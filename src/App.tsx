@@ -309,7 +309,7 @@ function Ventas({ user, locales, localActivo }) {
       q=q.eq("fecha",filtFecha);
     } else {
       const desde=filtMes+"-01";
-      const [vy,vm]=filtMes.split("-").map(Number); const hasta=filtMes+"-"+String(new Date(vy,vm,0).getDate()).padStart(2,"0");
+      const [fyr,fmo]=filtMes.split("-").map(Number); const hasta=filtMes+"-"+String(new Date(fyr,fmo,0).getDate()).padStart(2,"0");
       q=q.gte("fecha",desde).lte("fecha",hasta);
     }
     if(localActivo) q=q.eq("local_id",localActivo);
@@ -1057,8 +1057,8 @@ function EERR({ locales, localActivo }) {
   useEffect(()=>{
     const load=async()=>{
       setLoading(true);
-      const [y,m]=mes.split("-").map(Number);
-      const lastDay=new Date(y,m,0).getDate();
+      const [yr,mo]=mes.split("-").map(Number);
+      const lastDay=new Date(yr,mo,0).getDate();
       const desde=mes+"-01", hasta=mes+"-"+String(lastDay).padStart(2,"0");
       const lid=localActivo?parseInt(localActivo):null;
       const [{data:v},{data:f},{data:g},{data:m}]=await Promise.all([
@@ -1175,7 +1175,7 @@ function Contador({ locales, localActivo }) {
   useEffect(()=>{
     const load=async()=>{
       setLoading(true);
-      const [cy,cm]=mes.split("-").map(Number); const desde=mes+"-01",hasta=mes+"-"+String(new Date(cy,cm,0).getDate()).padStart(2,"0");
+      const [cyr,cmo]=mes.split("-").map(Number); const desde=mes+"-01",hasta=mes+"-"+String(new Date(cyr,cmo,0).getDate()).padStart(2,"0");
       const [{data:f},{data:v}]=await Promise.all([
         db.from("facturas").select("*").gte("fecha",desde).lte("fecha",hasta).neq("estado","anulada"),
         db.from("ventas").select("*").gte("fecha",desde).lte("fecha",hasta),
