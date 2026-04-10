@@ -291,69 +291,167 @@ function Dashboard({ locales, localActivo }) {
 
 // ─── VENTAS ───────────────────────────────────────────────────────────────────
 function Ventas({ user, locales, localActivo }) {
-  const [ventas, setVentas] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState(false);
-  const [filtFecha, setFiltFecha] = useState(toISO(today));
-  const [form, setForm] = useState({local_id:"",fecha:toISO(today),turno:"Noche",medio:"EFECTIVO SALON",monto:"",cant:""});
-  const localesDisp = user.rol==="dueno"?locales:locales.filter(l=>(user.locales||[]).includes(l.id));
-  const load = async () => {
+  const [ventas,setVentas]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [modalNuevo,setModalNuevo]=useState(false);
+  const [detalleModal,setDetalleModal]=useState(null);
+  const [editModal,setEditModal]=useState(null);
+  const [filtFecha,setFiltFecha]=useState("");
+  const [filtMes,setFiltMes]=useState(toISO(today).slice(0,7));
+  const [form,setForm]=useState({local_id:"",fecha:toISO(today),turno:"Noche",medio:"EFECTIVO SALON",monto:"",cant:""});
+  const localesDisp=user.rol==="dueno"?locales:locales.filter(l=>(user.locales||[]).includes(l.id));
+
+  const load=async()=>{
     setLoading(true);
-    let q = db.from("ventas").select("*").order("fecha",{ascending:false});
+    let q=db.from("ventas").select("*").order("fecha",{ascending:false}).order("turno",{ascending:false});
     if(filtFecha) q=q.eq("fecha",filtFecha);
+    else q=q.gte("fecha",filtMes+"-01").lte("fecha",filtMes+"-31");
     if(localActivo) q=q.eq("local_id",localActivo);
-    const {data} = await q.limit(100);
-    setVentas(data||[]);
-    setLoading(false);
+    const {data}=await q.limit(500);
+    setVentas(data||[]);setLoading(false);
   };
-  useEffect(()=>{load();},[filtFecha,localActivo]);
-  useEffect(()=>{
-    if(localesDisp.length>0&&!form.local_id) setForm(f=>({...f,local_id:localActivo||localesDisp[0]?.id||""}));
-  },[locales,localActivo]);
-  const total = ventas.reduce((s,v)=>s+(v.monto||0),0);
-  const porMedio = MEDIOS_COBRO.map(m=>({m,t:ventas.filter(v=>v.medio===m).reduce((s,v)=>s+v.monto,0)})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
-  const guardar = async () => {
-    if(!form.monto||!form.local_id) return;
+  useEffect(()=>{load();},[filtFecha,filtMes,localActivo]);
+  useEffect(()=>{if(localesDisp.length>0&&!form.local_id)setForm(f=>({...f,local_id:localActivo||localesDisp[0]?.id||""}));},[locales,localActivo]);
+
+  // Group ventas by fecha + turno + local
+  const grupos=[];
+  const seen={};
+  for(const v of ventas){
+    const key=`${v.fecha}||${v.turno}||${v.local_id}`;
+    if(!seen[key]){seen[key]={key,fecha:v.fecha,turno:v.turno,local_id:v.local_id,items:[],total:0};grupos.push(seen[key]);}
+    seen[key].items.push(v);
+    seen[key].total+=(v.monto||0);
+  }
+  grupos.sort((a,b)=>a.fecha<b.fecha?1:a.fecha>b.fecha?-1:0);
+
+  const totalPeriodo=ventas.reduce((s,v)=>s+(v.monto||0),0);
+
+  const guardar=async()=>{
+    if(!form.monto||!form.local_id)return;
     await db.from("ventas").insert([{...form,id:genId("V"),local_id:parseInt(form.local_id),monto:parseFloat(form.monto),cant:parseInt(form.cant)||1}]);
-    setModal(false); load();
+    setModalNuevo(false);load();
   };
+
+  const guardarEdit=async()=>{
+    if(!editModal)return;
+    await db.from("ventas").update({fecha:editModal.fecha,turno:editModal.turno,medio:editModal.medio,monto:parseFloat(editModal.monto),cant:parseInt(editModal.cant)||1,local_id:parseInt(editModal.local_id)}).eq("id",editModal.id);
+    setEditModal(null);
+    if(detalleModal){
+      // refresh detalle
+      const updated=detalleModal.items.map(i=>i.id===editModal.id?{...i,...editModal,monto:parseFloat(editModal.monto)}:i);
+      setDetalleModal({...detalleModal,items:updated,total:updated.reduce((s,i)=>s+(i.monto||0),0)});
+    }
+    load();
+  };
+
+  const eliminarLinea=async(id)=>{
+    if(!confirm("¿Eliminar este registro?"))return;
+    await db.from("ventas").delete().eq("id",id);
+    if(detalleModal){
+      const updated=detalleModal.items.filter(i=>i.id!==id);
+      if(updated.length===0){setDetalleModal(null);}
+      else{setDetalleModal({...detalleModal,items:updated,total:updated.reduce((s,i)=>s+(i.monto||0),0)});}
+    }
+    load();
+  };
+
+  const eliminarBloque=async(grupo)=>{
+    if(!confirm(`¿Eliminar el cierre completo del ${fmt_d(grupo.fecha)} ${grupo.turno}?`))return;
+    await Promise.all(grupo.items.map(v=>db.from("ventas").delete().eq("id",v.id)));
+    setDetalleModal(null);load();
+  };
+
   return (
     <div>
       <div className="ph-row">
-        <div><div className="ph-title">Ventas</div><div className="ph-sub">Total: {fmt_$(total)}</div></div>
-        <div style={{display:"flex",gap:8}}><input type="date" className="search" style={{width:155}} value={filtFecha} onChange={e=>setFiltFecha(e.target.value)}/><button className="btn btn-acc" onClick={()=>setModal(true)}>+ Cargar</button></div>
+        <div><div className="ph-title">Ventas</div><div className="ph-sub">Total período: {fmt_$(totalPeriodo)}</div></div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          <input type="date" className="search" style={{width:155}} value={filtFecha} onChange={e=>{setFiltFecha(e.target.value);if(e.target.value)setFiltMes("");}} placeholder="Día específico"/>
+          <input type="month" className="search" style={{width:140}} value={filtMes} onChange={e=>{setFiltMes(e.target.value);setFiltFecha("");}}/>
+          <button className="btn btn-acc" onClick={()=>setModalNuevo(true)}>+ Cargar</button>
+        </div>
       </div>
-      {porMedio.length>0 && (
-        <div className="panel" style={{marginBottom:16}}>
-          <div className="panel-hd"><span className="panel-title">Por Forma de Cobro</span></div>
-          <div style={{padding:"12px 16px",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:8}}>
-            {porMedio.map(x=>(
-              <div key={x.m} style={{background:"var(--s2)",padding:"10px 12px",borderRadius:"var(--r)",borderLeft:"2px solid var(--acc)"}}>
-                <div style={{fontSize:10,color:"var(--muted)",marginBottom:4}}>{x.m}</div>
-                <div className="num">{fmt_$(x.t)}</div>
-                <div style={{fontSize:10,color:"var(--muted2)"}}>{total>0?((x.t/total)*100).toFixed(1):0}%</div>
+
+      <div className="panel">
+        <div className="panel-hd"><span className="panel-title">Cierres de turno — {grupos.length} bloques</span></div>
+        {loading?<div className="loading">Cargando...</div>:grupos.length===0?<div className="empty">No hay ventas en este período</div>:(
+          <table>
+            <thead><tr><th>Fecha</th><th>Turno</th><th>Local</th><th>Registros</th><th>Total</th><th></th></tr></thead>
+            <tbody>{grupos.map(g=>(
+              <tr key={g.key}>
+                <td className="mono">{fmt_d(g.fecha)}</td>
+                <td><span className={`badge ${g.turno==="Noche"?"b-info":"b-warn"}`}>{g.turno}</span></td>
+                <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===g.local_id)?.nombre||"—"}</td>
+                <td style={{fontSize:11,color:"var(--muted2)"}}>{g.items.length} formas de cobro</td>
+                <td><span className="num kpi-success">{fmt_$(g.total)}</span></td>
+                <td><button className="btn btn-ghost btn-sm" onClick={()=>setDetalleModal(g)}>Ver detalle →</button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        )}
+      </div>
+
+      {/* DETALLE MODAL */}
+      {detalleModal&&(
+        <div className="overlay" onClick={()=>setDetalleModal(null)}>
+          <div className="modal" style={{width:640}} onClick={e=>e.stopPropagation()}>
+            <div className="modal-hd">
+              <div>
+                <div className="modal-title">{fmt_d(detalleModal.fecha)} · {detalleModal.turno}</div>
+                <div style={{fontSize:11,color:"var(--muted2)",marginTop:2}}>{locales.find(l=>l.id===detalleModal.local_id)?.nombre} · Total: <span style={{color:"var(--success)",fontFamily:"'Syne',sans-serif",fontWeight:700}}>{fmt_$(detalleModal.total)}</span></div>
               </div>
-            ))}
+              <div style={{display:"flex",gap:6}}>
+                <button className="btn btn-danger btn-sm" onClick={()=>eliminarBloque(detalleModal)}>Eliminar cierre</button>
+                <button className="close-btn" onClick={()=>setDetalleModal(null)}>✕</button>
+              </div>
+            </div>
+            <div className="modal-body" style={{padding:0}}>
+              <table>
+                <thead><tr><th>Forma de Cobro</th><th>Cubiertos</th><th>Monto</th><th>% del total</th><th></th></tr></thead>
+                <tbody>{detalleModal.items.sort((a,b)=>b.monto-a.monto).map(v=>(
+                  <tr key={v.id}>
+                    <td style={{fontWeight:500}}>{v.medio}</td>
+                    <td style={{color:"var(--muted2)"}}>{v.cant||"—"}</td>
+                    <td><span className="num kpi-success">{fmt_$(v.monto)}</span></td>
+                    <td style={{fontSize:11,color:"var(--muted2)"}}>{detalleModal.total>0?((v.monto/detalleModal.total)*100).toFixed(1):0}%</td>
+                    <td><div style={{display:"flex",gap:4}}>
+                      <button className="btn btn-ghost btn-sm" onClick={()=>setEditModal({...v})}>Editar</button>
+                      <button className="btn btn-danger btn-sm" onClick={()=>eliminarLinea(v.id)}>✕</button>
+                    </div></td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
-      <div className="panel">
-        {loading?<div className="loading">Cargando...</div>:ventas.length===0?<div className="empty">No hay ventas para esta fecha</div>:(
-          <table><thead><tr><th>Local</th><th>Turno</th><th>Medio</th><th>Cant.</th><th>Monto</th></tr></thead>
-          <tbody>{ventas.map(v=>(
-            <tr key={v.id}>
-              <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===v.local_id)?.nombre}</td>
-              <td><span className="badge b-muted">{v.turno}</span></td>
-              <td>{v.medio}</td><td style={{color:"var(--muted2)"}}>{v.cant}</td>
-              <td><span className="num kpi-success">{fmt_$(v.monto)}</span></td>
-            </tr>
-          ))}</tbody></table>
-        )}
-      </div>
-      {modal && (
-        <div className="overlay" onClick={()=>setModal(false)}>
+
+      {/* EDIT MODAL */}
+      {editModal&&(
+        <div className="overlay" onClick={()=>setEditModal(null)}>
+          <div className="modal" style={{width:440}} onClick={e=>e.stopPropagation()}>
+            <div className="modal-hd"><div className="modal-title">Editar Venta</div><button className="close-btn" onClick={()=>setEditModal(null)}>✕</button></div>
+            <div className="modal-body">
+              <div className="form2">
+                <div className="field"><label>Fecha</label><input type="date" value={editModal.fecha} onChange={e=>setEditModal({...editModal,fecha:e.target.value})}/></div>
+                <div className="field"><label>Turno</label><select value={editModal.turno} onChange={e=>setEditModal({...editModal,turno:e.target.value})}><option>Mediodía</option><option>Noche</option></select></div>
+              </div>
+              <div className="field"><label>Forma de Cobro</label><select value={editModal.medio} onChange={e=>setEditModal({...editModal,medio:e.target.value})}>{MEDIOS_COBRO.map(m=><option key={m}>{m}</option>)}</select></div>
+              <div className="form2">
+                <div className="field"><label>Monto $</label><input type="number" value={editModal.monto} onChange={e=>setEditModal({...editModal,monto:e.target.value})}/></div>
+                <div className="field"><label>Cubiertos</label><input type="number" value={editModal.cant||""} onChange={e=>setEditModal({...editModal,cant:e.target.value})}/></div>
+              </div>
+            </div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setEditModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={guardarEdit}>Guardar</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* NUEVO MODAL */}
+      {modalNuevo&&(
+        <div className="overlay" onClick={()=>setModalNuevo(false)}>
           <div className="modal" onClick={e=>e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Nueva Venta</div><button className="close-btn" onClick={()=>setModal(false)}>✕</button></div>
+            <div className="modal-hd"><div className="modal-title">Nueva Venta</div><button className="close-btn" onClick={()=>setModalNuevo(false)}>✕</button></div>
             <div className="modal-body">
               <div className="form2">
                 <div className="field"><label>Local</label><select value={form.local_id} onChange={e=>setForm({...form,local_id:e.target.value})}><option value="">Seleccioná...</option>{localesDisp.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
@@ -368,7 +466,7 @@ function Ventas({ user, locales, localActivo }) {
                 <div className="field"><label>Cubiertos</label><input type="number" value={form.cant} onChange={e=>setForm({...form,cant:e.target.value})} placeholder="0"/></div>
               </div>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar}>Guardar</button></div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModalNuevo(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar}>Guardar</button></div>
           </div>
         </div>
       )}
@@ -376,7 +474,6 @@ function Ventas({ user, locales, localActivo }) {
   );
 }
 
-// ─── FACTURAS ─────────────────────────────────────────────────────────────────
 function Compras({ user, locales, localActivo }) {
   const [facturas, setFacturas] = useState([]);
   const [proveedores, setProveedores] = useState([]);
@@ -1127,54 +1224,60 @@ function Proveedores() {
 
 // ─── EMPLEADOS ────────────────────────────────────────────────────────────────
 function Empleados({ locales }) {
-  const [empleados, setEmpleados] = useState([]);
-  const [modal, setModal] = useState(false);
-  const [editModal, setEditModal] = useState(null);
-  const [pagarModal, setPagarModal] = useState(null);
-  const [aumentoModal, setAumentoModal] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [pct, setPct] = useState("");
-  const [pagoForm, setPagoForm] = useState({cuenta:"Banco",fecha:toISO(today),monto:""});
-  const emptyForm = {nombre:"",legajo:"",local_id:"",puesto:"",sueldo:"",fecha_ingreso:toISO(today),fecha_alta_afip:"",estado:"Activo"};
-  const [form, setForm] = useState(emptyForm);
+  const [empleados,setEmpleados]=useState([]);
+  const [modal,setModal]=useState(false);
+  const [editModal,setEditModal]=useState(null);
+  const [pagarModal,setPagarModal]=useState(null);
+  const [aumentoModal,setAumentoModal]=useState(false);
+  const [archivosModal,setArchivosModal]=useState(null);
+  const [archivos,setArchivos]=useState([]);
+  const [uploading,setUploading]=useState(false);
+  const [loading,setLoading]=useState(true);
+  const [search,setSearch]=useState("");
+  const [pct,setPct]=useState("");
+  const [pagoForm,setPagoForm]=useState({cuenta:"Banco",fecha:toISO(today),monto:""});
+  const emptyForm={nombre:"",legajo:"",local_id:"",puesto:"",sueldo:"",fecha_ingreso:toISO(today),fecha_alta_afip:"",estado:"Activo"};
+  const [form,setForm]=useState(emptyForm);
 
-  const load = async () => {
-    setLoading(true);
-    const {data} = await db.from("empleados").select("*").order("nombre");
-    setEmpleados(data||[]); setLoading(false);
-  };
+  const load=async()=>{setLoading(true);const {data}=await db.from("empleados").select("*").order("nombre");setEmpleados(data||[]);setLoading(false);};
   useEffect(()=>{load();},[]);
 
-  const eFilt = empleados.filter(e=>!search||e.nombre.toLowerCase().includes(search.toLowerCase()));
-  const totalSueldos = empleados.filter(e=>e.estado==="Activo").reduce((s,e)=>s+(e.sueldo||0),0);
+  const loadArchivos=async(empId)=>{const {data}=await db.from("empleado_archivos").select("*").eq("empleado_id",empId).order("fecha",{ascending:false});setArchivos(data||[]);};
+  const abrirArchivos=async(e)=>{setArchivosModal(e);await loadArchivos(e.id);};
 
-  const guardar = async () => {
-    if(!form.nombre) return;
-    await db.from("empleados").insert([{...form,local_id:form.local_id?parseInt(form.local_id):null,sueldo:parseFloat(form.sueldo)||0}]);
-    setModal(false); setForm(emptyForm); load();
+  const subirArchivo=async(file,empId)=>{
+    if(!file)return;
+    setUploading(true);
+    const ext=file.name.split(".").pop();
+    const path=`${empId}/${Date.now()}.${ext}`;
+    const {error}=await db.storage.from("empleados").upload(path,file);
+    if(!error){
+      const {data:urlData}=db.storage.from("empleados").getPublicUrl(path);
+      await db.from("empleado_archivos").insert([{id:genId("ARG"),empleado_id:empId,nombre:file.name,url:urlData.publicUrl,tipo:ext,fecha:toISO(today),detalle:""}]);
+      await loadArchivos(empId);
+    }
+    setUploading(false);
   };
 
-  const guardarEdit = async () => {
-    await db.from("empleados").update({nombre:editModal.nombre,legajo:editModal.legajo,puesto:editModal.puesto,sueldo:parseFloat(editModal.sueldo)||0,local_id:editModal.local_id?parseInt(editModal.local_id):null,estado:editModal.estado}).eq("id",editModal.id);
-    setEditModal(null); load();
-  };
+  const eFilt=empleados.filter(e=>!search||e.nombre.toLowerCase().includes(search.toLowerCase()));
+  const totalSueldos=empleados.filter(e=>e.estado==="Activo").reduce((s,e)=>s+(e.sueldo||0),0);
 
-  const pagar = async () => {
-    const e = pagarModal;
-    const monto = parseFloat(pagoForm.monto)||e.sueldo;
-    const {data:caja} = await db.from("saldos_caja").select("saldo").eq("cuenta",pagoForm.cuenta).single();
-    if(caja) await db.from("saldos_caja").update({saldo:(caja.saldo||0)-monto}).eq("cuenta",pagoForm.cuenta);
+  const guardar=async()=>{if(!form.nombre)return;await db.from("empleados").insert([{...form,local_id:form.local_id?parseInt(form.local_id):null,sueldo:parseFloat(form.sueldo)||0}]);setModal(false);setForm(emptyForm);load();};
+  const guardarEdit=async()=>{await db.from("empleados").update({nombre:editModal.nombre,legajo:editModal.legajo,puesto:editModal.puesto,sueldo:parseFloat(editModal.sueldo)||0,local_id:editModal.local_id?parseInt(editModal.local_id):null,estado:editModal.estado,fecha_ingreso:editModal.fecha_ingreso,fecha_alta_afip:editModal.fecha_alta_afip,fecha_baja:editModal.fecha_baja,fecha_baja_afip:editModal.fecha_baja_afip}).eq("id",editModal.id);setEditModal(null);load();};
+
+  const pagar=async()=>{
+    const e=pagarModal;const monto=parseFloat(pagoForm.monto)||e.sueldo;
+    const {data:caja}=await db.from("saldos_caja").select("saldo").eq("cuenta",pagoForm.cuenta).single();
+    if(caja)await db.from("saldos_caja").update({saldo:(caja.saldo||0)-monto}).eq("cuenta",pagoForm.cuenta);
     await db.from("movimientos").insert([{id:genId("MOV"),fecha:pagoForm.fecha,cuenta:pagoForm.cuenta,tipo:"Pago Sueldo",cat:"SUELDOS",importe:-monto,detalle:`Sueldo ${e.nombre}`,fact_id:null}]);
     setPagarModal(null);
   };
 
-  const aumentoMasivo = async () => {
-    const p = parseFloat(pct);
-    if(!p||p<=0) return;
-    const activos = empleados.filter(e=>e.estado==="Activo");
+  const aumentoMasivo=async()=>{
+    const p=parseFloat(pct);if(!p||p<=0)return;
+    const activos=empleados.filter(e=>e.estado==="Activo");
     await Promise.all(activos.map(e=>db.from("empleados").update({sueldo:Math.round(e.sueldo*(1+p/100))}).eq("id",e.id)));
-    setAumentoModal(false); setPct(""); load();
+    setAumentoModal(false);setPct("");load();
   };
 
   return (
@@ -1196,99 +1299,121 @@ function Empleados({ locales }) {
               <td className="mono" style={{color:"var(--muted2)"}}>{e.legajo||"—"}</td>
               <td style={{fontSize:11,color:"var(--muted2)"}}>{e.puesto||"—"}</td>
               <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===e.local_id)?.nombre||"—"}</td>
+              <td className="mono" style={{fontSize:11}}>{fmt_d(e.fecha_ingreso)}</td>
+              <td className="mono" style={{fontSize:11,color:e.fecha_alta_afip?"var(--success)":"var(--warn)"}}>{e.fecha_alta_afip?fmt_d(e.fecha_alta_afip):"Pendiente"}</td>
               <td><span className="num kpi-acc">{fmt_$(e.sueldo)}</span></td>
               <td><span className={`badge ${e.estado==="Activo"?"b-success":"b-muted"}`}>{e.estado}</span></td>
-              <td>
-                <div style={{display:"flex",gap:4}}>
-                  <button className="btn btn-ghost btn-sm" onClick={()=>setEditModal({...e})}>Editar</button>
-                  {e.estado==="Activo"&&<button className="btn btn-success btn-sm" onClick={()=>{setPagarModal(e);setPagoForm({cuenta:"Banco",fecha:toISO(today),monto:e.sueldo})}}>Pagar</button>}
-                </div>
-              </td>
+              <td><div style={{display:"flex",gap:4}}>
+                <button className="btn btn-ghost btn-sm" onClick={()=>setEditModal({...e})}>Editar</button>
+                <button className="btn btn-ghost btn-sm" onClick={()=>abrirArchivos(e)}>📎</button>
+                {e.estado==="Activo"&&<button className="btn btn-success btn-sm" onClick={()=>{setPagarModal(e);setPagoForm({cuenta:"Banco",fecha:toISO(today),monto:e.sueldo})}}>Pagar</button>}
+              </div></td>
             </tr>
           ))}</tbody></table>
         )}
       </div>
 
-      {modal && (
-        <div className="overlay" onClick={()=>setModal(false)}>
-          <div className="modal" onClick={e=>e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Nuevo Empleado</div><button className="close-btn" onClick={()=>setModal(false)}>✕</button></div>
-            <div className="modal-body">
-              <div className="form2">
-                <div className="field"><label>Nombre *</label><input value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})} placeholder="Nombre completo"/></div>
-                <div className="field"><label>Legajo</label><input value={form.legajo} onChange={e=>setForm({...form,legajo:e.target.value})} placeholder="001"/></div>
-              </div>
-              <div className="form2">
-                <div className="field"><label>Puesto</label><input value={form.puesto} onChange={e=>setForm({...form,puesto:e.target.value})} placeholder="Mozo, Cocinero..."/></div>
-                <div className="field"><label>Local</label><select value={form.local_id} onChange={e=>setForm({...form,local_id:e.target.value})}><option value="">Sin asignar</option>{locales.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
-              </div>
-              <div className="form2">
-                <div className="field"><label>Fecha de Ingreso</label><input type="date" value={form.fecha_ingreso} onChange={e=>setForm({...form,fecha_ingreso:e.target.value})}/></div>
-                <div className="field"><label>Fecha Alta AFIP</label><input type="date" value={form.fecha_alta_afip||""} onChange={e=>setForm({...form,fecha_alta_afip:e.target.value})}/></div>
-              </div>
-              <div className="field"><label>Sueldo mensual $</label><input type="number" value={form.sueldo} onChange={e=>setForm({...form,sueldo:e.target.value})} placeholder="0"/></div>
-            </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar}>Guardar</button></div>
+      {modal&&(<div className="overlay" onClick={()=>setModal(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
+        <div className="modal-hd"><div className="modal-title">Nuevo Empleado</div><button className="close-btn" onClick={()=>setModal(false)}>✕</button></div>
+        <div className="modal-body">
+          <div className="form2">
+            <div className="field"><label>Nombre *</label><input value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})} placeholder="Nombre completo"/></div>
+            <div className="field"><label>Legajo</label><input value={form.legajo} onChange={e=>setForm({...form,legajo:e.target.value})} placeholder="001"/></div>
           </div>
+          <div className="form2">
+            <div className="field"><label>Puesto</label><input value={form.puesto} onChange={e=>setForm({...form,puesto:e.target.value})} placeholder="Mozo, Sushiman..."/></div>
+            <div className="field"><label>Local</label><select value={form.local_id} onChange={e=>setForm({...form,local_id:e.target.value})}><option value="">Sin asignar</option>{locales.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
+          </div>
+          <div className="form2">
+            <div className="field"><label>Fecha de Ingreso</label><input type="date" value={form.fecha_ingreso} onChange={e=>setForm({...form,fecha_ingreso:e.target.value})}/></div>
+            <div className="field"><label>Fecha Alta AFIP</label><input type="date" value={form.fecha_alta_afip} onChange={e=>setForm({...form,fecha_alta_afip:e.target.value})}/></div>
+          </div>
+          <div className="field"><label>Sueldo mensual $</label><input type="number" value={form.sueldo} onChange={e=>setForm({...form,sueldo:e.target.value})} placeholder="0"/></div>
         </div>
-      )}
+        <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar}>Guardar</button></div>
+      </div></div>)}
 
-      {editModal && (
-        <div className="overlay" onClick={()=>setEditModal(null)}>
-          <div className="modal" onClick={e=>e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Editar Empleado</div><button className="close-btn" onClick={()=>setEditModal(null)}>✕</button></div>
-            <div className="modal-body">
-              <div className="form2">
-                <div className="field"><label>Nombre</label><input value={editModal.nombre} onChange={e=>setEditModal({...editModal,nombre:e.target.value})}/></div>
-                <div className="field"><label>Legajo</label><input value={editModal.legajo||""} onChange={e=>setEditModal({...editModal,legajo:e.target.value})}/></div>
-              </div>
-              <div className="form2">
-                <div className="field"><label>Puesto</label><input value={editModal.puesto||""} onChange={e=>setEditModal({...editModal,puesto:e.target.value})}/></div>
-                <div className="field"><label>Local</label><select value={editModal.local_id||""} onChange={e=>setEditModal({...editModal,local_id:e.target.value})}><option value="">Sin asignar</option>{locales.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
-              </div>
-              <div className="form2">
-                <div className="field"><label>Sueldo $</label><input type="number" value={editModal.sueldo} onChange={e=>setEditModal({...editModal,sueldo:e.target.value})}/></div>
-                <div className="field"><label>Estado</label><select value={editModal.estado} onChange={e=>setEditModal({...editModal,estado:e.target.value})}><option>Activo</option><option>Inactivo</option></select></div>
-              </div>
-            </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setEditModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={guardarEdit}>Guardar</button></div>
+      {editModal&&(<div className="overlay" onClick={()=>setEditModal(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
+        <div className="modal-hd"><div className="modal-title">Editar Empleado</div><button className="close-btn" onClick={()=>setEditModal(null)}>✕</button></div>
+        <div className="modal-body">
+          <div className="form2">
+            <div className="field"><label>Nombre</label><input value={editModal.nombre} onChange={e=>setEditModal({...editModal,nombre:e.target.value})}/></div>
+            <div className="field"><label>Legajo</label><input value={editModal.legajo||""} onChange={e=>setEditModal({...editModal,legajo:e.target.value})}/></div>
+          </div>
+          <div className="form2">
+            <div className="field"><label>Puesto</label><input value={editModal.puesto||""} onChange={e=>setEditModal({...editModal,puesto:e.target.value})}/></div>
+            <div className="field"><label>Local</label><select value={editModal.local_id||""} onChange={e=>setEditModal({...editModal,local_id:e.target.value})}><option value="">Sin asignar</option>{locales.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
+          </div>
+          <div className="form2">
+            <div className="field"><label>Fecha de Ingreso</label><input type="date" value={editModal.fecha_ingreso||""} onChange={e=>setEditModal({...editModal,fecha_ingreso:e.target.value})}/></div>
+            <div className="field"><label>Fecha Alta AFIP</label><input type="date" value={editModal.fecha_alta_afip||""} onChange={e=>setEditModal({...editModal,fecha_alta_afip:e.target.value})}/></div>
+          </div>
+          <div className="form2">
+            <div className="field"><label>Fecha de Baja</label><input type="date" value={editModal.fecha_baja||""} onChange={e=>setEditModal({...editModal,fecha_baja:e.target.value})}/></div>
+            <div className="field"><label>Fecha Baja AFIP</label><input type="date" value={editModal.fecha_baja_afip||""} onChange={e=>setEditModal({...editModal,fecha_baja_afip:e.target.value})}/></div>
+          </div>
+          <div className="form2">
+            <div className="field"><label>Sueldo $</label><input type="number" value={editModal.sueldo} onChange={e=>setEditModal({...editModal,sueldo:e.target.value})}/></div>
+            <div className="field"><label>Estado</label><select value={editModal.estado} onChange={e=>setEditModal({...editModal,estado:e.target.value})}><option>Activo</option><option>Inactivo</option></select></div>
           </div>
         </div>
-      )}
+        <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setEditModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={guardarEdit}>Guardar</button></div>
+      </div></div>)}
 
-      {pagarModal && (
-        <div className="overlay" onClick={()=>setPagarModal(null)}>
-          <div className="modal" style={{width:420}} onClick={e=>e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Pagar Sueldo</div><button className="close-btn" onClick={()=>setPagarModal(null)}>✕</button></div>
-            <div className="modal-body">
-              <div className="alert alert-info">{pagarModal.nombre} · Sueldo: {fmt_$(pagarModal.sueldo)}</div>
-              <div className="field"><label>Cuenta de egreso</label><select value={pagoForm.cuenta} onChange={e=>setPagoForm({...pagoForm,cuenta:e.target.value})}>{CUENTAS.map(c=><option key={c}>{c}</option>)}</select></div>
-              <div className="field"><label>Monto</label><input type="number" value={pagoForm.monto} onChange={e=>setPagoForm({...pagoForm,monto:e.target.value})}/></div>
-              <div className="field"><label>Fecha</label><input type="date" value={pagoForm.fecha} onChange={e=>setPagoForm({...pagoForm,fecha:e.target.value})}/></div>
-            </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setPagarModal(null)}>Cancelar</button><button className="btn btn-success" onClick={pagar}>Confirmar Pago</button></div>
-          </div>
+      {pagarModal&&(<div className="overlay" onClick={()=>setPagarModal(null)}><div className="modal" style={{width:420}} onClick={e=>e.stopPropagation()}>
+        <div className="modal-hd"><div className="modal-title">Pagar Sueldo</div><button className="close-btn" onClick={()=>setPagarModal(null)}>✕</button></div>
+        <div className="modal-body">
+          <div className="alert alert-info">{pagarModal.nombre} · Sueldo: {fmt_$(pagarModal.sueldo)}</div>
+          <div className="field"><label>Cuenta</label><select value={pagoForm.cuenta} onChange={e=>setPagoForm({...pagoForm,cuenta:e.target.value})}>{CUENTAS.map(c=><option key={c}>{c}</option>)}</select></div>
+          <div className="field"><label>Monto</label><input type="number" value={pagoForm.monto} onChange={e=>setPagoForm({...pagoForm,monto:e.target.value})}/></div>
+          <div className="field"><label>Fecha</label><input type="date" value={pagoForm.fecha} onChange={e=>setPagoForm({...pagoForm,fecha:e.target.value})}/></div>
         </div>
-      )}
+        <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setPagarModal(null)}>Cancelar</button><button className="btn btn-success" onClick={pagar}>Confirmar Pago</button></div>
+      </div></div>)}
 
-      {aumentoModal && (
-        <div className="overlay" onClick={()=>setAumentoModal(false)}>
-          <div className="modal" style={{width:380}} onClick={e=>e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Aumento Masivo</div><button className="close-btn" onClick={()=>setAumentoModal(false)}>✕</button></div>
-            <div className="modal-body">
-              <div className="alert alert-warn">Se aplica a todos los empleados activos. Masa salarial actual: {fmt_$(totalSueldos)}</div>
-              <div className="field"><label>Porcentaje de aumento %</label><input type="number" value={pct} onChange={e=>setPct(e.target.value)} placeholder="Ej: 15"/></div>
-              {pct&&<div style={{padding:10,background:"var(--s2)",borderRadius:"var(--r)",fontSize:12}}>Nueva masa salarial: <strong style={{color:"var(--acc)"}}>{fmt_$(totalSueldos*(1+parseFloat(pct)/100))}</strong></div>}
-            </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setAumentoModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={aumentoMasivo}>Aplicar Aumento</button></div>
-          </div>
+      {aumentoModal&&(<div className="overlay" onClick={()=>setAumentoModal(false)}><div className="modal" style={{width:380}} onClick={e=>e.stopPropagation()}>
+        <div className="modal-hd"><div className="modal-title">Aumento Masivo</div><button className="close-btn" onClick={()=>setAumentoModal(false)}>✕</button></div>
+        <div className="modal-body">
+          <div className="alert alert-warn">Se aplica a todos los activos. Masa actual: {fmt_$(totalSueldos)}</div>
+          <div className="field"><label>Porcentaje %</label><input type="number" value={pct} onChange={e=>setPct(e.target.value)} placeholder="Ej: 15"/></div>
+          {pct&&<div style={{padding:10,background:"var(--s2)",borderRadius:"var(--r)",fontSize:12}}>Nueva masa: <strong style={{color:"var(--acc)"}}>{fmt_$(totalSueldos*(1+parseFloat(pct)/100))}</strong></div>}
         </div>
-      )}
+        <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setAumentoModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={aumentoMasivo}>Aplicar</button></div>
+      </div></div>)}
+
+      {archivosModal&&(<div className="overlay" onClick={()=>setArchivosModal(null)}><div className="modal" style={{width:580}} onClick={e=>e.stopPropagation()}>
+        <div className="modal-hd">
+          <div><div className="modal-title">📎 Legajo — {archivosModal.nombre}</div><div style={{fontSize:11,color:"var(--muted2)",marginTop:2}}>{archivosModal.puesto} · {locales.find(l=>l.id===archivosModal.local_id)?.nombre}</div></div>
+          <button className="close-btn" onClick={()=>setArchivosModal(null)}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div style={{marginBottom:16,padding:12,background:"var(--s2)",borderRadius:"var(--r)",border:"2px dashed var(--bd2)"}}>
+            <div style={{fontSize:10,letterSpacing:2,textTransform:"uppercase",color:"var(--muted)",marginBottom:8}}>Subir documento</div>
+            <input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" style={{display:"none"}} id="file-upload"
+              onChange={e=>subirArchivo(e.target.files[0],archivosModal.id)}/>
+            <label htmlFor="file-upload" className="btn btn-acc" style={{cursor:"pointer",display:"inline-flex"}}>
+              {uploading?"Subiendo...":"+ Seleccionar archivo"}
+            </label>
+            <span style={{fontSize:10,color:"var(--muted)",marginLeft:10}}>PDF, JPG, PNG — Altas, bajas, recibos firmados...</span>
+          </div>
+          {archivos.length===0?<div className="empty">No hay archivos cargados</div>:(
+            <table><thead><tr><th>Nombre</th><th>Tipo</th><th>Fecha</th><th></th></tr></thead>
+            <tbody>{archivos.map(a=>(
+              <tr key={a.id}>
+                <td><a href={a.url} target="_blank" rel="noreferrer" style={{color:"var(--acc)",textDecoration:"none"}}>{a.nombre}</a></td>
+                <td><span className="badge b-muted">{a.tipo?.toUpperCase()}</span></td>
+                <td className="mono" style={{fontSize:11}}>{fmt_d(a.fecha)}</td>
+                <td><a href={a.url} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm">⬇ Ver</a></td>
+              </tr>
+            ))}</tbody></table>
+          )}
+        </div>
+      </div></div>)}
     </div>
   );
 }
 
-// ─── CONFIG ───────────────────────────────────────────────────────────────────
+
 function Config({ locales }) {
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
