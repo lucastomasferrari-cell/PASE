@@ -59,20 +59,23 @@ export default async function handler(req, res) {
         }
 
         if (mpData.results) {
-          for (const mov of mpData.results) {
+          for (const pago of mpData.results) {
             await db.from('mp_movimientos').upsert(
               [
                 {
-                  id: String(mov.id),
+                  id: String(pago.id),
                   local_id: cred.local_id,
-                  fecha: mov.date_created,
-                  tipo: mov.type,
-                  descripcion: mov.description || mov.reason || mov.type,
-                  monto: mov.amount,
-                  saldo: mov.balance,
-                  estado: mov.status,
-                  referencia_id: String(mov.source_id || ''),
-                  medio_pago: mov.payment_method_id || null,
+                  fecha: pago.date_approved || pago.date_created,
+                  tipo: pago.payment_type_id,
+                  descripcion:
+                    pago.description ||
+                    pago.statement_descriptor ||
+                    pago.payment_type_id,
+                  monto: pago.transaction_amount,
+                  saldo: pago.transaction_details?.net_received_amount ?? null,
+                  estado: pago.status,
+                  referencia_id: String(pago.external_reference || pago.id),
+                  medio_pago: pago.payment_method_id || null,
                 },
               ],
               { onConflict: 'id' }
