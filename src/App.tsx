@@ -298,14 +298,20 @@ function Ventas({ user, locales, localActivo }) {
   const [editModal,setEditModal]=useState(null);
   const [filtFecha,setFiltFecha]=useState("");
   const [filtMes,setFiltMes]=useState(toISO(today).slice(0,7));
+  // filtMes is always active unless filtFecha is set
   const [form,setForm]=useState({local_id:"",fecha:toISO(today),turno:"Noche",medio:"EFECTIVO SALON",monto:"",cant:""});
   const localesDisp=user.rol==="dueno"?locales:locales.filter(l=>(user.locales||[]).includes(l.id));
 
   const load=async()=>{
     setLoading(true);
-    let q=db.from("ventas").select("*").order("fecha",{ascending:false}).order("turno",{ascending:false});
-    if(filtFecha) q=q.eq("fecha",filtFecha);
-    else q=q.gte("fecha",filtMes+"-01").lte("fecha",filtMes+"-31");
+    let q=db.from("ventas").select("*").order("fecha",{ascending:false});
+    if(filtFecha){
+      q=q.eq("fecha",filtFecha);
+    } else {
+      const desde=filtMes+"-01";
+      const hasta=filtMes+"-31";
+      q=q.gte("fecha",desde).lte("fecha",hasta);
+    }
     if(localActivo) q=q.eq("local_id",localActivo);
     const {data}=await q.limit(500);
     setVentas(data||[]);setLoading(false);
@@ -366,8 +372,11 @@ function Ventas({ user, locales, localActivo }) {
       <div className="ph-row">
         <div><div className="ph-title">Ventas</div><div className="ph-sub">Total período: {fmt_$(totalPeriodo)}</div></div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-          <input type="date" className="search" style={{width:155}} value={filtFecha} onChange={e=>{setFiltFecha(e.target.value);if(e.target.value)setFiltMes("");}} placeholder="Día específico"/>
-          <input type="month" className="search" style={{width:140}} value={filtMes} onChange={e=>{setFiltMes(e.target.value);setFiltFecha("");}}/>
+          <input type="date" className="search" style={{width:155}} value={filtFecha} 
+            onChange={e=>{setFiltFecha(e.target.value);}} 
+            placeholder="Día específico"/>
+          <input type="month" className="search" style={{width:140}} value={filtMes} 
+            onChange={e=>{setFiltMes(e.target.value);setFiltFecha("");}}/>
           <button className="btn btn-acc" onClick={()=>setModalNuevo(true)}>+ Cargar</button>
         </div>
       </div>
@@ -545,7 +554,9 @@ function Compras({ user, locales, localActivo }) {
     setModal(false); setForm(emptyForm); setItems([]); load();
   };
 
+  const [pagando,setPagando]=useState(false);
   const pagar = async () => {
+    if(pagando) return; setPagando(true);
     const f = pagarModal;
     const monto = parseFloat(pagoForm.monto)||f.total;
     const nuevosPagos = [...(f.pagos||[]),{cuenta:pagoForm.cuenta,monto,fecha:pagoForm.fecha}];
@@ -786,7 +797,9 @@ function Remitos({ user, locales, localActivo }) {
     setVincModal(null); load();
   };
 
+  const [pagandoRem,setPagandoRem]=useState(false);
   const pagarRemito = async () => {
+    if(pagandoRem) return; setPagandoRem(true);
     const r = pagarModal;
     const monto = parseFloat(pagoForm.monto)||r.monto;
     await db.from("remitos").update({estado:"pagado"}).eq("id",r.id);
@@ -795,7 +808,7 @@ function Remitos({ user, locales, localActivo }) {
     const {data:caja} = await db.from("saldos_caja").select("saldo").eq("cuenta",pagoForm.cuenta).single();
     if(caja) await db.from("saldos_caja").update({saldo:(caja.saldo||0)-monto}).eq("cuenta",pagoForm.cuenta);
     await db.from("movimientos").insert([{id:genId("MOV"),fecha:pagoForm.fecha,cuenta:pagoForm.cuenta,tipo:"Pago Proveedor",cat:r.cat,importe:-monto,detalle:`Pago remito ${r.nro} - ${prov?.nombre||""}`,fact_id:null}]);
-    setPagarModal(null); load();
+    setPagandoRem(false); setPagarModal(null); load();
   };
 
   const anular = async (r) => {
@@ -908,7 +921,7 @@ function Remitos({ user, locales, localActivo }) {
               <div className="field"><label>Monto</label><input type="number" value={pagoForm.monto} onChange={e=>setPagoForm({...pagoForm,monto:e.target.value})}/></div>
               <div className="field"><label>Fecha</label><input type="date" value={pagoForm.fecha} onChange={e=>setPagoForm({...pagoForm,fecha:e.target.value})}/></div>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setPagarModal(null)}>Cancelar</button><button className="btn btn-success" onClick={pagarRemito}>Confirmar Pago</button></div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setPagarModal(null)}>Cancelar</button><button className="btn btn-success" onClick={pagarRemito} disabled={pagandoRem}>{pagandoRem?"Procesando...":"Confirmar Pago"}</button></div>
           </div>
         </div>
       )}
@@ -1265,12 +1278,14 @@ function Empleados({ locales }) {
   const guardar=async()=>{if(!form.nombre)return;await db.from("empleados").insert([{...form,local_id:form.local_id?parseInt(form.local_id):null,sueldo:parseFloat(form.sueldo)||0}]);setModal(false);setForm(emptyForm);load();};
   const guardarEdit=async()=>{await db.from("empleados").update({nombre:editModal.nombre,legajo:editModal.legajo,puesto:editModal.puesto,sueldo:parseFloat(editModal.sueldo)||0,local_id:editModal.local_id?parseInt(editModal.local_id):null,estado:editModal.estado,fecha_ingreso:editModal.fecha_ingreso,fecha_alta_afip:editModal.fecha_alta_afip,fecha_baja:editModal.fecha_baja,fecha_baja_afip:editModal.fecha_baja_afip}).eq("id",editModal.id);setEditModal(null);load();};
 
+  const [pagandoSue,setPagandoSue]=useState(false);
   const pagar=async()=>{
+    if(pagandoSue)return; setPagandoSue(true);
     const e=pagarModal;const monto=parseFloat(pagoForm.monto)||e.sueldo;
     const {data:caja}=await db.from("saldos_caja").select("saldo").eq("cuenta",pagoForm.cuenta).single();
     if(caja)await db.from("saldos_caja").update({saldo:(caja.saldo||0)-monto}).eq("cuenta",pagoForm.cuenta);
     await db.from("movimientos").insert([{id:genId("MOV"),fecha:pagoForm.fecha,cuenta:pagoForm.cuenta,tipo:"Pago Sueldo",cat:"SUELDOS",importe:-monto,detalle:`Sueldo ${e.nombre}`,fact_id:null}]);
-    setPagarModal(null);
+    setPagandoSue(false); setPagarModal(null);
   };
 
   const aumentoMasivo=async()=>{
@@ -1586,8 +1601,9 @@ function Contador({ locales, localActivo }) {
         db.from("facturas").select("*").gte("fecha",desde).lte("fecha",hasta).neq("estado","anulada"),
         db.from("ventas").select("*").gte("fecha",desde).lte("fecha",hasta),
       ]);
-      setFacturas((f||[]).filter(x=>!localActivo||x.local_id===localActivo));
-      setVentas((v||[]).filter(x=>!localActivo||x.local_id===localActivo));
+      const lid=localActivo?parseInt(localActivo):null;
+      setFacturas((f||[]).filter(x=>!lid||parseInt(x.local_id)===lid));
+      setVentas((v||[]).filter(x=>!lid||parseInt(x.local_id)===lid));
       setLoading(false);
     };
     load();
@@ -1691,6 +1707,13 @@ function ImportarMaxirest({ locales }) {
   const confirmar=async()=>{
     if(!preview||preview.ventas.length===0)return;
     setLoading(true);
+    // Check for duplicate: same fecha + turno + local
+    const {data:exist}=await db.from("ventas").select("id").eq("fecha",preview.fecha).eq("turno",preview.turno).eq("local_id",parseInt(preview.local_id)).limit(1);
+    if(exist&&exist.length>0){
+      setLoading(false);
+      if(!confirm(`⚠ Ya existe un cierre del ${fmt_d(preview.fecha)} turno ${preview.turno} para este local. ¿Importar igual?`))return;
+      setLoading(true);
+    }
     await db.from("ventas").insert(preview.ventas.map(v=>({...v,id:genId("V"),local_id:parseInt(v.local_id)})));
     setLoading(false);setTexto("");setPreview(null);
     alert("✓ Importado: "+preview.ventas.length+" registros · Total: "+fmt_$(preview.ventas.reduce((s,v)=>s+v.monto,0)));
