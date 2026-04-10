@@ -15,7 +15,7 @@ const GASTOS_PUBLICIDAD = ["PIMENTON","COMMUNITY MANAGER","PRENSA Y PAUTA FB","F
 const COMISIONES_CATS = ["MERCADOPAGO","RAPPI","PEDIDOS YA","MASDELIVERY","BANCARIAS NAVE","COMPENSACIONES","OTRAS COMISIONES"];
 
 const ROLES = {
-  dueno:   { label:"Dueño",    color:"#E8C547", permisos:["dashboard","ventas","compras","remitos","gastos","caja","eerr","contador","proveedores","empleados","config","maxirest","insumos","lector_ia","recetas"] },
+  dueno:   { label:"Dueño",    color:"#E8C547", permisos:["dashboard","ventas","compras","remitos","gastos","caja","eerr","contador","proveedores","empleados","config","maxirest","insumos","lector_ia","recetas","mp"] },
   admin:   { label:"Admin",    color:"#3B82F6", permisos:["dashboard","ventas","compras","remitos","gastos","caja","proveedores","empleados"] },
   compras: { label:"Compras",  color:"#8B5CF6", permisos:["compras","remitos","proveedores"] },
   cajero:  { label:"Cajero",   color:"#10B981", permisos:["caja","dashboard"] },
@@ -172,6 +172,7 @@ function Sidebar({ user, section, onNav, onLogout, locales, localActivo, setLoca
     {id:"insumos",label:"Insumos",icon:"🥩",sec:"Stock"},
     {id:"lector_ia",label:"Lector Facturas IA",icon:"🤖",sec:"Stock"},
     {id:"recetas",label:"Recetas",icon:"📋",sec:"Stock"},
+    {id:"mp",label:"Conciliación MP",icon:"💳",sec:"Finanzas"},
     {id:"caja",label:"Caja & Bancos",icon:"💰",sec:"Finanzas"},
     {id:"eerr",label:"Estado de Result.",icon:"📊",sec:"Finanzas"},
     {id:"contador",label:"Contador / IVA",icon:"🧾",sec:"Finanzas"},
@@ -2278,6 +2279,212 @@ function Recetas({ locales, localActivo }) {
 }
 
 
+// ─── CONCILIACION MERCADO PAGO ────────────────────────────────────────────────
+function ConciliacionMP({ locales, localActivo }) {
+  const [credenciales,setCredenciales]=useState([]);
+  const [movimientos,setMovimientos]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [sincronizando,setSincronizando]=useState(false);
+  const [tab,setTab]=useState("movimientos");
+  const [mes,setMes]=useState(toISO(today).slice(0,7));
+  const [configModal,setConfigModal]=useState(false);
+  const [configForm,setConfigForm]=useState({local_id:"",access_token:""});
+
+  const load=async()=>{
+    setLoading(true);
+    const [myr,mmo]=mes.split("-").map(Number);
+    const mlast=new Date(myr,mmo,0).getDate();
+    const desde=mes+"-01T00:00:00",hasta=mes+"-"+String(mlast).padStart(2,"0")+"T23:59:59";
+    const [{data:c},{data:m}]=await Promise.all([
+      db.from("mp_credenciales").select("*,locales(nombre)"),
+      db.from("mp_movimientos").select("*").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false}),
+    ]);
+    setCredenciales(c||[]);
+    const mFilt=(m||[]).filter(x=>!localActivo||x.local_id===localActivo);
+    setMovimientos(mFilt);
+    setLoading(false);
+  };
+
+  useEffect(()=>{load();},[mes,localActivo]);
+
+  const sincronizar=async()=>{
+    setSincronizando(true);
+    try{
+      const r=await fetch("/api/mp-sync",{method:"POST"});
+      const d=await r.json();
+      if(d.ok){await load();alert("✓ Sincronización completada
+"+d.resultados.map(x=>x.local+": "+(x.movimientos||0)+" movimientos"+(x.error?" ⚠ "+x.error:"")).join("
+"));}
+      else alert("Error en sincronización");
+    }catch(e){alert("Error al conectar con MP");}
+    setSincronizando(false);
+  };
+
+  const guardarCredencial=async()=>{
+    if(!configForm.local_id||!configForm.access_token)return;
+    await db.from("mp_credenciales").upsert([{local_id:parseInt(configForm.local_id),access_token:configForm.access_token,activo:true}],{onConflict:"local_id"});
+    setConfigModal(false);setConfigForm({local_id:"",access_token:""});load();
+  };
+
+  const ingresos=movimientos.filter(m=>m.monto>0).reduce((s,m)=>s+m.monto,0);
+  const egresos=movimientos.filter(m=>m.monto<0).reduce((s,m)=>s+Math.abs(m.monto),0);
+  const neto=ingresos-egresos;
+
+  const TIPO_LABELS={
+    "payment":"Cobro","money_transfer":"Transferencia","withdrawal":"Retiro",
+    "refund":"Devolución","dispute":"Disputa","tax":"Impuesto",
+    "fee":"Comisión","payout":"Liquidación"
+  };
+
+  const getTipoColor=(tipo,monto)=>{
+    if(monto>0)return "var(--success)";
+    if(tipo==="refund"||tipo==="dispute")return "var(--danger)";
+    if(tipo==="fee"||tipo==="tax")return "var(--warn)";
+    return "var(--muted2)";
+  };
+
+  return (
+    <div>
+      <div className="ph-row">
+        <div><div className="ph-title">Conciliación MP</div><div className="ph-sub">MercadoPago · {credenciales.filter(c=>c.activo).length} cuentas conectadas</div></div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <input type="month" className="search" style={{width:160}} value={mes} onChange={e=>setMes(e.target.value)}/>
+          <button className="btn btn-ghost" onClick={()=>setConfigModal(true)}>⚙ Cuentas MP</button>
+          <button className="btn btn-acc" onClick={sincronizar} disabled={sincronizando}>
+            {sincronizando?"🔄 Sincronizando...":"↻ Sincronizar ahora"}
+          </button>
+        </div>
+      </div>
+
+      {credenciales.length===0&&!loading&&(
+        <div className="alert alert-warn">
+          ⚠ No hay cuentas de MercadoPago configuradas. Cliclá en "⚙ Cuentas MP" para agregar las credenciales de cada local.
+        </div>
+      )}
+
+      <div className="grid3">
+        <div className="kpi"><div className="kpi-label">Ingresos MP</div><div className="kpi-value kpi-success">{fmt_$(ingresos)}</div><div className="kpi-sub">Cobros del período</div></div>
+        <div className="kpi"><div className="kpi-label">Egresos MP</div><div className="kpi-value kpi-danger">{fmt_$(egresos)}</div><div className="kpi-sub">Retiros y comisiones</div></div>
+        <div className="kpi"><div className="kpi-label">Neto MP</div><div className={`kpi-value ${neto>=0?"kpi-acc":"kpi-danger"}`}>{fmt_$(neto)}</div><div className="kpi-sub">Balance del período</div></div>
+      </div>
+
+      <div className="tabs">
+        {[["movimientos","Movimientos"],["cuentas","Estado de Cuentas"],["comisiones","Comisiones MP"]].map(([id,l])=>(
+          <div key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>{l}</div>
+        ))}
+      </div>
+
+      {loading?<div className="loading">Cargando...</div>:tab==="movimientos"?(
+        <div className="panel">
+          <div className="panel-hd">
+            <span className="panel-title">Movimientos — {movimientos.length} registros</span>
+            <span style={{fontSize:11,color:"var(--muted2)"}}>Se actualiza automáticamente cada hora</span>
+          </div>
+          {movimientos.length===0?<div className="empty">Sin movimientos. Sincronizá para traer los datos de MP.</div>:(
+            <table>
+              <thead><tr><th>Fecha</th><th>Local</th><th>Tipo</th><th>Descripción</th><th>Monto</th><th>Saldo</th></tr></thead>
+              <tbody>{movimientos.map(m=>(
+                <tr key={m.id}>
+                  <td className="mono" style={{fontSize:11}}>{new Date(m.fecha).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</td>
+                  <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===m.local_id)?.nombre||"—"}</td>
+                  <td><span className="badge b-muted">{TIPO_LABELS[m.tipo]||m.tipo}</span></td>
+                  <td style={{fontSize:11,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.descripcion||"—"}</td>
+                  <td><span className="num" style={{color:getTipoColor(m.tipo,m.monto)}}>{m.monto>0?"+":""}{fmt_$(m.monto)}</span></td>
+                  <td style={{color:"var(--muted2)"}}>{fmt_$(m.saldo)}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
+        </div>
+      ):tab==="cuentas"?(
+        <div className="panel">
+          <div className="panel-hd"><span className="panel-title">Estado de Cuentas por Local</span></div>
+          {credenciales.length===0?<div className="empty">Sin cuentas configuradas</div>:(
+            <table>
+              <thead><tr><th>Local</th><th>Estado</th><th>Última Sync</th><th>Ingresos mes</th><th>Egresos mes</th><th>Neto</th></tr></thead>
+              <tbody>{credenciales.map(c=>{
+                const movLocal=movimientos.filter(m=>m.local_id===c.local_id);
+                const ing=movLocal.filter(m=>m.monto>0).reduce((s,m)=>s+m.monto,0);
+                const egr=movLocal.filter(m=>m.monto<0).reduce((s,m)=>s+Math.abs(m.monto),0);
+                return(
+                  <tr key={c.id}>
+                    <td style={{fontWeight:500}}>{c.locales?.nombre||"—"}</td>
+                    <td><span className={`badge ${c.activo?"b-success":"b-muted"}`}>{c.activo?"Conectada":"Inactiva"}</span></td>
+                    <td className="mono" style={{fontSize:11}}>{c.ultima_sync?new Date(c.ultima_sync).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"Nunca"}</td>
+                    <td><span className="num kpi-success">{fmt_$(ing)}</span></td>
+                    <td><span className="num kpi-danger">{fmt_$(egr)}</span></td>
+                    <td><span className="num" style={{color:ing-egr>=0?"var(--acc)":"var(--danger)"}}>{fmt_$(ing-egr)}</span></td>
+                  </tr>
+                );
+              })}</tbody>
+            </table>
+          )}
+        </div>
+      ):(
+        <div className="panel">
+          <div className="panel-hd"><span className="panel-title">Comisiones y Retenciones MP</span></div>
+          {movimientos.filter(m=>["fee","tax"].includes(m.tipo)).length===0?<div className="empty">Sin comisiones en este período</div>:(
+            <table>
+              <thead><tr><th>Fecha</th><th>Local</th><th>Concepto</th><th>Monto</th></tr></thead>
+              <tbody>{movimientos.filter(m=>["fee","tax"].includes(m.tipo)).map(m=>(
+                <tr key={m.id}>
+                  <td className="mono" style={{fontSize:11}}>{fmt_d(m.fecha?.split("T")[0])}</td>
+                  <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===m.local_id)?.nombre||"—"}</td>
+                  <td style={{fontSize:11}}>{m.descripcion}</td>
+                  <td><span className="num kpi-danger">{fmt_$(m.monto)}</span></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
+          <div style={{padding:"12px 16px",borderTop:"1px solid var(--bd)",display:"flex",justifyContent:"space-between"}}>
+            <span style={{fontSize:11,color:"var(--muted2)"}}>Total comisiones y retenciones</span>
+            <span className="num kpi-danger">{fmt_$(movimientos.filter(m=>["fee","tax"].includes(m.tipo)).reduce((s,m)=>s+Math.abs(m.monto),0))}</span>
+          </div>
+        </div>
+      )}
+
+      {configModal&&(<div className="overlay" onClick={()=>setConfigModal(false)}><div className="modal" style={{width:580}} onClick={e=>e.stopPropagation()}>
+        <div className="modal-hd"><div className="modal-title">⚙ Configurar Cuentas MP</div><button className="close-btn" onClick={()=>setConfigModal(false)}>✕</button></div>
+        <div className="modal-body">
+          {credenciales.length>0&&(
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:10,letterSpacing:2,textTransform:"uppercase",color:"var(--muted2)",marginBottom:8}}>Cuentas configuradas</div>
+              {credenciales.map(c=>(
+                <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:"var(--s2)",borderRadius:"var(--r)",marginBottom:6}}>
+                  <div>
+                    <span style={{fontWeight:500,fontSize:12}}>{c.locales?.nombre}</span>
+                    <span style={{fontSize:10,color:"var(--muted)",marginLeft:8}}>...{c.access_token?.slice(-8)}</span>
+                  </div>
+                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                    {c.ultima_sync&&<span style={{fontSize:10,color:"var(--success)"}}>✓ Sync {new Date(c.ultima_sync).toLocaleDateString("es-AR")}</span>}
+                    <span className={`badge ${c.activo?"b-success":"b-muted"}`}>{c.activo?"Activa":"Inactiva"}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{padding:16,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)"}}>
+            <div style={{fontSize:11,fontWeight:600,marginBottom:12}}>Agregar / actualizar cuenta</div>
+            <div className="field"><label>Local</label>
+              <select value={configForm.local_id} onChange={e=>setConfigForm({...configForm,local_id:e.target.value})}>
+                <option value="">Seleccioná el local...</option>
+                {locales.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>Access Token de Producción</label>
+              <input value={configForm.access_token} onChange={e=>setConfigForm({...configForm,access_token:e.target.value})} placeholder="APP_USR-..."/>
+              <div style={{fontSize:10,color:"var(--muted)",marginTop:4}}>Mercado Pago → Tu negocio → Credenciales → Access Token de Producción</div>
+            </div>
+          </div>
+        </div>
+        <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setConfigModal(false)}>Cerrar</button><button className="btn btn-acc" onClick={guardarCredencial}>Guardar Credencial</button></div>
+      </div></div>)}
+    </div>
+  );
+}
+
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [section, setSection] = useState("dashboard");
@@ -2311,6 +2518,7 @@ export default function App() {
       case "insumos":   return <Insumos {...props}/>;
       case "lector_ia": return <LectorFacturasIA {...props}/>;
       case "recetas":   return <Recetas {...props}/>;
+      case "mp":        return <ConciliacionMP {...props}/>;
       case "proveedores": return <Proveedores {...props}/>;
       case "empleados": return <Empleados {...props}/>;
       case "config":    return <Config {...props}/>;
