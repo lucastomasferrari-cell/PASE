@@ -2280,28 +2280,39 @@ function Recetas({ locales, localActivo }) {
 
 
 // ─── CONCILIACION MERCADO PAGO ────────────────────────────────────────────────
-function ConciliacionMP({ locales, localActivo }) {
+function ConciliacionMP({ user, locales, localActivo }) {
   const [credenciales,setCredenciales]=useState([]);
   const [movimientos,setMovimientos]=useState([]);
+  const [facturas,setFacturas]=useState([]);
+  const [gastos,setGastos]=useState([]);
   const [loading,setLoading]=useState(true);
   const [sincronizando,setSincronizando]=useState(false);
   const [tab,setTab]=useState("movimientos");
   const [mes,setMes]=useState(toISO(today).slice(0,7));
   const [configModal,setConfigModal]=useState(false);
   const [configForm,setConfigForm]=useState({local_id:"",access_token:""});
+  const [conciliarModal,setConciliarModal]=useState(null); // movimiento a conciliar
+  const [conciliarTab,setConciliarTab]=useState("gasto"); // gasto | factura | nuevo
+  const [nuevoGastoForm,setNuevoGastoForm]=useState({categoria:"",detalle:""});
+  const [vinculoSel,setVinculoSel]=useState("");
 
   const load=async()=>{
     setLoading(true);
     const [myr,mmo]=mes.split("-").map(Number);
     const mlast=new Date(myr,mmo,0).getDate();
     const desde=mes+"-01T00:00:00",hasta=mes+"-"+String(mlast).padStart(2,"0")+"T23:59:59";
-    const [{data:c},{data:m}]=await Promise.all([
+    const desdeD=mes+"-01",hastaD=mes+"-"+String(mlast).padStart(2,"0");
+    const [{data:c},{data:m},{data:f},{data:g}]=await Promise.all([
       db.from("mp_credenciales").select("*,locales(nombre)"),
       db.from("mp_movimientos").select("*").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false}),
+      db.from("facturas").select("id,nro,fecha,total,local_id,cat,estado").gte("fecha",desdeD).lte("fecha",hastaD).order("fecha",{ascending:false}),
+      db.from("gastos").select("id,fecha,categoria,detalle,monto,local_id,cuenta").gte("fecha",desdeD).lte("fecha",hastaD).order("fecha",{ascending:false}),
     ]);
     setCredenciales(c||[]);
     const mFilt=(m||[]).filter(x=>!localActivo||x.local_id===localActivo);
     setMovimientos(mFilt);
+    setFacturas((f||[]).filter(x=>!localActivo||x.local_id===localActivo));
+    setGastos((g||[]).filter(x=>!localActivo||x.local_id===localActivo));
     setLoading(false);
   };
 
@@ -2325,11 +2336,19 @@ function ConciliacionMP({ locales, localActivo }) {
   };
 
   const ingresos=movimientos.filter(m=>m.monto>0).reduce((s,m)=>s+m.monto,0);
-  const egresos=movimientos.filter(m=>m.monto<0).reduce((s,m)=>s+Math.abs(m.monto),0);
+  const egresosList=movimientos.filter(m=>m.monto<0);
+  const egresos=egresosList.reduce((s,m)=>s+Math.abs(m.monto),0);
+  const egresosConciliados=egresosList.filter(m=>m.conciliado).reduce((s,m)=>s+Math.abs(m.monto),0);
+  const egresosPendientes=egresos-egresosConciliados;
+  const pendientesCount=egresosList.filter(m=>!m.conciliado).length;
   const neto=ingresos-egresos;
 
+  // Ventas presenciales: Point devices (POS físico) - transaction_amount se mapea a monto.
+  const ventasPresenciales=movimientos.filter(m=>m.tipo==="point"&&m.monto>0).reduce((s,m)=>s+m.monto,0);
+  const ventasOnline=movimientos.filter(m=>m.tipo==="payment"&&m.monto>0).reduce((s,m)=>s+m.monto,0);
+
   const TIPO_LABELS={
-    "payment":"Cobro","money_transfer":"Transferencia","withdrawal":"Retiro",
+    "payment":"Cobro Online","point":"Venta Presencial","money_transfer":"Transferencia","withdrawal":"Retiro",
     "refund":"Devolución","dispute":"Disputa","tax":"Impuesto",
     "fee":"Comisión","payout":"Liquidación"
   };
@@ -2339,6 +2358,67 @@ function ConciliacionMP({ locales, localActivo }) {
     if(tipo==="refund"||tipo==="dispute")return "var(--danger)";
     if(tipo==="fee"||tipo==="tax")return "var(--warn)";
     return "var(--muted2)";
+  };
+
+  const abrirConciliar=(mov)=>{
+    setConciliarModal(mov);
+    setConciliarTab("gasto");
+    setVinculoSel("");
+    setNuevoGastoForm({categoria:"",detalle:mov.descripcion||""});
+  };
+
+  const vincularMovimiento=async(tipo,id)=>{
+    if(!conciliarModal||!id)return;
+    await db.from("mp_movimientos").update({
+      conciliado:true,
+      vinculo_tipo:tipo,
+      vinculo_id:String(id),
+      conciliado_at:new Date().toISOString(),
+      conciliado_por:user?.nombre||user?.email||null,
+    }).eq("id",conciliarModal.id);
+    setConciliarModal(null);
+    load();
+  };
+
+  const crearGastoYConciliar=async()=>{
+    if(!conciliarModal||!nuevoGastoForm.categoria)return;
+    const montoAbs=Math.abs(conciliarModal.monto||0);
+    const esComision=conciliarModal.tipo==="fee"||conciliarModal.tipo==="tax";
+    const gastoTipo=esComision?"comision":"variable";
+    const nuevoId=genId("GASTO");
+    await db.from("gastos").insert([{
+      id:nuevoId,
+      fecha:(conciliarModal.fecha||"").split("T")[0]||toISO(today),
+      local_id:conciliarModal.local_id||null,
+      categoria:nuevoGastoForm.categoria,
+      monto:montoAbs,
+      detalle:nuevoGastoForm.detalle||conciliarModal.descripcion||"",
+      tipo:gastoTipo,
+      cuenta:"MercadoPago",
+    }]);
+    await db.from("movimientos").insert([{
+      id:genId("MOV"),
+      fecha:(conciliarModal.fecha||"").split("T")[0]||toISO(today),
+      cuenta:"MercadoPago",
+      tipo:"Conciliación MP "+(TIPO_LABELS[conciliarModal.tipo]||conciliarModal.tipo||""),
+      cat:nuevoGastoForm.categoria,
+      importe:-montoAbs,
+      detalle:nuevoGastoForm.detalle||conciliarModal.descripcion||"",
+      fact_id:null,
+    }]);
+    await vincularMovimiento("gasto",nuevoId);
+  };
+
+  const desconciliar=async(mov)=>{
+    if(!confirm("¿Quitar la conciliación de este movimiento?"))return;
+    await db.from("mp_movimientos").update({
+      conciliado:false,
+      vinculo_tipo:null,
+      vinculo_id:null,
+      conciliado_at:null,
+      conciliado_por:null,
+    }).eq("id",mov.id);
+    load();
   };
 
   return (
@@ -2361,9 +2441,25 @@ function ConciliacionMP({ locales, localActivo }) {
       )}
 
       <div className="grid3">
-        <div className="kpi"><div className="kpi-label">Ingresos MP</div><div className="kpi-value kpi-success">{fmt_$(ingresos)}</div><div className="kpi-sub">Cobros del período</div></div>
-        <div className="kpi"><div className="kpi-label">Egresos MP</div><div className="kpi-value kpi-danger">{fmt_$(egresos)}</div><div className="kpi-sub">Retiros y comisiones</div></div>
+        <div className="kpi"><div className="kpi-label">Ingresos MP</div><div className="kpi-value kpi-success">{fmt_$(ingresos)}</div><div className="kpi-sub">Online {fmt_$(ventasOnline)} · Presencial {fmt_$(ventasPresenciales)}</div></div>
+        <div className="kpi"><div className="kpi-label">Egresos MP</div><div className="kpi-value kpi-danger">{fmt_$(egresos)}</div><div className="kpi-sub">Retiros, comisiones y devoluciones</div></div>
         <div className="kpi"><div className="kpi-label">Neto MP</div><div className={`kpi-value ${neto>=0?"kpi-acc":"kpi-danger"}`}>{fmt_$(neto)}</div><div className="kpi-sub">Balance del período</div></div>
+      </div>
+
+      <div className={`alert ${egresosPendientes===0?"alert-success":"alert-warn"}`} style={{marginTop:12,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+        <div>
+          <div style={{fontWeight:600,fontSize:12}}>
+            {egresosPendientes===0?"✓ Todos los egresos están conciliados":`⚠ ${pendientesCount} egreso${pendientesCount===1?"":"s"} sin justificar`}
+          </div>
+          <div style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>
+            Cada egreso debe vincularse a una Factura o Gasto para que el saldo teórico coincida con el real.
+          </div>
+        </div>
+        <div style={{display:"flex",gap:16,fontSize:11}}>
+          <div><div style={{color:"var(--muted2)",fontSize:9,textTransform:"uppercase",letterSpacing:1}}>Total egresos</div><div className="num kpi-danger">{fmt_$(egresos)}</div></div>
+          <div><div style={{color:"var(--muted2)",fontSize:9,textTransform:"uppercase",letterSpacing:1}}>Justificado</div><div className="num kpi-success">{fmt_$(egresosConciliados)}</div></div>
+          <div><div style={{color:"var(--muted2)",fontSize:9,textTransform:"uppercase",letterSpacing:1}}>Diferencia</div><div className={`num ${egresosPendientes===0?"kpi-success":"kpi-danger"}`}>{fmt_$(egresosPendientes)}</div></div>
+        </div>
       </div>
 
       <div className="tabs">
@@ -2380,17 +2476,31 @@ function ConciliacionMP({ locales, localActivo }) {
           </div>
           {movimientos.length===0?<div className="empty">Sin movimientos. Sincronizá para traer los datos de MP.</div>:(
             <table>
-              <thead><tr><th>Fecha</th><th>Local</th><th>Tipo</th><th>Descripción</th><th>Monto</th><th>Saldo</th></tr></thead>
-              <tbody>{movimientos.map(m=>(
-                <tr key={m.id}>
+              <thead><tr><th>Fecha</th><th>Local</th><th>Tipo</th><th>Descripción</th><th>Monto</th><th>Saldo</th><th>Conciliación</th></tr></thead>
+              <tbody>{movimientos.map(m=>{
+                const esEgreso=m.monto<0;
+                const pend=esEgreso&&!m.conciliado;
+                return (
+                <tr key={m.id} style={pend?{background:"rgba(239,68,68,0.08)",borderLeft:"2px solid var(--danger)"}:undefined}>
                   <td className="mono" style={{fontSize:11}}>{new Date(m.fecha).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</td>
                   <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===m.local_id)?.nombre||"—"}</td>
-                  <td><span className="badge b-muted">{TIPO_LABELS[m.tipo]||m.tipo}</span></td>
+                  <td><span className="badge b-muted">{TIPO_LABELS[m.tipo]||m.tipo||"—"}</span></td>
                   <td style={{fontSize:11,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.descripcion||"—"}</td>
                   <td><span className="num" style={{color:getTipoColor(m.tipo,m.monto)}}>{m.monto>0?"+":""}{fmt_$(m.monto)}</span></td>
                   <td style={{color:"var(--muted2)"}}>{fmt_$(m.saldo)}</td>
+                  <td>
+                    {!esEgreso?<span style={{fontSize:10,color:"var(--muted)"}}>—</span>:
+                      m.conciliado?
+                        <span style={{display:"flex",gap:4,alignItems:"center"}}>
+                          <span className="badge b-success" style={{fontSize:9}}>✓ {m.vinculo_tipo||"ok"}</span>
+                          <button className="btn btn-ghost btn-sm" style={{fontSize:9,padding:"2px 6px"}} onClick={()=>desconciliar(m)}>✕</button>
+                        </span>
+                      :<button className="btn btn-warn btn-sm" style={{fontSize:10,padding:"3px 8px"}} onClick={()=>abrirConciliar(m)}>Conciliar</button>
+                    }
+                  </td>
                 </tr>
-              ))}</tbody>
+                );
+              })}</tbody>
             </table>
           )}
         </div>
@@ -2440,6 +2550,68 @@ function ConciliacionMP({ locales, localActivo }) {
           </div>
         </div>
       )}
+
+      {conciliarModal&&(<div className="overlay" onClick={()=>setConciliarModal(null)}><div className="modal" style={{width:640}} onClick={e=>e.stopPropagation()}>
+        <div className="modal-hd"><div className="modal-title">Conciliar egreso MP</div><button className="close-btn" onClick={()=>setConciliarModal(null)}>✕</button></div>
+        <div className="modal-body">
+          <div style={{padding:12,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)",marginBottom:12}}>
+            <div style={{fontSize:10,color:"var(--muted2)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Movimiento a justificar</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontWeight:600,fontSize:13}}>{TIPO_LABELS[conciliarModal.tipo]||conciliarModal.tipo}</div>
+                <div style={{fontSize:11,color:"var(--muted2)"}}>{conciliarModal.descripcion||"—"} · {fmt_d((conciliarModal.fecha||"").split("T")[0])}</div>
+              </div>
+              <div className="num kpi-danger" style={{fontSize:16}}>{fmt_$(conciliarModal.monto)}</div>
+            </div>
+          </div>
+          <div className="tabs" style={{marginBottom:12}}>
+            {[["gasto","Gasto existente"],["factura","Factura existente"],["nuevo","Crear Gasto nuevo"]].map(([id,l])=>(
+              <div key={id} className={`tab ${conciliarTab===id?"active":""}`} onClick={()=>{setConciliarTab(id);setVinculoSel("");}}>{l}</div>
+            ))}
+          </div>
+          {conciliarTab==="gasto"&&(
+            <div>
+              <div className="field"><label>Seleccioná un gasto del mes</label>
+                <select value={vinculoSel} onChange={e=>setVinculoSel(e.target.value)}>
+                  <option value="">— Elegir gasto —</option>
+                  {gastos.map(g=><option key={g.id} value={g.id}>{fmt_d(g.fecha)} · {g.categoria} · {fmt_$(g.monto)} · {g.detalle||""}</option>)}
+                </select>
+              </div>
+              {gastos.length===0&&<div style={{fontSize:11,color:"var(--muted2)"}}>No hay gastos cargados este mes. Creá uno nuevo en la pestaña "Crear Gasto nuevo".</div>}
+            </div>
+          )}
+          {conciliarTab==="factura"&&(
+            <div>
+              <div className="field"><label>Seleccioná una factura del mes</label>
+                <select value={vinculoSel} onChange={e=>setVinculoSel(e.target.value)}>
+                  <option value="">— Elegir factura —</option>
+                  {facturas.map(f=><option key={f.id} value={f.id}>{fmt_d(f.fecha)} · #{f.nro} · {fmt_$(f.total)} · {f.estado}</option>)}
+                </select>
+              </div>
+              {facturas.length===0&&<div style={{fontSize:11,color:"var(--muted2)"}}>No hay facturas cargadas este mes.</div>}
+            </div>
+          )}
+          {conciliarTab==="nuevo"&&(
+            <div>
+              <div className="alert alert-warn" style={{marginBottom:12}}>Se creará un gasto por {fmt_$(Math.abs(conciliarModal.monto||0))} con cuenta MercadoPago y se vinculará automáticamente.</div>
+              <div className="field"><label>Categoría *</label>
+                <select value={nuevoGastoForm.categoria} onChange={e=>setNuevoGastoForm({...nuevoGastoForm,categoria:e.target.value})}>
+                  <option value="">Seleccioná...</option>
+                  {(conciliarModal.tipo==="fee"||conciliarModal.tipo==="tax"?COMISIONES_CATS:[...GASTOS_VARIABLES,...GASTOS_FIJOS,...GASTOS_PUBLICIDAD]).map(c=><option key={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="field"><label>Detalle</label><input value={nuevoGastoForm.detalle} onChange={e=>setNuevoGastoForm({...nuevoGastoForm,detalle:e.target.value})} placeholder="Descripción..."/></div>
+            </div>
+          )}
+        </div>
+        <div className="modal-ft">
+          <button className="btn btn-sec" onClick={()=>setConciliarModal(null)}>Cancelar</button>
+          {conciliarTab==="nuevo"?
+            <button className="btn btn-acc" disabled={!nuevoGastoForm.categoria} onClick={crearGastoYConciliar}>Crear y conciliar</button>
+            :<button className="btn btn-acc" disabled={!vinculoSel} onClick={()=>vincularMovimiento(conciliarTab,vinculoSel)}>Vincular</button>
+          }
+        </div>
+      </div></div>)}
 
       {configModal&&(<div className="overlay" onClick={()=>setConfigModal(false)}><div className="modal" style={{width:580}} onClick={e=>e.stopPropagation()}>
         <div className="modal-hd"><div className="modal-title">⚙ Configurar Cuentas MP</div><button className="close-btn" onClick={()=>setConfigModal(false)}>✕</button></div>
