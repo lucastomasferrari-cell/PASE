@@ -32,15 +32,22 @@ export default async function handler(req, res) {
 
     for (const cred of creds) {
       try {
-        // Traer movimientos de los últimos 7 días
+        // Traer pagos de los últimos 7 días
+        const hasta = new Date();
         const desde = new Date();
         desde.setDate(desde.getDate() - 7);
-        const desdeISO = desde.toISOString();
+        const beginDate = desde.toISOString();
+        const endDate = hasta.toISOString();
 
-        const mpRes = await fetch(
-          `https://api.mercadopago.com/v1/account/movements/search?begin_date=${desdeISO}&limit=100`,
-          { headers: { Authorization: `Bearer ${cred.access_token}` } }
-        );
+        const mpUrl =
+          `https://api.mercadopago.com/v1/payments/search?` +
+          `begin_date=${encodeURIComponent(beginDate)}` +
+          `&end_date=${encodeURIComponent(endDate)}` +
+          `&sort=date_created&criteria=desc`;
+
+        const mpRes = await fetch(mpUrl, {
+          headers: { Authorization: `Bearer ${cred.access_token}` },
+        });
         const mpData = await mpRes.json();
 
         if (!mpRes.ok) {
