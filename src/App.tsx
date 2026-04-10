@@ -6,12 +6,17 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const CATEGORIAS_COMPRA = ["PESCADERIA","CARNICERIA","VERDULERIA","BEBIDAS","VINOS","ALMACEN","PACKAGING","PAPELERIA","BARRIO CHINO","PRODUCTOS ORIENTALES","SUPERMERCADO","HIELO","LIMPIEZA","CONTADOR","PUBLICIDAD","EXPENSAS","PROPINAS","SUSHIMAN PM","EQUIPAMIENTO","SUELDOS","OTROS"];
-const MEDIOS_COBRO = ["EFECTIVO SALON","TARJETA CREDITO","TARJETA DEBITO","QR","LINK","RAPPI ONLINE","PEYA ONLINE","PEYA EFECTIVO","MP DELIVERY","BIGBOX","FANBAG","EVENTO","TRANSFERENCIA","Point MP","Point Nave","NAVE"];
+const MEDIOS_COBRO = ["EFECTIVO SALON","TARJETA CREDITO","TARJETA DEBITO","QR","LINK","RAPPI ONLINE","PEYA ONLINE","PEYA EFECTIVO","MP DELIVERY","BIGBOX","FANBAG","EVENTO","TRANSFERENCIA","Point MP","Point Nave","NAVE","MASDELIVERY ONLINE","EFECTIVO DELIVERY"];
 const CUENTAS = ["Caja Chica","Caja Mayor","MercadoPago","Banco"];
 const UNIDADES = ["kg","g","litro","ml","unidad","caja","bolsa","docena"];
+const GASTOS_FIJOS = ["ALQUILER","EDESUR","METROGAS","AYSA","INTERNET","MAXIREST","WOKI","SEGURO","FUMIGACION","ABL","EXPENSAS","AQA","CONTADOR","OTROS FIJOS"];
+const GASTOS_VARIABLES = ["COMPRAS MERCADO LIBRE","ENVIOS","LIBRERIA","BAZAR","FARMACIA","MANTENIMIENTO","EQUIPAMIENTO","DEVOLUCIONES CLIENTES","PERSONAL","AJUSTE","GASTOS VARIOS"];
+const GASTOS_PUBLICIDAD = ["PIMENTON","COMMUNITY MANAGER","PRENSA Y PAUTA FB","FOTOGRAFIA Y ACCIONES","RAPPI CUOTA ADS","OTRAS PUBLICIDAD"];
+const COMISIONES_CATS = ["MERCADOPAGO","RAPPI","PEDIDOS YA","MASDELIVERY","BANCARIAS NAVE","COMPENSACIONES","OTRAS COMISIONES"];
+
 const ROLES = {
-  dueno:   { label:"Dueño",    color:"#E8C547", permisos:["dashboard","ventas","compras","remitos","caja","eerr","proveedores","empleados","config"] },
-  admin:   { label:"Admin",    color:"#3B82F6", permisos:["dashboard","ventas","compras","remitos","caja","proveedores","empleados"] },
+  dueno:   { label:"Dueño",    color:"#E8C547", permisos:["dashboard","ventas","compras","remitos","gastos","caja","eerr","contador","proveedores","empleados","config","maxirest"] },
+  admin:   { label:"Admin",    color:"#3B82F6", permisos:["dashboard","ventas","compras","remitos","gastos","caja","proveedores","empleados"] },
   compras: { label:"Compras",  color:"#8B5CF6", permisos:["compras","remitos","proveedores"] },
   cajero:  { label:"Cajero",   color:"#10B981", permisos:["caja","dashboard"] },
 };
@@ -161,9 +166,12 @@ function Sidebar({ user, section, onNav, onLogout, locales, localActivo, setLoca
     {id:"ventas",label:"Ventas",icon:"↑",sec:"Operaciones"},
     {id:"compras",label:"Facturas",icon:"📄",sec:"Operaciones"},
     {id:"remitos",label:"Remitos",icon:"🚚",sec:"Operaciones"},
+    {id:"gastos",label:"Gastos",icon:"💸",sec:"Operaciones"},
     {id:"proveedores",label:"Proveedores",icon:"🏭",sec:"Operaciones"},
+    {id:"maxirest",label:"Import Maxirest",icon:"📥",sec:"Operaciones"},
     {id:"caja",label:"Caja & Bancos",icon:"💰",sec:"Finanzas"},
     {id:"eerr",label:"Estado de Result.",icon:"📊",sec:"Finanzas"},
+    {id:"contador",label:"Contador / IVA",icon:"🧾",sec:"Finanzas"},
     {id:"empleados",label:"Empleados",icon:"👷",sec:"RRHH"},
     {id:"config",label:"Usuarios",icon:"👥",sec:"Config"},
   ];
@@ -1128,7 +1136,7 @@ function Empleados({ locales }) {
   const [search, setSearch] = useState("");
   const [pct, setPct] = useState("");
   const [pagoForm, setPagoForm] = useState({cuenta:"Banco",fecha:toISO(today),monto:""});
-  const emptyForm = {nombre:"",legajo:"",local_id:"",puesto:"",sueldo:"",fecha_ingreso:toISO(today),estado:"Activo"};
+  const emptyForm = {nombre:"",legajo:"",local_id:"",puesto:"",sueldo:"",fecha_ingreso:toISO(today),fecha_alta_afip:"",estado:"Activo"};
   const [form, setForm] = useState(emptyForm);
 
   const load = async () => {
@@ -1181,7 +1189,7 @@ function Empleados({ locales }) {
       </div>
       <div className="panel">
         {loading?<div className="loading">Cargando...</div>:eFilt.length===0?<div className="empty">No hay empleados</div>:(
-          <table><thead><tr><th>Nombre</th><th>Legajo</th><th>Puesto</th><th>Local</th><th>Sueldo</th><th>Estado</th><th></th></tr></thead>
+          <table><thead><tr><th>Nombre</th><th>Legajo</th><th>Puesto</th><th>Local</th><th>Ingreso</th><th>Alta AFIP</th><th>Sueldo</th><th>Estado</th><th></th></tr></thead>
           <tbody>{eFilt.map(e=>(
             <tr key={e.id} style={{opacity:e.estado==="Inactivo"?0.5:1}}>
               <td style={{fontWeight:500}}>{e.nombre}</td>
@@ -1215,9 +1223,10 @@ function Empleados({ locales }) {
                 <div className="field"><label>Local</label><select value={form.local_id} onChange={e=>setForm({...form,local_id:e.target.value})}><option value="">Sin asignar</option>{locales.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
               </div>
               <div className="form2">
-                <div className="field"><label>Sueldo mensual $</label><input type="number" value={form.sueldo} onChange={e=>setForm({...form,sueldo:e.target.value})} placeholder="0"/></div>
-                <div className="field"><label>Fecha de ingreso</label><input type="date" value={form.fecha_ingreso} onChange={e=>setForm({...form,fecha_ingreso:e.target.value})}/></div>
+                <div className="field"><label>Fecha de Ingreso</label><input type="date" value={form.fecha_ingreso} onChange={e=>setForm({...form,fecha_ingreso:e.target.value})}/></div>
+                <div className="field"><label>Fecha Alta AFIP</label><input type="date" value={form.fecha_alta_afip||""} onChange={e=>setForm({...form,fecha_alta_afip:e.target.value})}/></div>
               </div>
+              <div className="field"><label>Sueldo mensual $</label><input type="number" value={form.sueldo} onChange={e=>setForm({...form,sueldo:e.target.value})} placeholder="0"/></div>
             </div>
             <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar}>Guardar</button></div>
           </div>
@@ -1359,6 +1368,240 @@ function Config({ locales }) {
 }
 
 // ─── APP ──────────────────────────────────────────────────────────────────────
+
+// ─── GASTOS ───────────────────────────────────────────────────────────────────
+function Gastos({ user, locales, localActivo }) {
+  const [gastos,setGastos]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [tab,setTab]=useState("fijos");
+  const [modal,setModal]=useState(false);
+  const [mes,setMes]=useState(toISO(today).slice(0,7));
+  const emptyForm={fecha:toISO(today),local_id:"",categoria:"",monto:"",detalle:"",cuenta:"MercadoPago"};
+  const [form,setForm]=useState(emptyForm);
+  const load=async()=>{
+    setLoading(true);
+    let q=db.from("gastos").select("*").gte("fecha",mes+"-01").lte("fecha",mes+"-31").order("fecha",{ascending:false});
+    if(localActivo)q=q.eq("local_id",localActivo);
+    const {data}=await q;setGastos(data||[]);setLoading(false);
+  };
+  useEffect(()=>{load();},[mes,localActivo]);
+  const getCats=()=>tab==="fijos"?GASTOS_FIJOS:tab==="variables"?GASTOS_VARIABLES:tab==="publicidad"?GASTOS_PUBLICIDAD:COMISIONES_CATS;
+  const getTipo=()=>tab==="fijos"?"fijo":tab==="variables"?"variable":tab==="publicidad"?"publicidad":"comision";
+  const gFilt=gastos.filter(g=>g.tipo===getTipo());
+  const totalMes=gastos.reduce((s,g)=>s+(g.monto||0),0);
+  const totalTab=gFilt.reduce((s,g)=>s+(g.monto||0),0);
+  const guardar=async()=>{
+    if(!form.monto||!form.categoria)return;
+    const nuevo={...form,id:genId("GASTO"),tipo:getTipo(),local_id:form.local_id?parseInt(form.local_id):null,monto:parseFloat(form.monto)};
+    await db.from("gastos").insert([nuevo]);
+    const {data:caja}=await db.from("saldos_caja").select("saldo").eq("cuenta",form.cuenta).single();
+    if(caja)await db.from("saldos_caja").update({saldo:(caja.saldo||0)-parseFloat(form.monto)}).eq("cuenta",form.cuenta);
+    await db.from("movimientos").insert([{id:genId("MOV"),fecha:form.fecha,cuenta:form.cuenta,tipo:"Gasto "+getTipo(),cat:form.categoria,importe:-parseFloat(form.monto),detalle:form.detalle||form.categoria,fact_id:null}]);
+    setModal(false);setForm(emptyForm);load();
+  };
+  const tabLabels=[["fijos","Gastos Fijos"],["variables","Gastos Variables"],["publicidad","Publicidad y MKT"],["comisiones","Comisiones"]];
+  return (
+    <div>
+      <div className="ph-row">
+        <div><div className="ph-title">Gastos</div><div className="ph-sub">Total mes: {fmt_$(totalMes)}</div></div>
+        <div style={{display:"flex",gap:8}}>
+          <input type="month" className="search" style={{width:160}} value={mes} onChange={e=>setMes(e.target.value)}/>
+          <button className="btn btn-acc" onClick={()=>{setForm(emptyForm);setModal(true)}}>+ Cargar Gasto</button>
+        </div>
+      </div>
+      <div className="tabs">{tabLabels.map(([id,l])=><div key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>{l}</div>)}</div>
+      <div className="panel">
+        <div className="panel-hd"><span className="panel-title">{tabLabels.find(t=>t[0]===tab)?.[1]}</span><span className="num kpi-warn">{fmt_$(totalTab)}</span></div>
+        {loading?<div className="loading">Cargando...</div>:gFilt.length===0?<div className="empty">No hay gastos este mes</div>:(
+          <table><thead><tr><th>Fecha</th><th>Categoría</th><th>Detalle</th><th>Local</th><th>Cuenta</th><th>Monto</th></tr></thead>
+          <tbody>{gFilt.map(g=>(
+            <tr key={g.id}>
+              <td className="mono">{fmt_d(g.fecha)}</td>
+              <td><span className="badge b-muted">{g.categoria}</span></td>
+              <td style={{fontSize:11,color:"var(--muted2)"}}>{g.detalle||"—"}</td>
+              <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===g.local_id)?.nombre||"Todos"}</td>
+              <td style={{fontSize:11,color:"var(--muted2)"}}>{g.cuenta||"—"}</td>
+              <td><span className="num kpi-danger">{fmt_$(g.monto)}</span></td>
+            </tr>
+          ))}</tbody></table>
+        )}
+      </div>
+      {modal&&(<div className="overlay" onClick={()=>setModal(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
+        <div className="modal-hd"><div className="modal-title">Cargar — {tabLabels.find(t=>t[0]===tab)?.[1]}</div><button className="close-btn" onClick={()=>setModal(false)}>✕</button></div>
+        <div className="modal-body">
+          <div className="form2">
+            <div className="field"><label>Categoría *</label><select value={form.categoria} onChange={e=>setForm({...form,categoria:e.target.value})}><option value="">Seleccioná...</option>{getCats().map(c=><option key={c}>{c}</option>)}</select></div>
+            <div className="field"><label>Local</label><select value={form.local_id} onChange={e=>setForm({...form,local_id:e.target.value})}><option value="">Todos</option>{locales.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
+          </div>
+          <div className="form2">
+            <div className="field"><label>Fecha</label><input type="date" value={form.fecha} onChange={e=>setForm({...form,fecha:e.target.value})}/></div>
+            <div className="field"><label>Cuenta de egreso</label><select value={form.cuenta} onChange={e=>setForm({...form,cuenta:e.target.value})}>{CUENTAS.map(c=><option key={c}>{c}</option>)}</select></div>
+          </div>
+          <div className="field"><label>Monto $</label><input type="number" value={form.monto} onChange={e=>setForm({...form,monto:e.target.value})} placeholder="0"/></div>
+          <div className="field"><label>Detalle</label><input value={form.detalle} onChange={e=>setForm({...form,detalle:e.target.value})} placeholder="Descripción..."/></div>
+        </div>
+        <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar}>Guardar</button></div>
+      </div></div>)}
+    </div>
+  );
+}
+
+// ─── CONTADOR ─────────────────────────────────────────────────────────────────
+function Contador({ locales, localActivo }) {
+  const [facturas,setFacturas]=useState([]);
+  const [ventas,setVentas]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [tab,setTab]=useState("iva");
+  const [mes,setMes]=useState(toISO(today).slice(0,7));
+  useEffect(()=>{
+    const load=async()=>{
+      setLoading(true);
+      const desde=mes+"-01",hasta=mes+"-31";
+      const [{data:f},{data:v}]=await Promise.all([
+        db.from("facturas").select("*").gte("fecha",desde).lte("fecha",hasta).neq("estado","anulada"),
+        db.from("ventas").select("*").gte("fecha",desde).lte("fecha",hasta),
+      ]);
+      setFacturas((f||[]).filter(x=>!localActivo||x.local_id===localActivo));
+      setVentas((v||[]).filter(x=>!localActivo||x.local_id===localActivo));
+      setLoading(false);
+    };
+    load();
+  },[mes,localActivo]);
+  const ivaC21=facturas.reduce((s,f)=>s+(f.iva21||0),0);
+  const ivaC105=facturas.reduce((s,f)=>s+(f.iva105||0),0);
+  const totalIvaC=ivaC21+ivaC105;
+  const totalV=ventas.reduce((s,v)=>s+(v.monto||0),0);
+  const ivaV=totalV/1.21*0.21;
+  const pos=ivaV-totalIvaC;
+  const exportCSV=(rows,fn)=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"}));a.download=fn;a.click();};
+  return (
+    <div>
+      <div className="ph-row">
+        <div><div className="ph-title">Contador / IVA</div><div className="ph-sub">Libros y posición fiscal</div></div>
+        <input type="month" className="search" style={{width:160}} value={mes} onChange={e=>setMes(e.target.value)}/>
+      </div>
+      <div className="tabs">
+        {[["iva","Monitor IVA"],["compras","Libro IVA Compras"],["ventas_l","Libro IVA Ventas"]].map(([id,l])=>(
+          <div key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>{l}</div>
+        ))}
+      </div>
+      {loading?<div className="loading">Cargando...</div>:tab==="iva"?(
+        <>
+          <div className="grid3">
+            <div className="kpi"><div className="kpi-label">IVA Ventas (Débito)</div><div className="kpi-value kpi-danger">{fmt_$(ivaV)}</div><div className="kpi-sub">Estimado s/ {fmt_$(totalV)}</div></div>
+            <div className="kpi"><div className="kpi-label">IVA Compras (Crédito)</div><div className="kpi-value kpi-success">{fmt_$(totalIvaC)}</div><div className="kpi-sub">21%: {fmt_$(ivaC21)} · 10.5%: {fmt_$(ivaC105)}</div></div>
+            <div className="kpi"><div className="kpi-label">Posición Neta</div><div className={`kpi-value ${pos>0?"kpi-danger":"kpi-success"}`}>{fmt_$(pos)}</div><div className="kpi-sub">{pos>0?"⚠ A pagar a AFIP":"✓ Saldo a favor"}</div></div>
+          </div>
+          <div className="panel">
+            <div className="panel-hd"><span className="panel-title">Resumen Fiscal — {mes}</span></div>
+            <div style={{padding:"8px 0 12px"}}>
+              {[["Débito Fiscal (IVA ventas)",ivaV,"var(--danger)"],["(-) Crédito Fiscal",-totalIvaC,"var(--success)"],["(=) Posición Neta",pos,pos>0?"var(--danger)":"var(--success)"]].map(([l,v,c],i)=>(
+                <div key={i} className="eerr-row" style={i===2?{background:"var(--s2)",padding:"12px 16px"}:{}}>
+                  <span style={{fontSize:i===2?13:12,fontWeight:i===2?600:400}}>{l}</span>
+                  <span style={{fontFamily:"'Syne',sans-serif",fontSize:i===2?22:16,fontWeight:700,color:c}}>{fmt_$(v)}</span>
+                </div>
+              ))}
+              <div style={{margin:"12px 16px 0",padding:"10px 12px",background:pos>50000?"rgba(239,68,68,.08)":"rgba(34,197,94,.08)",border:`1px solid ${pos>50000?"rgba(239,68,68,.3)":"rgba(34,197,94,.3)"}`,borderRadius:"var(--r)",fontSize:11}}>
+                {pos>50000?"⚠ Posición IVA elevada. Considerá hacer más compras con factura.":"✓ Posición IVA bajo control."}
+              </div>
+            </div>
+          </div>
+        </>
+      ):tab==="compras"?(
+        <div className="panel">
+          <div className="panel-hd">
+            <span className="panel-title">Libro IVA Compras — {mes} ({facturas.length} comp.)</span>
+            <button className="btn btn-acc btn-sm" onClick={()=>exportCSV([["Fecha","Nro Factura","Neto","IVA 21","IVA 10.5","IIBB","Total"],...facturas.map(f=>[f.fecha,f.nro,f.neto,f.iva21,f.iva105,f.iibb,f.total])],`libro_compras_${mes}.csv`)}>⬇ Exportar CSV</button>
+          </div>
+          {facturas.length===0?<div className="empty">Sin facturas</div>:(
+            <table><thead><tr><th>Fecha</th><th>Nº Factura</th><th>Neto</th><th>IVA 21%</th><th>IVA 10.5%</th><th>IIBB</th><th>Total</th></tr></thead>
+            <tbody>{facturas.map(f=><tr key={f.id}><td className="mono">{fmt_d(f.fecha)}</td><td className="mono">{f.nro}</td><td>{fmt_$(f.neto)}</td><td style={{color:"var(--warn)"}}>{fmt_$(f.iva21)}</td><td style={{color:"var(--warn)"}}>{fmt_$(f.iva105)}</td><td style={{color:"var(--muted2)"}}>{fmt_$(f.iibb)}</td><td><span className="num kpi-acc">{fmt_$(f.total)}</span></td></tr>)}</tbody>
+          </table>)}
+        </div>
+      ):(
+        <div className="panel">
+          <div className="panel-hd">
+            <span className="panel-title">Libro IVA Ventas — {mes} ({ventas.length} reg.)</span>
+            <button className="btn btn-acc btn-sm" onClick={()=>exportCSV([["Fecha","Local","Forma Cobro","Total","Neto Est","IVA 21 Est"],...ventas.map(v=>[v.fecha,locales.find(l=>l.id===v.local_id)?.nombre,v.medio,v.monto,(v.monto/1.21).toFixed(2),(v.monto/1.21*0.21).toFixed(2)])],`libro_ventas_${mes}.csv`)}>⬇ Exportar CSV</button>
+          </div>
+          {ventas.length===0?<div className="empty">Sin ventas</div>:(
+            <table><thead><tr><th>Fecha</th><th>Local</th><th>Forma de Cobro</th><th>Total</th><th>Neto Est.</th><th>IVA Est.</th></tr></thead>
+            <tbody>{ventas.map(v=><tr key={v.id}><td className="mono">{fmt_d(v.fecha)}</td><td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===v.local_id)?.nombre}</td><td>{v.medio}</td><td><span className="num kpi-success">{fmt_$(v.monto)}</span></td><td style={{color:"var(--muted2)"}}>{fmt_$(v.monto/1.21)}</td><td style={{color:"var(--warn)"}}>{fmt_$(v.monto/1.21*0.21)}</td></tr>)}</tbody>
+          </table>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── IMPORTAR MAXIREST ────────────────────────────────────────────────────────
+function ImportarMaxirest({ locales }) {
+  const [texto,setTexto]=useState("");
+  const [preview,setPreview]=useState(null);
+  const [loading,setLoading]=useState(false);
+  const MMAP={"EFECTIVO SALON":"EFECTIVO SALON","EFECTIVO DELIVERY":"EFECTIVO DELIVERY","TARJETA DEBITO":"TARJETA DEBITO","TARJETA CREDITO":"TARJETA CREDITO","RAPPI ONLINE":"RAPPI ONLINE","PEYA ONLINE":"PEYA ONLINE","MP DELIVERY":"MP DELIVERY","MASDELIVERY ONLINE":"MASDELIVERY ONLINE","BIGBOX":"BIGBOX","FANBAG":"FANBAG","TRANSFERENCIA":"TRANSFERENCIA","QR":"QR","LINK":"LINK","POINT NAVE":"Point Nave"};
+  const parsear=()=>{
+    if(!texto.trim())return;
+    let fecha=toISO(today);
+    const fm=texto.match(/(\w+)\s+(\d+)\s+de\s+(\w+)\s+de\s+(\d{4})/i);
+    if(fm){const ms={enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,octubre:10,noviembre:11,diciembre:12};const m=ms[fm[3].toLowerCase()];if(m)fecha=`${fm[4]}-${String(m).padStart(2,"0")}-${String(fm[2]).padStart(2,"0")}`;}
+    const tm=texto.match(/Turno\s+\d+\s+\((\w+)/i);
+    const turno=tm?.[1]==="Noche"?"Noche":"Mediodía";
+    let local_id=locales[0]?.id;
+    if(texto.includes("Villa Crespo")||texto.includes("Juan Ramirez"))local_id=locales.find(l=>l.nombre.includes("Villa Crespo"))?.id||local_id;
+    else if(texto.includes("Belgrano"))local_id=locales.find(l=>l.nombre.includes("Belgrano"))?.id||local_id;
+    else if(texto.includes("Devoto"))local_id=locales.find(l=>l.nombre.includes("Devoto"))?.id||local_id;
+    else if(texto.includes("Palermo"))local_id=locales.find(l=>l.nombre.includes("Palermo"))?.id||local_id;
+    else if(texto.includes("Rene")||texto.includes("Cantina"))local_id=locales.find(l=>l.nombre.includes("Rene"))?.id||local_id;
+    const ventas=[];
+    const idx=texto.indexOf("VENTAS POR FORMA DE COBRO");
+    if(idx>-1){
+      texto.slice(idx).split("\n").forEach(line=>{
+        const m=line.match(/^(.+?)\s+([\d.]+)\s+(\d+)\s*$/);
+        if(m){const mr=m[1].trim().toUpperCase();const monto=parseFloat(m[2]);const cant=parseInt(m[3]);if(monto>0&&!mr.includes("TOTAL")){ventas.push({medio:MMAP[mr]||mr,monto,cant,fecha,turno,local_id});}}
+      });
+    }
+    setPreview({fecha,turno,local_id,ventas});
+  };
+  const confirmar=async()=>{
+    if(!preview||preview.ventas.length===0)return;
+    setLoading(true);
+    await db.from("ventas").insert(preview.ventas.map(v=>({...v,id:genId("V"),local_id:parseInt(v.local_id)})));
+    setLoading(false);setTexto("");setPreview(null);
+    alert("✓ Importado: "+preview.ventas.length+" registros · Total: "+fmt_$(preview.ventas.reduce((s,v)=>s+v.monto,0)));
+  };
+  return (
+    <div>
+      <div className="ph-row"><div><div className="ph-title">Importar Maxirest</div><div className="ph-sub">Pegá el texto del mail de cierre de turno</div></div></div>
+      <div className="panel">
+        <div className="panel-hd"><span className="panel-title">Texto del mail de cierre</span></div>
+        <div style={{padding:16}}>
+          <textarea style={{width:"100%",height:280,background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--txt)",padding:"10px 12px",fontFamily:"'DM Mono',monospace",fontSize:11,borderRadius:"var(--r)",outline:"none",resize:"vertical"}} placeholder="Pegá acá el texto completo del mail de cierre de Maxirest..." value={texto} onChange={e=>setTexto(e.target.value)}/>
+          <button className="btn btn-acc" style={{marginTop:8}} onClick={parsear}>Analizar texto</button>
+        </div>
+      </div>
+      {preview&&(
+        <div className="panel">
+          <div className="panel-hd"><span className="panel-title">Preview — {fmt_d(preview.fecha)} · {preview.turno} · {locales.find(l=>l.id===preview.local_id)?.nombre}</span></div>
+          <div style={{padding:16}}>
+            {preview.ventas.length>0?(
+              <>
+                <table style={{marginBottom:12}}><thead><tr><th>Forma de Cobro</th><th>Monto</th><th>Cant.</th></tr></thead>
+                <tbody>{preview.ventas.map((v,i)=><tr key={i}><td>{v.medio}</td><td><span className="num kpi-success">{fmt_$(v.monto)}</span></td><td style={{color:"var(--muted2)"}}>{v.cant}</td></tr>)}</tbody></table>
+                <div style={{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:700,color:"var(--success)",marginBottom:16}}>Total: {fmt_$(preview.ventas.reduce((s,v)=>s+v.monto,0))}</div>
+              </>
+            ):<div className="alert alert-warn">No se detectaron ventas. Verificá el formato.</div>}
+            <div style={{display:"flex",gap:8}}>
+              <button className="btn btn-sec" onClick={()=>setPreview(null)}>Cancelar</button>
+              <button className="btn btn-acc" onClick={confirmar} disabled={loading||preview.ventas.length===0}>{loading?"Importando...":"✓ Confirmar e Importar"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [section, setSection] = useState("dashboard");
@@ -1386,6 +1629,9 @@ export default function App() {
       case "remitos":   return <Remitos {...props}/>;
       case "caja":      return <Caja {...props}/>;
       case "eerr":      return <EERR {...props}/>;
+      case "gastos":    return <Gastos {...props}/>;
+      case "contador":  return <Contador {...props}/>;
+      case "maxirest":  return <ImportarMaxirest {...props}/>;
       case "proveedores": return <Proveedores {...props}/>;
       case "empleados": return <Empleados {...props}/>;
       case "config":    return <Config {...props}/>;
