@@ -1849,7 +1849,7 @@ function LectorFacturasIA({ locales, localActivo }) {
       const isImg=archivo.type.startsWith("image/");
       const mediaType=isImg?archivo.type:"application/pdf";
 
-      const response=await fetch("https://api.anthropic.com/v1/messages",{
+      const response=await fetch("/api/claude",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
