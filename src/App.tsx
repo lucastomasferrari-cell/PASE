@@ -1917,7 +1917,10 @@ Si algún campo no existe en la factura, poné 0 o null según corresponda. Los 
   };
 
   const guardar=async()=>{
-    if(!form.prov_id||!form.nro||!form.local_id)return;
+    if(!form.prov_id&&!form.local_id){alert("⚠ Seleccioná el proveedor y el local antes de guardar.");return;}
+    if(!form.prov_id){alert("⚠ Seleccioná el proveedor antes de guardar.");return;}
+    if(!form.local_id){alert("⚠ Seleccioná el local antes de guardar.");return;}
+    if(!form.nro){alert("⚠ Completá el número de factura.");return;}
     setGuardando(true);
     const id=genId("FACT");
     await db.from("facturas").insert([{...form,id,prov_id:parseInt(form.prov_id),local_id:parseInt(form.local_id),neto:parseFloat(form.neto)||0,iva21:parseFloat(form.iva21)||0,iva105:parseFloat(form.iva105)||0,iibb:parseFloat(form.iibb)||0,total:parseFloat(form.total)||0,estado:"pendiente",pagos:[]}]);
