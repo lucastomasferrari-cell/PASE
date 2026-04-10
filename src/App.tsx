@@ -2312,10 +2312,8 @@ function ConciliacionMP({ locales, localActivo }) {
     try{
       const r=await fetch("/api/mp-sync",{method:"POST"});
       const d=await r.json();
-      if(d.ok){await load();alert("✓ Sincronización completada
-"+d.resultados.map(x=>x.local+": "+(x.movimientos||0)+" movimientos"+(x.error?" ⚠ "+x.error:"")).join("
-"));}
-      else alert("Error en sincronización");
+      if(d.ok){await load();alert("Sincronizacion completada: "+d.resultados.map(x=>x.local+": "+(x.movimientos||0)+" mov"+(x.error?" ERR:"+x.error:"")).join(", "));}
+      else alert("Error en sincronizacion");
     }catch(e){alert("Error al conectar con MP");}
     setSincronizando(false);
   };
