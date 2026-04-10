@@ -1061,8 +1061,9 @@ function EERR({ locales, localActivo }) {
         db.from("facturas").select("*").gte("fecha",desde).lte("fecha",hasta).eq("estado","pagada"),
         db.from("movimientos").select("*").gte("fecha",desde).lte("fecha",hasta).eq("cat","SUELDOS"),
       ]);
-      setVentas((v||[]).filter(x=>!localActivo||x.local_id===localActivo));
-      setFacturas((f||[]).filter(x=>!localActivo||x.local_id===localActivo));
+const lid=localActivo?parseInt(localActivo):null;
+setVentas((v||[]).filter(x=>!lid||parseInt(x.local_id)===lid));
+setFacturas((f||[]).filter(x=>!lid||parseInt(x.local_id)===lid));
       setSueldos((m||[]).filter(x=>!localActivo||true).reduce((s,x)=>s+Math.abs(x.importe||0),0));
       setLoading(false);
     };
