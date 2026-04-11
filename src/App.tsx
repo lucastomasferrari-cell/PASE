@@ -2329,7 +2329,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
       if(d.ok){
         await load();
         const lines=(d.resultados||[]).flatMap(x=>{
-          const header=[x.local+" (local "+x.local_id+")"+": "+(x.movimientos||0)+" mov"];
+          const header=[x.local+" (local "+x.local_id+(x.account_id?", mp_id "+x.account_id:"")+")"+": "+(x.movimientos||0)+" mov"];
           if(x.balance_fuente)header.push("fuente: "+x.balance_fuente);
           if(x.error)header.push("ERR: "+x.error);
           if(x.upd_error)header.push("DB err: "+x.upd_error);

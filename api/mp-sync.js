@@ -37,14 +37,15 @@ function matchEgresoKeyword(pago) {
 
 // Clasifica un pago como ingreso (+) o egreso (-) y devuelve el tipo de UI.
 // Orden de reglas (primera que matchee gana):
-//  1. Keyword de proveedor/servicio conocido → egreso (payment_out).
-//  2. operation_type money_transfer / recurring_payment / investment /
-//     cellphone_recharge / bank_withdrawal → egreso con tipo específico.
-//  3. operation_type regular_payment + payer.id === miId → egreso (le pagamos a alguien).
-//  4. operation_type regular_payment + collector.id === miId → ingreso (nos pagaron).
-//  5. Fallback: ingreso (point si es POS físico, payment si es online).
+//  1. collector_id === miId → INGRESO (nos pagaron: somos el receptor).
+//  2. payer.id === miId → EGRESO (nosotros pagamos a alguien).
+//  3. transaction_amount < 0 → EGRESO.
+//  4. operation_type money_transfer / recurring_payment / investment /
+//     cellphone_recharge / bank_withdrawal → EGRESO con tipo específico.
+//  5. Keyword de proveedor/servicio conocido → EGRESO (payment_out).
+//  6. Fallback: ingreso (point si es POS físico, payment si es online).
 function clasificarPago(pago, accountId) {
-  const opType = pago?.operation_type || '';
+  const opType = (pago?.operation_type || '').toLowerCase();
   const payerId = pago?.payer?.id != null ? String(pago.payer.id) : '';
   const collectorId =
     pago?.collector_id != null
@@ -53,27 +54,37 @@ function clasificarPago(pago, accountId) {
       ? String(pago.collector.id)
       : '';
   const miId = accountId != null ? String(accountId) : '';
+  const monto = Number(pago?.transaction_amount) || 0;
 
-  if (matchEgresoKeyword(pago)) {
+  // 1. collector somos nosotros → ingreso.
+  if (miId && collectorId && collectorId === miId) {
+    if (esPagoPoint(pago)) return { direccion: 1, tipo: 'point' };
+    return { direccion: 1, tipo: 'payment' };
+  }
+
+  // 2. payer somos nosotros → egreso.
+  if (miId && payerId && payerId === miId) {
     return { direccion: -1, tipo: 'payment_out' };
   }
 
+  // 3. transaction_amount negativo → egreso.
+  if (monto < 0) {
+    return { direccion: -1, tipo: 'payment_out' };
+  }
+
+  // 4. operation_types que son siempre egresos.
   if (opType === 'money_transfer') return { direccion: -1, tipo: 'money_transfer' };
   if (opType === 'recurring_payment') return { direccion: -1, tipo: 'recurring' };
   if (opType === 'investment') return { direccion: -1, tipo: 'investment' };
   if (opType === 'cellphone_recharge') return { direccion: -1, tipo: 'recharge' };
   if (opType === 'bank_withdrawal') return { direccion: -1, tipo: 'withdrawal' };
 
-  if (opType === 'regular_payment') {
-    if (miId && payerId && payerId === miId) {
-      return { direccion: -1, tipo: 'payment_out' };
-    }
-    if (miId && collectorId && collectorId === miId) {
-      if (esPagoPoint(pago)) return { direccion: 1, tipo: 'point' };
-      return { direccion: 1, tipo: 'payment' };
-    }
+  // 5. Keyword de proveedor conocido.
+  if (matchEgresoKeyword(pago)) {
+    return { direccion: -1, tipo: 'payment_out' };
   }
 
+  // 6. Fallback final: ingreso.
   if (esPagoPoint(pago)) return { direccion: 1, tipo: 'point' };
   return { direccion: 1, tipo: 'payment' };
 }
@@ -779,6 +790,7 @@ export default async function handler(req, res) {
         resultados.push({
           local: cred.locales?.nombre,
           local_id: cred.local_id,
+          account_id: accountId,
           movimientos: cantPagos,
           comisiones: cantFees,
           reembolsos: cantRefunds,
