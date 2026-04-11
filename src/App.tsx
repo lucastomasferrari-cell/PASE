@@ -2295,6 +2295,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
   const [conciliarTab,setConciliarTab]=useState("gasto"); // gasto | factura | nuevo
   const [nuevoGastoForm,setNuevoGastoForm]=useState({categoria:"",detalle:""});
   const [vinculoSel,setVinculoSel]=useState("");
+  const [saldoInicialModal,setSaldoInicialModal]=useState(null); // {local_id, monto}
 
   const load=async()=>{
     setLoading(true);
@@ -2327,22 +2328,14 @@ function ConciliacionMP({ user, locales, localActivo }) {
       console.log("[MP] /api/mp-sync response:",d);
       if(d.ok){
         await load();
-        const lines=(d.resultados||[]).flatMap(x=>{
-          const head=[x.local+": "+(x.movimientos||0)+" mov"];
-          if(x.saldo_calculado!=null)head.push("saldo "+fmt_$(x.saldo_calculado));
-          if(x.balance_fuente)head.push("fuente: "+x.balance_fuente);
-          if(x.upd_error)head.push("DB err: "+x.upd_error);
-          if(x.error)head.push("ERR: "+x.error);
-          const out=[head.join(" · ")];
-          if(Array.isArray(x.balance_probes)){
-            for(const p of x.balance_probes){
-              const short=p.url.replace("https://api.mercadopago.com","");
-              const amt=p.balance_detectado!=null?" → "+fmt_$(p.balance_detectado):"";
-              const body=p.body?(" "+String(p.body).replace(/\s+/g," ").slice(0,120)):(p.error?" "+p.error:"");
-              out.push("    "+short+" HTTP "+(p.status??"ERR")+amt+body);
-            }
-          }
-          return out;
+        const lines=(d.resultados||[]).map(x=>{
+          const parts=[x.local+": "+(x.movimientos||0)+" mov"];
+          if(x.saldo_disponible!=null)parts.push("saldo "+fmt_$(x.saldo_disponible));
+          if(x.saldo_inicial!=null)parts.push("inicial "+fmt_$(x.saldo_inicial));
+          if(x.por_acreditar!=null&&x.por_acreditar>0)parts.push("por acreditar "+fmt_$(x.por_acreditar));
+          if(x.upd_error)parts.push("DB err: "+x.upd_error);
+          if(x.error)parts.push("ERR: "+x.error);
+          return parts.join(" · ");
         });
         alert("Sincronización completada\n"+lines.join("\n"));
       }
@@ -2376,11 +2369,29 @@ function ConciliacionMP({ user, locales, localActivo }) {
   const ventasPresenciales=movimientos.filter(m=>m.tipo==="point"&&m.monto>0).reduce((s,m)=>s+m.monto,0);
   const ventasOnline=movimientos.filter(m=>m.tipo==="payment"&&m.monto>0).reduce((s,m)=>s+m.monto,0);
 
-  // Saldo calculado desde mp_movimientos — /v1/account/balance no está
-  // disponible con tokens estándar (403), así que el backend guarda la
-  // suma de montos aprobados en mp_credenciales.saldo_disponible.
+  // Saldo real = saldo_inicial (fijado por el usuario) + movimientos
+  // aprobados posteriores. /api/mp-sync lo guarda en saldo_disponible.
   const saldoRealDisponible=credenciales.reduce((s,c)=>s+(Number(c.saldo_disponible)||0),0);
+  const saldoInicialTotal=credenciales.reduce((s,c)=>s+(Number(c.saldo_inicial)||0),0);
+  const porAcreditarTotal=credenciales.reduce((s,c)=>s+(Number(c.por_acreditar)||0),0);
   const ultimaActualizacionBalance=credenciales.map(c=>c.balance_at).filter(Boolean).sort().pop();
+
+  // Próximos ingresos: movimientos que todavía no están approved.
+  const proximosIngresos=movimientos
+    .filter(m=>m.monto>0&&["in_process","pending","authorized"].includes((m.estado||"").toLowerCase()))
+    .sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||""));
+
+  const guardarSaldoInicial=async()=>{
+    if(!saldoInicialModal||saldoInicialModal.monto===""||saldoInicialModal.monto==null)return;
+    const monto=parseFloat(saldoInicialModal.monto);
+    if(Number.isNaN(monto))return;
+    await db.from("mp_credenciales").update({
+      saldo_inicial:monto,
+      saldo_inicial_at:new Date().toISOString(),
+    }).eq("local_id",saldoInicialModal.local_id);
+    setSaldoInicialModal(null);
+    load();
+  };
 
   const TIPO_LABELS={
     "payment":"Cobro Online","point":"Venta Presencial",
@@ -2549,22 +2560,28 @@ function ConciliacionMP({ user, locales, localActivo }) {
         <div>
           <div className="panel" style={{marginBottom:16,background:"linear-gradient(135deg,rgba(62,207,207,0.12),rgba(62,207,207,0.02))",border:"1px solid rgba(62,207,207,0.35)"}}>
             <div style={{padding:"20px 24px"}}>
-              <div style={{fontSize:10,letterSpacing:2,textTransform:"uppercase",color:"var(--muted2)",marginBottom:6}}>Saldo calculado en MercadoPago</div>
-              <div style={{fontFamily:"'Syne',sans-serif",fontSize:42,fontWeight:800,color:"var(--acc3)",lineHeight:1.1}}>{fmt_$(saldoRealDisponible)}</div>
-              <div style={{fontSize:11,color:"var(--muted2)",marginTop:6}}>
-                Suma neta de todos los movimientos MP aprobados (cobros − comisiones − egresos).
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+                <div>
+                  <div style={{fontSize:10,letterSpacing:2,textTransform:"uppercase",color:"var(--muted2)",marginBottom:6}}>Saldo disponible en MercadoPago</div>
+                  <div style={{fontFamily:"'Syne',sans-serif",fontSize:42,fontWeight:800,color:"var(--acc3)",lineHeight:1.1}}>{fmt_$(saldoRealDisponible)}</div>
+                  <div style={{fontSize:11,color:"var(--muted2)",marginTop:6}}>
+                    Saldo inicial {fmt_$(saldoInicialTotal)} + movimientos aprobados posteriores.
+                  </div>
+                </div>
+                <button className="btn btn-ghost" onClick={()=>setSaldoInicialModal({local_id:credenciales[0]?.local_id||"",monto:""})}>⚙ Establecer saldo inicial</button>
               </div>
               <div style={{display:"flex",gap:24,marginTop:14,flexWrap:"wrap"}}>
+                <div><div style={{fontSize:9,color:"var(--muted2)",textTransform:"uppercase",letterSpacing:1}}>Por acreditar</div><div className="num" style={{fontSize:14,color:"var(--warn)"}}>{fmt_$(porAcreditarTotal)}</div></div>
                 <div><div style={{fontSize:9,color:"var(--muted2)",textTransform:"uppercase",letterSpacing:1}}>Actualizado</div><div className="mono" style={{fontSize:11,color:"var(--muted2)"}}>{ultimaActualizacionBalance?new Date(ultimaActualizacionBalance).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—"}</div></div>
               </div>
-              {!ultimaActualizacionBalance&&<div style={{fontSize:11,color:"var(--muted2)",marginTop:8}}>⚠ Ejecutá una sincronización para calcular el saldo a partir de los movimientos.</div>}
+              {saldoInicialTotal===0&&!ultimaActualizacionBalance&&<div style={{fontSize:11,color:"var(--warn)",marginTop:10}}>⚠ Cargá el saldo inicial y luego sincronizá para ver el saldo real.</div>}
             </div>
           </div>
-          <div className="panel">
+          <div className="panel" style={{marginBottom:16}}>
             <div className="panel-hd"><span className="panel-title">Estado de Cuentas por Local</span></div>
             {credenciales.length===0?<div className="empty">Sin cuentas configuradas</div>:(
               <table>
-                <thead><tr><th>Local</th><th>Estado</th><th>Última Sync</th><th>Saldo calculado</th><th>Ingresos mes</th><th>Egresos mes</th></tr></thead>
+                <thead><tr><th>Local</th><th>Estado</th><th>Saldo inicial</th><th>Disponible</th><th>Por acreditar</th><th>Ingresos mes</th><th>Egresos mes</th><th></th></tr></thead>
                 <tbody>{credenciales.map(c=>{
                   const movLocal=movimientos.filter(m=>m.local_id===c.local_id);
                   const ing=movLocal.filter(m=>m.monto>0).reduce((s,m)=>s+m.monto,0);
@@ -2573,13 +2590,35 @@ function ConciliacionMP({ user, locales, localActivo }) {
                     <tr key={c.id}>
                       <td style={{fontWeight:500}}>{c.locales?.nombre||"—"}</td>
                       <td><span className={`badge ${c.activo?"b-success":"b-muted"}`}>{c.activo?"Conectada":"Inactiva"}</span></td>
-                      <td className="mono" style={{fontSize:11}}>{c.ultima_sync?new Date(c.ultima_sync).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"Nunca"}</td>
-                      <td><span className="num" style={{color:"var(--acc3)"}}>{c.saldo_disponible!=null?fmt_$(c.saldo_disponible):"—"}</span></td>
+                      <td>
+                        <div style={{fontSize:11}}>{fmt_$(c.saldo_inicial||0)}</div>
+                        <div className="mono" style={{fontSize:9,color:"var(--muted2)"}}>{c.saldo_inicial_at?"desde "+fmt_d(c.saldo_inicial_at.slice(0,10)):"no fijado"}</div>
+                      </td>
+                      <td><span className="num" style={{color:"var(--acc3)",fontWeight:600}}>{c.saldo_disponible!=null?fmt_$(c.saldo_disponible):"—"}</span></td>
+                      <td><span className="num kpi-warn">{c.por_acreditar!=null?fmt_$(c.por_acreditar):"—"}</span></td>
                       <td><span className="num kpi-success">{fmt_$(ing)}</span></td>
                       <td><span className="num kpi-danger">{fmt_$(egr)}</span></td>
+                      <td><button className="btn btn-ghost btn-sm" style={{fontSize:10,padding:"3px 8px"}} onClick={()=>setSaldoInicialModal({local_id:c.local_id,monto:String(c.saldo_inicial||"")})}>Editar</button></td>
                     </tr>
                   );
                 })}</tbody>
+              </table>
+            )}
+          </div>
+          <div className="panel">
+            <div className="panel-hd"><span className="panel-title">Próximos ingresos — {proximosIngresos.length} pendientes</span><span className="num kpi-warn">{fmt_$(porAcreditarTotal)}</span></div>
+            {proximosIngresos.length===0?<div className="empty">Sin pagos pendientes de acreditación en el período</div>:(
+              <table>
+                <thead><tr><th>Fecha pago</th><th>Local</th><th>Estado</th><th>Descripción</th><th>Monto</th></tr></thead>
+                <tbody>{proximosIngresos.map(m=>(
+                  <tr key={m.id}>
+                    <td className="mono" style={{fontSize:11}}>{new Date(m.fecha).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"})}</td>
+                    <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(x=>x.id===m.local_id)?.nombre||"—"}</td>
+                    <td><span className="badge b-warn" style={{fontSize:9}}>{m.estado||"pending"}</span></td>
+                    <td style={{fontSize:11,maxWidth:240,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.descripcion||"—"}</td>
+                    <td><span className="num kpi-warn">+{fmt_$(m.monto)}</span></td>
+                  </tr>
+                ))}</tbody>
               </table>
             )}
           </div>
@@ -2606,6 +2645,33 @@ function ConciliacionMP({ user, locales, localActivo }) {
           </div>
         </div>
       )}
+
+      {saldoInicialModal&&(<div className="overlay" onClick={()=>setSaldoInicialModal(null)}><div className="modal" style={{width:520}} onClick={e=>e.stopPropagation()}>
+        <div className="modal-hd"><div className="modal-title">Establecer saldo inicial MP</div><button className="close-btn" onClick={()=>setSaldoInicialModal(null)}>✕</button></div>
+        <div className="modal-body">
+          <div className="alert alert-warn" style={{marginBottom:12}}>
+            Ingresá el saldo real actual de tu cuenta Mercado Pago. A partir de esta fecha el sistema sumará todos los movimientos aprobados posteriores para calcular el saldo disponible.
+          </div>
+          <div className="field">
+            <label>Local</label>
+            <select value={saldoInicialModal.local_id} onChange={e=>setSaldoInicialModal({...saldoInicialModal,local_id:parseInt(e.target.value)||e.target.value})}>
+              <option value="">Seleccioná...</option>
+              {credenciales.map(c=><option key={c.id} value={c.local_id}>{c.locales?.nombre||`Local ${c.local_id}`}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label>Saldo real actual en MP $</label>
+            <input type="number" value={saldoInicialModal.monto} onChange={e=>setSaldoInicialModal({...saldoInicialModal,monto:e.target.value})} placeholder="0"/>
+          </div>
+          {(()=>{const c=credenciales.find(x=>x.local_id===saldoInicialModal.local_id);return c&&c.saldo_inicial_at?(
+            <div style={{fontSize:10,color:"var(--muted2)",marginTop:4}}>Último saldo inicial: {fmt_$(c.saldo_inicial||0)} fijado el {fmt_d(c.saldo_inicial_at.slice(0,10))}. Al guardar se reinicia el corte desde ahora.</div>
+          ):null;})()}
+        </div>
+        <div className="modal-ft">
+          <button className="btn btn-sec" onClick={()=>setSaldoInicialModal(null)}>Cancelar</button>
+          <button className="btn btn-acc" disabled={!saldoInicialModal.local_id||saldoInicialModal.monto===""} onClick={guardarSaldoInicial}>Guardar</button>
+        </div>
+      </div></div>)}
 
       {conciliarModal&&(<div className="overlay" onClick={()=>setConciliarModal(null)}><div className="modal" style={{width:640}} onClick={e=>e.stopPropagation()}>
         <div className="modal-hd"><div className="modal-title">Conciliar egreso MP</div><button className="close-btn" onClick={()=>setConciliarModal(null)}>✕</button></div>

@@ -281,147 +281,55 @@ export default async function handler(req, res) {
           }
         }
 
-        // Probamos varios endpoints de balance de Mercado Pago en serie.
-        // De cada uno guardamos status + body (truncado) y lo devolvemos
-        // en resultados[].balance_probes para poder inspeccionar qué
-        // responde cada uno desde el alert del sync.
-        const balanceProbes = [];
-        const pickNumber = (obj, ...keys) => {
-          if (!obj || typeof obj !== 'object') return null;
-          for (const k of keys) {
-            if (obj[k] != null && !Number.isNaN(Number(obj[k]))) {
-              return Number(obj[k]);
-            }
-          }
-          return null;
-        };
-        // Busca recursivamente una clave de balance en estructuras anidadas.
-        const buscarBalanceProfundo = (obj, depth = 0) => {
-          if (!obj || typeof obj !== 'object' || depth > 4) return null;
-          const direct = pickNumber(
-            obj,
-            'available_balance',
-            'available',
-            'balance',
-            'amount',
-            'total_amount',
-            'total'
+        // Saldo real = saldo_inicial (ingresado por el usuario) + la suma
+        // neta de todos los movimientos aprobados posteriores a la fecha
+        // en la que se fijó ese saldo inicial. Los egresos (fees, refunds,
+        // payment_out, money_transfer) ya están guardados con signo
+        // negativo, así que un SUM(monto) da el neto directamente.
+        const saldoInicial = Number(cred.saldo_inicial) || 0;
+        const saldoInicialAt = cred.saldo_inicial_at || null;
+
+        let saldoAprobado = 0;
+        let porAcreditar = 0;
+        const { data: movLocal, error: movErr } = await db
+          .from('mp_movimientos')
+          .select('monto, estado, fecha')
+          .eq('local_id', cred.local_id);
+        if (movErr) {
+          console.error(
+            'mp-sync: sum mp_movimientos error',
+            cred.local_id,
+            movErr
           );
-          if (direct != null) return direct;
-          for (const v of Object.values(obj)) {
-            if (v && typeof v === 'object') {
-              const found = buscarBalanceProfundo(v, depth + 1);
-              if (found != null) return found;
+        } else {
+          for (const m of movLocal || []) {
+            const monto = Number(m.monto) || 0;
+            const estado = (m.estado || '').toLowerCase();
+            const despuesDelCorte =
+              !saldoInicialAt ||
+              (m.fecha && new Date(m.fecha) >= new Date(saldoInicialAt));
+            if (estado === 'approved' && despuesDelCorte) {
+              saldoAprobado += monto;
+            } else if (
+              (estado === 'in_process' || estado === 'pending') &&
+              monto > 0
+            ) {
+              porAcreditar += monto;
             }
-          }
-          return null;
-        };
-
-        const probeEndpoints = [
-          { url: 'https://api.mercadopago.com/v1/account/balance' },
-          { url: 'https://api.mercadopago.com/v1/mercadopago_account/balance' },
-          {
-            url: 'https://api.mercadopago.com/users/me',
-          },
-          { url: 'https://api.mercadopago.com/v1/account' },
-          accountId
-            ? {
-                url: `https://api.mercadopago.com/users/${accountId}/mercadopago_account/balance`,
-              }
-            : null,
-          {
-            url: 'https://api.mercadopago.com/users/me/mercadopago_account/balance',
-          },
-        ].filter(Boolean);
-
-        let credSaldoDisponible = null;
-        let balanceFuente = 'movimientos';
-
-        for (const probe of probeEndpoints) {
-          try {
-            const res = await fetch(probe.url, {
-              headers: {
-                Authorization: `Bearer ${cred.access_token}`,
-                Accept: 'application/json',
-              },
-            });
-            const body = await res.text();
-            console.log(
-              '[mp-sync] probe',
-              probe.url,
-              '→',
-              res.status,
-              body?.slice(0, 400)
-            );
-            let parsed = null;
-            try {
-              parsed = body ? JSON.parse(body) : null;
-            } catch {
-              parsed = null;
-            }
-
-            let valorBalance = null;
-            if (res.ok && parsed && typeof parsed === 'object') {
-              valorBalance =
-                pickNumber(parsed, 'available_balance', 'balance', 'amount') ??
-                buscarBalanceProfundo(parsed);
-            }
-
-            balanceProbes.push({
-              url: probe.url,
-              status: res.status,
-              ok: res.ok,
-              balance_detectado: valorBalance,
-              body: body?.slice(0, 300) || null,
-            });
-
-            if (valorBalance != null && credSaldoDisponible == null) {
-              credSaldoDisponible = valorBalance;
-              balanceFuente = 'api:' + probe.url.replace('https://api.mercadopago.com', '');
-            }
-          } catch (probeErr) {
-            console.error('mp-sync: probe error', probe.url, probeErr);
-            balanceProbes.push({
-              url: probe.url,
-              status: null,
-              ok: false,
-              error: String(probeErr?.message || probeErr),
-            });
           }
         }
 
-        // Fallback: sumar montos aprobados de mp_movimientos si ningún
-        // endpoint respondió con un balance válido.
-        if (credSaldoDisponible == null) {
-          const { data: movLocal, error: movErr } = await db
-            .from('mp_movimientos')
-            .select('monto, estado')
-            .eq('local_id', cred.local_id);
-          if (movErr) {
-            console.error(
-              'mp-sync: sum mp_movimientos error',
-              cred.local_id,
-              movErr
-            );
-          } else {
-            credSaldoDisponible = (movLocal || [])
-              .filter((m) => !m.estado || m.estado === 'approved')
-              .reduce((s, m) => s + (Number(m.monto) || 0), 0);
-          }
-        }
+        const credSaldoDisponible = saldoInicial + saldoAprobado;
+        balanceTotalMP += credSaldoDisponible;
+        balanceConsultado = true;
 
-        if (credSaldoDisponible != null) {
-          balanceTotalMP += credSaldoDisponible;
-          balanceConsultado = true;
-        }
-
-        // Guardar el saldo calculado en mp_credenciales. Si la migración con
-        // la columna saldo_disponible no corrió todavía, reintentamos sin ella.
+        // Guardar el saldo calculado en mp_credenciales. Si las columnas
+        // nuevas aún no existen, reintentamos sólo con ultima_sync.
         const fullPayload = {
           ultima_sync: new Date().toISOString(),
           saldo_disponible: credSaldoDisponible,
-          balance_at:
-            credSaldoDisponible != null ? new Date().toISOString() : null,
+          por_acreditar: porAcreditar,
+          balance_at: new Date().toISOString(),
         };
         let { error: updErr } = await db
           .from('mp_credenciales')
@@ -463,9 +371,10 @@ export default async function handler(req, res) {
           movimientos: cantPagos,
           comisiones: cantFees,
           reembolsos: cantRefunds,
-          saldo_calculado: credSaldoDisponible,
-          balance_fuente: balanceFuente,
-          balance_probes: balanceProbes,
+          saldo_inicial: saldoInicial,
+          saldo_aprobado: saldoAprobado,
+          saldo_disponible: credSaldoDisponible,
+          por_acreditar: porAcreditar,
           upd_error: updErr ? updErr.message : undefined,
         });
       } catch (err) {
