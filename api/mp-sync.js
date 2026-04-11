@@ -351,11 +351,21 @@ export default async function handler(req, res) {
           error: null,
         };
         try {
-          const begin = new Date();
-          begin.setDate(begin.getDate() - 3);
-          const end = new Date();
-          const beginIso = begin.toISOString();
-          const endIso = end.toISOString();
+          // ISO 8601 en UTC, sin milisegundos. begin_date al inicio del día
+          // de hace 3 días, end_date al segundo actual — lo que MP acepta.
+          const pad = (n) => String(n).padStart(2, '0');
+          const now = new Date();
+          const begin = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+          const beginIso =
+            `${begin.getUTCFullYear()}-${pad(begin.getUTCMonth() + 1)}-${pad(
+              begin.getUTCDate()
+            )}T00:00:00Z`;
+          const endIso =
+            `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(
+              now.getUTCDate()
+            )}T${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(
+              now.getUTCSeconds()
+            )}Z`;
 
           // 1) POST — pide generar el reporte para la ventana de fechas.
           try {
@@ -406,17 +416,23 @@ export default async function handler(req, res) {
             } catch {
               listData = null;
             }
-            const files = Array.isArray(listData)
+            const rawFiles = Array.isArray(listData)
               ? listData
               : Array.isArray(listData?.results)
               ? listData.results
               : [];
-            // Elegir el más reciente por fecha de creación.
-            files.sort((a, b) => {
-              const da = new Date(a?.date_created || a?.date || 0).getTime();
-              const db_ = new Date(b?.date_created || b?.date || 0).getTime();
-              return db_ - da;
-            });
+            // Sólo .csv (ignorar los .xlsx que son reportes manuales),
+            // y el más reciente por fecha de creación.
+            const files = rawFiles
+              .filter((f) => {
+                const name = (f?.file_name || f?.fileName || f?.name || '').toLowerCase();
+                return name.endsWith('.csv');
+              })
+              .sort((a, b) => {
+                const da = new Date(a?.date_created || a?.date || 0).getTime();
+                const db_ = new Date(b?.date_created || b?.date || 0).getTime();
+                return db_ - da;
+              });
             const latest = files[0];
             releaseReport.file_name =
               latest?.file_name || latest?.fileName || latest?.name || null;

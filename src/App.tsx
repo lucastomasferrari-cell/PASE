@@ -2504,6 +2504,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
             <input type="date" className="search" style={{width:140}} value={hasta} onChange={e=>setHasta(e.target.value)}/>
           </div>
           <button className="btn btn-ghost btn-sm" style={{fontSize:10}} onClick={()=>{const d=new Date();d.setDate(d.getDate()-30);setDesde(toISO(d));setHasta(toISO(today));}}>Últ. 30d</button>
+          <button className="btn btn-ghost" onClick={()=>setSaldoInicialModal({local_id:credenciales[0]?.local_id||"",monto:""})}>⚙ Fijar saldo inicial</button>
           <button className="btn btn-ghost" onClick={()=>setConfigModal(true)}>⚙ Cuentas MP</button>
           <button className="btn btn-acc" onClick={sincronizar} disabled={sincronizando}>
             {sincronizando?"🔄 Sincronizando...":"↻ Sincronizar ahora"}
@@ -2518,30 +2519,27 @@ function ConciliacionMP({ user, locales, localActivo }) {
       )}
 
       <div className="grid3">
-        <div className="kpi"><div className="kpi-label">Ingresos MP</div><div className="kpi-value kpi-success">{fmt_$(ingresos)}</div><div className="kpi-sub">Online {fmt_$(ventasOnline)} · Presencial {fmt_$(ventasPresenciales)}</div></div>
-        <div className="kpi"><div className="kpi-label">Egresos MP</div><div className="kpi-value kpi-danger">{fmt_$(egresos)}</div><div className="kpi-sub">Retiros, comisiones y devoluciones</div></div>
-        <div className="kpi"><div className="kpi-label">Neto MP</div><div className={`kpi-value ${neto>=0?"kpi-acc":"kpi-danger"}`}>{fmt_$(neto)}</div><div className="kpi-sub">Balance del período</div></div>
-      </div>
-
-      <div className={`alert ${egresosPendientes===0?"alert-success":"alert-warn"}`} style={{marginTop:12,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
-        <div>
-          <div style={{fontWeight:600,fontSize:12}}>
-            {egresosPendientes===0?"✓ Todos los egresos están conciliados":`⚠ ${pendientesCount} egreso${pendientesCount===1?"":"s"} sin justificar`}
-          </div>
-          <div style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>
-            Pagos y transferencias salientes deben vincularse a una Factura o Gasto. Las comisiones MP se concilian automáticamente.
-          </div>
+        <div className="kpi">
+          <div className="kpi-label">Saldo disponible MP</div>
+          <div className="kpi-value" style={{color:"var(--acc3)",fontFamily:"'Syne',sans-serif",fontSize:34,fontWeight:800}}>{fmt_$(saldoRealDisponible)}</div>
+          <div className="kpi-sub">{ultimaActualizacionBalance?"Actualizado "+new Date(ultimaActualizacionBalance).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"Ejecutá una sincronización"}</div>
         </div>
-        <div style={{display:"flex",gap:16,fontSize:11}}>
-          <div><div style={{color:"var(--muted2)",fontSize:9,textTransform:"uppercase",letterSpacing:1}}>Egresos a justificar</div><div className="num kpi-danger">{fmt_$(egresosManualesTotal)}</div></div>
-          <div><div style={{color:"var(--muted2)",fontSize:9,textTransform:"uppercase",letterSpacing:1}}>Justificado</div><div className="num kpi-success">{fmt_$(egresosConciliados)}</div></div>
-          <div><div style={{color:"var(--muted2)",fontSize:9,textTransform:"uppercase",letterSpacing:1}}>Diferencia</div><div className={`num ${egresosPendientes===0?"kpi-success":"kpi-danger"}`}>{fmt_$(egresosPendientes)}</div></div>
-          <div><div style={{color:"var(--muted2)",fontSize:9,textTransform:"uppercase",letterSpacing:1}}>Comisiones auto</div><div className="num" style={{color:"var(--muted2)"}}>{fmt_$(comisionesTotal)}</div></div>
+        <div className="kpi">
+          <div className="kpi-label">Egresos sin justificar</div>
+          <div className="kpi-value kpi-warn" style={{fontFamily:"'Syne',sans-serif",fontSize:34,fontWeight:800}}>{pendientesCount}</div>
+          <div className="kpi-sub">{pendientesCount===0?"Todos conciliados ✓":"Requieren conciliación manual"}</div>
         </div>
+        {porAcreditarTotal>0&&(
+          <div className="kpi">
+            <div className="kpi-label">Por acreditar</div>
+            <div className="kpi-value kpi-warn" style={{fontSize:28}}>{fmt_$(porAcreditarTotal)}</div>
+            <div className="kpi-sub">Pagos en proceso / pending</div>
+          </div>
+        )}
       </div>
 
       <div className="tabs">
-        {[["movimientos","Movimientos"],["cuentas","Estado de Cuentas"],["comisiones","Comisiones MP"]].map(([id,l])=>(
+        {[["movimientos","Movimientos"],["comisiones","Comisiones MP"]].map(([id,l])=>(
           <div key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>{l}</div>
         ))}
       </div>
@@ -2584,36 +2582,6 @@ function ConciliacionMP({ user, locales, localActivo }) {
             </table>
           )}
         </div>
-      ):tab==="cuentas"?(
-        <div>
-          <div className="panel" style={{marginBottom:16,background:"linear-gradient(135deg,rgba(62,207,207,0.12),rgba(62,207,207,0.02))",border:"1px solid rgba(62,207,207,0.35)"}}>
-            <div style={{padding:"20px 24px",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
-              <div>
-                <div style={{fontSize:10,letterSpacing:2,textTransform:"uppercase",color:"var(--muted2)",marginBottom:6}}>Saldo disponible</div>
-                <div style={{fontFamily:"'Syne',sans-serif",fontSize:42,fontWeight:800,color:"var(--acc3)",lineHeight:1.1}}>{fmt_$(saldoRealDisponible)}</div>
-                <div style={{fontSize:11,color:"var(--muted2)",marginTop:6}}>Por acreditar: <span className="num" style={{color:"var(--warn)"}}>{fmt_$(porAcreditarTotal)}</span></div>
-                <div className="mono" style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>Actualizado {ultimaActualizacionBalance?new Date(ultimaActualizacionBalance).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—"}</div>
-              </div>
-              <button className="btn btn-acc" onClick={()=>setSaldoInicialModal({local_id:credenciales[0]?.local_id||"",monto:""})}>⚙ Establecer saldo inicial</button>
-            </div>
-          </div>
-          <div className="panel">
-            <div className="panel-hd"><span className="panel-title">Cuentas por Local</span></div>
-            {credenciales.length===0?<div className="empty">Sin cuentas configuradas</div>:(
-              <table>
-                <thead><tr><th>Local</th><th>Estado</th><th>Saldo disponible</th><th>Por acreditar</th></tr></thead>
-                <tbody>{credenciales.map(c=>(
-                  <tr key={c.id}>
-                    <td style={{fontWeight:500}}>{c.locales?.nombre||"—"}</td>
-                    <td><span className={`badge ${c.activo?"b-success":"b-muted"}`}>{c.activo?"Conectada":"Inactiva"}</span></td>
-                    <td><span className="num" style={{color:"var(--acc3)",fontWeight:600}}>{c.saldo_disponible!=null?fmt_$(c.saldo_disponible):"—"}</span></td>
-                    <td><span className="num kpi-warn">{c.por_acreditar!=null?fmt_$(c.por_acreditar):"—"}</span></td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            )}
-          </div>
-        </div>
       ):(
         (()=>{
           // Comisiones y retenciones — resumen por tipo de cobro padre.
@@ -2637,23 +2605,26 @@ function ConciliacionMP({ user, locales, localActivo }) {
                 <span style={{fontSize:11,color:"var(--muted2)"}}>{fees.length} cargos en el período</span>
               </div>
               {total===0?<div className="empty">Sin comisiones en este período</div>:(
-                <div style={{padding:"20px 24px"}}>
-                  <div className="grid3">
-                    <div className="kpi">
-                      <div className="kpi-label">Cobro Online</div>
-                      <div className="kpi-value kpi-warn">{fmt_$(comisionOnline)}</div>
-                      <div className="kpi-sub">Comisiones por ventas online</div>
-                    </div>
-                    <div className="kpi">
-                      <div className="kpi-label">Venta Presencial</div>
-                      <div className="kpi-value kpi-warn">{fmt_$(comisionPresencial)}</div>
-                      <div className="kpi-sub">Comisiones Point / POS</div>
-                    </div>
-                    <div className="kpi">
-                      <div className="kpi-label">Total</div>
-                      <div className="kpi-value kpi-danger">{fmt_$(total)}</div>
-                      <div className="kpi-sub">{comisionOtras>0?`Incluye ${fmt_$(comisionOtras)} de otras`:"Todas las comisiones del período"}</div>
-                    </div>
+                <div style={{padding:"20px 24px",display:"grid",gap:12,gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))"}}>
+                  <div className="kpi">
+                    <div className="kpi-label">Cobro Online</div>
+                    <div className="kpi-value kpi-warn">{fmt_$(comisionOnline)}</div>
+                    <div className="kpi-sub">Comisiones por ventas online</div>
+                  </div>
+                  <div className="kpi">
+                    <div className="kpi-label">Presencial</div>
+                    <div className="kpi-value kpi-warn">{fmt_$(comisionPresencial)}</div>
+                    <div className="kpi-sub">Comisiones Point / POS</div>
+                  </div>
+                  <div className="kpi">
+                    <div className="kpi-label">Otras comisiones</div>
+                    <div className="kpi-value" style={{color:"var(--muted2)"}}>{fmt_$(comisionOtras)}</div>
+                    <div className="kpi-sub">Sin pago padre en el período</div>
+                  </div>
+                  <div className="kpi" style={{borderLeft:"3px solid var(--danger)"}}>
+                    <div className="kpi-label">TOTAL</div>
+                    <div className="kpi-value kpi-danger">{fmt_$(total)}</div>
+                    <div className="kpi-sub">Todas las comisiones del período</div>
                   </div>
                 </div>
               )}
