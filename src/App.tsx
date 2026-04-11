@@ -2340,15 +2340,8 @@ function ConciliacionMP({ user, locales, localActivo }) {
             out.push("    release_report LIST HTTP "+(rr.list_status??"ERR")+" intentos="+(rr.list_attempts||0)+" file="+(rr.file_name||"(ninguno hoy)"));
             if(rr.file_date_created)out.push("    release_report file_date_created="+rr.file_date_created);
             if(rr.file_status!=null)out.push("    release_report FILE HTTP "+rr.file_status+(rr.file_snippet?" snippet: "+String(rr.file_snippet).replace(/\s+/g," ").slice(0,120):""));
-            out.push("    release_report parsed_balance="+(rr.parsed_balance!=null?fmt_$(rr.parsed_balance):"null")+(rr.parse_method?" ["+rr.parse_method+"]":""));
+            out.push("    release_report parsed_balance="+(rr.parsed_balance!=null?fmt_$(rr.parsed_balance):"null")+(rr.parse_method?" ["+rr.parse_method+"]":"")+(rr.csv_rows?" ("+rr.csv_rows+" filas CSV)":""));
             if(rr.error)out.push("    release_report ERR: "+rr.error);
-            if(rr.csv_lines){
-              out.push("    ─── CSV primeras 30 líneas ───");
-              for(const ln of String(rr.csv_lines).split(/\r?\n/)){
-                out.push("      "+ln);
-              }
-              out.push("    ─── fin CSV ───");
-            }
           }
           if(x.saldo_debug){
             const dbg=x.saldo_debug;

@@ -349,7 +349,7 @@ export default async function handler(req, res) {
           file_date_created: null,
           file_status: null,
           file_snippet: null,
-          csv_lines: null, // DEBUG: primeras 30 líneas del CSV crudo
+          csv_rows: null,
           parsed_balance: null,
           parse_method: null,
           error: null,
@@ -497,21 +497,13 @@ export default async function handler(req, res) {
               );
 
               if (fileRes.ok && csvText) {
-                // DEBUG: primeras 30 líneas crudas para inspeccionar
-                // el formato real devuelto por MP.
-                releaseReport.csv_lines = csvText
-                  .split(/\r?\n/)
-                  .slice(0, 30)
-                  .join('\n');
-
-                // Parseo del CSV del release_report.
-                // El CSV incluye filas especiales con RECORD_TYPE:
-                //   initial_available_balance → saldo inicial del período
-                //   closing_balance           → saldo al cierre (EL QUE NOS IMPORTA)
-                // La columna BALANCE_AMOUNT es la última y tiene el monto.
-                // Buscamos closing_balance y leemos su BALANCE_AMOUNT.
-                // Fallback: initial_available_balance si no apareció el
-                // closing_balance todavía.
+                // Parseo del CSV completo del release_report.
+                // Filas especiales con RECORD_TYPE:
+                //   initial_available_balance → saldo al inicio del período
+                //   closing_balance           → saldo al cierre (EL BUENO)
+                // La columna BALANCE_AMOUNT tiene el monto. Leemos el CSV
+                // completo y buscamos primero closing_balance en todas las
+                // filas; si no aparece, caemos a initial_available_balance.
                 const parseNumero = (raw) => {
                   if (raw == null || raw === '') return null;
                   const s = String(raw).trim();
@@ -526,10 +518,15 @@ export default async function handler(req, res) {
                   return Number.isFinite(v) ? v : null;
                 };
 
-                const lines = csvText
+                // Stripping BOM por las dudas, y splitting por cualquier
+                // estilo de salto de línea.
+                const cleanCsv = csvText.replace(/^\uFEFF/, '');
+                const lines = cleanCsv
                   .split(/\r?\n/)
                   .map((l) => l.trim())
                   .filter(Boolean);
+                releaseReport.csv_rows = lines.length;
+
                 if (lines.length >= 2) {
                   const sep = lines[0].includes(';') ? ';' : ',';
                   const header = lines[0]
@@ -540,6 +537,8 @@ export default async function handler(req, res) {
 
                   const findBalanceForType = (wantedType) => {
                     if (idxRecordType === -1 || idxBalance === -1) return null;
+                    // Recorrido completo desde la última fila hacia arriba:
+                    // closing_balance suele estar al final del archivo.
                     for (let i = lines.length - 1; i >= 1; i--) {
                       const cells = lines[i]
                         .split(sep)
@@ -552,13 +551,11 @@ export default async function handler(req, res) {
                     return null;
                   };
 
-                  // Método principal: BALANCE_AMOUNT de closing_balance.
                   const closing = findBalanceForType('closing_balance');
                   if (closing != null) {
                     releaseReport.parsed_balance = closing;
                     releaseReport.parse_method = 'closing_balance';
                   } else {
-                    // Fallback: initial_available_balance.
                     const initial = findBalanceForType(
                       'initial_available_balance'
                     );
