@@ -331,7 +331,182 @@ export default async function handler(req, res) {
           }
         }
 
-        const credSaldoDisponible = saldoInicialNum + saldoAprobado;
+        let credSaldoDisponible = saldoInicialNum + saldoAprobado;
+        let balanceFuente = 'saldo_inicial+movimientos';
+
+        // Release report (settlement) — saldo real de MP.
+        // Flujo: POST para generar un reporte con el rango, GET /list para
+        // obtener el nombre de archivo, GET /<file_name> para bajar el CSV,
+        // y parsear la última fila en busca de BALANCE_AMOUNT o
+        // SETTLEMENT_NET_CREDIT_AMOUNT como "closing balance".
+        const releaseReport = {
+          post_status: null,
+          post_body: null,
+          list_status: null,
+          list_body: null,
+          file_name: null,
+          file_status: null,
+          file_snippet: null,
+          parsed_balance: null,
+          error: null,
+        };
+        try {
+          const begin = new Date();
+          begin.setDate(begin.getDate() - 3);
+          const end = new Date();
+          const beginIso = begin.toISOString();
+          const endIso = end.toISOString();
+
+          // 1) POST — pide generar el reporte para la ventana de fechas.
+          try {
+            const postRes = await fetch(
+              'https://api.mercadopago.com/v1/account/release_report',
+              {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${cred.access_token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  begin_date: beginIso,
+                  end_date: endIso,
+                }),
+              }
+            );
+            releaseReport.post_status = postRes.status;
+            releaseReport.post_body = (await postRes.text())?.slice(0, 200) || null;
+            console.log(
+              '[mp-sync] release_report POST',
+              cred.local_id,
+              postRes.status,
+              releaseReport.post_body
+            );
+          } catch (e) {
+            releaseReport.error = 'POST: ' + String(e?.message || e);
+          }
+
+          // 2) GET /list — nombre del reporte más reciente.
+          try {
+            const listRes = await fetch(
+              'https://api.mercadopago.com/v1/account/release_report/list',
+              { headers: { Authorization: `Bearer ${cred.access_token}` } }
+            );
+            releaseReport.list_status = listRes.status;
+            const listBody = await listRes.text();
+            releaseReport.list_body = listBody?.slice(0, 300) || null;
+            console.log(
+              '[mp-sync] release_report /list',
+              cred.local_id,
+              listRes.status,
+              releaseReport.list_body
+            );
+            let listData = null;
+            try {
+              listData = listBody ? JSON.parse(listBody) : null;
+            } catch {
+              listData = null;
+            }
+            const files = Array.isArray(listData)
+              ? listData
+              : Array.isArray(listData?.results)
+              ? listData.results
+              : [];
+            // Elegir el más reciente por fecha de creación.
+            files.sort((a, b) => {
+              const da = new Date(a?.date_created || a?.date || 0).getTime();
+              const db_ = new Date(b?.date_created || b?.date || 0).getTime();
+              return db_ - da;
+            });
+            const latest = files[0];
+            releaseReport.file_name =
+              latest?.file_name || latest?.fileName || latest?.name || null;
+          } catch (e) {
+            releaseReport.error =
+              (releaseReport.error ? releaseReport.error + ' | ' : '') +
+              'LIST: ' + String(e?.message || e);
+          }
+
+          // 3) GET /<file_name> — descarga el CSV del reporte.
+          if (releaseReport.file_name) {
+            try {
+              const fileRes = await fetch(
+                `https://api.mercadopago.com/v1/account/release_report/${encodeURIComponent(
+                  releaseReport.file_name
+                )}`,
+                { headers: { Authorization: `Bearer ${cred.access_token}` } }
+              );
+              releaseReport.file_status = fileRes.status;
+              const csvText = await fileRes.text();
+              releaseReport.file_snippet = csvText?.slice(0, 200) || null;
+              console.log(
+                '[mp-sync] release_report file',
+                cred.local_id,
+                fileRes.status,
+                csvText?.length,
+                'chars'
+              );
+
+              if (fileRes.ok && csvText) {
+                // 4) Parseo del CSV: primero partimos por líneas y detectamos
+                //    el separador (, o ;). Buscamos columnas BALANCE_AMOUNT
+                //    o SETTLEMENT_NET_CREDIT_AMOUNT y tomamos el valor de la
+                //    última fila de datos no vacía.
+                const lines = csvText
+                  .split(/\r?\n/)
+                  .map((l) => l.trim())
+                  .filter(Boolean);
+                if (lines.length >= 2) {
+                  const sep = lines[0].includes(';') ? ';' : ',';
+                  const header = lines[0]
+                    .split(sep)
+                    .map((h) => h.replace(/^"|"$/g, '').trim().toUpperCase());
+                  const idxBalance = header.indexOf('BALANCE_AMOUNT');
+                  const idxNetCredit = header.indexOf(
+                    'SETTLEMENT_NET_CREDIT_AMOUNT'
+                  );
+                  const pickIdx = idxBalance !== -1 ? idxBalance : idxNetCredit;
+                  if (pickIdx !== -1) {
+                    for (let i = lines.length - 1; i >= 1; i--) {
+                      const cells = lines[i]
+                        .split(sep)
+                        .map((c) => c.replace(/^"|"$/g, '').trim());
+                      const raw = cells[pickIdx];
+                      if (raw == null || raw === '') continue;
+                      // Normalizar formato AR (1.234,56) o US (1,234.56).
+                      const normal = raw.includes(',') && raw.includes('.')
+                        ? raw.replace(/\./g, '').replace(',', '.')
+                        : raw.includes(',') && !raw.includes('.')
+                        ? raw.replace(',', '.')
+                        : raw;
+                      const val = Number(normal);
+                      if (Number.isFinite(val)) {
+                        releaseReport.parsed_balance = val;
+                        break;
+                      }
+                    }
+                  }
+                }
+              }
+            } catch (e) {
+              releaseReport.error =
+                (releaseReport.error ? releaseReport.error + ' | ' : '') +
+                'FILE: ' + String(e?.message || e);
+            }
+          }
+        } catch (e) {
+          releaseReport.error =
+            (releaseReport.error ? releaseReport.error + ' | ' : '') +
+            String(e?.message || e);
+        }
+
+        if (
+          releaseReport.parsed_balance != null &&
+          Number.isFinite(releaseReport.parsed_balance)
+        ) {
+          credSaldoDisponible = releaseReport.parsed_balance;
+          balanceFuente = 'release_report';
+        }
+
         balanceTotalMP += credSaldoDisponible;
         balanceConsultado = true;
 
@@ -346,6 +521,8 @@ export default async function handler(req, res) {
             saldo_aprobado: saldoAprobado,
             saldo_disponible: credSaldoDisponible,
             por_acreditar: porAcreditar,
+            release_report_balance: releaseReport.parsed_balance,
+            balance_fuente: balanceFuente,
           }
         );
 
@@ -410,6 +587,8 @@ export default async function handler(req, res) {
             saldo_disponible: credSaldoDisponible,
             por_acreditar: porAcreditar,
           },
+          release_report: releaseReport,
+          balance_fuente: balanceFuente,
           saldo_inicial: saldoInicialNum,
           saldo_aprobado: saldoAprobado,
           saldo_disponible: credSaldoDisponible,

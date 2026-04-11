@@ -2330,9 +2330,18 @@ function ConciliacionMP({ user, locales, localActivo }) {
         await load();
         const lines=(d.resultados||[]).flatMap(x=>{
           const header=[x.local+" (local "+x.local_id+")"+": "+(x.movimientos||0)+" mov"];
+          if(x.balance_fuente)header.push("fuente: "+x.balance_fuente);
           if(x.error)header.push("ERR: "+x.error);
           if(x.upd_error)header.push("DB err: "+x.upd_error);
           const out=[header.join(" · ")];
+          if(x.release_report){
+            const rr=x.release_report;
+            out.push("    release_report POST HTTP "+(rr.post_status??"ERR")+(rr.post_body?" "+String(rr.post_body).replace(/\s+/g," ").slice(0,120):""));
+            out.push("    release_report LIST HTTP "+(rr.list_status??"ERR")+" file="+(rr.file_name||"(ninguno)"));
+            if(rr.file_status!=null)out.push("    release_report FILE HTTP "+rr.file_status+(rr.file_snippet?" snippet: "+String(rr.file_snippet).replace(/\s+/g," ").slice(0,120):""));
+            out.push("    release_report parsed_balance="+(rr.parsed_balance!=null?fmt_$(rr.parsed_balance):"null"));
+            if(rr.error)out.push("    release_report ERR: "+rr.error);
+          }
           if(x.saldo_debug){
             const dbg=x.saldo_debug;
             out.push("    saldo_inicial raw="+JSON.stringify(dbg.saldo_inicial_raw)+" → "+fmt_$(dbg.saldo_inicial_num));
