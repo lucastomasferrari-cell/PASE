@@ -344,12 +344,16 @@ export default async function handler(req, res) {
           post_body: null,
           list_status: null,
           list_body: null,
+          list_attempts: 0,
           file_name: null,
+          file_date_created: null,
           file_status: null,
           file_snippet: null,
           parsed_balance: null,
+          parse_method: null,
           error: null,
         };
+        const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         try {
           // ISO 8601 en UTC, sin milisegundos. begin_date al inicio del día
           // de hace 3 días, end_date al segundo actual — lo que MP acepta.
@@ -395,51 +399,80 @@ export default async function handler(req, res) {
             releaseReport.error = 'POST: ' + String(e?.message || e);
           }
 
-          // 2) GET /list — nombre del reporte más reciente.
-          try {
-            const listRes = await fetch(
-              'https://api.mercadopago.com/v1/account/release_report/list',
-              { headers: { Authorization: `Bearer ${cred.access_token}` } }
-            );
-            releaseReport.list_status = listRes.status;
-            const listBody = await listRes.text();
-            releaseReport.list_body = listBody?.slice(0, 300) || null;
-            console.log(
-              '[mp-sync] release_report /list',
-              cred.local_id,
-              listRes.status,
-              releaseReport.list_body
-            );
-            let listData = null;
+          // 2) GET /list — con reintentos, porque el POST es asíncrono
+          //    y el archivo generado recién aparece después de unos
+          //    segundos. Sólo aceptamos archivos .csv creados hoy (UTC),
+          //    así no cae en reportes viejos de 2023 que quedaron en el
+          //    listado.
+          const todayStart = new Date();
+          todayStart.setUTCHours(0, 0, 0, 0);
+          const todayMs = todayStart.getTime();
+          for (let attempt = 0; attempt < 3; attempt++) {
+            if (attempt > 0) await sleep(2000);
+            releaseReport.list_attempts = attempt + 1;
             try {
-              listData = listBody ? JSON.parse(listBody) : null;
-            } catch {
-              listData = null;
+              const listRes = await fetch(
+                'https://api.mercadopago.com/v1/account/release_report/list',
+                { headers: { Authorization: `Bearer ${cred.access_token}` } }
+              );
+              releaseReport.list_status = listRes.status;
+              const listBody = await listRes.text();
+              releaseReport.list_body = listBody?.slice(0, 300) || null;
+              console.log(
+                '[mp-sync] release_report /list',
+                cred.local_id,
+                'attempt',
+                attempt + 1,
+                listRes.status,
+                releaseReport.list_body
+              );
+              let listData = null;
+              try {
+                listData = listBody ? JSON.parse(listBody) : null;
+              } catch {
+                listData = null;
+              }
+              const rawFiles = Array.isArray(listData)
+                ? listData
+                : Array.isArray(listData?.results)
+                ? listData.results
+                : [];
+              const files = rawFiles
+                .filter((f) => {
+                  const name = (
+                    f?.file_name || f?.fileName || f?.name || ''
+                  ).toLowerCase();
+                  if (!name.endsWith('.csv')) return false;
+                  const dc = new Date(
+                    f?.date_created || f?.date || 0
+                  ).getTime();
+                  return dc >= todayMs;
+                })
+                .sort((a, b) => {
+                  const da = new Date(
+                    a?.date_created || a?.date || 0
+                  ).getTime();
+                  const db_ = new Date(
+                    b?.date_created || b?.date || 0
+                  ).getTime();
+                  return db_ - da;
+                });
+              const latest = files[0];
+              if (latest) {
+                releaseReport.file_name =
+                  latest.file_name || latest.fileName || latest.name || null;
+                releaseReport.file_date_created =
+                  latest.date_created || latest.date || null;
+                break;
+              }
+            } catch (e) {
+              releaseReport.error =
+                (releaseReport.error ? releaseReport.error + ' | ' : '') +
+                'LIST attempt ' +
+                (attempt + 1) +
+                ': ' +
+                String(e?.message || e);
             }
-            const rawFiles = Array.isArray(listData)
-              ? listData
-              : Array.isArray(listData?.results)
-              ? listData.results
-              : [];
-            // Sólo .csv (ignorar los .xlsx que son reportes manuales),
-            // y el más reciente por fecha de creación.
-            const files = rawFiles
-              .filter((f) => {
-                const name = (f?.file_name || f?.fileName || f?.name || '').toLowerCase();
-                return name.endsWith('.csv');
-              })
-              .sort((a, b) => {
-                const da = new Date(a?.date_created || a?.date || 0).getTime();
-                const db_ = new Date(b?.date_created || b?.date || 0).getTime();
-                return db_ - da;
-              });
-            const latest = files[0];
-            releaseReport.file_name =
-              latest?.file_name || latest?.fileName || latest?.name || null;
-          } catch (e) {
-            releaseReport.error =
-              (releaseReport.error ? releaseReport.error + ' | ' : '') +
-              'LIST: ' + String(e?.message || e);
           }
 
           // 3) GET /<file_name> — descarga el CSV del reporte.
@@ -463,10 +496,29 @@ export default async function handler(req, res) {
               );
 
               if (fileRes.ok && csvText) {
-                // 4) Parseo del CSV: primero partimos por líneas y detectamos
-                //    el separador (, o ;). Buscamos columnas BALANCE_AMOUNT
-                //    o SETTLEMENT_NET_CREDIT_AMOUNT y tomamos el valor de la
-                //    última fila de datos no vacía.
+                // 4) Parseo del CSV del release_report.
+                //    Columnas esperadas:
+                //      DATE;SOURCE_ID;EXTERNAL_REFERENCE;RECORD_TYPE;
+                //      DESCRIPTION;NET_CREDIT_AMOUNT;NET_DEBIT_AMOUNT;
+                //      GROSS_AMOUNT;SELLER_AMOUNT
+                //    Método principal: última fila con RECORD_TYPE=
+                //    'settlement' y su SELLER_AMOUNT como closing balance.
+                //    Fallback: SUM(NET_CREDIT_AMOUNT) - SUM(NET_DEBIT_AMOUNT)
+                //    ignorando filas sin RECORD_TYPE o tipo header/footer.
+                const parseNumero = (raw) => {
+                  if (raw == null || raw === '') return null;
+                  const s = String(raw).trim();
+                  if (!s) return null;
+                  const normal =
+                    s.includes(',') && s.includes('.')
+                      ? s.replace(/\./g, '').replace(',', '.')
+                      : s.includes(',') && !s.includes('.')
+                      ? s.replace(',', '.')
+                      : s;
+                  const v = Number(normal);
+                  return Number.isFinite(v) ? v : null;
+                };
+
                 const lines = csvText
                   .split(/\r?\n/)
                   .map((l) => l.trim())
@@ -476,30 +528,54 @@ export default async function handler(req, res) {
                   const header = lines[0]
                     .split(sep)
                     .map((h) => h.replace(/^"|"$/g, '').trim().toUpperCase());
-                  const idxBalance = header.indexOf('BALANCE_AMOUNT');
-                  const idxNetCredit = header.indexOf(
-                    'SETTLEMENT_NET_CREDIT_AMOUNT'
-                  );
-                  const pickIdx = idxBalance !== -1 ? idxBalance : idxNetCredit;
-                  if (pickIdx !== -1) {
+                  const idxRecordType = header.indexOf('RECORD_TYPE');
+                  const idxNetCredit = header.indexOf('NET_CREDIT_AMOUNT');
+                  const idxNetDebit = header.indexOf('NET_DEBIT_AMOUNT');
+                  const idxSeller = header.indexOf('SELLER_AMOUNT');
+
+                  // Método 1: última fila settlement -> SELLER_AMOUNT
+                  if (idxRecordType !== -1 && idxSeller !== -1) {
                     for (let i = lines.length - 1; i >= 1; i--) {
                       const cells = lines[i]
                         .split(sep)
                         .map((c) => c.replace(/^"|"$/g, '').trim());
-                      const raw = cells[pickIdx];
-                      if (raw == null || raw === '') continue;
-                      // Normalizar formato AR (1.234,56) o US (1,234.56).
-                      const normal = raw.includes(',') && raw.includes('.')
-                        ? raw.replace(/\./g, '').replace(',', '.')
-                        : raw.includes(',') && !raw.includes('.')
-                        ? raw.replace(',', '.')
-                        : raw;
-                      const val = Number(normal);
-                      if (Number.isFinite(val)) {
+                      const tipo = (cells[idxRecordType] || '').toLowerCase();
+                      if (tipo !== 'settlement') continue;
+                      const val = parseNumero(cells[idxSeller]);
+                      if (val != null) {
                         releaseReport.parsed_balance = val;
+                        releaseReport.parse_method =
+                          'last_settlement_seller_amount';
                         break;
                       }
                     }
+                  }
+
+                  // Método 2 (fallback): SUM(net_credit) - SUM(net_debit)
+                  if (
+                    releaseReport.parsed_balance == null &&
+                    idxNetCredit !== -1 &&
+                    idxNetDebit !== -1
+                  ) {
+                    let credits = 0;
+                    let debits = 0;
+                    for (let i = 1; i < lines.length; i++) {
+                      const cells = lines[i]
+                        .split(sep)
+                        .map((c) => c.replace(/^"|"$/g, '').trim());
+                      const tipo = (
+                        idxRecordType !== -1 ? cells[idxRecordType] : ''
+                      ).toLowerCase();
+                      // Saltar filas sin tipo (header/footer/blank).
+                      if (!tipo || tipo === 'header' || tipo === 'footer')
+                        continue;
+                      const c = parseNumero(cells[idxNetCredit]);
+                      const d = parseNumero(cells[idxNetDebit]);
+                      if (c != null) credits += c;
+                      if (d != null) debits += d;
+                    }
+                    releaseReport.parsed_balance = credits - debits;
+                    releaseReport.parse_method = 'sum_credit_minus_debit';
                   }
                 }
               }

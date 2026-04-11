@@ -2337,9 +2337,10 @@ function ConciliacionMP({ user, locales, localActivo }) {
           if(x.release_report){
             const rr=x.release_report;
             out.push("    release_report POST HTTP "+(rr.post_status??"ERR")+(rr.post_body?" "+String(rr.post_body).replace(/\s+/g," ").slice(0,120):""));
-            out.push("    release_report LIST HTTP "+(rr.list_status??"ERR")+" file="+(rr.file_name||"(ninguno)"));
+            out.push("    release_report LIST HTTP "+(rr.list_status??"ERR")+" intentos="+(rr.list_attempts||0)+" file="+(rr.file_name||"(ninguno hoy)"));
+            if(rr.file_date_created)out.push("    release_report file_date_created="+rr.file_date_created);
             if(rr.file_status!=null)out.push("    release_report FILE HTTP "+rr.file_status+(rr.file_snippet?" snippet: "+String(rr.file_snippet).replace(/\s+/g," ").slice(0,120):""));
-            out.push("    release_report parsed_balance="+(rr.parsed_balance!=null?fmt_$(rr.parsed_balance):"null"));
+            out.push("    release_report parsed_balance="+(rr.parsed_balance!=null?fmt_$(rr.parsed_balance):"null")+(rr.parse_method?" ["+rr.parse_method+"]":""));
             if(rr.error)out.push("    release_report ERR: "+rr.error);
           }
           if(x.saldo_debug){
