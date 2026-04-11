@@ -2335,12 +2335,19 @@ function ConciliacionMP({ user, locales, localActivo }) {
     setConfigModal(false);setConfigForm({local_id:"",access_token:""});load();
   };
 
+  // Comisiones/impuestos son egresos automáticos y se muestran aparte — no entran en conciliación manual.
+  const ES_AUTOMATICO=t=>t==="fee"||t==="tax";
+
   const ingresos=movimientos.filter(m=>m.monto>0).reduce((s,m)=>s+m.monto,0);
   const egresosList=movimientos.filter(m=>m.monto<0);
   const egresos=egresosList.reduce((s,m)=>s+Math.abs(m.monto),0);
-  const egresosConciliados=egresosList.filter(m=>m.conciliado).reduce((s,m)=>s+Math.abs(m.monto),0);
-  const egresosPendientes=egresos-egresosConciliados;
-  const pendientesCount=egresosList.filter(m=>!m.conciliado).length;
+  const comisionesList=egresosList.filter(m=>ES_AUTOMATICO(m.tipo));
+  const comisionesTotal=comisionesList.reduce((s,m)=>s+Math.abs(m.monto),0);
+  const egresosManualesList=egresosList.filter(m=>!ES_AUTOMATICO(m.tipo));
+  const egresosManualesTotal=egresosManualesList.reduce((s,m)=>s+Math.abs(m.monto),0);
+  const egresosConciliados=egresosManualesList.filter(m=>m.conciliado).reduce((s,m)=>s+Math.abs(m.monto),0);
+  const egresosPendientes=egresosManualesTotal-egresosConciliados;
+  const pendientesCount=egresosManualesList.filter(m=>!m.conciliado).length;
   const neto=ingresos-egresos;
 
   // Ventas presenciales: Point devices (POS físico) - transaction_amount se mapea a monto.
@@ -2348,7 +2355,10 @@ function ConciliacionMP({ user, locales, localActivo }) {
   const ventasOnline=movimientos.filter(m=>m.tipo==="payment"&&m.monto>0).reduce((s,m)=>s+m.monto,0);
 
   const TIPO_LABELS={
-    "payment":"Cobro Online","point":"Venta Presencial","money_transfer":"Transferencia","withdrawal":"Retiro",
+    "payment":"Cobro Online","point":"Venta Presencial",
+    "payment_out":"Pago saliente","recurring":"Servicio/Suscripción",
+    "money_transfer":"Transferencia","withdrawal":"Retiro",
+    "investment":"Inversión","recharge":"Recarga",
     "refund":"Devolución","dispute":"Disputa","tax":"Impuesto",
     "fee":"Comisión","payout":"Liquidación"
   };
@@ -2452,13 +2462,14 @@ function ConciliacionMP({ user, locales, localActivo }) {
             {egresosPendientes===0?"✓ Todos los egresos están conciliados":`⚠ ${pendientesCount} egreso${pendientesCount===1?"":"s"} sin justificar`}
           </div>
           <div style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>
-            Cada egreso debe vincularse a una Factura o Gasto para que el saldo teórico coincida con el real.
+            Pagos y transferencias salientes deben vincularse a una Factura o Gasto. Las comisiones MP se concilian automáticamente.
           </div>
         </div>
         <div style={{display:"flex",gap:16,fontSize:11}}>
-          <div><div style={{color:"var(--muted2)",fontSize:9,textTransform:"uppercase",letterSpacing:1}}>Total egresos</div><div className="num kpi-danger">{fmt_$(egresos)}</div></div>
+          <div><div style={{color:"var(--muted2)",fontSize:9,textTransform:"uppercase",letterSpacing:1}}>Egresos a justificar</div><div className="num kpi-danger">{fmt_$(egresosManualesTotal)}</div></div>
           <div><div style={{color:"var(--muted2)",fontSize:9,textTransform:"uppercase",letterSpacing:1}}>Justificado</div><div className="num kpi-success">{fmt_$(egresosConciliados)}</div></div>
           <div><div style={{color:"var(--muted2)",fontSize:9,textTransform:"uppercase",letterSpacing:1}}>Diferencia</div><div className={`num ${egresosPendientes===0?"kpi-success":"kpi-danger"}`}>{fmt_$(egresosPendientes)}</div></div>
+          <div><div style={{color:"var(--muted2)",fontSize:9,textTransform:"uppercase",letterSpacing:1}}>Comisiones auto</div><div className="num" style={{color:"var(--muted2)"}}>{fmt_$(comisionesTotal)}</div></div>
         </div>
       </div>
 
@@ -2479,7 +2490,8 @@ function ConciliacionMP({ user, locales, localActivo }) {
               <thead><tr><th>Fecha</th><th>Local</th><th>Tipo</th><th>Descripción</th><th>Monto</th><th>Saldo</th><th>Conciliación</th></tr></thead>
               <tbody>{movimientos.map(m=>{
                 const esEgreso=m.monto<0;
-                const pend=esEgreso&&!m.conciliado;
+                const esAuto=ES_AUTOMATICO(m.tipo);
+                const pend=esEgreso&&!esAuto&&!m.conciliado;
                 return (
                 <tr key={m.id} style={pend?{background:"rgba(239,68,68,0.08)",borderLeft:"2px solid var(--danger)"}:undefined}>
                   <td className="mono" style={{fontSize:11}}>{new Date(m.fecha).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</td>
@@ -2490,6 +2502,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
                   <td style={{color:"var(--muted2)"}}>{fmt_$(m.saldo)}</td>
                   <td>
                     {!esEgreso?<span style={{fontSize:10,color:"var(--muted)"}}>—</span>:
+                      esAuto?<span className="badge b-muted" style={{fontSize:9}}>Automático</span>:
                       m.conciliado?
                         <span style={{display:"flex",gap:4,alignItems:"center"}}>
                           <span className="badge b-success" style={{fontSize:9}}>✓ {m.vinculo_tipo||"ok"}</span>

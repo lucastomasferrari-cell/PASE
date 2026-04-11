@@ -12,11 +12,40 @@ function esPagoPoint(pago) {
   );
 }
 
-// Clasifica el tipo de movimiento para la columna `tipo` del UI.
-// Valores consumidos por TIPO_LABELS en el front: payment, point, fee, refund, withdrawal, money_transfer, tax, payout, dispute.
-function clasificarPago(pago) {
-  if (esPagoPoint(pago)) return 'point';
-  return 'payment';
+// operation_type values que son SIEMPRE egresos desde la cuenta del merchant
+// (servicios, transferencias salientes, suscripciones, recargas, inversiones).
+const OP_TYPES_EGRESO = new Set([
+  'money_transfer',
+  'recurring_payment',
+  'investment',
+  'cellphone_recharge',
+  'bank_withdrawal',
+]);
+
+// Clasifica un pago como ingreso (+) o egreso (-) y devuelve el tipo de UI.
+// Un pago es egreso si:
+//   1. operation_type está en OP_TYPES_EGRESO
+//   2. payer.id coincide con el user_id propio de la cuenta MP (nos aparece como pagador)
+function clasificarPago(pago, userId) {
+  const opType = pago?.operation_type || '';
+  const payerId = pago?.payer?.id != null ? String(pago.payer.id) : '';
+  const miId = userId != null ? String(userId) : '';
+
+  const esEgresoPorOp = OP_TYPES_EGRESO.has(opType);
+  const esEgresoPorPayer = miId && payerId && payerId === miId;
+  const esEgreso = esEgresoPorOp || esEgresoPorPayer;
+
+  if (esEgreso) {
+    if (opType === 'money_transfer') return { direccion: -1, tipo: 'money_transfer' };
+    if (opType === 'recurring_payment') return { direccion: -1, tipo: 'recurring' };
+    if (opType === 'investment') return { direccion: -1, tipo: 'investment' };
+    if (opType === 'cellphone_recharge') return { direccion: -1, tipo: 'recharge' };
+    if (opType === 'bank_withdrawal') return { direccion: -1, tipo: 'withdrawal' };
+    return { direccion: -1, tipo: 'payment_out' };
+  }
+
+  if (esPagoPoint(pago)) return { direccion: 1, tipo: 'point' };
+  return { direccion: 1, tipo: 'payment' };
 }
 
 export default async function handler(req, res) {
@@ -54,6 +83,21 @@ export default async function handler(req, res) {
 
     for (const cred of creds) {
       try {
+        // Id propio del merchant (dueño del access_token). Se usa para detectar
+        // pagos en los que figuramos como payer => son egresos (ej. servicios).
+        let userId = null;
+        try {
+          const meRes = await fetch('https://api.mercadopago.com/users/me', {
+            headers: { Authorization: `Bearer ${cred.access_token}` },
+          });
+          if (meRes.ok) {
+            const meData = await meRes.json();
+            userId = meData?.id != null ? String(meData.id) : null;
+          }
+        } catch (meErr) {
+          console.error('mp-sync: users/me error', cred.local_id, meErr);
+        }
+
         const hasta = new Date();
         const desde = new Date();
         desde.setDate(desde.getDate() - 7);
@@ -85,12 +129,13 @@ export default async function handler(req, res) {
 
         if (mpData.results) {
           for (const pago of mpData.results) {
-            const monto = Number(pago.transaction_amount) || 0;
+            const bruto = Number(pago.transaction_amount) || 0;
+            const { direccion, tipo } = clasificarPago(pago, userId);
+            const monto = direccion * Math.abs(bruto);
             const neto =
               pago?.transaction_details?.net_received_amount != null
-                ? Number(pago.transaction_details.net_received_amount)
+                ? Number(pago.transaction_details.net_received_amount) * direccion
                 : null;
-            const tipo = clasificarPago(pago);
             const fecha = pago.date_approved || pago.date_created;
             const payTypeId = pago.payment_type_id || null;
 
@@ -118,7 +163,9 @@ export default async function handler(req, res) {
             );
             cantPagos++;
 
-            // Comisiones MP: generan egreso que debe conciliarse.
+            // Comisiones MP: egreso automático, se marca conciliado=true
+            // porque no requiere justificación manual (son costos fijos MP
+            // que se agregan solos en la pestaña "Comisiones MP").
             const fees = Array.isArray(pago.fee_details) ? pago.fee_details : [];
             const totalFee = fees.reduce(
               (s, f) => s + (Number(f.amount) || 0),
@@ -138,6 +185,11 @@ export default async function handler(req, res) {
                     estado: pago.status,
                     referencia_id: String(pago.id),
                     medio_pago: payTypeId,
+                    conciliado: true,
+                    vinculo_tipo: 'auto',
+                    vinculo_id: String(pago.id),
+                    conciliado_at: new Date().toISOString(),
+                    conciliado_por: 'sistema',
                   },
                 ],
                 { onConflict: 'id' }
