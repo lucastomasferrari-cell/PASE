@@ -332,34 +332,68 @@ export default async function handler(req, res) {
           }
         }
 
-        // DEBUG: probar distintos endpoints de transferencias para ver
-        // cuál responde 2xx en esta cuenta. No se guarda nada todavía.
+        // Transferencias enviadas — se piden al endpoint de payments
+        // con operation_type=money_transfer y se guardan como egresos.
         let cantTransfers = 0;
-        const transferProbes = [];
-        const encBegin = encodeURIComponent(beginDate);
-        const encEnd = encodeURIComponent(endDate);
-        const probeUrls = [
-          `https://api.mercadopago.com/v1/account/movements?type=bank_transfer&begin_date=${encBegin}&end_date=${encEnd}`,
-          accountId
-            ? `https://api.mercadopago.com/v1/users/${accountId}/transfers?begin_date=${encBegin}&end_date=${encEnd}`
-            : `https://api.mercadopago.com/v1/users/73828709/transfers?begin_date=${encBegin}&end_date=${encEnd}`,
-          `https://api.mercadopago.com/v1/payments/search?operation_type=money_transfer&begin_date=${encBegin}&end_date=${encEnd}&sort=date_created&criteria=desc&limit=200`,
-        ];
-        for (const url of probeUrls) {
-          const probe = { url, status: null, snippet: null, error: null };
-          try {
-            const r = await fetch(url, {
-              headers: { Authorization: `Bearer ${cred.access_token}` },
-            });
-            probe.status = r.status;
-            const body = await r.text();
-            probe.snippet = (body || '').slice(0, 100);
-            console.log('[mp-sync] transfers probe', url, '→', r.status, probe.snippet);
-          } catch (e) {
-            probe.error = String(e?.message || e);
-            console.error('[mp-sync] transfers probe error', url, e);
+        try {
+          const mtUrl =
+            `https://api.mercadopago.com/v1/payments/search?` +
+            `operation_type=money_transfer` +
+            `&begin_date=${encodeURIComponent(beginDate)}` +
+            `&end_date=${encodeURIComponent(endDate)}` +
+            `&sort=date_created&criteria=desc&limit=200`;
+          const mtRes = await fetch(mtUrl, {
+            headers: { Authorization: `Bearer ${cred.access_token}` },
+          });
+          console.log(
+            '[mp-sync] money_transfer search',
+            cred.local_id,
+            '→',
+            mtRes.status
+          );
+          if (mtRes.ok) {
+            const mtData = await mtRes.json();
+            const rows = Array.isArray(mtData?.results) ? mtData.results : [];
+            for (const t of rows) {
+              if (t?.id == null) continue;
+              const monto = Number(t.transaction_amount) || 0;
+              if (monto === 0) continue;
+              const fecha =
+                t.date_approved || t.date_created || new Date().toISOString();
+              const descripcion =
+                t.description ||
+                t.statement_descriptor ||
+                'Transferencia enviada';
+              await db.from('mp_movimientos').upsert(
+                [
+                  {
+                    id: `mt-${t.id}`,
+                    local_id: cred.local_id,
+                    fecha,
+                    tipo: 'transferencia',
+                    descripcion,
+                    monto: -Math.abs(monto),
+                    saldo: null,
+                    estado: t.status || 'approved',
+                    referencia_id: String(t.external_reference || t.id),
+                    medio_pago: 'bank_transfer',
+                  },
+                ],
+                { onConflict: 'id' }
+              );
+              cantTransfers++;
+            }
+          } else {
+            const body = await mtRes.text();
+            console.warn(
+              '[mp-sync] money_transfer search failed',
+              cred.local_id,
+              mtRes.status,
+              body?.slice(0, 200)
+            );
           }
-          transferProbes.push(probe);
+        } catch (e) {
+          console.error('[mp-sync] money_transfer fetch error', cred.local_id, e);
         }
 
         // Saldo real = saldo_inicial (ingresado por el usuario) + suma
@@ -865,7 +899,6 @@ export default async function handler(req, res) {
           comisiones: cantFees,
           reembolsos: cantRefunds,
           transferencias: cantTransfers,
-          transfer_probes: transferProbes,
           saldo_debug: {
             saldo_inicial_raw: saldoInicialRaw,
             saldo_inicial_num: saldoInicialNum,
