@@ -2338,10 +2338,6 @@ function ConciliacionMP({ user, locales, localActivo }) {
           if(x.error)header.push("ERR: "+x.error);
           if(x.upd_error)header.push("DB err: "+x.upd_error);
           const out=[header.join(" · ")];
-          if(x.bank_transfer_probe){
-            const bt=x.bank_transfer_probe;
-            out.push("    bank_transfer probe HTTP "+(bt.status??"ERR")+" total="+(bt.total??"?")+(bt.snippet?" snippet: "+String(bt.snippet).replace(/\s+/g," ").slice(0,120):"")+(bt.error?" ERR: "+String(bt.error).slice(0,120):""));
-          }
           if(x.release_report){
             const rr=x.release_report;
             if(rr.config_status!=null)out.push("    release_report CONFIG HTTP "+rr.config_status);
@@ -2355,6 +2351,16 @@ function ConciliacionMP({ user, locales, localActivo }) {
             }
             if(rr.first_time_message)out.push("    ℹ "+rr.first_time_message);
             if(rr.error)out.push("    release_report ERR: "+rr.error);
+            if(Array.isArray(rr.non_payment_types)&&rr.non_payment_types.length){
+              out.push("    RECORD_TYPEs no-payment vistos: "+rr.non_payment_types.join(", "));
+            }
+            if(Array.isArray(rr.non_payment_rows)&&rr.non_payment_rows.length){
+              out.push("    ─── primeras "+rr.non_payment_rows.length+" filas no-payment del CSV ───");
+              for(let i=0;i<rr.non_payment_rows.length;i++){
+                out.push("      ["+i+"] "+JSON.stringify(rr.non_payment_rows[i]));
+              }
+              out.push("    ─── fin ───");
+            }
           }
           if(x.saldo_debug){
             const dbg=x.saldo_debug;

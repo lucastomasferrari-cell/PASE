@@ -354,53 +354,6 @@ export default async function handler(req, res) {
           }
         }
 
-        // PROBE: transferencias bancarias (CBU) — se intenta con
-        // operation_type=bank_transfer. Por ahora sólo se loguea el
-        // status y la cantidad de resultados, no se guarda nada.
-        const bankTransferProbe = {
-          status: null,
-          total: null,
-          snippet: null,
-          error: null,
-        };
-        try {
-          const btUrl =
-            `https://api.mercadopago.com/v1/payments/search?` +
-            `operation_type=bank_transfer` +
-            `&begin_date=${encodeURIComponent(beginDate)}` +
-            `&end_date=${encodeURIComponent(endDate)}` +
-            `&sort=date_created&criteria=desc&limit=200`;
-          const btRes = await fetch(btUrl, {
-            headers: { Authorization: `Bearer ${cred.access_token}` },
-          });
-          bankTransferProbe.status = btRes.status;
-          const btBody = await btRes.text();
-          bankTransferProbe.snippet = (btBody || '').slice(0, 200);
-          if (btRes.ok) {
-            let btData = null;
-            try {
-              btData = btBody ? JSON.parse(btBody) : null;
-            } catch {
-              btData = null;
-            }
-            const rows = Array.isArray(btData?.results) ? btData.results : [];
-            bankTransferProbe.total = rows.length;
-          } else {
-            bankTransferProbe.error = (btBody || '').slice(0, 200);
-          }
-          console.log(
-            '[mp-sync] bank_transfer probe',
-            cred.local_id,
-            '→',
-            btRes.status,
-            'total=',
-            bankTransferProbe.total,
-            bankTransferProbe.snippet
-          );
-        } catch (e) {
-          bankTransferProbe.error = String(e?.message || e);
-          console.error('[mp-sync] bank_transfer probe error', cred.local_id, e);
-        }
 
         // Saldo real = saldo_inicial (ingresado por el usuario) + suma
         // neta de movimientos aprobados con fecha >= saldo_inicial_at.
@@ -478,6 +431,8 @@ export default async function handler(req, res) {
           total_credit: null,
           total_debit: null,
           mov_rows: null,
+          non_payment_rows: null,
+          non_payment_types: null,
           parsed_balance: null,
           parse_method: null,
           first_time_message: null,
@@ -741,6 +696,40 @@ export default async function handler(req, res) {
                     'total',
                   ]);
 
+                  // DEBUG: capturar las primeras 5 filas cuyo RECORD_TYPE
+                  // NO es payment / fee / initial_available_balance /
+                  // closing_balance / total — el objetivo es ver qué
+                  // RECORD_TYPE usan las transferencias bancarias (CBU)
+                  // y qué columnas traen los destinatarios / montos.
+                  const IGNORAR_DEBUG = new Set([
+                    'payment',
+                    'fee',
+                    'initial_available_balance',
+                    'closing_balance',
+                    'total',
+                  ]);
+                  const nonPaymentRows = [];
+                  const tiposVistos = new Set();
+                  if (idxRecordType !== -1) {
+                    for (let i = 1; i < lines.length; i++) {
+                      const cells = lines[i]
+                        .split(sep)
+                        .map((c) => c.replace(/^"|"$/g, '').trim());
+                      const tipo = (cells[idxRecordType] || '').toLowerCase();
+                      if (!tipo || IGNORAR_DEBUG.has(tipo)) continue;
+                      tiposVistos.add(tipo);
+                      if (nonPaymentRows.length < 5) {
+                        const obj = {};
+                        for (let j = 0; j < header.length; j++) {
+                          obj[header[j]] = cells[j];
+                        }
+                        nonPaymentRows.push(obj);
+                      }
+                    }
+                  }
+                  releaseReport.non_payment_rows = nonPaymentRows;
+                  releaseReport.non_payment_types = Array.from(tiposVistos);
+
                   // Método 1: closing_balance (sólo existe en reportes
                   // programados del día cerrado).
                   let closingBalance = null;
@@ -904,7 +893,6 @@ export default async function handler(req, res) {
           movimientos: cantPagos,
           comisiones: cantFees,
           reembolsos: cantRefunds,
-          bank_transfer_probe: bankTransferProbe,
           saldo_debug: {
             saldo_inicial_raw: saldoInicialRaw,
             saldo_inicial_num: saldoInicialNum,
