@@ -158,6 +158,28 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: 'Sin credenciales configuradas' });
     }
 
+    // One-time cleanup: las filas con id 'mt-*' eran los duplicados que
+    // generaba el probe anterior de money_transfer. Se borran antes de
+    // cada sync hasta confirmar que no vuelven a generarse.
+    let cleanupMtDeleted = null;
+    try {
+      const { error: delMtErr, count: delMtCount } = await db
+        .from('mp_movimientos')
+        .delete({ count: 'exact' })
+        .like('id', 'mt-%');
+      if (delMtErr) {
+        console.error('mp-sync: cleanup mt-% error', delMtErr);
+      } else {
+        cleanupMtDeleted = delMtCount ?? null;
+        console.log(
+          '[mp-sync] cleanup mt-% rows deleted:',
+          cleanupMtDeleted
+        );
+      }
+    } catch (e) {
+      console.error('mp-sync: cleanup mt-% exception', e);
+    }
+
     const resultados = [];
     let balanceTotalMP = 0;
     let balanceConsultado = false;
@@ -332,68 +354,52 @@ export default async function handler(req, res) {
           }
         }
 
-        // Transferencias enviadas — se piden al endpoint de payments
-        // con operation_type=money_transfer y se guardan como egresos.
-        let cantTransfers = 0;
+        // PROBE: transferencias bancarias (CBU) — se intenta con
+        // operation_type=bank_transfer. Por ahora sólo se loguea el
+        // status y la cantidad de resultados, no se guarda nada.
+        const bankTransferProbe = {
+          status: null,
+          total: null,
+          snippet: null,
+          error: null,
+        };
         try {
-          const mtUrl =
+          const btUrl =
             `https://api.mercadopago.com/v1/payments/search?` +
-            `operation_type=money_transfer` +
+            `operation_type=bank_transfer` +
             `&begin_date=${encodeURIComponent(beginDate)}` +
             `&end_date=${encodeURIComponent(endDate)}` +
             `&sort=date_created&criteria=desc&limit=200`;
-          const mtRes = await fetch(mtUrl, {
+          const btRes = await fetch(btUrl, {
             headers: { Authorization: `Bearer ${cred.access_token}` },
           });
+          bankTransferProbe.status = btRes.status;
+          const btBody = await btRes.text();
+          bankTransferProbe.snippet = (btBody || '').slice(0, 200);
+          if (btRes.ok) {
+            let btData = null;
+            try {
+              btData = btBody ? JSON.parse(btBody) : null;
+            } catch {
+              btData = null;
+            }
+            const rows = Array.isArray(btData?.results) ? btData.results : [];
+            bankTransferProbe.total = rows.length;
+          } else {
+            bankTransferProbe.error = (btBody || '').slice(0, 200);
+          }
           console.log(
-            '[mp-sync] money_transfer search',
+            '[mp-sync] bank_transfer probe',
             cred.local_id,
             '→',
-            mtRes.status
+            btRes.status,
+            'total=',
+            bankTransferProbe.total,
+            bankTransferProbe.snippet
           );
-          if (mtRes.ok) {
-            const mtData = await mtRes.json();
-            const rows = Array.isArray(mtData?.results) ? mtData.results : [];
-            for (const t of rows) {
-              if (t?.id == null) continue;
-              const monto = Number(t.transaction_amount) || 0;
-              if (monto === 0) continue;
-              const fecha =
-                t.date_approved || t.date_created || new Date().toISOString();
-              const descripcion =
-                t.description ||
-                t.statement_descriptor ||
-                'Transferencia enviada';
-              await db.from('mp_movimientos').upsert(
-                [
-                  {
-                    id: `mt-${t.id}`,
-                    local_id: cred.local_id,
-                    fecha,
-                    tipo: 'transferencia',
-                    descripcion,
-                    monto: -Math.abs(monto),
-                    saldo: null,
-                    estado: t.status || 'approved',
-                    referencia_id: String(t.external_reference || t.id),
-                    medio_pago: 'bank_transfer',
-                  },
-                ],
-                { onConflict: 'id' }
-              );
-              cantTransfers++;
-            }
-          } else {
-            const body = await mtRes.text();
-            console.warn(
-              '[mp-sync] money_transfer search failed',
-              cred.local_id,
-              mtRes.status,
-              body?.slice(0, 200)
-            );
-          }
         } catch (e) {
-          console.error('[mp-sync] money_transfer fetch error', cred.local_id, e);
+          bankTransferProbe.error = String(e?.message || e);
+          console.error('[mp-sync] bank_transfer probe error', cred.local_id, e);
         }
 
         // Saldo real = saldo_inicial (ingresado por el usuario) + suma
@@ -898,7 +904,7 @@ export default async function handler(req, res) {
           movimientos: cantPagos,
           comisiones: cantFees,
           reembolsos: cantRefunds,
-          transferencias: cantTransfers,
+          bank_transfer_probe: bankTransferProbe,
           saldo_debug: {
             saldo_inicial_raw: saldoInicialRaw,
             saldo_inicial_num: saldoInicialNum,
@@ -950,6 +956,7 @@ export default async function handler(req, res) {
       resultados,
       balance_mp: balanceConsultado ? balanceTotalMP : null,
       reset: resetSummary.length ? resetSummary : undefined,
+      cleanup_mt_deleted: cleanupMtDeleted,
     });
   } catch (err) {
     console.error('mp-sync: unhandled error', err);

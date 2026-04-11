@@ -2328,13 +2328,20 @@ function ConciliacionMP({ user, locales, localActivo }) {
       console.log("[MP] /api/mp-sync response:",d);
       if(d.ok){
         await load();
-        const lines=(d.resultados||[]).flatMap(x=>{
+        const lines=[];
+        if(d.cleanup_mt_deleted!=null){
+          lines.push("cleanup mt-*: "+d.cleanup_mt_deleted+" filas borradas");
+        }
+        lines.push(...(d.resultados||[]).flatMap(x=>{
           const header=[x.local+" (local "+x.local_id+(x.account_id?", mp_id "+x.account_id:"")+")"+": "+(x.movimientos||0)+" mov"];
-          if(x.transferencias!=null)header.push(x.transferencias+" transf");
           if(x.balance_fuente)header.push("fuente: "+x.balance_fuente);
           if(x.error)header.push("ERR: "+x.error);
           if(x.upd_error)header.push("DB err: "+x.upd_error);
           const out=[header.join(" · ")];
+          if(x.bank_transfer_probe){
+            const bt=x.bank_transfer_probe;
+            out.push("    bank_transfer probe HTTP "+(bt.status??"ERR")+" total="+(bt.total??"?")+(bt.snippet?" snippet: "+String(bt.snippet).replace(/\s+/g," ").slice(0,120):"")+(bt.error?" ERR: "+String(bt.error).slice(0,120):""));
+          }
           if(x.release_report){
             const rr=x.release_report;
             if(rr.config_status!=null)out.push("    release_report CONFIG HTTP "+rr.config_status);
@@ -2358,7 +2365,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
             out.push("    → saldo_disponible="+fmt_$(dbg.saldo_disponible));
           }
           return out;
-        });
+        }));
         alert("Sincronización completada\n"+lines.join("\n"));
       }
       else alert("Error en sincronización: "+(d.error||"desconocido"));
