@@ -281,178 +281,38 @@ export default async function handler(req, res) {
           }
         }
 
-        // Saldo real de la cuenta MP — se guarda por credencial y se suma al
-        // total global para actualizar saldos_caja.
-        // MP expone el balance por varios endpoints según la generación de
-        // la API y el tipo de cuenta. Probamos en orden hasta encontrar uno
-        // que responda 200 con números válidos.
+        // Saldo calculado desde mp_movimientos.
+        // /v1/account/balance devuelve 403 con tokens estándar y
+        // /v1/money_releases 400, así que reconstruimos el saldo sumando
+        // todos los montos aprobados ya sincronizados para este local.
+        // Al estar los egresos (fees, refunds, payment_out, money_transfer)
+        // guardados con signo negativo, un SUM(monto) ya da el neto.
         let credSaldoDisponible = null;
-        let credSaldoPendiente = null;
-        let credSaldoNoDisponible = null;
-        let credSaldoTotal = null;
-        let balanceEndpointUsado = null;
-        let balanceStatus = null;
-        let balanceRaw = null;
-
-        const extraerMonto = (obj, ...keys) => {
-          for (const k of keys) {
-            if (obj && obj[k] != null && !Number.isNaN(Number(obj[k]))) {
-              return Number(obj[k]);
-            }
-          }
-          return null;
-        };
-
-        const balanceEndpoints = [
-          'https://api.mercadopago.com/v1/account/balance',
-          accountId
-            ? `https://api.mercadopago.com/users/${accountId}/mercadopago_account/balance`
-            : null,
-          'https://api.mercadopago.com/users/me/mercadopago_account/balance',
-        ].filter(Boolean);
-
-        for (const endpoint of balanceEndpoints) {
-          try {
-            const balRes = await fetch(endpoint, {
-              headers: { Authorization: `Bearer ${cred.access_token}` },
-            });
-            balanceStatus = balRes.status;
-            const bodyText = await balRes.text();
-            // Log completo del body — sirve para entender qué está devolviendo
-            // realmente cada endpoint de balance para este access_token.
-            console.log(
-              '[mp-sync] balance',
-              endpoint,
-              '→',
-              balRes.status,
-              bodyText?.slice(0, 600)
-            );
-            let balData = null;
-            try {
-              balData = bodyText ? JSON.parse(bodyText) : null;
-            } catch {
-              balData = null;
-            }
-            if (!balRes.ok) {
-              balanceRaw = bodyText?.slice(0, 500) || null;
-              continue;
-            }
-            balanceRaw = balData;
-
-            // Distintos endpoints usan distintos nombres. Normalizamos.
-            credSaldoDisponible = extraerMonto(
-              balData,
-              'available_balance',
-              'balance',
-              'available',
-              'amount'
-            );
-            credSaldoPendiente = extraerMonto(
-              balData,
-              'pending_amount',
-              'pending_balance',
-              'pending'
-            );
-            credSaldoNoDisponible = extraerMonto(
-              balData,
-              'unavailable_balance',
-              'withheld_amount',
-              'blocked'
-            );
-            credSaldoTotal = extraerMonto(
-              balData,
-              'total_amount',
-              'total_balance',
-              'total'
-            );
-            if (credSaldoTotal == null) {
-              const partes = [credSaldoDisponible, credSaldoPendiente, credSaldoNoDisponible].filter(
-                (x) => x != null
-              );
-              if (partes.length) credSaldoTotal = partes.reduce((a, b) => a + b, 0);
-            }
-
-            if (
-              credSaldoDisponible != null ||
-              credSaldoTotal != null ||
-              credSaldoPendiente != null
-            ) {
-              balanceEndpointUsado = endpoint;
-              const disponible = Number(credSaldoDisponible || credSaldoTotal || 0);
-              balanceTotalMP += disponible;
-              balanceConsultado = true;
-              break;
-            }
-          } catch (balErr) {
-            console.error('mp-sync: balance fetch error', endpoint, balErr);
-          }
-        }
-
-        // Liquidaciones / money releases — montos que se van a acreditar
-        // en los próximos días. Se upsertean en mp_liquidaciones.
-        let cantLiquidaciones = 0;
-        try {
-          const relRes = await fetch(
-            'https://api.mercadopago.com/v1/money_releases/list?limit=100',
-            { headers: { Authorization: `Bearer ${cred.access_token}` } }
+        const { data: movLocal, error: movErr } = await db
+          .from('mp_movimientos')
+          .select('monto, estado')
+          .eq('local_id', cred.local_id);
+        if (movErr) {
+          console.error(
+            'mp-sync: sum mp_movimientos error',
+            cred.local_id,
+            movErr
           );
-          if (relRes.ok) {
-            const relData = await relRes.json();
-            const releases = Array.isArray(relData?.results)
-              ? relData.results
-              : Array.isArray(relData)
-              ? relData
-              : [];
-            for (const r of releases) {
-              const rid =
-                r.id != null
-                  ? String(r.id)
-                  : `${cred.local_id}-${r.release_date || r.date_created || Math.random()}`;
-              await db.from('mp_liquidaciones').upsert(
-                [
-                  {
-                    id: rid,
-                    local_id: cred.local_id,
-                    amount: Number(r.amount) || 0,
-                    currency: r.currency_id || 'ARS',
-                    release_date: r.release_date || r.date_release || null,
-                    date_created: r.date_created || null,
-                    concept: r.concept || r.type || null,
-                    estado: r.status || null,
-                    descripcion: r.description || r.reason || null,
-                    synced_at: new Date().toISOString(),
-                  },
-                ],
-                { onConflict: 'id' }
-              );
-              cantLiquidaciones++;
-            }
-          } else if (relRes.status !== 404) {
-            console.warn(
-              'mp-sync: money_releases endpoint returned',
-              relRes.status,
-              'for local',
-              cred.local_id
-            );
-          }
-        } catch (relErr) {
-          console.error('mp-sync: money_releases fetch error', cred.local_id, relErr);
+        } else {
+          credSaldoDisponible = (movLocal || [])
+            .filter((m) => !m.estado || m.estado === 'approved')
+            .reduce((s, m) => s + (Number(m.monto) || 0), 0);
+          balanceTotalMP += credSaldoDisponible;
+          balanceConsultado = true;
         }
 
-        // Intentamos primero con las columnas nuevas de balance. Si la
-        // migración no corrió todavía Supabase devuelve
-        // PGRST204 / "column ... does not exist" — en ese caso reintentamos
-        // sólo con ultima_sync para no perder los demás datos del sync.
+        // Guardar el saldo calculado en mp_credenciales. Si la migración con
+        // la columna saldo_disponible no corrió todavía, reintentamos sin ella.
         const fullPayload = {
           ultima_sync: new Date().toISOString(),
           saldo_disponible: credSaldoDisponible,
-          saldo_pendiente: credSaldoPendiente,
-          saldo_no_disponible: credSaldoNoDisponible,
-          saldo_total: credSaldoTotal,
           balance_at:
-            credSaldoDisponible != null || credSaldoTotal != null
-              ? new Date().toISOString()
-              : null,
+            credSaldoDisponible != null ? new Date().toISOString() : null,
         };
         let { error: updErr } = await db
           .from('mp_credenciales')
@@ -494,15 +354,7 @@ export default async function handler(req, res) {
           movimientos: cantPagos,
           comisiones: cantFees,
           reembolsos: cantRefunds,
-          liquidaciones: cantLiquidaciones,
-          balance: {
-            endpoint: balanceEndpointUsado,
-            status: balanceStatus,
-            disponible: credSaldoDisponible,
-            pendiente: credSaldoPendiente,
-            total: credSaldoTotal,
-            raw: balanceRaw,
-          },
+          saldo_calculado: credSaldoDisponible,
           upd_error: updErr ? updErr.message : undefined,
         });
       } catch (err) {

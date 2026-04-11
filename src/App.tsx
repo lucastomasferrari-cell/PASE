@@ -2283,7 +2283,6 @@ function Recetas({ locales, localActivo }) {
 function ConciliacionMP({ user, locales, localActivo }) {
   const [credenciales,setCredenciales]=useState([]);
   const [movimientos,setMovimientos]=useState([]);
-  const [liquidaciones,setLiquidaciones]=useState([]);
   const [facturas,setFacturas]=useState([]);
   const [gastos,setGastos]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -2303,23 +2302,18 @@ function ConciliacionMP({ user, locales, localActivo }) {
     const mlast=new Date(myr,mmo,0).getDate();
     const desde=mes+"-01T00:00:00",hasta=mes+"-"+String(mlast).padStart(2,"0")+"T23:59:59";
     const desdeD=mes+"-01",hastaD=mes+"-"+String(mlast).padStart(2,"0");
-    const [credRes,movRes,facRes,gasRes,liqRes]=await Promise.all([
+    const [credRes,movRes,facRes,gasRes]=await Promise.all([
       db.from("mp_credenciales").select("*,locales(nombre)"),
       db.from("mp_movimientos").select("*").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false}),
       db.from("facturas").select("id,nro,fecha,total,local_id,cat,estado").gte("fecha",desdeD).lte("fecha",hastaD).order("fecha",{ascending:false}),
       db.from("gastos").select("id,fecha,categoria,detalle,monto,local_id,cuenta").gte("fecha",desdeD).lte("fecha",hastaD).order("fecha",{ascending:false}),
-      // mp_liquidaciones es opcional — si la migración aún no corrió, Supabase devuelve 400 y lo ignoramos.
-      db.from("mp_liquidaciones").select("*").order("release_date",{ascending:true}).then(r=>r,()=>({data:[],error:null})),
     ]);
     if(credRes.error)console.warn("mp_credenciales load error:",credRes.error);
-    if(liqRes.error)console.warn("mp_liquidaciones load error (¿migración pendiente?):",liqRes.error);
-    console.log("[MP] credenciales cargadas:",credRes.data);
-    const c=credRes.data||[], m=movRes.data||[], f=facRes.data||[], g=gasRes.data||[], l=liqRes.data||[];
+    const c=credRes.data||[], m=movRes.data||[], f=facRes.data||[], g=gasRes.data||[];
     setCredenciales(c.filter(x=>!localActivo||x.local_id===localActivo));
     setMovimientos(m.filter(x=>!localActivo||x.local_id===localActivo));
     setFacturas(f.filter(x=>!localActivo||x.local_id===localActivo));
     setGastos(g.filter(x=>!localActivo||x.local_id===localActivo));
-    setLiquidaciones(l.filter(x=>!localActivo||x.local_id===localActivo));
     setLoading(false);
   };
 
@@ -2335,10 +2329,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
         await load();
         const lines=(d.resultados||[]).map(x=>{
           const parts=[x.local+": "+(x.movimientos||0)+" mov"];
-          if(x.balance){
-            if(x.balance.disponible!=null)parts.push("saldo $"+x.balance.disponible);
-            else if(x.balance.status)parts.push("balance HTTP "+x.balance.status);
-          }
+          if(x.saldo_calculado!=null)parts.push("saldo "+fmt_$(x.saldo_calculado));
           if(x.upd_error)parts.push("DB err: "+x.upd_error);
           if(x.error)parts.push("ERR: "+x.error);
           return parts.join(" · ");
@@ -2375,22 +2366,11 @@ function ConciliacionMP({ user, locales, localActivo }) {
   const ventasPresenciales=movimientos.filter(m=>m.tipo==="point"&&m.monto>0).reduce((s,m)=>s+m.monto,0);
   const ventasOnline=movimientos.filter(m=>m.tipo==="payment"&&m.monto>0).reduce((s,m)=>s+m.monto,0);
 
-  // Saldo real disponible — sumado de todas las credenciales sincronizadas.
+  // Saldo calculado desde mp_movimientos — /v1/account/balance no está
+  // disponible con tokens estándar (403), así que el backend guarda la
+  // suma de montos aprobados en mp_credenciales.saldo_disponible.
   const saldoRealDisponible=credenciales.reduce((s,c)=>s+(Number(c.saldo_disponible)||0),0);
-  const saldoRealPendiente=credenciales.reduce((s,c)=>s+(Number(c.saldo_pendiente)||0),0);
-  const saldoRealTotal=credenciales.reduce((s,c)=>s+(Number(c.saldo_total)||(Number(c.saldo_disponible)||0)+(Number(c.saldo_pendiente)||0)),0);
   const ultimaActualizacionBalance=credenciales.map(c=>c.balance_at).filter(Boolean).sort().pop();
-
-  // Liquidaciones — agrupadas por fecha de liberación.
-  const hoyISO=toISO(today);
-  const enSieteDias=new Date();enSieteDias.setDate(enSieteDias.getDate()+7);
-  const semanaISO=toISO(enSieteDias);
-  const liqFuturas=liquidaciones.filter(l=>l.release_date&&l.release_date.slice(0,10)>=hoyISO);
-  const liqHoy=liqFuturas.filter(l=>l.release_date.slice(0,10)===hoyISO);
-  const liqSemana=liqFuturas.filter(l=>l.release_date.slice(0,10)<=semanaISO);
-  const totalLiqHoy=liqHoy.reduce((s,l)=>s+(Number(l.amount)||0),0);
-  const totalLiqSemana=liqSemana.reduce((s,l)=>s+(Number(l.amount)||0),0);
-  const totalLiqPendiente=liqFuturas.reduce((s,l)=>s+(Number(l.amount)||0),0);
 
   const TIPO_LABELS={
     "payment":"Cobro Online","point":"Venta Presencial",
@@ -2512,7 +2492,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
       </div>
 
       <div className="tabs">
-        {[["movimientos","Movimientos"],["cuentas","Estado de Cuentas"],["liquidaciones","Liquidaciones"],["comisiones","Comisiones MP"]].map(([id,l])=>(
+        {[["movimientos","Movimientos"],["cuentas","Estado de Cuentas"],["comisiones","Comisiones MP"]].map(([id,l])=>(
           <div key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>{l}</div>
         ))}
       </div>
@@ -2559,21 +2539,22 @@ function ConciliacionMP({ user, locales, localActivo }) {
         <div>
           <div className="panel" style={{marginBottom:16,background:"linear-gradient(135deg,rgba(62,207,207,0.12),rgba(62,207,207,0.02))",border:"1px solid rgba(62,207,207,0.35)"}}>
             <div style={{padding:"20px 24px"}}>
-              <div style={{fontSize:10,letterSpacing:2,textTransform:"uppercase",color:"var(--muted2)",marginBottom:6}}>Saldo real disponible en MercadoPago</div>
+              <div style={{fontSize:10,letterSpacing:2,textTransform:"uppercase",color:"var(--muted2)",marginBottom:6}}>Saldo calculado en MercadoPago</div>
               <div style={{fontFamily:"'Syne',sans-serif",fontSize:42,fontWeight:800,color:"var(--acc3)",lineHeight:1.1}}>{fmt_$(saldoRealDisponible)}</div>
+              <div style={{fontSize:11,color:"var(--muted2)",marginTop:6}}>
+                Suma neta de todos los movimientos MP aprobados (cobros − comisiones − egresos).
+              </div>
               <div style={{display:"flex",gap:24,marginTop:14,flexWrap:"wrap"}}>
-                <div><div style={{fontSize:9,color:"var(--muted2)",textTransform:"uppercase",letterSpacing:1}}>Pendiente de liberar</div><div className="num" style={{fontSize:14,color:"var(--warn)"}}>{fmt_$(saldoRealPendiente)}</div></div>
-                <div><div style={{fontSize:9,color:"var(--muted2)",textTransform:"uppercase",letterSpacing:1}}>Total</div><div className="num" style={{fontSize:14}}>{fmt_$(saldoRealTotal)}</div></div>
                 <div><div style={{fontSize:9,color:"var(--muted2)",textTransform:"uppercase",letterSpacing:1}}>Actualizado</div><div className="mono" style={{fontSize:11,color:"var(--muted2)"}}>{ultimaActualizacionBalance?new Date(ultimaActualizacionBalance).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—"}</div></div>
               </div>
-              {!ultimaActualizacionBalance&&<div style={{fontSize:11,color:"var(--muted2)",marginTop:8}}>⚠ Ejecutá una sincronización para traer el saldo real desde Mercado Pago.</div>}
+              {!ultimaActualizacionBalance&&<div style={{fontSize:11,color:"var(--muted2)",marginTop:8}}>⚠ Ejecutá una sincronización para calcular el saldo a partir de los movimientos.</div>}
             </div>
           </div>
           <div className="panel">
             <div className="panel-hd"><span className="panel-title">Estado de Cuentas por Local</span></div>
             {credenciales.length===0?<div className="empty">Sin cuentas configuradas</div>:(
               <table>
-                <thead><tr><th>Local</th><th>Estado</th><th>Última Sync</th><th>Disponible</th><th>Pendiente</th><th>Ingresos mes</th><th>Egresos mes</th></tr></thead>
+                <thead><tr><th>Local</th><th>Estado</th><th>Última Sync</th><th>Saldo calculado</th><th>Ingresos mes</th><th>Egresos mes</th></tr></thead>
                 <tbody>{credenciales.map(c=>{
                   const movLocal=movimientos.filter(m=>m.local_id===c.local_id);
                   const ing=movLocal.filter(m=>m.monto>0).reduce((s,m)=>s+m.monto,0);
@@ -2584,43 +2565,9 @@ function ConciliacionMP({ user, locales, localActivo }) {
                       <td><span className={`badge ${c.activo?"b-success":"b-muted"}`}>{c.activo?"Conectada":"Inactiva"}</span></td>
                       <td className="mono" style={{fontSize:11}}>{c.ultima_sync?new Date(c.ultima_sync).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"Nunca"}</td>
                       <td><span className="num" style={{color:"var(--acc3)"}}>{c.saldo_disponible!=null?fmt_$(c.saldo_disponible):"—"}</span></td>
-                      <td><span className="num kpi-warn">{c.saldo_pendiente!=null?fmt_$(c.saldo_pendiente):"—"}</span></td>
                       <td><span className="num kpi-success">{fmt_$(ing)}</span></td>
                       <td><span className="num kpi-danger">{fmt_$(egr)}</span></td>
                     </tr>
-                  );
-                })}</tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      ):tab==="liquidaciones"?(
-        <div>
-          <div className="grid3" style={{marginBottom:16}}>
-            <div className="kpi"><div className="kpi-label">Disponible hoy</div><div className="kpi-value kpi-success">{fmt_$(totalLiqHoy)}</div><div className="kpi-sub">{liqHoy.length} liberacion{liqHoy.length===1?"":"es"}</div></div>
-            <div className="kpi"><div className="kpi-label">Próximos 7 días</div><div className="kpi-value kpi-acc">{fmt_$(totalLiqSemana)}</div><div className="kpi-sub">{liqSemana.length} liberacion{liqSemana.length===1?"":"es"}</div></div>
-            <div className="kpi"><div className="kpi-label">Total pendiente</div><div className="kpi-value kpi-warn">{fmt_$(totalLiqPendiente)}</div><div className="kpi-sub">Incluye {fmt_$(saldoRealPendiente)} de saldo retenido</div></div>
-          </div>
-          <div className="panel">
-            <div className="panel-hd"><span className="panel-title">Próximas liquidaciones — {liqFuturas.length} registros</span><span style={{fontSize:11,color:"var(--muted2)"}}>Fuente: /v1/money_releases/list</span></div>
-            {liqFuturas.length===0?<div className="empty">Sin liquidaciones pendientes. Sincronizá para traer los datos.</div>:(
-              <table>
-                <thead><tr><th>Fecha de liberación</th><th>Local</th><th>Concepto</th><th>Descripción</th><th>Estado</th><th>Monto</th></tr></thead>
-                <tbody>{liqFuturas.map(l=>{
-                  const releaseDay=l.release_date?.slice(0,10);
-                  const esHoy=releaseDay===hoyISO;
-                  return (
-                  <tr key={l.id} style={esHoy?{background:"rgba(34,197,94,0.08)",borderLeft:"2px solid var(--success)"}:undefined}>
-                    <td className="mono" style={{fontSize:11}}>
-                      {fmt_d(releaseDay)}
-                      {esHoy&&<span className="badge b-success" style={{marginLeft:6,fontSize:9}}>Disponible hoy</span>}
-                    </td>
-                    <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(x=>x.id===l.local_id)?.nombre||"—"}</td>
-                    <td><span className="badge b-muted">{l.concept||"—"}</span></td>
-                    <td style={{fontSize:11,maxWidth:240,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.descripcion||"—"}</td>
-                    <td style={{fontSize:11,color:"var(--muted2)"}}>{l.estado||"—"}</td>
-                    <td><span className="num kpi-success">+{fmt_$(l.amount)}</span></td>
-                  </tr>
                   );
                 })}</tbody>
               </table>
