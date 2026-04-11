@@ -2349,9 +2349,13 @@ function ConciliacionMP({ user, locales, localActivo }) {
             if(rr.first_time_message)out.push("    ℹ "+rr.first_time_message);
             if(rr.error)out.push("    release_report ERR: "+rr.error);
           }
-          if(x.transfers_debug){
-            const td=x.transfers_debug;
-            out.push("    bank_transfers HTTP "+(td.status??"ERR")+" endpoint="+(td.endpoint||"(ninguno OK)")+" total="+(td.total||0)+(td.error?" ERR: "+String(td.error).slice(0,160):""));
+          if(Array.isArray(x.transfer_probes)&&x.transfer_probes.length){
+            out.push("    ─── transfer endpoint probes ───");
+            for(const p of x.transfer_probes){
+              const shortUrl=String(p.url).replace("https://api.mercadopago.com","");
+              out.push("      "+shortUrl+" → HTTP "+(p.status??"ERR")+(p.snippet?" "+String(p.snippet).replace(/\s+/g," ").slice(0,100):"")+(p.error?" ERR: "+p.error:""));
+            }
+            out.push("    ─── fin probes ───");
           }
           if(x.saldo_debug){
             const dbg=x.saldo_debug;
