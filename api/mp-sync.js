@@ -431,8 +431,7 @@ export default async function handler(req, res) {
           total_credit: null,
           total_debit: null,
           mov_rows: null,
-          non_payment_rows: null,
-          non_payment_types: null,
+          release_rows_upserted: null,
           parsed_balance: null,
           parse_method: null,
           first_time_message: null,
@@ -696,39 +695,97 @@ export default async function handler(req, res) {
                     'total',
                   ]);
 
-                  // DEBUG: capturar las primeras 5 filas cuyo RECORD_TYPE
-                  // NO es payment / fee / initial_available_balance /
-                  // closing_balance / total — el objetivo es ver qué
-                  // RECORD_TYPE usan las transferencias bancarias (CBU)
-                  // y qué columnas traen los destinatarios / montos.
-                  const IGNORAR_DEBUG = new Set([
-                    'payment',
-                    'fee',
-                    'initial_available_balance',
-                    'closing_balance',
-                    'total',
-                  ]);
-                  const nonPaymentRows = [];
-                  const tiposVistos = new Set();
-                  if (idxRecordType !== -1) {
+                  // Procesar filas RECORD_TYPE='release': capturan las
+                  // liberaciones del release_report, que incluyen las
+                  // transferencias bancarias (CBU) a proveedores.
+                  //   NET_DEBIT_AMOUNT  > 0 → transferencia saliente
+                  //   NET_CREDIT_AMOUNT > 0 → liquidación entrante
+                  const idxDate = header.indexOf('DATE');
+                  const idxSourceId = header.indexOf('SOURCE_ID');
+                  const idxExternalRef = header.indexOf('EXTERNAL_REFERENCE');
+                  const idxDescription = header.indexOf('DESCRIPTION');
+                  let cantRelease = 0;
+                  if (
+                    idxRecordType !== -1 &&
+                    (idxNetCredit !== -1 || idxNetDebit !== -1)
+                  ) {
                     for (let i = 1; i < lines.length; i++) {
                       const cells = lines[i]
                         .split(sep)
                         .map((c) => c.replace(/^"|"$/g, '').trim());
                       const tipo = (cells[idxRecordType] || '').toLowerCase();
-                      if (!tipo || IGNORAR_DEBUG.has(tipo)) continue;
-                      tiposVistos.add(tipo);
-                      if (nonPaymentRows.length < 5) {
-                        const obj = {};
-                        for (let j = 0; j < header.length; j++) {
-                          obj[header[j]] = cells[j];
-                        }
-                        nonPaymentRows.push(obj);
+                      if (tipo !== 'release') continue;
+                      const netCredit =
+                        idxNetCredit !== -1
+                          ? parseNumero(cells[idxNetCredit]) || 0
+                          : 0;
+                      const netDebit =
+                        idxNetDebit !== -1
+                          ? parseNumero(cells[idxNetDebit]) || 0
+                          : 0;
+                      if (netCredit <= 0 && netDebit <= 0) continue;
+
+                      const sourceId =
+                        idxSourceId !== -1 ? cells[idxSourceId] || '' : '';
+                      const extRef =
+                        idxExternalRef !== -1
+                          ? cells[idxExternalRef] || ''
+                          : '';
+                      const rawDate =
+                        idxDate !== -1 ? cells[idxDate] || '' : '';
+                      const descripcionRaw =
+                        idxDescription !== -1
+                          ? cells[idxDescription] || ''
+                          : '';
+                      const uniqueKey =
+                        sourceId || `${rawDate}-${extRef || i}`;
+
+                      let monto = 0;
+                      let rowTipo = null;
+                      let descripcionDefault = '';
+                      if (netDebit > 0) {
+                        monto = -netDebit;
+                        rowTipo = 'bank_transfer';
+                        descripcionDefault = 'Transferencia enviada';
+                      } else {
+                        monto = netCredit;
+                        rowTipo = 'liquidacion';
+                        descripcionDefault = 'Liquidación MP';
                       }
+
+                      let fechaIso;
+                      const parsed = rawDate ? new Date(rawDate) : null;
+                      if (parsed && !Number.isNaN(parsed.getTime())) {
+                        fechaIso = parsed.toISOString();
+                      } else {
+                        fechaIso = new Date().toISOString();
+                      }
+
+                      await db.from('mp_movimientos').upsert(
+                        [
+                          {
+                            id: `rr-${uniqueKey}`,
+                            local_id: cred.local_id,
+                            fecha: fechaIso,
+                            tipo: rowTipo,
+                            descripcion: descripcionRaw || descripcionDefault,
+                            monto,
+                            saldo: null,
+                            estado: 'approved',
+                            referencia_id:
+                              extRef || sourceId || String(uniqueKey),
+                            medio_pago:
+                              rowTipo === 'bank_transfer'
+                                ? 'bank_transfer'
+                                : null,
+                          },
+                        ],
+                        { onConflict: 'id' }
+                      );
+                      cantRelease++;
                     }
                   }
-                  releaseReport.non_payment_rows = nonPaymentRows;
-                  releaseReport.non_payment_types = Array.from(tiposVistos);
+                  releaseReport.release_rows_upserted = cantRelease;
 
                   // Método 1: closing_balance (sólo existe en reportes
                   // programados del día cerrado).

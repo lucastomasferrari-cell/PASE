@@ -2349,18 +2349,9 @@ function ConciliacionMP({ user, locales, localActivo }) {
             if(rr.initial_balance!=null||rr.total_credit!=null||rr.total_debit!=null){
               out.push("      inicial="+fmt_$(rr.initial_balance||0)+" + créditos="+fmt_$(rr.total_credit||0)+" − débitos="+fmt_$(rr.total_debit||0)+" ("+(rr.mov_rows||0)+" movs)");
             }
+            if(rr.release_rows_upserted!=null)out.push("    release rows upserted: "+rr.release_rows_upserted);
             if(rr.first_time_message)out.push("    ℹ "+rr.first_time_message);
             if(rr.error)out.push("    release_report ERR: "+rr.error);
-            if(Array.isArray(rr.non_payment_types)&&rr.non_payment_types.length){
-              out.push("    RECORD_TYPEs no-payment vistos: "+rr.non_payment_types.join(", "));
-            }
-            if(Array.isArray(rr.non_payment_rows)&&rr.non_payment_rows.length){
-              out.push("    ─── primeras "+rr.non_payment_rows.length+" filas no-payment del CSV ───");
-              for(let i=0;i<rr.non_payment_rows.length;i++){
-                out.push("      ["+i+"] "+JSON.stringify(rr.non_payment_rows[i]));
-              }
-              out.push("    ─── fin ───");
-            }
           }
           if(x.saldo_debug){
             const dbg=x.saldo_debug;
@@ -2460,6 +2451,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
     "payment":"Cobro Online","point":"Venta Presencial",
     "payment_out":"Pago saliente","recurring":"Servicio/Suscripción",
     "money_transfer":"Transferencia","transferencia":"Transferencia enviada",
+    "bank_transfer":"Transferencia a CBU","liquidacion":"Liquidación",
     "withdrawal":"Retiro",
     "investment":"Inversión","recharge":"Recarga",
     "refund":"Devolución","dispute":"Disputa","tax":"Impuesto",
