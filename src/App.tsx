@@ -2351,6 +2351,10 @@ function ConciliacionMP({ user, locales, localActivo }) {
           if(x.error)header.push("ERR: "+x.error);
           if(x.upd_error)header.push("DB err: "+x.upd_error);
           const out=[header.join(" · ")];
+          if(x.balance_api_probe){
+            const bp=x.balance_api_probe;
+            out.push("    settlement_report HTTP "+(bp.status??"ERR")+" available_balance="+(bp.available_balance!=null?fmt_$(bp.available_balance):"null")+(bp.snippet?" snippet: "+String(bp.snippet).replace(/\s+/g," ").slice(0,120):"")+(bp.error?" ERR: "+String(bp.error).slice(0,120):""));
+          }
           if(x.release_report){
             const rr=x.release_report;
             if(rr.config_status!=null)out.push("    release_report CONFIG HTTP "+rr.config_status);
@@ -2358,10 +2362,6 @@ function ConciliacionMP({ user, locales, localActivo }) {
             out.push("    release_report LIST HTTP "+(rr.list_status??"ERR")+" intentos="+(rr.list_attempts||0)+" file="+(rr.file_name||"(ninguno)")+(rr.created_from?" ["+rr.created_from+"]":""));
             if(rr.file_date_created)out.push("    release_report file_date_created="+rr.file_date_created);
             if(rr.file_status!=null)out.push("    release_report FILE HTTP "+rr.file_status+(rr.file_snippet?" snippet: "+String(rr.file_snippet).replace(/\s+/g," ").slice(0,120):""));
-            out.push("    release_report parsed_balance="+(rr.parsed_balance!=null?fmt_$(rr.parsed_balance):"null")+(rr.parse_method?" ["+rr.parse_method+"]":"")+(rr.csv_rows?" ("+rr.csv_rows+" filas CSV)":""));
-            if(rr.initial_balance!=null||rr.total_credit!=null||rr.total_debit!=null){
-              out.push("      inicial="+fmt_$(rr.initial_balance||0)+" + créditos="+fmt_$(rr.total_credit||0)+" − débitos="+fmt_$(rr.total_debit||0)+" ("+(rr.mov_rows||0)+" movs)");
-            }
             if(rr.release_rows_upserted!=null)out.push("    release rows upserted: "+rr.release_rows_upserted);
             if(rr.first_time_message)out.push("    ℹ "+rr.first_time_message);
             if(rr.error)out.push("    release_report ERR: "+rr.error);
