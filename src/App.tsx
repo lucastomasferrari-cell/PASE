@@ -146,8 +146,8 @@ function Login({ onLogin }) {
         <div className="login-brand">GASTRO</div>
         <div className="login-sub">Sistema de Gestión</div>
         {err && <div className="alert alert-danger">{err}</div>}
-        <div className="field"><label>Usuario</label><input value={usuario} onChange={e=>setUsuario(e.target.value)} placeholder="dueno / admin / compras / cajero" onKeyDown={e=>e.key==="Enter"&&go()} /></div>
-        <div className="field"><label>Contraseña</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&go()} /></div>
+        <div className="field"><label>Usuario</label><input autoComplete="username" value={usuario} onChange={e=>setUsuario(e.target.value)} placeholder="dueno / admin / compras / cajero" onKeyDown={e=>e.key==="Enter"&&go()} /></div>
+        <div className="field"><label>Contraseña</label><input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&go()} /></div>
         <button className="btn btn-acc" style={{width:"100%",justifyContent:"center"}} onClick={go} disabled={loading}>{loading?"Verificando...":"Ingresar"}</button>
         <div style={{marginTop:16,padding:10,background:"var(--bg)",borderRadius:"var(--r)",fontSize:10,color:"var(--muted)",lineHeight:1.8}}>
           dueno123 · admin123 · compras123 · cajero123
@@ -1628,14 +1628,14 @@ function Config({ locales }) {
       <div className="panel">
         {loading?<div className="loading">Cargando...</div>:(
           <table><thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th></th></tr></thead>
-          <tbody>{usuarios.map(u=><tr key={u.id}><td style={{fontWeight:500}}>{u.nombre}</td><td className="mono" style={{color:"var(--muted2)"}}>{u.email}</td><td><span className="badge" style={{background:ROLES[u.rol]?.color+"22",color:ROLES[u.rol]?.color}}>{ROLES[u.rol]?.label}</span></td><td><button className="btn btn-ghost btn-sm" onClick={()=>setEditModal({...u})}>Cambiar clave</button></td></tr>)}</tbody>
+          <tbody>{usuarios.map(u=><tr key={u.id}><td style={{fontWeight:500}}>{u.nombre}</td><td className="mono" style={{color:"var(--muted2)"}}>{u.email}</td><td><span className="badge" style={{background:ROLES[u.rol]?.color+"22",color:ROLES[u.rol]?.color}}>{ROLES[u.rol]?.label}</span></td><td><button className="btn btn-ghost btn-sm" onClick={()=>setEditModal({id:u.id,nombre:u.nombre,password:""})}>Cambiar clave</button></td></tr>)}</tbody>
         </table>)}
       </div>
       {modal&&(<div className="overlay" onClick={()=>setModal(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
         <div className="modal-hd"><div className="modal-title">Nuevo Usuario</div><button className="close-btn" onClick={()=>setModal(false)}>✕</button></div>
         <div className="modal-body">
           <div className="field"><label>Nombre</label><input value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})}/></div>
-          <div className="form2"><div className="field"><label>Usuario</label><input value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></div><div className="field"><label>Contraseña</label><input value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></div></div>
+          <div className="form2"><div className="field"><label>Usuario</label><input autoComplete="off" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></div><div className="field"><label>Contraseña</label><input type="password" autoComplete="new-password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></div></div>
           <div className="field"><label>Rol</label><select value={form.rol} onChange={e=>setForm({...form,rol:e.target.value})}>{Object.entries(ROLES).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select></div>
         </div>
         <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar}>Crear</button></div>
@@ -1644,7 +1644,7 @@ function Config({ locales }) {
         <div className="modal-hd"><div className="modal-title">Cambiar Contraseña</div><button className="close-btn" onClick={()=>setEditModal(null)}>✕</button></div>
         <div className="modal-body">
           <div className="alert alert-info">{editModal.nombre}</div>
-          <div className="field"><label>Nueva contraseña</label><input value={editModal.password} onChange={e=>setEditModal({...editModal,password:e.target.value})}/></div>
+          <div className="field"><label>Nueva contraseña</label><input type="password" autoComplete="new-password" placeholder="Nueva contraseña" value={editModal.password} onChange={e=>setEditModal({...editModal,password:e.target.value})}/></div>
         </div>
         <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setEditModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={guardarEdit}>Guardar</button></div>
       </div></div>)}
