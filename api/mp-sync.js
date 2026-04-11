@@ -281,7 +281,12 @@ export default async function handler(req, res) {
           }
         }
 
-        // Saldo real de la cuenta MP — se suma al total global para actualizar saldos_caja.
+        // Saldo real de la cuenta MP — se guarda por credencial y se suma al
+        // total global para actualizar saldos_caja.
+        let credSaldoDisponible = null;
+        let credSaldoPendiente = null;
+        let credSaldoNoDisponible = null;
+        let credSaldoTotal = null;
         try {
           const balRes = await fetch(
             'https://api.mercadopago.com/v1/account/balance',
@@ -289,10 +294,23 @@ export default async function handler(req, res) {
           );
           if (balRes.ok) {
             const balData = await balRes.json();
-            const disponible =
-              Number(balData.available_balance) ||
-              Number(balData.total_amount) ||
-              0;
+            credSaldoDisponible =
+              balData.available_balance != null
+                ? Number(balData.available_balance)
+                : null;
+            credSaldoPendiente =
+              balData.pending_amount != null
+                ? Number(balData.pending_amount)
+                : null;
+            credSaldoNoDisponible =
+              balData.unavailable_balance != null
+                ? Number(balData.unavailable_balance)
+                : null;
+            credSaldoTotal =
+              balData.total_amount != null
+                ? Number(balData.total_amount)
+                : null;
+            const disponible = Number(credSaldoDisponible || credSaldoTotal || 0);
             balanceTotalMP += disponible;
             balanceConsultado = true;
           } else {
@@ -307,9 +325,68 @@ export default async function handler(req, res) {
           console.error('mp-sync: balance fetch error', cred.local_id, balErr);
         }
 
+        // Liquidaciones / money releases — montos que se van a acreditar
+        // en los próximos días. Se upsertean en mp_liquidaciones.
+        let cantLiquidaciones = 0;
+        try {
+          const relRes = await fetch(
+            'https://api.mercadopago.com/v1/money_releases/list?limit=100',
+            { headers: { Authorization: `Bearer ${cred.access_token}` } }
+          );
+          if (relRes.ok) {
+            const relData = await relRes.json();
+            const releases = Array.isArray(relData?.results)
+              ? relData.results
+              : Array.isArray(relData)
+              ? relData
+              : [];
+            for (const r of releases) {
+              const rid =
+                r.id != null
+                  ? String(r.id)
+                  : `${cred.local_id}-${r.release_date || r.date_created || Math.random()}`;
+              await db.from('mp_liquidaciones').upsert(
+                [
+                  {
+                    id: rid,
+                    local_id: cred.local_id,
+                    amount: Number(r.amount) || 0,
+                    currency: r.currency_id || 'ARS',
+                    release_date: r.release_date || r.date_release || null,
+                    date_created: r.date_created || null,
+                    concept: r.concept || r.type || null,
+                    estado: r.status || null,
+                    descripcion: r.description || r.reason || null,
+                    synced_at: new Date().toISOString(),
+                  },
+                ],
+                { onConflict: 'id' }
+              );
+              cantLiquidaciones++;
+            }
+          } else if (relRes.status !== 404) {
+            console.warn(
+              'mp-sync: money_releases endpoint returned',
+              relRes.status,
+              'for local',
+              cred.local_id
+            );
+          }
+        } catch (relErr) {
+          console.error('mp-sync: money_releases fetch error', cred.local_id, relErr);
+        }
+
         await db
           .from('mp_credenciales')
-          .update({ ultima_sync: new Date().toISOString() })
+          .update({
+            ultima_sync: new Date().toISOString(),
+            saldo_disponible: credSaldoDisponible,
+            saldo_pendiente: credSaldoPendiente,
+            saldo_no_disponible: credSaldoNoDisponible,
+            saldo_total: credSaldoTotal,
+            balance_at:
+              credSaldoDisponible != null ? new Date().toISOString() : null,
+          })
           .eq('local_id', cred.local_id);
 
         resultados.push({
@@ -317,6 +394,7 @@ export default async function handler(req, res) {
           movimientos: cantPagos,
           comisiones: cantFees,
           reembolsos: cantRefunds,
+          liquidaciones: cantLiquidaciones,
         });
       } catch (err) {
         console.error('mp-sync: error processing credential', cred?.local_id, err);
