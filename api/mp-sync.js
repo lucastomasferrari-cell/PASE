@@ -205,6 +205,55 @@ export default async function handler(req, res) {
         const beginDate = desde.toISOString();
         const endDate = hasta.toISOString();
 
+        // DEBUG: pedir también /v1/account/movements/search y guardar las
+        // primeras 3 filas para ver qué estructura devuelve. Si funciona,
+        // el próximo paso es usarla en lugar de /v1/payments/search.
+        const movementsDebug = {
+          status: null,
+          error: null,
+          first_rows: null,
+          total: null,
+        };
+        try {
+          const movUrl =
+            `https://api.mercadopago.com/v1/account/movements/search?` +
+            `filters.type=all` +
+            `&sort=date_created&criteria=desc` +
+            `&begin_date=${encodeURIComponent(beginDate)}` +
+            `&end_date=${encodeURIComponent(endDate)}`;
+          const movRes = await fetch(movUrl, {
+            headers: { Authorization: `Bearer ${cred.access_token}` },
+          });
+          movementsDebug.status = movRes.status;
+          const movBody = await movRes.text();
+          let movData = null;
+          try {
+            movData = movBody ? JSON.parse(movBody) : null;
+          } catch {
+            movData = null;
+          }
+          const rows = Array.isArray(movData?.results)
+            ? movData.results
+            : Array.isArray(movData)
+            ? movData
+            : [];
+          movementsDebug.total = rows.length;
+          movementsDebug.first_rows = rows.slice(0, 3);
+          if (!movRes.ok) {
+            movementsDebug.error = (movBody || '').slice(0, 300);
+          }
+          console.log(
+            '[mp-sync] /v1/account/movements/search',
+            cred.local_id,
+            movRes.status,
+            'rows:',
+            rows.length
+          );
+        } catch (e) {
+          movementsDebug.error = String(e?.message || e);
+          console.error('mp-sync: movements/search error', cred.local_id, e);
+        }
+
         const mpUrl =
           `https://api.mercadopago.com/v1/payments/search?` +
           `begin_date=${encodeURIComponent(beginDate)}` +
@@ -856,6 +905,7 @@ export default async function handler(req, res) {
           local_id: cred.local_id,
           account_id: accountId,
           debug_payments: debugPayments.length ? debugPayments : undefined,
+          movements_debug: movementsDebug,
           movimientos: cantPagos,
           comisiones: cantFees,
           reembolsos: cantRefunds,

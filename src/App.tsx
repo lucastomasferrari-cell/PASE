@@ -2363,6 +2363,17 @@ function ConciliacionMP({ user, locales, localActivo }) {
             }
             out.push("    ─── fin debug ───");
           }
+          if(x.movements_debug){
+            const md=x.movements_debug;
+            out.push("    ─── /v1/account/movements/search HTTP "+(md.status??"ERR")+" (total rows: "+(md.total??"?")+") ───");
+            if(md.error)out.push("      ERR: "+md.error);
+            if(Array.isArray(md.first_rows)){
+              for(let i=0;i<md.first_rows.length;i++){
+                out.push("      ["+i+"] "+JSON.stringify(md.first_rows[i]));
+              }
+            }
+            out.push("    ─── fin movements ───");
+          }
           return out;
         });
         alert("Sincronización completada\n"+lines.join("\n"));
