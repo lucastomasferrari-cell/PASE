@@ -281,13 +281,15 @@ export default async function handler(req, res) {
           }
         }
 
-        // Saldo real = saldo_inicial (ingresado por el usuario) + la suma
-        // neta de todos los movimientos aprobados posteriores a la fecha
-        // en la que se fijó ese saldo inicial. Los egresos (fees, refunds,
-        // payment_out, money_transfer) ya están guardados con signo
-        // negativo, así que un SUM(monto) da el neto directamente.
+        // Saldo real = saldo_inicial (ingresado por el usuario) + suma
+        // neta de movimientos aprobados con fecha >= saldo_inicial_at.
+        // Si saldo_inicial_at aún no fue fijado, NO sumamos nada para
+        // evitar arrastrar el histórico completo y mostramos saldo_inicial
+        // tal cual. por_acreditar cuenta pending/in_process sin importar
+        // el corte (ya que son plata futura).
         const saldoInicial = Number(cred.saldo_inicial) || 0;
         const saldoInicialAt = cred.saldo_inicial_at || null;
+        const corte = saldoInicialAt ? new Date(saldoInicialAt) : null;
 
         let saldoAprobado = 0;
         let porAcreditar = 0;
@@ -305,11 +307,12 @@ export default async function handler(req, res) {
           for (const m of movLocal || []) {
             const monto = Number(m.monto) || 0;
             const estado = (m.estado || '').toLowerCase();
-            const despuesDelCorte =
-              !saldoInicialAt ||
-              (m.fecha && new Date(m.fecha) >= new Date(saldoInicialAt));
-            if (estado === 'approved' && despuesDelCorte) {
-              saldoAprobado += monto;
+            if (estado === 'approved') {
+              if (corte && m.fecha && new Date(m.fecha) >= corte) {
+                saldoAprobado += monto;
+              }
+              // Si no hay corte fijado, saldo_aprobado queda en 0 y el
+              // disponible es simplemente saldo_inicial.
             } else if (
               (estado === 'in_process' || estado === 'pending') &&
               monto > 0
