@@ -227,10 +227,41 @@ export default async function handler(req, res) {
         let cantPagos = 0;
         let cantFees = 0;
         let cantRefunds = 0;
+        const debugPayments = [];
 
         if (mpData.results) {
           for (const pago of mpData.results) {
             const bruto = Number(pago.transaction_amount) || 0;
+
+            // DEBUG: capturar el objeto completo para pagos sospechosos.
+            const descMatch = (pago?.description || '') +
+              ' ' + (pago?.statement_descriptor || '');
+            if (/malita|tienda\s*nova/i.test(descMatch)) {
+              debugPayments.push({
+                id: pago.id,
+                date_created: pago.date_created,
+                date_approved: pago.date_approved,
+                description: pago.description,
+                statement_descriptor: pago.statement_descriptor,
+                status: pago.status,
+                operation_type: pago.operation_type,
+                payment_type_id: pago.payment_type_id,
+                payment_method_id: pago.payment_method_id,
+                transaction_amount: pago.transaction_amount,
+                transaction_amount_refunded: pago.transaction_amount_refunded,
+                currency_id: pago.currency_id,
+                money_release_date: pago.money_release_date,
+                collector_id: pago.collector_id,
+                payer: pago.payer,
+                point_of_interaction: pago.point_of_interaction,
+                additional_info: pago.additional_info,
+                external_reference: pago.external_reference,
+                transaction_details: pago.transaction_details,
+                fee_details: pago.fee_details,
+                raw: pago, // objeto completo por las dudas
+              });
+            }
+
             const { direccion, tipo } = clasificarPago(pago, accountId);
             const monto = direccion * Math.abs(bruto);
             const neto =
@@ -824,6 +855,7 @@ export default async function handler(req, res) {
           local: cred.locales?.nombre,
           local_id: cred.local_id,
           account_id: accountId,
+          debug_payments: debugPayments.length ? debugPayments : undefined,
           movimientos: cantPagos,
           comisiones: cantFees,
           reembolsos: cantRefunds,
