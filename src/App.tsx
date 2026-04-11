@@ -2328,14 +2328,20 @@ function ConciliacionMP({ user, locales, localActivo }) {
       console.log("[MP] /api/mp-sync response:",d);
       if(d.ok){
         await load();
-        const lines=(d.resultados||[]).map(x=>{
-          const parts=[x.local+": "+(x.movimientos||0)+" mov"];
-          if(x.saldo_disponible!=null)parts.push("saldo "+fmt_$(x.saldo_disponible));
-          if(x.saldo_inicial!=null)parts.push("inicial "+fmt_$(x.saldo_inicial));
-          if(x.por_acreditar!=null&&x.por_acreditar>0)parts.push("por acreditar "+fmt_$(x.por_acreditar));
-          if(x.upd_error)parts.push("DB err: "+x.upd_error);
-          if(x.error)parts.push("ERR: "+x.error);
-          return parts.join(" · ");
+        const lines=(d.resultados||[]).flatMap(x=>{
+          const header=[x.local+" (local "+x.local_id+")"+": "+(x.movimientos||0)+" mov"];
+          if(x.error)header.push("ERR: "+x.error);
+          if(x.upd_error)header.push("DB err: "+x.upd_error);
+          const out=[header.join(" · ")];
+          if(x.saldo_debug){
+            const dbg=x.saldo_debug;
+            out.push("    saldo_inicial raw="+JSON.stringify(dbg.saldo_inicial_raw)+" → "+fmt_$(dbg.saldo_inicial_num));
+            out.push("    corte="+(dbg.saldo_inicial_at||"(sin fijar)"));
+            out.push("    movs="+dbg.mov_total+" (después del corte="+dbg.mov_despues_corte+"), rango "+(dbg.mov_min_fecha||"—")+" → "+(dbg.mov_max_fecha||"—"));
+            out.push("    saldo_aprobado="+fmt_$(dbg.saldo_aprobado)+" · por_acreditar="+fmt_$(dbg.por_acreditar));
+            out.push("    → saldo_disponible="+fmt_$(dbg.saldo_disponible));
+          }
+          return out;
         });
         alert("Sincronización completada\n"+lines.join("\n"));
       }
@@ -2379,10 +2385,23 @@ function ConciliacionMP({ user, locales, localActivo }) {
     if(!saldoInicialModal||saldoInicialModal.monto===""||saldoInicialModal.monto==null)return;
     const monto=parseFloat(saldoInicialModal.monto);
     if(Number.isNaN(monto))return;
-    await db.from("mp_credenciales").update({
+    const now=new Date().toISOString();
+    // Al fijar un nuevo saldo inicial, reseteamos también saldo_disponible
+    // y por_acreditar para que la UI refleje el valor inmediatamente sin
+    // esperar al próximo sync. El sync posterior volverá a computarlos
+    // sumando los movimientos que ocurran después de este corte.
+    const {error}=await db.from("mp_credenciales").update({
       saldo_inicial:monto,
-      saldo_inicial_at:new Date().toISOString(),
+      saldo_inicial_at:now,
+      saldo_disponible:monto,
+      por_acreditar:0,
+      balance_at:now,
     }).eq("local_id",saldoInicialModal.local_id);
+    if(error){
+      console.error("guardarSaldoInicial error:",error);
+      alert("No se pudo guardar el saldo inicial: "+error.message);
+      return;
+    }
     setSaldoInicialModal(null);
     load();
   };

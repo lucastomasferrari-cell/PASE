@@ -283,16 +283,20 @@ export default async function handler(req, res) {
 
         // Saldo real = saldo_inicial (ingresado por el usuario) + suma
         // neta de movimientos aprobados con fecha >= saldo_inicial_at.
-        // Si saldo_inicial_at aún no fue fijado, NO sumamos nada para
-        // evitar arrastrar el histórico completo y mostramos saldo_inicial
-        // tal cual. por_acreditar cuenta pending/in_process sin importar
-        // el corte (ya que son plata futura).
-        const saldoInicial = Number(cred.saldo_inicial) || 0;
+        // Si saldo_inicial_at aún no fue fijado, NO sumamos nada y
+        // saldo_disponible queda igual a saldo_inicial.
+        const saldoInicialRaw = cred.saldo_inicial;
+        const saldoInicial = Number(saldoInicialRaw);
+        const saldoInicialNum = Number.isFinite(saldoInicial) ? saldoInicial : 0;
         const saldoInicialAt = cred.saldo_inicial_at || null;
         const corte = saldoInicialAt ? new Date(saldoInicialAt) : null;
 
         let saldoAprobado = 0;
         let porAcreditar = 0;
+        let movTotalCount = 0;
+        let movDespuesCount = 0;
+        let movMinFecha = null;
+        let movMaxFecha = null;
         const { data: movLocal, error: movErr } = await db
           .from('mp_movimientos')
           .select('monto, estado, fecha')
@@ -305,14 +309,19 @@ export default async function handler(req, res) {
           );
         } else {
           for (const m of movLocal || []) {
+            movTotalCount++;
+            if (m.fecha) {
+              if (!movMinFecha || m.fecha < movMinFecha) movMinFecha = m.fecha;
+              if (!movMaxFecha || m.fecha > movMaxFecha) movMaxFecha = m.fecha;
+            }
             const monto = Number(m.monto) || 0;
             const estado = (m.estado || '').toLowerCase();
             if (estado === 'approved') {
               if (corte && m.fecha && new Date(m.fecha) >= corte) {
                 saldoAprobado += monto;
+                movDespuesCount++;
               }
-              // Si no hay corte fijado, saldo_aprobado queda en 0 y el
-              // disponible es simplemente saldo_inicial.
+              // Sin corte: saldo_aprobado queda en 0, disponible = inicial.
             } else if (
               (estado === 'in_process' || estado === 'pending') &&
               monto > 0
@@ -322,9 +331,23 @@ export default async function handler(req, res) {
           }
         }
 
-        const credSaldoDisponible = saldoInicial + saldoAprobado;
+        const credSaldoDisponible = saldoInicialNum + saldoAprobado;
         balanceTotalMP += credSaldoDisponible;
         balanceConsultado = true;
+
+        console.log(
+          '[mp-sync] balance debug local_id=' + cred.local_id,
+          {
+            saldo_inicial_raw: saldoInicialRaw,
+            saldo_inicial_num: saldoInicialNum,
+            saldo_inicial_at: saldoInicialAt,
+            mov_total: movTotalCount,
+            mov_despues_corte: movDespuesCount,
+            saldo_aprobado: saldoAprobado,
+            saldo_disponible: credSaldoDisponible,
+            por_acreditar: porAcreditar,
+          }
+        );
 
         // Guardar el saldo calculado en mp_credenciales. Si las columnas
         // nuevas aún no existen, reintentamos sólo con ultima_sync.
@@ -371,10 +394,23 @@ export default async function handler(req, res) {
 
         resultados.push({
           local: cred.locales?.nombre,
+          local_id: cred.local_id,
           movimientos: cantPagos,
           comisiones: cantFees,
           reembolsos: cantRefunds,
-          saldo_inicial: saldoInicial,
+          saldo_debug: {
+            saldo_inicial_raw: saldoInicialRaw,
+            saldo_inicial_num: saldoInicialNum,
+            saldo_inicial_at: saldoInicialAt,
+            mov_total: movTotalCount,
+            mov_despues_corte: movDespuesCount,
+            mov_min_fecha: movMinFecha,
+            mov_max_fecha: movMaxFecha,
+            saldo_aprobado: saldoAprobado,
+            saldo_disponible: credSaldoDisponible,
+            por_acreditar: porAcreditar,
+          },
+          saldo_inicial: saldoInicialNum,
           saldo_aprobado: saldoAprobado,
           saldo_disponible: credSaldoDisponible,
           por_acreditar: porAcreditar,
