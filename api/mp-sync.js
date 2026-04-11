@@ -332,6 +332,110 @@ export default async function handler(req, res) {
           }
         }
 
+        // Transferencias bancarias enviadas — /v1/payments/search no las
+        // incluye, así que pedimos el endpoint dedicado. Probamos dos
+        // rutas porque MP expone la misma data en distintos paths según
+        // la cuenta.
+        let cantTransfers = 0;
+        const transfersDebug = { endpoint: null, status: null, total: 0, error: null };
+        const transferEndpoints = [
+          `https://api.mercadopago.com/v1/account/bank_transfers/search?begin_date=${encodeURIComponent(
+            beginDate
+          )}&end_date=${encodeURIComponent(endDate)}&sort=date_created&criteria=desc`,
+          `https://api.mercadopago.com/v1/transfers/search?begin_date=${encodeURIComponent(
+            beginDate
+          )}&end_date=${encodeURIComponent(endDate)}&sort=date_created&criteria=desc`,
+        ];
+
+        let transfersData = null;
+        for (const url of transferEndpoints) {
+          try {
+            const tRes = await fetch(url, {
+              headers: { Authorization: `Bearer ${cred.access_token}` },
+            });
+            const tBody = await tRes.text();
+            console.log(
+              '[mp-sync] bank_transfers',
+              url,
+              '→',
+              tRes.status,
+              (tBody || '').slice(0, 200)
+            );
+            if (tRes.ok) {
+              try {
+                transfersData = tBody ? JSON.parse(tBody) : null;
+              } catch {
+                transfersData = null;
+              }
+              transfersDebug.endpoint = url;
+              transfersDebug.status = tRes.status;
+              break;
+            }
+            transfersDebug.status = tRes.status;
+            transfersDebug.error = (tBody || '').slice(0, 200);
+          } catch (e) {
+            transfersDebug.error = String(e?.message || e);
+          }
+        }
+
+        if (transfersData) {
+          const rows = Array.isArray(transfersData?.results)
+            ? transfersData.results
+            : Array.isArray(transfersData)
+            ? transfersData
+            : [];
+          transfersDebug.total = rows.length;
+          for (const t of rows) {
+            // Los campos varían según endpoint: intentamos varios alias
+            // para id / monto / fecha / destinatario.
+            const id =
+              t.id != null
+                ? String(t.id)
+                : t.transfer_id != null
+                ? String(t.transfer_id)
+                : null;
+            if (!id) continue;
+            const monto =
+              Number(t.amount) ||
+              Number(t.transaction_amount) ||
+              Number(t.total_amount) ||
+              0;
+            if (monto <= 0) continue;
+            const fecha =
+              t.date_approved ||
+              t.date_created ||
+              t.date ||
+              new Date().toISOString();
+            const destinatario =
+              t.receiver?.name ||
+              t.receiver?.first_name ||
+              t.counterpart?.name ||
+              t.destination?.name ||
+              t.description ||
+              t.external_reference ||
+              'Transferencia';
+            const estado = t.status || 'approved';
+            await db.from('mp_movimientos').upsert(
+              [
+                {
+                  id: `tr-${id}`,
+                  local_id: cred.local_id,
+                  fecha,
+                  tipo: 'transferencia',
+                  descripcion: `Transferencia enviada · ${destinatario}`.trim(),
+                  monto: -Math.abs(monto),
+                  saldo: null,
+                  estado,
+                  referencia_id: String(id),
+                  medio_pago: 'bank_transfer',
+                },
+              ],
+              { onConflict: 'id' }
+            );
+            cantTransfers++;
+          }
+        }
+
         // Saldo real = saldo_inicial (ingresado por el usuario) + suma
         // neta de movimientos aprobados con fecha >= saldo_inicial_at.
         // Si saldo_inicial_at aún no fue fijado, NO sumamos nada y
@@ -834,6 +938,8 @@ export default async function handler(req, res) {
           movimientos: cantPagos,
           comisiones: cantFees,
           reembolsos: cantRefunds,
+          transferencias: cantTransfers,
+          transfers_debug: transfersDebug,
           saldo_debug: {
             saldo_inicial_raw: saldoInicialRaw,
             saldo_inicial_num: saldoInicialNum,

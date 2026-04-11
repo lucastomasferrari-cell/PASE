@@ -2330,6 +2330,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
         await load();
         const lines=(d.resultados||[]).flatMap(x=>{
           const header=[x.local+" (local "+x.local_id+(x.account_id?", mp_id "+x.account_id:"")+")"+": "+(x.movimientos||0)+" mov"];
+          if(x.transferencias!=null)header.push(x.transferencias+" transf");
           if(x.balance_fuente)header.push("fuente: "+x.balance_fuente);
           if(x.error)header.push("ERR: "+x.error);
           if(x.upd_error)header.push("DB err: "+x.upd_error);
@@ -2347,6 +2348,10 @@ function ConciliacionMP({ user, locales, localActivo }) {
             }
             if(rr.first_time_message)out.push("    ℹ "+rr.first_time_message);
             if(rr.error)out.push("    release_report ERR: "+rr.error);
+          }
+          if(x.transfers_debug){
+            const td=x.transfers_debug;
+            out.push("    bank_transfers HTTP "+(td.status??"ERR")+" endpoint="+(td.endpoint||"(ninguno OK)")+" total="+(td.total||0)+(td.error?" ERR: "+String(td.error).slice(0,160):""));
           }
           if(x.saldo_debug){
             const dbg=x.saldo_debug;
@@ -2445,7 +2450,8 @@ function ConciliacionMP({ user, locales, localActivo }) {
   const TIPO_LABELS={
     "payment":"Cobro Online","point":"Venta Presencial",
     "payment_out":"Pago saliente","recurring":"Servicio/Suscripción",
-    "money_transfer":"Transferencia","withdrawal":"Retiro",
+    "money_transfer":"Transferencia","transferencia":"Transferencia enviada",
+    "withdrawal":"Retiro",
     "investment":"Inversión","recharge":"Recarga",
     "refund":"Devolución","dispute":"Disputa","tax":"Impuesto",
     "fee":"Comisión","payout":"Liquidación"
