@@ -2441,19 +2441,31 @@ function ConciliacionMP({ user, locales, localActivo }) {
 
   const guardarSaldoInicial=async()=>{
     if(!saldoInicialModal||saldoInicialModal.monto===""||saldoInicialModal.monto==null)return;
+    if(!saldoInicialModal.local_id)return;
     const monto=parseFloat(saldoInicialModal.monto);
     if(Number.isNaN(monto))return;
-    const now=new Date().toISOString();
+    // La fecha de corte viene del input del modal. Si el usuario dejó
+    // una fecha sin hora, la convertimos a ISO tratándola como medianoche
+    // local del día elegido. Eso queda guardado en saldo_inicial_at y
+    // el sync futuro sólo suma los movimientos posteriores a ese corte.
+    const rawFecha=saldoInicialModal.fecha;
+    let corteIso;
+    if(rawFecha){
+      const parsed=new Date(rawFecha.length===10?rawFecha+"T00:00:00":rawFecha);
+      corteIso=Number.isNaN(parsed.getTime())?new Date().toISOString():parsed.toISOString();
+    }else{
+      corteIso=new Date().toISOString();
+    }
     // Al fijar un nuevo saldo inicial, reseteamos también saldo_disponible
     // y por_acreditar para que la UI refleje el valor inmediatamente sin
     // esperar al próximo sync. El sync posterior volverá a computarlos
     // sumando los movimientos que ocurran después de este corte.
     const {error}=await db.from("mp_credenciales").update({
       saldo_inicial:monto,
-      saldo_inicial_at:now,
+      saldo_inicial_at:corteIso,
       saldo_disponible:monto,
       por_acreditar:0,
-      balance_at:now,
+      balance_at:new Date().toISOString(),
     }).eq("local_id",saldoInicialModal.local_id);
     if(error){
       console.error("guardarSaldoInicial error:",error);
@@ -2555,7 +2567,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
             <input type="date" className="search" style={{width:140}} value={hasta} onChange={e=>setHasta(e.target.value)}/>
           </div>
           <button className="btn btn-ghost btn-sm" style={{fontSize:10}} onClick={()=>{const d=new Date();d.setDate(d.getDate()-30);setDesde(toISO(d));setHasta(toISO(today));}}>Últ. 30d</button>
-          <button className="btn btn-ghost" onClick={()=>setSaldoInicialModal({local_id:credenciales[0]?.local_id||"",monto:""})}>⚙ Fijar saldo inicial</button>
+          <button className="btn btn-ghost" onClick={()=>setSaldoInicialModal({local_id:credenciales[0]?.local_id||"",monto:"",fecha:toISO(today)})}>⚙ Fijar saldo inicial</button>
           <button className="btn btn-ghost" onClick={()=>setConfigModal(true)}>⚙ Cuentas MP</button>
           <button className="btn btn-acc" onClick={sincronizar} disabled={sincronizando}>
             {sincronizando?"🔄 Sincronizando...":"↻ Sincronizar ahora"}
@@ -2684,32 +2696,70 @@ function ConciliacionMP({ user, locales, localActivo }) {
         })()
       )}
 
-      {saldoInicialModal&&(<div className="overlay" onClick={()=>setSaldoInicialModal(null)}><div className="modal" style={{width:520}} onClick={e=>e.stopPropagation()}>
-        <div className="modal-hd"><div className="modal-title">Establecer saldo inicial MP</div><button className="close-btn" onClick={()=>setSaldoInicialModal(null)}>✕</button></div>
-        <div className="modal-body">
-          <div className="alert alert-warn" style={{marginBottom:12}}>
-            Ingresá el saldo real actual de tu cuenta Mercado Pago. A partir de esta fecha el sistema sumará todos los movimientos aprobados posteriores para calcular el saldo disponible.
+      {saldoInicialModal&&(()=>{
+        const credSel=credenciales.find(x=>x.local_id===saldoInicialModal.local_id);
+        const calculado=credSel?Number(credSel.saldo_disponible)||0:0;
+        const inicialPrev=credSel?Number(credSel.saldo_inicial)||0:0;
+        const montoNum=saldoInicialModal.monto===""||saldoInicialModal.monto==null?null:parseFloat(saldoInicialModal.monto);
+        const diferencia=montoNum!=null&&!Number.isNaN(montoNum)?montoNum-calculado:null;
+        return (
+        <div className="overlay" onClick={()=>setSaldoInicialModal(null)}><div className="modal" style={{width:560}} onClick={e=>e.stopPropagation()}>
+          <div className="modal-hd"><div className="modal-title">Fijar saldo inicial MP</div><button className="close-btn" onClick={()=>setSaldoInicialModal(null)}>✕</button></div>
+          <div className="modal-body">
+            <div className="alert alert-warn" style={{marginBottom:12}}>
+              Ingresá el saldo real de tu cuenta MP y la fecha en que ese saldo es válido. A partir de ese corte el sistema va a sumar sólo los movimientos aprobados posteriores.
+            </div>
+            <div className="field">
+              <label>Local</label>
+              <select value={saldoInicialModal.local_id} onChange={e=>setSaldoInicialModal({...saldoInicialModal,local_id:parseInt(e.target.value)||e.target.value})}>
+                <option value="">Seleccioná...</option>
+                {credenciales.map(c=><option key={c.id} value={c.local_id}>{c.locales?.nombre||`Local ${c.local_id}`}</option>)}
+              </select>
+            </div>
+
+            {credSel&&(
+              <div style={{padding:12,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)",marginBottom:12}}>
+                <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"var(--muted2)",marginBottom:6}}>Saldo calculado actual</div>
+                <div className="num" style={{fontSize:22,fontWeight:600,color:"var(--acc3)",fontFamily:"'Syne',sans-serif"}}>{fmt_$(calculado)}</div>
+                <div style={{fontSize:10,color:"var(--muted2)",marginTop:4}}>
+                  = saldo inicial {fmt_$(inicialPrev)}{credSel.saldo_inicial_at?` (corte ${fmt_d(credSel.saldo_inicial_at.slice(0,10))})`:" (sin corte)"} + movimientos aprobados posteriores
+                </div>
+              </div>
+            )}
+
+            <div className="form2">
+              <div className="field">
+                <label>Fecha del corte</label>
+                <input type="date" value={saldoInicialModal.fecha||""} onChange={e=>setSaldoInicialModal({...saldoInicialModal,fecha:e.target.value})}/>
+              </div>
+              <div className="field">
+                <label>Saldo real en MP $</label>
+                <input type="number" value={saldoInicialModal.monto} onChange={e=>setSaldoInicialModal({...saldoInicialModal,monto:e.target.value})} placeholder="0"/>
+              </div>
+            </div>
+
+            {credSel&&diferencia!=null&&(
+              <div style={{padding:"10px 12px",background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)",marginTop:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{fontSize:11,color:"var(--muted2)"}}>Diferencia contra el calculado</div>
+                <div className="num" style={{color:Math.abs(diferencia)<1?"var(--success)":diferencia>0?"var(--acc3)":"var(--warn)",fontWeight:600}}>
+                  {diferencia>=0?"+":""}{fmt_$(diferencia)}
+                </div>
+              </div>
+            )}
+
+            {credSel&&credSel.saldo_inicial_at&&(
+              <div style={{fontSize:10,color:"var(--muted2)",marginTop:10}}>
+                Al guardar, el corte se mueve a la fecha que elijas y se reinicia la suma de movimientos posteriores.
+              </div>
+            )}
           </div>
-          <div className="field">
-            <label>Local</label>
-            <select value={saldoInicialModal.local_id} onChange={e=>setSaldoInicialModal({...saldoInicialModal,local_id:parseInt(e.target.value)||e.target.value})}>
-              <option value="">Seleccioná...</option>
-              {credenciales.map(c=><option key={c.id} value={c.local_id}>{c.locales?.nombre||`Local ${c.local_id}`}</option>)}
-            </select>
+          <div className="modal-ft">
+            <button className="btn btn-sec" onClick={()=>setSaldoInicialModal(null)}>Cancelar</button>
+            <button className="btn btn-acc" disabled={!saldoInicialModal.local_id||saldoInicialModal.monto===""||!saldoInicialModal.fecha} onClick={guardarSaldoInicial}>Guardar</button>
           </div>
-          <div className="field">
-            <label>Saldo real actual en MP $</label>
-            <input type="number" value={saldoInicialModal.monto} onChange={e=>setSaldoInicialModal({...saldoInicialModal,monto:e.target.value})} placeholder="0"/>
-          </div>
-          {(()=>{const c=credenciales.find(x=>x.local_id===saldoInicialModal.local_id);return c&&c.saldo_inicial_at?(
-            <div style={{fontSize:10,color:"var(--muted2)",marginTop:4}}>Último saldo inicial: {fmt_$(c.saldo_inicial||0)} fijado el {fmt_d(c.saldo_inicial_at.slice(0,10))}. Al guardar se reinicia el corte desde ahora.</div>
-          ):null;})()}
-        </div>
-        <div className="modal-ft">
-          <button className="btn btn-sec" onClick={()=>setSaldoInicialModal(null)}>Cancelar</button>
-          <button className="btn btn-acc" disabled={!saldoInicialModal.local_id||saldoInicialModal.monto===""} onClick={guardarSaldoInicial}>Guardar</button>
-        </div>
-      </div></div>)}
+        </div></div>
+        );
+      })()}
 
       {conciliarModal&&(<div className="overlay" onClick={()=>setConciliarModal(null)}><div className="modal" style={{width:640}} onClick={e=>e.stopPropagation()}>
         <div className="modal-hd"><div className="modal-title">Conciliar egreso MP</div><button className="close-btn" onClick={()=>setConciliarModal(null)}>✕</button></div>
