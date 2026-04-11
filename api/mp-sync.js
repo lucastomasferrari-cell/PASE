@@ -349,6 +349,7 @@ export default async function handler(req, res) {
           file_date_created: null,
           file_status: null,
           file_snippet: null,
+          csv_lines: null, // DEBUG: primeras 30 líneas del CSV crudo
           parsed_balance: null,
           parse_method: null,
           error: null,
@@ -496,6 +497,13 @@ export default async function handler(req, res) {
               );
 
               if (fileRes.ok && csvText) {
+                // DEBUG: primeras 30 líneas crudas para inspeccionar
+                // el formato real devuelto por MP.
+                releaseReport.csv_lines = csvText
+                  .split(/\r?\n/)
+                  .slice(0, 30)
+                  .join('\n');
+
                 // 4) Parseo del CSV del release_report.
                 //    Columnas esperadas:
                 //      DATE;SOURCE_ID;EXTERNAL_REFERENCE;RECORD_TYPE;
