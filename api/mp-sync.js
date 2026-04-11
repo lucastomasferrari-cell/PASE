@@ -318,6 +318,15 @@ export default async function handler(req, res) {
             });
             balanceStatus = balRes.status;
             const bodyText = await balRes.text();
+            // Log completo del body — sirve para entender qué está devolviendo
+            // realmente cada endpoint de balance para este access_token.
+            console.log(
+              '[mp-sync] balance',
+              endpoint,
+              '→',
+              balRes.status,
+              bodyText?.slice(0, 600)
+            );
             let balData = null;
             try {
               balData = bodyText ? JSON.parse(bodyText) : null;
@@ -325,14 +334,7 @@ export default async function handler(req, res) {
               balData = null;
             }
             if (!balRes.ok) {
-              console.warn(
-                'mp-sync: balance endpoint',
-                endpoint,
-                'returned',
-                balRes.status,
-                bodyText?.slice(0, 200)
-              );
-              balanceRaw = bodyText?.slice(0, 300) || null;
+              balanceRaw = bodyText?.slice(0, 500) || null;
               continue;
             }
             balanceRaw = balData;
@@ -342,7 +344,8 @@ export default async function handler(req, res) {
               balData,
               'available_balance',
               'balance',
-              'available'
+              'available',
+              'amount'
             );
             credSaldoPendiente = extraerMonto(
               balData,
@@ -436,7 +439,11 @@ export default async function handler(req, res) {
           console.error('mp-sync: money_releases fetch error', cred.local_id, relErr);
         }
 
-        const updatePayload = {
+        // Intentamos primero con las columnas nuevas de balance. Si la
+        // migración no corrió todavía Supabase devuelve
+        // PGRST204 / "column ... does not exist" — en ese caso reintentamos
+        // sólo con ultima_sync para no perder los demás datos del sync.
+        const fullPayload = {
           ultima_sync: new Date().toISOString(),
           saldo_disponible: credSaldoDisponible,
           saldo_pendiente: credSaldoPendiente,
@@ -447,12 +454,39 @@ export default async function handler(req, res) {
               ? new Date().toISOString()
               : null,
         };
-        const { error: updErr } = await db
+        let { error: updErr } = await db
           .from('mp_credenciales')
-          .update(updatePayload)
+          .update(fullPayload)
           .eq('local_id', cred.local_id);
         if (updErr) {
-          console.error('mp-sync: mp_credenciales update error', cred.local_id, updErr);
+          console.error(
+            'mp-sync: mp_credenciales full update error',
+            cred.local_id,
+            updErr
+          );
+          const msg = (updErr.message || '').toLowerCase();
+          const faltaColumna =
+            msg.includes('does not exist') ||
+            msg.includes('schema cache') ||
+            updErr.code === 'PGRST204';
+          if (faltaColumna) {
+            const { error: fallbackErr } = await db
+              .from('mp_credenciales')
+              .update({ ultima_sync: new Date().toISOString() })
+              .eq('local_id', cred.local_id);
+            if (fallbackErr) {
+              console.error(
+                'mp-sync: mp_credenciales fallback update error',
+                cred.local_id,
+                fallbackErr
+              );
+            } else {
+              updErr = {
+                message:
+                  'migration pendiente: aplicar 20260410_mp_balance_liquidaciones.sql para guardar el saldo',
+              };
+            }
+          }
         }
 
         resultados.push({
@@ -467,7 +501,7 @@ export default async function handler(req, res) {
             disponible: credSaldoDisponible,
             pendiente: credSaldoPendiente,
             total: credSaldoTotal,
-            raw: typeof balanceRaw === 'string' ? balanceRaw : undefined,
+            raw: balanceRaw,
           },
           upd_error: updErr ? updErr.message : undefined,
         });

@@ -2303,19 +2303,23 @@ function ConciliacionMP({ user, locales, localActivo }) {
     const mlast=new Date(myr,mmo,0).getDate();
     const desde=mes+"-01T00:00:00",hasta=mes+"-"+String(mlast).padStart(2,"0")+"T23:59:59";
     const desdeD=mes+"-01",hastaD=mes+"-"+String(mlast).padStart(2,"0");
-    const [{data:c},{data:m},{data:f},{data:g},{data:l}]=await Promise.all([
+    const [credRes,movRes,facRes,gasRes,liqRes]=await Promise.all([
       db.from("mp_credenciales").select("*,locales(nombre)"),
       db.from("mp_movimientos").select("*").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false}),
       db.from("facturas").select("id,nro,fecha,total,local_id,cat,estado").gte("fecha",desdeD).lte("fecha",hastaD).order("fecha",{ascending:false}),
       db.from("gastos").select("id,fecha,categoria,detalle,monto,local_id,cuenta").gte("fecha",desdeD).lte("fecha",hastaD).order("fecha",{ascending:false}),
-      db.from("mp_liquidaciones").select("*").order("release_date",{ascending:true}),
+      // mp_liquidaciones es opcional — si la migración aún no corrió, Supabase devuelve 400 y lo ignoramos.
+      db.from("mp_liquidaciones").select("*").order("release_date",{ascending:true}).then(r=>r,()=>({data:[],error:null})),
     ]);
-    setCredenciales((c||[]).filter(x=>!localActivo||x.local_id===localActivo));
-    const mFilt=(m||[]).filter(x=>!localActivo||x.local_id===localActivo);
-    setMovimientos(mFilt);
-    setFacturas((f||[]).filter(x=>!localActivo||x.local_id===localActivo));
-    setGastos((g||[]).filter(x=>!localActivo||x.local_id===localActivo));
-    setLiquidaciones((l||[]).filter(x=>!localActivo||x.local_id===localActivo));
+    if(credRes.error)console.warn("mp_credenciales load error:",credRes.error);
+    if(liqRes.error)console.warn("mp_liquidaciones load error (¿migración pendiente?):",liqRes.error);
+    console.log("[MP] credenciales cargadas:",credRes.data);
+    const c=credRes.data||[], m=movRes.data||[], f=facRes.data||[], g=gasRes.data||[], l=liqRes.data||[];
+    setCredenciales(c.filter(x=>!localActivo||x.local_id===localActivo));
+    setMovimientos(m.filter(x=>!localActivo||x.local_id===localActivo));
+    setFacturas(f.filter(x=>!localActivo||x.local_id===localActivo));
+    setGastos(g.filter(x=>!localActivo||x.local_id===localActivo));
+    setLiquidaciones(l.filter(x=>!localActivo||x.local_id===localActivo));
     setLoading(false);
   };
 
@@ -2326,6 +2330,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
     try{
       const r=await fetch("/api/mp-sync",{method:"POST"});
       const d=await r.json();
+      console.log("[MP] /api/mp-sync response:",d);
       if(d.ok){
         await load();
         const lines=(d.resultados||[]).map(x=>{
