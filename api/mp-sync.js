@@ -12,36 +12,66 @@ function esPagoPoint(pago) {
   );
 }
 
-// operation_type values que son SIEMPRE egresos desde la cuenta del merchant
-// (servicios, transferencias salientes, suscripciones, recargas, inversiones).
-const OP_TYPES_EGRESO = new Set([
-  'money_transfer',
-  'recurring_payment',
-  'investment',
-  'cellphone_recharge',
-  'bank_withdrawal',
-]);
+// Palabras clave en descripción / statement_descriptor que identifican
+// proveedores y servicios que SIEMPRE son egresos, aunque la dirección
+// por ids no sea concluyente. Se evalúa en upper-case.
+const EGRESO_KEYWORDS = [
+  'AYSA', 'EDESUR', 'EDENOR', 'METROGAS', 'NATURGY', 'CAMUZZI',
+  'DISCO', 'JUMBO', 'VEA', 'COTO', 'CARREFOUR', 'WALMART', 'CENCOSUD',
+  'DIA ', 'CHANGOMAS', 'MAKRO',
+  'TELECENTRO', 'FIBERTEL', 'CABLEVISION', 'TELECOM', 'MOVISTAR',
+  'CLARO', 'PERSONAL', 'DIRECTV', 'FLOW',
+  'ABL', 'RENTAS', 'AFIP', 'ARBA', 'MUNICIPALIDAD', 'EXPENSAS',
+  'NETFLIX', 'SPOTIFY', 'GOOGLE', 'MICROSOFT', 'AMAZON',
+];
+
+function matchEgresoKeyword(pago) {
+  const partes = [
+    pago?.description || '',
+    pago?.statement_descriptor || '',
+    pago?.additional_info?.items?.[0]?.title || '',
+  ];
+  const texto = partes.join(' ').toUpperCase();
+  return EGRESO_KEYWORDS.some((k) => texto.includes(k));
+}
 
 // Clasifica un pago como ingreso (+) o egreso (-) y devuelve el tipo de UI.
-// Un pago es egreso si:
-//   1. operation_type está en OP_TYPES_EGRESO
-//   2. payer.id coincide con el user_id propio de la cuenta MP (nos aparece como pagador)
-function clasificarPago(pago, userId) {
+// Orden de reglas (primera que matchee gana):
+//  1. Keyword de proveedor/servicio conocido → egreso (payment_out).
+//  2. operation_type money_transfer / recurring_payment / investment /
+//     cellphone_recharge / bank_withdrawal → egreso con tipo específico.
+//  3. operation_type regular_payment + payer.id === miId → egreso (le pagamos a alguien).
+//  4. operation_type regular_payment + collector.id === miId → ingreso (nos pagaron).
+//  5. Fallback: ingreso (point si es POS físico, payment si es online).
+function clasificarPago(pago, accountId) {
   const opType = pago?.operation_type || '';
   const payerId = pago?.payer?.id != null ? String(pago.payer.id) : '';
-  const miId = userId != null ? String(userId) : '';
+  const collectorId =
+    pago?.collector_id != null
+      ? String(pago.collector_id)
+      : pago?.collector?.id != null
+      ? String(pago.collector.id)
+      : '';
+  const miId = accountId != null ? String(accountId) : '';
 
-  const esEgresoPorOp = OP_TYPES_EGRESO.has(opType);
-  const esEgresoPorPayer = miId && payerId && payerId === miId;
-  const esEgreso = esEgresoPorOp || esEgresoPorPayer;
-
-  if (esEgreso) {
-    if (opType === 'money_transfer') return { direccion: -1, tipo: 'money_transfer' };
-    if (opType === 'recurring_payment') return { direccion: -1, tipo: 'recurring' };
-    if (opType === 'investment') return { direccion: -1, tipo: 'investment' };
-    if (opType === 'cellphone_recharge') return { direccion: -1, tipo: 'recharge' };
-    if (opType === 'bank_withdrawal') return { direccion: -1, tipo: 'withdrawal' };
+  if (matchEgresoKeyword(pago)) {
     return { direccion: -1, tipo: 'payment_out' };
+  }
+
+  if (opType === 'money_transfer') return { direccion: -1, tipo: 'money_transfer' };
+  if (opType === 'recurring_payment') return { direccion: -1, tipo: 'recurring' };
+  if (opType === 'investment') return { direccion: -1, tipo: 'investment' };
+  if (opType === 'cellphone_recharge') return { direccion: -1, tipo: 'recharge' };
+  if (opType === 'bank_withdrawal') return { direccion: -1, tipo: 'withdrawal' };
+
+  if (opType === 'regular_payment') {
+    if (miId && payerId && payerId === miId) {
+      return { direccion: -1, tipo: 'payment_out' };
+    }
+    if (miId && collectorId && collectorId === miId) {
+      if (esPagoPoint(pago)) return { direccion: 1, tipo: 'point' };
+      return { direccion: 1, tipo: 'payment' };
+    }
   }
 
   if (esPagoPoint(pago)) return { direccion: 1, tipo: 'point' };
@@ -81,22 +111,49 @@ export default async function handler(req, res) {
     let balanceTotalMP = 0;
     let balanceConsultado = false;
 
-    for (const cred of creds) {
+    // Cache de ids de cuenta por access_token — se resuelve una sola vez
+    // por sync y se reutiliza al clasificar cada pago.
+    const accountIdCache = new Map();
+    const resolverAccountId = async (token) => {
+      if (accountIdCache.has(token)) return accountIdCache.get(token);
+      let id = null;
       try {
-        // Id propio del merchant (dueño del access_token). Se usa para detectar
-        // pagos en los que figuramos como payer => son egresos (ej. servicios).
-        let userId = null;
+        const accRes = await fetch('https://api.mercadopago.com/v1/account', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (accRes.ok) {
+          const accData = await accRes.json();
+          id =
+            accData?.id != null
+              ? String(accData.id)
+              : accData?.user_id != null
+              ? String(accData.user_id)
+              : null;
+        }
+      } catch (e) {
+        console.error('mp-sync: /v1/account fetch error', e);
+      }
+      if (!id) {
+        // Fallback a /users/me si /v1/account no devuelve id.
         try {
           const meRes = await fetch('https://api.mercadopago.com/users/me', {
-            headers: { Authorization: `Bearer ${cred.access_token}` },
+            headers: { Authorization: `Bearer ${token}` },
           });
           if (meRes.ok) {
             const meData = await meRes.json();
-            userId = meData?.id != null ? String(meData.id) : null;
+            id = meData?.id != null ? String(meData.id) : null;
           }
-        } catch (meErr) {
-          console.error('mp-sync: users/me error', cred.local_id, meErr);
+        } catch (e) {
+          console.error('mp-sync: /users/me fetch error', e);
         }
+      }
+      accountIdCache.set(token, id);
+      return id;
+    };
+
+    for (const cred of creds) {
+      try {
+        const accountId = await resolverAccountId(cred.access_token);
 
         const hasta = new Date();
         const desde = new Date();
@@ -130,7 +187,7 @@ export default async function handler(req, res) {
         if (mpData.results) {
           for (const pago of mpData.results) {
             const bruto = Number(pago.transaction_amount) || 0;
-            const { direccion, tipo } = clasificarPago(pago, userId);
+            const { direccion, tipo } = clasificarPago(pago, accountId);
             const monto = direccion * Math.abs(bruto);
             const neto =
               pago?.transaction_details?.net_received_amount != null
