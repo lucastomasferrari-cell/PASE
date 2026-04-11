@@ -46,7 +46,14 @@ function matchEgresoKeyword(pago) {
 //  6. Fallback: ingreso (point si es POS físico, payment si es online).
 function clasificarPago(pago, accountId) {
   const opType = (pago?.operation_type || '').toLowerCase();
-  const payerId = pago?.payer?.id != null ? String(pago.payer.id) : '';
+  // payer id viene a veces como `payer_id` (top-level) y a veces como
+  // `payer.id` (objeto anidado). Lo mismo con collector.
+  const payerId =
+    pago?.payer_id != null
+      ? String(pago.payer_id)
+      : pago?.payer?.id != null
+      ? String(pago.payer.id)
+      : '';
   const collectorId =
     pago?.collector_id != null
       ? String(pago.collector_id)
@@ -205,55 +212,6 @@ export default async function handler(req, res) {
         const beginDate = desde.toISOString();
         const endDate = hasta.toISOString();
 
-        // DEBUG: pedir también /v1/account/movements/search y guardar las
-        // primeras 3 filas para ver qué estructura devuelve. Si funciona,
-        // el próximo paso es usarla en lugar de /v1/payments/search.
-        const movementsDebug = {
-          status: null,
-          error: null,
-          first_rows: null,
-          total: null,
-        };
-        try {
-          const movUrl =
-            `https://api.mercadopago.com/v1/account/movements/search?` +
-            `filters.type=all` +
-            `&sort=date_created&criteria=desc` +
-            `&begin_date=${encodeURIComponent(beginDate)}` +
-            `&end_date=${encodeURIComponent(endDate)}`;
-          const movRes = await fetch(movUrl, {
-            headers: { Authorization: `Bearer ${cred.access_token}` },
-          });
-          movementsDebug.status = movRes.status;
-          const movBody = await movRes.text();
-          let movData = null;
-          try {
-            movData = movBody ? JSON.parse(movBody) : null;
-          } catch {
-            movData = null;
-          }
-          const rows = Array.isArray(movData?.results)
-            ? movData.results
-            : Array.isArray(movData)
-            ? movData
-            : [];
-          movementsDebug.total = rows.length;
-          movementsDebug.first_rows = rows.slice(0, 3);
-          if (!movRes.ok) {
-            movementsDebug.error = (movBody || '').slice(0, 300);
-          }
-          console.log(
-            '[mp-sync] /v1/account/movements/search',
-            cred.local_id,
-            movRes.status,
-            'rows:',
-            rows.length
-          );
-        } catch (e) {
-          movementsDebug.error = String(e?.message || e);
-          console.error('mp-sync: movements/search error', cred.local_id, e);
-        }
-
         const mpUrl =
           `https://api.mercadopago.com/v1/payments/search?` +
           `begin_date=${encodeURIComponent(beginDate)}` +
@@ -276,41 +234,10 @@ export default async function handler(req, res) {
         let cantPagos = 0;
         let cantFees = 0;
         let cantRefunds = 0;
-        const debugPayments = [];
 
         if (mpData.results) {
           for (const pago of mpData.results) {
             const bruto = Number(pago.transaction_amount) || 0;
-
-            // DEBUG: capturar el objeto completo para pagos sospechosos.
-            const descMatch = (pago?.description || '') +
-              ' ' + (pago?.statement_descriptor || '');
-            if (/malita|tienda\s*nova/i.test(descMatch)) {
-              debugPayments.push({
-                id: pago.id,
-                date_created: pago.date_created,
-                date_approved: pago.date_approved,
-                description: pago.description,
-                statement_descriptor: pago.statement_descriptor,
-                status: pago.status,
-                operation_type: pago.operation_type,
-                payment_type_id: pago.payment_type_id,
-                payment_method_id: pago.payment_method_id,
-                transaction_amount: pago.transaction_amount,
-                transaction_amount_refunded: pago.transaction_amount_refunded,
-                currency_id: pago.currency_id,
-                money_release_date: pago.money_release_date,
-                collector_id: pago.collector_id,
-                payer: pago.payer,
-                point_of_interaction: pago.point_of_interaction,
-                additional_info: pago.additional_info,
-                external_reference: pago.external_reference,
-                transaction_details: pago.transaction_details,
-                fee_details: pago.fee_details,
-                raw: pago, // objeto completo por las dudas
-              });
-            }
-
             const { direccion, tipo } = clasificarPago(pago, accountId);
             const monto = direccion * Math.abs(bruto);
             const neto =
@@ -904,8 +831,6 @@ export default async function handler(req, res) {
           local: cred.locales?.nombre,
           local_id: cred.local_id,
           account_id: accountId,
-          debug_payments: debugPayments.length ? debugPayments : undefined,
-          movements_debug: movementsDebug,
           movimientos: cantPagos,
           comisiones: cantFees,
           reembolsos: cantRefunds,
