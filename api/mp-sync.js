@@ -281,52 +281,117 @@ export default async function handler(req, res) {
           }
         }
 
-        // 1) Intentamos /v1/account/balance. Si devuelve 200 con
-        //    available_balance, lo usamos como saldo real.
-        // 2) Si no, reconstruimos el saldo sumando los montos aprobados
-        //    guardados en mp_movimientos (los egresos ya están con signo
-        //    negativo, así que el SUM da el neto).
-        let credSaldoDisponible = null;
-        let balanceApiStatus = null;
-        let balanceApiError = null;
-        let balanceFuente = 'movimientos';
-        try {
-          const balRes = await fetch(
-            'https://api.mercadopago.com/v1/account/balance',
-            { headers: { Authorization: `Bearer ${cred.access_token}` } }
-          );
-          balanceApiStatus = balRes.status;
-          const bodyText = await balRes.text();
-          console.log(
-            '[mp-sync] /v1/account/balance',
-            cred.local_id,
-            '→',
-            balRes.status,
-            bodyText?.slice(0, 400)
-          );
-          if (balRes.ok) {
-            let balData = null;
-            try {
-              balData = bodyText ? JSON.parse(bodyText) : null;
-            } catch {
-              balData = null;
+        // Probamos varios endpoints de balance de Mercado Pago en serie.
+        // De cada uno guardamos status + body (truncado) y lo devolvemos
+        // en resultados[].balance_probes para poder inspeccionar qué
+        // responde cada uno desde el alert del sync.
+        const balanceProbes = [];
+        const pickNumber = (obj, ...keys) => {
+          if (!obj || typeof obj !== 'object') return null;
+          for (const k of keys) {
+            if (obj[k] != null && !Number.isNaN(Number(obj[k]))) {
+              return Number(obj[k]);
             }
-            const apiDisponible =
-              balData && balData.available_balance != null
-                ? Number(balData.available_balance)
-                : null;
-            if (apiDisponible != null && !Number.isNaN(apiDisponible)) {
-              credSaldoDisponible = apiDisponible;
-              balanceFuente = 'api';
-            }
-          } else {
-            balanceApiError = bodyText?.slice(0, 200) || null;
           }
-        } catch (balErr) {
-          console.error('mp-sync: /v1/account/balance fetch error', balErr);
-          balanceApiError = String(balErr?.message || balErr);
+          return null;
+        };
+        // Busca recursivamente una clave de balance en estructuras anidadas.
+        const buscarBalanceProfundo = (obj, depth = 0) => {
+          if (!obj || typeof obj !== 'object' || depth > 4) return null;
+          const direct = pickNumber(
+            obj,
+            'available_balance',
+            'available',
+            'balance',
+            'amount',
+            'total_amount',
+            'total'
+          );
+          if (direct != null) return direct;
+          for (const v of Object.values(obj)) {
+            if (v && typeof v === 'object') {
+              const found = buscarBalanceProfundo(v, depth + 1);
+              if (found != null) return found;
+            }
+          }
+          return null;
+        };
+
+        const probeEndpoints = [
+          { url: 'https://api.mercadopago.com/v1/account/balance' },
+          { url: 'https://api.mercadopago.com/v1/mercadopago_account/balance' },
+          {
+            url: 'https://api.mercadopago.com/users/me',
+          },
+          { url: 'https://api.mercadopago.com/v1/account' },
+          accountId
+            ? {
+                url: `https://api.mercadopago.com/users/${accountId}/mercadopago_account/balance`,
+              }
+            : null,
+          {
+            url: 'https://api.mercadopago.com/users/me/mercadopago_account/balance',
+          },
+        ].filter(Boolean);
+
+        let credSaldoDisponible = null;
+        let balanceFuente = 'movimientos';
+
+        for (const probe of probeEndpoints) {
+          try {
+            const res = await fetch(probe.url, {
+              headers: {
+                Authorization: `Bearer ${cred.access_token}`,
+                Accept: 'application/json',
+              },
+            });
+            const body = await res.text();
+            console.log(
+              '[mp-sync] probe',
+              probe.url,
+              '→',
+              res.status,
+              body?.slice(0, 400)
+            );
+            let parsed = null;
+            try {
+              parsed = body ? JSON.parse(body) : null;
+            } catch {
+              parsed = null;
+            }
+
+            let valorBalance = null;
+            if (res.ok && parsed && typeof parsed === 'object') {
+              valorBalance =
+                pickNumber(parsed, 'available_balance', 'balance', 'amount') ??
+                buscarBalanceProfundo(parsed);
+            }
+
+            balanceProbes.push({
+              url: probe.url,
+              status: res.status,
+              ok: res.ok,
+              balance_detectado: valorBalance,
+              body: body?.slice(0, 300) || null,
+            });
+
+            if (valorBalance != null && credSaldoDisponible == null) {
+              credSaldoDisponible = valorBalance;
+              balanceFuente = 'api:' + probe.url.replace('https://api.mercadopago.com', '');
+            }
+          } catch (probeErr) {
+            console.error('mp-sync: probe error', probe.url, probeErr);
+            balanceProbes.push({
+              url: probe.url,
+              status: null,
+              ok: false,
+              error: String(probeErr?.message || probeErr),
+            });
+          }
         }
 
+        // Fallback: sumar montos aprobados de mp_movimientos si ningún
+        // endpoint respondió con un balance válido.
         if (credSaldoDisponible == null) {
           const { data: movLocal, error: movErr } = await db
             .from('mp_movimientos')
@@ -399,9 +464,8 @@ export default async function handler(req, res) {
           comisiones: cantFees,
           reembolsos: cantRefunds,
           saldo_calculado: credSaldoDisponible,
-          balance_api_status: balanceApiStatus,
-          balance_api_error: balanceApiError,
           balance_fuente: balanceFuente,
+          balance_probes: balanceProbes,
           upd_error: updErr ? updErr.message : undefined,
         });
       } catch (err) {

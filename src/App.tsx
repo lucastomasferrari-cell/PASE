@@ -2327,16 +2327,22 @@ function ConciliacionMP({ user, locales, localActivo }) {
       console.log("[MP] /api/mp-sync response:",d);
       if(d.ok){
         await load();
-        const lines=(d.resultados||[]).map(x=>{
-          const parts=[x.local+": "+(x.movimientos||0)+" mov"];
-          if(x.saldo_calculado!=null)parts.push("saldo "+fmt_$(x.saldo_calculado));
-          if(x.balance_api_status!=null){
-            const fuente=x.balance_fuente==="api"?"API ok":"fallback";
-            parts.push("/v1/account/balance HTTP "+x.balance_api_status+" ("+fuente+")");
+        const lines=(d.resultados||[]).flatMap(x=>{
+          const head=[x.local+": "+(x.movimientos||0)+" mov"];
+          if(x.saldo_calculado!=null)head.push("saldo "+fmt_$(x.saldo_calculado));
+          if(x.balance_fuente)head.push("fuente: "+x.balance_fuente);
+          if(x.upd_error)head.push("DB err: "+x.upd_error);
+          if(x.error)head.push("ERR: "+x.error);
+          const out=[head.join(" · ")];
+          if(Array.isArray(x.balance_probes)){
+            for(const p of x.balance_probes){
+              const short=p.url.replace("https://api.mercadopago.com","");
+              const amt=p.balance_detectado!=null?" → "+fmt_$(p.balance_detectado):"";
+              const body=p.body?(" "+String(p.body).replace(/\s+/g," ").slice(0,120)):(p.error?" "+p.error:"");
+              out.push("    "+short+" HTTP "+(p.status??"ERR")+amt+body);
+            }
           }
-          if(x.upd_error)parts.push("DB err: "+x.upd_error);
-          if(x.error)parts.push("ERR: "+x.error);
-          return parts.join(" · ");
+          return out;
         });
         alert("Sincronización completada\n"+lines.join("\n"));
       }
