@@ -340,6 +340,8 @@ export default async function handler(req, res) {
         // y parsear la última fila en busca de BALANCE_AMOUNT o
         // SETTLEMENT_NET_CREDIT_AMOUNT como "closing balance".
         const releaseReport = {
+          config_status: null,
+          config_body: null,
           post_status: null,
           post_body: null,
           list_status: null,
@@ -347,6 +349,7 @@ export default async function handler(req, res) {
           list_attempts: 0,
           file_name: null,
           file_date_created: null,
+          created_from: null,
           file_status: null,
           file_snippet: null,
           csv_rows: null,
@@ -356,6 +359,7 @@ export default async function handler(req, res) {
           mov_rows: null,
           parsed_balance: null,
           parse_method: null,
+          first_time_message: null,
           error: null,
         };
         const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -376,107 +380,180 @@ export default async function handler(req, res) {
               now.getUTCSeconds()
             )}Z`;
 
-          // 1) POST — pide generar el reporte para la ventana de fechas.
+          // 1) PUT /config — garantiza que el reporte diario automático
+          //    esté activo. Es idempotente, se ejecuta en cada sync.
           try {
-            const postRes = await fetch(
-              'https://api.mercadopago.com/v1/account/release_report',
+            const configRes = await fetch(
+              'https://api.mercadopago.com/v1/account/release_report/config',
               {
-                method: 'POST',
+                method: 'PUT',
                 headers: {
                   Authorization: `Bearer ${cred.access_token}`,
                   'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                  begin_date: beginIso,
-                  end_date: endIso,
+                  scheduled: true,
+                  execute_after_withdrawal: false,
+                  display_timezone: 'GMT-03',
+                  frequency: { hour: 23, type: 'daily' },
                 }),
               }
             );
-            releaseReport.post_status = postRes.status;
-            releaseReport.post_body = (await postRes.text())?.slice(0, 200) || null;
+            releaseReport.config_status = configRes.status;
+            releaseReport.config_body =
+              (await configRes.text())?.slice(0, 200) || null;
             console.log(
-              '[mp-sync] release_report POST',
+              '[mp-sync] release_report PUT /config',
               cred.local_id,
-              postRes.status,
-              releaseReport.post_body
+              configRes.status,
+              releaseReport.config_body
             );
           } catch (e) {
-            releaseReport.error = 'POST: ' + String(e?.message || e);
+            releaseReport.error =
+              (releaseReport.error ? releaseReport.error + ' | ' : '') +
+              'CONFIG: ' + String(e?.message || e);
           }
 
-          // 2) GET /list — con reintentos, porque el POST es asíncrono
-          //    y el archivo generado recién aparece después de unos
-          //    segundos. Sólo aceptamos archivos .csv creados hoy (UTC),
-          //    así no cae en reportes viejos de 2023 que quedaron en el
-          //    listado.
-          const todayStart = new Date();
-          todayStart.setUTCHours(0, 0, 0, 0);
-          const todayMs = todayStart.getTime();
-          for (let attempt = 0; attempt < 3; attempt++) {
-            if (attempt > 0) await sleep(2000);
-            releaseReport.list_attempts = attempt + 1;
+          // 2) GET /list — buscamos primero el reporte programado más
+          //    reciente (created_from='schedule'). Si existe lo usamos;
+          //    ya trae el closing_balance del día cerrado.
+          const parseListBody = (body) => {
+            let data = null;
+            try { data = body ? JSON.parse(body) : null; } catch {}
+            return Array.isArray(data)
+              ? data
+              : Array.isArray(data?.results)
+              ? data.results
+              : [];
+          };
+          const sortByDateDesc = (arr) =>
+            arr.slice().sort((a, b) => {
+              const da = new Date(a?.date_created || a?.date || 0).getTime();
+              const db_ = new Date(b?.date_created || b?.date || 0).getTime();
+              return db_ - da;
+            });
+          const isCsv = (f) =>
+            (f?.file_name || f?.fileName || f?.name || '').toLowerCase().endsWith('.csv');
+
+          let scheduledFile = null;
+          try {
+            const listRes = await fetch(
+              'https://api.mercadopago.com/v1/account/release_report/list',
+              { headers: { Authorization: `Bearer ${cred.access_token}` } }
+            );
+            releaseReport.list_status = listRes.status;
+            releaseReport.list_attempts = 1;
+            const listBody = await listRes.text();
+            releaseReport.list_body = listBody?.slice(0, 300) || null;
+            console.log(
+              '[mp-sync] release_report /list',
+              cred.local_id,
+              listRes.status,
+              releaseReport.list_body
+            );
+            const rawFiles = parseListBody(listBody);
+            const scheduledCsvs = sortByDateDesc(
+              rawFiles.filter(
+                (f) =>
+                  isCsv(f) &&
+                  (f?.created_from || '').toLowerCase() === 'schedule'
+              )
+            );
+            scheduledFile = scheduledCsvs[0] || null;
+          } catch (e) {
+            releaseReport.error =
+              (releaseReport.error ? releaseReport.error + ' | ' : '') +
+              'LIST: ' + String(e?.message || e);
+          }
+
+          if (scheduledFile) {
+            releaseReport.file_name =
+              scheduledFile.file_name ||
+              scheduledFile.fileName ||
+              scheduledFile.name ||
+              null;
+            releaseReport.file_date_created =
+              scheduledFile.date_created || scheduledFile.date || null;
+            releaseReport.created_from = 'schedule';
+          } else {
+            // 3) No hay reporte programado todavía — pedimos uno manual
+            //    como fallback y mostramos el mensaje de primera vez.
+            releaseReport.first_time_message =
+              'El primer reporte automático estará disponible mañana';
             try {
-              const listRes = await fetch(
-                'https://api.mercadopago.com/v1/account/release_report/list',
-                { headers: { Authorization: `Bearer ${cred.access_token}` } }
+              const postRes = await fetch(
+                'https://api.mercadopago.com/v1/account/release_report',
+                {
+                  method: 'POST',
+                  headers: {
+                    Authorization: `Bearer ${cred.access_token}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    begin_date: beginIso,
+                    end_date: endIso,
+                  }),
+                }
               );
-              releaseReport.list_status = listRes.status;
-              const listBody = await listRes.text();
-              releaseReport.list_body = listBody?.slice(0, 300) || null;
+              releaseReport.post_status = postRes.status;
+              releaseReport.post_body =
+                (await postRes.text())?.slice(0, 200) || null;
               console.log(
-                '[mp-sync] release_report /list',
+                '[mp-sync] release_report POST',
                 cred.local_id,
-                'attempt',
-                attempt + 1,
-                listRes.status,
-                releaseReport.list_body
+                postRes.status,
+                releaseReport.post_body
               );
-              let listData = null;
-              try {
-                listData = listBody ? JSON.parse(listBody) : null;
-              } catch {
-                listData = null;
-              }
-              const rawFiles = Array.isArray(listData)
-                ? listData
-                : Array.isArray(listData?.results)
-                ? listData.results
-                : [];
-              const files = rawFiles
-                .filter((f) => {
-                  const name = (
-                    f?.file_name || f?.fileName || f?.name || ''
-                  ).toLowerCase();
-                  if (!name.endsWith('.csv')) return false;
-                  const dc = new Date(
-                    f?.date_created || f?.date || 0
-                  ).getTime();
-                  return dc >= todayMs;
-                })
-                .sort((a, b) => {
-                  const da = new Date(
-                    a?.date_created || a?.date || 0
-                  ).getTime();
-                  const db_ = new Date(
-                    b?.date_created || b?.date || 0
-                  ).getTime();
-                  return db_ - da;
-                });
-              const latest = files[0];
-              if (latest) {
-                releaseReport.file_name =
-                  latest.file_name || latest.fileName || latest.name || null;
-                releaseReport.file_date_created =
-                  latest.date_created || latest.date || null;
-                break;
-              }
             } catch (e) {
               releaseReport.error =
                 (releaseReport.error ? releaseReport.error + ' | ' : '') +
-                'LIST attempt ' +
-                (attempt + 1) +
-                ': ' +
-                String(e?.message || e);
+                'POST: ' + String(e?.message || e);
+            }
+
+            // Poll /list buscando el manual recién creado (hoy).
+            const todayStart = new Date();
+            todayStart.setUTCHours(0, 0, 0, 0);
+            const todayMs = todayStart.getTime();
+            for (let attempt = 0; attempt < 3; attempt++) {
+              if (attempt > 0) await sleep(2000);
+              releaseReport.list_attempts =
+                (releaseReport.list_attempts || 0) + 1;
+              try {
+                const listRes = await fetch(
+                  'https://api.mercadopago.com/v1/account/release_report/list',
+                  { headers: { Authorization: `Bearer ${cred.access_token}` } }
+                );
+                releaseReport.list_status = listRes.status;
+                const listBody = await listRes.text();
+                releaseReport.list_body = listBody?.slice(0, 300) || null;
+                const rawFiles = parseListBody(listBody);
+                const manualToday = sortByDateDesc(
+                  rawFiles.filter((f) => {
+                    if (!isCsv(f)) return false;
+                    const dc = new Date(
+                      f?.date_created || f?.date || 0
+                    ).getTime();
+                    return dc >= todayMs;
+                  })
+                );
+                const latest = manualToday[0];
+                if (latest) {
+                  releaseReport.file_name =
+                    latest.file_name || latest.fileName || latest.name || null;
+                  releaseReport.file_date_created =
+                    latest.date_created || latest.date || null;
+                  releaseReport.created_from =
+                    (latest?.created_from || 'manual').toLowerCase();
+                  break;
+                }
+              } catch (e) {
+                releaseReport.error =
+                  (releaseReport.error ? releaseReport.error + ' | ' : '') +
+                  'LIST poll ' +
+                  (attempt + 1) +
+                  ': ' +
+                  String(e?.message || e);
+              }
             }
           }
 
@@ -501,15 +578,12 @@ export default async function handler(req, res) {
               );
 
               if (fileRes.ok && csvText) {
-                // Parseo del CSV completo del release_report.
-                // Para reportes del período actual el CSV no trae
-                // closing_balance (aún no cerró), así que reconstruimos:
-                //   parsed_balance = initial_available_balance
-                //                  + SUM(NET_CREDIT_AMOUNT)
-                //                  − SUM(NET_DEBIT_AMOUNT)
-                // Las filas especiales (initial_available_balance,
-                // closing_balance, total) se excluyen del sumatorio;
-                // sólo se usan las filas de movimientos reales.
+                // Parseo del CSV del release_report.
+                //   - Si es un reporte programado (día cerrado), trae la
+                //     fila closing_balance: esa es la fuente preferida.
+                //   - Si es un reporte manual del día en curso, usamos
+                //     initial_available_balance + SUM(NET_CREDIT) −
+                //     SUM(NET_DEBIT) como reconstrucción.
                 const parseNumero = (raw) => {
                   if (raw == null || raw === '') return null;
                   const s = String(raw).trim();
@@ -546,55 +620,77 @@ export default async function handler(req, res) {
                     'total',
                   ]);
 
-                  // 1) Buscar el initial_available_balance (fila especial
-                  //    al inicio del reporte).
-                  let initialBalance = null;
+                  // Método 1: closing_balance (sólo existe en reportes
+                  // programados del día cerrado).
+                  let closingBalance = null;
                   if (idxRecordType !== -1 && idxBalance !== -1) {
-                    for (let i = 1; i < lines.length; i++) {
+                    for (let i = lines.length - 1; i >= 1; i--) {
                       const cells = lines[i]
                         .split(sep)
                         .map((c) => c.replace(/^"|"$/g, '').trim());
                       const tipo = (cells[idxRecordType] || '').toLowerCase();
-                      if (tipo === 'initial_available_balance') {
+                      if (tipo === 'closing_balance') {
                         const v = parseNumero(cells[idxBalance]);
-                        if (v != null) initialBalance = v;
-                        break;
+                        if (v != null) {
+                          closingBalance = v;
+                          break;
+                        }
                       }
                     }
                   }
 
-                  // 2) Sumar credits / debits de las filas de movimientos.
-                  let totalCredit = 0;
-                  let totalDebit = 0;
-                  let movRows = 0;
-                  if (
-                    idxRecordType !== -1 &&
-                    idxNetCredit !== -1 &&
-                    idxNetDebit !== -1
-                  ) {
-                    for (let i = 1; i < lines.length; i++) {
-                      const cells = lines[i]
-                        .split(sep)
-                        .map((c) => c.replace(/^"|"$/g, '').trim());
-                      const tipo = (cells[idxRecordType] || '').toLowerCase();
-                      if (!tipo || FILAS_ESPECIALES.has(tipo)) continue;
-                      const c = parseNumero(cells[idxNetCredit]) || 0;
-                      const d = parseNumero(cells[idxNetDebit]) || 0;
-                      totalCredit += c;
-                      totalDebit += d;
-                      movRows++;
+                  if (closingBalance != null) {
+                    releaseReport.parsed_balance = closingBalance;
+                    releaseReport.parse_method = 'closing_balance';
+                  } else {
+                    // Método 2: initial_available_balance + créditos − débitos.
+                    let initialBalance = null;
+                    if (idxRecordType !== -1 && idxBalance !== -1) {
+                      for (let i = 1; i < lines.length; i++) {
+                        const cells = lines[i]
+                          .split(sep)
+                          .map((c) => c.replace(/^"|"$/g, '').trim());
+                        const tipo = (cells[idxRecordType] || '').toLowerCase();
+                        if (tipo === 'initial_available_balance') {
+                          const v = parseNumero(cells[idxBalance]);
+                          if (v != null) initialBalance = v;
+                          break;
+                        }
+                      }
                     }
-                  }
 
-                  if (initialBalance != null) {
-                    releaseReport.parsed_balance =
-                      initialBalance + totalCredit - totalDebit;
-                    releaseReport.parse_method =
-                      'initial_balance_plus_movements';
-                    releaseReport.initial_balance = initialBalance;
-                    releaseReport.total_credit = totalCredit;
-                    releaseReport.total_debit = totalDebit;
-                    releaseReport.mov_rows = movRows;
+                    let totalCredit = 0;
+                    let totalDebit = 0;
+                    let movRows = 0;
+                    if (
+                      idxRecordType !== -1 &&
+                      idxNetCredit !== -1 &&
+                      idxNetDebit !== -1
+                    ) {
+                      for (let i = 1; i < lines.length; i++) {
+                        const cells = lines[i]
+                          .split(sep)
+                          .map((c) => c.replace(/^"|"$/g, '').trim());
+                        const tipo = (cells[idxRecordType] || '').toLowerCase();
+                        if (!tipo || FILAS_ESPECIALES.has(tipo)) continue;
+                        const c = parseNumero(cells[idxNetCredit]) || 0;
+                        const d = parseNumero(cells[idxNetDebit]) || 0;
+                        totalCredit += c;
+                        totalDebit += d;
+                        movRows++;
+                      }
+                    }
+
+                    if (initialBalance != null) {
+                      releaseReport.parsed_balance =
+                        initialBalance + totalCredit - totalDebit;
+                      releaseReport.parse_method =
+                        'initial_balance_plus_movements';
+                      releaseReport.initial_balance = initialBalance;
+                      releaseReport.total_credit = totalCredit;
+                      releaseReport.total_debit = totalDebit;
+                      releaseReport.mov_rows = movRows;
+                    }
                   }
                 }
               }

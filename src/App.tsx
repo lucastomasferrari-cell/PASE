@@ -2336,14 +2336,16 @@ function ConciliacionMP({ user, locales, localActivo }) {
           const out=[header.join(" · ")];
           if(x.release_report){
             const rr=x.release_report;
-            out.push("    release_report POST HTTP "+(rr.post_status??"ERR")+(rr.post_body?" "+String(rr.post_body).replace(/\s+/g," ").slice(0,120):""));
-            out.push("    release_report LIST HTTP "+(rr.list_status??"ERR")+" intentos="+(rr.list_attempts||0)+" file="+(rr.file_name||"(ninguno hoy)"));
+            if(rr.config_status!=null)out.push("    release_report CONFIG HTTP "+rr.config_status);
+            if(rr.post_status!=null)out.push("    release_report POST HTTP "+rr.post_status+(rr.post_body?" "+String(rr.post_body).replace(/\s+/g," ").slice(0,120):""));
+            out.push("    release_report LIST HTTP "+(rr.list_status??"ERR")+" intentos="+(rr.list_attempts||0)+" file="+(rr.file_name||"(ninguno)")+(rr.created_from?" ["+rr.created_from+"]":""));
             if(rr.file_date_created)out.push("    release_report file_date_created="+rr.file_date_created);
             if(rr.file_status!=null)out.push("    release_report FILE HTTP "+rr.file_status+(rr.file_snippet?" snippet: "+String(rr.file_snippet).replace(/\s+/g," ").slice(0,120):""));
             out.push("    release_report parsed_balance="+(rr.parsed_balance!=null?fmt_$(rr.parsed_balance):"null")+(rr.parse_method?" ["+rr.parse_method+"]":"")+(rr.csv_rows?" ("+rr.csv_rows+" filas CSV)":""));
             if(rr.initial_balance!=null||rr.total_credit!=null||rr.total_debit!=null){
               out.push("      inicial="+fmt_$(rr.initial_balance||0)+" + créditos="+fmt_$(rr.total_credit||0)+" − débitos="+fmt_$(rr.total_debit||0)+" ("+(rr.mov_rows||0)+" movs)");
             }
+            if(rr.first_time_message)out.push("    ℹ "+rr.first_time_message);
             if(rr.error)out.push("    release_report ERR: "+rr.error);
           }
           if(x.saldo_debug){
