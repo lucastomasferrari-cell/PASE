@@ -2330,6 +2330,10 @@ function ConciliacionMP({ user, locales, localActivo }) {
         const lines=(d.resultados||[]).map(x=>{
           const parts=[x.local+": "+(x.movimientos||0)+" mov"];
           if(x.saldo_calculado!=null)parts.push("saldo "+fmt_$(x.saldo_calculado));
+          if(x.balance_api_status!=null){
+            const fuente=x.balance_fuente==="api"?"API ok":"fallback";
+            parts.push("/v1/account/balance HTTP "+x.balance_api_status+" ("+fuente+")");
+          }
           if(x.upd_error)parts.push("DB err: "+x.upd_error);
           if(x.error)parts.push("ERR: "+x.error);
           return parts.join(" · ");

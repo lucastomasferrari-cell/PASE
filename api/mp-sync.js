@@ -281,27 +281,71 @@ export default async function handler(req, res) {
           }
         }
 
-        // Saldo calculado desde mp_movimientos.
-        // /v1/account/balance devuelve 403 con tokens estándar y
-        // /v1/money_releases 400, así que reconstruimos el saldo sumando
-        // todos los montos aprobados ya sincronizados para este local.
-        // Al estar los egresos (fees, refunds, payment_out, money_transfer)
-        // guardados con signo negativo, un SUM(monto) ya da el neto.
+        // 1) Intentamos /v1/account/balance. Si devuelve 200 con
+        //    available_balance, lo usamos como saldo real.
+        // 2) Si no, reconstruimos el saldo sumando los montos aprobados
+        //    guardados en mp_movimientos (los egresos ya están con signo
+        //    negativo, así que el SUM da el neto).
         let credSaldoDisponible = null;
-        const { data: movLocal, error: movErr } = await db
-          .from('mp_movimientos')
-          .select('monto, estado')
-          .eq('local_id', cred.local_id);
-        if (movErr) {
-          console.error(
-            'mp-sync: sum mp_movimientos error',
-            cred.local_id,
-            movErr
+        let balanceApiStatus = null;
+        let balanceApiError = null;
+        let balanceFuente = 'movimientos';
+        try {
+          const balRes = await fetch(
+            'https://api.mercadopago.com/v1/account/balance',
+            { headers: { Authorization: `Bearer ${cred.access_token}` } }
           );
-        } else {
-          credSaldoDisponible = (movLocal || [])
-            .filter((m) => !m.estado || m.estado === 'approved')
-            .reduce((s, m) => s + (Number(m.monto) || 0), 0);
+          balanceApiStatus = balRes.status;
+          const bodyText = await balRes.text();
+          console.log(
+            '[mp-sync] /v1/account/balance',
+            cred.local_id,
+            '→',
+            balRes.status,
+            bodyText?.slice(0, 400)
+          );
+          if (balRes.ok) {
+            let balData = null;
+            try {
+              balData = bodyText ? JSON.parse(bodyText) : null;
+            } catch {
+              balData = null;
+            }
+            const apiDisponible =
+              balData && balData.available_balance != null
+                ? Number(balData.available_balance)
+                : null;
+            if (apiDisponible != null && !Number.isNaN(apiDisponible)) {
+              credSaldoDisponible = apiDisponible;
+              balanceFuente = 'api';
+            }
+          } else {
+            balanceApiError = bodyText?.slice(0, 200) || null;
+          }
+        } catch (balErr) {
+          console.error('mp-sync: /v1/account/balance fetch error', balErr);
+          balanceApiError = String(balErr?.message || balErr);
+        }
+
+        if (credSaldoDisponible == null) {
+          const { data: movLocal, error: movErr } = await db
+            .from('mp_movimientos')
+            .select('monto, estado')
+            .eq('local_id', cred.local_id);
+          if (movErr) {
+            console.error(
+              'mp-sync: sum mp_movimientos error',
+              cred.local_id,
+              movErr
+            );
+          } else {
+            credSaldoDisponible = (movLocal || [])
+              .filter((m) => !m.estado || m.estado === 'approved')
+              .reduce((s, m) => s + (Number(m.monto) || 0), 0);
+          }
+        }
+
+        if (credSaldoDisponible != null) {
           balanceTotalMP += credSaldoDisponible;
           balanceConsultado = true;
         }
@@ -355,6 +399,9 @@ export default async function handler(req, res) {
           comisiones: cantFees,
           reembolsos: cantRefunds,
           saldo_calculado: credSaldoDisponible,
+          balance_api_status: balanceApiStatus,
+          balance_api_error: balanceApiError,
+          balance_fuente: balanceFuente,
           upd_error: updErr ? updErr.message : undefined,
         });
       } catch (err) {
