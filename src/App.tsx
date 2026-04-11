@@ -2301,21 +2301,34 @@ function ConciliacionMP({ user, locales, localActivo }) {
 
   const load=async()=>{
     setLoading(true);
-    const desdeTs=desde+"T00:00:00";
-    const hastaTs=hasta+"T23:59:59";
-    const [credRes,movRes,facRes,gasRes]=await Promise.all([
-      db.from("mp_credenciales").select("*,locales(nombre)"),
-      db.from("mp_movimientos").select("*").gte("fecha",desdeTs).lte("fecha",hastaTs).order("fecha",{ascending:false}),
-      db.from("facturas").select("id,nro,fecha,total,local_id,cat,estado").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false}),
-      db.from("gastos").select("id,fecha,categoria,detalle,monto,local_id,cuenta").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false}),
-    ]);
-    if(credRes.error)console.warn("mp_credenciales load error:",credRes.error);
-    const c=credRes.data||[], m=movRes.data||[], f=facRes.data||[], g=gasRes.data||[];
-    setCredenciales(c.filter(x=>!localActivo||x.local_id===localActivo));
-    setMovimientos(m.filter(x=>!localActivo||x.local_id===localActivo));
-    setFacturas(f.filter(x=>!localActivo||x.local_id===localActivo));
-    setGastos(g.filter(x=>!localActivo||x.local_id===localActivo));
-    setLoading(false);
+    try{
+      const desdeTs=desde+"T00:00:00";
+      const hastaTs=hasta+"T23:59:59";
+      // Filtramos mp_movimientos por local en el server cuando hay un
+      // local activo, así evitamos traer filas que igual vamos a descartar.
+      let movQ=db.from("mp_movimientos").select("*").gte("fecha",desdeTs).lte("fecha",hastaTs).order("fecha",{ascending:false}).limit(5000);
+      if(localActivo)movQ=movQ.eq("local_id",localActivo);
+      const [credRes,movRes,facRes,gasRes]=await Promise.all([
+        db.from("mp_credenciales").select("*,locales(nombre)"),
+        movQ,
+        db.from("facturas").select("id,nro,fecha,total,local_id,cat,estado").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false}),
+        db.from("gastos").select("id,fecha,categoria,detalle,monto,local_id,cuenta").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false}),
+      ]);
+      if(credRes.error)console.warn("mp_credenciales load error:",credRes.error);
+      if(movRes.error)console.warn("mp_movimientos load error:",movRes.error);
+      if(facRes.error)console.warn("facturas load error:",facRes.error);
+      if(gasRes.error)console.warn("gastos load error:",gasRes.error);
+      const c=credRes.data||[], m=movRes.data||[], f=facRes.data||[], g=gasRes.data||[];
+      console.log("[MP] load:",c.length,"credenciales /",m.length,"movimientos /",f.length,"facturas /",g.length,"gastos");
+      setCredenciales(c.filter(x=>!localActivo||x.local_id===localActivo));
+      setMovimientos(m);
+      setFacturas(f.filter(x=>!localActivo||x.local_id===localActivo));
+      setGastos(g.filter(x=>!localActivo||x.local_id===localActivo));
+    }catch(e){
+      console.error("ConciliacionMP load error:",e);
+    }finally{
+      setLoading(false);
+    }
   };
 
   useEffect(()=>{load();},[desde,hasta,localActivo]);
@@ -2324,7 +2337,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
     setSincronizando(true);
     try{
       const r=await fetch("/api/mp-sync",{method:"POST"});
-      const d=await r.json();
+      const d=await r.json().catch(()=>({ok:false,error:"respuesta no-JSON del servidor"}));
       console.log("[MP] /api/mp-sync response:",d);
       if(d.ok){
         await load();
@@ -2366,8 +2379,12 @@ function ConciliacionMP({ user, locales, localActivo }) {
         alert("Sincronización completada\n"+lines.join("\n"));
       }
       else alert("Error en sincronización: "+(d.error||"desconocido"));
-    }catch(e){alert("Error al conectar con MP: "+(e?.message||""));}
-    setSincronizando(false);
+    }catch(e){
+      console.error("ConciliacionMP sincronizar error:",e);
+      alert("Error al conectar con MP: "+(e?.message||""));
+    }finally{
+      setSincronizando(false);
+    }
   };
 
   const guardarCredencial=async()=>{
