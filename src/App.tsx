@@ -2341,6 +2341,9 @@ function ConciliacionMP({ user, locales, localActivo }) {
             if(rr.file_date_created)out.push("    release_report file_date_created="+rr.file_date_created);
             if(rr.file_status!=null)out.push("    release_report FILE HTTP "+rr.file_status+(rr.file_snippet?" snippet: "+String(rr.file_snippet).replace(/\s+/g," ").slice(0,120):""));
             out.push("    release_report parsed_balance="+(rr.parsed_balance!=null?fmt_$(rr.parsed_balance):"null")+(rr.parse_method?" ["+rr.parse_method+"]":"")+(rr.csv_rows?" ("+rr.csv_rows+" filas CSV)":""));
+            if(rr.initial_balance!=null||rr.total_credit!=null||rr.total_debit!=null){
+              out.push("      inicial="+fmt_$(rr.initial_balance||0)+" + créditos="+fmt_$(rr.total_credit||0)+" − débitos="+fmt_$(rr.total_debit||0)+" ("+(rr.mov_rows||0)+" movs)");
+            }
             if(rr.error)out.push("    release_report ERR: "+rr.error);
           }
           if(x.saldo_debug){

@@ -350,6 +350,10 @@ export default async function handler(req, res) {
           file_status: null,
           file_snippet: null,
           csv_rows: null,
+          initial_balance: null,
+          total_credit: null,
+          total_debit: null,
+          mov_rows: null,
           parsed_balance: null,
           parse_method: null,
           error: null,
@@ -498,12 +502,14 @@ export default async function handler(req, res) {
 
               if (fileRes.ok && csvText) {
                 // Parseo del CSV completo del release_report.
-                // Filas especiales con RECORD_TYPE:
-                //   initial_available_balance → saldo al inicio del período
-                //   closing_balance           → saldo al cierre (EL BUENO)
-                // La columna BALANCE_AMOUNT tiene el monto. Leemos el CSV
-                // completo y buscamos primero closing_balance en todas las
-                // filas; si no aparece, caemos a initial_available_balance.
+                // Para reportes del período actual el CSV no trae
+                // closing_balance (aún no cerró), así que reconstruimos:
+                //   parsed_balance = initial_available_balance
+                //                  + SUM(NET_CREDIT_AMOUNT)
+                //                  − SUM(NET_DEBIT_AMOUNT)
+                // Las filas especiales (initial_available_balance,
+                // closing_balance, total) se excluyen del sumatorio;
+                // sólo se usan las filas de movimientos reales.
                 const parseNumero = (raw) => {
                   if (raw == null || raw === '') return null;
                   const s = String(raw).trim();
@@ -518,8 +524,6 @@ export default async function handler(req, res) {
                   return Number.isFinite(v) ? v : null;
                 };
 
-                // Stripping BOM por las dudas, y splitting por cualquier
-                // estilo de salto de línea.
                 const cleanCsv = csvText.replace(/^\uFEFF/, '');
                 const lines = cleanCsv
                   .split(/\r?\n/)
@@ -534,35 +538,63 @@ export default async function handler(req, res) {
                     .map((h) => h.replace(/^"|"$/g, '').trim().toUpperCase());
                   const idxRecordType = header.indexOf('RECORD_TYPE');
                   const idxBalance = header.indexOf('BALANCE_AMOUNT');
+                  const idxNetCredit = header.indexOf('NET_CREDIT_AMOUNT');
+                  const idxNetDebit = header.indexOf('NET_DEBIT_AMOUNT');
+                  const FILAS_ESPECIALES = new Set([
+                    'initial_available_balance',
+                    'closing_balance',
+                    'total',
+                  ]);
 
-                  const findBalanceForType = (wantedType) => {
-                    if (idxRecordType === -1 || idxBalance === -1) return null;
-                    // Recorrido completo desde la última fila hacia arriba:
-                    // closing_balance suele estar al final del archivo.
-                    for (let i = lines.length - 1; i >= 1; i--) {
+                  // 1) Buscar el initial_available_balance (fila especial
+                  //    al inicio del reporte).
+                  let initialBalance = null;
+                  if (idxRecordType !== -1 && idxBalance !== -1) {
+                    for (let i = 1; i < lines.length; i++) {
                       const cells = lines[i]
                         .split(sep)
                         .map((c) => c.replace(/^"|"$/g, '').trim());
                       const tipo = (cells[idxRecordType] || '').toLowerCase();
-                      if (tipo !== wantedType) continue;
-                      const val = parseNumero(cells[idxBalance]);
-                      if (val != null) return val;
+                      if (tipo === 'initial_available_balance') {
+                        const v = parseNumero(cells[idxBalance]);
+                        if (v != null) initialBalance = v;
+                        break;
+                      }
                     }
-                    return null;
-                  };
+                  }
 
-                  const closing = findBalanceForType('closing_balance');
-                  if (closing != null) {
-                    releaseReport.parsed_balance = closing;
-                    releaseReport.parse_method = 'closing_balance';
-                  } else {
-                    const initial = findBalanceForType(
-                      'initial_available_balance'
-                    );
-                    if (initial != null) {
-                      releaseReport.parsed_balance = initial;
-                      releaseReport.parse_method = 'initial_available_balance';
+                  // 2) Sumar credits / debits de las filas de movimientos.
+                  let totalCredit = 0;
+                  let totalDebit = 0;
+                  let movRows = 0;
+                  if (
+                    idxRecordType !== -1 &&
+                    idxNetCredit !== -1 &&
+                    idxNetDebit !== -1
+                  ) {
+                    for (let i = 1; i < lines.length; i++) {
+                      const cells = lines[i]
+                        .split(sep)
+                        .map((c) => c.replace(/^"|"$/g, '').trim());
+                      const tipo = (cells[idxRecordType] || '').toLowerCase();
+                      if (!tipo || FILAS_ESPECIALES.has(tipo)) continue;
+                      const c = parseNumero(cells[idxNetCredit]) || 0;
+                      const d = parseNumero(cells[idxNetDebit]) || 0;
+                      totalCredit += c;
+                      totalDebit += d;
+                      movRows++;
                     }
+                  }
+
+                  if (initialBalance != null) {
+                    releaseReport.parsed_balance =
+                      initialBalance + totalCredit - totalDebit;
+                    releaseReport.parse_method =
+                      'initial_balance_plus_movements';
+                    releaseReport.initial_balance = initialBalance;
+                    releaseReport.total_credit = totalCredit;
+                    releaseReport.total_debit = totalDebit;
+                    releaseReport.mov_rows = movRows;
                   }
                 }
               }
