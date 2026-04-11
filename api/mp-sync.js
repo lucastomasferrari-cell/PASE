@@ -504,15 +504,14 @@ export default async function handler(req, res) {
                   .slice(0, 30)
                   .join('\n');
 
-                // 4) Parseo del CSV del release_report.
-                //    Columnas esperadas:
-                //      DATE;SOURCE_ID;EXTERNAL_REFERENCE;RECORD_TYPE;
-                //      DESCRIPTION;NET_CREDIT_AMOUNT;NET_DEBIT_AMOUNT;
-                //      GROSS_AMOUNT;SELLER_AMOUNT
-                //    Método principal: última fila con RECORD_TYPE=
-                //    'settlement' y su SELLER_AMOUNT como closing balance.
-                //    Fallback: SUM(NET_CREDIT_AMOUNT) - SUM(NET_DEBIT_AMOUNT)
-                //    ignorando filas sin RECORD_TYPE o tipo header/footer.
+                // Parseo del CSV del release_report.
+                // El CSV incluye filas especiales con RECORD_TYPE:
+                //   initial_available_balance → saldo inicial del período
+                //   closing_balance           → saldo al cierre (EL QUE NOS IMPORTA)
+                // La columna BALANCE_AMOUNT es la última y tiene el monto.
+                // Buscamos closing_balance y leemos su BALANCE_AMOUNT.
+                // Fallback: initial_available_balance si no apareció el
+                // closing_balance todavía.
                 const parseNumero = (raw) => {
                   if (raw == null || raw === '') return null;
                   const s = String(raw).trim();
@@ -537,53 +536,36 @@ export default async function handler(req, res) {
                     .split(sep)
                     .map((h) => h.replace(/^"|"$/g, '').trim().toUpperCase());
                   const idxRecordType = header.indexOf('RECORD_TYPE');
-                  const idxNetCredit = header.indexOf('NET_CREDIT_AMOUNT');
-                  const idxNetDebit = header.indexOf('NET_DEBIT_AMOUNT');
-                  const idxSeller = header.indexOf('SELLER_AMOUNT');
+                  const idxBalance = header.indexOf('BALANCE_AMOUNT');
 
-                  // Método 1: última fila settlement -> SELLER_AMOUNT
-                  if (idxRecordType !== -1 && idxSeller !== -1) {
+                  const findBalanceForType = (wantedType) => {
+                    if (idxRecordType === -1 || idxBalance === -1) return null;
                     for (let i = lines.length - 1; i >= 1; i--) {
                       const cells = lines[i]
                         .split(sep)
                         .map((c) => c.replace(/^"|"$/g, '').trim());
                       const tipo = (cells[idxRecordType] || '').toLowerCase();
-                      if (tipo !== 'settlement') continue;
-                      const val = parseNumero(cells[idxSeller]);
-                      if (val != null) {
-                        releaseReport.parsed_balance = val;
-                        releaseReport.parse_method =
-                          'last_settlement_seller_amount';
-                        break;
-                      }
+                      if (tipo !== wantedType) continue;
+                      const val = parseNumero(cells[idxBalance]);
+                      if (val != null) return val;
                     }
-                  }
+                    return null;
+                  };
 
-                  // Método 2 (fallback): SUM(net_credit) - SUM(net_debit)
-                  if (
-                    releaseReport.parsed_balance == null &&
-                    idxNetCredit !== -1 &&
-                    idxNetDebit !== -1
-                  ) {
-                    let credits = 0;
-                    let debits = 0;
-                    for (let i = 1; i < lines.length; i++) {
-                      const cells = lines[i]
-                        .split(sep)
-                        .map((c) => c.replace(/^"|"$/g, '').trim());
-                      const tipo = (
-                        idxRecordType !== -1 ? cells[idxRecordType] : ''
-                      ).toLowerCase();
-                      // Saltar filas sin tipo (header/footer/blank).
-                      if (!tipo || tipo === 'header' || tipo === 'footer')
-                        continue;
-                      const c = parseNumero(cells[idxNetCredit]);
-                      const d = parseNumero(cells[idxNetDebit]);
-                      if (c != null) credits += c;
-                      if (d != null) debits += d;
+                  // Método principal: BALANCE_AMOUNT de closing_balance.
+                  const closing = findBalanceForType('closing_balance');
+                  if (closing != null) {
+                    releaseReport.parsed_balance = closing;
+                    releaseReport.parse_method = 'closing_balance';
+                  } else {
+                    // Fallback: initial_available_balance.
+                    const initial = findBalanceForType(
+                      'initial_available_balance'
+                    );
+                    if (initial != null) {
+                      releaseReport.parsed_balance = initial;
+                      releaseReport.parse_method = 'initial_available_balance';
                     }
-                    releaseReport.parsed_balance = credits - debits;
-                    releaseReport.parse_method = 'sum_credit_minus_debit';
                   }
                 }
               }
