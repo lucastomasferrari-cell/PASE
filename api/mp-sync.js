@@ -104,6 +104,39 @@ export default async function handler(req, res) {
       process.env.SUPABASE_SERVICE_KEY
     );
 
+    // Reset opcional: si viene ?reset=1,2 borramos todos los
+    // mp_movimientos de esos locales antes de volver a sincronizar.
+    // Pensado para re-clasificar filas guardadas con lógica vieja.
+    const resetParam =
+      (req.query && (req.query.reset || req.query.reset_local)) ||
+      (req.body && (req.body.reset || req.body.reset_local));
+    const resetIds = (() => {
+      if (resetParam == null || resetParam === '') return [];
+      const arr = String(resetParam)
+        .split(',')
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => Number.isFinite(n));
+      return arr;
+    })();
+    const resetSummary = [];
+    for (const lid of resetIds) {
+      const { error: delErr, count } = await db
+        .from('mp_movimientos')
+        .delete({ count: 'exact' })
+        .eq('local_id', lid);
+      if (delErr) {
+        console.error('mp-sync: reset delete error', lid, delErr);
+        resetSummary.push({ local_id: lid, error: delErr.message });
+      } else {
+        console.log(
+          '[mp-sync] reset deleted mp_movimientos for local_id=' + lid,
+          'count=',
+          count
+        );
+        resetSummary.push({ local_id: lid, deleted: count ?? null });
+      }
+    }
+
     const { data: creds, error: credsError } = await db
       .from('mp_credenciales')
       .select('*, locales(nombre)')
@@ -844,6 +877,7 @@ export default async function handler(req, res) {
       ok: true,
       resultados,
       balance_mp: balanceConsultado ? balanceTotalMP : null,
+      reset: resetSummary.length ? resetSummary : undefined,
     });
   } catch (err) {
     console.error('mp-sync: unhandled error', err);

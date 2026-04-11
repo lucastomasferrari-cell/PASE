@@ -2371,6 +2371,27 @@ function ConciliacionMP({ user, locales, localActivo }) {
     setConfigModal(false);setConfigForm({local_id:"",access_token:""});load();
   };
 
+  // Borra todos los mp_movimientos de un local y vuelve a sincronizar,
+  // así los pagos se re-clasifican con la lógica actual. Útil después
+  // de arreglar reglas de clasificación.
+  const resetearLocal=async(localId,nombre)=>{
+    if(!confirm(`Borrar todos los movimientos MP de ${nombre||"este local"} y re-sincronizar? Esta acción no se puede deshacer.`))return;
+    setSincronizando(true);
+    try{
+      const r=await fetch("/api/mp-sync?reset="+encodeURIComponent(localId),{method:"POST"});
+      const d=await r.json();
+      console.log("[MP] reset response:",d);
+      if(d.ok){
+        const resetInfo=(d.reset||[]).map(x=>x.local_id+": "+(x.deleted??x.error)).join(", ");
+        await load();
+        alert("Reset + sync completados\n"+resetInfo);
+      }else{
+        alert("Error en reset: "+(d.error||"desconocido"));
+      }
+    }catch(e){alert("Error al resetear: "+(e?.message||""));}
+    setSincronizando(false);
+  };
+
   // Comisiones/impuestos son egresos automáticos y se muestran aparte — no entran en conciliación manual.
   const ES_AUTOMATICO=t=>t==="fee"||t==="tax";
 
@@ -2743,6 +2764,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
                   <div style={{display:"flex",gap:6,alignItems:"center"}}>
                     {c.ultima_sync&&<span style={{fontSize:10,color:"var(--success)"}}>✓ Sync {new Date(c.ultima_sync).toLocaleDateString("es-AR")}</span>}
                     <span className={`badge ${c.activo?"b-success":"b-muted"}`}>{c.activo?"Activa":"Inactiva"}</span>
+                    <button className="btn btn-ghost btn-sm" style={{fontSize:9,padding:"2px 6px"}} disabled={sincronizando} onClick={()=>resetearLocal(c.local_id,c.locales?.nombre)}>↻ Reset datos</button>
                   </div>
                 </div>
               ))}
