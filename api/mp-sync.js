@@ -873,35 +873,30 @@ export default async function handler(req, res) {
             String(e?.message || e);
         }
 
-        // El parsed_balance del CSV del release_report NO es el saldo real
-        // disponible en la cuenta — es un acumulador del período (initial +
-        // créditos − débitos sobre la ventana del reporte). Para el saldo
-        // real intentamos endpoints específicos de balance. Si ninguno
-        // responde, dejamos credSaldoDisponible en saldo_inicial + suma de
-        // movimientos aprobados (el cálculo manual basado en el valor que
-        // el usuario fijó en la UI).
+        // Saldo real de la cuenta MP — lo pedimos explícitamente al
+        // endpoint /v1/account/balance. Si devuelve 200 con
+        // available_balance, esa es la fuente de verdad y reemplaza al
+        // cálculo manual (saldo_inicial + aprobados). Si no, queda el
+        // fallback manual.
         const balanceApiProbe = {
-          url: null,
+          url: 'https://api.mercadopago.com/v1/account/balance',
           status: null,
           snippet: null,
           error: null,
           available_balance: null,
         };
         try {
-          const url =
-            'https://api.mercadopago.com/v1/account/settlement_report';
-          const apiRes = await fetch(url, {
+          const apiRes = await fetch(balanceApiProbe.url, {
             headers: {
               Authorization: `Bearer ${cred.access_token}`,
               Accept: 'application/json',
             },
           });
-          balanceApiProbe.url = url;
           balanceApiProbe.status = apiRes.status;
           const body = await apiRes.text();
           balanceApiProbe.snippet = (body || '').slice(0, 300);
           console.log(
-            '[mp-sync] settlement_report probe',
+            '[mp-sync] /v1/account/balance',
             cred.local_id,
             apiRes.status,
             balanceApiProbe.snippet
@@ -913,10 +908,14 @@ export default async function handler(req, res) {
             } catch {
               parsed = null;
             }
-            // Busca available_balance en distintos niveles.
+            // Busca available_balance en distintos niveles (por si MP
+            // lo devuelve dentro de un objeto anidado).
             const walk = (obj, depth = 0) => {
               if (!obj || typeof obj !== 'object' || depth > 4) return null;
-              if (obj.available_balance != null && !Number.isNaN(Number(obj.available_balance))) {
+              if (
+                obj.available_balance != null &&
+                !Number.isNaN(Number(obj.available_balance))
+              ) {
                 return Number(obj.available_balance);
               }
               for (const v of Object.values(obj)) {
@@ -931,14 +930,18 @@ export default async function handler(req, res) {
             if (detected != null) {
               balanceApiProbe.available_balance = detected;
               credSaldoDisponible = detected;
-              balanceFuente = 'settlement_report';
+              balanceFuente = 'v1/account/balance';
             }
           } else {
             balanceApiProbe.error = (body || '').slice(0, 200);
           }
         } catch (e) {
           balanceApiProbe.error = String(e?.message || e);
-          console.error('[mp-sync] settlement_report probe error', cred.local_id, e);
+          console.error(
+            '[mp-sync] /v1/account/balance fetch error',
+            cred.local_id,
+            e
+          );
         }
 
         balanceTotalMP += credSaldoDisponible;

@@ -2353,7 +2353,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
           const out=[header.join(" · ")];
           if(x.balance_api_probe){
             const bp=x.balance_api_probe;
-            out.push("    settlement_report HTTP "+(bp.status??"ERR")+" available_balance="+(bp.available_balance!=null?fmt_$(bp.available_balance):"null")+(bp.snippet?" snippet: "+String(bp.snippet).replace(/\s+/g," ").slice(0,120):"")+(bp.error?" ERR: "+String(bp.error).slice(0,120):""));
+            out.push("    /v1/account/balance HTTP "+(bp.status??"ERR")+" available_balance="+(bp.available_balance!=null?fmt_$(bp.available_balance):"null")+(bp.snippet?" snippet: "+String(bp.snippet).replace(/\s+/g," ").slice(0,120):"")+(bp.error?" ERR: "+String(bp.error).slice(0,120):""));
           }
           if(x.release_report){
             const rr=x.release_report;
