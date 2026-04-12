@@ -2351,10 +2351,6 @@ function ConciliacionMP({ user, locales, localActivo }) {
           if(x.error)header.push("ERR: "+x.error);
           if(x.upd_error)header.push("DB err: "+x.upd_error);
           const out=[header.join(" · ")];
-          if(x.balance_api_probe){
-            const bp=x.balance_api_probe;
-            out.push("    /v1/account/balance HTTP "+(bp.status??"ERR")+" available_balance="+(bp.available_balance!=null?fmt_$(bp.available_balance):"null")+(bp.snippet?" snippet: "+String(bp.snippet).replace(/\s+/g," ").slice(0,120):"")+(bp.error?" ERR: "+String(bp.error).slice(0,120):""));
-          }
           if(x.release_report){
             const rr=x.release_report;
             if(rr.config_status!=null)out.push("    release_report CONFIG HTTP "+rr.config_status);

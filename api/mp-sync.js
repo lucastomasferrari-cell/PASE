@@ -365,6 +365,17 @@ export default async function handler(req, res) {
         const saldoInicialAt = cred.saldo_inicial_at || null;
         const corte = saldoInicialAt ? new Date(saldoInicialAt) : null;
 
+        // Fuente única del saldo: filas del release_report (tipo
+        // 'bank_transfer' | 'liquidacion'), con fecha > corte.
+        //   monto liquidacion   = +NET_CREDIT_AMOUNT
+        //   monto bank_transfer = -NET_DEBIT_AMOUNT
+        // Por lo tanto SUM(monto) sobre esas filas ya es
+        //   SUM(NET_CREDIT) - SUM(NET_DEBIT).
+        // Los pagos de /v1/payments/search (tipo payment / point / fee /
+        // refund / payment_out / money_transfer / recurring) se muestran
+        // en la tabla pero NO suman al saldo.
+        const RELEASE_TIPOS = new Set(['bank_transfer', 'liquidacion']);
+
         let saldoAprobado = 0;
         let porAcreditar = 0;
         let movTotalCount = 0;
@@ -373,7 +384,7 @@ export default async function handler(req, res) {
         let movMaxFecha = null;
         const { data: movLocal, error: movErr } = await db
           .from('mp_movimientos')
-          .select('monto, estado, fecha')
+          .select('tipo, monto, estado, fecha')
           .eq('local_id', cred.local_id);
         if (movErr) {
           console.error(
@@ -390,23 +401,31 @@ export default async function handler(req, res) {
             }
             const monto = Number(m.monto) || 0;
             const estado = (m.estado || '').toLowerCase();
+            const tipoRow = (m.tipo || '').toLowerCase();
             if (estado === 'approved') {
-              if (corte && m.fecha && new Date(m.fecha) >= corte) {
+              // Saldo: sólo release rows con fecha >= corte.
+              if (
+                RELEASE_TIPOS.has(tipoRow) &&
+                corte &&
+                m.fecha &&
+                new Date(m.fecha) >= corte
+              ) {
                 saldoAprobado += monto;
                 movDespuesCount++;
               }
-              // Sin corte: saldo_aprobado queda en 0, disponible = inicial.
             } else if (
               (estado === 'in_process' || estado === 'pending') &&
               monto > 0
             ) {
+              // Por acreditar sigue contando los pagos pendientes de la
+              // payments API, pero no se mete en el saldo disponible.
               porAcreditar += monto;
             }
           }
         }
 
         let credSaldoDisponible = saldoInicialNum + saldoAprobado;
-        let balanceFuente = 'saldo_inicial+movimientos';
+        let balanceFuente = 'saldo_inicial+release_rows';
 
         // Release report (settlement) — saldo real de MP.
         // Flujo: POST para generar un reporte con el rango, GET /list para
@@ -873,76 +892,9 @@ export default async function handler(req, res) {
             String(e?.message || e);
         }
 
-        // Saldo real de la cuenta MP — lo pedimos explícitamente al
-        // endpoint /v1/account/balance. Si devuelve 200 con
-        // available_balance, esa es la fuente de verdad y reemplaza al
-        // cálculo manual (saldo_inicial + aprobados). Si no, queda el
-        // fallback manual.
-        const balanceApiProbe = {
-          url: 'https://api.mercadopago.com/v1/account/balance',
-          status: null,
-          snippet: null,
-          error: null,
-          available_balance: null,
-        };
-        try {
-          const apiRes = await fetch(balanceApiProbe.url, {
-            headers: {
-              Authorization: `Bearer ${cred.access_token}`,
-              Accept: 'application/json',
-            },
-          });
-          balanceApiProbe.status = apiRes.status;
-          const body = await apiRes.text();
-          balanceApiProbe.snippet = (body || '').slice(0, 300);
-          console.log(
-            '[mp-sync] /v1/account/balance',
-            cred.local_id,
-            apiRes.status,
-            balanceApiProbe.snippet
-          );
-          if (apiRes.ok) {
-            let parsed = null;
-            try {
-              parsed = body ? JSON.parse(body) : null;
-            } catch {
-              parsed = null;
-            }
-            // Busca available_balance en distintos niveles (por si MP
-            // lo devuelve dentro de un objeto anidado).
-            const walk = (obj, depth = 0) => {
-              if (!obj || typeof obj !== 'object' || depth > 4) return null;
-              if (
-                obj.available_balance != null &&
-                !Number.isNaN(Number(obj.available_balance))
-              ) {
-                return Number(obj.available_balance);
-              }
-              for (const v of Object.values(obj)) {
-                if (v && typeof v === 'object') {
-                  const found = walk(v, depth + 1);
-                  if (found != null) return found;
-                }
-              }
-              return null;
-            };
-            const detected = walk(parsed);
-            if (detected != null) {
-              balanceApiProbe.available_balance = detected;
-              credSaldoDisponible = detected;
-              balanceFuente = 'v1/account/balance';
-            }
-          } else {
-            balanceApiProbe.error = (body || '').slice(0, 200);
-          }
-        } catch (e) {
-          balanceApiProbe.error = String(e?.message || e);
-          console.error(
-            '[mp-sync] /v1/account/balance fetch error',
-            cred.local_id,
-            e
-          );
-        }
+        // /v1/account/balance devuelve 404 con los tokens que usamos,
+        // así que no lo llamamos más. El saldo se calcula únicamente
+        // como saldo_inicial + suma de release rows posteriores al corte.
 
         balanceTotalMP += credSaldoDisponible;
         balanceConsultado = true;
@@ -1026,7 +978,6 @@ export default async function handler(req, res) {
             por_acreditar: porAcreditar,
           },
           release_report: releaseReport,
-          balance_api_probe: balanceApiProbe,
           balance_fuente: balanceFuente,
           saldo_inicial: saldoInicialNum,
           saldo_aprobado: saldoAprobado,
