@@ -2365,7 +2365,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
         await load();
         const totalMovs=(d.resultados||[]).reduce((s,x)=>s+(Number(x.movimientos)||0),0);
         const saldoTotal=(d.resultados||[]).reduce((s,x)=>s+(Number(x.saldo_disponible)||0),0);
-        showToast("ok","✅ Sincronización completada · "+totalMovs+" movimientos · "+fmt_$(saldoTotal)+" saldo");
+        showToast("ok","✅ Sincronización completada · "+totalMovs+" movimientos · "+fmt_mp(saldoTotal)+" saldo");
       }else{
         showToast("err","⚠ Error en sincronización: "+(d.error||"desconocido"));
       }
@@ -2470,12 +2470,16 @@ function ConciliacionMP({ user, locales, localActivo }) {
     "payment":"Cobro Online","point":"Venta Presencial",
     "payment_out":"Pago saliente","recurring":"Servicio/Suscripción",
     "money_transfer":"Transferencia","transferencia":"Transferencia enviada",
-    "bank_transfer":"Transferencia a CBU","liquidacion":"Liquidación",
+    "bank_transfer":"Transferencia a CBU","bank_transfer_in":"Transferencia recibida",
+    "liquidacion":"Liquidación",
     "withdrawal":"Retiro",
     "investment":"Inversión","recharge":"Recarga",
     "refund":"Devolución","dispute":"Disputa","tax":"Impuesto",
     "fee":"Comisión","payout":"Liquidación"
   };
+  // Formatter local con 2 decimales para mostrar los montos MP con
+  // centavos (fmt_$ global trunca a enteros).
+  const fmt_mp=n=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n)||0);
 
   const getTipoColor=(tipo,monto)=>{
     if(monto>0)return "var(--success)";
@@ -2597,7 +2601,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
       <div className="grid3">
         <div className="kpi">
           <div className="kpi-label">Saldo disponible MP</div>
-          <div className="kpi-value" style={{color:"var(--acc3)",fontFamily:"'Syne',sans-serif",fontSize:34,fontWeight:800}}>{fmt_$(saldoRealDisponible)}</div>
+          <div className="kpi-value" style={{color:"var(--acc3)",fontFamily:"'Syne',sans-serif",fontSize:34,fontWeight:800}}>{fmt_mp(saldoRealDisponible)}</div>
           <div className="kpi-sub">{ultimaActualizacionBalance?"Actualizado "+new Date(ultimaActualizacionBalance).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"Ejecutá una sincronización"}</div>
         </div>
         <div className="kpi">
@@ -2608,7 +2612,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
         {porAcreditarTotal>0&&(
           <div className="kpi">
             <div className="kpi-label">Por acreditar</div>
-            <div className="kpi-value kpi-warn" style={{fontSize:28}}>{fmt_$(porAcreditarTotal)}</div>
+            <div className="kpi-value kpi-warn" style={{fontSize:28}}>{fmt_mp(porAcreditarTotal)}</div>
             <div className="kpi-sub">Pagos en proceso / pending</div>
           </div>
         )}
@@ -2639,8 +2643,8 @@ function ConciliacionMP({ user, locales, localActivo }) {
                   <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===m.local_id)?.nombre||"—"}</td>
                   <td><span className="badge b-muted">{TIPO_LABELS[m.tipo]||m.tipo||"—"}</span></td>
                   <td style={{fontSize:11,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.descripcion||"—"}</td>
-                  <td><span className="num" style={{color:getTipoColor(m.tipo,m.monto)}}>{m.monto>0?"+":""}{fmt_$(m.monto)}</span></td>
-                  <td style={{color:"var(--muted2)"}}>{fmt_$(m.saldo)}</td>
+                  <td><span className="num" style={{color:getTipoColor(m.tipo,m.monto)}}>{m.monto>0?"+":""}{fmt_mp(m.monto)}</span></td>
+                  <td style={{color:"var(--muted2)"}}>{fmt_mp(m.saldo)}</td>
                   <td>
                     {!esEgreso?<span style={{fontSize:10,color:"var(--muted)"}}>—</span>:
                       esAuto?<span className="badge b-muted" style={{fontSize:9}}>Automático</span>:
@@ -2684,22 +2688,22 @@ function ConciliacionMP({ user, locales, localActivo }) {
                 <div style={{padding:"20px 24px",display:"grid",gap:12,gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))"}}>
                   <div className="kpi">
                     <div className="kpi-label">Cobro Online</div>
-                    <div className="kpi-value kpi-warn">{fmt_$(comisionOnline)}</div>
+                    <div className="kpi-value kpi-warn">{fmt_mp(comisionOnline)}</div>
                     <div className="kpi-sub">Comisiones por ventas online</div>
                   </div>
                   <div className="kpi">
                     <div className="kpi-label">Presencial</div>
-                    <div className="kpi-value kpi-warn">{fmt_$(comisionPresencial)}</div>
+                    <div className="kpi-value kpi-warn">{fmt_mp(comisionPresencial)}</div>
                     <div className="kpi-sub">Comisiones Point / POS</div>
                   </div>
                   <div className="kpi">
                     <div className="kpi-label">Otras comisiones</div>
-                    <div className="kpi-value" style={{color:"var(--muted2)"}}>{fmt_$(comisionOtras)}</div>
+                    <div className="kpi-value" style={{color:"var(--muted2)"}}>{fmt_mp(comisionOtras)}</div>
                     <div className="kpi-sub">Sin pago padre en el período</div>
                   </div>
                   <div className="kpi" style={{borderLeft:"3px solid var(--danger)"}}>
                     <div className="kpi-label">TOTAL</div>
-                    <div className="kpi-value kpi-danger">{fmt_$(total)}</div>
+                    <div className="kpi-value kpi-danger">{fmt_mp(total)}</div>
                     <div className="kpi-sub">Todas las comisiones del período</div>
                   </div>
                 </div>
@@ -2733,9 +2737,9 @@ function ConciliacionMP({ user, locales, localActivo }) {
             {credSel&&(
               <div style={{padding:12,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)",marginBottom:12}}>
                 <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"var(--muted2)",marginBottom:6}}>Saldo calculado actual</div>
-                <div className="num" style={{fontSize:22,fontWeight:600,color:"var(--acc3)",fontFamily:"'Syne',sans-serif"}}>{fmt_$(calculado)}</div>
+                <div className="num" style={{fontSize:22,fontWeight:600,color:"var(--acc3)",fontFamily:"'Syne',sans-serif"}}>{fmt_mp(calculado)}</div>
                 <div style={{fontSize:10,color:"var(--muted2)",marginTop:4}}>
-                  = saldo inicial {fmt_$(inicialPrev)}{credSel.saldo_inicial_at?` (corte ${fmt_d(credSel.saldo_inicial_at.slice(0,10))})`:" (sin corte)"} + movimientos aprobados posteriores
+                  = saldo inicial {fmt_mp(inicialPrev)}{credSel.saldo_inicial_at?` (corte ${fmt_d(credSel.saldo_inicial_at.slice(0,10))})`:" (sin corte)"} + movimientos aprobados posteriores
                 </div>
               </div>
             )}
@@ -2755,7 +2759,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
               <div style={{padding:"10px 12px",background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)",marginTop:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div style={{fontSize:11,color:"var(--muted2)"}}>Diferencia contra el calculado</div>
                 <div className="num" style={{color:Math.abs(diferencia)<1?"var(--success)":diferencia>0?"var(--acc3)":"var(--warn)",fontWeight:600}}>
-                  {diferencia>=0?"+":""}{fmt_$(diferencia)}
+                  {diferencia>=0?"+":""}{fmt_mp(diferencia)}
                 </div>
               </div>
             )}

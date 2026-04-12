@@ -65,6 +65,12 @@ function clasificarPago(pago, accountId) {
 
   // 1. collector somos nosotros → ingreso.
   if (miId && collectorId && collectorId === miId) {
+    const payTypeId = (pago?.payment_type_id || '').toLowerCase();
+    // Transferencias entrantes de persona a persona (CBU / alias) —
+    // van directo al saldo disponible, no pasan por liquidación.
+    if (payTypeId === 'bank_transfer') {
+      return { direccion: 1, tipo: 'bank_transfer_in' };
+    }
     if (esPagoPoint(pago)) return { direccion: 1, tipo: 'point' };
     return { direccion: 1, tipo: 'payment' };
   }
@@ -257,14 +263,15 @@ export default async function handler(req, res) {
         let cantFees = 0;
         let cantRefunds = 0;
 
+        const round2 = (v) => Math.round(v * 100) / 100;
         if (mpData.results) {
           for (const pago of mpData.results) {
             const bruto = Number(pago.transaction_amount) || 0;
             const { direccion, tipo } = clasificarPago(pago, accountId);
-            const monto = direccion * Math.abs(bruto);
+            const monto = round2(direccion * Math.abs(bruto));
             const neto =
               pago?.transaction_details?.net_received_amount != null
-                ? Number(pago.transaction_details.net_received_amount) * direccion
+                ? round2(Number(pago.transaction_details.net_received_amount) * direccion)
                 : null;
             const fecha = pago.date_approved || pago.date_created;
             const payTypeId = pago.payment_type_id || null;
@@ -310,7 +317,7 @@ export default async function handler(req, res) {
                     fecha,
                     tipo: 'fee',
                     descripcion: `Comisión MP · ${payTypeId || ''}`.trim(),
-                    monto: -Math.abs(totalFee),
+                    monto: round2(-Math.abs(totalFee)),
                     saldo: null,
                     estado: pago.status,
                     referencia_id: String(pago.id),
@@ -340,7 +347,7 @@ export default async function handler(req, res) {
                     fecha: r.date_created || fecha,
                     tipo: 'refund',
                     descripcion: `Reembolso · ${r.reason || pago.description || ''}`.trim(),
-                    monto: -rMonto,
+                    monto: round2(-rMonto),
                     saldo: null,
                     estado: r.status || 'approved',
                     referencia_id: String(pago.id),
@@ -365,16 +372,21 @@ export default async function handler(req, res) {
         const saldoInicialAt = cred.saldo_inicial_at || null;
         const corte = saldoInicialAt ? new Date(saldoInicialAt) : null;
 
-        // Fuente única del saldo: filas del release_report (tipo
-        // 'bank_transfer' | 'liquidacion'), con fecha > corte.
-        //   monto liquidacion   = +NET_CREDIT_AMOUNT
-        //   monto bank_transfer = -NET_DEBIT_AMOUNT
-        // Por lo tanto SUM(monto) sobre esas filas ya es
-        //   SUM(NET_CREDIT) - SUM(NET_DEBIT).
-        // Los pagos de /v1/payments/search (tipo payment / point / fee /
-        // refund / payment_out / money_transfer / recurring) se muestran
-        // en la tabla pero NO suman al saldo.
-        const RELEASE_TIPOS = new Set(['bank_transfer', 'liquidacion']);
+        // Fuente del saldo:
+        //   - filas del release_report (tipo 'bank_transfer' |
+        //     'liquidacion'), donde
+        //         monto liquidacion   = +NET_CREDIT_AMOUNT
+        //         monto bank_transfer = -NET_DEBIT_AMOUNT
+        //   - transferencias entrantes CBU/alias de la payments API
+        //     (tipo 'bank_transfer_in') — impactan directo al saldo,
+        //     no pasan por liquidación diferida.
+        // Los pagos de /v1/payments/search con tarjeta / QR / point
+        // siguen apareciendo en la tabla pero NO suman al saldo.
+        const RELEASE_TIPOS = new Set([
+          'bank_transfer',
+          'liquidacion',
+          'bank_transfer_in',
+        ]);
 
         let saldoAprobado = 0;
         let porAcreditar = 0;
@@ -804,15 +816,19 @@ export default async function handler(req, res) {
                       const uniqueKey =
                         sourceId || `${rawDate}-${extRef || i}`;
 
+                      // Redondeo a 2 decimales para evitar errores de
+                      // punto flotante; los montos del CSV vienen como
+                      // "1234.56" y queremos conservarlos tal cual.
+                      const round2 = (v) => Math.round(v * 100) / 100;
                       let monto = 0;
                       let rowTipo = null;
                       let descripcionDefault = '';
                       if (netDebit > 0) {
-                        monto = -netDebit;
+                        monto = round2(-netDebit);
                         rowTipo = 'bank_transfer';
                         descripcionDefault = 'Transferencia enviada';
                       } else {
-                        monto = netCredit;
+                        monto = round2(netCredit);
                         rowTipo = 'liquidacion';
                         descripcionDefault = 'Liquidación MP';
                       }
