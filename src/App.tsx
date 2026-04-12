@@ -2365,10 +2365,25 @@ function ConciliacionMP({ user, locales, localActivo }) {
           if(x.saldo_debug){
             const dbg=x.saldo_debug;
             out.push("    saldo_inicial raw="+JSON.stringify(dbg.saldo_inicial_raw)+" → "+fmt_$(dbg.saldo_inicial_num));
-            out.push("    corte="+(dbg.saldo_inicial_at||"(sin fijar)"));
+            out.push("    saldo_inicial_at raw="+JSON.stringify(dbg.saldo_inicial_at_raw)+" → corte_iso="+(dbg.corte_iso||"(sin fijar)")+" corte_ms="+(dbg.corte_ms||"null"));
             out.push("    movs="+dbg.mov_total+" (después del corte="+dbg.mov_despues_corte+"), rango "+(dbg.mov_min_fecha||"—")+" → "+(dbg.mov_max_fecha||"—"));
             out.push("    saldo_aprobado="+fmt_$(dbg.saldo_aprobado)+" · por_acreditar="+fmt_$(dbg.por_acreditar));
             out.push("    → saldo_disponible="+fmt_$(dbg.saldo_disponible));
+            if(Array.isArray(dbg.liquidacion_rows)&&dbg.liquidacion_rows.length){
+              out.push("    ─── últimas 5 liquidaciones (DESC) ───");
+              for(let i=0;i<dbg.liquidacion_rows.length;i++){
+                const r=dbg.liquidacion_rows[i];
+                out.push("      ["+i+"] fecha="+r.fecha+" ms="+r.fecha_ms+" monto="+fmt_$(r.monto)+" estado="+r.estado+" cumple_corte="+r.cumple_corte);
+              }
+              out.push("    ─── fin ───");
+            }
+            if(Array.isArray(dbg.counted_rows)&&dbg.counted_rows.length){
+              out.push("    ─── primeras "+dbg.counted_rows.length+" filas contadas en saldo_aprobado ───");
+              for(const r of dbg.counted_rows){
+                out.push("      "+r.tipo+" fecha="+r.fecha+" monto="+fmt_$(r.monto)+" id="+r.id);
+              }
+              out.push("    ─── fin ───");
+            }
           }
           return out;
         }));

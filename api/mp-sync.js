@@ -382,9 +382,17 @@ export default async function handler(req, res) {
         let movDespuesCount = 0;
         let movMinFecha = null;
         let movMaxFecha = null;
+        // DEBUG: trazas para saldo_inicial_at / fechas de liquidación.
+        const saldoTrace = {
+          saldo_inicial_at_raw: saldoInicialAt,
+          corte_iso: corte ? corte.toISOString() : null,
+          corte_ms: corte ? corte.getTime() : null,
+          liquidacion_rows: [],
+          counted_rows: [],
+        };
         const { data: movLocal, error: movErr } = await db
           .from('mp_movimientos')
-          .select('tipo, monto, estado, fecha')
+          .select('id, tipo, monto, estado, fecha')
           .eq('local_id', cred.local_id);
         if (movErr) {
           console.error(
@@ -393,6 +401,24 @@ export default async function handler(req, res) {
             movErr
           );
         } else {
+          // DEBUG query: últimas 5 liquidaciones por fecha desc.
+          const { data: liqRecent } = await db
+            .from('mp_movimientos')
+            .select('id, tipo, monto, estado, fecha')
+            .eq('local_id', cred.local_id)
+            .eq('tipo', 'liquidacion')
+            .order('fecha', { ascending: false })
+            .limit(5);
+          saldoTrace.liquidacion_rows = (liqRecent || []).map((r) => ({
+            id: r.id,
+            fecha: r.fecha,
+            fecha_ms: r.fecha ? new Date(r.fecha).getTime() : null,
+            monto: Number(r.monto) || 0,
+            estado: r.estado,
+            cumple_corte:
+              corte && r.fecha ? new Date(r.fecha) >= corte : false,
+          }));
+
           for (const m of movLocal || []) {
             movTotalCount++;
             if (m.fecha) {
@@ -412,6 +438,14 @@ export default async function handler(req, res) {
               ) {
                 saldoAprobado += monto;
                 movDespuesCount++;
+                if (saldoTrace.counted_rows.length < 10) {
+                  saldoTrace.counted_rows.push({
+                    id: m.id,
+                    tipo: tipoRow,
+                    fecha: m.fecha,
+                    monto,
+                  });
+                }
               }
             } else if (
               (estado === 'in_process' || estado === 'pending') &&
@@ -426,6 +460,17 @@ export default async function handler(req, res) {
 
         let credSaldoDisponible = saldoInicialNum + saldoAprobado;
         let balanceFuente = 'saldo_inicial+release_rows';
+
+        console.log('[mp-sync] saldo trace local_id=' + cred.local_id, {
+          saldo_inicial_num: saldoInicialNum,
+          saldo_inicial_at_raw: saldoTrace.saldo_inicial_at_raw,
+          corte_iso: saldoTrace.corte_iso,
+          corte_ms: saldoTrace.corte_ms,
+          liquidacion_rows: saldoTrace.liquidacion_rows,
+          saldo_aprobado: saldoAprobado,
+          counted_rows: saldoTrace.counted_rows,
+          credSaldoDisponible,
+        });
 
         // Release report (settlement) — saldo real de MP.
         // Flujo: POST para generar un reporte con el rango, GET /list para
@@ -969,6 +1014,9 @@ export default async function handler(req, res) {
             saldo_inicial_raw: saldoInicialRaw,
             saldo_inicial_num: saldoInicialNum,
             saldo_inicial_at: saldoInicialAt,
+            saldo_inicial_at_raw: saldoTrace.saldo_inicial_at_raw,
+            corte_iso: saldoTrace.corte_iso,
+            corte_ms: saldoTrace.corte_ms,
             mov_total: movTotalCount,
             mov_despues_corte: movDespuesCount,
             mov_min_fecha: movMinFecha,
@@ -976,6 +1024,8 @@ export default async function handler(req, res) {
             saldo_aprobado: saldoAprobado,
             saldo_disponible: credSaldoDisponible,
             por_acreditar: porAcreditar,
+            liquidacion_rows: saldoTrace.liquidacion_rows,
+            counted_rows: saldoTrace.counted_rows,
           },
           release_report: releaseReport,
           balance_fuente: balanceFuente,
