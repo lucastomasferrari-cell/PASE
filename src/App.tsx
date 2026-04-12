@@ -2287,6 +2287,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
   const [gastos,setGastos]=useState([]);
   const [loading,setLoading]=useState(true);
   const [sincronizando,setSincronizando]=useState(false);
+  const [toast,setToast]=useState(null); // {kind:'ok'|'err', msg:string}
   const [tab,setTab]=useState("movimientos");
   const _hace30=new Date();_hace30.setDate(_hace30.getDate()-30);
   const [desde,setDesde]=useState(toISO(_hace30));
@@ -2333,66 +2334,44 @@ function ConciliacionMP({ user, locales, localActivo }) {
 
   useEffect(()=>{load();},[desde,hasta,localActivo]);
 
+  const showToast=(kind,msg)=>{
+    setToast({kind,msg});
+    setTimeout(()=>setToast(t=>t&&t.msg===msg?null:t),5000);
+  };
+
   const sincronizar=async()=>{
     setSincronizando(true);
     try{
       const r=await fetch("/api/mp-sync",{method:"POST"});
       const d=await r.json().catch(()=>({ok:false,error:"respuesta no-JSON del servidor"}));
-      console.log("[MP] /api/mp-sync response:",d);
+      // Todo el detalle técnico va a DevTools.
+      console.groupCollapsed("%c[MP] /api/mp-sync response","color:#3ECFCF;font-weight:600");
+      console.log("ok:",d.ok,"error:",d.error||null);
+      if(d.cleanup_mt_deleted!=null)console.log("cleanup_mt_deleted:",d.cleanup_mt_deleted);
+      if(d.balance_mp!=null)console.log("balance_mp:",d.balance_mp);
+      for(const x of (d.resultados||[])){
+        console.groupCollapsed("["+x.local_id+"] "+x.local+(x.account_id?" — mp_id "+x.account_id:""));
+        console.log("movimientos:",x.movimientos,"comisiones:",x.comisiones,"reembolsos:",x.reembolsos);
+        if(x.error)console.warn("ERR:",x.error);
+        if(x.upd_error)console.warn("DB err:",x.upd_error);
+        if(x.balance_fuente)console.log("balance_fuente:",x.balance_fuente);
+        if(x.release_report)console.log("release_report:",x.release_report);
+        if(x.saldo_debug)console.log("saldo_debug:",x.saldo_debug);
+        console.groupEnd();
+      }
+      console.groupEnd();
+
       if(d.ok){
         await load();
-        const lines=[];
-        if(d.cleanup_mt_deleted!=null){
-          lines.push("cleanup mt-*: "+d.cleanup_mt_deleted+" filas borradas");
-        }
-        lines.push(...(d.resultados||[]).flatMap(x=>{
-          const header=[x.local+" (local "+x.local_id+(x.account_id?", mp_id "+x.account_id:"")+")"+": "+(x.movimientos||0)+" mov"];
-          if(x.balance_fuente)header.push("fuente: "+x.balance_fuente);
-          if(x.error)header.push("ERR: "+x.error);
-          if(x.upd_error)header.push("DB err: "+x.upd_error);
-          const out=[header.join(" · ")];
-          if(x.release_report){
-            const rr=x.release_report;
-            if(rr.config_status!=null)out.push("    release_report CONFIG HTTP "+rr.config_status);
-            if(rr.post_status!=null)out.push("    release_report POST HTTP "+rr.post_status+(rr.post_body?" "+String(rr.post_body).replace(/\s+/g," ").slice(0,120):""));
-            out.push("    release_report LIST HTTP "+(rr.list_status??"ERR")+" intentos="+(rr.list_attempts||0)+" file="+(rr.file_name||"(ninguno)")+(rr.created_from?" ["+rr.created_from+"]":""));
-            if(rr.file_date_created)out.push("    release_report file_date_created="+rr.file_date_created);
-            if(rr.file_status!=null)out.push("    release_report FILE HTTP "+rr.file_status+(rr.file_snippet?" snippet: "+String(rr.file_snippet).replace(/\s+/g," ").slice(0,120):""));
-            if(rr.release_rows_upserted!=null)out.push("    release rows upserted: "+rr.release_rows_upserted);
-            if(rr.first_time_message)out.push("    ℹ "+rr.first_time_message);
-            if(rr.error)out.push("    release_report ERR: "+rr.error);
-          }
-          if(x.saldo_debug){
-            const dbg=x.saldo_debug;
-            out.push("    saldo_inicial raw="+JSON.stringify(dbg.saldo_inicial_raw)+" → "+fmt_$(dbg.saldo_inicial_num));
-            out.push("    saldo_inicial_at raw="+JSON.stringify(dbg.saldo_inicial_at_raw)+" → corte_iso="+(dbg.corte_iso||"(sin fijar)")+" corte_ms="+(dbg.corte_ms||"null"));
-            out.push("    movs="+dbg.mov_total+" (después del corte="+dbg.mov_despues_corte+"), rango "+(dbg.mov_min_fecha||"—")+" → "+(dbg.mov_max_fecha||"—"));
-            out.push("    saldo_aprobado="+fmt_$(dbg.saldo_aprobado)+" · por_acreditar="+fmt_$(dbg.por_acreditar));
-            out.push("    → saldo_disponible="+fmt_$(dbg.saldo_disponible));
-            if(Array.isArray(dbg.liquidacion_rows)&&dbg.liquidacion_rows.length){
-              out.push("    ─── últimas 5 liquidaciones (DESC) ───");
-              for(let i=0;i<dbg.liquidacion_rows.length;i++){
-                const r=dbg.liquidacion_rows[i];
-                out.push("      ["+i+"] fecha="+r.fecha+" ms="+r.fecha_ms+" monto="+fmt_$(r.monto)+" estado="+r.estado+" cumple_corte="+r.cumple_corte);
-              }
-              out.push("    ─── fin ───");
-            }
-            if(Array.isArray(dbg.counted_rows)&&dbg.counted_rows.length){
-              out.push("    ─── primeras "+dbg.counted_rows.length+" filas contadas en saldo_aprobado ───");
-              for(const r of dbg.counted_rows){
-                out.push("      "+r.tipo+" fecha="+r.fecha+" monto="+fmt_$(r.monto)+" id="+r.id);
-              }
-              out.push("    ─── fin ───");
-            }
-          }
-          return out;
-        }));
-        alert("Sincronización completada\n"+lines.join("\n"));
+        const totalMovs=(d.resultados||[]).reduce((s,x)=>s+(Number(x.movimientos)||0),0);
+        const saldoTotal=(d.resultados||[]).reduce((s,x)=>s+(Number(x.saldo_disponible)||0),0);
+        showToast("ok","✅ Sincronización completada · "+totalMovs+" movimientos · "+fmt_$(saldoTotal)+" saldo");
+      }else{
+        showToast("err","⚠ Error en sincronización: "+(d.error||"desconocido"));
       }
-      else alert("Error en sincronización: "+(d.error||"desconocido"));
     }catch(e){
       console.error("ConciliacionMP sincronizar error:",e);
-      alert("Error al conectar con MP: "+(e?.message||""));
+      showToast("err","⚠ Error al conectar con MP: "+(e?.message||""));
     }finally{
       setSincronizando(false);
     }
@@ -2568,6 +2547,29 @@ function ConciliacionMP({ user, locales, localActivo }) {
 
   return (
     <div>
+      {toast&&(
+        <div
+          onClick={()=>setToast(null)}
+          style={{
+            position:"fixed",
+            bottom:24,
+            right:24,
+            zIndex:1000,
+            padding:"12px 16px",
+            borderRadius:"var(--r)",
+            background:toast.kind==="ok"?"rgba(34,197,94,0.15)":"rgba(239,68,68,0.15)",
+            border:"1px solid "+(toast.kind==="ok"?"rgba(34,197,94,0.4)":"rgba(239,68,68,0.4)"),
+            color:toast.kind==="ok"?"var(--success)":"var(--danger)",
+            fontSize:12,
+            fontWeight:500,
+            maxWidth:420,
+            cursor:"pointer",
+            boxShadow:"0 4px 16px rgba(0,0,0,0.4)",
+          }}
+        >
+          {toast.msg}
+        </div>
+      )}
       <div className="ph-row">
         <div><div className="ph-title">Conciliación MP</div><div className="ph-sub">MercadoPago · {credenciales.filter(c=>c.activo).length} cuentas conectadas</div></div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
