@@ -421,11 +421,13 @@ export default async function handler(req, res) {
         const saldoInicialAt = cred.saldo_inicial_at || null;
         const corte = saldoInicialAt ? new Date(saldoInicialAt) : null;
 
-        // Fuente única del saldo: filas con id 'rr-*' (del release_report
-        // CSV). Esas son la fuente autoritativa de MP para dinero que
-        // realmente entró o salió de la cuenta. Las filas de la payments
-        // API se muestran en la tabla pero NO suman al saldo — así se
-        // evita el doble conteo.
+        // Fuente principal del saldo: filas rr-* (release_report CSV).
+        // Complemento para egresos del día: filas de la payments API con
+        // tipo bank_transfer / payment_out que aún no tienen contraparte
+        // en el release_report (que recién las incluye al día siguiente).
+        // Esto evita que transferencias salientes de hoy se "olviden"
+        // hasta mañana.
+        const EGRESO_API_TIPOS = new Set(['bank_transfer', 'payment_out']);
 
         let saldoAprobado = 0;
         let porAcreditar = 0;
@@ -433,17 +435,15 @@ export default async function handler(req, res) {
         let movDespuesCount = 0;
         let movMinFecha = null;
         let movMaxFecha = null;
-        // DEBUG: trazas para saldo_inicial_at / fechas de liquidación.
         const saldoTrace = {
           saldo_inicial_at_raw: saldoInicialAt,
           corte_iso: corte ? corte.toISOString() : null,
           corte_ms: corte ? corte.getTime() : null,
-          liquidacion_rows: [],
           counted_rows: [],
         };
         const { data: movLocal, error: movErr } = await db
           .from('mp_movimientos')
-          .select('id, tipo, monto, estado, fecha')
+          .select('id, tipo, monto, estado, fecha, referencia_id')
           .eq('local_id', cred.local_id);
         if (movErr) {
           console.error(
@@ -452,23 +452,14 @@ export default async function handler(req, res) {
             movErr
           );
         } else {
-          // DEBUG query: últimas 5 liquidaciones por fecha desc.
-          const { data: liqRecent } = await db
-            .from('mp_movimientos')
-            .select('id, tipo, monto, estado, fecha')
-            .eq('local_id', cred.local_id)
-            .eq('tipo', 'liquidacion')
-            .order('fecha', { ascending: false })
-            .limit(5);
-          saldoTrace.liquidacion_rows = (liqRecent || []).map((r) => ({
-            id: r.id,
-            fecha: r.fecha,
-            fecha_ms: r.fecha ? new Date(r.fecha).getTime() : null,
-            monto: Number(r.monto) || 0,
-            estado: r.estado,
-            cumple_corte:
-              corte && r.fecha ? new Date(r.fecha) >= corte : false,
-          }));
+          // Set de referencia_id de filas rr-* para saber si un egreso
+          // de la payments API ya tiene contraparte en el CSV.
+          const rrRefIdsLocal = new Set();
+          for (const m of movLocal || []) {
+            if (m.id && String(m.id).startsWith('rr-') && m.referencia_id) {
+              rrRefIdsLocal.add(String(m.referencia_id));
+            }
+          }
 
           for (const m of movLocal || []) {
             movTotalCount++;
@@ -478,32 +469,38 @@ export default async function handler(req, res) {
             }
             const monto = Number(m.monto) || 0;
             const estado = (m.estado || '').toLowerCase();
-            const esReleaseReport = m.id && String(m.id).startsWith('rr-');
-            if (estado === 'approved') {
-              // Saldo: SÓLO filas del release_report (id 'rr-*').
-              if (
-                esReleaseReport &&
-                corte &&
-                m.fecha &&
-                new Date(m.fecha) >= corte
+            const tipoRow = (m.tipo || '').toLowerCase();
+            const esRR = m.id && String(m.id).startsWith('rr-');
+            const cumpleCorte = corte && m.fecha && new Date(m.fecha) >= corte;
+
+            if (estado === 'approved' && cumpleCorte) {
+              // 1) Fila rr-* → siempre suma (fuente autoritativa).
+              // 2) Fila payments API con tipo egreso (bank_transfer /
+              //    payment_out) → suma SOLO si no tiene contraparte rr-*
+              //    (evita doble conteo cuando el CSV llegue mañana).
+              if (esRR) {
+                saldoAprobado += monto;
+                movDespuesCount++;
+              } else if (
+                EGRESO_API_TIPOS.has(tipoRow) &&
+                !rrRefIdsLocal.has(String(m.referencia_id || ''))
               ) {
                 saldoAprobado += monto;
                 movDespuesCount++;
-                if (saldoTrace.counted_rows.length < 10) {
-                  saldoTrace.counted_rows.push({
-                    id: m.id,
-                    tipo: tipoRow,
-                    fecha: m.fecha,
-                    monto,
-                  });
-                }
+              }
+              if (saldoTrace.counted_rows.length < 10 && (esRR || EGRESO_API_TIPOS.has(tipoRow))) {
+                saldoTrace.counted_rows.push({
+                  id: m.id,
+                  tipo: tipoRow,
+                  fecha: m.fecha,
+                  monto,
+                  src: esRR ? 'rr' : 'api',
+                });
               }
             } else if (
               (estado === 'in_process' || estado === 'pending') &&
               monto > 0
             ) {
-              // Por acreditar sigue contando los pagos pendientes de la
-              // payments API, pero no se mete en el saldo disponible.
               porAcreditar += monto;
             }
           }
@@ -512,16 +509,13 @@ export default async function handler(req, res) {
         let credSaldoDisponible = saldoInicialNum + saldoAprobado;
         let balanceFuente = 'saldo_inicial+release_rows';
 
-        console.log('[mp-sync] saldo trace local_id=' + cred.local_id, {
-          saldo_inicial_num: saldoInicialNum,
-          saldo_inicial_at_raw: saldoTrace.saldo_inicial_at_raw,
-          corte_iso: saldoTrace.corte_iso,
-          corte_ms: saldoTrace.corte_ms,
-          liquidacion_rows: saldoTrace.liquidacion_rows,
-          saldo_aprobado: saldoAprobado,
-          counted_rows: saldoTrace.counted_rows,
-          credSaldoDisponible,
-        });
+        console.log(
+          '[mp-sync] saldo local_id=' + cred.local_id,
+          'inicial=' + saldoInicialNum,
+          'aprobado=' + saldoAprobado,
+          'disponible=' + credSaldoDisponible,
+          'filas_en_saldo=' + movDespuesCount
+        );
 
         // Release report (settlement) — saldo real de MP.
         // Flujo: POST para generar un reporte con el rango, GET /list para
@@ -1067,20 +1061,13 @@ export default async function handler(req, res) {
           comisiones: cantFees,
           reembolsos: cantRefunds,
           saldo_debug: {
-            saldo_inicial_raw: saldoInicialRaw,
             saldo_inicial_num: saldoInicialNum,
-            saldo_inicial_at: saldoInicialAt,
-            saldo_inicial_at_raw: saldoTrace.saldo_inicial_at_raw,
             corte_iso: saldoTrace.corte_iso,
-            corte_ms: saldoTrace.corte_ms,
             mov_total: movTotalCount,
-            mov_despues_corte: movDespuesCount,
-            mov_min_fecha: movMinFecha,
-            mov_max_fecha: movMaxFecha,
+            mov_en_saldo: movDespuesCount,
             saldo_aprobado: saldoAprobado,
             saldo_disponible: credSaldoDisponible,
             por_acreditar: porAcreditar,
-            liquidacion_rows: saldoTrace.liquidacion_rows,
             counted_rows: saldoTrace.counted_rows,
           },
           release_report: releaseReport,
