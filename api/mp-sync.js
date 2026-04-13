@@ -164,26 +164,52 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: 'Sin credenciales configuradas' });
     }
 
-    // One-time cleanup: las filas con id 'mt-*' eran los duplicados que
-    // generaba el probe anterior de money_transfer. Se borran antes de
-    // cada sync hasta confirmar que no vuelven a generarse.
-    let cleanupMtDeleted = null;
+    // Dedup cleanup: borrar filas de la payments API que ya tienen
+    // contraparte en el release_report (mismo monto absoluto + mismo
+    // día). Esto limpia los duplicados históricos que se acumularon
+    // antes de que existiera el filtro de dedup en el insert.
+    let cleanupDedupDeleted = null;
     try {
-      const { error: delMtErr, count: delMtCount } = await db
+      const { data: allMovs } = await db
         .from('mp_movimientos')
-        .delete({ count: 'exact' })
-        .like('id', 'mt-%');
-      if (delMtErr) {
-        console.error('mp-sync: cleanup mt-% error', delMtErr);
-      } else {
-        cleanupMtDeleted = delMtCount ?? null;
-        console.log(
-          '[mp-sync] cleanup mt-% rows deleted:',
-          cleanupMtDeleted
-        );
+        .select('id, monto, fecha');
+      if (allMovs && allMovs.length) {
+        const rrSet = new Set();
+        for (const m of allMovs) {
+          if (m.id && String(m.id).startsWith('rr-')) {
+            const day = (m.fecha || '').slice(0, 10);
+            const amt = Math.round(Math.abs(Number(m.monto) || 0));
+            if (day && amt) rrSet.add(`${amt}_${day}`);
+          }
+        }
+        const dupeIds = [];
+        for (const m of allMovs) {
+          if (m.id && !String(m.id).startsWith('rr-')) {
+            const day = (m.fecha || '').slice(0, 10);
+            const amt = Math.round(Math.abs(Number(m.monto) || 0));
+            if (day && amt && rrSet.has(`${amt}_${day}`)) {
+              dupeIds.push(m.id);
+            }
+          }
+        }
+        if (dupeIds.length) {
+          const { error: delErr, count } = await db
+            .from('mp_movimientos')
+            .delete({ count: 'exact' })
+            .in('id', dupeIds);
+          if (delErr) {
+            console.error('mp-sync: dedup cleanup error', delErr);
+          } else {
+            cleanupDedupDeleted = count ?? dupeIds.length;
+            console.log(
+              '[mp-sync] dedup cleanup deleted:',
+              cleanupDedupDeleted
+            );
+          }
+        }
       }
     } catch (e) {
-      console.error('mp-sync: cleanup mt-% exception', e);
+      console.error('mp-sync: dedup cleanup exception', e);
     }
 
     const resultados = [];
@@ -262,8 +288,26 @@ export default async function handler(req, res) {
         let cantPagos = 0;
         let cantFees = 0;
         let cantRefunds = 0;
+        let cantSkipped = 0;
 
         const round2 = (v) => Math.round(v * 100) / 100;
+
+        // Cargar filas existentes del release_report (id 'rr-*') para
+        // este local, así podemos detectar pagos de la API que ya tienen
+        // su contraparte en el CSV y evitar el duplicado.
+        // Key: "monto_absoluto_redondeado_día"
+        const { data: rrExist } = await db
+          .from('mp_movimientos')
+          .select('monto, fecha')
+          .eq('local_id', cred.local_id)
+          .like('id', 'rr-%');
+        const rrKeys = new Set();
+        for (const r of rrExist || []) {
+          const day = (r.fecha || '').slice(0, 10);
+          const amt = Math.round(Math.abs(Number(r.monto) || 0));
+          if (day && amt) rrKeys.add(`${amt}_${day}`);
+        }
+
         if (mpData.results) {
           for (const pago of mpData.results) {
             const bruto = Number(pago.transaction_amount) || 0;
@@ -275,6 +319,16 @@ export default async function handler(req, res) {
                 : null;
             const fecha = pago.date_approved || pago.date_created;
             const payTypeId = pago.payment_type_id || null;
+
+            // Dedup: si ya existe una fila rr-* con el mismo monto
+            // absoluto el mismo día, el release_report ya lo tiene
+            // cubierto → no insertar el duplicado desde payments API.
+            const payDay = (fecha || '').slice(0, 10);
+            const payAmt = Math.round(Math.abs(monto));
+            if (payDay && payAmt && rrKeys.has(`${payAmt}_${payDay}`)) {
+              cantSkipped++;
+              continue;
+            }
 
             const descripcion =
               pago.description ||
@@ -372,21 +426,11 @@ export default async function handler(req, res) {
         const saldoInicialAt = cred.saldo_inicial_at || null;
         const corte = saldoInicialAt ? new Date(saldoInicialAt) : null;
 
-        // Fuente del saldo:
-        //   - filas del release_report (tipo 'bank_transfer' |
-        //     'liquidacion'), donde
-        //         monto liquidacion   = +NET_CREDIT_AMOUNT
-        //         monto bank_transfer = -NET_DEBIT_AMOUNT
-        //   - transferencias entrantes CBU/alias de la payments API
-        //     (tipo 'bank_transfer_in') — impactan directo al saldo,
-        //     no pasan por liquidación diferida.
-        // Los pagos de /v1/payments/search con tarjeta / QR / point
-        // siguen apareciendo en la tabla pero NO suman al saldo.
-        const RELEASE_TIPOS = new Set([
-          'bank_transfer',
-          'liquidacion',
-          'bank_transfer_in',
-        ]);
+        // Fuente única del saldo: filas con id 'rr-*' (del release_report
+        // CSV). Esas son la fuente autoritativa de MP para dinero que
+        // realmente entró o salió de la cuenta. Las filas de la payments
+        // API se muestran en la tabla pero NO suman al saldo — así se
+        // evita el doble conteo.
 
         let saldoAprobado = 0;
         let porAcreditar = 0;
@@ -439,11 +483,11 @@ export default async function handler(req, res) {
             }
             const monto = Number(m.monto) || 0;
             const estado = (m.estado || '').toLowerCase();
-            const tipoRow = (m.tipo || '').toLowerCase();
+            const esReleaseReport = m.id && String(m.id).startsWith('rr-');
             if (estado === 'approved') {
-              // Saldo: sólo release rows con fecha >= corte.
+              // Saldo: SÓLO filas del release_report (id 'rr-*').
               if (
-                RELEASE_TIPOS.has(tipoRow) &&
+                esReleaseReport &&
                 corte &&
                 m.fecha &&
                 new Date(m.fecha) >= corte
@@ -1024,6 +1068,7 @@ export default async function handler(req, res) {
           local_id: cred.local_id,
           account_id: accountId,
           movimientos: cantPagos,
+          skipped_duplicados: cantSkipped,
           comisiones: cantFees,
           reembolsos: cantRefunds,
           saldo_debug: {
@@ -1082,7 +1127,7 @@ export default async function handler(req, res) {
       resultados,
       balance_mp: balanceConsultado ? balanceTotalMP : null,
       reset: resetSummary.length ? resetSummary : undefined,
-      cleanup_mt_deleted: cleanupMtDeleted,
+      cleanup_dedup_deleted: cleanupDedupDeleted,
     });
   } catch (err) {
     console.error('mp-sync: unhandled error', err);

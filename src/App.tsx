@@ -2347,7 +2347,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
       // Todo el detalle técnico va a DevTools.
       console.groupCollapsed("%c[MP] /api/mp-sync response","color:#3ECFCF;font-weight:600");
       console.log("ok:",d.ok,"error:",d.error||null);
-      if(d.cleanup_mt_deleted!=null)console.log("cleanup_mt_deleted:",d.cleanup_mt_deleted);
+      if(d.cleanup_dedup_deleted)console.log("[MP] dedup cleanup:",d.cleanup_dedup_deleted,"duplicados eliminados");
       if(d.balance_mp!=null)console.log("balance_mp:",d.balance_mp);
       for(const x of (d.resultados||[])){
         console.groupCollapsed("["+x.local_id+"] "+x.local+(x.account_id?" — mp_id "+x.account_id:""));
