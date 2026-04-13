@@ -164,32 +164,32 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: 'Sin credenciales configuradas' });
     }
 
-    // Dedup cleanup: borrar filas de la payments API que ya tienen
-    // contraparte en el release_report (mismo monto absoluto + mismo
-    // día). Esto limpia los duplicados históricos que se acumularon
-    // antes de que existiera el filtro de dedup en el insert.
+    // Dedup cleanup por referencia_id: las filas rr-* (release_report)
+    // son la fuente autoritativa. Si existe una fila de la payments API
+    // (id sin prefijo rr-) cuyo referencia_id coincide con el de una
+    // fila rr-*, se borra la de payments API. Esto limpia duplicados
+    // históricos de forma determinista, sin heurísticas de monto/día.
     let cleanupDedupDeleted = null;
     try {
       const { data: allMovs } = await db
         .from('mp_movimientos')
-        .select('id, monto, fecha');
+        .select('id, referencia_id');
       if (allMovs && allMovs.length) {
-        const rrSet = new Set();
+        const rrRefIds = new Set();
         for (const m of allMovs) {
-          if (m.id && String(m.id).startsWith('rr-')) {
-            const day = (m.fecha || '').slice(0, 10);
-            const amt = Math.round(Math.abs(Number(m.monto) || 0));
-            if (day && amt) rrSet.add(`${amt}_${day}`);
+          if (m.id && String(m.id).startsWith('rr-') && m.referencia_id) {
+            rrRefIds.add(String(m.referencia_id));
           }
         }
         const dupeIds = [];
         for (const m of allMovs) {
-          if (m.id && !String(m.id).startsWith('rr-')) {
-            const day = (m.fecha || '').slice(0, 10);
-            const amt = Math.round(Math.abs(Number(m.monto) || 0));
-            if (day && amt && rrSet.has(`${amt}_${day}`)) {
-              dupeIds.push(m.id);
-            }
+          if (
+            m.id &&
+            !String(m.id).startsWith('rr-') &&
+            m.referencia_id &&
+            rrRefIds.has(String(m.referencia_id))
+          ) {
+            dupeIds.push(m.id);
           }
         }
         if (dupeIds.length) {
@@ -292,20 +292,17 @@ export default async function handler(req, res) {
 
         const round2 = (v) => Math.round(v * 100) / 100;
 
-        // Cargar filas existentes del release_report (id 'rr-*') para
-        // este local, así podemos detectar pagos de la API que ya tienen
-        // su contraparte en el CSV y evitar el duplicado.
-        // Key: "monto_absoluto_redondeado_día"
+        // Cargar referencia_ids de las filas rr-* (release_report) de este
+        // local. Si un pago de la API tiene la misma referencia_id, el
+        // release_report ya lo tiene cubierto → no insertar el duplicado.
         const { data: rrExist } = await db
           .from('mp_movimientos')
-          .select('monto, fecha')
+          .select('referencia_id')
           .eq('local_id', cred.local_id)
           .like('id', 'rr-%');
-        const rrKeys = new Set();
+        const rrRefIds = new Set();
         for (const r of rrExist || []) {
-          const day = (r.fecha || '').slice(0, 10);
-          const amt = Math.round(Math.abs(Number(r.monto) || 0));
-          if (day && amt) rrKeys.add(`${amt}_${day}`);
+          if (r.referencia_id) rrRefIds.add(String(r.referencia_id));
         }
 
         if (mpData.results) {
@@ -320,12 +317,10 @@ export default async function handler(req, res) {
             const fecha = pago.date_approved || pago.date_created;
             const payTypeId = pago.payment_type_id || null;
 
-            // Dedup: si ya existe una fila rr-* con el mismo monto
-            // absoluto el mismo día, el release_report ya lo tiene
-            // cubierto → no insertar el duplicado desde payments API.
-            const payDay = (fecha || '').slice(0, 10);
-            const payAmt = Math.round(Math.abs(monto));
-            if (payDay && payAmt && rrKeys.has(`${payAmt}_${payDay}`)) {
+            // Dedup: si ya existe una fila rr-* con el mismo referencia_id,
+            // el release_report ya tiene este movimiento → no duplicar.
+            const payRefId = String(pago.external_reference || pago.id);
+            if (rrRefIds.has(payRefId)) {
               cantSkipped++;
               continue;
             }
