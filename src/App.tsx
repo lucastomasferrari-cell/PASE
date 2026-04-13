@@ -1,31 +1,8 @@
 import { useState, useEffect } from "react";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const SUPABASE_URL = "https://pduxydviqiaxfqnshhdc.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkdXh5ZHZpcWlheGZxbnNoaGRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NDExNDAsImV4cCI6MjA5MTMxNzE0MH0.oh0ObrthoSjmHeAEC3_kfvDnZeOY22ShGAsxv6_2o08";
-const db = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-const CATEGORIAS_COMPRA = ["PESCADERIA","CARNICERIA","VERDULERIA","BEBIDAS","VINOS","ALMACEN","PACKAGING","PAPELERIA","BARRIO CHINO","PRODUCTOS ORIENTALES","SUPERMERCADO","HIELO","LIMPIEZA","CONTADOR","PUBLICIDAD","EXPENSAS","PROPINAS","SUSHIMAN PM","EQUIPAMIENTO","SUELDOS","OTROS"];
-const MEDIOS_COBRO = ["EFECTIVO SALON","TARJETA CREDITO","TARJETA DEBITO","QR","LINK","RAPPI ONLINE","PEYA ONLINE","PEYA EFECTIVO","MP DELIVERY","BIGBOX","FANBAG","EVENTO","TRANSFERENCIA","Point MP","Point Nave","NAVE","MASDELIVERY ONLINE","EFECTIVO DELIVERY"];
-const CUENTAS = ["Caja Chica","Caja Mayor","MercadoPago","Banco"];
-const UNIDADES = ["kg","g","litro","ml","unidad","caja","bolsa","docena"];
-const GASTOS_FIJOS = ["ALQUILER","EDESUR","METROGAS","AYSA","INTERNET","MAXIREST","WOKI","SEGURO","FUMIGACION","ABL","EXPENSAS","AQA","CONTADOR","OTROS FIJOS"];
-const GASTOS_VARIABLES = ["COMPRAS MERCADO LIBRE","ENVIOS","LIBRERIA","BAZAR","FARMACIA","MANTENIMIENTO","EQUIPAMIENTO","DEVOLUCIONES CLIENTES","PERSONAL","AJUSTE","GASTOS VARIOS"];
-const GASTOS_PUBLICIDAD = ["PIMENTON","COMMUNITY MANAGER","PRENSA Y PAUTA FB","FOTOGRAFIA Y ACCIONES","RAPPI CUOTA ADS","OTRAS PUBLICIDAD"];
-const COMISIONES_CATS = ["MERCADOPAGO","RAPPI","PEDIDOS YA","MASDELIVERY","BANCARIAS NAVE","COMPENSACIONES","OTRAS COMISIONES"];
-
-const ROLES = {
-  dueno:   { label:"Dueño",    color:"#E8C547", permisos:["dashboard","ventas","compras","remitos","gastos","caja","eerr","contador","proveedores","empleados","config","maxirest","insumos","lector_ia","recetas","mp"] },
-  admin:   { label:"Admin",    color:"#3B82F6", permisos:["dashboard","ventas","compras","remitos","gastos","caja","proveedores","empleados"] },
-  compras: { label:"Compras",  color:"#8B5CF6", permisos:["compras","remitos","proveedores"] },
-  cajero:  { label:"Cajero",   color:"#10B981", permisos:["caja","dashboard"] },
-};
-
-const toISO = d => d.toISOString().split("T")[0];
-const today = new Date();
-const fmt_d = d => d ? new Date(d+"T12:00:00").toLocaleDateString("es-AR") : "—";
-const fmt_$ = n => new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n||0);
-const genId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+import { db } from "./lib/supabase";
+import { CATEGORIAS_COMPRA, MEDIOS_COBRO, CUENTAS, UNIDADES, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS } from "./lib/constants";
+import { ROLES } from "./lib/auth";
+import { toISO, today, fmt_d, fmt_$, genId } from "./lib/utils";
 
 const css = `
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Mono:wght@400&display=swap');
