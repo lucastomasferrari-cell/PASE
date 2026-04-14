@@ -10,20 +10,20 @@ export default function Usuarios({ user, locales }) {
   const [err, setErr] = useState("");
   const [showPw, setShowPw] = useState(false);
 
-  const emptyForm = { nombre:"", email:"", password:"", rol:"encargado", activo:true, modulos:[] as string[], locales_ids:[] as any[] };
+  const emptyForm = { nombre:"", email:"", password:"", rol:"encargado", activo:true, modulos:[] as string[], locales_ids:[] as number[] };
   const [form, setForm] = useState(emptyForm);
 
   const load = async () => {
     setLoading(true);
     const [{ data: users }, { data: allPerms }, { data: allLocs }] = await Promise.all([
       db.from("usuarios").select("*").order("nombre"),
-      db.from("usuario_permisos").select("*"),
-      db.from("usuario_locales").select("*"),
+      db.from("usuario_permisos").select("usuario_id, modulo_slug"),
+      db.from("usuario_locales").select("usuario_id, local_id"),
     ]);
     const enriched = (users || []).map(u => ({
       ...u,
       _permisos: (allPerms || []).filter(p => p.usuario_id === u.id).map(p => p.modulo_slug),
-      _locales: (allLocs || []).filter(l => l.usuario_id === u.id).map(l => l.local_id),
+      _locales: (allLocs || []).filter(l => l.usuario_id === u.id).map(l => Number(l.local_id)),
     }));
     setUsuarios(enriched);
     setLoading(false);
@@ -32,21 +32,28 @@ export default function Usuarios({ user, locales }) {
 
   const abrirNuevo = () => { setForm(emptyForm); setModal("new"); setErr(""); setShowPw(false); };
 
-  const abrirEditar = (u) => {
+  const abrirEditar = async (u) => {
+    // Cargar locales frescos del usuario desde DB
+    const { data: userLocs } = await db.from("usuario_locales").select("local_id").eq("usuario_id", u.id);
+    const lids = (userLocs || []).map(l => Number(l.local_id));
+    // Fallback al campo viejo si no hay rows en usuario_locales
+    const finalLocs = lids.length > 0 ? lids : (u.locales || []).map(Number);
+
     setForm({
       nombre: u.nombre, email: u.email, password: "",
       rol: u.rol || "encargado", activo: u.activo !== false,
       modulos: u._permisos || [],
-      locales_ids: u._locales?.length ? u._locales : (u.locales || []),
+      locales_ids: finalLocs,
     });
     setModal(u); setErr(""); setShowPw(false);
   };
 
-  const toggleModulo = (slug) => {
+  const toggleModulo = (slug: string) => {
     setForm(f => ({ ...f, modulos: f.modulos.includes(slug) ? f.modulos.filter(m => m !== slug) : [...f.modulos, slug] }));
   };
-  const toggleLocal = (lid) => {
-    setForm(f => ({ ...f, locales_ids: f.locales_ids.includes(lid) ? f.locales_ids.filter(l => l !== lid) : [...f.locales_ids, lid] }));
+  const toggleLocal = (lid: number) => {
+    const numId = Number(lid);
+    setForm(f => ({ ...f, locales_ids: f.locales_ids.includes(numId) ? f.locales_ids.filter(l => l !== numId) : [...f.locales_ids, numId] }));
   };
 
   const guardar = async () => {
@@ -54,7 +61,7 @@ export default function Usuarios({ user, locales }) {
     if (modal === "new" && !form.password) return;
     setSaving(true); setErr("");
     try {
-      let userId;
+      let userId: number | null = null;
 
       if (modal === "new") {
         const r = await fetch("/api/auth-admin", {
@@ -64,7 +71,7 @@ export default function Usuarios({ user, locales }) {
         const d = await r.json();
         if (!d.ok) { setErr(d.error || "Error creando usuario"); setSaving(false); return; }
         const { data: newU } = await db.from("usuarios").select("id").eq("email", form.email).single();
-        userId = newU?.id;
+        userId = newU?.id ?? null;
         if (userId) await db.from("usuarios").update({ activo:form.activo, rol:form.rol }).eq("id", userId);
       } else {
         userId = modal.id;
@@ -79,20 +86,40 @@ export default function Usuarios({ user, locales }) {
         }
       }
 
-      // Save permisos
-      if (userId && form.rol !== "dueno") {
+      if (!userId) { setErr("No se pudo obtener el ID del usuario"); setSaving(false); return; }
+
+      // Save permisos (delete + re-insert)
+      if (form.rol !== "dueno") {
         await db.from("usuario_permisos").delete().eq("usuario_id", userId);
         if (form.modulos.length) {
-          await db.from("usuario_permisos").insert(form.modulos.map(slug => ({ usuario_id: userId, modulo_slug: slug })));
+          const { error: permErr } = await db.from("usuario_permisos").insert(
+            form.modulos.map(slug => ({ usuario_id: userId as number, modulo_slug: slug }))
+          );
+          if (permErr) console.error("Error guardando permisos:", permErr.message);
+        }
+      } else {
+        // Dueno: limpiar permisos individuales (tiene todos implícitos)
+        await db.from("usuario_permisos").delete().eq("usuario_id", userId);
+      }
+
+      // Save locales en usuario_locales (delete + re-insert)
+      await db.from("usuario_locales").delete().eq("usuario_id", userId);
+      if (form.locales_ids.length > 0) {
+        const rows = form.locales_ids.map(lid => ({
+          usuario_id: userId as number,
+          local_id: Number(lid),
+        }));
+        const { error: locErr } = await db.from("usuario_locales").insert(rows);
+        if (locErr) {
+          console.error("Error guardando locales:", locErr.message);
+          setErr("Error guardando locales: " + locErr.message);
+          setSaving(false);
+          return;
         }
       }
-      // Save locales
-      if (userId) {
-        await db.from("usuario_locales").delete().eq("usuario_id", userId);
-        if (form.locales_ids.length) {
-          await db.from("usuario_locales").insert(form.locales_ids.map(lid => ({ usuario_id: userId, local_id: lid })));
-        }
-      }
+
+      // Actualizar también campo viejo usuarios.locales para backward compat
+      await db.from("usuarios").update({ locales: form.locales_ids }).eq("id", userId);
 
       setModal(null); load();
     } catch (e: any) { setErr(e.message); }
@@ -105,6 +132,13 @@ export default function Usuarios({ user, locales }) {
   };
 
   const rc = (rol) => ROLES[rol]?.color || "#666";
+
+  // Mostrar locales para un usuario: primero _locales (nuevo), fallback a locales (viejo)
+  const getUserLocaleNames = (u) => {
+    const ids = (u._locales?.length ? u._locales : (u.locales || [])).map(Number);
+    if (!ids.length) return "—";
+    return ids.map(lid => locales.find(l => l.id === lid)?.nombre).filter(Boolean).join(", ") || "—";
+  };
 
   return (
     <div>
@@ -123,8 +157,7 @@ export default function Usuarios({ user, locales }) {
               <td className="mono" style={{ color:"var(--muted2)", fontSize:11 }}>{u.email}</td>
               <td><span className="badge" style={{ background:rc(u.rol)+"22", color:rc(u.rol) }}>{ROLES[u.rol]?.label || u.rol}</span></td>
               <td style={{ fontSize:10 }}>
-                {u.rol === "dueno" ? <span style={{ color:"var(--muted)" }}>Todos</span> :
-                 (u._locales || []).map(lid => locales.find(l => l.id === lid)?.nombre).filter(Boolean).join(", ") || "—"}
+                {u.rol === "dueno" ? <span style={{ color:"var(--muted)" }}>Todos</span> : getUserLocaleNames(u)}
               </td>
               <td style={{ fontSize:10 }}>
                 {u.rol === "dueno" ? <span style={{ color:"var(--muted)" }}>Todos</span> :
@@ -207,27 +240,31 @@ export default function Usuarios({ user, locales }) {
                 </div>
               </div>
 
-              {/* Locales (solo encargado) */}
-              {form.rol === "encargado" && (
+              {/* Locales — visible para admin y encargado */}
+              {form.rol !== "dueno" && (
                 <div style={{ marginTop:16 }}>
                   <label style={{ display:"block", fontSize:9, letterSpacing:"1.5px", textTransform:"uppercase", color:"var(--muted)", marginBottom:8 }}>
-                    Locales asignados
+                    Locales asignados {form.rol === "encargado" && "(obligatorio para encargados)"}
                   </label>
-                  <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                    {locales.map(l => {
-                      const checked = form.locales_ids.includes(l.id);
-                      return (
-                        <label key={l.id} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11,
-                          color: checked ? "var(--txt)" : "var(--muted2)", cursor:"pointer",
-                          padding:"6px 10px", background: checked ? "var(--s3)" : "var(--s2)",
-                          borderRadius:"var(--r)", border:`1px solid ${checked ? "var(--acc)" : "var(--bd)"}` }}>
-                          <input type="checkbox" checked={checked} onChange={() => toggleLocal(l.id)} style={{ accentColor:"var(--acc)" }} />
-                          {l.nombre}
-                        </label>
-                      );
-                    })}
-                  </div>
-                  {form.locales_ids.length === 0 && <div className="alert alert-warn" style={{ marginTop:8 }}>Sin locales asignados no podrá cargar novedades</div>}
+                  {locales.length === 0 ? <div className="empty" style={{padding:16}}>No hay locales cargados en el sistema</div> : (
+                    <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                      {locales.map(l => {
+                        const checked = form.locales_ids.includes(Number(l.id));
+                        return (
+                          <label key={l.id} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11,
+                            color: checked ? "var(--txt)" : "var(--muted2)", cursor:"pointer",
+                            padding:"6px 10px", background: checked ? "var(--s3)" : "var(--s2)",
+                            borderRadius:"var(--r)", border:`1px solid ${checked ? "var(--acc)" : "var(--bd)"}` }}>
+                            <input type="checkbox" checked={checked} onChange={() => toggleLocal(Number(l.id))} style={{ accentColor:"var(--acc)" }} />
+                            {l.nombre}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {form.rol === "encargado" && form.locales_ids.length === 0 && (
+                    <div className="alert alert-warn" style={{ marginTop:8 }}>Sin locales asignados no podrá cargar novedades en RRHH</div>
+                  )}
                 </div>
               )}
             </div>
