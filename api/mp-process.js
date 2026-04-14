@@ -268,8 +268,7 @@ export default async function handler(req, res) {
 
           if (generateTs) {
             target = csvFiles.find(f => new Date(f.date_created || 0).getTime() >= generateTs - 5000);
-          }
-          if (!target) {
+          } else {
             target = csvFiles[0] || null;
           }
 
@@ -277,6 +276,9 @@ export default async function handler(req, res) {
             releaseReport.file_name = target.file_name || target.fileName || target.name || null;
             releaseReport.file_date_created = target.date_created || target.date || null;
             console.log('[mp-process] CSV:', releaseReport.file_name, releaseReport.file_date_created);
+          } else if (generateTs) {
+            releaseReport.error = 'CSV no encontrado. MP no generó el reporte en el tiempo esperado.';
+            console.warn('[mp-process] CSV no encontrado para ts=' + generateTs, 'disponibles:', csvFiles.map(f => f.file_name + ' ' + f.date_created).join(', '));
           }
         } catch (e) {
           releaseReport.error = 'LIST: ' + String(e?.message || e);

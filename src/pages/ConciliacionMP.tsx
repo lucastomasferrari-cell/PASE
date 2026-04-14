@@ -112,7 +112,12 @@ function ConciliacionMP({ user, locales, localActivo }) {
         await load();
         const totalMovs=(d.resultados||[]).reduce((s,x)=>s+(Number(x.movimientos)||0),0);
         const saldoTotal=(d.resultados||[]).reduce((s,x)=>s+(Number(x.saldo_disponible)||0),0);
-        showToast("ok","Sincronización completada · "+totalMovs+" movimientos · "+fmt_mp(saldoTotal)+" saldo");
+        const csvNoEncontrado=(d.resultados||[]).some(x=>x.release_error&&x.release_error.includes("CSV no encontrado"));
+        if(csvNoEncontrado){
+          showToast("err","⚠ MercadoPago no generó el reporte a tiempo. Intentá sincronizar de nuevo en unos minutos.");
+        }else{
+          showToast("ok","Sincronización completada · "+totalMovs+" movimientos · "+fmt_mp(saldoTotal)+" saldo");
+        }
       }else{
         showToast("err","⚠ Error procesando: "+(d.error||"desconocido"));
       }
