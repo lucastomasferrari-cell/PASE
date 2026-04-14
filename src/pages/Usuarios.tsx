@@ -86,18 +86,28 @@ export default function Usuarios({ user, locales }) {
         userId = modal.id;
         await db.from("usuarios").update({ nombre:form.nombre, activo:form.activo, locales:form.locales_ids }).eq("id", userId);
         if (form.password) {
-          // Actualizar hash SHA-256 en tabla usuarios (usado por login)
+          // Actualizar hash SHA-256 en tabla usuarios (usado por login fallback)
           const hash = await sha256(form.password);
           await db.from("usuarios").update({ password: hash }).eq("id", userId);
           // También actualizar en Supabase Auth si el usuario está migrado
           if (modal.auth_id) {
-            const r = await fetch("/api/auth-admin", {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action:"change_password", authId:modal.auth_id, password:form.password }),
-            });
-            const d = await r.json();
-            if (!d.ok) { setErr(d.error); setSaving(false); guardando.current = false; return; }
+            try {
+              const r = await fetch("/api/auth-admin", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action:"change_password", authId:modal.auth_id, password:form.password }),
+              });
+              const d = await r.json();
+              if (!d.ok) {
+                // No bloquear el guardado — la contraseña ya se actualizó en la tabla
+                console.warn("Supabase Auth change_password falló:", d.error);
+                setErr("Contraseña actualizada en sistema local pero falló en Supabase Auth — el usuario puede seguir usando la contraseña anterior vía Auth");
+              }
+            } catch (authErr: any) {
+              console.warn("Error llamando auth-admin:", authErr.message);
+              setErr("Contraseña actualizada localmente. Error de red al sincronizar con Supabase Auth.");
+            }
           }
+          // auth_id null: no hay user en Supabase Auth, solo funciona SHA-256
         }
       }
 

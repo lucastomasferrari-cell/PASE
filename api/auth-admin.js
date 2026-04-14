@@ -50,19 +50,23 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, auth_id: authUser.user.id });
 
     } else if (action === 'change_password') {
-      // Cambiar contraseña
+      // Cambiar contraseña en Supabase Auth
       if (!authId || !password) {
+        console.error('[auth-admin] change_password: faltan campos', { authId: !!authId, password: !!password });
         return res.status(400).json({ ok: false, error: 'Faltan authId o password' });
       }
 
+      console.log('[auth-admin] change_password para authId:', authId);
       const { error: updErr } = await db.auth.admin.updateUserById(authId, {
         password,
       });
 
       if (updErr) {
+        console.error('[auth-admin] change_password falló:', updErr.message);
         return res.status(500).json({ ok: false, error: updErr.message });
       }
 
+      console.log('[auth-admin] change_password OK para authId:', authId);
       return res.status(200).json({ ok: true });
 
     } else {
