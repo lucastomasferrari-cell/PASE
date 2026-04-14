@@ -7,8 +7,22 @@ export default async function handler(req, res) {
     const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
     const ALLOWED = (process.env.TELEGRAM_ALLOWED_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
 
+    // Debug: log env var availability
+    console.log('[telegram-webhook] ENV check:', {
+      hasTOKEN: !!TOKEN,
+      hasSUPABASE_URL: !!process.env.SUPABASE_URL,
+      hasSUPABASE_SERVICE_KEY: !!process.env.SUPABASE_SERVICE_KEY,
+      ALLOWED_IDS: process.env.TELEGRAM_ALLOWED_IDS || '(not set)',
+    });
+
     if (!TOKEN || !process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
-      return res.status(500).json({ error: 'Missing env vars' });
+      const missing = [
+        !TOKEN && 'TELEGRAM_BOT_TOKEN',
+        !process.env.SUPABASE_URL && 'SUPABASE_URL',
+        !process.env.SUPABASE_SERVICE_KEY && 'SUPABASE_SERVICE_KEY',
+      ].filter(Boolean);
+      console.error('[telegram-webhook] Missing env vars:', missing.join(', '));
+      return res.status(500).json({ error: 'Missing env vars: ' + missing.join(', ') });
     }
 
     const { createClient } = await import('@supabase/supabase-js');
