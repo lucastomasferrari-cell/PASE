@@ -411,111 +411,34 @@ export default async function handler(req, res) {
         }
 
 
-        // Saldo real = saldo_inicial (ingresado por el usuario) + suma
-        // neta de movimientos aprobados con fecha >= saldo_inicial_at.
-        // Si saldo_inicial_at aún no fue fijado, NO sumamos nada y
-        // saldo_disponible queda igual a saldo_inicial.
+        // Saldo = saldo_inicial + SUM(monto) de filas rr-* approved
+        // posteriores al corte. Si no hay saldo_inicial_at → $0.
         const saldoInicialRaw = cred.saldo_inicial;
         const saldoInicial = Number(saldoInicialRaw);
         const saldoInicialNum = Number.isFinite(saldoInicial) ? saldoInicial : 0;
         const saldoInicialAt = cred.saldo_inicial_at || null;
         const corte = saldoInicialAt ? new Date(saldoInicialAt) : null;
 
-        // Fuente principal del saldo: filas rr-* (release_report CSV).
-        // Complemento para egresos del día: filas de la payments API con
-        // tipo bank_transfer / payment_out que aún no tienen contraparte
-        // en el release_report (que recién las incluye al día siguiente).
-        // Esto evita que transferencias salientes de hoy se "olviden"
-        // hasta mañana.
-        const EGRESO_API_TIPOS = new Set(['bank_transfer', 'payment_out']);
-
         let saldoAprobado = 0;
         let porAcreditar = 0;
         let movTotalCount = 0;
         let movDespuesCount = 0;
-        let movMinFecha = null;
-        let movMaxFecha = null;
         const saldoTrace = {
           saldo_inicial_at_raw: saldoInicialAt,
           corte_iso: corte ? corte.toISOString() : null,
-          corte_ms: corte ? corte.getTime() : null,
           counted_rows: [],
         };
-        const { data: movLocal, error: movErr } = await db
-          .from('mp_movimientos')
-          .select('id, tipo, monto, estado, fecha, referencia_id')
-          .eq('local_id', cred.local_id);
-        if (movErr) {
-          console.error(
-            'mp-sync: sum mp_movimientos error',
-            cred.local_id,
-            movErr
+
+        // Sin corte seteado, saldo_disponible = 0 (no hay referencia).
+        if (!corte) {
+          console.log(
+            '[mp-sync] saldo local_id=' + cred.local_id,
+            'sin saldo_inicial_at → saldo_disponible=0'
           );
-        } else {
-          // Set de referencia_id de filas rr-* para saber si un egreso
-          // de la payments API ya tiene contraparte en el CSV.
-          const rrRefIdsLocal = new Set();
-          for (const m of movLocal || []) {
-            if (m.id && String(m.id).startsWith('rr-') && m.referencia_id) {
-              rrRefIdsLocal.add(String(m.referencia_id));
-            }
-          }
-
-          for (const m of movLocal || []) {
-            movTotalCount++;
-            if (m.fecha) {
-              if (!movMinFecha || m.fecha < movMinFecha) movMinFecha = m.fecha;
-              if (!movMaxFecha || m.fecha > movMaxFecha) movMaxFecha = m.fecha;
-            }
-            const monto = Number(m.monto) || 0;
-            const estado = (m.estado || '').toLowerCase();
-            const tipoRow = (m.tipo || '').toLowerCase();
-            const esRR = m.id && String(m.id).startsWith('rr-');
-            const cumpleCorte = corte && m.fecha && new Date(m.fecha) >= corte;
-
-            if (estado === 'approved' && cumpleCorte) {
-              // 1) Fila rr-* → siempre suma (fuente autoritativa).
-              // 2) Fila payments API con tipo egreso (bank_transfer /
-              //    payment_out) → suma SOLO si no tiene contraparte rr-*
-              //    (evita doble conteo cuando el CSV llegue mañana).
-              if (esRR) {
-                saldoAprobado += monto;
-                movDespuesCount++;
-              } else if (
-                EGRESO_API_TIPOS.has(tipoRow) &&
-                !rrRefIdsLocal.has(String(m.referencia_id || ''))
-              ) {
-                saldoAprobado += monto;
-                movDespuesCount++;
-              }
-              if (saldoTrace.counted_rows.length < 10 && (esRR || EGRESO_API_TIPOS.has(tipoRow))) {
-                saldoTrace.counted_rows.push({
-                  id: m.id,
-                  tipo: tipoRow,
-                  fecha: m.fecha,
-                  monto,
-                  src: esRR ? 'rr' : 'api',
-                });
-              }
-            } else if (
-              (estado === 'in_process' || estado === 'pending') &&
-              monto > 0
-            ) {
-              porAcreditar += monto;
-            }
-          }
         }
 
-        let credSaldoDisponible = saldoInicialNum + saldoAprobado;
-        let balanceFuente = 'saldo_inicial+release_rows';
-
-        console.log(
-          '[mp-sync] saldo local_id=' + cred.local_id,
-          'inicial=' + saldoInicialNum,
-          'aprobado=' + saldoAprobado,
-          'disponible=' + credSaldoDisponible,
-          'filas_en_saldo=' + movDespuesCount
-        );
+        // El cálculo del saldo se hace DESPUÉS del release report
+        // y el dedup, para incluir las filas rr-* recién insertadas.
 
         // Release report (settlement) — saldo real de MP.
         // Flujo: POST para generar un reporte con el rango, GET /list para
@@ -598,9 +521,8 @@ export default async function handler(req, res) {
               'CONFIG: ' + String(e?.message || e);
           }
 
-          // 2) GET /list — buscamos primero el reporte programado más
-          //    reciente (created_from='schedule'). Si existe lo usamos;
-          //    ya trae el closing_balance del día cerrado.
+          // 2) POST — siempre generar un reporte nuevo con end_date=ahora
+          //    para capturar movimientos hasta el momento exacto del sync.
           const parseListBody = (body) => {
             let data = null;
             try { data = body ? JSON.parse(body) : null; } catch {}
@@ -610,16 +532,48 @@ export default async function handler(req, res) {
               ? data.results
               : [];
           };
-          const sortByDateDesc = (arr) =>
-            arr.slice().sort((a, b) => {
-              const da = new Date(a?.date_created || a?.date || 0).getTime();
-              const db_ = new Date(b?.date_created || b?.date || 0).getTime();
-              return db_ - da;
-            });
           const isCsv = (f) =>
             (f?.file_name || f?.fileName || f?.name || '').toLowerCase().endsWith('.csv');
 
-          let scheduledFile = null;
+          const prePostTs = Date.now();
+          try {
+            const postRes = await fetch(
+              'https://api.mercadopago.com/v1/account/release_report',
+              {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${cred.access_token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  begin_date: beginIso,
+                  end_date: endIso,
+                }),
+              }
+            );
+            releaseReport.post_status = postRes.status;
+            releaseReport.post_body =
+              (await postRes.text())?.slice(0, 200) || null;
+            console.log(
+              '[mp-sync] release_report POST',
+              cred.local_id,
+              postRes.status,
+              releaseReport.post_body
+            );
+          } catch (e) {
+            releaseReport.error =
+              (releaseReport.error ? releaseReport.error + ' | ' : '') +
+              'POST: ' + String(e?.message || e);
+          }
+
+          // Esperar 90s para que MP genere el CSV.
+          console.log(
+            '[mp-sync] esperando 90s para CSV...',
+            cred.local_id
+          );
+          await sleep(90000);
+
+          // GET /list — buscar el CSV recién creado.
           try {
             const listRes = await fetch(
               'https://api.mercadopago.com/v1/account/release_report/list',
@@ -629,116 +583,39 @@ export default async function handler(req, res) {
             releaseReport.list_attempts = 1;
             const listBody = await listRes.text();
             releaseReport.list_body = listBody?.slice(0, 300) || null;
-            console.log(
-              '[mp-sync] release_report /list',
-              cred.local_id,
-              listRes.status,
-              releaseReport.list_body
-            );
             const rawFiles = parseListBody(listBody);
-            const scheduledCsvs = sortByDateDesc(
-              rawFiles.filter(
-                (f) =>
-                  isCsv(f) &&
-                  (f?.created_from || '').toLowerCase() === 'schedule'
-              )
-            );
-            scheduledFile = scheduledCsvs[0] || null;
+            const fresh = rawFiles
+              .filter((f) => {
+                if (!isCsv(f)) return false;
+                const dc = new Date(f?.date_created || f?.date || 0).getTime();
+                return dc >= prePostTs - 5000;
+              })
+              .sort((a, b) => {
+                const da = new Date(a?.date_created || a?.date || 0).getTime();
+                const db_ = new Date(b?.date_created || b?.date || 0).getTime();
+                return db_ - da;
+              });
+            const latest = fresh[0];
+            if (latest) {
+              releaseReport.file_name =
+                latest.file_name || latest.fileName || latest.name || null;
+              releaseReport.file_date_created =
+                latest.date_created || latest.date || null;
+              releaseReport.created_from = 'manual_fresh';
+              console.log(
+                '[mp-sync] release_report found:',
+                releaseReport.file_name
+              );
+            } else {
+              console.warn(
+                '[mp-sync] CSV no encontrado después de 90s',
+                cred.local_id
+              );
+            }
           } catch (e) {
             releaseReport.error =
               (releaseReport.error ? releaseReport.error + ' | ' : '') +
               'LIST: ' + String(e?.message || e);
-          }
-
-          if (scheduledFile) {
-            releaseReport.file_name =
-              scheduledFile.file_name ||
-              scheduledFile.fileName ||
-              scheduledFile.name ||
-              null;
-            releaseReport.file_date_created =
-              scheduledFile.date_created || scheduledFile.date || null;
-            releaseReport.created_from = 'schedule';
-          } else {
-            // 3) No hay reporte programado todavía — pedimos uno manual
-            //    como fallback y mostramos el mensaje de primera vez.
-            releaseReport.first_time_message =
-              'El primer reporte automático estará disponible mañana';
-            try {
-              const postRes = await fetch(
-                'https://api.mercadopago.com/v1/account/release_report',
-                {
-                  method: 'POST',
-                  headers: {
-                    Authorization: `Bearer ${cred.access_token}`,
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    begin_date: beginIso,
-                    end_date: endIso,
-                  }),
-                }
-              );
-              releaseReport.post_status = postRes.status;
-              releaseReport.post_body =
-                (await postRes.text())?.slice(0, 200) || null;
-              console.log(
-                '[mp-sync] release_report POST',
-                cred.local_id,
-                postRes.status,
-                releaseReport.post_body
-              );
-            } catch (e) {
-              releaseReport.error =
-                (releaseReport.error ? releaseReport.error + ' | ' : '') +
-                'POST: ' + String(e?.message || e);
-            }
-
-            // Poll /list buscando el manual recién creado (hoy).
-            const todayStart = new Date();
-            todayStart.setUTCHours(0, 0, 0, 0);
-            const todayMs = todayStart.getTime();
-            for (let attempt = 0; attempt < 3; attempt++) {
-              if (attempt > 0) await sleep(2000);
-              releaseReport.list_attempts =
-                (releaseReport.list_attempts || 0) + 1;
-              try {
-                const listRes = await fetch(
-                  'https://api.mercadopago.com/v1/account/release_report/list',
-                  { headers: { Authorization: `Bearer ${cred.access_token}` } }
-                );
-                releaseReport.list_status = listRes.status;
-                const listBody = await listRes.text();
-                releaseReport.list_body = listBody?.slice(0, 300) || null;
-                const rawFiles = parseListBody(listBody);
-                const manualToday = sortByDateDesc(
-                  rawFiles.filter((f) => {
-                    if (!isCsv(f)) return false;
-                    const dc = new Date(
-                      f?.date_created || f?.date || 0
-                    ).getTime();
-                    return dc >= todayMs;
-                  })
-                );
-                const latest = manualToday[0];
-                if (latest) {
-                  releaseReport.file_name =
-                    latest.file_name || latest.fileName || latest.name || null;
-                  releaseReport.file_date_created =
-                    latest.date_created || latest.date || null;
-                  releaseReport.created_from =
-                    (latest?.created_from || 'manual').toLowerCase();
-                  break;
-                }
-              } catch (e) {
-                releaseReport.error =
-                  (releaseReport.error ? releaseReport.error + ' | ' : '') +
-                  'LIST poll ' +
-                  (attempt + 1) +
-                  ': ' +
-                  String(e?.message || e);
-              }
-            }
           }
 
           // 3) GET /<file_name> — descarga el CSV del reporte.
@@ -900,6 +777,50 @@ export default async function handler(req, res) {
                   }
                   releaseReport.release_rows_upserted = cantRelease;
 
+                  // Post-release dedup: si en este mismo sync la payments API
+                  // insertó filas que ahora tienen contraparte rr-*, las borramos
+                  // inmediatamente para no devolver duplicados al frontend.
+                  if (cantRelease > 0) {
+                    try {
+                      const { data: postMovs } = await db
+                        .from('mp_movimientos')
+                        .select('id, referencia_id')
+                        .eq('local_id', cred.local_id);
+                      if (postMovs && postMovs.length) {
+                        const postRrRefs = new Set();
+                        for (const m of postMovs) {
+                          if (m.id && String(m.id).startsWith('rr-') && m.referencia_id) {
+                            postRrRefs.add(String(m.referencia_id));
+                          }
+                        }
+                        const postDupeIds = [];
+                        for (const m of postMovs) {
+                          if (
+                            m.id &&
+                            !String(m.id).startsWith('rr-') &&
+                            m.referencia_id &&
+                            postRrRefs.has(String(m.referencia_id))
+                          ) {
+                            postDupeIds.push(m.id);
+                          }
+                        }
+                        if (postDupeIds.length) {
+                          await db
+                            .from('mp_movimientos')
+                            .delete()
+                            .in('id', postDupeIds);
+                          console.log(
+                            '[mp-sync] post-release dedup deleted:',
+                            postDupeIds.length,
+                            postDupeIds
+                          );
+                        }
+                      }
+                    } catch (e) {
+                      console.error('mp-sync: post-release dedup error', e);
+                    }
+                  }
+
                   // Método 1: closing_balance (sólo existe en reportes
                   // programados del día cerrado).
                   let closingBalance = null;
@@ -986,9 +907,64 @@ export default async function handler(req, res) {
             String(e?.message || e);
         }
 
-        // /v1/account/balance devuelve 404 con los tokens que usamos,
-        // así que no lo llamamos más. El saldo se calcula únicamente
-        // como saldo_inicial + suma de release rows posteriores al corte.
+        // ── CÁLCULO DEL SALDO (post release report + dedup) ──
+        // Solo filas rr-* approved con fecha >= corte. Nada más.
+        // Solo filas rr-* approved con fecha >= corte.
+        const { data: movLocal, error: movErr } = await db
+          .from('mp_movimientos')
+          .select('id, tipo, monto, estado, fecha')
+          .eq('local_id', cred.local_id)
+          .like('id', 'rr-%')
+          .eq('estado', 'approved');
+        if (movErr) {
+          console.error(
+            'mp-sync: sum mp_movimientos error',
+            cred.local_id,
+            movErr
+          );
+        } else if (corte) {
+          for (const m of movLocal || []) {
+            movTotalCount++;
+            const monto = Number(m.monto) || 0;
+            const cumpleCorte = m.fecha && new Date(m.fecha) >= corte;
+            if (cumpleCorte) {
+              saldoAprobado += monto;
+              movDespuesCount++;
+              if (saldoTrace.counted_rows.length < 50) {
+                saldoTrace.counted_rows.push({
+                  id: m.id,
+                  tipo: m.tipo,
+                  fecha: m.fecha,
+                  monto,
+                });
+              }
+            }
+          }
+        }
+
+        // por_acreditar: movimientos pendientes (cualquier fuente)
+        if (corte) {
+          const { data: pendMovs } = await db
+            .from('mp_movimientos')
+            .select('monto')
+            .eq('local_id', cred.local_id)
+            .in('estado', ['in_process', 'pending'])
+            .gt('monto', 0);
+          for (const m of pendMovs || []) {
+            porAcreditar += Number(m.monto) || 0;
+          }
+        }
+
+        const credSaldoDisponible = corte ? saldoInicialNum + saldoAprobado : 0;
+        const balanceFuente = corte ? 'saldo_inicial+rr_only' : 'sin_corte';
+
+        console.log(
+          '[mp-sync] saldo local_id=' + cred.local_id,
+          'inicial=' + saldoInicialNum,
+          'aprobado=' + saldoAprobado,
+          'disponible=' + credSaldoDisponible,
+          'filas_rr=' + movDespuesCount
+        );
 
         balanceTotalMP += credSaldoDisponible;
         balanceConsultado = true;
@@ -999,8 +975,8 @@ export default async function handler(req, res) {
             saldo_inicial_raw: saldoInicialRaw,
             saldo_inicial_num: saldoInicialNum,
             saldo_inicial_at: saldoInicialAt,
-            mov_total: movTotalCount,
-            mov_despues_corte: movDespuesCount,
+            mov_total_rr: movTotalCount,
+            mov_en_saldo: movDespuesCount,
             saldo_aprobado: saldoAprobado,
             saldo_disponible: credSaldoDisponible,
             por_acreditar: porAcreditar,

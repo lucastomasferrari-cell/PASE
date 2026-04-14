@@ -315,6 +315,12 @@ function ConciliacionMP({ user, locales, localActivo }) {
         </div>
       </div>
 
+      {sincronizando&&(
+        <div className="alert" style={{background:"var(--bg2)",border:"1px solid var(--acc3)",color:"var(--acc3)",textAlign:"center",padding:"14px 20px",marginBottom:12,borderRadius:8,fontSize:14}}>
+          Sincronizando con MercadoPago... Esto puede tardar hasta 2 minutos mientras se genera el reporte.
+        </div>
+      )}
+
       {credenciales.length===0&&!loading&&(
         <div className="alert alert-warn">
           ⚠ No hay cuentas de MercadoPago configuradas. Cliclá en "⚙ Cuentas MP" para agregar las credenciales de cada local.
