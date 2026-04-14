@@ -36,27 +36,43 @@ export default function App() {
   // Restaurar sesión al cargar
   useEffect(()=>{
     const restore = async () => {
-      const { data: { session } } = await db.auth.getSession();
-      if (session?.user) {
-        const { data: perfil } = await db
-          .from("usuarios")
-          .select("*")
-          .eq("auth_id", session.user.id)
-          .single();
-        if (perfil) {
-          applyLogin(perfil);
+      // 1. Intentar restaurar desde localStorage (funciona para todos los usuarios)
+      try {
+        const savedId = localStorage.getItem("pase_uid");
+        if (savedId) {
+          const { data: perfil } = await db.from("usuarios").select("*").eq("id", parseInt(savedId)).single();
+          if (perfil && perfil.activo !== false) {
+            await applyLogin(perfil);
+            setAuthLoading(false);
+            return;
+          }
+          // Usuario no encontrado o inactivo: limpiar
+          localStorage.removeItem("pase_uid");
         }
-      }
+      } catch {}
+
+      // 2. Fallback: Supabase Auth session (usuarios con auth_id)
+      try {
+        const { data: { session } } = await db.auth.getSession();
+        if (session?.user) {
+          const { data: perfil } = await db.from("usuarios").select("*").eq("auth_id", session.user.id).single();
+          if (perfil) {
+            localStorage.setItem("pase_uid", String(perfil.id));
+            await applyLogin(perfil);
+          }
+        }
+      } catch {}
+
       setAuthLoading(false);
     };
     restore();
 
-    // Escuchar cambios de sesión (refresh token, etc)
-    const { data: { subscription } } = db.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = db.auth.onAuthStateChange(async (event) => {
       if (event === "SIGNED_OUT") {
         setUser(null);
         setSection("dashboard");
         setLocalActivo(null);
+        localStorage.removeItem("pase_uid");
       }
     });
     return () => subscription.unsubscribe();
@@ -74,6 +90,7 @@ export default function App() {
       _locales: (locsData || []).length ? (locsData || []).map(l => l.local_id) : (u.locales || []),
     };
     setUser(enriched);
+    localStorage.setItem("pase_uid", String(enriched.id));
     const perms = getPermisos(enriched);
     if(!perms.includes("dashboard") && perms.length) setSection(perms[0]);
     if(enriched.rol!=="dueno" && enriched._locales?.length===1) setLocalActivo(enriched._locales[0]);
@@ -88,7 +105,7 @@ export default function App() {
     setUser(null);
     setSection("dashboard");
     setLocalActivo(null);
-    try { localStorage.removeItem("gastro_user"); } catch {}
+    localStorage.removeItem("pase_uid");
   };
 
   const [toast, setToast] = useState("");
