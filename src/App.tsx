@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db } from "./lib/supabase";
-import { getPermisos, AuthProvider } from "./lib/auth";
+import { getPermisos, tienePermiso, AuthProvider } from "./lib/auth";
 import { Sidebar, css } from "./components/Layout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -91,9 +91,27 @@ export default function App() {
     try { localStorage.removeItem("gastro_user"); } catch {}
   };
 
+  const [toast, setToast] = useState("");
+  const toastTimer = useRef<any>(null);
+  const showToast = (msg: string) => {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(""), 3000);
+  };
+
   const props = { user, locales, localActivo };
 
+  const guardedNav = (slug: string) => {
+    if (!tienePermiso(user, slug)) {
+      setSection("dashboard");
+      showToast("Sin acceso");
+      return true;
+    }
+    return false;
+  };
+
   const renderSection = () => {
+    if (section !== "dashboard" && guardedNav(section)) return <Dashboard {...props}/>;
     switch(section) {
       case "dashboard": return <Dashboard {...props}/>;
       case "ventas":    return <Ventas {...props}/>;
@@ -128,7 +146,10 @@ export default function App() {
         <Sidebar user={user} section={section} onNav={setSection}
           onLogout={logout}
           locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo}/>
-        <main className="main">{renderSection()}</main>
+        <main className="main">
+          {toast && <div style={{position:"fixed",top:16,right:16,zIndex:200,padding:"10px 20px",background:"var(--danger)",color:"#fff",borderRadius:"var(--r)",fontSize:12,fontFamily:"'DM Mono',monospace",fontWeight:600,boxShadow:"0 4px 12px rgba(0,0,0,.5)"}}>{toast}</div>}
+          {renderSection()}
+        </main>
       </div>
     </AuthProvider>
   );

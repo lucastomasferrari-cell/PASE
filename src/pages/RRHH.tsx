@@ -49,19 +49,21 @@ export default function RRHH({ user, locales, localActivo }) {
   const [valoresDoble, setValoresDoble] = useState<any[]>([]);
   const visLocs = localesVisibles(user);
   const locsDisp = visLocs === null ? locales : locales.filter(l => visLocs.includes(l.id));
+  const esEnc = user?.rol === "encargado";
 
   // Empleados tab
   const [empleados, setEmpleados] = useState<any[]>([]);
   const [empLoading, setEmpLoading] = useState(true);
   const [empModal, setEmpModal] = useState<any>(null);
-  const [empFiltLocal, setEmpFiltLocal] = useState(localActivo || (locsDisp.length === 1 ? locsDisp[0].id : ""));
+  const defaultLocal = localActivo || (locsDisp.length === 1 ? locsDisp[0]?.id : (esEnc && locsDisp.length ? locsDisp[0].id : ""));
+  const [empFiltLocal, setEmpFiltLocal] = useState(defaultLocal);
   const empEmpty = { local_id:"", apellido:"", nombre:"", cuil:"", puesto:"", modo_pago:"MENSUAL", sueldo_mensual:"", alias_mp:"", fecha_inicio:toISO(today), activo:true };
   const [empForm, setEmpForm] = useState(empEmpty);
 
   // Novedades tab
   const [novMes, setNovMes] = useState(today.getMonth() + 1);
   const [novAnio, setNovAnio] = useState(today.getFullYear());
-  const [novLocal, setNovLocal] = useState(localActivo || (locsDisp.length === 1 ? locsDisp[0].id : ""));
+  const [novLocal, setNovLocal] = useState(defaultLocal);
   const [novEmps, setNovEmps] = useState<any[]>([]);
   const [novMap, setNovMap] = useState<Record<string, any>>({});
   const [novLoading, setNovLoading] = useState(false);
@@ -278,7 +280,7 @@ export default function RRHH({ user, locales, localActivo }) {
       {tab === "empleados" && (<>
         <div style={{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap", alignItems:"center" }}>
           <select className="search" style={{ width:180 }} value={empFiltLocal} onChange={e => setEmpFiltLocal(e.target.value)}>
-            <option value="">Todos los locales</option>
+            {!esEnc && <option value="">Todos los locales</option>}
             {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
           </select>
           <button className="btn btn-acc" onClick={abrirEmpNuevo}>+ Nuevo empleado</button>
@@ -435,7 +437,7 @@ export default function RRHH({ user, locales, localActivo }) {
           </select>
           <input type="number" className="search" style={{ width:80 }} value={liqAnio} onChange={e => setLiqAnio(parseInt(e.target.value))} />
           <select className="search" style={{ width:180 }} value={liqLocal} onChange={e => setLiqLocal(e.target.value)}>
-            <option value="">Todos los locales</option>
+            {!esEnc && <option value="">Todos los locales</option>}
             {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
           </select>
           <button className="btn btn-sec" onClick={exportCSV}>Exportar CSV</button>
