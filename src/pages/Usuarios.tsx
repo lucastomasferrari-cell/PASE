@@ -2,6 +2,12 @@ import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
 import { ROLES, MODULOS } from "../lib/auth";
 
+async function sha256(text: string) {
+  const enc = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 export default function Usuarios({ user, locales }) {
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -79,13 +85,19 @@ export default function Usuarios({ user, locales }) {
       } else {
         userId = modal.id;
         await db.from("usuarios").update({ nombre:form.nombre, activo:form.activo, locales:form.locales_ids }).eq("id", userId);
-        if (form.password && modal.auth_id) {
-          const r = await fetch("/api/auth-admin", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action:"change_password", authId:modal.auth_id, password:form.password }),
-          });
-          const d = await r.json();
-          if (!d.ok) { setErr(d.error); setSaving(false); return; }
+        if (form.password) {
+          // Actualizar hash SHA-256 en tabla usuarios (usado por login)
+          const hash = await sha256(form.password);
+          await db.from("usuarios").update({ password: hash }).eq("id", userId);
+          // También actualizar en Supabase Auth si el usuario está migrado
+          if (modal.auth_id) {
+            const r = await fetch("/api/auth-admin", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action:"change_password", authId:modal.auth_id, password:form.password }),
+            });
+            const d = await r.json();
+            if (!d.ok) { setErr(d.error); setSaving(false); guardando.current = false; return; }
+          }
         }
       }
 
