@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
 import { ROLES, MODULOS } from "../lib/auth";
 
@@ -56,9 +56,12 @@ export default function Usuarios({ user, locales }) {
     setForm(f => ({ ...f, locales_ids: f.locales_ids.includes(numId) ? f.locales_ids.filter(l => l !== numId) : [...f.locales_ids, numId] }));
   };
 
+  const guardando = useRef(false);
   const guardar = async () => {
     if (!form.nombre || !form.email) return;
     if (modal === "new" && !form.password) return;
+    if (guardando.current) return;
+    guardando.current = true;
     setSaving(true); setErr("");
     try {
       let userId: number | null = null;
@@ -121,6 +124,7 @@ export default function Usuarios({ user, locales }) {
       setModal(null); load();
     } catch (e: any) { setErr(e.message); }
     setSaving(false);
+    guardando.current = false;
   };
 
   const toggleActivo = async (u) => {

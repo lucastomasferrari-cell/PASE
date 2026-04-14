@@ -32,14 +32,14 @@ export default async function handler(req, res) {
         return res.status(500).json({ ok: false, error: authErr.message });
       }
 
-      const { error: insertErr } = await db.from('usuarios').insert([{
+      const { error: insertErr } = await db.from('usuarios').upsert([{
         nombre,
         email: usuario,
         password: '***', // no guardar en texto plano
         rol,
         locales: userLocales || [],
         auth_id: authUser.user.id,
-      }]);
+      }], { onConflict: 'auth_id', ignoreDuplicates: true });
 
       if (insertErr) {
         // Rollback: borrar auth user
