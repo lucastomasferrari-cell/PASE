@@ -88,7 +88,7 @@ export default function RRHH({ user, locales, localActivo }) {
   const loadEmpleados = async () => {
     setEmpLoading(true);
     let q = db.from("rrhh_empleados").select("*").order("apellido");
-    if (empFiltLocal) q = q.eq("local_id", empFiltLocal);
+    if (empFiltLocal) q = q.eq("local_id", parseInt(empFiltLocal));
     const { data } = await q;
     setEmpleados(data || []);
     setEmpLoading(false);
@@ -97,7 +97,7 @@ export default function RRHH({ user, locales, localActivo }) {
   const loadNovedades = async () => {
     if (!novLocal) return;
     setNovLoading(true);
-    const { data: emps } = await db.from("rrhh_empleados").select("*").eq("local_id", novLocal).eq("activo", true).order("apellido");
+    const { data: emps } = await db.from("rrhh_empleados").select("*").eq("local_id", parseInt(novLocal)).eq("activo", true).order("apellido");
     const empIds = (emps || []).map(e => e.id);
     let novs: any[] = [];
     if (empIds.length) {
@@ -118,7 +118,7 @@ export default function RRHH({ user, locales, localActivo }) {
     setLiqLoading(true);
     // Load all novedades + liquidaciones for the month
     let q = db.from("rrhh_novedades").select("*, rrhh_liquidaciones(*), rrhh_empleados(*)").eq("mes", liqMes).eq("anio", liqAnio).eq("estado", "confirmado");
-    if (liqLocal) q = q.eq("rrhh_empleados.local_id", liqLocal);
+    if (liqLocal) q = q.eq("rrhh_empleados.local_id", parseInt(liqLocal));
     const { data } = await q;
     setLiqData(data || []);
     setLiqLoading(false);
@@ -134,7 +134,7 @@ export default function RRHH({ user, locales, localActivo }) {
 
   const guardarEmp = async () => {
     if (!empForm.apellido || !empForm.nombre || !empForm.local_id || !empForm.puesto || !empForm.sueldo_mensual) return;
-    const payload = { ...empForm, local_id: empForm.local_id, sueldo_mensual: parseFloat(empForm.sueldo_mensual) || 0 };
+    const payload = { ...empForm, local_id: parseInt(empForm.local_id), sueldo_mensual: parseFloat(empForm.sueldo_mensual) || 0 };
     if (empModal?.id) {
       const { valor_dia, valor_hora, creado_at, ...upd } = payload as any;
       await db.from("rrhh_empleados").update(upd).eq("id", empModal.id);
@@ -146,7 +146,7 @@ export default function RRHH({ user, locales, localActivo }) {
 
   const abrirEmpNuevo = () => { setEmpForm({ ...empEmpty, local_id: empFiltLocal || "" }); setEmpModal("new"); };
   const abrirEmpEditar = (e) => {
-    setEmpForm({ local_id:e.local_id||"", apellido:e.apellido, nombre:e.nombre, cuil:e.cuil||"", puesto:e.puesto, modo_pago:e.modo_pago, sueldo_mensual:String(e.sueldo_mensual), alias_mp:e.alias_mp||"", fecha_inicio:e.fecha_inicio||"", activo:e.activo });
+    setEmpForm({ local_id:e.local_id ? String(e.local_id) : "", apellido:e.apellido, nombre:e.nombre, cuil:e.cuil||"", puesto:e.puesto, modo_pago:e.modo_pago, sueldo_mensual:String(e.sueldo_mensual), alias_mp:e.alias_mp||"", fecha_inicio:e.fecha_inicio||"", activo:e.activo });
     setEmpModal(e);
   };
 

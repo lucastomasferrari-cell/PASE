@@ -1,3 +1,12 @@
+import { createContext, useContext } from "react";
+
+// ─── TIPOS ───────────────────────────────────────────────────────────────────
+// usuarios.id = INTEGER, usuarios.rol = TEXT, usuarios.locales = INTEGER[]
+// locales.id = INTEGER
+// usuario_permisos.usuario_id = INTEGER
+// usuario_locales.usuario_id = INTEGER, local_id = INTEGER
+// rrhh_novedades.cargado_por = INTEGER
+
 export const ROLES: Record<string, { label: string; color: string; permisos?: string[] }> = {
   dueno:     { label:"Dueño",      color:"#9333EA" },
   admin:     { label:"Admin",      color:"#3B82F6", permisos:["dashboard","ventas","compras","remitos","gastos","caja","proveedores","empleados"] },
@@ -27,6 +36,8 @@ export const MODULOS = [
   { slug:"usuarios", label:"Usuarios", icon:"👥" },
 ];
 
+// ─── FUNCIONES PURAS ─────────────────────────────────────────────────────────
+
 export function getPermisos(user: any): string[] {
   if (!user) return [];
   if (user.rol === "dueno") return MODULOS.map(m => m.slug);
@@ -44,8 +55,26 @@ export function esEncargado(user: any): boolean {
   return user?.rol === "encargado";
 }
 
-export function localesVisibles(user: any): any[] | null {
+/** null = todos los locales (dueno/admin). number[] para encargado. */
+export function localesVisibles(user: any): number[] | null {
   if (!user) return [];
   if (user.rol === "dueno" || user.rol === "admin") return null;
   return user._locales?.length ? user._locales : (user.locales || []);
+}
+
+// ─── REACT CONTEXT + HOOK ────────────────────────────────────────────────────
+// user en sesión: { id: number, nombre, email, rol: string, activo: boolean,
+//   _permisos: string[], _locales: number[] }
+
+const AuthContext = createContext<any>(null);
+export const AuthProvider = AuthContext.Provider;
+
+export function useAuth() {
+  const user = useContext(AuthContext);
+  return {
+    user,
+    tienePermiso: (slug: string) => tienePermiso(user, slug),
+    esEncargado: () => esEncargado(user),
+    localesVisibles: () => localesVisibles(user),
+  };
 }

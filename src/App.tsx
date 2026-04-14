@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "./lib/supabase";
-import { getPermisos } from "./lib/auth";
+import { getPermisos, AuthProvider } from "./lib/auth";
 import { Sidebar, css } from "./components/Layout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -122,7 +122,7 @@ export default function App() {
   if(!user) return <><style>{css}</style><Login onLogin={login}/></>;
 
   return (
-    <>
+    <AuthProvider value={user}>
       <style>{css}</style>
       <div className="app">
         <Sidebar user={user} section={section} onNav={setSection}
@@ -130,6 +130,6 @@ export default function App() {
           locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo}/>
         <main className="main">{renderSection()}</main>
       </div>
-    </>
+    </AuthProvider>
   );
 }
