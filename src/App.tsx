@@ -25,16 +25,58 @@ export default function App() {
   const [section, setSection] = useState("dashboard");
   const [locales, setLocales] = useState([]);
   const [localActivo, setLocalActivo] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(()=>{
     db.from("locales").select("*").order("id").then(({data})=>setLocales(data||[]));
   },[]);
 
-  const login = u => {
+  // Restaurar sesión al cargar
+  useEffect(()=>{
+    const restore = async () => {
+      const { data: { session } } = await db.auth.getSession();
+      if (session?.user) {
+        const { data: perfil } = await db
+          .from("usuarios")
+          .select("*")
+          .eq("auth_id", session.user.id)
+          .single();
+        if (perfil) {
+          applyLogin(perfil);
+        }
+      }
+      setAuthLoading(false);
+    };
+    restore();
+
+    // Escuchar cambios de sesión (refresh token, etc)
+    const { data: { subscription } } = db.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_OUT") {
+        setUser(null);
+        setSection("dashboard");
+        setLocalActivo(null);
+      }
+    });
+    return () => subscription.unsubscribe();
+  },[]);
+
+  const applyLogin = (u) => {
     setUser(u);
     const perms = ROLES[u.rol]?.permisos||[];
     if(!perms.includes("dashboard")) setSection(perms[0]);
     if(u.rol!=="dueno"&&(u.locales||[]).length===1) setLocalActivo(u.locales[0]);
+  };
+
+  const login = (u) => {
+    applyLogin(u);
+  };
+
+  const logout = async () => {
+    await db.auth.signOut();
+    setUser(null);
+    setSection("dashboard");
+    setLocalActivo(null);
+    try { localStorage.removeItem("gastro_user"); } catch {}
   };
 
   const props = { user, locales, localActivo };
@@ -61,6 +103,8 @@ export default function App() {
     }
   };
 
+  if (authLoading) return <><style>{css}</style><div className="login-wrap"><div className="login-bg"/><div className="login-card" style={{textAlign:"center",padding:40}}>Cargando...</div></div></>;
+
   if(!user) return <><style>{css}</style><Login onLogin={login}/></>;
 
   return (
@@ -68,7 +112,7 @@ export default function App() {
       <style>{css}</style>
       <div className="app">
         <Sidebar user={user} section={section} onNav={setSection}
-          onLogout={()=>{setUser(null);setSection("dashboard");setLocalActivo(null);try{localStorage.removeItem("gastro_user");}catch{}}}
+          onLogout={logout}
           locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo}/>
         <main className="main">{renderSection()}</main>
       </div>
