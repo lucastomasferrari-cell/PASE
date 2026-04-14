@@ -14,40 +14,49 @@ export default async function handler(req, res) {
     const { action, nombre, usuario, password, rol, locales: userLocales, userId, authId } = req.body || {};
 
     if (action === 'create') {
-      // Crear usuario en Supabase Auth + tabla usuarios
-      if (!nombre || !usuario || !password || !rol) {
+      if (!nombre || !usuario || !password) {
         return res.status(400).json({ ok: false, error: 'Faltan campos requeridos' });
       }
 
-      const authEmail = usuario.includes('@') ? usuario : usuario + '@pase.local';
-
-      const { data: authUser, error: authErr } = await db.auth.admin.createUser({
-        email: authEmail,
-        password,
-        email_confirm: true,
-        user_metadata: { nombre, rol },
-      });
-
-      if (authErr) {
-        return res.status(500).json({ ok: false, error: authErr.message });
+      // 1. Intentar crear en Supabase Auth (no bloquea si falla)
+      let authId = null;
+      try {
+        const authEmail = usuario.includes('@') ? usuario : usuario + '@pase.local';
+        const { data: authUser, error: authErr } = await db.auth.admin.createUser({
+          email: authEmail,
+          password,
+          email_confirm: true,
+          user_metadata: { nombre, rol: rol || 'encargado' },
+        });
+        if (authErr) {
+          console.warn('[auth-admin] Supabase Auth falló (continuando sin auth):', authErr.message);
+        } else {
+          authId = authUser.user.id;
+        }
+      } catch (authCatchErr) {
+        console.warn('[auth-admin] Supabase Auth exception (continuando sin auth):', authCatchErr.message);
       }
 
-      const { error: insertErr } = await db.from('usuarios').upsert([{
+      // 2. Hash SHA-256 de la contraseña
+      const { createHash } = await import('crypto');
+      const hashPassword = createHash('sha256').update(password).digest('hex');
+
+      // 3. INSERT en tabla usuarios (sin campo id, SERIAL auto-incremental)
+      const { error: insertErr } = await db.from('usuarios').insert([{
         nombre,
         email: usuario,
-        password: '***', // no guardar en texto plano
-        rol,
+        password: hashPassword,
+        rol: rol || 'encargado',
+        activo: true,
         locales: userLocales || [],
-        auth_id: authUser.user.id,
-      }], { onConflict: 'auth_id', ignoreDuplicates: true });
+        auth_id: authId,
+      }]);
 
       if (insertErr) {
-        // Rollback: borrar auth user
-        await db.auth.admin.deleteUser(authUser.user.id);
         return res.status(500).json({ ok: false, error: insertErr.message });
       }
 
-      return res.status(200).json({ ok: true, auth_id: authUser.user.id });
+      return res.status(200).json({ ok: true, auth_id: authId });
 
     } else if (action === 'change_password') {
       // Cambiar contraseña en Supabase Auth
