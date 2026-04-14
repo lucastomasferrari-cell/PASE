@@ -2,6 +2,12 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { ROLES } from "../lib/auth";
 
+async function sha256(text) {
+  const enc = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 export default function Config({ locales }) {
   const [usuarios,setUsuarios]=useState([]);
@@ -46,8 +52,9 @@ export default function Config({ locales }) {
         if(!d.ok){setFormErr(d.error||"Error cambiando contraseña");setSaving(false);return;}
       }catch(e){setFormErr(e.message);setSaving(false);return;}
     }else{
-      // Fallback: usuario no migrado
-      await db.from("usuarios").update({password:editModal.password}).eq("id",editModal.id);
+      // Fallback: usuario no migrado — guardar hash
+      const hash = await sha256(editModal.password);
+      await db.from("usuarios").update({password:hash}).eq("id",editModal.id);
     }
     setSaving(false);setEditModal(null);load();
   };

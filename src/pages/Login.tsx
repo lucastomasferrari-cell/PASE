@@ -1,6 +1,12 @@
 import { useState, useRef } from "react";
 import { db } from "../lib/supabase";
 
+async function sha256(text) {
+  const enc = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 export default function Login({ onLogin }) {
   const [usuario, setUsuario] = useState("");
@@ -34,12 +40,13 @@ export default function Login({ onLogin }) {
       }
     }
 
-    // Fallback: query directa (para usuarios no migrados aún)
+    // Fallback: comparar contra hash SHA-256
+    const hash = await sha256(password);
     const { data } = await db
       .from("usuarios")
       .select("*")
       .eq("email", usuario)
-      .eq("password", password)
+      .eq("password", hash)
       .single();
     setLoading(false);
 
