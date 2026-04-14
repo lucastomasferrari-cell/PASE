@@ -88,7 +88,10 @@ export default function Usuarios({ user, locales }) {
         if (form.password) {
           // Actualizar hash SHA-256 en tabla usuarios (usado por login fallback)
           const hash = await sha256(form.password);
-          await db.from("usuarios").update({ password: hash }).eq("id", userId);
+          console.log("[Usuarios] UPDATE password:", { userId, hashPreview: hash.slice(0, 16) + "...", authId: modal.auth_id || "NULL" });
+          const { error: pwErr } = await db.from("usuarios").update({ password: hash }).eq("id", userId);
+          if (pwErr) console.error("[Usuarios] UPDATE password falló:", pwErr.message);
+          else console.log("[Usuarios] UPDATE password OK para userId:", userId);
           // También actualizar en Supabase Auth si el usuario está migrado
           if (modal.auth_id) {
             try {
