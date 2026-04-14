@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
 import { tienePermiso, localesVisibles } from "../lib/auth";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
+import RRHHLegajo from "./RRHHLegajo";
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 function calcSueldoBase(modo_pago: string, sueldo_mensual: number) {
@@ -44,6 +45,7 @@ const PRESENTISMO_OPTS = [
 // ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
 export default function RRHH({ user, locales, localActivo }) {
   const [tab, setTab] = useState("novedades");
+  const [legajoId, setLegajoId] = useState<string | null>(null);
 
   // Shared
   const [valoresDoble, setValoresDoble] = useState<any[]>([]);
@@ -138,7 +140,17 @@ export default function RRHH({ user, locales, localActivo }) {
     if (!empForm.apellido || !empForm.nombre || !empForm.local_id || !empForm.puesto || !empForm.sueldo_mensual) return;
     const payload = { ...empForm, local_id: parseInt(empForm.local_id), sueldo_mensual: parseFloat(empForm.sueldo_mensual) || 0 };
     if (empModal?.id) {
-      const { valor_dia, valor_hora, creado_at, ...upd } = payload as any;
+      // Registrar historial si el sueldo cambió
+      const sueldoAnterior = Number(empModal.sueldo_mensual);
+      const sueldoNuevo = payload.sueldo_mensual;
+      if (sueldoAnterior !== sueldoNuevo && sueldoAnterior > 0) {
+        await db.from("rrhh_historial_sueldos").insert([{
+          empleado_id: empModal.id, sueldo_anterior: sueldoAnterior,
+          sueldo_nuevo: sueldoNuevo, motivo: "Edición desde listado",
+          registrado_por: user?.id,
+        }]);
+      }
+      const { valor_dia, valor_hora, creado_at, vacaciones_dias_acumulados, aguinaldo_acumulado, ...upd } = payload as any;
       await db.from("rrhh_empleados").update(upd).eq("id", empModal.id);
     } else {
       await db.from("rrhh_empleados").insert([payload]);
@@ -266,6 +278,11 @@ export default function RRHH({ user, locales, localActivo }) {
     ...(esDueno ? [{ id:"config", label:"Configuración" }] : []),
   ];
 
+  // Sub-vista legajo
+  if (legajoId) {
+    return <RRHHLegajo empleadoId={legajoId} user={user} locales={locales} onBack={() => { setLegajoId(null); loadEmpleados(); }} />;
+  }
+
   return (
     <div>
       <div className="ph-row">
@@ -300,7 +317,7 @@ export default function RRHH({ user, locales, localActivo }) {
                 <td className="mono" style={{ fontSize:10, color:"var(--muted2)" }}>{e.alias_mp || "—"}</td>
                 <td className="mono" style={{ fontSize:11 }}>{fmt_d(e.fecha_inicio)}</td>
                 <td><span className={`badge ${e.activo !== false ? "b-success" : "b-muted"}`}>{e.activo !== false ? "Si" : "No"}</span></td>
-                <td><button className="btn btn-ghost btn-sm" onClick={() => abrirEmpEditar(e)}>Editar</button></td>
+                <td><div style={{display:"flex",gap:4}}><button className="btn btn-ghost btn-sm" onClick={() => setLegajoId(e.id)}>Legajo</button><button className="btn btn-ghost btn-sm" onClick={() => abrirEmpEditar(e)}>Editar</button></div></td>
               </tr>
             ))}</tbody></table>
             </div>
