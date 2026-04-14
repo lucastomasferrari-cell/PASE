@@ -128,7 +128,6 @@ export default function App() {
       case "mp":        return <ConciliacionMP {...props}/>;
       case "caja_efectivo": return <CajaEfectivo {...props}/>;
       case "proveedores": return <Proveedores {...props}/>;
-      case "empleados": return <Empleados {...props}/>;
       case "usuarios":  return <Usuarios {...props}/>;
       case "rrhh":      return <RRHHPage {...props}/>;
       default: return null;

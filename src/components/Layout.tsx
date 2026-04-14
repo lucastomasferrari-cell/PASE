@@ -19,7 +19,6 @@ export function Sidebar({ user, section, onNav, onLogout, locales, localActivo, 
     {id:"caja_efectivo",label:"Caja Efectivo",icon:"💵",sec:"Finanzas"},
     {id:"eerr",label:"Estado de Result.",icon:"📊",sec:"Finanzas"},
     {id:"contador",label:"Contador / IVA",icon:"🧾",sec:"Finanzas"},
-    {id:"empleados",label:"Empleados",icon:"👷",sec:"RRHH"},
     {id:"rrhh",label:"RRHH",icon:"💼",sec:"RRHH"},
     {id:"usuarios",label:"Usuarios",icon:"👥",sec:"Config"},
   ];
