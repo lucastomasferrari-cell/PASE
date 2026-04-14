@@ -19,6 +19,7 @@ import Insumos from "./pages/Insumos";
 import LectorFacturasIA from "./pages/LectorFacturasIA";
 import Recetas from "./pages/Recetas";
 import ConciliacionMP from "./pages/ConciliacionMP";
+import CajaEfectivo from "./pages/CajaEfectivo";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -96,6 +97,7 @@ export default function App() {
       case "lector_ia": return <LectorFacturasIA {...props}/>;
       case "recetas":   return <Recetas {...props}/>;
       case "mp":        return <ConciliacionMP {...props}/>;
+      case "caja_efectivo": return <CajaEfectivo {...props}/>;
       case "proveedores": return <Proveedores {...props}/>;
       case "empleados": return <Empleados {...props}/>;
       case "config":    return <Config {...props}/>;
