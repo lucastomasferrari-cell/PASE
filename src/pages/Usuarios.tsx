@@ -10,7 +10,7 @@ export default function Usuarios({ user, locales }) {
   const [err, setErr] = useState("");
   const [showPw, setShowPw] = useState(false);
 
-  const emptyForm = { nombre:"", email:"", password:"", rol:"encargado", activo:true, modulos:[] as string[], locales_ids:[] as number[] };
+  const emptyForm = { nombre:"", email:"", password:"", activo:true, modulos:[] as string[], locales_ids:[] as number[] };
   const [form, setForm] = useState(emptyForm);
 
   const load = async () => {
@@ -41,7 +41,7 @@ export default function Usuarios({ user, locales }) {
 
     setForm({
       nombre: u.nombre, email: u.email, password: "",
-      rol: u.rol || "encargado", activo: u.activo !== false,
+      activo: u.activo !== false,
       modulos: u._permisos || [],
       locales_ids: finalLocs,
     });
@@ -66,16 +66,16 @@ export default function Usuarios({ user, locales }) {
       if (modal === "new") {
         const r = await fetch("/api/auth-admin", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action:"create", nombre:form.nombre, usuario:form.email, password:form.password, rol:form.rol, locales:form.locales_ids }),
+          body: JSON.stringify({ action:"create", nombre:form.nombre, usuario:form.email, password:form.password, rol:"encargado", locales:form.locales_ids }),
         });
         const d = await r.json();
         if (!d.ok) { setErr(d.error || "Error creando usuario"); setSaving(false); return; }
         const { data: newU } = await db.from("usuarios").select("id").eq("email", form.email).single();
         userId = newU?.id ?? null;
-        if (userId) await db.from("usuarios").update({ activo:form.activo, rol:form.rol }).eq("id", userId);
+        if (userId) await db.from("usuarios").update({ activo:form.activo }).eq("id", userId);
       } else {
         userId = modal.id;
-        await db.from("usuarios").update({ nombre:form.nombre, rol:form.rol, activo:form.activo, locales:form.locales_ids }).eq("id", userId);
+        await db.from("usuarios").update({ nombre:form.nombre, activo:form.activo, locales:form.locales_ids }).eq("id", userId);
         if (form.password && modal.auth_id) {
           const r = await fetch("/api/auth-admin", {
             method: "POST", headers: { "Content-Type": "application/json" },
@@ -89,17 +89,14 @@ export default function Usuarios({ user, locales }) {
       if (!userId) { setErr("No se pudo obtener el ID del usuario"); setSaving(false); return; }
 
       // Save permisos (delete + re-insert)
-      if (form.rol !== "dueno") {
-        await db.from("usuario_permisos").delete().eq("usuario_id", userId);
-        if (form.modulos.length) {
-          const { error: permErr } = await db.from("usuario_permisos").insert(
-            form.modulos.map(slug => ({ usuario_id: userId as number, modulo_slug: slug }))
-          );
-          if (permErr) console.error("Error guardando permisos:", permErr.message);
-        }
-      } else {
-        // Dueno: limpiar permisos individuales (tiene todos implícitos)
-        await db.from("usuario_permisos").delete().eq("usuario_id", userId);
+      // Dueno tiene todos implícitos, no necesita rows. Otros roles sí.
+      const userRol = modal === "new" ? "encargado" : (modal.rol || "encargado");
+      await db.from("usuario_permisos").delete().eq("usuario_id", userId);
+      if (userRol !== "dueno" && form.modulos.length) {
+        const { error: permErr } = await db.from("usuario_permisos").insert(
+          form.modulos.map(slug => ({ usuario_id: userId as number, modulo_slug: slug }))
+        );
+        if (permErr) console.error("Error guardando permisos:", permErr.message);
       }
 
       // Save locales en usuario_locales (delete + re-insert)
@@ -206,67 +203,66 @@ export default function Usuarios({ user, locales }) {
                 </div>
               </div>
 
-              <div className="form2">
-                <div className="field"><label>Rol</label>
-                  <select value={form.rol} onChange={e => setForm({ ...form, rol:e.target.value })}>
-                    <option value="dueno">Dueño</option><option value="admin">Admin</option><option value="encargado">Encargado</option>
-                  </select></div>
-                <div className="field"><label>Estado</label>
-                  <select value={form.activo ? "1" : "0"} onChange={e => setForm({ ...form, activo:e.target.value === "1" })}>
-                    <option value="1">Activo</option><option value="0">Inactivo</option>
-                  </select></div>
-              </div>
+              <div className="field"><label>Estado</label>
+                <select value={form.activo ? "1" : "0"} onChange={e => setForm({ ...form, activo:e.target.value === "1" })}>
+                  <option value="1">Activo</option><option value="0">Inactivo</option>
+                </select></div>
 
               {/* Módulos */}
-              <div style={{ marginTop:16, marginBottom:16 }}>
-                <label style={{ display:"block", fontSize:9, letterSpacing:"1.5px", textTransform:"uppercase", color:"var(--muted)", marginBottom:8 }}>
-                  Módulos habilitados
-                </label>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:4 }}>
-                  {MODULOS.map(m => {
-                    const checked = form.rol === "dueno" || form.modulos.includes(m.slug);
-                    const disabled = form.rol === "dueno";
-                    return (
-                      <label key={m.slug} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11,
-                        color: disabled ? "var(--muted)" : checked ? "var(--txt)" : "var(--muted2)",
-                        cursor: disabled ? "default" : "pointer", padding:"4px 6px",
-                        background: checked ? "var(--s3)" : "transparent", borderRadius:"var(--r)" }}>
-                        <input type="checkbox" checked={checked} disabled={disabled}
-                          onChange={() => !disabled && toggleModulo(m.slug)} style={{ accentColor:"var(--acc)" }} />
-                        <span>{m.icon}</span> {m.label}
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Locales — visible para admin y encargado */}
-              {form.rol !== "dueno" && (
-                <div style={{ marginTop:16 }}>
-                  <label style={{ display:"block", fontSize:9, letterSpacing:"1.5px", textTransform:"uppercase", color:"var(--muted)", marginBottom:8 }}>
-                    Locales asignados {form.rol === "encargado" && "(obligatorio para encargados)"}
-                  </label>
-                  {locales.length === 0 ? <div className="empty" style={{padding:16}}>No hay locales cargados en el sistema</div> : (
-                    <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                      {locales.map(l => {
-                        const checked = form.locales_ids.includes(Number(l.id));
+              {(() => {
+                const modalRol = modal === "new" ? "encargado" : (modal.rol || "encargado");
+                const isDueno = modalRol === "dueno";
+                return (<>
+                  <div style={{ marginTop:16, marginBottom:16 }}>
+                    <label style={{ display:"block", fontSize:9, letterSpacing:"1.5px", textTransform:"uppercase", color:"var(--muted)", marginBottom:8 }}>
+                      Módulos habilitados
+                    </label>
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:4 }}>
+                      {MODULOS.map(m => {
+                        const checked = isDueno || form.modulos.includes(m.slug);
                         return (
-                          <label key={l.id} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11,
-                            color: checked ? "var(--txt)" : "var(--muted2)", cursor:"pointer",
-                            padding:"6px 10px", background: checked ? "var(--s3)" : "var(--s2)",
-                            borderRadius:"var(--r)", border:`1px solid ${checked ? "var(--acc)" : "var(--bd)"}` }}>
-                            <input type="checkbox" checked={checked} onChange={() => toggleLocal(Number(l.id))} style={{ accentColor:"var(--acc)" }} />
-                            {l.nombre}
+                          <label key={m.slug} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11,
+                            color: isDueno ? "var(--muted)" : checked ? "var(--txt)" : "var(--muted2)",
+                            cursor: isDueno ? "default" : "pointer", padding:"4px 6px",
+                            background: checked ? "var(--s3)" : "transparent", borderRadius:"var(--r)" }}>
+                            <input type="checkbox" checked={checked} disabled={isDueno}
+                              onChange={() => !isDueno && toggleModulo(m.slug)} style={{ accentColor:"var(--acc)" }} />
+                            <span>{m.icon}</span> {m.label}
                           </label>
                         );
                       })}
                     </div>
+                  </div>
+
+                  {/* Locales — visible para admin y encargado */}
+                  {!isDueno && (
+                    <div style={{ marginTop:16 }}>
+                      <label style={{ display:"block", fontSize:9, letterSpacing:"1.5px", textTransform:"uppercase", color:"var(--muted)", marginBottom:8 }}>
+                        Locales asignados
+                      </label>
+                      {locales.length === 0 ? <div className="empty" style={{padding:16}}>No hay locales cargados en el sistema</div> : (
+                        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                          {locales.map(l => {
+                            const checked = form.locales_ids.includes(Number(l.id));
+                            return (
+                              <label key={l.id} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11,
+                                color: checked ? "var(--txt)" : "var(--muted2)", cursor:"pointer",
+                                padding:"6px 10px", background: checked ? "var(--s3)" : "var(--s2)",
+                                borderRadius:"var(--r)", border:`1px solid ${checked ? "var(--acc)" : "var(--bd)"}` }}>
+                                <input type="checkbox" checked={checked} onChange={() => toggleLocal(Number(l.id))} style={{ accentColor:"var(--acc)" }} />
+                                {l.nombre}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {form.locales_ids.length === 0 && (
+                        <div className="alert alert-warn" style={{ marginTop:8 }}>Sin locales asignados no podrá cargar novedades en RRHH</div>
+                      )}
+                    </div>
                   )}
-                  {form.rol === "encargado" && form.locales_ids.length === 0 && (
-                    <div className="alert alert-warn" style={{ marginTop:8 }}>Sin locales asignados no podrá cargar novedades en RRHH</div>
-                  )}
-                </div>
-              )}
+                </>);
+              })()}
             </div>
             <div className="modal-ft">
               <button className="btn btn-sec" onClick={() => setModal(null)}>Cancelar</button>
