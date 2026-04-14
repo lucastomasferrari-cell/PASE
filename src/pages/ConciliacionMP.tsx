@@ -62,24 +62,48 @@ function ConciliacionMP({ user, locales, localActivo }) {
     setTimeout(()=>setToast(t=>t&&t.msg===msg?null:t),5000);
   };
 
+  const [syncCountdown,setSyncCountdown]=useState(0);
+
   const sincronizar=async()=>{
     setSincronizando(true);
+    setSyncCountdown(120);
     try{
-      const r=await fetch("/api/mp-sync",{method:"POST"});
-      const d=await r.json().catch(()=>({ok:false,error:"respuesta no-JSON del servidor"}));
-      // Todo el detalle técnico va a DevTools.
-      console.groupCollapsed("%c[MP] /api/mp-sync response","color:#3ECFCF;font-weight:600");
+      // Paso 1: generar CSV (< 5s)
+      const genRes=await fetch("/api/mp-generate",{method:"POST"});
+      const genData=await genRes.json().catch(()=>({ok:false}));
+      const ts=genData.timestamp||Date.now();
+      console.log("[MP] mp-generate:",genData);
+
+      if(!genData.ok){
+        showToast("err","⚠ Error generando reporte: "+(genData.error||"desconocido"));
+        setSincronizando(false);
+        setSyncCountdown(0);
+        return;
+      }
+
+      // Paso 2: countdown de 2 minutos
+      await new Promise(resolve=>{
+        let remaining=120;
+        const interval=setInterval(()=>{
+          remaining--;
+          setSyncCountdown(remaining);
+          if(remaining<=0){clearInterval(interval);resolve();}
+        },1000);
+      });
+
+      // Paso 3: procesar CSV + calcular saldo
+      setSyncCountdown(-1); // indica "procesando"
+      const procRes=await fetch("/api/mp-process",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ts})});
+      const d=await procRes.json().catch(()=>({ok:false,error:"respuesta no-JSON del servidor"}));
+
+      console.groupCollapsed("%c[MP] /api/mp-process response","color:#3ECFCF;font-weight:600");
       console.log("ok:",d.ok,"error:",d.error||null);
-      if(d.cleanup_dedup_deleted)console.log("[MP] dedup cleanup:",d.cleanup_dedup_deleted,"duplicados eliminados");
-      if(d.balance_mp!=null)console.log("balance_mp:",d.balance_mp);
+      if(d.cleanup_dedup_deleted)console.log("[MP] dedup cleanup:",d.cleanup_dedup_deleted);
       for(const x of (d.resultados||[])){
-        console.groupCollapsed("["+x.local_id+"] "+x.local+(x.account_id?" — mp_id "+x.account_id:""));
-        console.log("movimientos:",x.movimientos,"comisiones:",x.comisiones,"reembolsos:",x.reembolsos);
-        if(x.error)console.warn("ERR:",x.error);
+        console.groupCollapsed("["+x.local_id+"] "+x.local);
+        console.log("movimientos:",x.movimientos,"release_rows:",x.release_rows,"saldo_disponible:",x.saldo_disponible);
+        if(x.release_error)console.warn("release err:",x.release_error);
         if(x.upd_error)console.warn("DB err:",x.upd_error);
-        if(x.balance_fuente)console.log("balance_fuente:",x.balance_fuente);
-        if(x.release_report)console.log("release_report:",x.release_report);
-        if(x.saldo_debug)console.log("saldo_debug:",x.saldo_debug);
         console.groupEnd();
       }
       console.groupEnd();
@@ -88,15 +112,16 @@ function ConciliacionMP({ user, locales, localActivo }) {
         await load();
         const totalMovs=(d.resultados||[]).reduce((s,x)=>s+(Number(x.movimientos)||0),0);
         const saldoTotal=(d.resultados||[]).reduce((s,x)=>s+(Number(x.saldo_disponible)||0),0);
-        showToast("ok","✅ Sincronización completada · "+totalMovs+" movimientos · "+fmt_mp(saldoTotal)+" saldo");
+        showToast("ok","Sincronización completada · "+totalMovs+" movimientos · "+fmt_mp(saldoTotal)+" saldo");
       }else{
-        showToast("err","⚠ Error en sincronización: "+(d.error||"desconocido"));
+        showToast("err","⚠ Error procesando: "+(d.error||"desconocido"));
       }
     }catch(e){
       console.error("ConciliacionMP sincronizar error:",e);
       showToast("err","⚠ Error al conectar con MP: "+(e?.message||""));
     }finally{
       setSincronizando(false);
+      setSyncCountdown(0);
     }
   };
 
@@ -317,7 +342,11 @@ function ConciliacionMP({ user, locales, localActivo }) {
 
       {sincronizando&&(
         <div className="alert" style={{background:"var(--bg2)",border:"1px solid var(--acc3)",color:"var(--acc3)",textAlign:"center",padding:"14px 20px",marginBottom:12,borderRadius:8,fontSize:14}}>
-          Sincronizando con MercadoPago... Esto puede tardar hasta 2 minutos mientras se genera el reporte.
+          {syncCountdown>0
+            ? `Esperando reporte de MercadoPago... ${Math.floor(syncCountdown/60)}:${String(syncCountdown%60).padStart(2,"0")}`
+            : syncCountdown===-1
+            ? "Procesando movimientos y calculando saldo..."
+            : "Conectando con MercadoPago..."}
         </div>
       )}
 
