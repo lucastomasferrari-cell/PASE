@@ -19,38 +19,33 @@ export default function Login({ onLogin }) {
     if (!usuario || !password) return;
     setLoading(true); setErr("");
 
-    // Intentar Supabase Auth (email@pase.local)
-    const authEmail = usuario.includes("@") ? usuario : usuario + "@pase.local";
-    const { data: authData } = await db.auth.signInWithPassword({
-      email: authEmail,
-      password,
-    });
+    // Primero buscar el usuario por email para saber si tiene auth_id
+    const { data: usr } = await db
+      .from("usuarios")
+      .select("*")
+      .eq("email", usuario)
+      .single();
 
-    if (authData?.user) {
-      const { data: perfil } = await db
-        .from("usuarios")
-        .select("*")
-        .eq("auth_id", authData.user.id)
-        .single();
+    if (!usr) { setLoading(false); setErr("Usuario o contraseña incorrectos"); return; }
 
-      if (perfil) {
+    // Si tiene auth_id → intentar Supabase Auth
+    if (usr.auth_id) {
+      const authEmail = usuario.includes("@") ? usuario : usuario + "@pase.local";
+      const { data: authData } = await db.auth.signInWithPassword({
+        email: authEmail,
+        password,
+      });
+      if (authData?.user) {
         setLoading(false);
-        onLogin(perfil);
+        onLogin(usr);
         return;
       }
     }
 
-    // Fallback: comparar contra hash SHA-256
+    // Fallback (o único camino si auth_id es null): comparar hash SHA-256
     const hash = await sha256(password);
-    const { data } = await db
-      .from("usuarios")
-      .select("*")
-      .eq("email", usuario)
-      .eq("password", hash)
-      .single();
     setLoading(false);
-
-    if (data) onLogin(data);
+    if (usr.password === hash) onLogin(usr);
     else setErr("Usuario o contraseña incorrectos");
   };
 
