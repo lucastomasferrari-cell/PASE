@@ -1,8 +1,8 @@
-import { ROLES } from "../lib/auth";
+import { ROLES, getPermisos } from "../lib/auth";
 
 export function Sidebar({ user, section, onNav, onLogout, locales, localActivo, setLocalActivo }) {
-  const perms = ROLES[user.rol]?.permisos || [];
-  const localesDisp = user.rol==="dueno" ? locales : locales.filter(l=>(user.locales||[]).includes(l.id));
+  const perms = getPermisos(user);
+  const localesDisp = (user.rol==="dueno" || user.rol==="admin") ? locales : locales.filter(l=>(user._locales||user.locales||[]).includes(l.id));
   const nav = [
     {id:"dashboard",label:"Dashboard",icon:"▦",sec:"Principal"},
     {id:"ventas",label:"Ventas",icon:"↑",sec:"Operaciones"},
@@ -20,7 +20,8 @@ export function Sidebar({ user, section, onNav, onLogout, locales, localActivo, 
     {id:"eerr",label:"Estado de Result.",icon:"📊",sec:"Finanzas"},
     {id:"contador",label:"Contador / IVA",icon:"🧾",sec:"Finanzas"},
     {id:"empleados",label:"Empleados",icon:"👷",sec:"RRHH"},
-    {id:"config",label:"Usuarios",icon:"👥",sec:"Config"},
+    {id:"rrhh",label:"RRHH",icon:"💼",sec:"RRHH"},
+    {id:"usuarios",label:"Usuarios",icon:"👥",sec:"Config"},
   ];
   const secs = [...new Set(nav.map(n=>n.sec))];
   return (

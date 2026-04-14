@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "./lib/supabase";
-import { ROLES } from "./lib/auth";
+import { getPermisos } from "./lib/auth";
 import { Sidebar, css } from "./components/Layout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -14,12 +14,13 @@ import ImportarMaxirest from "./pages/ImportarMaxirest";
 import Gastos from "./pages/Gastos";
 import Proveedores from "./pages/Proveedores";
 import Empleados from "./pages/Empleados";
-import Config from "./pages/Config";
+import Usuarios from "./pages/Usuarios";
 import Insumos from "./pages/Insumos";
 import LectorFacturasIA from "./pages/LectorFacturasIA";
 import Recetas from "./pages/Recetas";
 import ConciliacionMP from "./pages/ConciliacionMP";
 import CajaEfectivo from "./pages/CajaEfectivo";
+import RRHHPage from "./pages/RRHH";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -61,11 +62,21 @@ export default function App() {
     return () => subscription.unsubscribe();
   },[]);
 
-  const applyLogin = (u) => {
-    setUser(u);
-    const perms = ROLES[u.rol]?.permisos||[];
-    if(!perms.includes("dashboard")) setSection(perms[0]);
-    if(u.rol!=="dueno"&&(u.locales||[]).length===1) setLocalActivo(u.locales[0]);
+  const applyLogin = async (u) => {
+    // Load DB-driven permisos and locales
+    const [{ data: permsData }, { data: locsData }] = await Promise.all([
+      db.from("usuario_permisos").select("modulo_slug").eq("usuario_id", u.id),
+      db.from("usuario_locales").select("local_id").eq("usuario_id", u.id),
+    ]);
+    const enriched = {
+      ...u,
+      _permisos: (permsData || []).map(p => p.modulo_slug),
+      _locales: (locsData || []).length ? (locsData || []).map(l => l.local_id) : (u.locales || []),
+    };
+    setUser(enriched);
+    const perms = getPermisos(enriched);
+    if(!perms.includes("dashboard") && perms.length) setSection(perms[0]);
+    if(enriched.rol!=="dueno" && enriched._locales?.length===1) setLocalActivo(enriched._locales[0]);
   };
 
   const login = (u) => {
@@ -100,7 +111,8 @@ export default function App() {
       case "caja_efectivo": return <CajaEfectivo {...props}/>;
       case "proveedores": return <Proveedores {...props}/>;
       case "empleados": return <Empleados {...props}/>;
-      case "config":    return <Config {...props}/>;
+      case "usuarios":  return <Usuarios {...props}/>;
+      case "rrhh":      return <RRHHPage {...props}/>;
       default: return null;
     }
   };
