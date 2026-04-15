@@ -46,6 +46,10 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
   const [docForm, setDocForm] = useState({ tipo:"otro", mes:"", anio:"" });
   const [uploading, setUploading] = useState(false);
 
+  // Liquidación final
+  const [liqFinalModal, setLiqFinalModal] = useState(false);
+  const [liqFinalForm, setLiqFinalForm] = useState({ fecha_egreso: toISO(today), motivo: "Renuncia" });
+
   const [toast, setToast] = useState("");
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
   const esDueno = user?.rol === "dueno" || user?.rol === "admin";
@@ -292,6 +296,10 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
           )}
         </div>
 
+        {esDueno && emp.activo && (
+          <button className="btn btn-danger btn-sm" style={{marginTop:12}} onClick={() => setLiqFinalModal(true)}>Liquidación final</button>
+        )}
+
         {sueldoModal && (
           <div className="overlay" onClick={() => setSueldoModal(false)}>
             <div className="modal" style={{width:420}} onClick={e => e.stopPropagation()}>
@@ -305,6 +313,79 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
             </div>
           </div>
         )}
+
+        {liqFinalModal && (() => {
+          const sueldo = Number(emp.sueldo_mensual);
+          const vDia = sueldo / 30;
+          const fechaEg = new Date(liqFinalForm.fecha_egreso + "T12:00:00");
+          const diaDelMes = fechaEg.getDate();
+          const proporcionalMes = vDia * diaDelMes;
+          const vacDias = Number(emp.vacaciones_dias_acumulados || 0);
+          const vacMonto = vacDias * vDia;
+          // SAC proporcional
+          const inicioSem = fechaEg.getMonth() < 6 ? new Date(fechaEg.getFullYear(), 0, 1) : new Date(fechaEg.getFullYear(), 6, 1);
+          const diasEnSem = Math.ceil((fechaEg.getTime() - inicioSem.getTime()) / 86400000);
+          const sacProp = (sueldo / 2) * (diasEnSem / 180);
+          const esDespidoSinCausa = liqFinalForm.motivo === "Despido sin causa";
+          const antAnios = Math.max(1, Math.floor(antiguedadAnios));
+          const indemnizacion = esDespidoSinCausa ? sueldo * antAnios : 0;
+          const preaviso = esDespidoSinCausa ? (antiguedadAnios < 5 ? vDia * 15 : sueldo) : 0;
+          const diasRestantesMes = new Date(fechaEg.getFullYear(), fechaEg.getMonth() + 1, 0).getDate() - diaDelMes;
+          const integracion = esDespidoSinCausa ? vDia * diasRestantesMes : 0;
+          const total = proporcionalMes + vacMonto + sacProp + indemnizacion + preaviso + integracion;
+
+          const confirmarLiqFinal = async () => {
+            const desc = `Liquidación final ${emp.apellido} ${emp.nombre}`;
+            const gastoId = genId("GASTO");
+            await db.from("gastos").insert([{ id: gastoId, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: total, detalle: desc, local_id: emp.local_id, cuenta:"Caja Chica" }]);
+            await db.from("rrhh_pagos_especiales").insert([{ empleado_id: emp.id, tipo:"liquidacion_final", monto: total, gasto_id: gastoId, pagado_por: user?.id }]);
+            await db.from("rrhh_empleados").update({ activo: false, fecha_egreso: liqFinalForm.fecha_egreso, motivo_baja: liqFinalForm.motivo, vacaciones_dias_acumulados: 0, aguinaldo_acumulado: 0 }).eq("id", emp.id);
+            setLiqFinalModal(false);
+            showToast("Liquidación final procesada");
+            loadAll();
+          };
+
+          return (
+            <div className="overlay" onClick={() => setLiqFinalModal(false)}>
+              <div className="modal" style={{width:580}} onClick={e => e.stopPropagation()}>
+                <div className="modal-hd"><div className="modal-title">Liquidación Final — {emp.apellido}, {emp.nombre}</div><button className="close-btn" onClick={() => setLiqFinalModal(false)}>✕</button></div>
+                <div className="modal-body">
+                  <div className="form2" style={{marginBottom:16}}>
+                    <div className="field"><label>Fecha de egreso</label><input type="date" value={liqFinalForm.fecha_egreso} onChange={e => setLiqFinalForm({...liqFinalForm, fecha_egreso:e.target.value})} /></div>
+                    <div className="field"><label>Motivo</label>
+                      <select value={liqFinalForm.motivo} onChange={e => setLiqFinalForm({...liqFinalForm, motivo:e.target.value})}>
+                        <option value="Renuncia">Renuncia</option><option value="Despido sin causa">Despido sin causa</option><option value="Despido con causa">Despido con causa</option><option value="Acuerdo mutuo">Acuerdo mutuo</option>
+                      </select></div>
+                  </div>
+                  <div style={{background:"var(--s2)",borderRadius:"var(--r)",padding:16}}>
+                    <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>Conceptos</div>
+                    {[
+                      ["Proporcional mes", proporcionalMes],
+                      ["Vacaciones (" + vacDias.toFixed(1) + " días)", vacMonto],
+                      ["SAC proporcional", sacProp],
+                      ...(esDespidoSinCausa ? [
+                        ["Indemnización (" + antAnios + " año" + (antAnios > 1 ? "s" : "") + ")", indemnizacion],
+                        ["Preaviso", preaviso],
+                        ["Integración mes despido", integracion],
+                      ] : []),
+                    ].map(([label, monto], i) => (
+                      <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid var(--bd)",fontSize:12}}>
+                        <span>{label}</span><span className="num" style={{color:"var(--acc)"}}>{fmt_$(monto as number)}</span>
+                      </div>
+                    ))}
+                    <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",fontSize:14,fontWeight:700}}>
+                      <span>TOTAL</span><span className="num" style={{color:"var(--success)",fontSize:18}}>{fmt_$(total)}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="modal-ft">
+                  <button className="btn btn-sec" onClick={() => setLiqFinalModal(false)}>Cancelar</button>
+                  <button className="btn btn-danger" onClick={confirmarLiqFinal}>Confirmar y pagar</button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </>)}
 
       {/* ═══ MOVIMIENTOS ═══════════════════════════════════════════════════ */}
@@ -363,11 +444,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
                           {liq.efectivo > 0 && <span style={{fontSize:10,color:"var(--muted2)",marginLeft:8}}>Efvo: {fmt_$(liq.efectivo)}</span>}
                           {liq.transferencia > 0 && <span style={{fontSize:10,color:"var(--info)",marginLeft:8}}>Transf: {fmt_$(liq.transferencia)}</span>}
                         </div>
-                        {puedePagar && (
-                          <button className="btn btn-success btn-sm" onClick={(e) => { e.stopPropagation(); pagarMes(nov); }} disabled={pagando}>
-                            {pagando ? "Pagando..." : `Pagar ${fmt_$(liq.total_a_pagar)}`}
-                          </button>
-                        )}
+                        {/* Pagos se gestionan desde el tab Pagos de RRHH */}
                       </div>
                     </div>
                   )}
