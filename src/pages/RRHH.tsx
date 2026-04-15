@@ -5,6 +5,29 @@ import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import RRHHLegajo from "./RRHHLegajo";
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
+function calcVacacionesAcumuladas(fechaInicio: string | null): number {
+  if (!fechaInicio) return 0;
+  const inicio = new Date(fechaInicio + "T12:00:00");
+  const ahora = new Date();
+  const mesesTrabajados = (ahora.getFullYear() - inicio.getFullYear()) * 12 + (ahora.getMonth() - inicio.getMonth());
+  if (mesesTrabajados <= 0) return 0;
+  const anios = mesesTrabajados / 12;
+  let diasPorAnio = 14;
+  if (anios >= 20) diasPorAnio = 35;
+  else if (anios >= 10) diasPorAnio = 28;
+  else if (anios >= 5) diasPorAnio = 21;
+  return (diasPorAnio / 12) * mesesTrabajados;
+}
+
+function calcSACTeorico(sueldoMensual: number): { acumulado: number; teorico: number } {
+  const ahora = new Date();
+  const mes = ahora.getMonth() + 1; // 1-12
+  const mesesEnSemestre = mes <= 6 ? mes : mes - 6;
+  const acumulado = (sueldoMensual / 12) * mesesEnSemestre;
+  const teorico = sueldoMensual / 2;
+  return { acumulado, teorico };
+}
+
 function calcSueldoBase(modo_pago: string, sueldo_mensual: number) {
   if (modo_pago === "QUINCENAL") return sueldo_mensual / 2;
   if (modo_pago === "SEMANAL") return sueldo_mensual / 4;
@@ -59,6 +82,7 @@ export default function RRHH({ user, locales, localActivo }) {
   const [allEmps, setAllEmps] = useState<any[]>([]);
   const [valoresDoble, setValoresDoble] = useState<any[]>([]);
   const [empSearch, setEmpSearch] = useState("");
+  const [vacTomadas, setVacTomadas] = useState<Record<string, number>>({});
   const [empFiltLocal, setEmpFiltLocal] = useState(defaultLocal);
   const [empModal, setEmpModal] = useState<any>(null);
   const empEmpty = { local_id:"", apellido:"", nombre:"", cuil:"", puesto:"", modo_pago:"MENSUAL", sueldo_mensual:"", alias_mp:"", fecha_inicio:toISO(today), activo:true };
@@ -98,6 +122,14 @@ export default function RRHH({ user, locales, localActivo }) {
   const loadEmpleados = async () => {
     const { data } = await db.from("rrhh_empleados").select("*").order("apellido");
     setAllEmps(data || []);
+    // Cargar días de vacaciones tomadas (novedades confirmadas)
+    const empIds = (data || []).map(e => e.id);
+    if (empIds.length) {
+      const { data: novs } = await db.from("rrhh_novedades").select("empleado_id, vacaciones_dias").eq("estado", "confirmado").in("empleado_id", empIds).gt("vacaciones_dias", 0);
+      const map: Record<string, number> = {};
+      (novs || []).forEach(n => { map[n.empleado_id] = (map[n.empleado_id] || 0) + Number(n.vacaciones_dias || 0); });
+      setVacTomadas(map);
+    }
   };
 
   const loadNovedades = async () => {
@@ -172,7 +204,7 @@ export default function RRHH({ user, locales, localActivo }) {
         estimado += Number(emp.sueldo_mensual);
       }
     });
-    const totalSAC = activos.reduce((s, e) => s + Number(e.aguinaldo_acumulado || 0), 0);
+    const totalSAC = activos.reduce((s, e) => s + calcSACTeorico(Number(e.sueldo_mensual)).acumulado, 0);
     // Próximo SAC
     const junio30 = new Date(anio, 5, 30);
     const dic31 = new Date(anio, 11, 31);
@@ -197,6 +229,18 @@ export default function RRHH({ user, locales, localActivo }) {
   useEffect(() => { if (tab === "dashboard") loadDashboard(); }, [tab]);
   useEffect(() => { if (tab === "novedades" && novLocal) loadNovedades(); }, [tab, novLocal, novMes, novAnio]);
   useEffect(() => { if (tab === "pagos" && pagoLocal) loadPagos(); }, [tab, pagoLocal, pagoMes, pagoAnio]);
+
+  // Autoseleccionar local para encargados con un solo local
+  useEffect(() => {
+    if (tab === "novedades" && !novLocal && locsDisp.length >= 1) {
+      setNovLocal(esEnc ? locsDisp[0].id : (locsDisp.length === 1 ? locsDisp[0].id : ""));
+    }
+  }, [tab, locsDisp.length]);
+  useEffect(() => {
+    if (tab === "pagos" && !pagoLocal && locsDisp.length >= 1) {
+      setPagoLocal(esEnc ? locsDisp[0].id : (locsDisp.length === 1 ? locsDisp[0].id : ""));
+    }
+  }, [tab, locsDisp.length]);
 
   // ─── EMPLEADOS ACTIONS ─────────────────────────────────────────────────────
   const puestos = [...new Set(valoresDoble.map(v => v.puesto))];
@@ -267,7 +311,7 @@ export default function RRHH({ user, locales, localActivo }) {
       if (saved) {
         const vd = valoresDoble.find(v => v.puesto === emp.puesto)?.valor || 0;
         const calc = calcLiquidacion(emp, nov, vd);
-        await db.from("rrhh_liquidaciones").upsert({ novedad_id: saved.id, ...calc, calculado_at: new Date().toISOString() }, { onConflict: "novedad_id" });
+        await db.from("rrhh_liquidaciones").upsert({ novedad_id: saved.id, ...calc, estado: "pendiente", calculado_at: new Date().toISOString() }, { onConflict: "novedad_id" });
       }
     }
     setConfirming(false);
@@ -422,7 +466,9 @@ export default function RRHH({ user, locales, localActivo }) {
             <div style={{overflowX:"auto"}}>
             <table><thead><tr><th>Nombre</th><th>Local</th><th>Puesto</th><th style={{textAlign:"right"}}>Sueldo</th><th>Modo</th><th>Vacaciones</th><th>CUIL</th><th>Activo</th><th></th></tr></thead>
             <tbody>{empsFilt.map(e => {
-              const vac = Number(e.vacaciones_dias_acumulados || 0);
+              const vacAcum = calcVacacionesAcumuladas(e.fecha_inicio);
+              const vacTom = vacTomadas[e.id] || 0;
+              const vac = Math.max(0, vacAcum - vacTom);
               const vacColor = vac >= 14 ? "var(--success)" : vac >= 7 ? "var(--warn)" : "var(--muted2)";
               return (
                 <tr key={e.id} style={{opacity: e.activo === false ? 0.4 : 1}}>

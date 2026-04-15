@@ -13,7 +13,6 @@ import Contador from "./pages/Contador";
 import ImportarMaxirest from "./pages/ImportarMaxirest";
 import Gastos from "./pages/Gastos";
 import Proveedores from "./pages/Proveedores";
-import Empleados from "./pages/Empleados";
 import Usuarios from "./pages/Usuarios";
 import Insumos from "./pages/Insumos";
 import LectorFacturasIA from "./pages/LectorFacturasIA";

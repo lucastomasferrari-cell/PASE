@@ -36,6 +36,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
 
   // Vacaciones/Aguinaldo
   const [pagosEsp, setPagosEsp] = useState<any[]>([]);
+  const [vacTomadas, setVacTomadas] = useState(0);
   const [vacModal, setVacModal] = useState(false);
   const [vacDias, setVacDias] = useState("");
   const [aguModal, setAguModal] = useState(false);
@@ -71,6 +72,12 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
     setMovMeses(novs || []);
   };
 
+  const loadVacTomadas = async () => {
+    const { data } = await db.from("rrhh_novedades").select("vacaciones_dias").eq("empleado_id", empleadoId).eq("estado", "confirmado").gt("vacaciones_dias", 0);
+    const total = (data || []).reduce((s, n) => s + Number(n.vacaciones_dias || 0), 0);
+    setVacTomadas(total);
+  };
+
   const loadPagosEsp = async () => {
     const { data } = await db.from("rrhh_pagos_especiales").select("*").eq("empleado_id", empleadoId).order("pagado_at", { ascending: false });
     setPagosEsp(data || []);
@@ -83,7 +90,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
 
   const loadAll = async () => {
     setLoading(true);
-    await Promise.all([loadEmp(), loadHistSueldos(), loadMovimientos(), loadPagosEsp(), loadDocs()]);
+    await Promise.all([loadEmp(), loadHistSueldos(), loadMovimientos(), loadPagosEsp(), loadDocs(), loadVacTomadas()]);
     setLoading(false);
   };
 
@@ -100,6 +107,14 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
   const antiguedadAnios = antiguedadMs / (365.25 * 24 * 60 * 60 * 1000);
   const diasVacAnuales = diasVacacionesPorAnio(Math.floor(antiguedadAnios));
   const diasVacPorMes = diasVacAnuales / 12;
+  const mesesTrabajados = fechaInicio ? (new Date().getFullYear() - fechaInicio.getFullYear()) * 12 + (new Date().getMonth() - fechaInicio.getMonth()) : 0;
+  const vacAcumuladas = Math.max(0, diasVacPorMes * Math.max(0, mesesTrabajados) - vacTomadas);
+
+  // SAC teórico
+  const mesActual = new Date().getMonth() + 1;
+  const mesesEnSemestre = mesActual <= 6 ? mesActual : mesActual - 6;
+  const sacAcumulado = (Number(emp.sueldo_mensual) / 12) * mesesEnSemestre;
+  const sacTeorico = Number(emp.sueldo_mensual) / 2;
 
   // ─── ACCIONES: SUELDO ──────────────────────────────────────────────────────
   const guardarSueldo = async () => {
@@ -154,7 +169,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
 
   // ─── ACCIONES: VACACIONES ──────────────────────────────────────────────────
   const pagarVacaciones = async () => {
-    const dias = parseFloat(vacDias) || (emp.vacaciones_dias_acumulados || 0);
+    const dias = parseFloat(vacDias) || vacAcumuladas;
     if (dias <= 0) return;
     const monto = dias * valorDia;
     const desc = `Vacaciones ${emp.apellido} ${emp.nombre}`;
@@ -177,7 +192,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
 
   // ─── ACCIONES: AGUINALDO ───────────────────────────────────────────────────
   const pagarAguinaldo = async () => {
-    const monto = emp.aguinaldo_acumulado || 0;
+    const monto = sacAcumulado;
     if (monto <= 0) return;
     const desc = `Aguinaldo ${emp.apellido} ${emp.nombre}`;
     const gastoId = genId("GASTO");
@@ -320,7 +335,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
           const fechaEg = new Date(liqFinalForm.fecha_egreso + "T12:00:00");
           const diaDelMes = fechaEg.getDate();
           const proporcionalMes = vDia * diaDelMes;
-          const vacDias = Number(emp.vacaciones_dias_acumulados || 0);
+          const vacDias = vacAcumuladas;
           const vacMonto = vacDias * vDia;
           // SAC proporcional
           const inicioSem = fechaEg.getMonth() < 6 ? new Date(fechaEg.getFullYear(), 0, 1) : new Date(fechaEg.getFullYear(), 6, 1);
@@ -463,15 +478,16 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
             <div className="panel-hd"><span className="panel-title">Vacaciones</span></div>
             <div style={{padding:16}}>
               <div style={{marginBottom:12}}>
-                <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Días acumulados</div>
-                <div className="num" style={{fontSize:20,color:"var(--acc)"}}>{(emp.vacaciones_dias_acumulados || 0).toFixed(1)} días</div>
-                <div style={{fontSize:11,color:"var(--muted2)",marginTop:2}}>Equivale a {fmt_$((emp.vacaciones_dias_acumulados || 0) * valorDia)}</div>
+                <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Días disponibles</div>
+                <div className="num" style={{fontSize:20,color:"var(--acc)"}}>{vacAcumuladas.toFixed(1)} días</div>
+                <div style={{fontSize:11,color:"var(--muted2)",marginTop:2}}>Equivale a {fmt_$(vacAcumuladas * valorDia)}</div>
+                {vacTomadas > 0 && <div style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>Tomadas: {vacTomadas.toFixed(1)} días</div>}
               </div>
               <div style={{fontSize:10,color:"var(--muted2)",marginBottom:12}}>
                 Corresponde: {diasVacAnuales} días/año ({diasVacPorMes.toFixed(2)} días/mes) · Antigüedad: {Math.floor(antiguedadAnios)} años
               </div>
-              {esDueno && (emp.vacaciones_dias_acumulados || 0) > 0 && (
-                <button className="btn btn-acc btn-sm" onClick={() => { setVacDias(String(emp.vacaciones_dias_acumulados || 0)); setVacModal(true); }}>Pagar vacaciones</button>
+              {esDueno && vacAcumuladas > 0 && (
+                <button className="btn btn-acc btn-sm" onClick={() => { setVacDias(String(vacAcumuladas.toFixed(1))); setVacModal(true); }}>Pagar vacaciones</button>
               )}
             </div>
           </div>
@@ -481,10 +497,12 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
             <div className="panel-hd"><span className="panel-title">Aguinaldo</span></div>
             <div style={{padding:16}}>
               <div style={{marginBottom:12}}>
-                <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Acumulado (semestre en curso)</div>
-                <div className="num" style={{fontSize:20,color:"var(--acc)"}}>{fmt_$(emp.aguinaldo_acumulado || 0)}</div>
+                <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Acumulado proporcional ({mesesEnSemestre} {mesesEnSemestre === 1 ? "mes" : "meses"} del semestre)</div>
+                <div className="num" style={{fontSize:20,color:"var(--acc)"}}>{fmt_$(sacAcumulado)}</div>
+                <div style={{fontSize:11,color:"var(--muted2)",marginTop:4}}>Teórico semestre completo: {fmt_$(sacTeorico)}</div>
+                <div style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>SAC = mejor sueldo del semestre / 2 · Pago en {mesActual <= 6 ? "junio" : "diciembre"}</div>
               </div>
-              {esDueno && (emp.aguinaldo_acumulado || 0) > 0 && (
+              {esDueno && sacAcumulado > 0 && (
                 <button className="btn btn-acc btn-sm" onClick={() => setAguModal(true)}>Pagar aguinaldo</button>
               )}
             </div>
@@ -513,7 +531,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
             <div className="modal" style={{width:420}} onClick={e => e.stopPropagation()}>
               <div className="modal-hd"><div className="modal-title">Pagar vacaciones</div><button className="close-btn" onClick={() => setVacModal(false)}>✕</button></div>
               <div className="modal-body">
-                <div className="alert alert-info">Acumulado: {(emp.vacaciones_dias_acumulados || 0).toFixed(1)} días · {fmt_$((emp.vacaciones_dias_acumulados || 0) * valorDia)}</div>
+                <div className="alert alert-info">Disponibles: {vacAcumuladas.toFixed(1)} días · {fmt_$(vacAcumuladas * valorDia)}</div>
                 <div className="field"><label>Días a pagar</label><input type="number" value={vacDias} onChange={e => setVacDias(e.target.value)} /></div>
                 {vacDias && <div style={{padding:8,fontSize:12}}>Monto: <strong style={{color:"var(--acc)"}}>{fmt_$(parseFloat(vacDias) * valorDia)}</strong></div>}
               </div>
@@ -528,7 +546,8 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
             <div className="modal" style={{width:420}} onClick={e => e.stopPropagation()}>
               <div className="modal-hd"><div className="modal-title">Pagar aguinaldo</div><button className="close-btn" onClick={() => setAguModal(false)}>✕</button></div>
               <div className="modal-body">
-                <div className="alert alert-info">Monto acumulado: {fmt_$(emp.aguinaldo_acumulado || 0)}</div>
+                <div className="alert alert-info">Monto acumulado proporcional: {fmt_$(sacAcumulado)}</div>
+                <div style={{fontSize:11,color:"var(--muted2)",padding:"4px 0"}}>Teórico semestre completo: {fmt_$(sacTeorico)}</div>
               </div>
               <div className="modal-ft"><button className="btn btn-sec" onClick={() => setAguModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={pagarAguinaldo}>Confirmar pago</button></div>
             </div>
