@@ -278,11 +278,6 @@ export default function RRHH({ user, locales, localActivo }) {
     ...(esDueno ? [{ id:"config", label:"Configuración" }] : []),
   ];
 
-  // Sub-vista legajo
-  if (legajoId) {
-    return <RRHHLegajo empleadoId={legajoId} user={user} locales={locales} onBack={() => { setLegajoId(null); loadEmpleados(); }} />;
-  }
-
   return (
     <div>
       <div className="ph-row">
@@ -558,6 +553,21 @@ export default function RRHH({ user, locales, localActivo }) {
           </table>
         </div>
       </>)}
+
+      {/* ─── LEGAJO MODAL ────────────────────────────────────────────────────── */}
+      {legajoId && (
+        <div className="overlay" onClick={() => { setLegajoId(null); loadEmpleados(); }}>
+          <div style={{background:"var(--s1)",border:"1px solid var(--bd2)",borderRadius:"var(--r)",width:"90vw",maxWidth:1100,height:"90vh",display:"flex",flexDirection:"column",overflow:"hidden"}} onClick={e => e.stopPropagation()}>
+            <div className="modal-hd">
+              <div className="modal-title">Legajo</div>
+              <button className="close-btn" onClick={() => { setLegajoId(null); loadEmpleados(); }}>✕</button>
+            </div>
+            <div style={{flex:1,overflowY:"auto",padding:20}}>
+              <RRHHLegajo empleadoId={legajoId} user={user} locales={locales} onClose={() => { setLegajoId(null); loadEmpleados(); }} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

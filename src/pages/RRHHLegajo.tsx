@@ -19,7 +19,7 @@ function diasVacacionesPorAnio(antiguedadAnios: number): number {
   return 35;
 }
 
-export default function RRHHLegajo({ empleadoId, user, locales, onBack }) {
+export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
   const [emp, setEmp] = useState<any>(null);
   const [tab, setTab] = useState("datos");
   const [loading, setLoading] = useState(true);
@@ -238,18 +238,17 @@ export default function RRHHLegajo({ empleadoId, user, locales, onBack }) {
 
   return (
     <div>
-      {toast && <div style={{position:"fixed",top:16,right:16,zIndex:200,padding:"10px 20px",background:"var(--success)",color:"#000",borderRadius:"var(--r)",fontSize:12,fontFamily:"'DM Mono',monospace",fontWeight:600,boxShadow:"0 4px 12px rgba(0,0,0,.5)"}}>{toast}</div>}
+      {toast && <div style={{position:"fixed",top:16,right:16,zIndex:300,padding:"10px 20px",background:"var(--success)",color:"#000",borderRadius:"var(--r)",fontSize:12,fontFamily:"'DM Mono',monospace",fontWeight:600,boxShadow:"0 4px 12px rgba(0,0,0,.5)"}}>{toast}</div>}
 
-      <div className="ph-row">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:12,flexWrap:"wrap"}}>
         <div>
-          <button className="btn btn-ghost btn-sm" onClick={onBack} style={{marginBottom:8}}>← Volver a empleados</button>
-          <div className="ph-title">{emp.apellido}, {emp.nombre}</div>
-          <div className="ph-sub">{emp.puesto} · {localNombre} · {emp.modo_pago} · {emp.activo ? "Activo" : "Inactivo"}</div>
+          <div style={{fontFamily:"'Syne',sans-serif",fontSize:22,fontWeight:800,lineHeight:1}}>{emp.apellido}, {emp.nombre}</div>
+          <div style={{fontSize:11,color:"var(--muted2)",marginTop:4}}>{emp.puesto} · {localNombre} · {emp.modo_pago} · {emp.activo ? "Activo" : "Inactivo"}</div>
         </div>
-        <div className="kpi" style={{textAlign:"right",minWidth:140}}>
-          <div className="kpi-label">Sueldo mensual</div>
-          <div className="kpi-value kpi-acc" style={{fontSize:22}}>{fmt_$(emp.sueldo_mensual)}</div>
-          <div className="kpi-sub">Día: {fmt_$(valorDia)}</div>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"var(--muted)"}}>Sueldo mensual</div>
+          <div style={{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:700,color:"var(--acc)"}}>{fmt_$(emp.sueldo_mensual)}</div>
+          <div style={{fontSize:10,color:"var(--muted2)"}}>Día: {fmt_$(valorDia)}</div>
         </div>
       </div>
 
@@ -311,10 +310,12 @@ export default function RRHHLegajo({ empleadoId, user, locales, onBack }) {
       {/* ═══ MOVIMIENTOS ═══════════════════════════════════════════════════ */}
       {tab === "movimientos" && (<>
         {movMeses.length === 0 ? <div className="empty">Sin movimientos registrados</div> : movMeses.map(nov => {
-          const liq = (nov.rrhh_liquidaciones || [])[0];
+          const liqArr = Array.isArray(nov.rrhh_liquidaciones) ? nov.rrhh_liquidaciones : [];
+          const liq = liqArr[0];
           const key = `${nov.anio}-${nov.mes}`;
           const isExp = expanded === key;
           const pagado = liq?.estado === "pagado";
+          const puedePagar = esDueno && nov.estado === "confirmado" && liq && !pagado;
 
           return (
             <div key={key} className="panel" style={{marginBottom:8}}>
@@ -362,9 +363,9 @@ export default function RRHHLegajo({ empleadoId, user, locales, onBack }) {
                           {liq.efectivo > 0 && <span style={{fontSize:10,color:"var(--muted2)",marginLeft:8}}>Efvo: {fmt_$(liq.efectivo)}</span>}
                           {liq.transferencia > 0 && <span style={{fontSize:10,color:"var(--info)",marginLeft:8}}>Transf: {fmt_$(liq.transferencia)}</span>}
                         </div>
-                        {esDueno && nov.estado === "confirmado" && !pagado && (
+                        {puedePagar && (
                           <button className="btn btn-success btn-sm" onClick={(e) => { e.stopPropagation(); pagarMes(nov); }} disabled={pagando}>
-                            {pagando ? "Pagando..." : "Pagar mes"}
+                            {pagando ? "Pagando..." : `Pagar ${fmt_$(liq.total_a_pagar)}`}
                           </button>
                         )}
                       </div>
