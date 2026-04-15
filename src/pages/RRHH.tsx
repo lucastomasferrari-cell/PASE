@@ -2,58 +2,32 @@ import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
 import { localesVisibles } from "../lib/auth";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
+import {
+  calcularVacaciones,
+  calcularSACProporcional,
+  calcularTotalLiquidacion,
+} from "../lib/calculos/rrhh";
 import RRHHLegajo from "./RRHHLegajo";
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
-function calcVacacionesAcumuladas(fechaInicio: string | null): number {
-  if (!fechaInicio) return 0;
-  const inicio = new Date(fechaInicio + "T12:00:00");
-  const ahora = new Date();
-  const mesesTrabajados = (ahora.getFullYear() - inicio.getFullYear()) * 12 + (ahora.getMonth() - inicio.getMonth());
-  if (mesesTrabajados <= 0) return 0;
-  const anios = mesesTrabajados / 12;
-  let diasPorAnio = 14;
-  if (anios >= 20) diasPorAnio = 35;
-  else if (anios >= 10) diasPorAnio = 28;
-  else if (anios >= 5) diasPorAnio = 21;
-  return (diasPorAnio / 12) * mesesTrabajados;
-}
-
-function calcSACTeorico(sueldoMensual: number): { acumulado: number; teorico: number } {
-  const ahora = new Date();
-  const mes = ahora.getMonth() + 1; // 1-12
-  const mesesEnSemestre = mes <= 6 ? mes : mes - 6;
-  const acumulado = (sueldoMensual / 12) * mesesEnSemestre;
-  const teorico = sueldoMensual / 2;
-  return { acumulado, teorico };
-}
-
-function calcSueldoBase(modo_pago: string, sueldo_mensual: number) {
-  if (modo_pago === "QUINCENAL") return sueldo_mensual / 2;
-  if (modo_pago === "SEMANAL") return sueldo_mensual / 4;
-  return sueldo_mensual;
-}
-
 function calcLiquidacion(emp: any, nov: any, valorDoble: number) {
-  const valor_dia = emp.sueldo_mensual / 30;
-  const valor_hora = valor_dia / 8;
-  const sueldo_base = calcSueldoBase(emp.modo_pago, emp.sueldo_mensual);
-  const descuento_ausencias = (nov.inasistencias || 0) * valor_dia;
-  const total_horas_extras = (nov.horas_extras || 0) * valor_hora;
-  const total_dobles = (nov.dobles || 0) * valorDoble;
-  const total_feriados = (nov.feriados || 0) * valor_dia;
-  const total_vacaciones = (nov.vacaciones_dias || 0) * valor_dia;
-  const subtotal1 = sueldo_base - descuento_ausencias + total_horas_extras + total_dobles + total_feriados + total_vacaciones;
-  const monto_presentismo = nov.presentismo === "MANTIENE" ? emp.sueldo_mensual * 0.05 : 0;
-  const subtotal2 = subtotal1 + monto_presentismo;
-  const total_a_pagar = subtotal2 - (nov.adelantos || 0) - (nov.pagos_dobles_realizados || 0);
+  const result = calcularTotalLiquidacion({
+    sueldo_mensual: emp.sueldo_mensual,
+    modo_pago: emp.modo_pago,
+    inasistencias: nov.inasistencias || 0,
+    horas_extras: nov.horas_extras || 0,
+    dobles: nov.dobles || 0,
+    valor_doble: valorDoble,
+    feriados: nov.feriados || 0,
+    vacaciones_dias: nov.vacaciones_dias || 0,
+    presentismo_mantiene: nov.presentismo === "MANTIENE",
+    adelantos: nov.adelantos || 0,
+    pagos_dobles_realizados: nov.pagos_dobles_realizados || 0,
+  });
   return {
-    sueldo_base, descuento_ausencias, total_horas_extras, total_dobles, total_feriados,
-    total_vacaciones, subtotal1, monto_presentismo, subtotal2,
-    adelantos: nov.adelantos || 0, pagos_realizados: nov.pagos_dobles_realizados || 0,
-    total_a_pagar,
-    efectivo: emp.alias_mp ? 0 : Math.max(total_a_pagar, 0),
-    transferencia: emp.alias_mp ? Math.max(total_a_pagar, 0) : 0,
+    ...result,
+    efectivo: emp.alias_mp ? 0 : Math.max(result.total_a_pagar, 0),
+    transferencia: emp.alias_mp ? Math.max(result.total_a_pagar, 0) : 0,
   };
 }
 
@@ -204,7 +178,8 @@ export default function RRHH({ user, locales, localActivo }) {
         estimado += Number(emp.sueldo_mensual);
       }
     });
-    const totalSAC = activos.reduce((s, e) => s + calcSACTeorico(Number(e.sueldo_mensual)).acumulado, 0);
+    const mesActual = today.getMonth() + 1;
+    const totalSAC = activos.reduce((s, e) => s + calcularSACProporcional(Number(e.sueldo_mensual), mesActual), 0);
     // Próximo SAC
     const junio30 = new Date(anio, 5, 30);
     const dic31 = new Date(anio, 11, 31);
@@ -466,9 +441,7 @@ export default function RRHH({ user, locales, localActivo }) {
             <div style={{overflowX:"auto"}}>
             <table><thead><tr><th>Nombre</th><th>Local</th><th>Puesto</th><th style={{textAlign:"right"}}>Sueldo</th><th>Modo</th><th>Vacaciones</th><th>CUIL</th><th>Activo</th><th></th></tr></thead>
             <tbody>{empsFilt.map(e => {
-              const vacAcum = calcVacacionesAcumuladas(e.fecha_inicio);
-              const vacTom = vacTomadas[e.id] || 0;
-              const vac = Math.max(0, vacAcum - vacTom);
+              const vac = calcularVacaciones(e.fecha_inicio, vacTomadas[e.id] || 0);
               const vacColor = vac >= 14 ? "var(--success)" : vac >= 7 ? "var(--warn)" : "var(--muted2)";
               return (
                 <tr key={e.id} style={{opacity: e.activo === false ? 0.4 : 1}}>

@@ -1,6 +1,13 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
+import {
+  diasVacacionesPorAnio,
+  calcularVacaciones,
+  calcularSACProporcional,
+  calcularSACTeorico,
+  calcularLiquidacionFinal,
+} from "../lib/calculos/rrhh";
 
 const MESES = ["","Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const DOC_TIPOS = [
@@ -11,13 +18,6 @@ const DOC_TIPOS = [
   { value:"contrato", label:"Contrato" },
   { value:"otro", label:"Otro" },
 ];
-
-function diasVacacionesPorAnio(antiguedadAnios: number): number {
-  if (antiguedadAnios < 5) return 14;
-  if (antiguedadAnios < 10) return 21;
-  if (antiguedadAnios < 20) return 28;
-  return 35;
-}
 
 export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
   const [emp, setEmp] = useState<any>(null);
@@ -107,14 +107,13 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
   const antiguedadAnios = antiguedadMs / (365.25 * 24 * 60 * 60 * 1000);
   const diasVacAnuales = diasVacacionesPorAnio(Math.floor(antiguedadAnios));
   const diasVacPorMes = diasVacAnuales / 12;
-  const mesesTrabajados = fechaInicio ? (new Date().getFullYear() - fechaInicio.getFullYear()) * 12 + (new Date().getMonth() - fechaInicio.getMonth()) : 0;
-  const vacAcumuladas = Math.max(0, diasVacPorMes * Math.max(0, mesesTrabajados) - vacTomadas);
+  const vacAcumuladas = calcularVacaciones(emp.fecha_inicio, vacTomadas);
 
   // SAC teórico
   const mesActual = new Date().getMonth() + 1;
   const mesesEnSemestre = mesActual <= 6 ? mesActual : mesActual - 6;
-  const sacAcumulado = (Number(emp.sueldo_mensual) / 12) * mesesEnSemestre;
-  const sacTeorico = Number(emp.sueldo_mensual) / 2;
+  const sacAcumulado = calcularSACProporcional(Number(emp.sueldo_mensual), mesActual);
+  const sacTeorico = calcularSACTeorico(Number(emp.sueldo_mensual));
 
   // ─── ACCIONES: SUELDO ──────────────────────────────────────────────────────
   const guardarSueldo = async () => {
@@ -330,30 +329,21 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
         )}
 
         {liqFinalModal && (() => {
-          const sueldo = Number(emp.sueldo_mensual);
-          const vDia = sueldo / 30;
-          const fechaEg = new Date(liqFinalForm.fecha_egreso + "T12:00:00");
-          const diaDelMes = fechaEg.getDate();
-          const proporcionalMes = vDia * diaDelMes;
-          const vacDias = vacAcumuladas;
-          const vacMonto = vacDias * vDia;
-          // SAC proporcional
-          const inicioSem = fechaEg.getMonth() < 6 ? new Date(fechaEg.getFullYear(), 0, 1) : new Date(fechaEg.getFullYear(), 6, 1);
-          const diasEnSem = Math.ceil((fechaEg.getTime() - inicioSem.getTime()) / 86400000);
-          const sacProp = (sueldo / 2) * (diasEnSem / 180);
+          const lf = calcularLiquidacionFinal({
+            sueldo_mensual: Number(emp.sueldo_mensual),
+            fecha_inicio: emp.fecha_inicio,
+            fecha_egreso: liqFinalForm.fecha_egreso,
+            vacaciones_acumuladas: vacAcumuladas,
+            motivo: liqFinalForm.motivo as any,
+          });
           const esDespidoSinCausa = liqFinalForm.motivo === "Despido sin causa";
           const antAnios = Math.max(1, Math.floor(antiguedadAnios));
-          const indemnizacion = esDespidoSinCausa ? sueldo * antAnios : 0;
-          const preaviso = esDespidoSinCausa ? (antiguedadAnios < 5 ? vDia * 15 : sueldo) : 0;
-          const diasRestantesMes = new Date(fechaEg.getFullYear(), fechaEg.getMonth() + 1, 0).getDate() - diaDelMes;
-          const integracion = esDespidoSinCausa ? vDia * diasRestantesMes : 0;
-          const total = proporcionalMes + vacMonto + sacProp + indemnizacion + preaviso + integracion;
 
           const confirmarLiqFinal = async () => {
             const desc = `Liquidación final ${emp.apellido} ${emp.nombre}`;
             const gastoId = genId("GASTO");
-            await db.from("gastos").insert([{ id: gastoId, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: total, detalle: desc, local_id: emp.local_id, cuenta:"Caja Chica" }]);
-            await db.from("rrhh_pagos_especiales").insert([{ empleado_id: emp.id, tipo:"liquidacion_final", monto: total, gasto_id: gastoId, pagado_por: user?.id }]);
+            await db.from("gastos").insert([{ id: gastoId, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: lf.total, detalle: desc, local_id: emp.local_id, cuenta:"Caja Chica" }]);
+            await db.from("rrhh_pagos_especiales").insert([{ empleado_id: emp.id, tipo:"liquidacion_final", monto: lf.total, gasto_id: gastoId, pagado_por: user?.id }]);
             await db.from("rrhh_empleados").update({ activo: false, fecha_egreso: liqFinalForm.fecha_egreso, motivo_baja: liqFinalForm.motivo, vacaciones_dias_acumulados: 0, aguinaldo_acumulado: 0 }).eq("id", emp.id);
             setLiqFinalModal(false);
             showToast("Liquidación final procesada");
@@ -375,13 +365,13 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
                   <div style={{background:"var(--s2)",borderRadius:"var(--r)",padding:16}}>
                     <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>Conceptos</div>
                     {[
-                      ["Proporcional mes", proporcionalMes],
-                      ["Vacaciones (" + vacDias.toFixed(1) + " días)", vacMonto],
-                      ["SAC proporcional", sacProp],
+                      ["Proporcional mes", lf.proporcional_mes],
+                      ["Vacaciones (" + vacAcumuladas.toFixed(1) + " días)", lf.vacaciones_dinero],
+                      ["SAC proporcional", lf.sac_proporcional],
                       ...(esDespidoSinCausa ? [
-                        ["Indemnización (" + antAnios + " año" + (antAnios > 1 ? "s" : "") + ")", indemnizacion],
-                        ["Preaviso", preaviso],
-                        ["Integración mes despido", integracion],
+                        ["Indemnización (" + antAnios + " año" + (antAnios > 1 ? "s" : "") + ")", lf.indemnizacion],
+                        ["Preaviso", lf.preaviso],
+                        ["Integración mes despido", lf.integracion_mes],
                       ] : []),
                     ].map(([label, monto], i) => (
                       <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid var(--bd)",fontSize:12}}>
@@ -389,7 +379,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
                       </div>
                     ))}
                     <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",fontSize:14,fontWeight:700}}>
-                      <span>TOTAL</span><span className="num" style={{color:"var(--success)",fontSize:18}}>{fmt_$(total)}</span>
+                      <span>TOTAL</span><span className="num" style={{color:"var(--success)",fontSize:18}}>{fmt_$(lf.total)}</span>
                     </div>
                   </div>
                 </div>
