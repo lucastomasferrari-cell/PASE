@@ -8,31 +8,31 @@ export default function Dashboard({ locales, localActivo }) {
   const [stats, setStats] = useState({saldos:{},deuda:0,vencidas:0,ventasHoy:0,remPend:0});
   const [provDeuda, setProvDeuda] = useState([]);
   const [loading, setLoading] = useState(true);
-  useEffect(()=>{
-    const load = async () => {
-      const hoy = toISO(today);
-      const [{data:saldos},{data:facturas},{data:remitos},{data:ventas},{data:provs}] = await Promise.all([
-        db.from("saldos_caja").select("*"),
-        db.from("facturas").select("*").neq("estado","anulada"),
-        db.from("remitos").select("*"),
-        db.from("ventas").select("*").eq("fecha",hoy),
-        db.from("proveedores").select("*").gt("saldo",0).eq("estado","Activo"),
-      ]);
-      const saldosObj = {};
-      (saldos||[]).forEach(s=>saldosObj[s.cuenta]=s.saldo);
-      const fAct = (facturas||[]).filter(f=>f.estado!=="pagada"&&(!localActivo||f.local_id===localActivo));
-      setStats({
-        saldos:saldosObj,
-        deuda:fAct.reduce((s,f)=>s+(f.total||0),0),
-        vencidas:fAct.filter(f=>f.estado==="vencida").length,
-        ventasHoy:(ventas||[]).filter(v=>!localActivo||v.local_id===localActivo).reduce((s,v)=>s+(v.monto||0),0),
-        remPend:(remitos||[]).filter(r=>r.estado==="sin_factura"&&(!localActivo||r.local_id===localActivo)).length,
-      });
-      setProvDeuda((provs||[]).sort((a,b)=>b.saldo-a.saldo).slice(0,8));
-      setLoading(false);
-    };
-    load();
-  },[localActivo]);
+  const load = async (localId = localActivo) => {
+    setLoading(true);
+    const hoy = toISO(today);
+    const [{data:saldos},{data:facturas},{data:remitos},{data:ventas},{data:provs}] = await Promise.all([
+      db.from("saldos_caja").select("*"),
+      db.from("facturas").select("*").neq("estado","anulada"),
+      db.from("remitos").select("*"),
+      db.from("ventas").select("*").eq("fecha",hoy),
+      db.from("proveedores").select("*").gt("saldo",0).eq("estado","Activo"),
+    ]);
+    const saldosObj = {};
+    (saldos||[]).forEach(s=>saldosObj[s.cuenta]=s.saldo);
+    const matchLocal = (rowLocal) => !localId || String(rowLocal) === String(localId);
+    const fAct = (facturas||[]).filter(f=>f.estado!=="pagada"&&matchLocal(f.local_id));
+    setStats({
+      saldos:saldosObj,
+      deuda:fAct.reduce((s,f)=>s+(f.total||0),0),
+      vencidas:fAct.filter(f=>f.estado==="vencida").length,
+      ventasHoy:(ventas||[]).filter(v=>matchLocal(v.local_id)).reduce((s,v)=>s+(v.monto||0),0),
+      remPend:(remitos||[]).filter(r=>r.estado==="sin_factura"&&matchLocal(r.local_id)).length,
+    });
+    setProvDeuda((provs||[]).sort((a,b)=>b.saldo-a.saldo).slice(0,8));
+    setLoading(false);
+  };
+  useEffect(()=>{ load(localActivo); },[localActivo]);
   if(loading) return <div className="loading">Cargando...</div>;
   const totalLiquidez = Object.values(stats.saldos).reduce((a,b)=>a+b,0);
   return (
