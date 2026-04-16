@@ -38,12 +38,22 @@ export default function Gastos({ user, locales, localActivo }) {
 
   const guardar=async()=>{
     if(!form.monto||!form.categoria)return;
-    const nuevo={...form,id:genId("GASTO"),tipo:getTipo(),local_id:form.local_id?parseInt(form.local_id):null,monto:parseFloat(form.monto),plantilla_id:form.plantilla_id||null};
-    await db.from("gastos").insert([nuevo]);
-    const {data:caja}=await db.from("saldos_caja").select("saldo").eq("cuenta",form.cuenta).maybeSingle();
-    if(caja)await db.from("saldos_caja").update({saldo:(caja.saldo||0)-parseFloat(form.monto)}).eq("cuenta",form.cuenta);
-    await db.from("movimientos").insert([{id:genId("MOV"),fecha:form.fecha,cuenta:form.cuenta,tipo:"Gasto "+getTipo(),cat:form.categoria,importe:-parseFloat(form.monto),detalle:form.detalle||form.categoria,fact_id:null}]);
-    setModal(false);setForm(emptyForm);load();
+    try {
+      const nuevo={...form,id:genId("GASTO"),tipo:getTipo(),local_id:form.local_id?parseInt(form.local_id):null,monto:parseFloat(form.monto),plantilla_id:form.plantilla_id||null};
+      const {error:gastoErr}=await db.from("gastos").insert([nuevo]);
+      if(gastoErr)throw new Error("Error guardando gasto: "+gastoErr.message);
+
+      const {data:caja}=await db.from("saldos_caja").select("saldo").eq("cuenta",form.cuenta).maybeSingle();
+      if(caja)await db.from("saldos_caja").update({saldo:(caja.saldo||0)-parseFloat(form.monto)}).eq("cuenta",form.cuenta);
+
+      const {error:movErr}=await db.from("movimientos").insert([{id:genId("MOV"),fecha:form.fecha,cuenta:form.cuenta,tipo:"Gasto "+getTipo(),cat:form.categoria,importe:-parseFloat(form.monto),detalle:form.detalle||form.categoria,fact_id:null}]);
+      if(movErr)console.error("movimientos error (no crítico):",movErr);
+
+      setModal(false);setForm(emptyForm);load();
+    } catch (err: any) {
+      console.error("Error guardando gasto:",err);
+      alert("Error al guardar: "+err.message);
+    }
   };
 
   const guardarPlantilla=async()=>{
