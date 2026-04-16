@@ -138,7 +138,13 @@ export default function RRHH({ user, locales, localActivo }) {
     }
     const merged = (emps || []).map(emp => {
       const nov = novs.find(n => n.empleado_id === emp.id);
-      const liq = nov ? (Array.isArray(nov.rrhh_liquidaciones) ? nov.rrhh_liquidaciones : [])[0] : null;
+      let liq = nov ? (Array.isArray(nov.rrhh_liquidaciones) ? nov.rrhh_liquidaciones : [])[0] : null;
+      // Si la novedad está confirmada pero no tiene liquidación, calcularla on-the-fly
+      if (nov && !liq) {
+        const vd = valoresDoble.find(v => v.puesto === emp.puesto)?.valor || 0;
+        const calc = calcLiquidacion(emp, nov, vd);
+        liq = { ...calc, estado: "pendiente", _novedadId: nov.id, _generated: true };
+      }
       return { emp, nov, liq };
     }).filter(r => r.nov);
     setPagoData(merged);
@@ -318,13 +324,22 @@ export default function RRHH({ user, locales, localActivo }) {
   // ─── PAGOS ACTIONS ─────────────────────────────────────────────────────────
   const pagarUno = async (row: any) => {
     if (pagando) return;
-    const { emp, liq } = row;
+    const { emp, nov, liq } = row;
     if (!liq || liq.estado === "pagado") return;
     setPagando(true);
+    let liqId = liq.id;
+    // Si la liquidación fue calculada on-the-fly, crearla en DB primero
+    if (liq._generated && nov?.id) {
+      const { _novedadId, _generated, ...calcFields } = liq;
+      const { data: created } = await db.from("rrhh_liquidaciones").insert([{
+        novedad_id: nov.id, ...calcFields, estado: "pendiente", calculado_at: new Date().toISOString(),
+      }]).select().single();
+      if (created) liqId = created.id;
+    }
     const desc = `Sueldo ${emp.apellido} ${emp.nombre} - ${MESES_NOMBRE[pagoMes]} ${pagoAnio}`;
     const gastoId = genId("GASTO");
     await db.from("gastos").insert([{ id: gastoId, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: Number(liq.total_a_pagar), detalle: desc, local_id: emp.local_id, cuenta: emp.alias_mp ? "MercadoPago" : "Caja Chica" }]);
-    await db.from("rrhh_liquidaciones").update({ estado:"pagado", gasto_id: gastoId, pagado_at: new Date().toISOString(), pagado_por: user?.id }).eq("id", liq.id);
+    await db.from("rrhh_liquidaciones").update({ estado:"pagado", gasto_id: gastoId, pagado_at: new Date().toISOString(), pagado_por: user?.id }).eq("id", liqId);
     await db.from("rrhh_empleados").update({ aguinaldo_acumulado: (emp.aguinaldo_acumulado || 0) + Number(liq.total_a_pagar) / 12 }).eq("id", emp.id);
     setPagando(false);
     showToast("Pago registrado");
@@ -337,11 +352,19 @@ export default function RRHH({ user, locales, localActivo }) {
     if (!pendientes.length) return;
     setPagando(true);
     for (const row of pendientes) {
-      const { emp, liq } = row;
+      const { emp, nov, liq } = row;
+      let liqId = liq.id;
+      if (liq._generated && nov?.id) {
+        const { _novedadId, _generated, ...calcFields } = liq;
+        const { data: created } = await db.from("rrhh_liquidaciones").insert([{
+          novedad_id: nov.id, ...calcFields, estado: "pendiente", calculado_at: new Date().toISOString(),
+        }]).select().single();
+        if (created) liqId = created.id;
+      }
       const desc = `Sueldo ${emp.apellido} ${emp.nombre} - ${MESES_NOMBRE[pagoMes]} ${pagoAnio}`;
       const gastoId = genId("GASTO");
       await db.from("gastos").insert([{ id: gastoId, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: Number(liq.total_a_pagar), detalle: desc, local_id: emp.local_id, cuenta: emp.alias_mp ? "MercadoPago" : "Caja Chica" }]);
-      await db.from("rrhh_liquidaciones").update({ estado:"pagado", gasto_id: gastoId, pagado_at: new Date().toISOString(), pagado_por: user?.id }).eq("id", liq.id);
+      await db.from("rrhh_liquidaciones").update({ estado:"pagado", gasto_id: gastoId, pagado_at: new Date().toISOString(), pagado_por: user?.id }).eq("id", liqId);
       await db.from("rrhh_empleados").update({ aguinaldo_acumulado: (emp.aguinaldo_acumulado || 0) + Number(liq.total_a_pagar) / 12 }).eq("id", emp.id);
     }
     setPagando(false);
