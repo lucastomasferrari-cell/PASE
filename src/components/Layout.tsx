@@ -59,9 +59,9 @@ export const css = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#1c1c1c;--s1:#161616;--s2:#212121;--s3:#2a2a2a;--bd:#252525;--bd2:#303030;--acc:#cc785c;--txt:#e0e0e0;--muted:#666;--muted2:#888;--danger:#888;--success:#888;--warn:#888;--info:#888;--r:8px}
-body{background:var(--bg);color:var(--txt);font-family:'Inter',sans-serif;font-size:13px;line-height:1.5}
+body{background:var(--bg);color:var(--txt);font-family:'Inter',sans-serif;font-size:13.5px;line-height:1.5}
 .app{display:flex;min-height:100vh}
-.sb{width:196px;background:var(--s1);border-right:1px solid var(--bd);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:20}
+.sb{width:176px;background:var(--s1);border-right:1px solid var(--bd);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:20}
 .sb-logo{padding:12px 14px 14px;border-bottom:1px solid var(--bd);margin-bottom:4px}
 .sb-local{padding:8px 8px;border-bottom:1px solid var(--bd)}
 .sb-local select{width:100%;background:var(--s2);border:1px solid var(--bd2);color:var(--txt);padding:5px 8px;font-size:11px;font-family:'Inter',sans-serif;border-radius:6px;outline:none}
@@ -74,7 +74,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Inter',sans-serif;font-s
 .sb-uname{font-size:11px;font-weight:500;margin-bottom:1px;color:var(--txt)}
 .sb-logout{display:block;width:100%;margin-top:6px;padding:5px;background:transparent;border:1px solid var(--bd);color:var(--muted);cursor:pointer;font-size:10px;font-family:'Inter',sans-serif;border-radius:6px}
 .sb-logout:hover{border-color:var(--acc);color:var(--acc)}
-.main{margin-left:196px;flex:1;padding:20px 24px;min-height:100vh}
+.main{margin-left:176px;flex:1;padding:20px 28px;min-height:100vh}
 .ph-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;gap:12px;flex-wrap:wrap}
 .ph-title{font-family:'Inter',sans-serif;font-size:17px;font-weight:500;line-height:1;color:#fff}
 .ph-sub{font-size:11px;color:var(--muted);margin-top:3px}
@@ -97,7 +97,7 @@ thead th{padding:7px 12px;text-align:left;font-size:9px;letter-spacing:.8px;text
 tbody tr{border-bottom:1px solid var(--bd);transition:background 0.1s}
 tbody tr:last-child{border-bottom:none}
 tbody tr:hover{background:#1e1e1e}
-td{padding:9px 12px;font-size:12px}
+td{padding:9px 12px;font-size:12.5px}
 .badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:9px;letter-spacing:.5px;text-transform:uppercase;font-weight:500}
 .b-danger{background:var(--s3);color:var(--muted2)}
 .b-success{background:var(--s3);color:var(--muted2)}
