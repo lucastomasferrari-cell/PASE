@@ -283,7 +283,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
           <div className="kpi"><div className="kpi-label">Antigüedad</div><div style={{fontSize:13}}>{Math.floor(antiguedadAnios)} años, {Math.floor((antiguedadAnios % 1) * 12)} meses</div></div>
         </div>
         <div className="grid3" style={{marginBottom:16}}>
-          <div className="kpi"><div className="kpi-label">Alias MP</div><div style={{fontSize:13}}>{emp.alias_mp || "—"}</div></div>
+          <div className="kpi"><div className="kpi-label">CBU / Alias</div><div style={{fontSize:13}}>{emp.alias_mp || "—"}</div></div>
           <div className="kpi"><div className="kpi-label">Modo de pago</div><div style={{fontSize:13}}>{emp.modo_pago}</div></div>
           <div className="kpi">
             <div className="kpi-label">Estado</div>

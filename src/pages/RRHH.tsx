@@ -518,7 +518,7 @@ export default function RRHH({ user, locales, localActivo }) {
                 </div>
                 <div className="form3">
                   <div className="field"><label>Sueldo mensual *</label><input type="number" value={empForm.sueldo_mensual} onChange={e => setEmpForm({...empForm, sueldo_mensual:e.target.value})} placeholder="0" /></div>
-                  <div className="field"><label>Alias MP</label><input value={empForm.alias_mp} onChange={e => setEmpForm({...empForm, alias_mp:e.target.value})} /></div>
+                  <div className="field"><label>CBU / Alias</label><input value={empForm.alias_mp} onChange={e => setEmpForm({...empForm, alias_mp:e.target.value})} /></div>
                   <div className="field"><label>Fecha inicio</label><input type="date" value={empForm.fecha_inicio} onChange={e => setEmpForm({...empForm, fecha_inicio:e.target.value})} /></div>
                 </div>
                 <div className="field"><label>Activo</label><select value={empForm.activo ? "1" : "0"} onChange={e => setEmpForm({...empForm, activo:e.target.value === "1"})}><option value="1">Si</option><option value="0">No</option></select></div>
@@ -612,7 +612,7 @@ export default function RRHH({ user, locales, localActivo }) {
           <div className="panel">
             <div style={{overflowX:"auto"}}>
             <table>
-              <thead><tr><th>Empleado</th><th style={{textAlign:"right"}}>Total</th><th style={{textAlign:"right"}}>Efectivo</th><th style={{textAlign:"right"}}>Transferencia</th><th>Alias MP</th><th>Estado</th><th></th></tr></thead>
+              <thead><tr><th>Empleado</th><th style={{textAlign:"right"}}>Total</th><th style={{textAlign:"right"}}>Efectivo</th><th style={{textAlign:"right"}}>Transferencia</th><th>CBU / Alias</th><th>Estado</th><th></th></tr></thead>
               <tbody>{pagoData.map(({ emp, liq }) => {
                 if (!liq) return null;
                 const pagado = liq.estado === "pagado";
