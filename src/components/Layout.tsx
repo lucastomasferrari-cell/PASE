@@ -61,7 +61,7 @@ export const css = `
 :root{--bg:#1c1c1c;--s1:#161616;--s2:#212121;--s3:#2a2a2a;--bd:#252525;--bd2:#303030;--acc:#cc785c;--txt:#e0e0e0;--muted:#666;--muted2:#888;--danger:#888;--success:#888;--warn:#888;--info:#888;--r:8px}
 body{background:var(--bg);color:var(--txt);font-family:'Inter',sans-serif;font-size:13.5px;line-height:1.5}
 .app{display:flex;min-height:100vh}
-.sb{width:210px;background:var(--s1);border-right:1px solid var(--bd);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:20}
+.sb{width:240px;background:var(--s1);border-right:1px solid var(--bd);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:20}
 .sb-logo{padding:14px 20px 16px;border-bottom:1px solid var(--bd)}
 .sb-logo-name{font-size:15px;font-weight:500;color:#fff}
 .sb-local{padding:8px 12px;border-bottom:1px solid var(--bd)}
@@ -76,7 +76,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Inter',sans-serif;font-s
 .sb-uname{font-size:12px;font-weight:500;margin-bottom:1px;color:var(--txt)}
 .sb-logout{display:block;width:100%;margin-top:6px;padding:5px;background:transparent;border:1px solid var(--bd);color:var(--muted);cursor:pointer;font-size:10px;font-family:'Inter',sans-serif;border-radius:6px}
 .sb-logout:hover{border-color:var(--acc);color:var(--acc)}
-.main{margin-left:210px;flex:1;padding:24px 32px;min-height:100vh}
+.main{margin-left:240px;flex:1;padding:28px 48px;min-height:100vh}
 .ph-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;gap:12px;flex-wrap:wrap}
 .ph-title{font-family:'Inter',sans-serif;font-size:17px;font-weight:500;line-height:1;color:#fff}
 .ph-sub{font-size:11px !important;color:var(--muted);margin-top:3px;font-weight:400 !important}
