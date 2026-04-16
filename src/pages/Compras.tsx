@@ -32,7 +32,7 @@ export default function Compras({ user, locales, localActivo }) {
   useEffect(()=>{load();},[]);
 
   const fFilt = facturas.filter(f=>{
-    if(localActivo&&f.local_id!==localActivo) return false;
+    if(localActivo&&String(f.local_id)!==String(localActivo)) return false;
     if(tab==="pendientes") return f.estado==="pendiente"&&(f.tipo||"factura")!=="nota_credito";
     if(tab==="vencidas") return f.estado==="vencida"&&(f.tipo||"factura")!=="nota_credito";
     if(tab==="pagadas") return f.estado==="pagada";
@@ -41,7 +41,7 @@ export default function Compras({ user, locales, localActivo }) {
     return f.estado!=="anulada";
   }).filter(f=>!search||proveedores.find(p=>p.id===f.prov_id)?.nombre.toLowerCase().includes(search.toLowerCase())||(f.nro||"").includes(search));
 
-  const fActivas = facturas.filter(f=>f.estado!=="pagada"&&f.estado!=="anulada"&&(!localActivo||f.local_id===localActivo));
+  const fActivas = facturas.filter(f=>f.estado!=="pagada"&&f.estado!=="anulada"&&(!localActivo||String(f.local_id)===String(localActivo)));
 
   const onProvChange = (prov_id) => {
     const prov = proveedores.find(p=>p.id===parseInt(prov_id));
