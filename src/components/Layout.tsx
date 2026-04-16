@@ -25,7 +25,7 @@ export function Sidebar({ user, section, onNav, onLogout, locales, localActivo, 
   const secs = [...new Set(nav.map(n=>n.sec))];
   return (
     <div className="sb">
-      <div className="sb-logo"><div className="sb-name">GASTRO</div><div className="sb-tag">Sistema de Gestión</div></div>
+      <div className="sb-logo"><div style={{fontFamily:"'Helvetica Neue',Helvetica,Arial,sans-serif",fontWeight:700,fontSize:16,letterSpacing:0.5,color:"var(--txt)"}}>PASE<span style={{display:"block",fontSize:9,fontWeight:400,letterSpacing:2,textTransform:"uppercase",color:"var(--muted)",marginTop:2}}>aliado gastronómico</span></div></div>
       {localesDisp.length > 1 && (
         <div className="sb-local">
           <select value={localActivo||""} onChange={e=>setLocalActivo(e.target.value?parseInt(e.target.value):null)}>

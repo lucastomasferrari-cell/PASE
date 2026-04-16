@@ -53,8 +53,8 @@ export default function Login({ onLogin }) {
     <div className="login-wrap">
       <div className="login-bg" />
       <div className="login-card">
-        <div className="login-brand">GASTRO</div>
-        <div className="login-sub">Sistema de Gestión</div>
+        <div className="login-brand">PASE</div>
+        <div className="login-sub">aliado gastronómico</div>
         {err && <div className="alert alert-danger">{err}</div>}
         <div className="field"><label>Usuario</label><input autoComplete="username" value={usuario} onChange={e=>setUsuario(e.target.value)} placeholder="Ingresá tu usuario" onKeyDown={e=>e.key==="Enter"&&go()} /></div>
         <div className="field"><label>Contraseña</label><input ref={passRef} type="password" autoComplete="current-password" defaultValue="" placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&go()} /></div>
