@@ -11,7 +11,7 @@ export default function Gastos({ user, locales, localActivo }) {
   const [subTab,setSubTab]=useState("recurrentes");
   const [modal,setModal]=useState(false);
   const [plantModal,setPlantModal]=useState(false);
-  const [plantForm,setPlantForm]=useState({nombre:"",categoria:"",detalle:"",monto_estimado:""});
+  const [plantForm,setPlantForm]=useState({nombre:"",categoria:"",local_id:""});
   const [plantEdit,setPlantEdit]=useState<any>(null);
   const [mes,setMes]=useState(toISO(today).slice(0,7));
   const emptyForm={fecha:toISO(today),local_id:"",categoria:"",monto:"",detalle:"",cuenta:"MercadoPago",plantilla_id:null as number|null};
@@ -58,13 +58,13 @@ export default function Gastos({ user, locales, localActivo }) {
 
   const guardarPlantilla=async()=>{
     if(!plantForm.nombre||!plantForm.categoria)return;
-    const payload={nombre:plantForm.nombre,tipo:getTipo(),categoria:plantForm.categoria,detalle:plantForm.detalle||null,monto_estimado:parseFloat(plantForm.monto_estimado)||0,activo:true};
+    const payload:any={nombre:plantForm.nombre,tipo:getTipo(),categoria:plantForm.categoria,local_id:plantForm.local_id?parseInt(plantForm.local_id):null,activo:true};
     if(plantEdit){
       await db.from("gastos_plantillas").update(payload).eq("id",plantEdit.id);
     }else{
       await db.from("gastos_plantillas").insert([payload]);
     }
-    setPlantEdit(null);setPlantForm({nombre:"",categoria:"",detalle:"",monto_estimado:""});load();
+    setPlantEdit(null);setPlantForm({nombre:"",categoria:"",local_id:""});load();
   };
 
   const eliminarPlantilla=async(id:number)=>{
@@ -73,7 +73,7 @@ export default function Gastos({ user, locales, localActivo }) {
   };
 
   const pagarPlantilla=(p:any)=>{
-    setForm({...emptyForm,categoria:p.categoria,detalle:p.detalle||p.nombre,monto:String(p.monto_estimado||""),plantilla_id:p.id});
+    setForm({...emptyForm,categoria:p.categoria,detalle:p.nombre,monto:"",local_id:p.local_id?String(p.local_id):"",plantilla_id:p.id});
     setModal(true);
   };
 
@@ -100,17 +100,17 @@ export default function Gastos({ user, locales, localActivo }) {
         <div className="panel">
           <div className="panel-hd">
             <span className="panel-title">Gastos recurrentes — {tabLabels.find(t=>t[0]===tab)?.[1]}</span>
-            <button className="btn btn-ghost btn-sm" onClick={()=>{setPlantForm({nombre:"",categoria:"",detalle:"",monto_estimado:""});setPlantEdit(null);setPlantModal(true)}}>Gestionar</button>
+            <button className="btn btn-ghost btn-sm" onClick={()=>{setPlantForm({nombre:"",categoria:"",local_id:""});setPlantEdit(null);setPlantModal(true)}}>Gestionar</button>
           </div>
           {plantFilt.length===0?<div className="empty">No hay gastos recurrentes configurados. Usá "Gestionar" para agregar.</div>:(
-            <table><thead><tr><th>Nombre</th><th>Categoría</th><th>Estimado</th><th>Estado mes</th><th></th></tr></thead>
+            <table><thead><tr><th>Nombre</th><th>Categoría</th><th>Local</th><th>Estado mes</th><th></th></tr></thead>
             <tbody>{plantFilt.map(p=>{
               const pagado=gFilt.find(g=>g.plantilla_id===p.id);
               return(
                 <tr key={p.id} style={pagado?{opacity:0.6}:{}}>
                   <td style={{fontWeight:500,fontSize:12}}>{p.nombre}</td>
                   <td><span className="badge b-muted">{p.categoria}</span></td>
-                  <td><span className="num">{fmt_$(p.monto_estimado)}</span></td>
+                  <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===p.local_id)?.nombre||"Todos"}</td>
                   <td>{pagado
                     ?<span className="badge b-success">Pagado {fmt_$(pagado.monto)}</span>
                     :<span className="badge b-warn">Pendiente</span>}
@@ -163,14 +163,14 @@ export default function Gastos({ user, locales, localActivo }) {
         <div className="modal-hd"><div className="modal-title">Gestionar Recurrentes — {tabLabels.find(t=>t[0]===tab)?.[1]}</div><button className="close-btn" onClick={()=>setPlantModal(false)}>✕</button></div>
         <div className="modal-body">
           {plantFilt.length>0&&(
-            <table style={{marginBottom:16}}><thead><tr><th>Nombre</th><th>Categoría</th><th>Estimado</th><th></th></tr></thead>
+            <table style={{marginBottom:16}}><thead><tr><th>Nombre</th><th>Categoría</th><th>Local</th><th></th></tr></thead>
             <tbody>{plantFilt.map(p=>(
               <tr key={p.id}>
                 <td style={{fontSize:12}}>{p.nombre}</td>
                 <td><span className="badge b-muted">{p.categoria}</span></td>
-                <td className="num">{fmt_$(p.monto_estimado)}</td>
+                <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===p.local_id)?.nombre||"Todos"}</td>
                 <td><div style={{display:"flex",gap:4}}>
-                  <button className="btn btn-ghost btn-sm" onClick={()=>{setPlantEdit(p);setPlantForm({nombre:p.nombre,categoria:p.categoria,detalle:p.detalle||"",monto_estimado:String(p.monto_estimado||"")});}}>Editar</button>
+                  <button className="btn btn-ghost btn-sm" onClick={()=>{setPlantEdit(p);setPlantForm({nombre:p.nombre,categoria:p.categoria,local_id:p.local_id?String(p.local_id):""});}}>Editar</button>
                   <button className="btn btn-danger btn-sm" onClick={()=>eliminarPlantilla(p.id)}>X</button>
                 </div></td>
               </tr>
@@ -178,16 +178,13 @@ export default function Gastos({ user, locales, localActivo }) {
           )}
           <div style={{borderTop:"1px solid var(--bd)",paddingTop:12}}>
             <div style={{fontSize:10,letterSpacing:1,textTransform:"uppercase",color:"var(--muted)",marginBottom:8}}>{plantEdit?"Editar":"Nueva"} plantilla</div>
-            <div className="form2">
+            <div className="form3">
               <div className="field"><label>Nombre *</label><input value={plantForm.nombre} onChange={e=>setPlantForm({...plantForm,nombre:e.target.value})} placeholder="Ej: Alquiler local"/></div>
               <div className="field"><label>Categoría *</label><select value={plantForm.categoria} onChange={e=>setPlantForm({...plantForm,categoria:e.target.value})}><option value="">Seleccioná...</option>{getCats().map(c=><option key={c}>{c}</option>)}</select></div>
-            </div>
-            <div className="form2">
-              <div className="field"><label>Monto estimado</label><input type="number" value={plantForm.monto_estimado} onChange={e=>setPlantForm({...plantForm,monto_estimado:e.target.value})} placeholder="0"/></div>
-              <div className="field"><label>Detalle</label><input value={plantForm.detalle} onChange={e=>setPlantForm({...plantForm,detalle:e.target.value})} placeholder="Descripción..."/></div>
+              <div className="field"><label>Local</label><select value={plantForm.local_id} onChange={e=>setPlantForm({...plantForm,local_id:e.target.value})}><option value="">Todos</option>{locales.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
             </div>
             <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-              {plantEdit&&<button className="btn btn-ghost btn-sm" onClick={()=>{setPlantEdit(null);setPlantForm({nombre:"",categoria:"",detalle:"",monto_estimado:""});}}>Cancelar edición</button>}
+              {plantEdit&&<button className="btn btn-ghost btn-sm" onClick={()=>{setPlantEdit(null);setPlantForm({nombre:"",categoria:"",local_id:""});}}>Cancelar edición</button>}
               <button className="btn btn-acc btn-sm" onClick={guardarPlantilla}>{plantEdit?"Guardar":"Agregar"}</button>
             </div>
           </div>
