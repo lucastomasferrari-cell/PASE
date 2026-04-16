@@ -58,7 +58,7 @@ export function Sidebar({ user, section, onNav, onLogout, locales, localActivo, 
 export const css = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#1c1c1c;--s1:#161616;--s2:#212121;--s3:#2a2a2a;--bd:#252525;--bd2:#303030;--acc:#cc785c;--txt:#e0e0e0;--muted:#666;--muted2:#888;--danger:#e06060;--success:#5a9e7a;--warn:#c4933a;--info:#5a8abf;--r:8px}
+:root{--bg:#1c1c1c;--s1:#161616;--s2:#212121;--s3:#2a2a2a;--bd:#252525;--bd2:#303030;--acc:#cc785c;--txt:#e0e0e0;--muted:#666;--muted2:#888;--danger:#888;--success:#888;--warn:#888;--info:#888;--r:8px}
 body{background:var(--bg);color:var(--txt);font-family:'Inter',sans-serif;font-size:13px;line-height:1.5}
 .app{display:flex;min-height:100vh}
 .sb{width:196px;background:var(--s1);border-right:1px solid var(--bd);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:20}
@@ -99,10 +99,10 @@ tbody tr:last-child{border-bottom:none}
 tbody tr:hover{background:#1e1e1e}
 td{padding:9px 12px;font-size:12px}
 .badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:9px;letter-spacing:.5px;text-transform:uppercase;font-weight:500}
-.b-danger{background:rgba(224,96,96,.1);color:var(--danger)}
-.b-success{background:rgba(90,158,122,.1);color:var(--success)}
-.b-warn{background:rgba(196,147,58,.1);color:var(--warn)}
-.b-info{background:rgba(90,138,191,.1);color:var(--info)}
+.b-danger{background:var(--s3);color:var(--muted2)}
+.b-success{background:var(--s3);color:var(--muted2)}
+.b-warn{background:var(--s3);color:var(--muted2)}
+.b-info{background:var(--s3);color:var(--muted2)}
 .b-muted{background:var(--s3);color:var(--muted2)}
 .b-anulada{background:rgba(100,100,100,.1);color:var(--muted);text-decoration:line-through}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:none;cursor:pointer;font-family:'Inter',sans-serif;font-size:11px;font-weight:500;border-radius:var(--r);transition:all 0.15s;white-space:nowrap}
@@ -138,10 +138,10 @@ td{padding:9px 12px;font-size:12px}
 .tab.active{color:var(--acc);border-bottom-color:var(--acc)}
 .tab:hover:not(.active){color:var(--txt)}
 .alert{padding:10px 14px;border-radius:var(--r);font-size:11px;margin-bottom:12px;border-left:3px solid;line-height:1.5}
-.alert-danger{background:rgba(224,96,96,.08);border-color:var(--danger);color:#f1a8a8}
-.alert-warn{background:rgba(196,147,58,.08);border-color:var(--warn);color:#dbb97d}
-.alert-success{background:rgba(90,158,122,.08);border-color:var(--success);color:#9ec5af}
-.alert-info{background:rgba(90,138,191,.08);border-color:var(--info);color:#9eb8d6}
+.alert-danger{background:rgba(255,255,255,.04);border-color:var(--bd2);color:var(--muted2)}
+.alert-warn{background:rgba(255,255,255,.04);border-color:var(--bd2);color:var(--muted2)}
+.alert-success{background:rgba(255,255,255,.04);border-color:var(--bd2);color:var(--muted2)}
+.alert-info{background:rgba(255,255,255,.04);border-color:var(--bd2);color:var(--muted2)}
 .caja-card{background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);padding:16px;position:relative;overflow:hidden}
 .caja-name{font-size:9px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
 .caja-saldo{font-family:'Inter',sans-serif;font-size:20px;font-weight:500}
