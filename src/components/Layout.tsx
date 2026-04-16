@@ -174,4 +174,5 @@ td{padding:9px 12px;font-size:12.5px}
 .pill{padding:4px 11px;border-radius:20px;font-size:11px;cursor:pointer;color:var(--muted2);border:1px solid var(--bd);background:var(--s2);transition:all .1s}
 .pill:hover{color:var(--txt)}
 .pill.active{background:var(--s3);color:var(--txt);border-color:var(--bd2)}
+/* build: 2026-04-16-12 */
 `;
