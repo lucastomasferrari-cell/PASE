@@ -327,23 +327,37 @@ export default function RRHH({ user, locales, localActivo }) {
     const { emp, nov, liq } = row;
     if (!liq || liq.estado === "pagado") return;
     setPagando(true);
-    let liqId = liq.id;
-    // Si la liquidación fue calculada on-the-fly, crearla en DB primero
-    if (liq._generated && nov?.id) {
-      const { _novedadId, _generated, ...calcFields } = liq;
-      const { data: created } = await db.from("rrhh_liquidaciones").insert([{
-        novedad_id: nov.id, ...calcFields, estado: "pendiente", calculado_at: new Date().toISOString(),
-      }]).select().single();
-      if (created) liqId = created.id;
+    try {
+      const desc = `Sueldo ${emp.apellido} ${emp.nombre} - ${MESES_NOMBRE[pagoMes]} ${pagoAnio}`;
+      const gastoId = genId("GASTO");
+      const cuenta = (Number(liq.transferencia) > 0 && emp.alias_mp) ? "MercadoPago" : "Caja Chica";
+      const { error: gastoErr } = await db.from("gastos").insert([{ id: gastoId, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: Number(liq.total_a_pagar), detalle: desc, local_id: emp.local_id, cuenta }]);
+      if (gastoErr) throw new Error("Error gasto: " + gastoErr.message);
+
+      const pagadoPayload = { estado:"pagado", gasto_id: gastoId, pagado_at: new Date().toISOString(), pagado_por: user?.id };
+
+      if (liq._generated && nov?.id) {
+        // Crear liquidación directamente como pagada (evita race condition update/select)
+        const { _novedadId, _generated, id: _ignoreId, ...calcFields } = liq;
+        const { error: insErr } = await db.from("rrhh_liquidaciones").insert([{
+          novedad_id: nov.id, ...calcFields, ...pagadoPayload, calculado_at: new Date().toISOString(),
+        }]);
+        if (insErr) throw new Error("Error liquidación: " + insErr.message);
+      } else {
+        const { error: updErr } = await db.from("rrhh_liquidaciones").update(pagadoPayload).eq("id", liq.id);
+        if (updErr) throw new Error("Error update liquidación: " + updErr.message);
+      }
+
+      await db.from("rrhh_empleados").update({ aguinaldo_acumulado: (emp.aguinaldo_acumulado || 0) + Number(liq.total_a_pagar) / 12 }).eq("id", emp.id);
+      showToast("Pago registrado");
+      await loadPagos();
+      await loadEmpleados();
+    } catch (err: any) {
+      console.error("Error pagarUno:", err);
+      alert("Error al registrar el pago: " + err.message);
+    } finally {
+      setPagando(false);
     }
-    const desc = `Sueldo ${emp.apellido} ${emp.nombre} - ${MESES_NOMBRE[pagoMes]} ${pagoAnio}`;
-    const gastoId = genId("GASTO");
-    await db.from("gastos").insert([{ id: gastoId, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: Number(liq.total_a_pagar), detalle: desc, local_id: emp.local_id, cuenta: emp.alias_mp ? "MercadoPago" : "Caja Chica" }]);
-    await db.from("rrhh_liquidaciones").update({ estado:"pagado", gasto_id: gastoId, pagado_at: new Date().toISOString(), pagado_por: user?.id }).eq("id", liqId);
-    await db.from("rrhh_empleados").update({ aguinaldo_acumulado: (emp.aguinaldo_acumulado || 0) + Number(liq.total_a_pagar) / 12 }).eq("id", emp.id);
-    setPagando(false);
-    showToast("Pago registrado");
-    loadPagos(); loadEmpleados();
   };
 
   const pagarTodos = async () => {
@@ -613,15 +627,23 @@ export default function RRHH({ user, locales, localActivo }) {
             <div style={{overflowX:"auto"}}>
             <table>
               <thead><tr><th>Empleado</th><th style={{textAlign:"right"}}>Total</th><th style={{textAlign:"right"}}>Efectivo</th><th style={{textAlign:"right"}}>Transferencia</th><th>CBU / Alias</th><th>Estado</th><th></th></tr></thead>
-              <tbody>{pagoData.map(({ emp, liq }) => {
+              <tbody>{pagoData.map((row, idx) => {
+                const { emp, nov, liq } = row;
                 if (!liq) return null;
                 const pagado = liq.estado === "pagado";
+                const updateSplit = (campo: "efectivo"|"transferencia", valor: number) => {
+                  setPagoData(prev => prev.map((r, i) => i === idx ? { ...r, liq: { ...r.liq, [campo]: valor } } : r));
+                };
                 return (
                   <tr key={emp.id}>
                     <td style={{fontWeight:500,fontSize:12}}>{emp.apellido}, {emp.nombre}</td>
                     <td style={{textAlign:"right"}}><span className="num" style={{color:"var(--acc)"}}>{fmt_$(liq.total_a_pagar)}</span></td>
-                    <td style={{textAlign:"right",fontSize:11}}>{fmt_$(liq.efectivo)}</td>
-                    <td style={{textAlign:"right",fontSize:11,color:"var(--info)"}}>{fmt_$(liq.transferencia)}</td>
+                    <td style={{textAlign:"right",fontSize:11}}>
+                      {pagado ? fmt_$(liq.efectivo) : <input type="number" value={Number(liq.efectivo)||0} onChange={e => updateSplit("efectivo", parseFloat(e.target.value)||0)} style={{width:90,background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--acc)",padding:"3px 6px",fontFamily:"'DM Mono',monospace",fontSize:11,borderRadius:"var(--r)",textAlign:"right"}}/>}
+                    </td>
+                    <td style={{textAlign:"right",fontSize:11,color:"var(--info)"}}>
+                      {pagado ? fmt_$(liq.transferencia) : <input type="number" value={Number(liq.transferencia)||0} onChange={e => updateSplit("transferencia", parseFloat(e.target.value)||0)} style={{width:90,background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--info)",padding:"3px 6px",fontFamily:"'DM Mono',monospace",fontSize:11,borderRadius:"var(--r)",textAlign:"right"}}/>}
+                    </td>
                     <td className="mono" style={{fontSize:10,color:"var(--muted2)"}}>{emp.alias_mp || "—"}</td>
                     <td>
                       {pagado
@@ -630,7 +652,7 @@ export default function RRHH({ user, locales, localActivo }) {
                     </td>
                     <td>
                       {esDueno && !pagado && (
-                        <button className="btn btn-success btn-sm" onClick={() => pagarUno({ emp, liq })} disabled={pagando}>Pagar</button>
+                        <button className="btn btn-success btn-sm" onClick={() => pagarUno({ emp, nov, liq })} disabled={pagando}>Pagar</button>
                       )}
                     </td>
                   </tr>
