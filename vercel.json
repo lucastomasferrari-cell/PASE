@@ -4,5 +4,13 @@
       "path": "/api/mp-sync",
       "schedule": "0 6 * * *"
     }
+  ],
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache" }
+      ]
+    }
   ]
 }
