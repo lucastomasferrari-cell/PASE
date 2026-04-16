@@ -328,7 +328,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
         </div>
       )}
       <div className="ph-row">
-        <div><div className="ph-title">Conciliación MP</div><div className="ph-sub">MercadoPago · {credenciales.filter(c=>c.activo).length} cuentas conectadas</div></div>
+        <div><div className="ph-title">Conciliación MP</div></div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
           <div style={{display:"flex",gap:4,alignItems:"center",fontSize:10,color:"var(--muted2)"}}>
             <span>Desde</span>

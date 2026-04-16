@@ -48,7 +48,7 @@ export default function Caja() {
   return (
     <div>
       <div className="ph-row">
-        <div><div className="ph-title">Caja & Bancos</div><div className="ph-sub">Total disponible: {fmt_$(totalLiquidez)}</div></div>
+        <div><div className="ph-title">Caja & Bancos</div></div>
         <button className="btn btn-acc" onClick={()=>setModal(true)}>+ Movimiento</button>
       </div>
       <div className="grid4">

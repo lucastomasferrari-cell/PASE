@@ -68,7 +68,6 @@ export default function CajaEfectivo({ user, locales, localActivo }) {
       <div className="ph-row">
         <div>
           <div className="ph-title">Caja Efectivo</div>
-          <div className="ph-sub">Control de ingresos y egresos en efectivo por local</div>
         </div>
         <button className="btn btn-acc" onClick={() => setModal(true)}>+ Nuevo movimiento</button>
       </div>

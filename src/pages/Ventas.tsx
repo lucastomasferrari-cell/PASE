@@ -84,7 +84,7 @@ export default function Ventas({ user, locales, localActivo }) {
   return (
     <div>
       <div className="ph-row">
-        <div><div className="ph-title">Ventas</div><div className="ph-sub">Total período: {fmt_$(totalPeriodo)}</div></div>
+        <div><div className="ph-title">Ventas</div></div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
           <input type="date" className="search" style={{width:155}} value={filtFecha}
             onChange={e=>{setFiltFecha(e.target.value);}}

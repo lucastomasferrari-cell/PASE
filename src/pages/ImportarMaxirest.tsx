@@ -47,7 +47,7 @@ export default function ImportarMaxirest({ locales }) {
   };
   return (
     <div>
-      <div className="ph-row"><div><div className="ph-title">Importar Maxirest</div><div className="ph-sub">Pegá el texto del mail de cierre de turno</div></div></div>
+      <div className="ph-row"><div><div className="ph-title">Importar Maxirest</div></div></div>
       <div className="panel">
         <div className="panel-hd"><span className="panel-title">Texto del mail de cierre</span></div>
         <div style={{padding:16}}>

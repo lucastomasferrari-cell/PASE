@@ -80,7 +80,7 @@ export default function Recetas({ locales, localActivo }) {
   return (
     <div>
       <div className="ph-row">
-        <div><div className="ph-title">Recetas</div><div className="ph-sub">{rFilt.length} recetas · Costo teórico automático</div></div>
+        <div><div className="ph-title">Recetas</div></div>
         <div style={{display:"flex",gap:8}}>
           <input className="search" placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)}/>
           <button className="btn btn-acc" onClick={()=>{setForm(emptyForm);setItems([]);setEditando(null);setModal(true)}}>+ Nueva Receta</button>

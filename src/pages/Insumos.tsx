@@ -48,7 +48,7 @@ export default function Insumos() {
   return (
     <div>
       <div className="ph-row">
-        <div><div className="ph-title">Insumos</div><div className="ph-sub">{insumos.filter(i=>i.activo).length} activos</div></div>
+        <div><div className="ph-title">Insumos</div></div>
         <div style={{display:"flex",gap:8}}>
           <input className="search" placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)}/>
           <button className="btn btn-acc" onClick={()=>{setForm(emptyForm);setShowMermaCal(false);setMermaCal({sucio:"",limpio:""});setModal(true)}}>+ Nuevo Insumo</button>

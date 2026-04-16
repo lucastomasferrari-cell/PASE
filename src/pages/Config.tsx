@@ -61,7 +61,7 @@ export default function Config({ locales }) {
 
   return (
     <div>
-      <div className="ph-row"><div><div className="ph-title">Usuarios</div><div className="ph-sub">Accesos y permisos</div></div><button className="btn btn-acc" onClick={()=>{setModal(true);setFormErr("");}}>+ Nuevo</button></div>
+      <div className="ph-row"><div><div className="ph-title">Usuarios</div></div><button className="btn btn-acc" onClick={()=>{setModal(true);setFormErr("");}}>+ Nuevo</button></div>
       <div className="panel">
         {loading?<div className="loading">Cargando...</div>:(
           <table><thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Auth</th><th></th></tr></thead>

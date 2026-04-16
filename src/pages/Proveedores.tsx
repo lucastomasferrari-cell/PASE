@@ -32,7 +32,7 @@ export default function Proveedores() {
   return (
     <div>
       <div className="ph-row">
-        <div><div className="ph-title">Proveedores</div><div className="ph-sub">{proveedores.filter(p=>p.estado==="Activo").length} activos · {fmt_$(proveedores.reduce((s,p)=>s+(p.saldo||0),0))} deuda total</div></div>
+        <div><div className="ph-title">Proveedores</div></div>
         <div style={{display:"flex",gap:8}}><input className="search" placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)}/><button className="btn btn-acc" onClick={()=>setModal(true)}>+ Nuevo</button></div>
       </div>
       <div className="panel">

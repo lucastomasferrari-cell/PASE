@@ -71,7 +71,7 @@ export default function EERR({ locales, localActivo }) {
   return (
     <div>
       <div className="ph-row">
-        <div><div className="ph-title">Estado de Resultados</div><div className="ph-sub">P&L completo · {mes}</div></div>
+        <div><div className="ph-title">Estado de Resultados</div></div>
         <input type="month" className="search" style={{width:160}} value={mes} onChange={e=>setMes(e.target.value)}/>
       </div>
       {loading?<div className="loading">Cargando...</div>:(

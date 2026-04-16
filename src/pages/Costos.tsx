@@ -14,7 +14,7 @@ export default function Costos({ user, locales, localActivo }) {
   return (
     <div>
       <div className="ph-row">
-        <div><div className="ph-title">Costos</div><div className="ph-sub">Insumos, recetas y precios de venta</div></div>
+        <div><div className="ph-title">Costos</div></div>
       </div>
       <div className="tabs">
         {tabs.map(([id, l]) => (

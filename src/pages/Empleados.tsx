@@ -51,7 +51,7 @@ export default function Empleados({ locales }) {
   return (
     <div>
       <div className="ph-row">
-        <div><div className="ph-title">Empleados</div><div className="ph-sub">{empleados.filter(e=>e.estado==="Activo").length} activos · Masa salarial {fmt_$(totalSueldos)}/mes</div></div>
+        <div><div className="ph-title">Empleados</div></div>
         <div style={{display:"flex",gap:8}}>
           <input className="search" placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)}/>
           <button className="btn btn-ghost" onClick={()=>setAumentoModal(true)}>Aumento %</button>

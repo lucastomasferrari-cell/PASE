@@ -138,26 +138,19 @@ export default function Gastos({ user, locales, localActivo }) {
   return (
     <div>
       <div className="ph-row">
-        <div>
-          <div className="ph-title">Gastos</div>
-          <div className="ph-sub">{fmt_d(desde)} → {fmt_d(hasta)} · Total: {fmt_$(totalPeriodo)}</div>
-        </div>
+        <div><div className="ph-title">Gastos</div></div>
         <button className="btn btn-acc" onClick={() => { setForm(emptyForm); setModal(true); }}>+ Cargar Gasto</button>
       </div>
 
-      {/* Filtros */}
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
-        <input className="search" placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: 200 }} />
-        <span style={{ width: 1, height: 22, background: "var(--bd)" }} />
-        <input type="date" className="search" value={desde} onChange={e => setDesde(e.target.value)} style={{ width: 145 }} />
-        <span style={{ color: "var(--muted2)", fontSize: 12 }}>→</span>
-        <input type="date" className="search" value={hasta} onChange={e => setHasta(e.target.value)} style={{ width: 145 }} />
-      </div>
-
-      {/* Pills */}
-      <div className="pills">
-        {TIPOS.map(t => (
-          <div key={t.id} className={`pill ${tipoFiltro === t.id ? "active" : ""}`} onClick={() => setTipoFiltro(t.id)}>{t.label}</div>
+      {/* Filtros + Pills unificados */}
+      <div style={{display:"flex",gap:8,marginBottom:16,alignItems:"center",flexWrap:"wrap"}}>
+        <input className="search" placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)} style={{width:140}}/>
+        <input type="date" className="search" value={desde} onChange={e=>setDesde(e.target.value)} style={{width:120}}/>
+        <span style={{fontSize:11,color:"var(--muted)"}}>→</span>
+        <input type="date" className="search" value={hasta} onChange={e=>setHasta(e.target.value)} style={{width:120}}/>
+        <div style={{width:1,height:14,background:"var(--bd)",margin:"0 4px"}}/>
+        {[["todos","Todos"],["fijo","Fijos"],["variable","Variables"],["publicidad","Publicidad"],["comision","Comisiones"]].map(([id,l])=>(
+          <div key={id} className={`pill ${tipoFiltro===id?"active":""}`} onClick={()=>setTipoFiltro(id)}>{l}</div>
         ))}
       </div>
 

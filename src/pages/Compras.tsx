@@ -153,7 +153,6 @@ export default function Compras({ user, locales, localActivo }) {
       <div className="ph-row">
         <div>
           <div className="ph-title">Facturas</div>
-          <div className="ph-sub">{fActivas.length} activas · {fmt_$(fActivas.reduce((s, f) => s + (f.total || 0), 0))} por pagar</div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="btn btn-sec" onClick={() => setLectorModal(true)}>Lector IA</button>

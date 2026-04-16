@@ -86,7 +86,7 @@ export default function Remitos({ user, locales, localActivo }) {
   return (
     <div>
       <div className="ph-row">
-        <div><div className="ph-title">Remitos</div><div className="ph-sub">{sinFact.length} sin factura · {fmt_$(sinFact.reduce((s,r)=>s+(r.monto||0),0))} deuda provisoria</div></div>
+        <div><div className="ph-title">Remitos</div></div>
         <button className="btn btn-acc" onClick={()=>{setForm(emptyForm);setModal(true)}}>+ Remito Valorado</button>
       </div>
       <div className="alert alert-warn">Los remitos generan <strong>deuda provisoria</strong>. Vinculalos a la factura cuando llegue, o registrá el pago directo si no viene factura.</div>

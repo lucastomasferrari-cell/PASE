@@ -421,7 +421,7 @@ export default function RRHH({ user, locales, localActivo }) {
       {toast && <div style={{position:"fixed",top:16,right:16,zIndex:300,padding:"10px 20px",background:"var(--success)",color:"#000",borderRadius:"var(--r)",fontSize:12,fontFamily:"'DM Mono',monospace",fontWeight:600,boxShadow:"0 4px 12px rgba(0,0,0,.5)"}}>{toast}</div>}
 
       <div className="ph-row">
-        <div><div className="ph-title">RRHH</div><div className="ph-sub">Recursos Humanos</div></div>
+        <div><div className="ph-title">RRHH</div></div>
         {esDueno && <button className="btn btn-ghost btn-sm" onClick={() => { loadValoresDoble(); setCfgModal(true); }} style={{fontSize:16,padding:"4px 8px"}}>⚙</button>}
       </div>
 

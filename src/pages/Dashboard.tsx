@@ -39,7 +39,6 @@ export default function Dashboard({ locales, localActivo }) {
     <div>
       <div style={{marginBottom:20}}>
         <div className="ph-title">Dashboard</div>
-        <div className="ph-sub">{today.toLocaleDateString("es-AR",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</div>
       </div>
       <div className="grid4">
         <div className="kpi"><div className="kpi-label">Liquidez Total</div><div className="kpi-value kpi-acc">{fmt_$(totalLiquidez)}</div><div className="kpi-sub">Todas las cuentas</div></div>

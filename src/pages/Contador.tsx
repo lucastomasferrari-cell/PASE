@@ -33,7 +33,7 @@ export default function Contador({ locales, localActivo }) {
   return (
     <div>
       <div className="ph-row">
-        <div><div className="ph-title">Contador / IVA</div><div className="ph-sub">Libros y posición fiscal</div></div>
+        <div><div className="ph-title">Contador / IVA</div></div>
         <input type="month" className="search" style={{width:160}} value={mes} onChange={e=>setMes(e.target.value)}/>
       </div>
       <div className="tabs">

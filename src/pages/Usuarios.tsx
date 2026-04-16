@@ -169,7 +169,7 @@ export default function Usuarios({ user, locales }) {
   return (
     <div>
       <div className="ph-row">
-        <div><div className="ph-title">Usuarios</div><div className="ph-sub">Gestión de accesos, permisos y locales</div></div>
+        <div><div className="ph-title">Usuarios</div></div>
         <button className="btn btn-acc" onClick={abrirNuevo}>+ Nuevo usuario</button>
       </div>
 

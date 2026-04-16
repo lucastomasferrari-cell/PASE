@@ -120,7 +120,7 @@ Si algún campo no existe en la factura, poné 0 o null según corresponda. Los 
   return (
     <div>
       <div className="ph-row">
-        <div><div className="ph-title">Lector de Facturas IA</div><div className="ph-sub">Subí una foto o PDF y la IA extrae los datos automáticamente</div></div>
+        <div><div className="ph-title">Lector de Facturas IA</div></div>
       </div>
 
       <div className="grid2">
