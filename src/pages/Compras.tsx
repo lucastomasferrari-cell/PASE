@@ -76,20 +76,43 @@ export default function Compras({ user, locales, localActivo }) {
 
   const [pagando,setPagando]=useState(false);
   const pagar = async () => {
-    if(pagando) return; setPagando(true);
-    const f = pagarModal;
-    const monto = parseFloat(pagoForm.monto)||f.total;
-    const nuevosPagos = [...(f.pagos||[]),{cuenta:pagoForm.cuenta,monto,fecha:pagoForm.fecha}];
-    const totalPagado = nuevosPagos.reduce((s,p)=>s+p.monto,0);
-    const nuevoEstado = totalPagado>=f.total?"pagada":"pendiente";
-    await db.from("facturas").update({estado:nuevoEstado,pagos:nuevosPagos}).eq("id",f.id);
-    const prov = proveedores.find(p=>p.id===f.prov_id);
-    if(prov) await db.from("proveedores").update({saldo:Math.max(0,(prov.saldo||0)-monto)}).eq("id",f.prov_id);
-    // Registrar movimiento en caja
-    const {data:caja} = await db.from("saldos_caja").select("saldo").eq("cuenta",pagoForm.cuenta).single();
-    if(caja) await db.from("saldos_caja").update({saldo:(caja.saldo||0)-monto}).eq("cuenta",pagoForm.cuenta);
-    await db.from("movimientos").insert([{id:genId("MOV"),fecha:pagoForm.fecha,cuenta:pagoForm.cuenta,tipo:"Pago Proveedor",cat:f.cat,importe:-monto,detalle:`Pago ${prov?.nombre||""} - Fact ${f.nro}`,fact_id:f.id}]);
-    setPagarModal(null); load();
+    if (pagando) return;
+    setPagando(true);
+    try {
+      const f = pagarModal;
+      const monto = parseFloat(pagoForm.monto) || f.total;
+      const nuevosPagos = [...(f.pagos || []), { cuenta: pagoForm.cuenta, monto, fecha: pagoForm.fecha }];
+      const totalPagado = nuevosPagos.reduce((s, p) => s + p.monto, 0);
+      const nuevoEstado = totalPagado >= f.total ? "pagada" : "pendiente";
+
+      const { error: factErr } = await db.from("facturas")
+        .update({ estado: nuevoEstado, pagos: nuevosPagos }).eq("id", f.id);
+      if (factErr) throw new Error("Error actualizando factura: " + factErr.message);
+
+      const prov = proveedores.find(p => p.id === f.prov_id);
+      if (prov) await db.from("proveedores")
+        .update({ saldo: Math.max(0, (prov.saldo || 0) - monto) }).eq("id", f.prov_id);
+
+      const { data: caja } = await db.from("saldos_caja")
+        .select("saldo").eq("cuenta", pagoForm.cuenta).maybeSingle();
+      if (caja) await db.from("saldos_caja")
+        .update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", pagoForm.cuenta);
+
+      const { error: movErr } = await db.from("movimientos").insert([{
+        id: genId("MOV"), fecha: pagoForm.fecha, cuenta: pagoForm.cuenta,
+        tipo: "Pago Proveedor", cat: f.cat, importe: -monto,
+        detalle: `Pago ${prov?.nombre || ""} - Fact ${f.nro}`, fact_id: f.id
+      }]);
+      if (movErr) console.error("movimientos insert error (no crítico):", movErr);
+
+      setPagarModal(null);
+      load();
+    } catch (err: any) {
+      console.error("Error en pagar:", err);
+      alert("Error al registrar el pago: " + err.message);
+    } finally {
+      setPagando(false);
+    }
   };
 
   const anular = async (f) => {
