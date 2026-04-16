@@ -76,11 +76,12 @@ export default function EERR({ locales, localActivo }) {
       </div>
       {loading?<div className="loading">Cargando...</div>:(
         <>
-          <div className="grid4">
-            <div className="kpi"><div className="kpi-label">Ingresos</div><div className="kpi-value kpi-success">{fmt_$(totalVentas)}</div></div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12,marginBottom:20}}>
+            <div className="kpi"><div className="kpi-label">Ventas</div><div className="kpi-value kpi-success">{fmt_$(totalVentas)}</div></div>
             <div className="kpi"><div className="kpi-label">CMV</div><div className="kpi-value kpi-warn">{fmt_$(totalCMV)}</div><div className="kpi-sub">{pct(totalCMV)}</div></div>
-            <div className="kpi"><div className="kpi-label">Utilidad Bruta</div><div className={`kpi-value ${utilBruta>=0?"kpi-success":"kpi-danger"}`}>{fmt_$(utilBruta)}</div><div className="kpi-sub">{pct(utilBruta)}</div></div>
-            <div className="kpi"><div className="kpi-label">Utilidad Neta</div><div className={`kpi-value ${utilNeta>=0?"kpi-success":"kpi-danger"}`}>{fmt_$(utilNeta)}</div><div className="kpi-sub">{pct(utilNeta)}</div></div>
+            <div className="kpi"><div className="kpi-label">Labor Cost</div><div className="kpi-value kpi-danger">{fmt_$(sueldos)}</div><div className="kpi-sub">{pct(sueldos)}</div></div>
+            <div className="kpi"><div className="kpi-label">% Rentabilidad</div><div className={`kpi-value ${utilNeta>=0?"kpi-success":"kpi-danger"}`}>{totalVentas>0?((utilNeta/totalVentas)*100).toFixed(1):"0"}%</div></div>
+            <div className="kpi"><div className="kpi-label">Ganancia del mes</div><div className={`kpi-value ${utilNeta>=0?"kpi-success":"kpi-danger"}`}>{fmt_$(utilNeta)}</div></div>
           </div>
 
           <div className="grid2">
