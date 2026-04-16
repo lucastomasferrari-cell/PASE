@@ -9,7 +9,8 @@ export default function ListaPrecios({ locales, localActivo }) {
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const { data } = await db.from("recetas").select("*, receta_items(cantidad, insumo_id, insumos(precio_prom))").order("nombre");
+      const { data, error } = await db.from("recetas").select("*, receta_items(*, insumos(*))").order("nombre");
+      if (error) console.error("Error cargando recetas:", error);
       setRecetas(data || []);
       setLoading(false);
     };
@@ -31,7 +32,7 @@ export default function ListaPrecios({ locales, localActivo }) {
               <thead><tr><th>Receta</th><th>Categoría</th><th style={{ textAlign: "right" }}>Costo</th><th style={{ textAlign: "right" }}>Precio Venta</th><th style={{ textAlign: "right" }}>Margen %</th><th>Estado</th></tr></thead>
               <tbody>{recetas.map(r => {
                 const items = r.receta_items || [];
-                const costo = items.reduce((s: number, it: any) => s + (it.cantidad || 0) * (it.insumos?.precio_prom || 0), 0);
+                const costo = items.reduce((s: number, it: any) => s + (Number(it.cantidad) || 0) * (Number(it.insumos?.costo_promedio) || 0), 0);
                 const precio = Number(r.precio_venta) || 0;
                 const margen = precio > 0 ? ((precio - costo) / precio * 100) : 0;
                 const margenColor = margen >= 70 ? "var(--success)" : margen >= 30 ? "var(--txt)" : "var(--danger)";
