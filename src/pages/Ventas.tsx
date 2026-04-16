@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { MEDIOS_COBRO, CATEGORIAS_COMPRA } from "../lib/constants";
+import { MEDIOS_COBRO } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import ImportarMaxirest from "./ImportarMaxirest";
 
@@ -14,27 +14,8 @@ export default function Ventas({ user, locales, localActivo }) {
   const [editModal,setEditModal]=useState(null);
   const [filtFecha,setFiltFecha]=useState("");
   const [filtMes,setFiltMes]=useState(toISO(today).slice(0,7));
-  // filtMes is always active unless filtFecha is set
   const [form,setForm]=useState({local_id:"",fecha:toISO(today),turno:"Noche",medio:"EFECTIVO SALON",monto:"",cant:""});
   const localesDisp=user.rol==="dueno"?locales:locales.filter(l=>(user.locales||[]).includes(l.id));
-
-  // Factura rápida
-  const [factModal,setFactModal]=useState(false);
-  const [proveedores,setProveedores]=useState([]);
-  const emptyFact={prov_id:"",local_id:localActivo||"",nro:"",fecha:toISO(today),venc:"",neto:"",iva21:"",iva105:"",iibb:"",cat:"",detalle:""};
-  const [factForm,setFactForm]=useState(emptyFact);
-  const factTotal=()=>(parseFloat(factForm.neto)||0)+(parseFloat(factForm.iva21)||0)+(parseFloat(factForm.iva105)||0)+(parseFloat(factForm.iibb)||0);
-  const loadProvs=async()=>{const{data}=await db.from("proveedores").select("*").eq("estado","Activo").order("nombre");setProveedores(data||[]);};
-  const abrirFactModal=()=>{setFactForm({...emptyFact,local_id:localActivo||localesDisp[0]?.id||""});loadProvs();setFactModal(true);};
-  const guardarFact=async()=>{
-    if(!factForm.prov_id||!factForm.nro||!factForm.neto||!factForm.local_id)return;
-    const total=factTotal();
-    const id=genId("FACT");
-    await db.from("facturas").insert([{...factForm,id,prov_id:parseInt(factForm.prov_id),local_id:parseInt(factForm.local_id),neto:parseFloat(factForm.neto),iva21:parseFloat(factForm.iva21)||0,iva105:parseFloat(factForm.iva105)||0,iibb:parseFloat(factForm.iibb)||0,total,estado:"pendiente",pagos:[]}]);
-    const prov=proveedores.find(p=>p.id===parseInt(factForm.prov_id));
-    if(prov)await db.from("proveedores").update({saldo:(prov.saldo||0)+total}).eq("id",prov.id);
-    setFactModal(false);setFactForm(emptyFact);
-  };
 
   const load=async()=>{
     setLoading(true);
@@ -77,7 +58,6 @@ export default function Ventas({ user, locales, localActivo }) {
     await db.from("ventas").update({fecha:editModal.fecha,turno:editModal.turno,medio:editModal.medio,monto:parseFloat(editModal.monto),cant:parseInt(editModal.cant)||1,local_id:parseInt(editModal.local_id)}).eq("id",editModal.id);
     setEditModal(null);
     if(detalleModal){
-      // refresh detalle
       const updated=detalleModal.items.map(i=>i.id===editModal.id?{...i,...editModal,monto:parseFloat(editModal.monto)}:i);
       setDetalleModal({...detalleModal,items:updated,total:updated.reduce((s,i)=>s+(i.monto||0),0)});
     }
@@ -112,7 +92,6 @@ export default function Ventas({ user, locales, localActivo }) {
           <input type="month" className="search" style={{width:140}} value={filtMes}
             onChange={e=>{setFiltMes(e.target.value);setFiltFecha("");}}/>
           <button className="btn btn-ghost" onClick={()=>setShowMaxirest(!showMaxirest)}>Importar Maxirest</button>
-          <button className="btn btn-sec" onClick={abrirFactModal}>+ Factura</button>
           <button className="btn btn-acc" onClick={()=>setModalNuevo(true)}>+ Cargar venta</button>
         </div>
       </div>
@@ -145,7 +124,7 @@ export default function Ventas({ user, locales, localActivo }) {
             <div className="modal-hd">
               <div>
                 <div className="modal-title">{fmt_d(detalleModal.fecha)} · {detalleModal.turno}</div>
-                <div style={{fontSize:11,color:"var(--muted2)",marginTop:2}}>{locales.find(l=>l.id===detalleModal.local_id)?.nombre} · Total: <span style={{color:"var(--success)",fontFamily:"'Syne',sans-serif",fontWeight:700}}>{fmt_$(detalleModal.total)}</span></div>
+                <div style={{fontSize:11,color:"var(--muted2)",marginTop:2}}>{locales.find(l=>l.id===detalleModal.local_id)?.nombre} · Total: <span style={{color:"var(--success)",fontFamily:"'Inter',sans-serif",fontWeight:700}}>{fmt_$(detalleModal.total)}</span></div>
               </div>
               <div style={{display:"flex",gap:6}}>
                 <button className="btn btn-danger btn-sm" onClick={()=>eliminarBloque(detalleModal)}>Eliminar cierre</button>
@@ -214,49 +193,6 @@ export default function Ventas({ user, locales, localActivo }) {
               </div>
             </div>
             <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModalNuevo(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar}>Guardar</button></div>
-          </div>
-        </div>
-      )}
-
-      {/* FACTURA RÁPIDA MODAL */}
-      {factModal&&(
-        <div className="overlay" onClick={()=>setFactModal(false)}>
-          <div className="modal" onClick={e=>e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Nueva Factura</div><button className="close-btn" onClick={()=>setFactModal(false)}>✕</button></div>
-            <div className="modal-body">
-              <div className="form2">
-                <div className="field"><label>Proveedor *</label>
-                  <select value={factForm.prov_id} onChange={e=>{const p=proveedores.find(x=>x.id===parseInt(e.target.value));setFactForm({...factForm,prov_id:e.target.value,cat:p?.cat||factForm.cat});}}>
-                    <option value="">Seleccioná...</option>{proveedores.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
-                  </select></div>
-                <div className="field"><label>Nro Factura *</label><input value={factForm.nro} onChange={e=>setFactForm({...factForm,nro:e.target.value})} placeholder="A-0001-00001234"/></div>
-              </div>
-              <div className="form2">
-                <div className="field"><label>Local *</label>
-                  <select value={factForm.local_id} onChange={e=>setFactForm({...factForm,local_id:e.target.value})}>
-                    <option value="">Seleccioná...</option>{localesDisp.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}
-                  </select></div>
-                <div className="field"><label>Categoría</label>
-                  <select value={factForm.cat} onChange={e=>setFactForm({...factForm,cat:e.target.value})}>
-                    <option value="">Sin categoría</option>{CATEGORIAS_COMPRA.map(c=><option key={c}>{c}</option>)}
-                  </select></div>
-              </div>
-              <div className="form2">
-                <div className="field"><label>Fecha</label><input type="date" value={factForm.fecha} onChange={e=>setFactForm({...factForm,fecha:e.target.value})}/></div>
-                <div className="field"><label>Vencimiento</label><input type="date" value={factForm.venc} onChange={e=>setFactForm({...factForm,venc:e.target.value})}/></div>
-              </div>
-              <div className="form2">
-                <div className="field"><label>Neto *</label><input type="number" value={factForm.neto} onChange={e=>setFactForm({...factForm,neto:e.target.value})} placeholder="0"/></div>
-                <div className="field"><label>IVA 21%</label><input type="number" value={factForm.iva21} onChange={e=>setFactForm({...factForm,iva21:e.target.value})} placeholder="0"/></div>
-              </div>
-              <div className="form2">
-                <div className="field"><label>IVA 10.5%</label><input type="number" value={factForm.iva105} onChange={e=>setFactForm({...factForm,iva105:e.target.value})} placeholder="0"/></div>
-                <div className="field"><label>IIBB</label><input type="number" value={factForm.iibb} onChange={e=>setFactForm({...factForm,iibb:e.target.value})} placeholder="0"/></div>
-              </div>
-              <div className="field"><label>Detalle</label><input value={factForm.detalle} onChange={e=>setFactForm({...factForm,detalle:e.target.value})} placeholder="Descripción..."/></div>
-              {factForm.neto&&<div style={{padding:8,background:"var(--s2)",borderRadius:"var(--r)",fontSize:12,marginTop:8}}>Total: <strong style={{color:"var(--acc)",fontFamily:"'Syne',sans-serif"}}>{fmt_$(factTotal())}</strong></div>}
-            </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setFactModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardarFact}>Guardar factura</button></div>
           </div>
         </div>
       )}
