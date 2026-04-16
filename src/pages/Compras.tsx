@@ -13,7 +13,7 @@ export default function Compras({ user, locales, localActivo }) {
   const [verModal, setVerModal] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const emptyForm = {prov_id:"",local_id:localActivo||"",nro:"",fecha:toISO(today),venc:"",neto:"",iva21:"",iva105:"",iibb:"",cat:"",detalle:""};
+  const emptyForm = {prov_id:"",local_id:localActivo||"",nro:"",fecha:toISO(today),venc:"",neto:"",iva21:"",iva105:"",iibb:"",cat:"",detalle:"",tipo:"factura"};
   const [form, setForm] = useState(emptyForm);
   const [items, setItems] = useState([]);
   const [pagoForm, setPagoForm] = useState({cuenta:"MercadoPago",monto:"",fecha:toISO(today)});
@@ -32,10 +32,11 @@ export default function Compras({ user, locales, localActivo }) {
 
   const fFilt = facturas.filter(f=>{
     if(localActivo&&f.local_id!==localActivo) return false;
-    if(tab==="pendientes") return f.estado==="pendiente";
-    if(tab==="vencidas") return f.estado==="vencida";
+    if(tab==="pendientes") return f.estado==="pendiente"&&(f.tipo||"factura")!=="nota_credito";
+    if(tab==="vencidas") return f.estado==="vencida"&&(f.tipo||"factura")!=="nota_credito";
     if(tab==="pagadas") return f.estado==="pagada";
     if(tab==="anuladas") return f.estado==="anulada";
+    if(tab==="nc") return (f.tipo||"factura")==="nota_credito";
     return f.estado!=="anulada";
   }).filter(f=>!search||proveedores.find(p=>p.id===f.prov_id)?.nombre.toLowerCase().includes(search.toLowerCase())||(f.nro||"").includes(search));
 
@@ -61,16 +62,21 @@ export default function Compras({ user, locales, localActivo }) {
 
   const guardar = async () => {
     if(!form.prov_id||!form.nro||!form.neto||!form.local_id) return;
-    const total = calcTotal();
-    const id = genId("FACT");
-    const nueva = {...form,id,prov_id:parseInt(form.prov_id),local_id:parseInt(form.local_id),neto:parseFloat(form.neto),iva21:parseFloat(form.iva21)||0,iva105:parseFloat(form.iva105)||0,iibb:parseFloat(form.iibb)||0,total,estado:"pendiente",pagos:[]};
+    const isNC = form.tipo === "nota_credito";
+    const totalAbs = calcTotal();
+    const total = isNC ? -Math.abs(totalAbs) : totalAbs;
+    const id = genId(isNC ? "NC" : "FACT");
+    const nueva = {...form,id,prov_id:parseInt(form.prov_id),local_id:parseInt(form.local_id),neto:parseFloat(form.neto),iva21:parseFloat(form.iva21)||0,iva105:parseFloat(form.iva105)||0,iibb:parseFloat(form.iibb)||0,total,estado:isNC?"pagada":"pendiente",pagos:[],tipo:form.tipo};
     await db.from("facturas").insert([nueva]);
     if(items.length>0) {
       const itemsToInsert = items.filter(it=>it.producto).map(it=>({...it,factura_id:id,cantidad:parseFloat(it.cantidad)||0,precio_unitario:parseFloat(it.precio_unitario)||0,subtotal:it.subtotal}));
       if(itemsToInsert.length>0) await db.from("factura_items").insert(itemsToInsert);
     }
     const prov = proveedores.find(p=>p.id===nueva.prov_id);
-    if(prov) await db.from("proveedores").update({saldo:(prov.saldo||0)+total}).eq("id",prov.id);
+    if(prov) {
+      const saldoDelta = isNC ? -Math.abs(totalAbs) : totalAbs;
+      await db.from("proveedores").update({saldo:Math.max(0,(prov.saldo||0)+saldoDelta)}).eq("id",prov.id);
+    }
     setModal(false); setForm(emptyForm); setItems([]); load();
   };
 
@@ -123,7 +129,8 @@ export default function Compras({ user, locales, localActivo }) {
     load();
   };
 
-  const eb = e => {
+  const eb = (e, tipo?) => {
+    if((tipo||"factura")==="nota_credito") return <span className="badge b-info">NC</span>;
     if(e==="vencida") return <span className="badge b-danger">Vencida</span>;
     if(e==="pagada") return <span className="badge b-success">Pagada</span>;
     if(e==="anulada") return <span className="badge b-anulada">Anulada</span>;
@@ -137,7 +144,7 @@ export default function Compras({ user, locales, localActivo }) {
         <button className="btn btn-acc" onClick={()=>{setForm(emptyForm);setItems([]);setModal(true)}}>+ Cargar Factura</button>
       </div>
       <div className="tabs">
-        {[["todas","Todas"],["pendientes","Pendientes"],["vencidas","Vencidas"],["pagadas","Pagadas"],["anuladas","Anuladas"]].map(([id,l])=>(
+        {[["todas","Todas"],["pendientes","Pendientes"],["vencidas","Vencidas"],["pagadas","Pagadas"],["nc","Notas de Crédito"],["anuladas","Anuladas"]].map(([id,l])=>(
           <div key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>{l}</div>
         ))}
         <div style={{flex:1}}/>
@@ -156,7 +163,7 @@ export default function Compras({ user, locales, localActivo }) {
                 <td className="mono" style={{fontSize:11,color:f.estado==="vencida"?"var(--danger)":"var(--muted2)"}}>{fmt_d(f.venc)}</td>
                 <td><span className="badge b-muted">{f.cat}</span></td>
                 <td><span className="num kpi-warn">{fmt_$(f.total)}</span></td>
-                <td>{eb(f.estado)}</td>
+                <td>{eb(f.estado, f.tipo)}</td>
                 <td>
                   <div style={{display:"flex",gap:4}}>
                     <button className="btn btn-ghost btn-sm" onClick={()=>setVerModal(f)}>Ver</button>
@@ -174,11 +181,14 @@ export default function Compras({ user, locales, localActivo }) {
       {modal && (
         <div className="overlay" onClick={()=>setModal(false)}>
           <div className="modal" style={{width:680}} onClick={e=>e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Cargar Factura</div><button className="close-btn" onClick={()=>setModal(false)}>✕</button></div>
+            <div className="modal-hd"><div className="modal-title">{form.tipo==="nota_credito"?"Cargar Nota de Crédito":"Cargar Factura"}</div><button className="close-btn" onClick={()=>setModal(false)}>✕</button></div>
             <div className="modal-body">
               <div className="form2">
-                <div className="field"><label>Proveedor *</label><select value={form.prov_id} onChange={e=>onProvChange(e.target.value)}><option value="">Seleccioná...</option>{proveedores.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}</select></div>
+                <div className="field"><label>Tipo de comprobante</label><select value={form.tipo} onChange={e=>setForm({...form,tipo:e.target.value})}><option value="factura">Factura</option><option value="nota_credito">Nota de Crédito</option></select></div>
                 <div className="field"><label>Local *</label><select value={form.local_id} onChange={e=>setForm({...form,local_id:e.target.value})}><option value="">Seleccioná...</option>{localesDisp.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
+              </div>
+              <div className="form2">
+                <div className="field"><label>Proveedor *</label><select value={form.prov_id} onChange={e=>onProvChange(e.target.value)}><option value="">Seleccioná...</option>{proveedores.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}</select></div>
               </div>
               <div className="form2">
                 <div className="field"><label>Nº Factura *</label><input value={form.nro} onChange={e=>setForm({...form,nro:e.target.value})} placeholder="A-0001-00001234"/></div>
