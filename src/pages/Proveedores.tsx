@@ -22,8 +22,11 @@ export default function Proveedores() {
   const guardarEdit=async()=>{await db.from("proveedores").update({nombre:editModal.nombre,cuit:editModal.cuit,cat:editModal.cat,estado:editModal.estado}).eq("id",editModal.id);setEditModal(null);load();};
   const toggleEstado=async(p)=>{await db.from("proveedores").update({estado:p.estado==="Activo"?"Inactivo":"Activo"}).eq("id",p.id);load();};
   const abrirCta=async(p)=>{
-    setCtaModal(p);setCtaLoading(true);
-    const {data}=await db.from("facturas").select("*").eq("prov_id",p.id).order("fecha",{ascending:false});
+    setCtaFacts([]); // limpiar datos del proveedor anterior
+    setCtaModal(p);
+    setCtaLoading(true);
+    const {data,error}=await db.from("facturas").select("*").eq("prov_id",p.id).neq("estado","anulada").order("fecha",{ascending:false});
+    if(error)console.error("Error cargando estado de cuenta:",error);
     setCtaFacts(data||[]);setCtaLoading(false);
   };
   return (
