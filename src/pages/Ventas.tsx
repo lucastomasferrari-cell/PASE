@@ -2,12 +2,14 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { MEDIOS_COBRO, CATEGORIAS_COMPRA } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
+import ImportarMaxirest from "./ImportarMaxirest";
 
 // ─── VENTAS ───────────────────────────────────────────────────────────────────
 export default function Ventas({ user, locales, localActivo }) {
   const [ventas,setVentas]=useState([]);
   const [loading,setLoading]=useState(true);
   const [modalNuevo,setModalNuevo]=useState(false);
+  const [showMaxirest,setShowMaxirest]=useState(false);
   const [detalleModal,setDetalleModal]=useState(null);
   const [editModal,setEditModal]=useState(null);
   const [filtFecha,setFiltFecha]=useState("");
@@ -109,10 +111,13 @@ export default function Ventas({ user, locales, localActivo }) {
             placeholder="Día específico"/>
           <input type="month" className="search" style={{width:140}} value={filtMes}
             onChange={e=>{setFiltMes(e.target.value);setFiltFecha("");}}/>
+          <button className="btn btn-ghost" onClick={()=>setShowMaxirest(!showMaxirest)}>Importar Maxirest</button>
           <button className="btn btn-sec" onClick={abrirFactModal}>+ Factura</button>
           <button className="btn btn-acc" onClick={()=>setModalNuevo(true)}>+ Cargar venta</button>
         </div>
       </div>
+
+      {showMaxirest&&<div style={{marginBottom:16}}><ImportarMaxirest locales={locales}/></div>}
 
       <div className="panel">
         <div className="panel-hd"><span className="panel-title">Cierres de turno — {grupos.length} bloques</span></div>

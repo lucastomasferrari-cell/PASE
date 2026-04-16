@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { CATEGORIAS_COMPRA, CUENTAS, UNIDADES } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
+import LectorFacturasIA from "./LectorFacturasIA";
 
 export default function Compras({ user, locales, localActivo }) {
   const [facturas, setFacturas] = useState([]);
@@ -144,12 +145,13 @@ export default function Compras({ user, locales, localActivo }) {
         <button className="btn btn-acc" onClick={()=>{setForm(emptyForm);setItems([]);setModal(true)}}>+ Cargar Factura</button>
       </div>
       <div className="tabs">
-        {[["todas","Todas"],["pendientes","Pendientes"],["vencidas","Vencidas"],["pagadas","Pagadas"],["nc","Notas de Crédito"],["anuladas","Anuladas"]].map(([id,l])=>(
+        {[["todas","Todas"],["pendientes","Pendientes"],["vencidas","Vencidas"],["pagadas","Pagadas"],["nc","Notas de Crédito"],["anuladas","Anuladas"],["lector_ia","Lector IA"]].map(([id,l])=>(
           <div key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>{l}</div>
         ))}
         <div style={{flex:1}}/>
         <input className="search" placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)} style={{margin:"0 0 -1px",width:180}}/>
       </div>
+      {tab==="lector_ia"?<LectorFacturasIA user={user} locales={locales} localActivo={localActivo}/>:
       <div className="panel">
         {loading?<div className="loading">Cargando...</div>:fFilt.length===0?<div className="empty">No hay facturas</div>:(
           <table><thead><tr><th>Proveedor</th><th>Nº Factura</th><th>Fecha</th><th>Vencimiento</th><th>Categoría</th><th>Total</th><th>Estado</th><th></th></tr></thead>
@@ -175,7 +177,7 @@ export default function Compras({ user, locales, localActivo }) {
             );
           })}</tbody></table>
         )}
-      </div>
+      </div>}
 
       {/* MODAL CARGAR FACTURA */}
       {modal && (
