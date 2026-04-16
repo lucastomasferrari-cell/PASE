@@ -112,8 +112,9 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
   // SAC teórico
   const mesActual = new Date().getMonth() + 1;
   const mesesEnSemestre = mesActual <= 6 ? mesActual : mesActual - 6;
-  const sacAcumulado = calcularSACProporcional(Number(emp.sueldo_mensual), mesActual);
-  const sacTeorico = calcularSACTeorico(Number(emp.sueldo_mensual));
+  const sueldoNum = parseFloat(String(emp.sueldo_mensual || 0)) || 0;
+  const sacAcumulado = calcularSACProporcional(sueldoNum, mesActual);
+  const sacTeorico = calcularSACTeorico(sueldoNum);
 
   // ─── ACCIONES: SUELDO ──────────────────────────────────────────────────────
   const guardarSueldo = async () => {

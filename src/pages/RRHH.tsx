@@ -59,7 +59,7 @@ export default function RRHH({ user, locales, localActivo }) {
   const [vacTomadas, setVacTomadas] = useState<Record<string, number>>({});
   const [empFiltLocal, setEmpFiltLocal] = useState(defaultLocal);
   const [empModal, setEmpModal] = useState<any>(null);
-  const empEmpty = { local_id:"", apellido:"", nombre:"", cuil:"", puesto:"", modo_pago:"MENSUAL", sueldo_mensual:"", alias_mp:"", fecha_inicio:toISO(today), activo:true };
+  const empEmpty = { local_id:"", apellido:"", nombre:"", cuil:"", puesto:"", modo_pago:"MENSUAL", sueldo_mensual:"", alias_mp:"", fecha_inicio:"", activo:true };
   const [empForm, setEmpForm] = useState(empEmpty);
 
   // Novedades
@@ -179,7 +179,10 @@ export default function RRHH({ user, locales, localActivo }) {
       }
     });
     const mesActual = today.getMonth() + 1;
-    const totalSAC = activos.reduce((s, e) => s + calcularSACProporcional(Number(e.sueldo_mensual), mesActual), 0);
+    const totalSAC = activos.reduce((s, e) => {
+      const sueldo = parseFloat(String(e.sueldo_mensual || 0)) || 0;
+      return s + calcularSACProporcional(sueldo, mesActual);
+    }, 0);
     // Próximo SAC
     const junio30 = new Date(anio, 5, 30);
     const dic31 = new Date(anio, 11, 31);
@@ -208,14 +211,20 @@ export default function RRHH({ user, locales, localActivo }) {
   // Autoseleccionar local para encargados con un solo local
   useEffect(() => {
     if (tab === "novedades" && !novLocal && locsDisp.length >= 1) {
-      setNovLocal(esEnc ? locsDisp[0].id : (locsDisp.length === 1 ? locsDisp[0].id : ""));
+      const localDefault = esEnc || locsDisp.length === 1
+        ? String(locsDisp[0].id)
+        : "";
+      if (localDefault) setNovLocal(localDefault);
     }
-  }, [tab, locsDisp.length]);
+  }, [tab, locsDisp.length, locsDisp[0]?.id]);
   useEffect(() => {
     if (tab === "pagos" && !pagoLocal && locsDisp.length >= 1) {
-      setPagoLocal(esEnc ? locsDisp[0].id : (locsDisp.length === 1 ? locsDisp[0].id : ""));
+      const localDefault = esEnc || locsDisp.length === 1
+        ? String(locsDisp[0].id)
+        : "";
+      if (localDefault) setPagoLocal(localDefault);
     }
-  }, [tab, locsDisp.length]);
+  }, [tab, locsDisp.length, locsDisp[0]?.id]);
 
   // ─── EMPLEADOS ACTIONS ─────────────────────────────────────────────────────
   const puestos = [...new Set(valoresDoble.map(v => v.puesto))];
@@ -442,6 +451,7 @@ export default function RRHH({ user, locales, localActivo }) {
             <table><thead><tr><th>Nombre</th><th>Local</th><th>Puesto</th><th style={{textAlign:"right"}}>Sueldo</th><th>Modo</th><th>Vacaciones</th><th>CUIL</th><th>Activo</th><th></th></tr></thead>
             <tbody>{empsFilt.map(e => {
               const vac = calcularVacaciones(e.fecha_inicio, vacTomadas[e.id] || 0);
+              console.log('[RRHH Debug] emp:', e.apellido, 'fecha_inicio:', e.fecha_inicio, 'vac:', vac);
               const vacColor = vac >= 14 ? "var(--success)" : vac >= 7 ? "var(--warn)" : "var(--muted2)";
               return (
                 <tr key={e.id} style={{opacity: e.activo === false ? 0.4 : 1}}>
@@ -503,7 +513,7 @@ export default function RRHH({ user, locales, localActivo }) {
             {MESES_SEL.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
           </select>
           <input type="number" className="search" style={{width:70}} value={novAnio} onChange={e => setNovAnio(parseInt(e.target.value))} />
-          <select className="search" style={{width:160}} value={novLocal} onChange={e => setNovLocal(e.target.value)}>
+          <select className="search" style={{width:160}} value={String(novLocal || "")} onChange={e => setNovLocal(e.target.value)}>
             <option value="">Seleccionar local...</option>
             {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
           </select>
@@ -563,7 +573,7 @@ export default function RRHH({ user, locales, localActivo }) {
             {MESES_SEL.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
           </select>
           <input type="number" className="search" style={{width:70}} value={pagoAnio} onChange={e => setPagoAnio(parseInt(e.target.value))} />
-          <select className="search" style={{width:160}} value={pagoLocal} onChange={e => setPagoLocal(e.target.value)}>
+          <select className="search" style={{width:160}} value={String(pagoLocal || "")} onChange={e => setPagoLocal(e.target.value)}>
             {!esEnc && <option value="">Seleccionar local...</option>}
             {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
           </select>

@@ -35,7 +35,24 @@ export default function App() {
   // Restaurar sesión al cargar
   useEffect(()=>{
     const restore = async () => {
-      // 1. Intentar restaurar desde localStorage (funciona para todos los usuarios)
+      // 0. Intentar restaurar desde sessionStorage (más rápido, no necesita DB)
+      try {
+        const savedUser = sessionStorage.getItem("pase_user");
+        if (savedUser) {
+          const parsed = JSON.parse(savedUser);
+          if (parsed && parsed.id && parsed.activo !== false) {
+            setUser(parsed);
+            if (parsed.rol !== "dueno" && (parsed._locales || []).length === 1) {
+              setLocalActivo(parsed._locales[0]);
+            }
+            setAuthLoading(false);
+            return;
+          }
+          sessionStorage.removeItem("pase_user");
+        }
+      } catch {}
+
+      // 1. Intentar restaurar desde localStorage (query a DB)
       try {
         const savedId = localStorage.getItem("pase_uid");
         if (savedId) {
@@ -45,8 +62,8 @@ export default function App() {
             setAuthLoading(false);
             return;
           }
-          // Usuario no encontrado o inactivo: limpiar
           localStorage.removeItem("pase_uid");
+          sessionStorage.removeItem("pase_user");
         }
       } catch {}
 
@@ -72,6 +89,7 @@ export default function App() {
         setSection("dashboard");
         setLocalActivo(null);
         localStorage.removeItem("pase_uid");
+        sessionStorage.removeItem("pase_user");
       }
     });
     return () => subscription.unsubscribe();
@@ -90,6 +108,7 @@ export default function App() {
     };
     setUser(enriched);
     localStorage.setItem("pase_uid", String(enriched.id));
+    sessionStorage.setItem("pase_user", JSON.stringify(enriched));
     const perms = getPermisos(enriched);
     if(!perms.includes("dashboard") && perms.length) setSection(perms[0]);
     if(enriched.rol!=="dueno" && enriched._locales?.length===1) setLocalActivo(enriched._locales[0]);
@@ -105,6 +124,7 @@ export default function App() {
     setSection("dashboard");
     setLocalActivo(null);
     localStorage.removeItem("pase_uid");
+    sessionStorage.removeItem("pase_user");
   };
 
   const [toast, setToast] = useState("");
