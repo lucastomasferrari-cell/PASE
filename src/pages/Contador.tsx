@@ -54,7 +54,7 @@ export default function Contador({ locales, localActivo }) {
               {[["Débito Fiscal (IVA ventas)",ivaV,"var(--danger)"],["(-) Crédito Fiscal",-totalIvaC,"var(--success)"],["(=) Posición Neta",pos,pos>0?"var(--danger)":"var(--success)"]].map(([l,v,c],i)=>(
                 <div key={i} className="eerr-row" style={i===2?{background:"var(--s2)",padding:"12px 16px"}:{}}>
                   <span style={{fontSize:i===2?13:12,fontWeight:i===2?600:400}}>{l}</span>
-                  <span style={{fontFamily:"'Syne',sans-serif",fontSize:i===2?22:16,fontWeight:700,color:c}}>{fmt_$(v)}</span>
+                  <span style={{fontFamily:"'Inter',sans-serif",fontSize:i===2?17:14,fontWeight:500,color:c}}>{fmt_$(v)}</span>
                 </div>
               ))}
               <div style={{margin:"12px 16px 0",padding:"10px 12px",background:pos>50000?"rgba(239,68,68,.08)":"rgba(34,197,94,.08)",border:`1px solid ${pos>50000?"rgba(239,68,68,.3)":"rgba(34,197,94,.3)"}`,borderRadius:"var(--r)",fontSize:11}}>

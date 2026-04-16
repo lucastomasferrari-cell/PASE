@@ -124,7 +124,7 @@ export default function Ventas({ user, locales, localActivo }) {
             <div className="modal-hd">
               <div>
                 <div className="modal-title">{fmt_d(detalleModal.fecha)} · {detalleModal.turno}</div>
-                <div style={{fontSize:11,color:"var(--muted2)",marginTop:2}}>{locales.find(l=>l.id===detalleModal.local_id)?.nombre} · Total: <span style={{color:"var(--success)",fontFamily:"'Inter',sans-serif",fontWeight:700}}>{fmt_$(detalleModal.total)}</span></div>
+                <div style={{fontSize:11,color:"var(--muted2)",marginTop:2}}>{locales.find(l=>l.id===detalleModal.local_id)?.nombre} · Total: <span style={{color:"var(--success)",fontFamily:"'Inter',sans-serif",fontWeight:500}}>{fmt_$(detalleModal.total)}</span></div>
               </div>
               <div style={{display:"flex",gap:6}}>
                 <button className="btn btn-danger btn-sm" onClick={()=>eliminarBloque(detalleModal)}>Eliminar cierre</button>

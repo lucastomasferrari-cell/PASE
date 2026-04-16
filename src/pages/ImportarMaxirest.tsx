@@ -63,7 +63,7 @@ export default function ImportarMaxirest({ locales }) {
               <>
                 <table style={{marginBottom:12}}><thead><tr><th>Forma de Cobro</th><th>Monto</th><th>Cant.</th></tr></thead>
                 <tbody>{preview.ventas.map((v,i)=><tr key={i}><td>{v.medio}</td><td><span className="num kpi-success">{fmt_$(v.monto)}</span></td><td style={{color:"var(--muted2)"}}>{v.cant}</td></tr>)}</tbody></table>
-                <div style={{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:700,color:"var(--success)",marginBottom:16}}>Total: {fmt_$(preview.ventas.reduce((s,v)=>s+v.monto,0))}</div>
+                <div style={{fontFamily:"'Inter',sans-serif",fontSize:17,fontWeight:500,color:"var(--success)",marginBottom:16}}>Total: {fmt_$(preview.ventas.reduce((s,v)=>s+v.monto,0))}</div>
               </>
             ):<div className="alert alert-warn">No se detectaron ventas. Verificá el formato.</div>}
             <div style={{display:"flex",gap:8}}>

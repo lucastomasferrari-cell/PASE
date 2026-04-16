@@ -91,7 +91,7 @@ export default function Insumos() {
                 <div key={key} onClick={()=>setForm({...form,unidad:key})}
                   style={{padding:"12px",border:`2px solid ${form.unidad===key?"var(--acc)":"var(--bd)"}`,borderRadius:"var(--r)",cursor:"pointer",background:form.unidad===key?"rgba(232,197,71,.08)":"var(--s2)",transition:"all 0.15s"}}>
                   <div style={{fontSize:20,marginBottom:4}}>{info.icon}</div>
-                  <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:13,color:form.unidad===key?"var(--acc)":"var(--txt)"}}>{info.label}</div>
+                  <div style={{fontFamily:"'Inter',sans-serif",fontWeight:500,fontSize:13,color:form.unidad===key?"var(--acc)":"var(--txt)"}}>{info.label}</div>
                   <div style={{fontSize:9,color:"var(--muted)",marginTop:4,lineHeight:1.4}}>{info.tip}</div>
                 </div>
               ))}
@@ -139,7 +139,7 @@ export default function Insumos() {
                 </div>
                 {mermaRes!==null&&(
                   <div style={{padding:"12px",background:"rgba(232,197,71,.1)",border:"1px solid var(--acc)",borderRadius:"var(--r)",marginTop:8}}>
-                    <div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:700,color:"var(--acc)"}}>✨ Rendimiento: {mermaRes}%</div>
+                    <div style={{fontFamily:"'Inter',sans-serif",fontSize:15,fontWeight:500,color:"var(--acc)"}}>Rendimiento: {mermaRes}%</div>
                     <div style={{fontSize:11,color:"var(--muted2)",marginTop:4}}>Por cada 1000{UNIDAD_INFO[form.unidad]?.unit} que comprás, a la cocina entran {Math.round(mermaRes*10)}{UNIDAD_INFO[form.unidad]?.unit}.</div>
                     <button className="btn btn-acc" style={{marginTop:8}} onClick={()=>{setForm({...form,merma:100-mermaRes});setShowMermaCal(false);}}>Aplicar este rendimiento</button>
                   </div>

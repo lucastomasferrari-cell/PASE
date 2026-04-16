@@ -138,7 +138,7 @@ Si algún campo no existe en la factura, poné 0 o null según corresponda. Los 
                 }}/>
               <label htmlFor="factura-upload" style={{cursor:"pointer"}}>
                 <div style={{fontSize:32,marginBottom:8}}>📄</div>
-                <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,color:"var(--acc)"}}>Seleccionar archivo</div>
+                <div style={{fontFamily:"'Inter',sans-serif",fontWeight:500,fontSize:14,color:"var(--acc)"}}>Seleccionar archivo</div>
                 <div style={{fontSize:11,color:"var(--muted)",marginTop:4}}>PDF, JPG o PNG — Factura A, B o C</div>
               </label>
             </div>
@@ -192,7 +192,7 @@ Si algún campo no existe en la factura, poné 0 o null según corresponda. Los 
                   <div style={{display:"flex",justifyContent:"space-between",borderTop:"1px solid var(--bd)",paddingTop:8}}>
                     <span style={{fontWeight:600}}>TOTAL</span>
                     <input type="number" value={form.total} onChange={e=>setForm({...form,total:e.target.value})}
-                      style={{width:120,background:"var(--bg)",border:"1px solid var(--acc)",color:"var(--acc)",padding:"4px 8px",fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,borderRadius:"var(--r)",textAlign:"right"}}/>
+                      style={{width:120,background:"var(--bg)",border:"1px solid var(--acc)",color:"var(--acc)",padding:"4px 8px",fontFamily:"'Inter',sans-serif",fontWeight:500,fontSize:14,borderRadius:"var(--r)",textAlign:"right"}}/>
                   </div>
                 </div>
 

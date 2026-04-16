@@ -435,14 +435,14 @@ export default function RRHH({ user, locales, localActivo }) {
           {/* Próximo pago */}
           <div className="kpi">
             <div className="kpi-label">Próximo pago de sueldos</div>
-            <div className="kpi-value kpi-acc" style={{fontSize:28}}>{d.diasFinMes} días</div>
+            <div className="kpi-value kpi-acc" style={{fontSize:18}}>{d.diasFinMes} días</div>
             <div className="kpi-sub" style={{marginTop:8}}>Estimado: <strong style={{color:"var(--acc)"}}>{fmt_$(d.estimado)}</strong></div>
             <div className="kpi-sub">{d.mensuales} mensuales · {d.quincenales} quincenales · {d.semanales} semanales</div>
           </div>
           {/* SAC */}
           <div className="kpi">
             <div className="kpi-label">Próximo SAC</div>
-            <div className="kpi-value" style={{fontSize:28,color:"var(--warn)"}}>{d.diasSAC} días</div>
+            <div className="kpi-value" style={{fontSize:18,color:"var(--warn)"}}>{d.diasSAC} días</div>
             <div className="kpi-sub" style={{marginTop:8}}>Fecha: {d.proxSAC} · Acumulado: <strong style={{color:"var(--warn)"}}>{fmt_$(d.totalSAC)}</strong></div>
             <div className="kpi-sub" style={{color:"var(--muted)",fontSize:9}}>SAC = mejor sueldo del semestre / 2 · Se paga en junio y diciembre</div>
           </div>
@@ -451,7 +451,7 @@ export default function RRHH({ user, locales, localActivo }) {
           {/* Nómina */}
           <div className="kpi">
             <div className="kpi-label">Nómina</div>
-            <div className="kpi-value" style={{fontSize:28}}>{d.total}</div>
+            <div className="kpi-value" style={{fontSize:18}}>{d.total}</div>
             <div className="kpi-sub">{d.mensuales} mensuales / {d.quincenales} quinc. / {d.semanales} sem.</div>
             {d.sinCuil > 0 && <div className="kpi-sub" style={{color:"var(--warn)",marginTop:4}}>⚠ {d.sinCuil} sin CUIL registrado</div>}
           </div>

@@ -169,7 +169,7 @@ export default function Recetas({ locales, localActivo }) {
                       <td><input type="number" style={{width:70,background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--txt)",padding:"4px 6px",fontFamily:"'DM Mono',monospace",fontSize:11,borderRadius:"var(--r)"}} value={it.cantidad} onChange={e=>updateItem(i,"cantidad",e.target.value)} placeholder="0"/></td>
                       <td style={{color:"var(--muted2)",fontSize:11}}>{ins?.unidad_label||"—"}</td>
                       <td style={{color:ins?.merma>0?"var(--warn)":"var(--muted2)",fontSize:11}}>{ins?.merma>0?`${ins.merma}%`:"0%"}</td>
-                      <td style={{color:"var(--acc)",fontFamily:"'Syne',sans-serif",fontSize:13,fontWeight:700}}>{costo>0?fmt_$(costo):"—"}</td>
+                      <td style={{color:"var(--acc)",fontFamily:"'Inter',sans-serif",fontSize:13,fontWeight:500}}>{costo>0?fmt_$(costo):"—"}</td>
                       <td><button className="btn btn-danger btn-sm" onClick={()=>setItems(items.filter((_,idx)=>idx!==i))}>✕</button></td>
                     </tr>
                   );
@@ -184,9 +184,9 @@ export default function Recetas({ locales, localActivo }) {
               const foodCost=precio>0?((costoTotal/precio)*100):0;
               return(
                 <div style={{marginTop:12,padding:12,background:"var(--s2)",borderRadius:"var(--r)",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-                  <div><div style={{fontSize:9,color:"var(--muted)",letterSpacing:2,textTransform:"uppercase"}}>Costo Teórico</div><div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:700,color:"var(--warn)"}}>{fmt_$(costoTotal)}</div></div>
-                  <div><div style={{fontSize:9,color:"var(--muted)",letterSpacing:2,textTransform:"uppercase"}}>Food Cost</div><div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:700,color:foodCost>35?"var(--danger)":foodCost>25?"var(--warn)":"var(--success)"}}>{foodCost.toFixed(1)}%</div></div>
-                  <div><div style={{fontSize:9,color:"var(--muted)",letterSpacing:2,textTransform:"uppercase"}}>Margen Bruto</div><div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:700,color:margen<60?"var(--danger)":"var(--success)"}}>{margen.toFixed(1)}%</div></div>
+                  <div><div style={{fontSize:9,color:"var(--muted)",letterSpacing:2,textTransform:"uppercase"}}>Costo Teórico</div><div style={{fontFamily:"'Inter',sans-serif",fontSize:15,fontWeight:500,color:"var(--warn)"}}>{fmt_$(costoTotal)}</div></div>
+                  <div><div style={{fontSize:9,color:"var(--muted)",letterSpacing:2,textTransform:"uppercase"}}>Food Cost</div><div style={{fontFamily:"'Inter',sans-serif",fontSize:15,fontWeight:500,color:foodCost>35?"var(--danger)":foodCost>25?"var(--warn)":"var(--success)"}}>{foodCost.toFixed(1)}%</div></div>
+                  <div><div style={{fontSize:9,color:"var(--muted)",letterSpacing:2,textTransform:"uppercase"}}>Margen Bruto</div><div style={{fontFamily:"'Inter',sans-serif",fontSize:15,fontWeight:500,color:margen<60?"var(--danger)":"var(--success)"}}>{margen.toFixed(1)}%</div></div>
                 </div>
               );
             })()}
@@ -229,7 +229,7 @@ export default function Recetas({ locales, localActivo }) {
                 return(
                   <div style={{marginTop:16,padding:16,background:"var(--s2)",borderRadius:"var(--r)",display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
                     {[["Costo Teórico",fmt_$(costoTotal),"var(--warn)"],["Precio Venta",fmt_$(precio),"var(--success)"],["Food Cost",foodCost.toFixed(1)+"%",foodCost>35?"var(--danger)":foodCost>25?"var(--warn)":"var(--success)"],["Margen Bruto",margen.toFixed(1)+"%",margen<60?"var(--danger)":"var(--success)"]].map(([l,v,c])=>(
-                      <div key={l}><div style={{fontSize:9,color:"var(--muted)",letterSpacing:2,textTransform:"uppercase",marginBottom:4}}>{l}</div><div style={{fontFamily:"'Syne',sans-serif",fontSize:16,fontWeight:700,color:c}}>{v}</div></div>
+                      <div key={l}><div style={{fontSize:9,color:"var(--muted)",letterSpacing:2,textTransform:"uppercase",marginBottom:4}}>{l}</div><div style={{fontFamily:"'Inter',sans-serif",fontSize:14,fontWeight:500,color:c}}>{v}</div></div>
                     ))}
                   </div>
                 );

@@ -261,12 +261,12 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
 
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:12,flexWrap:"wrap"}}>
         <div>
-          <div style={{fontFamily:"'Syne',sans-serif",fontSize:22,fontWeight:800,lineHeight:1}}>{emp.apellido}, {emp.nombre}</div>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:17,fontWeight:500,lineHeight:1,color:"#fff"}}>{emp.apellido}, {emp.nombre}</div>
           <div style={{fontSize:11,color:"var(--muted2)",marginTop:4}}>{emp.puesto} · {localNombre} · {emp.modo_pago} · {emp.activo ? "Activo" : "Inactivo"}</div>
         </div>
         <div style={{textAlign:"right"}}>
           <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"var(--muted)"}}>Sueldo mensual</div>
-          <div style={{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:700,color:"var(--acc)"}}>{fmt_$(emp.sueldo_mensual)}</div>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:17,fontWeight:500,color:"var(--acc)"}}>{fmt_$(emp.sueldo_mensual)}</div>
           <div style={{fontSize:10,color:"var(--muted2)"}}>Día: {fmt_$(valorDia)}</div>
         </div>
       </div>
@@ -379,8 +379,8 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
                         <span>{label}</span><span className="num" style={{color:"var(--acc)"}}>{fmt_$(monto as number)}</span>
                       </div>
                     ))}
-                    <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",fontSize:14,fontWeight:700}}>
-                      <span>TOTAL</span><span className="num" style={{color:"var(--success)",fontSize:18}}>{fmt_$(lf.total)}</span>
+                    <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",fontSize:13,fontWeight:500}}>
+                      <span>TOTAL</span><span className="num" style={{color:"var(--success)",fontSize:15,fontWeight:500}}>{fmt_$(lf.total)}</span>
                     </div>
                   </div>
                 </div>
@@ -446,7 +446,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
                       </div>
                       <div style={{marginTop:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                         <div>
-                          <span className="num" style={{fontSize:16,color:"var(--success)"}}>{fmt_$(liq.total_a_pagar)}</span>
+                          <span className="num" style={{fontSize:14,color:"var(--success)"}}>{fmt_$(liq.total_a_pagar)}</span>
                           {liq.efectivo > 0 && <span style={{fontSize:10,color:"var(--muted2)",marginLeft:8}}>Efvo: {fmt_$(liq.efectivo)}</span>}
                           {liq.transferencia > 0 && <span style={{fontSize:10,color:"var(--info)",marginLeft:8}}>Transf: {fmt_$(liq.transferencia)}</span>}
                         </div>
@@ -470,7 +470,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
             <div style={{padding:16}}>
               <div style={{marginBottom:12}}>
                 <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Días disponibles</div>
-                <div className="num" style={{fontSize:20,color:"var(--acc)"}}>{vacAcumuladas.toFixed(1)} días</div>
+                <div className="num" style={{fontSize:17,fontWeight:500,color:"var(--acc)"}}>{vacAcumuladas.toFixed(1)} días</div>
                 <div style={{fontSize:11,color:"var(--muted2)",marginTop:2}}>Equivale a {fmt_$(vacAcumuladas * valorDia)}</div>
                 {vacTomadas > 0 && <div style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>Tomadas: {vacTomadas.toFixed(1)} días</div>}
               </div>
@@ -489,7 +489,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
             <div style={{padding:16}}>
               <div style={{marginBottom:12}}>
                 <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Acumulado proporcional ({mesesEnSemestre} {mesesEnSemestre === 1 ? "mes" : "meses"} del semestre)</div>
-                <div className="num" style={{fontSize:20,color:"var(--acc)"}}>{fmt_$(sacAcumulado)}</div>
+                <div className="num" style={{fontSize:17,fontWeight:500,color:"var(--acc)"}}>{fmt_$(sacAcumulado)}</div>
                 <div style={{fontSize:11,color:"var(--muted2)",marginTop:4}}>Teórico semestre completo: {fmt_$(sacTeorico)}</div>
                 <div style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>SAC = mejor sueldo del semestre / 2 · Pago en {mesActual <= 6 ? "junio" : "diciembre"}</div>
               </div>

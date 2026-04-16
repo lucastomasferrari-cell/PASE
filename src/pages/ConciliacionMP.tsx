@@ -364,18 +364,18 @@ function ConciliacionMP({ user, locales, localActivo }) {
       <div className="grid3">
         <div className="kpi">
           <div className="kpi-label">Saldo disponible MP</div>
-          <div className="kpi-value" style={{color:"var(--acc3)",fontFamily:"'Syne',sans-serif",fontSize:34,fontWeight:800}}>{fmt_mp(saldoRealDisponible)}</div>
+          <div className="kpi-value" style={{color:"var(--acc)",fontFamily:"'Inter',sans-serif",fontSize:18,fontWeight:500}}>{fmt_mp(saldoRealDisponible)}</div>
           <div className="kpi-sub">{ultimaActualizacionBalance?"Actualizado "+new Date(ultimaActualizacionBalance).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"Ejecutá una sincronización"}</div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Egresos sin justificar</div>
-          <div className="kpi-value kpi-warn" style={{fontFamily:"'Syne',sans-serif",fontSize:34,fontWeight:800}}>{pendientesCount}</div>
+          <div className="kpi-value kpi-warn" style={{fontFamily:"'Inter',sans-serif",fontSize:18,fontWeight:500}}>{pendientesCount}</div>
           <div className="kpi-sub">{pendientesCount===0?"Todos conciliados ✓":"Requieren conciliación manual"}</div>
         </div>
         {porAcreditarTotal>0&&(
           <div className="kpi">
             <div className="kpi-label">Por acreditar</div>
-            <div className="kpi-value kpi-warn" style={{fontSize:28}}>{fmt_mp(porAcreditarTotal)}</div>
+            <div className="kpi-value kpi-warn" style={{fontSize:18}}>{fmt_mp(porAcreditarTotal)}</div>
             <div className="kpi-sub">Pagos en proceso / pending</div>
           </div>
         )}
@@ -500,7 +500,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
             {credSel&&(
               <div style={{padding:12,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)",marginBottom:12}}>
                 <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"var(--muted2)",marginBottom:6}}>Saldo calculado actual</div>
-                <div className="num" style={{fontSize:22,fontWeight:600,color:"var(--acc3)",fontFamily:"'Syne',sans-serif"}}>{fmt_mp(calculado)}</div>
+                <div className="num" style={{fontSize:17,fontWeight:500,color:"var(--acc)",fontFamily:"'Inter',sans-serif"}}>{fmt_mp(calculado)}</div>
                 <div style={{fontSize:10,color:"var(--muted2)",marginTop:4}}>
                   = saldo inicial {fmt_mp(inicialPrev)}{credSel.saldo_inicial_at?` (corte ${fmt_d(credSel.saldo_inicial_at.slice(0,10))})`:" (sin corte)"} + movimientos aprobados posteriores
                 </div>
@@ -551,7 +551,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
                 <div style={{fontWeight:600,fontSize:13}}>{TIPO_LABELS[conciliarModal.tipo]||conciliarModal.tipo}</div>
                 <div style={{fontSize:11,color:"var(--muted2)"}}>{conciliarModal.descripcion||"—"} · {fmt_d((conciliarModal.fecha||"").split("T")[0])}</div>
               </div>
-              <div className="num kpi-danger" style={{fontSize:16}}>{fmt_$(conciliarModal.monto)}</div>
+              <div className="num kpi-danger" style={{fontSize:14}}>{fmt_$(conciliarModal.monto)}</div>
             </div>
           </div>
           <div className="tabs" style={{marginBottom:12}}>

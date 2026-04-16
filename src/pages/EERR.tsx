@@ -55,7 +55,7 @@ export default function EERR({ locales, localActivo }) {
     <div className="eerr-row" style={big?{background:"var(--s2)",padding:"12px 16px"}:{}}>
       <span style={{fontSize:big?13:11,fontWeight:big?600:400,color:big?"var(--txt)":"var(--muted2)"}}>{label}</span>
       <div>
-        <span style={{fontFamily:"'Syne',sans-serif",fontSize:big?20:14,fontWeight:700,color}}>{fmt_$(valor)}</span>
+        <span style={{fontFamily:"'Inter',sans-serif",fontSize:big?17:13,fontWeight:500,color}}>{fmt_$(valor)}</span>
         {!big&&<span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(Math.abs(valor))}</span>}
       </div>
     </div>
@@ -90,7 +90,7 @@ export default function EERR({ locales, localActivo }) {
               {porMedio.length===0?<div className="empty">Sin ventas este mes</div>:(
                 <div>
                   {porMedio.map(x=><div key={x.m} className="eerr-row"><span style={{fontSize:11}}>{x.m}</span><div><span className="num kpi-success">{fmt_$(x.t)}</span><span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(x.t)}</span></div></div>)}
-                  <div className="eerr-row" style={{background:"var(--s2)"}}><span style={{fontWeight:600}}>TOTAL VENTAS</span><span style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:700,color:"var(--success)"}}>{fmt_$(totalVentas)}</span></div>
+                  <div className="eerr-row" style={{background:"var(--s2)"}}><span style={{fontWeight:600}}>TOTAL VENTAS</span><span style={{fontFamily:"'Inter',sans-serif",fontSize:15,fontWeight:500,color:"var(--success)"}}>{fmt_$(totalVentas)}</span></div>
                 </div>
               )}
             </div>
