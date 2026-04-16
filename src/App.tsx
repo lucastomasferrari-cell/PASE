@@ -20,6 +20,7 @@ import Recetas from "./pages/Recetas";
 import ConciliacionMP from "./pages/ConciliacionMP";
 import CajaEfectivo from "./pages/CajaEfectivo";
 import RRHHPage from "./pages/RRHH";
+import Costos from "./pages/Costos";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -166,6 +167,9 @@ export default function App() {
       case "proveedores": return <Proveedores {...props}/>;
       case "usuarios":  return <Usuarios {...props}/>;
       case "rrhh":      return <RRHHPage {...props}/>;
+      case "costos":    return <Costos {...props}/>;
+      case "insumos":   return <Costos {...props}/>;
+      case "recetas":   return <Costos {...props}/>;
       default: return null;
     }
   };
