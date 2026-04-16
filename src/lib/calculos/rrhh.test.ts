@@ -307,9 +307,9 @@ describe("calcularTotalLiquidacion", () => {
     expect(r.total_feriados).toBeCloseTo(ferVal, 0);
   });
 
-  it("con vacaciones → suma vacaciones_dias × valor_dia", () => {
+  it("con vacaciones → suma vacaciones_dias × valor_dia_vacacional (sueldo/25 por LCT Art 155)", () => {
     const r = calcularTotalLiquidacion({ ...base, vacaciones_dias: 5 });
-    const vacVal = 5 * (600000 / 30);
+    const vacVal = 5 * (600000 / 25);
     expect(r.total_vacaciones).toBeCloseTo(vacVal, 0);
   });
 
@@ -337,13 +337,14 @@ describe("calcularTotalLiquidacion", () => {
     });
     const valorDia = 600000 / 30;
     const valorHora = valorDia / 8;
+    const valorDiaVacacional = 600000 / 25;
     const expected =
       600000 // sueldo base
       - 1 * valorDia // inasistencias
       + 4 * valorHora // horas extras
       + 2 * 5000 // dobles
       + 1 * valorDia // feriados
-      + 3 * valorDia // vacaciones
+      + 3 * valorDiaVacacional // vacaciones (LCT Art 155)
       + 30000 // presentismo
       - 30000 // adelantos
       - 10000; // pagos dobles
