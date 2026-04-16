@@ -165,4 +165,12 @@ td{padding:9px 12px;font-size:12px}
 .items-table tr:hover{background:var(--s2)}
 .saldo-edit{display:flex;gap:8px;align-items:center}
 .saldo-edit input{width:160px}
+.section{margin-bottom:12px}
+.section-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px}
+.section-title{font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted2);font-weight:500}
+.section-total{font-size:11px;color:var(--muted2)}
+.pills{display:flex;gap:5px;margin-bottom:14px;flex-wrap:wrap}
+.pill{padding:4px 11px;border-radius:20px;font-size:11px;cursor:pointer;color:var(--muted2);border:1px solid var(--bd);background:var(--s2);transition:all .1s}
+.pill:hover{color:var(--txt)}
+.pill.active{background:var(--s3);color:var(--txt);border-color:var(--bd2)}
 `;
