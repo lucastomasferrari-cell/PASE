@@ -20,7 +20,7 @@ export default function Remitos({ user, locales, localActivo }) {
     setLoading(true);
     const [{data:r},{data:f},{data:p}] = await Promise.all([
       db.from("remitos").select("*").order("fecha",{ascending:false}),
-      db.from("facturas").select("*").neq("estado","pagada").neq("estado","anulada"),
+      db.from("facturas").select("*").neq("estado","anulada"),
       db.from("proveedores").select("*").eq("estado","Activo").order("nombre"),
     ]);
     setRemitos(r||[]); setFacturas(f||[]); setProveedores(p||[]); setLoading(false);
@@ -38,7 +38,7 @@ export default function Remitos({ user, locales, localActivo }) {
   const guardar = async () => {
     if(!form.prov_id||!form.monto||!form.local_id) return;
     const nro = form.nro||`REM-${Date.now().toString().slice(-6)}`;
-    const nuevo = {...form,id:genId("REM"),prov_id:parseInt(form.prov_id),local_id:parseInt(form.local_id),nro,monto:parseFloat(form.monto),estado:"sin_factura",fact_id:null};
+    const nuevo = {...form,id:genId("REM"),prov_id:parseInt(form.prov_id),local_id:parseInt(form.local_id),nro,monto:parseFloat(form.monto),estado:"sin_factura",factura_id:null};
     await db.from("remitos").insert([nuevo]);
     const prov = proveedores.find(p=>p.id===nuevo.prov_id);
     if(prov) await db.from("proveedores").update({saldo:(prov.saldo||0)+nuevo.monto}).eq("id",prov.id);
@@ -55,7 +55,7 @@ export default function Remitos({ user, locales, localActivo }) {
       // El saldo ya tiene la deuda del remito, solo ajustamos la diferencia
       await db.from("proveedores").update({saldo:Math.max(0,(prov.saldo||0)+diff)}).eq("id",prov.id);
     }
-    await db.from("remitos").update({estado:"facturado",fact_id:fid}).eq("id",r.id);
+    await db.from("remitos").update({estado:"vinculado",factura_id:fid}).eq("id",r.id);
     setVincModal(null); load();
   };
 
@@ -69,7 +69,7 @@ export default function Remitos({ user, locales, localActivo }) {
     if(prov) await db.from("proveedores").update({saldo:Math.max(0,(prov.saldo||0)-monto)}).eq("id",r.prov_id);
     const {data:caja} = await db.from("saldos_caja").select("saldo").eq("cuenta",pagoForm.cuenta).single();
     if(caja) await db.from("saldos_caja").update({saldo:(caja.saldo||0)-monto}).eq("cuenta",pagoForm.cuenta);
-    await db.from("movimientos").insert([{id:genId("MOV"),fecha:pagoForm.fecha,cuenta:pagoForm.cuenta,tipo:"Pago Proveedor",cat:r.cat,importe:-monto,detalle:`Pago remito ${r.nro} - ${prov?.nombre||""}`,fact_id:null}]);
+    await db.from("movimientos").insert([{id:genId("MOV"),fecha:pagoForm.fecha,cuenta:pagoForm.cuenta,tipo:"Pago Proveedor",cat:r.cat,importe:-monto,detalle:`Pago remito ${r.nro} - ${prov?.nombre||""}`,factura_id:null}]);
     setPagandoRem(false); setPagarModal(null); load();
   };
 
@@ -105,16 +105,17 @@ export default function Remitos({ user, locales, localActivo }) {
                 <td><span className="num kpi-warn">{fmt_$(r.monto)}</span></td>
                 <td>
                   {r.estado==="sin_factura"&&<span className="badge b-warn">Sin Factura</span>}
-                  {r.estado==="facturado"&&<span className="badge b-success">Facturado</span>}
+                  {(r.estado==="facturado"||r.estado==="vinculado")&&<span className="badge b-success">Vinculado</span>}
                   {r.estado==="pagado"&&<span className="badge b-info">Pagado</span>}
                   {r.estado==="anulado"&&<span className="badge b-anulada">Anulado</span>}
                 </td>
                 <td>
                   {!isAnulado && (
-                    <div style={{display:"flex",gap:4}}>
+                    <div style={{display:"flex",gap:4,alignItems:"center"}}>
                       {r.estado==="sin_factura"&&<button className="btn btn-ghost btn-sm" onClick={()=>setVincModal(r)}>Vincular FC</button>}
+                      {r.factura_id&&<span className="mono" style={{fontSize:10,color:"var(--info)"}}>{"→ "}{facturas.find(f=>f.id===r.factura_id)?.nro||r.factura_id}</span>}
                       {r.estado==="sin_factura"&&<button className="btn btn-success btn-sm" onClick={()=>{setPagarModal(r);setPagoForm({cuenta:"MercadoPago",monto:r.monto,fecha:toISO(today)})}}>Pagar</button>}
-                      <button className="btn btn-danger btn-sm" onClick={()=>anular(r)}>Anular</button>
+                      {r.estado!=="pagado"&&<button className="btn btn-danger btn-sm" onClick={()=>anular(r)}>Anular</button>}
                     </div>
                   )}
                 </td>
@@ -157,7 +158,7 @@ export default function Remitos({ user, locales, localActivo }) {
               <div className="alert alert-warn">Remito {vincModal.nro} · {fmt_$(vincModal.monto)}</div>
               <p style={{fontSize:11,color:"var(--muted2)",marginBottom:12}}>Al vincular, la deuda provisoria del remito se ajusta con la deuda fiscal de la factura.</p>
               <table><thead><tr><th>Factura</th><th>Fecha</th><th>Total</th><th>Diferencia</th><th></th></tr></thead>
-              <tbody>{facturas.filter(f=>f.prov_id===vincModal.prov_id).map(f=>{
+              <tbody>{facturas.filter(f=>f.prov_id===vincModal.prov_id&&f.estado==="pendiente").map(f=>{
                 const diff = (f.total||0)-(vincModal.monto||0);
                 return (<tr key={f.id}>
                   <td className="mono">{f.nro}</td><td>{fmt_d(f.fecha)}</td>
@@ -166,7 +167,7 @@ export default function Remitos({ user, locales, localActivo }) {
                   <td><button className="btn btn-acc btn-sm" onClick={()=>vincFact(f.id)}>Vincular</button></td>
                 </tr>);
               })}</tbody></table>
-              {facturas.filter(f=>f.prov_id===vincModal.prov_id).length===0&&<div className="empty">No hay facturas pendientes de este proveedor</div>}
+              {facturas.filter(f=>f.prov_id===vincModal.prov_id&&f.estado==="pendiente").length===0&&<div className="empty">No hay facturas pendientes de este proveedor</div>}
             </div>
           </div>
         </div>
