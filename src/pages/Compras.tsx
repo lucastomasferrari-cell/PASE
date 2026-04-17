@@ -29,6 +29,7 @@ export default function Compras({ user, locales, localActivo }) {
   const [verModal, setVerModal] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [pagando, setPagando] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const emptyForm = { prov_id: "", local_id: localActivo ? String(localActivo) : "", nro: "", fecha: toISO(today), venc: "", neto: "", iva21: "", iva105: "", iibb: "", cat: "", detalle: "", tipo: "factura" };
   const [form, setForm] = useState<any>(emptyForm);
@@ -85,23 +86,33 @@ export default function Compras({ user, locales, localActivo }) {
   const removeItem = (i: number) => setItems(items.filter((_, idx) => idx !== i));
 
   const guardar = async () => {
-    if (!form.prov_id || !form.nro || !form.neto || !form.local_id) return;
-    const isNC = form.tipo === "nota_credito";
-    const totalAbs = calcTotal();
-    const total = isNC ? -Math.abs(totalAbs) : totalAbs;
-    const id = genId(isNC ? "NC" : "FACT");
-    const nueva = { ...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(form.local_id), neto: parseFloat(form.neto), iva21: parseFloat(form.iva21) || 0, iva105: parseFloat(form.iva105) || 0, iibb: parseFloat(form.iibb) || 0, total, estado: isNC ? "pagada" : "pendiente", pagos: [], tipo: form.tipo };
-    await db.from("facturas").insert([nueva]);
-    if (items.length > 0) {
-      const itemsToInsert = items.filter(it => it.producto).map(it => ({ ...it, factura_id: id, cantidad: parseFloat(it.cantidad) || 0, precio_unitario: parseFloat(it.precio_unitario) || 0, subtotal: it.subtotal }));
-      if (itemsToInsert.length > 0) await db.from("factura_items").insert(itemsToInsert);
+    if (saving || !form.prov_id || !form.nro || !form.neto || !form.local_id) return;
+    setSaving(true);
+    try {
+      const isNC = form.tipo === "nota_credito";
+      const totalAbs = calcTotal();
+      const total = isNC ? -Math.abs(totalAbs) : totalAbs;
+      const id = genId(isNC ? "NC" : "FACT");
+      const nueva = { ...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(form.local_id), neto: parseFloat(form.neto), iva21: parseFloat(form.iva21) || 0, iva105: parseFloat(form.iva105) || 0, iibb: parseFloat(form.iibb) || 0, total, estado: isNC ? "pagada" : "pendiente", pagos: [], tipo: form.tipo };
+      const { error: factErr } = await db.from("facturas").insert([nueva]);
+      if (factErr) throw new Error("Error guardando factura: " + factErr.message);
+
+      if (items.length > 0) {
+        const itemsToInsert = items.filter(it => it.producto).map(it => ({ ...it, factura_id: id, cantidad: parseFloat(it.cantidad) || 0, precio_unitario: parseFloat(it.precio_unitario) || 0, subtotal: it.subtotal }));
+        if (itemsToInsert.length > 0) await db.from("factura_items").insert(itemsToInsert);
+      }
+      const prov = proveedores.find(p => p.id === nueva.prov_id);
+      if (prov) {
+        const saldoDelta = isNC ? -Math.abs(totalAbs) : totalAbs;
+        await db.from("proveedores").update({ saldo: Math.max(0, (prov.saldo || 0) + saldoDelta) }).eq("id", prov.id);
+      }
+      setModal(false); setForm(emptyForm); setItems([]); load();
+    } catch (err: any) {
+      console.error("Error guardando factura:", err);
+      alert("Error al guardar: " + err.message);
+    } finally {
+      setSaving(false);
     }
-    const prov = proveedores.find(p => p.id === nueva.prov_id);
-    if (prov) {
-      const saldoDelta = isNC ? -Math.abs(totalAbs) : totalAbs;
-      await db.from("proveedores").update({ saldo: Math.max(0, (prov.saldo || 0) + saldoDelta) }).eq("id", prov.id);
-    }
-    setModal(false); setForm(emptyForm); setItems([]); load();
   };
 
   const pagar = async () => {
@@ -292,7 +303,7 @@ export default function Compras({ user, locales, localActivo }) {
                 )}
               </div>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar}>Guardar</button></div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={saving}>{saving ? "Guardando..." : "Guardar"}</button></div>
           </div>
         </div>
       )}
