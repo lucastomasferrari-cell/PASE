@@ -21,6 +21,7 @@ import ConciliacionMP from "./pages/ConciliacionMP";
 import CajaEfectivo from "./pages/CajaEfectivo";
 import RRHHPage from "./pages/RRHH";
 import Costos from "./pages/Costos";
+import Configuracion from "./pages/Configuracion";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -170,6 +171,7 @@ export default function App() {
       case "costos":    return <Costos {...props}/>;
       case "insumos":   return <Costos {...props}/>;
       case "recetas":   return <Costos {...props}/>;
+      case "configuracion": return <Configuracion user={user}/>;
       default: return null;
     }
   };

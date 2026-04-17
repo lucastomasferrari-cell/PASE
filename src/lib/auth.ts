@@ -30,6 +30,7 @@ export const MODULOS = [
   { slug:"contador", label:"Contador / IVA", icon:"🧾" },
   { slug:"rrhh", label:"RRHH", icon:"💼" },
   { slug:"usuarios", label:"Usuarios", icon:"👥" },
+  { slug:"configuracion", label:"Configuración", icon:"⚙" },
 ];
 
 // ─── FUNCIONES PURAS ─────────────────────────────────────────────────────────
