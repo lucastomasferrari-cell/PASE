@@ -329,12 +329,36 @@ export default function RRHH({ user, locales, localActivo }) {
     setPagando(true);
     try {
       const desc = `Sueldo ${emp.apellido} ${emp.nombre} - ${MESES_NOMBRE[pagoMes]} ${pagoAnio}`;
-      const gastoId = genId("GASTO");
-      const cuenta = (Number(liq.transferencia) > 0 && emp.alias_mp) ? "MercadoPago" : "Caja Chica";
-      const { error: gastoErr } = await db.from("gastos").insert([{ id: gastoId, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: Number(liq.total_a_pagar), detalle: desc, local_id: emp.local_id, cuenta }]);
-      if (gastoErr) throw new Error("Error gasto: " + gastoErr.message);
+      const efectivo = Number(liq.efectivo || 0);
+      const transferencia = Number(liq.transferencia || 0);
+      const total = Number(liq.total_a_pagar || 0);
 
-      const pagadoPayload = { estado:"pagado", gasto_id: gastoId, pagado_at: new Date().toISOString(), pagado_por: user?.id };
+      if (Math.abs((efectivo + transferencia) - total) > 0.01) {
+        throw new Error(`Split inválido: efectivo (${efectivo}) + transferencia (${transferencia}) = ${efectivo + transferencia} no coincide con total (${total})`);
+      }
+
+      const gastoIds: string[] = [];
+      if (efectivo > 0) {
+        const gid = genId("GASTO");
+        const { error } = await db.from("gastos").insert([{ id: gid, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: efectivo, detalle: desc + " (efectivo)", local_id: emp.local_id, cuenta: "Caja Efectivo" }]);
+        if (error) throw new Error("Error gasto efectivo: " + error.message);
+        gastoIds.push(gid);
+      }
+      if (transferencia > 0) {
+        const gid = genId("GASTO");
+        const { error } = await db.from("gastos").insert([{ id: gid, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: transferencia, detalle: desc + " (transferencia)", local_id: emp.local_id, cuenta: "MercadoPago" }]);
+        if (error) throw new Error("Error gasto transferencia: " + error.message);
+        gastoIds.push(gid);
+      }
+      if (gastoIds.length === 0 && total > 0) {
+        const gid = genId("GASTO");
+        const cuenta = emp.alias_mp ? "MercadoPago" : "Caja Chica";
+        const { error } = await db.from("gastos").insert([{ id: gid, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: total, detalle: desc, local_id: emp.local_id, cuenta }]);
+        if (error) throw new Error("Error gasto: " + error.message);
+        gastoIds.push(gid);
+      }
+
+      const pagadoPayload = { estado:"pagado", gasto_id: gastoIds[0] || null, pagado_at: new Date().toISOString(), pagado_por: user?.id };
 
       if (liq._generated && nov?.id) {
         // Crear liquidación directamente como pagada (evita race condition update/select)
@@ -367,6 +391,15 @@ export default function RRHH({ user, locales, localActivo }) {
     setPagando(true);
     for (const row of pendientes) {
       const { emp, nov, liq } = row;
+      const efectivo = Number(liq.efectivo || 0);
+      const transferencia = Number(liq.transferencia || 0);
+      const total = Number(liq.total_a_pagar || 0);
+
+      if (Math.abs((efectivo + transferencia) - total) > 0.01) {
+        console.error(`Skip ${emp.apellido}: split inválido (${efectivo}+${transferencia}≠${total})`);
+        continue;
+      }
+
       let liqId = liq.id;
       if (liq._generated && nov?.id) {
         const { _novedadId, _generated, ...calcFields } = liq;
@@ -376,10 +409,24 @@ export default function RRHH({ user, locales, localActivo }) {
         if (created) liqId = created.id;
       }
       const desc = `Sueldo ${emp.apellido} ${emp.nombre} - ${MESES_NOMBRE[pagoMes]} ${pagoAnio}`;
-      const gastoId = genId("GASTO");
-      await db.from("gastos").insert([{ id: gastoId, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: Number(liq.total_a_pagar), detalle: desc, local_id: emp.local_id, cuenta: emp.alias_mp ? "MercadoPago" : "Caja Chica" }]);
-      await db.from("rrhh_liquidaciones").update({ estado:"pagado", gasto_id: gastoId, pagado_at: new Date().toISOString(), pagado_por: user?.id }).eq("id", liqId);
-      await db.from("rrhh_empleados").update({ aguinaldo_acumulado: (emp.aguinaldo_acumulado || 0) + Number(liq.total_a_pagar) / 12 }).eq("id", emp.id);
+      const gastoIds: string[] = [];
+      if (efectivo > 0) {
+        const gid = genId("GASTO");
+        await db.from("gastos").insert([{ id: gid, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: efectivo, detalle: desc + " (efectivo)", local_id: emp.local_id, cuenta: "Caja Efectivo" }]);
+        gastoIds.push(gid);
+      }
+      if (transferencia > 0) {
+        const gid = genId("GASTO");
+        await db.from("gastos").insert([{ id: gid, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: transferencia, detalle: desc + " (transferencia)", local_id: emp.local_id, cuenta: "MercadoPago" }]);
+        gastoIds.push(gid);
+      }
+      if (gastoIds.length === 0 && total > 0) {
+        const gid = genId("GASTO");
+        await db.from("gastos").insert([{ id: gid, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: total, detalle: desc, local_id: emp.local_id, cuenta: emp.alias_mp ? "MercadoPago" : "Caja Chica" }]);
+        gastoIds.push(gid);
+      }
+      await db.from("rrhh_liquidaciones").update({ estado:"pagado", gasto_id: gastoIds[0] || null, pagado_at: new Date().toISOString(), pagado_por: user?.id }).eq("id", liqId);
+      await db.from("rrhh_empleados").update({ aguinaldo_acumulado: (emp.aguinaldo_acumulado || 0) + total / 12 }).eq("id", emp.id);
     }
     setPagando(false);
     showToast(`${pendientes.length} pagos registrados`);
