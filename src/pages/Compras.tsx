@@ -31,12 +31,19 @@ export default function Compras({ user, locales, localActivo }) {
   const [pagando, setPagando] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const emptyForm = { prov_id: "", local_id: localActivo ? String(localActivo) : "", nro: "", fecha: toISO(today), venc: "", neto: "", iva21: "", iva105: "", iibb: "", cat: "", detalle: "", tipo: "factura" };
+  const emptyForm = { prov_id: "", local_id: localActivo ? String(localActivo) : "", nro: "", fecha: toISO(today), venc: "", neto: "", iva21: "", iva105: "", iibb: "", perc_iva: "", otros_cargos: "", descuentos: "", cat: "", detalle: "", tipo: "factura" };
   const [form, setForm] = useState<any>(emptyForm);
   const [items, setItems] = useState<any[]>([]);
   const [pagoForm, setPagoForm] = useState({ cuenta: "MercadoPago", monto: "", fecha: toISO(today) });
   const localesDisp = user.rol === "dueno" ? locales : locales.filter(l => (user.locales || []).includes(l.id));
-  const calcTotal = () => (parseFloat(form.neto) || 0) + (parseFloat(form.iva21) || 0) + (parseFloat(form.iva105) || 0) + (parseFloat(form.iibb) || 0);
+  const calcTotal = () =>
+    (parseFloat(form.neto) || 0) +
+    (parseFloat(form.iva21) || 0) +
+    (parseFloat(form.iva105) || 0) +
+    (parseFloat(form.iibb) || 0) +
+    (parseFloat(form.perc_iva) || 0) +
+    (parseFloat(form.otros_cargos) || 0) -
+    (parseFloat(form.descuentos) || 0);
 
   const load = async () => {
     setLoading(true);
@@ -93,7 +100,7 @@ export default function Compras({ user, locales, localActivo }) {
       const totalAbs = calcTotal();
       const total = isNC ? -Math.abs(totalAbs) : totalAbs;
       const id = genId(isNC ? "NC" : "FACT");
-      const nueva = { ...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(form.local_id), neto: parseFloat(form.neto), iva21: parseFloat(form.iva21) || 0, iva105: parseFloat(form.iva105) || 0, iibb: parseFloat(form.iibb) || 0, total, estado: isNC ? "pagada" : "pendiente", pagos: [], tipo: form.tipo };
+      const nueva = { ...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(form.local_id), neto: parseFloat(form.neto), iva21: parseFloat(form.iva21) || 0, iva105: parseFloat(form.iva105) || 0, iibb: parseFloat(form.iibb) || 0, perc_iva: parseFloat(form.perc_iva) || 0, otros_cargos: parseFloat(form.otros_cargos) || 0, descuentos: parseFloat(form.descuentos) || 0, total, estado: isNC ? "pagada" : "pendiente", pagos: [], tipo: form.tipo };
       const { error: factErr } = await db.from("facturas").insert([nueva]);
       if (factErr) throw new Error("Error guardando factura: " + factErr.message);
 
@@ -277,6 +284,11 @@ export default function Compras({ user, locales, localActivo }) {
                 <div className="field"><label>IVA 10.5%</label><input type="number" value={form.iva105} onChange={e => setForm({ ...form, iva105: e.target.value })} placeholder="0" /></div>
                 <div className="field"><label>Perc. IIBB</label><input type="number" value={form.iibb} onChange={e => setForm({ ...form, iibb: e.target.value })} placeholder="0" /></div>
               </div>
+              <div className="form3">
+                <div className="field"><label>Perc. IVA</label><input type="number" value={form.perc_iva} onChange={e => setForm({ ...form, perc_iva: e.target.value })} placeholder="0" /></div>
+                <div className="field"><label>Otros Cargos</label><input type="number" value={form.otros_cargos} onChange={e => setForm({ ...form, otros_cargos: e.target.value })} placeholder="0" /></div>
+                <div className="field"><label>Descuentos (−)</label><input type="number" value={form.descuentos} onChange={e => setForm({ ...form, descuentos: e.target.value })} placeholder="0" /></div>
+              </div>
               <div className="field"><label>Total calculado</label><input readOnly value={fmt_$(calcTotal())} style={{ color: "var(--acc)", fontFamily: "'Inter',sans-serif", fontWeight: 500 }} /></div>
               <div className="field"><label>Descripción</label><input value={form.detalle} onChange={e => setForm({ ...form, detalle: e.target.value })} placeholder="Detalle general..." /></div>
 
@@ -328,6 +340,9 @@ export default function Compras({ user, locales, localActivo }) {
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12 }}><span>IVA 21%</span><span>{fmt_$(verModal.iva21)}</span></div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12 }}><span>IVA 10.5%</span><span>{fmt_$(verModal.iva105)}</span></div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12 }}><span>Perc. IIBB</span><span>{fmt_$(verModal.iibb)}</span></div>
+                {Number(verModal.perc_iva) > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12 }}><span>Perc. IVA</span><span>{fmt_$(verModal.perc_iva)}</span></div>}
+                {Number(verModal.otros_cargos) > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12 }}><span>Otros Cargos</span><span>{fmt_$(verModal.otros_cargos)}</span></div>}
+                {Number(verModal.descuentos) > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12, color: "var(--danger)" }}><span>Descuentos</span><span>− {fmt_$(verModal.descuentos)}</span></div>}
                 <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid var(--bd)", paddingTop: 8, fontFamily: "'Inter',sans-serif", fontSize: 16, fontWeight: 500 }}><span>TOTAL</span><span style={{ color: "var(--acc)" }}>{fmt_$(verModal.total)}</span></div>
               </div>
               {(verModal.pagos || []).length > 0 && (
