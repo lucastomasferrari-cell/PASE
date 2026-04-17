@@ -93,7 +93,11 @@ export default function Compras({ user, locales, localActivo }) {
   const removeItem = (i: number) => setItems(items.filter((_, idx) => idx !== i));
 
   const guardar = async () => {
-    if (saving || !form.prov_id || !form.nro || !form.neto || !form.local_id) return;
+    if (saving) return;
+    if (!form.prov_id) { alert("Seleccioná un proveedor"); return; }
+    if (!form.nro) { alert("Ingresá el número de factura"); return; }
+    if (!form.neto) { alert("Ingresá el neto gravado"); return; }
+    if (!form.local_id) { alert("Seleccioná un local"); return; }
     setSaving(true);
     try {
       const isNC = form.tipo === "nota_credito";
@@ -174,7 +178,7 @@ export default function Compras({ user, locales, localActivo }) {
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="btn btn-sec" onClick={() => setLectorModal(true)}>Lector IA</button>
-          <button className="btn btn-acc" onClick={() => { setForm(emptyForm); setItems([]); setModal(true); }}>+ Cargar Factura</button>
+          <button className="btn btn-acc" onClick={() => { setForm({ ...emptyForm, local_id: localActivo ? String(localActivo) : "" }); setItems([]); setModal(true); }}>+ Cargar Factura</button>
         </div>
       </div>
 
