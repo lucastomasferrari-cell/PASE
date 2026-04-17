@@ -5,10 +5,11 @@ import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 
 // ─── CAJA ─────────────────────────────────────────────────────────────────────
 export default function Caja() {
-  const [movimientos, setMovimientos] = useState([]);
-  const [saldos, setSaldos] = useState({});
+  const [movimientos, setMovimientos] = useState<any[]>([]);
+  const [saldos, setSaldos] = useState<Record<string, number>>({});
   const [modal, setModal] = useState(false);
-  const [editSaldoModal, setEditSaldoModal] = useState(null);
+  const [editSaldoModal, setEditSaldoModal] = useState<any>(null);
+  const [editMov, setEditMov] = useState<any>(null);
   const [filtCuenta, setFiltCuenta] = useState("Todas");
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({fecha:toISO(today),cuenta:"Caja Chica",tipo:"Pago Gasto",cat:"",importe:"",detalle:"",esEgreso:true});
@@ -38,9 +39,27 @@ export default function Caja() {
     setModal(false); load();
   };
 
-  const guardarSaldo = async (cuenta, nuevoSaldo) => {
+  const guardarSaldo = async (cuenta: string, nuevoSaldo: any) => {
     await db.from("saldos_caja").update({saldo:parseFloat(nuevoSaldo)||0}).eq("cuenta",cuenta);
     setEditSaldoModal(null); load();
+  };
+
+  const eliminarMov = async (m: any) => {
+    if (!confirm("¿Eliminar este movimiento? Se revertirá su impacto en la caja.")) return;
+    const { error } = await db.from("movimientos").delete().eq("id", m.id);
+    if (error) { alert("Error al eliminar: " + error.message); return; }
+    const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", m.cuenta).maybeSingle();
+    if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - (m.importe || 0) }).eq("cuenta", m.cuenta);
+    load();
+  };
+
+  const guardarEditMov = async () => {
+    if (!editMov) return;
+    const { error } = await db.from("movimientos").update({
+      fecha: editMov.fecha, detalle: editMov.detalle, cat: editMov.cat || null
+    }).eq("id", editMov.id);
+    if (error) { alert("Error al editar: " + error.message); return; }
+    setEditMov(null); load();
   };
 
   const cc = c => c==="Caja Chica"?"var(--acc)":c==="Caja Mayor"?"var(--acc2)":c==="MercadoPago"?"var(--acc3)":"var(--info)";
@@ -68,7 +87,7 @@ export default function Caja() {
           </select>
         </div>
         {loading?<div className="loading">Cargando...</div>:mFilt.length===0?<div className="empty">Sin movimientos</div>:(
-          <table><thead><tr><th>Fecha</th><th>Cuenta</th><th>Tipo</th><th>Categoría</th><th>Detalle</th><th>Importe</th></tr></thead>
+          <table><thead><tr><th>Fecha</th><th>Cuenta</th><th>Tipo</th><th>Categoría</th><th>Detalle</th><th>Importe</th><th></th></tr></thead>
           <tbody>{mFilt.map(m=>(
             <tr key={m.id}>
               <td className="mono">{fmt_d(m.fecha)}</td>
@@ -77,6 +96,10 @@ export default function Caja() {
               <td>{m.cat?<span className="badge b-muted">{m.cat}</span>:"—"}</td>
               <td style={{fontSize:11,maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.detalle}</td>
               <td><span className="num" style={{color:m.importe<0?"var(--danger)":"var(--success)"}}>{fmt_$(m.importe)}</span></td>
+              <td><div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
+                <button className="btn btn-ghost btn-sm" onClick={()=>setEditMov({...m})}>Editar</button>
+                <button className="btn btn-danger btn-sm" onClick={()=>eliminarMov(m)}>✕</button>
+              </div></td>
             </tr>
           ))}</tbody></table>
         )}
@@ -91,6 +114,27 @@ export default function Caja() {
               <div className="field"><label>Saldo actual real $</label><input type="number" value={editSaldoModal.saldo} onChange={e=>setEditSaldoModal({...editSaldoModal,saldo:e.target.value})} placeholder="0"/></div>
             </div>
             <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setEditSaldoModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={()=>guardarSaldo(editSaldoModal.cuenta,editSaldoModal.saldo)}>Guardar</button></div>
+          </div>
+        </div>
+      )}
+
+      {editMov && (
+        <div className="overlay" onClick={()=>setEditMov(null)}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <div className="modal-hd"><div className="modal-title">Editar Movimiento</div><button className="close-btn" onClick={()=>setEditMov(null)}>✕</button></div>
+            <div className="modal-body">
+              <div className="alert alert-warn">El importe, cuenta y tipo no son editables para no descuadrar los saldos. Si necesitás corregir el importe, eliminá el movimiento y creá uno nuevo.</div>
+              <div className="form2">
+                <div className="field"><label>Fecha</label><input type="date" value={editMov.fecha} onChange={e=>setEditMov({...editMov,fecha:e.target.value})}/></div>
+                <div className="field"><label>Categoría EERR</label><select value={editMov.cat||""} onChange={e=>setEditMov({...editMov,cat:e.target.value})}><option value="">Sin categoría</option>{CATEGORIAS_COMPRA.map(c=><option key={c}>{c}</option>)}</select></div>
+              </div>
+              <div className="field"><label>Detalle</label><input value={editMov.detalle||""} onChange={e=>setEditMov({...editMov,detalle:e.target.value})} placeholder="Descripción..."/></div>
+              <div className="form2" style={{marginTop:8,opacity:0.5}}>
+                <div className="field"><label>Cuenta (bloqueado)</label><input readOnly value={editMov.cuenta}/></div>
+                <div className="field"><label>Importe (bloqueado)</label><input readOnly value={fmt_$(editMov.importe)}/></div>
+              </div>
+            </div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setEditMov(null)}>Cancelar</button><button className="btn btn-acc" onClick={guardarEditMov}>Guardar</button></div>
           </div>
         </div>
       )}
