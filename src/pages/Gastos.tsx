@@ -29,6 +29,8 @@ export default function Gastos({ user, locales, localActivo }) {
   const [modal, setModal] = useState(false);
   const [pagarModal, setPagarModal] = useState<any>(null);
   const [gestionarModal, setGestionarModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [pagandoPlant, setPagandoPlant] = useState(false);
 
   const emptyForm = { fecha: toISO(today), local_id: localActivo ? String(localActivo) : "", categoria: "", tipo: "fijo", monto: "", detalle: "", cuenta: "MercadoPago", plantilla_id: null as number | null };
   const [form, setForm] = useState(emptyForm);
@@ -69,24 +71,30 @@ export default function Gastos({ user, locales, localActivo }) {
   const plantillasFiltradas = plantillas.filter(p => tipoFiltro === "todos" || p.tipo === tipoFiltro);
   const esPasado = hasta < toISO(today);
 
+  const getTipo = () => tipoFiltro === "todos" ? form.tipo : tipoFiltro;
+
   // ─── ACCIONES ──────────────────────────────────────────────────────────────
   const guardar = async () => {
-    if (!form.monto || !form.categoria) return;
+    if (saving || !form.monto || !form.categoria) return;
+    setSaving(true);
     try {
-      const nuevo = { ...form, id: genId("GASTO"), local_id: form.local_id ? parseInt(form.local_id) : null, monto: parseFloat(form.monto), plantilla_id: form.plantilla_id || null };
+      const tipo = getTipo();
+      const nuevo = { ...form, id: genId("GASTO"), tipo, local_id: form.local_id ? parseInt(form.local_id) : null, monto: parseFloat(form.monto), plantilla_id: form.plantilla_id || null };
       const { error: gErr } = await db.from("gastos").insert([nuevo]);
       if (gErr) throw new Error("Error guardando gasto: " + gErr.message);
 
       const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", form.cuenta).maybeSingle();
       if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - parseFloat(form.monto) }).eq("cuenta", form.cuenta);
 
-      const { error: mErr } = await db.from("movimientos").insert([{ id: genId("MOV"), fecha: form.fecha, cuenta: form.cuenta, tipo: "Gasto " + form.tipo, cat: form.categoria, importe: -parseFloat(form.monto), detalle: form.detalle || form.categoria, fact_id: null }]);
+      const { error: mErr } = await db.from("movimientos").insert([{ id: genId("MOV"), fecha: form.fecha, cuenta: form.cuenta, tipo: "Gasto " + tipo, cat: form.categoria, importe: -parseFloat(form.monto), detalle: form.detalle || form.categoria, fact_id: null }]);
       if (mErr) console.error("movimientos error (no crítico):", mErr);
 
       setModal(false); setForm(emptyForm); load();
     } catch (err: any) {
       console.error("Error guardando gasto:", err);
       alert("Error al guardar: " + err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -96,7 +104,8 @@ export default function Gastos({ user, locales, localActivo }) {
   };
 
   const confirmarPagoPlantilla = async () => {
-    if (!pagarModal || !pagoPlantForm.monto) return;
+    if (pagandoPlant || !pagarModal || !pagoPlantForm.monto) return;
+    setPagandoPlant(true);
     try {
       const monto = parseFloat(pagoPlantForm.monto);
       const nuevo = {
@@ -119,6 +128,8 @@ export default function Gastos({ user, locales, localActivo }) {
     } catch (err: any) {
       console.error("Error pago plantilla:", err);
       alert("Error: " + err.message);
+    } finally {
+      setPagandoPlant(false);
     }
   };
 
@@ -254,7 +265,7 @@ export default function Gastos({ user, locales, localActivo }) {
               <div className="field"><label>Monto $</label><input type="number" value={form.monto} onChange={e => setForm({ ...form, monto: e.target.value })} placeholder="0" /></div>
               <div className="field"><label>Detalle (opcional)</label><input value={form.detalle} onChange={e => setForm({ ...form, detalle: e.target.value })} placeholder="Descripción..." /></div>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar}>Guardar</button></div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={saving}>{saving ? "Guardando..." : "Guardar"}</button></div>
           </div>
         </div>
       )}
@@ -278,7 +289,7 @@ export default function Gastos({ user, locales, localActivo }) {
                 </select>
               </div>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setPagarModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={confirmarPagoPlantilla}>Confirmar pago</button></div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setPagarModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={confirmarPagoPlantilla} disabled={pagandoPlant}>{pagandoPlant ? "Procesando..." : "Confirmar pago"}</button></div>
           </div>
         </div>
       )}
