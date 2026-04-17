@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { CUENTAS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS } from "../lib/constants";
+import { CUENTAS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, COMISIONES_CATS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 
 const TIPOS = [
@@ -8,13 +8,15 @@ const TIPOS = [
   { id: "fijo", label: "Fijos" },
   { id: "variable", label: "Variables" },
   { id: "publicidad", label: "Publicidad" },
+  { id: "impuesto", label: "Impuestos" },
   { id: "comision", label: "Comisiones" },
 ];
-const ALL_CATS = [...GASTOS_FIJOS, ...GASTOS_VARIABLES, ...GASTOS_PUBLICIDAD, ...COMISIONES_CATS];
+const ALL_CATS = [...GASTOS_FIJOS, ...GASTOS_VARIABLES, ...GASTOS_PUBLICIDAD, ...GASTOS_IMPUESTOS, ...COMISIONES_CATS];
 const catsByTipo = (t: string) =>
   t === "fijo" ? GASTOS_FIJOS :
   t === "variable" ? GASTOS_VARIABLES :
   t === "publicidad" ? GASTOS_PUBLICIDAD :
+  t === "impuesto" ? GASTOS_IMPUESTOS :
   t === "comision" ? COMISIONES_CATS :
   ALL_CATS;
 
@@ -160,7 +162,7 @@ export default function Gastos({ user, locales, localActivo }) {
         <span style={{fontSize:11,color:"var(--muted)"}}>→</span>
         <input type="date" className="search" value={hasta} onChange={e=>setHasta(e.target.value)} style={{width:120}}/>
         <div style={{width:1,height:14,background:"var(--bd)",margin:"0 4px"}}/>
-        {[["todos","Todos"],["fijo","Fijos"],["variable","Variables"],["publicidad","Publicidad"],["comision","Comisiones"]].map(([id,l])=>(
+        {[["todos","Todos"],["fijo","Fijos"],["variable","Variables"],["publicidad","Publicidad"],["impuesto","Impuestos"],["comision","Comisiones"]].map(([id,l])=>(
           <div key={id} className={`pill ${tipoFiltro===id?"active":""}`} onClick={()=>setTipoFiltro(id)}>{l}</div>
         ))}
       </div>
