@@ -190,8 +190,9 @@ export function calcularLiquidacionFinal(params: LiquidacionFinalParams): Liquid
   // Proporcional del mes trabajado
   const proporcional_mes = valorDia * diaDelMes;
 
-  // Vacaciones no tomadas en dinero
-  const vacaciones_dinero = Math.max(0, vacaciones_acumuladas) * valorDia;
+  // Vacaciones no tomadas en dinero (LCT Art 155: sueldo/25)
+  const valor_dia_vacacional = sueldo_mensual / 25;
+  const vacaciones_dinero = Math.max(0, vacaciones_acumuladas) * valor_dia_vacacional;
 
   // SAC proporcional del semestre
   const inicioSem = fechaEg.getMonth() < 6
