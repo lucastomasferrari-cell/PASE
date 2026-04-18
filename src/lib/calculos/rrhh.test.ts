@@ -382,9 +382,10 @@ describe("calcularLiquidacionFinal", () => {
     expect(r.proporcional_mes).toBeCloseTo(valorDia * 15, 0);
   });
 
-  it("vacaciones no tomadas en dinero → días × valorDia", () => {
+  it("vacaciones no tomadas en dinero → días × (sueldo/25) (LCT Art 155)", () => {
     const r = calcularLiquidacionFinal(baseFinal);
-    expect(r.vacaciones_dinero).toBeCloseTo(10 * valorDia, 0);
+    const valorDiaVacacional = 600000 / 25; // 24000
+    expect(r.vacaciones_dinero).toBeCloseTo(10 * valorDiaVacacional, 0);
   });
 
   it("SAC proporcional al semestre", () => {
