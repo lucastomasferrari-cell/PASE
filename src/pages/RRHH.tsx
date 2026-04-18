@@ -129,7 +129,7 @@ export default function RRHH({ user, locales, localActivo }) {
     const map: Record<string, any> = {};
     (emps || []).forEach(e => {
       const existing = novs.find(n => n.empleado_id === e.id);
-      map[e.id] = existing || { inasistencias:0, presentismo:"MANTIENE", horas_extras:0, dobles:0, feriados:0, adelantos:0, vacaciones_dias:0, fecha_inicio_mes:null, observaciones:"", estado:"borrador" };
+      map[e.id] = existing || { inasistencias:0, presentismo:"MANTIENE", horas_extras:0, dobles:0, feriados:0, adelantos:0, fecha_inicio_mes:null, observaciones:"", estado:"borrador" };
     });
     setNovEmps(emps || []);
     setNovMap(map);
@@ -327,7 +327,7 @@ export default function RRHH({ user, locales, localActivo }) {
   };
 
   const saveNovedad = async (empId: string, nov: any) => {
-    const { id, estado, ...rest } = nov;
+    const { id, estado, vacaciones_dias: _vac, ...rest } = nov;
     await db.from("rrhh_novedades").upsert({
       ...(id ? { id } : {}), empleado_id: empId, mes: novMes, anio: novAnio,
       ...rest, estado: estado || "borrador", cargado_por: user?.id, updated_at: new Date().toISOString(),
@@ -346,7 +346,6 @@ export default function RRHH({ user, locales, localActivo }) {
       dobles: nov.dobles || 0,
       feriados: nov.feriados || 0,
       adelantos: nov.adelantos || 0,
-      vacaciones_dias: nov.vacaciones_dias || 0,
       fecha_inicio_mes: nov.fecha_inicio_mes || null,
       observaciones: nov.observaciones || "",
       estado: "confirmado",
@@ -548,7 +547,7 @@ export default function RRHH({ user, locales, localActivo }) {
                 <th style={{minWidth:120,fontSize:8}}>Empleado</th><th style={{width:50,fontSize:8}}>Inasist.</th><th style={{width:90,fontSize:8}}>Present.</th>
                 <th style={{width:50,fontSize:8}}>HS Ex.</th><th style={{width:50,fontSize:8}}>Dobles</th>
                 <th style={{width:50,fontSize:8}}>Ferid.</th><th style={{width:65,fontSize:8}}>Adel.$</th>
-                <th style={{width:50,fontSize:8}}>Vac.</th><th style={{width:100,fontSize:8}}>Inicio mes</th><th style={{width:90,fontSize:8}}>Obs.</th>
+                <th style={{width:100,fontSize:8}}>Inicio mes</th><th style={{width:90,fontSize:8}}>Obs.</th>
                 <th style={{textAlign:"right",width:80,fontSize:8}}>Preview</th><th style={{width:80,fontSize:8}}>Acción</th>
               </tr></thead>
               <tbody>{novEmps.map(emp => {
@@ -567,7 +566,6 @@ export default function RRHH({ user, locales, localActivo }) {
                     <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.dobles ?? 0} onChange={e => updateNov(emp.id, "dobles", parseFloat(e.target.value) || 0)} /></td>
                     <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.feriados ?? 0} onChange={e => updateNov(emp.id, "feriados", parseFloat(e.target.value) || 0)} /></td>
                     <td><input type="number" style={{...inp,width:55}} disabled={locked} value={nov.adelantos ?? 0} onChange={e => updateNov(emp.id, "adelantos", parseFloat(e.target.value) || 0)} /></td>
-                    <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.vacaciones_dias ?? 0} onChange={e => updateNov(emp.id, "vacaciones_dias", parseFloat(e.target.value) || 0)} /></td>
                     <td><input type="date" style={{...inp,width:90}} disabled={locked} value={nov.fecha_inicio_mes || ""} onChange={e => updateNov(emp.id, "fecha_inicio_mes", e.target.value || null)} /></td>
                     <td><input style={{...inp,width:80,textAlign:"left"}} disabled={locked} value={nov.observaciones || ""} onChange={e => updateNov(emp.id, "observaciones", e.target.value)} /></td>
                     <td style={{textAlign:"right"}}><span className="num" style={{color: preview < 0 ? "var(--danger)" : "var(--success)",fontSize:11}}>{fmt_$(preview)}</span></td>
