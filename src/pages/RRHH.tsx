@@ -689,8 +689,10 @@ export default function RRHH({ user, locales, localActivo }) {
                   id: gid, fecha: toISO(today), tipo: "fijo", categoria: "SUELDOS",
                   monto, detalle: desc + ` (${fp.cuenta})`, local_id: emp.local_id, cuenta: fp.cuenta,
                 }]);
-                const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", fp.cuenta).maybeSingle();
-                if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", fp.cuenta);
+                if (emp.local_id) {
+                  const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", fp.cuenta).eq("local_id", emp.local_id).maybeSingle();
+                  if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", fp.cuenta).eq("local_id", emp.local_id);
+                }
                 await db.from("movimientos").insert([{
                   id: genId("MOV"), fecha: toISO(today), cuenta: fp.cuenta,
                   tipo: "Pago Sueldo", cat: "SUELDOS", importe: -monto, detalle: desc,

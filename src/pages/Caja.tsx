@@ -18,12 +18,14 @@ export default function Caja({ localActivo }: any) {
     setLoading(true);
     let q = db.from("movimientos").select("*").order("fecha", {ascending: false}).limit(80);
     if (localActivo) q = q.eq("local_id", parseInt(String(localActivo)));
-    const [{data:m},{data:s}] = await Promise.all([
-      q,
-      db.from("saldos_caja").select("*"),
-    ]);
+    let sq = db.from("saldos_caja").select("*");
+    if (localActivo) sq = sq.eq("local_id", parseInt(String(localActivo)));
+    const [{data:m},{data:s}] = await Promise.all([q, sq]);
     setMovimientos(m||[]);
-    const obj={}; (s||[]).forEach(x=>obj[x.cuenta]=x.saldo); setSaldos(obj);
+    // Si no hay localActivo, se agregan saldos de todos los locales por cuenta
+    const obj: Record<string, number> = {};
+    (s||[]).forEach(x=> { obj[x.cuenta] = (obj[x.cuenta]||0) + (x.saldo||0); });
+    setSaldos(obj);
     setLoading(false);
   };
   useEffect(()=>{load();},[localActivo]);
@@ -33,16 +35,20 @@ export default function Caja({ localActivo }: any) {
 
   const guardar = async () => {
     if(!form.importe) return;
+    if(!localActivo) { alert("Seleccioná un local activo en el sidebar"); return; }
+    const lid = parseInt(String(localActivo));
     const importe = parseFloat(form.importe)*(form.esEgreso?-1:1);
     const {esEgreso,...rest} = form;
-    await db.from("movimientos").insert([{...rest,id:genId("MOV"),importe,fact_id:null,local_id:localActivo?parseInt(String(localActivo)):null}]);
+    await db.from("movimientos").insert([{...rest,id:genId("MOV"),importe,fact_id:null,local_id:lid}]);
     const actual = saldos[form.cuenta]||0;
-    await db.from("saldos_caja").update({saldo:actual+importe}).eq("cuenta",form.cuenta);
+    await db.from("saldos_caja").update({saldo:actual+importe}).eq("cuenta",form.cuenta).eq("local_id",lid);
     setModal(false); load();
   };
 
   const guardarSaldo = async (cuenta: string, nuevoSaldo: any) => {
-    await db.from("saldos_caja").update({saldo:parseFloat(nuevoSaldo)||0}).eq("cuenta",cuenta);
+    if(!localActivo) { alert("Seleccioná un local activo para editar el saldo"); return; }
+    const lid = parseInt(String(localActivo));
+    await db.from("saldos_caja").update({saldo:parseFloat(nuevoSaldo)||0}).eq("cuenta",cuenta).eq("local_id",lid);
     setEditSaldoModal(null); load();
   };
 
@@ -50,8 +56,10 @@ export default function Caja({ localActivo }: any) {
     if (!confirm("¿Eliminar este movimiento? Se revertirá su impacto en la caja.")) return;
     const { error } = await db.from("movimientos").delete().eq("id", m.id);
     if (error) { alert("Error al eliminar: " + error.message); return; }
-    const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", m.cuenta).maybeSingle();
-    if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - (m.importe || 0) }).eq("cuenta", m.cuenta);
+    if (m.local_id) {
+      const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", m.cuenta).eq("local_id", m.local_id).maybeSingle();
+      if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - (m.importe || 0) }).eq("cuenta", m.cuenta).eq("local_id", m.local_id);
+    }
     load();
   };
 

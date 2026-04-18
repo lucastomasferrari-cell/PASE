@@ -142,8 +142,10 @@ export default function Compras({ user, locales, localActivo }) {
       const prov = proveedores.find(p => p.id === f.prov_id);
       if (prov) await db.from("proveedores").update({ saldo: Math.max(0, (prov.saldo || 0) - monto) }).eq("id", f.prov_id);
 
-      const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", pagoForm.cuenta).maybeSingle();
-      if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", pagoForm.cuenta);
+      if (f.local_id) {
+        const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", pagoForm.cuenta).eq("local_id", f.local_id).maybeSingle();
+        if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", pagoForm.cuenta).eq("local_id", f.local_id);
+      }
 
       const { error: movErr } = await db.from("movimientos").insert([{
         id: genId("MOV"), fecha: pagoForm.fecha, cuenta: pagoForm.cuenta,

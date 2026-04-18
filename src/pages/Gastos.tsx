@@ -85,8 +85,11 @@ export default function Gastos({ user, locales, localActivo }) {
       const { error: gErr } = await db.from("gastos").insert([nuevo]);
       if (gErr) throw new Error("Error guardando gasto: " + gErr.message);
 
-      const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", form.cuenta).maybeSingle();
-      if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - parseFloat(form.monto) }).eq("cuenta", form.cuenta);
+      const lidForm = form.local_id ? parseInt(form.local_id) : null;
+      if (lidForm) {
+        const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", form.cuenta).eq("local_id", lidForm).maybeSingle();
+        if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - parseFloat(form.monto) }).eq("cuenta", form.cuenta).eq("local_id", lidForm);
+      }
 
       const { error: mErr } = await db.from("movimientos").insert([{ id: genId("MOV"), fecha: form.fecha, cuenta: form.cuenta, tipo: "Gasto " + tipo, cat: form.categoria, importe: -parseFloat(form.monto), detalle: form.detalle || form.categoria, fact_id: null, local_id: form.local_id ? parseInt(form.local_id) : null }]);
       if (mErr) console.error("movimientos error (no crítico):", mErr);
@@ -120,8 +123,10 @@ export default function Gastos({ user, locales, localActivo }) {
       const { error: gErr } = await db.from("gastos").insert([nuevo]);
       if (gErr) throw new Error("Error guardando: " + gErr.message);
 
-      const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", pagoPlantForm.cuenta).maybeSingle();
-      if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", pagoPlantForm.cuenta);
+      if (pagarModal.local_id) {
+        const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", pagoPlantForm.cuenta).eq("local_id", pagarModal.local_id).maybeSingle();
+        if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", pagoPlantForm.cuenta).eq("local_id", pagarModal.local_id);
+      }
 
       const { error: mErr } = await db.from("movimientos").insert([{ id: genId("MOV"), fecha: pagoPlantForm.fecha, cuenta: pagoPlantForm.cuenta, tipo: "Gasto " + pagarModal.tipo, cat: pagarModal.categoria, importe: -monto, detalle: pagarModal.nombre, fact_id: null, local_id: pagarModal.local_id || null }]);
       if (mErr) console.error("movimientos error (no crítico):", mErr);

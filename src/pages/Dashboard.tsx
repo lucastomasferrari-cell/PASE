@@ -11,15 +11,17 @@ export default function Dashboard({ locales, localActivo }) {
   const load = async (localId = localActivo) => {
     setLoading(true);
     const hoy = toISO(today);
+    let sq = db.from("saldos_caja").select("*");
+    if (localId) sq = sq.eq("local_id", parseInt(String(localId)));
     const [{data:saldos},{data:facturas},{data:remitos},{data:ventas},{data:provs}] = await Promise.all([
-      db.from("saldos_caja").select("*"),
+      sq,
       db.from("facturas").select("*").neq("estado","anulada"),
       db.from("remitos").select("*"),
       db.from("ventas").select("*").eq("fecha",hoy),
       db.from("proveedores").select("*").gt("saldo",0).eq("estado","Activo"),
     ]);
-    const saldosObj = {};
-    (saldos||[]).forEach(s=>saldosObj[s.cuenta]=s.saldo);
+    const saldosObj: Record<string, number> = {};
+    (saldos||[]).forEach(s => { saldosObj[s.cuenta] = (saldosObj[s.cuenta]||0) + (s.saldo||0); });
     const matchLocal = (rowLocal) => !localId || String(rowLocal) === String(localId);
     const fAct = (facturas||[]).filter(f=>f.estado!=="pagada"&&matchLocal(f.local_id));
     setStats({

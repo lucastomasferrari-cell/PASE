@@ -396,8 +396,10 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
               id: gastoId, fecha: toISO(today), tipo: "fijo", categoria: "SUELDOS",
               monto: total, detalle: desc, local_id: emp.local_id, cuenta: liqFinalCuenta,
             }]);
-            const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", liqFinalCuenta).maybeSingle();
-            if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - total }).eq("cuenta", liqFinalCuenta);
+            if (emp.local_id) {
+              const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", liqFinalCuenta).eq("local_id", emp.local_id).maybeSingle();
+              if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - total }).eq("cuenta", liqFinalCuenta).eq("local_id", emp.local_id);
+            }
             await db.from("movimientos").insert([{
               id: genId("MOV"), fecha: toISO(today), cuenta: liqFinalCuenta,
               tipo: "Liquidación Final", cat: "SUELDOS", importe: -total, detalle: desc,
