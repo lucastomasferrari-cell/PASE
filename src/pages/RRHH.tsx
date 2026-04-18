@@ -193,7 +193,9 @@ export default function RRHH({ user, locales, localActivo }) {
       const { data } = await db.from("rrhh_novedades").select("*, rrhh_liquidaciones(*)").eq("mes", mes).eq("anio", anio).in("empleado_id", empIds);
       novsMes = data || [];
     }
-    const sinCuil = activos.filter(e => !e.cuil || e.cuil.trim() === "").length;
+    const sinDatos = activos.filter(e =>
+      !e.cuil || !e.fecha_inicio || !e.sueldo_mensual || e.sueldo_mensual <= 0
+    ).length;
     const conNovedades = novsMes.length;
     const confirmadas = novsMes.filter(n => n.estado === "confirmado").length;
     const pagados = novsMes.filter(n => {
@@ -228,7 +230,7 @@ export default function RRHH({ user, locales, localActivo }) {
     const diasFinMes = Math.max(0, Math.ceil((finMes.getTime() - ahora.getTime()) / 86400000));
 
     setDashStats({
-      total: activos.length, sinCuil,
+      total: activos.length, sinDatos,
       conNovedades, confirmadas, pagados, estimado, totalSAC,
       proxSAC: proxSAC.toLocaleDateString("es-AR"), diasSAC, diasFinMes,
       mes, anio,
@@ -459,7 +461,7 @@ export default function RRHH({ user, locales, localActivo }) {
             <div className="kpi-label">Nómina</div>
             <div className="kpi-value" style={{fontSize:18}}>{d.total}</div>
             <div className="kpi-sub">empleados activos</div>
-            {d.sinCuil > 0 && <div className="kpi-sub" style={{color:"var(--warn)",marginTop:4}}>⚠ {d.sinCuil} sin CUIL registrado</div>}
+            {d.sinDatos > 0 && <div className="kpi-sub" style={{color:"var(--warn)",marginTop:4}}>⚠ {d.sinDatos} con datos incompletos</div>}
           </div>
           {/* Estado del mes */}
           <div className="kpi">
@@ -491,10 +493,15 @@ export default function RRHH({ user, locales, localActivo }) {
         <div className="panel">
           {empsFilt.length === 0 ? <div className="empty">Sin empleados</div> : (
             <div style={{overflowX:"auto"}}>
-            <table><thead><tr><th>Nombre</th><th>Local</th><th>Puesto</th><th style={{textAlign:"right"}}>Sueldo</th><th>Vacaciones</th><th>CUIL</th><th>Activo</th><th></th></tr></thead>
+            <table><thead><tr><th>Nombre</th><th>Local</th><th>Puesto</th><th style={{textAlign:"right"}}>Sueldo</th><th>Vacaciones</th><th>Alertas</th><th>Activo</th><th></th></tr></thead>
             <tbody>{empsFilt.map(e => {
               const vac = calcularVacaciones(e.fecha_inicio, vacTomadas[e.id] || 0);
               const vacColor = vac >= 14 ? "var(--success)" : vac >= 7 ? "var(--warn)" : "var(--muted2)";
+              const alertas: string[] = [];
+              if (!e.cuil || e.cuil.trim() === "") alertas.push("Sin CUIL");
+              if (!e.fecha_inicio) alertas.push("Sin fecha inicio");
+              if (!e.sueldo_mensual || e.sueldo_mensual <= 0) alertas.push("Sin sueldo");
+              if (!e.puesto) alertas.push("Sin puesto");
               return (
                 <tr key={e.id} style={{opacity: e.activo === false ? 0.4 : 1}}>
                   <td style={{fontWeight:500,fontSize:12}}>{e.apellido}, {e.nombre}</td>
@@ -502,7 +509,10 @@ export default function RRHH({ user, locales, localActivo }) {
                   <td><span className="badge b-muted" style={{fontSize:8}}>{e.puesto}</span></td>
                   <td style={{textAlign:"right"}}><span className="num kpi-acc">{fmt_$(e.sueldo_mensual)}</span></td>
                   <td style={{fontSize:11,color:vacColor}}>{vac >= 14 && "🌴 "}{vac.toFixed(1)}d</td>
-                  <td className="mono" style={{fontSize:9,color:e.cuil ? "var(--muted2)" : "var(--warn)"}}>{e.cuil || "⚠ sin CUIL"}</td>
+                  <td>{alertas.length > 0
+                    ? <span className="badge b-warn" style={{fontSize:8}} title={alertas.join(", ")}>⚠ {alertas.length} alerta{alertas.length > 1 ? "s" : ""}</span>
+                    : <span className="badge b-success" style={{fontSize:8}}>✓ Completo</span>
+                  }</td>
                   <td><span className={`badge ${e.activo !== false ? "b-success" : "b-muted"}`} style={{fontSize:8}}>{e.activo !== false ? "Si" : "No"}</span></td>
                   <td><div style={{display:"flex",gap:4}}>
                     <button className="btn btn-ghost btn-sm" style={{fontSize:9}} onClick={() => setLegajoId(e.id)}>Legajo</button>
