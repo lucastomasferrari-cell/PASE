@@ -9,7 +9,6 @@ export default function Caja({ localActivo }: any) {
   const [saldos, setSaldos] = useState<Record<string, number>>({});
   const [modal, setModal] = useState(false);
   const [editSaldoModal, setEditSaldoModal] = useState<any>(null);
-  const [editMov, setEditMov] = useState<any>(null);
   const [filtCuenta, setFiltCuenta] = useState("Todas");
   const [mostrarAnulados, setMostrarAnulados] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -108,51 +107,6 @@ export default function Caja({ localActivo }: any) {
     load();
   };
 
-  const guardarEditMov = async () => {
-    if (!editMov) return;
-    if (!editMov.justificativo?.trim()) { alert("El justificativo es obligatorio"); return; }
-    const original = movimientos.find(m => m.id === editMov.id);
-    const lid = editMov.local_id;
-
-    if (original && lid && (original.importe !== parseFloat(editMov.importe) || original.cuenta !== editMov.cuenta)) {
-      const { data: cajaOrig } = await db.from("saldos_caja").select("saldo")
-        .eq("cuenta", original.cuenta).eq("local_id", lid).maybeSingle();
-      if (cajaOrig) await db.from("saldos_caja")
-        .update({ saldo: (cajaOrig.saldo || 0) - (original.importe || 0) })
-        .eq("cuenta", original.cuenta).eq("local_id", lid);
-
-      const { data: cajaNueva } = await db.from("saldos_caja").select("saldo")
-        .eq("cuenta", editMov.cuenta).eq("local_id", lid).maybeSingle();
-      if (cajaNueva) await db.from("saldos_caja")
-        .update({ saldo: (cajaNueva.saldo || 0) + (parseFloat(editMov.importe) || 0) })
-        .eq("cuenta", editMov.cuenta).eq("local_id", lid);
-    }
-
-    await db.from("movimientos").update({
-      fecha: editMov.fecha,
-      detalle: editMov.detalle,
-      cat: editMov.cat || null,
-      importe: parseFloat(editMov.importe) || original?.importe,
-      cuenta: editMov.cuenta,
-      editado: true,
-      editado_motivo: editMov.justificativo,
-      editado_at: new Date().toISOString(),
-    }).eq("id", editMov.id);
-
-    await db.from("auditoria").insert([{
-      tabla: "movimientos", accion: "EDICION",
-      detalle: JSON.stringify({
-        id: editMov.id,
-        antes: original,
-        despues: editMov,
-        justificativo: editMov.justificativo,
-      }),
-      fecha: new Date().toISOString(),
-    }]);
-
-    setEditMov(null); load();
-  };
-
   const cc = c => c==="Caja Chica"?"var(--acc)":c==="Caja Mayor"?"var(--acc2)":c==="MercadoPago"?"var(--acc3)":"var(--info)";
 
   return (
@@ -203,8 +157,7 @@ export default function Caja({ localActivo }: any) {
               </td>
               <td>
                 <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
-                  {!m.anulado && <button className="btn btn-ghost btn-sm" onClick={() => setEditMov({...m})}>Editar</button>}
-                  {!m.anulado && <button className="btn btn-danger btn-sm" onClick={() => eliminarMov(m)}>✕</button>}
+                  {!m.anulado && <button className="btn btn-danger btn-sm" onClick={() => eliminarMov(m)}>Anular</button>}
                 </div>
               </td>
             </tr>
@@ -245,53 +198,6 @@ export default function Caja({ localActivo }: any) {
             <div className="modal-ft">
               <button className="btn btn-sec" onClick={() => setEditSaldoModal(null)}>Cancelar</button>
               <button className="btn btn-acc" onClick={guardarAjusteSaldo}>Confirmar ajuste</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {editMov && (
-        <div className="overlay" onClick={() => setEditMov(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-hd">
-              <div className="modal-title">Editar Movimiento</div>
-              <button className="close-btn" onClick={() => setEditMov(null)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <div className="form2">
-                <div className="field"><label>Fecha</label>
-                  <input type="date" value={editMov.fecha} onChange={e => setEditMov({...editMov, fecha: e.target.value})}/>
-                </div>
-                <div className="field"><label>Categoría</label>
-                  <select value={editMov.cat||""} onChange={e => setEditMov({...editMov, cat: e.target.value})}>
-                    <option value="">Sin categoría</option>
-                    {CATEGORIAS_COMPRA.map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="form2">
-                <div className="field"><label>Cuenta</label>
-                  <select value={editMov.cuenta} onChange={e => setEditMov({...editMov, cuenta: e.target.value})}>
-                    {CUENTAS.map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div className="field"><label>Importe $</label>
-                  <input type="number" value={editMov.importe}
-                    onChange={e => setEditMov({...editMov, importe: e.target.value})}/>
-                </div>
-              </div>
-              <div className="field"><label>Detalle</label>
-                <input value={editMov.detalle||""} onChange={e => setEditMov({...editMov, detalle: e.target.value})}/>
-              </div>
-              <div className="field"><label>Justificativo de la edición *</label>
-                <input value={editMov.justificativo||""}
-                  onChange={e => setEditMov({...editMov, justificativo: e.target.value})}
-                  placeholder="Motivo de la modificación..."/>
-              </div>
-            </div>
-            <div className="modal-ft">
-              <button className="btn btn-sec" onClick={() => setEditMov(null)}>Cancelar</button>
-              <button className="btn btn-acc" onClick={guardarEditMov}>Guardar</button>
             </div>
           </div>
         </div>
