@@ -26,14 +26,14 @@ export default function EERR({ locales, localActivo }) {
         db.from("gastos").select("*").gte("fecha",desde).lte("fecha",hasta),
         db.from("rrhh_liquidaciones")
           .select("*, rrhh_novedades(mes, anio, empleado_id, rrhh_empleados(nombre, apellido, puesto, local_id))")
-          .eq("estado","pagado")
+          .in("estado", ["pendiente", "pagado"])
           .eq("anulado", false)
-          .gte("pagado_at", desde+"T00:00:00")
-          .lte("pagado_at", hasta+"T23:59:59"),
+          .gte("calculado_at", desde+"T00:00:00")
+          .lte("calculado_at", hasta+"T23:59:59"),
       ]);
       setVentas((v||[]).filter(x=>!lid||parseInt(x.local_id)===lid));
       setFacturas((f||[]).filter(x=>!lid||parseInt(x.local_id)===lid));
-      setGastos((g||[]).filter(x=>x.categoria!=="SUELDOS"&&(!lid||!x.local_id||parseInt(x.local_id)===lid)));
+      setGastos((g||[]).filter(x => x.categoria !== "SUELDOS" && (!lid || parseInt(x.local_id) === lid)));
       const liqFiltradas=(liqData||[]).filter(l=>{
         const emp=l.rrhh_novedades?.rrhh_empleados;
         return !lid||parseInt(emp?.local_id)===lid;
