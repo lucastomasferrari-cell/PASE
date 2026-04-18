@@ -148,15 +148,20 @@ export default function RRHH({ user, locales, localActivo }) {
     }
     const merged = (emps || []).map(emp => {
       const nov = novs.find(n => n.empleado_id === emp.id);
-      let liq = nov ? (Array.isArray(nov.rrhh_liquidaciones) ? nov.rrhh_liquidaciones : [])[0] : null;
-      // Si la novedad está confirmada pero no tiene liquidación, calcularla on-the-fly
-      if (nov && !liq) {
+      if (!nov) return null;
+
+      const liqArr = Array.isArray(nov.rrhh_liquidaciones) ? nov.rrhh_liquidaciones : [];
+      let liq = liqArr[0] || null;
+
+      // Solo generar on-the-fly si NO hay liquidación real en DB
+      if (!liq) {
         const vd = valoresDoble.find(v => v.puesto === emp.puesto)?.valor || 0;
         const calc = calcLiquidacion(emp, nov, vd);
         liq = { ...calc, estado: "pendiente", _novedadId: nov.id, _generated: true };
       }
+
       return { emp, nov, liq };
-    }).filter(r => r.nov && r.liq);
+    }).filter(Boolean);
     setPagoData(merged);
     setPagoLoading(false);
   };
