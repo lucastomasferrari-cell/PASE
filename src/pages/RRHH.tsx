@@ -156,7 +156,7 @@ export default function RRHH({ user, locales, localActivo }) {
         liq = { ...calc, estado: "pendiente", _novedadId: nov.id, _generated: true };
       }
       return { emp, nov, liq };
-    }).filter(r => r.nov);
+    }).filter(r => r.nov && r.liq);
     setPagoData(merged);
     setPagoLoading(false);
   };
