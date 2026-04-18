@@ -159,7 +159,7 @@ export function calcularTotalLiquidacion(params: LiquidacionParams): Liquidacion
     total_dobles + total_feriados + total_vacaciones;
   const monto_presentismo = calcularPresentismo(sueldo_mensual, presentismo_mantiene);
   const subtotal2 = subtotal1 + monto_presentismo;
-  const total_a_pagar = subtotal2 - Math.max(0, adelantos) - Math.max(0, pagos_dobles_realizados);
+  const total_a_pagar = Math.round(subtotal2 - Math.max(0, adelantos) - Math.max(0, pagos_dobles_realizados));
 
   return {
     sueldo_base,

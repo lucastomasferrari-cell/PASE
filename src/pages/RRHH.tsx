@@ -171,7 +171,7 @@ export default function RRHH({ user, locales, localActivo }) {
       if (!liq) {
         const vd = valoresDoble.find(v => v.puesto === emp.puesto)?.valor || 0;
         const calc = calcLiquidacion(emp, nov, vd);
-        liq = { ...calc, estado: "pendiente", _novedadId: nov.id, _generated: true };
+        liq = { ...calc, total_a_pagar: Math.round(calc.total_a_pagar), estado: "pendiente", _novedadId: nov.id, _generated: true };
       }
 
       return { emp, nov, liq };
@@ -651,7 +651,7 @@ export default function RRHH({ user, locales, localActivo }) {
                       {esDueno && !pagado && (
                         <button className="btn btn-success btn-sm" onClick={() => {
                           setPagoModal({ emp, nov, liq });
-                          setFormasPago([{ cuenta: "Caja Efectivo", monto: String(liq.total_a_pagar) }]);
+                          setFormasPago([{ cuenta: "Caja Efectivo", monto: String(Math.round(Number(liq.total_a_pagar || 0))) }]);
                         }}>Pagar</button>
                       )}
                     </td>
@@ -668,9 +668,9 @@ export default function RRHH({ user, locales, localActivo }) {
 
         {pagoModal && (() => {
           const { emp, nov, liq } = pagoModal;
-          const total = Math.round(Number(liq.total_a_pagar || 0) * 100) / 100;
-          const asignado = Math.round(formasPago.reduce((s, f) => s + (parseFloat(f.monto) || 0), 0) * 100) / 100;
-          const restante = Math.round((total - asignado) * 100) / 100;
+          const total = Math.round(Number(liq.total_a_pagar || 0));
+          const asignado = Math.round(formasPago.reduce((s, f) => s + (parseFloat(f.monto) || 0), 0));
+          const restante = total - asignado;
           const puedeConfirmar = restante === 0 && formasPago.length > 0 && formasPago.every(f => parseFloat(f.monto) > 0);
           const cerrarModal = () => { setPagoModal(null); setFormasPago([]); };
 
