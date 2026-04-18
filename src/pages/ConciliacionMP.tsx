@@ -286,6 +286,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
       importe:-montoAbs,
       detalle:nuevoGastoForm.detalle||conciliarModal.descripcion||"",
       fact_id:null,
+      local_id:conciliarModal.local_id||null,
     }]);
     await vincularMovimiento("gasto",nuevoId);
   };

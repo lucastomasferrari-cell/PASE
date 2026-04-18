@@ -69,7 +69,7 @@ export default function Remitos({ user, locales, localActivo }) {
     if(prov) await db.from("proveedores").update({saldo:Math.max(0,(prov.saldo||0)-monto)}).eq("id",r.prov_id);
     const {data:caja} = await db.from("saldos_caja").select("saldo").eq("cuenta",pagoForm.cuenta).single();
     if(caja) await db.from("saldos_caja").update({saldo:(caja.saldo||0)-monto}).eq("cuenta",pagoForm.cuenta);
-    await db.from("movimientos").insert([{id:genId("MOV"),fecha:pagoForm.fecha,cuenta:pagoForm.cuenta,tipo:"Pago Proveedor",cat:r.cat,importe:-monto,detalle:`Pago remito ${r.nro} - ${prov?.nombre||""}`,factura_id:null}]);
+    await db.from("movimientos").insert([{id:genId("MOV"),fecha:pagoForm.fecha,cuenta:pagoForm.cuenta,tipo:"Pago Proveedor",cat:r.cat,importe:-monto,detalle:`Pago remito ${r.nro} - ${prov?.nombre||""}`,factura_id:null,local_id:r.local_id||null}]);
     setPagandoRem(false); setPagarModal(null); load();
   };
 

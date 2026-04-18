@@ -35,7 +35,7 @@ export default function Caja({ localActivo }: any) {
     if(!form.importe) return;
     const importe = parseFloat(form.importe)*(form.esEgreso?-1:1);
     const {esEgreso,...rest} = form;
-    await db.from("movimientos").insert([{...rest,id:genId("MOV"),importe,fact_id:null}]);
+    await db.from("movimientos").insert([{...rest,id:genId("MOV"),importe,fact_id:null,local_id:localActivo?parseInt(String(localActivo)):null}]);
     const actual = saldos[form.cuenta]||0;
     await db.from("saldos_caja").update({saldo:actual+importe}).eq("cuenta",form.cuenta);
     setModal(false); load();

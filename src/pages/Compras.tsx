@@ -148,7 +148,8 @@ export default function Compras({ user, locales, localActivo }) {
       const { error: movErr } = await db.from("movimientos").insert([{
         id: genId("MOV"), fecha: pagoForm.fecha, cuenta: pagoForm.cuenta,
         tipo: "Pago Proveedor", cat: f.cat, importe: -monto,
-        detalle: `Pago ${prov?.nombre || ""} - Fact ${f.nro}`, fact_id: f.id
+        detalle: `Pago ${prov?.nombre || ""} - Fact ${f.nro}`, fact_id: f.id,
+        local_id: f.local_id || null,
       }]);
       if (movErr) console.error("movimientos insert error (no crítico):", movErr);
 
