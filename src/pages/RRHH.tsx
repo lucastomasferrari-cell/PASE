@@ -139,21 +139,35 @@ export default function RRHH({ user, locales, localActivo }) {
   const loadPagos = async () => {
     if (!pagoLocal) return;
     setPagoLoading(true);
-    const { data: emps } = await db.from("rrhh_empleados").select("*").eq("local_id", parseInt(pagoLocal)).eq("activo", true).order("apellido");
+
+    const { data: emps } = await db.from("rrhh_empleados")
+      .select("*").eq("local_id", parseInt(pagoLocal)).eq("activo", true).order("apellido");
     const empIds = (emps || []).map(e => e.id);
-    let novs: any[] = [];
-    if (empIds.length) {
-      const { data } = await db.from("rrhh_novedades").select("*, rrhh_liquidaciones(*)").eq("mes", pagoMes).eq("anio", pagoAnio).eq("estado", "confirmado").in("empleado_id", empIds);
-      novs = data || [];
+
+    if (!empIds.length) { setPagoData([]); setPagoLoading(false); return; }
+
+    const { data: novs } = await db.from("rrhh_novedades")
+      .select("*")
+      .eq("mes", pagoMes).eq("anio", pagoAnio)
+      .eq("estado", "confirmado")
+      .in("empleado_id", empIds);
+
+    const novIds = (novs || []).map(n => n.id);
+
+    // Query separada para liquidaciones (evita problemas con nested select y FK)
+    let liqs: any[] = [];
+    if (novIds.length) {
+      const { data } = await db.from("rrhh_liquidaciones")
+        .select("*").in("novedad_id", novIds);
+      liqs = data || [];
     }
+
     const merged = (emps || []).map(emp => {
-      const nov = novs.find(n => n.empleado_id === emp.id);
+      const nov = novs?.find(n => n.empleado_id === emp.id);
       if (!nov) return null;
 
-      const liqArr = Array.isArray(nov.rrhh_liquidaciones) ? nov.rrhh_liquidaciones : [];
-      let liq = liqArr[0] || null;
+      let liq = liqs.find(l => l.novedad_id === nov.id) || null;
 
-      // Solo generar on-the-fly si NO hay liquidación real en DB
       if (!liq) {
         const vd = valoresDoble.find(v => v.puesto === emp.puesto)?.valor || 0;
         const calc = calcLiquidacion(emp, nov, vd);
@@ -162,6 +176,7 @@ export default function RRHH({ user, locales, localActivo }) {
 
       return { emp, nov, liq };
     }).filter(Boolean);
+
     setPagoData(merged);
     setPagoLoading(false);
   };
