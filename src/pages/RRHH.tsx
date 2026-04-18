@@ -674,6 +674,7 @@ export default function RRHH({ user, locales, localActivo }) {
                 await db.from("movimientos").insert([{
                   id: genId("MOV"), fecha: toISO(today), cuenta: fp.cuenta,
                   tipo: "Pago Sueldo", cat: "SUELDOS", importe: -monto, detalle: desc,
+                  local_id: emp.local_id,
                 }]);
                 gastoIds.push(gid);
               }

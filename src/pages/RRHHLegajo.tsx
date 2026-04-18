@@ -401,6 +401,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
             await db.from("movimientos").insert([{
               id: genId("MOV"), fecha: toISO(today), cuenta: liqFinalCuenta,
               tipo: "Liquidación Final", cat: "SUELDOS", importe: -total, detalle: desc,
+              local_id: emp.local_id,
             }]);
             await db.from("rrhh_pagos_especiales").insert([{
               empleado_id: emp.id, tipo: "liquidacion_final", monto: total,

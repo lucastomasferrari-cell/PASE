@@ -4,7 +4,7 @@ import { CATEGORIAS_COMPRA, CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 
 // ─── CAJA ─────────────────────────────────────────────────────────────────────
-export default function Caja() {
+export default function Caja({ localActivo }: any) {
   const [movimientos, setMovimientos] = useState<any[]>([]);
   const [saldos, setSaldos] = useState<Record<string, number>>({});
   const [modal, setModal] = useState(false);
@@ -16,15 +16,17 @@ export default function Caja() {
 
   const load = async () => {
     setLoading(true);
+    let q = db.from("movimientos").select("*").order("fecha", {ascending: false}).limit(80);
+    if (localActivo) q = q.eq("local_id", parseInt(String(localActivo)));
     const [{data:m},{data:s}] = await Promise.all([
-      db.from("movimientos").select("*").order("fecha",{ascending:false}).limit(80),
+      q,
       db.from("saldos_caja").select("*"),
     ]);
     setMovimientos(m||[]);
     const obj={}; (s||[]).forEach(x=>obj[x.cuenta]=x.saldo); setSaldos(obj);
     setLoading(false);
   };
-  useEffect(()=>{load();},[]);
+  useEffect(()=>{load();},[localActivo]);
 
   const mFilt = movimientos.filter(m=>filtCuenta==="Todas"||m.cuenta===filtCuenta);
   const totalLiquidez = Object.values(saldos).reduce((a,b)=>a+b,0);
