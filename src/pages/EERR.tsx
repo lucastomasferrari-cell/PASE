@@ -8,6 +8,7 @@ export default function EERR({ locales, localActivo }) {
   const [facturas,setFacturas]=useState([]);
   const [gastos,setGastos]=useState([]);
   const [sueldos,setSueldos]=useState(0);
+  const [sueldosDetalle,setSueldosDetalle]=useState<any[]>([]);
   const [mes,setMes]=useState(toISO(today).slice(0,7));
   const [loading,setLoading]=useState(true);
 
@@ -18,16 +19,25 @@ export default function EERR({ locales, localActivo }) {
       const lastDay=new Date(yr,mo,0).getDate();
       const desde=mes+"-01", hasta=mes+"-"+String(lastDay).padStart(2,"0");
       const lid=localActivo?parseInt(localActivo):null;
-      const [{data:v},{data:f},{data:g},{data:m}]=await Promise.all([
+      const [{data:v},{data:f},{data:g},{data:liqData}]=await Promise.all([
         db.from("ventas").select("*").gte("fecha",desde).lte("fecha",hasta),
         db.from("facturas").select("*").gte("fecha",desde).lte("fecha",hasta).neq("estado","anulada"),
         db.from("gastos").select("*").gte("fecha",desde).lte("fecha",hasta),
-        db.from("movimientos").select("*").gte("fecha",desde).lte("fecha",hasta).eq("cat","SUELDOS"),
+        db.from("rrhh_liquidaciones")
+          .select("*, rrhh_novedades(mes, anio, empleado_id, rrhh_empleados(nombre, apellido, puesto, local_id))")
+          .eq("estado","pagado")
+          .gte("pagado_at", desde+"T00:00:00")
+          .lte("pagado_at", hasta+"T23:59:59"),
       ]);
       setVentas((v||[]).filter(x=>!lid||parseInt(x.local_id)===lid));
       setFacturas((f||[]).filter(x=>!lid||parseInt(x.local_id)===lid));
-      setGastos((g||[]).filter(x=>!lid||!x.local_id||parseInt(x.local_id)===lid));
-      setSueldos((m||[]).reduce((s,x)=>s+Math.abs(x.importe||0),0));
+      setGastos((g||[]).filter(x=>x.categoria!=="SUELDOS"&&(!lid||!x.local_id||parseInt(x.local_id)===lid)));
+      const liqFiltradas=(liqData||[]).filter(l=>{
+        const emp=l.rrhh_novedades?.rrhh_empleados;
+        return !lid||parseInt(emp?.local_id)===lid;
+      });
+      setSueldosDetalle(liqFiltradas);
+      setSueldos(liqFiltradas.reduce((s,l)=>s+(l.total_a_pagar||0),0));
       setLoading(false);
     };
     load();
