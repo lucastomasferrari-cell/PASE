@@ -9,6 +9,7 @@ export default function EERR({ locales, localActivo }) {
   const [gastos,setGastos]=useState([]);
   const [sueldos,setSueldos]=useState(0);
   const [sueldosDetalle,setSueldosDetalle]=useState<any[]>([]);
+  const [sueldosExpanded,setSueldosExpanded]=useState(false);
   const [mes,setMes]=useState(toISO(today).slice(0,7));
   const [loading,setLoading]=useState(true);
 
@@ -124,7 +125,37 @@ export default function EERR({ locales, localActivo }) {
             <ESection title="MERCADERÍA (CMV)" items={porCatCMV} total={totalCMV} color="var(--warn)"/>
             <ESection title="GASTOS FIJOS" items={porCatFijos} total={totalGastosFijos} color="var(--danger)"/>
             <ESection title="GASTOS VARIABLES" items={porCatVar} total={totalGastosVar} color="var(--danger)"/>
-            <div className="eerr-section-title">SUELDOS — <span style={{color:"var(--danger)"}}>{fmt_$(sueldos)}</span> <span style={{color:"var(--muted)"}}>{pct(sueldos)}</span></div>
+            <div
+              className="eerr-section-title"
+              style={{cursor:"pointer",userSelect:"none"}}
+              onClick={()=>setSueldosExpanded(e=>!e)}
+            >
+              SUELDOS — <span style={{color:"var(--danger)"}}>{fmt_$(sueldos)}</span>{" "}
+              <span style={{color:"var(--muted)"}}>{pct(sueldos)}</span>
+              <span style={{color:"var(--muted2)",fontSize:10,marginLeft:8}}>{sueldosExpanded?"▲ ocultar":"▼ ver detalle"}</span>
+            </div>
+            {sueldosExpanded&&(
+              <div style={{paddingBottom:8}}>
+                {sueldosDetalle.length===0?(
+                  <div className="eerr-row"><span style={{fontSize:11,color:"var(--muted2)"}}>Sin sueldos pagados este mes</span></div>
+                ):sueldosDetalle.map((liq,i)=>{
+                  const emp=liq.rrhh_novedades?.rrhh_empleados;
+                  if(!emp) return null;
+                  return (
+                    <div key={i} className="eerr-row">
+                      <span style={{fontSize:11,color:"var(--muted2)"}}>
+                        {emp.apellido}, {emp.nombre}
+                        <span style={{fontSize:9,color:"var(--muted)",marginLeft:6}}>{emp.puesto}</span>
+                      </span>
+                      <div>
+                        <span className="num" style={{color:"var(--danger)"}}>{fmt_$(liq.total_a_pagar)}</span>
+                        <span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(liq.total_a_pagar)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             <ESection title="PUBLICIDAD Y MKT" items={porCatPub} total={totalPublicidad} color="var(--info)"/>
             <ESection title="COMISIONES" items={porCatCom} total={totalComisiones} color="var(--acc2)"/>
           </div>
