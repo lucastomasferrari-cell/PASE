@@ -55,6 +55,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
   const [liqFinalData, setLiqFinalData] = useState<any>(null);
   const [liqFinalCuenta, setLiqFinalCuenta] = useState("Caja Efectivo");
   const [liqFinalOverrides, setLiqFinalOverrides] = useState<Record<string, string>>({});
+  const [liqFinalLoading, setLiqFinalLoading] = useState(false);
 
   const [toast, setToast] = useState("");
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
@@ -382,40 +383,45 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
           }, 0);
 
           const confirmarLiqFinal = async () => {
-            if (!liqFinalData) return;
-            const { data: existing } = await db.from("rrhh_pagos_especiales")
-              .select("id").eq("empleado_id", emp.id).eq("tipo", "liquidacion_final");
-            if (existing && existing.length > 0) {
-              alert("Ya existe una liquidación final para este empleado");
-              return;
-            }
-            const desc = `Liquidación final ${emp.apellido} ${emp.nombre}`;
-            const gastoId = genId("GASTO");
+            if (!liqFinalData || liqFinalLoading) return;
+            setLiqFinalLoading(true);
+            try {
+              const { data: existing } = await db.from("rrhh_pagos_especiales")
+                .select("id").eq("empleado_id", emp.id).eq("tipo", "liquidacion_final");
+              if (existing && existing.length > 0) {
+                alert("Ya existe una liquidación final para este empleado");
+                return;
+              }
+              const desc = `Liquidación final ${emp.apellido} ${emp.nombre}`;
+              const gastoId = genId("GASTO");
 
-            await db.from("gastos").insert([{
-              id: gastoId, fecha: toISO(today), tipo: "fijo", categoria: "SUELDOS",
-              monto: total, detalle: desc, local_id: emp.local_id, cuenta: liqFinalCuenta,
-            }]);
-            if (emp.local_id) {
-              const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", liqFinalCuenta).eq("local_id", emp.local_id).maybeSingle();
-              if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - total }).eq("cuenta", liqFinalCuenta).eq("local_id", emp.local_id);
+              await db.from("rrhh_pagos_especiales").insert([{
+                empleado_id: emp.id, tipo: "liquidacion_final", monto: total,
+                gasto_id: gastoId, pagado_por: user?.id,
+              }]);
+              await db.from("gastos").insert([{
+                id: gastoId, fecha: toISO(today), tipo: "fijo", categoria: "SUELDOS",
+                monto: total, detalle: desc, local_id: emp.local_id, cuenta: liqFinalCuenta,
+              }]);
+              if (emp.local_id) {
+                const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", liqFinalCuenta).eq("local_id", emp.local_id).maybeSingle();
+                if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - total }).eq("cuenta", liqFinalCuenta).eq("local_id", emp.local_id);
+              }
+              await db.from("movimientos").insert([{
+                id: genId("MOV"), fecha: toISO(today), cuenta: liqFinalCuenta,
+                tipo: "Liquidación Final", cat: "SUELDOS", importe: -total, detalle: desc,
+                local_id: emp.local_id,
+              }]);
+              await db.from("rrhh_empleados").update({
+                activo: false, fecha_egreso: liqFinalForm.fecha_egreso, motivo_baja: liqFinalForm.motivo,
+                vacaciones_dias_acumulados: 0, aguinaldo_acumulado: 0,
+              }).eq("id", emp.id);
+              setLiqFinalModal(false);
+              showToast("Liquidación final procesada");
+              loadAll();
+            } finally {
+              setLiqFinalLoading(false);
             }
-            await db.from("movimientos").insert([{
-              id: genId("MOV"), fecha: toISO(today), cuenta: liqFinalCuenta,
-              tipo: "Liquidación Final", cat: "SUELDOS", importe: -total, detalle: desc,
-              local_id: emp.local_id,
-            }]);
-            await db.from("rrhh_pagos_especiales").insert([{
-              empleado_id: emp.id, tipo: "liquidacion_final", monto: total,
-              gasto_id: gastoId, pagado_por: user?.id,
-            }]);
-            await db.from("rrhh_empleados").update({
-              activo: false, fecha_egreso: liqFinalForm.fecha_egreso, motivo_baja: liqFinalForm.motivo,
-              vacaciones_dias_acumulados: 0, aguinaldo_acumulado: 0,
-            }).eq("id", emp.id);
-            setLiqFinalModal(false);
-            showToast("Liquidación final procesada");
-            loadAll();
           };
 
           return (
@@ -465,7 +471,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
                 </div>
                 <div className="modal-ft">
                   <button className="btn btn-sec" onClick={() => setLiqFinalModal(false)}>Cancelar</button>
-                  <button className="btn btn-danger" onClick={confirmarLiqFinal}>Confirmar y pagar</button>
+                  <button className="btn btn-danger" disabled={liqFinalLoading} onClick={confirmarLiqFinal}>{liqFinalLoading ? "Procesando..." : "Confirmar y pagar"}</button>
                 </div>
               </div>
             </div>
