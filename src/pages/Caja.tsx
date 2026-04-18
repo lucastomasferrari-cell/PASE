@@ -81,6 +81,24 @@ export default function Caja({ localActivo }: any) {
         .eq("cuenta", m.cuenta).eq("local_id", m.local_id);
     }
 
+    // Si es un pago de sueldo, propagamos la anulación a rrhh_liquidaciones
+    // así el EERR lo excluye. Match fragilito por (detalle+fecha+cuenta+local_id)
+    // pero es la única traza disponible entre movimientos y gastos hoy.
+    if (m.cat === "SUELDOS" && m.local_id) {
+      const { data: gastoMatch } = await db.from("gastos")
+        .select("id")
+        .eq("detalle", m.detalle)
+        .eq("fecha", m.fecha)
+        .eq("cuenta", m.cuenta)
+        .eq("local_id", m.local_id)
+        .maybeSingle();
+      if (gastoMatch?.id) {
+        await db.from("rrhh_liquidaciones")
+          .update({ anulado: true })
+          .eq("gasto_id", gastoMatch.id);
+      }
+    }
+
     await db.from("auditoria").insert([{
       tabla: "movimientos", accion: "ANULACION",
       detalle: JSON.stringify({ movimiento: m, justificativo: motivo }),

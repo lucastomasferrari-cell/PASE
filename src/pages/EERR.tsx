@@ -27,6 +27,7 @@ export default function EERR({ locales, localActivo }) {
         db.from("rrhh_liquidaciones")
           .select("*, rrhh_novedades(mes, anio, empleado_id, rrhh_empleados(nombre, apellido, puesto, local_id))")
           .eq("estado","pagado")
+          .eq("anulado", false)
           .gte("pagado_at", desde+"T00:00:00")
           .lte("pagado_at", hasta+"T23:59:59"),
       ]);
