@@ -79,6 +79,8 @@ export default function RRHH({ user, locales, localActivo }) {
   const [pagoData, setPagoData] = useState<any[]>([]);
   const [pagoLoading, setPagoLoading] = useState(false);
   const [pagando, setPagando] = useState(false);
+  const [pagoModal, setPagoModal] = useState<any>(null);
+  const [formasPago, setFormasPago] = useState<{cuenta:string, monto:string}[]>([]);
 
   // Dashboard
   const [dashLoading, setDashLoading] = useState(true);
@@ -320,118 +322,6 @@ export default function RRHH({ user, locales, localActivo }) {
     setNovMap(prev => ({ ...prev, [empId]: { ...prev[empId], estado: "borrador" } }));
   };
 
-  // ─── PAGOS ACTIONS ─────────────────────────────────────────────────────────
-  const pagarUno = async (row: any) => {
-    if (pagando) return;
-    const { emp, nov, liq } = row;
-    if (!liq || liq.estado === "pagado") return;
-    setPagando(true);
-    try {
-      const desc = `Sueldo ${emp.apellido} ${emp.nombre} - ${MESES_NOMBRE[pagoMes]} ${pagoAnio}`;
-      const efectivo = Number(liq.efectivo || 0);
-      const transferencia = Number(liq.transferencia || 0);
-      const total = Number(liq.total_a_pagar || 0);
-
-      if (Math.abs((efectivo + transferencia) - total) > 0.01) {
-        throw new Error(`Split inválido: efectivo (${efectivo}) + transferencia (${transferencia}) = ${efectivo + transferencia} no coincide con total (${total})`);
-      }
-
-      const gastoIds: string[] = [];
-      if (efectivo > 0) {
-        const gid = genId("GASTO");
-        const { error } = await db.from("gastos").insert([{ id: gid, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: efectivo, detalle: desc + " (efectivo)", local_id: emp.local_id, cuenta: "Caja Efectivo" }]);
-        if (error) throw new Error("Error gasto efectivo: " + error.message);
-        gastoIds.push(gid);
-      }
-      if (transferencia > 0) {
-        const gid = genId("GASTO");
-        const { error } = await db.from("gastos").insert([{ id: gid, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: transferencia, detalle: desc + " (transferencia)", local_id: emp.local_id, cuenta: "MercadoPago" }]);
-        if (error) throw new Error("Error gasto transferencia: " + error.message);
-        gastoIds.push(gid);
-      }
-      if (gastoIds.length === 0 && total > 0) {
-        const gid = genId("GASTO");
-        const cuenta = emp.alias_mp ? "MercadoPago" : "Caja Chica";
-        const { error } = await db.from("gastos").insert([{ id: gid, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: total, detalle: desc, local_id: emp.local_id, cuenta }]);
-        if (error) throw new Error("Error gasto: " + error.message);
-        gastoIds.push(gid);
-      }
-
-      const pagadoPayload = { estado:"pagado", gasto_id: gastoIds[0] || null, pagado_at: new Date().toISOString(), pagado_por: user?.id };
-
-      if (liq._generated && nov?.id) {
-        // Crear liquidación directamente como pagada (evita race condition update/select)
-        const { _novedadId, _generated, id: _ignoreId, ...calcFields } = liq;
-        const { error: insErr } = await db.from("rrhh_liquidaciones").insert([{
-          novedad_id: nov.id, ...calcFields, ...pagadoPayload, calculado_at: new Date().toISOString(),
-        }]);
-        if (insErr) throw new Error("Error liquidación: " + insErr.message);
-      } else {
-        const { error: updErr } = await db.from("rrhh_liquidaciones").update(pagadoPayload).eq("id", liq.id);
-        if (updErr) throw new Error("Error update liquidación: " + updErr.message);
-      }
-
-      await db.from("rrhh_empleados").update({ aguinaldo_acumulado: (emp.aguinaldo_acumulado || 0) + Number(liq.total_a_pagar) / 12 }).eq("id", emp.id);
-      showToast("Pago registrado");
-      await loadPagos();
-      await loadEmpleados();
-    } catch (err: any) {
-      console.error("Error pagarUno:", err);
-      alert("Error al registrar el pago: " + err.message);
-    } finally {
-      setPagando(false);
-    }
-  };
-
-  const pagarTodos = async () => {
-    if (pagando) return;
-    const pendientes = pagoData.filter(r => r.liq && r.liq.estado !== "pagado");
-    if (!pendientes.length) return;
-    setPagando(true);
-    for (const row of pendientes) {
-      const { emp, nov, liq } = row;
-      const efectivo = Number(liq.efectivo || 0);
-      const transferencia = Number(liq.transferencia || 0);
-      const total = Number(liq.total_a_pagar || 0);
-
-      if (Math.abs((efectivo + transferencia) - total) > 0.01) {
-        console.error(`Skip ${emp.apellido}: split inválido (${efectivo}+${transferencia}≠${total})`);
-        continue;
-      }
-
-      let liqId = liq.id;
-      if (liq._generated && nov?.id) {
-        const { _novedadId, _generated, ...calcFields } = liq;
-        const { data: created } = await db.from("rrhh_liquidaciones").insert([{
-          novedad_id: nov.id, ...calcFields, estado: "pendiente", calculado_at: new Date().toISOString(),
-        }]).select().single();
-        if (created) liqId = created.id;
-      }
-      const desc = `Sueldo ${emp.apellido} ${emp.nombre} - ${MESES_NOMBRE[pagoMes]} ${pagoAnio}`;
-      const gastoIds: string[] = [];
-      if (efectivo > 0) {
-        const gid = genId("GASTO");
-        await db.from("gastos").insert([{ id: gid, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: efectivo, detalle: desc + " (efectivo)", local_id: emp.local_id, cuenta: "Caja Efectivo" }]);
-        gastoIds.push(gid);
-      }
-      if (transferencia > 0) {
-        const gid = genId("GASTO");
-        await db.from("gastos").insert([{ id: gid, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: transferencia, detalle: desc + " (transferencia)", local_id: emp.local_id, cuenta: "MercadoPago" }]);
-        gastoIds.push(gid);
-      }
-      if (gastoIds.length === 0 && total > 0) {
-        const gid = genId("GASTO");
-        await db.from("gastos").insert([{ id: gid, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: total, detalle: desc, local_id: emp.local_id, cuenta: emp.alias_mp ? "MercadoPago" : "Caja Chica" }]);
-        gastoIds.push(gid);
-      }
-      await db.from("rrhh_liquidaciones").update({ estado:"pagado", gasto_id: gastoIds[0] || null, pagado_at: new Date().toISOString(), pagado_por: user?.id }).eq("id", liqId);
-      await db.from("rrhh_empleados").update({ aguinaldo_acumulado: (emp.aguinaldo_acumulado || 0) + total / 12 }).eq("id", emp.id);
-    }
-    setPagando(false);
-    showToast(`${pendientes.length} pagos registrados`);
-    loadPagos(); loadEmpleados();
-  };
-
   // ─── CONFIG ACTIONS ────────────────────────────────────────────────────────
   const guardarValorDoble = async (item: any) => {
     if (!item.puesto || !item.valor) return;
@@ -451,8 +341,6 @@ export default function RRHH({ user, locales, localActivo }) {
   const inp: any = { padding:"3px 5px", background:"var(--bg)", border:"1px solid var(--bd)", color:"var(--txt)", fontFamily:"'DM Mono',monospace", fontSize:10, borderRadius:"var(--r)", textAlign:"center" };
   const d = dashStats;
   const totalPagosPend = pagoData.filter(r => r.liq && r.liq.estado !== "pagado").length;
-  const totalEfvo = pagoData.reduce((s, r) => s + (r.liq ? Number(r.liq.efectivo || 0) : 0), 0);
-  const totalTransf = pagoData.reduce((s, r) => s + (r.liq ? Number(r.liq.transferencia || 0) : 0), 0);
   const totalGeneral = pagoData.reduce((s, r) => s + (r.liq ? Number(r.liq.total_a_pagar || 0) : 0), 0);
 
   const tabs = [
@@ -663,9 +551,7 @@ export default function RRHH({ user, locales, localActivo }) {
             {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
           </select>
           <div style={{flex:1}} />
-          {esDueno && totalPagosPend > 0 && (
-            <button className="btn btn-success" onClick={pagarTodos} disabled={pagando}>{pagando ? "Pagando..." : `Pagar todos (${totalPagosPend})`}</button>
-          )}
+          {totalPagosPend > 0 && <span style={{fontSize:11,color:"var(--muted2)"}}>{totalPagosPend} pendiente{totalPagosPend > 1 ? "s" : ""}</span>}
         </div>
 
         {!pagoLocal ? <div className="alert alert-info">Seleccioná un local</div> :
@@ -674,24 +560,16 @@ export default function RRHH({ user, locales, localActivo }) {
           <div className="panel">
             <div style={{overflowX:"auto"}}>
             <table>
-              <thead><tr><th>Empleado</th><th style={{textAlign:"right"}}>Total</th><th style={{textAlign:"right"}}>Efectivo</th><th style={{textAlign:"right"}}>Transferencia</th><th>CBU / Alias</th><th>Estado</th><th></th></tr></thead>
-              <tbody>{pagoData.map((row, idx) => {
+              <thead><tr><th>Empleado</th><th>Puesto</th><th style={{textAlign:"right"}}>Total</th><th>CBU / Alias</th><th>Estado</th><th></th></tr></thead>
+              <tbody>{pagoData.map((row) => {
                 const { emp, nov, liq } = row;
                 if (!liq) return null;
                 const pagado = liq.estado === "pagado";
-                const updateSplit = (campo: "efectivo"|"transferencia", valor: number) => {
-                  setPagoData(prev => prev.map((r, i) => i === idx ? { ...r, liq: { ...r.liq, [campo]: valor } } : r));
-                };
                 return (
                   <tr key={emp.id}>
                     <td style={{fontWeight:500,fontSize:12}}>{emp.apellido}, {emp.nombre}</td>
+                    <td><span className="badge b-muted" style={{fontSize:8}}>{emp.puesto}</span></td>
                     <td style={{textAlign:"right"}}><span className="num" style={{color:"var(--acc)"}}>{fmt_$(liq.total_a_pagar)}</span></td>
-                    <td style={{textAlign:"right",fontSize:11}}>
-                      {pagado ? fmt_$(liq.efectivo) : <input type="number" value={Number(liq.efectivo)||0} onChange={e => updateSplit("efectivo", parseFloat(e.target.value)||0)} style={{width:90,background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--acc)",padding:"3px 6px",fontFamily:"'DM Mono',monospace",fontSize:11,borderRadius:"var(--r)",textAlign:"right"}}/>}
-                    </td>
-                    <td style={{textAlign:"right",fontSize:11,color:"var(--info)"}}>
-                      {pagado ? fmt_$(liq.transferencia) : <input type="number" value={Number(liq.transferencia)||0} onChange={e => updateSplit("transferencia", parseFloat(e.target.value)||0)} style={{width:90,background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--info)",padding:"3px 6px",fontFamily:"'DM Mono',monospace",fontSize:11,borderRadius:"var(--r)",textAlign:"right"}}/>}
-                    </td>
                     <td className="mono" style={{fontSize:10,color:"var(--muted2)"}}>{emp.alias_mp || "—"}</td>
                     <td>
                       {pagado
@@ -700,7 +578,10 @@ export default function RRHH({ user, locales, localActivo }) {
                     </td>
                     <td>
                       {esDueno && !pagado && (
-                        <button className="btn btn-success btn-sm" onClick={() => pagarUno({ emp, nov, liq })} disabled={pagando}>Pagar</button>
+                        <button className="btn btn-success btn-sm" onClick={() => {
+                          setPagoModal({ emp, nov, liq });
+                          setFormasPago([{ cuenta: "Caja Efectivo", monto: String(liq.total_a_pagar) }]);
+                        }}>Pagar</button>
                       )}
                     </td>
                   </tr>
@@ -708,14 +589,112 @@ export default function RRHH({ user, locales, localActivo }) {
               })}</tbody>
             </table>
             </div>
-            {/* Totales */}
-            <div style={{padding:"12px 16px",borderTop:"1px solid var(--bd)",display:"flex",justifyContent:"flex-end",gap:24,fontSize:12}}>
-              <span>Efectivo: <strong style={{color:"var(--acc)"}}>{fmt_$(totalEfvo)}</strong></span>
-              <span>Transferencia: <strong style={{color:"var(--info)"}}>{fmt_$(totalTransf)}</strong></span>
-              <span>Total: <strong style={{color:"var(--success)"}}>{fmt_$(totalGeneral)}</strong></span>
+            <div style={{padding:"12px 16px",borderTop:"1px solid var(--bd)",display:"flex",justifyContent:"flex-end",fontSize:12}}>
+              <span>Total mes: <strong style={{color:"var(--success)"}}>{fmt_$(totalGeneral)}</strong></span>
             </div>
           </div>
         </>)}
+
+        {pagoModal && (() => {
+          const { emp, nov, liq } = pagoModal;
+          const total = Number(liq.total_a_pagar || 0);
+          const asignado = formasPago.reduce((s, f) => s + (parseFloat(f.monto) || 0), 0);
+          const restante = Math.round((total - asignado) * 100) / 100;
+          const puedeConfirmar = Math.abs(restante) < 0.01 && formasPago.length > 0;
+          const cerrarModal = () => { setPagoModal(null); setFormasPago([]); };
+
+          const confirmarPago = async () => {
+            if (!puedeConfirmar || pagando) return;
+            setPagando(true);
+            try {
+              const desc = `Sueldo ${emp.apellido} ${emp.nombre} - ${MESES_NOMBRE[pagoMes]} ${pagoAnio}`;
+              const gastoIds: string[] = [];
+
+              for (const fp of formasPago) {
+                const monto = parseFloat(fp.monto) || 0;
+                if (monto <= 0) continue;
+                const gid = genId("GASTO");
+                await db.from("gastos").insert([{
+                  id: gid, fecha: toISO(today), tipo: "fijo", categoria: "SUELDOS",
+                  monto, detalle: desc + ` (${fp.cuenta})`, local_id: emp.local_id, cuenta: fp.cuenta,
+                }]);
+                const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", fp.cuenta).maybeSingle();
+                if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", fp.cuenta);
+                await db.from("movimientos").insert([{
+                  id: genId("MOV"), fecha: toISO(today), cuenta: fp.cuenta,
+                  tipo: "Pago Sueldo", cat: "SUELDOS", importe: -monto, detalle: desc,
+                }]);
+                gastoIds.push(gid);
+              }
+
+              const pagadoPayload = { estado: "pagado", gasto_id: gastoIds[0] || null, pagado_at: new Date().toISOString(), pagado_por: user?.id };
+
+              if (liq._generated && nov?.id) {
+                const { _novedadId, _generated, id: _ignoreId, ...calcFields } = liq;
+                await db.from("rrhh_liquidaciones").insert([{ novedad_id: nov.id, ...calcFields, ...pagadoPayload, calculado_at: new Date().toISOString() }]);
+              } else {
+                await db.from("rrhh_liquidaciones").update(pagadoPayload).eq("id", liq.id);
+              }
+
+              await db.from("rrhh_empleados").update({ aguinaldo_acumulado: (emp.aguinaldo_acumulado || 0) + total / 12 }).eq("id", emp.id);
+              showToast("Pago registrado");
+              cerrarModal();
+              await loadPagos();
+              await loadEmpleados();
+            } catch (err: any) {
+              alert("Error: " + err.message);
+            } finally {
+              setPagando(false);
+            }
+          };
+
+          return (
+            <div className="overlay" onClick={cerrarModal}>
+              <div className="modal" style={{width:480}} onClick={e => e.stopPropagation()}>
+                <div className="modal-hd">
+                  <div className="modal-title">Pagar — {emp.apellido}, {emp.nombre}</div>
+                  <button className="close-btn" onClick={cerrarModal}>✕</button>
+                </div>
+                <div className="modal-body">
+                  <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginBottom:16,borderBottom:"1px solid var(--bd)"}}>
+                    <span style={{fontSize:12,color:"var(--muted2)"}}>Total a pagar</span>
+                    <span style={{fontSize:16,fontWeight:500,color:"var(--acc)"}}>{fmt_$(total)}</span>
+                  </div>
+
+                  {formasPago.map((fp, i) => (
+                    <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
+                      <select className="search" style={{flex:1}} value={fp.cuenta}
+                        onChange={e => setFormasPago(prev => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
+                        {CUENTAS_PAGO.map(c => <option key={c}>{c}</option>)}
+                      </select>
+                      <input type="number" className="search" style={{width:120}} placeholder="Monto" value={fp.monto}
+                        onChange={e => setFormasPago(prev => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
+                      <button className="btn btn-danger btn-sm" onClick={() => setFormasPago(prev => prev.filter((_, j) => j !== i))}>✕</button>
+                    </div>
+                  ))}
+
+                  <button className="btn btn-ghost btn-sm" style={{marginBottom:16}}
+                    onClick={() => setFormasPago(prev => [...prev, { cuenta: "Caja Efectivo", monto: restante > 0 ? String(restante) : "" }])}>
+                    + Agregar forma de pago
+                  </button>
+
+                  <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
+                    <span style={{fontSize:12,color:"var(--muted2)"}}>Restante</span>
+                    <span style={{fontSize:14,fontWeight:500,color: Math.abs(restante) < 0.01 ? "var(--success)" : "var(--danger)"}}>
+                      {fmt_$(restante)}
+                    </span>
+                  </div>
+                </div>
+                <div className="modal-ft">
+                  <button className="btn btn-sec" onClick={cerrarModal}>Cancelar</button>
+                  <button className="btn btn-success" onClick={confirmarPago} disabled={!puedeConfirmar || pagando}>
+                    {pagando ? "Procesando..." : "Confirmar pago"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </>)}
 
       {/* ═══ LEGAJO MODAL ═════════════════════════════════════════════════ */}
