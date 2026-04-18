@@ -39,7 +39,9 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
   const [vacTomadas, setVacTomadas] = useState(0);
   const [vacModal, setVacModal] = useState(false);
   const [vacDias, setVacDias] = useState("");
+  const [vacMonto, setVacMonto] = useState("");
   const [aguModal, setAguModal] = useState(false);
+  const [aguMonto, setAguMonto] = useState("");
 
   // Documentos
   const [docs, setDocs] = useState<any[]>([]);
@@ -100,6 +102,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
 
   const localNombre = locales.find(l => l.id === emp.local_id)?.nombre || "—";
   const valorDia = emp.sueldo_mensual / 30;
+  const valorDiaVacacional = emp.sueldo_mensual / 25; // LCT Art 155
 
   // Antigüedad
   const fechaInicio = emp.fecha_inicio ? new Date(emp.fecha_inicio + "T12:00:00") : null;
@@ -168,10 +171,12 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
   };
 
   // ─── ACCIONES: VACACIONES ──────────────────────────────────────────────────
+  const plusVacacional = vacAcumuladas * valorDiaVacacional;
+
   const pagarVacaciones = async () => {
     const dias = parseFloat(vacDias) || vacAcumuladas;
-    if (dias <= 0) return;
-    const monto = dias * valorDia;
+    const monto = parseFloat(vacMonto) || plusVacacional;
+    if (dias <= 0 || monto <= 0) return;
     const desc = `Vacaciones ${emp.apellido} ${emp.nombre}`;
     const gastoId = genId("GASTO");
 
@@ -185,14 +190,14 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
     }]);
     await db.from("rrhh_empleados").update({ vacaciones_dias_acumulados: 0 }).eq("id", emp.id);
 
-    setVacModal(false); setVacDias("");
+    setVacModal(false); setVacDias(""); setVacMonto("");
     showToast("Vacaciones pagadas");
     loadAll();
   };
 
   // ─── ACCIONES: AGUINALDO ───────────────────────────────────────────────────
   const pagarAguinaldo = async () => {
-    const monto = sacAcumulado;
+    const monto = parseFloat(aguMonto) || sacAcumulado;
     if (monto <= 0) return;
     const desc = `Aguinaldo ${emp.apellido} ${emp.nombre}`;
     const gastoId = genId("GASTO");
@@ -207,7 +212,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
     }]);
     await db.from("rrhh_empleados").update({ aguinaldo_acumulado: 0 }).eq("id", emp.id);
 
-    setAguModal(false);
+    setAguModal(false); setAguMonto("");
     showToast("Aguinaldo pagado");
     loadAll();
   };
@@ -262,7 +267,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:12,flexWrap:"wrap"}}>
         <div>
           <div style={{fontFamily:"'Inter',sans-serif",fontSize:17,fontWeight:500,lineHeight:1,color:"#fff"}}>{emp.apellido}, {emp.nombre}</div>
-          <div style={{fontSize:11,color:"var(--muted2)",marginTop:4}}>{emp.puesto} · {localNombre} · {emp.modo_pago} · {emp.activo ? "Activo" : "Inactivo"}</div>
+          <div style={{fontSize:11,color:"var(--muted2)",marginTop:4}}>{emp.puesto} · {localNombre} · {emp.activo ? "Activo" : "Inactivo"}</div>
         </div>
         <div style={{textAlign:"right"}}>
           <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"var(--muted)"}}>Sueldo mensual</div>
@@ -282,9 +287,8 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
           <div className="kpi"><div className="kpi-label">Fecha ingreso</div><div style={{fontSize:13}}>{fmt_d(emp.fecha_inicio)}</div></div>
           <div className="kpi"><div className="kpi-label">Antigüedad</div><div style={{fontSize:13}}>{Math.floor(antiguedadAnios)} años, {Math.floor((antiguedadAnios % 1) * 12)} meses</div></div>
         </div>
-        <div className="grid3" style={{marginBottom:16}}>
+        <div className="grid2" style={{marginBottom:16}}>
           <div className="kpi"><div className="kpi-label">CBU / Alias</div><div style={{fontSize:13}}>{emp.alias_mp || "—"}</div></div>
-          <div className="kpi"><div className="kpi-label">Modo de pago</div><div style={{fontSize:13}}>{emp.modo_pago}</div></div>
           <div className="kpi">
             <div className="kpi-label">Estado</div>
             <span className={`badge ${emp.activo ? "b-success" : "b-muted"}`} style={{cursor:"pointer"}} onClick={toggleActivo}>
@@ -478,7 +482,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
                 Corresponde: {diasVacAnuales} días/año ({diasVacPorMes.toFixed(2)} días/mes) · Antigüedad: {Math.floor(antiguedadAnios)} años
               </div>
               {esDueno && vacAcumuladas > 0 && (
-                <button className="btn btn-acc btn-sm" onClick={() => { setVacDias(String(vacAcumuladas.toFixed(1))); setVacModal(true); }}>Pagar vacaciones</button>
+                <button className="btn btn-acc btn-sm" onClick={() => { setVacDias(String(vacAcumuladas.toFixed(1))); setVacMonto(""); setVacModal(true); }}>Pagar vacaciones</button>
               )}
             </div>
           </div>
@@ -494,7 +498,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
                 <div style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>SAC = mejor sueldo del semestre / 2 · Pago en {mesActual <= 6 ? "junio" : "diciembre"}</div>
               </div>
               {esDueno && sacAcumulado > 0 && (
-                <button className="btn btn-acc btn-sm" onClick={() => setAguModal(true)}>Pagar aguinaldo</button>
+                <button className="btn btn-acc btn-sm" onClick={() => { setAguMonto(""); setAguModal(true); }}>Pagar aguinaldo</button>
               )}
             </div>
           </div>
@@ -519,14 +523,23 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
         {/* Modal vacaciones */}
         {vacModal && (
           <div className="overlay" onClick={() => setVacModal(false)}>
-            <div className="modal" style={{width:420}} onClick={e => e.stopPropagation()}>
+            <div className="modal" style={{width:440}} onClick={e => e.stopPropagation()}>
               <div className="modal-hd"><div className="modal-title">Pagar vacaciones</div><button className="close-btn" onClick={() => setVacModal(false)}>✕</button></div>
               <div className="modal-body">
-                <div className="alert alert-info">Disponibles: {vacAcumuladas.toFixed(1)} días · {fmt_$(vacAcumuladas * valorDia)}</div>
-                <div className="field"><label>Días a pagar</label><input type="number" value={vacDias} onChange={e => setVacDias(e.target.value)} /></div>
-                {vacDias && <div style={{padding:8,fontSize:12}}>Monto: <strong style={{color:"var(--acc)"}}>{fmt_$(parseFloat(vacDias) * valorDia)}</strong></div>}
+                <div className="field"><label>Días a pagar</label>
+                  <input type="number" value={vacDias} onChange={e => setVacDias(e.target.value)} placeholder={vacAcumuladas.toFixed(1)} />
+                </div>
+                <div className="field"><label>Monto $</label>
+                  <input type="number" value={vacMonto} onChange={e => setVacMonto(e.target.value)} placeholder={fmt_$(plusVacacional)} />
+                  <div style={{fontSize:10,color:"var(--muted2)",marginTop:4}}>
+                    Plus vacacional recomendado: <strong style={{color:"var(--acc)"}}>{fmt_$(plusVacacional)}</strong> ({vacAcumuladas.toFixed(1)} días × sueldo/25)
+                  </div>
+                </div>
               </div>
-              <div className="modal-ft"><button className="btn btn-sec" onClick={() => setVacModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={pagarVacaciones}>Confirmar pago</button></div>
+              <div className="modal-ft">
+                <button className="btn btn-sec" onClick={() => setVacModal(false)}>Cancelar</button>
+                <button className="btn btn-acc" onClick={pagarVacaciones}>Confirmar pago</button>
+              </div>
             </div>
           </div>
         )}
@@ -534,13 +547,20 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
         {/* Modal aguinaldo */}
         {aguModal && (
           <div className="overlay" onClick={() => setAguModal(false)}>
-            <div className="modal" style={{width:420}} onClick={e => e.stopPropagation()}>
+            <div className="modal" style={{width:440}} onClick={e => e.stopPropagation()}>
               <div className="modal-hd"><div className="modal-title">Pagar aguinaldo</div><button className="close-btn" onClick={() => setAguModal(false)}>✕</button></div>
               <div className="modal-body">
-                <div className="alert alert-info">Monto acumulado proporcional: {fmt_$(sacAcumulado)}</div>
-                <div style={{fontSize:11,color:"var(--muted2)",padding:"4px 0"}}>Teórico semestre completo: {fmt_$(sacTeorico)}</div>
+                <div className="field"><label>Monto $</label>
+                  <input type="number" value={aguMonto} onChange={e => setAguMonto(e.target.value)} placeholder={fmt_$(sacAcumulado)} />
+                  <div style={{fontSize:10,color:"var(--muted2)",marginTop:4}}>
+                    Acumulado proporcional: <strong style={{color:"var(--acc)"}}>{fmt_$(sacAcumulado)}</strong> · Teórico semestre: {fmt_$(sacTeorico)}
+                  </div>
+                </div>
               </div>
-              <div className="modal-ft"><button className="btn btn-sec" onClick={() => setAguModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={pagarAguinaldo}>Confirmar pago</button></div>
+              <div className="modal-ft">
+                <button className="btn btn-sec" onClick={() => setAguModal(false)}>Cancelar</button>
+                <button className="btn btn-acc" onClick={pagarAguinaldo}>Confirmar pago</button>
+              </div>
             </div>
           </div>
         )}
