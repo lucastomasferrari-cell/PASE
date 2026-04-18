@@ -162,6 +162,7 @@ td{padding:9px 12px;font-size:12.5px}
 .mono{font-family:'Inter',sans-serif;font-size:11px}
 .eerr-row{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;border-bottom:1px solid var(--bd)}
 .eerr-row:last-child{border-bottom:none}
+.eerr-section-title{padding:10px 16px;font-size:9px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted2);font-weight:500;border-top:1px solid var(--bd);background:var(--s1)}
 .items-table{width:100%;border-collapse:collapse;margin-top:8px}
 .items-table th{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);padding:4px 6px;text-align:left;border-bottom:1px solid var(--bd)}
 .items-table td{padding:4px 6px;font-size:11px}
