@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { MEDIOS_COBRO, CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS } from "../lib/constants";
+import { MEDIOS_COBRO, CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 
 export default function EERR({ locales, localActivo }) {
@@ -50,9 +50,10 @@ export default function EERR({ locales, localActivo }) {
   const totalGastosVar=gastos.filter(g=>g.tipo==="variable").reduce((s,g)=>s+(g.monto||0),0);
   const totalPublicidad=gastos.filter(g=>g.tipo==="publicidad").reduce((s,g)=>s+(g.monto||0),0);
   const totalComisiones=gastos.filter(g=>g.tipo==="comision").reduce((s,g)=>s+(g.monto||0),0);
+  const totalImpuestos=gastos.filter(g=>g.tipo==="impuesto").reduce((s,g)=>s+(g.monto||0),0);
   const totalGastos=totalGastosFijos+totalGastosVar;
   const utilBruta=totalVentas-totalCMV;
-  const utilNeta=utilBruta-totalGastos-sueldos-totalPublicidad-totalComisiones;
+  const utilNeta=utilBruta-totalGastos-sueldos-totalPublicidad-totalComisiones-totalImpuestos;
   const pct=n=>totalVentas>0?((n/totalVentas)*100).toFixed(1)+"%":"0%";
 
   const porMedio=MEDIOS_COBRO.map(m=>({m,t:ventas.filter(v=>v.medio===m).reduce((s,v)=>s+v.monto,0)})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
@@ -61,6 +62,7 @@ export default function EERR({ locales, localActivo }) {
   const porCatVar=GASTOS_VARIABLES.map(c=>({c,t:gastos.filter(g=>g.tipo==="variable"&&g.categoria===c).reduce((s,g)=>s+g.monto,0)})).filter(x=>x.t>0);
   const porCatPub=GASTOS_PUBLICIDAD.map(c=>({c,t:gastos.filter(g=>g.tipo==="publicidad"&&g.categoria===c).reduce((s,g)=>s+g.monto,0)})).filter(x=>x.t>0);
   const porCatCom=COMISIONES_CATS.map(c=>({c,t:gastos.filter(g=>g.tipo==="comision"&&g.categoria===c).reduce((s,g)=>s+g.monto,0)})).filter(x=>x.t>0);
+  const porCatImp=GASTOS_IMPUESTOS.map(c=>({c,t:gastos.filter(g=>g.tipo==="impuesto"&&g.categoria===c).reduce((s,g)=>s+g.monto,0)})).filter(x=>x.t>0);
 
   const ERow=({label,valor,color,big})=>(
     <div className="eerr-row" style={big?{background:"var(--s2)",padding:"12px 16px"}:{}}>
@@ -115,6 +117,7 @@ export default function EERR({ locales, localActivo }) {
                 <ERow label="(-) Sueldos" valor={-sueldos} color="var(--danger)" big={false}/>
                 <ERow label="(-) Publicidad y MKT" valor={-totalPublicidad} color="var(--danger)" big={false}/>
                 <ERow label="(-) Comisiones" valor={-totalComisiones} color="var(--danger)" big={false}/>
+                <ERow label="(-) Impuestos" valor={-totalImpuestos} color="var(--danger)" big={false}/>
                 <ERow label="(=) Utilidad Neta" valor={utilNeta} color={utilNeta>=0?"var(--success)":"var(--danger)"} big={true}/>
               </div>
             </div>
@@ -158,6 +161,7 @@ export default function EERR({ locales, localActivo }) {
             )}
             <ESection title="PUBLICIDAD Y MKT" items={porCatPub} total={totalPublicidad} color="var(--info)"/>
             <ESection title="COMISIONES" items={porCatCom} total={totalComisiones} color="var(--acc2)"/>
+            <ESection title="IMPUESTOS" items={porCatImp} total={totalImpuestos} color="var(--danger)"/>
           </div>
         </>
       )}
