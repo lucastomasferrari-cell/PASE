@@ -80,13 +80,26 @@ export default function Caja({ localActivo }: any) {
   };
 
   const eliminarMov = async (m: any) => {
-    if (!confirm("¿Eliminar este movimiento? Se revertirá su impacto en la caja.")) return;
+    const motivo = prompt("¿Por qué eliminás este movimiento? (obligatorio)");
+    if (!motivo?.trim()) return;
+
+    await db.from("auditoria").insert([{
+      tabla: "movimientos", accion: "ELIMINACION",
+      detalle: JSON.stringify({ movimiento: m, justificativo: motivo }),
+      fecha: new Date().toISOString(),
+    }]);
+
     const { error } = await db.from("movimientos").delete().eq("id", m.id);
     if (error) { alert("Error al eliminar: " + error.message); return; }
+
     if (m.local_id) {
-      const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", m.cuenta).eq("local_id", m.local_id).maybeSingle();
-      if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - (m.importe || 0) }).eq("cuenta", m.cuenta).eq("local_id", m.local_id);
+      const { data: caja } = await db.from("saldos_caja").select("saldo")
+        .eq("cuenta", m.cuenta).eq("local_id", m.local_id).maybeSingle();
+      if (caja) await db.from("saldos_caja")
+        .update({ saldo: (caja.saldo || 0) - (m.importe || 0) })
+        .eq("cuenta", m.cuenta).eq("local_id", m.local_id);
     }
+
     load();
   };
 
