@@ -12,6 +12,8 @@ export default function Caja({ localActivo }: any) {
   const [filtCuenta, setFiltCuenta] = useState("Todas");
   const [mostrarAnulados, setMostrarAnulados] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [detalleEdicion, setDetalleEdicion] = useState<any>(null);
+  const [auditLog, setAuditLog] = useState<any>(null);
   const [form, setForm] = useState({fecha:toISO(today),cuenta:"Caja Chica",tipo:"Pago Gasto",cat:"",importe:"",detalle:"",esEgreso:true});
 
   const load = async () => {
@@ -29,6 +31,21 @@ export default function Caja({ localActivo }: any) {
     setLoading(false);
   };
   useEffect(()=>{load();},[localActivo]);
+
+  useEffect(() => {
+    if (!detalleEdicion) { setAuditLog(null); return; }
+    db.from("auditoria")
+      .select("*")
+      .eq("tabla", "movimientos")
+      .eq("accion", "EDICION")
+      .order("fecha", { ascending: false })
+      .then(({ data }) => {
+        const log = (data || []).find(l => {
+          try { return JSON.parse(l.detalle)?.id === detalleEdicion.id; } catch { return false; }
+        });
+        setAuditLog(log ? JSON.parse(log.detalle) : null);
+      });
+  }, [detalleEdicion]);
 
   const mFilt = movimientos
     .filter(m => filtCuenta === "Todas" || m.cuenta === filtCuenta)
@@ -162,7 +179,14 @@ export default function Caja({ localActivo }: any) {
                   <span className="badge b-danger" style={{fontSize:8}} title={m.anulado_motivo}>Anulado</span>
                 )}
                 {m.editado && !m.anulado && (
-                  <span className="badge b-warn" style={{fontSize:8}} title={`Editado: ${m.editado_motivo}`}>Editado</span>
+                  <span
+                    className="badge b-warn"
+                    style={{fontSize:8, cursor:"pointer"}}
+                    onClick={() => setDetalleEdicion(m)}
+                    title="Ver detalle de edición"
+                  >
+                    Editado
+                  </span>
                 )}
               </td>
               <td>
@@ -219,6 +243,45 @@ export default function Caja({ localActivo }: any) {
               <button className="btn btn-sec" onClick={() => setEditMov(null)}>Cancelar</button>
               <button className="btn btn-acc" onClick={guardarEditMov}>Guardar</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {detalleEdicion && (
+        <div className="overlay" onClick={() => setDetalleEdicion(null)}>
+          <div className="modal" style={{width:480}} onClick={e => e.stopPropagation()}>
+            <div className="modal-hd">
+              <div className="modal-title">Detalle de edición</div>
+              <button className="close-btn" onClick={() => setDetalleEdicion(null)}>✕</button>
+            </div>
+            <div className="modal-body">
+              {auditLog ? (<>
+                <div style={{marginBottom:12,fontSize:11,color:"var(--muted2)"}}>
+                  Justificativo: <strong style={{color:"var(--txt)"}}>{auditLog.justificativo || "—"}</strong>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+                  <div>
+                    <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1,color:"var(--muted)",marginBottom:8}}>Antes</div>
+                    {auditLog.antes && Object.entries(auditLog.antes).map(([k, v]: any) => (
+                      <div key={k} style={{fontSize:11,marginBottom:4}}>
+                        <span style={{color:"var(--muted2)"}}>{k}:</span> <span style={{color:"var(--danger)"}}>{String(v??'—')}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1,color:"var(--muted)",marginBottom:8}}>Después</div>
+                    {auditLog.despues && Object.entries(auditLog.despues).map(([k, v]: any) => (
+                      <div key={k} style={{fontSize:11,marginBottom:4}}>
+                        <span style={{color:"var(--muted2)"}}>{k}:</span> <span style={{color:"var(--success)"}}>{String(v??'—')}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>) : (
+                <div className="empty">Sin detalle de auditoría disponible</div>
+              )}
+            </div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setDetalleEdicion(null)}>Cerrar</button></div>
           </div>
         </div>
       )}
