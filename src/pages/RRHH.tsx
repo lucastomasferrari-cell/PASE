@@ -567,7 +567,7 @@ export default function RRHH({ user, locales, localActivo }) {
                 <th style={{minWidth:120,fontSize:8}}>Empleado</th><th style={{width:50,fontSize:8}}>Inasist.</th><th style={{width:90,fontSize:8}}>Present.</th>
                 <th style={{width:50,fontSize:8}}>HS Ex.</th><th style={{width:50,fontSize:8}}>Dobles</th>
                 <th style={{width:50,fontSize:8}}>Ferid.</th><th style={{width:65,fontSize:8}}>Adel.$</th>
-                <th style={{width:100,fontSize:8}}>Inicio mes</th><th style={{width:90,fontSize:8}}>Obs.</th>
+                <th style={{width:90,fontSize:8}}>Obs.</th>
                 <th style={{textAlign:"right",width:80,fontSize:8}}>Preview</th><th style={{width:80,fontSize:8}}>Acción</th>
               </tr></thead>
               <tbody>{novEmps.map(emp => {
@@ -586,7 +586,6 @@ export default function RRHH({ user, locales, localActivo }) {
                     <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.dobles ?? 0} onChange={e => updateNov(emp.id, "dobles", parseFloat(e.target.value) || 0)} /></td>
                     <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.feriados ?? 0} onChange={e => updateNov(emp.id, "feriados", parseFloat(e.target.value) || 0)} /></td>
                     <td><input type="number" style={{...inp,width:55}} disabled={locked} value={nov.adelantos ?? 0} onChange={e => updateNov(emp.id, "adelantos", parseFloat(e.target.value) || 0)} /></td>
-                    <td><input type="date" style={{...inp,width:90}} disabled={locked} value={nov.fecha_inicio_mes || ""} onChange={e => updateNov(emp.id, "fecha_inicio_mes", e.target.value || null)} /></td>
                     <td><input style={{...inp,width:80,textAlign:"left"}} disabled={locked} value={nov.observaciones || ""} onChange={e => updateNov(emp.id, "observaciones", e.target.value)} /></td>
                     <td style={{textAlign:"right"}}><span className="num" style={{color: preview < 0 ? "var(--danger)" : "var(--success)",fontSize:11}}>{fmt_$(preview)}</span></td>
                     <td>
