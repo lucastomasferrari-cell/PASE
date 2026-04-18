@@ -45,10 +45,37 @@ export default function Caja({ localActivo }: any) {
     setModal(false); load();
   };
 
-  const guardarSaldo = async (cuenta: string, nuevoSaldo: any) => {
-    if(!localActivo) { alert("Seleccioná un local activo para editar el saldo"); return; }
+  const guardarAjusteSaldo = async () => {
+    if (!localActivo) { alert("Seleccioná un local activo"); return; }
+    if (!editSaldoModal.justificativo?.trim()) { alert("El justificativo es obligatorio"); return; }
     const lid = parseInt(String(localActivo));
-    await db.from("saldos_caja").update({saldo:parseFloat(nuevoSaldo)||0}).eq("cuenta",cuenta).eq("local_id",lid);
+    const saldoAnterior = saldos[editSaldoModal.cuenta] || 0;
+    const saldoNuevo = parseFloat(editSaldoModal.saldo) || 0;
+    const diferencia = saldoNuevo - saldoAnterior;
+
+    await db.from("saldos_caja").update({ saldo: saldoNuevo })
+      .eq("cuenta", editSaldoModal.cuenta).eq("local_id", lid);
+
+    await db.from("movimientos").insert([{
+      id: genId("MOV"), fecha: toISO(today),
+      cuenta: editSaldoModal.cuenta, tipo: "Ajuste de saldo",
+      cat: "AJUSTE", importe: diferencia,
+      detalle: `Ajuste: ${editSaldoModal.justificativo}`,
+      local_id: lid,
+    }]);
+
+    await db.from("auditoria").insert([{
+      tabla: "saldos_caja", accion: "AJUSTE",
+      detalle: JSON.stringify({
+        cuenta: editSaldoModal.cuenta,
+        saldo_anterior: saldoAnterior,
+        saldo_nuevo: saldoNuevo,
+        justificativo: editSaldoModal.justificativo,
+        local_id: lid,
+      }),
+      fecha: new Date().toISOString(),
+    }]);
+
     setEditSaldoModal(null); load();
   };
 
@@ -116,14 +143,39 @@ export default function Caja({ localActivo }: any) {
       </div>
 
       {editSaldoModal && (
-        <div className="overlay" onClick={()=>setEditSaldoModal(null)}>
-          <div className="modal" style={{width:380}} onClick={e=>e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Editar Saldo — {editSaldoModal.cuenta}</div><button className="close-btn" onClick={()=>setEditSaldoModal(null)}>✕</button></div>
-            <div className="modal-body">
-              <div className="alert alert-warn">Este ajuste modifica el saldo directamente. Usalo para sincronizar con el saldo real actual.</div>
-              <div className="field"><label>Saldo actual real $</label><input type="number" value={editSaldoModal.saldo} onChange={e=>setEditSaldoModal({...editSaldoModal,saldo:e.target.value})} placeholder="0"/></div>
+        <div className="overlay" onClick={() => setEditSaldoModal(null)}>
+          <div className="modal" style={{width:420}} onClick={e => e.stopPropagation()}>
+            <div className="modal-hd">
+              <div className="modal-title">Ajuste de Saldo — {editSaldoModal.cuenta}</div>
+              <button className="close-btn" onClick={() => setEditSaldoModal(null)}>✕</button>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setEditSaldoModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={()=>guardarSaldo(editSaldoModal.cuenta,editSaldoModal.saldo)}>Guardar</button></div>
+            <div className="modal-body">
+              <div style={{padding:"8px 0",marginBottom:12,fontSize:12,color:"var(--muted2)"}}>
+                Saldo actual: <strong style={{color:"var(--acc)"}}>{fmt_$(saldos[editSaldoModal.cuenta]||0)}</strong>
+              </div>
+              <div className="field">
+                <label>Nuevo saldo real $</label>
+                <input type="number" value={editSaldoModal.saldo}
+                  onChange={e => setEditSaldoModal({...editSaldoModal, saldo: e.target.value})} placeholder="0"/>
+                {editSaldoModal.saldo !== "" && (
+                  <div style={{fontSize:11,color:"var(--muted2)",marginTop:4}}>
+                    Diferencia: <strong style={{color: (parseFloat(editSaldoModal.saldo)||0) - (saldos[editSaldoModal.cuenta]||0) >= 0 ? "var(--success)" : "var(--danger)"}}>
+                      {fmt_$((parseFloat(editSaldoModal.saldo)||0) - (saldos[editSaldoModal.cuenta]||0))}
+                    </strong>
+                  </div>
+                )}
+              </div>
+              <div className="field">
+                <label>Justificativo *</label>
+                <input value={editSaldoModal.justificativo || ""}
+                  onChange={e => setEditSaldoModal({...editSaldoModal, justificativo: e.target.value})}
+                  placeholder="Ej: Arqueo de caja, corrección de error, saldo inicial..."/>
+              </div>
+            </div>
+            <div className="modal-ft">
+              <button className="btn btn-sec" onClick={() => setEditSaldoModal(null)}>Cancelar</button>
+              <button className="btn btn-acc" onClick={guardarAjusteSaldo}>Confirmar ajuste</button>
+            </div>
           </div>
         </div>
       )}
