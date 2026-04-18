@@ -26,7 +26,7 @@ export default function ImportarMaxirest({ locales }) {
     if(idx>-1){
       texto.slice(idx).split("\n").forEach(line=>{
         const m=line.match(/^(.+?)\s+([\d.]+)\s+(\d+)\s*$/);
-        if(m){const mr=m[1].trim().toUpperCase();const monto=parseFloat(m[2]);const cant=parseInt(m[3]);const SUBTOTALES_IGNORAR=["EFECTIVO","TARJETAS"];if(monto>0&&!mr.includes("TOTAL")&&!SUBTOTALES_IGNORAR.includes(mr)){ventas.push({medio:MMAP[mr]||mr,monto,cant,fecha,turno,local_id});}}
+        if(m){const mr=m[1].trim().toUpperCase();const monto=parseFloat(m[2]);const cant=parseInt(m[3]);const SUBTOTALES_IGNORAR=["EFECTIVO","TARJETAS","OTROS","RESUMEN","SUBTOTAL"];if(monto>0&&!mr.includes("TOTAL")&&!mr.includes("OTROS")&&!SUBTOTALES_IGNORAR.includes(mr)){ventas.push({medio:MMAP[mr]||mr,monto,cant,fecha,turno,local_id});}}
       });
     }
     setPreview({fecha,turno,local_id,ventas});
