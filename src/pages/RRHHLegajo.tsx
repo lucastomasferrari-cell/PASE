@@ -52,6 +52,9 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
   // Liquidación final
   const [liqFinalModal, setLiqFinalModal] = useState(false);
   const [liqFinalForm, setLiqFinalForm] = useState({ fecha_egreso: toISO(today), motivo: "Renuncia" });
+  const [liqFinalData, setLiqFinalData] = useState<any>(null);
+  const [liqFinalCuenta, setLiqFinalCuenta] = useState("Caja Efectivo");
+  const [liqFinalOverrides, setLiqFinalOverrides] = useState<Record<string, string>>({});
 
   const [toast, setToast] = useState("");
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
@@ -97,6 +100,23 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
   };
 
   useEffect(() => { loadAll(); }, [empleadoId]);
+
+  // Recalcular liquidación final cuando cambia fecha/motivo o abre el modal
+  useEffect(() => {
+    if (!liqFinalModal || !emp) return;
+    const vacAcum = calcularVacaciones(emp.fecha_inicio, vacTomadas);
+    const lf = calcularLiquidacionFinal({
+      sueldo_mensual: Number(emp.sueldo_mensual),
+      fecha_inicio: emp.fecha_inicio,
+      fecha_egreso: liqFinalForm.fecha_egreso,
+      vacaciones_acumuladas: vacAcum,
+      motivo: liqFinalForm.motivo as any,
+    });
+    setLiqFinalData(lf);
+  }, [liqFinalModal, liqFinalForm.fecha_egreso, liqFinalForm.motivo, emp?.sueldo_mensual, emp?.fecha_inicio, vacTomadas]);
+
+  // Reset overrides al cambiar motivo
+  useEffect(() => { setLiqFinalOverrides({}); }, [liqFinalForm.motivo]);
 
   if (loading || !emp) return <div className="loading">Cargando legajo...</div>;
 
@@ -334,22 +354,62 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
         )}
 
         {liqFinalModal && (() => {
-          const lf = calcularLiquidacionFinal({
-            sueldo_mensual: Number(emp.sueldo_mensual),
-            fecha_inicio: emp.fecha_inicio,
-            fecha_egreso: liqFinalForm.fecha_egreso,
-            vacaciones_acumuladas: vacAcumuladas,
-            motivo: liqFinalForm.motivo as any,
-          });
           const esDespidoSinCausa = liqFinalForm.motivo === "Despido sin causa";
+          const esAcuerdoMutuo = liqFinalForm.motivo === "Acuerdo mutuo";
           const antAnios = Math.max(1, Math.floor(antiguedadAnios));
 
+          const conceptos: [string, string][] = [
+            ["proporcional_mes", "Proporcional mes"],
+            ["vacaciones_dinero", "Vacaciones (" + vacAcumuladas.toFixed(1) + " días)"],
+            ["sac_proporcional", "SAC proporcional"],
+            ...(esDespidoSinCausa ? ([
+              ["indemnizacion", "Indemnización (" + antAnios + " año" + (antAnios > 1 ? "s" : "") + ")"],
+              ["preaviso", "Preaviso"],
+              ["integracion_mes", "Integración mes despido"],
+            ] as [string, string][]) : []),
+          ];
+
+          const getConceptoMonto = (key: string, calculado: number) => {
+            if (esAcuerdoMutuo && liqFinalOverrides[key] !== undefined) {
+              return parseFloat(liqFinalOverrides[key]) || 0;
+            }
+            return calculado;
+          };
+
+          const total = conceptos.reduce((s, [k]) => {
+            const calc = liqFinalData?.[k] || 0;
+            return s + getConceptoMonto(k, calc);
+          }, 0);
+
           const confirmarLiqFinal = async () => {
+            if (!liqFinalData) return;
+            const { data: existing } = await db.from("rrhh_pagos_especiales")
+              .select("id").eq("empleado_id", emp.id).eq("tipo", "liquidacion_final");
+            if (existing && existing.length > 0) {
+              alert("Ya existe una liquidación final para este empleado");
+              return;
+            }
             const desc = `Liquidación final ${emp.apellido} ${emp.nombre}`;
             const gastoId = genId("GASTO");
-            await db.from("gastos").insert([{ id: gastoId, fecha: toISO(today), tipo:"fijo", categoria:"SUELDOS", monto: lf.total, detalle: desc, local_id: emp.local_id, cuenta:"Caja Chica" }]);
-            await db.from("rrhh_pagos_especiales").insert([{ empleado_id: emp.id, tipo:"liquidacion_final", monto: lf.total, gasto_id: gastoId, pagado_por: user?.id }]);
-            await db.from("rrhh_empleados").update({ activo: false, fecha_egreso: liqFinalForm.fecha_egreso, motivo_baja: liqFinalForm.motivo, vacaciones_dias_acumulados: 0, aguinaldo_acumulado: 0 }).eq("id", emp.id);
+
+            await db.from("gastos").insert([{
+              id: gastoId, fecha: toISO(today), tipo: "fijo", categoria: "SUELDOS",
+              monto: total, detalle: desc, local_id: emp.local_id, cuenta: liqFinalCuenta,
+            }]);
+            const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", liqFinalCuenta).maybeSingle();
+            if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - total }).eq("cuenta", liqFinalCuenta);
+            await db.from("movimientos").insert([{
+              id: genId("MOV"), fecha: toISO(today), cuenta: liqFinalCuenta,
+              tipo: "Liquidación Final", cat: "SUELDOS", importe: -total, detalle: desc,
+            }]);
+            await db.from("rrhh_pagos_especiales").insert([{
+              empleado_id: emp.id, tipo: "liquidacion_final", monto: total,
+              gasto_id: gastoId, pagado_por: user?.id,
+            }]);
+            await db.from("rrhh_empleados").update({
+              activo: false, fecha_egreso: liqFinalForm.fecha_egreso, motivo_baja: liqFinalForm.motivo,
+              vacaciones_dias_acumulados: 0, aguinaldo_acumulado: 0,
+            }).eq("id", emp.id);
             setLiqFinalModal(false);
             showToast("Liquidación final procesada");
             loadAll();
@@ -368,24 +428,36 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
                       </select></div>
                   </div>
                   <div style={{background:"var(--s2)",borderRadius:"var(--r)",padding:16}}>
-                    <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>Conceptos</div>
-                    {[
-                      ["Proporcional mes", lf.proporcional_mes],
-                      ["Vacaciones (" + vacAcumuladas.toFixed(1) + " días)", lf.vacaciones_dinero],
-                      ["SAC proporcional", lf.sac_proporcional],
-                      ...(esDespidoSinCausa ? [
-                        ["Indemnización (" + antAnios + " año" + (antAnios > 1 ? "s" : "") + ")", lf.indemnizacion],
-                        ["Preaviso", lf.preaviso],
-                        ["Integración mes despido", lf.integracion_mes],
-                      ] : []),
-                    ].map(([label, monto], i) => (
-                      <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid var(--bd)",fontSize:12}}>
-                        <span>{label}</span><span className="num" style={{color:"var(--acc)"}}>{fmt_$(monto as number)}</span>
-                      </div>
-                    ))}
-                    <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",fontSize:13,fontWeight:500}}>
-                      <span>TOTAL</span><span className="num" style={{color:"var(--success)",fontSize:15,fontWeight:500}}>{fmt_$(lf.total)}</span>
+                    <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>
+                      Conceptos{esAcuerdoMutuo && <span style={{color:"var(--warn)",marginLeft:8}}>(editables)</span>}
                     </div>
+                    {conceptos.map(([key, label]) => {
+                      const calc = liqFinalData?.[key] || 0;
+                      const monto = getConceptoMonto(key, calc);
+                      return (
+                        <div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid var(--bd)",fontSize:12}}>
+                          <span>{label}</span>
+                          {esAcuerdoMutuo ? (
+                            <input
+                              type="number"
+                              value={liqFinalOverrides[key] ?? String(calc)}
+                              onChange={e => setLiqFinalOverrides(prev => ({...prev, [key]: e.target.value}))}
+                              style={{width:130,background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--acc)",padding:"3px 6px",fontFamily:"'DM Mono',monospace",fontSize:11,textAlign:"right",borderRadius:"var(--r)"}}
+                            />
+                          ) : (
+                            <span className="num" style={{color:"var(--acc)"}}>{fmt_$(monto)}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",fontSize:13,fontWeight:500}}>
+                      <span>TOTAL</span><span className="num" style={{color:"var(--success)",fontSize:15,fontWeight:500}}>{fmt_$(total)}</span>
+                    </div>
+                  </div>
+                  <div className="field" style={{marginTop:12}}><label>Cuenta de egreso</label>
+                    <select value={liqFinalCuenta} onChange={e => setLiqFinalCuenta(e.target.value)}>
+                      {["Caja Efectivo","Caja Chica","Caja Mayor","MercadoPago","Banco"].map(c => <option key={c}>{c}</option>)}
+                    </select>
                   </div>
                 </div>
                 <div className="modal-ft">
