@@ -648,10 +648,10 @@ export default function RRHH({ user, locales, localActivo }) {
 
         {pagoModal && (() => {
           const { emp, nov, liq } = pagoModal;
-          const total = Number(liq.total_a_pagar || 0);
-          const asignado = formasPago.reduce((s, f) => s + (parseFloat(f.monto) || 0), 0);
+          const total = Math.round(Number(liq.total_a_pagar || 0) * 100) / 100;
+          const asignado = Math.round(formasPago.reduce((s, f) => s + (parseFloat(f.monto) || 0), 0) * 100) / 100;
           const restante = Math.round((total - asignado) * 100) / 100;
-          const puedeConfirmar = Math.abs(restante) < 0.01 && formasPago.length > 0;
+          const puedeConfirmar = restante === 0 && formasPago.length > 0 && formasPago.every(f => parseFloat(f.monto) > 0);
           const cerrarModal = () => { setPagoModal(null); setFormasPago([]); };
 
           const confirmarPago = async () => {
