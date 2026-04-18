@@ -31,7 +31,13 @@ export default function Dashboard({ locales, localActivo }) {
       ventasHoy:(ventas||[]).filter(v=>matchLocal(v.local_id)).reduce((s,v)=>s+(v.monto||0),0),
       remPend:(remitos||[]).filter(r=>r.estado==="sin_factura"&&matchLocal(r.local_id)).length,
     });
-    setProvDeuda((provs||[]).sort((a,b)=>b.saldo-a.saldo).slice(0,8));
+    if (localId) {
+      const deudaPorProv: Record<number, number> = {};
+      fAct.forEach(f => { deudaPorProv[f.prov_id] = (deudaPorProv[f.prov_id]||0) + (f.total||0); });
+      setProvDeuda((provs||[]).map(p => ({...p, saldo: deudaPorProv[p.id] || 0})).filter(p => p.saldo > 0).sort((a,b)=>b.saldo-a.saldo).slice(0,8));
+    } else {
+      setProvDeuda((provs||[]).sort((a,b)=>b.saldo-a.saldo).slice(0,8));
+    }
     setLoading(false);
   };
   useEffect(()=>{ load(localActivo); },[localActivo]);
