@@ -11,6 +11,7 @@ export default function Caja({ localActivo }: any) {
   const [editSaldoModal, setEditSaldoModal] = useState<any>(null);
   const [editMov, setEditMov] = useState<any>(null);
   const [filtCuenta, setFiltCuenta] = useState("Todas");
+  const [mostrarAnulados, setMostrarAnulados] = useState(false);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({fecha:toISO(today),cuenta:"Caja Chica",tipo:"Pago Gasto",cat:"",importe:"",detalle:"",esEgreso:true});
 
@@ -30,7 +31,9 @@ export default function Caja({ localActivo }: any) {
   };
   useEffect(()=>{load();},[localActivo]);
 
-  const mFilt = movimientos.filter(m=>filtCuenta==="Todas"||m.cuenta===filtCuenta);
+  const mFilt = movimientos
+    .filter(m => filtCuenta === "Todas" || m.cuenta === filtCuenta)
+    .filter(m => mostrarAnulados ? true : !m.anulado);
   const totalLiquidez = Object.values(saldos).reduce((a,b)=>a+b,0);
 
   const guardar = async () => {
@@ -80,17 +83,13 @@ export default function Caja({ localActivo }: any) {
   };
 
   const eliminarMov = async (m: any) => {
-    const motivo = prompt("¿Por qué eliminás este movimiento? (obligatorio)");
+    const motivo = prompt("¿Por qué anulás este movimiento? (obligatorio)");
     if (!motivo?.trim()) return;
 
-    await db.from("auditoria").insert([{
-      tabla: "movimientos", accion: "ELIMINACION",
-      detalle: JSON.stringify({ movimiento: m, justificativo: motivo }),
-      fecha: new Date().toISOString(),
-    }]);
-
-    const { error } = await db.from("movimientos").delete().eq("id", m.id);
-    if (error) { alert("Error al eliminar: " + error.message); return; }
+    await db.from("movimientos").update({
+      anulado: true,
+      anulado_motivo: motivo,
+    }).eq("id", m.id);
 
     if (m.local_id) {
       const { data: caja } = await db.from("saldos_caja").select("saldo")
@@ -100,56 +99,56 @@ export default function Caja({ localActivo }: any) {
         .eq("cuenta", m.cuenta).eq("local_id", m.local_id);
     }
 
+    await db.from("auditoria").insert([{
+      tabla: "movimientos", accion: "ANULACION",
+      detalle: JSON.stringify({ movimiento: m, justificativo: motivo }),
+      fecha: new Date().toISOString(),
+    }]);
+
     load();
   };
 
   const guardarEditMov = async () => {
     if (!editMov) return;
+    if (!editMov.justificativo?.trim()) { alert("El justificativo es obligatorio"); return; }
     const original = movimientos.find(m => m.id === editMov.id);
+    const lid = editMov.local_id;
 
-    await db.from("auditoria").insert([{
-      tabla: "movimientos", accion: "EDICION",
-      detalle: JSON.stringify({
-        id: editMov.id,
-        antes: {
-          fecha: original?.fecha, detalle: original?.detalle,
-          cat: original?.cat, importe: original?.importe,
-          cuenta: original?.cuenta,
-        },
-        despues: {
-          fecha: editMov.fecha, detalle: editMov.detalle,
-          cat: editMov.cat, importe: editMov.importe,
-          cuenta: editMov.cuenta,
-        },
-        justificativo: editMov.justificativo,
-      }),
-      fecha: new Date().toISOString(),
-    }]);
+    if (original && lid && (original.importe !== parseFloat(editMov.importe) || original.cuenta !== editMov.cuenta)) {
+      const { data: cajaOrig } = await db.from("saldos_caja").select("saldo")
+        .eq("cuenta", original.cuenta).eq("local_id", lid).maybeSingle();
+      if (cajaOrig) await db.from("saldos_caja")
+        .update({ saldo: (cajaOrig.saldo || 0) - (original.importe || 0) })
+        .eq("cuenta", original.cuenta).eq("local_id", lid);
 
-    if (original && (original.importe !== editMov.importe || original.cuenta !== editMov.cuenta)) {
-      const lid = editMov.local_id;
-      if (lid) {
-        const { data: cajaOrig } = await db.from("saldos_caja").select("saldo")
-          .eq("cuenta", original.cuenta).eq("local_id", lid).maybeSingle();
-        if (cajaOrig) await db.from("saldos_caja")
-          .update({ saldo: (cajaOrig.saldo || 0) - (original.importe || 0) })
-          .eq("cuenta", original.cuenta).eq("local_id", lid);
-
-        const { data: cajaNueva } = await db.from("saldos_caja").select("saldo")
-          .eq("cuenta", editMov.cuenta).eq("local_id", lid).maybeSingle();
-        if (cajaNueva) await db.from("saldos_caja")
-          .update({ saldo: (cajaNueva.saldo || 0) + (parseFloat(editMov.importe) || 0) })
-          .eq("cuenta", editMov.cuenta).eq("local_id", lid);
-      }
+      const { data: cajaNueva } = await db.from("saldos_caja").select("saldo")
+        .eq("cuenta", editMov.cuenta).eq("local_id", lid).maybeSingle();
+      if (cajaNueva) await db.from("saldos_caja")
+        .update({ saldo: (cajaNueva.saldo || 0) + (parseFloat(editMov.importe) || 0) })
+        .eq("cuenta", editMov.cuenta).eq("local_id", lid);
     }
 
     await db.from("movimientos").update({
       fecha: editMov.fecha,
       detalle: editMov.detalle,
       cat: editMov.cat || null,
-      importe: parseFloat(editMov.importe) || editMov.importe,
+      importe: parseFloat(editMov.importe) || original?.importe,
       cuenta: editMov.cuenta,
+      editado: true,
+      editado_motivo: editMov.justificativo,
+      editado_at: new Date().toISOString(),
     }).eq("id", editMov.id);
+
+    await db.from("auditoria").insert([{
+      tabla: "movimientos", accion: "EDICION",
+      detalle: JSON.stringify({
+        id: editMov.id,
+        antes: original,
+        despues: editMov,
+        justificativo: editMov.justificativo,
+      }),
+      fecha: new Date().toISOString(),
+    }]);
 
     setEditMov(null); load();
   };
@@ -174,24 +173,40 @@ export default function Caja({ localActivo }: any) {
       <div className="panel">
         <div className="panel-hd">
           <span className="panel-title">Movimientos</span>
-          <select className="search" style={{width:160}} value={filtCuenta} onChange={e=>setFiltCuenta(e.target.value)}>
-            <option>Todas</option>{CUENTAS.map(c=><option key={c}>{c}</option>)}
-          </select>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"var(--muted2)",cursor:"pointer"}}>
+              <input type="checkbox" checked={mostrarAnulados} onChange={e => setMostrarAnulados(e.target.checked)}/>
+              Ver anulados
+            </label>
+            <select className="search" style={{width:160}} value={filtCuenta} onChange={e=>setFiltCuenta(e.target.value)}>
+              <option>Todas</option>{CUENTAS.map(c=><option key={c}>{c}</option>)}
+            </select>
+          </div>
         </div>
         {loading?<div className="loading">Cargando...</div>:mFilt.length===0?<div className="empty">Sin movimientos</div>:(
-          <table><thead><tr><th>Fecha</th><th>Cuenta</th><th>Tipo</th><th>Categoría</th><th>Detalle</th><th>Importe</th><th></th></tr></thead>
+          <table><thead><tr><th>Fecha</th><th>Cuenta</th><th>Tipo</th><th>Categoría</th><th>Detalle</th><th>Importe</th><th>Estado</th><th></th></tr></thead>
           <tbody>{mFilt.map(m=>(
-            <tr key={m.id}>
+            <tr key={m.id} style={{opacity: m.anulado ? 0.5 : 1, textDecoration: m.anulado ? "line-through" : "none"}}>
               <td className="mono">{fmt_d(m.fecha)}</td>
               <td><span className="badge" style={{background:"transparent",color:cc(m.cuenta),border:`1px solid ${cc(m.cuenta)}44`}}>{m.cuenta}</span></td>
               <td style={{fontSize:11,color:"var(--muted2)"}}>{m.tipo}</td>
               <td>{m.cat?<span className="badge b-muted">{m.cat}</span>:"—"}</td>
               <td style={{fontSize:11,maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.detalle}</td>
               <td><span className="num" style={{color:m.importe<0?"var(--danger)":"var(--success)"}}>{fmt_$(m.importe)}</span></td>
-              <td><div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
-                <button className="btn btn-ghost btn-sm" onClick={()=>setEditMov({...m})}>Editar</button>
-                <button className="btn btn-danger btn-sm" onClick={()=>eliminarMov(m)}>✕</button>
-              </div></td>
+              <td>
+                {m.anulado && (
+                  <span className="badge b-danger" style={{fontSize:8}} title={m.anulado_motivo}>Anulado</span>
+                )}
+                {m.editado && !m.anulado && (
+                  <span className="badge b-warn" style={{fontSize:8}} title={`Editado: ${m.editado_motivo}`}>Editado</span>
+                )}
+              </td>
+              <td>
+                <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
+                  {!m.anulado && <button className="btn btn-ghost btn-sm" onClick={() => setEditMov({...m})}>Editar</button>}
+                  {!m.anulado && <button className="btn btn-danger btn-sm" onClick={() => eliminarMov(m)}>✕</button>}
+                </div>
+              </td>
             </tr>
           ))}</tbody></table>
         )}
