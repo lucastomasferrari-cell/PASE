@@ -13,7 +13,7 @@ import RRHHLegajo from "./RRHHLegajo";
 function calcLiquidacion(emp: any, nov: any, valorDoble: number) {
   const result = calcularTotalLiquidacion({
     sueldo_mensual: emp.sueldo_mensual,
-    modo_pago: emp.modo_pago,
+    modo_pago: "MENSUAL",
     inasistencias: nov.inasistencias || 0,
     horas_extras: nov.horas_extras || 0,
     dobles: nov.dobles || 0,
@@ -22,7 +22,7 @@ function calcLiquidacion(emp: any, nov: any, valorDoble: number) {
     vacaciones_dias: nov.vacaciones_dias || 0,
     presentismo_mantiene: nov.presentismo === "MANTIENE",
     adelantos: nov.adelantos || 0,
-    pagos_dobles_realizados: nov.pagos_dobles_realizados || 0,
+    pagos_dobles_realizados: 0,
   });
   return {
     ...result,
@@ -34,9 +34,10 @@ function calcLiquidacion(emp: any, nov: any, valorDoble: number) {
 const MESES_NOMBRE = ["","Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const MESES_SEL = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const PRESENTISMO_OPTS = [
-  { value:"MANTIENE", label:"Mantiene" }, { value:"PIERDE", label:"Pierde" },
-  { value:"PIERDE_LLEGADAS", label:"Pierde (lleg.)" }, { value:"INICIO_PARCIAL", label:"Inicio parc." },
+  { value:"MANTIENE", label:"Tiene" },
+  { value:"PIERDE", label:"No tiene" },
 ];
+const CUENTAS_PAGO = ["Caja Efectivo","Caja Chica","Caja Mayor","MercadoPago","Banco"];
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function RRHH({ user, locales, localActivo }) {
@@ -59,7 +60,7 @@ export default function RRHH({ user, locales, localActivo }) {
   const [vacTomadas, setVacTomadas] = useState<Record<string, number>>({});
   const [empFiltLocal, setEmpFiltLocal] = useState(defaultLocal);
   const [empModal, setEmpModal] = useState<any>(null);
-  const empEmpty = { local_id:"", apellido:"", nombre:"", cuil:"", puesto:"", modo_pago:"MENSUAL", sueldo_mensual:"", alias_mp:"", fecha_inicio:"", activo:true };
+  const empEmpty = { local_id:"", apellido:"", nombre:"", cuil:"", puesto:"", sueldo_mensual:"", alias_mp:"", fecha_inicio:"", activo:true };
   const [empForm, setEmpForm] = useState(empEmpty);
 
   // Novedades
@@ -69,7 +70,6 @@ export default function RRHH({ user, locales, localActivo }) {
   const [novEmps, setNovEmps] = useState<any[]>([]);
   const [novMap, setNovMap] = useState<Record<string, any>>({});
   const [novLoading, setNovLoading] = useState(false);
-  const [confirming, setConfirming] = useState(false);
   const saveTimers = useRef<Record<string, any>>({});
 
   // Pagos
@@ -119,7 +119,7 @@ export default function RRHH({ user, locales, localActivo }) {
     const map: Record<string, any> = {};
     (emps || []).forEach(e => {
       const existing = novs.find(n => n.empleado_id === e.id);
-      map[e.id] = existing || { inasistencias:0, presentismo:"MANTIENE", dias_trabajados:null, horas_extras:0, dobles:0, pagos_dobles_realizados:0, feriados:0, adelantos:0, vacaciones_dias:0, observaciones:"", estado:"borrador" };
+      map[e.id] = existing || { inasistencias:0, presentismo:"MANTIENE", horas_extras:0, dobles:0, feriados:0, adelantos:0, vacaciones_dias:0, fecha_inicio_mes:null, observaciones:"", estado:"borrador" };
     });
     setNovEmps(emps || []);
     setNovMap(map);
@@ -163,9 +163,6 @@ export default function RRHH({ user, locales, localActivo }) {
       const { data } = await db.from("rrhh_novedades").select("*, rrhh_liquidaciones(*)").eq("mes", mes).eq("anio", anio).in("empleado_id", empIds);
       novsMes = data || [];
     }
-    const mensuales = activos.filter(e => e.modo_pago === "MENSUAL").length;
-    const quincenales = activos.filter(e => e.modo_pago === "QUINCENAL").length;
-    const semanales = activos.filter(e => e.modo_pago === "SEMANAL").length;
     const sinCuil = activos.filter(e => !e.cuil || e.cuil.trim() === "").length;
     const conNovedades = novsMes.length;
     const confirmadas = novsMes.filter(n => n.estado === "confirmado").length;
@@ -201,7 +198,7 @@ export default function RRHH({ user, locales, localActivo }) {
     const diasFinMes = Math.max(0, Math.ceil((finMes.getTime() - ahora.getTime()) / 86400000));
 
     setDashStats({
-      total: activos.length, mensuales, quincenales, semanales, sinCuil,
+      total: activos.length, sinCuil,
       conNovedades, confirmadas, pagados, estimado, totalSAC,
       proxSAC: proxSAC.toLocaleDateString("es-AR"), diasSAC, diasFinMes,
       mes, anio,
@@ -261,7 +258,7 @@ export default function RRHH({ user, locales, localActivo }) {
 
   const abrirEmpNuevo = () => { setEmpForm({ ...empEmpty, local_id: empFiltLocal || "" }); setEmpModal("new"); };
   const abrirEmpEditar = (e) => {
-    setEmpForm({ local_id: e.local_id ? String(e.local_id) : "", apellido:e.apellido, nombre:e.nombre, cuil:e.cuil||"", puesto:e.puesto, modo_pago:e.modo_pago, sueldo_mensual:String(e.sueldo_mensual), alias_mp:e.alias_mp||"", fecha_inicio:e.fecha_inicio||"", activo:e.activo });
+    setEmpForm({ local_id: e.local_id ? String(e.local_id) : "", apellido:e.apellido, nombre:e.nombre, cuil:e.cuil||"", puesto:e.puesto, sueldo_mensual:String(e.sueldo_mensual), alias_mp:e.alias_mp||"", fecha_inicio:e.fecha_inicio||"", activo:e.activo });
     setEmpModal(e);
   };
 
@@ -283,43 +280,45 @@ export default function RRHH({ user, locales, localActivo }) {
     }, { onConflict: "empleado_id,mes,anio" });
   };
 
-  const confirmarMes = async () => {
-    if (!novLocal || confirming) return;
-    setConfirming(true);
-    for (const emp of novEmps) {
-      const nov = novMap[emp.id];
-      if (!nov) continue;
-      const { data: saved } = await db.from("rrhh_novedades").upsert({
-        ...(nov.id ? { id: nov.id } : {}), empleado_id: emp.id, mes: novMes, anio: novAnio,
-        inasistencias: nov.inasistencias || 0, presentismo: nov.presentismo || "MANTIENE",
-        dias_trabajados: nov.dias_trabajados, horas_extras: nov.horas_extras || 0,
-        dobles: nov.dobles || 0, pagos_dobles_realizados: nov.pagos_dobles_realizados || 0,
-        feriados: nov.feriados || 0, adelantos: nov.adelantos || 0,
-        vacaciones_dias: nov.vacaciones_dias || 0, observaciones: nov.observaciones || "",
-        estado: "confirmado", cargado_por: user?.id, updated_at: new Date().toISOString(),
-      }, { onConflict: "empleado_id,mes,anio" }).select().single();
-      if (saved) {
-        const vd = valoresDoble.find(v => v.puesto === emp.puesto)?.valor || 0;
-        const calc = calcLiquidacion(emp, nov, vd);
-        await db.from("rrhh_liquidaciones").upsert({ novedad_id: saved.id, ...calc, estado: "pendiente", calculado_at: new Date().toISOString() }, { onConflict: "novedad_id" });
-      }
+  const confirmarUno = async (emp: any) => {
+    const nov = novMap[emp.id];
+    if (!nov) return;
+    const { data: saved } = await db.from("rrhh_novedades").upsert({
+      ...(nov.id ? { id: nov.id } : {}),
+      empleado_id: emp.id, mes: novMes, anio: novAnio,
+      inasistencias: nov.inasistencias || 0,
+      presentismo: nov.presentismo || "MANTIENE",
+      horas_extras: nov.horas_extras || 0,
+      dobles: nov.dobles || 0,
+      feriados: nov.feriados || 0,
+      adelantos: nov.adelantos || 0,
+      vacaciones_dias: nov.vacaciones_dias || 0,
+      fecha_inicio_mes: nov.fecha_inicio_mes || null,
+      observaciones: nov.observaciones || "",
+      estado: "confirmado",
+      cargado_por: user?.id,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "empleado_id,mes,anio" }).select().single();
+
+    if (saved) {
+      const vd = valoresDoble.find(v => v.puesto === emp.puesto)?.valor || 0;
+      const calc = calcLiquidacion(emp, nov, vd);
+      await db.from("rrhh_liquidaciones").upsert({
+        novedad_id: saved.id, ...calc, estado: "pendiente",
+        calculado_at: new Date().toISOString(),
+      }, { onConflict: "novedad_id" });
     }
-    setConfirming(false);
-    showToast("Mes confirmado");
+    showToast(`${emp.apellido} confirmado`);
     loadNovedades();
   };
 
-  const reabrirMes = async () => {
-    if (!novLocal) return;
-    const ids = Object.values(novMap).filter(n => n.id && n.estado === "confirmado").map(n => n.id);
-    if (!ids.length) return;
-    await db.from("rrhh_liquidaciones").delete().in("novedad_id", ids);
-    await db.from("rrhh_novedades").update({ estado: "borrador" }).in("id", ids);
-    loadNovedades();
+  const editarNov = async (empId: string) => {
+    const nov = novMap[empId];
+    if (!nov?.id) return;
+    await db.from("rrhh_liquidaciones").delete().eq("novedad_id", nov.id);
+    await db.from("rrhh_novedades").update({ estado: "borrador" }).eq("id", nov.id);
+    setNovMap(prev => ({ ...prev, [empId]: { ...prev[empId], estado: "borrador" } }));
   };
-
-  const allConfirmado = novEmps.length > 0 && novEmps.every(e => novMap[e.id]?.estado === "confirmado");
-  const canConfirm = novEmps.length > 0 && novEmps.every(e => novMap[e.id]?.presentismo);
 
   // ─── PAGOS ACTIONS ─────────────────────────────────────────────────────────
   const pagarUno = async (row: any) => {
@@ -484,7 +483,7 @@ export default function RRHH({ user, locales, localActivo }) {
             <div className="kpi-label">Próximo pago de sueldos</div>
             <div className="kpi-value kpi-acc" style={{fontSize:18}}>{d.diasFinMes} días</div>
             <div className="kpi-sub" style={{marginTop:8}}>Estimado: <strong style={{color:"var(--acc)"}}>{fmt_$(d.estimado)}</strong></div>
-            <div className="kpi-sub">{d.mensuales} mensuales · {d.quincenales} quincenales · {d.semanales} semanales</div>
+            <div className="kpi-sub">{d.total} empleados activos</div>
           </div>
           {/* SAC */}
           <div className="kpi">
@@ -499,7 +498,7 @@ export default function RRHH({ user, locales, localActivo }) {
           <div className="kpi">
             <div className="kpi-label">Nómina</div>
             <div className="kpi-value" style={{fontSize:18}}>{d.total}</div>
-            <div className="kpi-sub">{d.mensuales} mensuales / {d.quincenales} quinc. / {d.semanales} sem.</div>
+            <div className="kpi-sub">empleados activos</div>
             {d.sinCuil > 0 && <div className="kpi-sub" style={{color:"var(--warn)",marginTop:4}}>⚠ {d.sinCuil} sin CUIL registrado</div>}
           </div>
           {/* Estado del mes */}
@@ -532,10 +531,9 @@ export default function RRHH({ user, locales, localActivo }) {
         <div className="panel">
           {empsFilt.length === 0 ? <div className="empty">Sin empleados</div> : (
             <div style={{overflowX:"auto"}}>
-            <table><thead><tr><th>Nombre</th><th>Local</th><th>Puesto</th><th style={{textAlign:"right"}}>Sueldo</th><th>Modo</th><th>Vacaciones</th><th>CUIL</th><th>Activo</th><th></th></tr></thead>
+            <table><thead><tr><th>Nombre</th><th>Local</th><th>Puesto</th><th style={{textAlign:"right"}}>Sueldo</th><th>Vacaciones</th><th>CUIL</th><th>Activo</th><th></th></tr></thead>
             <tbody>{empsFilt.map(e => {
               const vac = calcularVacaciones(e.fecha_inicio, vacTomadas[e.id] || 0);
-              console.log('[RRHH Debug] emp:', e.apellido, 'fecha_inicio:', e.fecha_inicio, 'vac:', vac);
               const vacColor = vac >= 14 ? "var(--success)" : vac >= 7 ? "var(--warn)" : "var(--muted2)";
               return (
                 <tr key={e.id} style={{opacity: e.activo === false ? 0.4 : 1}}>
@@ -543,7 +541,6 @@ export default function RRHH({ user, locales, localActivo }) {
                   <td style={{fontSize:11}}>{locales.find(l => l.id === e.local_id)?.nombre || "—"}</td>
                   <td><span className="badge b-muted" style={{fontSize:8}}>{e.puesto}</span></td>
                   <td style={{textAlign:"right"}}><span className="num kpi-acc">{fmt_$(e.sueldo_mensual)}</span></td>
-                  <td style={{fontSize:9,color:"var(--muted2)"}}>{e.modo_pago}</td>
                   <td style={{fontSize:11,color:vacColor}}>{vac >= 14 && "🌴 "}{vac.toFixed(1)}d</td>
                   <td className="mono" style={{fontSize:9,color:e.cuil ? "var(--muted2)" : "var(--warn)"}}>{e.cuil || "⚠ sin CUIL"}</td>
                   <td><span className={`badge ${e.activo !== false ? "b-success" : "b-muted"}`} style={{fontSize:8}}>{e.activo !== false ? "Si" : "No"}</span></td>
@@ -571,11 +568,8 @@ export default function RRHH({ user, locales, localActivo }) {
                   <div className="field"><label>Local *</label><select value={empForm.local_id} onChange={e => setEmpForm({...empForm, local_id:e.target.value})}><option value="">Seleccionar...</option>{locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
                   <div className="field"><label>CUIL</label><input value={empForm.cuil} onChange={e => setEmpForm({...empForm, cuil:e.target.value})} placeholder="XX-XXXXXXXX-X" /></div>
                 </div>
-                <div className="form2">
-                  <div className="field"><label>Puesto *</label><select value={empForm.puesto} onChange={e => setEmpForm({...empForm, puesto:e.target.value})}><option value="">Seleccionar...</option>{puestos.map(p => <option key={p} value={p}>{p}</option>)}<option value="__otro">-- Otro --</option></select>
-                    {empForm.puesto === "__otro" && <input style={{marginTop:4}} placeholder="Escribir puesto..." onChange={e => setEmpForm({...empForm, puesto:e.target.value})} />}
-                  </div>
-                  <div className="field"><label>Modo de pago *</label><select value={empForm.modo_pago} onChange={e => setEmpForm({...empForm, modo_pago:e.target.value})}><option value="MENSUAL">Mensual</option><option value="QUINCENAL">Quincenal</option><option value="SEMANAL">Semanal</option></select></div>
+                <div className="field"><label>Puesto *</label><select value={empForm.puesto} onChange={e => setEmpForm({...empForm, puesto:e.target.value})}><option value="">Seleccionar...</option>{puestos.map(p => <option key={p} value={p}>{p}</option>)}<option value="__otro">-- Otro --</option></select>
+                  {empForm.puesto === "__otro" && <input style={{marginTop:4}} placeholder="Escribir puesto..." onChange={e => setEmpForm({...empForm, puesto:e.target.value})} />}
                 </div>
                 <div className="form3">
                   <div className="field"><label>Sueldo mensual *</label><input type="number" value={empForm.sueldo_mensual} onChange={e => setEmpForm({...empForm, sueldo_mensual:e.target.value})} placeholder="0" /></div>
@@ -611,9 +605,10 @@ export default function RRHH({ user, locales, localActivo }) {
             <table>
               <thead><tr>
                 <th style={{minWidth:120,fontSize:8}}>Empleado</th><th style={{width:50,fontSize:8}}>Inasist.</th><th style={{width:90,fontSize:8}}>Present.</th>
-                <th style={{width:50,fontSize:8}}>Días</th><th style={{width:50,fontSize:8}}>HS Ex.</th><th style={{width:50,fontSize:8}}>Dobles</th>
-                <th style={{width:65,fontSize:8}}>Pag.dob.$</th><th style={{width:50,fontSize:8}}>Ferid.</th><th style={{width:65,fontSize:8}}>Adel.$</th>
-                <th style={{width:50,fontSize:8}}>Vac.</th><th style={{width:90,fontSize:8}}>Obs.</th><th style={{textAlign:"right",width:80,fontSize:8}}>Preview</th><th style={{width:50,fontSize:8}}>Estado</th>
+                <th style={{width:50,fontSize:8}}>HS Ex.</th><th style={{width:50,fontSize:8}}>Dobles</th>
+                <th style={{width:50,fontSize:8}}>Ferid.</th><th style={{width:65,fontSize:8}}>Adel.$</th>
+                <th style={{width:50,fontSize:8}}>Vac.</th><th style={{width:100,fontSize:8}}>Inicio mes</th><th style={{width:90,fontSize:8}}>Obs.</th>
+                <th style={{textAlign:"right",width:80,fontSize:8}}>Preview</th><th style={{width:80,fontSize:8}}>Acción</th>
               </tr></thead>
               <tbody>{novEmps.map(emp => {
                 const nov = novMap[emp.id] || {};
@@ -627,24 +622,30 @@ export default function RRHH({ user, locales, localActivo }) {
                     <td><select style={{...inp,width:82,textAlign:"left"}} disabled={locked} value={nov.presentismo || "MANTIENE"} onChange={e => updateNov(emp.id, "presentismo", e.target.value)}>
                       {PRESENTISMO_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select></td>
-                    <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.dias_trabajados ?? ""} onChange={e => updateNov(emp.id, "dias_trabajados", e.target.value ? parseFloat(e.target.value) : null)} /></td>
                     <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.horas_extras ?? 0} onChange={e => updateNov(emp.id, "horas_extras", parseFloat(e.target.value) || 0)} /></td>
                     <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.dobles ?? 0} onChange={e => updateNov(emp.id, "dobles", parseFloat(e.target.value) || 0)} /></td>
-                    <td><input type="number" style={{...inp,width:55}} disabled={locked} value={nov.pagos_dobles_realizados ?? 0} onChange={e => updateNov(emp.id, "pagos_dobles_realizados", parseFloat(e.target.value) || 0)} /></td>
                     <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.feriados ?? 0} onChange={e => updateNov(emp.id, "feriados", parseFloat(e.target.value) || 0)} /></td>
                     <td><input type="number" style={{...inp,width:55}} disabled={locked} value={nov.adelantos ?? 0} onChange={e => updateNov(emp.id, "adelantos", parseFloat(e.target.value) || 0)} /></td>
                     <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.vacaciones_dias ?? 0} onChange={e => updateNov(emp.id, "vacaciones_dias", parseFloat(e.target.value) || 0)} /></td>
+                    <td><input type="date" style={{...inp,width:90}} disabled={locked} value={nov.fecha_inicio_mes || ""} onChange={e => updateNov(emp.id, "fecha_inicio_mes", e.target.value || null)} /></td>
                     <td><input style={{...inp,width:80,textAlign:"left"}} disabled={locked} value={nov.observaciones || ""} onChange={e => updateNov(emp.id, "observaciones", e.target.value)} /></td>
                     <td style={{textAlign:"right"}}><span className="num" style={{color: preview < 0 ? "var(--danger)" : "var(--success)",fontSize:11}}>{fmt_$(preview)}</span></td>
-                    <td><span className={`badge ${nov.estado === "confirmado" ? "b-success" : "b-muted"}`} style={{fontSize:7}}>{nov.estado === "confirmado" ? "OK" : "Borr."}</span></td>
+                    <td>
+                      <div style={{display:"flex",gap:4}}>
+                        {nov.estado === "confirmado" ? (
+                          <>
+                            <span className="badge b-success" style={{fontSize:7}}>OK</span>
+                            {esDueno && <button className="btn btn-ghost btn-sm" style={{fontSize:9,padding:"2px 6px"}} onClick={() => editarNov(emp.id)}>Editar</button>}
+                          </>
+                        ) : (
+                          <button className="btn btn-acc btn-sm" style={{fontSize:9,padding:"2px 8px"}} onClick={() => confirmarUno(emp)}>OK</button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 );
               })}</tbody>
             </table>
-            </div>
-            <div style={{padding:"12px 16px",display:"flex",justifyContent:"flex-end",gap:8}}>
-              {esDueno && allConfirmado && <button className="btn btn-ghost btn-sm" onClick={reabrirMes}>Reabrir mes</button>}
-              {!allConfirmado && <button className="btn btn-acc" onClick={confirmarMes} disabled={!canConfirm || confirming}>{confirming ? "Confirmando..." : "Confirmar mes"}</button>}
             </div>
           </div>
         )}
