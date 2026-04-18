@@ -86,6 +86,14 @@ export default function RRHH({ user, locales, localActivo }) {
   const [dashLoading, setDashLoading] = useState(true);
   const [dashStats, setDashStats] = useState<any>({});
 
+  // Historial
+  const [histLocal, setHistLocal] = useState(defaultLocal);
+  const [histMes, setHistMes] = useState(today.getMonth() + 1);
+  const [histAnio, setHistAnio] = useState(today.getFullYear());
+  const [histData, setHistData] = useState<any[]>([]);
+  const [histLoading, setHistLoading] = useState(false);
+  const [histDetalle, setHistDetalle] = useState<any>(null);
+
   // Config
   const [cfgEdit, setCfgEdit] = useState<any>(null);
 
@@ -208,10 +216,54 @@ export default function RRHH({ user, locales, localActivo }) {
     setDashLoading(false);
   };
 
+  const loadHistorial = async () => {
+    setHistLoading(true);
+    const desde = `${histAnio}-${String(histMes).padStart(2,"0")}-01`;
+    const hasta = `${histAnio}-${String(histMes).padStart(2,"0")}-${String(new Date(histAnio,histMes,0).getDate()).padStart(2,"0")}`;
+
+    const { data: liqs } = await db.from("rrhh_liquidaciones")
+      .select("*, rrhh_novedades(mes, anio, empleado_id, inasistencias, presentismo, horas_extras, dobles, feriados, adelantos, observaciones, rrhh_empleados(nombre, apellido, puesto, local_id))")
+      .eq("estado", "pagado")
+      .gte("pagado_at", desde + "T00:00:00")
+      .lte("pagado_at", hasta + "T23:59:59");
+
+    const { data: especiales } = await db.from("rrhh_pagos_especiales")
+      .select("*, rrhh_empleados(nombre, apellido, puesto, local_id)")
+      .gte("pagado_at", desde + "T00:00:00")
+      .lte("pagado_at", hasta + "T23:59:59");
+
+    const sueldos = (liqs || []).map(l => ({
+      tipo: "sueldo",
+      fecha: l.pagado_at?.split("T")[0],
+      emp: l.rrhh_novedades?.rrhh_empleados,
+      nov: l.rrhh_novedades,
+      liq: l,
+      monto: l.total_a_pagar,
+      label: `Sueldo ${MESES_NOMBRE[l.rrhh_novedades?.mes || 0]} ${l.rrhh_novedades?.anio || ""}`,
+    }));
+
+    const esp = (especiales || []).map(e => ({
+      tipo: e.tipo,
+      fecha: e.pagado_at?.split("T")[0],
+      emp: e.rrhh_empleados,
+      monto: e.monto,
+      label: e.tipo === "vacaciones" ? "Vacaciones" : e.tipo === "aguinaldo" ? "Aguinaldo" : "Liquidación final",
+      detalle: e,
+    }));
+
+    const todos = [...sueldos, ...esp]
+      .filter(h => !histLocal || String(h.emp?.local_id) === String(histLocal))
+      .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+
+    setHistData(todos);
+    setHistLoading(false);
+  };
+
   useEffect(() => { loadValoresDoble(); loadEmpleados(); }, []);
   useEffect(() => { if (tab === "dashboard") loadDashboard(); }, [tab]);
   useEffect(() => { if (tab === "novedades" && novLocal) loadNovedades(); }, [tab, novLocal, novMes, novAnio]);
   useEffect(() => { if (tab === "pagos" && pagoLocal) loadPagos(); }, [tab, pagoLocal, pagoMes, pagoAnio]);
+  useEffect(() => { if (tab === "historial") loadHistorial(); }, [tab, histLocal, histMes, histAnio]);
 
   // Autoseleccionar local para encargados con un solo local
   useEffect(() => {
@@ -348,6 +400,7 @@ export default function RRHH({ user, locales, localActivo }) {
     { id:"empleados", label:"Empleados" },
     { id:"novedades", label:"Novedades" },
     { id:"pagos", label:"Pagos" },
+    { id:"historial", label:"Historial" },
   ];
 
   return (
@@ -695,6 +748,78 @@ export default function RRHH({ user, locales, localActivo }) {
             </div>
           );
         })()}
+      </>)}
+
+      {/* ═══ HISTORIAL ════════════════════════════════════════════════════ */}
+      {tab === "historial" && (<>
+        <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+          <select className="search" style={{width:100}} value={histMes} onChange={e => setHistMes(parseInt(e.target.value))}>
+            {MESES_SEL.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
+          </select>
+          <input type="number" className="search" style={{width:70}} value={histAnio} onChange={e => setHistAnio(parseInt(e.target.value))} />
+          <select className="search" style={{width:160}} value={String(histLocal || "")} onChange={e => setHistLocal(e.target.value)}>
+            {!esEnc && <option value="">Todos los locales</option>}
+            {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+          </select>
+        </div>
+        {histLoading ? <div className="loading">Cargando...</div> : histData.length === 0 ? <div className="empty">Sin pagos en este período</div> : (
+          <div className="panel">
+            <table>
+              <thead><tr><th>Fecha</th><th>Empleado</th><th>Puesto</th><th>Tipo</th><th style={{textAlign:"right"}}>Monto</th><th></th></tr></thead>
+              <tbody>{histData.map((h, i) => (
+                <tr key={i}>
+                  <td className="mono" style={{fontSize:11}}>{fmt_d(h.fecha)}</td>
+                  <td style={{fontWeight:500,fontSize:12}}>{h.emp?.apellido}, {h.emp?.nombre}</td>
+                  <td><span className="badge b-muted" style={{fontSize:8}}>{h.emp?.puesto}</span></td>
+                  <td><span className="badge b-info" style={{fontSize:9}}>{h.label}</span></td>
+                  <td style={{textAlign:"right"}}><span className="num kpi-success">{fmt_$(h.monto)}</span></td>
+                  <td><button className="btn btn-ghost btn-sm" onClick={() => setHistDetalle(h)}>Ver</button></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+
+        {histDetalle && (
+          <div className="overlay" onClick={() => setHistDetalle(null)}>
+            <div className="modal" style={{width:520}} onClick={e => e.stopPropagation()}>
+              <div className="modal-hd">
+                <div className="modal-title">{histDetalle.label} — {histDetalle.emp?.apellido}, {histDetalle.emp?.nombre}</div>
+                <button className="close-btn" onClick={() => setHistDetalle(null)}>✕</button>
+              </div>
+              <div className="modal-body">
+                <div style={{marginBottom:12,fontSize:12,color:"var(--muted2)"}}>
+                  Fecha: {fmt_d(histDetalle.fecha)} · Total: <strong style={{color:"var(--acc)"}}>{fmt_$(histDetalle.monto)}</strong>
+                </div>
+                {histDetalle.nov && (
+                  <div style={{background:"var(--s2)",borderRadius:"var(--r)",padding:12}}>
+                    <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Novedades</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:16,fontSize:11}}>
+                      {histDetalle.nov.inasistencias > 0 && <div>Inasistencias: <strong>{histDetalle.nov.inasistencias}</strong></div>}
+                      <div>Presentismo: <strong>{histDetalle.nov.presentismo === "MANTIENE" ? "Tiene" : "No tiene"}</strong></div>
+                      {histDetalle.nov.horas_extras > 0 && <div>HS extra: <strong>{histDetalle.nov.horas_extras}</strong></div>}
+                      {histDetalle.nov.dobles > 0 && <div>Dobles: <strong>{histDetalle.nov.dobles}</strong></div>}
+                      {histDetalle.nov.feriados > 0 && <div>Feriados: <strong>{histDetalle.nov.feriados}</strong></div>}
+                      {histDetalle.nov.adelantos > 0 && <div>Adelantos: <strong>{fmt_$(histDetalle.nov.adelantos)}</strong></div>}
+                      {histDetalle.nov.observaciones && <div>Obs: <strong>{histDetalle.nov.observaciones}</strong></div>}
+                    </div>
+                    {histDetalle.liq && (
+                      <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid var(--bd)",display:"flex",flexWrap:"wrap",gap:16,fontSize:11}}>
+                        <div>Base: <strong>{fmt_$(histDetalle.liq.sueldo_base)}</strong></div>
+                        {histDetalle.liq.descuento_ausencias > 0 && <div style={{color:"var(--danger)"}}>-Ausencias: {fmt_$(histDetalle.liq.descuento_ausencias)}</div>}
+                        {histDetalle.liq.total_horas_extras > 0 && <div>+HE: {fmt_$(histDetalle.liq.total_horas_extras)}</div>}
+                        {histDetalle.liq.monto_presentismo > 0 && <div style={{color:"var(--success)"}}>+Present.: {fmt_$(histDetalle.liq.monto_presentismo)}</div>}
+                        {histDetalle.liq.adelantos > 0 && <div style={{color:"var(--warn)"}}>-Adelantos: {fmt_$(histDetalle.liq.adelantos)}</div>}
+                        <div><strong>Total: {fmt_$(histDetalle.liq.total_a_pagar)}</strong></div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="modal-ft"><button className="btn btn-sec" onClick={() => setHistDetalle(null)}>Cerrar</button></div>
+            </div>
+          </div>
+        )}
       </>)}
 
       {/* ═══ LEGAJO MODAL ═════════════════════════════════════════════════ */}
