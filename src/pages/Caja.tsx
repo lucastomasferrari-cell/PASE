@@ -92,10 +92,52 @@ export default function Caja({ localActivo }: any) {
 
   const guardarEditMov = async () => {
     if (!editMov) return;
-    const { error } = await db.from("movimientos").update({
-      fecha: editMov.fecha, detalle: editMov.detalle, cat: editMov.cat || null
+    const original = movimientos.find(m => m.id === editMov.id);
+
+    await db.from("auditoria").insert([{
+      tabla: "movimientos", accion: "EDICION",
+      detalle: JSON.stringify({
+        id: editMov.id,
+        antes: {
+          fecha: original?.fecha, detalle: original?.detalle,
+          cat: original?.cat, importe: original?.importe,
+          cuenta: original?.cuenta,
+        },
+        despues: {
+          fecha: editMov.fecha, detalle: editMov.detalle,
+          cat: editMov.cat, importe: editMov.importe,
+          cuenta: editMov.cuenta,
+        },
+        justificativo: editMov.justificativo,
+      }),
+      fecha: new Date().toISOString(),
+    }]);
+
+    if (original && (original.importe !== editMov.importe || original.cuenta !== editMov.cuenta)) {
+      const lid = editMov.local_id;
+      if (lid) {
+        const { data: cajaOrig } = await db.from("saldos_caja").select("saldo")
+          .eq("cuenta", original.cuenta).eq("local_id", lid).maybeSingle();
+        if (cajaOrig) await db.from("saldos_caja")
+          .update({ saldo: (cajaOrig.saldo || 0) - (original.importe || 0) })
+          .eq("cuenta", original.cuenta).eq("local_id", lid);
+
+        const { data: cajaNueva } = await db.from("saldos_caja").select("saldo")
+          .eq("cuenta", editMov.cuenta).eq("local_id", lid).maybeSingle();
+        if (cajaNueva) await db.from("saldos_caja")
+          .update({ saldo: (cajaNueva.saldo || 0) + (parseFloat(editMov.importe) || 0) })
+          .eq("cuenta", editMov.cuenta).eq("local_id", lid);
+      }
+    }
+
+    await db.from("movimientos").update({
+      fecha: editMov.fecha,
+      detalle: editMov.detalle,
+      cat: editMov.cat || null,
+      importe: parseFloat(editMov.importe) || editMov.importe,
+      cuenta: editMov.cuenta,
     }).eq("id", editMov.id);
-    if (error) { alert("Error al editar: " + error.message); return; }
+
     setEditMov(null); load();
   };
 
@@ -181,22 +223,48 @@ export default function Caja({ localActivo }: any) {
       )}
 
       {editMov && (
-        <div className="overlay" onClick={()=>setEditMov(null)}>
-          <div className="modal" onClick={e=>e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Editar Movimiento</div><button className="close-btn" onClick={()=>setEditMov(null)}>✕</button></div>
+        <div className="overlay" onClick={() => setEditMov(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-hd">
+              <div className="modal-title">Editar Movimiento</div>
+              <button className="close-btn" onClick={() => setEditMov(null)}>✕</button>
+            </div>
             <div className="modal-body">
-              <div className="alert alert-warn">El importe, cuenta y tipo no son editables para no descuadrar los saldos. Si necesitás corregir el importe, eliminá el movimiento y creá uno nuevo.</div>
               <div className="form2">
-                <div className="field"><label>Fecha</label><input type="date" value={editMov.fecha} onChange={e=>setEditMov({...editMov,fecha:e.target.value})}/></div>
-                <div className="field"><label>Categoría EERR</label><select value={editMov.cat||""} onChange={e=>setEditMov({...editMov,cat:e.target.value})}><option value="">Sin categoría</option>{CATEGORIAS_COMPRA.map(c=><option key={c}>{c}</option>)}</select></div>
+                <div className="field"><label>Fecha</label>
+                  <input type="date" value={editMov.fecha} onChange={e => setEditMov({...editMov, fecha: e.target.value})}/>
+                </div>
+                <div className="field"><label>Categoría</label>
+                  <select value={editMov.cat||""} onChange={e => setEditMov({...editMov, cat: e.target.value})}>
+                    <option value="">Sin categoría</option>
+                    {CATEGORIAS_COMPRA.map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
               </div>
-              <div className="field"><label>Detalle</label><input value={editMov.detalle||""} onChange={e=>setEditMov({...editMov,detalle:e.target.value})} placeholder="Descripción..."/></div>
-              <div className="form2" style={{marginTop:8,opacity:0.5}}>
-                <div className="field"><label>Cuenta (bloqueado)</label><input readOnly value={editMov.cuenta}/></div>
-                <div className="field"><label>Importe (bloqueado)</label><input readOnly value={fmt_$(editMov.importe)}/></div>
+              <div className="form2">
+                <div className="field"><label>Cuenta</label>
+                  <select value={editMov.cuenta} onChange={e => setEditMov({...editMov, cuenta: e.target.value})}>
+                    {CUENTAS.map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="field"><label>Importe $</label>
+                  <input type="number" value={editMov.importe}
+                    onChange={e => setEditMov({...editMov, importe: e.target.value})}/>
+                </div>
+              </div>
+              <div className="field"><label>Detalle</label>
+                <input value={editMov.detalle||""} onChange={e => setEditMov({...editMov, detalle: e.target.value})}/>
+              </div>
+              <div className="field"><label>Justificativo de la edición *</label>
+                <input value={editMov.justificativo||""}
+                  onChange={e => setEditMov({...editMov, justificativo: e.target.value})}
+                  placeholder="Motivo de la modificación..."/>
               </div>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setEditMov(null)}>Cancelar</button><button className="btn btn-acc" onClick={guardarEditMov}>Guardar</button></div>
+            <div className="modal-ft">
+              <button className="btn btn-sec" onClick={() => setEditMov(null)}>Cancelar</button>
+              <button className="btn btn-acc" onClick={guardarEditMov}>Guardar</button>
+            </div>
           </div>
         </div>
       )}
