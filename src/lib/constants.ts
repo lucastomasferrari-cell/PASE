@@ -1,5 +1,25 @@
 export const CATEGORIAS_COMPRA = ["PESCADERIA","CARNICERIA","VERDULERIA","BEBIDAS","VINOS","ALMACEN","PACKAGING","PAPELERIA","BARRIO CHINO","PRODUCTOS ORIENTALES","SUPERMERCADO","HIELO","LIMPIEZA","CONTADOR","PUBLICIDAD","EXPENSAS","PROPINAS","SUSHIMAN PM","EQUIPAMIENTO","SUELDOS","OTROS"];
 export const MEDIOS_COBRO = ["EFECTIVO SALON","TARJETA CREDITO","TARJETA DEBITO","QR","LINK","RAPPI ONLINE","PEYA ONLINE","PEYA EFECTIVO","MP DELIVERY","BIGBOX","FANBAG","EVENTO","TRANSFERENCIA","Point MP","Point Nave","NAVE","MASDELIVERY ONLINE","EFECTIVO DELIVERY"];
+export const MEDIO_A_CUENTA: Record<string, string> = {
+  "EFECTIVO SALON": "Caja Chica",
+  "EFECTIVO DELIVERY": "Caja Chica",
+  "TARJETA CREDITO": "Banco",
+  "TARJETA DEBITO": "Banco",
+  "QR": "Banco",
+  "LINK": "Banco",
+  "TRANSFERENCIA": "Banco",
+  "RAPPI ONLINE": "MercadoPago",
+  "PEYA ONLINE": "MercadoPago",
+  "PEYA EFECTIVO": "Caja Chica",
+  "MP DELIVERY": "MercadoPago",
+  "MASDELIVERY ONLINE": "MercadoPago",
+  "BIGBOX": "MercadoPago",
+  "FANBAG": "MercadoPago",
+  "Point MP": "MercadoPago",
+  "Point Nave": "MercadoPago",
+  "NAVE": "MercadoPago",
+  "EVENTO": "Caja Chica",
+};
 export const CUENTAS = ["Caja Chica","Caja Mayor","Caja Efectivo","MercadoPago","Banco"];
 export const UNIDADES = ["kg","g","litro","ml","unidad","caja","bolsa","docena"];
 export const GASTOS_FIJOS = ["ALQUILER","EDESUR","METROGAS","AYSA","INTERNET","MAXIREST","WOKI","SEGURO","FUMIGACION","ABL","EXPENSAS","AQA","CONTADOR","OTROS FIJOS"];
