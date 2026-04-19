@@ -18,6 +18,7 @@ const DOC_TIPOS = [
   { value:"contrato", label:"Contrato" },
   { value:"otro", label:"Otro" },
 ];
+const CUENTAS_LIQ = ["Caja Efectivo","Caja Chica","Caja Mayor","MercadoPago","Banco"];
 
 export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
   const [emp, setEmp] = useState<any>(null);
@@ -280,401 +281,518 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
         {tabs.map(t => <div key={t.id} className={`tab ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)}>{t.label}</div>)}
       </div>
 
-      {/* ═══ DATOS PERSONALES ═══════════════════════════════════════════════ */}
-      {tab === "datos" && (<>
-        <div className="grid3" style={{marginBottom:16}}>
-          <div className="kpi"><div className="kpi-label">CUIL</div><div style={{fontSize:13}}>{emp.cuil || "—"}</div></div>
-          <div className="kpi"><div className="kpi-label">Fecha ingreso</div><div style={{fontSize:13}}>{fmt_d(emp.fecha_inicio)}</div></div>
-          <div className="kpi"><div className="kpi-label">Antigüedad</div><div style={{fontSize:13}}>{Math.floor(antiguedadAnios)} años, {Math.floor((antiguedadAnios % 1) * 12)} meses</div></div>
-        </div>
-        <div className="grid2" style={{marginBottom:16}}>
-          <div className="kpi"><div className="kpi-label">CBU / Alias</div><div style={{fontSize:13}}>{emp.alias_mp || "—"}</div></div>
-          <div className="kpi">
-            <div className="kpi-label">Estado</div>
-            <span className={`badge ${emp.activo ? "b-success" : "b-muted"}`} style={{cursor:"pointer"}} onClick={toggleActivo}>
-              {emp.activo ? "Activo" : "Inactivo"}
-            </span>
-          </div>
-        </div>
+      {tab === "datos" && (
+        <TabDatos
+          emp={emp}
+          histSueldos={histSueldos}
+          antiguedadAnios={antiguedadAnios}
+          vacAcumuladas={vacAcumuladas}
+          esDueno={esDueno}
+          sueldoModal={sueldoModal}
+          setSueldoModal={setSueldoModal}
+          sueldoForm={sueldoForm}
+          setSueldoForm={setSueldoForm}
+          guardarSueldo={guardarSueldo}
+          toggleActivo={toggleActivo}
+          liqFinalModal={liqFinalModal}
+          setLiqFinalModal={setLiqFinalModal}
+          liqFinalForm={liqFinalForm}
+          setLiqFinalForm={setLiqFinalForm}
+          liqFinalData={liqFinalData}
+          liqFinalCuenta={liqFinalCuenta}
+          setLiqFinalCuenta={setLiqFinalCuenta}
+          liqFinalOverrides={liqFinalOverrides}
+          setLiqFinalOverrides={setLiqFinalOverrides}
+          liqFinalLoading={liqFinalLoading}
+          setLiqFinalLoading={setLiqFinalLoading}
+          user={user}
+          showToast={showToast}
+          loadAll={loadAll}
+        />
+      )}
 
-        <div className="panel">
-          <div className="panel-hd">
-            <span className="panel-title">Sueldo actual: {fmt_$(emp.sueldo_mensual)}</span>
-            {esDueno && <button className="btn btn-acc btn-sm" onClick={() => { setSueldoForm({ monto:String(emp.sueldo_mensual), motivo:"" }); setSueldoModal(true); }}>Actualizar sueldo</button>}
-          </div>
-          {histSueldos.length === 0 ? <div className="empty">Sin cambios de sueldo registrados</div> : (
-            <table><thead><tr><th>Fecha</th><th style={{textAlign:"right"}}>Anterior</th><th style={{textAlign:"right"}}>Nuevo</th><th>Motivo</th></tr></thead>
-            <tbody>{histSueldos.map(h => (
-              <tr key={h.id}>
-                <td className="mono">{fmt_d(h.fecha_cambio)}</td>
-                <td style={{textAlign:"right"}}><span className="num" style={{color:"var(--muted2)"}}>{fmt_$(h.sueldo_anterior)}</span></td>
-                <td style={{textAlign:"right"}}><span className="num kpi-acc">{fmt_$(h.sueldo_nuevo)}</span></td>
-                <td style={{fontSize:11,color:"var(--muted2)"}}>{h.motivo || "—"}</td>
-              </tr>
-            ))}</tbody></table>
-          )}
-        </div>
+      {tab === "movimientos" && (
+        <TabMovimientos
+          movMeses={movMeses}
+          expanded={expanded}
+          setExpanded={setExpanded}
+          esDueno={esDueno}
+        />
+      )}
 
-        {esDueno && emp.activo && (
-          <button className="btn btn-danger btn-sm" style={{marginTop:12}} onClick={() => setLiqFinalModal(true)}>Liquidación final</button>
-        )}
+      {tab === "vacagu" && (
+        <TabVacAgu
+          vacAcumuladas={vacAcumuladas}
+          vacTomadas={vacTomadas}
+          valorDia={valorDia}
+          plusVacacional={plusVacacional}
+          diasVacAnuales={diasVacAnuales}
+          diasVacPorMes={diasVacPorMes}
+          antiguedadAnios={antiguedadAnios}
+          sacAcumulado={sacAcumulado}
+          sacTeorico={sacTeorico}
+          mesActual={mesActual}
+          mesesEnSemestre={mesesEnSemestre}
+          pagosEsp={pagosEsp}
+          esDueno={esDueno}
+          vacModal={vacModal}
+          setVacModal={setVacModal}
+          vacDias={vacDias}
+          setVacDias={setVacDias}
+          vacMonto={vacMonto}
+          setVacMonto={setVacMonto}
+          aguModal={aguModal}
+          setAguModal={setAguModal}
+          aguMonto={aguMonto}
+          setAguMonto={setAguMonto}
+          pagarVacaciones={pagarVacaciones}
+          pagarAguinaldo={pagarAguinaldo}
+        />
+      )}
 
-        {sueldoModal && (
-          <div className="overlay" onClick={() => setSueldoModal(false)}>
-            <div className="modal" style={{width:420}} onClick={e => e.stopPropagation()}>
-              <div className="modal-hd"><div className="modal-title">Actualizar sueldo</div><button className="close-btn" onClick={() => setSueldoModal(false)}>✕</button></div>
-              <div className="modal-body">
-                <div className="alert alert-info">Sueldo actual: {fmt_$(emp.sueldo_mensual)}</div>
-                <div className="field"><label>Nuevo sueldo $</label><input type="number" value={sueldoForm.monto} onChange={e => setSueldoForm({...sueldoForm, monto:e.target.value})} /></div>
-                <div className="field"><label>Motivo</label><input value={sueldoForm.motivo} onChange={e => setSueldoForm({...sueldoForm, motivo:e.target.value})} placeholder="Aumento paritarias, promoción..." /></div>
-              </div>
-              <div className="modal-ft"><button className="btn btn-sec" onClick={() => setSueldoModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardarSueldo}>Guardar</button></div>
-            </div>
-          </div>
-        )}
-
-        {liqFinalModal && (() => {
-          const esDespidoSinCausa = liqFinalForm.motivo === "Despido sin causa";
-          const esAcuerdoMutuo = liqFinalForm.motivo === "Acuerdo mutuo";
-          const antAnios = Math.max(1, Math.floor(antiguedadAnios));
-
-          const conceptos: [string, string][] = [
-            ["proporcional_mes", "Proporcional mes"],
-            ["vacaciones_dinero", "Vacaciones (" + vacAcumuladas.toFixed(1) + " días)"],
-            ["sac_proporcional", "SAC proporcional"],
-            ...(esDespidoSinCausa ? ([
-              ["indemnizacion", "Indemnización (" + antAnios + " año" + (antAnios > 1 ? "s" : "") + ")"],
-              ["preaviso", "Preaviso"],
-              ["integracion_mes", "Integración mes despido"],
-            ] as [string, string][]) : []),
-          ];
-
-          const getConceptoMonto = (key: string, calculado: number) => {
-            if (esAcuerdoMutuo && liqFinalOverrides[key] !== undefined) {
-              return parseFloat(liqFinalOverrides[key]) || 0;
-            }
-            return calculado;
-          };
-
-          const total = conceptos.reduce((s, [k]) => {
-            const calc = liqFinalData?.[k] || 0;
-            return s + getConceptoMonto(k, calc);
-          }, 0);
-
-          const confirmarLiqFinal = async () => {
-            if (!liqFinalData || liqFinalLoading) return;
-            setLiqFinalLoading(true);
-            try {
-              const { data: existing } = await db.from("rrhh_pagos_especiales")
-                .select("id").eq("empleado_id", emp.id).eq("tipo", "liquidacion_final");
-              if (existing && existing.length > 0) {
-                alert("Ya existe una liquidación final para este empleado");
-                return;
-              }
-              const desc = `Liquidación final ${emp.apellido} ${emp.nombre}`;
-
-              await db.from("rrhh_pagos_especiales").insert([{
-                empleado_id: emp.id, tipo: "liquidacion_final", monto: total,
-                gasto_id: null, pagado_por: user?.id,
-              }]);
-              if (emp.local_id) {
-                const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", liqFinalCuenta).eq("local_id", emp.local_id).maybeSingle();
-                if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - total }).eq("cuenta", liqFinalCuenta).eq("local_id", emp.local_id);
-              }
-              await db.from("movimientos").insert([{
-                id: genId("MOV"), fecha: toISO(today), cuenta: liqFinalCuenta,
-                tipo: "Liquidación Final", cat: "SUELDOS", importe: -total, detalle: desc,
-                local_id: emp.local_id,
-              }]);
-              await db.from("rrhh_empleados").update({
-                activo: false, fecha_egreso: liqFinalForm.fecha_egreso, motivo_baja: liqFinalForm.motivo,
-                vacaciones_dias_acumulados: 0, aguinaldo_acumulado: 0,
-              }).eq("id", emp.id);
-              setLiqFinalModal(false);
-              showToast("Liquidación final procesada");
-              loadAll();
-            } finally {
-              setLiqFinalLoading(false);
-            }
-          };
-
-          return (
-            <div className="overlay" onClick={() => setLiqFinalModal(false)}>
-              <div className="modal" style={{width:580}} onClick={e => e.stopPropagation()}>
-                <div className="modal-hd"><div className="modal-title">Liquidación Final — {emp.apellido}, {emp.nombre}</div><button className="close-btn" onClick={() => setLiqFinalModal(false)}>✕</button></div>
-                <div className="modal-body">
-                  <div className="form2" style={{marginBottom:16}}>
-                    <div className="field"><label>Fecha de egreso</label><input type="date" value={liqFinalForm.fecha_egreso} onChange={e => setLiqFinalForm({...liqFinalForm, fecha_egreso:e.target.value})} /></div>
-                    <div className="field"><label>Motivo</label>
-                      <select value={liqFinalForm.motivo} onChange={e => setLiqFinalForm({...liqFinalForm, motivo:e.target.value})}>
-                        <option value="Renuncia">Renuncia</option><option value="Despido sin causa">Despido sin causa</option><option value="Despido con causa">Despido con causa</option><option value="Acuerdo mutuo">Acuerdo mutuo</option>
-                      </select></div>
-                  </div>
-                  <div style={{background:"var(--s2)",borderRadius:"var(--r)",padding:16}}>
-                    <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>
-                      Conceptos{esAcuerdoMutuo && <span style={{color:"var(--warn)",marginLeft:8}}>(editables)</span>}
-                    </div>
-                    {conceptos.map(([key, label]) => {
-                      const calc = liqFinalData?.[key] || 0;
-                      const monto = getConceptoMonto(key, calc);
-                      return (
-                        <div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid var(--bd)",fontSize:12}}>
-                          <span>{label}</span>
-                          {esAcuerdoMutuo ? (
-                            <input
-                              type="number"
-                              value={liqFinalOverrides[key] ?? String(calc)}
-                              onChange={e => setLiqFinalOverrides(prev => ({...prev, [key]: e.target.value}))}
-                              style={{width:130,background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--acc)",padding:"3px 6px",fontFamily:"'DM Mono',monospace",fontSize:11,textAlign:"right",borderRadius:"var(--r)"}}
-                            />
-                          ) : (
-                            <span className="num" style={{color:"var(--acc)"}}>{fmt_$(monto)}</span>
-                          )}
-                        </div>
-                      );
-                    })}
-                    <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",fontSize:13,fontWeight:500}}>
-                      <span>TOTAL</span><span className="num" style={{color:"var(--success)",fontSize:15,fontWeight:500}}>{fmt_$(total)}</span>
-                    </div>
-                  </div>
-                  <div className="field" style={{marginTop:12}}><label>Cuenta de egreso</label>
-                    <select value={liqFinalCuenta} onChange={e => setLiqFinalCuenta(e.target.value)}>
-                      {["Caja Efectivo","Caja Chica","Caja Mayor","MercadoPago","Banco"].map(c => <option key={c}>{c}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="modal-ft">
-                  <button className="btn btn-sec" onClick={() => setLiqFinalModal(false)}>Cancelar</button>
-                  <button className="btn btn-danger" disabled={liqFinalLoading} onClick={confirmarLiqFinal}>{liqFinalLoading ? "Procesando..." : "Confirmar y pagar"}</button>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-      </>)}
-
-      {/* ═══ MOVIMIENTOS ═══════════════════════════════════════════════════ */}
-      {tab === "movimientos" && (<>
-        {movMeses.length === 0 ? <div className="empty">Sin movimientos registrados</div> : movMeses.map(nov => {
-          const liqArr = Array.isArray(nov.rrhh_liquidaciones) ? nov.rrhh_liquidaciones : [];
-          const liq = liqArr[0];
-          const key = `${nov.anio}-${nov.mes}`;
-          const isExp = expanded === key;
-          const pagado = liq?.estado === "pagado";
-          const puedePagar = esDueno && nov.estado === "confirmado" && liq && !pagado;
-
-          return (
-            <div key={key} className="panel" style={{marginBottom:8}}>
-              <div className="panel-hd" style={{cursor:"pointer"}} onClick={() => setExpanded(isExp ? null : key)}>
-                <div style={{display:"flex",alignItems:"center",gap:12}}>
-                  <span className="panel-title">{MESES[nov.mes]} {nov.anio}</span>
-                  <span className={`badge ${nov.estado === "confirmado" ? (pagado ? "b-success" : "b-warn") : "b-muted"}`}>
-                    {nov.estado === "confirmado" ? (pagado ? "Pagado" : "Pendiente") : "Borrador"}
-                  </span>
-                </div>
-                <div style={{display:"flex",alignItems:"center",gap:12}}>
-                  {liq && <span className="num" style={{color: pagado ? "var(--success)" : "var(--acc)"}}>{fmt_$(liq.total_a_pagar)}</span>}
-                  <span style={{color:"var(--muted2)"}}>{isExp ? "▲" : "▼"}</span>
-                </div>
-              </div>
-              {isExp && (
-                <div style={{padding:16}}>
-                  <div className="grid3" style={{marginBottom:12}}>
-                    <div><span style={{fontSize:9,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>Inasistencias</span><div>{nov.inasistencias || 0}</div></div>
-                    <div><span style={{fontSize:9,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>Presentismo</span><div>{nov.presentismo}</div></div>
-                    <div><span style={{fontSize:9,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>Hs Extras</span><div>{nov.horas_extras || 0}</div></div>
-                  </div>
-                  <div className="grid3" style={{marginBottom:12}}>
-                    <div><span style={{fontSize:9,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>Dobles</span><div>{nov.dobles || 0}</div></div>
-                    <div><span style={{fontSize:9,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>Feriados</span><div>{nov.feriados || 0}</div></div>
-                    <div><span style={{fontSize:9,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>Adelantos</span><div>{fmt_$(nov.adelantos || 0)}</div></div>
-                  </div>
-                  {nov.observaciones && <div style={{fontSize:11,color:"var(--muted2)",marginBottom:12}}>Obs: {nov.observaciones}</div>}
-
-                  {liq && (
-                    <div style={{background:"var(--s2)",borderRadius:"var(--r)",padding:12,marginBottom:12}}>
-                      <div style={{display:"flex",flexWrap:"wrap",gap:16,fontSize:11}}>
-                        <div>Base: <strong>{fmt_$(liq.sueldo_base)}</strong></div>
-                        {liq.descuento_ausencias > 0 && <div style={{color:"var(--danger)"}}>-Ausencias: {fmt_$(liq.descuento_ausencias)}</div>}
-                        {liq.total_horas_extras > 0 && <div>+HE: {fmt_$(liq.total_horas_extras)}</div>}
-                        {liq.total_dobles > 0 && <div>+Dobles: {fmt_$(liq.total_dobles)}</div>}
-                        {liq.total_feriados > 0 && <div>+Feriados: {fmt_$(liq.total_feriados)}</div>}
-                        {liq.monto_presentismo > 0 && <div style={{color:"var(--success)"}}>+Present.: {fmt_$(liq.monto_presentismo)}</div>}
-                        {liq.adelantos > 0 && <div style={{color:"var(--warn)"}}>-Adelantos: {fmt_$(liq.adelantos)}</div>}
-                        {liq.pagos_realizados > 0 && <div style={{color:"var(--warn)"}}>-Pagos: {fmt_$(liq.pagos_realizados)}</div>}
-                      </div>
-                      <div style={{marginTop:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <div>
-                          <span className="num" style={{fontSize:14,color:"var(--success)"}}>{fmt_$(liq.total_a_pagar)}</span>
-                          {liq.efectivo > 0 && <span style={{fontSize:10,color:"var(--muted2)",marginLeft:8}}>Efvo: {fmt_$(liq.efectivo)}</span>}
-                          {liq.transferencia > 0 && <span style={{fontSize:10,color:"var(--info)",marginLeft:8}}>Transf: {fmt_$(liq.transferencia)}</span>}
-                        </div>
-                        {/* Pagos se gestionan desde el tab Pagos de RRHH */}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </>)}
-
-      {/* ═══ VACACIONES Y AGUINALDO ════════════════════════════════════════ */}
-      {tab === "vacagu" && (<>
-        <div className="grid2" style={{marginBottom:20}}>
-          {/* Vacaciones */}
-          <div className="panel">
-            <div className="panel-hd"><span className="panel-title">Vacaciones</span></div>
-            <div style={{padding:16}}>
-              <div style={{marginBottom:12}}>
-                <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Días disponibles</div>
-                <div className="num" style={{fontSize:17,fontWeight:500,color:"var(--acc)"}}>{vacAcumuladas.toFixed(1)} días</div>
-                <div style={{fontSize:11,color:"var(--muted2)",marginTop:2}}>Equivale a {fmt_$(vacAcumuladas * valorDia)}</div>
-                {vacTomadas > 0 && <div style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>Tomadas: {vacTomadas.toFixed(1)} días</div>}
-              </div>
-              <div style={{fontSize:10,color:"var(--muted2)",marginBottom:12}}>
-                Corresponde: {diasVacAnuales} días/año ({diasVacPorMes.toFixed(2)} días/mes) · Antigüedad: {Math.floor(antiguedadAnios)} años
-              </div>
-              {esDueno && vacAcumuladas > 0 && (
-                <button className="btn btn-acc btn-sm" onClick={() => { setVacDias(String(vacAcumuladas.toFixed(1))); setVacMonto(""); setVacModal(true); }}>Pagar vacaciones</button>
-              )}
-            </div>
-          </div>
-
-          {/* Aguinaldo */}
-          <div className="panel">
-            <div className="panel-hd"><span className="panel-title">Aguinaldo</span></div>
-            <div style={{padding:16}}>
-              <div style={{marginBottom:12}}>
-                <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Acumulado proporcional ({mesesEnSemestre} {mesesEnSemestre === 1 ? "mes" : "meses"} del semestre)</div>
-                <div className="num" style={{fontSize:17,fontWeight:500,color:"var(--acc)"}}>{fmt_$(sacAcumulado)}</div>
-                <div style={{fontSize:11,color:"var(--muted2)",marginTop:4}}>Teórico semestre completo: {fmt_$(sacTeorico)}</div>
-                <div style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>SAC = mejor sueldo del semestre / 2 · Pago en {mesActual <= 6 ? "junio" : "diciembre"}</div>
-              </div>
-              {esDueno && sacAcumulado > 0 && (
-                <button className="btn btn-acc btn-sm" onClick={() => { setAguMonto(""); setAguModal(true); }}>Pagar aguinaldo</button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Historial pagos especiales */}
-        <div className="panel">
-          <div className="panel-hd"><span className="panel-title">Historial de pagos especiales</span></div>
-          {pagosEsp.length === 0 ? <div className="empty">Sin pagos registrados</div> : (
-            <table><thead><tr><th>Fecha</th><th>Tipo</th><th>Días</th><th style={{textAlign:"right"}}>Monto</th></tr></thead>
-            <tbody>{pagosEsp.map(p => (
-              <tr key={p.id}>
-                <td className="mono">{fmt_d(p.pagado_at?.split("T")[0])}</td>
-                <td><span className={`badge ${p.tipo === "vacaciones" ? "b-info" : "b-warn"}`}>{p.tipo}</span></td>
-                <td>{p.dias || "—"}</td>
-                <td style={{textAlign:"right"}}><span className="num kpi-acc">{fmt_$(p.monto)}</span></td>
-              </tr>
-            ))}</tbody></table>
-          )}
-        </div>
-
-        {/* Modal vacaciones */}
-        {vacModal && (
-          <div className="overlay" onClick={() => setVacModal(false)}>
-            <div className="modal" style={{width:440}} onClick={e => e.stopPropagation()}>
-              <div className="modal-hd"><div className="modal-title">Pagar vacaciones</div><button className="close-btn" onClick={() => setVacModal(false)}>✕</button></div>
-              <div className="modal-body">
-                <div className="field"><label>Días a pagar</label>
-                  <input type="number" value={vacDias} onChange={e => setVacDias(e.target.value)} placeholder={vacAcumuladas.toFixed(1)} />
-                </div>
-                <div className="field"><label>Monto $</label>
-                  <input type="number" value={vacMonto} onChange={e => setVacMonto(e.target.value)} placeholder={fmt_$(plusVacacional)} />
-                  <div style={{fontSize:10,color:"var(--muted2)",marginTop:4}}>
-                    Plus vacacional recomendado: <strong style={{color:"var(--acc)"}}>{fmt_$(plusVacacional)}</strong> ({vacAcumuladas.toFixed(1)} días × sueldo/25)
-                  </div>
-                </div>
-              </div>
-              <div className="modal-ft">
-                <button className="btn btn-sec" onClick={() => setVacModal(false)}>Cancelar</button>
-                <button className="btn btn-acc" onClick={pagarVacaciones}>Confirmar pago</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modal aguinaldo */}
-        {aguModal && (
-          <div className="overlay" onClick={() => setAguModal(false)}>
-            <div className="modal" style={{width:440}} onClick={e => e.stopPropagation()}>
-              <div className="modal-hd"><div className="modal-title">Pagar aguinaldo</div><button className="close-btn" onClick={() => setAguModal(false)}>✕</button></div>
-              <div className="modal-body">
-                <div className="field"><label>Monto $</label>
-                  <input type="number" value={aguMonto} onChange={e => setAguMonto(e.target.value)} placeholder={fmt_$(sacAcumulado)} />
-                  <div style={{fontSize:10,color:"var(--muted2)",marginTop:4}}>
-                    Acumulado proporcional: <strong style={{color:"var(--acc)"}}>{fmt_$(sacAcumulado)}</strong> · Teórico semestre: {fmt_$(sacTeorico)}
-                  </div>
-                </div>
-              </div>
-              <div className="modal-ft">
-                <button className="btn btn-sec" onClick={() => setAguModal(false)}>Cancelar</button>
-                <button className="btn btn-acc" onClick={pagarAguinaldo}>Confirmar pago</button>
-              </div>
-            </div>
-          </div>
-        )}
-      </>)}
-
-      {/* ═══ DOCUMENTOS ═══════════════════════════════════════════════════ */}
-      {tab === "documentos" && (<>
-        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
-          {esDueno && <button className="btn btn-acc btn-sm" onClick={() => setDocModal(true)}>+ Subir documento</button>}
-        </div>
-        <div className="panel">
-          {docs.length === 0 ? <div className="empty">Sin documentos</div> : (
-            <table><thead><tr><th>Nombre</th><th>Tipo</th><th>Período</th><th>Fecha</th><th></th></tr></thead>
-            <tbody>{docs.map(d => (
-              <tr key={d.id}>
-                <td style={{fontWeight:500,fontSize:11}}>{d.nombre_archivo}</td>
-                <td><span className="badge b-info">{DOC_TIPOS.find(t => t.value === d.tipo)?.label || d.tipo}</span></td>
-                <td style={{fontSize:11,color:"var(--muted2)"}}>{d.mes && d.anio ? `${MESES[d.mes]} ${d.anio}` : "—"}</td>
-                <td className="mono" style={{fontSize:11}}>{fmt_d(d.subido_at?.split("T")[0])}</td>
-                <td>
-                  <div style={{display:"flex",gap:4}}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => verDoc(d)}>Ver</button>
-                    {esDueno && <button className="btn btn-danger btn-sm" onClick={() => eliminarDoc(d)}>X</button>}
-                  </div>
-                </td>
-              </tr>
-            ))}</tbody></table>
-          )}
-        </div>
-
-        {docModal && (
-          <div className="overlay" onClick={() => setDocModal(false)}>
-            <div className="modal" style={{width:480}} onClick={e => e.stopPropagation()}>
-              <div className="modal-hd"><div className="modal-title">Subir documento</div><button className="close-btn" onClick={() => setDocModal(false)}>✕</button></div>
-              <div className="modal-body">
-                <div className="field"><label>Tipo de documento</label>
-                  <select value={docForm.tipo} onChange={e => setDocForm({...docForm, tipo:e.target.value})}>
-                    {DOC_TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select></div>
-                <div className="form2">
-                  <div className="field"><label>Mes (opcional)</label>
-                    <select value={docForm.mes} onChange={e => setDocForm({...docForm, mes:e.target.value})}>
-                      <option value="">—</option>{MESES.slice(1).map((m,i) => <option key={i+1} value={i+1}>{m}</option>)}
-                    </select></div>
-                  <div className="field"><label>Año (opcional)</label>
-                    <input type="number" value={docForm.anio} onChange={e => setDocForm({...docForm, anio:e.target.value})} placeholder={String(today.getFullYear())} /></div>
-                </div>
-                <div className="field"><label>Archivo</label>
-                  <input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                    onChange={e => e.target.files?.[0] && subirDoc(e.target.files[0])}
-                    style={{background:"var(--bg)",border:"1px solid var(--bd)",padding:8,borderRadius:"var(--r)",width:"100%",color:"var(--txt)",fontFamily:"'DM Mono',monospace",fontSize:12}} />
-                </div>
-                {uploading && <div className="loading">Subiendo...</div>}
-              </div>
-              <div className="modal-ft"><button className="btn btn-sec" onClick={() => setDocModal(false)}>Cerrar</button></div>
-            </div>
-          </div>
-        )}
-      </>)}
+      {tab === "documentos" && (
+        <TabDocumentos
+          docs={docs}
+          esDueno={esDueno}
+          docModal={docModal}
+          setDocModal={setDocModal}
+          docForm={docForm}
+          setDocForm={setDocForm}
+          uploading={uploading}
+          subirDoc={subirDoc}
+          verDoc={verDoc}
+          eliminarDoc={eliminarDoc}
+        />
+      )}
     </div>
+  );
+}
+
+// ─── SUB-COMPONENTES ─────────────────────────────────────────────────────────
+
+function TabDatos({
+  emp, histSueldos, antiguedadAnios, vacAcumuladas, esDueno,
+  sueldoModal, setSueldoModal, sueldoForm, setSueldoForm, guardarSueldo, toggleActivo,
+  liqFinalModal, setLiqFinalModal, liqFinalForm, setLiqFinalForm, liqFinalData,
+  liqFinalCuenta, setLiqFinalCuenta, liqFinalOverrides, setLiqFinalOverrides,
+  liqFinalLoading, setLiqFinalLoading,
+  user, showToast, loadAll,
+}: any) {
+  return (
+    <>
+      <div className="grid3" style={{marginBottom:16}}>
+        <div className="kpi"><div className="kpi-label">CUIL</div><div style={{fontSize:13}}>{emp.cuil || "—"}</div></div>
+        <div className="kpi"><div className="kpi-label">Fecha ingreso</div><div style={{fontSize:13}}>{fmt_d(emp.fecha_inicio)}</div></div>
+        <div className="kpi"><div className="kpi-label">Antigüedad</div><div style={{fontSize:13}}>{Math.floor(antiguedadAnios)} años, {Math.floor((antiguedadAnios % 1) * 12)} meses</div></div>
+      </div>
+      <div className="grid2" style={{marginBottom:16}}>
+        <div className="kpi"><div className="kpi-label">CBU / Alias</div><div style={{fontSize:13}}>{emp.alias_mp || "—"}</div></div>
+        <div className="kpi">
+          <div className="kpi-label">Estado</div>
+          <span className={`badge ${emp.activo ? "b-success" : "b-muted"}`} style={{cursor:"pointer"}} onClick={toggleActivo}>
+            {emp.activo ? "Activo" : "Inactivo"}
+          </span>
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-hd">
+          <span className="panel-title">Sueldo actual: {fmt_$(emp.sueldo_mensual)}</span>
+          {esDueno && <button className="btn btn-acc btn-sm" onClick={() => { setSueldoForm({ monto:String(emp.sueldo_mensual), motivo:"" }); setSueldoModal(true); }}>Actualizar sueldo</button>}
+        </div>
+        {histSueldos.length === 0 ? <div className="empty">Sin cambios de sueldo registrados</div> : (
+          <table><thead><tr><th>Fecha</th><th style={{textAlign:"right"}}>Anterior</th><th style={{textAlign:"right"}}>Nuevo</th><th>Motivo</th></tr></thead>
+          <tbody>{histSueldos.map(h => (
+            <tr key={h.id}>
+              <td className="mono">{fmt_d(h.fecha_cambio)}</td>
+              <td style={{textAlign:"right"}}><span className="num" style={{color:"var(--muted2)"}}>{fmt_$(h.sueldo_anterior)}</span></td>
+              <td style={{textAlign:"right"}}><span className="num kpi-acc">{fmt_$(h.sueldo_nuevo)}</span></td>
+              <td style={{fontSize:11,color:"var(--muted2)"}}>{h.motivo || "—"}</td>
+            </tr>
+          ))}</tbody></table>
+        )}
+      </div>
+
+      {esDueno && emp.activo && (
+        <button className="btn btn-danger btn-sm" style={{marginTop:12}} onClick={() => setLiqFinalModal(true)}>Liquidación final</button>
+      )}
+
+      {sueldoModal && (
+        <div className="overlay" onClick={() => setSueldoModal(false)}>
+          <div className="modal" style={{width:420}} onClick={e => e.stopPropagation()}>
+            <div className="modal-hd"><div className="modal-title">Actualizar sueldo</div><button className="close-btn" onClick={() => setSueldoModal(false)}>✕</button></div>
+            <div className="modal-body">
+              <div className="alert alert-info">Sueldo actual: {fmt_$(emp.sueldo_mensual)}</div>
+              <div className="field"><label>Nuevo sueldo $</label><input type="number" value={sueldoForm.monto} onChange={e => setSueldoForm({...sueldoForm, monto:e.target.value})} /></div>
+              <div className="field"><label>Motivo</label><input value={sueldoForm.motivo} onChange={e => setSueldoForm({...sueldoForm, motivo:e.target.value})} placeholder="Aumento paritarias, promoción..." /></div>
+            </div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setSueldoModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardarSueldo}>Guardar</button></div>
+          </div>
+        </div>
+      )}
+
+      {liqFinalModal && (() => {
+        const esDespidoSinCausa = liqFinalForm.motivo === "Despido sin causa";
+        const esAcuerdoMutuo = liqFinalForm.motivo === "Acuerdo mutuo";
+        const antAnios = Math.max(1, Math.floor(antiguedadAnios));
+
+        const conceptos: [string, string][] = [
+          ["proporcional_mes", "Proporcional mes"],
+          ["vacaciones_dinero", "Vacaciones (" + vacAcumuladas.toFixed(1) + " días)"],
+          ["sac_proporcional", "SAC proporcional"],
+          ...(esDespidoSinCausa ? ([
+            ["indemnizacion", "Indemnización (" + antAnios + " año" + (antAnios > 1 ? "s" : "") + ")"],
+            ["preaviso", "Preaviso"],
+            ["integracion_mes", "Integración mes despido"],
+          ] as [string, string][]) : []),
+        ];
+
+        const getConceptoMonto = (key: string, calculado: number) => {
+          if (esAcuerdoMutuo && liqFinalOverrides[key] !== undefined) {
+            return parseFloat(liqFinalOverrides[key]) || 0;
+          }
+          return calculado;
+        };
+
+        const total = conceptos.reduce((s, [k]) => {
+          const calc = liqFinalData?.[k] || 0;
+          return s + getConceptoMonto(k, calc);
+        }, 0);
+
+        const confirmarLiqFinal = async () => {
+          if (!liqFinalData || liqFinalLoading) return;
+          setLiqFinalLoading(true);
+          try {
+            const { data: existing } = await db.from("rrhh_pagos_especiales")
+              .select("id").eq("empleado_id", emp.id).eq("tipo", "liquidacion_final");
+            if (existing && existing.length > 0) {
+              alert("Ya existe una liquidación final para este empleado");
+              return;
+            }
+            const desc = `Liquidación final ${emp.apellido} ${emp.nombre}`;
+
+            await db.from("rrhh_pagos_especiales").insert([{
+              empleado_id: emp.id, tipo: "liquidacion_final", monto: total,
+              gasto_id: null, pagado_por: user?.id,
+            }]);
+            if (emp.local_id) {
+              const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", liqFinalCuenta).eq("local_id", emp.local_id).maybeSingle();
+              if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - total }).eq("cuenta", liqFinalCuenta).eq("local_id", emp.local_id);
+            }
+            await db.from("movimientos").insert([{
+              id: genId("MOV"), fecha: toISO(today), cuenta: liqFinalCuenta,
+              tipo: "Liquidación Final", cat: "SUELDOS", importe: -total, detalle: desc,
+              local_id: emp.local_id,
+            }]);
+            await db.from("rrhh_empleados").update({
+              activo: false, fecha_egreso: liqFinalForm.fecha_egreso, motivo_baja: liqFinalForm.motivo,
+              vacaciones_dias_acumulados: 0, aguinaldo_acumulado: 0,
+            }).eq("id", emp.id);
+            setLiqFinalModal(false);
+            showToast("Liquidación final procesada");
+            loadAll();
+          } finally {
+            setLiqFinalLoading(false);
+          }
+        };
+
+        return (
+          <div className="overlay" onClick={() => setLiqFinalModal(false)}>
+            <div className="modal" style={{width:580}} onClick={e => e.stopPropagation()}>
+              <div className="modal-hd"><div className="modal-title">Liquidación Final — {emp.apellido}, {emp.nombre}</div><button className="close-btn" onClick={() => setLiqFinalModal(false)}>✕</button></div>
+              <div className="modal-body">
+                <div className="form2" style={{marginBottom:16}}>
+                  <div className="field"><label>Fecha de egreso</label><input type="date" value={liqFinalForm.fecha_egreso} onChange={e => setLiqFinalForm({...liqFinalForm, fecha_egreso:e.target.value})} /></div>
+                  <div className="field"><label>Motivo</label>
+                    <select value={liqFinalForm.motivo} onChange={e => setLiqFinalForm({...liqFinalForm, motivo:e.target.value})}>
+                      <option value="Renuncia">Renuncia</option><option value="Despido sin causa">Despido sin causa</option><option value="Despido con causa">Despido con causa</option><option value="Acuerdo mutuo">Acuerdo mutuo</option>
+                    </select></div>
+                </div>
+                <div style={{background:"var(--s2)",borderRadius:"var(--r)",padding:16}}>
+                  <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>
+                    Conceptos{esAcuerdoMutuo && <span style={{color:"var(--warn)",marginLeft:8}}>(editables)</span>}
+                  </div>
+                  {conceptos.map(([key, label]) => {
+                    const calc = liqFinalData?.[key] || 0;
+                    const monto = getConceptoMonto(key, calc);
+                    return (
+                      <div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid var(--bd)",fontSize:12}}>
+                        <span>{label}</span>
+                        {esAcuerdoMutuo ? (
+                          <input
+                            type="number"
+                            value={liqFinalOverrides[key] ?? String(calc)}
+                            onChange={e => setLiqFinalOverrides(prev => ({...prev, [key]: e.target.value}))}
+                            style={{width:130,background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--acc)",padding:"3px 6px",fontFamily:"'DM Mono',monospace",fontSize:11,textAlign:"right",borderRadius:"var(--r)"}}
+                          />
+                        ) : (
+                          <span className="num" style={{color:"var(--acc)"}}>{fmt_$(monto)}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",fontSize:13,fontWeight:500}}>
+                    <span>TOTAL</span><span className="num" style={{color:"var(--success)",fontSize:15,fontWeight:500}}>{fmt_$(total)}</span>
+                  </div>
+                </div>
+                <div className="field" style={{marginTop:12}}><label>Cuenta de egreso</label>
+                  <select value={liqFinalCuenta} onChange={e => setLiqFinalCuenta(e.target.value)}>
+                    {CUENTAS_LIQ.map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="modal-ft">
+                <button className="btn btn-sec" onClick={() => setLiqFinalModal(false)}>Cancelar</button>
+                <button className="btn btn-danger" disabled={liqFinalLoading} onClick={confirmarLiqFinal}>{liqFinalLoading ? "Procesando..." : "Confirmar y pagar"}</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+    </>
+  );
+}
+
+function TabMovimientos({ movMeses, expanded, setExpanded, esDueno }: any) {
+  return (
+    <>
+      {movMeses.length === 0 ? <div className="empty">Sin movimientos registrados</div> : movMeses.map(nov => {
+        const liqArr = Array.isArray(nov.rrhh_liquidaciones) ? nov.rrhh_liquidaciones : [];
+        const liq = liqArr[0];
+        const key = `${nov.anio}-${nov.mes}`;
+        const isExp = expanded === key;
+        const pagado = liq?.estado === "pagado";
+        const puedePagar = esDueno && nov.estado === "confirmado" && liq && !pagado;
+
+        return (
+          <div key={key} className="panel" style={{marginBottom:8}}>
+            <div className="panel-hd" style={{cursor:"pointer"}} onClick={() => setExpanded(isExp ? null : key)}>
+              <div style={{display:"flex",alignItems:"center",gap:12}}>
+                <span className="panel-title">{MESES[nov.mes]} {nov.anio}</span>
+                <span className={`badge ${nov.estado === "confirmado" ? (pagado ? "b-success" : "b-warn") : "b-muted"}`}>
+                  {nov.estado === "confirmado" ? (pagado ? "Pagado" : "Pendiente") : "Borrador"}
+                </span>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:12}}>
+                {liq && <span className="num" style={{color: pagado ? "var(--success)" : "var(--acc)"}}>{fmt_$(liq.total_a_pagar)}</span>}
+                <span style={{color:"var(--muted2)"}}>{isExp ? "▲" : "▼"}</span>
+              </div>
+            </div>
+            {isExp && (
+              <div style={{padding:16}}>
+                <div className="grid3" style={{marginBottom:12}}>
+                  <div><span style={{fontSize:9,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>Inasistencias</span><div>{nov.inasistencias || 0}</div></div>
+                  <div><span style={{fontSize:9,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>Presentismo</span><div>{nov.presentismo}</div></div>
+                  <div><span style={{fontSize:9,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>Hs Extras</span><div>{nov.horas_extras || 0}</div></div>
+                </div>
+                <div className="grid3" style={{marginBottom:12}}>
+                  <div><span style={{fontSize:9,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>Dobles</span><div>{nov.dobles || 0}</div></div>
+                  <div><span style={{fontSize:9,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>Feriados</span><div>{nov.feriados || 0}</div></div>
+                  <div><span style={{fontSize:9,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>Adelantos</span><div>{fmt_$(nov.adelantos || 0)}</div></div>
+                </div>
+                {nov.observaciones && <div style={{fontSize:11,color:"var(--muted2)",marginBottom:12}}>Obs: {nov.observaciones}</div>}
+
+                {liq && (
+                  <div style={{background:"var(--s2)",borderRadius:"var(--r)",padding:12,marginBottom:12}}>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:16,fontSize:11}}>
+                      <div>Base: <strong>{fmt_$(liq.sueldo_base)}</strong></div>
+                      {liq.descuento_ausencias > 0 && <div style={{color:"var(--danger)"}}>-Ausencias: {fmt_$(liq.descuento_ausencias)}</div>}
+                      {liq.total_horas_extras > 0 && <div>+HE: {fmt_$(liq.total_horas_extras)}</div>}
+                      {liq.total_dobles > 0 && <div>+Dobles: {fmt_$(liq.total_dobles)}</div>}
+                      {liq.total_feriados > 0 && <div>+Feriados: {fmt_$(liq.total_feriados)}</div>}
+                      {liq.monto_presentismo > 0 && <div style={{color:"var(--success)"}}>+Present.: {fmt_$(liq.monto_presentismo)}</div>}
+                      {liq.adelantos > 0 && <div style={{color:"var(--warn)"}}>-Adelantos: {fmt_$(liq.adelantos)}</div>}
+                      {liq.pagos_realizados > 0 && <div style={{color:"var(--warn)"}}>-Pagos: {fmt_$(liq.pagos_realizados)}</div>}
+                    </div>
+                    <div style={{marginTop:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div>
+                        <span className="num" style={{fontSize:14,color:"var(--success)"}}>{fmt_$(liq.total_a_pagar)}</span>
+                        {liq.efectivo > 0 && <span style={{fontSize:10,color:"var(--muted2)",marginLeft:8}}>Efvo: {fmt_$(liq.efectivo)}</span>}
+                        {liq.transferencia > 0 && <span style={{fontSize:10,color:"var(--info)",marginLeft:8}}>Transf: {fmt_$(liq.transferencia)}</span>}
+                      </div>
+                      {/* Pagos se gestionan desde el tab Pagos de RRHH */}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+function TabVacAgu({
+  vacAcumuladas, vacTomadas, valorDia, plusVacacional,
+  diasVacAnuales, diasVacPorMes, antiguedadAnios,
+  sacAcumulado, sacTeorico, mesActual, mesesEnSemestre,
+  pagosEsp, esDueno,
+  vacModal, setVacModal, vacDias, setVacDias, vacMonto, setVacMonto,
+  aguModal, setAguModal, aguMonto, setAguMonto,
+  pagarVacaciones, pagarAguinaldo,
+}: any) {
+  return (
+    <>
+      <div className="grid2" style={{marginBottom:20}}>
+        {/* Vacaciones */}
+        <div className="panel">
+          <div className="panel-hd"><span className="panel-title">Vacaciones</span></div>
+          <div style={{padding:16}}>
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Días disponibles</div>
+              <div className="num" style={{fontSize:17,fontWeight:500,color:"var(--acc)"}}>{vacAcumuladas.toFixed(1)} días</div>
+              <div style={{fontSize:11,color:"var(--muted2)",marginTop:2}}>Equivale a {fmt_$(vacAcumuladas * valorDia)}</div>
+              {vacTomadas > 0 && <div style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>Tomadas: {vacTomadas.toFixed(1)} días</div>}
+            </div>
+            <div style={{fontSize:10,color:"var(--muted2)",marginBottom:12}}>
+              Corresponde: {diasVacAnuales} días/año ({diasVacPorMes.toFixed(2)} días/mes) · Antigüedad: {Math.floor(antiguedadAnios)} años
+            </div>
+            {esDueno && vacAcumuladas > 0 && (
+              <button className="btn btn-acc btn-sm" onClick={() => { setVacDias(String(vacAcumuladas.toFixed(1))); setVacMonto(""); setVacModal(true); }}>Pagar vacaciones</button>
+            )}
+          </div>
+        </div>
+
+        {/* Aguinaldo */}
+        <div className="panel">
+          <div className="panel-hd"><span className="panel-title">Aguinaldo</span></div>
+          <div style={{padding:16}}>
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Acumulado proporcional ({mesesEnSemestre} {mesesEnSemestre === 1 ? "mes" : "meses"} del semestre)</div>
+              <div className="num" style={{fontSize:17,fontWeight:500,color:"var(--acc)"}}>{fmt_$(sacAcumulado)}</div>
+              <div style={{fontSize:11,color:"var(--muted2)",marginTop:4}}>Teórico semestre completo: {fmt_$(sacTeorico)}</div>
+              <div style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>SAC = mejor sueldo del semestre / 2 · Pago en {mesActual <= 6 ? "junio" : "diciembre"}</div>
+            </div>
+            {esDueno && sacAcumulado > 0 && (
+              <button className="btn btn-acc btn-sm" onClick={() => { setAguMonto(""); setAguModal(true); }}>Pagar aguinaldo</button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Historial pagos especiales */}
+      <div className="panel">
+        <div className="panel-hd"><span className="panel-title">Historial de pagos especiales</span></div>
+        {pagosEsp.length === 0 ? <div className="empty">Sin pagos registrados</div> : (
+          <table><thead><tr><th>Fecha</th><th>Tipo</th><th>Días</th><th style={{textAlign:"right"}}>Monto</th></tr></thead>
+          <tbody>{pagosEsp.map(p => (
+            <tr key={p.id}>
+              <td className="mono">{fmt_d(p.pagado_at?.split("T")[0])}</td>
+              <td><span className={`badge ${p.tipo === "vacaciones" ? "b-info" : "b-warn"}`}>{p.tipo}</span></td>
+              <td>{p.dias || "—"}</td>
+              <td style={{textAlign:"right"}}><span className="num kpi-acc">{fmt_$(p.monto)}</span></td>
+            </tr>
+          ))}</tbody></table>
+        )}
+      </div>
+
+      {/* Modal vacaciones */}
+      {vacModal && (
+        <div className="overlay" onClick={() => setVacModal(false)}>
+          <div className="modal" style={{width:440}} onClick={e => e.stopPropagation()}>
+            <div className="modal-hd"><div className="modal-title">Pagar vacaciones</div><button className="close-btn" onClick={() => setVacModal(false)}>✕</button></div>
+            <div className="modal-body">
+              <div className="field"><label>Días a pagar</label>
+                <input type="number" value={vacDias} onChange={e => setVacDias(e.target.value)} placeholder={vacAcumuladas.toFixed(1)} />
+              </div>
+              <div className="field"><label>Monto $</label>
+                <input type="number" value={vacMonto} onChange={e => setVacMonto(e.target.value)} placeholder={fmt_$(plusVacacional)} />
+                <div style={{fontSize:10,color:"var(--muted2)",marginTop:4}}>
+                  Plus vacacional recomendado: <strong style={{color:"var(--acc)"}}>{fmt_$(plusVacacional)}</strong> ({vacAcumuladas.toFixed(1)} días × sueldo/25)
+                </div>
+              </div>
+            </div>
+            <div className="modal-ft">
+              <button className="btn btn-sec" onClick={() => setVacModal(false)}>Cancelar</button>
+              <button className="btn btn-acc" onClick={pagarVacaciones}>Confirmar pago</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal aguinaldo */}
+      {aguModal && (
+        <div className="overlay" onClick={() => setAguModal(false)}>
+          <div className="modal" style={{width:440}} onClick={e => e.stopPropagation()}>
+            <div className="modal-hd"><div className="modal-title">Pagar aguinaldo</div><button className="close-btn" onClick={() => setAguModal(false)}>✕</button></div>
+            <div className="modal-body">
+              <div className="field"><label>Monto $</label>
+                <input type="number" value={aguMonto} onChange={e => setAguMonto(e.target.value)} placeholder={fmt_$(sacAcumulado)} />
+                <div style={{fontSize:10,color:"var(--muted2)",marginTop:4}}>
+                  Acumulado proporcional: <strong style={{color:"var(--acc)"}}>{fmt_$(sacAcumulado)}</strong> · Teórico semestre: {fmt_$(sacTeorico)}
+                </div>
+              </div>
+            </div>
+            <div className="modal-ft">
+              <button className="btn btn-sec" onClick={() => setAguModal(false)}>Cancelar</button>
+              <button className="btn btn-acc" onClick={pagarAguinaldo}>Confirmar pago</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function TabDocumentos({
+  docs, esDueno,
+  docModal, setDocModal, docForm, setDocForm,
+  uploading, subirDoc, verDoc, eliminarDoc,
+}: any) {
+  return (
+    <>
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
+        {esDueno && <button className="btn btn-acc btn-sm" onClick={() => setDocModal(true)}>+ Subir documento</button>}
+      </div>
+      <div className="panel">
+        {docs.length === 0 ? <div className="empty">Sin documentos</div> : (
+          <table><thead><tr><th>Nombre</th><th>Tipo</th><th>Período</th><th>Fecha</th><th></th></tr></thead>
+          <tbody>{docs.map(d => (
+            <tr key={d.id}>
+              <td style={{fontWeight:500,fontSize:11}}>{d.nombre_archivo}</td>
+              <td><span className="badge b-info">{DOC_TIPOS.find(t => t.value === d.tipo)?.label || d.tipo}</span></td>
+              <td style={{fontSize:11,color:"var(--muted2)"}}>{d.mes && d.anio ? `${MESES[d.mes]} ${d.anio}` : "—"}</td>
+              <td className="mono" style={{fontSize:11}}>{fmt_d(d.subido_at?.split("T")[0])}</td>
+              <td>
+                <div style={{display:"flex",gap:4}}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => verDoc(d)}>Ver</button>
+                  {esDueno && <button className="btn btn-danger btn-sm" onClick={() => eliminarDoc(d)}>X</button>}
+                </div>
+              </td>
+            </tr>
+          ))}</tbody></table>
+        )}
+      </div>
+
+      {docModal && (
+        <div className="overlay" onClick={() => setDocModal(false)}>
+          <div className="modal" style={{width:480}} onClick={e => e.stopPropagation()}>
+            <div className="modal-hd"><div className="modal-title">Subir documento</div><button className="close-btn" onClick={() => setDocModal(false)}>✕</button></div>
+            <div className="modal-body">
+              <div className="field"><label>Tipo de documento</label>
+                <select value={docForm.tipo} onChange={e => setDocForm({...docForm, tipo:e.target.value})}>
+                  {DOC_TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select></div>
+              <div className="form2">
+                <div className="field"><label>Mes (opcional)</label>
+                  <select value={docForm.mes} onChange={e => setDocForm({...docForm, mes:e.target.value})}>
+                    <option value="">—</option>{MESES.slice(1).map((m,i) => <option key={i+1} value={i+1}>{m}</option>)}
+                  </select></div>
+                <div className="field"><label>Año (opcional)</label>
+                  <input type="number" value={docForm.anio} onChange={e => setDocForm({...docForm, anio:e.target.value})} placeholder={String(today.getFullYear())} /></div>
+              </div>
+              <div className="field"><label>Archivo</label>
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                  onChange={e => e.target.files?.[0] && subirDoc(e.target.files[0])}
+                  style={{background:"var(--bg)",border:"1px solid var(--bd)",padding:8,borderRadius:"var(--r)",width:"100%",color:"var(--txt)",fontFamily:"'DM Mono',monospace",fontSize:12}} />
+              </div>
+              {uploading && <div className="loading">Subiendo...</div>}
+            </div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setDocModal(false)}>Cerrar</button></div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
