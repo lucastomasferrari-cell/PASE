@@ -202,7 +202,7 @@ export default function RRHH({ user, locales, localActivo }) {
     let liqsDash: any[] = [];
     if (novIds.length) {
       const { data: liqData } = await db.from("rrhh_liquidaciones")
-        .select("novedad_id, estado")
+        .select("novedad_id, estado, total_a_pagar")
         .in("novedad_id", novIds);
       liqsDash = liqData || [];
     }
@@ -215,7 +215,7 @@ export default function RRHH({ user, locales, localActivo }) {
     activos.forEach(emp => {
       const nov = novsMes.find(n => n.empleado_id === emp.id);
       if (nov && nov.estado === "confirmado") {
-        const liq = (Array.isArray(nov.rrhh_liquidaciones) ? nov.rrhh_liquidaciones : [])[0];
+        const liq = liqsDash.find(l => l.novedad_id === nov.id);
         estimado += liq ? Number(liq.total_a_pagar || 0) : Number(emp.sueldo_mensual);
       } else {
         estimado += Number(emp.sueldo_mensual);
