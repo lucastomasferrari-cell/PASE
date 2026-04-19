@@ -84,7 +84,7 @@ export default function RRHH({ user, locales, localActivo }) {
   const [pagoModal, setPagoModal] = useState<any>(null);
   const [formasPago, setFormasPago] = useState<{cuenta:string, monto:string}[]>([]);
   const [adelModal, setAdelModal] = useState(false);
-  const [adelForm, setAdelForm] = useState({ empleado_id:"", monto:"", cuenta:"Caja Efectivo", fecha:toISO(today) });
+  const [adelForm, setAdelForm] = useState({ empleado_id:"", monto:"", cuenta:"Caja Efectivo", fecha:toISO(today), descripcion:"" });
 
   // Dashboard
   const [dashLoading, setDashLoading] = useState(true);
@@ -285,8 +285,8 @@ export default function RRHH({ user, locales, localActivo }) {
       tipo: e.tipo,
       fecha: e.pagado_at?.split("T")[0],
       emp: e.rrhh_empleados,
-      monto: e.monto,
-      label: e.tipo === "vacaciones" ? "Vacaciones" : e.tipo === "aguinaldo" ? "Aguinaldo" : "Liquidación final",
+      monto: Number(e.monto_pagado) > 0 ? Number(e.monto_pagado) : Number(e.monto),
+      label: (e.tipo === "vacaciones" ? "Vacaciones" : e.tipo === "aguinaldo" ? "Aguinaldo" : "Liquidación final") + (e.pendiente ? " (parcial)" : ""),
       detalle: e,
     }));
 
@@ -428,7 +428,9 @@ export default function RRHH({ user, locales, localActivo }) {
     const emp = allEmps.find(e => e.id === adelForm.empleado_id);
     if (!emp) return;
     const lid = emp.local_id;
-    const desc = `Adelanto ${emp.apellido} ${emp.nombre}`;
+    const desc = adelForm.descripcion
+      ? `Adelanto ${emp.apellido} ${emp.nombre} — ${adelForm.descripcion}`
+      : `Adelanto ${emp.apellido} ${emp.nombre}`;
 
     await db.from("movimientos").insert([{
       id: genId("MOV"), fecha: adelForm.fecha, cuenta: adelForm.cuenta,
@@ -452,7 +454,7 @@ export default function RRHH({ user, locales, localActivo }) {
 
     showToast(`Adelanto registrado — ${emp.apellido}`);
     setAdelModal(false);
-    setAdelForm({ empleado_id:"", monto:"", cuenta:"Caja Efectivo", fecha:toISO(today) });
+    setAdelForm({ empleado_id:"", monto:"", cuenta:"Caja Efectivo", fecha:toISO(today), descripcion:"" });
     if (tab === "pagos") await loadPagos();
   };
 
@@ -1071,6 +1073,9 @@ function TabPagos({
                 <select value={adelForm.cuenta} onChange={e => setAdelForm({...adelForm, cuenta: e.target.value})}>
                   {CUENTAS_PAGO.map(c => <option key={c}>{c}</option>)}
                 </select>
+              </div>
+              <div className="field"><label>Descripción (opcional)</label>
+                <input value={adelForm.descripcion} onChange={e => setAdelForm({...adelForm, descripcion: e.target.value})} placeholder="Ej: Adelanto solicitado por urgencia..."/>
               </div>
               <div style={{fontSize:10,color:"var(--muted2)",marginTop:4}}>
                 Se registra como movimiento (cat SUELDOS), afecta saldos de caja y queda como adelanto descontable a futuro.

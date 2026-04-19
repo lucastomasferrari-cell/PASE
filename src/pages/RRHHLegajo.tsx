@@ -40,9 +40,9 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
   const [vacTomadas, setVacTomadas] = useState(0);
   const [vacModal, setVacModal] = useState(false);
   const [vacDias, setVacDias] = useState("");
-  const [vacMonto, setVacMonto] = useState("");
+  const [vacLineas, setVacLineas] = useState<{cuenta:string, monto:string}[]>([{cuenta:"Caja Chica", monto:""}]);
   const [aguModal, setAguModal] = useState(false);
-  const [aguMonto, setAguMonto] = useState("");
+  const [aguLineas, setAguLineas] = useState<{cuenta:string, monto:string}[]>([{cuenta:"Caja Chica", monto:""}]);
 
   // Documentos
   const [docs, setDocs] = useState<any[]>([]);
@@ -166,55 +166,77 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
 
   const pagarVacaciones = async () => {
     const dias = parseFloat(vacDias) || vacAcumuladas;
-    const monto = parseFloat(vacMonto) || plusVacacional;
-    if (dias <= 0 || monto <= 0) return;
+    const montoEsperado = plusVacacional;
+    const totalPagado = vacLineas.reduce((s, l) => s + (parseFloat(l.monto) || 0), 0);
+    if (dias <= 0 || totalPagado <= 0) return;
     const desc = `Vacaciones ${emp.apellido} ${emp.nombre}`;
-    const cuenta = "Caja Chica";
+    const pendiente = totalPagado < montoEsperado - 0.01;
+
+    for (const l of vacLineas) {
+      const monto = parseFloat(l.monto) || 0;
+      if (monto <= 0) continue;
+      if (emp.local_id) {
+        const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", l.cuenta).eq("local_id", emp.local_id).maybeSingle();
+        if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", l.cuenta).eq("local_id", emp.local_id);
+      }
+      await db.from("movimientos").insert([{
+        id: genId("MOV"), fecha: toISO(today), cuenta: l.cuenta,
+        tipo: "Pago Vacaciones", cat: "SUELDOS", importe: -monto, detalle: desc,
+        local_id: emp.local_id,
+      }]);
+    }
 
     await db.from("rrhh_pagos_especiales").insert([{
-      empleado_id: emp.id, tipo: "vacaciones", monto, dias,
-      gasto_id: null, pagado_por: user?.id,
+      empleado_id: emp.id, tipo: "vacaciones",
+      monto: montoEsperado, monto_pagado: totalPagado, pendiente,
+      dias, gasto_id: null, pagado_por: user?.id,
     }]);
-    if (emp.local_id) {
-      const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", cuenta).eq("local_id", emp.local_id).maybeSingle();
-      if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", cuenta).eq("local_id", emp.local_id);
-    }
-    await db.from("movimientos").insert([{
-      id: genId("MOV"), fecha: toISO(today), cuenta,
-      tipo: "Pago Vacaciones", cat: "SUELDOS", importe: -monto, detalle: desc,
-      local_id: emp.local_id,
-    }]);
-    await db.from("rrhh_empleados").update({ vacaciones_dias_acumulados: 0 }).eq("id", emp.id);
 
-    setVacModal(false); setVacDias(""); setVacMonto("");
-    showToast("Vacaciones pagadas");
+    if (!pendiente) {
+      await db.from("rrhh_empleados").update({ vacaciones_dias_acumulados: 0 }).eq("id", emp.id);
+    }
+
+    setVacModal(false); setVacDias("");
+    setVacLineas([{cuenta:"Caja Chica", monto:""}]);
+    showToast(pendiente ? `Pago parcial — Resta ${fmt_$(montoEsperado - totalPagado)}` : "Vacaciones pagadas");
     loadAll();
   };
 
   // ─── ACCIONES: AGUINALDO ───────────────────────────────────────────────────
   const pagarAguinaldo = async () => {
-    const monto = parseFloat(aguMonto) || sacAcumulado;
-    if (monto <= 0) return;
+    const montoEsperado = sacAcumulado;
+    const totalPagado = aguLineas.reduce((s, l) => s + (parseFloat(l.monto) || 0), 0);
+    if (totalPagado <= 0) return;
     const desc = `Aguinaldo ${emp.apellido} ${emp.nombre}`;
-    const cuenta = "Caja Chica";
+    const pendiente = totalPagado < montoEsperado - 0.01;
+
+    for (const l of aguLineas) {
+      const monto = parseFloat(l.monto) || 0;
+      if (monto <= 0) continue;
+      if (emp.local_id) {
+        const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", l.cuenta).eq("local_id", emp.local_id).maybeSingle();
+        if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", l.cuenta).eq("local_id", emp.local_id);
+      }
+      await db.from("movimientos").insert([{
+        id: genId("MOV"), fecha: toISO(today), cuenta: l.cuenta,
+        tipo: "Pago Aguinaldo", cat: "SUELDOS", importe: -monto, detalle: desc,
+        local_id: emp.local_id,
+      }]);
+    }
 
     await db.from("rrhh_pagos_especiales").insert([{
-      empleado_id: emp.id, tipo: "aguinaldo", monto,
+      empleado_id: emp.id, tipo: "aguinaldo",
+      monto: montoEsperado, monto_pagado: totalPagado, pendiente,
       gasto_id: null, pagado_por: user?.id,
     }]);
-    if (emp.local_id) {
-      const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", cuenta).eq("local_id", emp.local_id).maybeSingle();
-      if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", cuenta).eq("local_id", emp.local_id);
-    }
-    await db.from("movimientos").insert([{
-      id: genId("MOV"), fecha: toISO(today), cuenta,
-      tipo: "Pago Aguinaldo", cat: "SUELDOS", importe: -monto, detalle: desc,
-      local_id: emp.local_id,
-    }]);
-    await db.from("rrhh_empleados").update({ aguinaldo_acumulado: 0 }).eq("id", emp.id);
 
-    setAguModal(false); setAguMonto("");
-    showToast("Aguinaldo pagado");
+    if (!pendiente) {
+      await db.from("rrhh_empleados").update({ aguinaldo_acumulado: 0 }).eq("id", emp.id);
+    }
+
+    setAguModal(false);
+    setAguLineas([{cuenta:"Caja Chica", monto:""}]);
+    showToast(pendiente ? `Pago parcial — Resta ${fmt_$(montoEsperado - totalPagado)}` : "Aguinaldo pagado");
     loadAll();
   };
 
@@ -339,12 +361,12 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
           setVacModal={setVacModal}
           vacDias={vacDias}
           setVacDias={setVacDias}
-          vacMonto={vacMonto}
-          setVacMonto={setVacMonto}
+          vacLineas={vacLineas}
+          setVacLineas={setVacLineas}
           aguModal={aguModal}
           setAguModal={setAguModal}
-          aguMonto={aguMonto}
-          setAguMonto={setAguMonto}
+          aguLineas={aguLineas}
+          setAguLineas={setAguLineas}
           pagarVacaciones={pagarVacaciones}
           pagarAguinaldo={pagarAguinaldo}
         />
@@ -628,8 +650,8 @@ function TabVacAgu({
   diasVacAnuales, diasVacPorMes, antiguedadAnios,
   sacAcumulado, sacTeorico, mesActual, mesesEnSemestre,
   pagosEsp, esDueno,
-  vacModal, setVacModal, vacDias, setVacDias, vacMonto, setVacMonto,
-  aguModal, setAguModal, aguMonto, setAguMonto,
+  vacModal, setVacModal, vacDias, setVacDias, vacLineas, setVacLineas,
+  aguModal, setAguModal, aguLineas, setAguLineas,
   pagarVacaciones, pagarAguinaldo,
 }: any) {
   return (
@@ -649,7 +671,11 @@ function TabVacAgu({
               Corresponde: {diasVacAnuales} días/año ({diasVacPorMes.toFixed(2)} días/mes) · Antigüedad: {Math.floor(antiguedadAnios)} años
             </div>
             {esDueno && vacAcumuladas > 0 && (
-              <button className="btn btn-acc btn-sm" onClick={() => { setVacDias(String(vacAcumuladas.toFixed(1))); setVacMonto(""); setVacModal(true); }}>Pagar vacaciones</button>
+              <button className="btn btn-acc btn-sm" onClick={() => {
+                setVacDias(String(vacAcumuladas.toFixed(1)));
+                setVacLineas([{cuenta:"Caja Chica", monto: String(Math.round(plusVacacional))}]);
+                setVacModal(true);
+              }}>Pagar vacaciones</button>
             )}
           </div>
         </div>
@@ -665,7 +691,10 @@ function TabVacAgu({
               <div style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>SAC = mejor sueldo del semestre / 2 · Pago en {mesActual <= 6 ? "junio" : "diciembre"}</div>
             </div>
             {esDueno && sacAcumulado > 0 && (
-              <button className="btn btn-acc btn-sm" onClick={() => { setAguMonto(""); setAguModal(true); }}>Pagar aguinaldo</button>
+              <button className="btn btn-acc btn-sm" onClick={() => {
+                setAguLineas([{cuenta:"Caja Chica", monto: String(Math.round(sacAcumulado))}]);
+                setAguModal(true);
+              }}>Pagar aguinaldo</button>
             )}
           </div>
         </div>
@@ -675,62 +704,130 @@ function TabVacAgu({
       <div className="panel">
         <div className="panel-hd"><span className="panel-title">Historial de pagos especiales</span></div>
         {pagosEsp.length === 0 ? <div className="empty">Sin pagos registrados</div> : (
-          <table><thead><tr><th>Fecha</th><th>Tipo</th><th>Días</th><th style={{textAlign:"right"}}>Monto</th></tr></thead>
-          <tbody>{pagosEsp.map(p => (
-            <tr key={p.id}>
-              <td className="mono">{fmt_d(p.pagado_at?.split("T")[0])}</td>
-              <td><span className={`badge ${p.tipo === "vacaciones" ? "b-info" : "b-warn"}`}>{p.tipo}</span></td>
-              <td>{p.dias || "—"}</td>
-              <td style={{textAlign:"right"}}><span className="num kpi-acc">{fmt_$(p.monto)}</span></td>
-            </tr>
-          ))}</tbody></table>
+          <table><thead><tr><th>Fecha</th><th>Tipo</th><th>Días</th><th style={{textAlign:"right"}}>Monto</th><th>Estado</th></tr></thead>
+          <tbody>{pagosEsp.map(p => {
+            const montoMostrado = Number(p.monto_pagado) > 0 ? Number(p.monto_pagado) : Number(p.monto);
+            return (
+              <tr key={p.id}>
+                <td className="mono">{fmt_d(p.pagado_at?.split("T")[0])}</td>
+                <td><span className={`badge ${p.tipo === "vacaciones" ? "b-info" : "b-warn"}`}>{p.tipo}</span></td>
+                <td>{p.dias || "—"}</td>
+                <td style={{textAlign:"right"}}>
+                  <span className="num kpi-acc">{fmt_$(montoMostrado)}</span>
+                  {p.pendiente && <div style={{fontSize:9,color:"var(--muted2)"}}>de {fmt_$(p.monto)}</div>}
+                </td>
+                <td>{p.pendiente ? <span className="badge b-warn" style={{fontSize:8}}>Parcial</span> : <span className="badge b-success" style={{fontSize:8}}>Completo</span>}</td>
+              </tr>
+            );
+          })}</tbody></table>
         )}
       </div>
 
       {/* Modal vacaciones */}
-      {vacModal && (
-        <div className="overlay" onClick={() => setVacModal(false)}>
-          <div className="modal" style={{width:440}} onClick={e => e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Pagar vacaciones</div><button className="close-btn" onClick={() => setVacModal(false)}>✕</button></div>
-            <div className="modal-body">
-              <div className="field"><label>Días a pagar</label>
-                <input type="number" value={vacDias} onChange={e => setVacDias(e.target.value)} placeholder={vacAcumuladas.toFixed(1)} />
-              </div>
-              <div className="field"><label>Monto $</label>
-                <input type="number" value={vacMonto} onChange={e => setVacMonto(e.target.value)} placeholder={fmt_$(plusVacacional)} />
-                <div style={{fontSize:10,color:"var(--muted2)",marginTop:4}}>
-                  Plus vacacional recomendado: <strong style={{color:"var(--acc)"}}>{fmt_$(plusVacacional)}</strong> ({vacAcumuladas.toFixed(1)} días × sueldo/25)
+      {vacModal && (() => {
+        const totalPagado = vacLineas.reduce((s, l) => s + (parseFloat(l.monto) || 0), 0);
+        const restante = plusVacacional - totalPagado;
+        const esParcial = totalPagado > 0 && totalPagado < plusVacacional - 0.01;
+        const puedeConfirmar = totalPagado > 0 && vacLineas.every(l => parseFloat(l.monto) > 0);
+        return (
+          <div className="overlay" onClick={() => setVacModal(false)}>
+            <div className="modal" style={{width:480}} onClick={e => e.stopPropagation()}>
+              <div className="modal-hd"><div className="modal-title">Pagar vacaciones</div><button className="close-btn" onClick={() => setVacModal(false)}>✕</button></div>
+              <div className="modal-body">
+                <div className="field"><label>Días a pagar</label>
+                  <input type="number" value={vacDias} onChange={e => setVacDias(e.target.value)} placeholder={vacAcumuladas.toFixed(1)} />
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginBottom:12,borderBottom:"1px solid var(--bd)"}}>
+                  <span style={{fontSize:12,color:"var(--muted2)"}}>Plus vacacional recomendado</span>
+                  <span style={{fontSize:14,fontWeight:500,color:"var(--acc)"}}>{fmt_$(plusVacacional)}</span>
+                </div>
+                <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Formas de pago</div>
+                {vacLineas.map((l, i) => (
+                  <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
+                    <select className="search" style={{flex:1}} value={l.cuenta}
+                      onChange={e => setVacLineas(prev => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
+                      {CUENTAS_LIQ.map(c => <option key={c}>{c}</option>)}
+                    </select>
+                    <input type="number" className="search" style={{width:120}} placeholder="Monto" value={l.monto}
+                      onChange={e => setVacLineas(prev => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
+                    {vacLineas.length > 1 && <button className="btn btn-danger btn-sm" onClick={() => setVacLineas(prev => prev.filter((_, j) => j !== i))}>✕</button>}
+                  </div>
+                ))}
+                <button className="btn btn-ghost btn-sm" style={{marginBottom:12}}
+                  onClick={() => setVacLineas(prev => [...prev, { cuenta: "Caja Chica", monto: restante > 0 ? String(Math.round(restante)) : "" }])}>
+                  + Agregar forma de pago
+                </button>
+                <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
+                  <span style={{fontSize:12,color: esParcial ? "var(--warn)" : "var(--muted2)"}}>
+                    {esParcial ? "Pago parcial — Restante" : "Restante"}
+                  </span>
+                  <span style={{fontSize:14,fontWeight:500,color: Math.abs(restante) < 0.5 ? "var(--success)" : "var(--warn)"}}>
+                    {fmt_$(Math.max(0, restante))}
+                  </span>
                 </div>
               </div>
-            </div>
-            <div className="modal-ft">
-              <button className="btn btn-sec" onClick={() => setVacModal(false)}>Cancelar</button>
-              <button className="btn btn-acc" onClick={pagarVacaciones}>Confirmar pago</button>
+              <div className="modal-ft">
+                <button className="btn btn-sec" onClick={() => setVacModal(false)}>Cancelar</button>
+                <button className="btn btn-acc" onClick={pagarVacaciones} disabled={!puedeConfirmar}>
+                  {esParcial ? "Registrar pago parcial" : "Confirmar pago"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Modal aguinaldo */}
-      {aguModal && (
-        <div className="overlay" onClick={() => setAguModal(false)}>
-          <div className="modal" style={{width:440}} onClick={e => e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Pagar aguinaldo</div><button className="close-btn" onClick={() => setAguModal(false)}>✕</button></div>
-            <div className="modal-body">
-              <div className="field"><label>Monto $</label>
-                <input type="number" value={aguMonto} onChange={e => setAguMonto(e.target.value)} placeholder={fmt_$(sacAcumulado)} />
-                <div style={{fontSize:10,color:"var(--muted2)",marginTop:4}}>
-                  Acumulado proporcional: <strong style={{color:"var(--acc)"}}>{fmt_$(sacAcumulado)}</strong> · Teórico semestre: {fmt_$(sacTeorico)}
+      {aguModal && (() => {
+        const totalPagado = aguLineas.reduce((s, l) => s + (parseFloat(l.monto) || 0), 0);
+        const restante = sacAcumulado - totalPagado;
+        const esParcial = totalPagado > 0 && totalPagado < sacAcumulado - 0.01;
+        const puedeConfirmar = totalPagado > 0 && aguLineas.every(l => parseFloat(l.monto) > 0);
+        return (
+          <div className="overlay" onClick={() => setAguModal(false)}>
+            <div className="modal" style={{width:480}} onClick={e => e.stopPropagation()}>
+              <div className="modal-hd"><div className="modal-title">Pagar aguinaldo</div><button className="close-btn" onClick={() => setAguModal(false)}>✕</button></div>
+              <div className="modal-body">
+                <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginBottom:8,borderBottom:"1px solid var(--bd)"}}>
+                  <span style={{fontSize:12,color:"var(--muted2)"}}>Acumulado proporcional</span>
+                  <span style={{fontSize:14,fontWeight:500,color:"var(--acc)"}}>{fmt_$(sacAcumulado)}</span>
+                </div>
+                <div style={{fontSize:10,color:"var(--muted2)",marginBottom:12}}>Teórico semestre completo: {fmt_$(sacTeorico)}</div>
+                <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Formas de pago</div>
+                {aguLineas.map((l, i) => (
+                  <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
+                    <select className="search" style={{flex:1}} value={l.cuenta}
+                      onChange={e => setAguLineas(prev => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
+                      {CUENTAS_LIQ.map(c => <option key={c}>{c}</option>)}
+                    </select>
+                    <input type="number" className="search" style={{width:120}} placeholder="Monto" value={l.monto}
+                      onChange={e => setAguLineas(prev => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
+                    {aguLineas.length > 1 && <button className="btn btn-danger btn-sm" onClick={() => setAguLineas(prev => prev.filter((_, j) => j !== i))}>✕</button>}
+                  </div>
+                ))}
+                <button className="btn btn-ghost btn-sm" style={{marginBottom:12}}
+                  onClick={() => setAguLineas(prev => [...prev, { cuenta: "Caja Chica", monto: restante > 0 ? String(Math.round(restante)) : "" }])}>
+                  + Agregar forma de pago
+                </button>
+                <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
+                  <span style={{fontSize:12,color: esParcial ? "var(--warn)" : "var(--muted2)"}}>
+                    {esParcial ? "Pago parcial — Restante" : "Restante"}
+                  </span>
+                  <span style={{fontSize:14,fontWeight:500,color: Math.abs(restante) < 0.5 ? "var(--success)" : "var(--warn)"}}>
+                    {fmt_$(Math.max(0, restante))}
+                  </span>
                 </div>
               </div>
-            </div>
-            <div className="modal-ft">
-              <button className="btn btn-sec" onClick={() => setAguModal(false)}>Cancelar</button>
-              <button className="btn btn-acc" onClick={pagarAguinaldo}>Confirmar pago</button>
+              <div className="modal-ft">
+                <button className="btn btn-sec" onClick={() => setAguModal(false)}>Cancelar</button>
+                <button className="btn btn-acc" onClick={pagarAguinaldo} disabled={!puedeConfirmar}>
+                  {esParcial ? "Registrar pago parcial" : "Confirmar pago"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </>
   );
 }
