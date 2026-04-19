@@ -83,6 +83,7 @@ export default function RRHH({ user, locales, localActivo }) {
   const [pagando, setPagando] = useState(false);
   const [pagoModal, setPagoModal] = useState<any>(null);
   const [formasPago, setFormasPago] = useState<{cuenta:string, monto:string}[]>([]);
+  const [adelantosPendientes, setAdelantosPendientes] = useState<any[]>([]);
   const [adelModal, setAdelModal] = useState(false);
   const [adelForm, setAdelForm] = useState({ empleado_id:"", monto:"", cuenta:"Caja Efectivo", fecha:toISO(today), descripcion:"" });
 
@@ -422,6 +423,22 @@ export default function RRHH({ user, locales, localActivo }) {
   };
 
   // ─── ADELANTOS ─────────────────────────────────────────────────────────────
+  const abrirPagoSueldo = async (emp: any, nov: any, liq: any) => {
+    const { data: adelantos } = await db.from("rrhh_adelantos")
+      .select("*")
+      .eq("empleado_id", emp.id)
+      .eq("descontado", false)
+      .order("fecha");
+    const pendientes = adelantos || [];
+    const totalAdelantos = pendientes.reduce((s, a) => s + Number(a.monto), 0);
+    const total = Math.round(Number(liq.total_a_pagar || 0));
+    const yaPagado = Math.round(Number(liq.pagos_realizados || 0));
+    const pendienteCash = Math.max(0, total - yaPagado - Math.round(totalAdelantos));
+    setAdelantosPendientes(pendientes);
+    setPagoModal({ emp, nov, liq });
+    setFormasPago(pendienteCash > 0 ? [{ cuenta: "Caja Efectivo", monto: String(pendienteCash) }] : []);
+  };
+
   const guardarAdelanto = async () => {
     const monto = parseFloat(adelForm.monto);
     if (!monto || monto <= 0 || !adelForm.empleado_id || !adelForm.cuenta) return;
@@ -574,6 +591,9 @@ export default function RRHH({ user, locales, localActivo }) {
           adelForm={adelForm}
           setAdelForm={setAdelForm}
           guardarAdelanto={guardarAdelanto}
+          adelantosPendientes={adelantosPendientes}
+          setAdelantosPendientes={setAdelantosPendientes}
+          abrirPagoSueldo={abrirPagoSueldo}
         />
       )}
 
@@ -853,6 +873,7 @@ function TabPagos({
   pagoModal, setPagoModal, formasPago, setFormasPago,
   pagando, setPagando, loadPagos, loadEmpleados, showToast, user,
   allEmps, adelModal, setAdelModal, adelForm, setAdelForm, guardarAdelanto,
+  adelantosPendientes, setAdelantosPendientes, abrirPagoSueldo,
 }: any) {
   return (
     <>
@@ -906,10 +927,7 @@ function TabPagos({
                   </td>
                   <td>
                     {esDueno && !pagado && (
-                      <button className="btn btn-success btn-sm" onClick={() => {
-                        setPagoModal({ emp, nov, liq });
-                        setFormasPago([{ cuenta: "Caja Efectivo", monto: String(pendiente) }]);
-                      }}>Pagar</button>
+                      <button className="btn btn-success btn-sm" onClick={() => abrirPagoSueldo(emp, nov, liq)}>Pagar</button>
                     )}
                   </td>
                 </tr>
@@ -928,12 +946,14 @@ function TabPagos({
         const total = Math.round(Number(liq.total_a_pagar || 0));
         const yaPagado = Math.round(Number(liq.pagos_realizados || 0));
         const pendiente = Math.max(0, total - yaPagado);
-        const asignado = Math.round(formasPago.reduce((s, f) => s + (parseFloat(f.monto) || 0), 0));
-        const restanteTrasEste = pendiente - asignado;
-        const completaPago = asignado >= pendiente;
-        const esPagoParcial = asignado > 0 && asignado < pendiente;
-        const puedeConfirmar = asignado > 0 && asignado <= pendiente && formasPago.length > 0 && formasPago.every(f => parseFloat(f.monto) > 0);
-        const cerrarModal = () => { setPagoModal(null); setFormasPago([]); };
+        const totalAdelantos = Math.round((adelantosPendientes || []).reduce((s: number, a: any) => s + Number(a.monto), 0));
+        const asignadoCash = Math.round(formasPago.reduce((s, f) => s + (parseFloat(f.monto) || 0), 0));
+        const asignadoTotal = asignadoCash + totalAdelantos;
+        const restanteTrasEste = pendiente - asignadoTotal;
+        const completaPago = asignadoTotal >= pendiente;
+        const esPagoParcial = asignadoTotal > 0 && asignadoTotal < pendiente;
+        const puedeConfirmar = asignadoTotal > 0 && asignadoTotal <= pendiente && formasPago.every(f => parseFloat(f.monto) > 0);
+        const cerrarModal = () => { setPagoModal(null); setFormasPago([]); setAdelantosPendientes([]); };
 
         const confirmarPago = async () => {
           if (!puedeConfirmar || pagando) return;
@@ -955,7 +975,7 @@ function TabPagos({
               }]);
             }
 
-            const nuevosPagos = yaPagado + asignado;
+            const nuevosPagos = yaPagado + asignadoTotal;
             const payload: any = { pagos_realizados: nuevosPagos };
             if (completaPago) {
               payload.estado = "pagado";
@@ -969,6 +989,12 @@ function TabPagos({
               await db.from("rrhh_liquidaciones").insert([{ novedad_id: nov.id, ...calcFields, estado: completaPago ? "pagado" : "pendiente", pagos_realizados: nuevosPagos, calculado_at: new Date().toISOString(), ...(completaPago ? { pagado_at: payload.pagado_at, pagado_por: user?.id } : {}) }]);
             } else {
               await db.from("rrhh_liquidaciones").update(payload).eq("id", liq.id);
+            }
+
+            if (adelantosPendientes && adelantosPendientes.length > 0) {
+              await db.from("rrhh_adelantos")
+                .update({ descontado: true })
+                .in("id", adelantosPendientes.map((a: any) => a.id));
             }
 
             if (completaPago) {
@@ -1007,6 +1033,25 @@ function TabPagos({
                   </div>
                 )}
 
+                {totalAdelantos > 0 && (
+                  <div style={{background:"var(--s2)",borderRadius:"var(--r)",padding:12,marginBottom:12}}>
+                    <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Adelantos a descontar</div>
+                    {adelantosPendientes.map((a: any) => (
+                      <div key={a.id} style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:4}}>
+                        <span style={{color:"var(--muted2)"}}>{fmt_d(a.fecha)} · {a.cuenta || "—"}</span>
+                        <span style={{color:"var(--danger)"}}>−{fmt_$(a.monto)}</span>
+                      </div>
+                    ))}
+                    <div style={{display:"flex",justifyContent:"space-between",marginTop:6,paddingTop:8,borderTop:"1px solid var(--bd)",fontSize:12,fontWeight:500}}>
+                      <span>Total adelantos</span>
+                      <span style={{color:"var(--danger)"}}>−{fmt_$(totalAdelantos)}</span>
+                    </div>
+                    <div style={{fontSize:10,color:"var(--muted2)",marginTop:4}}>
+                      Ya salieron de caja al registrarse. Se marcarán como descontados al confirmar.
+                    </div>
+                  </div>
+                )}
+
                 {formasPago.map((fp, i) => (
                   <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
                     <select className="search" style={{flex:1}} value={fp.cuenta}
@@ -1023,6 +1068,19 @@ function TabPagos({
                   onClick={() => setFormasPago(prev => [...prev, { cuenta: "Caja Efectivo", monto: restanteTrasEste > 0 ? String(restanteTrasEste) : "" }])}>
                   + Agregar forma de pago
                 </button>
+
+                {totalAdelantos > 0 && (
+                  <>
+                    <div style={{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:11}}>
+                      <span style={{color:"var(--muted2)"}}>Efectivo en caja</span>
+                      <span style={{color:"var(--txt)"}}>{fmt_$(asignadoCash)}</span>
+                    </div>
+                    <div style={{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:11}}>
+                      <span style={{color:"var(--muted2)"}}>+ Adelantos a imputar</span>
+                      <span style={{color:"var(--txt)"}}>{fmt_$(totalAdelantos)}</span>
+                    </div>
+                  </>
+                )}
 
                 <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
                   <span style={{fontSize:12,color: esPagoParcial ? "var(--warn)" : "var(--muted2)"}}>

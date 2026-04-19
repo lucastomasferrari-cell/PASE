@@ -37,6 +37,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
 
   // Vacaciones/Aguinaldo
   const [pagosEsp, setPagosEsp] = useState<any[]>([]);
+  const [adelantos, setAdelantos] = useState<any[]>([]);
   const [vacTomadas, setVacTomadas] = useState(0);
   const [vacModal, setVacModal] = useState(false);
   const [vacDias, setVacDias] = useState("");
@@ -90,6 +91,11 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
     setPagosEsp(data || []);
   };
 
+  const loadAdelantos = async () => {
+    const { data } = await db.from("rrhh_adelantos").select("*").eq("empleado_id", empleadoId).order("fecha", { ascending: false });
+    setAdelantos(data || []);
+  };
+
   const loadDocs = async () => {
     const { data } = await db.from("rrhh_documentos").select("*").eq("empleado_id", empleadoId).order("subido_at", { ascending: false });
     setDocs(data || []);
@@ -97,7 +103,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
 
   const loadAll = async () => {
     setLoading(true);
-    await Promise.all([loadEmp(), loadHistSueldos(), loadMovimientos(), loadPagosEsp(), loadDocs(), loadVacTomadas()]);
+    await Promise.all([loadEmp(), loadHistSueldos(), loadMovimientos(), loadPagosEsp(), loadAdelantos(), loadDocs(), loadVacTomadas()]);
     setLoading(false);
   };
 
@@ -339,6 +345,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
           expanded={expanded}
           setExpanded={setExpanded}
           esDueno={esDueno}
+          adelantos={adelantos}
         />
       )}
 
@@ -575,9 +582,31 @@ function TabDatos({
   );
 }
 
-function TabMovimientos({ movMeses, expanded, setExpanded, esDueno }: any) {
+function TabMovimientos({ movMeses, expanded, setExpanded, esDueno, adelantos }: any) {
   return (
     <>
+      {(adelantos || []).length > 0 && (
+        <div className="panel" style={{marginBottom:12}}>
+          <div className="panel-hd"><span className="panel-title">Adelantos</span></div>
+          <table>
+            <thead><tr><th>Fecha</th><th>Cuenta</th><th style={{textAlign:"right"}}>Monto</th><th>Estado</th></tr></thead>
+            <tbody>{adelantos.map((a: any) => (
+              <tr key={a.id}>
+                <td className="mono">{fmt_d(a.fecha)}</td>
+                <td style={{fontSize:11,color:"var(--muted2)"}}>{a.cuenta || "—"}</td>
+                <td style={{textAlign:"right"}}><span className="num" style={{color:"var(--danger)"}}>{fmt_$(a.monto)}</span></td>
+                <td>
+                  <span className="badge b-info" style={{fontSize:8,marginRight:4}}>Adelanto</span>
+                  {a.descontado
+                    ? <span className="badge b-success" style={{fontSize:8}}>Descontado</span>
+                    : <span className="badge b-warn" style={{fontSize:8}}>Pendiente</span>}
+                </td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+
       {movMeses.length === 0 ? <div className="empty">Sin movimientos registrados</div> : movMeses.map(nov => {
         const liqArr = Array.isArray(nov.rrhh_liquidaciones) ? nov.rrhh_liquidaciones : [];
         const liq = liqArr[0];
