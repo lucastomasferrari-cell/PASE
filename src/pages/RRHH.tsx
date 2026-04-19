@@ -198,8 +198,16 @@ export default function RRHH({ user, locales, localActivo }) {
     ).length;
     const conNovedades = novsMes.length;
     const confirmadas = novsMes.filter(n => n.estado === "confirmado").length;
+    const novIds = novsMes.map(n => n.id);
+    let liqsDash: any[] = [];
+    if (novIds.length) {
+      const { data: liqData } = await db.from("rrhh_liquidaciones")
+        .select("novedad_id, estado")
+        .in("novedad_id", novIds);
+      liqsDash = liqData || [];
+    }
     const pagados = novsMes.filter(n => {
-      const liq = (Array.isArray(n.rrhh_liquidaciones) ? n.rrhh_liquidaciones : [])[0];
+      const liq = liqsDash.find(l => l.novedad_id === n.id);
       return liq?.estado === "pagado";
     }).length;
     // Estimado a pagar
