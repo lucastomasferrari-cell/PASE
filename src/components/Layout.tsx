@@ -67,8 +67,9 @@ body{background:var(--bg);color:var(--txt);font-family:'Inter',sans-serif;font-s
 .sb-logo-name{font-size:15px;font-weight:500;color:#fff}
 .sb-local{padding:8px 12px;border-bottom:1px solid var(--bd)}
 .sb-local select{width:100%;background:var(--s2);border:1px solid var(--bd2);color:var(--txt);padding:5px 8px;font-size:12px;font-family:'Inter',sans-serif;border-radius:6px;outline:none}
-.sb-nav{flex:1;padding:4px 0;overflow-y:auto;scrollbar-width:none}
-.sb-nav::-webkit-scrollbar{display:none}
+.sb-nav{flex:1;padding:4px 0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--bd2) transparent}
+.sb-nav::-webkit-scrollbar{width:4px}
+.sb-nav::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:2px}
 .sb-section{padding:10px 20px 3px;font-size:9px;letter-spacing:.8px;text-transform:uppercase;color:#444}
 .nav-item{display:flex;align-items:center;gap:9px;padding:6px 14px;cursor:pointer;font-size:13px;color:#777;border-radius:6px;margin:1px 8px;transition:all 0.1s}
 .nav-item:hover{background:#1e1e1e;color:#bbb}
