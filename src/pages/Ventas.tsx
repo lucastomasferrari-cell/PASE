@@ -16,8 +16,12 @@ export default function Ventas({ user, locales, localActivo }) {
   const _ultDia=new Date(today.getFullYear(),today.getMonth()+1,0).getDate();
   const [filtDesde,setFiltDesde]=useState(_mesActual+"-01");
   const [filtHasta,setFiltHasta]=useState(_mesActual+"-"+String(_ultDia).padStart(2,"0"));
-  const [form,setForm]=useState({local_id:"",fecha:toISO(today),turno:"Noche",medio:"EFECTIVO SALON",monto:"",cant:""});
+  const [form,setForm]=useState({local_id:"",fecha:toISO(today),turno:"Noche"});
+  const [lineas,setLineas]=useState<{medio:string,monto:string}[]>([{medio:"EFECTIVO SALON",monto:""}]);
   const localesDisp=user.rol==="dueno"?locales:locales.filter(l=>(user.locales||[]).includes(l.id));
+  const updateLinea=(i:number,field:"medio"|"monto",value:string)=>{
+    setLineas(prev=>prev.map((l,j)=>j===i?{...l,[field]:value}:l));
+  };
 
   const load=async()=>{
     setLoading(true);
@@ -45,14 +49,19 @@ export default function Ventas({ user, locales, localActivo }) {
   const totalPeriodo=ventas.reduce((s,v)=>s+(v.monto||0),0);
 
   const guardar=async()=>{
-    if(!form.monto||!form.local_id)return;
-    await db.from("ventas").insert([{...form,id:genId("V"),local_id:parseInt(form.local_id),monto:parseFloat(form.monto),cant:parseInt(form.cant)||1}]);
+    if(!form.local_id)return;
+    const rows=lineas
+      .filter(l=>parseFloat(l.monto)>0)
+      .map(l=>({id:genId("V"),local_id:parseInt(form.local_id),fecha:form.fecha,turno:form.turno,medio:l.medio,monto:parseFloat(l.monto)}));
+    if(rows.length===0)return;
+    await db.from("ventas").insert(rows);
+    setLineas([{medio:"EFECTIVO SALON",monto:""}]);
     setModalNuevo(false);load();
   };
 
   const guardarEdit=async()=>{
     if(!editModal)return;
-    await db.from("ventas").update({fecha:editModal.fecha,turno:editModal.turno,medio:editModal.medio,monto:parseFloat(editModal.monto),cant:parseInt(editModal.cant)||1,local_id:parseInt(editModal.local_id)}).eq("id",editModal.id);
+    await db.from("ventas").update({fecha:editModal.fecha,turno:editModal.turno,medio:editModal.medio,monto:parseFloat(editModal.monto),local_id:parseInt(editModal.local_id)}).eq("id",editModal.id);
     setEditModal(null);
     if(detalleModal){
       const updated=detalleModal.items.map(i=>i.id===editModal.id?{...i,...editModal,monto:parseFloat(editModal.monto)}:i);
@@ -130,11 +139,10 @@ export default function Ventas({ user, locales, localActivo }) {
             </div>
             <div className="modal-body" style={{padding:0}}>
               <table>
-                <thead><tr><th>Forma de Cobro</th><th>Cubiertos</th><th>Monto</th><th>% del total</th><th></th></tr></thead>
+                <thead><tr><th>Forma de Cobro</th><th>Monto</th><th>% del total</th><th></th></tr></thead>
                 <tbody>{detalleModal.items.sort((a,b)=>b.monto-a.monto).map(v=>(
                   <tr key={v.id}>
                     <td style={{fontWeight:500}}>{v.medio}</td>
-                    <td style={{color:"var(--muted2)"}}>{v.cant||"—"}</td>
                     <td><span className="num kpi-success">{fmt_$(v.monto)}</span></td>
                     <td style={{fontSize:11,color:"var(--muted2)"}}>{detalleModal.total>0?((v.monto/detalleModal.total)*100).toFixed(1):0}%</td>
                     <td><div style={{display:"flex",gap:4}}>
@@ -160,10 +168,7 @@ export default function Ventas({ user, locales, localActivo }) {
                 <div className="field"><label>Turno</label><select value={editModal.turno} onChange={e=>setEditModal({...editModal,turno:e.target.value})}><option>Mediodía</option><option>Noche</option></select></div>
               </div>
               <div className="field"><label>Forma de Cobro</label><select value={editModal.medio} onChange={e=>setEditModal({...editModal,medio:e.target.value})}>{MEDIOS_COBRO.map(m=><option key={m}>{m}</option>)}</select></div>
-              <div className="form2">
-                <div className="field"><label>Monto $</label><input type="number" value={editModal.monto} onChange={e=>setEditModal({...editModal,monto:e.target.value})}/></div>
-                <div className="field"><label>Cubiertos</label><input type="number" value={editModal.cant||""} onChange={e=>setEditModal({...editModal,cant:e.target.value})}/></div>
-              </div>
+              <div className="field"><label>Monto $</label><input type="number" value={editModal.monto} onChange={e=>setEditModal({...editModal,monto:e.target.value})}/></div>
             </div>
             <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setEditModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={guardarEdit}>Guardar</button></div>
           </div>
@@ -173,20 +178,30 @@ export default function Ventas({ user, locales, localActivo }) {
       {/* NUEVO MODAL */}
       {modalNuevo&&(
         <div className="overlay" onClick={()=>setModalNuevo(false)}>
-          <div className="modal" onClick={e=>e.stopPropagation()}>
+          <div className="modal" style={{width:520}} onClick={e=>e.stopPropagation()}>
             <div className="modal-hd"><div className="modal-title">Nueva Venta</div><button className="close-btn" onClick={()=>setModalNuevo(false)}>✕</button></div>
             <div className="modal-body">
               <div className="form2">
                 <div className="field"><label>Local</label><select value={form.local_id} onChange={e=>setForm({...form,local_id:e.target.value})}><option value="">Seleccioná...</option>{localesDisp.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
                 <div className="field"><label>Fecha</label><input type="date" value={form.fecha} onChange={e=>setForm({...form,fecha:e.target.value})}/></div>
               </div>
-              <div className="form2">
-                <div className="field"><label>Turno</label><select value={form.turno} onChange={e=>setForm({...form,turno:e.target.value})}><option>Mediodía</option><option>Noche</option></select></div>
-                <div className="field"><label>Medio de Cobro</label><select value={form.medio} onChange={e=>setForm({...form,medio:e.target.value})}>{MEDIOS_COBRO.map(m=><option key={m}>{m}</option>)}</select></div>
-              </div>
-              <div className="form2">
-                <div className="field"><label>Monto $</label><input type="number" value={form.monto} onChange={e=>setForm({...form,monto:e.target.value})} placeholder="0"/></div>
-                <div className="field"><label>Cubiertos</label><input type="number" value={form.cant} onChange={e=>setForm({...form,cant:e.target.value})} placeholder="0"/></div>
+              <div className="field"><label>Turno</label><select value={form.turno} onChange={e=>setForm({...form,turno:e.target.value})}><option>Mediodía</option><option>Noche</option></select></div>
+
+              <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginTop:16,marginBottom:8}}>Formas de cobro</div>
+              {lineas.map((l,i)=>(
+                <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
+                  <select className="search" style={{flex:1}} value={l.medio} onChange={e=>updateLinea(i,"medio",e.target.value)}>
+                    {MEDIOS_COBRO.map(m=><option key={m}>{m}</option>)}
+                  </select>
+                  <input type="number" className="search" style={{width:120}} placeholder="Monto" value={l.monto} onChange={e=>updateLinea(i,"monto",e.target.value)}/>
+                  {lineas.length>1 && <button className="btn btn-danger btn-sm" onClick={()=>setLineas(prev=>prev.filter((_,j)=>j!==i))}>✕</button>}
+                </div>
+              ))}
+              <button className="btn btn-ghost btn-sm" style={{marginBottom:12}} onClick={()=>setLineas(prev=>[...prev,{medio:"EFECTIVO SALON",monto:""}])}>+ Agregar forma de cobro</button>
+
+              <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)",fontSize:12}}>
+                <span style={{color:"var(--muted2)"}}>Total</span>
+                <span style={{fontWeight:500,color:"var(--success)"}}>{fmt_$(lineas.reduce((s,l)=>s+(parseFloat(l.monto)||0),0))}</span>
               </div>
             </div>
             <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModalNuevo(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar}>Guardar</button></div>
