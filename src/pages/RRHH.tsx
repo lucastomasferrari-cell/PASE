@@ -39,6 +39,8 @@ const PRESENTISMO_OPTS = [
 ];
 const CUENTAS_PAGO = ["Caja Efectivo","Caja Chica","Caja Mayor","MercadoPago","Banco"];
 
+const inp: any = { padding:"3px 5px", background:"var(--bg)", border:"1px solid var(--bd)", color:"var(--txt)", fontFamily:"'DM Mono',monospace", fontSize:10, borderRadius:"var(--r)", textAlign:"center" };
+
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function RRHH({ user, locales, localActivo }) {
   const [tab, setTab] = useState("dashboard");
@@ -418,9 +420,7 @@ export default function RRHH({ user, locales, localActivo }) {
     loadValoresDoble();
   };
 
-  // ─── RENDER HELPERS ────────────────────────────────────────────────────────
-  const inp: any = { padding:"3px 5px", background:"var(--bg)", border:"1px solid var(--bd)", color:"var(--txt)", fontFamily:"'DM Mono',monospace", fontSize:10, borderRadius:"var(--r)", textAlign:"center" };
-  const d = dashStats;
+  // ─── DERIVED ───────────────────────────────────────────────────────────────
   const totalPagosPend = pagoData.filter(r => r.liq && r.liq.estado !== "pagado").length;
   const totalGeneral = pagoData.reduce((s, r) => s + (r.liq ? Number(r.liq.total_a_pagar || 0) : 0), 0);
 
@@ -445,413 +445,95 @@ export default function RRHH({ user, locales, localActivo }) {
         {tabs.map(t => <div key={t.id} className={`tab ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)}>{t.label}</div>)}
       </div>
 
-      {/* ═══ DASHBOARD ═════════════════════════════════════════════════════ */}
-      {tab === "dashboard" && (dashLoading ? <div className="loading">Cargando...</div> : <>
-        <div className="grid2" style={{marginBottom:16}}>
-          {/* Próximo pago */}
-          <div className="kpi">
-            <div className="kpi-label">Próximo pago de sueldos</div>
-            <div className="kpi-value kpi-acc" style={{fontSize:18}}>{d.diasFinMes} días</div>
-            <div className="kpi-sub" style={{marginTop:8}}>Estimado: <strong style={{color:"var(--acc)"}}>{fmt_$(d.estimado)}</strong></div>
-            <div className="kpi-sub">{d.total} empleados activos</div>
-          </div>
-          {/* SAC */}
-          <div className="kpi">
-            <div className="kpi-label">Próximo SAC</div>
-            <div className="kpi-value" style={{fontSize:18,color:"var(--warn)"}}>{d.diasSAC} días</div>
-            <div className="kpi-sub" style={{marginTop:8}}>Fecha: {d.proxSAC} · Acumulado: <strong style={{color:"var(--warn)"}}>{fmt_$(d.totalSAC)}</strong></div>
-            <div className="kpi-sub" style={{color:"var(--muted)",fontSize:9}}>SAC = mejor sueldo del semestre / 2 · Se paga en junio y diciembre</div>
-          </div>
-        </div>
-        <div className="grid2">
-          {/* Nómina */}
-          <div className="kpi">
-            <div className="kpi-label">Nómina</div>
-            <div className="kpi-value" style={{fontSize:18}}>{d.total}</div>
-            <div className="kpi-sub">empleados activos</div>
-            {d.sinDatos > 0 && <div className="kpi-sub" style={{color:"var(--warn)",marginTop:4}}>⚠ {d.sinDatos} con datos incompletos</div>}
-          </div>
-          {/* Estado del mes */}
-          <div className="kpi">
-            <div className="kpi-label">Estado — {MESES_SEL[(d.mes || 1) - 1]} {d.anio}</div>
-            <div style={{display:"flex",gap:16,marginTop:8,fontSize:12}}>
-              <div>Novedades: <strong>{d.conNovedades}</strong>/{d.total}</div>
-              <div>Confirmadas: <strong style={{color:"var(--acc)"}}>{d.confirmadas}</strong></div>
-              <div>Pagados: <strong style={{color:"var(--success)"}}>{d.pagados}</strong></div>
-            </div>
-            <div style={{marginTop:10,height:6,background:"var(--s3)",borderRadius:3,overflow:"hidden"}}>
-              <div style={{height:"100%",width:`${d.total ? (d.pagados / d.total * 100) : 0}%`,background:"var(--success)",borderRadius:3,transition:"width 0.3s"}} />
-            </div>
-            <div className="kpi-sub" style={{marginTop:4}}>{d.total ? Math.round(d.pagados / d.total * 100) : 0}% completado</div>
-          </div>
-        </div>
-      </>)}
+      {tab === "dashboard" && <TabDashboard dashStats={dashStats} dashLoading={dashLoading} />}
 
-      {/* ═══ EMPLEADOS ═════════════════════════════════════════════════════ */}
-      {tab === "empleados" && (<>
-        <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
-          <select className="search" style={{width:160}} value={empFiltLocal} onChange={e => setEmpFiltLocal(e.target.value)}>
-            {!esEnc && <option value="">Todos los locales</option>}
-            {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-          </select>
-          <input className="search" placeholder="Buscar..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} style={{width:160}} />
-          <div style={{flex:1}} />
-          <button className="btn btn-acc" onClick={abrirEmpNuevo}>+ Nuevo empleado</button>
-        </div>
-        <div className="panel">
-          {empsFilt.length === 0 ? <div className="empty">Sin empleados</div> : (
-            <div style={{overflowX:"auto"}}>
-            <table><thead><tr><th>Nombre</th><th>Local</th><th>Puesto</th><th style={{textAlign:"right"}}>Sueldo</th><th>Vacaciones</th><th>Alertas</th><th>Activo</th><th></th></tr></thead>
-            <tbody>{empsFilt.map(e => {
-              const vac = calcularVacaciones(e.fecha_inicio, vacTomadas[e.id] || 0);
-              const vacColor = vac >= 14 ? "var(--success)" : vac >= 7 ? "var(--warn)" : "var(--muted2)";
-              const alertas: string[] = [];
-              if (!e.cuil || e.cuil.trim() === "") alertas.push("Sin CUIL");
-              if (!e.fecha_inicio) alertas.push("Sin fecha inicio");
-              if (!e.sueldo_mensual || e.sueldo_mensual <= 0) alertas.push("Sin sueldo");
-              if (!e.puesto) alertas.push("Sin puesto");
-              return (
-                <tr key={e.id} style={{opacity: e.activo === false ? 0.4 : 1}}>
-                  <td style={{fontWeight:500,fontSize:12}}>{e.apellido}, {e.nombre}</td>
-                  <td style={{fontSize:11}}>{locales.find(l => l.id === e.local_id)?.nombre || "—"}</td>
-                  <td><span className="badge b-muted" style={{fontSize:8}}>{e.puesto}</span></td>
-                  <td style={{textAlign:"right"}}><span className="num kpi-acc">{fmt_$(e.sueldo_mensual)}</span></td>
-                  <td style={{fontSize:11,color:vacColor}}>{vac >= 14 && "🌴 "}{vac.toFixed(1)}d</td>
-                  <td>{alertas.length > 0
-                    ? <span className="badge b-warn" style={{fontSize:8}} title={alertas.join(", ")}>⚠ {alertas.length} alerta{alertas.length > 1 ? "s" : ""}</span>
-                    : <span className="badge b-success" style={{fontSize:8}}>✓ Completo</span>
-                  }</td>
-                  <td><span className={`badge ${e.activo !== false ? "b-success" : "b-muted"}`} style={{fontSize:8}}>{e.activo !== false ? "Si" : "No"}</span></td>
-                  <td><div style={{display:"flex",gap:4}}>
-                    <button className="btn btn-ghost btn-sm" style={{fontSize:9}} onClick={() => setLegajoId(e.id)}>Legajo</button>
-                    <button className="btn btn-ghost btn-sm" style={{fontSize:9}} onClick={() => abrirEmpEditar(e)}>Editar</button>
-                  </div></td>
-                </tr>
-              );
-            })}</tbody></table>
-            </div>
-          )}
-        </div>
+      {tab === "empleados" && (
+        <TabEmpleados
+          empFiltLocal={empFiltLocal}
+          setEmpFiltLocal={setEmpFiltLocal}
+          empSearch={empSearch}
+          setEmpSearch={setEmpSearch}
+          esEnc={esEnc}
+          locsDisp={locsDisp}
+          locales={locales}
+          empsFilt={empsFilt}
+          vacTomadas={vacTomadas}
+          puestos={puestos}
+          empModal={empModal}
+          setEmpModal={setEmpModal}
+          empForm={empForm}
+          setEmpForm={setEmpForm}
+          abrirEmpNuevo={abrirEmpNuevo}
+          abrirEmpEditar={abrirEmpEditar}
+          guardarEmp={guardarEmp}
+          setLegajoId={setLegajoId}
+        />
+      )}
 
-        {empModal && (
-          <div className="overlay" onClick={() => setEmpModal(null)}>
-            <div className="modal" onClick={e => e.stopPropagation()}>
-              <div className="modal-hd"><div className="modal-title">{empModal === "new" ? "Nuevo Empleado" : "Editar Empleado"}</div><button className="close-btn" onClick={() => setEmpModal(null)}>✕</button></div>
-              <div className="modal-body">
-                <div className="form2">
-                  <div className="field"><label>Apellido *</label><input value={empForm.apellido} onChange={e => setEmpForm({...empForm, apellido:e.target.value})} /></div>
-                  <div className="field"><label>Nombre *</label><input value={empForm.nombre} onChange={e => setEmpForm({...empForm, nombre:e.target.value})} /></div>
-                </div>
-                <div className="form2">
-                  <div className="field"><label>Local *</label><select value={empForm.local_id} onChange={e => setEmpForm({...empForm, local_id:e.target.value})}><option value="">Seleccionar...</option>{locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
-                  <div className="field"><label>CUIL</label><input value={empForm.cuil} onChange={e => setEmpForm({...empForm, cuil:e.target.value})} placeholder="XX-XXXXXXXX-X" /></div>
-                </div>
-                <div className="field"><label>Puesto *</label><select value={empForm.puesto} onChange={e => setEmpForm({...empForm, puesto:e.target.value})}><option value="">Seleccionar...</option>{puestos.map(p => <option key={p} value={p}>{p}</option>)}<option value="__otro">-- Otro --</option></select>
-                  {empForm.puesto === "__otro" && <input style={{marginTop:4}} placeholder="Escribir puesto..." onChange={e => setEmpForm({...empForm, puesto:e.target.value})} />}
-                </div>
-                <div className="form3">
-                  <div className="field"><label>Sueldo mensual *</label><input type="number" value={empForm.sueldo_mensual} onChange={e => setEmpForm({...empForm, sueldo_mensual:e.target.value})} placeholder="0" /></div>
-                  <div className="field"><label>CBU / Alias</label><input value={empForm.alias_mp} onChange={e => setEmpForm({...empForm, alias_mp:e.target.value})} /></div>
-                  <div className="field"><label>Fecha inicio</label><input type="date" value={empForm.fecha_inicio} onChange={e => setEmpForm({...empForm, fecha_inicio:e.target.value})} /></div>
-                </div>
-                <div className="field"><label>Activo</label><select value={empForm.activo ? "1" : "0"} onChange={e => setEmpForm({...empForm, activo:e.target.value === "1"})}><option value="1">Si</option><option value="0">No</option></select></div>
-              </div>
-              <div className="modal-ft"><button className="btn btn-sec" onClick={() => setEmpModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={guardarEmp}>Guardar</button></div>
-            </div>
-          </div>
-        )}
-      </>)}
+      {tab === "novedades" && (
+        <TabNovedades
+          novMes={novMes}
+          setNovMes={setNovMes}
+          novAnio={novAnio}
+          setNovAnio={setNovAnio}
+          novLocal={novLocal}
+          setNovLocal={setNovLocal}
+          locsDisp={locsDisp}
+          novLoading={novLoading}
+          novEmps={novEmps}
+          novMap={novMap}
+          valoresDoble={valoresDoble}
+          updateNov={updateNov}
+          confirmarUno={confirmarUno}
+          editarNov={editarNov}
+          esDueno={esDueno}
+        />
+      )}
 
-      {/* ═══ NOVEDADES ═════════════════════════════════════════════════════ */}
-      {tab === "novedades" && (<>
-        <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
-          <select className="search" style={{width:100}} value={novMes} onChange={e => setNovMes(parseInt(e.target.value))}>
-            {MESES_SEL.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
-          </select>
-          <input type="number" className="search" style={{width:70}} value={novAnio} onChange={e => setNovAnio(parseInt(e.target.value))} />
-          <select className="search" style={{width:160}} value={String(novLocal || "")} onChange={e => setNovLocal(e.target.value)}>
-            <option value="">Seleccionar local...</option>
-            {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-          </select>
-        </div>
+      {tab === "pagos" && (
+        <TabPagos
+          pagoMes={pagoMes}
+          setPagoMes={setPagoMes}
+          pagoAnio={pagoAnio}
+          setPagoAnio={setPagoAnio}
+          pagoLocal={pagoLocal}
+          setPagoLocal={setPagoLocal}
+          locsDisp={locsDisp}
+          esEnc={esEnc}
+          esDueno={esDueno}
+          pagoLoading={pagoLoading}
+          pagoData={pagoData}
+          totalPagosPend={totalPagosPend}
+          totalGeneral={totalGeneral}
+          pagoModal={pagoModal}
+          setPagoModal={setPagoModal}
+          formasPago={formasPago}
+          setFormasPago={setFormasPago}
+          pagando={pagando}
+          setPagando={setPagando}
+          loadPagos={loadPagos}
+          loadEmpleados={loadEmpleados}
+          showToast={showToast}
+          user={user}
+        />
+      )}
 
-        {!novLocal ? <div className="alert alert-info">Seleccioná un local para cargar novedades</div> :
-         novLoading ? <div className="loading">Cargando...</div> :
-         novEmps.length === 0 ? <div className="empty">Sin empleados activos en este local</div> : (
-          <div className="panel">
-            <div style={{overflowX:"auto"}}>
-            <table>
-              <thead><tr>
-                <th style={{minWidth:120,fontSize:8}}>Empleado</th><th style={{width:50,fontSize:8}}>Inasist.</th><th style={{width:90,fontSize:8}}>Present.</th>
-                <th style={{width:50,fontSize:8}}>HS Ex.</th><th style={{width:50,fontSize:8}}>Dobles</th>
-                <th style={{width:50,fontSize:8}}>Ferid.</th><th style={{width:65,fontSize:8}}>Adel.$</th>
-                <th style={{width:90,fontSize:8}}>Obs.</th>
-                <th style={{textAlign:"right",width:80,fontSize:8}}>Preview</th><th style={{width:80,fontSize:8}}>Acción</th>
-              </tr></thead>
-              <tbody>{novEmps.map(emp => {
-                const nov = novMap[emp.id] || {};
-                const locked = nov.estado === "confirmado";
-                const vd = valoresDoble.find(v => v.puesto === emp.puesto)?.valor || 0;
-                const preview = calcLiquidacion(emp, nov, vd).total_a_pagar;
-                return (
-                  <tr key={emp.id}>
-                    <td style={{fontWeight:500,fontSize:10}}>{emp.apellido}, {emp.nombre}</td>
-                    <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.inasistencias ?? 0} onChange={e => updateNov(emp.id, "inasistencias", parseFloat(e.target.value) || 0)} /></td>
-                    <td><select style={{...inp,width:82,textAlign:"left"}} disabled={locked} value={nov.presentismo || "MANTIENE"} onChange={e => updateNov(emp.id, "presentismo", e.target.value)}>
-                      {PRESENTISMO_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select></td>
-                    <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.horas_extras ?? 0} onChange={e => updateNov(emp.id, "horas_extras", parseFloat(e.target.value) || 0)} /></td>
-                    <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.dobles ?? 0} onChange={e => updateNov(emp.id, "dobles", parseFloat(e.target.value) || 0)} /></td>
-                    <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.feriados ?? 0} onChange={e => updateNov(emp.id, "feriados", parseFloat(e.target.value) || 0)} /></td>
-                    <td><input type="number" style={{...inp,width:55}} disabled={locked} value={nov.adelantos ?? 0} onChange={e => updateNov(emp.id, "adelantos", parseFloat(e.target.value) || 0)} /></td>
-                    <td><input style={{...inp,width:80,textAlign:"left"}} disabled={locked} value={nov.observaciones || ""} onChange={e => updateNov(emp.id, "observaciones", e.target.value)} /></td>
-                    <td style={{textAlign:"right"}}><span className="num" style={{color: preview < 0 ? "var(--danger)" : "var(--success)",fontSize:11}}>{fmt_$(preview)}</span></td>
-                    <td>
-                      <div style={{display:"flex",gap:4}}>
-                        {nov.estado === "confirmado" ? (
-                          <>
-                            <span className="badge b-success" style={{fontSize:7}}>OK</span>
-                            {esDueno && <button className="btn btn-ghost btn-sm" style={{fontSize:9,padding:"2px 6px"}} onClick={() => editarNov(emp.id)}>Editar</button>}
-                          </>
-                        ) : (
-                          <button className="btn btn-acc btn-sm" style={{fontSize:9,padding:"2px 8px"}} onClick={() => confirmarUno(emp)}>OK</button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}</tbody>
-            </table>
-            </div>
-          </div>
-        )}
-      </>)}
-
-      {/* ═══ PAGOS ═════════════════════════════════════════════════════════ */}
-      {tab === "pagos" && (<>
-        <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
-          <select className="search" style={{width:100}} value={pagoMes} onChange={e => setPagoMes(parseInt(e.target.value))}>
-            {MESES_SEL.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
-          </select>
-          <input type="number" className="search" style={{width:70}} value={pagoAnio} onChange={e => setPagoAnio(parseInt(e.target.value))} />
-          <select className="search" style={{width:160}} value={String(pagoLocal || "")} onChange={e => setPagoLocal(e.target.value)}>
-            {!esEnc && <option value="">Seleccionar local...</option>}
-            {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-          </select>
-          <div style={{flex:1}} />
-          {totalPagosPend > 0 && <span style={{fontSize:11,color:"var(--muted2)"}}>{totalPagosPend} pendiente{totalPagosPend > 1 ? "s" : ""}</span>}
-        </div>
-
-        {!pagoLocal ? <div className="alert alert-info">Seleccioná un local</div> :
-         pagoLoading ? <div className="loading">Cargando...</div> :
-         pagoData.length === 0 ? <div className="alert alert-warn">Confirmá las novedades primero en el tab Novedades</div> : (<>
-          <div className="panel">
-            <div style={{overflowX:"auto"}}>
-            <table>
-              <thead><tr><th>Empleado</th><th>Puesto</th><th style={{textAlign:"right"}}>Total</th><th>CBU / Alias</th><th>Estado</th><th></th></tr></thead>
-              <tbody>{pagoData.map((row) => {
-                const { emp, nov, liq } = row;
-                if (!liq) return null;
-                const pagado = liq.estado === "pagado";
-                return (
-                  <tr key={emp.id}>
-                    <td style={{fontWeight:500,fontSize:12}}>{emp.apellido}, {emp.nombre}</td>
-                    <td><span className="badge b-muted" style={{fontSize:8}}>{emp.puesto}</span></td>
-                    <td style={{textAlign:"right"}}><span className="num" style={{color:"var(--acc)"}}>{fmt_$(liq.total_a_pagar)}</span></td>
-                    <td className="mono" style={{fontSize:10,color:"var(--muted2)"}}>{emp.alias_mp || "—"}</td>
-                    <td>
-                      {pagado
-                        ? <span className="badge b-success">{fmt_d(liq.pagado_at?.split("T")[0])}</span>
-                        : <span className="badge b-warn">Pendiente</span>}
-                    </td>
-                    <td>
-                      {esDueno && !pagado && (
-                        <button className="btn btn-success btn-sm" onClick={() => {
-                          setPagoModal({ emp, nov, liq });
-                          setFormasPago([{ cuenta: "Caja Efectivo", monto: String(Math.round(Number(liq.total_a_pagar || 0))) }]);
-                        }}>Pagar</button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}</tbody>
-            </table>
-            </div>
-            <div style={{padding:"12px 16px",borderTop:"1px solid var(--bd)",display:"flex",justifyContent:"flex-end",fontSize:12}}>
-              <span>Total mes: <strong style={{color:"var(--success)"}}>{fmt_$(totalGeneral)}</strong></span>
-            </div>
-          </div>
-        </>)}
-
-        {pagoModal && (() => {
-          const { emp, nov, liq } = pagoModal;
-          const total = Math.round(Number(liq.total_a_pagar || 0));
-          const asignado = Math.round(formasPago.reduce((s, f) => s + (parseFloat(f.monto) || 0), 0));
-          const restante = total - asignado;
-          const puedeConfirmar = restante === 0 && formasPago.length > 0 && formasPago.every(f => parseFloat(f.monto) > 0);
-          const cerrarModal = () => { setPagoModal(null); setFormasPago([]); };
-
-          const confirmarPago = async () => {
-            if (!puedeConfirmar || pagando) return;
-            setPagando(true);
-            try {
-              const desc = `Sueldo ${emp.apellido} ${emp.nombre} - ${MESES_NOMBRE[pagoMes]} ${pagoAnio}`;
-
-              for (const fp of formasPago) {
-                const monto = parseFloat(fp.monto) || 0;
-                if (monto <= 0) continue;
-                if (emp.local_id) {
-                  const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", fp.cuenta).eq("local_id", emp.local_id).maybeSingle();
-                  if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", fp.cuenta).eq("local_id", emp.local_id);
-                }
-                await db.from("movimientos").insert([{
-                  id: genId("MOV"), fecha: toISO(today), cuenta: fp.cuenta,
-                  tipo: "Pago Sueldo", cat: "SUELDOS", importe: -monto, detalle: desc,
-                  local_id: emp.local_id,
-                }]);
-              }
-
-              const pagadoPayload = { estado: "pagado", gasto_id: null, pagado_at: new Date().toISOString(), pagado_por: user?.id };
-
-              if (liq._generated && nov?.id) {
-                const { _novedadId, _generated, id: _ignoreId, ...calcFields } = liq;
-                await db.from("rrhh_liquidaciones").insert([{ novedad_id: nov.id, ...calcFields, ...pagadoPayload, calculado_at: new Date().toISOString() }]);
-              } else {
-                await db.from("rrhh_liquidaciones").update(pagadoPayload).eq("id", liq.id);
-              }
-
-              await db.from("rrhh_empleados").update({ aguinaldo_acumulado: (emp.aguinaldo_acumulado || 0) + total / 12 }).eq("id", emp.id);
-              showToast("Pago registrado");
-              cerrarModal();
-              await loadPagos();
-              await loadEmpleados();
-            } catch (err: any) {
-              alert("Error: " + err.message);
-            } finally {
-              setPagando(false);
-            }
-          };
-
-          return (
-            <div className="overlay" onClick={cerrarModal}>
-              <div className="modal" style={{width:480}} onClick={e => e.stopPropagation()}>
-                <div className="modal-hd">
-                  <div className="modal-title">Pagar — {emp.apellido}, {emp.nombre}</div>
-                  <button className="close-btn" onClick={cerrarModal}>✕</button>
-                </div>
-                <div className="modal-body">
-                  <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginBottom:16,borderBottom:"1px solid var(--bd)"}}>
-                    <span style={{fontSize:12,color:"var(--muted2)"}}>Total a pagar</span>
-                    <span style={{fontSize:16,fontWeight:500,color:"var(--acc)"}}>{fmt_$(total)}</span>
-                  </div>
-
-                  {formasPago.map((fp, i) => (
-                    <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
-                      <select className="search" style={{flex:1}} value={fp.cuenta}
-                        onChange={e => setFormasPago(prev => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
-                        {CUENTAS_PAGO.map(c => <option key={c}>{c}</option>)}
-                      </select>
-                      <input type="number" className="search" style={{width:120}} placeholder="Monto" value={fp.monto}
-                        onChange={e => setFormasPago(prev => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
-                      <button className="btn btn-danger btn-sm" onClick={() => setFormasPago(prev => prev.filter((_, j) => j !== i))}>✕</button>
-                    </div>
-                  ))}
-
-                  <button className="btn btn-ghost btn-sm" style={{marginBottom:16}}
-                    onClick={() => setFormasPago(prev => [...prev, { cuenta: "Caja Efectivo", monto: restante > 0 ? String(restante) : "" }])}>
-                    + Agregar forma de pago
-                  </button>
-
-                  <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
-                    <span style={{fontSize:12,color:"var(--muted2)"}}>Restante</span>
-                    <span style={{fontSize:14,fontWeight:500,color: Math.abs(restante) < 0.01 ? "var(--success)" : "var(--danger)"}}>
-                      {fmt_$(restante)}
-                    </span>
-                  </div>
-                </div>
-                <div className="modal-ft">
-                  <button className="btn btn-sec" onClick={cerrarModal}>Cancelar</button>
-                  <button className="btn btn-success" onClick={confirmarPago} disabled={!puedeConfirmar || pagando}>
-                    {pagando ? "Procesando..." : "Confirmar pago"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-      </>)}
-
-      {/* ═══ HISTORIAL ════════════════════════════════════════════════════ */}
-      {tab === "historial" && (<>
-        <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
-          <select className="search" style={{width:100}} value={histMes} onChange={e => setHistMes(parseInt(e.target.value))}>
-            {MESES_SEL.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
-          </select>
-          <input type="number" className="search" style={{width:70}} value={histAnio} onChange={e => setHistAnio(parseInt(e.target.value))} />
-          <select className="search" style={{width:160}} value={String(histLocal || "")} onChange={e => setHistLocal(e.target.value)}>
-            {!esEnc && <option value="">Todos los locales</option>}
-            {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-          </select>
-        </div>
-        {histLoading ? <div className="loading">Cargando...</div> : histData.length === 0 ? <div className="empty">Sin pagos en este período</div> : (
-          <div className="panel">
-            <table>
-              <thead><tr><th>Fecha</th><th>Empleado</th><th>Puesto</th><th>Tipo</th><th style={{textAlign:"right"}}>Monto</th><th></th></tr></thead>
-              <tbody>{histData.map((h, i) => (
-                <tr key={i}>
-                  <td className="mono" style={{fontSize:11}}>{fmt_d(h.fecha)}</td>
-                  <td style={{fontWeight:500,fontSize:12}}>{h.emp?.apellido}, {h.emp?.nombre}</td>
-                  <td><span className="badge b-muted" style={{fontSize:8}}>{h.emp?.puesto}</span></td>
-                  <td><span className="badge b-info" style={{fontSize:9}}>{h.label}</span></td>
-                  <td style={{textAlign:"right"}}><span className="num kpi-success">{fmt_$(h.monto)}</span></td>
-                  <td><button className="btn btn-ghost btn-sm" onClick={() => setHistDetalle(h)}>Ver</button></td>
-                </tr>
-              ))}</tbody>
-            </table>
-          </div>
-        )}
-
-        {histDetalle && (
-          <div className="overlay" onClick={() => setHistDetalle(null)}>
-            <div className="modal" style={{width:520}} onClick={e => e.stopPropagation()}>
-              <div className="modal-hd">
-                <div className="modal-title">{histDetalle.label} — {histDetalle.emp?.apellido}, {histDetalle.emp?.nombre}</div>
-                <button className="close-btn" onClick={() => setHistDetalle(null)}>✕</button>
-              </div>
-              <div className="modal-body">
-                <div style={{marginBottom:12,fontSize:12,color:"var(--muted2)"}}>
-                  Fecha: {fmt_d(histDetalle.fecha)} · Total: <strong style={{color:"var(--acc)"}}>{fmt_$(histDetalle.monto)}</strong>
-                </div>
-                {histDetalle.nov && (
-                  <div style={{background:"var(--s2)",borderRadius:"var(--r)",padding:12}}>
-                    <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Novedades</div>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:16,fontSize:11}}>
-                      {histDetalle.nov.inasistencias > 0 && <div>Inasistencias: <strong>{histDetalle.nov.inasistencias}</strong></div>}
-                      <div>Presentismo: <strong>{histDetalle.nov.presentismo === "MANTIENE" ? "Tiene" : "No tiene"}</strong></div>
-                      {histDetalle.nov.horas_extras > 0 && <div>HS extra: <strong>{histDetalle.nov.horas_extras}</strong></div>}
-                      {histDetalle.nov.dobles > 0 && <div>Dobles: <strong>{histDetalle.nov.dobles}</strong></div>}
-                      {histDetalle.nov.feriados > 0 && <div>Feriados: <strong>{histDetalle.nov.feriados}</strong></div>}
-                      {histDetalle.nov.adelantos > 0 && <div>Adelantos: <strong>{fmt_$(histDetalle.nov.adelantos)}</strong></div>}
-                      {histDetalle.nov.observaciones && <div>Obs: <strong>{histDetalle.nov.observaciones}</strong></div>}
-                    </div>
-                    {histDetalle.liq && (
-                      <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid var(--bd)",display:"flex",flexWrap:"wrap",gap:16,fontSize:11}}>
-                        <div>Base: <strong>{fmt_$(histDetalle.liq.sueldo_base)}</strong></div>
-                        {histDetalle.liq.descuento_ausencias > 0 && <div style={{color:"var(--danger)"}}>-Ausencias: {fmt_$(histDetalle.liq.descuento_ausencias)}</div>}
-                        {histDetalle.liq.total_horas_extras > 0 && <div>+HE: {fmt_$(histDetalle.liq.total_horas_extras)}</div>}
-                        {histDetalle.liq.monto_presentismo > 0 && <div style={{color:"var(--success)"}}>+Present.: {fmt_$(histDetalle.liq.monto_presentismo)}</div>}
-                        {histDetalle.liq.adelantos > 0 && <div style={{color:"var(--warn)"}}>-Adelantos: {fmt_$(histDetalle.liq.adelantos)}</div>}
-                        <div><strong>Total: {fmt_$(histDetalle.liq.total_a_pagar)}</strong></div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="modal-ft"><button className="btn btn-sec" onClick={() => setHistDetalle(null)}>Cerrar</button></div>
-            </div>
-          </div>
-        )}
-      </>)}
+      {tab === "historial" && (
+        <TabHistorial
+          histMes={histMes}
+          setHistMes={setHistMes}
+          histAnio={histAnio}
+          setHistAnio={setHistAnio}
+          histLocal={histLocal}
+          setHistLocal={setHistLocal}
+          locsDisp={locsDisp}
+          esEnc={esEnc}
+          histLoading={histLoading}
+          histData={histData}
+          histDetalle={histDetalle}
+          setHistDetalle={setHistDetalle}
+        />
+      )}
 
       {/* ═══ LEGAJO MODAL ═════════════════════════════════════════════════ */}
       {legajoId && (
@@ -898,5 +580,450 @@ export default function RRHH({ user, locales, localActivo }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── SUB-COMPONENTES ─────────────────────────────────────────────────────────
+
+function TabDashboard({ dashStats, dashLoading }: { dashStats: any; dashLoading: boolean }) {
+  if (dashLoading) return <div className="loading">Cargando...</div>;
+  const d = dashStats;
+  return (
+    <>
+      <div className="grid2" style={{marginBottom:16}}>
+        {/* Próximo pago */}
+        <div className="kpi">
+          <div className="kpi-label">Próximo pago de sueldos</div>
+          <div className="kpi-value kpi-acc" style={{fontSize:18}}>{d.diasFinMes} días</div>
+          <div className="kpi-sub" style={{marginTop:8}}>Estimado: <strong style={{color:"var(--acc)"}}>{fmt_$(d.estimado)}</strong></div>
+          <div className="kpi-sub">{d.total} empleados activos</div>
+        </div>
+        {/* SAC */}
+        <div className="kpi">
+          <div className="kpi-label">Próximo SAC</div>
+          <div className="kpi-value" style={{fontSize:18,color:"var(--warn)"}}>{d.diasSAC} días</div>
+          <div className="kpi-sub" style={{marginTop:8}}>Fecha: {d.proxSAC} · Acumulado: <strong style={{color:"var(--warn)"}}>{fmt_$(d.totalSAC)}</strong></div>
+          <div className="kpi-sub" style={{color:"var(--muted)",fontSize:9}}>SAC = mejor sueldo del semestre / 2 · Se paga en junio y diciembre</div>
+        </div>
+      </div>
+      <div className="grid2">
+        {/* Nómina */}
+        <div className="kpi">
+          <div className="kpi-label">Nómina</div>
+          <div className="kpi-value" style={{fontSize:18}}>{d.total}</div>
+          <div className="kpi-sub">empleados activos</div>
+          {d.sinDatos > 0 && <div className="kpi-sub" style={{color:"var(--warn)",marginTop:4}}>⚠ {d.sinDatos} con datos incompletos</div>}
+        </div>
+        {/* Estado del mes */}
+        <div className="kpi">
+          <div className="kpi-label">Estado — {MESES_SEL[(d.mes || 1) - 1]} {d.anio}</div>
+          <div style={{display:"flex",gap:16,marginTop:8,fontSize:12}}>
+            <div>Novedades: <strong>{d.conNovedades}</strong>/{d.total}</div>
+            <div>Confirmadas: <strong style={{color:"var(--acc)"}}>{d.confirmadas}</strong></div>
+            <div>Pagados: <strong style={{color:"var(--success)"}}>{d.pagados}</strong></div>
+          </div>
+          <div style={{marginTop:10,height:6,background:"var(--s3)",borderRadius:3,overflow:"hidden"}}>
+            <div style={{height:"100%",width:`${d.total ? (d.pagados / d.total * 100) : 0}%`,background:"var(--success)",borderRadius:3,transition:"width 0.3s"}} />
+          </div>
+          <div className="kpi-sub" style={{marginTop:4}}>{d.total ? Math.round(d.pagados / d.total * 100) : 0}% completado</div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function TabEmpleados({
+  empFiltLocal, setEmpFiltLocal, empSearch, setEmpSearch,
+  esEnc, locsDisp, locales, empsFilt, vacTomadas, puestos,
+  empModal, setEmpModal, empForm, setEmpForm,
+  abrirEmpNuevo, abrirEmpEditar, guardarEmp, setLegajoId,
+}: any) {
+  return (
+    <>
+      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+        <select className="search" style={{width:160}} value={empFiltLocal} onChange={e => setEmpFiltLocal(e.target.value)}>
+          {!esEnc && <option value="">Todos los locales</option>}
+          {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+        </select>
+        <input className="search" placeholder="Buscar..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} style={{width:160}} />
+        <div style={{flex:1}} />
+        <button className="btn btn-acc" onClick={abrirEmpNuevo}>+ Nuevo empleado</button>
+      </div>
+      <div className="panel">
+        {empsFilt.length === 0 ? <div className="empty">Sin empleados</div> : (
+          <div style={{overflowX:"auto"}}>
+          <table><thead><tr><th>Nombre</th><th>Local</th><th>Puesto</th><th style={{textAlign:"right"}}>Sueldo</th><th>Vacaciones</th><th>Alertas</th><th>Activo</th><th></th></tr></thead>
+          <tbody>{empsFilt.map(e => {
+            const vac = calcularVacaciones(e.fecha_inicio, vacTomadas[e.id] || 0);
+            const vacColor = vac >= 14 ? "var(--success)" : vac >= 7 ? "var(--warn)" : "var(--muted2)";
+            const alertas: string[] = [];
+            if (!e.cuil || e.cuil.trim() === "") alertas.push("Sin CUIL");
+            if (!e.fecha_inicio) alertas.push("Sin fecha inicio");
+            if (!e.sueldo_mensual || e.sueldo_mensual <= 0) alertas.push("Sin sueldo");
+            if (!e.puesto) alertas.push("Sin puesto");
+            return (
+              <tr key={e.id} style={{opacity: e.activo === false ? 0.4 : 1}}>
+                <td style={{fontWeight:500,fontSize:12}}>{e.apellido}, {e.nombre}</td>
+                <td style={{fontSize:11}}>{locales.find(l => l.id === e.local_id)?.nombre || "—"}</td>
+                <td><span className="badge b-muted" style={{fontSize:8}}>{e.puesto}</span></td>
+                <td style={{textAlign:"right"}}><span className="num kpi-acc">{fmt_$(e.sueldo_mensual)}</span></td>
+                <td style={{fontSize:11,color:vacColor}}>{vac >= 14 && "🌴 "}{vac.toFixed(1)}d</td>
+                <td>{alertas.length > 0
+                  ? <span className="badge b-warn" style={{fontSize:8}} title={alertas.join(", ")}>⚠ {alertas.length} alerta{alertas.length > 1 ? "s" : ""}</span>
+                  : <span className="badge b-success" style={{fontSize:8}}>✓ Completo</span>
+                }</td>
+                <td><span className={`badge ${e.activo !== false ? "b-success" : "b-muted"}`} style={{fontSize:8}}>{e.activo !== false ? "Si" : "No"}</span></td>
+                <td><div style={{display:"flex",gap:4}}>
+                  <button className="btn btn-ghost btn-sm" style={{fontSize:9}} onClick={() => setLegajoId(e.id)}>Legajo</button>
+                  <button className="btn btn-ghost btn-sm" style={{fontSize:9}} onClick={() => abrirEmpEditar(e)}>Editar</button>
+                </div></td>
+              </tr>
+            );
+          })}</tbody></table>
+          </div>
+        )}
+      </div>
+
+      {empModal && (
+        <div className="overlay" onClick={() => setEmpModal(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-hd"><div className="modal-title">{empModal === "new" ? "Nuevo Empleado" : "Editar Empleado"}</div><button className="close-btn" onClick={() => setEmpModal(null)}>✕</button></div>
+            <div className="modal-body">
+              <div className="form2">
+                <div className="field"><label>Apellido *</label><input value={empForm.apellido} onChange={e => setEmpForm({...empForm, apellido:e.target.value})} /></div>
+                <div className="field"><label>Nombre *</label><input value={empForm.nombre} onChange={e => setEmpForm({...empForm, nombre:e.target.value})} /></div>
+              </div>
+              <div className="form2">
+                <div className="field"><label>Local *</label><select value={empForm.local_id} onChange={e => setEmpForm({...empForm, local_id:e.target.value})}><option value="">Seleccionar...</option>{locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
+                <div className="field"><label>CUIL</label><input value={empForm.cuil} onChange={e => setEmpForm({...empForm, cuil:e.target.value})} placeholder="XX-XXXXXXXX-X" /></div>
+              </div>
+              <div className="field"><label>Puesto *</label><select value={empForm.puesto} onChange={e => setEmpForm({...empForm, puesto:e.target.value})}><option value="">Seleccionar...</option>{puestos.map(p => <option key={p} value={p}>{p}</option>)}<option value="__otro">-- Otro --</option></select>
+                {empForm.puesto === "__otro" && <input style={{marginTop:4}} placeholder="Escribir puesto..." onChange={e => setEmpForm({...empForm, puesto:e.target.value})} />}
+              </div>
+              <div className="form3">
+                <div className="field"><label>Sueldo mensual *</label><input type="number" value={empForm.sueldo_mensual} onChange={e => setEmpForm({...empForm, sueldo_mensual:e.target.value})} placeholder="0" /></div>
+                <div className="field"><label>CBU / Alias</label><input value={empForm.alias_mp} onChange={e => setEmpForm({...empForm, alias_mp:e.target.value})} /></div>
+                <div className="field"><label>Fecha inicio</label><input type="date" value={empForm.fecha_inicio} onChange={e => setEmpForm({...empForm, fecha_inicio:e.target.value})} /></div>
+              </div>
+              <div className="field"><label>Activo</label><select value={empForm.activo ? "1" : "0"} onChange={e => setEmpForm({...empForm, activo:e.target.value === "1"})}><option value="1">Si</option><option value="0">No</option></select></div>
+            </div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setEmpModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={guardarEmp}>Guardar</button></div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function TabNovedades({
+  novMes, setNovMes, novAnio, setNovAnio, novLocal, setNovLocal,
+  locsDisp, novLoading, novEmps, novMap, valoresDoble,
+  updateNov, confirmarUno, editarNov, esDueno,
+}: any) {
+  return (
+    <>
+      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+        <select className="search" style={{width:100}} value={novMes} onChange={e => setNovMes(parseInt(e.target.value))}>
+          {MESES_SEL.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
+        </select>
+        <input type="number" className="search" style={{width:70}} value={novAnio} onChange={e => setNovAnio(parseInt(e.target.value))} />
+        <select className="search" style={{width:160}} value={String(novLocal || "")} onChange={e => setNovLocal(e.target.value)}>
+          <option value="">Seleccionar local...</option>
+          {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+        </select>
+      </div>
+
+      {!novLocal ? <div className="alert alert-info">Seleccioná un local para cargar novedades</div> :
+       novLoading ? <div className="loading">Cargando...</div> :
+       novEmps.length === 0 ? <div className="empty">Sin empleados activos en este local</div> : (
+        <div className="panel">
+          <div style={{overflowX:"auto"}}>
+          <table>
+            <thead><tr>
+              <th style={{minWidth:120,fontSize:8}}>Empleado</th><th style={{width:50,fontSize:8}}>Inasist.</th><th style={{width:90,fontSize:8}}>Present.</th>
+              <th style={{width:50,fontSize:8}}>HS Ex.</th><th style={{width:50,fontSize:8}}>Dobles</th>
+              <th style={{width:50,fontSize:8}}>Ferid.</th><th style={{width:65,fontSize:8}}>Adel.$</th>
+              <th style={{width:90,fontSize:8}}>Obs.</th>
+              <th style={{textAlign:"right",width:80,fontSize:8}}>Preview</th><th style={{width:80,fontSize:8}}>Acción</th>
+            </tr></thead>
+            <tbody>{novEmps.map(emp => {
+              const nov = novMap[emp.id] || {};
+              const locked = nov.estado === "confirmado";
+              const vd = valoresDoble.find(v => v.puesto === emp.puesto)?.valor || 0;
+              const preview = calcLiquidacion(emp, nov, vd).total_a_pagar;
+              return (
+                <tr key={emp.id}>
+                  <td style={{fontWeight:500,fontSize:10}}>{emp.apellido}, {emp.nombre}</td>
+                  <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.inasistencias ?? 0} onChange={e => updateNov(emp.id, "inasistencias", parseFloat(e.target.value) || 0)} /></td>
+                  <td><select style={{...inp,width:82,textAlign:"left"}} disabled={locked} value={nov.presentismo || "MANTIENE"} onChange={e => updateNov(emp.id, "presentismo", e.target.value)}>
+                    {PRESENTISMO_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select></td>
+                  <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.horas_extras ?? 0} onChange={e => updateNov(emp.id, "horas_extras", parseFloat(e.target.value) || 0)} /></td>
+                  <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.dobles ?? 0} onChange={e => updateNov(emp.id, "dobles", parseFloat(e.target.value) || 0)} /></td>
+                  <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.feriados ?? 0} onChange={e => updateNov(emp.id, "feriados", parseFloat(e.target.value) || 0)} /></td>
+                  <td><input type="number" style={{...inp,width:55}} disabled={locked} value={nov.adelantos ?? 0} onChange={e => updateNov(emp.id, "adelantos", parseFloat(e.target.value) || 0)} /></td>
+                  <td><input style={{...inp,width:80,textAlign:"left"}} disabled={locked} value={nov.observaciones || ""} onChange={e => updateNov(emp.id, "observaciones", e.target.value)} /></td>
+                  <td style={{textAlign:"right"}}><span className="num" style={{color: preview < 0 ? "var(--danger)" : "var(--success)",fontSize:11}}>{fmt_$(preview)}</span></td>
+                  <td>
+                    <div style={{display:"flex",gap:4}}>
+                      {nov.estado === "confirmado" ? (
+                        <>
+                          <span className="badge b-success" style={{fontSize:7}}>OK</span>
+                          {esDueno && <button className="btn btn-ghost btn-sm" style={{fontSize:9,padding:"2px 6px"}} onClick={() => editarNov(emp.id)}>Editar</button>}
+                        </>
+                      ) : (
+                        <button className="btn btn-acc btn-sm" style={{fontSize:9,padding:"2px 8px"}} onClick={() => confirmarUno(emp)}>OK</button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}</tbody>
+          </table>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function TabPagos({
+  pagoMes, setPagoMes, pagoAnio, setPagoAnio, pagoLocal, setPagoLocal,
+  locsDisp, esEnc, esDueno, pagoLoading, pagoData,
+  totalPagosPend, totalGeneral,
+  pagoModal, setPagoModal, formasPago, setFormasPago,
+  pagando, setPagando, loadPagos, loadEmpleados, showToast, user,
+}: any) {
+  return (
+    <>
+      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+        <select className="search" style={{width:100}} value={pagoMes} onChange={e => setPagoMes(parseInt(e.target.value))}>
+          {MESES_SEL.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
+        </select>
+        <input type="number" className="search" style={{width:70}} value={pagoAnio} onChange={e => setPagoAnio(parseInt(e.target.value))} />
+        <select className="search" style={{width:160}} value={String(pagoLocal || "")} onChange={e => setPagoLocal(e.target.value)}>
+          {!esEnc && <option value="">Seleccionar local...</option>}
+          {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+        </select>
+        <div style={{flex:1}} />
+        {totalPagosPend > 0 && <span style={{fontSize:11,color:"var(--muted2)"}}>{totalPagosPend} pendiente{totalPagosPend > 1 ? "s" : ""}</span>}
+      </div>
+
+      {!pagoLocal ? <div className="alert alert-info">Seleccioná un local</div> :
+       pagoLoading ? <div className="loading">Cargando...</div> :
+       pagoData.length === 0 ? <div className="alert alert-warn">Confirmá las novedades primero en el tab Novedades</div> : (<>
+        <div className="panel">
+          <div style={{overflowX:"auto"}}>
+          <table>
+            <thead><tr><th>Empleado</th><th>Puesto</th><th style={{textAlign:"right"}}>Total</th><th>CBU / Alias</th><th>Estado</th><th></th></tr></thead>
+            <tbody>{pagoData.map((row) => {
+              const { emp, nov, liq } = row;
+              if (!liq) return null;
+              const pagado = liq.estado === "pagado";
+              return (
+                <tr key={emp.id}>
+                  <td style={{fontWeight:500,fontSize:12}}>{emp.apellido}, {emp.nombre}</td>
+                  <td><span className="badge b-muted" style={{fontSize:8}}>{emp.puesto}</span></td>
+                  <td style={{textAlign:"right"}}><span className="num" style={{color:"var(--acc)"}}>{fmt_$(liq.total_a_pagar)}</span></td>
+                  <td className="mono" style={{fontSize:10,color:"var(--muted2)"}}>{emp.alias_mp || "—"}</td>
+                  <td>
+                    {pagado
+                      ? <span className="badge b-success">{fmt_d(liq.pagado_at?.split("T")[0])}</span>
+                      : <span className="badge b-warn">Pendiente</span>}
+                  </td>
+                  <td>
+                    {esDueno && !pagado && (
+                      <button className="btn btn-success btn-sm" onClick={() => {
+                        setPagoModal({ emp, nov, liq });
+                        setFormasPago([{ cuenta: "Caja Efectivo", monto: String(Math.round(Number(liq.total_a_pagar || 0))) }]);
+                      }}>Pagar</button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}</tbody>
+          </table>
+          </div>
+          <div style={{padding:"12px 16px",borderTop:"1px solid var(--bd)",display:"flex",justifyContent:"flex-end",fontSize:12}}>
+            <span>Total mes: <strong style={{color:"var(--success)"}}>{fmt_$(totalGeneral)}</strong></span>
+          </div>
+        </div>
+      </>)}
+
+      {pagoModal && (() => {
+        const { emp, nov, liq } = pagoModal;
+        const total = Math.round(Number(liq.total_a_pagar || 0));
+        const asignado = Math.round(formasPago.reduce((s, f) => s + (parseFloat(f.monto) || 0), 0));
+        const restante = total - asignado;
+        const puedeConfirmar = restante === 0 && formasPago.length > 0 && formasPago.every(f => parseFloat(f.monto) > 0);
+        const cerrarModal = () => { setPagoModal(null); setFormasPago([]); };
+
+        const confirmarPago = async () => {
+          if (!puedeConfirmar || pagando) return;
+          setPagando(true);
+          try {
+            const desc = `Sueldo ${emp.apellido} ${emp.nombre} - ${MESES_NOMBRE[pagoMes]} ${pagoAnio}`;
+
+            for (const fp of formasPago) {
+              const monto = parseFloat(fp.monto) || 0;
+              if (monto <= 0) continue;
+              if (emp.local_id) {
+                const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", fp.cuenta).eq("local_id", emp.local_id).maybeSingle();
+                if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", fp.cuenta).eq("local_id", emp.local_id);
+              }
+              await db.from("movimientos").insert([{
+                id: genId("MOV"), fecha: toISO(today), cuenta: fp.cuenta,
+                tipo: "Pago Sueldo", cat: "SUELDOS", importe: -monto, detalle: desc,
+                local_id: emp.local_id,
+              }]);
+            }
+
+            const pagadoPayload = { estado: "pagado", gasto_id: null, pagado_at: new Date().toISOString(), pagado_por: user?.id };
+
+            if (liq._generated && nov?.id) {
+              const { _novedadId, _generated, id: _ignoreId, ...calcFields } = liq;
+              await db.from("rrhh_liquidaciones").insert([{ novedad_id: nov.id, ...calcFields, ...pagadoPayload, calculado_at: new Date().toISOString() }]);
+            } else {
+              await db.from("rrhh_liquidaciones").update(pagadoPayload).eq("id", liq.id);
+            }
+
+            await db.from("rrhh_empleados").update({ aguinaldo_acumulado: (emp.aguinaldo_acumulado || 0) + total / 12 }).eq("id", emp.id);
+            showToast("Pago registrado");
+            cerrarModal();
+            await loadPagos();
+            await loadEmpleados();
+          } catch (err: any) {
+            alert("Error: " + err.message);
+          } finally {
+            setPagando(false);
+          }
+        };
+
+        return (
+          <div className="overlay" onClick={cerrarModal}>
+            <div className="modal" style={{width:480}} onClick={e => e.stopPropagation()}>
+              <div className="modal-hd">
+                <div className="modal-title">Pagar — {emp.apellido}, {emp.nombre}</div>
+                <button className="close-btn" onClick={cerrarModal}>✕</button>
+              </div>
+              <div className="modal-body">
+                <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginBottom:16,borderBottom:"1px solid var(--bd)"}}>
+                  <span style={{fontSize:12,color:"var(--muted2)"}}>Total a pagar</span>
+                  <span style={{fontSize:16,fontWeight:500,color:"var(--acc)"}}>{fmt_$(total)}</span>
+                </div>
+
+                {formasPago.map((fp, i) => (
+                  <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
+                    <select className="search" style={{flex:1}} value={fp.cuenta}
+                      onChange={e => setFormasPago(prev => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
+                      {CUENTAS_PAGO.map(c => <option key={c}>{c}</option>)}
+                    </select>
+                    <input type="number" className="search" style={{width:120}} placeholder="Monto" value={fp.monto}
+                      onChange={e => setFormasPago(prev => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
+                    <button className="btn btn-danger btn-sm" onClick={() => setFormasPago(prev => prev.filter((_, j) => j !== i))}>✕</button>
+                  </div>
+                ))}
+
+                <button className="btn btn-ghost btn-sm" style={{marginBottom:16}}
+                  onClick={() => setFormasPago(prev => [...prev, { cuenta: "Caja Efectivo", monto: restante > 0 ? String(restante) : "" }])}>
+                  + Agregar forma de pago
+                </button>
+
+                <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
+                  <span style={{fontSize:12,color:"var(--muted2)"}}>Restante</span>
+                  <span style={{fontSize:14,fontWeight:500,color: Math.abs(restante) < 0.01 ? "var(--success)" : "var(--danger)"}}>
+                    {fmt_$(restante)}
+                  </span>
+                </div>
+              </div>
+              <div className="modal-ft">
+                <button className="btn btn-sec" onClick={cerrarModal}>Cancelar</button>
+                <button className="btn btn-success" onClick={confirmarPago} disabled={!puedeConfirmar || pagando}>
+                  {pagando ? "Procesando..." : "Confirmar pago"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+    </>
+  );
+}
+
+function TabHistorial({
+  histMes, setHistMes, histAnio, setHistAnio, histLocal, setHistLocal,
+  locsDisp, esEnc, histLoading, histData, histDetalle, setHistDetalle,
+}: any) {
+  return (
+    <>
+      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+        <select className="search" style={{width:100}} value={histMes} onChange={e => setHistMes(parseInt(e.target.value))}>
+          {MESES_SEL.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
+        </select>
+        <input type="number" className="search" style={{width:70}} value={histAnio} onChange={e => setHistAnio(parseInt(e.target.value))} />
+        <select className="search" style={{width:160}} value={String(histLocal || "")} onChange={e => setHistLocal(e.target.value)}>
+          {!esEnc && <option value="">Todos los locales</option>}
+          {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+        </select>
+      </div>
+      {histLoading ? <div className="loading">Cargando...</div> : histData.length === 0 ? <div className="empty">Sin pagos en este período</div> : (
+        <div className="panel">
+          <table>
+            <thead><tr><th>Fecha</th><th>Empleado</th><th>Puesto</th><th>Tipo</th><th style={{textAlign:"right"}}>Monto</th><th></th></tr></thead>
+            <tbody>{histData.map((h, i) => (
+              <tr key={i}>
+                <td className="mono" style={{fontSize:11}}>{fmt_d(h.fecha)}</td>
+                <td style={{fontWeight:500,fontSize:12}}>{h.emp?.apellido}, {h.emp?.nombre}</td>
+                <td><span className="badge b-muted" style={{fontSize:8}}>{h.emp?.puesto}</span></td>
+                <td><span className="badge b-info" style={{fontSize:9}}>{h.label}</span></td>
+                <td style={{textAlign:"right"}}><span className="num kpi-success">{fmt_$(h.monto)}</span></td>
+                <td><button className="btn btn-ghost btn-sm" onClick={() => setHistDetalle(h)}>Ver</button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+
+      {histDetalle && (
+        <div className="overlay" onClick={() => setHistDetalle(null)}>
+          <div className="modal" style={{width:520}} onClick={e => e.stopPropagation()}>
+            <div className="modal-hd">
+              <div className="modal-title">{histDetalle.label} — {histDetalle.emp?.apellido}, {histDetalle.emp?.nombre}</div>
+              <button className="close-btn" onClick={() => setHistDetalle(null)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div style={{marginBottom:12,fontSize:12,color:"var(--muted2)"}}>
+                Fecha: {fmt_d(histDetalle.fecha)} · Total: <strong style={{color:"var(--acc)"}}>{fmt_$(histDetalle.monto)}</strong>
+              </div>
+              {histDetalle.nov && (
+                <div style={{background:"var(--s2)",borderRadius:"var(--r)",padding:12}}>
+                  <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Novedades</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:16,fontSize:11}}>
+                    {histDetalle.nov.inasistencias > 0 && <div>Inasistencias: <strong>{histDetalle.nov.inasistencias}</strong></div>}
+                    <div>Presentismo: <strong>{histDetalle.nov.presentismo === "MANTIENE" ? "Tiene" : "No tiene"}</strong></div>
+                    {histDetalle.nov.horas_extras > 0 && <div>HS extra: <strong>{histDetalle.nov.horas_extras}</strong></div>}
+                    {histDetalle.nov.dobles > 0 && <div>Dobles: <strong>{histDetalle.nov.dobles}</strong></div>}
+                    {histDetalle.nov.feriados > 0 && <div>Feriados: <strong>{histDetalle.nov.feriados}</strong></div>}
+                    {histDetalle.nov.adelantos > 0 && <div>Adelantos: <strong>{fmt_$(histDetalle.nov.adelantos)}</strong></div>}
+                    {histDetalle.nov.observaciones && <div>Obs: <strong>{histDetalle.nov.observaciones}</strong></div>}
+                  </div>
+                  {histDetalle.liq && (
+                    <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid var(--bd)",display:"flex",flexWrap:"wrap",gap:16,fontSize:11}}>
+                      <div>Base: <strong>{fmt_$(histDetalle.liq.sueldo_base)}</strong></div>
+                      {histDetalle.liq.descuento_ausencias > 0 && <div style={{color:"var(--danger)"}}>-Ausencias: {fmt_$(histDetalle.liq.descuento_ausencias)}</div>}
+                      {histDetalle.liq.total_horas_extras > 0 && <div>+HE: {fmt_$(histDetalle.liq.total_horas_extras)}</div>}
+                      {histDetalle.liq.monto_presentismo > 0 && <div style={{color:"var(--success)"}}>+Present.: {fmt_$(histDetalle.liq.monto_presentismo)}</div>}
+                      {histDetalle.liq.adelantos > 0 && <div style={{color:"var(--warn)"}}>-Adelantos: {fmt_$(histDetalle.liq.adelantos)}</div>}
+                      <div><strong>Total: {fmt_$(histDetalle.liq.total_a_pagar)}</strong></div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setHistDetalle(null)}>Cerrar</button></div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
