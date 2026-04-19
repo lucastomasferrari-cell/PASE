@@ -19,6 +19,7 @@ import LectorFacturasIA from "./pages/LectorFacturasIA";
 import Recetas from "./pages/Recetas";
 import ConciliacionMP from "./pages/ConciliacionMP";
 import CajaEfectivo from "./pages/CajaEfectivo";
+import Cashflow from "./pages/Cashflow";
 import RRHHPage from "./pages/RRHH";
 import Costos from "./pages/Costos";
 import Configuracion from "./pages/Configuracion";
@@ -165,6 +166,7 @@ export default function App() {
       case "recetas":   return <Recetas {...props}/>;
       case "mp":        return <ConciliacionMP {...props}/>;
       case "caja_efectivo": return <CajaEfectivo {...props}/>;
+      case "cashflow": return <Cashflow {...props}/>;
       case "proveedores": return <Proveedores {...props}/>;
       case "usuarios":  return <Usuarios {...props}/>;
       case "rrhh":      return <RRHHPage {...props}/>;

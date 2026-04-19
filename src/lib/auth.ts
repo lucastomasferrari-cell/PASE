@@ -9,7 +9,7 @@ import { createContext, useContext } from "react";
 
 export const ROLES: Record<string, { label: string; color: string; permisos?: string[] }> = {
   dueno:     { label:"Dueño",      color:"#9333EA" },
-  admin:     { label:"Admin",      color:"#3B82F6", permisos:["dashboard","ventas","compras","remitos","gastos","caja","proveedores","rrhh"] },
+  admin:     { label:"Admin",      color:"#3B82F6", permisos:["dashboard","ventas","compras","remitos","gastos","caja","cashflow","proveedores","rrhh"] },
   encargado: { label:"Encargado",  color:"#6B7280", permisos:["dashboard"] },
   compras:   { label:"Compras",    color:"#8B5CF6", permisos:["compras","remitos","proveedores"] },
   cajero:    { label:"Cajero",     color:"#10B981", permisos:["caja","dashboard"] },
@@ -24,8 +24,9 @@ export const MODULOS = [
   { slug:"proveedores", label:"Proveedores", icon:"🏭" },
   { slug:"costos", label:"Costos", icon:"📋" },
   { slug:"mp", label:"Conciliación MP", icon:"💳" },
-  { slug:"caja", label:"Caja & Bancos", icon:"💰" },
+  { slug:"caja", label:"Tesorería", icon:"💰" },
   { slug:"caja_efectivo", label:"Caja Efectivo", icon:"💵" },
+  { slug:"cashflow", label:"Cashflow", icon:"📈" },
   { slug:"eerr", label:"Estado de Result.", icon:"📊" },
   { slug:"contador", label:"Contador / IVA", icon:"🧾" },
   { slug:"rrhh", label:"RRHH", icon:"💼" },
