@@ -12,26 +12,23 @@ export default function Ventas({ user, locales, localActivo }) {
   const [showMaxirest,setShowMaxirest]=useState(false);
   const [detalleModal,setDetalleModal]=useState(null);
   const [editModal,setEditModal]=useState(null);
-  const [filtFecha,setFiltFecha]=useState("");
-  const [filtMes,setFiltMes]=useState(toISO(today).slice(0,7));
+  const _mesActual=toISO(today).slice(0,7);
+  const _ultDia=new Date(today.getFullYear(),today.getMonth()+1,0).getDate();
+  const [filtDesde,setFiltDesde]=useState(_mesActual+"-01");
+  const [filtHasta,setFiltHasta]=useState(_mesActual+"-"+String(_ultDia).padStart(2,"0"));
   const [form,setForm]=useState({local_id:"",fecha:toISO(today),turno:"Noche",medio:"EFECTIVO SALON",monto:"",cant:""});
   const localesDisp=user.rol==="dueno"?locales:locales.filter(l=>(user.locales||[]).includes(l.id));
 
   const load=async()=>{
     setLoading(true);
     let q=db.from("ventas").select("*").order("fecha",{ascending:false});
-    if(filtFecha){
-      q=q.eq("fecha",filtFecha);
-    } else {
-      const desde=filtMes+"-01";
-      const [fyr,fmo]=filtMes.split("-").map(Number); const hasta=filtMes+"-"+String(new Date(fyr,fmo,0).getDate()).padStart(2,"0");
-      q=q.gte("fecha",desde).lte("fecha",hasta);
-    }
+    if(filtDesde) q=q.gte("fecha",filtDesde);
+    if(filtHasta) q=q.lte("fecha",filtHasta);
     if(localActivo) q=q.eq("local_id",localActivo);
     const {data}=await q.limit(500);
     setVentas(data||[]);setLoading(false);
   };
-  useEffect(()=>{load();},[filtFecha,filtMes,localActivo]);
+  useEffect(()=>{load();},[filtDesde,filtHasta,localActivo]);
   useEffect(()=>{if(localesDisp.length>0&&!form.local_id)setForm(f=>({...f,local_id:localActivo||localesDisp[0]?.id||""}));},[locales,localActivo]);
 
   // Group ventas by fecha + turno + local
@@ -86,11 +83,11 @@ export default function Ventas({ user, locales, localActivo }) {
       <div className="ph-row">
         <div><div className="ph-title">Ventas</div></div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-          <input type="date" className="search" style={{width:155}} value={filtFecha}
-            onChange={e=>{setFiltFecha(e.target.value);}}
-            placeholder="Día específico"/>
-          <input type="month" className="search" style={{width:140}} value={filtMes}
-            onChange={e=>{setFiltMes(e.target.value);setFiltFecha("");}}/>
+          <input type="date" className="search" style={{width:155}} value={filtDesde}
+            onChange={e=>setFiltDesde(e.target.value)}/>
+          <span style={{color:"var(--muted2)",fontSize:12}}>→</span>
+          <input type="date" className="search" style={{width:155}} value={filtHasta}
+            onChange={e=>setFiltHasta(e.target.value)}/>
           <button className="btn btn-ghost" onClick={()=>setShowMaxirest(!showMaxirest)}>Importar Maxirest</button>
           <button className="btn btn-acc" onClick={()=>setModalNuevo(true)}>+ Cargar venta</button>
         </div>
