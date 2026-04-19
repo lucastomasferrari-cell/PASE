@@ -11,6 +11,7 @@ export default function Proveedores() {
   const [ctaModal,setCtaModal]=useState<any>(null);
   const [ctaFacts,setCtaFacts]=useState<any[]>([]);
   const [ctaLoading,setCtaLoading]=useState(false);
+  const [ctaMes,setCtaMes]=useState(toISO(today).slice(0,7));
   const [search,setSearch]=useState("");
   const [loading,setLoading]=useState(true);
   const emptyForm={nombre:"",cuit:"",cat:"PESCADERIA",estado:"Activo"};
@@ -23,6 +24,7 @@ export default function Proveedores() {
   const toggleEstado=async(p)=>{await db.from("proveedores").update({estado:p.estado==="Activo"?"Inactivo":"Activo"}).eq("id",p.id);load();};
   const abrirCta=async(p)=>{
     setCtaFacts([]); // limpiar datos del proveedor anterior
+    setCtaMes(toISO(today).slice(0,7));
     setCtaModal(p);
     setCtaLoading(true);
     const {data,error}=await db.from("facturas").select("*").eq("prov_id",p.id).neq("estado","anulada").order("fecha",{ascending:false});
@@ -90,7 +92,28 @@ export default function Proveedores() {
             const totalNC=ncs.reduce((s,f)=>s+Math.abs(f.total||0),0);
             const deudaNeta=aPagar-totalNC;
             const pagos=ctaFacts.flatMap(f=>(f.pagos||[]).map(p=>({...p,nro:f.nro})));
+
+            const [yr,mo]=ctaMes.split("-").map(Number);
+            const desde=ctaMes+"-01";
+            const hasta=ctaMes+"-"+String(new Date(yr,mo,0).getDate()).padStart(2,"0");
+            const facturasDelMes=ctaFacts.filter(f=>(f.tipo||"factura")==="factura"&&f.fecha>=desde&&f.fecha<=hasta);
+            const totalFacturadoMes=facturasDelMes.reduce((s,f)=>s+Number(f.total||0),0);
+            const totalPagadoMes=ctaFacts.reduce((s,f)=>{
+              const pagosDelMes=(f.pagos||[]).filter(p=>p.fecha>=desde&&p.fecha<=hasta);
+              return s+pagosDelMes.reduce((sp,p)=>sp+Number(p.monto||0),0);
+            },0);
+            const pendienteMes=totalFacturadoMes-totalPagadoMes;
+
             return(<>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                <span style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>Resumen del mes</span>
+                <input type="month" className="search" style={{width:140}} value={ctaMes} onChange={e=>setCtaMes(e.target.value)}/>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:16}}>
+                <div className="kpi"><div className="kpi-label">Facturado en {ctaMes}</div><div className="kpi-value kpi-warn">{fmt_$(totalFacturadoMes)}</div></div>
+                <div className="kpi"><div className="kpi-label">Pagado en {ctaMes}</div><div className="kpi-value kpi-success">{fmt_$(totalPagadoMes)}</div></div>
+                <div className="kpi"><div className="kpi-label">Pendiente del mes</div><div className={`kpi-value ${pendienteMes>0?"kpi-danger":"kpi-success"}`}>{fmt_$(pendienteMes)}</div></div>
+              </div>
               <div className="grid4" style={{marginBottom:16}}>
                 <div className="kpi"><div className="kpi-label">A Pagar</div><div className="kpi-value kpi-warn">{fmt_$(aPagar)}</div></div>
                 <div className="kpi"><div className="kpi-label">Vencido</div><div className="kpi-value kpi-danger">{fmt_$(totalVencido)}</div></div>
