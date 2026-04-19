@@ -7,6 +7,7 @@ export const cajaService = {
       .select("*")
       .eq("anulado", false)
       .order("fecha", { ascending: false })
+      .order("id", { ascending: false })
       .limit(limit);
     if (localId) q = q.eq("local_id", localId);
     const { data, error } = await q;

@@ -18,7 +18,7 @@ export default function Caja({ localActivo }: any) {
 
   const load = async () => {
     setLoading(true);
-    let q = db.from("movimientos").select("*").order("fecha", {ascending: false}).limit(80);
+    let q = db.from("movimientos").select("*").order("fecha", {ascending: false}).order("id", {ascending: false}).limit(80);
     if (localActivo) q = q.eq("local_id", parseInt(String(localActivo)));
     let sq = db.from("saldos_caja").select("*");
     if (localActivo) sq = sq.eq("local_id", parseInt(String(localActivo)));
