@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { MEDIOS_COBRO } from "../lib/constants";
+import { MEDIOS_COBRO, MEDIO_A_CUENTA } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import ImportarMaxirest from "./ImportarMaxirest";
 
@@ -50,11 +50,32 @@ export default function Ventas({ user, locales, localActivo }) {
 
   const guardar=async()=>{
     if(!form.local_id)return;
+    const lid=parseInt(form.local_id);
     const rows=lineas
       .filter(l=>parseFloat(l.monto)>0)
-      .map(l=>({id:genId("V"),local_id:parseInt(form.local_id),fecha:form.fecha,turno:form.turno,medio:l.medio,monto:parseFloat(l.monto)}));
+      .map(l=>({id:genId("V"),local_id:lid,fecha:form.fecha,turno:form.turno,medio:l.medio,monto:parseFloat(l.monto)}));
     if(rows.length===0)return;
     await db.from("ventas").insert(rows);
+
+    const impactoPorCuenta:Record<string,number>={};
+    rows.forEach(v=>{
+      const cuenta=MEDIO_A_CUENTA[v.medio]||"Caja Chica";
+      impactoPorCuenta[cuenta]=(impactoPorCuenta[cuenta]||0)+v.monto;
+    });
+    for(const [cuenta,monto] of Object.entries(impactoPorCuenta)){
+      await db.from("movimientos").insert([{
+        id:genId("MOV"),fecha:form.fecha,cuenta,
+        tipo:"Ingreso Venta",cat:"VENTAS",
+        importe:monto,detalle:`Ventas ${form.turno} - ${form.fecha}`,
+        local_id:lid,
+      }]);
+      const {data:caja}=await db.from("saldos_caja").select("saldo")
+        .eq("cuenta",cuenta).eq("local_id",lid).maybeSingle();
+      if(caja) await db.from("saldos_caja")
+        .update({saldo:(caja.saldo||0)+monto})
+        .eq("cuenta",cuenta).eq("local_id",lid);
+    }
+
     setLineas([{medio:"EFECTIVO SALON",monto:""}]);
     setModalNuevo(false);load();
   };

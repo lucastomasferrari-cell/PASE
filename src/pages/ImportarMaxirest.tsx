@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { db } from "../lib/supabase";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
-import { MEDIOS_COBRO } from "../lib/constants";
+import { MEDIOS_COBRO, MEDIO_A_CUENTA } from "../lib/constants";
 
 export default function ImportarMaxirest({ locales }) {
   const [texto,setTexto]=useState("");
@@ -41,7 +41,29 @@ export default function ImportarMaxirest({ locales }) {
       if(!confirm(`⚠ Ya existe un cierre del ${fmt_d(preview.fecha)} turno ${preview.turno} para este local. ¿Importar igual?`))return;
       setLoading(true);
     }
-    await db.from("ventas").insert(preview.ventas.map(v=>({...v,id:genId("V"),local_id:parseInt(v.local_id)})));
+    const lid=parseInt(preview.local_id);
+    const ventasAInsertar=preview.ventas.map(v=>({...v,id:genId("V"),local_id:lid}));
+    await db.from("ventas").insert(ventasAInsertar);
+
+    const impactoPorCuenta:Record<string,number>={};
+    ventasAInsertar.forEach(v=>{
+      const cuenta=MEDIO_A_CUENTA[v.medio]||"Caja Chica";
+      impactoPorCuenta[cuenta]=(impactoPorCuenta[cuenta]||0)+v.monto;
+    });
+    for(const [cuenta,monto] of Object.entries(impactoPorCuenta)){
+      await db.from("movimientos").insert([{
+        id:genId("MOV"),fecha:preview.fecha,cuenta,
+        tipo:"Ingreso Venta",cat:"VENTAS",
+        importe:monto,detalle:`Ventas ${preview.turno} - ${preview.fecha}`,
+        local_id:lid,
+      }]);
+      const {data:caja}=await db.from("saldos_caja").select("saldo")
+        .eq("cuenta",cuenta).eq("local_id",lid).maybeSingle();
+      if(caja) await db.from("saldos_caja")
+        .update({saldo:(caja.saldo||0)+monto})
+        .eq("cuenta",cuenta).eq("local_id",lid);
+    }
+
     setLoading(false);setTexto("");setPreview(null);
     alert("✓ Importado: "+preview.ventas.length+" registros · Total: "+fmt_$(preview.ventas.reduce((s,v)=>s+v.monto,0)));
   };
