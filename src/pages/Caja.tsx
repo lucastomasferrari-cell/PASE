@@ -22,6 +22,10 @@ export default function Caja({ user, localActivo }: any) {
   const [detalleEdicion, setDetalleEdicion] = useState<any>(null);
   const [auditLog, setAuditLog] = useState<any>(null);
   const [form, setForm] = useState({fecha:toISO(today),cuenta:"Caja Chica",tipo:"Pago Gasto",cat:"",importe:"",detalle:"",esEgreso:true});
+  const [movCajaEf, setMovCajaEf] = useState<any[]>([]);
+  const [modalCajaEf, setModalCajaEf] = useState(false);
+  const [formCajaEf, setFormCajaEf] = useState({fecha:toISO(today),descripcion:"",monto:"",esIngreso:true});
+  const esDueno = user?.rol === "dueno" || user?.rol === "admin";
 
   const load = async () => {
     setLoading(true);
@@ -35,6 +39,15 @@ export default function Caja({ user, localActivo }: any) {
     const obj: Record<string, number> = {};
     (s||[]).forEach(x=> { obj[x.cuenta] = (obj[x.cuenta]||0) + (x.saldo||0); });
     setSaldos(obj);
+    if (esDueno) {
+      let ceQ = db.from("caja_efectivo").select("*")
+        .order("fecha", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (localActivo) ceQ = ceQ.eq("local_id", parseInt(String(localActivo)));
+      const { data: ce } = await ceQ;
+      setMovCajaEf(ce || []);
+    }
     setLoading(false);
   };
   useEffect(()=>{load();},[localActivo]);
@@ -160,6 +173,21 @@ export default function Caja({ user, localActivo }: any) {
     setEditMov(null); load();
   };
 
+  const guardarCajaEf = async () => {
+    if (!formCajaEf.monto || !localActivo) return;
+    const monto = parseFloat(formCajaEf.monto) * (formCajaEf.esIngreso ? 1 : -1);
+    await db.from("caja_efectivo").insert([{
+      fecha: formCajaEf.fecha,
+      descripcion: formCajaEf.descripcion,
+      monto,
+      local_id: parseInt(String(localActivo)),
+      creado_por: user?.nombre || "—",
+    }]);
+    setModalCajaEf(false);
+    setFormCajaEf({fecha:toISO(today),descripcion:"",monto:"",esIngreso:true});
+    load();
+  };
+
   const cc = c => c==="Caja Chica"?"var(--acc)":c==="Caja Mayor"?"var(--acc2)":c==="MercadoPago"?"var(--acc3)":"var(--info)";
 
   return (
@@ -224,6 +252,57 @@ export default function Caja({ user, localActivo }: any) {
           ))}</tbody></table>
         )}
       </div>
+
+      {esDueno && (
+        <div className="panel" style={{marginTop:16}}>
+          <div className="panel-hd">
+            <span className="panel-title">Caja Efectivo — Privado</span>
+            <button className="btn btn-acc btn-sm" onClick={() => setModalCajaEf(true)}>+ Movimiento</button>
+          </div>
+          {movCajaEf.length === 0 ? <div className="empty">Sin movimientos</div> : (
+            <table>
+              <thead><tr><th>Fecha</th><th>Descripción</th><th style={{textAlign:"right"}}>Monto</th></tr></thead>
+              <tbody>{movCajaEf.map(m => (
+                <tr key={m.id}>
+                  <td className="mono">{fmt_d(m.fecha)}</td>
+                  <td style={{fontSize:11}}>{m.descripcion}</td>
+                  <td style={{textAlign:"right"}}>
+                    <span className="num" style={{color: Number(m.monto) < 0 ? "var(--danger)" : "var(--success)"}}>
+                      {fmt_$(Number(m.monto))}
+                    </span>
+                  </td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {modalCajaEf && (
+        <div className="overlay" onClick={() => setModalCajaEf(false)}>
+          <div className="modal" style={{width:460}} onClick={e => e.stopPropagation()}>
+            <div className="modal-hd"><div className="modal-title">Caja Efectivo — Nuevo movimiento</div><button className="close-btn" onClick={() => setModalCajaEf(false)}>✕</button></div>
+            <div className="modal-body">
+              <div className="field"><label>Tipo</label>
+                <select value={formCajaEf.esIngreso ? "ingreso" : "egreso"} onChange={e => setFormCajaEf({...formCajaEf, esIngreso: e.target.value === "ingreso"})}>
+                  <option value="ingreso">Ingreso (entra plata)</option>
+                  <option value="egreso">Egreso (sale plata)</option>
+                </select>
+              </div>
+              <div className="form2">
+                <div className="field"><label>Monto $</label><input type="number" value={formCajaEf.monto} onChange={e => setFormCajaEf({...formCajaEf, monto: e.target.value})} placeholder="0"/></div>
+                <div className="field"><label>Fecha</label><input type="date" value={formCajaEf.fecha} onChange={e => setFormCajaEf({...formCajaEf, fecha: e.target.value})}/></div>
+              </div>
+              <div className="field"><label>Descripción</label><input value={formCajaEf.descripcion} onChange={e => setFormCajaEf({...formCajaEf, descripcion: e.target.value})} placeholder="Ej: Retiro, ajuste..."/></div>
+              {!localActivo && <div className="alert alert-warn">Seleccioná un local activo en el sidebar.</div>}
+            </div>
+            <div className="modal-ft">
+              <button className="btn btn-sec" onClick={() => setModalCajaEf(false)}>Cancelar</button>
+              <button className="btn btn-acc" onClick={guardarCajaEf} disabled={!formCajaEf.monto || !localActivo}>Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editMov && (
         <div className="overlay" onClick={() => setEditMov(null)}>
