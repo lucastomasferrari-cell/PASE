@@ -142,18 +142,19 @@ export default function Compras({ user, locales, localActivo }) {
       const prov = proveedores.find(p => p.id === f.prov_id);
       if (prov) await db.from("proveedores").update({ saldo: Math.max(0, (prov.saldo || 0) - monto) }).eq("id", f.prov_id);
 
-      if (f.local_id) {
-        const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", pagoForm.cuenta).eq("local_id", f.local_id).maybeSingle();
-        if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", pagoForm.cuenta).eq("local_id", f.local_id);
+      const lid = f.local_id ? parseInt(String(f.local_id)) : null;
+      if (lid) {
+        const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", pagoForm.cuenta).eq("local_id", lid).maybeSingle();
+        if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", pagoForm.cuenta).eq("local_id", lid);
       }
 
       const { error: movErr } = await db.from("movimientos").insert([{
         id: genId("MOV"), fecha: pagoForm.fecha, cuenta: pagoForm.cuenta,
         tipo: "Pago Proveedor", cat: f.cat, importe: -monto,
         detalle: `Pago ${prov?.nombre || ""} - Fact ${f.nro}`, fact_id: f.id,
-        local_id: f.local_id || null,
+        local_id: lid,
       }]);
-      if (movErr) console.error("movimientos insert error (no crítico):", movErr);
+      if (movErr) throw new Error("Error insertando movimiento: " + movErr.message);
 
       setPagarModal(null);
       load();
