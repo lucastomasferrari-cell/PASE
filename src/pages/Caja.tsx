@@ -1,10 +1,17 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { CATEGORIAS_COMPRA, CUENTAS } from "../lib/constants";
+import { CATEGORIAS_COMPRA } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 
-// ─── CAJA ─────────────────────────────────────────────────────────────────────
-export default function Caja({ localActivo }: any) {
+const CUENTAS_POR_ROL: Record<string, string[]> = {
+  dueno: ["Caja Chica", "Caja Mayor", "Caja Efectivo", "MercadoPago", "Banco"],
+  admin: ["Caja Chica", "Caja Mayor", "Caja Efectivo", "MercadoPago", "Banco"],
+  encargado: ["Caja Chica", "MercadoPago"],
+};
+
+// ─── TESORERÍA ────────────────────────────────────────────────────────────────
+export default function Caja({ user, localActivo }: any) {
+  const cuentasVisibles = CUENTAS_POR_ROL[user?.rol] || ["Caja Chica", "MercadoPago"];
   const [movimientos, setMovimientos] = useState<any[]>([]);
   const [saldos, setSaldos] = useState<Record<string, number>>({});
   const [modal, setModal] = useState(false);
@@ -158,11 +165,11 @@ export default function Caja({ localActivo }: any) {
   return (
     <div>
       <div className="ph-row">
-        <div><div className="ph-title">Caja & Bancos</div></div>
+        <div><div className="ph-title">Tesorería</div></div>
         <button className="btn btn-acc" onClick={()=>setModal(true)}>+ Movimiento</button>
       </div>
       <div className="grid4">
-        {CUENTAS.map(k=>(
+        {cuentasVisibles.map(k=>(
           <div key={k} className={`caja-card caja-${k==="Caja Chica"?"chica":k==="Caja Mayor"?"mayor":k==="MercadoPago"?"mp":"banco"}`}>
             <div className="caja-name">{k}</div>
             <div className="caja-saldo" style={{color:(saldos[k]||0)<0?"var(--danger)":"var(--txt)"}}>{fmt_$(saldos[k]||0)}</div>
@@ -178,7 +185,7 @@ export default function Caja({ localActivo }: any) {
               Ver anulados
             </label>
             <select className="search" style={{width:160}} value={filtCuenta} onChange={e=>setFiltCuenta(e.target.value)}>
-              <option>Todas</option>{CUENTAS.map(c=><option key={c}>{c}</option>)}
+              <option>Todas</option>{cuentasVisibles.map(c=><option key={c}>{c}</option>)}
             </select>
           </div>
         </div>
@@ -240,7 +247,7 @@ export default function Caja({ localActivo }: any) {
               <div className="form2">
                 <div className="field"><label>Cuenta</label>
                   <select value={editMov.cuenta} onChange={e => setEditMov({...editMov, cuenta: e.target.value})}>
-                    {CUENTAS.map(c => <option key={c}>{c}</option>)}
+                    {cuentasVisibles.map(c => <option key={c}>{c}</option>)}
                   </select>
                 </div>
                 <div className="field"><label>Importe $</label>
@@ -310,7 +317,7 @@ export default function Caja({ localActivo }: any) {
             <div className="modal-hd"><div className="modal-title">Nuevo Movimiento</div><button className="close-btn" onClick={()=>setModal(false)}>✕</button></div>
             <div className="modal-body">
               <div className="form2">
-                <div className="field"><label>Cuenta</label><select value={form.cuenta} onChange={e=>setForm({...form,cuenta:e.target.value})}>{CUENTAS.map(c=><option key={c}>{c}</option>)}</select></div>
+                <div className="field"><label>Cuenta</label><select value={form.cuenta} onChange={e=>setForm({...form,cuenta:e.target.value})}>{cuentasVisibles.map(c=><option key={c}>{c}</option>)}</select></div>
                 <div className="field"><label>Dirección</label><select value={form.esEgreso?"egreso":"ingreso"} onChange={e=>setForm({...form,esEgreso:e.target.value==="egreso"})}><option value="egreso">Egreso (sale plata)</option><option value="ingreso">Ingreso (entra plata)</option></select></div>
               </div>
               <div className="form2">
