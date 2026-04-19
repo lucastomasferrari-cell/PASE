@@ -83,6 +83,8 @@ export default function RRHH({ user, locales, localActivo }) {
   const [pagando, setPagando] = useState(false);
   const [pagoModal, setPagoModal] = useState<any>(null);
   const [formasPago, setFormasPago] = useState<{cuenta:string, monto:string}[]>([]);
+  const [adelModal, setAdelModal] = useState(false);
+  const [adelForm, setAdelForm] = useState({ empleado_id:"", monto:"", cuenta:"Caja Efectivo", fecha:toISO(today) });
 
   // Dashboard
   const [dashLoading, setDashLoading] = useState(true);
@@ -264,6 +266,11 @@ export default function RRHH({ user, locales, localActivo }) {
       .gte("pagado_at", desde + "T00:00:00")
       .lte("pagado_at", hasta + "T23:59:59");
 
+    const { data: adelantos } = await db.from("rrhh_adelantos")
+      .select("*, rrhh_empleados(nombre, apellido, puesto, local_id)")
+      .gte("fecha", desde)
+      .lte("fecha", hasta);
+
     const sueldos = (liqs || []).map(l => ({
       tipo: "sueldo",
       fecha: l.pagado_at?.split("T")[0],
@@ -283,7 +290,16 @@ export default function RRHH({ user, locales, localActivo }) {
       detalle: e,
     }));
 
-    const todos = [...sueldos, ...esp]
+    const adel = (adelantos || []).map(a => ({
+      tipo: "adelanto",
+      fecha: a.fecha,
+      emp: a.rrhh_empleados,
+      monto: a.monto,
+      label: "Adelanto",
+      detalle: a,
+    }));
+
+    const todos = [...sueldos, ...esp, ...adel]
       .filter(h => !histLocal || String(h.emp?.local_id) === String(histLocal))
       .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
 
@@ -405,6 +421,41 @@ export default function RRHH({ user, locales, localActivo }) {
     setNovMap(prev => ({ ...prev, [empId]: { ...prev[empId], estado: "borrador" } }));
   };
 
+  // ─── ADELANTOS ─────────────────────────────────────────────────────────────
+  const guardarAdelanto = async () => {
+    const monto = parseFloat(adelForm.monto);
+    if (!monto || monto <= 0 || !adelForm.empleado_id || !adelForm.cuenta) return;
+    const emp = allEmps.find(e => e.id === adelForm.empleado_id);
+    if (!emp) return;
+    const lid = emp.local_id;
+    const desc = `Adelanto ${emp.apellido} ${emp.nombre}`;
+
+    await db.from("movimientos").insert([{
+      id: genId("MOV"), fecha: adelForm.fecha, cuenta: adelForm.cuenta,
+      tipo: "Adelanto", cat: "SUELDOS", importe: -monto, detalle: desc,
+      local_id: lid,
+    }]);
+    if (lid) {
+      const { data: caja } = await db.from("saldos_caja").select("saldo")
+        .eq("cuenta", adelForm.cuenta).eq("local_id", lid).maybeSingle();
+      if (caja) await db.from("saldos_caja")
+        .update({ saldo: (caja.saldo || 0) - monto })
+        .eq("cuenta", adelForm.cuenta).eq("local_id", lid);
+    }
+    await db.from("rrhh_adelantos").insert([{
+      empleado_id: adelForm.empleado_id,
+      monto, fecha: adelForm.fecha,
+      local_id: lid, cuenta: adelForm.cuenta,
+      descontado: false,
+      registrado_por: user?.nombre || null,
+    }]);
+
+    showToast(`Adelanto registrado — ${emp.apellido}`);
+    setAdelModal(false);
+    setAdelForm({ empleado_id:"", monto:"", cuenta:"Caja Efectivo", fecha:toISO(today) });
+    if (tab === "pagos") await loadPagos();
+  };
+
   // ─── CONFIG ACTIONS ────────────────────────────────────────────────────────
   const guardarValorDoble = async (item: any) => {
     if (!item.puesto || !item.valor) return;
@@ -515,6 +566,12 @@ export default function RRHH({ user, locales, localActivo }) {
           loadEmpleados={loadEmpleados}
           showToast={showToast}
           user={user}
+          allEmps={allEmps}
+          adelModal={adelModal}
+          setAdelModal={setAdelModal}
+          adelForm={adelForm}
+          setAdelForm={setAdelForm}
+          guardarAdelanto={guardarAdelanto}
         />
       )}
 
@@ -793,6 +850,7 @@ function TabPagos({
   totalPagosPend, totalGeneral,
   pagoModal, setPagoModal, formasPago, setFormasPago,
   pagando, setPagando, loadPagos, loadEmpleados, showToast, user,
+  allEmps, adelModal, setAdelModal, adelForm, setAdelForm, guardarAdelanto,
 }: any) {
   return (
     <>
@@ -807,6 +865,7 @@ function TabPagos({
         </select>
         <div style={{flex:1}} />
         {totalPagosPend > 0 && <span style={{fontSize:11,color:"var(--muted2)"}}>{totalPagosPend} pendiente{totalPagosPend > 1 ? "s" : ""}</span>}
+        {esDueno && <button className="btn btn-sec btn-sm" onClick={() => setAdelModal(true)}>+ Adelanto</button>}
       </div>
 
       {!pagoLocal ? <div className="alert alert-info">Seleccioná un local</div> :
@@ -820,22 +879,34 @@ function TabPagos({
               const { emp, nov, liq } = row;
               if (!liq) return null;
               const pagado = liq.estado === "pagado";
+              const yaPagado = Number(liq.pagos_realizados || 0);
+              const total = Number(liq.total_a_pagar || 0);
+              const pendiente = Math.max(0, Math.round(total) - Math.round(yaPagado));
+              const esParcial = !pagado && yaPagado > 0;
+              const pct = total > 0 ? Math.round((yaPagado / total) * 100) : 0;
               return (
                 <tr key={emp.id}>
                   <td style={{fontWeight:500,fontSize:12}}>{emp.apellido}, {emp.nombre}</td>
                   <td><span className="badge b-muted" style={{fontSize:8}}>{emp.puesto}</span></td>
-                  <td style={{textAlign:"right"}}><span className="num" style={{color:"var(--acc)"}}>{fmt_$(liq.total_a_pagar)}</span></td>
+                  <td style={{textAlign:"right"}}><span className="num" style={{color:"var(--acc)"}}>{fmt_$(total)}</span></td>
                   <td className="mono" style={{fontSize:10,color:"var(--muted2)"}}>{emp.alias_mp || "—"}</td>
                   <td>
                     {pagado
                       ? <span className="badge b-success">{fmt_d(liq.pagado_at?.split("T")[0])}</span>
-                      : <span className="badge b-warn">Pendiente</span>}
+                      : esParcial
+                        ? <span className="badge b-info" title={`Pagado ${fmt_$(yaPagado)} de ${fmt_$(total)}`}>Parcial · {pct}%</span>
+                        : <span className="badge b-warn">Pendiente</span>}
+                    {esParcial && (
+                      <div style={{fontSize:9,color:"var(--muted2)",marginTop:3}}>
+                        {fmt_$(yaPagado)} de {fmt_$(total)} · Resta {fmt_$(pendiente)}
+                      </div>
+                    )}
                   </td>
                   <td>
                     {esDueno && !pagado && (
                       <button className="btn btn-success btn-sm" onClick={() => {
                         setPagoModal({ emp, nov, liq });
-                        setFormasPago([{ cuenta: "Caja Efectivo", monto: String(Math.round(Number(liq.total_a_pagar || 0))) }]);
+                        setFormasPago([{ cuenta: "Caja Efectivo", monto: String(pendiente) }]);
                       }}>Pagar</button>
                     )}
                   </td>
@@ -853,16 +924,20 @@ function TabPagos({
       {pagoModal && (() => {
         const { emp, nov, liq } = pagoModal;
         const total = Math.round(Number(liq.total_a_pagar || 0));
+        const yaPagado = Math.round(Number(liq.pagos_realizados || 0));
+        const pendiente = Math.max(0, total - yaPagado);
         const asignado = Math.round(formasPago.reduce((s, f) => s + (parseFloat(f.monto) || 0), 0));
-        const restante = total - asignado;
-        const puedeConfirmar = restante === 0 && formasPago.length > 0 && formasPago.every(f => parseFloat(f.monto) > 0);
+        const restanteTrasEste = pendiente - asignado;
+        const completaPago = asignado >= pendiente;
+        const esPagoParcial = asignado > 0 && asignado < pendiente;
+        const puedeConfirmar = asignado > 0 && asignado <= pendiente && formasPago.length > 0 && formasPago.every(f => parseFloat(f.monto) > 0);
         const cerrarModal = () => { setPagoModal(null); setFormasPago([]); };
 
         const confirmarPago = async () => {
           if (!puedeConfirmar || pagando) return;
           setPagando(true);
           try {
-            const desc = `Sueldo ${emp.apellido} ${emp.nombre} - ${MESES_NOMBRE[pagoMes]} ${pagoAnio}`;
+            const desc = `${completaPago && yaPagado === 0 ? "Sueldo" : completaPago ? "Sueldo (saldo final)" : "Sueldo (parcial)"} ${emp.apellido} ${emp.nombre} - ${MESES_NOMBRE[pagoMes]} ${pagoAnio}`;
 
             for (const fp of formasPago) {
               const monto = parseFloat(fp.monto) || 0;
@@ -878,17 +953,28 @@ function TabPagos({
               }]);
             }
 
-            const pagadoPayload = { estado: "pagado", gasto_id: null, pagado_at: new Date().toISOString(), pagado_por: user?.id };
-
-            if (liq._generated && nov?.id) {
-              const { _novedadId, _generated, id: _ignoreId, ...calcFields } = liq;
-              await db.from("rrhh_liquidaciones").insert([{ novedad_id: nov.id, ...calcFields, ...pagadoPayload, calculado_at: new Date().toISOString() }]);
-            } else {
-              await db.from("rrhh_liquidaciones").update(pagadoPayload).eq("id", liq.id);
+            const nuevosPagos = yaPagado + asignado;
+            const payload: any = { pagos_realizados: nuevosPagos };
+            if (completaPago) {
+              payload.estado = "pagado";
+              payload.gasto_id = null;
+              payload.pagado_at = new Date().toISOString();
+              payload.pagado_por = user?.id;
             }
 
-            await db.from("rrhh_empleados").update({ aguinaldo_acumulado: (emp.aguinaldo_acumulado || 0) + total / 12 }).eq("id", emp.id);
-            showToast("Pago registrado");
+            if (liq._generated && nov?.id) {
+              const { _novedadId, _generated, id: _ignoreId, pagos_realizados: _ignorePag, ...calcFields } = liq;
+              await db.from("rrhh_liquidaciones").insert([{ novedad_id: nov.id, ...calcFields, estado: completaPago ? "pagado" : "pendiente", pagos_realizados: nuevosPagos, calculado_at: new Date().toISOString(), ...(completaPago ? { pagado_at: payload.pagado_at, pagado_por: user?.id } : {}) }]);
+            } else {
+              await db.from("rrhh_liquidaciones").update(payload).eq("id", liq.id);
+            }
+
+            if (completaPago) {
+              await db.from("rrhh_empleados").update({ aguinaldo_acumulado: (emp.aguinaldo_acumulado || 0) + total / 12 }).eq("id", emp.id);
+              showToast("Pago completado");
+            } else {
+              showToast(`Pago parcial registrado — Resta ${fmt_$(restanteTrasEste)}`);
+            }
             cerrarModal();
             await loadPagos();
             await loadEmpleados();
@@ -907,10 +993,17 @@ function TabPagos({
                 <button className="close-btn" onClick={cerrarModal}>✕</button>
               </div>
               <div className="modal-body">
-                <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginBottom:16,borderBottom:"1px solid var(--bd)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginBottom:yaPagado>0?8:16,borderBottom:"1px solid var(--bd)"}}>
                   <span style={{fontSize:12,color:"var(--muted2)"}}>Total a pagar</span>
                   <span style={{fontSize:16,fontWeight:500,color:"var(--acc)"}}>{fmt_$(total)}</span>
                 </div>
+
+                {yaPagado > 0 && (
+                  <div style={{display:"flex",justifyContent:"space-between",padding:"6px 0",marginBottom:12,fontSize:12}}>
+                    <span style={{color:"var(--muted2)"}}>Ya pagado (parcial previo)</span>
+                    <span style={{color:"var(--info)"}}>{fmt_$(yaPagado)} — Pendiente: <strong>{fmt_$(pendiente)}</strong></span>
+                  </div>
+                )}
 
                 {formasPago.map((fp, i) => (
                   <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
@@ -925,27 +1018,73 @@ function TabPagos({
                 ))}
 
                 <button className="btn btn-ghost btn-sm" style={{marginBottom:16}}
-                  onClick={() => setFormasPago(prev => [...prev, { cuenta: "Caja Efectivo", monto: restante > 0 ? String(restante) : "" }])}>
+                  onClick={() => setFormasPago(prev => [...prev, { cuenta: "Caja Efectivo", monto: restanteTrasEste > 0 ? String(restanteTrasEste) : "" }])}>
                   + Agregar forma de pago
                 </button>
 
                 <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
-                  <span style={{fontSize:12,color:"var(--muted2)"}}>Restante</span>
-                  <span style={{fontSize:14,fontWeight:500,color: Math.abs(restante) < 0.01 ? "var(--success)" : "var(--danger)"}}>
-                    {fmt_$(restante)}
+                  <span style={{fontSize:12,color: esPagoParcial ? "var(--warn)" : "var(--muted2)"}}>
+                    {esPagoParcial ? "Pago parcial — Restante" : "Restante"}
+                  </span>
+                  <span style={{fontSize:14,fontWeight:500,color: Math.abs(restanteTrasEste) < 0.01 ? "var(--success)" : restanteTrasEste < 0 ? "var(--danger)" : "var(--warn)"}}>
+                    {fmt_$(Math.max(0, restanteTrasEste))}
                   </span>
                 </div>
               </div>
               <div className="modal-ft">
                 <button className="btn btn-sec" onClick={cerrarModal}>Cancelar</button>
                 <button className="btn btn-success" onClick={confirmarPago} disabled={!puedeConfirmar || pagando}>
-                  {pagando ? "Procesando..." : "Confirmar pago"}
+                  {pagando ? "Procesando..." : completaPago ? "Confirmar pago" : "Registrar pago parcial"}
                 </button>
               </div>
             </div>
           </div>
         );
       })()}
+
+      {adelModal && (
+        <div className="overlay" onClick={() => setAdelModal(false)}>
+          <div className="modal" style={{width:480}} onClick={e => e.stopPropagation()}>
+            <div className="modal-hd">
+              <div className="modal-title">Adelanto a empleado</div>
+              <button className="close-btn" onClick={() => setAdelModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="field"><label>Empleado</label>
+                <select value={adelForm.empleado_id} onChange={e => setAdelForm({...adelForm, empleado_id: e.target.value})}>
+                  <option value="">Seleccionar...</option>
+                  {(allEmps || [])
+                    .filter(e => e.activo !== false)
+                    .filter(e => !pagoLocal || e.local_id === parseInt(String(pagoLocal)))
+                    .map(e => <option key={e.id} value={e.id}>{e.apellido}, {e.nombre}</option>)}
+                </select>
+              </div>
+              <div className="form2">
+                <div className="field"><label>Monto $</label>
+                  <input type="number" value={adelForm.monto} onChange={e => setAdelForm({...adelForm, monto: e.target.value})} placeholder="0"/>
+                </div>
+                <div className="field"><label>Fecha</label>
+                  <input type="date" value={adelForm.fecha} onChange={e => setAdelForm({...adelForm, fecha: e.target.value})}/>
+                </div>
+              </div>
+              <div className="field"><label>Cuenta de egreso</label>
+                <select value={adelForm.cuenta} onChange={e => setAdelForm({...adelForm, cuenta: e.target.value})}>
+                  {CUENTAS_PAGO.map(c => <option key={c}>{c}</option>)}
+                </select>
+              </div>
+              <div style={{fontSize:10,color:"var(--muted2)",marginTop:4}}>
+                Se registra como movimiento (cat SUELDOS), afecta saldos de caja y queda como adelanto descontable a futuro.
+              </div>
+            </div>
+            <div className="modal-ft">
+              <button className="btn btn-sec" onClick={() => setAdelModal(false)}>Cancelar</button>
+              <button className="btn btn-acc" onClick={guardarAdelanto} disabled={!adelForm.empleado_id || !adelForm.monto || parseFloat(adelForm.monto) <= 0}>
+                Registrar adelanto
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
