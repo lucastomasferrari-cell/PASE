@@ -688,16 +688,10 @@ export default function RRHH({ user, locales, localActivo }) {
             setPagando(true);
             try {
               const desc = `Sueldo ${emp.apellido} ${emp.nombre} - ${MESES_NOMBRE[pagoMes]} ${pagoAnio}`;
-              const gastoIds: string[] = [];
 
               for (const fp of formasPago) {
                 const monto = parseFloat(fp.monto) || 0;
                 if (monto <= 0) continue;
-                const gid = genId("GASTO");
-                await db.from("gastos").insert([{
-                  id: gid, fecha: toISO(today), tipo: "fijo", categoria: "SUELDOS",
-                  monto, detalle: desc + ` (${fp.cuenta})`, local_id: emp.local_id, cuenta: fp.cuenta,
-                }]);
                 if (emp.local_id) {
                   const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", fp.cuenta).eq("local_id", emp.local_id).maybeSingle();
                   if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", fp.cuenta).eq("local_id", emp.local_id);
@@ -707,10 +701,9 @@ export default function RRHH({ user, locales, localActivo }) {
                   tipo: "Pago Sueldo", cat: "SUELDOS", importe: -monto, detalle: desc,
                   local_id: emp.local_id,
                 }]);
-                gastoIds.push(gid);
               }
 
-              const pagadoPayload = { estado: "pagado", gasto_id: gastoIds[0] || null, pagado_at: new Date().toISOString(), pagado_por: user?.id };
+              const pagadoPayload = { estado: "pagado", gasto_id: null, pagado_at: new Date().toISOString(), pagado_por: user?.id };
 
               if (liq._generated && nov?.id) {
                 const { _novedadId, _generated, id: _ignoreId, ...calcFields } = liq;

@@ -160,37 +160,6 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
     loadEmp();
   };
 
-  // ─── ACCIONES: PAGAR MES ───────────────────────────────────────────────────
-  const pagarMes = async (nov: any) => {
-    if (pagando) return;
-    const liq = (nov.rrhh_liquidaciones || [])[0];
-    if (!liq || liq.estado === "pagado") return;
-    setPagando(true);
-
-    const desc = `Sueldo ${emp.apellido} ${emp.nombre} - ${MESES[nov.mes]} ${nov.anio}`;
-    const gastoId = genId("GASTO");
-    await db.from("gastos").insert([{
-      id: gastoId, fecha: toISO(today), tipo: "fijo", categoria: "SUELDOS",
-      monto: Number(liq.total_a_pagar), detalle: desc,
-      local_id: emp.local_id, cuenta: emp.alias_mp ? "MercadoPago" : "Caja Chica",
-    }]);
-
-    await db.from("rrhh_liquidaciones").update({
-      estado: "pagado", gasto_id: gastoId,
-      pagado_at: new Date().toISOString(), pagado_por: user?.id,
-    }).eq("id", liq.id);
-
-    // Acumular aguinaldo: sueldo/12
-    const aguIncremento = Number(liq.total_a_pagar) / 12;
-    await db.from("rrhh_empleados").update({
-      aguinaldo_acumulado: (emp.aguinaldo_acumulado || 0) + aguIncremento,
-    }).eq("id", emp.id);
-
-    setPagando(false);
-    showToast("Pago registrado correctamente");
-    loadAll();
-  };
-
   // ─── ACCIONES: VACACIONES ──────────────────────────────────────────────────
   const plusVacacional = vacAcumuladas * valorDiaVacacional;
 
@@ -199,15 +168,20 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
     const monto = parseFloat(vacMonto) || plusVacacional;
     if (dias <= 0 || monto <= 0) return;
     const desc = `Vacaciones ${emp.apellido} ${emp.nombre}`;
-    const gastoId = genId("GASTO");
+    const cuenta = "Caja Chica";
 
-    await db.from("gastos").insert([{
-      id: gastoId, fecha: toISO(today), tipo: "fijo", categoria: "SUELDOS",
-      monto, detalle: desc, local_id: emp.local_id, cuenta: "Caja Chica",
-    }]);
     await db.from("rrhh_pagos_especiales").insert([{
       empleado_id: emp.id, tipo: "vacaciones", monto, dias,
-      gasto_id: gastoId, pagado_por: user?.id,
+      gasto_id: null, pagado_por: user?.id,
+    }]);
+    if (emp.local_id) {
+      const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", cuenta).eq("local_id", emp.local_id).maybeSingle();
+      if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", cuenta).eq("local_id", emp.local_id);
+    }
+    await db.from("movimientos").insert([{
+      id: genId("MOV"), fecha: toISO(today), cuenta,
+      tipo: "Pago Vacaciones", cat: "SUELDOS", importe: -monto, detalle: desc,
+      local_id: emp.local_id,
     }]);
     await db.from("rrhh_empleados").update({ vacaciones_dias_acumulados: 0 }).eq("id", emp.id);
 
@@ -221,15 +195,20 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
     const monto = parseFloat(aguMonto) || sacAcumulado;
     if (monto <= 0) return;
     const desc = `Aguinaldo ${emp.apellido} ${emp.nombre}`;
-    const gastoId = genId("GASTO");
+    const cuenta = "Caja Chica";
 
-    await db.from("gastos").insert([{
-      id: gastoId, fecha: toISO(today), tipo: "fijo", categoria: "SUELDOS",
-      monto, detalle: desc, local_id: emp.local_id, cuenta: "Caja Chica",
-    }]);
     await db.from("rrhh_pagos_especiales").insert([{
       empleado_id: emp.id, tipo: "aguinaldo", monto,
-      gasto_id: gastoId, pagado_por: user?.id,
+      gasto_id: null, pagado_por: user?.id,
+    }]);
+    if (emp.local_id) {
+      const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", cuenta).eq("local_id", emp.local_id).maybeSingle();
+      if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", cuenta).eq("local_id", emp.local_id);
+    }
+    await db.from("movimientos").insert([{
+      id: genId("MOV"), fecha: toISO(today), cuenta,
+      tipo: "Pago Aguinaldo", cat: "SUELDOS", importe: -monto, detalle: desc,
+      local_id: emp.local_id,
     }]);
     await db.from("rrhh_empleados").update({ aguinaldo_acumulado: 0 }).eq("id", emp.id);
 
@@ -393,15 +372,10 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
                 return;
               }
               const desc = `Liquidación final ${emp.apellido} ${emp.nombre}`;
-              const gastoId = genId("GASTO");
 
               await db.from("rrhh_pagos_especiales").insert([{
                 empleado_id: emp.id, tipo: "liquidacion_final", monto: total,
-                gasto_id: gastoId, pagado_por: user?.id,
-              }]);
-              await db.from("gastos").insert([{
-                id: gastoId, fecha: toISO(today), tipo: "fijo", categoria: "SUELDOS",
-                monto: total, detalle: desc, local_id: emp.local_id, cuenta: liqFinalCuenta,
+                gasto_id: null, pagado_por: user?.id,
               }]);
               if (emp.local_id) {
                 const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", liqFinalCuenta).eq("local_id", emp.local_id).maybeSingle();

@@ -49,7 +49,7 @@ export default function Gastos({ user, locales, localActivo }) {
     if (localActivo) q = q.eq("local_id", localActivo);
     const { data: g } = await q;
     const { data: p } = await db.from("gastos_plantillas").select("*").eq("activo", true).order("nombre");
-    setGastos(g || []);
+    setGastos((g || []).filter(g => g.categoria !== "SUELDOS"));
     setPlantillas(p || []);
     setLoading(false);
   };
