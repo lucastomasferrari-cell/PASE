@@ -69,7 +69,7 @@ export const css = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#1c1c1c;--s1:#161616;--s2:#212121;--s3:#2a2a2a;--bd:#252525;--bd2:#303030;--acc:#a8893a;--txt:#e0e0e0;--muted:#555;--muted2:#888;--danger:#c4614a;--success:#6b9e7a;--warn:#c49a3c;--info:#5a8fa8;--r:8px}
-body{background:var(--bg);color:var(--txt);font-family:'Inter',sans-serif;font-size:13.5px;line-height:1.5}
+body{background:radial-gradient(ellipse at 20% 50%, #1e1a16 0%, #161616 50%, #0f1419 100%);color:var(--txt);font-family:'Inter',sans-serif;font-size:13.5px;line-height:1.5;min-height:100vh}
 .app{display:flex;min-height:100vh}
 .sb{width:240px;background:var(--s1);border-right:1px solid var(--bd);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:20}
 .sb-logo{padding:14px 20px 16px;border-bottom:1px solid var(--bd)}
@@ -94,7 +94,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Inter',sans-serif;font-s
 .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
-.kpi{background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:12px 14px}
+.kpi{background:rgba(33,33,33,0.6);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px 14px}
 .kpi-label{font-size:9px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;line-height:1.3}
 .kpi-value{font-size:18px;font-weight:500;line-height:1;color:var(--txt)}
 .kpi-sub{font-size:10px;color:#444;margin-top:5px}
@@ -102,7 +102,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Inter',sans-serif;font-s
 .kpi-danger{color:var(--danger)}
 .kpi-warn{color:var(--warn)}
 .kpi-success{color:var(--success)}
-.panel{background:var(--s2);border:1px solid var(--bd);border-radius:10px;margin-bottom:10px}
+.panel{background:rgba(33,33,33,0.7);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.06);border-radius:10px;margin-bottom:10px}
 .panel-hd{padding:10px 14px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .panel-title{font-size:9px;letter-spacing:.8px;text-transform:uppercase;font-weight:500;color:var(--muted)}
 table{width:100%;border-collapse:collapse}
@@ -155,7 +155,7 @@ td{padding:9px 12px;font-size:12.5px}
 .alert-warn{background:rgba(255,255,255,.04);border-color:var(--bd2);color:var(--muted2)}
 .alert-success{background:rgba(255,255,255,.04);border-color:var(--bd2);color:var(--muted2)}
 .alert-info{background:rgba(255,255,255,.04);border-color:var(--bd2);color:var(--muted2)}
-.caja-card{background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);padding:16px;position:relative;overflow:hidden}
+.caja-card{background:rgba(33,33,33,0.6);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.06);border-radius:var(--r);padding:16px;position:relative;overflow:hidden}
 .caja-name{font-size:9px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
 .caja-saldo{font-family:'Inter',sans-serif;font-size:20px;font-weight:500}
 .anulada-row{opacity:0.5}
