@@ -20,6 +20,7 @@ import Recetas from "./pages/Recetas";
 import ConciliacionMP from "./pages/ConciliacionMP";
 import CajaEfectivo from "./pages/CajaEfectivo";
 import Cashflow from "./pages/Cashflow";
+import Cierre from "./pages/Cierre";
 import RRHHPage from "./pages/RRHH";
 import Costos from "./pages/Costos";
 import Configuracion from "./pages/Configuracion";
@@ -167,6 +168,7 @@ export default function App() {
       case "mp":        return <ConciliacionMP {...props}/>;
       case "caja_efectivo": return <CajaEfectivo {...props}/>;
       case "cashflow": return <Cashflow {...props}/>;
+      case "cierre": return <Cierre {...props}/>;
       case "proveedores": return <Proveedores {...props}/>;
       case "usuarios":  return <Usuarios {...props}/>;
       case "rrhh":      return <RRHHPage {...props}/>;
