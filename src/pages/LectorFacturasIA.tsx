@@ -63,10 +63,23 @@ Formato requerido:
   "total": 0,
   "items": [
     {"descripcion": "nombre producto", "cantidad": 0, "unidad": "kg/l/u", "precio_unitario": 0, "subtotal": 0}
-  ]
+  ],
+  "confianza": {
+    "razon_social": 0,
+    "nro_factura": 0,
+    "fecha_emision": 0,
+    "total": 0,
+    "neto_gravado": 0
+  },
+  "confianza_global": 0,
+  "advertencias": []
 }
 
-Si algún campo no existe en la factura, poné 0 o null según corresponda. Los montos siempre como números sin puntos ni comas.`}
+Reglas:
+- Si algún campo no existe en la factura, poné 0 o null según corresponda. Los montos siempre como números sin puntos ni comas.
+- En "confianza" y "confianza_global" devolvé un número de 0 a 100 indicando qué tan seguro estás de cada dato extraído. 100 = nítido y sin ambigüedad, 50 = legible pero hay dudas, 0 = ilegible o inferido.
+- "confianza_global" debe reflejar el peor campo crítico (total, nro_factura, razon_social) — si cualquiera de esos es bajo, bajá el global.
+- En "advertencias" poné un array de strings cortos (máx 3) describiendo problemas específicos: "neto + IVA no cuadra con total", "CUIT parcialmente ilegible", "fecha ambigua", etc. Si no hay problemas, devolvé [].`}
             ]
           }]
         })
@@ -79,9 +92,16 @@ Si algún campo no existe en la factura, poné 0 o null según corresponda. Los 
       setResultado(parsed);
 
       // Pre-llenar el form con los datos extraídos
-      const provMatch=proveedores.find(p=>
-        parsed.razon_social&&p.nombre.toLowerCase().includes(parsed.razon_social.toLowerCase().slice(0,8))
-      );
+      const cuitDet=(parsed.cuit_emisor||"").replace(/-/g,"");
+      const razon=(parsed.razon_social||"").toLowerCase();
+      const provMatch=proveedores.find(p=>{
+        const nombre=p.nombre.toLowerCase();
+        const provCuit=(p.cuit||"").replace(/-/g,"");
+        if(cuitDet&&provCuit===cuitDet) return true;
+        if(razon.length>=10&&nombre.includes(razon.slice(0,10))) return true;
+        if(nombre.length>=10&&razon.includes(nombre.slice(0,10))) return true;
+        return false;
+      });
       setForm(f=>({
         ...f,
         prov_id:provMatch?.id||"",
@@ -124,7 +144,9 @@ Si algún campo no existe en la factura, poné 0 o null según corresponda. Los 
       imagen_url=path;
     }
 
-    const {error:insErr}=await db.from("facturas").insert([{...form,id,prov_id:parseInt(form.prov_id),local_id:parseInt(form.local_id),neto:parseFloat(form.neto)||0,iva21:parseFloat(form.iva21)||0,iva105:parseFloat(form.iva105)||0,iibb:parseFloat(form.iibb)||0,total:parseFloat(form.total)||0,estado:"pendiente",pagos:[],imagen_url}]);
+    const confGlobal=resultado?.confianza_global??100;
+    const estado=confGlobal<70?"revision":"pendiente";
+    const {error:insErr}=await db.from("facturas").insert([{...form,id,prov_id:parseInt(form.prov_id),local_id:parseInt(form.local_id),neto:parseFloat(form.neto)||0,iva21:parseFloat(form.iva21)||0,iva105:parseFloat(form.iva105)||0,iibb:parseFloat(form.iibb)||0,total:parseFloat(form.total)||0,estado,pagos:[],imagen_url}]);
     if(insErr){
       // Rollback del archivo si el insert falló, así no queda huérfano
       if(imagen_url) await db.storage.from("facturas").remove([imagen_url]);
@@ -178,15 +200,37 @@ Si algún campo no existe en la factura, poné 0 o null según corresponda. Los 
           <div style={{padding:16}}>
             {!resultado&&!loading&&<div className="empty" style={{padding:40}}>Subí una factura y hacé click en "Leer con IA"</div>}
             {loading&&<div className="loading">La IA está leyendo la factura...</div>}
-            {resultado&&(
-              <>
-                <div style={{marginBottom:12,padding:10,background:"rgba(34,197,94,.08)",border:"1px solid rgba(34,197,94,.3)",borderRadius:"var(--r)",fontSize:11,color:"var(--success)"}}>
-                  ✓ Datos extraídos. Verificá que todo esté correcto antes de guardar.
+            {resultado&&(() => {
+              const conf=resultado.confianza||{};
+              const confGlobal=resultado.confianza_global??100;
+              const advertencias=resultado.advertencias||[];
+              const globalColor=confGlobal>=80?"var(--success)":confGlobal>=50?"var(--warn)":"var(--danger)";
+              const globalLabel=confGlobal>=80?"Alta confianza":confGlobal>=50?"Revisar campos marcados":"Baja confianza — revisá todo";
+              const globalRgb=confGlobal>=80?"107,158,122":confGlobal>=50?"196,154,60":"196,97,74";
+              const campoBorder=(campo:string)=>{
+                const c=conf[campo];
+                if(c===undefined||c===null) return "1px solid var(--bd)";
+                if(c>=80) return "1px solid var(--bd)";
+                if(c>=50) return "1px solid var(--warn)";
+                return "1px solid var(--danger)";
+              };
+              return (<>
+                <div style={{padding:"10px 14px",borderRadius:"var(--r)",marginBottom:12,background:`rgba(${globalRgb},0.1)`,border:`1px solid ${globalColor}33`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <span style={{fontSize:12,color:globalColor}}>{globalLabel}</span>
+                  <span style={{fontSize:20,fontWeight:500,color:globalColor}}>{confGlobal}%</span>
                 </div>
+                {advertencias.length>0 && (
+                  <div style={{marginBottom:12}}>
+                    {advertencias.map((a:string,i:number)=>(
+                      <div key={i} style={{fontSize:10,color:"var(--warn)",marginBottom:4}}>⚠ {a}</div>
+                    ))}
+                  </div>
+                )}
                 {resultado.razon_social&&<div style={{fontSize:11,color:"var(--muted2)",marginBottom:12}}>Emisor detectado: <strong style={{color:"var(--txt)"}}>{resultado.razon_social}</strong> · CUIT: {resultado.cuit_emisor}</div>}
 
                 <div className="field"><label>Proveedor *</label>
-                  <select value={form.prov_id} onChange={e=>setForm({...form,prov_id:e.target.value})}>
+                  <select value={form.prov_id} onChange={e=>setForm({...form,prov_id:e.target.value})}
+                    style={{border:campoBorder("razon_social")}}>
                     <option value="">Seleccioná...</option>
                     {proveedores.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
                   </select>
@@ -198,24 +242,28 @@ Si algún campo no existe en la factura, poné 0 o null según corresponda. Los 
                       {locales.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}
                     </select>
                   </div>
-                  <div className="field"><label>Nº Factura</label><input value={form.nro} onChange={e=>setForm({...form,nro:e.target.value})}/></div>
+                  <div className="field"><label>Nº Factura</label>
+                    <input value={form.nro} onChange={e=>setForm({...form,nro:e.target.value})} style={{border:campoBorder("nro_factura")}}/>
+                  </div>
                 </div>
                 <div className="form2">
-                  <div className="field"><label>Fecha</label><input type="date" value={form.fecha} onChange={e=>setForm({...form,fecha:e.target.value})}/></div>
+                  <div className="field"><label>Fecha</label>
+                    <input type="date" value={form.fecha} onChange={e=>setForm({...form,fecha:e.target.value})} style={{border:campoBorder("fecha_emision")}}/>
+                  </div>
                   <div className="field"><label>Vencimiento</label><input type="date" value={form.venc||""} onChange={e=>setForm({...form,venc:e.target.value})}/></div>
                 </div>
                 <div style={{background:"var(--s2)",padding:12,borderRadius:"var(--r)",marginBottom:12}}>
-                  {[["Neto Gravado","neto"],["IVA 21%","iva21"],["IVA 10.5%","iva105"],["Perc. IIBB","iibb"]].map(([l,k])=>(
-                    <div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                  {[["Neto Gravado","neto","neto_gravado"],["IVA 21%","iva21",null],["IVA 10.5%","iva105",null],["Perc. IIBB","iibb",null]].map(([l,k,confKey])=>(
+                    <div key={k as string} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                       <span style={{fontSize:11,color:"var(--muted2)"}}>{l}</span>
-                      <input type="number" value={form[k]} onChange={e=>setForm({...form,[k]:e.target.value})}
-                        style={{width:120,background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--txt)",padding:"4px 8px",fontFamily:"'DM Mono',monospace",fontSize:12,borderRadius:"var(--r)",textAlign:"right"}}/>
+                      <input type="number" value={form[k as string]} onChange={e=>setForm({...form,[k as string]:e.target.value})}
+                        style={{width:120,background:"var(--bg)",border:confKey?campoBorder(confKey as string):"1px solid var(--bd)",color:"var(--txt)",padding:"4px 8px",fontFamily:"'DM Mono',monospace",fontSize:12,borderRadius:"var(--r)",textAlign:"right"}}/>
                     </div>
                   ))}
                   <div style={{display:"flex",justifyContent:"space-between",borderTop:"1px solid var(--bd)",paddingTop:8}}>
                     <span style={{fontWeight:600}}>TOTAL</span>
                     <input type="number" value={form.total} onChange={e=>setForm({...form,total:e.target.value})}
-                      style={{width:120,background:"var(--bg)",border:"1px solid var(--acc)",color:"var(--acc)",padding:"4px 8px",fontFamily:"'Inter',sans-serif",fontWeight:500,fontSize:14,borderRadius:"var(--r)",textAlign:"right"}}/>
+                      style={{width:120,background:"var(--bg)",border:conf.total!==undefined&&conf.total<80?campoBorder("total"):"1px solid var(--acc)",color:"var(--acc)",padding:"4px 8px",fontFamily:"'Inter',sans-serif",fontWeight:500,fontSize:14,borderRadius:"var(--r)",textAlign:"right"}}/>
                   </div>
                 </div>
 
@@ -234,8 +282,8 @@ Si algún campo no existe en la factura, poné 0 o null según corresponda. Los 
                 <button className="btn btn-acc" style={{width:"100%",justifyContent:"center"}} onClick={guardar} disabled={guardando}>
                   {guardando?"Guardando...":"✓ Guardar Factura"}
                 </button>
-              </>
-            )}
+              </>);
+            })()}
           </div>
         </div>
       </div>

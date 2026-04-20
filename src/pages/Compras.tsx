@@ -5,10 +5,10 @@ import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import LectorFacturasIA from "./LectorFacturasIA";
 
 const estadoDot = (estado: string) => {
-  const colors: Record<string,string> = { pendiente: "var(--muted2)", vencida: "var(--acc)", pagada: "var(--success)" };
-  const labels: Record<string,string> = { pendiente: "Pendiente", vencida: "Vencida", pagada: "Pagada", anulada: "Anulada" };
+  const colors: Record<string,string> = { pendiente: "var(--muted2)", vencida: "var(--acc)", pagada: "var(--success)", revision: "var(--warn)" };
+  const labels: Record<string,string> = { pendiente: "Pendiente", vencida: "Vencida", pagada: "Pagada", anulada: "Anulada", revision: "⚠ Revisión" };
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--muted2)" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: estado === "revision" ? "var(--warn)" : "var(--muted2)" }}>
       <div style={{ width: 5, height: 5, borderRadius: "50%", background: colors[estado] || "var(--bd2)", flexShrink: 0 }} />
       {labels[estado] || estado}
     </div>
