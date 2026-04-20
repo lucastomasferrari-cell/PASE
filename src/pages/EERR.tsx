@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { MEDIOS_COBRO, CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 export default function EERR({ locales, localActivo }) {
   const [ventas,setVentas]=useState([]);
@@ -126,6 +127,23 @@ export default function EERR({ locales, localActivo }) {
 
           <div className="panel">
             <div className="panel-hd"><span className="panel-title">Detalle por Categoría</span></div>
+            {porCatCMV.length > 0 && (
+              <div style={{padding:"12px 4px"}}>
+                <ResponsiveContainer width="100%" height={120}>
+                  <BarChart data={porCatCMV.map(x=>({cat:x.c, monto:x.t}))} margin={{top:0,right:8,left:0,bottom:0}}>
+                    <XAxis dataKey="cat" tick={{fontSize:9,fill:"var(--muted)"}} axisLine={false} tickLine={false}/>
+                    <YAxis hide/>
+                    <Tooltip
+                      contentStyle={{background:"var(--s1)",border:"1px solid var(--bd2)",borderRadius:6,fontSize:11}}
+                      formatter={(v:number)=>[`$${v.toLocaleString("es-AR")}`, "CMV"]}
+                    />
+                    <Bar dataKey="monto" radius={[4,4,0,0]}>
+                      {porCatCMV.map((_,i)=><Cell key={i} fill={i===0?"var(--warn)":i===1?"var(--acc)":"var(--info)"}/>)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
             <ESection title="MERCADERÍA (CMV)" items={porCatCMV} total={totalCMV} color="var(--warn)"/>
             <ESection title="GASTOS FIJOS" items={porCatFijos} total={totalGastosFijos} color="var(--danger)"/>
             <ESection title="GASTOS VARIABLES" items={porCatVar} total={totalGastosVar} color="var(--danger)"/>

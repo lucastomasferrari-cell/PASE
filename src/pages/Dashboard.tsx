@@ -2,27 +2,42 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_$ } from "../lib/utils";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 export default function Dashboard({ locales, localActivo }) {
   const [stats, setStats] = useState({saldos:{},deuda:0,vencidas:0,ventasHoy:0,remPend:0,blindajeVencidos:0,blindajePorVencer:0});
   const [provDeuda, setProvDeuda] = useState([]);
+  const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const load = async (localId = localActivo) => {
     setLoading(true);
     const hoy = toISO(today);
+    const lid = localId ? parseInt(String(localId)) : null;
+    const ultimos7 = Array.from({length:7},(_,i)=>{
+      const d = new Date();
+      d.setDate(d.getDate()-6+i);
+      return d.toISOString().slice(0,10);
+    });
     let sq = db.from("saldos_caja").select("*");
-    if (localId) sq = sq.eq("local_id", parseInt(String(localId)));
+    if (lid) sq = sq.eq("local_id", lid);
     let bq = db.from("blindaje_documentos").select("vencimiento, local_id");
-    if (localId) bq = bq.eq("local_id", parseInt(String(localId)));
-    const [{data:saldos},{data:facturas},{data:remitos},{data:ventas},{data:provs},{data:blindaje}] = await Promise.all([
+    if (lid) bq = bq.eq("local_id", lid);
+    let vsq = db.from("ventas").select("fecha, monto, local_id").gte("fecha", ultimos7[0]).lte("fecha", ultimos7[6]);
+    if (lid) vsq = vsq.eq("local_id", lid);
+    const [{data:saldos},{data:facturas},{data:remitos},{data:ventas},{data:provs},{data:blindaje},{data:ventasSemana}] = await Promise.all([
       sq,
       db.from("facturas").select("*").neq("estado","anulada"),
       db.from("remitos").select("*"),
       db.from("ventas").select("*").eq("fecha",hoy),
       db.from("proveedores").select("*").gt("saldo",0).eq("estado","Activo"),
       bq,
+      vsq,
     ]);
+    setChartData(ultimos7.map(d => ({
+      dia: d.slice(5),
+      ventas: (ventasSemana||[]).filter((v:any)=>v.fecha===d).reduce((s:number,v:any)=>s+Number(v.monto),0),
+    })));
     const saldosObj: Record<string, number> = {};
     (saldos||[]).forEach(s => { saldosObj[s.cuenta] = (saldosObj[s.cuenta]||0) + (s.saldo||0); });
     const matchLocal = (rowLocal) => !localId || String(rowLocal) === String(localId);
@@ -65,6 +80,24 @@ export default function Dashboard({ locales, localActivo }) {
         <div className="kpi"><div className="kpi-label">Ventas Hoy</div><div className="kpi-value kpi-success">{fmt_$(stats.ventasHoy)}</div></div>
         <div className="kpi"><div className="kpi-label">Deuda Proveedores</div><div className="kpi-value kpi-warn">{fmt_$(stats.deuda)}</div></div>
         <div className="kpi"><div className="kpi-label">Facturas Vencidas</div><div className="kpi-value kpi-danger">{stats.vencidas}</div></div>
+      </div>
+      <div className="panel" style={{marginBottom:16}}>
+        <div className="panel-hd"><span className="panel-title">Ventas — últimos 7 días</span></div>
+        <div style={{padding:"12px 4px"}}>
+          <ResponsiveContainer width="100%" height={140}>
+            <LineChart data={chartData} margin={{top:4,right:16,left:0,bottom:0}}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--bd2)" vertical={false}/>
+              <XAxis dataKey="dia" tick={{fontSize:10,fill:"var(--muted)"}} axisLine={false} tickLine={false}/>
+              <YAxis tick={{fontSize:10,fill:"var(--muted)"}} axisLine={false} tickLine={false} tickFormatter={v=>v===0?"":`$${(v/1000).toFixed(0)}k`}/>
+              <Tooltip
+                contentStyle={{background:"var(--s1)",border:"1px solid var(--bd2)",borderRadius:6,fontSize:11}}
+                labelStyle={{color:"var(--muted2)"}}
+                formatter={(v:number)=>[`$${v.toLocaleString("es-AR")}`, "Ventas"]}
+              />
+              <Line type="monotone" dataKey="ventas" stroke="var(--acc)" strokeWidth={2} dot={false} activeDot={{r:4,fill:"var(--acc)"}}/>
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       </div>
       <div className="grid2">
         <div className="panel">
