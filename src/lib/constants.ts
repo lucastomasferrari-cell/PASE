@@ -1,24 +1,25 @@
 export const CATEGORIAS_COMPRA = ["PESCADERIA","CARNICERIA","VERDULERIA","BEBIDAS","VINOS","ALMACEN","PACKAGING","PAPELERIA","BARRIO CHINO","PRODUCTOS ORIENTALES","SUPERMERCADO","HIELO","LIMPIEZA","CONTADOR","PUBLICIDAD","EXPENSAS","PROPINAS","SUSHIMAN PM","EQUIPAMIENTO","SUELDOS","OTROS"];
 export const MEDIOS_COBRO = ["EFECTIVO SALON","TARJETA CREDITO","TARJETA DEBITO","QR","LINK","RAPPI ONLINE","PEYA ONLINE","PEYA EFECTIVO","MP DELIVERY","BIGBOX","FANBAG","EVENTO","TRANSFERENCIA","Point MP","Point Nave","NAVE","MASDELIVERY ONLINE","EFECTIVO DELIVERY"];
-export const MEDIO_A_CUENTA: Record<string, string> = {
-  "EFECTIVO SALON": "Caja Chica",
+export const MEDIO_A_CUENTA: Record<string, string | null> = {
+  "EFECTIVO SALON":    "Caja Chica",
   "EFECTIVO DELIVERY": "Caja Chica",
-  "TARJETA CREDITO": "Banco",
-  "TARJETA DEBITO": "Banco",
-  "QR": "Banco",
-  "LINK": "Banco",
-  "TRANSFERENCIA": "Banco",
-  "RAPPI ONLINE": "MercadoPago",
-  "PEYA ONLINE": "MercadoPago",
-  "PEYA EFECTIVO": "Caja Chica",
-  "MP DELIVERY": "MercadoPago",
-  "MASDELIVERY ONLINE": "MercadoPago",
-  "BIGBOX": "MercadoPago",
-  "FANBAG": "MercadoPago",
-  "Point MP": "MercadoPago",
-  "Point Nave": "MercadoPago",
-  "NAVE": "MercadoPago",
-  "EVENTO": "Caja Chica",
+  "PEYA EFECTIVO":     "Caja Chica",
+  "EVENTO":            "Caja Chica",
+  // Todo lo demás: null = no impacta en caja
+  "TARJETA CREDITO":   null,
+  "TARJETA DEBITO":    null,
+  "QR":                null,
+  "LINK":              null,
+  "TRANSFERENCIA":     null,
+  "RAPPI ONLINE":      null,
+  "PEYA ONLINE":       null,
+  "MP DELIVERY":       null,
+  "MASDELIVERY ONLINE":null,
+  "BIGBOX":            null,
+  "FANBAG":            null,
+  "Point MP":          null,
+  "Point Nave":        null,
+  "NAVE":              null,
 };
 export const CUENTAS = ["Caja Chica","Caja Mayor","Caja Efectivo","MercadoPago","Banco"];
 export const UNIDADES = ["kg","g","litro","ml","unidad","caja","bolsa","docena"];

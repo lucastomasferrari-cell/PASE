@@ -47,10 +47,12 @@ export default function ImportarMaxirest({ locales }) {
 
     const impactoPorCuenta:Record<string,number>={};
     ventasAInsertar.forEach(v=>{
-      const cuenta=MEDIO_A_CUENTA[v.medio]||"Caja Chica";
+      const cuenta=MEDIO_A_CUENTA[v.medio];
+      if(!cuenta) return; // medios no-efectivo no impactan en caja
       impactoPorCuenta[cuenta]=(impactoPorCuenta[cuenta]||0)+v.monto;
     });
     for(const [cuenta,monto] of Object.entries(impactoPorCuenta)){
+      if(!cuenta) continue;
       await db.from("movimientos").insert([{
         id:genId("MOV"),fecha:preview.fecha,cuenta,
         tipo:"Ingreso Venta",cat:"VENTAS",
