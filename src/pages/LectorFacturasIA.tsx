@@ -109,7 +109,30 @@ Si algún campo no existe en la factura, poné 0 o null según corresponda. Los 
     if(!form.nro){alert("⚠ Completá el número de factura.");return;}
     setGuardando(true);
     const id=genId("FACT");
-    await db.from("facturas").insert([{...form,id,prov_id:parseInt(form.prov_id),local_id:parseInt(form.local_id),neto:parseFloat(form.neto)||0,iva21:parseFloat(form.iva21)||0,iva105:parseFloat(form.iva105)||0,iibb:parseFloat(form.iibb)||0,total:parseFloat(form.total)||0,estado:"pendiente",pagos:[]}]);
+
+    // Subir archivo original a Supabase Storage si viene adjunto
+    let imagen_url=null;
+    if(archivo){
+      const ext=(archivo.name.split(".").pop()||"bin").toLowerCase();
+      const path=`${id}.${ext}`;
+      const {error:upErr}=await db.storage.from("facturas").upload(path,archivo,{contentType:archivo.type||"application/octet-stream",upsert:false});
+      if(upErr){
+        alert("Error subiendo la imagen: "+upErr.message);
+        setGuardando(false);
+        return;
+      }
+      imagen_url=path;
+    }
+
+    const {error:insErr}=await db.from("facturas").insert([{...form,id,prov_id:parseInt(form.prov_id),local_id:parseInt(form.local_id),neto:parseFloat(form.neto)||0,iva21:parseFloat(form.iva21)||0,iva105:parseFloat(form.iva105)||0,iibb:parseFloat(form.iibb)||0,total:parseFloat(form.total)||0,estado:"pendiente",pagos:[],imagen_url}]);
+    if(insErr){
+      // Rollback del archivo si el insert falló, así no queda huérfano
+      if(imagen_url) await db.storage.from("facturas").remove([imagen_url]);
+      alert("Error guardando la factura: "+insErr.message);
+      setGuardando(false);
+      return;
+    }
+
     const prov=proveedores.find(p=>p.id===parseInt(form.prov_id));
     if(prov)await db.from("proveedores").update({saldo:(prov.saldo||0)+parseFloat(form.total)}).eq("id",prov.id);
     setGuardando(false);setArchivo(null);setPreview(null);setResultado(null);
