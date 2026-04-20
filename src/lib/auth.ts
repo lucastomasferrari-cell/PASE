@@ -25,7 +25,6 @@ export const MODULOS = [
   { slug:"costos", label:"Costos", icon:"📋" },
   { slug:"mp", label:"Conciliación MP", icon:"💳" },
   { slug:"caja", label:"Tesorería", icon:"💰" },
-  { slug:"caja_efectivo", label:"Caja Efectivo", icon:"💵" },
   { slug:"cashflow", label:"Cashflow", icon:"📈" },
   { slug:"cierre", label:"Cierre Comparativo", icon:"📊" },
   { slug:"eerr", label:"Estado de Result.", icon:"📊" },
@@ -33,7 +32,7 @@ export const MODULOS = [
   { slug:"rrhh", label:"RRHH", icon:"💼" },
   { slug:"blindaje", label:"Blindaje", icon:"🛡" },
   { slug:"usuarios", label:"Usuarios", icon:"👥" },
-  { slug:"configuracion", label:"Configuración", icon:"⚙" },
+  { slug:"configuracion", label:"Conceptos", icon:"⚙" },
 ];
 
 // ─── FUNCIONES PURAS ─────────────────────────────────────────────────────────
