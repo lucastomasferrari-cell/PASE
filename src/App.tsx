@@ -190,10 +190,35 @@ export default function App() {
     <AuthProvider value={user}>
       <style>{css}</style>
       <div className="app">
-        <Sidebar user={user} section={section} onNav={setSection}
-          onLogout={logout}
-          locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo}/>
-        <main className="main">
+        {/* Fondo decorativo para glassmorphism */}
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 0, overflow: "hidden", pointerEvents: "none"
+        }}>
+          <div style={{
+            position: "absolute", top: "-20%", left: "10%",
+            width: 600, height: 600, borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(168,137,58,0.12) 0%, transparent 70%)",
+            filter: "blur(40px)"
+          }}/>
+          <div style={{
+            position: "absolute", bottom: "-10%", right: "5%",
+            width: 500, height: 500, borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(90,143,168,0.08) 0%, transparent 70%)",
+            filter: "blur(40px)"
+          }}/>
+          <div style={{
+            position: "absolute", top: "40%", right: "20%",
+            width: 400, height: 400, borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(196,97,74,0.07) 0%, transparent 70%)",
+            filter: "blur(40px)"
+          }}/>
+        </div>
+        <div style={{position:"relative",zIndex:1}}>
+          <Sidebar user={user} section={section} onNav={setSection}
+            onLogout={logout}
+            locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo}/>
+        </div>
+        <main className="main" style={{position:"relative",zIndex:1}}>
           {toast && <div style={{position:"fixed",top:16,right:16,zIndex:200,padding:"10px 20px",background:"var(--danger)",color:"#fff",borderRadius:"var(--r)",fontSize:12,fontFamily:"'DM Mono',monospace",fontWeight:600,boxShadow:"0 4px 12px rgba(0,0,0,.5)"}}>{toast}</div>}
           {renderSection()}
         </main>
