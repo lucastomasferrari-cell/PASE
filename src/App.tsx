@@ -21,6 +21,7 @@ import ConciliacionMP from "./pages/ConciliacionMP";
 import CajaEfectivo from "./pages/CajaEfectivo";
 import Cashflow from "./pages/Cashflow";
 import Cierre from "./pages/Cierre";
+import Blindaje from "./pages/Blindaje";
 import RRHHPage from "./pages/RRHH";
 import Costos from "./pages/Costos";
 import Configuracion from "./pages/Configuracion";
@@ -169,6 +170,7 @@ export default function App() {
       case "caja_efectivo": return <CajaEfectivo {...props}/>;
       case "cashflow": return <Cashflow {...props}/>;
       case "cierre": return <Cierre {...props}/>;
+      case "blindaje": return <Blindaje {...props}/>;
       case "proveedores": return <Proveedores {...props}/>;
       case "usuarios":  return <Usuarios {...props}/>;
       case "rrhh":      return <RRHHPage {...props}/>;

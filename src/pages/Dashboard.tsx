@@ -5,7 +5,7 @@ import { toISO, today, fmt_$ } from "../lib/utils";
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 export default function Dashboard({ locales, localActivo }) {
-  const [stats, setStats] = useState({saldos:{},deuda:0,vencidas:0,ventasHoy:0,remPend:0});
+  const [stats, setStats] = useState({saldos:{},deuda:0,vencidas:0,ventasHoy:0,remPend:0,blindajeVencidos:0,blindajePorVencer:0});
   const [provDeuda, setProvDeuda] = useState([]);
   const [loading, setLoading] = useState(true);
   const load = async (localId = localActivo) => {
@@ -13,23 +13,35 @@ export default function Dashboard({ locales, localActivo }) {
     const hoy = toISO(today);
     let sq = db.from("saldos_caja").select("*");
     if (localId) sq = sq.eq("local_id", parseInt(String(localId)));
-    const [{data:saldos},{data:facturas},{data:remitos},{data:ventas},{data:provs}] = await Promise.all([
+    let bq = db.from("blindaje_documentos").select("vencimiento, local_id");
+    if (localId) bq = bq.eq("local_id", parseInt(String(localId)));
+    const [{data:saldos},{data:facturas},{data:remitos},{data:ventas},{data:provs},{data:blindaje}] = await Promise.all([
       sq,
       db.from("facturas").select("*").neq("estado","anulada"),
       db.from("remitos").select("*"),
       db.from("ventas").select("*").eq("fecha",hoy),
       db.from("proveedores").select("*").gt("saldo",0).eq("estado","Activo"),
+      bq,
     ]);
     const saldosObj: Record<string, number> = {};
     (saldos||[]).forEach(s => { saldosObj[s.cuenta] = (saldosObj[s.cuenta]||0) + (s.saldo||0); });
     const matchLocal = (rowLocal) => !localId || String(rowLocal) === String(localId);
     const fAct = (facturas||[]).filter(f=>f.estado!=="pagada"&&matchLocal(f.local_id));
+    const ahora = Date.now();
+    let blindajeVencidos = 0, blindajePorVencer = 0;
+    (blindaje || []).forEach((d: any) => {
+      if (!d.vencimiento) return;
+      const dias = Math.floor((new Date(d.vencimiento + "T12:00:00").getTime() - ahora) / 86400000);
+      if (dias < 0) blindajeVencidos++;
+      else if (dias <= 30) blindajePorVencer++;
+    });
     setStats({
       saldos:saldosObj,
       deuda:fAct.reduce((s,f)=>s+(f.total||0),0),
       vencidas:fAct.filter(f=>f.estado==="vencida").length,
       ventasHoy:(ventas||[]).filter(v=>matchLocal(v.local_id)).reduce((s,v)=>s+(v.monto||0),0),
       remPend:(remitos||[]).filter(r=>r.estado==="sin_factura"&&matchLocal(r.local_id)).length,
+      blindajeVencidos, blindajePorVencer,
     });
     if (localId) {
       const deudaPorProv: Record<number, number> = {};
@@ -71,7 +83,9 @@ export default function Dashboard({ locales, localActivo }) {
           <div style={{padding:"8px 16px"}}>
             {stats.vencidas>0 && <div className="alert alert-danger">⚠ {stats.vencidas} factura(s) vencida(s)</div>}
             {stats.remPend>0 && <div className="alert alert-warn">🚚 {stats.remPend} remito(s) sin factura</div>}
-            {stats.vencidas===0&&stats.remPend===0 && <div className="alert alert-success">✓ Todo al día</div>}
+            {stats.blindajeVencidos>0 && <div className="alert alert-danger">🛡 {stats.blindajeVencidos} documento(s) vencido(s) — Blindaje</div>}
+            {stats.blindajePorVencer>0 && <div className="alert alert-warn">🛡 {stats.blindajePorVencer} documento(s) por vencer en ≤30d — Blindaje</div>}
+            {stats.vencidas===0&&stats.remPend===0&&stats.blindajeVencidos===0&&stats.blindajePorVencer===0 && <div className="alert alert-success">✓ Todo al día</div>}
           </div>
         </div>
       </div>
