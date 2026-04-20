@@ -68,7 +68,7 @@ export function Sidebar({ user, section, onNav, onLogout, locales, localActivo, 
 export const css = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#1c1c1c;--s1:#161616;--s2:#212121;--s3:#2a2a2a;--bd:#252525;--bd2:#303030;--acc:#cc785c;--txt:#e0e0e0;--muted:#666;--muted2:#888;--danger:#888;--success:#888;--warn:#888;--info:#888;--r:8px}
+:root{--bg:#1c1c1c;--s1:#161616;--s2:#212121;--s3:#2a2a2a;--bd:#252525;--bd2:#303030;--acc:#a8893a;--txt:#e0e0e0;--muted:#666;--muted2:#888;--danger:#c4614a;--success:#6b9e7a;--warn:#c49a3c;--info:#5a8fa8;--r:8px}
 body{background:var(--bg);color:var(--txt);font-family:'Inter',sans-serif;font-size:13.5px;line-height:1.5}
 .app{display:flex;min-height:100vh}
 .sb{width:240px;background:var(--s1);border-right:1px solid var(--bd);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:20}
