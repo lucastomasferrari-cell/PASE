@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { ROLES, getPermisos } from "../lib/auth";
 
 export function Sidebar({ user, section, onNav, onLogout, locales, localActivo, setLocalActivo }) {
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
   const perms = getPermisos(user);
   const localesDisp = (user.rol==="dueno" || user.rol==="admin") ? locales : locales.filter(l=>(user._locales||user.locales||[]).includes(l.id));
   const nav = [
@@ -23,37 +26,41 @@ export function Sidebar({ user, section, onNav, onLogout, locales, localActivo, 
   ];
   const secs = [...new Set(nav.map(n=>n.sec))];
   return (
-    <div className="sb">
-      <div className="sb-logo">
-        <div style={{fontFamily:"'Inter',sans-serif",fontWeight:500,fontSize:14,color:"#fff",letterSpacing:.2}}>PASE</div>
-        <div style={{fontSize:9,color:"#444",letterSpacing:"1.2px",textTransform:"uppercase",marginTop:3}}>aliado gastronómico</div>
-      </div>
-      {localesDisp.length > 1 && (
-        <div className="sb-local">
-          <select value={localActivo||""} onChange={e=>setLocalActivo(e.target.value?parseInt(e.target.value):null)}>
-            {user.rol==="dueno" && <option value="">Todos los locales</option>}
-            {localesDisp.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}
-          </select>
+    <>
+      <button className="hamburger" onClick={() => setOpen(o => !o)} aria-label="Menú">☰</button>
+      <div className={`overlay-sb ${open ? "open" : ""}`} onClick={close}/>
+      <div className={`sb ${open ? "open" : ""}`}>
+        <div className="sb-logo">
+          <div style={{fontFamily:"'Inter',sans-serif",fontWeight:500,fontSize:14,color:"#fff",letterSpacing:.2}}>PASE</div>
+          <div style={{fontSize:9,color:"#444",letterSpacing:"1.2px",textTransform:"uppercase",marginTop:3}}>aliado gastronómico</div>
         </div>
-      )}
-      <nav className="sb-nav">
-        {secs.map(s=>{
-          const items = nav.filter(n=>n.sec===s&&perms.includes(n.id));
-          if(!items.length) return null;
-          return (<div key={s}><div className="sb-section">{s}</div>{items.map(n=>(
-            <div key={n.id} className={`nav-item ${section===n.id?"active":""}`} onClick={()=>onNav(n.id)}>
-              <span style={{width:14,height:14,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html: n.icon}}/>
-              {n.label}
-            </div>
-          ))}</div>);
-        })}
-      </nav>
-      <div className="sb-user">
-        <div className="sb-uname">{user.nombre}</div>
-        <div style={{fontSize:10,color:ROLES[user.rol]?.color}}>{ROLES[user.rol]?.label}</div>
-        <button className="sb-logout" onClick={onLogout}>Cerrar sesión →</button>
+        {localesDisp.length > 1 && (
+          <div className="sb-local">
+            <select value={localActivo||""} onChange={e=>setLocalActivo(e.target.value?parseInt(e.target.value):null)}>
+              {user.rol==="dueno" && <option value="">Todos los locales</option>}
+              {localesDisp.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}
+            </select>
+          </div>
+        )}
+        <nav className="sb-nav">
+          {secs.map(s=>{
+            const items = nav.filter(n=>n.sec===s&&perms.includes(n.id));
+            if(!items.length) return null;
+            return (<div key={s}><div className="sb-section">{s}</div>{items.map(n=>(
+              <div key={n.id} className={`nav-item ${section===n.id?"active":""}`} onClick={() => { onNav(n.id); close(); }}>
+                <span style={{width:14,height:14,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html: n.icon}}/>
+                {n.label}
+              </div>
+            ))}</div>);
+          })}
+        </nav>
+        <div className="sb-user">
+          <div className="sb-uname">{user.nombre}</div>
+          <div style={{fontSize:10,color:ROLES[user.rol]?.color}}>{ROLES[user.rol]?.label}</div>
+          <button className="sb-logout" onClick={onLogout}>Cerrar sesión →</button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -180,4 +187,58 @@ td{padding:9px 12px;font-size:12.5px}
 .pill:hover{color:var(--txt)}
 .pill.active{background:var(--s3);color:var(--txt);border-color:var(--bd2)}
 /* build: 2026-04-16-12 */
+
+/* ─── MOBILE ≤768px ─────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .sb {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    z-index: 50;
+    width: 220px;
+  }
+  .sb.open { transform: translateX(0); }
+  .main { margin-left: 0; padding: 16px; }
+  .grid4 { grid-template-columns: repeat(2,1fr); }
+  .grid3 { grid-template-columns: repeat(2,1fr); }
+  .grid2 { grid-template-columns: 1fr; }
+  .form2 { grid-template-columns: 1fr; }
+  .form3 { grid-template-columns: 1fr; }
+  .form4 { grid-template-columns: 1fr 1fr; }
+  .modal { width: 98vw; max-width: 98vw; }
+  table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .ph-row { flex-direction: column; gap: 8px; }
+  .tabs { gap: 0; }
+  .tab { padding: 6px 10px; font-size: 9px; }
+  .btn { padding: 5px 10px; font-size: 10px; }
+  .kpi-value { font-size: 15px; }
+  .panel-hd { flex-direction: column; align-items: flex-start; gap: 8px; }
+}
+
+/* ─── HAMBURGER BUTTON ───────────────────────────────────────────────── */
+.hamburger {
+  display: none;
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 60;
+  background: var(--s2);
+  border: 1px solid var(--bd);
+  border-radius: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+  color: var(--txt);
+  font-size: 16px;
+  line-height: 1;
+}
+@media (max-width: 768px) {
+  .hamburger { display: flex; align-items: center; justify-content: center; }
+  .overlay-sb {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.6);
+    z-index: 40;
+  }
+  .overlay-sb.open { display: block; }
+}
 `;
