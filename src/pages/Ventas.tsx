@@ -54,7 +54,7 @@ export default function Ventas({ user, locales, localActivo }) {
     const lid=parseInt(form.local_id);
     const rows=lineas
       .filter(l=>parseFloat(l.monto)>0)
-      .map(l=>({id:genId("V"),local_id:lid,fecha:form.fecha,turno:form.turno,medio:l.medio,monto:parseFloat(l.monto)}));
+      .map(l=>({id:genId("V"),local_id:lid,fecha:form.fecha,turno:form.turno,medio:l.medio,monto:parseFloat(l.monto),origen:"manual"}));
     if(rows.length===0)return;
     await db.from("ventas").insert(rows);
 
@@ -113,23 +113,29 @@ export default function Ventas({ user, locales, localActivo }) {
 
   return (
     <div>
+      {/* SECCIÓN SUPERIOR: carga manual + importador Maxirest */}
       <div className="ph-row">
         <div><div className="ph-title">Ventas</div></div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-          <input type="date" className="search" style={{width:155}} value={filtDesde}
-            onChange={e=>setFiltDesde(e.target.value)}/>
-          <span style={{color:"var(--muted2)",fontSize:12}}>→</span>
-          <input type="date" className="search" style={{width:155}} value={filtHasta}
-            onChange={e=>setFiltHasta(e.target.value)}/>
-          <button className="btn btn-ghost" onClick={()=>setShowMaxirest(!showMaxirest)}>Importar Maxirest</button>
+          <button className="btn btn-ghost" onClick={()=>setShowMaxirest(!showMaxirest)}>{showMaxirest?"Cerrar importador":"Importar desde Maxirest"}</button>
           <button className="btn btn-acc" onClick={()=>setModalNuevo(true)}>+ Cargar venta</button>
         </div>
       </div>
 
-      {showMaxirest&&<div style={{marginBottom:16}}><ImportarMaxirest locales={locales}/></div>}
+      {showMaxirest&&<div style={{marginBottom:16}}><ImportarMaxirest locales={locales} onImported={load}/></div>}
 
+      {/* SECCIÓN INFERIOR: filtros + historial */}
       <div className="panel">
-        <div className="panel-hd"><span className="panel-title">Cierres de turno — {grupos.length} bloques</span></div>
+        <div className="panel-hd" style={{flexWrap:"wrap",gap:8}}>
+          <span className="panel-title">Historial — {grupos.length} cierres · {fmt_$(totalPeriodo)}</span>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+            <input type="date" className="search" style={{width:155}} value={filtDesde}
+              onChange={e=>setFiltDesde(e.target.value)}/>
+            <span style={{color:"var(--muted2)",fontSize:12}}>→</span>
+            <input type="date" className="search" style={{width:155}} value={filtHasta}
+              onChange={e=>setFiltHasta(e.target.value)}/>
+          </div>
+        </div>
         {loading?<div className="loading">Cargando...</div>:grupos.length===0?<div className="empty">No hay ventas en este período</div>:(
           <table>
             <thead><tr><th>Fecha</th><th>Turno</th><th>Local</th><th>Registros</th><th>Total</th><th></th></tr></thead>
@@ -166,11 +172,11 @@ export default function Ventas({ user, locales, localActivo }) {
                 <thead><tr><th>Forma de Cobro</th><th>Monto</th><th>% del total</th><th></th></tr></thead>
                 <tbody>{detalleModal.items.sort((a,b)=>b.monto-a.monto).map(v=>(
                   <tr key={v.id}>
-                    <td style={{fontWeight:500}}>{v.medio}</td>
+                    <td style={{fontWeight:500}}>{v.medio}{v.origen==="maxirest"&&<span className="badge b-muted" style={{marginLeft:6,fontSize:8}}>Maxirest</span>}</td>
                     <td><span className="num kpi-success">{fmt_$(v.monto)}</span></td>
                     <td style={{fontSize:11,color:"var(--muted2)"}}>{detalleModal.total>0?((v.monto/detalleModal.total)*100).toFixed(1):0}%</td>
                     <td><div style={{display:"flex",gap:4}}>
-                      <button className="btn btn-ghost btn-sm" onClick={()=>setEditModal({...v})}>Editar</button>
+                      {v.origen!=="maxirest"&&<button className="btn btn-ghost btn-sm" onClick={()=>setEditModal({...v})}>Editar</button>}
                       <button className="btn btn-danger btn-sm" onClick={()=>eliminarLinea(v.id)}>✕</button>
                     </div></td>
                   </tr>

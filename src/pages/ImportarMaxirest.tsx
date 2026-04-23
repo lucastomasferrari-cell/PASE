@@ -3,7 +3,7 @@ import { db } from "../lib/supabase";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import { MEDIOS_COBRO, MEDIO_A_CUENTA } from "../lib/constants";
 
-export default function ImportarMaxirest({ locales }) {
+export default function ImportarMaxirest({ locales, onImported }: { locales: any[]; onImported?: () => void }) {
   const [texto,setTexto]=useState("");
   const [preview,setPreview]=useState(null);
   const [loading,setLoading]=useState(false);
@@ -42,7 +42,7 @@ export default function ImportarMaxirest({ locales }) {
       setLoading(true);
     }
     const lid=parseInt(preview.local_id);
-    const ventasAInsertar=preview.ventas.map(v=>({...v,id:genId("V"),local_id:lid}));
+    const ventasAInsertar=preview.ventas.map(v=>({...v,id:genId("V"),local_id:lid,origen:"maxirest"}));
     await db.from("ventas").insert(ventasAInsertar);
 
     const impactoPorCuenta:Record<string,number>={};
@@ -68,6 +68,7 @@ export default function ImportarMaxirest({ locales }) {
 
     setLoading(false);setTexto("");setPreview(null);
     alert("✓ Importado: "+preview.ventas.length+" registros · Total: "+fmt_$(preview.ventas.reduce((s,v)=>s+v.monto,0)));
+    onImported?.();
   };
   return (
     <div>
