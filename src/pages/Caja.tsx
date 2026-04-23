@@ -186,13 +186,15 @@ export default function Caja({ user, locales = [], localActivo }: any) {
   };
 
   const guardarCajaEf = async () => {
-    if (!formCajaEf.monto || !localActivo) return;
+    if (!formCajaEf.monto) return;
+    const lid = lidImplicito != null ? lidImplicito : parseInt(localFormId);
+    if (!Number.isFinite(lid)) return;
     const monto = parseFloat(formCajaEf.monto) * (formCajaEf.esIngreso ? 1 : -1);
     await db.from("caja_efectivo").insert([{
       fecha: formCajaEf.fecha,
       descripcion: formCajaEf.descripcion,
       monto,
-      local_id: parseInt(String(localActivo)),
+      local_id: lid,
       creado_por: user?.nombre || "—",
     }]);
     setModalCajaEf(false);
@@ -299,6 +301,15 @@ export default function Caja({ user, locales = [], localActivo }: any) {
           <div className="modal" style={{width:460}} onClick={e => e.stopPropagation()}>
             <div className="modal-hd"><div className="modal-title">Caja Efectivo — Nuevo movimiento</div><button className="close-btn" onClick={() => setModalCajaEf(false)}>✕</button></div>
             <div className="modal-body">
+              {necesitaSelectorLocal && (
+                <div className="field">
+                  <label>Local *</label>
+                  <select value={localFormId} onChange={e => setLocalFormId(e.target.value)} required>
+                    <option value="">Seleccioná el local...</option>
+                    {locsDisp.map((l:any) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+                  </select>
+                </div>
+              )}
               <div className="field"><label>Tipo</label>
                 <select value={formCajaEf.esIngreso ? "ingreso" : "egreso"} onChange={e => setFormCajaEf({...formCajaEf, esIngreso: e.target.value === "ingreso"})}>
                   <option value="ingreso">Ingreso (entra plata)</option>
@@ -310,11 +321,10 @@ export default function Caja({ user, locales = [], localActivo }: any) {
                 <div className="field"><label>Fecha</label><input type="date" value={formCajaEf.fecha} onChange={e => setFormCajaEf({...formCajaEf, fecha: e.target.value})}/></div>
               </div>
               <div className="field"><label>Descripción</label><input value={formCajaEf.descripcion} onChange={e => setFormCajaEf({...formCajaEf, descripcion: e.target.value})} placeholder="Ej: Retiro, ajuste..."/></div>
-              {!localActivo && <div className="alert alert-warn">Seleccioná un local activo en el sidebar.</div>}
             </div>
             <div className="modal-ft">
               <button className="btn btn-sec" onClick={() => setModalCajaEf(false)}>Cancelar</button>
-              <button className="btn btn-acc" onClick={guardarCajaEf} disabled={!formCajaEf.monto || !localActivo}>Guardar</button>
+              <button className="btn btn-acc" onClick={guardarCajaEf} disabled={!formCajaEf.monto || (necesitaSelectorLocal && !localFormId)}>Guardar</button>
             </div>
           </div>
         </div>
