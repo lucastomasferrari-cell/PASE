@@ -743,10 +743,20 @@ export default async function handler(req, res) {
                         descripcionDefault = 'Liquidación MP';
                       }
 
+                      // Parse del CSV: si no hay marcador TZ, interpretar como Argentina
+                      // (el release_report está configurado con display_timezone=GMT-03).
+                      // Convertimos a UTC ISO para guardar. Los helpers del cliente lo
+                      // formatean de vuelta a AR al mostrarlo.
                       let fechaIso;
-                      const parsed = rawDate ? new Date(rawDate) : null;
-                      if (parsed && !Number.isNaN(parsed.getTime())) {
-                        fechaIso = parsed.toISOString();
+                      if (rawDate) {
+                        let s = String(rawDate).trim();
+                        if (s.includes(' ') && !s.includes('T')) s = s.replace(' ', 'T');
+                        if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(s)) {
+                          if (!s.includes('T')) s = s + 'T00:00:00';
+                          s = s + '-03:00';
+                        }
+                        const parsed = new Date(s);
+                        fechaIso = !Number.isNaN(parsed.getTime()) ? parsed.toISOString() : new Date().toISOString();
                       } else {
                         fechaIso = new Date().toISOString();
                       }

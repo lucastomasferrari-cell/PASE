@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
 import { COMISIONES_CATS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD } from "../lib/constants";
-import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
+import { toISO, today, fmt_d, fmt_$, genId, fmt_dt_ar } from "../lib/utils";
 
 function ConciliacionMP({ user, locales, localActivo }) {
   const [credenciales,setCredenciales]=useState([]);
@@ -371,7 +371,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
         <div className="kpi">
           <div className="kpi-label">Saldo disponible MP</div>
           <div className="kpi-value" style={{color:"var(--acc)",fontFamily:"'Inter',sans-serif",fontSize:18,fontWeight:500}}>{fmt_mp(saldoRealDisponible)}</div>
-          <div className="kpi-sub">{ultimaActualizacionBalance?"Actualizado "+new Date(ultimaActualizacionBalance).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"Ejecutá una sincronización"}</div>
+          <div className="kpi-sub">{ultimaActualizacionBalance?"Actualizado "+fmt_dt_ar(ultimaActualizacionBalance):"Ejecutá una sincronización"}</div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Egresos sin justificar</div>
@@ -408,7 +408,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
                 const pend=esEgreso&&!esAuto&&!m.conciliado;
                 return (
                 <tr key={m.id} style={pend?{background:"rgba(239,68,68,0.08)",borderLeft:"2px solid var(--danger)"}:undefined}>
-                  <td className="mono" style={{fontSize:11}}>{new Date(m.fecha).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</td>
+                  <td className="mono" style={{fontSize:11}}>{fmt_dt_ar(m.fecha)}</td>
                   <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===m.local_id)?.nombre||"—"}</td>
                   <td><span className="badge b-muted">{TIPO_LABELS[m.tipo]||m.tipo||"—"}</span></td>
                   <td style={{fontSize:11,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.descripcion||"—"}</td>
@@ -622,7 +622,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
                     <span style={{fontSize:10,color:"var(--muted)",marginLeft:8}}>...{c.access_token?.slice(-8)}</span>
                   </div>
                   <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                    {c.ultima_sync&&<span style={{fontSize:10,color:"var(--success)"}}>✓ Sync {new Date(c.ultima_sync).toLocaleDateString("es-AR")}</span>}
+                    {c.ultima_sync&&<span style={{fontSize:10,color:"var(--success)"}}>✓ Sync {fmt_dt_ar(c.ultima_sync)}</span>}
                     <span className={`badge ${c.activo?"b-success":"b-muted"}`}>{c.activo?"Activa":"Inactiva"}</span>
                     <button className="btn btn-ghost btn-sm" style={{fontSize:9,padding:"2px 6px"}} disabled={sincronizando} onClick={()=>resetearLocal(c.local_id,c.locales?.nombre)}>↻ Reset datos</button>
                   </div>
