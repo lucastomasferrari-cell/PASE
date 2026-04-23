@@ -19,9 +19,10 @@
 - Roles: dueno (acceso total), admin (casi total), encargado (restringido por local y por cuentas).
 - Permisos por módulo en tabla `usuario_permisos`.
 - Locales por encargado en tabla `usuario_locales`.
-- Cuentas visibles en Tesorería por usuario: columna `usuarios.cuentas_visibles TEXT[]` (NULL = todas, array = filtro, array vacío = ninguna).
-- Password temporal: columna `usuarios.password_temporal BOOLEAN`. Si es true, el componente `src/pages/ForcePasswordChange.tsx` bloquea la navegación hasta que el usuario cambie su password.
-- Para resetear password de un usuario: Supabase Dashboard → Authentication → Users → "Reset password", y después opcionalmente `UPDATE usuarios SET password_temporal = true WHERE id = X` para forzar cambio al próximo login.
+- Cuentas visibles en Tesorería por usuario: columna `usuarios.cuentas_visibles TEXT[]` (NULL = todas, array = filtro estricto, array vacío = ninguna).
+- Password temporal: columna `usuarios.password_temporal BOOLEAN`. Si es true, el componente `src/pages/ForcePasswordChange.tsx` bloquea navegación hasta cambiar password.
+- Para resetear password: Supabase Dashboard → Authentication → Users → "Reset password", opcionalmente después `UPDATE usuarios SET password_temporal = true WHERE id = X` para forzar cambio al próximo login.
+- Endpoint admin `api/auth-migrate-all.js` para migrar masivamente usuarios sin auth_id (protegido con header `x-admin-secret`, requiere env var `ADMIN_MIGRATION_SECRET` en Vercel).
 
 ## Módulos activos
 - Dashboard, Ventas, Facturas, Remitos, Gastos, Proveedores
@@ -71,45 +72,46 @@ Modal Legajo accesible desde Empleados (botón "Legajo" por fila)
 - Se acumula: aguinaldo_acumulado += sueldo/12 con cada pago mensual
 
 ## Conciliación MercadoPago
-- Sync automático vía cron-job.org cada 30 min
-- Job 1 (mp-generate): genera CSV en MP
-- Job 2 (mp-process): descarga y procesa CSV
-- Saldo inicial fijado: $1.843.593 el 11/04/2026
-- Prefijos: rr-* = release_report (autoritativo), sin prefijo = payments API
+- Sync automático vía cron-job.org cada 30 min.
+- Job 1 (mp-generate): genera CSV en MP.
+- Job 2 (mp-process): descarga y procesa CSV.
+- Saldo inicial fijado: $1.843.593 el 11/04/2026.
+- Prefijos: rr-* = release_report (autoritativo), sin prefijo = payments API.
+- Timezone: Argentina es UTC-3 todo el año. Los horarios se muestran con helpers `toBuenosAires`, `fmt_dt_ar`, `fmt_t_ar` de `src/lib/utils.ts`.
+- Parsing CSV release_report: MP entrega fechas en Argentina-local sin marcador TZ. El código detecta la falta de TZ y anexa -03:00 antes del parse. Pagos vía REST API (`date_approved`) ya vienen con Z y no se modifican.
+- Columna `mp_movimientos.fecha` es `timestamptz` (migrada 23/Apr/2026 de `timestamp without time zone`).
 
 ## Tablas principales Supabase
-- **usuarios**: id(int serial), nombre, email, password(sha256 legacy, no usar), rol, locales(array legacy), auth_id(uuid), activo, password_temporal(bool), cuentas_visibles(text[])
-- **usuario_permisos**: usuario_id(int), modulo_slug
-- **usuario_locales**: usuario_id(int), local_id(int)
-- **locales**: id(int), nombre
-- **movimientos**, **saldos_caja**, **caja_efectivo**
-- **facturas**, **factura_items**, **factura_items_stock**
-- **ventas**, **gastos**, **gastos_plantillas**
-- **remitos**, **remito_items**
-- **proveedores**, **insumos**, **recetas**, **receta_items**
-- **mp_credenciales**, **mp_movimientos**, **mp_liquidaciones**
-- **empleados** (legacy), **empleado_archivos**
-- **rrhh_empleados**, **rrhh_novedades**, **rrhh_liquidaciones**, **rrhh_valores_doble**
-- **rrhh_historial_sueldos**, **rrhh_documentos**, **rrhh_pagos_especiales**, **rrhh_adelantos**
-- **auditoria**
-- **blindaje_tipos_documento**, **blindaje_documentos**
-- **config_categorias**
+- usuarios: id, nombre, email, password (legacy SHA-256, sin uso), rol, locales (array legacy), auth_id (uuid, NOT NULL en activos), activo, password_temporal (boolean), cuentas_visibles (text[])
+- usuario_permisos, usuario_locales, locales
+- movimientos, facturas, factura_items, factura_items_stock
+- ventas (con columna `origen TEXT DEFAULT 'manual'`)
+- gastos, gastos_plantillas
+- remitos, remito_items
+- proveedores, insumos, recetas, receta_items
+- saldos_caja, caja_efectivo
+- mp_credenciales (admin-only), mp_movimientos (`fecha` es timestamptz), mp_liquidaciones
+- empleados (vieja, deprecated), empleado_archivos
+- rrhh_empleados, rrhh_novedades, rrhh_liquidaciones, rrhh_valores_doble, rrhh_historial_sueldos, rrhh_documentos, rrhh_pagos_especiales, rrhh_adelantos
+- auditoria, blindaje_tipos_documento, blindaje_documentos, config_categorias
 
 ## Pendientes prioritarios
-1. Fix RRHH: vacaciones muestra 0.0d — cálculo por antigüedad no funciona
-2. Fix RRHH: SAC acumulado muestra $0 — mostrar SAC teórico del semestre
-3. Fix RRHH: Novedades y Pagos no autoseleccionan local
-4. Fix RRHH: botón Pagar mes no aparece en legajo → movido a tab Pagos
-5. Liquidación final pendiente de implementar en legajo
-6. Módulo Empleados viejo → ocultar del sidebar (reemplazado por RRHH)
-7. Refactor: pasar `user` a `src/lib/services/caja.service.ts` y `rrhh.service.ts` para que usen `applyLocalScope` en lugar del `if (localId) q.eq(...)` actual.
+1. Fix RRHH: vacaciones muestra 0.0d — cálculo por antigüedad no funciona.
+2. Fix RRHH: SAC acumulado muestra $0 — mostrar SAC teórico del semestre.
+3. Fix RRHH: Novedades y Pagos no autoseleccionan local.
+4. Fix RRHH: botón Pagar mes en legajo (verificar tras mover a tab Pagos).
+5. Liquidación final en legajo — pendiente de implementar.
+6. Módulo Empleados viejo → ocultar del sidebar (reemplazado por RRHH).
+7. Refactor: pasar `user` a `src/lib/services/caja.service.ts` y `rrhh.service.ts` para que usen `applyLocalScope` en lugar del `if (localId) q.eq(...)` actual. Las RLS lo cubren server-side pero conviene alinear el patrón.
 
 ## Decisiones de arquitectura tomadas
-- **Login: Supabase Auth como único sistema** (cambio de política: antes era SHA-256 en tabla usuarios).
+- **Login: Supabase Auth como único sistema** (cambio de política 23/Apr/2026: antes era SHA-256 en tabla usuarios).
 - **RLS activo y restrictivo en todas las tablas** (migration 20260423_rls_real_policies.sql + extensión para gastos_plantillas, factura_items_stock, remito_items, rrhh_adelantos, mp_liquidaciones).
 - **Helpers de scope SECURITY DEFINER** en Postgres: `auth_usuario_id()`, `auth_es_dueno_o_admin()`, `auth_locales_visibles()`.
-- **Anon key fuera del código**: se lee de `VITE_SUPABASE_ANON_KEY`. Rotar siguiendo `ROTATE_ANON_KEY.md` ante cualquier sospecha.
-- **Defense-in-depth en frontend**: `applyLocalScope(q, user, localActivo)` de `src/lib/auth.ts` en toda query a tablas con `local_id`.
+- **Anon key fuera del código**: se lee de `VITE_SUPABASE_ANON_KEY` (ver `.env.example`). Rotada el 23/Apr/2026. Procedimiento en `ROTATE_ANON_KEY.md`.
+- **Defense-in-depth en frontend**: `applyLocalScope(q, user, localActivo)` y `scopeLocales(user, localActivo)` de `src/lib/auth.ts` en toda query a tablas con `local_id`.
+- **Fechas/timezone**: guardar siempre en UTC con `timestamptz` en DB. Conversión a zona Argentina solo en display via helpers `toBuenosAires`, `fmt_dt_ar`, `fmt_t_ar` de `src/lib/utils.ts`. Nunca hacer `.toISOString()` sobre fecha local sin marcador TZ.
+- **Distinción de origen en Ventas**: columna `origen` ('manual' | 'maxirest') diferencia carga manual de importada. Las importadas no se editan (solo eliminar).
 - local_id y usuario_id son INTEGER (no UUID) en todas las tablas.
 - El módulo RRHH NO depende del módulo Empleados viejo.
 - Pagos de sueldo crean gastos en tabla gastos con categoría "Sueldos".
@@ -163,11 +165,16 @@ const { data } = await q.order("fecha");
 
 ### E) Endpoints serverless en `api/`:
 
-Usar siempre `SUPABASE_SERVICE_KEY` (env var en Vercel), nunca anon. La service_key bypassa RLS — filtrar manualmente por `local_id` en el código del endpoint si corresponde.
+Usar siempre `SUPABASE_SERVICE_KEY` (env var en Vercel), nunca anon. La service_key bypassa RLS — filtrar manualmente por `local_id`/usuario en el código del endpoint si corresponde.
+
+### F) Fechas en nuevas tablas:
+
+Usar `timestamptz` siempre, nunca `timestamp` sin zona. Guardar en UTC, mostrar con helpers de `src/lib/utils.ts`.
 
 ## Troubleshooting rápido
 
-- **"Usuario no ve sus datos"** → falta policy (pasos A/B/C).
-- **"Encargado ve datos de otro local"** → falta `applyLocalScope` en frontend o policy mal escrita.
+- **"Usuario no ve sus datos"** → falta policy RLS (pasos A/B/C).
+- **"Encargado ve datos de otro local"** → falta `applyLocalScope` en frontend, o policy mal.
 - **"new row violates row-level security policy"** → el `WITH CHECK` no pasa. El `local_id` del INSERT/UPDATE tiene que estar en los del usuario.
 - **"relation does not exist"** en policies con JOIN → nombre de columna mal escrito.
+- **Horarios desfasados 3h** → columna guardada como `timestamp` sin zona en vez de `timestamptz`, o display sin usar helpers de Buenos Aires.
