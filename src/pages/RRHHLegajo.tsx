@@ -4,8 +4,9 @@ import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import {
   diasVacacionesPorAnio,
   calcularVacaciones,
-  calcularSACProporcional,
   calcularSACTeorico,
+  calcularSACMejorSueldo,
+  mesesTrabajadosEnSemestre,
   calcularLiquidacionFinal,
 } from "../lib/calculos/rrhh";
 
@@ -142,11 +143,21 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
   const diasVacPorMes = diasVacAnuales / 12;
   const vacAcumuladas = calcularVacaciones(emp.fecha_inicio, vacTomadas);
 
-  // SAC teórico
-  const mesActual = new Date().getMonth() + 1;
-  const mesesEnSemestre = mesActual <= 6 ? mesActual : mesActual - 6;
+  // SAC teórico — toma mejor sueldo del semestre (Art 122 LCT) prorrateado
+  // por tiempo efectivamente trabajado (considera fecha_inicio + historial).
+  const now = new Date();
+  const mesActual = now.getMonth() + 1;
+  const anioActual = now.getFullYear();
   const sueldoNum = parseFloat(String(emp.sueldo_mensual || 0)) || 0;
-  const sacAcumulado = calcularSACProporcional(sueldoNum, mesActual);
+  const sinSueldo = sueldoNum <= 0;
+  const mesesEnSemestre = mesesTrabajadosEnSemestre(emp.fecha_inicio, mesActual, anioActual);
+  const sacAcumulado = calcularSACMejorSueldo({
+    sueldoActual: sueldoNum,
+    historialSueldos: histSueldos,
+    fechaInicio: emp.fecha_inicio,
+    mesActual,
+    anioActual,
+  });
   const sacTeorico = calcularSACTeorico(sueldoNum);
 
   // ─── ACCIONES: SUELDO ──────────────────────────────────────────────────────
@@ -361,6 +372,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
           diasVacPorMes={diasVacPorMes}
           antiguedadAnios={antiguedadAnios}
           sinFechaInicio={sinFechaInicio}
+          sinSueldo={sinSueldo}
           sacAcumulado={sacAcumulado}
           sacTeorico={sacTeorico}
           mesActual={mesActual}
@@ -679,7 +691,7 @@ function TabMovimientos({ movMeses, expanded, setExpanded, esDueno, adelantos }:
 
 function TabVacAgu({
   vacAcumuladas, vacTomadas, valorDia, plusVacacional,
-  diasVacAnuales, diasVacPorMes, antiguedadAnios, sinFechaInicio,
+  diasVacAnuales, diasVacPorMes, antiguedadAnios, sinFechaInicio, sinSueldo,
   sacAcumulado, sacTeorico, mesActual, mesesEnSemestre,
   pagosEsp, esDueno,
   vacModal, setVacModal, vacDias, setVacDias, vacLineas, setVacLineas,
@@ -723,12 +735,16 @@ function TabVacAgu({
           <div className="panel-hd"><span className="panel-title">Aguinaldo</span></div>
           <div style={{padding:16}}>
             <div style={{marginBottom:12}}>
-              <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Acumulado proporcional ({mesesEnSemestre} {mesesEnSemestre === 1 ? "mes" : "meses"} del semestre)</div>
-              <div className="num" style={{fontSize:17,fontWeight:500,color:"var(--acc)"}}>{fmt_$(sacAcumulado)}</div>
-              <div style={{fontSize:11,color:"var(--muted2)",marginTop:4}}>Teórico semestre completo: {fmt_$(sacTeorico)}</div>
-              <div style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>SAC = mejor sueldo del semestre / 2 · Pago en {mesActual <= 6 ? "junio" : "diciembre"}</div>
+              {sinSueldo ? (
+                <div style={{fontSize:14,color:"var(--warn)"}}>— (falta sueldo)</div>
+              ) : (<>
+                <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Acumulado proporcional ({mesesEnSemestre} {mesesEnSemestre === 1 ? "mes" : "meses"} del semestre)</div>
+                <div className="num" style={{fontSize:17,fontWeight:500,color:"var(--acc)"}}>{fmt_$(sacAcumulado)}</div>
+                <div style={{fontSize:11,color:"var(--muted2)",marginTop:4}}>Teórico semestre completo: {fmt_$(sacTeorico)}</div>
+                <div style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>SAC = mejor sueldo del semestre × meses trabajados / 12 · Pago en {mesActual <= 6 ? "junio" : "diciembre"}</div>
+              </>)}
             </div>
-            {esDueno && sacAcumulado > 0 && (
+            {esDueno && !sinSueldo && sacAcumulado > 0 && (
               <button className="btn btn-acc btn-sm" onClick={() => {
                 setAguLineas([{cuenta:"Caja Chica", monto: String(Math.round(sacAcumulado))}]);
                 setAguModal(true);

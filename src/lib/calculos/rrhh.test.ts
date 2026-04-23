@@ -4,6 +4,9 @@ import {
   calcularVacaciones,
   calcularSACTeorico,
   calcularSACProporcional,
+  calcularSACMejorSueldo,
+  calcularMejorSueldoSemestre,
+  mesesTrabajadosEnSemestre,
   calcularSueldoBase,
   calcularDescuentoAusencias,
   calcularHorasExtras,
@@ -163,6 +166,180 @@ describe("calcularSACProporcional", () => {
 
   it("mes inválido 13 → 0", () => {
     expect(calcularSACProporcional(sueldo, 13)).toBe(0);
+  });
+});
+
+// ─── mesesTrabajadosEnSemestre ───────────────────────────────────────────────
+
+describe("mesesTrabajadosEnSemestre", () => {
+  it("ingreso en año anterior → semestre completo hasta mesActual", () => {
+    expect(mesesTrabajadosEnSemestre("2024-05-10", 4, 2026)).toBe(4); // enero-abril = 4
+  });
+
+  it("ingreso antes del semestre actual, mismo año → semestre completo", () => {
+    expect(mesesTrabajadosEnSemestre("2026-02-01", 9, 2026)).toBe(3); // S2: julio-sept = 3
+  });
+
+  it("ingreso dentro del semestre → cuenta desde mes de ingreso", () => {
+    expect(mesesTrabajadosEnSemestre("2026-03-10", 5, 2026)).toBe(3); // marzo, abril, mayo = 3
+  });
+
+  it("ingreso en el mismo mes actual → 1 mes", () => {
+    expect(mesesTrabajadosEnSemestre("2026-04-20", 4, 2026)).toBe(1);
+  });
+
+  it("ingreso posterior al mes actual → 0", () => {
+    expect(mesesTrabajadosEnSemestre("2026-06-10", 5, 2026)).toBe(0);
+  });
+
+  it("ingreso en año posterior → 0", () => {
+    expect(mesesTrabajadosEnSemestre("2027-01-01", 5, 2026)).toBe(0);
+  });
+
+  it("sin fecha_inicio → semestre completo hasta mesActual", () => {
+    expect(mesesTrabajadosEnSemestre(null, 4, 2026)).toBe(4);
+    expect(mesesTrabajadosEnSemestre("", 4, 2026)).toBe(4);
+  });
+
+  it("fecha inválida → fallback a semestre completo", () => {
+    expect(mesesTrabajadosEnSemestre("basura", 9, 2026)).toBe(3);
+  });
+
+  it("mes inválido → 0", () => {
+    expect(mesesTrabajadosEnSemestre("2026-01-01", 0, 2026)).toBe(0);
+    expect(mesesTrabajadosEnSemestre("2026-01-01", 13, 2026)).toBe(0);
+  });
+});
+
+// ─── calcularMejorSueldoSemestre ─────────────────────────────────────────────
+
+describe("calcularMejorSueldoSemestre", () => {
+  it("sin historial → usa sueldo actual", () => {
+    expect(calcularMejorSueldoSemestre(600000, [], 4, 2026)).toBe(600000);
+    expect(calcularMejorSueldoSemestre(600000, null, 4, 2026)).toBe(600000);
+  });
+
+  it("cambio dentro del semestre con aumento → toma el mayor", () => {
+    const hist = [
+      { sueldo_anterior: 500000, sueldo_nuevo: 600000, fecha_cambio: "2026-03-15" },
+    ];
+    expect(calcularMejorSueldoSemestre(600000, hist, 4, 2026)).toBe(600000);
+  });
+
+  it("cambio dentro del semestre con baja → toma el anterior (mayor)", () => {
+    const hist = [
+      { sueldo_anterior: 700000, sueldo_nuevo: 500000, fecha_cambio: "2026-03-15" },
+    ];
+    expect(calcularMejorSueldoSemestre(500000, hist, 4, 2026)).toBe(700000);
+  });
+
+  it("cambio antes del semestre → sueldo_nuevo es el vigente al inicio", () => {
+    const hist = [
+      { sueldo_anterior: 400000, sueldo_nuevo: 600000, fecha_cambio: "2025-11-01" },
+    ];
+    // Sueldo actual = 600000, cambio previo también lleva a 600000 → mejor es 600000
+    expect(calcularMejorSueldoSemestre(600000, hist, 4, 2026)).toBe(600000);
+  });
+
+  it("múltiples cambios → toma el máximo absoluto", () => {
+    const hist = [
+      { sueldo_anterior: 500000, sueldo_nuevo: 600000, fecha_cambio: "2026-02-01" },
+      { sueldo_anterior: 600000, sueldo_nuevo: 750000, fecha_cambio: "2026-03-10" },
+      { sueldo_anterior: 750000, sueldo_nuevo: 700000, fecha_cambio: "2026-04-05" },
+    ];
+    expect(calcularMejorSueldoSemestre(700000, hist, 4, 2026)).toBe(750000);
+  });
+
+  it("cambio en semestre anterior no afecta", () => {
+    const hist = [
+      { sueldo_anterior: 400000, sueldo_nuevo: 1000000, fecha_cambio: "2025-08-15" },
+    ];
+    // Semestre 1 2026 (enero-abril): el cambio fue en S2 2025, pero el sueldo_nuevo 1M quedó vigente → 1M
+    expect(calcularMejorSueldoSemestre(600000, hist, 4, 2026)).toBe(1000000);
+  });
+
+  it("sueldo actual 0 y sin historial → 0", () => {
+    expect(calcularMejorSueldoSemestre(0, [], 4, 2026)).toBe(0);
+  });
+
+  it("entrada con fecha_cambio inválida → se ignora", () => {
+    const hist = [
+      { sueldo_nuevo: 999999, fecha_cambio: "basura" as any },
+      { sueldo_anterior: 500000, sueldo_nuevo: 600000, fecha_cambio: "2026-02-01" },
+    ];
+    expect(calcularMejorSueldoSemestre(600000, hist, 4, 2026)).toBe(600000);
+  });
+});
+
+// ─── calcularSACMejorSueldo ──────────────────────────────────────────────────
+
+describe("calcularSACMejorSueldo", () => {
+  it("empleado antiguo con sueldo actual 600k en abril → (600k/12)*4 = 200k", () => {
+    const r = calcularSACMejorSueldo({
+      sueldoActual: 600000,
+      historialSueldos: [],
+      fechaInicio: "2020-01-01",
+      mesActual: 4,
+      anioActual: 2026,
+    });
+    expect(r).toBeCloseTo(200000, 0);
+  });
+
+  it("aumento en marzo a 750k → usa 750k y prorratea 4 meses → 250k", () => {
+    const r = calcularSACMejorSueldo({
+      sueldoActual: 750000,
+      historialSueldos: [
+        { sueldo_anterior: 600000, sueldo_nuevo: 750000, fecha_cambio: "2026-03-10" },
+      ],
+      fechaInicio: "2020-01-01",
+      mesActual: 4,
+      anioActual: 2026,
+    });
+    expect(r).toBeCloseTo(250000, 0);
+  });
+
+  it("ingreso en marzo → solo 2 meses del semestre (marzo, abril)", () => {
+    const r = calcularSACMejorSueldo({
+      sueldoActual: 600000,
+      historialSueldos: [],
+      fechaInicio: "2026-03-15",
+      mesActual: 4,
+      anioActual: 2026,
+    });
+    expect(r).toBeCloseTo((600000 / 12) * 2, 0);
+  });
+
+  it("ingreso futuro → 0", () => {
+    const r = calcularSACMejorSueldo({
+      sueldoActual: 600000,
+      historialSueldos: [],
+      fechaInicio: "2026-08-01",
+      mesActual: 4,
+      anioActual: 2026,
+    });
+    expect(r).toBe(0);
+  });
+
+  it("sueldo actual 0 y sin historial → 0", () => {
+    const r = calcularSACMejorSueldo({
+      sueldoActual: 0,
+      historialSueldos: [],
+      fechaInicio: "2024-01-01",
+      mesActual: 4,
+      anioActual: 2026,
+    });
+    expect(r).toBe(0);
+  });
+
+  it("semestre 2 (julio en adelante) → base julio", () => {
+    const r = calcularSACMejorSueldo({
+      sueldoActual: 600000,
+      historialSueldos: [],
+      fechaInicio: "2020-01-01",
+      mesActual: 9,
+      anioActual: 2026,
+    });
+    expect(r).toBeCloseTo((600000 / 12) * 3, 0); // julio, agosto, septiembre = 3
   });
 });
 

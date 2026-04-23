@@ -104,6 +104,86 @@ export function calcularSACProporcional(sueldo: number, mesActual: number): numb
   return (sueldo / 12) * mesesEnSemestre;
 }
 
+/**
+ * Meses trabajados dentro del semestre actual, considerando fecha_inicio.
+ * Semestre 1: enero-junio. Semestre 2: julio-diciembre.
+ * Si el empleado ingresó antes del semestre → cuenta mesActual meses.
+ * Si ingresó dentro del semestre → cuenta desde su mes de ingreso.
+ * Si ingresó después del mes actual → 0.
+ */
+export function mesesTrabajadosEnSemestre(
+  fechaInicio: string | null | undefined,
+  mesActual: number,
+  anioActual: number,
+): number {
+  if (mesActual < 1 || mesActual > 12) return 0;
+  const inicioSemestreMes = mesActual <= 6 ? 1 : 7;
+  if (!fechaInicio) return mesActual - inicioSemestreMes + 1;
+  const inicio = new Date(fechaInicio + "T12:00:00");
+  if (isNaN(inicio.getTime())) return mesActual - inicioSemestreMes + 1;
+  const inicioAnio = inicio.getFullYear();
+  const inicioMes = inicio.getMonth() + 1;
+  // Ingreso en año posterior o mes posterior al actual → no trabajó en este semestre
+  if (inicioAnio > anioActual) return 0;
+  if (inicioAnio === anioActual && inicioMes > mesActual) return 0;
+  // Ingresó antes del inicio del semestre → cuenta el semestre completo hasta mesActual
+  const ingresoAntesDelSemestre =
+    inicioAnio < anioActual || inicioMes < inicioSemestreMes;
+  const mesArranque = ingresoAntesDelSemestre ? inicioSemestreMes : inicioMes;
+  return Math.max(0, mesActual - mesArranque + 1);
+}
+
+/**
+ * Mayor sueldo devengado dentro del semestre actual.
+ * Considera el sueldo actual y los cambios registrados en rrhh_historial_sueldos
+ * dentro del semestre. El "mejor sueldo" es el máximo (Art 122 LCT).
+ */
+export function calcularMejorSueldoSemestre(
+  sueldoActual: number,
+  historialSueldos: Array<{ sueldo_anterior?: number; sueldo_nuevo?: number; fecha_cambio?: string }> | null | undefined,
+  mesActual: number,
+  anioActual: number,
+): number {
+  if (sueldoActual <= 0 && (!historialSueldos || historialSueldos.length === 0)) return 0;
+  const inicioSemestreMes = mesActual <= 6 ? 1 : 7;
+  const inicioSem = new Date(anioActual, inicioSemestreMes - 1, 1).getTime();
+  let mejor = Math.max(0, sueldoActual);
+  for (const h of historialSueldos || []) {
+    if (!h.fecha_cambio) continue;
+    const t = new Date(h.fecha_cambio).getTime();
+    if (isNaN(t)) continue;
+    // Cambios aplicados dentro del semestre aportan el sueldo_nuevo.
+    if (t >= inicioSem) {
+      if (h.sueldo_nuevo && h.sueldo_nuevo > mejor) mejor = h.sueldo_nuevo;
+      if (h.sueldo_anterior && h.sueldo_anterior > mejor) mejor = h.sueldo_anterior;
+    } else {
+      // Cambio previo al semestre: el sueldo_nuevo es el vigente al inicio del semestre.
+      if (h.sueldo_nuevo && h.sueldo_nuevo > mejor) mejor = h.sueldo_nuevo;
+    }
+  }
+  return mejor;
+}
+
+/**
+ * SAC acumulado usando el mejor sueldo del semestre, prorrateado por tiempo
+ * efectivamente trabajado (Art 122 LCT). Reemplaza calcularSACProporcional
+ * cuando se dispone del historial de sueldos y la fecha de ingreso.
+ */
+export function calcularSACMejorSueldo(params: {
+  sueldoActual: number;
+  historialSueldos?: Array<{ sueldo_anterior?: number; sueldo_nuevo?: number; fecha_cambio?: string }> | null;
+  fechaInicio?: string | null;
+  mesActual: number;
+  anioActual: number;
+}): number {
+  const { sueldoActual, historialSueldos, fechaInicio, mesActual, anioActual } = params;
+  const mejor = calcularMejorSueldoSemestre(sueldoActual, historialSueldos || null, mesActual, anioActual);
+  if (mejor <= 0) return 0;
+  const meses = mesesTrabajadosEnSemestre(fechaInicio, mesActual, anioActual);
+  if (meses <= 0) return 0;
+  return (mejor / 12) * meses;
+}
+
 // ─── LIQUIDACIÓN MENSUAL — COMPONENTES ───────────────────────────────────────
 
 /** Sueldo base según modo de pago */
