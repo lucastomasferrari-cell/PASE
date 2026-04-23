@@ -38,9 +38,24 @@ export default function Proveedores({ user, localActivo }: { user: any; locales?
   };
   useEffect(()=>{load();},[localActivo]);
   const pFilt=proveedores.filter(p=>!search||p.nombre.toLowerCase().includes(search.toLowerCase())||(p.cuit||"").includes(search));
-  const guardar=async()=>{if(!form.nombre)return;await db.from("proveedores").insert([{...form,saldo:0}]);setModal(false);setForm(emptyForm);load();};
-  const guardarEdit=async()=>{await db.from("proveedores").update({nombre:editModal.nombre,cuit:editModal.cuit,cat:editModal.cat,estado:editModal.estado}).eq("id",editModal.id);setEditModal(null);load();};
-  const toggleEstado=async(p)=>{await db.from("proveedores").update({estado:p.estado==="Activo"?"Inactivo":"Activo"}).eq("id",p.id);load();};
+  const guardar=async()=>{
+    if(!form.nombre)return;
+    const {error}=await db.from("proveedores").insert([{...form,saldo:0}]);
+    if(error){alert("Error creando proveedor: "+error.message);return;}
+    setModal(false);setForm(emptyForm);
+    await load();
+  };
+  const guardarEdit=async()=>{
+    const {error}=await db.from("proveedores").update({nombre:editModal.nombre,cuit:editModal.cuit,cat:editModal.cat,estado:editModal.estado}).eq("id",editModal.id);
+    if(error){alert("Error editando proveedor: "+error.message);return;}
+    setEditModal(null);
+    await load();
+  };
+  const toggleEstado=async(p)=>{
+    const {error}=await db.from("proveedores").update({estado:p.estado==="Activo"?"Inactivo":"Activo"}).eq("id",p.id);
+    if(error){alert("Error: "+error.message);return;}
+    await load();
+  };
   const abrirCta=async(p)=>{
     setCtaFacts([]);
     setCtaMes(toISO(today).slice(0,7));
