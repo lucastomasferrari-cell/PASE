@@ -3,6 +3,7 @@ import { db } from "./lib/supabase";
 import { getPermisos, tienePermiso, AuthProvider } from "./lib/auth";
 import { Sidebar, css } from "./components/Layout";
 import Login from "./pages/Login";
+import ForcePasswordChange from "./pages/ForcePasswordChange";
 import Dashboard from "./pages/Dashboard";
 import Ventas from "./pages/Ventas";
 import Compras from "./pages/Compras";
@@ -37,65 +38,44 @@ export default function App() {
     db.from("locales").select("*").order("id").then(({data})=>setLocales(data||[]));
   },[]);
 
-  // Restaurar sesión al cargar
+  // Restaurar sesión al cargar — única fuente de verdad: Supabase Auth
   useEffect(()=>{
     const restore = async () => {
-      // 0. Intentar restaurar desde sessionStorage (más rápido, no necesita DB)
-      try {
-        const savedUser = sessionStorage.getItem("pase_user");
-        if (savedUser) {
-          const parsed = JSON.parse(savedUser);
-          if (parsed && parsed.id && parsed.activo !== false) {
-            setUser(parsed);
-            if (parsed.rol !== "dueno" && (parsed._locales || []).length === 1) {
-              setLocalActivo(parsed._locales[0]);
-            }
-            setAuthLoading(false);
-            return;
-          }
-          sessionStorage.removeItem("pase_user");
-        }
-      } catch {}
-
-      // 1. Intentar restaurar desde localStorage (query a DB)
-      try {
-        const savedId = localStorage.getItem("pase_uid");
-        if (savedId) {
-          const { data: perfil } = await db.from("usuarios").select("*").eq("id", parseInt(savedId)).single();
-          if (perfil && perfil.activo !== false) {
-            await applyLogin(perfil);
-            setAuthLoading(false);
-            return;
-          }
-          localStorage.removeItem("pase_uid");
-          sessionStorage.removeItem("pase_user");
-        }
-      } catch {}
-
-      // 2. Fallback: Supabase Auth session (usuarios con auth_id)
       try {
         const { data: { session } } = await db.auth.getSession();
         if (session?.user) {
           const { data: perfil } = await db.from("usuarios").select("*").eq("auth_id", session.user.id).single();
-          if (perfil) {
-            localStorage.setItem("pase_uid", String(perfil.id));
+          if (perfil && perfil.activo !== false) {
             await applyLogin(perfil);
+          } else {
+            await db.auth.signOut();
           }
         }
       } catch {}
-
       setAuthLoading(false);
     };
     restore();
 
-    const { data: { subscription } } = db.auth.onAuthStateChange(async (event) => {
+    const { data: { subscription } } = db.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_OUT") {
         setUser(null);
         setSection("dashboard");
         setLocalActivo(null);
-        localStorage.removeItem("pase_uid");
         sessionStorage.removeItem("pase_user");
+        localStorage.removeItem("pase_uid");
+        return;
       }
+      if (event === "SIGNED_IN" && session?.user) {
+        // Skip si ya hay user (login manual ya ejecutó applyLogin) — evita doble fetch
+        setUser(curr => {
+          if (curr) return curr;
+          db.from("usuarios").select("*").eq("auth_id", session.user.id).single().then(({ data: perfil }) => {
+            if (perfil && perfil.activo !== false) applyLogin(perfil);
+          });
+          return curr;
+        });
+      }
+      // TOKEN_REFRESHED: no-op; la sesión se mantiene, no hace falta re-fetch
     });
     return () => subscription.unsubscribe();
   },[]);
@@ -112,7 +92,6 @@ export default function App() {
       _locales: (locsData || []).length ? (locsData || []).map(l => l.local_id) : (u.locales || []),
     };
     setUser(enriched);
-    localStorage.setItem("pase_uid", String(enriched.id));
     sessionStorage.setItem("pase_user", JSON.stringify(enriched));
     const perms = getPermisos(enriched);
     if(!perms.includes("dashboard") && perms.length) setSection(perms[0]);
@@ -125,11 +104,7 @@ export default function App() {
 
   const logout = async () => {
     await db.auth.signOut();
-    setUser(null);
-    setSection("dashboard");
-    setLocalActivo(null);
-    localStorage.removeItem("pase_uid");
-    sessionStorage.removeItem("pase_user");
+    // SIGNED_OUT en onAuthStateChange limpia el resto del state
   };
 
   const [toast, setToast] = useState("");
@@ -185,6 +160,12 @@ export default function App() {
   if (authLoading) return <><style>{css}</style><div className="login-wrap"><div className="login-bg"/><div className="login-card" style={{textAlign:"center",padding:40}}>Cargando...</div></div></>;
 
   if(!user) return <><style>{css}</style><Login onLogin={login}/></>;
+
+  if (user.password_temporal) return <><style>{css}</style><ForcePasswordChange user={user} onDone={() => {
+    const updated = { ...user, password_temporal: false };
+    setUser(updated);
+    sessionStorage.setItem("pase_user", JSON.stringify(updated));
+  }}/></>;
 
   return (
     <AuthProvider value={user}>

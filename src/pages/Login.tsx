@@ -1,12 +1,6 @@
 import { useState, useRef } from "react";
 import { db } from "../lib/supabase";
 
-async function sha256(text) {
-  const enc = new TextEncoder().encode(text);
-  const buf = await crypto.subtle.digest("SHA-256", enc);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
-}
-
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 export default function Login({ onLogin }) {
   const [usuario, setUsuario] = useState("");
@@ -19,34 +13,33 @@ export default function Login({ onLogin }) {
     if (!usuario || !password) return;
     setLoading(true); setErr("");
 
-    // Primero buscar el usuario por email para saber si tiene auth_id
-    const { data: usr } = await db
-      .from("usuarios")
-      .select("*")
-      .eq("email", usuario)
-      .single();
+    const authEmail = usuario.includes("@") ? usuario : usuario + "@pase.local";
+    const { data: authData, error: authErr } = await db.auth.signInWithPassword({
+      email: authEmail,
+      password,
+    });
 
-    if (!usr) { setLoading(false); setErr("Usuario o contraseña incorrectos"); return; }
-
-    // Si tiene auth_id → intentar Supabase Auth
-    if (usr.auth_id) {
-      const authEmail = usuario.includes("@") ? usuario : usuario + "@pase.local";
-      const { data: authData } = await db.auth.signInWithPassword({
-        email: authEmail,
-        password,
-      });
-      if (authData?.user) {
-        setLoading(false);
-        onLogin(usr);
-        return;
-      }
+    if (authErr || !authData?.user) {
+      setLoading(false);
+      setErr("Usuario o contraseña incorrectos");
+      return;
     }
 
-    // Fallback (o único camino si auth_id es null): comparar hash SHA-256
-    const hash = await sha256(password);
+    const { data: usr, error: usrErr } = await db
+      .from("usuarios")
+      .select("*")
+      .eq("auth_id", authData.user.id)
+      .single();
+
+    if (usrErr || !usr || !usr.activo) {
+      await db.auth.signOut();
+      setLoading(false);
+      setErr("Usuario no encontrado o desactivado");
+      return;
+    }
+
     setLoading(false);
-    if (usr.password === hash) onLogin(usr);
-    else setErr("Usuario o contraseña incorrectos");
+    onLogin(usr);
   };
 
   return (
