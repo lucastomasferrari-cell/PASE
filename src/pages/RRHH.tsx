@@ -81,6 +81,9 @@ export default function RRHH({ user, locales, localActivo }) {
   const [pagoLocal, setPagoLocal] = useState(defaultLocal);
   const [pagoLocalTouched, setPagoLocalTouched] = useState(false);
   const [pagoData, setPagoData] = useState<any[]>([]);
+  // Si se dispara "Pagar" desde el legajo, guardamos el emp.id acá para abrir
+  // el modal automáticamente cuando loadPagos termine y la fila esté en pagoData.
+  const [pendingPagoEmpId, setPendingPagoEmpId] = useState<string | null>(null);
   const [pagoLoading, setPagoLoading] = useState(false);
   const [pagando, setPagando] = useState(false);
   const [pagoModal, setPagoModal] = useState<any>(null);
@@ -362,6 +365,22 @@ export default function RRHH({ user, locales, localActivo }) {
   const handleNovLocalChange = (v: string) => { setNovLocal(v); setNovLocalTouched(true); };
   const handlePagoLocalChange = (v: string) => { setPagoLocal(v); setPagoLocalTouched(true); };
 
+  // Puente legajo → tab Pagos: al hacer click en "Pagar" desde la tabla de
+  // movimientos del legajo, cerramos el modal, cambiamos al tab Pagos y
+  // prefiltramos local/mes/anio. El useEffect de abajo abre el modal de pago
+  // cuando pagoData se carga con la fila del empleado.
+  const goToPagoFromLegajo = (emp: any, nov: any) => {
+    setLegajoId(null);
+    setTab("pagos");
+    if (emp.local_id) {
+      setPagoLocal(String(emp.local_id));
+      setPagoLocalTouched(true);
+    }
+    if (nov?.mes) setPagoMes(Number(nov.mes));
+    if (nov?.anio) setPagoAnio(Number(nov.anio));
+    setPendingPagoEmpId(emp.id);
+  };
+
   // ─── EMPLEADOS ACTIONS ─────────────────────────────────────────────────────
   const puestos = [...new Set(valoresDoble.map(v => v.puesto))];
   const empsFilt = allEmps.filter(e => {
@@ -453,6 +472,17 @@ export default function RRHH({ user, locales, localActivo }) {
   };
 
   // ─── ADELANTOS ─────────────────────────────────────────────────────────────
+  // Si hay un pendingPagoEmpId (viene del legajo) y pagoData ya contiene
+  // esa fila, abrir el modal de pago con los datos correctos.
+  useEffect(() => {
+    if (!pendingPagoEmpId || !pagoData.length) return;
+    const row = pagoData.find((r: any) => r.emp?.id === pendingPagoEmpId);
+    if (row && row.liq && row.liq.estado !== "pagado") {
+      abrirPagoSueldo(row.emp, row.nov, row.liq);
+    }
+    setPendingPagoEmpId(null);
+  }, [pagoData, pendingPagoEmpId]);
+
   const abrirPagoSueldo = async (emp: any, nov: any, liq: any) => {
     const { data: adelantos } = await db.from("rrhh_adelantos")
       .select("*")
@@ -653,7 +683,7 @@ export default function RRHH({ user, locales, localActivo }) {
               <button className="close-btn" onClick={() => { setLegajoId(null); loadEmpleados(); }}>✕</button>
             </div>
             <div style={{flex:1,overflowY:"auto",padding:20}}>
-              <RRHHLegajo empleadoId={legajoId} user={user} locales={locales} onClose={() => { setLegajoId(null); loadEmpleados(); }} />
+              <RRHHLegajo empleadoId={legajoId} user={user} locales={locales} onClose={() => { setLegajoId(null); loadEmpleados(); }} onGoToPago={goToPagoFromLegajo} />
             </div>
           </div>
         </div>

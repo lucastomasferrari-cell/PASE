@@ -21,7 +21,7 @@ const DOC_TIPOS = [
 ];
 const CUENTAS_LIQ = ["Caja Efectivo","Caja Chica","Caja Mayor","MercadoPago","Banco"];
 
-export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
+export default function RRHHLegajo({ empleadoId, user, locales, onClose, onGoToPago }: any) {
   const [emp, setEmp] = useState<any>(null);
   const [tab, setTab] = useState("datos");
   const [loading, setLoading] = useState(true);
@@ -354,11 +354,13 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
 
       {tab === "movimientos" && (
         <TabMovimientos
+          emp={emp}
           movMeses={movMeses}
           expanded={expanded}
           setExpanded={setExpanded}
           esDueno={esDueno}
           adelantos={adelantos}
+          onGoToPago={onGoToPago}
         />
       )}
 
@@ -597,7 +599,7 @@ function TabDatos({
   );
 }
 
-function TabMovimientos({ movMeses, expanded, setExpanded, esDueno, adelantos }: any) {
+function TabMovimientos({ emp, movMeses, expanded, setExpanded, esDueno, adelantos, onGoToPago }: any) {
   return (
     <>
       {(adelantos || []).length > 0 && (
@@ -676,7 +678,13 @@ function TabMovimientos({ movMeses, expanded, setExpanded, esDueno, adelantos }:
                         {liq.efectivo > 0 && <span style={{fontSize:10,color:"var(--muted2)",marginLeft:8}}>Efvo: {fmt_$(liq.efectivo)}</span>}
                         {liq.transferencia > 0 && <span style={{fontSize:10,color:"var(--info)",marginLeft:8}}>Transf: {fmt_$(liq.transferencia)}</span>}
                       </div>
-                      {/* Pagos se gestionan desde el tab Pagos de RRHH */}
+                      {esDueno && !pagado && onGoToPago && (
+                        <button
+                          className="btn btn-success btn-sm"
+                          onClick={(e) => { e.stopPropagation(); onGoToPago(emp, nov); }}
+                          title="Cierra el legajo y abre el pago en el tab Pagos"
+                        >Pagar</button>
+                      )}
                     </div>
                   </div>
                 )}
