@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
+import { applyLocalScope } from "../lib/auth";
 import { MEDIOS_COBRO, MEDIO_A_CUENTA } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import ImportarMaxirest from "./ImportarMaxirest";
@@ -28,7 +29,7 @@ export default function Ventas({ user, locales, localActivo }) {
     let q=db.from("ventas").select("*").order("fecha",{ascending:false});
     if(filtDesde) q=q.gte("fecha",filtDesde);
     if(filtHasta) q=q.lte("fecha",filtHasta);
-    if(localActivo) q=q.eq("local_id",localActivo);
+    q=applyLocalScope(q,user,localActivo);
     const {data}=await q.limit(500);
     setVentas(data||[]);setLoading(false);
   };

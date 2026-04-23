@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
+import { applyLocalScope } from "../lib/auth";
 import { CATEGORIAS_COMPRA, CUENTAS, UNIDADES } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import LectorFacturasIA from "./LectorFacturasIA";
@@ -47,13 +48,15 @@ export default function Compras({ user, locales, localActivo }) {
 
   const load = async () => {
     setLoading(true);
+    let fq = db.from("facturas").select("*").order("fecha", { ascending: false });
+    fq = applyLocalScope(fq, user, localActivo);
     const [{ data: f }, { data: p }] = await Promise.all([
-      db.from("facturas").select("*").order("fecha", { ascending: false }),
+      fq,
       db.from("proveedores").select("*").eq("estado", "Activo").order("nombre"),
     ]);
     setFacturas(f || []); setProveedores(p || []); setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [localActivo]);
 
   const fFilt = facturas.filter(f => {
     if (f.estado === "anulada") return false;

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
+import { applyLocalScope } from "../lib/auth";
 import { CUENTAS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, COMISIONES_CATS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 
@@ -46,9 +47,11 @@ export default function Gastos({ user, locales, localActivo }) {
   const load = async () => {
     setLoading(true);
     let q = db.from("gastos").select("*").gte("fecha", desde).lte("fecha", hasta).order("fecha", { ascending: false });
-    if (localActivo) q = q.eq("local_id", localActivo);
+    q = applyLocalScope(q, user, localActivo);
     const { data: g } = await q;
-    const { data: p } = await db.from("gastos_plantillas").select("*").eq("activo", true).order("nombre");
+    let pq = db.from("gastos_plantillas").select("*").eq("activo", true).order("nombre");
+    pq = applyLocalScope(pq, user, localActivo);
+    const { data: p } = await pq;
     setGastos((g || []).filter(g => g.categoria !== "SUELDOS"));
     setPlantillas(p || []);
     setLoading(false);

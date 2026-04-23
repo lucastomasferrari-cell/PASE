@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
+import { applyLocalScope } from "../lib/auth";
 import { CATEGORIAS_COMPRA, CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 
@@ -18,16 +19,20 @@ export default function Remitos({ user, locales, localActivo }) {
 
   const load = async () => {
     setLoading(true);
+    let rq = db.from("remitos").select("*").order("fecha",{ascending:false});
+    rq = applyLocalScope(rq, user, localActivo);
+    let fq = db.from("facturas").select("*").neq("estado","anulada");
+    fq = applyLocalScope(fq, user, localActivo);
     const [{data:r},{data:f},{data:p}] = await Promise.all([
-      db.from("remitos").select("*").order("fecha",{ascending:false}),
-      db.from("facturas").select("*").neq("estado","anulada"),
+      rq,
+      fq,
       db.from("proveedores").select("*").eq("estado","Activo").order("nombre"),
     ]);
     setRemitos(r||[]); setFacturas(f||[]); setProveedores(p||[]); setLoading(false);
   };
-  useEffect(()=>{load();},[]);
+  useEffect(()=>{load();},[localActivo]);
 
-  const rFilt = remitos.filter(r=>!localActivo||r.local_id===localActivo);
+  const rFilt = remitos;
   const sinFact = rFilt.filter(r=>r.estado==="sin_factura");
 
   const onProvChange = (prov_id) => {

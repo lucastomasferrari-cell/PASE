@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
+import { applyLocalScope } from "../lib/auth";
 import { COMISIONES_CATS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 
@@ -31,12 +32,16 @@ function ConciliacionMP({ user, locales, localActivo }) {
       // Filtramos mp_movimientos por local en el server cuando hay un
       // local activo, así evitamos traer filas que igual vamos a descartar.
       let movQ=db.from("mp_movimientos").select("*").gte("fecha",desdeTs).lte("fecha",hastaTs).order("fecha",{ascending:false}).limit(5000);
-      if(localActivo)movQ=movQ.eq("local_id",localActivo);
+      movQ=applyLocalScope(movQ,user,localActivo);
+      let facQ=db.from("facturas").select("id,nro,fecha,total,local_id,cat,estado").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false});
+      facQ=applyLocalScope(facQ,user,localActivo);
+      let gasQ=db.from("gastos").select("id,fecha,categoria,detalle,monto,local_id,cuenta").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false});
+      gasQ=applyLocalScope(gasQ,user,localActivo);
       const [credRes,movRes,facRes,gasRes]=await Promise.all([
         db.from("mp_credenciales").select("*,locales(nombre)"),
         movQ,
-        db.from("facturas").select("id,nro,fecha,total,local_id,cat,estado").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false}),
-        db.from("gastos").select("id,fecha,categoria,detalle,monto,local_id,cuenta").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false}),
+        facQ,
+        gasQ,
       ]);
       if(credRes.error)console.warn("mp_credenciales load error:",credRes.error);
       if(movRes.error)console.warn("mp_movimientos load error:",movRes.error);

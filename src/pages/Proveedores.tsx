@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { CATEGORIAS_COMPRA, CUENTAS } from "../lib/constants";
+import { applyLocalScope } from "../lib/auth";
+import { CATEGORIAS_COMPRA } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 
 // ─── PROVEEDORES ──────────────────────────────────────────────────────────────
-export default function Proveedores() {
+export default function Proveedores({ user, localActivo }: { user: any; locales?: any; localActivo: number | null }) {
   const [proveedores,setProveedores]=useState<any[]>([]);
   const [modal,setModal]=useState(false);
   const [editModal,setEditModal]=useState<any>(null);
@@ -16,18 +17,38 @@ export default function Proveedores() {
   const [loading,setLoading]=useState(true);
   const emptyForm={nombre:"",cuit:"",cat:"PESCADERIA",estado:"Activo"};
   const [form,setForm]=useState(emptyForm);
-  const load=async()=>{setLoading(true);const {data}=await db.from("proveedores").select("*").order("nombre");setProveedores(data||[]);setLoading(false);};
-  useEffect(()=>{load();},[]);
+  const load=async()=>{
+    setLoading(true);
+    // proveedores es global (sin local_id)
+    const {data:provs}=await db.from("proveedores").select("*").order("nombre");
+    // facturas scoped para recalcular saldo por proveedor dentro del alcance del usuario
+    let fq=db.from("facturas").select("prov_id,total,tipo,estado").neq("estado","anulada");
+    fq=applyLocalScope(fq,user,localActivo);
+    const {data:facts}=await fq;
+    const saldoPorProv=new Map<number,number>();
+    for(const f of (facts||[])){
+      if(f.prov_id==null)continue;
+      const isNC=(f.tipo||"factura")==="nota_credito";
+      const impagable=f.estado==="pendiente"||f.estado==="vencida";
+      if(isNC)saldoPorProv.set(f.prov_id,(saldoPorProv.get(f.prov_id)||0)-Math.abs(f.total||0));
+      else if(impagable)saldoPorProv.set(f.prov_id,(saldoPorProv.get(f.prov_id)||0)+Number(f.total||0));
+    }
+    setProveedores((provs||[]).map(p=>({...p,saldo:saldoPorProv.get(p.id)||0})));
+    setLoading(false);
+  };
+  useEffect(()=>{load();},[localActivo]);
   const pFilt=proveedores.filter(p=>!search||p.nombre.toLowerCase().includes(search.toLowerCase())||(p.cuit||"").includes(search));
   const guardar=async()=>{if(!form.nombre)return;await db.from("proveedores").insert([{...form,saldo:0}]);setModal(false);setForm(emptyForm);load();};
   const guardarEdit=async()=>{await db.from("proveedores").update({nombre:editModal.nombre,cuit:editModal.cuit,cat:editModal.cat,estado:editModal.estado}).eq("id",editModal.id);setEditModal(null);load();};
   const toggleEstado=async(p)=>{await db.from("proveedores").update({estado:p.estado==="Activo"?"Inactivo":"Activo"}).eq("id",p.id);load();};
   const abrirCta=async(p)=>{
-    setCtaFacts([]); // limpiar datos del proveedor anterior
+    setCtaFacts([]);
     setCtaMes(toISO(today).slice(0,7));
     setCtaModal(p);
     setCtaLoading(true);
-    const {data,error}=await db.from("facturas").select("*").eq("prov_id",p.id).neq("estado","anulada").order("fecha",{ascending:false});
+    let q=db.from("facturas").select("*").eq("prov_id",p.id).neq("estado","anulada").order("fecha",{ascending:false});
+    q=applyLocalScope(q,user,localActivo);
+    const {data,error}=await q;
     if(error)console.error("Error cargando estado de cuenta:",error);
     setCtaFacts(data||[]);setCtaLoading(false);
   };

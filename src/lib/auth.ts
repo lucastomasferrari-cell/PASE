@@ -61,6 +61,34 @@ export function localesVisibles(user: any): number[] | null {
   return user._locales?.length ? user._locales : (user.locales || []);
 }
 
+/**
+ * Combina localesVisibles(user) con localActivo (el dropdown del sidebar).
+ *  null     → no filtrar (dueno/admin sin localActivo)
+ *  []       → ningún local accesible → la query debe devolver vacío
+ *  number[] → filtrar por estos locales
+ */
+export function scopeLocales(user: any, localActivo: number | null): number[] | null {
+  const visibles = localesVisibles(user);
+  if (localActivo != null) {
+    if (visibles === null) return [localActivo];
+    return visibles.includes(localActivo) ? [localActivo] : [];
+  }
+  return visibles;
+}
+
+/**
+ * Aplica scopeLocales a un query builder de Supabase. Usar en toda tabla con local_id.
+ *   let q = db.from("facturas").select("*").eq("prov_id", p.id);
+ *   q = applyLocalScope(q, user, localActivo);
+ */
+export function applyLocalScope<Q>(q: Q, user: any, localActivo: number | null, col = "local_id"): Q {
+  const scope = scopeLocales(user, localActivo);
+  if (scope === null) return q;
+  if (scope.length === 0) return (q as any).eq(col, -1); // match imposible
+  if (scope.length === 1) return (q as any).eq(col, scope[0]);
+  return (q as any).in(col, scope);
+}
+
 // ─── REACT CONTEXT + HOOK ────────────────────────────────────────────────────
 // user en sesión: { id: number, nombre, email, rol: string, activo: boolean,
 //   _permisos: string[], _locales: number[] }
@@ -75,5 +103,6 @@ export function useAuth() {
     tienePermiso: (slug: string) => tienePermiso(user, slug),
     esEncargado: () => esEncargado(user),
     localesVisibles: () => localesVisibles(user),
+    scopeLocales: (localActivo: number | null) => scopeLocales(user, localActivo),
   };
 }

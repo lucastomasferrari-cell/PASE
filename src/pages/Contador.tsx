@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
+import { applyLocalScope } from "../lib/auth";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 
-export default function Contador({ locales, localActivo }) {
+export default function Contador({ user, locales, localActivo }: any) {
   const [facturas,setFacturas]=useState([]);
   const [ventas,setVentas]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -12,13 +13,13 @@ export default function Contador({ locales, localActivo }) {
     const load=async()=>{
       setLoading(true);
       const [cyr,cmo]=mes.split("-").map(Number); const desde=mes+"-01",hasta=mes+"-"+String(new Date(cyr,cmo,0).getDate()).padStart(2,"0");
-      const [{data:f},{data:v}]=await Promise.all([
-        db.from("facturas").select("*").gte("fecha",desde).lte("fecha",hasta).neq("estado","anulada"),
-        db.from("ventas").select("*").gte("fecha",desde).lte("fecha",hasta),
-      ]);
-      const lid=localActivo?parseInt(localActivo):null;
-      setFacturas((f||[]).filter(x=>!lid||parseInt(x.local_id)===lid));
-      setVentas((v||[]).filter(x=>!lid||parseInt(x.local_id)===lid));
+      let fq = db.from("facturas").select("*").gte("fecha",desde).lte("fecha",hasta).neq("estado","anulada");
+      fq = applyLocalScope(fq, user, localActivo);
+      let vq = db.from("ventas").select("*").gte("fecha",desde).lte("fecha",hasta);
+      vq = applyLocalScope(vq, user, localActivo);
+      const [{data:f},{data:v}]=await Promise.all([fq, vq]);
+      setFacturas(f||[]);
+      setVentas(v||[]);
       setLoading(false);
     };
     load();

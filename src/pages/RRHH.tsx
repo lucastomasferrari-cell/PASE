@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
-import { localesVisibles } from "../lib/auth";
+import { localesVisibles, applyLocalScope } from "../lib/auth";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import {
   calcularVacaciones,
@@ -109,7 +109,9 @@ export default function RRHH({ user, locales, localActivo }) {
   };
 
   const loadEmpleados = async () => {
-    const { data } = await db.from("rrhh_empleados").select("*").order("apellido");
+    let q = db.from("rrhh_empleados").select("*").order("apellido");
+    q = applyLocalScope(q, user, localActivo);
+    const { data } = await q;
     setAllEmps(data || []);
     // Cargar días de vacaciones tomadas (novedades confirmadas)
     const empIds = (data || []).map(e => e.id);
@@ -188,7 +190,9 @@ export default function RRHH({ user, locales, localActivo }) {
 
   const loadDashboard = async () => {
     setDashLoading(true);
-    const { data: emps } = await db.from("rrhh_empleados").select("*").eq("activo", true);
+    let empQ = db.from("rrhh_empleados").select("*").eq("activo", true);
+    empQ = applyLocalScope(empQ, user, localActivo);
+    const { data: emps } = await empQ;
     const activos = emps || [];
     const mes = today.getMonth() + 1;
     const anio = today.getFullYear();

@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
+import { applyLocalScope } from "../lib/auth";
 import { MEDIOS_COBRO, CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
-export default function EERR({ locales, localActivo }) {
+export default function EERR({ user, locales, localActivo }: any) {
   const [ventas,setVentas]=useState([]);
   const [facturas,setFacturas]=useState([]);
   const [gastos,setGastos]=useState([]);
@@ -21,10 +22,16 @@ export default function EERR({ locales, localActivo }) {
       const lastDay=new Date(yr,mo,0).getDate();
       const desde=mes+"-01", hasta=mes+"-"+String(lastDay).padStart(2,"0");
       const lid=localActivo?parseInt(localActivo):null;
+      let vq = db.from("ventas").select("*").gte("fecha",desde).lte("fecha",hasta);
+      vq = applyLocalScope(vq, user, lid);
+      let fq = db.from("facturas").select("*").gte("fecha",desde).lte("fecha",hasta).neq("estado","anulada");
+      fq = applyLocalScope(fq, user, lid);
+      let gq = db.from("gastos").select("*").gte("fecha",desde).lte("fecha",hasta);
+      gq = applyLocalScope(gq, user, lid);
       const [{data:v},{data:f},{data:g},{data:liqData}]=await Promise.all([
-        db.from("ventas").select("*").gte("fecha",desde).lte("fecha",hasta),
-        db.from("facturas").select("*").gte("fecha",desde).lte("fecha",hasta).neq("estado","anulada"),
-        db.from("gastos").select("*").gte("fecha",desde).lte("fecha",hasta),
+        vq,
+        fq,
+        gq,
         db.from("rrhh_liquidaciones")
           .select("*, rrhh_novedades(mes, anio, empleado_id, rrhh_empleados(nombre, apellido, puesto, local_id))")
           .in("estado", ["pendiente", "pagado"])
@@ -32,9 +39,9 @@ export default function EERR({ locales, localActivo }) {
           .gte("calculado_at", desde+"T00:00:00")
           .lte("calculado_at", hasta+"T23:59:59"),
       ]);
-      setVentas((v||[]).filter(x=>!lid||parseInt(x.local_id)===lid));
-      setFacturas((f||[]).filter(x=>!lid||parseInt(x.local_id)===lid));
-      setGastos((g||[]).filter(x => x.categoria !== "SUELDOS" && (!lid || parseInt(x.local_id) === lid)));
+      setVentas(v||[]);
+      setFacturas(f||[]);
+      setGastos((g||[]).filter(x => x.categoria !== "SUELDOS"));
       const liqFiltradas=(liqData||[]).filter(l=>{
         const emp=l.rrhh_novedades?.rrhh_empleados;
         return !lid||parseInt(emp?.local_id)===lid;

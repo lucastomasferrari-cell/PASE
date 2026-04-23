@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
+import { applyLocalScope } from "../lib/auth";
 import { toISO, today, fmt_$ } from "../lib/utils";
 
-export default function Cierre({ locales, localActivo }: any) {
+export default function Cierre({ user, locales, localActivo }: any) {
   const hoy = toISO(today).slice(0, 7);
   // Default: mes actual vs mes anterior
   const mesAnterior = (() => {
@@ -23,19 +24,22 @@ export default function Cierre({ locales, localActivo }: any) {
     const hasta = mes + "-" + String(lastDay).padStart(2, "0");
     const lid = localActivo ? parseInt(String(localActivo)) : null;
 
-    const [{ data: v }, { data: f }, { data: g }, { data: liq }] = await Promise.all([
-      db.from("ventas").select("monto, local_id").gte("fecha", desde).lte("fecha", hasta)
-        .then(r => ({ ...r, data: (r.data || []).filter((x: any) => !lid || parseInt(x.local_id) === lid) })),
-      db.from("facturas").select("total, local_id").gte("fecha", desde).lte("fecha", hasta)
-        .neq("estado", "anulada")
-        .then(r => ({ ...r, data: (r.data || []).filter((x: any) => !lid || parseInt(x.local_id) === lid) })),
-      db.from("gastos").select("monto, tipo, categoria, local_id").gte("fecha", desde).lte("fecha", hasta)
-        .then(r => ({ ...r, data: (r.data || []).filter((x: any) => x.categoria !== "SUELDOS" && (!lid || parseInt(x.local_id) === lid)) })),
+    let vq = db.from("ventas").select("monto, local_id").gte("fecha", desde).lte("fecha", hasta);
+    vq = applyLocalScope(vq, user, lid);
+    let fq = db.from("facturas").select("total, local_id").gte("fecha", desde).lte("fecha", hasta).neq("estado", "anulada");
+    fq = applyLocalScope(fq, user, lid);
+    let gq = db.from("gastos").select("monto, tipo, categoria, local_id").gte("fecha", desde).lte("fecha", hasta);
+    gq = applyLocalScope(gq, user, lid);
+    const [{ data: v }, { data: f }, { data: g0 }, { data: liq }] = await Promise.all([
+      vq,
+      fq,
+      gq,
       db.from("rrhh_liquidaciones")
         .select("total_a_pagar, rrhh_novedades(rrhh_empleados(local_id))")
         .in("estado", ["pendiente", "pagado"]).eq("anulado", false)
         .gte("calculado_at", desde + "T00:00:00").lte("calculado_at", hasta + "T23:59:59"),
     ]);
+    const g = (g0 || []).filter((x: any) => x.categoria !== "SUELDOS");
 
     const ventas = (v || []).reduce((s: number, x: any) => s + Number(x.monto), 0);
     const cmv = (f || []).reduce((s: number, x: any) => s + Number(x.total), 0);

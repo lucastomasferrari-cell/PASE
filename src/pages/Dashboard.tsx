@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
+import { applyLocalScope } from "../lib/auth";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_$ } from "../lib/utils";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
-export default function Dashboard({ locales, localActivo }) {
+export default function Dashboard({ user, locales, localActivo }: any) {
   const [stats, setStats] = useState({saldos:{},deuda:0,vencidas:0,ventasHoy:0,remPend:0,blindajeVencidos:0,blindajePorVencer:0});
   const [provDeuda, setProvDeuda] = useState([]);
   const [chartData, setChartData] = useState<any[]>([]);
@@ -20,16 +21,22 @@ export default function Dashboard({ locales, localActivo }) {
       return d.toISOString().slice(0,10);
     });
     let sq = db.from("saldos_caja").select("*");
-    if (lid) sq = sq.eq("local_id", lid);
+    sq = applyLocalScope(sq, user, lid);
     let bq = db.from("blindaje_documentos").select("vencimiento, local_id");
-    if (lid) bq = bq.eq("local_id", lid);
+    bq = applyLocalScope(bq, user, lid);
     let vsq = db.from("ventas").select("fecha, monto, local_id").gte("fecha", ultimos7[0]).lte("fecha", ultimos7[6]);
-    if (lid) vsq = vsq.eq("local_id", lid);
+    vsq = applyLocalScope(vsq, user, lid);
+    let fq = db.from("facturas").select("*").neq("estado","anulada");
+    fq = applyLocalScope(fq, user, lid);
+    let rq = db.from("remitos").select("*");
+    rq = applyLocalScope(rq, user, lid);
+    let vtq = db.from("ventas").select("*").eq("fecha",hoy);
+    vtq = applyLocalScope(vtq, user, lid);
     const [{data:saldos},{data:facturas},{data:remitos},{data:ventas},{data:provs},{data:blindaje},{data:ventasSemana}] = await Promise.all([
       sq,
-      db.from("facturas").select("*").neq("estado","anulada"),
-      db.from("remitos").select("*"),
-      db.from("ventas").select("*").eq("fecha",hoy),
+      fq,
+      rq,
+      vtq,
       db.from("proveedores").select("*").gt("saldo",0).eq("estado","Activo"),
       bq,
       vsq,

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
+import { applyLocalScope } from "../lib/auth";
 import { CATEGORIAS_COMPRA } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 
@@ -30,9 +31,9 @@ export default function Caja({ user, localActivo }: any) {
   const load = async () => {
     setLoading(true);
     let q = db.from("movimientos").select("*").order("fecha", {ascending: false}).order("id", {ascending: false}).limit(80);
-    if (localActivo) q = q.eq("local_id", parseInt(String(localActivo)));
+    q = applyLocalScope(q, user, localActivo);
     let sq = db.from("saldos_caja").select("*");
-    if (localActivo) sq = sq.eq("local_id", parseInt(String(localActivo)));
+    sq = applyLocalScope(sq, user, localActivo);
     const [{data:m},{data:s}] = await Promise.all([q, sq]);
     setMovimientos(m||[]);
     // Si no hay localActivo, se agregan saldos de todos los locales por cuenta
@@ -44,7 +45,7 @@ export default function Caja({ user, localActivo }: any) {
         .order("fecha", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(50);
-      if (localActivo) ceQ = ceQ.eq("local_id", parseInt(String(localActivo)));
+      ceQ = applyLocalScope(ceQ, user, localActivo);
       const { data: ce } = await ceQ;
       setMovCajaEf(ce || []);
     }

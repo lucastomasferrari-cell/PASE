@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
+import { applyLocalScope } from "../lib/auth";
 import { toISO, today, fmt_d } from "../lib/utils";
 
 const COLORES: Record<string, string> = {
@@ -44,8 +45,9 @@ export default function Blindaje({ user, locales, localActivo }: any) {
   };
 
   const loadDocumentos = async () => {
-    if (!localActivo) { setDocumentos([]); return; }
-    const { data } = await db.from("blindaje_documentos").select("*").eq("local_id", parseInt(String(localActivo)));
+    let q = db.from("blindaje_documentos").select("*");
+    q = applyLocalScope(q, user, localActivo);
+    const { data } = await q;
     setDocumentos(data || []);
   };
 

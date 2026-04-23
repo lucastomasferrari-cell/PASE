@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
+import { applyLocalScope } from "../lib/auth";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 
 export default function CajaEfectivo({ user, locales, localActivo }) {
@@ -14,7 +15,9 @@ export default function CajaEfectivo({ user, locales, localActivo }) {
   const load = async () => {
     setLoading(true);
     let q = db.from("caja_efectivo").select("*").order("fecha", { ascending: false }).order("created_at", { ascending: false });
-    if (filtLocal) q = q.eq("local_id", filtLocal);
+    // filtLocal es selección manual del usuario dentro de su scope visible.
+    // applyLocalScope limita a locales accesibles; si hay filtLocal, achicamos más.
+    q = applyLocalScope(q, user, filtLocal ? Number(filtLocal) : localActivo);
     if (filtDesde) q = q.gte("fecha", filtDesde);
     if (filtHasta) q = q.lte("fecha", filtHasta);
     const { data } = await q;
@@ -22,7 +25,7 @@ export default function CajaEfectivo({ user, locales, localActivo }) {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [filtLocal, filtDesde, filtHasta]);
+  useEffect(() => { load(); }, [filtLocal, filtDesde, filtHasta, localActivo]);
 
   const total = movimientos.reduce((s, m) => s + Number(m.monto), 0);
 
