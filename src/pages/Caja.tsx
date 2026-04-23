@@ -1,14 +1,23 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope, cuentasVisibles as cuentasVisiblesFn } from "../lib/auth";
+import { applyLocalScope, cuentasVisibles as cuentasVisiblesFn, localesVisibles } from "../lib/auth";
 import { CATEGORIAS_COMPRA, CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 
 // ─── TESORERÍA ────────────────────────────────────────────────────────────────
-export default function Caja({ user, localActivo }: any) {
+export default function Caja({ user, locales = [], localActivo }: any) {
   // cuentas_visibles del usuario (null = todas). Si null, usamos el listado completo.
   const vis = cuentasVisiblesFn(user);
   const cuentasVisibles = vis === null ? CUENTAS : vis;
+
+  // Locales accesibles: dueno/admin = todos; encargado = los asignados.
+  const visLocs = localesVisibles(user);
+  const locsDisp: any[] = visLocs === null ? (locales || []) : (locales || []).filter((l: any) => visLocs.includes(l.id));
+  // local_id implícito: si hay localActivo seteado o el usuario tiene un único local, no se pide selector.
+  const lidImplicito: number | null = localActivo != null
+    ? Number(localActivo)
+    : locsDisp.length === 1 ? Number(locsDisp[0].id) : null;
+
   const [movimientos, setMovimientos] = useState<any[]>([]);
   const [saldos, setSaldos] = useState<Record<string, number>>({});
   const [modal, setModal] = useState(false);
@@ -19,10 +28,16 @@ export default function Caja({ user, localActivo }: any) {
   const [detalleEdicion, setDetalleEdicion] = useState<any>(null);
   const [auditLog, setAuditLog] = useState<any>(null);
   const [form, setForm] = useState({fecha:toISO(today),cuenta:"Caja Chica",tipo:"Pago Gasto",cat:"",importe:"",detalle:"",esEgreso:true});
+  // Selector de local en el modal cuando no hay localActivo y hay >1 local visible.
+  const [localFormId, setLocalFormId] = useState<string>(lidImplicito != null ? String(lidImplicito) : "");
+  useEffect(() => {
+    setLocalFormId(lidImplicito != null ? String(lidImplicito) : "");
+  }, [localActivo, locsDisp.length]);
   const [movCajaEf, setMovCajaEf] = useState<any[]>([]);
   const [modalCajaEf, setModalCajaEf] = useState(false);
   const [formCajaEf, setFormCajaEf] = useState({fecha:toISO(today),descripcion:"",monto:"",esIngreso:true});
   const esDueno = user?.rol === "dueno" || user?.rol === "admin";
+  const necesitaSelectorLocal = lidImplicito == null && locsDisp.length > 1;
 
   const load = async () => {
     setLoading(true);
@@ -71,8 +86,8 @@ export default function Caja({ user, localActivo }: any) {
 
   const guardar = async () => {
     if(!form.importe) return;
-    if(!localActivo) { alert("Seleccioná un local activo en el sidebar"); return; }
-    const lid = parseInt(String(localActivo));
+    const lid = lidImplicito != null ? lidImplicito : parseInt(localFormId);
+    if (!Number.isFinite(lid)) return; // el botón Guardar está disabled cuando falta, defensa extra
     const importe = parseFloat(form.importe)*(form.esEgreso?-1:1);
     const {esEgreso,...rest} = form;
     await db.from("movimientos").insert([{...rest,id:genId("MOV"),importe,fact_id:null,local_id:lid}]);
@@ -396,6 +411,15 @@ export default function Caja({ user, localActivo }: any) {
           <div className="modal" onClick={e=>e.stopPropagation()}>
             <div className="modal-hd"><div className="modal-title">Nuevo Movimiento</div><button className="close-btn" onClick={()=>setModal(false)}>✕</button></div>
             <div className="modal-body">
+              {necesitaSelectorLocal && (
+                <div className="field">
+                  <label>Local *</label>
+                  <select value={localFormId} onChange={e=>setLocalFormId(e.target.value)} required>
+                    <option value="">Seleccioná el local...</option>
+                    {locsDisp.map((l:any)=><option key={l.id} value={l.id}>{l.nombre}</option>)}
+                  </select>
+                </div>
+              )}
               <div className="form2">
                 <div className="field"><label>Cuenta</label><select value={form.cuenta} onChange={e=>setForm({...form,cuenta:e.target.value})}>{cuentasVisibles.map(c=><option key={c}>{c}</option>)}</select></div>
                 <div className="field"><label>Dirección</label><select value={form.esEgreso?"egreso":"ingreso"} onChange={e=>setForm({...form,esEgreso:e.target.value==="egreso"})}><option value="egreso">Egreso (sale plata)</option><option value="ingreso">Ingreso (entra plata)</option></select></div>
@@ -407,7 +431,7 @@ export default function Caja({ user, localActivo }: any) {
               <div className="field"><label>Importe $</label><input type="number" value={form.importe} onChange={e=>setForm({...form,importe:e.target.value})} placeholder="0"/></div>
               <div className="field"><label>Detalle</label><input value={form.detalle} onChange={e=>setForm({...form,detalle:e.target.value})} placeholder="Descripción..."/></div>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar}>Guardar</button></div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={!form.importe || (necesitaSelectorLocal && !localFormId)}>Guardar</button></div>
           </div>
         </div>
       )}
