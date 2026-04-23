@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
 import { ROLES, MODULOS } from "../lib/auth";
+import { CUENTAS } from "../lib/constants";
 
 async function sha256(text: string) {
   const enc = new TextEncoder().encode(text);
@@ -16,7 +17,7 @@ export default function Usuarios({ user, locales }) {
   const [err, setErr] = useState("");
   const [showPw, setShowPw] = useState(false);
 
-  const emptyForm = { nombre:"", email:"", password:"", activo:true, modulos:[] as string[], locales_ids:[] as number[] };
+  const emptyForm = { nombre:"", email:"", password:"", activo:true, modulos:[] as string[], locales_ids:[] as number[], cuentas_all:true, cuentas_visibles:[] as string[] };
   const [form, setForm] = useState(emptyForm);
 
   const load = async () => {
@@ -50,6 +51,8 @@ export default function Usuarios({ user, locales }) {
       activo: u.activo !== false,
       modulos: u._permisos || [],
       locales_ids: finalLocs,
+      cuentas_all: u.cuentas_visibles === null || u.cuentas_visibles === undefined,
+      cuentas_visibles: Array.isArray(u.cuentas_visibles) ? u.cuentas_visibles : [],
     });
     setModal(u); setErr(""); setShowPw(false);
   };
@@ -60,6 +63,9 @@ export default function Usuarios({ user, locales }) {
   const toggleLocal = (lid: number) => {
     const numId = Number(lid);
     setForm(f => ({ ...f, locales_ids: f.locales_ids.includes(numId) ? f.locales_ids.filter(l => l !== numId) : [...f.locales_ids, numId] }));
+  };
+  const toggleCuenta = (c: string) => {
+    setForm(f => ({ ...f, cuentas_visibles: f.cuentas_visibles.includes(c) ? f.cuentas_visibles.filter(x => x !== c) : [...f.cuentas_visibles, c] }));
   };
 
   const guardando = useRef(false);
@@ -145,6 +151,10 @@ export default function Usuarios({ user, locales }) {
 
       // Actualizar también campo viejo usuarios.locales para backward compat
       await db.from("usuarios").update({ locales: form.locales_ids }).eq("id", userId);
+
+      // Cuentas visibles: null = todas; array (posiblemente vacío) = personalizado
+      const cuentasPayload = form.cuentas_all ? null : form.cuentas_visibles;
+      await db.from("usuarios").update({ cuentas_visibles: cuentasPayload }).eq("id", userId);
 
       setModal(null); load();
     } catch (e: any) { setErr(e.message); }
@@ -262,6 +272,48 @@ export default function Usuarios({ user, locales }) {
                       })}
                     </div>
                   </div>
+
+                  {/* Cuentas de Tesorería — visible para no-dueno */}
+                  {!isDueno && (
+                    <div style={{ marginTop:16 }}>
+                      <label style={{ display:"block", fontSize:9, letterSpacing:"1.5px", textTransform:"uppercase", color:"var(--muted)", marginBottom:8 }}>
+                        Cuentas de Tesorería visibles
+                      </label>
+                      <div style={{ display:"flex", gap:16, marginBottom:8 }}>
+                        <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, cursor:"pointer" }}>
+                          <input type="radio" name="cuentas_scope" checked={form.cuentas_all}
+                            onChange={() => setForm(f => ({ ...f, cuentas_all: true }))} style={{ accentColor:"var(--acc)" }} />
+                          Todas las cuentas
+                        </label>
+                        <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, cursor:"pointer" }}>
+                          <input type="radio" name="cuentas_scope" checked={!form.cuentas_all}
+                            onChange={() => setForm(f => ({ ...f, cuentas_all: false }))} style={{ accentColor:"var(--acc)" }} />
+                          Personalizado
+                        </label>
+                      </div>
+                      {!form.cuentas_all && (
+                        <>
+                          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                            {CUENTAS.map(c => {
+                              const checked = form.cuentas_visibles.includes(c);
+                              return (
+                                <label key={c} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11,
+                                  color: checked ? "var(--txt)" : "var(--muted2)", cursor:"pointer",
+                                  padding:"6px 10px", background: checked ? "var(--s3)" : "var(--s2)",
+                                  borderRadius:"var(--r)", border:`1px solid ${checked ? "var(--acc)" : "var(--bd)"}` }}>
+                                  <input type="checkbox" checked={checked} onChange={() => toggleCuenta(c)} style={{ accentColor:"var(--acc)" }} />
+                                  {c}
+                                </label>
+                              );
+                            })}
+                          </div>
+                          {form.cuentas_visibles.length === 0 && (
+                            <div className="alert alert-warn" style={{ marginTop:8 }}>Sin cuentas marcadas, el usuario no va a ver ninguna en Tesorería</div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
 
                   {/* Locales — visible para admin y encargado */}
                   {!isDueno && (

@@ -1,18 +1,14 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope } from "../lib/auth";
-import { CATEGORIAS_COMPRA } from "../lib/constants";
+import { applyLocalScope, cuentasVisibles as cuentasVisiblesFn } from "../lib/auth";
+import { CATEGORIAS_COMPRA, CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
-
-const CUENTAS_POR_ROL: Record<string, string[]> = {
-  dueno: ["Caja Chica", "Caja Mayor", "Caja Efectivo", "MercadoPago", "Banco"],
-  admin: ["Caja Chica", "Caja Mayor", "Caja Efectivo", "MercadoPago", "Banco"],
-  encargado: ["Caja Chica", "MercadoPago"],
-};
 
 // ─── TESORERÍA ────────────────────────────────────────────────────────────────
 export default function Caja({ user, localActivo }: any) {
-  const cuentasVisibles = CUENTAS_POR_ROL[user?.rol] || ["Caja Chica", "MercadoPago"];
+  // cuentas_visibles del usuario (null = todas). Si null, usamos el listado completo.
+  const vis = cuentasVisiblesFn(user);
+  const cuentasVisibles = vis === null ? CUENTAS : vis;
   const [movimientos, setMovimientos] = useState<any[]>([]);
   const [saldos, setSaldos] = useState<Record<string, number>>({});
   const [modal, setModal] = useState(false);
@@ -197,14 +193,18 @@ export default function Caja({ user, localActivo }: any) {
         <div><div className="ph-title">Tesorería</div></div>
         <button className="btn btn-acc" onClick={()=>setModal(true)}>+ Movimiento</button>
       </div>
-      <div className="grid4">
-        {cuentasVisibles.map(k=>(
-          <div key={k} className={`caja-card caja-${k==="Caja Chica"?"chica":k==="Caja Mayor"?"mayor":k==="MercadoPago"?"mp":"banco"}`}>
-            <div className="caja-name">{k}</div>
-            <div className="caja-saldo" style={{color:(saldos[k]||0)<0?"var(--danger)":"var(--txt)"}}>{fmt_$(saldos[k]||0)}</div>
-          </div>
-        ))}
-      </div>
+      {cuentasVisibles.length === 0 ? (
+        <div className="empty" style={{padding:24,marginBottom:16}}>No tenés cuentas asignadas. Pedile a un administrador que te habilite.</div>
+      ) : (
+        <div className="grid4">
+          {cuentasVisibles.map(k=>(
+            <div key={k} className={`caja-card caja-${k==="Caja Chica"?"chica":k==="Caja Mayor"?"mayor":k==="MercadoPago"?"mp":"banco"}`}>
+              <div className="caja-name">{k}</div>
+              <div className="caja-saldo" style={{color:(saldos[k]||0)<0?"var(--danger)":"var(--txt)"}}>{fmt_$(saldos[k]||0)}</div>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="panel">
         <div className="panel-hd">
           <span className="panel-title">Movimientos</span>

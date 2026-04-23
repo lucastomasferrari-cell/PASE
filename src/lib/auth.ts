@@ -89,6 +89,25 @@ export function applyLocalScope<Q>(q: Q, user: any, localActivo: number | null, 
   return (q as any).in(col, scope);
 }
 
+/**
+ * Cuentas de Tesorería visibles por el usuario.
+ *   null    → todas (dueno/admin, o usuario viejo sin setear)
+ *   []      → ninguna
+ *   string[]→ sólo esas
+ */
+export function cuentasVisibles(user: any): string[] | null {
+  if (!user) return [];
+  if (user.rol === "dueno" || user.rol === "admin") return null;
+  if (user.cuentas_visibles === null || user.cuentas_visibles === undefined) return null;
+  return user.cuentas_visibles;
+}
+
+export function puedeVerCuenta(user: any, cuenta: string): boolean {
+  const vis = cuentasVisibles(user);
+  if (vis === null) return true;
+  return vis.includes(cuenta);
+}
+
 // ─── REACT CONTEXT + HOOK ────────────────────────────────────────────────────
 // user en sesión: { id: number, nombre, email, rol: string, activo: boolean,
 //   _permisos: string[], _locales: number[] }
@@ -104,5 +123,7 @@ export function useAuth() {
     esEncargado: () => esEncargado(user),
     localesVisibles: () => localesVisibles(user),
     scopeLocales: (localActivo: number | null) => scopeLocales(user, localActivo),
+    cuentasVisibles: () => cuentasVisibles(user),
+    puedeVerCuenta: (cuenta: string) => puedeVerCuenta(user, cuenta),
   };
 }
