@@ -9,16 +9,19 @@
 ## Estructura
 - src/pages/ → un archivo por módulo
 - src/components/Layout.tsx → sidebar + navegación
-- src/lib/supabase.ts → cliente Supabase
-- src/lib/auth.ts → hook useAuth(), tienePermiso(), esEncargado(), localesVisibles()
-- api/ → endpoints serverless (mp-sync, mp-generate, mp-process, claude, telegram-webhook, auth-admin, auth-setup, auth-hash-passwords)
+- src/lib/supabase.ts → cliente Supabase (anon key desde VITE_SUPABASE_ANON_KEY)
+- src/lib/auth.ts → hook useAuth(), tienePermiso(), esEncargado(), localesVisibles(), scopeLocales(), applyLocalScope(), cuentasVisibles(), puedeVerCuenta()
+- api/ → endpoints serverless (mp-sync, mp-generate, mp-process, claude, telegram-webhook, auth-admin, auth-setup, auth-hash-passwords, auth-migrate-all)
 
 ## Autenticación
-- Login usa SHA-256 contra tabla usuarios (fallback principal)
-- Supabase Auth secundario, usuarios pueden tener auth_id null
-- Roles: dueno (acceso total), admin, encargado (restringido por local)
-- Permisos por módulo en tabla usuario_permisos
-- Locales por encargado en tabla usuario_locales
+- Login exclusivo vía Supabase Auth (`db.auth.signInWithPassword`). El fallback SHA-256 se eliminó en commit 3805ea7.
+- Todos los usuarios activos tienen `auth_id` poblado. El email para Auth: `email` de la tabla `usuarios`; si no contiene `@`, se concatena `@pase.local`.
+- Roles: dueno (acceso total), admin (casi total), encargado (restringido por local y por cuentas).
+- Permisos por módulo en tabla `usuario_permisos`.
+- Locales por encargado en tabla `usuario_locales`.
+- Cuentas visibles en Tesorería por usuario: columna `usuarios.cuentas_visibles TEXT[]` (NULL = todas, array = filtro, array vacío = ninguna).
+- Password temporal: columna `usuarios.password_temporal BOOLEAN`. Si es true, el componente `src/pages/ForcePasswordChange.tsx` bloquea la navegación hasta que el usuario cambie su password.
+- Para resetear password de un usuario: Supabase Dashboard → Authentication → Users → "Reset password", y después opcionalmente `UPDATE usuarios SET password_temporal = true WHERE id = X` para forzar cambio al próximo login.
 
 ## Módulos activos
 - Dashboard, Ventas, Facturas, Remitos, Gastos, Proveedores
@@ -75,32 +78,96 @@ Modal Legajo accesible desde Empleados (botón "Legajo" por fila)
 - Prefijos: rr-* = release_report (autoritativo), sin prefijo = payments API
 
 ## Tablas principales Supabase
-- usuarios: id(int serial), nombre, email, password(sha256), rol, locales(array), auth_id(uuid), activo
-- usuario_permisos: usuario_id(int), modulo_slug
-- usuario_locales: usuario_id(int), local_id(int)
-- locales: id(int), nombre
-- mp_movimientos, mp_credenciales, saldos_caja, movimientos
-- facturas, factura_items, ventas, gastos, remitos
-- proveedores, empleados(vieja), insumos, recetas, receta_items
+- **usuarios**: id(int serial), nombre, email, password(sha256 legacy, no usar), rol, locales(array legacy), auth_id(uuid), activo, password_temporal(bool), cuentas_visibles(text[])
+- **usuario_permisos**: usuario_id(int), modulo_slug
+- **usuario_locales**: usuario_id(int), local_id(int)
+- **locales**: id(int), nombre
+- **movimientos**, **saldos_caja**, **caja_efectivo**
+- **facturas**, **factura_items**, **factura_items_stock**
+- **ventas**, **gastos**, **gastos_plantillas**
+- **remitos**, **remito_items**
+- **proveedores**, **insumos**, **recetas**, **receta_items**
+- **mp_credenciales**, **mp_movimientos**, **mp_liquidaciones**
+- **empleados** (legacy), **empleado_archivos**
+- **rrhh_empleados**, **rrhh_novedades**, **rrhh_liquidaciones**, **rrhh_valores_doble**
+- **rrhh_historial_sueldos**, **rrhh_documentos**, **rrhh_pagos_especiales**, **rrhh_adelantos**
+- **auditoria**
+- **blindaje_tipos_documento**, **blindaje_documentos**
+- **config_categorias**
 
 ## Pendientes prioritarios
 1. Fix RRHH: vacaciones muestra 0.0d — cálculo por antigüedad no funciona
 2. Fix RRHH: SAC acumulado muestra $0 — mostrar SAC teórico del semestre
 3. Fix RRHH: Novedades y Pagos no autoseleccionan local
 4. Fix RRHH: botón Pagar mes no aparece en legajo → movido a tab Pagos
-5. Sesión no persiste al refrescar → guardar en sessionStorage
-6. Legajo debe abrirse como modal (no página separada) — implementado pero verificar
-7. Liquidación final pendiente de implementar en legajo
-8. Módulo Empleados viejo → ocultar del sidebar (reemplazado por RRHH)
+5. Liquidación final pendiente de implementar en legajo
+6. Módulo Empleados viejo → ocultar del sidebar (reemplazado por RRHH)
+7. Refactor: pasar `user` a `src/lib/services/caja.service.ts` y `rrhh.service.ts` para que usen `applyLocalScope` en lugar del `if (localId) q.eq(...)` actual.
 
 ## Decisiones de arquitectura tomadas
-- No usar Supabase Auth como sistema principal (SHA-256 en tabla usuarios)
-- RLS policies: FOR ALL USING (true) WITH CHECK (true) en todas las tablas nuevas
-- local_id e usuario_id son INTEGER (no UUID) en todas las tablas
-- El módulo RRHH NO depende del módulo Empleados viejo
-- Pagos de sueldo crean gastos en tabla gastos con categoria "Sueldos"
-- Legajo del empleado es modal, no página separada
+- **Login: Supabase Auth como único sistema** (cambio de política: antes era SHA-256 en tabla usuarios).
+- **RLS activo y restrictivo en todas las tablas** (migration 20260423_rls_real_policies.sql + extensión para gastos_plantillas, factura_items_stock, remito_items, rrhh_adelantos, mp_liquidaciones).
+- **Helpers de scope SECURITY DEFINER** en Postgres: `auth_usuario_id()`, `auth_es_dueno_o_admin()`, `auth_locales_visibles()`.
+- **Anon key fuera del código**: se lee de `VITE_SUPABASE_ANON_KEY`. Rotar siguiendo `ROTATE_ANON_KEY.md` ante cualquier sospecha.
+- **Defense-in-depth en frontend**: `applyLocalScope(q, user, localActivo)` de `src/lib/auth.ts` en toda query a tablas con `local_id`.
+- local_id y usuario_id son INTEGER (no UUID) en todas las tablas.
+- El módulo RRHH NO depende del módulo Empleados viejo.
+- Pagos de sueldo crean gastos en tabla gastos con categoría "Sueldos".
+- Legajo del empleado es modal, no página separada.
 
 ## Comandos útiles
 - Claude Code: claude --dangerously-skip-permissions
 - Deploy: push a main → Vercel auto-deploya
+
+## Cómo agregar una tabla nueva (checklist obligatorio)
+
+Cuando crees una tabla, hacé estos pasos o **no va a funcionar desde el frontend** (RLS bloquea todo por default):
+
+### A) Tabla con `local_id` (datos scoped por sucursal):
+
+```sql
+ALTER TABLE mi_tabla ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "mt_scope_all" ON mi_tabla FOR ALL TO authenticated
+  USING (auth_es_dueno_o_admin() OR local_id = ANY(auth_locales_visibles()) OR local_id IS NULL)
+  WITH CHECK (auth_es_dueno_o_admin() OR local_id = ANY(auth_locales_visibles()) OR local_id IS NULL);
+```
+
+### B) Master data global (catálogo, config):
+
+```sql
+ALTER TABLE mi_tabla ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "mt_read" ON mi_tabla FOR SELECT TO authenticated USING (true);
+CREATE POLICY "mt_admin_write" ON mi_tabla FOR ALL TO authenticated
+  USING (auth_es_dueno_o_admin()) WITH CHECK (auth_es_dueno_o_admin());
+```
+
+### C) Tabla hija (items de otra tabla que ya tiene RLS):
+
+```sql
+ALTER TABLE mi_tabla_hija ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "mth_scope_all" ON mi_tabla_hija FOR ALL TO authenticated
+  USING (EXISTS (SELECT 1 FROM tabla_padre p WHERE p.id = mi_tabla_hija.padre_id
+    AND (auth_es_dueno_o_admin() OR p.local_id = ANY(auth_locales_visibles()))))
+  WITH CHECK (EXISTS (SELECT 1 FROM tabla_padre p WHERE p.id = mi_tabla_hija.padre_id
+    AND (auth_es_dueno_o_admin() OR p.local_id = ANY(auth_locales_visibles()))));
+```
+
+### D) En el frontend, toda query a tablas con `local_id` debe usar `applyLocalScope`:
+
+```typescript
+import { applyLocalScope } from "../lib/auth";
+let q = db.from("mi_tabla").select("*").gte("fecha", desde);
+q = applyLocalScope(q, user, localActivo);
+const { data } = await q.order("fecha");
+```
+
+### E) Endpoints serverless en `api/`:
+
+Usar siempre `SUPABASE_SERVICE_KEY` (env var en Vercel), nunca anon. La service_key bypassa RLS — filtrar manualmente por `local_id` en el código del endpoint si corresponde.
+
+## Troubleshooting rápido
+
+- **"Usuario no ve sus datos"** → falta policy (pasos A/B/C).
+- **"Encargado ve datos de otro local"** → falta `applyLocalScope` en frontend o policy mal escrita.
+- **"new row violates row-level security policy"** → el `WITH CHECK` no pasa. El `local_id` del INSERT/UPDATE tiene que estar en los del usuario.
+- **"relation does not exist"** en policies con JOIN → nombre de columna mal escrito.
