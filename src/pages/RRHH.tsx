@@ -69,6 +69,7 @@ export default function RRHH({ user, locales, localActivo }) {
   const [novMes, setNovMes] = useState(today.getMonth() + 1);
   const [novAnio, setNovAnio] = useState(today.getFullYear());
   const [novLocal, setNovLocal] = useState(defaultLocal);
+  const [novLocalTouched, setNovLocalTouched] = useState(false);
   const [novEmps, setNovEmps] = useState<any[]>([]);
   const [novMap, setNovMap] = useState<Record<string, any>>({});
   const [novLoading, setNovLoading] = useState(false);
@@ -78,6 +79,7 @@ export default function RRHH({ user, locales, localActivo }) {
   const [pagoMes, setPagoMes] = useState(today.getMonth() + 1);
   const [pagoAnio, setPagoAnio] = useState(today.getFullYear());
   const [pagoLocal, setPagoLocal] = useState(defaultLocal);
+  const [pagoLocalTouched, setPagoLocalTouched] = useState(false);
   const [pagoData, setPagoData] = useState<any[]>([]);
   const [pagoLoading, setPagoLoading] = useState(false);
   const [pagando, setPagando] = useState(false);
@@ -318,23 +320,47 @@ export default function RRHH({ user, locales, localActivo }) {
   useEffect(() => { if (tab === "pagos" && pagoLocal) loadPagos(); }, [tab, pagoLocal, pagoMes, pagoAnio]);
   useEffect(() => { if (tab === "historial") loadHistorial(); }, [tab, histLocal, histMes, histAnio]);
 
-  // Autoseleccionar local para encargados con un solo local
+  // Autoselección de local en Novedades/Pagos.
+  // Prioridad: localActivo (sidebar) > único local disponible (encargado o locsDisp.length===1) > vacío.
+  // - Al entrar al tab: reset flag tocadoManual y apply default actual.
+  // - Mientras está en el tab, si localActivo cambia y el usuario no tocó manualmente: sync.
+  // - Si tocó manualmente: respetar hasta que cambie de tab y vuelva.
+  const lidDefault = (): string => {
+    if (localActivo) return String(localActivo);
+    if (locsDisp.length === 1) return String(locsDisp[0].id);
+    if (esEnc && locsDisp.length) return String(locsDisp[0].id);
+    return "";
+  };
+  // Reset + aplicar default al entrar al tab
   useEffect(() => {
-    if (tab === "novedades" && !novLocal && locsDisp.length >= 1) {
-      const localDefault = esEnc || locsDisp.length === 1
-        ? String(locsDisp[0].id)
-        : "";
-      if (localDefault) setNovLocal(localDefault);
+    if (tab === "novedades") {
+      setNovLocalTouched(false);
+      const v = lidDefault();
+      if (v) setNovLocal(v);
     }
-  }, [tab, locsDisp.length, locsDisp[0]?.id]);
+  }, [tab]);
   useEffect(() => {
-    if (tab === "pagos" && !pagoLocal && locsDisp.length >= 1) {
-      const localDefault = esEnc || locsDisp.length === 1
-        ? String(locsDisp[0].id)
-        : "";
-      if (localDefault) setPagoLocal(localDefault);
+    if (tab === "pagos") {
+      setPagoLocalTouched(false);
+      const v = lidDefault();
+      if (v) setPagoLocal(v);
     }
-  }, [tab, locsDisp.length, locsDisp[0]?.id]);
+  }, [tab]);
+  // Sync con localActivo o locales mientras está en el tab (si no se tocó)
+  useEffect(() => {
+    if (tab === "novedades" && !novLocalTouched) {
+      const v = lidDefault();
+      if (v) setNovLocal(v);
+    }
+  }, [localActivo, locsDisp.length, locsDisp[0]?.id]);
+  useEffect(() => {
+    if (tab === "pagos" && !pagoLocalTouched) {
+      const v = lidDefault();
+      if (v) setPagoLocal(v);
+    }
+  }, [localActivo, locsDisp.length, locsDisp[0]?.id]);
+  const handleNovLocalChange = (v: string) => { setNovLocal(v); setNovLocalTouched(true); };
+  const handlePagoLocalChange = (v: string) => { setPagoLocal(v); setPagoLocalTouched(true); };
 
   // ─── EMPLEADOS ACTIONS ─────────────────────────────────────────────────────
   const puestos = [...new Set(valoresDoble.map(v => v.puesto))];
@@ -551,7 +577,7 @@ export default function RRHH({ user, locales, localActivo }) {
           novAnio={novAnio}
           setNovAnio={setNovAnio}
           novLocal={novLocal}
-          setNovLocal={setNovLocal}
+          setNovLocal={handleNovLocalChange}
           locsDisp={locsDisp}
           novLoading={novLoading}
           novEmps={novEmps}
@@ -571,7 +597,7 @@ export default function RRHH({ user, locales, localActivo }) {
           pagoAnio={pagoAnio}
           setPagoAnio={setPagoAnio}
           pagoLocal={pagoLocal}
-          setPagoLocal={setPagoLocal}
+          setPagoLocal={handlePagoLocalChange}
           locsDisp={locsDisp}
           esEnc={esEnc}
           esDueno={esDueno}
