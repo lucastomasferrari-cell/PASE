@@ -133,8 +133,10 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
   const valorDiaVacacional = emp.sueldo_mensual / 25; // LCT Art 155
 
   // Antigüedad
+  const sinFechaInicio = !emp.fecha_inicio;
   const fechaInicio = emp.fecha_inicio ? new Date(emp.fecha_inicio + "T12:00:00") : null;
-  const antiguedadMs = fechaInicio ? Date.now() - fechaInicio.getTime() : 0;
+  const fechaInicioValida = fechaInicio && !isNaN(fechaInicio.getTime());
+  const antiguedadMs = fechaInicioValida ? Date.now() - fechaInicio.getTime() : 0;
   const antiguedadAnios = antiguedadMs / (365.25 * 24 * 60 * 60 * 1000);
   const diasVacAnuales = diasVacacionesPorAnio(Math.floor(antiguedadAnios));
   const diasVacPorMes = diasVacAnuales / 12;
@@ -358,6 +360,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose }) {
           diasVacAnuales={diasVacAnuales}
           diasVacPorMes={diasVacPorMes}
           antiguedadAnios={antiguedadAnios}
+          sinFechaInicio={sinFechaInicio}
           sacAcumulado={sacAcumulado}
           sacTeorico={sacTeorico}
           mesActual={mesActual}
@@ -411,8 +414,8 @@ function TabDatos({
     <>
       <div className="grid3" style={{marginBottom:16}}>
         <div className="kpi"><div className="kpi-label">CUIL</div><div style={{fontSize:13}}>{emp.cuil || "—"}</div></div>
-        <div className="kpi"><div className="kpi-label">Fecha ingreso</div><div style={{fontSize:13}}>{fmt_d(emp.fecha_inicio)}</div></div>
-        <div className="kpi"><div className="kpi-label">Antigüedad</div><div style={{fontSize:13}}>{Math.floor(antiguedadAnios)} años, {Math.floor((antiguedadAnios % 1) * 12)} meses</div></div>
+        <div className="kpi"><div className="kpi-label">Fecha ingreso</div><div style={{fontSize:13,color: emp.fecha_inicio ? undefined : "var(--warn)"}}>{emp.fecha_inicio ? fmt_d(emp.fecha_inicio) : "— (falta cargar)"}</div></div>
+        <div className="kpi"><div className="kpi-label">Antigüedad</div><div style={{fontSize:13}}>{emp.fecha_inicio ? `${Math.floor(antiguedadAnios)} años, ${Math.floor((antiguedadAnios % 1) * 12)} meses` : "—"}</div></div>
       </div>
       <div className="grid2" style={{marginBottom:16}}>
         <div className="kpi"><div className="kpi-label">CBU / Alias</div><div style={{fontSize:13}}>{emp.alias_mp || "—"}</div></div>
@@ -676,7 +679,7 @@ function TabMovimientos({ movMeses, expanded, setExpanded, esDueno, adelantos }:
 
 function TabVacAgu({
   vacAcumuladas, vacTomadas, valorDia, plusVacacional,
-  diasVacAnuales, diasVacPorMes, antiguedadAnios,
+  diasVacAnuales, diasVacPorMes, antiguedadAnios, sinFechaInicio,
   sacAcumulado, sacTeorico, mesActual, mesesEnSemestre,
   pagosEsp, esDueno,
   vacModal, setVacModal, vacDias, setVacDias, vacLineas, setVacLineas,
@@ -692,14 +695,20 @@ function TabVacAgu({
           <div style={{padding:16}}>
             <div style={{marginBottom:12}}>
               <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Días disponibles</div>
-              <div className="num" style={{fontSize:17,fontWeight:500,color:"var(--acc)"}}>{vacAcumuladas.toFixed(1)} días</div>
-              <div style={{fontSize:11,color:"var(--muted2)",marginTop:2}}>Equivale a {fmt_$(vacAcumuladas * valorDia)}</div>
-              {vacTomadas > 0 && <div style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>Tomadas: {vacTomadas.toFixed(1)} días</div>}
+              {sinFechaInicio ? (
+                <div style={{fontSize:14,color:"var(--warn)"}}>— (falta fecha de ingreso)</div>
+              ) : (<>
+                <div className="num" style={{fontSize:17,fontWeight:500,color:"var(--acc)"}}>{vacAcumuladas.toFixed(1)} días</div>
+                <div style={{fontSize:11,color:"var(--muted2)",marginTop:2}}>Equivale a {fmt_$(vacAcumuladas * valorDia)}</div>
+                {vacTomadas > 0 && <div style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>Tomadas: {vacTomadas.toFixed(1)} días</div>}
+              </>)}
             </div>
-            <div style={{fontSize:10,color:"var(--muted2)",marginBottom:12}}>
-              Corresponde: {diasVacAnuales} días/año ({diasVacPorMes.toFixed(2)} días/mes) · Antigüedad: {Math.floor(antiguedadAnios)} años
-            </div>
-            {esDueno && vacAcumuladas > 0 && (
+            {!sinFechaInicio && (
+              <div style={{fontSize:10,color:"var(--muted2)",marginBottom:12}}>
+                Corresponde: {diasVacAnuales} días/año ({diasVacPorMes.toFixed(2)} días/mes) · Antigüedad: {Math.floor(antiguedadAnios)} años
+              </div>
+            )}
+            {esDueno && !sinFechaInicio && vacAcumuladas > 0 && (
               <button className="btn btn-acc btn-sm" onClick={() => {
                 setVacDias(String(vacAcumuladas.toFixed(1)));
                 setVacLineas([{cuenta:"Caja Chica", monto: String(Math.round(plusVacacional))}]);
