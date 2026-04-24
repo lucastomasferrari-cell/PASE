@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
+import { translateRpcError } from "../lib/errors";
 import { CATEGORIAS_COMPRA, CUENTAS, UNIDADES } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import LectorFacturasIA from "./LectorFacturasIA";
@@ -135,35 +136,21 @@ export default function Compras({ user, locales, localActivo }) {
     try {
       const f = pagarModal;
       const monto = parseFloat(pagoForm.monto) || f.total;
-      const nuevosPagos = [...(f.pagos || []), { cuenta: pagoForm.cuenta, monto, fecha: pagoForm.fecha }];
-      const totalPagado = nuevosPagos.reduce((s: number, p: any) => s + p.monto, 0);
-      const nuevoEstado = totalPagado >= f.total ? "pagada" : "pendiente";
-
-      const { error: factErr } = await db.from("facturas").update({ estado: nuevoEstado, pagos: nuevosPagos }).eq("id", f.id);
-      if (factErr) throw new Error("Error actualizando factura: " + factErr.message);
-
       const prov = proveedores.find(p => p.id === f.prov_id);
-      if (prov) await db.from("proveedores").update({ saldo: Math.max(0, (prov.saldo || 0) - monto) }).eq("id", f.prov_id);
-
-      const lid = f.local_id ? parseInt(String(f.local_id)) : null;
-      if (lid) {
-        const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", pagoForm.cuenta).eq("local_id", lid).maybeSingle();
-        if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", pagoForm.cuenta).eq("local_id", lid);
-      }
-
-      const { error: movErr } = await db.from("movimientos").insert([{
-        id: genId("MOV"), fecha: pagoForm.fecha, cuenta: pagoForm.cuenta,
-        tipo: "Pago Proveedor", cat: f.cat, importe: -monto,
-        detalle: `Pago ${prov?.nombre || ""} - Fact ${f.nro}`, fact_id: f.id,
-        local_id: lid,
-      }]);
-      if (movErr) throw new Error("Error insertando movimiento: " + movErr.message);
-
+      const detalle = `Pago ${prov?.nombre || ""} - Fact ${f.nro}`;
+      const { error } = await db.rpc("pagar_factura", {
+        p_factura_id: f.id,
+        p_monto: monto,
+        p_cuenta: pagoForm.cuenta,
+        p_fecha: pagoForm.fecha,
+        p_detalle: detalle,
+      });
+      if (error) throw error;
       setPagarModal(null);
       load();
     } catch (err: any) {
       console.error("Error en pagar:", err);
-      alert("Error al registrar el pago: " + err.message);
+      alert(translateRpcError(err));
     } finally {
       setPagando(false);
     }
@@ -171,9 +158,9 @@ export default function Compras({ user, locales, localActivo }) {
 
   const anular = async (f: any) => {
     if (!confirm(`¿Anular factura ${f.nro}? Esta acción queda registrada.`)) return;
-    await db.from("facturas").update({ estado: "anulada" }).eq("id", f.id);
-    const prov = proveedores.find(p => p.id === f.prov_id);
-    if (prov && f.estado !== "pagada") await db.from("proveedores").update({ saldo: Math.max(0, (prov.saldo || 0) - f.total) }).eq("id", f.prov_id);
+    const motivo = prompt("Motivo (opcional):") || "Anulada desde UI";
+    const { error } = await db.rpc("anular_factura", { p_factura_id: f.id, p_motivo: motivo });
+    if (error) { alert(translateRpcError(error)); return; }
     load();
   };
 

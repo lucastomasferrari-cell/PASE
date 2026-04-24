@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
+import { translateRpcError } from "../lib/errors";
 import { CATEGORIAS_COMPRA, CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 
@@ -67,26 +68,28 @@ export default function Remitos({ user, locales, localActivo }) {
   const [pagandoRem,setPagandoRem]=useState(false);
   const pagarRemito = async () => {
     if(pagandoRem) return; setPagandoRem(true);
-    const r = pagarModal;
-    const monto = parseFloat(pagoForm.monto)||r.monto;
-    await db.from("remitos").update({estado:"pagado"}).eq("id",r.id);
-    const prov = proveedores.find(p=>p.id===r.prov_id);
-    if(prov) await db.from("proveedores").update({saldo:Math.max(0,(prov.saldo||0)-monto)}).eq("id",r.prov_id);
-    if(r.local_id) {
-      const {data:caja} = await db.from("saldos_caja").select("saldo").eq("cuenta",pagoForm.cuenta).eq("local_id",r.local_id).maybeSingle();
-      if(caja) await db.from("saldos_caja").update({saldo:(caja.saldo||0)-monto}).eq("cuenta",pagoForm.cuenta).eq("local_id",r.local_id);
+    try {
+      const r = pagarModal;
+      const monto = parseFloat(pagoForm.monto)||r.monto;
+      const { error } = await db.rpc("pagar_remito", {
+        p_remito_id: r.id, p_monto: monto,
+        p_cuenta: pagoForm.cuenta, p_fecha: pagoForm.fecha,
+      });
+      if (error) throw error;
+      setPagarModal(null); load();
+    } catch (err: any) {
+      console.error("Error pagando remito:", err);
+      alert(translateRpcError(err));
+    } finally {
+      setPagandoRem(false);
     }
-    await db.from("movimientos").insert([{id:genId("MOV"),fecha:pagoForm.fecha,cuenta:pagoForm.cuenta,tipo:"Pago Proveedor",cat:r.cat,importe:-monto,detalle:`Pago remito ${r.nro} - ${prov?.nombre||""}`,factura_id:null,local_id:r.local_id||null}]);
-    setPagandoRem(false); setPagarModal(null); load();
   };
 
   const anular = async (r) => {
     if(!confirm(`¿Anular remito ${r.nro}?`)) return;
-    await db.from("remitos").update({estado:"anulado"}).eq("id",r.id);
-    if(r.estado==="sin_factura") {
-      const prov = proveedores.find(p=>p.id===r.prov_id);
-      if(prov) await db.from("proveedores").update({saldo:Math.max(0,(prov.saldo||0)-r.monto)}).eq("id",r.prov_id);
-    }
+    const motivo = prompt("Motivo (opcional):") || "Anulado desde UI";
+    const { error } = await db.rpc("anular_remito", { p_remito_id: r.id, p_motivo: motivo });
+    if (error) { alert(translateRpcError(error)); return; }
     load();
   };
 
