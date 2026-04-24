@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
+import { tienePermiso } from "../lib/auth";
 
 const TIPOS = [
   { id: "gasto_fijo", label: "Gastos Fijos" },
@@ -48,7 +49,12 @@ export default function Configuracion({ user }: { user: any }) {
     load();
   };
 
-  if (user.rol !== "dueno" && user.rol !== "admin") {
+  // Gate granular: el slug del módulo (MODULOS en auth.ts) es "configuracion".
+  // Dueño siempre entra. Otros roles necesitan el permiso asignado en
+  // usuario_permisos. El App-level guardedNav ya aplica esto por el switch
+  // de section; este chequeo defensivo queda por si el componente se monta
+  // por otra vía.
+  if (!tienePermiso(user, "configuracion")) {
     return <div className="empty">No tenés permisos para acceder a esta sección.</div>;
   }
 
