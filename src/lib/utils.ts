@@ -1,3 +1,33 @@
+/**
+ * Parsea un monto a número, tolerando formatos mixtos.
+ *   "40642.56"   → 40642.56
+ *   "40642,56"   → 40642.56  (coma decimal es-AR)
+ *   "1.234,56"   → 1234.56   (punto de miles + coma decimal)
+ *   "1,234.56"   → 1234.56   (coma de miles + punto decimal)
+ *   40642.56     → 40642.56  (passthrough)
+ *   null/""/NaN  → 0
+ */
+export const parseMonto = (v: unknown): number => {
+  if (v == null || v === "") return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const s = String(v).trim();
+  if (!s) return 0;
+  // Detectar si coma es decimal (única y cerca del final) o miles.
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
+  let normalized: string;
+  if (lastComma === -1 && lastDot === -1) normalized = s;
+  else if (lastComma > lastDot) {
+    // Coma es decimal, puntos son miles
+    normalized = s.replace(/\./g, "").replace(",", ".");
+  } else {
+    // Punto es decimal (comas son miles)
+    normalized = s.replace(/,/g, "");
+  }
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : 0;
+};
+
 export const toISO = (d: Date) => d.toISOString().split("T")[0];
 export const today = new Date();
 export const fmt_d = (d: string | null | undefined) => d ? new Date(d+"T12:00:00").toLocaleDateString("es-AR") : "—";

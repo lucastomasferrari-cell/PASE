@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { fmt_d, fmt_$, genId } from "../lib/utils";
+import { fmt_d, fmt_$, genId, parseMonto } from "../lib/utils";
 import { useCategorias } from "../lib/useCategorias";
 import { UNIDADES } from "../lib/constants";
 
@@ -110,11 +110,11 @@ Reglas:
         nro:parsed.nro_factura||"",
         fecha:parsed.fecha_emision||"",
         venc:parsed.fecha_vencimiento||"",
-        neto:parsed.neto_gravado||0,
-        iva21:parsed.iva_21||0,
-        iva105:parsed.iva_105||0,
-        iibb:(parsed.percepciones_iibb||0)+(parsed.percepciones_iva||0),
-        total:parsed.total||0,
+        neto:parseMonto(parsed.neto_gravado),
+        iva21:parseMonto(parsed.iva_21),
+        iva105:parseMonto(parsed.iva_105),
+        iibb:parseMonto(parsed.percepciones_iibb)+parseMonto(parsed.percepciones_iva),
+        total:parseMonto(parsed.total),
         cat:provMatch?.cat||"",
       }));
     }catch(err){
@@ -148,7 +148,7 @@ Reglas:
 
     const confGlobal=resultado?.confianza_global??100;
     const estado=confGlobal<70?"revision":"pendiente";
-    const {error:insErr}=await db.from("facturas").insert([{...form,id,prov_id:parseInt(form.prov_id),local_id:parseInt(form.local_id),neto:parseFloat(form.neto)||0,iva21:parseFloat(form.iva21)||0,iva105:parseFloat(form.iva105)||0,iibb:parseFloat(form.iibb)||0,total:parseFloat(form.total)||0,estado,pagos:[],imagen_url}]);
+    const {error:insErr}=await db.from("facturas").insert([{...form,id,prov_id:parseInt(form.prov_id),local_id:parseInt(form.local_id),neto:parseMonto(form.neto),iva21:parseMonto(form.iva21),iva105:parseMonto(form.iva105),iibb:parseMonto(form.iibb),total:parseMonto(form.total),estado,pagos:[],imagen_url}]);
     if(insErr){
       // Rollback del archivo si el insert falló, así no queda huérfano
       if(imagen_url) await db.storage.from("facturas").remove([imagen_url]);
@@ -158,7 +158,7 @@ Reglas:
     }
 
     const prov=proveedores.find(p=>p.id===parseInt(form.prov_id));
-    if(prov)await db.from("proveedores").update({saldo:(prov.saldo||0)+parseFloat(form.total)}).eq("id",prov.id);
+    if(prov)await db.from("proveedores").update({saldo:(prov.saldo||0)+parseMonto(form.total)}).eq("id",prov.id);
     setGuardando(false);setArchivo(null);setPreview(null);setResultado(null);
     setForm({local_id:localActivo||"",prov_id:"",fecha:"",venc:"",nro:"",neto:0,iva21:0,iva105:0,iibb:0,total:0,cat:""});
     alert("✓ Factura cargada correctamente");
@@ -258,13 +258,13 @@ Reglas:
                   {[["Neto Gravado","neto","neto_gravado"],["IVA 21%","iva21",null],["IVA 10.5%","iva105",null],["Perc. IIBB","iibb",null]].map(([l,k,confKey])=>(
                     <div key={k as string} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                       <span style={{fontSize:11,color:"var(--muted2)"}}>{l}</span>
-                      <input type="number" value={form[k as string]} onChange={e=>setForm({...form,[k as string]:e.target.value})}
+                      <input type="number" step="0.01" value={form[k as string]} onChange={e=>setForm({...form,[k as string]:e.target.value})}
                         style={{width:120,background:"var(--bg)",border:confKey?campoBorder(confKey as string):"1px solid var(--bd)",color:"var(--txt)",padding:"4px 8px",fontFamily:"'DM Mono',monospace",fontSize:12,borderRadius:"var(--r)",textAlign:"right"}}/>
                     </div>
                   ))}
                   <div style={{display:"flex",justifyContent:"space-between",borderTop:"1px solid var(--bd)",paddingTop:8}}>
                     <span style={{fontWeight:600}}>TOTAL</span>
-                    <input type="number" value={form.total} onChange={e=>setForm({...form,total:e.target.value})}
+                    <input type="number" step="0.01" value={form.total} onChange={e=>setForm({...form,total:e.target.value})}
                       style={{width:120,background:"var(--bg)",border:conf.total!==undefined&&conf.total<80?campoBorder("total"):"1px solid var(--acc)",color:"var(--acc)",padding:"4px 8px",fontFamily:"'Inter',sans-serif",fontWeight:500,fontSize:14,borderRadius:"var(--r)",textAlign:"right"}}/>
                   </div>
                 </div>
