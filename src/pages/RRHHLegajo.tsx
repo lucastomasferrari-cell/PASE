@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
+import { translateRpcError } from "../lib/errors";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import {
   diasVacacionesPorAnio,
@@ -188,33 +189,21 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose, onGoToP
     const montoEsperado = plusVacacional;
     const totalPagado = vacLineas.reduce((s, l) => s + (parseFloat(l.monto) || 0), 0);
     if (dias <= 0 || totalPagado <= 0) return;
-    const desc = `Vacaciones ${emp.apellido} ${emp.nombre}`;
+
+    const lineas = vacLineas
+      .filter(l => (parseFloat(l.monto) || 0) > 0)
+      .map(l => ({ cuenta: l.cuenta, monto: parseFloat(l.monto) }));
+
+    const { error } = await db.rpc("pagar_vacaciones", {
+      p_empleado_id: emp.id,
+      p_lineas: lineas,
+      p_dias: dias,
+      p_monto_esperado: montoEsperado,
+      p_fecha: toISO(today),
+    });
+    if (error) { showToast(translateRpcError(error)); return; }
+
     const pendiente = totalPagado < montoEsperado - 0.01;
-
-    for (const l of vacLineas) {
-      const monto = parseFloat(l.monto) || 0;
-      if (monto <= 0) continue;
-      if (emp.local_id) {
-        const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", l.cuenta).eq("local_id", emp.local_id).maybeSingle();
-        if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", l.cuenta).eq("local_id", emp.local_id);
-      }
-      await db.from("movimientos").insert([{
-        id: genId("MOV"), fecha: toISO(today), cuenta: l.cuenta,
-        tipo: "Pago Vacaciones", cat: "SUELDOS", importe: -monto, detalle: desc,
-        local_id: emp.local_id,
-      }]);
-    }
-
-    await db.from("rrhh_pagos_especiales").insert([{
-      empleado_id: emp.id, tipo: "vacaciones",
-      monto: montoEsperado, monto_pagado: totalPagado, pendiente,
-      dias, gasto_id: null, pagado_por: user?.id,
-    }]);
-
-    if (!pendiente) {
-      await db.from("rrhh_empleados").update({ vacaciones_dias_acumulados: 0 }).eq("id", emp.id);
-    }
-
     setVacModal(false); setVacDias("");
     setVacLineas([{cuenta:"Caja Chica", monto:""}]);
     showToast(pendiente ? `Pago parcial — Resta ${fmt_$(montoEsperado - totalPagado)}` : "Vacaciones pagadas");
@@ -226,33 +215,20 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose, onGoToP
     const montoEsperado = sacAcumulado;
     const totalPagado = aguLineas.reduce((s, l) => s + (parseFloat(l.monto) || 0), 0);
     if (totalPagado <= 0) return;
-    const desc = `Aguinaldo ${emp.apellido} ${emp.nombre}`;
+
+    const lineas = aguLineas
+      .filter(l => (parseFloat(l.monto) || 0) > 0)
+      .map(l => ({ cuenta: l.cuenta, monto: parseFloat(l.monto) }));
+
+    const { error } = await db.rpc("pagar_aguinaldo", {
+      p_empleado_id: emp.id,
+      p_lineas: lineas,
+      p_monto_esperado: montoEsperado,
+      p_fecha: toISO(today),
+    });
+    if (error) { showToast(translateRpcError(error)); return; }
+
     const pendiente = totalPagado < montoEsperado - 0.01;
-
-    for (const l of aguLineas) {
-      const monto = parseFloat(l.monto) || 0;
-      if (monto <= 0) continue;
-      if (emp.local_id) {
-        const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", l.cuenta).eq("local_id", emp.local_id).maybeSingle();
-        if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", l.cuenta).eq("local_id", emp.local_id);
-      }
-      await db.from("movimientos").insert([{
-        id: genId("MOV"), fecha: toISO(today), cuenta: l.cuenta,
-        tipo: "Pago Aguinaldo", cat: "SUELDOS", importe: -monto, detalle: desc,
-        local_id: emp.local_id,
-      }]);
-    }
-
-    await db.from("rrhh_pagos_especiales").insert([{
-      empleado_id: emp.id, tipo: "aguinaldo",
-      monto: montoEsperado, monto_pagado: totalPagado, pendiente,
-      gasto_id: null, pagado_por: user?.id,
-    }]);
-
-    if (!pendiente) {
-      await db.from("rrhh_empleados").update({ aguinaldo_acumulado: 0 }).eq("id", emp.id);
-    }
-
     setAguModal(false);
     setAguLineas([{cuenta:"Caja Chica", monto:""}]);
     showToast(pendiente ? `Pago parcial — Resta ${fmt_$(montoEsperado - totalPagado)}` : "Aguinaldo pagado");
@@ -509,31 +485,14 @@ function TabDatos({
           if (!liqFinalData || liqFinalLoading) return;
           setLiqFinalLoading(true);
           try {
-            const { data: existing } = await db.from("rrhh_pagos_especiales")
-              .select("id").eq("empleado_id", emp.id).eq("tipo", "liquidacion_final");
-            if (existing && existing.length > 0) {
-              alert("Ya existe una liquidación final para este empleado");
-              return;
-            }
-            const desc = `Liquidación final ${emp.apellido} ${emp.nombre}`;
-
-            await db.from("rrhh_pagos_especiales").insert([{
-              empleado_id: emp.id, tipo: "liquidacion_final", monto: total,
-              gasto_id: null, pagado_por: user?.id,
-            }]);
-            if (emp.local_id) {
-              const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", liqFinalCuenta).eq("local_id", emp.local_id).maybeSingle();
-              if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - total }).eq("cuenta", liqFinalCuenta).eq("local_id", emp.local_id);
-            }
-            await db.from("movimientos").insert([{
-              id: genId("MOV"), fecha: toISO(today), cuenta: liqFinalCuenta,
-              tipo: "Liquidación Final", cat: "SUELDOS", importe: -total, detalle: desc,
-              local_id: emp.local_id,
-            }]);
-            await db.from("rrhh_empleados").update({
-              activo: false, fecha_egreso: liqFinalForm.fecha_egreso, motivo_baja: liqFinalForm.motivo,
-              vacaciones_dias_acumulados: 0, aguinaldo_acumulado: 0,
-            }).eq("id", emp.id);
+            const { error } = await db.rpc("liquidacion_final_empleado", {
+              p_empleado_id: emp.id,
+              p_fecha_egreso: liqFinalForm.fecha_egreso,
+              p_motivo: liqFinalForm.motivo,
+              p_total: total,
+              p_cuenta: liqFinalCuenta,
+            });
+            if (error) { alert(translateRpcError(error)); return; }
             setLiqFinalModal(false);
             showToast("Liquidación final procesada");
             loadAll();
