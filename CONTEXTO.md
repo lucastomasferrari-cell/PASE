@@ -117,6 +117,38 @@ Modal Legajo accesible desde Empleados (botón "Legajo" por fila)
 - Pagos de sueldo crean gastos en tabla gastos con categoría "Sueldos".
 - Legajo del empleado es modal, no página separada.
 
+## Sistema de permisos por módulo
+
+El sistema tiene dos capas que conversan entre sí:
+
+1. **usuario_permisos (frontend gate)**: habilita botones y pages según módulos asignados al usuario. Los strings de módulo ("slugs") están normalizados: `proveedores`, `insumos`, `recetas`, `configuracion`, `rrhh`, `usuarios`, `compras` (facturas), `gastos`, `caja`, `ventas`, `cashflow`, `eerr`, `dashboard`, `lector_ia`, `mp` (conciliación), `cierre`, `contador`, `costos`, `blindaje`, `remitos`, `maxirest`. Ver lista completa en `src/lib/auth.ts::MODULOS` y `tienePermiso()`.
+
+2. **RLS Postgres (backend gate)**: controla acceso SQL directo vía función `auth_tiene_permiso(slug)` que cruza `auth.uid()` con `usuario_permisos`. Dueño y admin pasan siempre por `CASE WHEN auth_es_dueno_o_admin() THEN true`.
+
+### Reglas de modificación
+
+Al agregar una tabla nueva al sistema:
+
+- **Data local-scoped** (tiene `local_id`): usar policy con `auth_locales_visibles()` como ya documentado en "Cómo agregar una tabla nueva → A".
+- **Master data con control granular** (catálogos, recetas, proveedores): usar `auth_tiene_permiso('<slug>')` tanto en `USING` como en `WITH CHECK`.
+- **Data crítica de sistema** (tokens, credenciales, audit log): mantener admin-only con `auth_es_dueno_o_admin()`.
+
+### Mapeo actual tabla → slug (migration `20260424_rls_permisos_granulares.sql`)
+
+| Tabla | Slug | Operaciones |
+|-------|------|-------------|
+| `proveedores` | `proveedores` | ALL |
+| `insumos` | `insumos` | ALL |
+| `recetas`, `receta_items` | `recetas` | ALL |
+| `config_categorias` | `configuracion` | ALL |
+| `rrhh_valores_doble` | `rrhh` | ALL |
+| `usuarios`, `usuario_permisos`, `usuario_locales` | `usuarios` | SELECT (escritura admin-only) |
+| `locales`, `mp_credenciales`, `auditoria` | — | admin-only (no relajar) |
+
+### Cache de permisos
+
+Los permisos se cachean en `sessionStorage` (clave `pase_user`) al login. Si el dueño cambia permisos de un usuario activo, el usuario puede refrescar via botón **"Actualizar permisos ↻"** en el panel de usuario del sidebar (abajo, al lado de "Cerrar sesión"), sin cerrar sesión. El RLS del backend siempre lee DB fresh, así que aunque el cache quede stale, no hay bypass de seguridad — sólo UX (el frontend muestra/oculta botones en base al cache).
+
 ## Taxonomía canónica (movimientos.tipo, categorías, grupos)
 
 Post migration `20260424_taxonomia_grupo_ingresos.sql`:
