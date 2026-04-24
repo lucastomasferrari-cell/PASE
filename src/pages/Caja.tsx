@@ -2,11 +2,13 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasVisibles as cuentasVisiblesFn, localesVisibles } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
-import { CATEGORIAS_COMPRA, CUENTAS } from "../lib/constants";
+import { useCategorias } from "../lib/useCategorias";
+import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 
 // ─── TESORERÍA ────────────────────────────────────────────────────────────────
 export default function Caja({ user, locales = [], localActivo }: any) {
+  const { CATEGORIAS_COMPRA } = useCategorias();
   // cuentas_visibles del usuario (null = todas). Si null, usamos el listado completo.
   const vis = cuentasVisiblesFn(user);
   const cuentasVisibles = vis === null ? CUENTAS : vis;

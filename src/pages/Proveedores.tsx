@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
-import { CATEGORIAS_COMPRA } from "../lib/constants";
+import { useCategorias } from "../lib/useCategorias";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 
 // ─── PROVEEDORES ──────────────────────────────────────────────────────────────
 export default function Proveedores({ user, localActivo }: { user: any; locales?: any; localActivo: number | null }) {
+  const { CATEGORIAS_COMPRA } = useCategorias();
   const [proveedores,setProveedores]=useState<any[]>([]);
   const [modal,setModal]=useState(false);
   const [editModal,setEditModal]=useState<any>(null);

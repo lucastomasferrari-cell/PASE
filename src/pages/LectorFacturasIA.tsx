@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { fmt_d, fmt_$, genId } from "../lib/utils";
-import { CATEGORIAS_COMPRA, UNIDADES } from "../lib/constants";
+import { useCategorias } from "../lib/useCategorias";
+import { UNIDADES } from "../lib/constants";
 
 export default function LectorFacturasIA({ locales, localActivo }) {
+  const { CATEGORIAS_COMPRA } = useCategorias();
   const [archivo,setArchivo]=useState(null);
   const [preview,setPreview]=useState(null);
   const [loading,setLoading]=useState(false);

@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasVisibles } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
-import { CUENTAS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, COMISIONES_CATS } from "../lib/constants";
+import { useCategorias } from "../lib/useCategorias";
+import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 
 const TIPOS = [
@@ -13,16 +14,16 @@ const TIPOS = [
   { id: "impuesto", label: "Impuestos" },
   { id: "comision", label: "Comisiones" },
 ];
-const ALL_CATS = [...GASTOS_FIJOS, ...GASTOS_VARIABLES, ...GASTOS_PUBLICIDAD, ...GASTOS_IMPUESTOS, ...COMISIONES_CATS];
-const catsByTipo = (t: string) =>
-  t === "fijo" ? GASTOS_FIJOS :
-  t === "variable" ? GASTOS_VARIABLES :
-  t === "publicidad" ? GASTOS_PUBLICIDAD :
-  t === "impuesto" ? GASTOS_IMPUESTOS :
-  t === "comision" ? COMISIONES_CATS :
-  ALL_CATS;
-
 export default function Gastos({ user, locales, localActivo }) {
+  const { GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, COMISIONES_CATS } = useCategorias();
+  const ALL_CATS = [...GASTOS_FIJOS, ...GASTOS_VARIABLES, ...GASTOS_PUBLICIDAD, ...GASTOS_IMPUESTOS, ...COMISIONES_CATS];
+  const catsByTipo = (t: string) =>
+    t === "fijo" ? GASTOS_FIJOS :
+    t === "variable" ? GASTOS_VARIABLES :
+    t === "publicidad" ? GASTOS_PUBLICIDAD :
+    t === "impuesto" ? GASTOS_IMPUESTOS :
+    t === "comision" ? COMISIONES_CATS :
+    ALL_CATS;
   const visCuentas = cuentasVisibles(user);
   const cuentasUsables = visCuentas === null ? CUENTAS : CUENTAS.filter(c => visCuentas.includes(c));
   const [search, setSearch] = useState("");

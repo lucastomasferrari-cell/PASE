@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasVisibles } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
-import { CATEGORIAS_COMPRA, CUENTAS } from "../lib/constants";
+import { useCategorias } from "../lib/useCategorias";
+import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 
 export default function Remitos({ user, locales, localActivo }) {
+  const { CATEGORIAS_COMPRA } = useCategorias();
   const visCuentas = cuentasVisibles(user);
   const cuentasUsables = visCuentas === null ? CUENTAS : CUENTAS.filter(c => visCuentas.includes(c));
   const [remitos, setRemitos] = useState([]);

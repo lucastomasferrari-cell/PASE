@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
-import { COMISIONES_CATS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD } from "../lib/constants";
+import { useCategorias } from "../lib/useCategorias";
 import { toISO, today, fmt_d, fmt_$, genId, fmt_dt_ar } from "../lib/utils";
 
 function ConciliacionMP({ user, locales, localActivo }) {
+  const { COMISIONES_CATS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD } = useCategorias();
   const [credenciales,setCredenciales]=useState([]);
   const [movimientos,setMovimientos]=useState([]);
   const [facturas,setFacturas]=useState([]);

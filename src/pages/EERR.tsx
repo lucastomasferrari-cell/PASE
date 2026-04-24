@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
-import { MEDIOS_COBRO, CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS } from "../lib/constants";
+import { useCategorias } from "../lib/useCategorias";
+import { MEDIOS_COBRO } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 export default function EERR({ user, locales, localActivo }: any) {
+  const { CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS } = useCategorias();
   const [ventas,setVentas]=useState([]);
   const [facturas,setFacturas]=useState([]);
   const [gastos,setGastos]=useState([]);
