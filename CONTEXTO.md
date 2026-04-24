@@ -178,3 +178,45 @@ Usar `timestamptz` siempre, nunca `timestamp` sin zona. Guardar en UTC, mostrar 
 - **"new row violates row-level security policy"** → el `WITH CHECK` no pasa. El `local_id` del INSERT/UPDATE tiene que estar en los del usuario.
 - **"relation does not exist"** en policies con JOIN → nombre de columna mal escrito.
 - **Horarios desfasados 3h** → columna guardada como `timestamp` sin zona en vez de `timestamptz`, o display sin usar helpers de Buenos Aires.
+
+## Pagos atómicos (RPC)
+
+Desde el batch α (migration `20260423_rpc_pagos_atomicos.sql`), toda operación que mueve plata entre múltiples tablas (movimientos, saldos_caja, facturas/remitos/gastos, rrhh_*) pasa por una función Postgres que agrupa todo en una transacción. Si algún step falla → rollback automático. Previene los estados inconsistentes que generaba el frontend al aplicar 4-5 operaciones sueltas.
+
+### Las 13 funciones
+
+| RPC | Usada en | Qué hace |
+|-----|----------|----------|
+| `pagar_factura(factura_id, monto, cuenta, fecha, detalle)` | Compras.tsx | UPDATE facturas(estado, pagos) + UPDATE proveedores.saldo + UPDATE saldos_caja + INSERT movimientos(fact_id) + auditoria |
+| `pagar_remito(remito_id, monto, cuenta, fecha)` | Remitos.tsx | UPDATE remitos(estado='pagado') + UPDATE proveedores.saldo + UPDATE saldos_caja + INSERT movimientos(remito_id_ref) + auditoria |
+| `anular_factura(factura_id, motivo)` | Compras.tsx | UPDATE facturas(estado='anulada') + revertir saldo proveedor si no estaba pagada + auditoria |
+| `anular_remito(remito_id, motivo)` | Remitos.tsx | UPDATE remitos(estado='anulado') + revertir saldo proveedor si sin_factura + auditoria |
+| `pagar_sueldo(nov_id, formas_pago, adelantos_ids, fecha, mes, anio, crear_liq, calc)` | RRHH.tsx | Loop formas_pago: UPDATE saldos_caja + INSERT movimientos(liquidacion_id). UPDATE rrhh_liquidaciones(estado, pagos_realizados). UPDATE rrhh_adelantos.descontado=true. UPDATE rrhh_empleados.aguinaldo_acumulado. Crea la liq si no existe. Auditoria. |
+| `registrar_adelanto(empleado_id, monto, cuenta, fecha, detalle)` | RRHH.tsx | UPDATE saldos_caja + INSERT rrhh_adelantos + INSERT movimientos(adelanto_id_ref) + auditoria |
+| `pagar_vacaciones(empleado_id, lineas, dias, monto_esperado, fecha)` | RRHHLegajo.tsx | Loop lineas: UPDATE saldos_caja + INSERT movimientos(pago_especial_id_ref). INSERT rrhh_pagos_especiales. UPDATE rrhh_empleados.vacaciones_dias_acumulados=0 si completa. |
+| `pagar_aguinaldo(empleado_id, lineas, monto_esperado, fecha)` | RRHHLegajo.tsx | Igual que vacaciones pero sobre aguinaldo_acumulado |
+| `liquidacion_final_empleado(empleado_id, fecha_egreso, motivo, total, cuenta)` | RRHHLegajo.tsx | Check LIQ_FINAL_YA_EXISTE + INSERT rrhh_pagos_especiales + UPDATE saldos_caja + INSERT movimientos + UPDATE rrhh_empleados(activo=false, egreso, vac/agu=0) |
+| `crear_movimiento_caja(fecha, cuenta, tipo, cat, importe, detalle, local_id)` | Caja.tsx | INSERT movimientos + UPDATE saldos_caja |
+| `anular_movimiento(mov_id, motivo)` | Caja.tsx | UPDATE movimientos(anulado=true) + revertir saldos_caja. Propaga a rrhh_liquidaciones vía liquidacion_id (fallback match por detalle+fecha+cuenta+local_id) + auditoria |
+| `crear_gasto(fecha, local_id, categoria, tipo, monto, detalle, cuenta, plantilla_id)` | Gastos.tsx | INSERT gastos + UPDATE saldos_caja + INSERT movimientos(gasto_id_ref) + auditoria. p_plantilla_id opcional |
+| `transferencia_cuentas(local_id, origen, destino, monto, fecha, detalle)` | (sin UI aún) | Dos UPDATE saldos_caja (−origen, +destino) + 2 INSERT movimientos (Transferencia Salida/Entrada) + auditoria |
+
+### Patrón de uso en el frontend
+
+```typescript
+import { translateRpcError } from "../lib/errors";
+const { error } = await db.rpc("pagar_factura", {
+  p_factura_id: f.id, p_monto: monto, p_cuenta: pagoForm.cuenta,
+  p_fecha: pagoForm.fecha, p_detalle: detalle,
+});
+if (error) { alert(translateRpcError(error)); return; }
+```
+
+### Convenciones
+
+- **Errores**: `RAISE EXCEPTION 'CODIGO_UPPER_SNAKE'`. Ej: `FACTURA_YA_PAGADA`, `SALDO_INSUFICIENTE`, `LOCAL_NO_AUTORIZADO`, `LIQ_FINAL_YA_EXISTE`. `src/lib/errors.ts::translateRpcError` mapea a español; códigos no mapeados muestran el raw (fallback transparente).
+- **SECURITY INVOKER** en todas: respetan RLS + validan permisos vía `_validar_local_autorizado(local_id)` que usa `auth_es_dueno_o_admin()` y `auth_locales_visibles()`.
+- **`_actualizar_saldo_caja`** es el helper que actualiza saldos con INSERT ... ON CONFLICT DO UPDATE (nunca falla por "fila no existe"). Loguea `WARN_SALDO_NEGATIVO` en auditoria si el saldo queda en rojo, sin bloquear (flag `p_permitir_negativo` default true).
+- **Columnas de referencia en `movimientos`**: `liquidacion_id (uuid)`, `gasto_id_ref (text)`, `remito_id_ref (text)`, `adelanto_id_ref (uuid)`, `pago_especial_id_ref (uuid)`, `fact_id (text, existente)`. Las RPCs las setean al insertar para permitir propagación de anulaciones con vínculo duro.
+- **Cron MP (`mp-process.js`)**: el delta de las RPCs sobre `saldos_caja.MercadoPago` es efímero. El cron pisa con el saldo autoritativo de MP en la próxima sync. Documentado en el docstring de `pagar_factura` y `pagar_sueldo`.
+- **Deuda técnica abierta**: la cuenta "Caja Efectivo" en saldos_caja sigue existiendo aunque haya una tabla `caja_efectivo` para el libro privado del dueño. La separación queda pendiente para un refactor aparte. Las RPCs escriben a saldos_caja para mantener el comportamiento actual.
