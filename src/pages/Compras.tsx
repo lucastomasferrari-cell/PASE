@@ -242,6 +242,37 @@ export default function Compras({ user, locales, localActivo }) {
         </select>
       </div>
 
+      {/* Banner de deuda acumulada cuando hay proveedor filtrado (Bug #25) */}
+      {provFiltro && (() => {
+        const prov = proveedores.find(p => String(p.id) === String(provFiltro));
+        const deuda = facturas.filter(f =>
+          String(f.prov_id) === String(provFiltro) &&
+          (f.tipo || "factura") === "factura" &&
+          (f.estado === "pendiente" || f.estado === "vencida"),
+        );
+        const pendientes = deuda.filter(f => f.estado === "pendiente");
+        const vencidas = deuda.filter(f => f.estado === "vencida");
+        const totalPend = pendientes.reduce((s, f) => s + Number(f.total || 0), 0);
+        const totalVenc = vencidas.reduce((s, f) => s + Number(f.total || 0), 0);
+        const totalAll = totalPend + totalVenc;
+        if (deuda.length === 0) {
+          return (
+            <div className="alert alert-info" style={{ marginBottom: 14, fontSize: 12 }}>
+              {prov?.nombre || "Proveedor"} sin facturas pendientes.
+            </div>
+          );
+        }
+        return (
+          <div className="alert alert-warn" style={{ marginBottom: 14, fontSize: 12, display: "flex", gap: 20, flexWrap: "wrap", alignItems: "baseline" }}>
+            <span><strong>{prov?.nombre || "Proveedor"}</strong> — deuda pendiente: <strong style={{ color: "var(--warn)" }}>{fmt_$(totalAll)}</strong> ({deuda.length} factura{deuda.length === 1 ? "" : "s"})</span>
+            <span style={{ color: "var(--muted2)" }}>
+              Pendientes: <span style={{ color: "var(--warn)" }}>{fmt_$(totalPend)}</span> ({pendientes.length})
+              {vencidas.length > 0 && <> · Vencidas: <span style={{ color: "var(--danger)" }}>{fmt_$(totalVenc)}</span> ({vencidas.length})</>}
+            </span>
+          </div>
+        );
+      })()}
+
       {/* Pills */}
       <div className="pills">
         {[["todas", "Todas"], ["pendiente", "Pendientes"], ["vencida", "Vencidas"], ["pagada", "Pagadas"]].map(([id, l]) => (
