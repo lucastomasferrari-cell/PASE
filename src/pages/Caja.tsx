@@ -106,13 +106,18 @@ export default function Caja({ user, locales = [], localActivo }: any) {
     const lid = lidImplicito != null ? lidImplicito : parseInt(localFormId);
     if (!Number.isFinite(lid)) return;
     const importe = parseFloat(form.importe)*(form.esEgreso?-1:1);
+    // form.tipo está hardcodeado como "Pago Gasto" y no se puede cambiar
+    // desde la UI del modal. Derivamos el tipo efectivo desde la dirección
+    // para no guardar "Pago Gasto" con importe positivo cuando el usuario
+    // eligió "Ingreso".
+    const tipoEfectivo = form.esEgreso ? "Egreso Manual" : "Ingreso Manual";
     const { error } = await db.rpc("crear_movimiento_caja", {
       p_fecha: form.fecha,
       p_cuenta: form.cuenta,
-      p_tipo: form.tipo,
+      p_tipo: tipoEfectivo,
       p_cat: form.cat || null,
       p_importe: importe,
-      p_detalle: form.detalle || form.tipo,
+      p_detalle: form.detalle || tipoEfectivo,
       p_local_id: lid,
     });
     if (error) { alert(translateRpcError(error)); return; }
@@ -150,12 +155,25 @@ export default function Caja({ user, locales = [], localActivo }: any) {
         .eq("cuenta", editMov.cuenta).eq("local_id", lid);
     }
 
+    // Si el signo de importe cambió, recalcular tipo: no tiene sentido que
+    // un movimiento siga siendo "Pago Gasto" si el importe ahora es positivo.
+    // Fallback a "Egreso Manual"/"Ingreso Manual" cuando el tipo original
+    // no matchea el signo nuevo.
+    const nuevoImporte = parseFloat(editMov.importe) || original?.importe || 0;
+    const signoOriginal = (original?.importe || 0) >= 0 ? 1 : -1;
+    const signoNuevo = nuevoImporte >= 0 ? 1 : -1;
+    const cambioSigno = signoOriginal !== signoNuevo;
+    const tipoNuevo = cambioSigno
+      ? (signoNuevo > 0 ? "Ingreso Manual" : "Egreso Manual")
+      : original?.tipo;
+
     await db.from("movimientos").update({
       fecha: editMov.fecha,
       detalle: editMov.detalle,
       cat: editMov.cat || null,
-      importe: parseFloat(editMov.importe) || original?.importe,
+      importe: nuevoImporte,
       cuenta: editMov.cuenta,
+      tipo: tipoNuevo,
       editado: true,
       editado_motivo: editMov.justificativo,
       editado_at: new Date().toISOString(),
