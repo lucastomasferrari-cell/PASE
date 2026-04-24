@@ -8,7 +8,41 @@ import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 
 // ─── TESORERÍA ────────────────────────────────────────────────────────────────
 export default function Caja({ user, locales = [], localActivo }: any) {
-  const { CATEGORIAS_COMPRA } = useCategorias();
+  const {
+    CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES,
+    GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, COMISIONES_CATS, CATEGORIAS_INGRESO,
+  } = useCategorias();
+  // Listas por dirección para el dropdown de Categoría del Nuevo Movimiento.
+  // Egreso: unión de todas las categorías que pueden aparecer en un egreso
+  // (CMV + 5 grupos de Gastos). Ingreso: las 11 cat_ingreso de config.
+  const catsEgreso = [
+    ...CATEGORIAS_COMPRA, ...GASTOS_FIJOS, ...GASTOS_VARIABLES,
+    ...GASTOS_PUBLICIDAD, ...GASTOS_IMPUESTOS, ...COMISIONES_CATS,
+  ];
+  const catsIngreso = CATEGORIAS_INGRESO;
+
+  // Deriva tipo del movimiento a partir de cat + dirección. Se usa tanto
+  // en guardar() como en guardarEditMov() cuando cambia el signo.
+  const deriveTipoMov = (cat: string, esEgreso: boolean): string => {
+    if (!esEgreso) {
+      // Ingresos
+      if (!cat) return "Ingreso Manual";
+      if (cat.startsWith("Liquidación")) return "Liquidación Plataforma";
+      if (cat === "Ingreso Socio") return "Aporte Socio";
+      if (cat === "Devolución Proveedor") return "Devolución Proveedor";
+      if (cat === "Transferencia Varios") return "Transferencia";
+      return "Ingreso Manual"; // Otro Ingreso o no mapeado
+    }
+    // Egresos: según grupo al que pertenece la categoría
+    if (GASTOS_FIJOS.includes(cat)) return "Gasto fijo";
+    if (GASTOS_VARIABLES.includes(cat)) return "Gasto variable";
+    if (GASTOS_PUBLICIDAD.includes(cat)) return "Gasto publicidad";
+    if (GASTOS_IMPUESTOS.includes(cat)) return "Gasto impuesto";
+    if (COMISIONES_CATS.includes(cat)) return "Gasto comision";
+    if (CATEGORIAS_COMPRA.includes(cat)) return "Pago Proveedor";
+    return "Egreso Manual";
+  };
+
   // cuentas_visibles del usuario (null = todas). Si null, usamos el listado completo.
   const vis = cuentasVisiblesFn(user);
   const cuentasVisibles = vis === null ? CUENTAS : vis;
@@ -36,6 +70,12 @@ export default function Caja({ user, locales = [], localActivo }: any) {
   useEffect(() => {
     setLocalFormId(lidImplicito != null ? String(lidImplicito) : "");
   }, [localActivo, locsDisp.length]);
+  // Al cambiar dirección (egreso↔ingreso), resetear cat porque el dropdown
+  // cambia de opciones — dejar un valor de egreso cuando está en ingreso
+  // sería incompatible.
+  useEffect(() => {
+    setForm(f => ({ ...f, cat: "" }));
+  }, [form.esEgreso]);
   const [movCajaEf, setMovCajaEf] = useState<any[]>([]);
   const [modalCajaEf, setModalCajaEf] = useState(false);
   const [formCajaEf, setFormCajaEf] = useState({fecha:toISO(today),descripcion:"",monto:"",esIngreso:true});
@@ -108,11 +148,10 @@ export default function Caja({ user, locales = [], localActivo }: any) {
     const lid = lidImplicito != null ? lidImplicito : parseInt(localFormId);
     if (!Number.isFinite(lid)) return;
     const importe = parseFloat(form.importe)*(form.esEgreso?-1:1);
-    // form.tipo está hardcodeado como "Pago Gasto" y no se puede cambiar
-    // desde la UI del modal. Derivamos el tipo efectivo desde la dirección
-    // para no guardar "Pago Gasto" con importe positivo cuando el usuario
-    // eligió "Ingreso".
-    const tipoEfectivo = form.esEgreso ? "Egreso Manual" : "Ingreso Manual";
+    // Tipo derivado de cat + dirección (ver deriveTipoMov). Ej: cat="ALQUILER"
+    // con dirección egreso → "Gasto fijo". cat="Liquidación Rappi" con
+    // ingreso → "Liquidación Plataforma".
+    const tipoEfectivo = deriveTipoMov(form.cat, form.esEgreso);
     const { error } = await db.rpc("crear_movimiento_caja", {
       p_fecha: form.fecha,
       p_cuenta: form.cuenta,
@@ -157,16 +196,17 @@ export default function Caja({ user, locales = [], localActivo }: any) {
         .eq("cuenta", editMov.cuenta).eq("local_id", lid);
     }
 
-    // Si el signo de importe cambió, recalcular tipo: no tiene sentido que
-    // un movimiento siga siendo "Pago Gasto" si el importe ahora es positivo.
-    // Fallback a "Egreso Manual"/"Ingreso Manual" cuando el tipo original
-    // no matchea el signo nuevo.
+    // Si el signo o la categoría cambiaron, recalcular tipo usando
+    // deriveTipoMov(cat, esEgreso). Así un movimiento que pasa de egreso
+    // a ingreso con cat="Liquidación Rappi" queda como "Liquidación
+    // Plataforma" y no como tipo viejo incoherente.
     const nuevoImporte = parseFloat(editMov.importe) || original?.importe || 0;
     const signoOriginal = (original?.importe || 0) >= 0 ? 1 : -1;
     const signoNuevo = nuevoImporte >= 0 ? 1 : -1;
     const cambioSigno = signoOriginal !== signoNuevo;
-    const tipoNuevo = cambioSigno
-      ? (signoNuevo > 0 ? "Ingreso Manual" : "Egreso Manual")
+    const catCambio = editMov.cat !== original?.cat;
+    const tipoNuevo = (cambioSigno || catCambio)
+      ? deriveTipoMov(editMov.cat || "", signoNuevo < 0)
       : original?.tipo;
 
     await db.from("movimientos").update({
@@ -355,7 +395,7 @@ export default function Caja({ user, locales = [], localActivo }: any) {
                 <div className="field"><label>Categoría</label>
                   <select value={editMov.cat||""} onChange={e => setEditMov({...editMov, cat: e.target.value})}>
                     <option value="">Sin categoría</option>
-                    {CATEGORIAS_COMPRA.map(c => <option key={c}>{c}</option>)}
+                    {((parseFloat(editMov.importe) || 0) < 0 ? catsEgreso : catsIngreso).map(c => <option key={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
@@ -445,7 +485,13 @@ export default function Caja({ user, locales = [], localActivo }: any) {
                 <div className="field"><label>Dirección</label><select value={form.esEgreso?"egreso":"ingreso"} onChange={e=>setForm({...form,esEgreso:e.target.value==="egreso"})}><option value="egreso">Egreso (sale plata)</option><option value="ingreso">Ingreso (entra plata)</option></select></div>
               </div>
               <div className="form2">
-                <div className="field"><label>Categoría EERR</label><select value={form.cat} onChange={e=>setForm({...form,cat:e.target.value})}><option value="">Sin categoría</option>{CATEGORIAS_COMPRA.map(c=><option key={c}>{c}</option>)}</select></div>
+                <div className="field">
+                  <label>Categoría</label>
+                  <select value={form.cat} onChange={e=>setForm({...form,cat:e.target.value})}>
+                    <option value="">{form.esEgreso ? "Sin categoría" : "— elegí una categoría"}</option>
+                    {(form.esEgreso ? catsEgreso : catsIngreso).map(c=><option key={c}>{c}</option>)}
+                  </select>
+                </div>
                 <div className="field"><label>Fecha</label><input type="date" value={form.fecha} onChange={e=>setForm({...form,fecha:e.target.value})}/></div>
               </div>
               <div className="field"><label>Importe $</label><input type="number" value={form.importe} onChange={e=>setForm({...form,importe:e.target.value})} placeholder="0"/></div>
