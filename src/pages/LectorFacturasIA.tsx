@@ -133,6 +133,33 @@ Reglas:
     if(!form.prov_id){alert("⚠ Seleccioná el proveedor antes de guardar.");return;}
     if(!form.local_id){alert("⚠ Seleccioná el local antes de guardar.");return;}
     if(!form.nro){alert("⚠ Completá el número de factura.");return;}
+
+    // Warning de duplicados (bug #29): mismo flow que Compras.tsx. Prev fecha
+    // y total del form detectado por IA + confirmado por usuario.
+    const totalForm = parseMonto(form.total);
+    if (form.fecha && form.prov_id && totalForm > 0) {
+      const { data: posibles } = await db.from("facturas")
+        .select("nro, fecha, total, estado, tipo")
+        .eq("prov_id", parseInt(form.prov_id))
+        .eq("fecha", form.fecha)
+        .neq("estado", "anulada");
+      const dup = (posibles || []).find(p => {
+        const diff = Math.abs(Number(p.total || 0) - totalForm);
+        const tol = Math.max(1, Math.abs(totalForm) * 0.01);
+        return diff <= tol && (p.tipo || "factura") !== "nota_credito";
+      });
+      if (dup) {
+        const prov = proveedores.find(p => p.id === parseInt(form.prov_id));
+        const ok = confirm(
+          `Ya existe una factura similar:\n\n` +
+          `  ${dup.nro} · ${fmt_d(dup.fecha)} · ${fmt_$(Number(dup.total))}\n` +
+          `  ${prov?.nombre || ""}\n\n` +
+          `¿Querés cargar esta igualmente?`,
+        );
+        if (!ok) return;
+      }
+    }
+
     setGuardando(true);
     const id=genId("FACT");
 

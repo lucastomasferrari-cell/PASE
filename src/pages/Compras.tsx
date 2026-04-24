@@ -123,11 +123,39 @@ export default function Compras({ user, locales, localActivo }) {
     if (!form.nro) { alert("Ingresá el número de factura"); return; }
     if (!form.neto) { alert("Ingresá el neto gravado"); return; }
     if (!form.local_id) { alert("Seleccioná un local"); return; }
+    const isNC = form.tipo === "nota_credito";
+    const totalAbs = calcTotal();
+    const total = isNC ? -Math.abs(totalAbs) : totalAbs;
+
+    // Warning de duplicados (bug #29): mismo proveedor, misma fecha, total
+    // dentro de ±1%. Detecta dupes por typo (ej: "00003-00015" vs
+    // "00003-00000515"). El chequeo respeta RLS — si el user tiene scope
+    // de locales restringido, sólo ve las suyas.
+    if (form.fecha && form.prov_id) {
+      const { data: posibles } = await db.from("facturas")
+        .select("nro, fecha, total, estado, tipo")
+        .eq("prov_id", parseInt(form.prov_id))
+        .eq("fecha", form.fecha)
+        .neq("estado", "anulada");
+      const dup = (posibles || []).find(p => {
+        const diff = Math.abs(Number(p.total || 0) - total);
+        const tol = Math.max(1, Math.abs(total) * 0.01);
+        return diff <= tol && (p.tipo || "factura") === form.tipo;
+      });
+      if (dup) {
+        const prov = proveedores.find(p => p.id === parseInt(form.prov_id));
+        const ok = confirm(
+          `Ya existe una factura similar:\n\n` +
+          `  ${dup.nro} · ${fmt_d(dup.fecha)} · ${fmt_$(Number(dup.total))}\n` +
+          `  ${prov?.nombre || ""}\n\n` +
+          `¿Querés cargar esta igualmente?`,
+        );
+        if (!ok) return;
+      }
+    }
+
     setSaving(true);
     try {
-      const isNC = form.tipo === "nota_credito";
-      const totalAbs = calcTotal();
-      const total = isNC ? -Math.abs(totalAbs) : totalAbs;
       const id = genId(isNC ? "NC" : "FACT");
       // Campos date: "" → null. Postgres rechaza string vacío en columnas
       // date con "invalid input syntax for type date: \"\"". Común en NC
