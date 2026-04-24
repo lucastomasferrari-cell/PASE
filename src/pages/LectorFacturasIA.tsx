@@ -14,6 +14,10 @@ export default function LectorFacturasIA({ locales, localActivo }) {
   const [insumos,setInsumos]=useState([]);
   const [guardando,setGuardando]=useState(false);
   const [form,setForm]=useState({local_id:localActivo||"",prov_id:"",fecha:"",venc:"",nro:"",neto:0,iva21:0,iva105:0,iibb:0,total:0,cat:""});
+  // Modal inline para crear un proveedor nuevo cuando el emisor detectado
+  // por IA no matchea con ninguno existente.
+  const [provModal,setProvModal]=useState<any>(null); // null | {nombre, cuit, cat}
+  const [provSaving,setProvSaving]=useState(false);
 
   useEffect(()=>{
     Promise.all([
@@ -164,6 +168,31 @@ Reglas:
     alert("✓ Factura cargada correctamente");
   };
 
+  const guardarProvInline = async () => {
+    if (provSaving || !provModal?.nombre) return;
+    setProvSaving(true);
+    try {
+      const { data, error } = await db.from("proveedores")
+        .insert([{
+          nombre: provModal.nombre,
+          cuit: provModal.cuit || null,
+          cat: provModal.cat || "OTROS",
+          estado: "Activo",
+          saldo: 0,
+        }])
+        .select()
+        .single();
+      if (error) { alert("No se pudo crear el proveedor: " + error.message); return; }
+      if (data) {
+        setProveedores(prev => [...prev, data].sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "")));
+        setForm(f => ({ ...f, prov_id: String(data.id), cat: data.cat || f.cat }));
+        setProvModal(null);
+      }
+    } finally {
+      setProvSaving(false);
+    }
+  };
+
   return (
     <div>
       <div className="ph-row">
@@ -231,11 +260,22 @@ Reglas:
                 {resultado.razon_social&&<div style={{fontSize:11,color:"var(--muted2)",marginBottom:12}}>Emisor detectado: <strong style={{color:"var(--txt)"}}>{resultado.razon_social}</strong> · CUIT: {resultado.cuit_emisor}</div>}
 
                 <div className="field"><label>Proveedor *</label>
-                  <select value={form.prov_id} onChange={e=>setForm({...form,prov_id:e.target.value})}
-                    style={{border:campoBorder("razon_social")}}>
-                    <option value="">Seleccioná...</option>
-                    {proveedores.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
-                  </select>
+                  <div style={{display:"flex",gap:6}}>
+                    <select value={form.prov_id} onChange={e=>setForm({...form,prov_id:e.target.value})}
+                      style={{flex:1,border:campoBorder("razon_social")}}>
+                      <option value="">Seleccioná...</option>
+                      {proveedores.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+                    </select>
+                    <button className="btn btn-ghost btn-sm" type="button"
+                      title="Crear un proveedor nuevo con los datos detectados por IA"
+                      onClick={()=>setProvModal({
+                        nombre: resultado.razon_social || "",
+                        cuit: resultado.cuit_emisor || "",
+                        cat: CATEGORIAS_COMPRA[0] || "OTROS",
+                      })}>
+                      + Nuevo
+                    </button>
+                  </div>
                 </div>
                 <div className="form2">
                   <div className="field"><label>Local *</label>
@@ -289,6 +329,42 @@ Reglas:
           </div>
         </div>
       </div>
+
+      {provModal && (
+        <div className="overlay" onClick={()=>setProvModal(null)}>
+          <div className="modal" style={{width:480}} onClick={e=>e.stopPropagation()}>
+            <div className="modal-hd">
+              <div className="modal-title">Nuevo proveedor</div>
+              <button className="close-btn" onClick={()=>setProvModal(null)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="alert alert-info" style={{marginBottom:12,fontSize:11}}>Datos pre-cargados desde la factura. Podés editarlos antes de guardar.</div>
+              <div className="field">
+                <label>Razón Social *</label>
+                <input value={provModal.nombre} onChange={e=>setProvModal({...provModal,nombre:e.target.value})} placeholder="Empresa S.A."/>
+              </div>
+              <div className="form2">
+                <div className="field">
+                  <label>CUIT</label>
+                  <input value={provModal.cuit||""} onChange={e=>setProvModal({...provModal,cuit:e.target.value})} placeholder="30-12345678-0"/>
+                </div>
+                <div className="field">
+                  <label>Categoría EERR</label>
+                  <select value={provModal.cat} onChange={e=>setProvModal({...provModal,cat:e.target.value})}>
+                    {CATEGORIAS_COMPRA.map(c=><option key={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="modal-ft">
+              <button className="btn btn-sec" onClick={()=>setProvModal(null)}>Cancelar</button>
+              <button className="btn btn-acc" onClick={guardarProvInline} disabled={provSaving||!provModal.nombre}>
+                {provSaving?"Guardando...":"Crear y seleccionar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
