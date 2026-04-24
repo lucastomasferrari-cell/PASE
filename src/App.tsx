@@ -102,6 +102,25 @@ export default function App() {
     applyLogin(u);
   };
 
+  // Refetch de usuario_permisos y usuario_locales del usuario activo sin
+  // cerrar sesión. El dueño cambia permisos → el afectado hace click en
+  // "Actualizar permisos" en el sidebar y ve el cambio al instante.
+  const refreshPermisos = async () => {
+    if (!user?.id) return;
+    const [{ data: permsData }, { data: locsData }] = await Promise.all([
+      db.from("usuario_permisos").select("modulo_slug").eq("usuario_id", user.id),
+      db.from("usuario_locales").select("local_id").eq("usuario_id", user.id),
+    ]);
+    const enriched = {
+      ...user,
+      _permisos: (permsData || []).map(p => p.modulo_slug),
+      _locales: (locsData || []).length ? (locsData || []).map(l => l.local_id) : (user.locales || []),
+    };
+    setUser(enriched);
+    sessionStorage.setItem("pase_user", JSON.stringify(enriched));
+    showToast("Permisos actualizados");
+  };
+
   const logout = async () => {
     await db.auth.signOut();
     // SIGNED_OUT en onAuthStateChange limpia el resto del state
@@ -168,7 +187,7 @@ export default function App() {
   }}/></>;
 
   return (
-    <AuthProvider value={user}>
+    <AuthProvider value={{ user, refreshPermisos }}>
       <style>{css}</style>
       <div className="app">
         {/* Fondo decorativo para glassmorphism */}
@@ -196,7 +215,7 @@ export default function App() {
         </div>
         <div style={{position:"relative",zIndex:1}}>
           <Sidebar user={user} section={section} onNav={setSection}
-            onLogout={logout}
+            onLogout={logout} onRefreshPerms={refreshPermisos}
             locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo}/>
         </div>
         <main className="main" style={{position:"relative",zIndex:1}}>

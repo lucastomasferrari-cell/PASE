@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ROLES, getPermisos } from "../lib/auth";
 
-export function Sidebar({ user, section, onNav, onLogout, locales, localActivo, setLocalActivo }) {
+export function Sidebar({ user, section, onNav, onLogout, onRefreshPerms, locales, localActivo, setLocalActivo }: any) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
   const perms = getPermisos(user);
@@ -58,6 +58,14 @@ export function Sidebar({ user, section, onNav, onLogout, locales, localActivo, 
         <div className="sb-user">
           <div className="sb-uname">{user.nombre}</div>
           <div style={{fontSize:10,color:ROLES[user.rol]?.color}}>{ROLES[user.rol]?.label}</div>
+          {onRefreshPerms && (
+            <button
+              className="sb-logout"
+              style={{marginBottom:4,color:"var(--muted2)"}}
+              onClick={() => onRefreshPerms()}
+              title="Traer desde la DB los permisos actuales sin cerrar sesión"
+            >Actualizar permisos ↻</button>
+          )}
           <button className="sb-logout" onClick={onLogout}>Cerrar sesión →</button>
         </div>
       </div>

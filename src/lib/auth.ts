@@ -112,11 +112,22 @@ export function puedeVerCuenta(user: any, cuenta: string): boolean {
 // user en sesión: { id: number, nombre, email, rol: string, activo: boolean,
 //   _permisos: string[], _locales: number[] }
 
+// El context guarda { user, refreshPermisos }. Retrocompat: si el value es
+// un objeto user plano (sin refreshPermisos), se sigue leyendo como antes.
+interface AuthContextValue {
+  user: any;
+  refreshPermisos?: () => Promise<void>;
+}
 const AuthContext = createContext<any>(null);
 export const AuthProvider = AuthContext.Provider;
 
 export function useAuth() {
-  const user = useContext(AuthContext);
+  const raw = useContext(AuthContext);
+  // Permite dos formas de pasar el value: { user, refreshPermisos } (nuevo)
+  // o el user directo (legacy). Detectamos por la presencia de .user.
+  const isWrapped = raw && typeof raw === "object" && "user" in raw;
+  const user = isWrapped ? (raw as AuthContextValue).user : raw;
+  const refreshPermisos = isWrapped ? (raw as AuthContextValue).refreshPermisos : undefined;
   return {
     user,
     tienePermiso: (slug: string) => tienePermiso(user, slug),
@@ -125,5 +136,6 @@ export function useAuth() {
     scopeLocales: (localActivo: number | null) => scopeLocales(user, localActivo),
     cuentasVisibles: () => cuentasVisibles(user),
     puedeVerCuenta: (cuenta: string) => puedeVerCuenta(user, cuenta),
+    refreshPermisos,
   };
 }
