@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "./lib/supabase";
-import { getPermisos, tienePermiso, AuthProvider } from "./lib/auth";
+import { getPermisos, tienePermiso, AuthProvider, necesitaElegirLocal } from "./lib/auth";
 import { Sidebar, css } from "./components/Layout";
 import Login from "./pages/Login";
 import ForcePasswordChange from "./pages/ForcePasswordChange";
+import SeleccionarLocalModal from "./components/SeleccionarLocalModal";
 import Dashboard from "./pages/Dashboard";
 import Ventas from "./pages/Ventas";
 import Compras from "./pages/Compras";
@@ -31,8 +32,21 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [section, setSection] = useState("dashboard");
   const [locales, setLocales] = useState([]);
-  const [localActivo, setLocalActivo] = useState(null);
+  const [localActivo, setLocalActivo] = useState<number | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  // Bug #27: bloquea navegación mientras encargado con >1 local no elige uno.
+  const [showLocalModal, setShowLocalModal] = useState(false);
+
+  // Persistir localActivo en sessionStorage para que al refrescar la página
+  // el encargado no tenga que re-elegir el local mientras siga siendo válido.
+  // necesitaElegirLocal() verifica que el stored siga estando en sus locales.
+  useEffect(() => {
+    if (localActivo != null) {
+      sessionStorage.setItem("pase_local_activo", String(localActivo));
+    } else {
+      sessionStorage.removeItem("pase_local_activo");
+    }
+  }, [localActivo]);
 
   useEffect(()=>{
     db.from("locales").select("*").order("id").then(({data})=>setLocales(data||[]));
@@ -61,7 +75,9 @@ export default function App() {
         setUser(null);
         setSection("dashboard");
         setLocalActivo(null);
+        setShowLocalModal(false);
         sessionStorage.removeItem("pase_user");
+        sessionStorage.removeItem("pase_local_activo");
         localStorage.removeItem("pase_uid");
         return;
       }
@@ -95,7 +111,22 @@ export default function App() {
     sessionStorage.setItem("pase_user", JSON.stringify(enriched));
     const perms = getPermisos(enriched);
     if(!perms.includes("dashboard") && perms.length) setSection(perms[0]);
-    if(enriched.rol!=="dueno" && enriched._locales?.length===1) setLocalActivo(enriched._locales[0]);
+
+    // Decisión de localActivo: ver necesitaElegirLocal() en auth.ts.
+    // Bug #27: encargado con >1 local NUNCA puede quedar con localActivo=null
+    // porque le expone data cruzada de todos sus locales.
+    const storedRaw = sessionStorage.getItem("pase_local_activo");
+    const stored = storedRaw ? parseInt(storedRaw) : null;
+    const decision = necesitaElegirLocal(enriched, stored);
+    if (decision.action === "setActivo") {
+      setLocalActivo(decision.localId!);
+      setShowLocalModal(false);
+    } else if (decision.action === "showModal") {
+      setLocalActivo(null);
+      setShowLocalModal(true);
+    } else {
+      setShowLocalModal(false);
+    }
   };
 
   const login = (u) => {
@@ -116,6 +147,16 @@ export default function App() {
       _permisos: (permsData || []).map(p => p.modulo_slug),
       _locales: (locsData || []).length ? (locsData || []).map(l => l.local_id) : (user.locales || []),
     };
+    // Re-evaluar localActivo: si el dueño le agregó/quitó locales al usuario,
+    // puede que el localActivo actual ya no esté en sus _locales → modal.
+    const decision = necesitaElegirLocal(enriched, localActivo);
+    if (decision.action === "showModal") {
+      setLocalActivo(null);
+      setShowLocalModal(true);
+    } else if (decision.action === "setActivo") {
+      setLocalActivo(decision.localId!);
+      setShowLocalModal(false);
+    }
     setUser(enriched);
     sessionStorage.setItem("pase_user", JSON.stringify(enriched));
     showToast("Permisos actualizados");
@@ -184,6 +225,11 @@ export default function App() {
     const updated = { ...user, password_temporal: false };
     setUser(updated);
     sessionStorage.setItem("pase_user", JSON.stringify(updated));
+  }}/></>;
+
+  if (showLocalModal) return <><style>{css}</style><SeleccionarLocalModal user={user} locales={locales} onConfirm={(id) => {
+    setLocalActivo(id);
+    setShowLocalModal(false);
   }}/></>;
 
   return (

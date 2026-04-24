@@ -54,6 +54,32 @@ export function esEncargado(user: any): boolean {
   return user?.rol === "encargado";
 }
 
+/**
+ * Decide qué hacer con localActivo para este usuario al loguearse/restaurar.
+ * Parte del fix del bug #27: encargados con >1 local NO pueden operar con
+ * localActivo=null, así que se les muestra un modal bloqueante.
+ *
+ * - dueno/admin         → "none" (dejan que el dropdown del sidebar decida)
+ * - encargado 0 locales → "none" (sin locales no hay nada que elegir)
+ * - encargado 1 local   → "setActivo" con ese local
+ * - encargado >1 locales + stored válido en su lista → "setActivo" con stored
+ * - encargado >1 locales + sin stored o stored inválido → "showModal"
+ */
+export function necesitaElegirLocal(
+  user: any,
+  storedLocalActivo: number | null,
+): { action: "none" | "setActivo" | "showModal"; localId?: number } {
+  if (!user) return { action: "none" };
+  if (user.rol === "dueno" || user.rol === "admin") return { action: "none" };
+  const locs: number[] = user._locales?.length ? user._locales : (user.locales || []);
+  if (locs.length === 0) return { action: "none" };
+  if (locs.length === 1) return { action: "setActivo", localId: Number(locs[0]) };
+  if (storedLocalActivo != null && locs.map(Number).includes(Number(storedLocalActivo))) {
+    return { action: "setActivo", localId: Number(storedLocalActivo) };
+  }
+  return { action: "showModal" };
+}
+
 /** null = todos los locales (dueno/admin). number[] para encargado. */
 export function localesVisibles(user: any): number[] | null {
   if (!user) return [];
