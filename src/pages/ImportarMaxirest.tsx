@@ -34,42 +34,74 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: {
   };
   const confirmar=async()=>{
     if(!preview||preview.ventas.length===0)return;
+    // Precondición dura: sin localActivo no hay insert — evita que el insert
+    // termine con local_id = NaN o que se cuele el del CSV por algún edge.
+    if(!localActivo){
+      alert("Seleccioná un local en el sidebar antes de importar.");
+      return;
+    }
     setLoading(true);
-    // Check for duplicate: same fecha + turno + local
-    const {data:exist}=await db.from("ventas").select("id").eq("fecha",preview.fecha).eq("turno",preview.turno).eq("local_id",parseInt(preview.local_id)).limit(1);
-    if(exist&&exist.length>0){
+    try {
+      const lid=Number(localActivo);
+      // Check duplicado: mismo fecha + turno + local
+      const {data:exist,error:existErr}=await db.from("ventas").select("id").eq("fecha",preview.fecha).eq("turno",preview.turno).eq("local_id",lid).limit(1);
+      if(existErr) throw new Error("Error verificando duplicados: "+existErr.message);
+      if(exist&&exist.length>0){
+        setLoading(false);
+        if(!confirm(`⚠ Ya existe un cierre del ${fmt_d(preview.fecha)} turno ${preview.turno} para este local. ¿Importar igual?`))return;
+        setLoading(true);
+      }
+
+      // Insert en ventas con .select() para VERIFICAR que las filas se
+      // persistieron. Si RLS las rechaza, error se rellena o devuelve data
+      // vacía — antes el código ignoraba esto y mostraba "✓ Importado"
+      // aunque no hubiera entrado nada (bug #24).
+      const ventasAInsertar=preview.ventas.map(v=>({...v,id:genId("V"),local_id:lid,origen:"maxirest"}));
+      console.log("[maxirest] Insert ventas: "+ventasAInsertar.length+" filas local_id="+lid);
+      const {data:ventasIns,error:ventasErr}=await db.from("ventas").insert(ventasAInsertar).select();
+      if(ventasErr) throw new Error("Error insertando ventas: "+ventasErr.message);
+      if(!ventasIns||ventasIns.length===0){
+        throw new Error("El insert de ventas no devolvió filas — RLS puede estar bloqueando. Verificá permisos sobre el local.");
+      }
+      if(ventasIns.length<ventasAInsertar.length){
+        console.warn("[maxirest] filas insertadas menos que esperadas: "+ventasIns.length+" de "+ventasAInsertar.length);
+      }
+
+      const impactoPorCuenta:Record<string,number>={};
+      ventasAInsertar.forEach(v=>{
+        const cuenta=MEDIO_A_CUENTA[v.medio];
+        if(!cuenta) return;
+        impactoPorCuenta[cuenta]=(impactoPorCuenta[cuenta]||0)+v.monto;
+      });
+      for(const [cuenta,monto] of Object.entries(impactoPorCuenta)){
+        if(!cuenta) continue;
+        const {error:movErr}=await db.from("movimientos").insert([{
+          id:genId("MOV"),fecha:preview.fecha,cuenta,
+          tipo:"Ingreso Venta",cat:"VENTAS",
+          importe:monto,detalle:`Ventas ${preview.turno} - ${preview.fecha}`,
+          local_id:lid,
+        }]);
+        if(movErr) console.error("[maxirest] movimiento error (no crítico):",movErr.message);
+        const {data:caja}=await db.from("saldos_caja").select("saldo")
+          .eq("cuenta",cuenta).eq("local_id",lid).maybeSingle();
+        if(caja){
+          const {error:saldoErr}=await db.from("saldos_caja")
+            .update({saldo:(caja.saldo||0)+monto})
+            .eq("cuenta",cuenta).eq("local_id",lid);
+          if(saldoErr) console.error("[maxirest] saldo error (no crítico):",saldoErr.message);
+        }
+      }
+
+      setTexto("");setPreview(null);
+      console.log("[maxirest] Import OK: "+ventasIns.length+" filas persistidas, total "+fmt_$(preview.ventas.reduce((s,v)=>s+v.monto,0)));
+      alert("✓ Importado: "+ventasIns.length+" registros · Total: "+fmt_$(preview.ventas.reduce((s,v)=>s+v.monto,0)));
+      onImported?.();
+    } catch (err: any) {
+      console.error("[maxirest] confirmar error:",err);
+      alert("No se pudo importar: "+err.message);
+    } finally {
       setLoading(false);
-      if(!confirm(`⚠ Ya existe un cierre del ${fmt_d(preview.fecha)} turno ${preview.turno} para este local. ¿Importar igual?`))return;
-      setLoading(true);
     }
-    const lid=parseInt(preview.local_id);
-    const ventasAInsertar=preview.ventas.map(v=>({...v,id:genId("V"),local_id:lid,origen:"maxirest"}));
-    await db.from("ventas").insert(ventasAInsertar);
-
-    const impactoPorCuenta:Record<string,number>={};
-    ventasAInsertar.forEach(v=>{
-      const cuenta=MEDIO_A_CUENTA[v.medio];
-      if(!cuenta) return; // medios no-efectivo no impactan en caja
-      impactoPorCuenta[cuenta]=(impactoPorCuenta[cuenta]||0)+v.monto;
-    });
-    for(const [cuenta,monto] of Object.entries(impactoPorCuenta)){
-      if(!cuenta) continue;
-      await db.from("movimientos").insert([{
-        id:genId("MOV"),fecha:preview.fecha,cuenta,
-        tipo:"Ingreso Venta",cat:"VENTAS",
-        importe:monto,detalle:`Ventas ${preview.turno} - ${preview.fecha}`,
-        local_id:lid,
-      }]);
-      const {data:caja}=await db.from("saldos_caja").select("saldo")
-        .eq("cuenta",cuenta).eq("local_id",lid).maybeSingle();
-      if(caja) await db.from("saldos_caja")
-        .update({saldo:(caja.saldo||0)+monto})
-        .eq("cuenta",cuenta).eq("local_id",lid);
-    }
-
-    setLoading(false);setTexto("");setPreview(null);
-    alert("✓ Importado: "+preview.ventas.length+" registros · Total: "+fmt_$(preview.ventas.reduce((s,v)=>s+v.monto,0)));
-    onImported?.();
   };
   return (
     <div>
