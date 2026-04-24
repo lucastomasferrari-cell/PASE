@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasVisibles as cuentasVisiblesFn, localesVisibles } from "../lib/auth";
+import { translateRpcError } from "../lib/errors";
 import { CATEGORIAS_COMPRA, CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 
@@ -87,56 +88,29 @@ export default function Caja({ user, locales = [], localActivo }: any) {
   const guardar = async () => {
     if(!form.importe) return;
     const lid = lidImplicito != null ? lidImplicito : parseInt(localFormId);
-    if (!Number.isFinite(lid)) return; // el botón Guardar está disabled cuando falta, defensa extra
+    if (!Number.isFinite(lid)) return;
     const importe = parseFloat(form.importe)*(form.esEgreso?-1:1);
-    const {esEgreso,...rest} = form;
-    await db.from("movimientos").insert([{...rest,id:genId("MOV"),importe,fact_id:null,local_id:lid}]);
-    const actual = saldos[form.cuenta]||0;
-    await db.from("saldos_caja").update({saldo:actual+importe}).eq("cuenta",form.cuenta).eq("local_id",lid);
+    const { error } = await db.rpc("crear_movimiento_caja", {
+      p_fecha: form.fecha,
+      p_cuenta: form.cuenta,
+      p_tipo: form.tipo,
+      p_cat: form.cat || null,
+      p_importe: importe,
+      p_detalle: form.detalle || form.tipo,
+      p_local_id: lid,
+    });
+    if (error) { alert(translateRpcError(error)); return; }
     setModal(false); load();
   };
 
   const eliminarMov = async (m: any) => {
     const motivo = prompt("¿Por qué anulás este movimiento? (obligatorio)");
     if (!motivo?.trim()) return;
-
-    await db.from("movimientos").update({
-      anulado: true,
-      anulado_motivo: motivo,
-    }).eq("id", m.id);
-
-    if (m.local_id) {
-      const { data: caja } = await db.from("saldos_caja").select("saldo")
-        .eq("cuenta", m.cuenta).eq("local_id", m.local_id).maybeSingle();
-      if (caja) await db.from("saldos_caja")
-        .update({ saldo: (caja.saldo || 0) - (m.importe || 0) })
-        .eq("cuenta", m.cuenta).eq("local_id", m.local_id);
-    }
-
-    // Si es un pago de sueldo, propagamos la anulación a rrhh_liquidaciones
-    // así el EERR lo excluye. Match fragilito por (detalle+fecha+cuenta+local_id)
-    // pero es la única traza disponible entre movimientos y gastos hoy.
-    if (m.cat === "SUELDOS" && m.local_id) {
-      const { data: gastoMatch } = await db.from("gastos")
-        .select("id")
-        .eq("detalle", m.detalle)
-        .eq("fecha", m.fecha)
-        .eq("cuenta", m.cuenta)
-        .eq("local_id", m.local_id)
-        .maybeSingle();
-      if (gastoMatch?.id) {
-        await db.from("rrhh_liquidaciones")
-          .update({ anulado: true })
-          .eq("gasto_id", gastoMatch.id);
-      }
-    }
-
-    await db.from("auditoria").insert([{
-      tabla: "movimientos", accion: "ANULACION",
-      detalle: JSON.stringify({ movimiento: m, justificativo: motivo }),
-      fecha: new Date().toISOString(),
-    }]);
-
+    const { error } = await db.rpc("anular_movimiento", {
+      p_mov_id: m.id,
+      p_motivo: motivo,
+    });
+    if (error) { alert(translateRpcError(error)); return; }
     load();
   };
 

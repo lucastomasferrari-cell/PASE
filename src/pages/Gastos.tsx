@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
+import { translateRpcError } from "../lib/errors";
 import { CUENTAS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, COMISIONES_CATS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 
@@ -84,23 +85,23 @@ export default function Gastos({ user, locales, localActivo }) {
     setSaving(true);
     try {
       const tipo = getTipo();
-      const nuevo = { ...form, id: genId("GASTO"), tipo, local_id: form.local_id ? parseInt(form.local_id) : null, monto: parseFloat(form.monto), plantilla_id: form.plantilla_id || null };
-      const { error: gErr } = await db.from("gastos").insert([nuevo]);
-      if (gErr) throw new Error("Error guardando gasto: " + gErr.message);
-
-      const lidForm = form.local_id ? parseInt(form.local_id) : null;
-      if (lidForm) {
-        const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", form.cuenta).eq("local_id", lidForm).maybeSingle();
-        if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - parseFloat(form.monto) }).eq("cuenta", form.cuenta).eq("local_id", lidForm);
-      }
-
-      const { error: mErr } = await db.from("movimientos").insert([{ id: genId("MOV"), fecha: form.fecha, cuenta: form.cuenta, tipo: "Gasto " + tipo, cat: form.categoria, importe: -parseFloat(form.monto), detalle: form.detalle || form.categoria, fact_id: null, local_id: form.local_id ? parseInt(form.local_id) : null }]);
-      if (mErr) console.error("movimientos error (no crítico):", mErr);
-
+      const lid = form.local_id ? parseInt(form.local_id) : null;
+      if (!lid) { alert("Seleccioná un local"); return; }
+      const { error } = await db.rpc("crear_gasto", {
+        p_fecha: form.fecha,
+        p_local_id: lid,
+        p_categoria: form.categoria,
+        p_tipo: tipo,
+        p_monto: parseFloat(form.monto),
+        p_detalle: form.detalle || form.categoria,
+        p_cuenta: form.cuenta,
+        p_plantilla_id: form.plantilla_id || null,
+      });
+      if (error) throw error;
       setModal(false); setForm(emptyForm); load();
     } catch (err: any) {
       console.error("Error guardando gasto:", err);
-      alert("Error al guardar: " + err.message);
+      alert(translateRpcError(err));
     } finally {
       setSaving(false);
     }
@@ -116,28 +117,21 @@ export default function Gastos({ user, locales, localActivo }) {
     setPagandoPlant(true);
     try {
       const monto = parseFloat(pagoPlantForm.monto);
-      const nuevo = {
-        id: genId("GASTO"), fecha: pagoPlantForm.fecha,
-        local_id: pagarModal.local_id || null,
-        categoria: pagarModal.categoria, tipo: pagarModal.tipo,
-        monto, detalle: pagarModal.nombre,
-        cuenta: pagoPlantForm.cuenta, plantilla_id: pagarModal.id,
-      };
-      const { error: gErr } = await db.from("gastos").insert([nuevo]);
-      if (gErr) throw new Error("Error guardando: " + gErr.message);
-
-      if (pagarModal.local_id) {
-        const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", pagoPlantForm.cuenta).eq("local_id", pagarModal.local_id).maybeSingle();
-        if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", pagoPlantForm.cuenta).eq("local_id", pagarModal.local_id);
-      }
-
-      const { error: mErr } = await db.from("movimientos").insert([{ id: genId("MOV"), fecha: pagoPlantForm.fecha, cuenta: pagoPlantForm.cuenta, tipo: "Gasto " + pagarModal.tipo, cat: pagarModal.categoria, importe: -monto, detalle: pagarModal.nombre, fact_id: null, local_id: pagarModal.local_id || null }]);
-      if (mErr) console.error("movimientos error (no crítico):", mErr);
-
+      const { error } = await db.rpc("crear_gasto", {
+        p_fecha: pagoPlantForm.fecha,
+        p_local_id: pagarModal.local_id || null,
+        p_categoria: pagarModal.categoria,
+        p_tipo: pagarModal.tipo,
+        p_monto: monto,
+        p_detalle: pagarModal.nombre,
+        p_cuenta: pagoPlantForm.cuenta,
+        p_plantilla_id: pagarModal.id,
+      });
+      if (error) throw error;
       setPagarModal(null); setPagoPlantForm(emptyPagoPlant); load();
     } catch (err: any) {
       console.error("Error pago plantilla:", err);
-      alert("Error: " + err.message);
+      alert(translateRpcError(err));
     } finally {
       setPagandoPlant(false);
     }
