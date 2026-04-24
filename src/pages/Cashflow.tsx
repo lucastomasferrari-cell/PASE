@@ -54,13 +54,28 @@ export default function Cashflow({ user, locales, localActivo }: any) {
       .select("total_a_pagar, rrhh_novedades(empleado_id, rrhh_empleados(local_id))")
       .eq("estado", "pendiente").eq("anulado", false);
 
+    // 6. Ventas del mes por medio (para panel "Por cobrar" derivado).
+    let qVentasMes = db.from("ventas").select("medio, monto")
+      .gte("fecha", desde).lte("fecha", hasta);
+    qVentasMes = applyLocalScope(qVentasMes, user, lid);
+
+    // 7. Liquidaciones recibidas del mes (movimientos cat = 'Liquidación X').
+    let qLiqMes = db.from("movimientos").select("cat, importe")
+      .eq("anulado", false).gt("importe", 0)
+      .gte("fecha", desde).lte("fecha", hasta)
+      .like("cat", "Liquidación %");
+    qLiqMes = applyLocalScope(qLiqMes, user, lid);
+    qLiqMes = aplicarCuentas(qLiqMes);
+
     const [
       { data: ingresos },
       { data: egresos },
       { data: saldos },
       { data: factPend },
       { data: sueldosPend },
-    ] = await Promise.all([qIngresos, qEgresos, qSaldos, qFactPend, qSueldosPend]);
+      { data: ventasMes },
+      { data: liqMes },
+    ] = await Promise.all([qIngresos, qEgresos, qSaldos, qFactPend, qSueldosPend, qVentasMes, qLiqMes]);
 
     // Procesar ingresos por cuenta
     const ingresosPorCuenta: Record<string, number> = {};
@@ -96,12 +111,52 @@ export default function Cashflow({ user, locales, localActivo }: any) {
       })
       .reduce((s, l) => s + Number(l.total_a_pagar), 0);
 
+    // Por cobrar: ventas por medio no-efectivo del mes menos liquidaciones
+    // recibidas del mes con la categoría correspondiente.
+    // Mapa medio → categoría de liquidación esperada.
+    const MEDIO_A_CAT_LIQ: Record<string, string> = {
+      "RAPPI ONLINE":       "Liquidación Rappi",
+      "PEYA ONLINE":        "Liquidación PedidosYa",
+      "MP DELIVERY":        "Liquidación MercadoPago",
+      "MASDELIVERY ONLINE": "Liquidación MercadoPago",
+      "BIGBOX":             "Liquidación Bigbox",
+      "FANBAG":             "Liquidación Fanbag",
+      "NAVE":               "Liquidación Nave",
+      "Point Nave":         "Liquidación Nave",
+      "Point MP":           "Liquidación MercadoPago",
+      "TARJETA CREDITO":    "Liquidación MercadoPago",
+      "TARJETA DEBITO":     "Liquidación MercadoPago",
+      "QR":                 "Liquidación MercadoPago",
+      "LINK":               "Liquidación MercadoPago",
+      "TRANSFERENCIA":      "Liquidación MercadoPago",
+    };
+    const ventasPorMedio: Record<string, number> = {};
+    (ventasMes || []).forEach(v => {
+      ventasPorMedio[v.medio] = (ventasPorMedio[v.medio] || 0) + Number(v.monto);
+    });
+    const liqPorCat: Record<string, number> = {};
+    (liqMes || []).forEach(m => {
+      if (!m.cat) return;
+      liqPorCat[m.cat] = (liqPorCat[m.cat] || 0) + Number(m.importe);
+    });
+    const porCobrar = Object.entries(ventasPorMedio)
+      .filter(([medio]) => MEDIO_A_CAT_LIQ[medio] !== undefined)
+      .map(([medio, vendido]) => {
+        const catLiq = MEDIO_A_CAT_LIQ[medio];
+        const cobrado = liqPorCat[catLiq] || 0;
+        return { medio, catLiq, vendido, cobrado, pendiente: Math.max(0, vendido - cobrado) };
+      })
+      .filter(x => x.vendido > 0)
+      .sort((a, b) => b.pendiente - a.pendiente);
+    const totalPorCobrar = porCobrar.reduce((s, x) => s + x.pendiente, 0);
+
     setData({
       ingresosPorCuenta, totalIngresos,
       egresosPorTipo, totalEgresos,
       flujoNeto: totalIngresos - totalEgresos,
       saldosPorCuenta, totalDisponible,
       deudaProveedores, sueldosPendTotal,
+      porCobrar, totalPorCobrar,
     });
     setLoading(false);
   };
@@ -109,7 +164,8 @@ export default function Cashflow({ user, locales, localActivo }: any) {
   useEffect(() => { load(); }, [mes, localActivo]);
 
   const { ingresosPorCuenta={}, totalIngresos=0, egresosPorTipo={}, totalEgresos=0,
-    flujoNeto=0, saldosPorCuenta={}, totalDisponible=0, deudaProveedores=0, sueldosPendTotal=0 } = data;
+    flujoNeto=0, saldosPorCuenta={}, totalDisponible=0, deudaProveedores=0, sueldosPendTotal=0,
+    porCobrar=[], totalPorCobrar=0 } = data;
 
   return (
     <div>
@@ -137,6 +193,38 @@ export default function Cashflow({ user, locales, localActivo }: any) {
           <div className="kpi">
             <div className="kpi-label">Disponible total</div>
             <div className={`kpi-value ${totalDisponible >= 0 ? "kpi-success" : "kpi-danger"}`}>{fmt_$(totalDisponible)}</div>
+          </div>
+        </div>
+
+        {/* Por cobrar: ventas del mes con medio no-efectivo menos liquidaciones
+            recibidas (cat Liquidación X). Derivado en runtime, sin nueva columna. */}
+        <div className="panel" style={{marginBottom:16}}>
+          <div className="panel-hd">
+            <span className="panel-title">Por cobrar — ventas pendientes de liquidación</span>
+            <span style={{fontSize:12,color:"var(--muted2)"}}>
+              Total pendiente: <span className="num" style={{color:"var(--warn)"}}>{fmt_$(totalPorCobrar)}</span>
+            </span>
+          </div>
+          {porCobrar.length === 0 ? (
+            <div className="empty">Sin ventas no-efectivo en el mes o todas ya liquidadas</div>
+          ) : (
+            <table>
+              <thead><tr><th>Medio</th><th>Categoría liquidación</th><th style={{textAlign:"right"}}>Vendido</th><th style={{textAlign:"right"}}>Cobrado</th><th style={{textAlign:"right"}}>Pendiente</th></tr></thead>
+              <tbody>
+                {porCobrar.map((x: any) => (
+                  <tr key={x.medio}>
+                    <td style={{fontSize:11}}>{x.medio}</td>
+                    <td style={{fontSize:10,color:"var(--muted2)"}}>{x.catLiq}</td>
+                    <td style={{textAlign:"right"}}><span className="num">{fmt_$(x.vendido)}</span></td>
+                    <td style={{textAlign:"right"}}><span className="num" style={{color: x.cobrado > 0 ? "var(--success)" : "var(--muted2)"}}>{fmt_$(x.cobrado)}</span></td>
+                    <td style={{textAlign:"right"}}><span className="num" style={{color: x.pendiente > 0 ? "var(--warn)" : "var(--muted2)"}}>{fmt_$(x.pendiente)}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <div style={{padding:"10px 14px",fontSize:10,color:"var(--muted2)",borderTop:"1px solid var(--bd)"}}>
+            Se deriva de ventas.monto (por medio) − movimientos con cat = "Liquidación X" del mismo mes. Informativo. Para registrar que llegó una liquidación, carga un movimiento de ingreso en Caja con la cat correspondiente.
           </div>
         </div>
 
