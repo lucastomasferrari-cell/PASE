@@ -3,24 +3,25 @@ import { db } from "../lib/supabase";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import { MEDIOS_COBRO, MEDIO_A_CUENTA } from "../lib/constants";
 
-export default function ImportarMaxirest({ locales, onImported }: { locales: any[]; onImported?: () => void }) {
+export default function ImportarMaxirest({ locales, localActivo, onImported }: { locales: any[]; localActivo?: number | null; onImported?: () => void }) {
   const [texto,setTexto]=useState("");
   const [preview,setPreview]=useState(null);
   const [loading,setLoading]=useState(false);
   const MMAP={"EFECTIVO SALON":"EFECTIVO SALON","EFECTIVO DELIVERY":"EFECTIVO DELIVERY","TARJETA DEBITO":"TARJETA DEBITO","TARJETA CREDITO":"TARJETA CREDITO","RAPPI ONLINE":"RAPPI ONLINE","PEYA ONLINE":"PEYA ONLINE","MP DELIVERY":"MP DELIVERY","MASDELIVERY ONLINE":"MASDELIVERY ONLINE","BIGBOX":"BIGBOX","FANBAG":"FANBAG","TRANSFERENCIA":"TRANSFERENCIA","QR":"QR","LINK":"LINK","POINT NAVE":"Point Nave"};
   const parsear=()=>{
     if(!texto.trim())return;
+    if(!localActivo){
+      alert("Seleccioná un local en el sidebar antes de importar. El cierre se asignará SIEMPRE al local activo, nunca al que figura en el CSV.");
+      return;
+    }
     let fecha=toISO(today);
     const fm=texto.match(/(\w+)\s+(\d+)\s+de\s+(\w+)\s+de\s+(\d{4})/i);
     if(fm){const ms={enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,octubre:10,noviembre:11,diciembre:12};const m=ms[fm[3].toLowerCase()];if(m)fecha=`${fm[4]}-${String(m).padStart(2,"0")}-${String(fm[2]).padStart(2,"0")}`;}
     const tm=texto.match(/Turno\s+\d+\s+\((\w+)/i);
     const turno=tm?.[1]==="Noche"?"Noche":"Mediodía";
-    let local_id=locales[0]?.id;
-    if(texto.includes("Villa Crespo")||texto.includes("Juan Ramirez"))local_id=locales.find(l=>l.nombre.includes("Villa Crespo"))?.id||local_id;
-    else if(texto.includes("Belgrano"))local_id=locales.find(l=>l.nombre.includes("Belgrano"))?.id||local_id;
-    else if(texto.includes("Devoto"))local_id=locales.find(l=>l.nombre.includes("Devoto"))?.id||local_id;
-    else if(texto.includes("Palermo"))local_id=locales.find(l=>l.nombre.includes("Palermo"))?.id||local_id;
-    else if(texto.includes("Rene")||texto.includes("Cantina"))local_id=locales.find(l=>l.nombre.includes("Rene"))?.id||local_id;
+    // local_id viene SIEMPRE del sidebar (localActivo), nunca del CSV.
+    // El CSV de Maxirest puede venir del local equivocado — no lo usamos.
+    const local_id=Number(localActivo);
     const ventas=[];
     const idx=texto.indexOf("VENTAS POR FORMA DE COBRO");
     if(idx>-1){

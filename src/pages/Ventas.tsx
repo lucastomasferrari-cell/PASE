@@ -122,7 +122,7 @@ export default function Ventas({ user, locales, localActivo }) {
         </div>
       </div>
 
-      {showMaxirest&&<div style={{marginBottom:16}}><ImportarMaxirest locales={locales} onImported={load}/></div>}
+      {showMaxirest&&<div style={{marginBottom:16}}><ImportarMaxirest locales={locales} localActivo={localActivo} onImported={load}/></div>}
 
       {/* SECCIÓN INFERIOR: filtros + historial */}
       <div className="panel">
