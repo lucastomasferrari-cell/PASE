@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope } from "../lib/auth";
+import { applyLocalScope, cuentasVisibles } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { CATEGORIAS_COMPRA, CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 
 export default function Remitos({ user, locales, localActivo }) {
+  const visCuentas = cuentasVisibles(user);
+  const cuentasUsables = visCuentas === null ? CUENTAS : CUENTAS.filter(c => visCuentas.includes(c));
   const [remitos, setRemitos] = useState([]);
   const [facturas, setFacturas] = useState([]);
   const [proveedores, setProveedores] = useState([]);
@@ -190,7 +192,7 @@ export default function Remitos({ user, locales, localActivo }) {
             <div className="modal-body">
               <div className="alert alert-info">Remito {pagarModal.nro} · {fmt_$(pagarModal.monto)}</div>
               <div className="alert alert-warn">Esto registra el pago sin factura. El gasto impacta en caja y en el EERR.</div>
-              <div className="field"><label>Cuenta de egreso</label><select value={pagoForm.cuenta} onChange={e=>setPagoForm({...pagoForm,cuenta:e.target.value})}>{CUENTAS.map(c=><option key={c}>{c}</option>)}</select></div>
+              <div className="field"><label>Cuenta de egreso</label><select value={pagoForm.cuenta} onChange={e=>setPagoForm({...pagoForm,cuenta:e.target.value})}>{cuentasUsables.map(c=><option key={c}>{c}</option>)}</select></div>
               <div className="field"><label>Monto</label><input type="number" value={pagoForm.monto} onChange={e=>setPagoForm({...pagoForm,monto:e.target.value})}/></div>
               <div className="field"><label>Fecha</label><input type="date" value={pagoForm.fecha} onChange={e=>setPagoForm({...pagoForm,fecha:e.target.value})}/></div>
             </div>

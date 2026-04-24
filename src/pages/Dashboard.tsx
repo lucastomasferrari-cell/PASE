@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope } from "../lib/auth";
+import { applyLocalScope, cuentasVisibles } from "../lib/auth";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_$ } from "../lib/utils";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
@@ -22,6 +22,10 @@ export default function Dashboard({ user, locales, localActivo }: any) {
     });
     let sq = db.from("saldos_caja").select("*");
     sq = applyLocalScope(sq, user, lid);
+    const visCuentas = cuentasVisibles(user);
+    if (visCuentas !== null) {
+      sq = visCuentas.length === 0 ? sq.eq("cuenta", "___NONE___") : sq.in("cuenta", visCuentas);
+    }
     let bq = db.from("blindaje_documentos").select("vencimiento, local_id");
     bq = applyLocalScope(bq, user, lid);
     let vsq = db.from("ventas").select("fecha, monto, local_id").gte("fecha", ultimos7[0]).lte("fecha", ultimos7[6]);

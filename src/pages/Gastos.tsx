@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope } from "../lib/auth";
+import { applyLocalScope, cuentasVisibles } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { CUENTAS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, COMISIONES_CATS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
@@ -23,6 +23,8 @@ const catsByTipo = (t: string) =>
   ALL_CATS;
 
 export default function Gastos({ user, locales, localActivo }) {
+  const visCuentas = cuentasVisibles(user);
+  const cuentasUsables = visCuentas === null ? CUENTAS : CUENTAS.filter(c => visCuentas.includes(c));
   const [search, setSearch] = useState("");
   const [desde, setDesde] = useState(toISO(new Date(today.getFullYear(), today.getMonth(), 1)));
   const [hasta, setHasta] = useState(toISO(today));
@@ -262,7 +264,7 @@ export default function Gastos({ user, locales, localActivo }) {
                 <div className="field"><label>Fecha</label><input type="date" value={form.fecha} onChange={e => setForm({ ...form, fecha: e.target.value })} /></div>
                 <div className="field"><label>Cuenta de egreso</label>
                   <select value={form.cuenta} onChange={e => setForm({ ...form, cuenta: e.target.value })}>
-                    {CUENTAS.map(c => <option key={c}>{c}</option>)}
+                    {cuentasUsables.map(c => <option key={c}>{c}</option>)}
                   </select>
                 </div>
               </div>

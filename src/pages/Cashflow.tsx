@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope } from "../lib/auth";
+import { applyLocalScope, cuentasVisibles } from "../lib/auth";
 import { fmt_$, toISO, today } from "../lib/utils";
 import { CUENTAS } from "../lib/constants";
 
@@ -18,22 +18,31 @@ export default function Cashflow({ user, locales, localActivo }: any) {
     const desde = mes + "-01";
     const hasta = mes + "-" + String(lastDay).padStart(2, "0");
     const lid = localActivo ? parseInt(String(localActivo)) : null;
+    const vis = cuentasVisibles(user);
+    const aplicarCuentas = <Q,>(q: Q): Q => {
+      if (vis === null) return q;
+      if (vis.length === 0) return (q as any).eq("cuenta", "___NONE___");
+      return (q as any).in("cuenta", vis);
+    };
 
     // 1. Ingresos cobrados — movimientos tipo "Ingreso Venta"
     let qIngresos = db.from("movimientos").select("cuenta, importe")
       .eq("tipo", "Ingreso Venta").eq("anulado", false)
       .gte("fecha", desde).lte("fecha", hasta);
     qIngresos = applyLocalScope(qIngresos, user, lid);
+    qIngresos = aplicarCuentas(qIngresos);
 
     // 2. Egresos pagados — todos los movimientos negativos excepto ingresos
     let qEgresos = db.from("movimientos").select("cuenta, tipo, cat, importe, detalle")
       .eq("anulado", false).lt("importe", 0)
       .gte("fecha", desde).lte("fecha", hasta);
     qEgresos = applyLocalScope(qEgresos, user, lid);
+    qEgresos = aplicarCuentas(qEgresos);
 
     // 3. Saldos actuales de caja
     let qSaldos = db.from("saldos_caja").select("*");
     qSaldos = applyLocalScope(qSaldos, user, lid);
+    qSaldos = aplicarCuentas(qSaldos);
 
     // 4. Facturas pendientes de pago
     let qFactPend = db.from("facturas").select("total, cat")

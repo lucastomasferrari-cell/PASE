@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
-import { localesVisibles, applyLocalScope } from "../lib/auth";
+import { localesVisibles, applyLocalScope, cuentasVisibles } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import {
@@ -44,6 +44,8 @@ const inp: any = { padding:"3px 5px", background:"var(--bg)", border:"1px solid 
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function RRHH({ user, locales, localActivo }) {
+  const visCuentas = cuentasVisibles(user);
+  const cuentasUsables = visCuentas === null ? CUENTAS_PAGO : CUENTAS_PAGO.filter(c => visCuentas.includes(c));
   const [tab, setTab] = useState("dashboard");
   const [legajoId, setLegajoId] = useState<string | null>(null);
   const [cfgModal, setCfgModal] = useState(false);
@@ -1088,7 +1090,7 @@ function TabPagos({
                   <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
                     <select className="search" style={{flex:1}} value={fp.cuenta}
                       onChange={e => setFormasPago(prev => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
-                      {CUENTAS_PAGO.map(c => <option key={c}>{c}</option>)}
+                      {cuentasUsables.map(c => <option key={c}>{c}</option>)}
                     </select>
                     <input type="number" className="search" style={{width:120}} placeholder="Monto" value={fp.monto}
                       onChange={e => setFormasPago(prev => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
@@ -1161,7 +1163,7 @@ function TabPagos({
               </div>
               <div className="field"><label>Cuenta de egreso</label>
                 <select value={adelForm.cuenta} onChange={e => setAdelForm({...adelForm, cuenta: e.target.value})}>
-                  {CUENTAS_PAGO.map(c => <option key={c}>{c}</option>)}
+                  {cuentasUsables.map(c => <option key={c}>{c}</option>)}
                 </select>
               </div>
               <div className="field"><label>Descripción (opcional)</label>

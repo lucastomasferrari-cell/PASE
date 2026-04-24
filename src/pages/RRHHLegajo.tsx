@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
+import { cuentasVisibles } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import {
@@ -23,6 +24,8 @@ const DOC_TIPOS = [
 const CUENTAS_LIQ = ["Caja Efectivo","Caja Chica","Caja Mayor","MercadoPago","Banco"];
 
 export default function RRHHLegajo({ empleadoId, user, locales, onClose, onGoToPago }: any) {
+  const visCuentas = cuentasVisibles(user);
+  const cuentasUsables = visCuentas === null ? CUENTAS_LIQ : CUENTAS_LIQ.filter(c => visCuentas.includes(c));
   const [emp, setEmp] = useState<any>(null);
   const [tab, setTab] = useState("datos");
   const [loading, setLoading] = useState(true);
@@ -542,7 +545,7 @@ function TabDatos({
                 </div>
                 <div className="field" style={{marginTop:12}}><label>Cuenta de egreso</label>
                   <select value={liqFinalCuenta} onChange={e => setLiqFinalCuenta(e.target.value)}>
-                    {CUENTAS_LIQ.map(c => <option key={c}>{c}</option>)}
+                    {cuentasUsables.map(c => <option key={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
@@ -767,7 +770,7 @@ function TabVacAgu({
                   <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
                     <select className="search" style={{flex:1}} value={l.cuenta}
                       onChange={e => setVacLineas(prev => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
-                      {CUENTAS_LIQ.map(c => <option key={c}>{c}</option>)}
+                      {cuentasUsables.map(c => <option key={c}>{c}</option>)}
                     </select>
                     <input type="number" className="search" style={{width:120}} placeholder="Monto" value={l.monto}
                       onChange={e => setVacLineas(prev => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
@@ -819,7 +822,7 @@ function TabVacAgu({
                   <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
                     <select className="search" style={{flex:1}} value={l.cuenta}
                       onChange={e => setAguLineas(prev => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
-                      {CUENTAS_LIQ.map(c => <option key={c}>{c}</option>)}
+                      {cuentasUsables.map(c => <option key={c}>{c}</option>)}
                     </select>
                     <input type="number" className="search" style={{width:120}} placeholder="Monto" value={l.monto}
                       onChange={e => setAguLineas(prev => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />

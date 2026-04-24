@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope } from "../lib/auth";
+import { applyLocalScope, cuentasVisibles } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { CATEGORIAS_COMPRA, CUENTAS, UNIDADES } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
@@ -18,6 +18,8 @@ const estadoDot = (estado: string) => {
 };
 
 export default function Compras({ user, locales, localActivo }) {
+  const visCuentas = cuentasVisibles(user);
+  const cuentasUsables = visCuentas === null ? CUENTAS : CUENTAS.filter(c => visCuentas.includes(c));
   const [facturas, setFacturas] = useState<any[]>([]);
   const [proveedores, setProveedores] = useState<any[]>([]);
   const [search, setSearch] = useState("");
@@ -365,7 +367,7 @@ export default function Compras({ user, locales, localActivo }) {
             <div className="modal-hd"><div className="modal-title">Registrar Pago</div><button className="close-btn" onClick={() => setPagarModal(null)}>✕</button></div>
             <div className="modal-body">
               <div className="alert alert-info">{pagarModal.nro} · Total: {fmt_$(pagarModal.total)}</div>
-              <div className="field"><label>Cuenta de egreso</label><select value={pagoForm.cuenta} onChange={e => setPagoForm({ ...pagoForm, cuenta: e.target.value })}>{CUENTAS.map(c => <option key={c}>{c}</option>)}</select></div>
+              <div className="field"><label>Cuenta de egreso</label><select value={pagoForm.cuenta} onChange={e => setPagoForm({ ...pagoForm, cuenta: e.target.value })}>{cuentasUsables.map(c => <option key={c}>{c}</option>)}</select></div>
               <div className="field"><label>Monto</label><input type="number" value={pagoForm.monto} onChange={e => setPagoForm({ ...pagoForm, monto: e.target.value })} /></div>
               <div className="field"><label>Fecha</label><input type="date" value={pagoForm.fecha} onChange={e => setPagoForm({ ...pagoForm, fecha: e.target.value })} /></div>
             </div>

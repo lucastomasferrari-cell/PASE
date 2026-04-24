@@ -44,8 +44,24 @@ export default function Caja({ user, locales = [], localActivo }: any) {
     setLoading(true);
     let q = db.from("movimientos").select("*").order("fecha", {ascending: false}).order("id", {ascending: false}).limit(80);
     q = applyLocalScope(q, user, localActivo);
+    // Defense-in-depth: si el usuario tiene cuentas restringidas, no traemos
+    // movimientos de cuentas ajenas ni saldos de cuentas ajenas.
+    if (vis !== null) {
+      if (vis.length === 0) {
+        q = q.eq("cuenta", "___NONE___"); // match imposible → 0 filas
+      } else {
+        q = q.in("cuenta", vis);
+      }
+    }
     let sq = db.from("saldos_caja").select("*");
     sq = applyLocalScope(sq, user, localActivo);
+    if (vis !== null) {
+      if (vis.length === 0) {
+        sq = sq.eq("cuenta", "___NONE___");
+      } else {
+        sq = sq.in("cuenta", vis);
+      }
+    }
     const [{data:m},{data:s}] = await Promise.all([q, sq]);
     setMovimientos(m||[]);
     // Si no hay localActivo, se agregan saldos de todos los locales por cuenta
