@@ -117,6 +117,59 @@ Modal Legajo accesible desde Empleados (botón "Legajo" por fila)
 - Pagos de sueldo crean gastos en tabla gastos con categoría "Sueldos".
 - Legajo del empleado es modal, no página separada.
 
+## Taxonomía canónica (movimientos.tipo, categorías, grupos)
+
+Post migration `20260424_taxonomia_grupo_ingresos.sql`:
+
+**`movimientos.tipo`** — valor canónico seteado por código/RPC, nunca por usuario. Universo:
+
+- Pagos de negocio: `Pago Proveedor`, `Pago Sueldo`, `Pago Vacaciones`, `Pago Aguinaldo`, `Liquidación Final`, `Adelanto`.
+- Gastos por grupo: `Gasto fijo`, `Gasto variable`, `Gasto publicidad`, `Gasto impuesto`, `Gasto comision` (el tipo lo derivan las RPCs a partir del grupo de la categoría).
+- Ingresos: `Ingreso Venta`, `Ingreso Manual`.
+- Manuales: `Egreso Manual`.
+- Internos: `Transferencia Salida`, `Transferencia Entrada`.
+- Legacy pre-batch α (ya no se genera, pero puede existir en filas viejas antes del cleanup): `Pago Gasto` (normalizado a `Egreso Manual` por la migration).
+
+**`config_categorias.grupo`** — clasificación contable única. Valores:
+
+| Grupo | Tipos de `config_categorias.tipo` |
+|-------|-----------------------------------|
+| CMV | `cat_compra` |
+| Gastos Fijos | `gasto_fijo` |
+| Gastos Variables | `gasto_variable` |
+| Publicidad y MKT | `gasto_publicidad` |
+| Comisiones | `gasto_comision` |
+| Impuestos | `gasto_impuesto` |
+| INGRESOS | `cat_ingreso` (11 filas: Liquidación Rappi/MP/PedidosYa/Evento/Bigbox/Fanbag/Nave + Ingreso Socio + Devolución Proveedor + Otro Ingreso + Transferencia Varios) |
+| (NULL) | `medio_cobro` — los medios no son grupo contable |
+
+Sueldos se deriva de `rrhh_liquidaciones`, no desde `config_categorias`.
+
+**`gastos.tipo`** — columna legacy que se mantiene (EERR.tsx filtra por ella). La RPC `crear_gasto` deriva el valor desde el grupo de la categoría elegida: `Gastos Fijos→"fijo"`, `Gastos Variables→"variable"`, etc. El frontend no tiene que preocuparse — el `p_tipo` que pasa queda como fallback cuando la categoría no está en el catálogo con grupo.
+
+**Fuente de verdad para listas de categorías en el frontend**: hook `useCategorias()` (`src/lib/useCategorias.ts`). Fetch único a `config_categorias` con cache en `sessionStorage` (1h TTL). Fallback silencioso a `constants.ts` si la DB falla.
+
+## Panel "Por cobrar" en Cashflow
+
+En `src/pages/Cashflow.tsx`, panel informativo que deriva en runtime:
+
+- Para cada medio de cobro no-efectivo del mes (Rappi Online, Peya Online, MP Delivery, Bigbox, Fanbag, Nave, tarjetas, QR, Link, transferencias): suma `ventas.monto` del mes.
+- Resta los movimientos con `cat = "Liquidación X"` del mismo mes y misma plataforma.
+- Muestra: vendido · cobrado · pendiente.
+
+Política Opción C (validada 2026-04-24): sólo efectivo dispara movimiento automático al cargar la venta. El resto se refleja en Cashflow cuando el usuario registra manualmente un movimiento de ingreso con la categoría de liquidación correspondiente (ver las 11 filas `cat_ingreso` en `config_categorias`).
+
+## Deuda técnica — Caja Efectivo
+
+Hoy existen dos representaciones paralelas para "Caja Efectivo":
+
+1. Fila en `saldos_caja` con `cuenta = 'Caja Efectivo'`. Las RPCs del batch α escriben ahí si el usuario elige esa cuenta como egreso.
+2. Tabla `caja_efectivo` (libro privado del dueño, panel "Caja Efectivo — Privado" en Tesorería).
+
+Cuando una venta con medio EFECTIVO SALON / EFECTIVO DELIVERY / PEYA EFECTIVO / EVENTO dispara movimiento automático, va a **Caja Chica** (no a Caja Efectivo). No están reconciliados. Para mover plata entre las dos representaciones hay que hacerlo manualmente.
+
+Pendiente para batch futuro: decidir si unificar las dos tablas o desambiguar nombres.
+
 ## EERR vs Cashflow — diferencia conceptual
 
 El sistema tiene dos miradas distintas sobre el dinero:
