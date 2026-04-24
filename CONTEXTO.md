@@ -116,6 +116,7 @@ Modal Legajo accesible desde Empleados (botón "Legajo" por fila)
 - El módulo RRHH NO depende del módulo Empleados viejo.
 - Pagos de sueldo crean gastos en tabla gastos con categoría "Sueldos".
 - Legajo del empleado es modal, no página separada.
+- **Migrations automáticas**: Claude Code corre las migrations con `POSTGRES_URL_NON_POOLING` via Session Pooler (accesible desde Vercel functions aunque esté marcada "Encrypted" y no baje con `env pull`). El flow: commit del SQL en `supabase/migrations/` → push → si hace falta, endpoint temporal `api/admin-run-sql.js` (protegido con `ADMIN_MIGRATION_SECRET`) que ejecuta SQL en transacción `BEGIN/COMMIT`, con rollback automático si falla. Queries de verificación (`SELECT COUNT(*) FROM pg_proc`, `pg_policies`, etc) post-migration para confirmar estado. El endpoint se elimina en un commit posterior para cerrar superficie de ataque. El usuario no copia-pega SQL en el Dashboard.
 
 ## Sistema de permisos por módulo
 
