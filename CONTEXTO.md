@@ -117,6 +117,35 @@ Modal Legajo accesible desde Empleados (botón "Legajo" por fila)
 - Pagos de sueldo crean gastos en tabla gastos con categoría "Sueldos".
 - Legajo del empleado es modal, no página separada.
 
+## EERR vs Cashflow — diferencia conceptual
+
+El sistema tiene dos miradas distintas sobre el dinero:
+
+**EERR (Estado de Resultados) — base devengada.** Cuenta el resultado del negocio independientemente de cuándo entra o sale la plata. Lee de: `ventas`, `facturas`, `gastos`, `rrhh_liquidaciones` (todo por fecha del hecho económico, no del pago).
+
+- Ingresos = ventas del período, por fecha de venta.
+- CMV = facturas de proveedores del período, por fecha de factura.
+- Gastos, Sueldos = por fecha de gasto o liquidación.
+
+**Cashflow — base percibida.** Cuenta cómo se mueve la plata entre cuentas. Lee de: `movimientos` (anulado=false) + `saldos_caja`.
+
+- Ingresos cobrados = movimientos positivos (ventas cobradas, liquidaciones de plataformas, aportes de socios, devoluciones, etc.).
+- Egresos pagados = movimientos negativos.
+
+Los "Ingresos" de Cashflow **NO van al EERR**. La venta se cuenta en EERR cuando se carga en Ventas (fecha de venta, no de cobro). Cuando Rappi/MercadoPago/PedidosYa/Bigbox/etc liquidan días después, ese movimiento entra al Cashflow como realización de cobro, pero no es una venta nueva — sumarla al EERR sería contar dos veces.
+
+**Categorías de ingreso exclusivas de Cashflow (grupo "INGRESOS"):**
+
+- Liquidación Rappi, MercadoPago, PedidosYa, Evento, Bigbox, Fanbag, Nave.
+- Ingreso Socio, Devolución Proveedor, Otro Ingreso, Transferencia Varios.
+
+**Cuándo mirar cada uno:**
+
+- EERR para rentabilidad mensual del negocio (¿gané o perdí este mes en términos contables?).
+- Cashflow para liquidez y plan de caja (¿con qué plata cuento hoy y qué compromisos tengo pendientes?).
+
+**Consecuencia**: EERR y Cashflow no tienen que coincidir día a día. Se reconcilian a largo plazo. Si un mes no cuadran, no es necesariamente un bug — es el delay natural de cobros diferidos (tarjeta 48-72h, Rappi/Peya 7-14 días, eventos al cierre, etc.).
+
 ## Comandos útiles
 - Claude Code: claude --dangerously-skip-permissions
 - Deploy: push a main → Vercel auto-deploya
