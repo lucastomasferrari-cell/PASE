@@ -33,6 +33,23 @@ export default function Compras({ user, locales, localActivo }) {
   const [modal, setModal] = useState(false);
   const [pagarModal, setPagarModal] = useState<any>(null);
   const [verModal, setVerModal] = useState<any>(null);
+  // Signed URL cargada on-demand cuando el modal ver se abre con imagen_url.
+  // Se reinicia cuando el modal se cierra.
+  const [imgUrl, setImgUrl] = useState<string | null>(null);
+  const [imgLoading, setImgLoading] = useState(false);
+  useEffect(() => {
+    if (!verModal?.imagen_url) { setImgUrl(null); return; }
+    let cancelled = false;
+    setImgLoading(true);
+    db.storage.from("facturas").createSignedUrl(verModal.imagen_url, 3600)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        setImgLoading(false);
+        if (error || !data) { setImgUrl(null); return; }
+        setImgUrl(data.signedUrl);
+      });
+    return () => { cancelled = true; };
+  }, [verModal?.imagen_url]);
   const [loading, setLoading] = useState(true);
   const [pagando, setPagando] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -355,6 +372,32 @@ export default function Compras({ user, locales, localActivo }) {
                       <span>{fmt_d(p.fecha)} · {p.cuenta}</span><span style={{ color: "var(--muted2)" }}>{fmt_$(p.monto)}</span>
                     </div>
                   ))}
+                </div>
+              )}
+              {verModal.imagen_url && (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase", marginBottom: 8 }}>Comprobante</div>
+                  {imgLoading && <div className="loading">Cargando comprobante...</div>}
+                  {!imgLoading && imgUrl && (() => {
+                    const isPdf = /\.pdf$/i.test(verModal.imagen_url);
+                    return isPdf ? (
+                      <div>
+                        <iframe src={imgUrl} style={{ width: "100%", height: 500, border: "1px solid var(--bd)", borderRadius: "var(--r)", background: "#fff" }} />
+                        <div style={{ marginTop: 6, fontSize: 11 }}>
+                          <a href={imgUrl} target="_blank" rel="noreferrer" style={{ color: "var(--acc)" }}>Abrir en nueva pestaña →</a>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <a href={imgUrl} target="_blank" rel="noreferrer">
+                          <img src={imgUrl} alt="Comprobante" style={{ width: "100%", maxHeight: 500, objectFit: "contain", borderRadius: "var(--r)", border: "1px solid var(--bd)", background: "#fff" }} />
+                        </a>
+                      </div>
+                    );
+                  })()}
+                  {!imgLoading && !imgUrl && (
+                    <div className="alert alert-warn" style={{ fontSize: 11 }}>No se pudo cargar el comprobante. El archivo puede haber sido eliminado.</div>
+                  )}
                 </div>
               )}
             </div>
