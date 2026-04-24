@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
 import { localesVisibles, applyLocalScope } from "../lib/auth";
+import { translateRpcError } from "../lib/errors";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import {
   calcularVacaciones,
@@ -504,30 +505,14 @@ export default function RRHH({ user, locales, localActivo }) {
     if (!monto || monto <= 0 || !adelForm.empleado_id || !adelForm.cuenta) return;
     const emp = allEmps.find(e => e.id === adelForm.empleado_id);
     if (!emp) return;
-    const lid = emp.local_id;
-    const desc = adelForm.descripcion
-      ? `Adelanto ${emp.apellido} ${emp.nombre} — ${adelForm.descripcion}`
-      : `Adelanto ${emp.apellido} ${emp.nombre}`;
-
-    await db.from("movimientos").insert([{
-      id: genId("MOV"), fecha: adelForm.fecha, cuenta: adelForm.cuenta,
-      tipo: "Adelanto", cat: "SUELDOS", importe: -monto, detalle: desc,
-      local_id: lid,
-    }]);
-    if (lid) {
-      const { data: caja } = await db.from("saldos_caja").select("saldo")
-        .eq("cuenta", adelForm.cuenta).eq("local_id", lid).maybeSingle();
-      if (caja) await db.from("saldos_caja")
-        .update({ saldo: (caja.saldo || 0) - monto })
-        .eq("cuenta", adelForm.cuenta).eq("local_id", lid);
-    }
-    await db.from("rrhh_adelantos").insert([{
-      empleado_id: adelForm.empleado_id,
-      monto, fecha: adelForm.fecha,
-      local_id: lid, cuenta: adelForm.cuenta,
-      descontado: false,
-      registrado_por: user?.nombre || null,
-    }]);
+    const { error } = await db.rpc("registrar_adelanto", {
+      p_empleado_id: adelForm.empleado_id,
+      p_monto: monto,
+      p_cuenta: adelForm.cuenta,
+      p_fecha: adelForm.fecha,
+      p_detalle: adelForm.descripcion || null,
+    });
+    if (error) { alert(translateRpcError(error)); return; }
 
     showToast(`Adelanto registrado — ${emp.apellido}`);
     setAdelModal(false);
@@ -1019,46 +1004,33 @@ function TabPagos({
           if (!puedeConfirmar || pagando) return;
           setPagando(true);
           try {
-            const desc = `${completaPago && yaPagado === 0 ? "Sueldo" : completaPago ? "Sueldo (saldo final)" : "Sueldo (parcial)"} ${emp.apellido} ${emp.nombre} - ${MESES_NOMBRE[pagoMes]} ${pagoAnio}`;
+            // Serializar las formas de pago (sólo las con monto > 0).
+            const formasValidas = formasPago
+              .filter(fp => (parseFloat(fp.monto) || 0) > 0)
+              .map(fp => ({ cuenta: fp.cuenta, monto: parseFloat(fp.monto) }));
+            const adelIds = (adelantosPendientes || []).map((a: any) => a.id);
 
-            for (const fp of formasPago) {
-              const monto = parseFloat(fp.monto) || 0;
-              if (monto <= 0) continue;
-              if (emp.local_id) {
-                const { data: caja } = await db.from("saldos_caja").select("saldo").eq("cuenta", fp.cuenta).eq("local_id", emp.local_id).maybeSingle();
-                if (caja) await db.from("saldos_caja").update({ saldo: (caja.saldo || 0) - monto }).eq("cuenta", fp.cuenta).eq("local_id", emp.local_id);
-              }
-              await db.from("movimientos").insert([{
-                id: genId("MOV"), fecha: toISO(today), cuenta: fp.cuenta,
-                tipo: "Pago Sueldo", cat: "SUELDOS", importe: -monto, detalle: desc,
-                local_id: emp.local_id,
-              }]);
-            }
-
-            const nuevosPagos = yaPagado + asignadoTotal;
-            const payload: any = { pagos_realizados: nuevosPagos };
-            if (completaPago) {
-              payload.estado = "pagado";
-              payload.gasto_id = null;
-              payload.pagado_at = new Date().toISOString();
-              payload.pagado_por = user?.id;
-            }
-
-            if (liq._generated && nov?.id) {
+            // Si la liq vino _generated (frontend la armó sin persistir),
+            // la RPC la crea on-the-fly con p_crear_liq + p_calc.
+            let pCalc: any = null;
+            if (liq._generated) {
               const { _novedadId, _generated, id: _ignoreId, pagos_realizados: _ignorePag, ...calcFields } = liq;
-              await db.from("rrhh_liquidaciones").insert([{ novedad_id: nov.id, ...calcFields, estado: completaPago ? "pagado" : "pendiente", pagos_realizados: nuevosPagos, calculado_at: new Date().toISOString(), ...(completaPago ? { pagado_at: payload.pagado_at, pagado_por: user?.id } : {}) }]);
-            } else {
-              await db.from("rrhh_liquidaciones").update(payload).eq("id", liq.id);
+              pCalc = calcFields;
             }
 
-            if (adelantosPendientes && adelantosPendientes.length > 0) {
-              await db.from("rrhh_adelantos")
-                .update({ descontado: true })
-                .in("id", adelantosPendientes.map((a: any) => a.id));
-            }
+            const { data, error } = await db.rpc("pagar_sueldo", {
+              p_nov_id: nov.id,
+              p_formas_pago: formasValidas,
+              p_adelantos_ids: adelIds,
+              p_fecha: toISO(today),
+              p_mes: pagoMes,
+              p_anio: pagoAnio,
+              p_crear_liq: !!liq._generated,
+              p_calc: pCalc,
+            });
+            if (error) throw error;
 
-            if (completaPago) {
-              await db.from("rrhh_empleados").update({ aguinaldo_acumulado: (emp.aguinaldo_acumulado || 0) + total / 12 }).eq("id", emp.id);
+            if ((data as any)?.completa) {
               showToast("Pago completado");
             } else {
               showToast(`Pago parcial registrado — Resta ${fmt_$(restanteTrasEste)}`);
@@ -1067,7 +1039,7 @@ function TabPagos({
             await loadPagos();
             await loadEmpleados();
           } catch (err: any) {
-            alert("Error: " + err.message);
+            alert(translateRpcError(err));
           } finally {
             setPagando(false);
           }
