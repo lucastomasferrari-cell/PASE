@@ -14,6 +14,7 @@ export default function Proveedores({ user, localActivo }: { user: any; locales?
   const [ctaLoading,setCtaLoading]=useState(false);
   const [ctaMes,setCtaMes]=useState(toISO(today).slice(0,7));
   const [search,setSearch]=useState("");
+  const [verInactivos,setVerInactivos]=useState(false);
   const [loading,setLoading]=useState(true);
   const emptyForm={nombre:"",cuit:"",cat:"PESCADERIA",estado:"Activo"};
   const [form,setForm]=useState(emptyForm);
@@ -37,7 +38,9 @@ export default function Proveedores({ user, localActivo }: { user: any; locales?
     setLoading(false);
   };
   useEffect(()=>{load();},[localActivo]);
-  const pFilt=proveedores.filter(p=>!search||p.nombre.toLowerCase().includes(search.toLowerCase())||(p.cuit||"").includes(search));
+  const pFilt=proveedores
+    .filter(p=>verInactivos||p.estado!=="Inactivo")
+    .filter(p=>!search||p.nombre.toLowerCase().includes(search.toLowerCase())||(p.cuit||"").includes(search));
   const guardar=async()=>{
     if(!form.nombre)return;
     const {error}=await db.from("proveedores").insert([{...form,saldo:0}]);
@@ -71,7 +74,14 @@ export default function Proveedores({ user, localActivo }: { user: any; locales?
     <div>
       <div className="ph-row">
         <div><div className="ph-title">Proveedores</div></div>
-        <div style={{display:"flex",gap:8}}><input className="search" placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)}/><button className="btn btn-acc" onClick={()=>setModal(true)}>+ Nuevo</button></div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"var(--muted2)",cursor:"pointer"}}>
+            <input type="checkbox" checked={verInactivos} onChange={e=>setVerInactivos(e.target.checked)} style={{accentColor:"var(--acc)"}}/>
+            Ver inactivos
+          </label>
+          <input className="search" placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)}/>
+          <button className="btn btn-acc" onClick={()=>setModal(true)}>+ Nuevo</button>
+        </div>
       </div>
       <div className="panel">
         {loading?<div className="loading">Cargando...</div>:(
