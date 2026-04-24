@@ -152,7 +152,7 @@ Reglas:
 
     const confGlobal=resultado?.confianza_global??100;
     const estado=confGlobal<70?"revision":"pendiente";
-    const {error:insErr}=await db.from("facturas").insert([{...form,id,prov_id:parseInt(form.prov_id),local_id:parseInt(form.local_id),neto:parseMonto(form.neto),iva21:parseMonto(form.iva21),iva105:parseMonto(form.iva105),iibb:parseMonto(form.iibb),total:parseMonto(form.total),estado,pagos:[],imagen_url}]);
+    const {error:insErr}=await db.from("facturas").insert([{...form,id,prov_id:parseInt(form.prov_id),local_id:parseInt(form.local_id),neto:parseMonto(form.neto),iva21:parseMonto(form.iva21),iva105:parseMonto(form.iva105),iibb:parseMonto(form.iibb),total:parseMonto(form.total),estado,pagos:[],imagen_url,fecha:form.fecha||null,venc:form.venc||null}]);
     if(insErr){
       // Rollback del archivo si el insert falló, así no queda huérfano
       if(imagen_url) await db.storage.from("facturas").remove([imagen_url]);

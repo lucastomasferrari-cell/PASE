@@ -129,7 +129,10 @@ export default function Compras({ user, locales, localActivo }) {
       const totalAbs = calcTotal();
       const total = isNC ? -Math.abs(totalAbs) : totalAbs;
       const id = genId(isNC ? "NC" : "FACT");
-      const nueva = { ...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(form.local_id), neto: parseFloat(form.neto), iva21: parseFloat(form.iva21) || 0, iva105: parseFloat(form.iva105) || 0, iibb: parseFloat(form.iibb) || 0, perc_iva: parseFloat(form.perc_iva) || 0, otros_cargos: parseFloat(form.otros_cargos) || 0, descuentos: parseFloat(form.descuentos) || 0, total, estado: isNC ? "pagada" : "pendiente", pagos: [], tipo: form.tipo };
+      // Campos date: "" → null. Postgres rechaza string vacío en columnas
+      // date con "invalid input syntax for type date: \"\"". Común en NC
+      // que no siempre tienen vencimiento.
+      const nueva = { ...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(form.local_id), neto: parseFloat(form.neto), iva21: parseFloat(form.iva21) || 0, iva105: parseFloat(form.iva105) || 0, iibb: parseFloat(form.iibb) || 0, perc_iva: parseFloat(form.perc_iva) || 0, otros_cargos: parseFloat(form.otros_cargos) || 0, descuentos: parseFloat(form.descuentos) || 0, total, estado: isNC ? "pagada" : "pendiente", pagos: [], tipo: form.tipo, fecha: form.fecha || null, venc: form.venc || null };
       const { error: factErr } = await db.from("facturas").insert([nueva]);
       if (factErr) throw new Error("Error guardando factura: " + factErr.message);
 
