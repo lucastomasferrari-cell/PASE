@@ -82,8 +82,23 @@ export default function Compras({ user, locales, localActivo }) {
 
   const fFilt = facturas.filter(f => {
     if (f.estado === "anulada") return false;
-    if ((f.tipo || "factura") === "nota_credito") return false;
-    if (pillEstado !== "todas" && f.estado !== pillEstado) return false;
+    const isNC = (f.tipo || "factura") === "nota_credito";
+    // Tab semantics:
+    //  - "todas": facturas + NC mezcladas por fecha
+    //  - "pendiente"/"vencida"/"pagada": solo facturas con ese estado
+    //  - "nc": solo notas de crédito
+    // Bug #32: antes la sección filtraba NC siempre, dejándolas invisibles
+    // del listado de Compras aunque en Proveedores → Estado de Cuenta
+    // aparecían en "NC Disponibles". Anto cargaba una NC y creía que se
+    // había perdido.
+    if (pillEstado === "nc") {
+      if (!isNC) return false;
+    } else if (pillEstado === "todas") {
+      // pasa todo (factura o NC)
+    } else {
+      if (isNC) return false;
+      if (f.estado !== pillEstado) return false;
+    }
     if (localActivo && String(f.local_id) !== String(localActivo)) return false;
     if (provFiltro && String(f.prov_id) !== String(provFiltro)) return false;
     if (desde && f.fecha < desde) return false;
@@ -275,7 +290,7 @@ export default function Compras({ user, locales, localActivo }) {
 
       {/* Pills */}
       <div className="pills">
-        {[["todas", "Todas"], ["pendiente", "Pendientes"], ["vencida", "Vencidas"], ["pagada", "Pagadas"]].map(([id, l]) => (
+        {[["todas", "Todas"], ["pendiente", "Pendientes"], ["vencida", "Vencidas"], ["pagada", "Pagadas"], ["nc", "Notas de Crédito"]].map(([id, l]) => (
           <div key={id} className={`pill ${pillEstado === id ? "active" : ""}`} onClick={() => setPillEstado(id)}>{l}</div>
         ))}
       </div>
@@ -294,11 +309,15 @@ export default function Compras({ user, locales, localActivo }) {
             </tr></thead>
             <tbody>{fFilt.map(f => {
               const prov = proveedores.find(p => p.id === f.prov_id);
+              const isNC = (f.tipo || "factura") === "nota_credito";
               return (
                 <tr key={f.id}>
                   <td>
                     <div style={{ fontSize: 12, fontWeight: 500, color: "var(--txt)" }}>{prov?.nombre || "—"}</div>
-                    <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 1 }}>{f.nro}</div>
+                    <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 1, display: "flex", alignItems: "center", gap: 6 }}>
+                      <span>{f.nro}</span>
+                      {isNC && <span className="badge b-info" style={{ fontSize: 8, letterSpacing: 0.5 }}>NC</span>}
+                    </div>
                   </td>
                   <td>
                     <div style={{ fontSize: 11, color: "var(--txt)" }}>{fmt_d(f.fecha)}</div>
@@ -307,12 +326,12 @@ export default function Compras({ user, locales, localActivo }) {
                     </div>
                   </td>
                   <td><span className="badge b-muted">{f.cat || "—"}</span></td>
-                  <td style={{ textAlign: "right" }}><span className="num">{fmt_$(f.total)}</span></td>
-                  <td>{estadoDot(f.estado)}</td>
+                  <td style={{ textAlign: "right" }}><span className="num" style={isNC ? { color: "var(--info)" } : undefined}>{fmt_$(f.total)}</span></td>
+                  <td>{isNC ? <span className="badge b-info">NC disponible</span> : estadoDot(f.estado)}</td>
                   <td>
                     <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
                       <button className="btn btn-ghost btn-sm" onClick={() => setVerModal(f)}>Ver</button>
-                      {f.estado !== "pagada" && <button className="btn btn-success btn-sm" onClick={() => { setPagarModal(f); setPagoForm({ cuenta: "MercadoPago", monto: f.total, fecha: toISO(today) }); }}>Pagar</button>}
+                      {!isNC && f.estado !== "pagada" && <button className="btn btn-success btn-sm" onClick={() => { setPagarModal(f); setPagoForm({ cuenta: "MercadoPago", monto: f.total, fecha: toISO(today) }); }}>Pagar</button>}
                       <button className="btn btn-danger btn-sm" onClick={() => anular(f)}>Anular</button>
                     </div>
                   </td>

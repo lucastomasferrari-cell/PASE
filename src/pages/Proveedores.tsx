@@ -174,6 +174,20 @@ export default function Proveedores({ user, localActivo }: { user: any; locales?
                   <tr key={f.id}><td className="mono">{f.nro}</td><td className="mono">{fmt_d(f.fecha)}</td><td className="mono" style={{color:f.estado==="vencida"?"var(--danger)":"var(--muted2)"}}>{fmt_d(f.venc)}</td><td style={{textAlign:"right"}}><span className="num kpi-warn">{fmt_$(f.total)}</span></td><td><span className={`badge ${f.estado==="vencida"?"b-danger":"b-warn"}`}>{f.estado==="vencida"?"Vencida":"Pendiente"}</span></td></tr>
                 ))}</tbody></table>
               </div>)}
+              {/* Bug #32: las NC del proveedor también se listan acá. El estado
+                  "Disponible" es estimado: hoy el sistema no tiene flow de
+                  aplicación de NC contra factura puntual (el RPC pagar_factura
+                  no consume NC). Las NC restan del saldo global del proveedor
+                  pero no se marcan individualmente como aplicadas. Si en el
+                  futuro se agrega esa feature, el badge se va a poder
+                  diferenciar entre Disponible/Aplicada. */}
+              {ncs.length>0&&(<div className="panel" style={{marginBottom:12}}>
+                <div className="panel-hd"><span className="panel-title">Notas de Crédito ({ncs.length})</span></div>
+                <table><thead><tr><th>Nº NC</th><th>Fecha</th><th style={{textAlign:"right"}}>Monto</th><th>Estado</th></tr></thead>
+                <tbody>{ncs.sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||"")).map(f=>(
+                  <tr key={f.id}><td className="mono">{f.nro}</td><td className="mono">{fmt_d(f.fecha)}</td><td style={{textAlign:"right"}}><span className="num kpi-info">{fmt_$(Math.abs(f.total||0))}</span></td><td><span className="badge b-info">Disponible</span></td></tr>
+                ))}</tbody></table>
+              </div>)}
               {pagos.length>0&&(<div className="panel">
                 <div className="panel-hd"><span className="panel-title">Historial de Pagos</span></div>
                 <table><thead><tr><th>Fecha</th><th>Factura</th><th>Cuenta</th><th style={{textAlign:"right"}}>Monto</th></tr></thead>
@@ -181,7 +195,7 @@ export default function Proveedores({ user, localActivo }: { user: any; locales?
                   <tr key={i}><td className="mono">{fmt_d(p.fecha)}</td><td className="mono">{p.nro}</td><td style={{fontSize:11,color:"var(--muted2)"}}>{p.cuenta}</td><td style={{textAlign:"right"}}><span className="num kpi-success">{fmt_$(p.monto)}</span></td></tr>
                 ))}</tbody></table>
               </div>)}
-              {pendientes.length===0&&vencidas.length===0&&pagos.length===0&&<div className="empty">Sin movimientos registrados</div>}
+              {pendientes.length===0&&vencidas.length===0&&pagos.length===0&&ncs.length===0&&<div className="empty">Sin movimientos registrados</div>}
             </>);
           })()}
         </div>
