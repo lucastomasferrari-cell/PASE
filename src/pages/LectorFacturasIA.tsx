@@ -51,54 +51,40 @@ export default function LectorFacturasIA({ locales, localActivo }) {
             role:"user",
             content:[
               {type:isImg?"image":"document",source:{type:"base64",media_type:mediaType,data:base64}},
-              {type:"text",text:`Sos un asistente de contabilidad argentina. Analizá esta factura y extraé los datos en formato JSON exacto, sin texto adicional, sin markdown, solo el JSON puro.
+              {type:"text",text:`Extraé datos de esta factura argentina. Devolvé SOLO JSON, sin texto extra, sin markdown.
 
-Formato requerido:
+FORMATO CRÍTICO DE MONTOS:
+En Argentina: punto = miles, coma = decimal. Ejemplo: "166.876,67" = ciento sesenta y seis mil ochocientos setenta y seis con sesenta y siete centavos.
+En el JSON, usá punto decimal: 166876.67. NUNCA elimines la coma decimal — eso multiplica por 100 y rompe la factura.
+
+Si hay dudas sobre un monto, devolvé 0 y bajá la confianza, NUNCA inventes números.
+
+Estructura JSON requerida:
 {
-  "razon_social": "nombre del emisor",
+  "razon_social": "string",
   "cuit_emisor": "XX-XXXXXXXX-X",
-  "tipo_factura": "A o B o C o X",
+  "tipo_factura": "A|B|C|X",
   "nro_factura": "XXXX-XXXXXXXX",
   "fecha_emision": "YYYY-MM-DD",
   "fecha_vencimiento": "YYYY-MM-DD o null",
-  "neto_gravado": 0,
-  "iva_21": 0,
-  "iva_105": 0,
-  "percepciones_iibb": 0,
-  "percepciones_iva": 0,
-  "total": 0,
-  "items": [
-    {"descripcion": "nombre producto", "cantidad": 0, "unidad": "kg/l/u", "precio_unitario": 0, "subtotal": 0}
-  ],
-  "confianza": {
-    "razon_social": 0,
-    "nro_factura": 0,
-    "fecha_emision": 0,
-    "total": 0,
-    "neto_gravado": 0
-  },
-  "confianza_global": 0,
-  "advertencias": []
+  "neto_gravado": numero_o_0,
+  "iva_21": numero_o_0,
+  "iva_105": numero_o_0,
+  "percepciones_iibb": numero_o_0,
+  "percepciones_iva": numero_o_0,
+  "total": numero_o_0,
+  "items": [{"descripcion": "string", "cantidad": numero, "unidad": "kg|l|u", "precio_unitario": numero, "subtotal": numero}],
+  "confianza": {"razon_social": 0-100, "nro_factura": 0-100, "fecha_emision": 0-100, "total": 0-100, "neto_gravado": 0-100},
+  "confianza_global": 0-100,
+  "advertencias": ["string corto"]
 }
 
-Reglas:
-- Si algún campo no existe en la factura, poné 0 o null según corresponda.
+VALIDACIÓN INTERNA antes de responder:
+- ¿La suma de items.subtotal coincide aproximadamente con neto_gravado? Si no, baja confianza.
+- ¿neto_gravado + iva_21 + iva_105 + percepciones suma aproximadamente al total? Si no, agregá advertencia "totales no cuadran".
+- Si total parece desproporcionadamente grande (>10M para una factura típica), revisá los separadores decimales una vez más antes de responder.
 
-IMPORTANTE — Formato de montos en facturas argentinas:
-En Argentina los montos se escriben con punto como separador de miles y coma como separador decimal. Ejemplos:
-- "$ 166.876,67" significa ciento sesenta y seis mil ochocientos setenta y seis con sesenta y siete centavos. En JSON debe ir como 166876.67.
-- "$ 1.234.567,89" significa un millón doscientos treinta y cuatro mil quinientos sesenta y siete con ochenta y nueve centavos. En JSON debe ir como 1234567.89.
-- "$ 50,00" significa cincuenta pesos. En JSON debe ir como 50.00 (o 50).
-
-Reglas de montos:
-- En el JSON, los montos van como números JavaScript estándar: usá PUNTO como separador decimal (no coma) y NO uses separadores de miles.
-- NUNCA quites la coma decimal ni multipliques por 100. Si en la factura ves "166.876,67", el JSON debe tener 166876.67 (con punto decimal), NO 16687667.
-- Si la factura no tiene decimales explícitos (ej: "$ 1.000"), poné 1000 o 1000.00.
-- Si un monto no existe en la factura, poné 0.
-
-- En "confianza" y "confianza_global" devolvé un número de 0 a 100 indicando qué tan seguro estás de cada dato extraído. 100 = nítido y sin ambigüedad, 50 = legible pero hay dudas, 0 = ilegible o inferido.
-- "confianza_global" debe reflejar el peor campo crítico (total, nro_factura, razon_social) — si cualquiera de esos es bajo, bajá el global.
-- En "advertencias" poné un array de strings cortos (máx 3) describiendo problemas específicos: "neto + IVA no cuadra con total", "CUIT parcialmente ilegible", "fecha ambigua", etc. Si no hay problemas, devolvé [].`}
+Si la factura está borrosa o no podés leer claramente, bajá confianza_global a <50 y NO inventes números.`}
             ]
           }]
         })
