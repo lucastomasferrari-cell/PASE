@@ -4,82 +4,10 @@ import { fmt_d, fmt_$, genId, parseMonto } from "../lib/utils";
 import { useCategorias } from "../lib/useCategorias";
 import { UNIDADES } from "../lib/constants";
 
-// Pre-procesamiento estilo cam-scanner antes de enviar a la IA. Mejora la
-// legibilidad de fotos de teléfono (tipografías chicas, iluminación irregular)
-// usando solo canvas API nativa — sin dependencias adicionales en el bundle.
-//
-// Pipeline:
-//  1. Si lado mayor < 2000px, escalar para llevarlo a 2000px (preserva aspect
-//     ratio). imageSmoothingQuality="high" da interpolación tipo bicúbica.
-//  2. Convertir a escala de grises (luma estándar BT.601).
-//  3. Calcular umbral con Otsu's method y binarizar (texto negro / fondo blanco).
-//  4. Re-encodear como JPEG calidad 0.95.
-//
-// La binarización puede dañar imágenes con sombras o iluminación irregular —
-// si eso pasa, el botón "Usar imagen original" en la UI re-direcciona el
-// archivo crudo a la IA. Para PDFs no aplica: ya tienen buena calidad y la
-// función pasa el archivo original sin tocar.
-async function procesarImagenParaIA(file: File): Promise<File> {
-  if (!file.type.startsWith("image/")) return file;
-  const bitmap = await createImageBitmap(file);
-  const maxDim = Math.max(bitmap.width, bitmap.height);
-  const scale = maxDim < 2000 ? 2000 / maxDim : 1;
-  const w = Math.round(bitmap.width * scale);
-  const h = Math.round(bitmap.height * scale);
-  const canvas = document.createElement("canvas");
-  canvas.width = w; canvas.height = h;
-  const ctx = canvas.getContext("2d")!;
-  ctx.imageSmoothingEnabled = true;
-  (ctx as any).imageSmoothingQuality = "high";
-  ctx.drawImage(bitmap, 0, 0, w, h);
-  if ((bitmap as any).close) (bitmap as any).close();
-
-  const imageData = ctx.getImageData(0, 0, w, h);
-  const data = imageData.data;
-  const gray = new Uint8Array(w * h);
-  for (let i = 0, j = 0; i < data.length; i += 4, j++) {
-    gray[j] = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) | 0;
-  }
-
-  // Otsu's method: encontrar el umbral que maximiza la varianza inter-clase
-  // entre fondo (oscuro) y texto (claro), o viceversa.
-  const hist = new Array(256).fill(0);
-  for (let i = 0; i < gray.length; i++) hist[gray[i]]++;
-  const total = gray.length;
-  let sumAll = 0;
-  for (let i = 0; i < 256; i++) sumAll += i * hist[i];
-  let sumB = 0, wB = 0, maxVar = -1, threshold = 128;
-  for (let t = 0; t < 256; t++) {
-    wB += hist[t];
-    if (wB === 0) continue;
-    const wF = total - wB;
-    if (wF === 0) break;
-    sumB += t * hist[t];
-    const mB = sumB / wB;
-    const mF = (sumAll - sumB) / wF;
-    const between = wB * wF * (mB - mF) * (mB - mF);
-    if (between > maxVar) { maxVar = between; threshold = t; }
-  }
-
-  for (let i = 0, j = 0; i < data.length; i += 4, j++) {
-    const v = gray[j] >= threshold ? 255 : 0;
-    data[i] = v; data[i + 1] = v; data[i + 2] = v;
-  }
-  ctx.putImageData(imageData, 0, 0);
-
-  const blob = await new Promise<Blob>((res, rej) =>
-    canvas.toBlob(b => (b ? res(b) : rej(new Error("encode failed"))), "image/jpeg", 0.95));
-  return new File([blob], (file.name.replace(/\.[^.]+$/, "") || "factura") + "-procesada.jpg", { type: "image/jpeg" });
-}
-
 export default function LectorFacturasIA({ locales, localActivo }) {
   const { CATEGORIAS_COMPRA } = useCategorias();
   const [archivo,setArchivo]=useState<File|null>(null);
-  const [archivoProcesado,setArchivoProcesado]=useState<File|null>(null);
   const [preview,setPreview]=useState<string|null>(null);
-  const [previewProcesado,setPreviewProcesado]=useState<string|null>(null);
-  const [procesando,setProcesando]=useState(false);
-  const [usarProcesada,setUsarProcesada]=useState(true);
   const [loading,setLoading]=useState(false);
   const [resultado,setResultado]=useState(null);
   const [proveedores,setProveedores]=useState([]);
@@ -109,13 +37,9 @@ export default function LectorFacturasIA({ locales, localActivo }) {
     if(!archivo)return;
     setLoading(true);setResultado(null);
     try{
-      // Bug #41 fase final: enviar la imagen procesada (canvas pipeline) por
-      // default. Si el usuario tocó "Usar imagen original" porque la
-      // binarización dañó la lectura, archivoOptimo cae al original.
-      const archivoOptimo = (usarProcesada && archivoProcesado) ? archivoProcesado : archivo;
-      const base64=await toBase64(archivoOptimo);
-      const isImg=archivoOptimo.type.startsWith("image/");
-      const mediaType=isImg?archivoOptimo.type:"application/pdf";
+      const base64=await toBase64(archivo);
+      const isImg=archivo.type.startsWith("image/");
+      const mediaType=isImg?archivo.type:"application/pdf";
 
       const response=await fetch("/api/claude",{
         method:"POST",
@@ -343,28 +267,12 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
           <div style={{padding:16}}>
             <div style={{border:"2px dashed var(--bd2)",borderRadius:"var(--r)",padding:32,textAlign:"center",background:"var(--s2)",marginBottom:12}}>
               <input type="file" accept=".pdf,.jpg,.jpeg,.png" style={{display:"none"}} id="factura-upload"
-                onChange={async e=>{
+                onChange={e=>{
                   const f=e.target.files?.[0];
                   if(!f)return;
-                  // Reset state al subir nueva factura
-                  setArchivo(f);setResultado(null);setUsarProcesada(true);
-                  setArchivoProcesado(null);setPreviewProcesado(null);
-                  if(f.type.startsWith("image/")){
-                    setPreview(URL.createObjectURL(f));
-                    setProcesando(true);
-                    try {
-                      const procesada = await procesarImagenParaIA(f);
-                      setArchivoProcesado(procesada);
-                      setPreviewProcesado(URL.createObjectURL(procesada));
-                    } catch (err) {
-                      console.warn("[lector-ia] pre-procesamiento falló, usando original:",err);
-                      setUsarProcesada(false);
-                    } finally {
-                      setProcesando(false);
-                    }
-                  } else {
-                    setPreview(null);
-                  }
+                  setArchivo(f);setResultado(null);
+                  if(f.type.startsWith("image/"))setPreview(URL.createObjectURL(f));
+                  else setPreview(null);
                 }}/>
               <label htmlFor="factura-upload" style={{cursor:"pointer"}}>
                 <div style={{fontSize:32,marginBottom:8}}>📄</div>
@@ -372,33 +280,9 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
                 <div style={{fontSize:11,color:"var(--muted)",marginTop:4}}>PDF, JPG o PNG — Factura A, B o C</div>
               </label>
             </div>
-            {archivo&&<div style={{fontSize:11,color:"var(--success)",marginBottom:8}}>✓ {archivo.name}</div>}
-            {procesando&&<div className="loading" style={{padding:8,fontSize:11}}>Mejorando imagen para la IA...</div>}
-            {preview&&!procesando&&(
-              <div style={{display:"grid",gridTemplateColumns:previewProcesado?"1fr 1fr":"1fr",gap:8,marginBottom:12}}>
-                <div>
-                  <div style={{fontSize:9,letterSpacing:1.5,textTransform:"uppercase",color:"var(--muted)",marginBottom:4}}>Original</div>
-                  <img src={preview} alt="original" style={{width:"100%",borderRadius:"var(--r)",maxHeight:240,objectFit:"contain",background:"var(--s2)"}}/>
-                </div>
-                {previewProcesado&&(
-                  <div>
-                    <div style={{fontSize:9,letterSpacing:1.5,textTransform:"uppercase",color:"var(--muted)",marginBottom:4}}>
-                      Procesada para IA {usarProcesada?<span style={{color:"var(--success)"}}>✓ activa</span>:<span style={{color:"var(--muted2)"}}>(no se envía)</span>}
-                    </div>
-                    <img src={previewProcesado} alt="procesada" style={{width:"100%",borderRadius:"var(--r)",maxHeight:240,objectFit:"contain",background:"var(--s2)",opacity:usarProcesada?1:0.5}}/>
-                  </div>
-                )}
-              </div>
-            )}
-            {previewProcesado&&!procesando&&(
-              <button
-                className="btn btn-ghost btn-sm"
-                style={{width:"100%",justifyContent:"center",marginBottom:8,fontSize:10}}
-                onClick={()=>setUsarProcesada(p=>!p)}>
-                {usarProcesada?"Usar imagen original (si la procesada se ve mal)":"Usar imagen procesada"}
-              </button>
-            )}
-            <button className="btn btn-acc" style={{width:"100%",justifyContent:"center"}} onClick={leerConIA} disabled={!archivo||loading||procesando}>
+            {archivo&&<div style={{fontSize:11,color:"var(--success)",marginBottom:12}}>✓ {archivo.name}</div>}
+            {preview&&<img src={preview} alt="preview" style={{width:"100%",borderRadius:"var(--r)",marginBottom:12,maxHeight:300,objectFit:"contain"}}/>}
+            <button className="btn btn-acc" style={{width:"100%",justifyContent:"center"}} onClick={leerConIA} disabled={!archivo||loading}>
               {loading?"🔍 Analizando con IA...":"✨ Leer con IA"}
             </button>
           </div>
