@@ -301,6 +301,7 @@ export default function Compras({ user, locales, localActivo }) {
           <table>
             <thead><tr>
               <th>Proveedor · Nº</th>
+              {!localActivo && <th>Local</th>}
               <th>Fecha · Vence</th>
               <th>Categoría</th>
               <th style={{ textAlign: "right" }}>Total</th>
@@ -319,6 +320,9 @@ export default function Compras({ user, locales, localActivo }) {
                       {isNC && <span className="badge b-info" style={{ fontSize: 8, letterSpacing: 0.5 }}>NC</span>}
                     </div>
                   </td>
+                  {!localActivo && (
+                    <td><span className="badge b-muted" style={{ fontSize: 10 }}>{locales.find(l => l.id === f.local_id)?.nombre || "—"}</span></td>
+                  )}
                   <td>
                     <div style={{ fontSize: 11, color: "var(--txt)" }}>{fmt_d(f.fecha)}</div>
                     <div style={{ fontSize: 10, color: f.estado === "vencida" ? "var(--acc)" : "var(--muted2)", marginTop: 1 }}>
