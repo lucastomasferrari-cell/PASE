@@ -1,4 +1,8 @@
 export const CATEGORIAS_COMPRA = ["PESCADERIA","CARNICERIA","VERDULERIA","BEBIDAS","VINOS","ALMACEN","PACKAGING","PAPELERIA","BARRIO CHINO","PRODUCTOS ORIENTALES","SUPERMERCADO","HIELO","LIMPIEZA","CONTADOR","PUBLICIDAD","EXPENSAS","PROPINAS","SUSHIMAN PM","EQUIPAMIENTO","SUELDOS","OTROS"];
+// Fallback offline de useMediosCobro — si la DB no responde, el hook usa
+// estos arrays para que los dropdowns y el cálculo de impacto-en-caja sigan
+// funcionando. La fuente de verdad real es la tabla medios_cobro
+// (refactor C, migration 20260424). Editar Configuración → Medios de cobro.
 export const MEDIOS_COBRO = ["EFECTIVO SALON","TARJETA CREDITO","TARJETA DEBITO","QR","LINK","RAPPI ONLINE","PEYA ONLINE","PEYA EFECTIVO","MP DELIVERY","BIGBOX","FANBAG","EVENTO","TRANSFERENCIA","Point MP","Point Nave","NAVE","MASDELIVERY ONLINE","EFECTIVO DELIVERY"];
 export const MEDIO_A_CUENTA: Record<string, string | null> = {
   "EFECTIVO SALON":    "Caja Chica",

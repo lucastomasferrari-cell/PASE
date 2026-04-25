@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
-import { MEDIOS_COBRO, MEDIO_A_CUENTA } from "../lib/constants";
+import { useMediosCobro } from "../lib/useMediosCobro";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import ImportarMaxirest from "./ImportarMaxirest";
 
@@ -20,6 +20,14 @@ export default function Ventas({ user, locales, localActivo }) {
   const [form,setForm]=useState({local_id:"",fecha:toISO(today),turno:"Noche"});
   const [lineas,setLineas]=useState<{medio:string,monto:string}[]>([{medio:"EFECTIVO SALON",monto:""}]);
   const localesDisp=user.rol==="dueno"?locales:locales.filter(l=>(user.locales||[]).includes(l.id));
+  const { mediosDisponibles, cuentaDestino } = useMediosCobro();
+  // Catálogo en cada modal viene del local del form (no del localActivo del
+  // sidebar) — el dueño puede cargar venta para cualquiera de sus locales.
+  const mediosForm = mediosDisponibles(form.local_id ? parseInt(form.local_id) : null);
+  const mediosEdit = mediosDisponibles(editModal?.local_id ? parseInt(editModal.local_id) : null);
+  // El medio default de una nueva línea: el primero del catálogo del local
+  // seleccionado o "EFECTIVO SALON" como último resort.
+  const medioDefault = mediosForm[0]?.nombre || "EFECTIVO SALON";
   const updateLinea=(i:number,field:"medio"|"monto",value:string)=>{
     setLineas(prev=>prev.map((l,j)=>j===i?{...l,[field]:value}:l));
   };
@@ -60,7 +68,7 @@ export default function Ventas({ user, locales, localActivo }) {
 
     const impactoPorCuenta:Record<string,number>={};
     rows.forEach(v=>{
-      const cuenta=MEDIO_A_CUENTA[v.medio];
+      const cuenta=cuentaDestino(v.medio,lid);
       if(!cuenta) return; // medios no-efectivo no impactan en caja
       impactoPorCuenta[cuenta]=(impactoPorCuenta[cuenta]||0)+v.monto;
     });
@@ -79,7 +87,7 @@ export default function Ventas({ user, locales, localActivo }) {
         .eq("cuenta",cuenta).eq("local_id",lid);
     }
 
-    setLineas([{medio:"EFECTIVO SALON",monto:""}]);
+    setLineas([{medio:medioDefault,monto:""}]);
     setModalNuevo(false);load();
   };
 
@@ -197,7 +205,12 @@ export default function Ventas({ user, locales, localActivo }) {
                 <div className="field"><label>Fecha</label><input type="date" value={editModal.fecha} onChange={e=>setEditModal({...editModal,fecha:e.target.value})}/></div>
                 <div className="field"><label>Turno</label><select value={editModal.turno} onChange={e=>setEditModal({...editModal,turno:e.target.value})}><option>Mediodía</option><option>Noche</option></select></div>
               </div>
-              <div className="field"><label>Forma de Cobro</label><select value={editModal.medio} onChange={e=>setEditModal({...editModal,medio:e.target.value})}>{MEDIOS_COBRO.map(m=><option key={m}>{m}</option>)}</select></div>
+              <div className="field"><label>Forma de Cobro</label><select value={editModal.medio} onChange={e=>setEditModal({...editModal,medio:e.target.value})}>
+                {/* Si el medio actual no está en el catálogo (medio legacy o
+                    desactivado), lo agregamos como opción para no perder el valor. */}
+                {!mediosEdit.some(m=>m.nombre===editModal.medio) && editModal.medio && <option key="legacy" value={editModal.medio}>{editModal.medio} (legacy)</option>}
+                {mediosEdit.map(m=><option key={m.id} value={m.nombre}>{m.nombre}</option>)}
+              </select></div>
               <div className="field"><label>Monto $</label><input type="number" value={editModal.monto} onChange={e=>setEditModal({...editModal,monto:e.target.value})}/></div>
             </div>
             <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setEditModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={guardarEdit}>Guardar</button></div>
@@ -221,13 +234,14 @@ export default function Ventas({ user, locales, localActivo }) {
               {lineas.map((l,i)=>(
                 <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
                   <select className="search" style={{flex:1}} value={l.medio} onChange={e=>updateLinea(i,"medio",e.target.value)}>
-                    {MEDIOS_COBRO.map(m=><option key={m}>{m}</option>)}
+                    {!mediosForm.some(m=>m.nombre===l.medio) && l.medio && <option key="legacy" value={l.medio}>{l.medio} (legacy)</option>}
+                    {mediosForm.map(m=><option key={m.id} value={m.nombre}>{m.nombre}</option>)}
                   </select>
                   <input type="number" className="search" style={{width:120}} placeholder="Monto" value={l.monto} onChange={e=>updateLinea(i,"monto",e.target.value)}/>
                   {lineas.length>1 && <button className="btn btn-danger btn-sm" onClick={()=>setLineas(prev=>prev.filter((_,j)=>j!==i))}>✕</button>}
                 </div>
               ))}
-              <button className="btn btn-ghost btn-sm" style={{marginBottom:12}} onClick={()=>setLineas(prev=>[...prev,{medio:"EFECTIVO SALON",monto:""}])}>+ Agregar forma de cobro</button>
+              <button className="btn btn-ghost btn-sm" style={{marginBottom:12}} onClick={()=>setLineas(prev=>[...prev,{medio:medioDefault,monto:""}])}>+ Agregar forma de cobro</button>
 
               <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)",fontSize:12}}>
                 <span style={{color:"var(--muted2)"}}>Total</span>

@@ -2,12 +2,13 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
 import { useCategorias } from "../lib/useCategorias";
-import { MEDIOS_COBRO } from "../lib/constants";
+import { useMediosCobro } from "../lib/useMediosCobro";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 export default function EERR({ user, locales, localActivo }: any) {
   const { CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS } = useCategorias();
+  const { mediosDisponibles } = useMediosCobro();
   const [ventas,setVentas]=useState([]);
   const [facturas,setFacturas]=useState([]);
   const [gastos,setGastos]=useState([]);
@@ -67,7 +68,26 @@ export default function EERR({ user, locales, localActivo }: any) {
   const utilNeta=utilBruta-totalGastos-sueldos-totalPublicidad-totalComisiones-totalImpuestos;
   const pct=n=>totalVentas>0?((n/totalVentas)*100).toFixed(1)+"%":"0%";
 
-  const porMedio=MEDIOS_COBRO.map(m=>({m,t:ventas.filter(v=>v.medio===m).reduce((s,v)=>s+v.monto,0)})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
+  // Itera sobre los medios que tienen ventas en el período (no sobre un
+  // array fijo). Ventas legacy con un medio que ya no existe en el catálogo
+  // siguen apareciendo con su nombre raw — no se las pierde del histórico.
+  // El catálogo se usa solo para ordenar (refleja el "orden" de Configuración)
+  // y para preferir el nombre canónico si hay match.
+  const catalogoEERR=mediosDisponibles(localActivo?Number(localActivo):null);
+  const ordenCanon=new Map(catalogoEERR.map(m=>[m.nombre,m.orden]));
+  const ventasPorMedio:Record<string,number>={};
+  for(const v of ventas){const k=v.medio||"—";ventasPorMedio[k]=(ventasPorMedio[k]||0)+(v.monto||0);}
+  const porMedio=Object.entries(ventasPorMedio)
+    .map(([m,t])=>({m,t}))
+    .filter(x=>x.t>0)
+    .sort((a,b)=>{
+      const oa=ordenCanon.get(a.m), ob=ordenCanon.get(b.m);
+      // Catálogo primero (orden ascendente); legacy al final por monto desc.
+      if(oa!==undefined && ob!==undefined) return oa-ob;
+      if(oa!==undefined) return -1;
+      if(ob!==undefined) return 1;
+      return b.t-a.t;
+    });
   const porCatCMV=CATEGORIAS_COMPRA.map(c=>({c,t:facturas.filter(f=>f.cat===c).reduce((s,f)=>s+f.total,0)})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
   const porCatFijos=GASTOS_FIJOS.map(c=>({c,t:gastos.filter(g=>g.tipo==="fijo"&&g.categoria===c).reduce((s,g)=>s+g.monto,0)})).filter(x=>x.t>0);
   const porCatVar=GASTOS_VARIABLES.map(c=>({c,t:gastos.filter(g=>g.tipo==="variable"&&g.categoria===c).reduce((s,g)=>s+g.monto,0)})).filter(x=>x.t>0);
