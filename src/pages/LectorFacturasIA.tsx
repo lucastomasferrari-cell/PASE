@@ -82,7 +82,20 @@ Formato requerido:
 }
 
 Reglas:
-- Si algún campo no existe en la factura, poné 0 o null según corresponda. Los montos siempre como números sin puntos ni comas.
+- Si algún campo no existe en la factura, poné 0 o null según corresponda.
+
+IMPORTANTE — Formato de montos en facturas argentinas:
+En Argentina los montos se escriben con punto como separador de miles y coma como separador decimal. Ejemplos:
+- "$ 166.876,67" significa ciento sesenta y seis mil ochocientos setenta y seis con sesenta y siete centavos. En JSON debe ir como 166876.67.
+- "$ 1.234.567,89" significa un millón doscientos treinta y cuatro mil quinientos sesenta y siete con ochenta y nueve centavos. En JSON debe ir como 1234567.89.
+- "$ 50,00" significa cincuenta pesos. En JSON debe ir como 50.00 (o 50).
+
+Reglas de montos:
+- En el JSON, los montos van como números JavaScript estándar: usá PUNTO como separador decimal (no coma) y NO uses separadores de miles.
+- NUNCA quites la coma decimal ni multipliques por 100. Si en la factura ves "166.876,67", el JSON debe tener 166876.67 (con punto decimal), NO 16687667.
+- Si la factura no tiene decimales explícitos (ej: "$ 1.000"), poné 1000 o 1000.00.
+- Si un monto no existe en la factura, poné 0.
+
 - En "confianza" y "confianza_global" devolvé un número de 0 a 100 indicando qué tan seguro estás de cada dato extraído. 100 = nítido y sin ambigüedad, 50 = legible pero hay dudas, 0 = ilegible o inferido.
 - "confianza_global" debe reflejar el peor campo crítico (total, nro_factura, razon_social) — si cualquiera de esos es bajo, bajá el global.
 - En "advertencias" poné un array de strings cortos (máx 3) describiendo problemas específicos: "neto + IVA no cuadra con total", "CUIT parcialmente ilegible", "fecha ambigua", etc. Si no hay problemas, devolvé [].`}
