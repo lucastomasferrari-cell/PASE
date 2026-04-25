@@ -351,7 +351,7 @@ export default function Compras({ user, locales, localActivo }) {
               <button className="close-btn" onClick={() => setLectorModal(false)}>✕</button>
             </div>
             <div className="modal-body">
-              <LectorFacturasIA user={user} locales={locales} localActivo={localActivo} />
+              <LectorFacturasIA user={user} locales={locales} localActivo={localActivo} onSaved={() => { load(); setLectorModal(false); }} />
             </div>
           </div>
         </div>

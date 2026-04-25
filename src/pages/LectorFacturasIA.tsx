@@ -4,7 +4,7 @@ import { fmt_d, fmt_$, genId, parseMonto } from "../lib/utils";
 import { useCategorias } from "../lib/useCategorias";
 import { UNIDADES } from "../lib/constants";
 
-export default function LectorFacturasIA({ locales, localActivo }) {
+export default function LectorFacturasIA({ locales, localActivo, onSaved }: { locales: any[]; localActivo: number | null; onSaved?: () => void }) {
   const { CATEGORIAS_COMPRA } = useCategorias();
   const [archivo,setArchivo]=useState<File|null>(null);
   const [preview,setPreview]=useState<string|null>(null);
@@ -228,6 +228,7 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
     setGuardando(false);setArchivo(null);setPreview(null);setResultado(null);
     setForm({local_id:localActivo||"",prov_id:"",fecha:"",venc:"",nro:"",neto:0,iva21:0,iva105:0,iibb:0,total:0,cat:""});
     alert("✓ Factura cargada correctamente");
+    onSaved?.();
   };
 
   const guardarProvInline = async () => {
