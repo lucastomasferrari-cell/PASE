@@ -121,7 +121,12 @@ export default function LectorFacturasIA({ locales, localActivo }) {
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
-          model:"claude-sonnet-4-20250514",
+          // Bug #41 fase final, Capa 2: Opus 4.7 tiene 98.5% en visual-acuity
+          // benchmark vs ~54% de Sonnet 4 — específicamente bueno para
+          // extracción visual de documentos con tipografías chicas como las
+          // facturas argentinas. El proxy api/claude.js es transparente
+          // y reenvía cualquier model que mandemos.
+          model:"claude-opus-4-7",
           max_tokens:1500,
           messages:[{
             role:"user",
