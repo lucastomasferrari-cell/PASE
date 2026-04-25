@@ -212,7 +212,7 @@ export default function App() {
       case "costos":    return <Costos {...props}/>;
       case "insumos":   return <Costos {...props}/>;
       case "recetas":   return <Costos {...props}/>;
-      case "configuracion": return <Configuracion user={user}/>;
+      case "configuracion": return <Configuracion user={user} locales={locales}/>;
       default: return null;
     }
   };
