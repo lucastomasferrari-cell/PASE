@@ -108,6 +108,23 @@ Reglas de montos:
       const text=data.content?.map(c=>c.text||"").join("");
       const clean=text.replace(/```json|```/g,"").trim();
       const parsed=JSON.parse(clean);
+
+      // Defensa en profundidad post-prompt-fix (bug #41): si la IA igual
+      // multiplica por 100 (o la factura es legítimamente alta), avisar
+      // antes de pre-llenar. 100M ARS es ~6 dígitos por encima del rango
+      // típico de una factura de gastronomía y vale la pena interrumpir.
+      const MAX_MONTO_RAZONABLE=100_000_000;
+      const camposMonto=["neto_gravado","iva_21","iva_105","percepciones_iibb","percepciones_iva","total"];
+      const sospechosos=camposMonto.filter(c=>Number(parsed[c]||0)>MAX_MONTO_RAZONABLE);
+      if(sospechosos.length>0){
+        const ok=confirm(
+          "⚠ La IA detectó montos muy altos:\n\n"+
+          sospechosos.map(c=>"  "+c+": $"+Number(parsed[c]).toLocaleString("es-AR")).join("\n")+
+          "\n\n¿La factura es realmente de este monto? Si dudás, revisá los montos manualmente antes de confirmar.\n\nCancelá para descartar y leer de nuevo."
+        );
+        if(!ok){setLoading(false);return;}
+      }
+
       setResultado(parsed);
 
       // Pre-llenar el form con los datos extraídos
