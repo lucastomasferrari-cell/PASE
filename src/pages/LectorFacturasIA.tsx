@@ -109,19 +109,33 @@ Reglas de montos:
       const clean=text.replace(/```json|```/g,"").trim();
       const parsed=JSON.parse(clean);
 
-      // Defensa en profundidad post-prompt-fix (bug #41): si la IA igual
-      // multiplica por 100 (o la factura es legítimamente alta), avisar
-      // antes de pre-llenar. 100M ARS es ~6 dígitos por encima del rango
-      // típico de una factura de gastronomía y vale la pena interrumpir.
-      const MAX_MONTO_RAZONABLE=100_000_000;
+      // Defensa en profundidad (bug #41 escalada): la IA puede alucinar
+      // montos completos, no solo multiplicar por 100. Tres chequeos:
+      //  1. Magnitud: monto absoluto >10M ARS para una factura de gastronomía
+      //     ya es excepción — vale la pena interrumpir aunque sea legítimo.
+      //  2. Coherencia items: total >> suma de items implica alucinación.
+      //  3. Coherencia desglose: neto+iva+percepciones >> total implica que
+      //     uno de los componentes está inflado x100.
+      const MAX_MONTO_RAZONABLE=10_000_000; // 10M ARS — ↓ desde 100M (bug #41)
       const camposMonto=["neto_gravado","iva_21","iva_105","percepciones_iibb","percepciones_iva","total"];
-      const sospechosos=camposMonto.filter(c=>Number(parsed[c]||0)>MAX_MONTO_RAZONABLE);
-      if(sospechosos.length>0){
-        const ok=confirm(
-          "⚠ La IA detectó montos muy altos:\n\n"+
-          sospechosos.map(c=>"  "+c+": $"+Number(parsed[c]).toLocaleString("es-AR")).join("\n")+
-          "\n\n¿La factura es realmente de este monto? Si dudás, revisá los montos manualmente antes de confirmar.\n\nCancelá para descartar y leer de nuevo."
-        );
+      const sospechososMagnitud=camposMonto.filter(c=>Number(parsed[c]||0)>MAX_MONTO_RAZONABLE);
+      const total=Number(parsed.total||0);
+      const sumaItems=Array.isArray(parsed.items)?parsed.items.reduce((s:number,it:any)=>s+Number(it.subtotal||0),0):0;
+      const sumaDesglose=Number(parsed.neto_gravado||0)+Number(parsed.iva_21||0)+Number(parsed.iva_105||0)+Number(parsed.percepciones_iibb||0)+Number(parsed.percepciones_iva||0);
+      const incoherenciaItems=sumaItems>0&&total>0&&total>sumaItems*2;
+      const incoherenciaDesglose=total>0&&sumaDesglose>total*1.5;
+      if(sospechososMagnitud.length>0||incoherenciaItems||incoherenciaDesglose){
+        const lineas=[
+          "⚠ La IA devolvió montos sospechosos:",
+          "",
+          ...sospechososMagnitud.map(c=>"  • "+c+" excede $10M: $"+Number(parsed[c]).toLocaleString("es-AR")),
+          ...(incoherenciaItems?["  • total ($"+total.toLocaleString("es-AR")+") es >2x la suma de items ($"+sumaItems.toLocaleString("es-AR")+") — posible alucinación"]:[]),
+          ...(incoherenciaDesglose?["  • neto+iva+percepciones ($"+sumaDesglose.toLocaleString("es-AR")+") >> total ($"+total.toLocaleString("es-AR")+") — un componente está inflado"]:[]),
+          "",
+          "Si la factura es real, podés aceptar y editar los montos manualmente antes de guardar.",
+          "Cancelá para descartar y volver a leer la factura.",
+        ];
+        const ok=confirm(lineas.join("\n"));
         if(!ok){setLoading(false);return;}
       }
 
