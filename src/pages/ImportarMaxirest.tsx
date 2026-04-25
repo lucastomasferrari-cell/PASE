@@ -38,40 +38,63 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: {
     const mediosFaltantes:string[]=[];
     const idx=texto.indexOf("VENTAS POR FORMA DE COBRO");
     if(idx>-1){
-      // SUBTOTALES_IGNORAR: filas resumen del mail (no son medios reales).
-      // Bug #31: "FORMA DE COBRO" es el header de la sección. "EFECTIVO"
-      // se quitó porque ahora es un medio legítimo del catálogo (Belgrano).
+      // SUBTOTALES_IGNORAR: subtotales del bloque de ventas que no son medios
+      // reales (ej: "TARJETAS" = suma de débito + crédito). "FORMA DE COBRO"
+      // es el header. "EFECTIVO" no se ignora — ahora es medio legítimo del
+      // catálogo (caso Belgrano). Esta lista actúa *dentro* del bloque ventas;
+      // el bloque RESUMEN al final del cierre se corta antes con enBloqueVentas.
       const SUBTOTALES_IGNORAR=["TARJETAS","OTROS","RESUMEN","SUBTOTAL","FORMA DE COBRO"];
       // Regex tolerante a NBSP y comas en el monto.
       const re=/^(.+?)[\s\u00a0]+([\d.,]+)[\s\u00a0]+(\d+)[\s\u00a0]*$/;
+      // Flag que cierra el bloque VENTAS apenas aparece la línea TOTAL.
+      // Sin esto, el bloque RESUMEN al final del cierre (que repite los
+      // mismos medios con cant=0 como verificación) se cuela como ventas
+      // duplicadas — en Belgrano 24/4 mediodía aparecía "EFECTIVO" 2 veces.
+      let enBloqueVentas=true;
       texto.slice(idx).split("\n").forEach(rawLine=>{
         const line=rawLine.replace(/\r/g,"");
         const trimmed=line.trim();
-        if(!trimmed){console.log("[maxirest:parse] skip vacío");return;}
-        if(/^[~=]+$/.test(trimmed)){console.log("[maxirest:parse] skip separador:",trimmed);return;}
+        if(!trimmed){return;}
+        if(/^[~=\-]+$/.test(trimmed)){return;}
         let mr:string|null=null,montoStr:string|null=null,cantStr:string|null=null;
         const m=line.match(re);
         if(m){
           mr=m[1].trim();montoStr=m[2];cantStr=m[3];
-          console.log("[maxirest:parse] match raw='"+trimmed+"' medio='"+mr+"' monto='"+montoStr+"' cant='"+cantStr+"'");
+          if(enBloqueVentas) console.log("[maxirest:parse] match raw='"+trimmed+"' medio='"+mr+"' monto='"+montoStr+"' cant='"+cantStr+"'");
         } else {
           const toks=trimmed.split(/[\s\u00a0]+/);
           if(toks.length>=3 && /^\d+$/.test(toks[toks.length-1]) && /^[\d.,]+$/.test(toks[toks.length-2])){
             cantStr=toks[toks.length-1];montoStr=toks[toks.length-2];
             mr=toks.slice(0,-2).join(" ");
-            console.log("[maxirest:parse] fallback split raw='"+trimmed+"' medio='"+mr+"' monto='"+montoStr+"' cant='"+cantStr+"'");
+            if(enBloqueVentas) console.log("[maxirest:parse] fallback split raw='"+trimmed+"' medio='"+mr+"' monto='"+montoStr+"' cant='"+cantStr+"'");
           } else {
-            console.log("[maxirest:parse] no-match raw='"+trimmed+"'");
+            // Sólo logueo no-match dentro del bloque — fuera del bloque hay
+            // mucho ruido de texto libre del cierre que no aporta.
+            if(enBloqueVentas) console.log("[maxirest:parse] no-match raw='"+trimmed+"'");
             return;
           }
+        }
+        const mrUpper=mr!.toUpperCase();
+        // Cierre del bloque: línea TOTAL exacta o "TOTAL ..." (ej "TOTAL VENTAS").
+        // includes("TOTAL") sería demasiado laxo (matchearía "SUBTOTAL"). Esta
+        // línea se skipea Y deja el flag en false para el resto del cierre.
+        if(mrUpper==="TOTAL"||mrUpper.startsWith("TOTAL ")){
+          console.log("[maxirest:parse] cierre bloque VENTAS en línea TOTAL: '"+trimmed+"'");
+          enBloqueVentas=false;
+          return;
+        }
+        if(!enBloqueVentas){
+          console.log("[maxirest:parse] skip fuera de bloque ventas: '"+trimmed+"'");
+          return;
         }
         const montoNorm=montoStr!.replace(/\.(?=\d{3}(\D|$))/g,"").replace(",",".").replace(/[^\d.]/g,"");
         const monto=parseFloat(montoNorm);
         const cant=parseInt(cantStr!);
-        const mrUpper=mr!.toUpperCase();
-        // Filtros previos al lookup en catálogo: TOTAL/SUBTOTAL nunca son medios.
-        if(monto<=0||mrUpper.includes("TOTAL")||SUBTOTALES_IGNORAR.includes(mrUpper)){
-          console.log("[maxirest:parse] descartado por filtro: '"+mr+"'");
+        // Defensa en profundidad: cant<=0 cubre el caso edge donde una fila
+        // de RESUMEN se colara antes del TOTAL. Con el flag bien puesto no
+        // debería pasar, pero no quiero depender solo de la detección de TOTAL.
+        if(monto<=0||cant<=0||SUBTOTALES_IGNORAR.includes(mrUpper)){
+          console.log("[maxirest:parse] descartado por filtro: '"+mr+"' monto="+monto+" cant="+cant);
           return;
         }
         const matched=buscarEnCatalogo(mr!);
