@@ -23,13 +23,55 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: {
     // El CSV de Maxirest puede venir del local equivocado — no lo usamos.
     const local_id=Number(localActivo);
     const ventas=[];
+    const matchedMedios:string[]=[];
     const idx=texto.indexOf("VENTAS POR FORMA DE COBRO");
     if(idx>-1){
-      texto.slice(idx).split("\n").forEach(line=>{
-        const m=line.match(/^(.+?)\s+([\d.]+)\s+(\d+)\s*$/);
-        if(m){const mr=m[1].trim().toUpperCase();const monto=parseFloat(m[2]);const cant=parseInt(m[3]);const SUBTOTALES_IGNORAR=["EFECTIVO","TARJETAS","OTROS","RESUMEN","SUBTOTAL"];if(monto>0&&!mr.includes("TOTAL")&&!mr.includes("OTROS")&&!SUBTOTALES_IGNORAR.includes(mr)){ventas.push({medio:MMAP[mr]||mr,monto,cant,fecha,turno,local_id});}}
+      // SUBTOTALES_IGNORAR: filas resumen del mail (no son medios de cobro reales).
+      // "FORMA DE COBRO" es el header de la sección — antes pasaba el regex y se
+      // colaba como medio fantasma (bug #31).
+      const SUBTOTALES_IGNORAR=["EFECTIVO","TARJETAS","OTROS","RESUMEN","SUBTOTAL","FORMA DE COBRO"];
+      // Regex tolerante: acepta non-breaking spaces ( ) y comas en el monto.
+      // Maxirest a veces inserta NBSP entre el medio y el monto, y el regex viejo
+      // (\s+) los rechazaba — los EFECTIVO no entraban (bug #31).
+      const re=/^(.+?)[\s\u00a0]+([\d.,]+)[\s\u00a0]+(\d+)[\s\u00a0]*$/;
+      texto.slice(idx).split("\n").forEach(rawLine=>{
+        const line=rawLine.replace(/\r/g,"");
+        const trimmed=line.trim();
+        if(!trimmed){console.log("[maxirest:parse] skip vacío");return;}
+        // Skip separadores tipo ~~~~~~ o ====== que Maxirest mete entre secciones.
+        if(/^[~=]+$/.test(trimmed)){console.log("[maxirest:parse] skip separador:",trimmed);return;}
+        let mr:string|null=null,montoStr:string|null=null,cantStr:string|null=null;
+        const m=line.match(re);
+        if(m){
+          mr=m[1].trim().toUpperCase();montoStr=m[2];cantStr=m[3];
+          console.log("[maxirest:parse] match raw='"+trimmed+"' medio='"+mr+"' monto='"+montoStr+"' cant='"+cantStr+"'");
+        } else {
+          // Fallback: si el regex falla (espacios raros, tabs múltiples), intentar
+          // split por whitespace y reconstruir medio desde los tokens iniciales.
+          const toks=trimmed.split(/[\s\u00a0]+/);
+          if(toks.length>=3 && /^\d+$/.test(toks[toks.length-1]) && /^[\d.,]+$/.test(toks[toks.length-2])){
+            cantStr=toks[toks.length-1];montoStr=toks[toks.length-2];
+            mr=toks.slice(0,-2).join(" ").toUpperCase();
+            console.log("[maxirest:parse] fallback split raw='"+trimmed+"' medio='"+mr+"' monto='"+montoStr+"' cant='"+cantStr+"'");
+          } else {
+            console.log("[maxirest:parse] no-match raw='"+trimmed+"'");
+            return;
+          }
+        }
+        // Normalizar monto: quitar todo lo que no sea dígito o punto.
+        // Si vino con coma decimal ("1234,56"), reemplazar por punto antes.
+        const montoNorm=montoStr!.replace(/\.(?=\d{3}(\D|$))/g,"").replace(",",".").replace(/[^\d.]/g,"");
+        const monto=parseFloat(montoNorm);
+        const cant=parseInt(cantStr!);
+        const pasa=monto>0&&!mr!.includes("TOTAL")&&!mr!.includes("OTROS")&&!SUBTOTALES_IGNORAR.includes(mr!);
+        console.log("[maxirest:parse] parsed medio='"+mr+"' monto="+monto+" cant="+cant+" pasa="+pasa);
+        if(pasa){
+          ventas.push({medio:MMAP[mr!]||mr!,monto,cant,fecha,turno,local_id});
+          matchedMedios.push(MMAP[mr!]||mr!);
+        }
       });
     }
+    console.log("[maxirest:parse] resumen: "+ventas.length+" líneas matcheadas → ["+matchedMedios.join(", ")+"]");
     setPreview({fecha,turno,local_id,ventas});
   };
   const confirmar=async()=>{
