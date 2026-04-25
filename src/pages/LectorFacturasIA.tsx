@@ -366,17 +366,33 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
                   </div>
                 </div>
 
-                {resultado.items?.length>0&&(
-                  <div style={{marginBottom:12}}>
-                    <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"var(--muted)",marginBottom:8}}>Ítems detectados ({resultado.items.length})</div>
-                    {resultado.items.map((it,i)=>(
-                      <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid var(--bd)",fontSize:11}}>
-                        <span>{it.descripcion}</span>
-                        <span style={{color:"var(--muted2)"}}>{it.cantidad} {it.unidad} · {fmt_$(it.subtotal)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {resultado.items?.length>0&&(()=>{
+                  // Bug #41 capa 3: si la suma de items no coincide con
+                  // el neto detectado, mostrar warning sobre los ítems.
+                  // Tolerancia 5% — los ítems típicos no incluyen IVA pero
+                  // sí descuentos/redondeos chicos. Si la diferencia es mayor,
+                  // probable alucinación o lectura incompleta.
+                  const sumaItems=resultado.items.reduce((s:number,it:any)=>s+Number(it.subtotal||0),0);
+                  const netoDet=parseMonto(form.neto);
+                  const diff=netoDet>0?Math.abs(sumaItems-netoDet)/netoDet:0;
+                  const incoherente=netoDet>0&&sumaItems>0&&diff>0.05;
+                  return (
+                    <div style={{marginBottom:12}}>
+                      <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"var(--muted)",marginBottom:8}}>Ítems detectados ({resultado.items.length})</div>
+                      {incoherente&&(
+                        <div className="alert alert-danger" style={{marginBottom:8,fontSize:11}}>
+                          ⚠ Los items no suman al neto detectado — revisá manualmente. Suma items: <strong>{fmt_$(sumaItems)}</strong> vs neto: <strong>{fmt_$(netoDet)}</strong>.
+                        </div>
+                      )}
+                      {resultado.items.map((it:any,i:number)=>(
+                        <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid var(--bd)",fontSize:11}}>
+                          <span>{it.descripcion}</span>
+                          <span style={{color:"var(--muted2)"}}>{it.cantidad} {it.unidad} · {fmt_$(it.subtotal)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
 
                 <button className="btn btn-acc" style={{width:"100%",justifyContent:"center"}} onClick={guardar} disabled={guardando}>
                   {guardando?"Guardando...":"✓ Guardar Factura"}
