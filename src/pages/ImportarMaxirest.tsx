@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { db } from "../lib/supabase";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
-import { MEDIOS_COBRO, MEDIO_A_CUENTA } from "../lib/constants";
+import { useMediosCobro } from "../lib/useMediosCobro";
 
 export default function ImportarMaxirest({ locales, localActivo, onImported }: { locales: any[]; localActivo?: number | null; onImported?: () => void }) {
   const [texto,setTexto]=useState("");
   const [preview,setPreview]=useState(null);
   const [loading,setLoading]=useState(false);
-  const MMAP={"EFECTIVO SALON":"EFECTIVO SALON","EFECTIVO DELIVERY":"EFECTIVO DELIVERY","TARJETA DEBITO":"TARJETA DEBITO","TARJETA CREDITO":"TARJETA CREDITO","RAPPI ONLINE":"RAPPI ONLINE","PEYA ONLINE":"PEYA ONLINE","MP DELIVERY":"MP DELIVERY","MASDELIVERY ONLINE":"MASDELIVERY ONLINE","BIGBOX":"BIGBOX","FANBAG":"FANBAG","TRANSFERENCIA":"TRANSFERENCIA","QR":"QR","LINK":"LINK","POINT NAVE":"Point Nave"};
+  const { mediosDisponibles, cuentaDestino } = useMediosCobro();
+
   const parsear=()=>{
     if(!texto.trim())return;
     if(!localActivo){
@@ -20,64 +21,90 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: {
     const tm=texto.match(/Turno\s+\d+\s+\((\w+)/i);
     const turno=tm?.[1]==="Noche"?"Noche":"Mediodía";
     // local_id viene SIEMPRE del sidebar (localActivo), nunca del CSV.
-    // El CSV de Maxirest puede venir del local equivocado — no lo usamos.
     const local_id=Number(localActivo);
-    const ventas=[];
+
+    // Catálogo del local activo (globales + específicos). Match contra
+    // el catálogo se hace case-insensitive porque Maxirest mete uppercase
+    // en el mail pero el catálogo puede tener "Point Nave" mixed case;
+    // exigir case-sensitive frustraría al dueño en casos triviales.
+    const catalogo=mediosDisponibles(local_id);
+    const buscarEnCatalogo=(raw:string)=>{
+      const target=raw.trim().toUpperCase();
+      return catalogo.find(m=>m.nombre.trim().toUpperCase()===target);
+    };
+
+    const ventas:any[]=[];
     const matchedMedios:string[]=[];
+    const mediosFaltantes:string[]=[];
     const idx=texto.indexOf("VENTAS POR FORMA DE COBRO");
     if(idx>-1){
-      // SUBTOTALES_IGNORAR: filas resumen del mail (no son medios de cobro reales).
-      // "FORMA DE COBRO" es el header de la sección — antes pasaba el regex y se
-      // colaba como medio fantasma (bug #31).
-      const SUBTOTALES_IGNORAR=["EFECTIVO","TARJETAS","OTROS","RESUMEN","SUBTOTAL","FORMA DE COBRO"];
-      // Regex tolerante: acepta non-breaking spaces ( ) y comas en el monto.
-      // Maxirest a veces inserta NBSP entre el medio y el monto, y el regex viejo
-      // (\s+) los rechazaba — los EFECTIVO no entraban (bug #31).
+      // SUBTOTALES_IGNORAR: filas resumen del mail (no son medios reales).
+      // Bug #31: "FORMA DE COBRO" es el header de la sección. "EFECTIVO"
+      // se quitó porque ahora es un medio legítimo del catálogo (Belgrano).
+      const SUBTOTALES_IGNORAR=["TARJETAS","OTROS","RESUMEN","SUBTOTAL","FORMA DE COBRO"];
+      // Regex tolerante a NBSP y comas en el monto.
       const re=/^(.+?)[\s\u00a0]+([\d.,]+)[\s\u00a0]+(\d+)[\s\u00a0]*$/;
       texto.slice(idx).split("\n").forEach(rawLine=>{
         const line=rawLine.replace(/\r/g,"");
         const trimmed=line.trim();
         if(!trimmed){console.log("[maxirest:parse] skip vacío");return;}
-        // Skip separadores tipo ~~~~~~ o ====== que Maxirest mete entre secciones.
         if(/^[~=]+$/.test(trimmed)){console.log("[maxirest:parse] skip separador:",trimmed);return;}
         let mr:string|null=null,montoStr:string|null=null,cantStr:string|null=null;
         const m=line.match(re);
         if(m){
-          mr=m[1].trim().toUpperCase();montoStr=m[2];cantStr=m[3];
+          mr=m[1].trim();montoStr=m[2];cantStr=m[3];
           console.log("[maxirest:parse] match raw='"+trimmed+"' medio='"+mr+"' monto='"+montoStr+"' cant='"+cantStr+"'");
         } else {
-          // Fallback: si el regex falla (espacios raros, tabs múltiples), intentar
-          // split por whitespace y reconstruir medio desde los tokens iniciales.
           const toks=trimmed.split(/[\s\u00a0]+/);
           if(toks.length>=3 && /^\d+$/.test(toks[toks.length-1]) && /^[\d.,]+$/.test(toks[toks.length-2])){
             cantStr=toks[toks.length-1];montoStr=toks[toks.length-2];
-            mr=toks.slice(0,-2).join(" ").toUpperCase();
+            mr=toks.slice(0,-2).join(" ");
             console.log("[maxirest:parse] fallback split raw='"+trimmed+"' medio='"+mr+"' monto='"+montoStr+"' cant='"+cantStr+"'");
           } else {
             console.log("[maxirest:parse] no-match raw='"+trimmed+"'");
             return;
           }
         }
-        // Normalizar monto: quitar todo lo que no sea dígito o punto.
-        // Si vino con coma decimal ("1234,56"), reemplazar por punto antes.
         const montoNorm=montoStr!.replace(/\.(?=\d{3}(\D|$))/g,"").replace(",",".").replace(/[^\d.]/g,"");
         const monto=parseFloat(montoNorm);
         const cant=parseInt(cantStr!);
-        const pasa=monto>0&&!mr!.includes("TOTAL")&&!mr!.includes("OTROS")&&!SUBTOTALES_IGNORAR.includes(mr!);
-        console.log("[maxirest:parse] parsed medio='"+mr+"' monto="+monto+" cant="+cant+" pasa="+pasa);
-        if(pasa){
-          ventas.push({medio:MMAP[mr!]||mr!,monto,cant,fecha,turno,local_id});
-          matchedMedios.push(MMAP[mr!]||mr!);
+        const mrUpper=mr!.toUpperCase();
+        // Filtros previos al lookup en catálogo: TOTAL/SUBTOTAL nunca son medios.
+        if(monto<=0||mrUpper.includes("TOTAL")||SUBTOTALES_IGNORAR.includes(mrUpper)){
+          console.log("[maxirest:parse] descartado por filtro: '"+mr+"'");
+          return;
+        }
+        const matched=buscarEnCatalogo(mr!);
+        if(matched){
+          ventas.push({medio:matched.nombre,monto,cant,fecha,turno,local_id});
+          matchedMedios.push(matched.nombre);
+          console.log("[maxirest:parse] catálogo match raw='"+mr+"' → '"+matched.nombre+"' (id "+matched.id+")");
+        } else {
+          mediosFaltantes.push(mr!);
+          console.log("[maxirest:parse] FALTANTE: medio '"+mr+"' no está en el catálogo del local "+local_id);
         }
       });
     }
-    console.log("[maxirest:parse] resumen: "+ventas.length+" líneas matcheadas → ["+matchedMedios.join(", ")+"]");
+    console.log("[maxirest:parse] resumen: "+ventas.length+" matcheadas → ["+matchedMedios.join(", ")+"]; "+mediosFaltantes.length+" faltantes → ["+mediosFaltantes.join(", ")+"]");
+
+    // Política dura: si algún medio del cierre no está configurado, NO
+    // se importa nada. Un import parcial deja la caja desbalanceada y
+    // el dueño no se entera de los faltantes.
+    if(mediosFaltantes.length>0){
+      const localNombre=locales.find(l=>l.id===local_id)?.nombre||`local #${local_id}`;
+      alert(
+        "No se pudo importar. Los siguientes medios no están configurados para "+localNombre+":\n\n"+
+        mediosFaltantes.map(m=>"  • "+m).join("\n")+
+        "\n\nAgregalos en Configuración → Medios de cobro y volvé a intentar."
+      );
+      setPreview(null);
+      return;
+    }
+
     setPreview({fecha,turno,local_id,ventas});
   };
   const confirmar=async()=>{
     if(!preview||preview.ventas.length===0)return;
-    // Precondición dura: sin localActivo no hay insert — evita que el insert
-    // termine con local_id = NaN o que se cuele el del CSV por algún edge.
     if(!localActivo){
       alert("Seleccioná un local en el sidebar antes de importar.");
       return;
@@ -85,7 +112,6 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: {
     setLoading(true);
     try {
       const lid=Number(localActivo);
-      // Check duplicado: mismo fecha + turno + local
       const {data:exist,error:existErr}=await db.from("ventas").select("id").eq("fecha",preview.fecha).eq("turno",preview.turno).eq("local_id",lid).limit(1);
       if(existErr) throw new Error("Error verificando duplicados: "+existErr.message);
       if(exist&&exist.length>0){
@@ -94,10 +120,6 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: {
         setLoading(true);
       }
 
-      // Insert en ventas con .select() para VERIFICAR que las filas se
-      // persistieron. Si RLS las rechaza, error se rellena o devuelve data
-      // vacía — antes el código ignoraba esto y mostraba "✓ Importado"
-      // aunque no hubiera entrado nada (bug #24).
       const ventasAInsertar=preview.ventas.map(v=>({...v,id:genId("V"),local_id:lid,origen:"maxirest"}));
       console.log("[maxirest] Insert ventas: "+ventasAInsertar.length+" filas local_id="+lid);
       const {data:ventasIns,error:ventasErr}=await db.from("ventas").insert(ventasAInsertar).select();
@@ -109,9 +131,11 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: {
         console.warn("[maxirest] filas insertadas menos que esperadas: "+ventasIns.length+" de "+ventasAInsertar.length);
       }
 
+      // Impacto en cuentas: ahora viene del catálogo dinámico vía hook.
+      // Los medios sin cuenta_destino (tarjetas, online, etc) no impactan.
       const impactoPorCuenta:Record<string,number>={};
       ventasAInsertar.forEach(v=>{
-        const cuenta=MEDIO_A_CUENTA[v.medio];
+        const cuenta=cuentaDestino(v.medio,lid);
         if(!cuenta) return;
         impactoPorCuenta[cuenta]=(impactoPorCuenta[cuenta]||0)+v.monto;
       });
