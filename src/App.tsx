@@ -48,9 +48,14 @@ export default function App() {
     }
   }, [localActivo]);
 
+  // Refetch cuando user cambia (post-login, post-logout). Si no hay user,
+  // skip — la query iría como rol anon y RLS la bloquea, dejando locales=[]
+  // permanentemente para el resto de la sesión (race condition con
+  // sesiones fresh tipo incógnito).
   useEffect(()=>{
+    if (!user) return;
     db.from("locales").select("*").order("id").then(({data})=>setLocales(data||[]));
-  },[]);
+  },[user]);
 
   // Restaurar sesión al cargar — única fuente de verdad: Supabase Auth
   useEffect(()=>{
