@@ -91,7 +91,7 @@ Modal Legajo accesible desde Empleados (botón "Legajo" por fila)
 - proveedores, insumos, recetas, receta_items
 - saldos_caja, caja_efectivo
 - mp_credenciales (admin-only), mp_movimientos (`fecha` es timestamptz), mp_liquidaciones
-- empleados (vieja, deprecated), empleado_archivos
+- empleado_archivos (FK uuid → rrhh_empleados; tabla legacy empleados eliminada en 202604261810)
 - rrhh_empleados, rrhh_novedades, rrhh_liquidaciones, rrhh_valores_doble, rrhh_historial_sueldos, rrhh_documentos, rrhh_pagos_especiales, rrhh_adelantos
 - auditoria, blindaje_tipos_documento, blindaje_documentos, config_categorias
 
