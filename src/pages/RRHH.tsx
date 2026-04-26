@@ -641,6 +641,7 @@ export default function RRHH({ user, locales, localActivo }) {
           adelantosPendientes={adelantosPendientes}
           setAdelantosPendientes={setAdelantosPendientes}
           abrirPagoSueldo={abrirPagoSueldo}
+          cuentasUsables={cuentasUsables}
         />
       )}
 
@@ -921,6 +922,7 @@ function TabPagos({
   pagando, setPagando, loadPagos, loadEmpleados, showToast, user,
   allEmps, adelModal, setAdelModal, adelForm, setAdelForm, guardarAdelanto,
   adelantosPendientes, setAdelantosPendientes, abrirPagoSueldo,
+  cuentasUsables,
 }: any) {
   return (
     <>
