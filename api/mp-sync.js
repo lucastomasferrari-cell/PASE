@@ -1,3 +1,5 @@
+import { createMpTokenGetter } from './_mp-token.js';
+
 // Detecta si un pago proviene de un dispositivo Mercado Pago Point (venta presencial)
 function esPagoPoint(pago) {
   const poi = pago?.point_of_interaction;
@@ -117,6 +119,11 @@ export default async function handler(req, res) {
       process.env.SUPABASE_SERVICE_KEY
     );
 
+    // Getter de token MP con cache scoped al handler. Llama a la RPC
+    // get_mp_token() (SECURITY DEFINER) que desencripta el bytea — en
+    // lugar de leer la columna plana.
+    const getMpToken = createMpTokenGetter(db);
+
     // Reset opcional: si viene ?reset=1,2 borramos todos los
     // mp_movimientos de esos locales antes de volver a sincronizar.
     // Pensado para re-clasificar filas guardadas con lógica vieja.
@@ -152,7 +159,7 @@ export default async function handler(req, res) {
 
     const { data: creds, error: credsError } = await db
       .from('mp_credenciales')
-      .select('*, locales(nombre)')
+      .select('id, local_id, saldo_inicial, saldo_inicial_at, locales(nombre)')
       .eq('activo', true);
 
     if (credsError) {
@@ -216,7 +223,7 @@ export default async function handler(req, res) {
     let balanceTotalMP = 0;
     let balanceConsultado = false;
 
-    // Cache de ids de cuenta por access_token — se resuelve una sola vez
+    // Cache de ids de cuenta por token — se resuelve una sola vez
     // por sync y se reutiliza al clasificar cada pago.
     const accountIdCache = new Map();
     const resolverAccountId = async (token) => {
@@ -258,7 +265,8 @@ export default async function handler(req, res) {
 
     for (const cred of creds) {
       try {
-        const accountId = await resolverAccountId(cred.access_token);
+        const token = await getMpToken(cred.id);
+        const accountId = await resolverAccountId(token);
 
         const hasta = new Date();
         const desde = new Date();
@@ -273,7 +281,7 @@ export default async function handler(req, res) {
           `&sort=date_created&criteria=desc&limit=200`;
 
         const mpRes = await fetch(mpUrl, {
-          headers: { Authorization: `Bearer ${cred.access_token}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
         const mpData = await mpRes.json();
 
@@ -495,7 +503,7 @@ export default async function handler(req, res) {
               {
                 method: 'PUT',
                 headers: {
-                  Authorization: `Bearer ${cred.access_token}`,
+                  Authorization: `Bearer ${token}`,
                   'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
@@ -542,7 +550,7 @@ export default async function handler(req, res) {
               {
                 method: 'POST',
                 headers: {
-                  Authorization: `Bearer ${cred.access_token}`,
+                  Authorization: `Bearer ${token}`,
                   'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
@@ -577,7 +585,7 @@ export default async function handler(req, res) {
           try {
             const listRes = await fetch(
               'https://api.mercadopago.com/v1/account/release_report/list',
-              { headers: { Authorization: `Bearer ${cred.access_token}` } }
+              { headers: { Authorization: `Bearer ${token}` } }
             );
             releaseReport.list_status = listRes.status;
             releaseReport.list_attempts = 1;
@@ -625,7 +633,7 @@ export default async function handler(req, res) {
                 `https://api.mercadopago.com/v1/account/release_report/${encodeURIComponent(
                   releaseReport.file_name
                 )}`,
-                { headers: { Authorization: `Bearer ${cred.access_token}` } }
+                { headers: { Authorization: `Bearer ${token}` } }
               );
               releaseReport.file_status = fileRes.status;
               const csvText = await fileRes.text();

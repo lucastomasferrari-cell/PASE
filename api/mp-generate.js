@@ -1,4 +1,6 @@
 // mp-generate: POST a MP para generar CSV nuevo. Responde en <5s.
+import { createMpTokenGetter } from './_mp-token.js';
+
 export default async function handler(req, res) {
   try {
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
@@ -8,9 +10,12 @@ export default async function handler(req, res) {
     const { createClient } = await import('@supabase/supabase-js');
     const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
+    // Getter de token MP con cache scoped al handler (RPC get_mp_token).
+    const getMpToken = createMpTokenGetter(db);
+
     const { data: creds, error: credsError } = await db
       .from('mp_credenciales')
-      .select('local_id, access_token, locales(nombre)')
+      .select('id, local_id, locales(nombre)')
       .eq('activo', true);
 
     if (credsError) {
@@ -33,12 +38,13 @@ export default async function handler(req, res) {
 
     for (const cred of creds) {
       try {
+        const token = await getMpToken(cred.id);
         const postRes = await fetch(
           'https://api.mercadopago.com/v1/account/release_report',
           {
             method: 'POST',
             headers: {
-              Authorization: `Bearer ${cred.access_token}`,
+              Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({ begin_date: beginIso, end_date: endIso }),

@@ -1,6 +1,8 @@
 // mp-process: descarga CSV más reciente, inserta filas rr-*, calcula saldo.
 // Se llama DESPUÉS de mp-generate + espera de 2 minutos.
 
+import { createMpTokenGetter } from './_mp-token.js';
+
 function esPagoPoint(pago) {
   const poi = pago?.point_of_interaction;
   if (!poi) return false;
@@ -72,12 +74,15 @@ export default async function handler(req, res) {
     const { createClient } = await import('@supabase/supabase-js');
     const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
+    // Getter de token MP con cache scoped al handler (RPC get_mp_token).
+    const getMpToken = createMpTokenGetter(db);
+
     // timestamp opcional del POST de mp-generate, para buscar CSV frescos
     const generateTs = Number(req.query?.ts || req.body?.ts) || 0;
 
     const { data: creds, error: credsError } = await db
       .from('mp_credenciales')
-      .select('*, locales(nombre)')
+      .select('id, local_id, saldo_inicial, saldo_inicial_at, locales(nombre)')
       .eq('activo', true);
 
     if (credsError) {
@@ -165,7 +170,8 @@ export default async function handler(req, res) {
 
     for (const cred of creds) {
       try {
-        const accountId = await resolverAccountId(cred.access_token);
+        const token = await getMpToken(cred.id);
+        const accountId = await resolverAccountId(token);
 
         // ── 1. Payments API (últimos 7 días) ──
         const hasta = new Date();
@@ -178,7 +184,7 @@ export default async function handler(req, res) {
           `&sort=date_created&criteria=desc&limit=200`;
 
         const mpRes = await fetch(mpUrl, {
-          headers: { Authorization: `Bearer ${cred.access_token}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
         const mpData = await mpRes.json();
 
@@ -254,7 +260,7 @@ export default async function handler(req, res) {
         try {
           const listRes = await fetch(
             'https://api.mercadopago.com/v1/account/release_report/list',
-            { headers: { Authorization: `Bearer ${cred.access_token}` } }
+            { headers: { Authorization: `Bearer ${token}` } }
           );
           const listBody = await listRes.text();
           const rawFiles = parseListBody(listBody);
@@ -289,7 +295,7 @@ export default async function handler(req, res) {
           try {
             const fileRes = await fetch(
               `https://api.mercadopago.com/v1/account/release_report/${encodeURIComponent(releaseReport.file_name)}`,
-              { headers: { Authorization: `Bearer ${cred.access_token}` } }
+              { headers: { Authorization: `Bearer ${token}` } }
             );
             const csvText = await fileRes.text();
             console.log('[mp-process] CSV downloaded', cred.local_id, csvText?.length, 'chars');
