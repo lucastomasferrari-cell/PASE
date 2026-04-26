@@ -5,6 +5,17 @@
       "schedule": "0 6 * * *"
     }
   ],
+  "functions": {
+    "api/mp-sync.js": {
+      "maxDuration": 300
+    },
+    "api/mp-generate.js": {
+      "maxDuration": 30
+    },
+    "api/mp-process.js": {
+      "maxDuration": 60
+    }
+  },
   "headers": [
     {
       "source": "/assets/(.*)",
