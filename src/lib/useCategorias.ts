@@ -26,7 +26,11 @@ export interface CategoriasState {
   source: "cache" | "db" | "fallback";
 }
 
-const CACHE_KEY = "pase_categorias_v1";
+// Bump v1→v2: invalida sessionStorage cache de todos los usuarios. Ver
+// reporte 2026-04-26 sobre dropdown de Categoría en Tesorería que mostraba
+// egresos en Ingreso. DB y código estaban correctos; la única vía por la
+// que un usuario podía ver lista mala era cache stale de una sesión vieja.
+const CACHE_KEY = "pase_categorias_v2";
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1h
 
 const FALLBACK: Omit<CategoriasState, "loading" | "source"> = {
