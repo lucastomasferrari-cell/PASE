@@ -79,6 +79,12 @@ export default function Caja({ user, locales = [], localActivo }: any) {
   const [movCajaEf, setMovCajaEf] = useState<any[]>([]);
   const [modalCajaEf, setModalCajaEf] = useState(false);
   const [formCajaEf, setFormCajaEf] = useState({fecha:toISO(today),descripcion:"",monto:"",esIngreso:true});
+  // Transferencia entre cuentas: misma direccion (no afecta saldo total),
+  // genera 2 movimientos (egreso en origen, ingreso en destino) vía RPC
+  // transferencia_cuentas.
+  const [transfModal, setTransfModal] = useState(false);
+  const [transfForm, setTransfForm] = useState({fecha:toISO(today),origen:"",destino:"",monto:"",detalle:""});
+  const [transfSaving, setTransfSaving] = useState(false);
   const esDueno = user?.rol === "dueno" || user?.rol === "admin";
   const necesitaSelectorLocal = lidImplicito == null && locsDisp.length > 1;
 
@@ -163,6 +169,32 @@ export default function Caja({ user, locales = [], localActivo }: any) {
     });
     if (error) { alert(translateRpcError(error)); return; }
     setModal(false); load();
+  };
+
+  const guardarTransferencia = async () => {
+    const lid = lidImplicito != null ? lidImplicito : parseInt(localFormId);
+    if (!Number.isFinite(lid)) { alert("Elegí un local"); return; }
+    if (!transfForm.origen || !transfForm.destino) { alert("Elegí cuenta origen y destino"); return; }
+    if (transfForm.origen === transfForm.destino) { alert("Las cuentas deben ser distintas"); return; }
+    const monto = parseFloat(transfForm.monto);
+    if (!Number.isFinite(monto) || monto <= 0) { alert("Monto inválido"); return; }
+    setTransfSaving(true);
+    try {
+      const { error } = await db.rpc("transferencia_cuentas", {
+        p_local_id: lid,
+        p_cuenta_origen: transfForm.origen,
+        p_cuenta_destino: transfForm.destino,
+        p_monto: monto,
+        p_fecha: transfForm.fecha,
+        p_detalle: transfForm.detalle || null,
+      });
+      if (error) { alert(translateRpcError(error)); return; }
+      setTransfModal(false);
+      setTransfForm({fecha:toISO(today),origen:"",destino:"",monto:"",detalle:""});
+      load();
+    } finally {
+      setTransfSaving(false);
+    }
   };
 
   const eliminarMov = async (m: any) => {
@@ -258,7 +290,10 @@ export default function Caja({ user, locales = [], localActivo }: any) {
     <div>
       <div className="ph-row">
         <div><div className="ph-title">Tesorería</div></div>
-        <button className="btn btn-acc" onClick={()=>setModal(true)}>+ Movimiento</button>
+        <div style={{display:"flex",gap:8}}>
+          <button className="btn btn-sec" onClick={()=>setTransfModal(true)} disabled={cuentasVisibles.length<2}>↔ Transferir</button>
+          <button className="btn btn-acc" onClick={()=>setModal(true)}>+ Movimiento</button>
+        </div>
       </div>
       {cuentasVisibles.length === 0 ? (
         <div className="empty" style={{padding:24,marginBottom:16}}>No tenés cuentas asignadas. Pedile a un administrador que te habilite.</div>
@@ -498,6 +533,35 @@ export default function Caja({ user, locales = [], localActivo }: any) {
               <div className="field"><label>Detalle</label><input value={form.detalle} onChange={e=>setForm({...form,detalle:e.target.value})} placeholder="Descripción..."/></div>
             </div>
             <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={!form.importe || (necesitaSelectorLocal && !localFormId)}>Guardar</button></div>
+          </div>
+        </div>
+      )}
+      {transfModal && (
+        <div className="overlay" onClick={()=>setTransfModal(false)}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <div className="modal-hd"><div className="modal-title">Transferir entre cuentas</div><button className="close-btn" onClick={()=>setTransfModal(false)}>✕</button></div>
+            <div className="modal-body">
+              {necesitaSelectorLocal && (
+                <div className="field">
+                  <label>Local *</label>
+                  <select value={localFormId} onChange={e=>setLocalFormId(e.target.value)} required>
+                    <option value="">Seleccioná el local...</option>
+                    {locsDisp.map((l:any)=><option key={l.id} value={l.id}>{l.nombre}</option>)}
+                  </select>
+                </div>
+              )}
+              <div className="form2">
+                <div className="field"><label>Cuenta origen</label><select value={transfForm.origen} onChange={e=>setTransfForm({...transfForm,origen:e.target.value})}><option value="">— elegí cuenta —</option>{cuentasVisibles.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+                <div className="field"><label>Cuenta destino</label><select value={transfForm.destino} onChange={e=>setTransfForm({...transfForm,destino:e.target.value})}><option value="">— elegí cuenta —</option>{cuentasVisibles.filter(c=>c!==transfForm.origen).map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+              </div>
+              <div className="form2">
+                <div className="field"><label>Monto $</label><input type="number" value={transfForm.monto} onChange={e=>setTransfForm({...transfForm,monto:e.target.value})} placeholder="0"/></div>
+                <div className="field"><label>Fecha</label><input type="date" value={transfForm.fecha} onChange={e=>setTransfForm({...transfForm,fecha:e.target.value})}/></div>
+              </div>
+              <div className="field"><label>Detalle (opcional)</label><input value={transfForm.detalle} onChange={e=>setTransfForm({...transfForm,detalle:e.target.value})} placeholder="Motivo de la transferencia..."/></div>
+              <div style={{fontSize:11,color:"var(--muted)",marginTop:8}}>Genera 2 movimientos: egreso en <b>{transfForm.origen||"origen"}</b> e ingreso en <b>{transfForm.destino||"destino"}</b>. No afecta el saldo total.</div>
+            </div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setTransfModal(false)} disabled={transfSaving}>Cancelar</button><button className="btn btn-acc" onClick={guardarTransferencia} disabled={transfSaving || !transfForm.origen || !transfForm.destino || transfForm.origen===transfForm.destino || !transfForm.monto || (necesitaSelectorLocal && !localFormId)}>{transfSaving?"Transfiriendo…":"Transferir"}</button></div>
           </div>
         </div>
       )}
