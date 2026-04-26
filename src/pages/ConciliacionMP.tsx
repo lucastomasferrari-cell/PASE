@@ -39,7 +39,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
       let gasQ=db.from("gastos").select("id,fecha,categoria,detalle,monto,local_id,cuenta").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false});
       gasQ=applyLocalScope(gasQ,user,localActivo);
       const [credRes,movRes,facRes,gasRes]=await Promise.all([
-        db.from("mp_credenciales").select("*,locales(nombre)"),
+        db.from("mp_credenciales").select("id, local_id, activo, ultima_sync, access_token_last8, locales(nombre)"),
         movQ,
         facQ,
         gasQ,
@@ -138,7 +138,15 @@ function ConciliacionMP({ user, locales, localActivo }) {
 
   const guardarCredencial=async()=>{
     if(!configForm.local_id||!configForm.access_token)return;
-    await db.from("mp_credenciales").upsert([{local_id:parseInt(configForm.local_id),access_token:configForm.access_token,activo:true}],{onConflict:"local_id"});
+    const {error}=await db.rpc("set_mp_token",{
+      p_local_id:parseInt(configForm.local_id),
+      p_access_token:configForm.access_token,
+    });
+    if(error){
+      console.error("set_mp_token error:",error);
+      showToast("err","⚠ Error guardando credencial: "+(error.message||""));
+      return;
+    }
     setConfigModal(false);setConfigForm({local_id:"",access_token:""});load();
   };
 
@@ -620,7 +628,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
                 <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:"var(--s2)",borderRadius:"var(--r)",marginBottom:6}}>
                   <div>
                     <span style={{fontWeight:500,fontSize:12}}>{c.locales?.nombre}</span>
-                    <span style={{fontSize:10,color:"var(--muted)",marginLeft:8}}>...{c.access_token?.slice(-8)}</span>
+                    <span style={{fontSize:10,color:"var(--muted)",marginLeft:8}}>...{c.access_token_last8||"••••••••"}</span>
                   </div>
                   <div style={{display:"flex",gap:6,alignItems:"center"}}>
                     {c.ultima_sync&&<span style={{fontSize:10,color:"var(--success)"}}>✓ Sync {fmt_dt_ar(c.ultima_sync)}</span>}
