@@ -173,11 +173,6 @@ function ConciliacionMP({ user, locales, localActivo }) {
 
   // Comisiones/impuestos son egresos automáticos y se muestran aparte — no entran en conciliación manual.
   const ES_AUTOMATICO=t=>t==="fee"||t==="tax";
-  // Las ventas (point = presencial, payment = cobro online) NO modifican el
-  // saldo real de la cuenta MP en el momento — el dinero entra al saldo
-  // pendiente y sólo se libera 3 días después vía liquidación. Excluirlas
-  // del list de Conciliación, que muestra movimientos del saldo released.
-  const ES_VENTA=t=>t==="point"||t==="payment";
 
   const ingresos=movimientos.filter(m=>m.monto>0).reduce((s,m)=>s+m.monto,0);
   const egresosList=movimientos.filter(m=>m.monto<0);
@@ -410,13 +405,13 @@ function ConciliacionMP({ user, locales, localActivo }) {
       {loading?<div className="loading">Cargando...</div>:tab==="movimientos"?(
         <div className="panel">
           <div className="panel-hd">
-            <span className="panel-title">Movimientos — {movimientos.filter(m=>!ES_AUTOMATICO(m.tipo)&&!ES_VENTA(m.tipo)).length} registros</span>
+            <span className="panel-title">Movimientos — {movimientos.filter(m=>!ES_AUTOMATICO(m.tipo)).length} registros</span>
             <span style={{fontSize:11,color:"var(--muted2)"}}>Comisiones en pestaña aparte · se actualiza cada hora</span>
           </div>
-          {movimientos.filter(m=>!ES_AUTOMATICO(m.tipo)&&!ES_VENTA(m.tipo)).length===0?<div className="empty">Sin movimientos. Sincronizá para traer los datos de MP.</div>:(
+          {movimientos.filter(m=>!ES_AUTOMATICO(m.tipo)).length===0?<div className="empty">Sin movimientos. Sincronizá para traer los datos de MP.</div>:(
             <table>
               <thead><tr><th>Fecha</th><th>Local</th><th>Tipo</th><th>Descripción</th><th>Monto</th><th>Saldo</th><th>Conciliación</th></tr></thead>
-              <tbody>{movimientos.filter(m=>!ES_AUTOMATICO(m.tipo)&&!ES_VENTA(m.tipo)).map(m=>{
+              <tbody>{movimientos.filter(m=>!ES_AUTOMATICO(m.tipo)).map(m=>{
                 const esEgreso=m.monto<0;
                 const esAuto=ES_AUTOMATICO(m.tipo);
                 const pend=esEgreso&&!esAuto&&!m.conciliado;
