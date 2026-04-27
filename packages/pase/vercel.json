@@ -1,7 +1,5 @@
 {
-  "buildCommand": "cd ../.. && pnpm install --frozen-lockfile && pnpm --filter pase build",
   "outputDirectory": "dist",
-  "installCommand": "echo 'install handled by buildCommand'",
   "crons": [
     {
       "path": "/api/mp-sync",
