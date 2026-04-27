@@ -4,7 +4,7 @@ import { applyLocalScope, cuentasVisibles } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS, UNIDADES } from "../lib/constants";
-import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
+import { toISO, today, fmt_d, fmt_$, genId, parseMonto } from "../lib/utils";
 import LectorFacturasIA from "./LectorFacturasIA";
 
 const estadoDot = (estado: string) => {
@@ -60,13 +60,13 @@ export default function Compras({ user, locales, localActivo }) {
   const [pagoForm, setPagoForm] = useState({ cuenta: "MercadoPago", monto: "", fecha: toISO(today) });
   const localesDisp = user.rol === "dueno" ? locales : locales.filter(l => (user.locales || []).includes(l.id));
   const calcTotal = () =>
-    (parseFloat(form.neto) || 0) +
-    (parseFloat(form.iva21) || 0) +
-    (parseFloat(form.iva105) || 0) +
-    (parseFloat(form.iibb) || 0) +
-    (parseFloat(form.perc_iva) || 0) +
-    (parseFloat(form.otros_cargos) || 0) -
-    (parseFloat(form.descuentos) || 0);
+    parseMonto(form.neto) +
+    parseMonto(form.iva21) +
+    parseMonto(form.iva105) +
+    parseMonto(form.iibb) +
+    parseMonto(form.perc_iva) +
+    parseMonto(form.otros_cargos) -
+    parseMonto(form.descuentos);
 
   const load = async () => {
     setLoading(true);
@@ -124,8 +124,8 @@ export default function Compras({ user, locales, localActivo }) {
     const newItems = [...items];
     newItems[i] = { ...newItems[i], [field]: val };
     if (field === "cantidad" || field === "precio_unitario") {
-      const q = parseFloat(field === "cantidad" ? val : newItems[i].cantidad) || 0;
-      const p = parseFloat(field === "precio_unitario" ? val : newItems[i].precio_unitario) || 0;
+      const q = parseMonto(field === "cantidad" ? val : newItems[i].cantidad);
+      const p = parseMonto(field === "precio_unitario" ? val : newItems[i].precio_unitario);
       newItems[i].subtotal = q * p;
     }
     setItems(newItems);
@@ -175,12 +175,12 @@ export default function Compras({ user, locales, localActivo }) {
       // Campos date: "" → null. Postgres rechaza string vacío en columnas
       // date con "invalid input syntax for type date: \"\"". Común en NC
       // que no siempre tienen vencimiento.
-      const nueva = { ...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(form.local_id), neto: parseFloat(form.neto), iva21: parseFloat(form.iva21) || 0, iva105: parseFloat(form.iva105) || 0, iibb: parseFloat(form.iibb) || 0, perc_iva: parseFloat(form.perc_iva) || 0, otros_cargos: parseFloat(form.otros_cargos) || 0, descuentos: parseFloat(form.descuentos) || 0, total, estado: isNC ? "pagada" : "pendiente", pagos: [], tipo: form.tipo, fecha: form.fecha || null, venc: form.venc || null };
+      const nueva = { ...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(form.local_id), neto: parseMonto(form.neto), iva21: parseMonto(form.iva21), iva105: parseMonto(form.iva105), iibb: parseMonto(form.iibb), perc_iva: parseMonto(form.perc_iva), otros_cargos: parseMonto(form.otros_cargos), descuentos: parseMonto(form.descuentos), total, estado: isNC ? "pagada" : "pendiente", pagos: [], tipo: form.tipo, fecha: form.fecha || null, venc: form.venc || null };
       const { error: factErr } = await db.from("facturas").insert([nueva]);
       if (factErr) throw new Error("Error guardando factura: " + factErr.message);
 
       if (items.length > 0) {
-        const itemsToInsert = items.filter(it => it.producto).map(it => ({ ...it, factura_id: id, cantidad: parseFloat(it.cantidad) || 0, precio_unitario: parseFloat(it.precio_unitario) || 0, subtotal: it.subtotal }));
+        const itemsToInsert = items.filter(it => it.producto).map(it => ({ ...it, factura_id: id, cantidad: parseMonto(it.cantidad), precio_unitario: parseMonto(it.precio_unitario), subtotal: it.subtotal }));
         if (itemsToInsert.length > 0) await db.from("factura_items").insert(itemsToInsert);
       }
       const prov = proveedores.find(p => p.id === nueva.prov_id);
@@ -202,7 +202,7 @@ export default function Compras({ user, locales, localActivo }) {
     setPagando(true);
     try {
       const f = pagarModal;
-      const monto = parseFloat(pagoForm.monto) || f.total;
+      const monto = parseMonto(pagoForm.monto) || f.total;
       const prov = proveedores.find(p => p.id === f.prov_id);
       const detalle = `Pago ${prov?.nombre || ""} - Fact ${f.nro}`;
       const { error } = await db.rpc("pagar_factura", {
@@ -381,17 +381,17 @@ export default function Compras({ user, locales, localActivo }) {
               </div>
               <div className="form2">
                 <div className="field"><label>Vencimiento</label><input type="date" value={form.venc} onChange={e => setForm({ ...form, venc: e.target.value })} /></div>
-                <div className="field"><label>Neto Gravado *</label><input type="number" value={form.neto} onChange={e => setForm({ ...form, neto: e.target.value })} placeholder="0" /></div>
+                <div className="field"><label>Neto Gravado *</label><input type="number" step="0.01" value={form.neto} onChange={e => setForm({ ...form, neto: e.target.value })} placeholder="0" /></div>
               </div>
               <div className="form3">
-                <div className="field"><label>IVA 21%</label><input type="number" value={form.iva21} onChange={e => setForm({ ...form, iva21: e.target.value })} placeholder="0" /></div>
-                <div className="field"><label>IVA 10.5%</label><input type="number" value={form.iva105} onChange={e => setForm({ ...form, iva105: e.target.value })} placeholder="0" /></div>
-                <div className="field"><label>Perc. IIBB</label><input type="number" value={form.iibb} onChange={e => setForm({ ...form, iibb: e.target.value })} placeholder="0" /></div>
+                <div className="field"><label>IVA 21%</label><input type="number" step="0.01" value={form.iva21} onChange={e => setForm({ ...form, iva21: e.target.value })} placeholder="0" /></div>
+                <div className="field"><label>IVA 10.5%</label><input type="number" step="0.01" value={form.iva105} onChange={e => setForm({ ...form, iva105: e.target.value })} placeholder="0" /></div>
+                <div className="field"><label>Perc. IIBB</label><input type="number" step="0.01" value={form.iibb} onChange={e => setForm({ ...form, iibb: e.target.value })} placeholder="0" /></div>
               </div>
               <div className="form3">
-                <div className="field"><label>Perc. IVA</label><input type="number" value={form.perc_iva} onChange={e => setForm({ ...form, perc_iva: e.target.value })} placeholder="0" /></div>
-                <div className="field"><label>Otros Cargos</label><input type="number" value={form.otros_cargos} onChange={e => setForm({ ...form, otros_cargos: e.target.value })} placeholder="0" /></div>
-                <div className="field"><label>Descuentos (−)</label><input type="number" value={form.descuentos} onChange={e => setForm({ ...form, descuentos: e.target.value })} placeholder="0" /></div>
+                <div className="field"><label>Perc. IVA</label><input type="number" step="0.01" value={form.perc_iva} onChange={e => setForm({ ...form, perc_iva: e.target.value })} placeholder="0" /></div>
+                <div className="field"><label>Otros Cargos</label><input type="number" step="0.01" value={form.otros_cargos} onChange={e => setForm({ ...form, otros_cargos: e.target.value })} placeholder="0" /></div>
+                <div className="field"><label>Descuentos (−)</label><input type="number" step="0.01" value={form.descuentos} onChange={e => setForm({ ...form, descuentos: e.target.value })} placeholder="0" /></div>
               </div>
               <div className="field"><label>Total calculado</label><input readOnly value={fmt_$(calcTotal())} style={{ color: "var(--acc)", fontFamily: "'Inter',sans-serif", fontWeight: 500 }} /></div>
               <div className="field"><label>Descripción</label><input value={form.detalle} onChange={e => setForm({ ...form, detalle: e.target.value })} placeholder="Detalle general..." /></div>
@@ -408,9 +408,9 @@ export default function Compras({ user, locales, localActivo }) {
                     <tbody>{items.map((it, i) => (
                       <tr key={i}>
                         <td><input style={{ width: "100%", background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.producto} onChange={e => updateItem(i, "producto", e.target.value)} placeholder="Ej: Salmón" /></td>
-                        <td><input type="number" style={{ width: 70, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.cantidad} onChange={e => updateItem(i, "cantidad", e.target.value)} /></td>
+                        <td><input type="number" step="0.01" style={{ width: 70, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.cantidad} onChange={e => updateItem(i, "cantidad", e.target.value)} /></td>
                         <td><select style={{ background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.unidad} onChange={e => updateItem(i, "unidad", e.target.value)}>{UNIDADES.map(u => <option key={u}>{u}</option>)}</select></td>
-                        <td><input type="number" style={{ width: 90, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.precio_unitario} onChange={e => updateItem(i, "precio_unitario", e.target.value)} /></td>
+                        <td><input type="number" step="0.01" style={{ width: 90, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.precio_unitario} onChange={e => updateItem(i, "precio_unitario", e.target.value)} /></td>
                         <td style={{ color: "var(--acc)", fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 500 }}>{fmt_$(it.subtotal)}</td>
                         <td><button className="btn btn-danger btn-sm" onClick={() => removeItem(i)}>✕</button></td>
                       </tr>
@@ -498,7 +498,7 @@ export default function Compras({ user, locales, localActivo }) {
             <div className="modal-body">
               <div className="alert alert-info">{pagarModal.nro} · Total: {fmt_$(pagarModal.total)}</div>
               <div className="field"><label>Cuenta de egreso</label><select value={pagoForm.cuenta} onChange={e => setPagoForm({ ...pagoForm, cuenta: e.target.value })}>{cuentasUsables.map(c => <option key={c}>{c}</option>)}</select></div>
-              <div className="field"><label>Monto</label><input type="number" value={pagoForm.monto} onChange={e => setPagoForm({ ...pagoForm, monto: e.target.value })} /></div>
+              <div className="field"><label>Monto</label><input type="number" step="0.01" value={pagoForm.monto} onChange={e => setPagoForm({ ...pagoForm, monto: e.target.value })} /></div>
               <div className="field"><label>Fecha</label><input type="date" value={pagoForm.fecha} onChange={e => setPagoForm({ ...pagoForm, fecha: e.target.value })} /></div>
             </div>
             <div className="modal-ft"><button className="btn btn-sec" onClick={() => setPagarModal(null)}>Cancelar</button><button className="btn btn-success" onClick={pagar} disabled={pagando}>{pagando ? "Procesando..." : "Confirmar Pago"}</button></div>
