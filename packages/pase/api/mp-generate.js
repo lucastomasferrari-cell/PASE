@@ -36,63 +36,42 @@ export default async function handler(req, res) {
     const resultados = [];
     const timestamp = Date.now();
 
+    // Override manual: ?source=release fuerza release_report (útil si por
+    // algún motivo el settlement_report está caído o el token no tiene
+    // scope para él). Default = settlement.
+    const sourceOverride = (req.query?.source || req.body?.source || '').toLowerCase();
+    const source = sourceOverride === 'release' ? 'release' : 'settlement';
+    const reportEndpoint = source === 'release'
+      ? 'https://api.mercadopago.com/v1/account/release_report'
+      : 'https://api.mercadopago.com/v1/account/settlement_report';
+
     for (const cred of creds) {
       try {
         const token = await getMpToken(cred.id);
 
-        // PARTE C de TASK 0.11: settlement_report es el endpoint nuevo,
-        // trae TRANSACTION_DATE near-realtime y TRANSACTION_TYPE explícito.
-        // Si MP devuelve 4xx/5xx (token sin scope, rate limit del settlement
-        // específico, etc), fallback a release_report — no rompe el sync.
-        let source = 'settlement';
+        // PARTE C de TASK 0.11 + Opción A del fix de rate limit: NO hay
+        // fallback automático. Cada call genera UNA sola task de MP.
+        // Si la elegida (settlement por default) rechaza, devolvemos
+        // error claro — el caller decide si retry con ?source=release.
         let postRes;
         try {
-          postRes = await fetch(
-            'https://api.mercadopago.com/v1/account/settlement_report',
-            {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ begin_date: beginIso, end_date: endIso }),
-            }
-          );
-          if (!postRes.ok) {
-            const fallbackBody = (await postRes.text()).slice(0, 200);
-            console.warn(
-              '[mp-generate] settlement_report POST',
-              postRes.status,
-              fallbackBody,
-              '— fallback a release_report'
-            );
-            postRes = await fetch(
-              'https://api.mercadopago.com/v1/account/release_report',
-              {
-                method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ begin_date: beginIso, end_date: endIso }),
-              }
-            );
-            source = 'release';
-          }
+          postRes = await fetch(reportEndpoint, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ begin_date: beginIso, end_date: endIso }),
+          });
         } catch (eFetch) {
-          console.error('[mp-generate] settlement_report fetch error', eFetch?.message);
-          postRes = await fetch(
-            'https://api.mercadopago.com/v1/account/release_report',
-            {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ begin_date: beginIso, end_date: endIso }),
-            }
-          );
-          source = 'release';
+          console.error('[mp-generate] fetch error', cred.local_id, source, eFetch?.message);
+          resultados.push({
+            local_id: cred.local_id,
+            local: cred.locales?.nombre,
+            source,
+            error: `fetch_error: ${eFetch?.message || String(eFetch)}`,
+          });
+          continue;
         }
 
         const postBody = await postRes.text();
@@ -102,12 +81,15 @@ export default async function handler(req, res) {
           local: cred.locales?.nombre,
           source,
           status: postRes.status,
+          ok: postRes.ok,
+          body: postRes.ok ? undefined : postBody.slice(0, 200),
         });
       } catch (e) {
         console.error('[mp-generate] error', cred.local_id, e);
         resultados.push({
           local_id: cred.local_id,
           local: cred.locales?.nombre,
+          source,
           error: e.message,
         });
       }

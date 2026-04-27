@@ -15,9 +15,6 @@
     },
     "api/mp-process.js": {
       "maxDuration": 60
-    },
-    "api/mp-debug-settlement.js": {
-      "maxDuration": 180
     }
   },
   "headers": [

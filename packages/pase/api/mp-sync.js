@@ -112,6 +112,13 @@ export default async function handler(req, res) {
       console.error('mp-sync: dedup cleanup exception', e);
     }
 
+    // Override manual: ?source=release fuerza release_report. Default
+    // = settlement. Sin fallback automático para no doblar la cuota MP
+    // cuando settlement rechaza (cada POST genera una task que cuenta
+    // contra el límite de 24/día por endpoint).
+    const sourceOverride = (req.query?.source || req.body?.source || '').toLowerCase();
+    const sourceDefault = sourceOverride === 'release' ? 'release' : 'settlement';
+
     const resultados = [];
     let balanceTotalMP = 0;
     let balanceConsultado = false;
@@ -141,49 +148,54 @@ export default async function handler(req, res) {
           error: null,
         };
 
-        // ── 1. PUT /config + POST: intentar settlement_report primero ──
-        const intentarPostReporte = async (sourceTry) => {
-          const baseUrl = sourceTry === 'settlement'
-            ? 'https://api.mercadopago.com/v1/account/settlement_report'
-            : 'https://api.mercadopago.com/v1/account/release_report';
-          // PUT /config (idempotente). Best-effort.
-          try {
-            const cfgRes = await fetch(`${baseUrl}/config`, {
-              method: 'PUT',
-              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                scheduled: true,
-                execute_after_withdrawal: false,
-                display_timezone: 'GMT-03',
-                frequency: { hour: 23, type: 'daily' },
-              }),
-            });
-            reportInfo.config_status = cfgRes.status;
-          } catch {}
-          // POST.
-          const postRes = await fetch(baseUrl, {
+        // ── 1. PUT /config + POST. Solo el endpoint elegido (settlement
+        //     por default, release si ?source=release). SIN fallback
+        //     automático: cada POST consume una task del cuenter de MP
+        //     (24/día por endpoint), y doblar el intento se come la
+        //     cuota cuando MP devuelve 429.
+        const baseUrl = sourceDefault === 'release'
+          ? 'https://api.mercadopago.com/v1/account/release_report'
+          : 'https://api.mercadopago.com/v1/account/settlement_report';
+        reportInfo.source = sourceDefault;
+
+        // PUT /config (idempotente, best-effort). No consume "tasks"
+        // del cuenter de generación.
+        try {
+          const cfgRes = await fetch(`${baseUrl}/config`, {
+            method: 'PUT',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              scheduled: true,
+              execute_after_withdrawal: false,
+              display_timezone: 'GMT-03',
+              frequency: { hour: 23, type: 'daily' },
+            }),
+          });
+          reportInfo.config_status = cfgRes.status;
+        } catch {}
+
+        // POST: dispara la generación del CSV. Consume 1 task.
+        const prePostTs = Date.now();
+        let postRes;
+        try {
+          postRes = await fetch(baseUrl, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ begin_date: beginIso, end_date: endIso }),
           });
-          const body = (await postRes.text()).slice(0, 200);
-          return { ok: postRes.ok, status: postRes.status, body, baseUrl };
-        };
-
-        const prePostTs = Date.now();
-        let postResult = await intentarPostReporte('settlement');
-        if (postResult.ok) {
-          reportInfo.source = 'settlement';
-        } else {
-          console.warn('[mp-sync] settlement_report POST', postResult.status, postResult.body, '— fallback a release');
-          postResult = await intentarPostReporte('release');
-          reportInfo.source = postResult.ok ? 'release' : null;
+        } catch (eFetch) {
+          reportInfo.error = `POST ${sourceDefault} fetch_error: ${eFetch?.message || String(eFetch)}`;
+          console.error('[mp-sync]', reportInfo.error, cred.local_id);
+          resultados.push({ local: cred.locales?.nombre, local_id: cred.local_id, report: reportInfo });
+          continue;
         }
-        reportInfo.post_status = postResult.status;
-        reportInfo.post_body = postResult.body;
+        const postBody = (await postRes.text()).slice(0, 200);
+        reportInfo.post_status = postRes.status;
+        reportInfo.post_body = postBody;
 
-        if (!postResult.ok) {
-          reportInfo.error = `POST ${reportInfo.source || 'all'} ${postResult.status}: ${postResult.body}`;
+        if (!postRes.ok) {
+          reportInfo.error = `POST ${sourceDefault} ${postRes.status}: ${postBody}`;
+          console.warn('[mp-sync]', reportInfo.error, cred.local_id);
           resultados.push({ local: cred.locales?.nombre, local_id: cred.local_id, report: reportInfo });
           continue;
         }
@@ -193,7 +205,7 @@ export default async function handler(req, res) {
         await sleep(90000);
 
         // ── 3. GET /list buscando el CSV recién creado ──
-        const baseUrl = postResult.baseUrl;
+        // baseUrl ya está definido arriba (línea ~156).
         try {
           const listRes = await fetch(`${baseUrl}/list`, {
             headers: { Authorization: `Bearer ${token}` },
