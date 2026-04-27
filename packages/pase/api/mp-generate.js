@@ -39,22 +39,68 @@ export default async function handler(req, res) {
     for (const cred of creds) {
       try {
         const token = await getMpToken(cred.id);
-        const postRes = await fetch(
-          'https://api.mercadopago.com/v1/account/release_report',
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ begin_date: beginIso, end_date: endIso }),
+
+        // PARTE C de TASK 0.11: settlement_report es el endpoint nuevo,
+        // trae TRANSACTION_DATE near-realtime y TRANSACTION_TYPE explícito.
+        // Si MP devuelve 4xx/5xx (token sin scope, rate limit del settlement
+        // específico, etc), fallback a release_report — no rompe el sync.
+        let source = 'settlement';
+        let postRes;
+        try {
+          postRes = await fetch(
+            'https://api.mercadopago.com/v1/account/settlement_report',
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ begin_date: beginIso, end_date: endIso }),
+            }
+          );
+          if (!postRes.ok) {
+            const fallbackBody = (await postRes.text()).slice(0, 200);
+            console.warn(
+              '[mp-generate] settlement_report POST',
+              postRes.status,
+              fallbackBody,
+              '— fallback a release_report'
+            );
+            postRes = await fetch(
+              'https://api.mercadopago.com/v1/account/release_report',
+              {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ begin_date: beginIso, end_date: endIso }),
+              }
+            );
+            source = 'release';
           }
-        );
+        } catch (eFetch) {
+          console.error('[mp-generate] settlement_report fetch error', eFetch?.message);
+          postRes = await fetch(
+            'https://api.mercadopago.com/v1/account/release_report',
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ begin_date: beginIso, end_date: endIso }),
+            }
+          );
+          source = 'release';
+        }
+
         const postBody = await postRes.text();
-        console.log('[mp-generate] POST', cred.local_id, postRes.status, postBody.slice(0, 200));
+        console.log('[mp-generate] POST', source, cred.local_id, postRes.status, postBody.slice(0, 200));
         resultados.push({
           local_id: cred.local_id,
           local: cred.locales?.nombre,
+          source,
           status: postRes.status,
         });
       } catch (e) {
