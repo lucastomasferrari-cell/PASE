@@ -149,12 +149,17 @@ export default function Ventas({ user, locales, localActivo }) {
 
   const eliminarBloque=async(grupo)=>{
     if(!confirm(`¿Eliminar el cierre completo del ${fmt_d(grupo.fecha)} ${grupo.turno}?`))return;
-    // RPC en serie por venta — cada call ajusta su movimiento + saldo.
-    // No usamos Promise.all para que las restas de saldo sean
-    // determinísticas y los errores se vean uno a uno.
-    for(const v of grupo.items){
-      const {error}=await db.rpc("eliminar_venta",{p_venta_id:v.id});
-      if(error){alert("Error eliminando venta "+v.id+": "+(error.message||""));return;}
+    // RPC eliminar_cierre: atómico a nivel cierre completo. Si falla en
+    // mitad, rollback transaccional → no quedan estados parciales como
+    // pasaba con el loop secuencial de eliminar_venta.
+    const {data,error}=await db.rpc("eliminar_cierre",{
+      p_local_id:grupo.local_id,
+      p_fecha:grupo.fecha,
+      p_turno:grupo.turno,
+    });
+    if(error){alert("Error eliminando cierre: "+(error.message||""));return;}
+    if(data?.contiene_legacy){
+      alert("Cierre borrado. Algunos movimientos antiguos en Caja Chica pueden requerir borrado manual (cierres pre-2026-04-27 sin link a sus ventas).");
     }
     setDetalleModal(null);load();
   };
