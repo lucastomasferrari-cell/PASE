@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { tienePermiso } from "../lib/auth";
 import { useMediosCobro, type MedioCobro } from "../lib/useMediosCobro";
+import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS } from "../lib/constants";
 
 const TIPOS = [
@@ -12,6 +13,7 @@ const TIPOS = [
   { id: "gasto_comision", label: "Comisiones" },
   { id: "medio_cobro", label: "Medios de Cobro" },
   { id: "cat_compra", label: "Categorías de Compra" },
+  { id: "cat_ingreso", label: "Categorías de Ingreso" },
 ];
 
 export default function Configuracion({ user, locales }: { user: any; locales?: any[] }) {
@@ -23,6 +25,14 @@ export default function Configuracion({ user, locales }: { user: any; locales?: 
   // El tab "medio_cobro" usa la tabla medios_cobro (refactor C), no
   // config_categorias — tiene su propio panel con CRUD multi-campo.
   const esMediosCobroTab = tab === "medio_cobro";
+  // Para cat_ingreso preservamos el casing tal como Lucas lo escribe
+  // (las existentes son "Liquidación X", "Ingreso Socio", etc en mixed
+  // case). Para los otros tipos seguimos forzando UPPERCASE como antes.
+  const preservarCasing = tab === "cat_ingreso";
+
+  // refresh() invalida el cache de useCategorias en sessionStorage para
+  // que los dropdowns en Caja/Ventas/etc se enteren del cambio sin reload.
+  const { refresh: refreshCategorias } = useCategorias();
 
   const load = async () => {
     if (esMediosCobroTab) return; // ese tab maneja su propia data
@@ -37,10 +47,11 @@ export default function Configuracion({ user, locales }: { user: any; locales?: 
 
   const agregar = async () => {
     if (!nuevo.trim()) return;
-    const nombre = nuevo.trim().toUpperCase();
+    const nombre = preservarCasing ? nuevo.trim() : nuevo.trim().toUpperCase();
     const maxOrden = items.length > 0 ? Math.max(...items.map(i => i.orden)) + 1 : 1;
     await db.from("config_categorias").insert([{ tipo: tab, nombre, orden: maxOrden, activo: true }]);
     setNuevo("");
+    await refreshCategorias();
     load();
   };
 
@@ -53,6 +64,7 @@ export default function Configuracion({ user, locales }: { user: any; locales?: 
       }
     }
     await db.from("config_categorias").update({ activo: false }).eq("id", item.id);
+    await refreshCategorias();
     load();
   };
 

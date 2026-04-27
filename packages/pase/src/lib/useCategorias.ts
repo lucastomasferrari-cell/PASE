@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { db } from "./supabase";
 import {
   CATEGORIAS_COMPRA as _CC, GASTOS_FIJOS as _GF, GASTOS_VARIABLES as _GV,
@@ -24,13 +24,15 @@ export interface CategoriasState {
   CATEGORIAS_INGRESO: string[]; // grupo = INGRESOS (nuevas)
   loading: boolean;
   source: "cache" | "db" | "fallback";
+  refresh: () => Promise<void>; // invalida sessionStorage y re-fetcha
 }
 
-// Bump v1→v2: invalida sessionStorage cache de todos los usuarios. Ver
-// reporte 2026-04-26 sobre dropdown de Categoría en Tesorería que mostraba
-// egresos en Ingreso. DB y código estaban correctos; la única vía por la
-// que un usuario podía ver lista mala era cache stale de una sesión vieja.
-const CACHE_KEY = "pase_categorias_v2";
+// Bump v2→v3: invalida cache de sesiones que escribieron antes del fix
+// del CRUD de cat_ingreso. Lucas agregaba/eliminaba categorías desde
+// Conceptos pero el cache no se invalidaba — los dropdowns mostraban
+// data vieja por hasta 1h. Ahora Configuracion.tsx llama refresh() tras
+// cada cambio, pero el bump fuerza fresh-fetch en sesiones existentes.
+const CACHE_KEY = "pase_categorias_v3";
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1h
 
 const FALLBACK: Omit<CategoriasState, "loading" | "source"> = {
@@ -81,10 +83,30 @@ function fromRows(rows: { tipo: string; nombre: string; orden: number; grupo: st
 }
 
 export function useCategorias(): CategoriasState {
+  // refresh() invalida sessionStorage + re-fetcha. La definición está acá
+  // arriba para que el initial useState pueda incluirla sin "ReferenceError".
+  const refresh = useCallback(async () => {
+    try { sessionStorage.removeItem(CACHE_KEY); } catch {}
+    setState(s => ({ ...s, loading: true }));
+    try {
+      const { data, error } = await db.from("config_categorias")
+        .select("tipo, nombre, orden, grupo, activo");
+      if (error || !data || data.length === 0) {
+        setState(s => ({ ...FALLBACK, loading: false, source: "fallback", refresh: s.refresh }));
+        return;
+      }
+      const next = fromRows(data as any);
+      writeCache(next);
+      setState(s => ({ ...next, loading: false, source: "db", refresh: s.refresh }));
+    } catch {
+      setState(s => ({ ...FALLBACK, loading: false, source: "fallback", refresh: s.refresh }));
+    }
+  }, []);
+
   const [state, setState] = useState<CategoriasState>(() => {
     const cached = readCache();
-    if (cached) return { ...cached, loading: false, source: "cache" };
-    return { ...FALLBACK, loading: true, source: "fallback" };
+    if (cached) return { ...cached, loading: false, source: "cache", refresh };
+    return { ...FALLBACK, loading: true, source: "fallback", refresh };
   });
 
   useEffect(() => {
@@ -98,14 +120,14 @@ export function useCategorias(): CategoriasState {
         if (cancelled) return;
         if (error || !data || data.length === 0) {
           // Fallback silencioso a constants.ts — no interrumpe UX.
-          setState({ ...FALLBACK, loading: false, source: "fallback" });
+          setState(s => ({ ...FALLBACK, loading: false, source: "fallback", refresh: s.refresh }));
           return;
         }
         const next = fromRows(data as any);
         writeCache(next);
-        setState({ ...next, loading: false, source: "db" });
+        setState(s => ({ ...next, loading: false, source: "db", refresh: s.refresh }));
       } catch {
-        if (!cancelled) setState({ ...FALLBACK, loading: false, source: "fallback" });
+        if (!cancelled) setState(s => ({ ...FALLBACK, loading: false, source: "fallback", refresh: s.refresh }));
       }
     })();
     return () => { cancelled = true; };
