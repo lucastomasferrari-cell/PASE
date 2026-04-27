@@ -39,7 +39,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
       let gasQ=db.from("gastos").select("id,fecha,categoria,detalle,monto,local_id,cuenta").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false});
       gasQ=applyLocalScope(gasQ,user,localActivo);
       const [credRes,movRes,facRes,gasRes]=await Promise.all([
-        db.from("mp_credenciales").select("id, local_id, activo, ultima_sync, access_token_last8, locales(nombre)"),
+        db.from("mp_credenciales").select("id, local_id, activo, ultima_sync, access_token_last8, saldo_disponible, por_acreditar, balance_at, saldo_mp_actual, saldo_mp_total, saldo_mp_unavailable, saldo_mp_actualizado_at, locales(nombre)"),
         movQ,
         facQ,
         gasQ,
@@ -214,11 +214,19 @@ function ConciliacionMP({ user, locales, localActivo }) {
   const ventasPresenciales=movimientos.filter(m=>m.tipo==="point"&&m.monto>0).reduce((s,m)=>s+m.monto,0);
   const ventasOnline=movimientos.filter(m=>m.tipo==="payment"&&m.monto>0).reduce((s,m)=>s+m.monto,0);
 
-  // Saldo real = saldo_inicial (fijado por el usuario) + movimientos
-  // aprobados posteriores. /api/mp-sync lo guarda en saldo_disponible.
-  const saldoRealDisponible=credenciales.reduce((s,c)=>s+(Number(c.saldo_disponible)||0),0);
+  // Saldo legacy: saldo_inicial (manual) + SUM(rr-* approved post-corte).
+  // /api/mp-sync y /api/mp-process lo guardan en saldo_disponible.
+  const saldoLegacyTotal=credenciales.reduce((s,c)=>s+(Number(c.saldo_disponible)||0),0);
   const porAcreditarTotal=credenciales.reduce((s,c)=>s+(Number(c.por_acreditar)||0),0);
   const ultimaActualizacionBalance=credenciales.map(c=>c.balance_at).filter(Boolean).sort().pop();
+  // Saldo desde API MP (PARTE B): valor real devuelto por
+  // /users/{id}/mercadopago_account/balance. Se actualiza después de cada sync.
+  const saldoApiTotal=credenciales.reduce((s,c)=>s+(Number(c.saldo_mp_actual)||0),0);
+  const ultimaActualizacionApi=credenciales.map(c=>c.saldo_mp_actualizado_at).filter(Boolean).sort().pop();
+  const tieneSaldoApi=credenciales.some(c=>c.saldo_mp_actual!=null);
+  // Diferencia API vs legacy (signo: positivo = API tiene más; negativo = API tiene menos).
+  const diffApiLegacy=saldoApiTotal-saldoLegacyTotal;
+  const hayDescuadre=tieneSaldoApi&&Math.abs(diffApiLegacy)>=1;
 
   const guardarSaldoInicial=async()=>{
     if(!saldoInicialModal||saldoInicialModal.monto===""||saldoInicialModal.monto==null)return;
@@ -401,10 +409,33 @@ function ConciliacionMP({ user, locales, localActivo }) {
       )}
 
       <div className="grid3">
-        <div className="kpi">
-          <div className="kpi-label">Saldo disponible MP</div>
-          <div className="kpi-value" style={{color:"var(--acc)",fontFamily:"'Inter',sans-serif",fontSize:18,fontWeight:500}}>{fmt_mp(saldoRealDisponible)}</div>
-          <div className="kpi-sub">{ultimaActualizacionBalance?"Actualizado "+fmt_dt_ar(ultimaActualizacionBalance):"Ejecutá una sincronización"}</div>
+        {/* Saldo MP (API): saldo real devuelto por la API MP en cada sync.
+            Color verde. Es la fuente de verdad ahora. */}
+        <div className="kpi" style={{borderLeft:"3px solid var(--success)"}}>
+          <div className="kpi-label">Saldo MP (API)</div>
+          <div className="kpi-value" style={{color:"var(--success)",fontFamily:"'Inter',sans-serif",fontSize:18,fontWeight:500}}>
+            {tieneSaldoApi?fmt_mp(saldoApiTotal):"—"}
+          </div>
+          <div className="kpi-sub">
+            {tieneSaldoApi
+              ? "Actualizado "+fmt_dt_ar(ultimaActualizacionApi)
+              : "Ejecutá una sincronización para leer el saldo desde MP"}
+          </div>
+        </div>
+        {/* Saldo calculado (legacy): suma manual de movimientos rr-* sobre saldo_inicial.
+            Si difiere de la API, muestra warning amarillo con flecha de diferencia. */}
+        <div className="kpi" style={hayDescuadre?{borderLeft:"3px solid var(--warn)"}:undefined}>
+          <div className="kpi-label" style={{color:"var(--muted)"}}>Saldo calculado (legacy)</div>
+          <div className="kpi-value" style={{color:hayDescuadre?"var(--warn)":"var(--muted2)",fontFamily:"'Inter',sans-serif",fontSize:18,fontWeight:500}}>
+            {fmt_mp(saldoLegacyTotal)}
+          </div>
+          <div className="kpi-sub">
+            {hayDescuadre
+              ? <span style={{color:"var(--warn)"}}>{diffApiLegacy>0?"▲":"▼"} {fmt_mp(Math.abs(diffApiLegacy))} vs API</span>
+              : ultimaActualizacionBalance
+                ? "Actualizado "+fmt_dt_ar(ultimaActualizacionBalance)
+                : "—"}
+          </div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Egresos sin justificar</div>

@@ -2,6 +2,7 @@
 // Se llama DESPUÉS de mp-generate + espera de 2 minutos.
 
 import { createMpTokenGetter } from './_mp-token.js';
+import { fetchMpBalance } from './_mp-balance.js';
 
 function esPagoPoint(pago) {
   const poi = pago?.point_of_interaction;
@@ -480,6 +481,24 @@ export default async function handler(req, res) {
           }
         }
 
+        // ── 5. Saldo REAL desde API MP (PARTE B de TASK 0.11) ──
+        // Best-effort: si falla, log + seguir. Las columnas saldo_mp_*
+        // quedan NULL hasta el próximo intento. Cero impacto en el flow.
+        let saldoApi = null;
+        try {
+          const bal = await fetchMpBalance(token, accountId);
+          saldoApi = { available: bal.available, total: bal.total, unavailable: bal.unavailable };
+          await db.from('mp_credenciales').update({
+            saldo_mp_actual: bal.available,
+            saldo_mp_total: bal.total,
+            saldo_mp_unavailable: bal.unavailable,
+            saldo_mp_actualizado_at: new Date().toISOString(),
+          }).eq('id', cred.id);
+        } catch (e) {
+          console.error('[mp-process] balance fetch failed', cred.local_id, e?.message);
+          saldoApi = { error: e?.message || String(e) };
+        }
+
         resultados.push({
           local: cred.locales?.nombre,
           local_id: cred.local_id,
@@ -497,6 +516,7 @@ export default async function handler(req, res) {
           filas_rr_en_saldo: movDespuesCount,
           release_error: releaseReport.error || undefined,
           upd_error: updErr ? updErr.message : undefined,
+          saldo_api: saldoApi,
         });
       } catch (err) {
         console.error('mp-process: error processing credential', cred?.local_id, err);

@@ -1,4 +1,5 @@
 import { createMpTokenGetter } from './_mp-token.js';
+import { fetchMpBalance } from './_mp-balance.js';
 
 // Detecta si un pago proviene de un dispositivo Mercado Pago Point (venta presencial)
 function esPagoPoint(pago) {
@@ -1046,6 +1047,24 @@ export default async function handler(req, res) {
           }
         }
 
+        // ── Saldo REAL desde API MP (PARTE B de TASK 0.11) ──
+        // Best-effort: si falla, log + seguir. Las columnas saldo_mp_*
+        // quedan NULL hasta el próximo intento. Cero impacto en el flow.
+        let saldoApi = null;
+        try {
+          const bal = await fetchMpBalance(token, accountId);
+          saldoApi = { available: bal.available, total: bal.total, unavailable: bal.unavailable };
+          await db.from('mp_credenciales').update({
+            saldo_mp_actual: bal.available,
+            saldo_mp_total: bal.total,
+            saldo_mp_unavailable: bal.unavailable,
+            saldo_mp_actualizado_at: new Date().toISOString(),
+          }).eq('id', cred.id);
+        } catch (e) {
+          console.error('[mp-sync] balance fetch failed', cred.local_id, e?.message);
+          saldoApi = { error: e?.message || String(e) };
+        }
+
         resultados.push({
           local: cred.locales?.nombre,
           local_id: cred.local_id,
@@ -1054,6 +1073,7 @@ export default async function handler(req, res) {
           skipped_duplicados: cantSkipped,
           comisiones: cantFees,
           reembolsos: cantRefunds,
+          saldo_api: saldoApi,
           saldo_debug: {
             saldo_inicial_num: saldoInicialNum,
             corte_iso: saldoTrace.corte_iso,
