@@ -174,13 +174,37 @@ function ConciliacionMP({ user, locales, localActivo }) {
   // Comisiones/impuestos son egresos automáticos y se muestran aparte — no entran en conciliación manual.
   const ES_AUTOMATICO=t=>t==="fee"||t==="tax";
 
-  const ingresos=movimientos.filter(m=>m.monto>0).reduce((s,m)=>s+m.monto,0);
-  const egresosList=movimientos.filter(m=>m.monto<0);
+  // Allowlist de tipos que afectan el saldo released de la cuenta MP. El
+  // listado y las KPIs operan sobre estos. Las ventas/cobros pendientes
+  // (tipo='point', tipo='payment' sin liberar) NO entran porque solo
+  // entran al saldo pendiente, no al released. El toggle de la UI
+  // permite incluirlas en el listado para auditoría visual on-demand.
+  const TIPOS_VISIBLES=new Set([
+    "liquidacion",
+    "bank_transfer",
+    "bank_transfer_in",
+    "pago_proveedor",
+    "refund",
+    "chargeback",
+  ]);
+  const [mostrarPendientes,setMostrarPendientes]=useState(false);
+
+  // KPIs SIEMPRE sobre tipos released (independiente del toggle), para
+  // que los totales reflejen el saldo real de la cuenta MP.
+  const movsReleased=movimientos.filter(m=>!ES_AUTOMATICO(m.tipo)&&TIPOS_VISIBLES.has(m.tipo));
+  // Listado: aplica el toggle. Por default solo released; con toggle on,
+  // todos los no-automáticos (incluye ventas/cobros pendientes).
+  const movsListado=movimientos.filter(m=>!ES_AUTOMATICO(m.tipo)&&(mostrarPendientes||TIPOS_VISIBLES.has(m.tipo)));
+
+  const ingresos=movsReleased.filter(m=>m.monto>0).reduce((s,m)=>s+m.monto,0);
+  const egresosList=movsReleased.filter(m=>m.monto<0);
   const egresos=egresosList.reduce((s,m)=>s+Math.abs(m.monto),0);
-  const comisionesList=egresosList.filter(m=>ES_AUTOMATICO(m.tipo));
+  // Comisiones se calculan sobre todos los movimientos crudos (fee/tax
+  // son egresos automáticos que viven en su propia pestaña).
+  const comisionesList=movimientos.filter(m=>m.monto<0&&ES_AUTOMATICO(m.tipo));
   const comisionesTotal=comisionesList.reduce((s,m)=>s+Math.abs(m.monto),0);
-  const egresosManualesList=egresosList.filter(m=>!ES_AUTOMATICO(m.tipo));
-  const egresosManualesTotal=egresosManualesList.reduce((s,m)=>s+Math.abs(m.monto),0);
+  const egresosManualesList=egresosList; // egresosList ya excluye automáticos
+  const egresosManualesTotal=egresos;
   const egresosConciliados=egresosManualesList.filter(m=>m.conciliado).reduce((s,m)=>s+Math.abs(m.monto),0);
   const egresosPendientes=egresosManualesTotal-egresosConciliados;
   const pendientesCount=egresosManualesList.filter(m=>!m.conciliado).length;
@@ -405,13 +429,19 @@ function ConciliacionMP({ user, locales, localActivo }) {
       {loading?<div className="loading">Cargando...</div>:tab==="movimientos"?(
         <div className="panel">
           <div className="panel-hd">
-            <span className="panel-title">Movimientos — {movimientos.filter(m=>!ES_AUTOMATICO(m.tipo)).length} registros</span>
-            <span style={{fontSize:11,color:"var(--muted2)"}}>Comisiones en pestaña aparte · se actualiza cada hora</span>
+            <span className="panel-title">Movimientos — {movsListado.length} registros</span>
+            <div style={{display:"flex",gap:12,alignItems:"center"}}>
+              <label style={{fontSize:10,color:"var(--muted2)",display:"flex",gap:6,alignItems:"center",cursor:"pointer",userSelect:"none"}}>
+                <input type="checkbox" checked={mostrarPendientes} onChange={e=>setMostrarPendientes(e.target.checked)} style={{cursor:"pointer"}}/>
+                Mostrar ventas/cobros pendientes
+              </label>
+              <span style={{fontSize:11,color:"var(--muted2)"}}>Comisiones en pestaña aparte · se actualiza cada hora</span>
+            </div>
           </div>
-          {movimientos.filter(m=>!ES_AUTOMATICO(m.tipo)).length===0?<div className="empty">Sin movimientos. Sincronizá para traer los datos de MP.</div>:(
+          {movsListado.length===0?<div className="empty">{mostrarPendientes?"Sin movimientos. Sincronizá para traer los datos de MP.":"Sin movimientos del saldo released. Activá \"Mostrar ventas/cobros pendientes\" para ver cobros sin liberar."}</div>:(
             <table>
               <thead><tr><th>Fecha</th><th>Local</th><th>Tipo</th><th>Descripción</th><th>Monto</th><th>Saldo</th><th>Conciliación</th></tr></thead>
-              <tbody>{movimientos.filter(m=>!ES_AUTOMATICO(m.tipo)).map(m=>{
+              <tbody>{movsListado.map(m=>{
                 const esEgreso=m.monto<0;
                 const esAuto=ES_AUTOMATICO(m.tipo);
                 const pend=esEgreso&&!esAuto&&!m.conciliado;
