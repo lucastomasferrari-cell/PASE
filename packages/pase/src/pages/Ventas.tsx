@@ -64,21 +64,29 @@ export default function Ventas({ user, locales, localActivo }) {
       .filter(l=>parseFloat(l.monto)>0)
       .map(l=>({id:genId("V"),local_id:lid,fecha:form.fecha,turno:form.turno,medio:l.medio,monto:parseFloat(l.monto),origen:"manual"}));
     if(rows.length===0)return;
-    await db.from("ventas").insert(rows);
+    // .select() para obtener las filas insertadas (con sus ids confirmados),
+    // que después usamos como venta_ids en el insert del movimiento.
+    const {data:ventasIns,error:ventasErr}=await db.from("ventas").insert(rows).select();
+    if(ventasErr){alert("Error al guardar venta: "+ventasErr.message);return;}
 
     const impactoPorCuenta:Record<string,number>={};
-    rows.forEach(v=>{
+    const idsPorCuenta:Record<string,string[]>={};
+    (ventasIns||[]).forEach(v=>{
       const cuenta=cuentaDestino(v.medio,lid);
       if(!cuenta) return; // medios no-efectivo no impactan en caja
       impactoPorCuenta[cuenta]=(impactoPorCuenta[cuenta]||0)+v.monto;
+      (idsPorCuenta[cuenta]=idsPorCuenta[cuenta]||[]).push(v.id);
     });
     for(const [cuenta,monto] of Object.entries(impactoPorCuenta)){
       if(!cuenta) continue;
+      // venta_ids linkea cada movimiento con sus ventas. Las RPCs
+      // eliminar_venta/editar_venta lo usan para ajustar atómicamente.
       await db.from("movimientos").insert([{
         id:genId("MOV"),fecha:form.fecha,cuenta,
         tipo:"Ingreso Venta",cat:"VENTAS",
         importe:monto,detalle:`Ventas ${form.turno} - ${form.fecha}`,
         local_id:lid,
+        venta_ids:idsPorCuenta[cuenta]||[],
       }]);
       const {data:caja}=await db.from("saldos_caja").select("saldo")
         .eq("cuenta",cuenta).eq("local_id",lid).maybeSingle();
@@ -93,10 +101,33 @@ export default function Ventas({ user, locales, localActivo }) {
 
   const guardarEdit=async()=>{
     if(!editModal)return;
-    await db.from("ventas").update({fecha:editModal.fecha,turno:editModal.turno,medio:editModal.medio,monto:parseFloat(editModal.monto),local_id:parseInt(editModal.local_id)}).eq("id",editModal.id);
+    const id=editModal.id;
+    const nuevoMonto=parseFloat(editModal.monto);
+    if(!Number.isFinite(nuevoMonto)||nuevoMonto<=0){
+      alert("El monto debe ser un número mayor a 0");return;
+    }
+    // editar_venta RPC: ajusta monto + recalcula movimiento + saldos
+    // atómicamente. Solo se puede cambiar el monto desde acá; otros
+    // campos se actualizan después con un update directo (no afectan
+    // movimientos en el caso típico).
+    const {error:rpcErr}=await db.rpc("editar_venta",{p_venta_id:id,p_nuevo_monto:nuevoMonto});
+    if(rpcErr){alert("Error al editar venta: "+(rpcErr.message||""));return;}
+
+    // Otros campos (fecha, turno, medio, local_id) — update directo.
+    // Cambiar estos puede descuadrar el saldo en casos raros (ej:
+    // pasar de EFECTIVO a TARJETA). Para esos casos hay que borrar y
+    // re-cargar manualmente. La UI debería desactivar esos campos en
+    // un sprint futuro.
+    await db.from("ventas").update({
+      fecha:editModal.fecha,
+      turno:editModal.turno,
+      medio:editModal.medio,
+      local_id:parseInt(editModal.local_id),
+    }).eq("id",id);
+
     setEditModal(null);
     if(detalleModal){
-      const updated=detalleModal.items.map(i=>i.id===editModal.id?{...i,...editModal,monto:parseFloat(editModal.monto)}:i);
+      const updated=detalleModal.items.map(i=>i.id===id?{...i,...editModal,monto:nuevoMonto}:i);
       setDetalleModal({...detalleModal,items:updated,total:updated.reduce((s,i)=>s+(i.monto||0),0)});
     }
     load();
@@ -104,7 +135,10 @@ export default function Ventas({ user, locales, localActivo }) {
 
   const eliminarLinea=async(id)=>{
     if(!confirm("¿Eliminar este registro?"))return;
-    await db.from("ventas").delete().eq("id",id);
+    // eliminar_venta RPC: borra venta + ajusta movimiento + saldos
+    // atómicamente. Si el mov es legacy sin venta_ids, solo borra la venta.
+    const {error}=await db.rpc("eliminar_venta",{p_venta_id:id});
+    if(error){alert("Error al eliminar venta: "+(error.message||""));return;}
     if(detalleModal){
       const updated=detalleModal.items.filter(i=>i.id!==id);
       if(updated.length===0){setDetalleModal(null);}
@@ -115,7 +149,13 @@ export default function Ventas({ user, locales, localActivo }) {
 
   const eliminarBloque=async(grupo)=>{
     if(!confirm(`¿Eliminar el cierre completo del ${fmt_d(grupo.fecha)} ${grupo.turno}?`))return;
-    await Promise.all(grupo.items.map(v=>db.from("ventas").delete().eq("id",v.id)));
+    // RPC en serie por venta — cada call ajusta su movimiento + saldo.
+    // No usamos Promise.all para que las restas de saldo sean
+    // determinísticas y los errores se vean uno a uno.
+    for(const v of grupo.items){
+      const {error}=await db.rpc("eliminar_venta",{p_venta_id:v.id});
+      if(error){alert("Error eliminando venta "+v.id+": "+(error.message||""));return;}
+    }
     setDetalleModal(null);load();
   };
 

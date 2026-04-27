@@ -156,11 +156,15 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: {
 
       // Impacto en cuentas: ahora viene del catálogo dinámico vía hook.
       // Los medios sin cuenta_destino (tarjetas, online, etc) no impactan.
+      // venta_ids linkea cada movimiento con sus ventas para que las RPCs
+      // eliminar_venta/editar_venta puedan ajustarlo atómicamente.
       const impactoPorCuenta:Record<string,number>={};
-      ventasAInsertar.forEach(v=>{
+      const idsPorCuenta:Record<string,string[]>={};
+      (ventasIns||[]).forEach(v=>{
         const cuenta=cuentaDestino(v.medio,lid);
         if(!cuenta) return;
         impactoPorCuenta[cuenta]=(impactoPorCuenta[cuenta]||0)+v.monto;
+        (idsPorCuenta[cuenta]=idsPorCuenta[cuenta]||[]).push(v.id);
       });
       for(const [cuenta,monto] of Object.entries(impactoPorCuenta)){
         if(!cuenta) continue;
@@ -169,6 +173,7 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: {
           tipo:"Ingreso Venta",cat:"VENTAS",
           importe:monto,detalle:`Ventas ${preview.turno} - ${preview.fecha}`,
           local_id:lid,
+          venta_ids:idsPorCuenta[cuenta]||[],
         }]);
         if(movErr) console.error("[maxirest] movimiento error (no crítico):",movErr.message);
         const {data:caja}=await db.from("saldos_caja").select("saldo")
