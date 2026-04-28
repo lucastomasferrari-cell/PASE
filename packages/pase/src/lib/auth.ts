@@ -38,20 +38,28 @@ export const MODULOS = [
   { slug:"blindaje", label:"Blindaje", icon:"🛡" },
   { slug:"usuarios", label:"Usuarios", icon:"👥" },
   { slug:"configuracion", label:"Conceptos", icon:"⚙" },
+  // Módulo solo para superadmin (TASK 0.15). Filtrado por getPermisos/tienePermiso
+  // — no aparece en dropdowns de otros usuarios aunque esté en el array.
+  { slug:"tenants", label:"Tenants", icon:"🏢" },
 ];
 
 // ─── FUNCIONES PURAS ─────────────────────────────────────────────────────────
 
 export function getPermisos(user: any): string[] {
   if (!user) return [];
-  // superadmin (TASK 0.15) y dueño ven todos los módulos.
-  if (user.rol === "superadmin" || user.rol === "dueno") return MODULOS.map(m => m.slug);
-  if (user._permisos?.length) return user._permisos;
-  return ROLES[user.rol]?.permisos || [];
+  // superadmin (TASK 0.15) ve TODOS los módulos incluyendo 'tenants'.
+  if (user.rol === "superadmin") return MODULOS.map(m => m.slug);
+  // Dueño/admin del tenant ven todos los módulos EXCEPTO 'tenants' (que es
+  // exclusivo de superadmin).
+  if (user.rol === "dueno") return MODULOS.filter(m => m.slug !== "tenants").map(m => m.slug);
+  if (user._permisos?.length) return user._permisos.filter((s: string) => s !== "tenants");
+  return (ROLES[user.rol]?.permisos || []).filter((s: string) => s !== "tenants");
 }
 
 export function tienePermiso(user: any, slug: string): boolean {
   if (!user) return false;
+  // 'tenants' es exclusivo de superadmin sin importar otros permisos.
+  if (slug === "tenants") return user.rol === "superadmin";
   if (user.rol === "superadmin" || user.rol === "dueno") return true;
   return getPermisos(user).includes(slug);
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "./lib/supabase";
 import { getPermisos, tienePermiso, AuthProvider, necesitaElegirLocal } from "./lib/auth";
-import type { Usuario, UsuarioRow, Local } from "./types";
+import type { Usuario, UsuarioRow, Local, Tenant } from "./types";
 import { Sidebar, css } from "./components/Layout";
 import Login from "./pages/Login";
 import ForcePasswordChange from "./pages/ForcePasswordChange";
@@ -28,6 +28,9 @@ import Blindaje from "./pages/Blindaje";
 import RRHHPage from "./pages/RRHH";
 import Costos from "./pages/Costos";
 import Configuracion from "./pages/Configuracion";
+import Tenants from "./pages/Tenants";
+
+const TENANT_OVERRIDE_KEY = "pase_tenant_override";
 
 export default function App() {
   const [user, setUser] = useState<Usuario | null>(null);
@@ -35,6 +38,10 @@ export default function App() {
   const [locales, setLocales] = useState<Local[]>([]);
   const [localActivo, setLocalActivo] = useState<number | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  // Multi-tenant (TASK 0.15): tenant del usuario logueado.
+  // Para superadmin, queda null por default; con tenant_override se setea.
+  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [tenantOverride, setTenantOverride] = useState<string | null>(null);
   // Bug #27: bloquea navegación mientras encargado con >1 local no elige uno.
   const [showLocalModal, setShowLocalModal] = useState(false);
 
@@ -118,6 +125,24 @@ export default function App() {
     const perms = getPermisos(enriched);
     if(!perms.includes("dashboard") && perms.length && perms[0]) setSection(perms[0]);
 
+    // Multi-tenant (TASK 0.15): cargar tenant del usuario.
+    // - superadmin → tenant_id NULL en su fila. Si hay sessionStorage
+    //   tenant_override, lo usamos. Si no, queda en null y la pantalla
+    //   "Tenants" lo deja elegir.
+    // - resto → cargar el tenant directo de su tenant_id.
+    const overrideUuid = enriched.rol === "superadmin" ? sessionStorage.getItem(TENANT_OVERRIDE_KEY) : null;
+    const tenantUuidToLoad = overrideUuid || enriched.tenant_id;
+    if (tenantUuidToLoad) {
+      const { data: t } = await db.from("tenants").select("*").eq("id", tenantUuidToLoad).single();
+      if (t) {
+        setTenant(t as Tenant);
+        setTenantOverride(overrideUuid);
+      }
+    } else {
+      setTenant(null);
+      setTenantOverride(null);
+    }
+
     // Decisión de localActivo: ver necesitaElegirLocal() en auth.ts.
     // Bug #27: encargado con >1 local NUNCA puede quedar con localActivo=null
     // porque le expone data cruzada de todos sus locales.
@@ -133,6 +158,11 @@ export default function App() {
     } else {
       setShowLocalModal(false);
     }
+  };
+
+  const clearTenantOverride = () => {
+    sessionStorage.removeItem(TENANT_OVERRIDE_KEY);
+    window.location.reload();
   };
 
   const login = (u: UsuarioRow) => {
@@ -219,6 +249,7 @@ export default function App() {
       case "insumos":   return <Costos {...props}/>;
       case "recetas":   return <Costos {...props}/>;
       case "configuracion": return <Configuracion user={user} locales={locales}/>;
+      case "tenants":   return user?.rol === "superadmin" ? <Tenants user={user as Usuario} /> : <Dashboard {...props}/>;
       default: return null;
     }
   };
@@ -269,7 +300,8 @@ export default function App() {
         <div style={{position:"relative",zIndex:1}}>
           <Sidebar user={user} section={section} onNav={setSection}
             onLogout={logout} onRefreshPerms={refreshPermisos}
-            locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo}/>
+            locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo}
+            tenant={tenant} tenantOverride={tenantOverride} onClearOverride={clearTenantOverride}/>
         </div>
         <main className="main" style={{position:"relative",zIndex:1}}>
           {toast && <div style={{position:"fixed",top:16,right:16,zIndex:200,padding:"10px 20px",background:"var(--danger)",color:"#fff",borderRadius:"var(--r)",fontSize:12,fontFamily:"'DM Mono',monospace",fontWeight:600,boxShadow:"0 4px 12px rgba(0,0,0,.5)"}}>{toast}</div>}

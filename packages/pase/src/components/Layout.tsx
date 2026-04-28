@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { ROLES, getPermisos } from "../lib/auth";
 
-export function Sidebar({ user, section, onNav, onLogout, onRefreshPerms, locales, localActivo, setLocalActivo }: any) {
+export function Sidebar({ user, section, onNav, onLogout, onRefreshPerms, locales, localActivo, setLocalActivo, tenant, tenantOverride, onClearOverride }: any) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
   const perms = getPermisos(user);
-  const localesDisp = (user.rol==="dueno" || user.rol==="admin") ? locales : locales.filter((l: { id: number })=>(user._locales||user.locales||[]).includes(l.id));
+  const esSuperAdmin = user.rol === "superadmin";
+  const localesDisp = (user.rol==="dueno" || user.rol==="admin" || esSuperAdmin) ? locales : locales.filter((l: { id: number })=>(user._locales||user.locales||[]).includes(l.id));
   const nav = [
     {id:"dashboard",label:"Dashboard",sec:"Principal",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="5" height="5" rx="1"/><rect x="8" y="1" width="5" height="5" rx="1"/><rect x="1" y="8" width="5" height="5" rx="1"/><rect x="8" y="8" width="5" height="5" rx="1"/></svg>`},
     {id:"ventas",label:"Ventas",sec:"Operaciones",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="1,11 4,6 7,8 10,4 13,6"/></svg>`},
@@ -24,6 +25,8 @@ export function Sidebar({ user, section, onNav, onLogout, onRefreshPerms, locale
     {id:"blindaje",label:"Blindaje",sec:"Herramientas",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 1L2 3v4c0 3 2.5 5.5 5 6 2.5-.5 5-3 5-6V3L7 1z"/><polyline points="4.5,7 6.5,9 9.5,5.5"/></svg>`},
     {id:"usuarios",label:"Usuarios",sec:"Herramientas",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="5" r="2.5"/><path d="M2 13c0-3 2-4.5 5-4.5s5 1.5 5 4.5"/></svg>`},
     {id:"configuracion",label:"Conceptos",sec:"Herramientas",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="2.5"/><path d="M7 1v1M7 12v1M1 7h1M12 7h1M2.9 2.9l.7.7M10.4 10.4l.7.7M2.9 11.1l.7-.7M10.4 3.6l.7-.7"/></svg>`},
+    // Solo superadmin (TASK 0.15). Filtrado por perms.includes('tenants') más abajo.
+    {id:"tenants",label:"Tenants",sec:"Sistema",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="5" height="10" rx="1"/><rect x="8" y="1" width="5" height="12" rx="1"/><line x1="3" y1="6" x2="4" y2="6"/><line x1="3" y1="9" x2="4" y2="9"/><line x1="10" y1="4" x2="11" y2="4"/><line x1="10" y1="7" x2="11" y2="7"/><line x1="10" y1="10" x2="11" y2="10"/></svg>`},
   ];
   const secs = [...new Set(nav.map(n=>n.sec))];
   return (
@@ -34,6 +37,23 @@ export function Sidebar({ user, section, onNav, onLogout, onRefreshPerms, locale
         <div className="sb-logo">
           <div style={{fontFamily:"'Inter',sans-serif",fontWeight:500,fontSize:14,color:"#fff",letterSpacing:.2}}>PASE</div>
           <div style={{fontSize:9,color:"#444",letterSpacing:"1.2px",textTransform:"uppercase",marginTop:3}}>aliado gastronómico</div>
+          {/* Multi-tenant badges (TASK 0.15) */}
+          {esSuperAdmin && !tenantOverride && (
+            <div style={{marginTop:8,padding:"4px 8px",background:"rgba(220,38,38,0.15)",border:"1px solid rgba(220,38,38,0.4)",borderRadius:4,fontSize:9,color:"#DC2626",letterSpacing:"1px",textTransform:"uppercase",fontWeight:600,textAlign:"center"}}>
+              ⚡ Modo Superadmin
+            </div>
+          )}
+          {tenantOverride && tenant && (
+            <div style={{marginTop:8,padding:"4px 8px",background:"rgba(168,137,58,0.15)",border:"1px solid rgba(168,137,58,0.4)",borderRadius:4,fontSize:9,color:"var(--acc)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
+              <span style={{letterSpacing:"0.5px",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>👁 {tenant.nombre}</span>
+              <button onClick={onClearOverride} style={{background:"none",border:"none",color:"var(--acc)",cursor:"pointer",padding:0,fontSize:11}} title="Volver a vista superadmin">✕</button>
+            </div>
+          )}
+          {!esSuperAdmin && tenant && (
+            <div style={{marginTop:8,fontSize:9,color:"var(--muted2)",letterSpacing:"0.5px"}}>
+              {tenant.nombre}
+            </div>
+          )}
         </div>
         {localesDisp.length > 1 && (
           <div className="sb-local">
