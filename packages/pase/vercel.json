@@ -24,9 +24,6 @@
     "api/mp-process.js": {
       "maxDuration": 60
     },
-    "api/mp-debug-balance.js": {
-      "maxDuration": 30
-    },
     "api/backup-tenants.js": {
       "maxDuration": 300
     },
