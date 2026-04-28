@@ -1,21 +1,32 @@
-// @ts-nocheck — TODO TASK 0.14: migrar a TS strict (etapa pendiente)
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { fmt_d, fmt_$ } from "../lib/utils";
+import type { Local } from "../types";
 
-export default function Recetas({ locales, localActivo }) {
-  const [recetas,setRecetas]=useState([]);
-  const [insumos,setInsumos]=useState([]);
+interface RecetasProps {
+  locales: Local[];
+  localActivo: number | null;
+}
+
+interface RecetaItemForm {
+  insumo_id: string | number;
+  cantidad: string | number;
+  unidad: string;
+}
+
+export default function Recetas({ locales, localActivo }: RecetasProps) {
+  const [recetas,setRecetas]=useState<any[]>([]);
+  const [insumos,setInsumos]=useState<any[]>([]);
   const [loading,setLoading]=useState(true);
   const [modal,setModal]=useState(false);
-  const [verModal,setVerModal]=useState(null);
+  const [verModal,setVerModal]=useState<any>(null);
   const [search,setSearch]=useState("");
 
   const CATEGORIAS_RECETA=["SUSHI","COCINA CALIENTE","ENTRADAS","POSTRES","BEBIDAS","DELIVERY","MENU DEL DIA","OTROS"];
-  const emptyForm={nombre:"",categoria:"",precio_venta:"",local_id:localActivo||"",activo:true};
+  const emptyForm={nombre:"",categoria:"",precio_venta:"",local_id:localActivo?String(localActivo):"",activo:true};
   const [form,setForm]=useState(emptyForm);
-  const [items,setItems]=useState([]);
-  const [editando,setEditando]=useState(null);
+  const [items,setItems]=useState<RecetaItemForm[]>([]);
+  const [editando,setEditando]=useState<string | number | null>(null);
 
   const load=async()=>{
     setLoading(true);
@@ -27,24 +38,24 @@ export default function Recetas({ locales, localActivo }) {
   };
   useEffect(()=>{load();},[]);
 
-  const rFilt=recetas.filter(r=>{
+  const rFilt=recetas.filter((r: any)=>{
     if(localActivo&&r.local_id&&r.local_id!==localActivo)return false;
     return !search||r.nombre.toLowerCase().includes(search.toLowerCase());
   });
 
-  const calcCosto=(its)=>{
-    return its.reduce((s,it)=>{
-      const ins=insumos.find(i=>i.id===parseInt(it.insumo_id));
+  const calcCosto=(its: RecetaItemForm[])=>{
+    return its.reduce((s: number,it: RecetaItemForm)=>{
+      const ins=insumos.find((i: any)=>i.id===parseInt(String(it.insumo_id)));
       if(!ins||!it.cantidad)return s;
-      const cantReal=parseFloat(it.cantidad)*(1+(ins.merma||0)/100);
+      const cantReal=parseFloat(String(it.cantidad))*(1+(ins.merma||0)/100);
       return s+(cantReal*(ins.costo_promedio||0));
     },0);
   };
 
   const addItem=()=>setItems([...items,{insumo_id:"",cantidad:"",unidad:"g"}]);
-  const updateItem=(i,field,val)=>{
+  const updateItem=(i: number,field: keyof RecetaItemForm,val: string)=>{
     const ni=[...items];ni[i]={...ni[i],[field]:val};
-    if(field==="insumo_id"){const ins=insumos.find(x=>x.id===parseInt(val));if(ins)ni[i].unidad=ins.unidad_label||"g";}
+    if(field==="insumo_id"){const ins=insumos.find((x: any)=>x.id===parseInt(val));if(ins)ni[i].unidad=ins.unidad_label||"g";}
     setItems(ni);
   };
 
@@ -52,29 +63,29 @@ export default function Recetas({ locales, localActivo }) {
     if(!form.nombre)return;
     const id=editando||null;
     if(id){
-      await db.from("recetas").update({nombre:form.nombre,categoria:form.categoria,precio_venta:parseFloat(form.precio_venta)||0,local_id:form.local_id?parseInt(form.local_id):null,activo:form.activo}).eq("id",id);
+      await db.from("recetas").update({nombre:form.nombre,categoria:form.categoria,precio_venta:parseFloat(String(form.precio_venta))||0,local_id:form.local_id?parseInt(String(form.local_id)):null,activo:form.activo}).eq("id",id);
       await db.from("receta_items").delete().eq("receta_id",id);
-      const its=items.filter(it=>it.insumo_id&&it.cantidad).map(it=>({receta_id:id,insumo_id:parseInt(it.insumo_id),cantidad:parseFloat(it.cantidad),unidad:it.unidad}));
+      const its=items.filter((it: RecetaItemForm)=>it.insumo_id&&it.cantidad).map((it: RecetaItemForm)=>({receta_id:id,insumo_id:parseInt(String(it.insumo_id)),cantidad:parseFloat(String(it.cantidad)),unidad:it.unidad}));
       if(its.length>0)await db.from("receta_items").insert(its);
     } else {
-      const {data:nueva}=await db.from("recetas").insert([{...form,local_id:form.local_id?parseInt(form.local_id):null,precio_venta:parseFloat(form.precio_venta)||0}]).select().single();
+      const {data:nueva}=await db.from("recetas").insert([{...form,local_id:form.local_id?parseInt(String(form.local_id)):null,precio_venta:parseFloat(String(form.precio_venta))||0}]).select().single();
       if(nueva){
-        const its=items.filter(it=>it.insumo_id&&it.cantidad).map(it=>({receta_id:nueva.id,insumo_id:parseInt(it.insumo_id),cantidad:parseFloat(it.cantidad),unidad:it.unidad}));
+        const its=items.filter((it: RecetaItemForm)=>it.insumo_id&&it.cantidad).map((it: RecetaItemForm)=>({receta_id:nueva.id,insumo_id:parseInt(String(it.insumo_id)),cantidad:parseFloat(String(it.cantidad)),unidad:it.unidad}));
         if(its.length>0)await db.from("receta_items").insert(its);
       }
     }
     setModal(false);setForm(emptyForm);setItems([]);setEditando(null);load();
   };
 
-  const abrir=async(r)=>{
+  const abrir=async(r: any)=>{
     const {data:its}=await db.from("receta_items").select("*").eq("receta_id",r.id);
     setVerModal({...r,items:its||[]});
   };
 
-  const editar=async(r)=>{
+  const editar=async(r: any)=>{
     const {data:its}=await db.from("receta_items").select("*").eq("receta_id",r.id);
-    setForm({nombre:r.nombre,categoria:r.categoria||"",precio_venta:r.precio_venta||"",local_id:r.local_id||"",activo:r.activo});
-    setItems((its||[]).map(it=>({insumo_id:it.insumo_id,cantidad:it.cantidad,unidad:it.unidad})));
+    setForm({nombre:r.nombre,categoria:r.categoria||"",precio_venta:r.precio_venta||"",local_id:r.local_id?String(r.local_id):"",activo:r.activo});
+    setItems((its||[]).map((it: any)=>({insumo_id:it.insumo_id,cantidad:it.cantidad,unidad:it.unidad})));
     setEditando(r.id);setModal(true);
   };
 
@@ -154,9 +165,9 @@ export default function Recetas({ locales, localActivo }) {
             {items.length>0&&(
               <table className="items-table">
                 <thead><tr><th>Insumo</th><th>Cantidad</th><th>Unidad</th><th>Merma</th><th>Costo</th><th></th></tr></thead>
-                <tbody>{items.map((it,i)=>{
-                  const ins=insumos.find(x=>x.id===parseInt(it.insumo_id));
-                  const cantReal=it.cantidad?(parseFloat(it.cantidad)*(1+(ins?.merma||0)/100)):0;
+                <tbody>{items.map((it: RecetaItemForm,i: number)=>{
+                  const ins=insumos.find((x: any)=>x.id===parseInt(String(it.insumo_id)));
+                  const cantReal=it.cantidad?(parseFloat(String(it.cantidad))*(1+(ins?.merma||0)/100)):0;
                   const costo=cantReal*(ins?.costo_promedio||0);
                   return(
                     <tr key={i}>
@@ -206,8 +217,8 @@ export default function Recetas({ locales, localActivo }) {
             <>
               <table className="items-table">
                 <thead><tr><th>Ingrediente</th><th>Cantidad</th><th>Merma</th><th>Cant. Real</th><th>Costo Unit.</th><th>Subtotal</th></tr></thead>
-                <tbody>{verModal.items.map((it,i)=>{
-                  const ins=insumos.find(x=>x.id===it.insumo_id);
+                <tbody>{verModal.items.map((it: any,i: number)=>{
+                  const ins=insumos.find((x: any)=>x.id===it.insumo_id);
                   const cantReal=parseFloat(it.cantidad)*(1+(ins?.merma||0)/100);
                   const costo=cantReal*(ins?.costo_promedio||0);
                   return(

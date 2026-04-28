@@ -1,4 +1,3 @@
-// @ts-nocheck — TODO TASK 0.14: migrar a TS strict (etapa pendiente)
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasVisibles } from "../lib/auth";
@@ -6,22 +5,29 @@ import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
+import type { Usuario, Local } from "../types";
 
-export default function Remitos({ user, locales, localActivo }) {
+interface RemitosProps {
+  user: Usuario;
+  locales: Local[];
+  localActivo: number | null;
+}
+
+export default function Remitos({ user, locales, localActivo }: RemitosProps) {
   const { CATEGORIAS_COMPRA } = useCategorias();
   const visCuentas = cuentasVisibles(user);
   const cuentasUsables = visCuentas === null ? CUENTAS : CUENTAS.filter(c => visCuentas.includes(c));
-  const [remitos, setRemitos] = useState([]);
-  const [facturas, setFacturas] = useState([]);
-  const [proveedores, setProveedores] = useState([]);
+  const [remitos, setRemitos] = useState<any[]>([]);
+  const [facturas, setFacturas] = useState<any[]>([]);
+  const [proveedores, setProveedores] = useState<any[]>([]);
   const [modal, setModal] = useState(false);
-  const [vincModal, setVincModal] = useState(null);
-  const [pagarModal, setPagarModal] = useState(null);
+  const [vincModal, setVincModal] = useState<any | null>(null);
+  const [pagarModal, setPagarModal] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
-  const emptyForm = {prov_id:"",local_id:localActivo||"",nro:"",fecha:toISO(today),monto:"",cat:"",detalle:""};
+  const emptyForm = {prov_id:"",local_id:localActivo?String(localActivo):"",nro:"",fecha:toISO(today),monto:"" as string|number,cat:"",detalle:""};
   const [form, setForm] = useState(emptyForm);
-  const [pagoForm, setPagoForm] = useState({cuenta:"MercadoPago",monto:"",fecha:toISO(today)});
-  const localesDisp = user.rol==="dueno"?locales:locales.filter(l=>(user.locales||[]).includes(l.id));
+  const [pagoForm, setPagoForm] = useState<{cuenta: string, monto: string|number, fecha: string}>({cuenta:"MercadoPago",monto:"",fecha:toISO(today)});
+  const localesDisp = user.rol==="dueno"?locales:locales.filter((l: Local)=>(user.locales||[]).includes(l.id));
 
   const load = async () => {
     setLoading(true);
@@ -39,28 +45,29 @@ export default function Remitos({ user, locales, localActivo }) {
   useEffect(()=>{load();},[localActivo]);
 
   const rFilt = remitos;
-  const sinFact = rFilt.filter(r=>r.estado==="sin_factura");
+  const sinFact = rFilt.filter((r: any)=>r.estado==="sin_factura");
 
-  const onProvChange = (prov_id) => {
-    const prov = proveedores.find(p=>p.id===parseInt(prov_id));
+  const onProvChange = (prov_id: string) => {
+    const prov = proveedores.find((p: any)=>p.id===parseInt(prov_id));
     setForm(f=>({...f,prov_id,cat:prov?.cat||f.cat}));
   };
 
   const guardar = async () => {
     if(!form.prov_id||!form.monto||!form.local_id) return;
     const nro = form.nro||`REM-${Date.now().toString().slice(-6)}`;
-    const nuevo = {...form,id:genId("REM"),prov_id:parseInt(form.prov_id),local_id:parseInt(form.local_id),nro,monto:parseFloat(form.monto),estado:"sin_factura",factura_id:null};
+    const nuevo = {...form,id:genId("REM"),prov_id:parseInt(form.prov_id),local_id:parseInt(String(form.local_id)),nro,monto:parseFloat(String(form.monto)),estado:"sin_factura",factura_id:null};
     await db.from("remitos").insert([nuevo]);
-    const prov = proveedores.find(p=>p.id===nuevo.prov_id);
+    const prov = proveedores.find((p: any)=>p.id===nuevo.prov_id);
     if(prov) await db.from("proveedores").update({saldo:(prov.saldo||0)+nuevo.monto}).eq("id",prov.id);
     setModal(false); setForm(emptyForm); load();
   };
 
-  const vincFact = async (fid) => {
+  const vincFact = async (fid: string) => {
     const r = vincModal;
-    const f = facturas.find(f=>f.id===fid);
+    if(!r) return;
+    const f = facturas.find((f: any)=>f.id===fid);
     // Cancelar deuda del remito y reemplazar por la de la factura (diferencia)
-    const prov = proveedores.find(p=>p.id===r.prov_id);
+    const prov = proveedores.find((p: any)=>p.id===r.prov_id);
     if(prov) {
       const diff = (f?.total||0) - r.monto; // diferencia puede ser positiva o negativa
       // El saldo ya tiene la deuda del remito, solo ajustamos la diferencia
@@ -72,10 +79,10 @@ export default function Remitos({ user, locales, localActivo }) {
 
   const [pagandoRem,setPagandoRem]=useState(false);
   const pagarRemito = async () => {
-    if(pagandoRem) return; setPagandoRem(true);
+    if(pagandoRem||!pagarModal) return; setPagandoRem(true);
     try {
       const r = pagarModal;
-      const monto = parseFloat(pagoForm.monto)||r.monto;
+      const monto = parseFloat(String(pagoForm.monto))||r.monto;
       const { error } = await db.rpc("pagar_remito", {
         p_remito_id: r.id, p_monto: monto,
         p_cuenta: pagoForm.cuenta, p_fecha: pagoForm.fecha,
@@ -90,7 +97,7 @@ export default function Remitos({ user, locales, localActivo }) {
     }
   };
 
-  const anular = async (r) => {
+  const anular = async (r: any) => {
     if(!confirm(`¿Anular remito ${r.nro}?`)) return;
     const motivo = prompt("Motivo (opcional):") || "Anulado desde UI";
     const { error } = await db.rpc("anular_remito", { p_remito_id: r.id, p_motivo: motivo });
