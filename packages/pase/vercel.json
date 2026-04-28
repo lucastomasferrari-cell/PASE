@@ -4,6 +4,10 @@
     {
       "path": "/api/mp-sync",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/backup-tenants",
+      "schedule": "0 7 * * *"
     }
   ],
   "functions": {
@@ -18,6 +22,9 @@
     },
     "api/mp-debug-balance.js": {
       "maxDuration": 30
+    },
+    "api/backup-tenants.js": {
+      "maxDuration": 300
     }
   },
   "headers": [
