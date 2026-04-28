@@ -1,8 +1,15 @@
-// @ts-nocheck — TODO TASK 0.14: migrar a TS strict (etapa pendiente)
 import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
 import { ROLES, MODULOS } from "../lib/auth";
 import { CUENTAS } from "../lib/constants";
+import type { Usuario, Local } from "../types";
+
+interface UsuariosProps {
+  user: Usuario;
+  locales: Local[];
+}
+
+type ModalState = null | "new" | Usuario;
 
 async function sha256(text: string) {
   const enc = new TextEncoder().encode(text);
@@ -10,10 +17,10 @@ async function sha256(text: string) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-export default function Usuarios({ user, locales }) {
-  const [usuarios, setUsuarios] = useState([]);
+export default function Usuarios({ locales }: UsuariosProps) {
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState(null); // null | "new" | user object (edit)
+  const [modal, setModal] = useState<ModalState>(null); // null | "new" | user object (edit)
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -28,10 +35,10 @@ export default function Usuarios({ user, locales }) {
       db.from("usuario_permisos").select("usuario_id, modulo_slug"),
       db.from("usuario_locales").select("usuario_id, local_id"),
     ]);
-    const enriched = (users || []).map(u => ({
+    const enriched: Usuario[] = (users || []).map((u: Usuario) => ({
       ...u,
-      _permisos: (allPerms || []).filter(p => p.usuario_id === u.id).map(p => p.modulo_slug),
-      _locales: (allLocs || []).filter(l => l.usuario_id === u.id).map(l => Number(l.local_id)),
+      _permisos: (allPerms || []).filter((p: { usuario_id: number }) => p.usuario_id === u.id).map((p: { modulo_slug: string }) => p.modulo_slug),
+      _locales: (allLocs || []).filter((l: { usuario_id: number }) => l.usuario_id === u.id).map((l: { local_id: number }) => Number(l.local_id)),
     }));
     setUsuarios(enriched);
     setLoading(false);
@@ -40,10 +47,10 @@ export default function Usuarios({ user, locales }) {
 
   const abrirNuevo = () => { setForm(emptyForm); setModal("new"); setErr(""); setShowPw(false); };
 
-  const abrirEditar = async (u) => {
+  const abrirEditar = async (u: Usuario) => {
     // Cargar locales frescos del usuario desde DB
     const { data: userLocs } = await db.from("usuario_locales").select("local_id").eq("usuario_id", u.id);
-    const lids = (userLocs || []).map(l => Number(l.local_id));
+    const lids = (userLocs || []).map((l: { local_id: number }) => Number(l.local_id));
     // Fallback al campo viejo si no hay rows en usuario_locales
     const finalLocs = lids.length > 0 ? lids : (u.locales || []).map(Number);
 
@@ -89,7 +96,7 @@ export default function Usuarios({ user, locales }) {
         const { data: newU } = await db.from("usuarios").select("id").eq("email", form.email).single();
         userId = newU?.id ?? null;
         if (userId) await db.from("usuarios").update({ activo:form.activo }).eq("id", userId);
-      } else {
+      } else if (modal !== null) {
         userId = modal.id;
         await db.from("usuarios").update({ nombre:form.nombre, activo:form.activo, locales:form.locales_ids }).eq("id", userId);
         if (form.password) {
@@ -125,7 +132,7 @@ export default function Usuarios({ user, locales }) {
 
       // Save permisos (delete + re-insert)
       // Dueno tiene todos implícitos, no necesita rows. Otros roles sí.
-      const userRol = modal === "new" ? "encargado" : (modal.rol || "encargado");
+      const userRol = modal === "new" || modal === null ? "encargado" : (modal.rol || "encargado");
       await db.from("usuario_permisos").delete().eq("usuario_id", userId);
       if (userRol !== "dueno" && form.modulos.length) {
         const { error: permErr } = await db.from("usuario_permisos").insert(
@@ -158,23 +165,23 @@ export default function Usuarios({ user, locales }) {
       await db.from("usuarios").update({ cuentas_visibles: cuentasPayload }).eq("id", userId);
 
       setModal(null); load();
-    } catch (e: any) { setErr(e.message); }
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     setSaving(false);
     guardando.current = false;
   };
 
-  const toggleActivo = async (u) => {
+  const toggleActivo = async (u: Usuario) => {
     await db.from("usuarios").update({ activo: u.activo === false }).eq("id", u.id);
     load();
   };
 
-  const rc = (rol) => ROLES[rol]?.color || "#666";
+  const rc = (rol: string) => ROLES[rol]?.color || "#666";
 
   // Mostrar locales para un usuario: primero _locales (nuevo), fallback a locales (viejo)
-  const getUserLocaleNames = (u) => {
+  const getUserLocaleNames = (u: Usuario) => {
     const ids = (u._locales?.length ? u._locales : (u.locales || [])).map(Number);
     if (!ids.length) return "—";
-    return ids.map(lid => locales.find(l => l.id === lid)?.nombre).filter(Boolean).join(", ") || "—";
+    return ids.map((lid: number) => locales.find((l: Local) => l.id === lid)?.nombre).filter(Boolean).join(", ") || "—";
   };
 
   return (
@@ -198,7 +205,7 @@ export default function Usuarios({ user, locales }) {
               </td>
               <td style={{ fontSize:10 }}>
                 {u.rol === "dueno" ? <span style={{ color:"var(--muted)" }}>Todos</span> :
-                 (u._permisos || []).length ? <span>{u._permisos.length} módulos</span> : "—"}
+                 (u._permisos || []).length ? <span>{u._permisos!.length} módulos</span> : "—"}
               </td>
               <td>
                 <span className={`badge ${u.activo !== false ? "b-success" : "b-muted"}`}
@@ -250,7 +257,7 @@ export default function Usuarios({ user, locales }) {
 
               {/* Módulos */}
               {(() => {
-                const modalRol = modal === "new" ? "encargado" : (modal.rol || "encargado");
+                const modalRol = modal === "new" || modal === null ? "encargado" : (modal.rol || "encargado");
                 const isDueno = modalRol === "dueno";
                 return (<>
                   <div style={{ marginTop:16, marginBottom:16 }}>

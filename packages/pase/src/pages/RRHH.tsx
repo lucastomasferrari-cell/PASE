@@ -1,4 +1,3 @@
-// @ts-nocheck — TODO TASK 0.14: migrar a TS strict (etapa pendiente)
 import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
 import { localesVisibles, applyLocalScope, cuentasVisibles } from "../lib/auth";
@@ -10,6 +9,13 @@ import {
   calcularTotalLiquidacion,
 } from "../lib/calculos/rrhh";
 import RRHHLegajo from "./RRHHLegajo";
+import type { Usuario, Local } from "../types";
+
+interface RRHHProps {
+  user: Usuario;
+  locales: Local[];
+  localActivo: number | null;
+}
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 function calcLiquidacion(emp: any, nov: any, valorDoble: number) {
@@ -44,7 +50,7 @@ const CUENTAS_PAGO = ["Caja Efectivo","Caja Chica","Caja Mayor","MercadoPago","B
 const inp: any = { padding:"3px 5px", background:"var(--bg)", border:"1px solid var(--bd)", color:"var(--txt)", fontFamily:"'DM Mono',monospace", fontSize:10, borderRadius:"var(--r)", textAlign:"center" };
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
-export default function RRHH({ user, locales, localActivo }) {
+export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const visCuentas = cuentasVisibles(user);
   const cuentasUsables = visCuentas === null ? CUENTAS_PAGO : CUENTAS_PAGO.filter(c => visCuentas.includes(c));
   const [tab, setTab] = useState("dashboard");
@@ -54,7 +60,7 @@ export default function RRHH({ user, locales, localActivo }) {
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(""), 3000); };
 
   const visLocs = localesVisibles(user);
-  const locsDisp = visLocs === null ? locales : locales.filter(l => visLocs.includes(l.id));
+  const locsDisp = visLocs === null ? locales : locales.filter((l: Local) => visLocs.includes(l.id));
   const esEnc = user?.rol === "encargado";
   const esDueno = user?.rol === "dueno" || user?.rol === "admin";
   const defaultLocal = localActivo || (locsDisp.length === 1 ? locsDisp[0]?.id : (esEnc && locsDisp.length ? locsDisp[0].id : ""));
@@ -135,7 +141,7 @@ export default function RRHH({ user, locales, localActivo }) {
   const loadNovedades = async () => {
     if (!novLocal) return;
     setNovLoading(true);
-    const { data: emps } = await db.from("rrhh_empleados").select("*").eq("local_id", parseInt(novLocal)).eq("activo", true).order("apellido");
+    const { data: emps } = await db.from("rrhh_empleados").select("*").eq("local_id", parseInt(String(novLocal))).eq("activo", true).order("apellido");
     const empIds = (emps || []).map(e => e.id);
     let novs: any[] = [];
     if (empIds.length) {
@@ -157,7 +163,7 @@ export default function RRHH({ user, locales, localActivo }) {
     setPagoLoading(true);
 
     const { data: emps } = await db.from("rrhh_empleados")
-      .select("*").eq("local_id", parseInt(pagoLocal)).eq("activo", true).order("apellido");
+      .select("*").eq("local_id", parseInt(String(pagoLocal))).eq("activo", true).order("apellido");
     const empIds = (emps || []).map(e => e.id);
 
     if (!empIds.length) { setPagoData([]); setPagoLoading(false); return; }
@@ -185,7 +191,7 @@ export default function RRHH({ user, locales, localActivo }) {
       let liq = liqs.find(l => l.novedad_id === nov.id) || null;
 
       if (!liq) {
-        const vd = valoresDoble.find(v => v.puesto === emp.puesto)?.valor || 0;
+        const vd = valoresDoble.find((v: any) => v.puesto === emp.puesto)?.valor || 0;
         const calc = calcLiquidacion(emp, nov, vd);
         liq = { ...calc, total_a_pagar: Math.round(calc.total_a_pagar), estado: "pendiente", _novedadId: nov.id, _generated: true };
       }
@@ -388,7 +394,7 @@ export default function RRHH({ user, locales, localActivo }) {
   // ─── EMPLEADOS ACTIONS ─────────────────────────────────────────────────────
   const puestos = [...new Set(valoresDoble.map(v => v.puesto))];
   const empsFilt = allEmps.filter(e => {
-    if (empFiltLocal && e.local_id !== parseInt(empFiltLocal)) return false;
+    if (empFiltLocal && e.local_id !== parseInt(String(empFiltLocal))) return false;
     if (empSearch && !(`${e.apellido} ${e.nombre}`).toLowerCase().includes(empSearch.toLowerCase())) return false;
     return true;
   });
@@ -412,8 +418,8 @@ export default function RRHH({ user, locales, localActivo }) {
     setEmpModal(null); loadEmpleados();
   };
 
-  const abrirEmpNuevo = () => { setEmpForm({ ...empEmpty, local_id: empFiltLocal || "" }); setEmpModal("new"); };
-  const abrirEmpEditar = (e) => {
+  const abrirEmpNuevo = () => { setEmpForm({ ...empEmpty, local_id: empFiltLocal ? String(empFiltLocal) : "" }); setEmpModal("new"); };
+  const abrirEmpEditar = (e: any) => {
     setEmpForm({ local_id: e.local_id ? String(e.local_id) : "", apellido:e.apellido, nombre:e.nombre, cuil:e.cuil||"", puesto:e.puesto, sueldo_mensual:String(e.sueldo_mensual), alias_mp:e.alias_mp||"", fecha_inicio:e.fecha_inicio||"", activo:e.activo });
     setEmpModal(e);
   };
@@ -456,7 +462,7 @@ export default function RRHH({ user, locales, localActivo }) {
     }, { onConflict: "empleado_id,mes,anio" }).select().single();
 
     if (saved) {
-      const vd = valoresDoble.find(v => v.puesto === emp.puesto)?.valor || 0;
+      const vd = valoresDoble.find((v: any) => v.puesto === emp.puesto)?.valor || 0;
       const calc = calcLiquidacion(emp, nov, vd);
       await db.from("rrhh_liquidaciones").upsert({
         novedad_id: saved.id, ...calc, estado: "pendiente",
@@ -771,7 +777,7 @@ function TabEmpleados({
       <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
         <select className="search" style={{width:160}} value={empFiltLocal} onChange={e => setEmpFiltLocal(e.target.value)}>
           {!esEnc && <option value="">Todos los locales</option>}
-          {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+          {locsDisp.map((l: any) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
         </select>
         <input className="search" placeholder="Buscar..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} style={{width:160}} />
         <div style={{flex:1}} />
@@ -781,7 +787,7 @@ function TabEmpleados({
         {empsFilt.length === 0 ? <div className="empty">Sin empleados</div> : (
           <div style={{overflowX:"auto"}}>
           <table><thead><tr><th>Nombre</th><th>Local</th><th>Puesto</th><th style={{textAlign:"right"}}>Sueldo</th><th>Vacaciones</th><th>Alertas</th><th>Activo</th><th></th></tr></thead>
-          <tbody>{empsFilt.map(e => {
+          <tbody>{empsFilt.map((e: any) => {
             const vac = calcularVacaciones(e.fecha_inicio, vacTomadas[e.id] || 0);
             const vacColor = vac >= 14 ? "var(--success)" : vac >= 7 ? "var(--warn)" : "var(--muted2)";
             const alertas: string[] = [];
@@ -792,7 +798,7 @@ function TabEmpleados({
             return (
               <tr key={e.id} style={{opacity: e.activo === false ? 0.4 : 1}}>
                 <td style={{fontWeight:500,fontSize:12}}>{e.apellido}, {e.nombre}</td>
-                <td style={{fontSize:11}}>{locales.find(l => l.id === e.local_id)?.nombre || "—"}</td>
+                <td style={{fontSize:11}}>{locales.find((l: any) => l.id === e.local_id)?.nombre || "—"}</td>
                 <td><span className="badge b-muted" style={{fontSize:8}}>{e.puesto}</span></td>
                 <td style={{textAlign:"right"}}><span className="num kpi-acc">{fmt_$(e.sueldo_mensual)}</span></td>
                 <td style={{fontSize:11,color:vacColor}}>{vac >= 14 && "🌴 "}{vac.toFixed(1)}d</td>
@@ -822,10 +828,10 @@ function TabEmpleados({
                 <div className="field"><label>Nombre *</label><input value={empForm.nombre} onChange={e => setEmpForm({...empForm, nombre:e.target.value})} /></div>
               </div>
               <div className="form2">
-                <div className="field"><label>Local *</label><select value={empForm.local_id} onChange={e => setEmpForm({...empForm, local_id:e.target.value})}><option value="">Seleccionar...</option>{locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
+                <div className="field"><label>Local *</label><select value={empForm.local_id} onChange={e => setEmpForm({...empForm, local_id:e.target.value})}><option value="">Seleccionar...</option>{locsDisp.map((l: any) => <option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
                 <div className="field"><label>CUIL</label><input value={empForm.cuil} onChange={e => setEmpForm({...empForm, cuil:e.target.value})} placeholder="XX-XXXXXXXX-X" /></div>
               </div>
-              <div className="field"><label>Puesto *</label><select value={empForm.puesto} onChange={e => setEmpForm({...empForm, puesto:e.target.value})}><option value="">Seleccionar...</option>{puestos.map(p => <option key={p} value={p}>{p}</option>)}<option value="__otro">-- Otro --</option></select>
+              <div className="field"><label>Puesto *</label><select value={empForm.puesto} onChange={e => setEmpForm({...empForm, puesto:e.target.value})}><option value="">Seleccionar...</option>{puestos.map((p: any) => <option key={p} value={p}>{p}</option>)}<option value="__otro">-- Otro --</option></select>
                 {empForm.puesto === "__otro" && <input style={{marginTop:4}} placeholder="Escribir puesto..." onChange={e => setEmpForm({...empForm, puesto:e.target.value})} />}
               </div>
               <div className="form3">
@@ -857,7 +863,7 @@ function TabNovedades({
         <input type="number" className="search" style={{width:70}} value={novAnio} onChange={e => setNovAnio(parseInt(e.target.value))} />
         <select className="search" style={{width:160}} value={String(novLocal || "")} onChange={e => setNovLocal(e.target.value)}>
           <option value="">Seleccionar local...</option>
-          {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+          {locsDisp.map((l: any) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
         </select>
       </div>
 
@@ -874,10 +880,10 @@ function TabNovedades({
               <th style={{width:90,fontSize:8}}>Obs.</th>
               <th style={{textAlign:"right",width:80,fontSize:8}}>Preview</th><th style={{width:80,fontSize:8}}>Acción</th>
             </tr></thead>
-            <tbody>{novEmps.map(emp => {
+            <tbody>{novEmps.map((emp: any) => {
               const nov = novMap[emp.id] || {};
               const locked = nov.estado === "confirmado";
-              const vd = valoresDoble.find(v => v.puesto === emp.puesto)?.valor || 0;
+              const vd = valoresDoble.find((v: any) => v.puesto === emp.puesto)?.valor || 0;
               const preview = calcLiquidacion(emp, nov, vd).total_a_pagar;
               return (
                 <tr key={emp.id}>
@@ -934,7 +940,7 @@ function TabPagos({
         <input type="number" className="search" style={{width:70}} value={pagoAnio} onChange={e => setPagoAnio(parseInt(e.target.value))} />
         <select className="search" style={{width:160}} value={String(pagoLocal || "")} onChange={e => setPagoLocal(e.target.value)}>
           {!esEnc && <option value="">Seleccionar local...</option>}
-          {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+          {locsDisp.map((l: any) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
         </select>
         <div style={{flex:1}} />
         {totalPagosPend > 0 && <span style={{fontSize:11,color:"var(--muted2)"}}>{totalPagosPend} pendiente{totalPagosPend > 1 ? "s" : ""}</span>}
@@ -948,7 +954,7 @@ function TabPagos({
           <div style={{overflowX:"auto"}}>
           <table>
             <thead><tr><th>Empleado</th><th>Puesto</th><th style={{textAlign:"right"}}>Total</th><th>CBU / Alias</th><th>Estado</th><th></th></tr></thead>
-            <tbody>{pagoData.map((row) => {
+            <tbody>{pagoData.map((row: any) => {
               const { emp, nov, liq } = row;
               if (!liq) return null;
               const pagado = liq.estado === "pagado";
@@ -997,12 +1003,12 @@ function TabPagos({
         const yaPagado = Math.round(Number(liq.pagos_realizados || 0));
         const pendiente = Math.max(0, total - yaPagado);
         const totalAdelantos = Math.round((adelantosPendientes || []).reduce((s: number, a: any) => s + Number(a.monto), 0));
-        const asignadoCash = Math.round(formasPago.reduce((s, f) => s + (parseFloat(f.monto) || 0), 0));
+        const asignadoCash = Math.round(formasPago.reduce((s: number, f: {cuenta:string, monto:string}) => s + (parseFloat(f.monto) || 0), 0));
         const asignadoTotal = asignadoCash + totalAdelantos;
         const restanteTrasEste = pendiente - asignadoTotal;
         const completaPago = asignadoTotal >= pendiente;
         const esPagoParcial = asignadoTotal > 0 && asignadoTotal < pendiente;
-        const puedeConfirmar = asignadoTotal > 0 && asignadoTotal <= pendiente && formasPago.every(f => parseFloat(f.monto) > 0);
+        const puedeConfirmar = asignadoTotal > 0 && asignadoTotal <= pendiente && formasPago.every((f: {cuenta:string, monto:string}) => parseFloat(f.monto) > 0);
         const cerrarModal = () => { setPagoModal(null); setFormasPago([]); setAdelantosPendientes([]); };
 
         const confirmarPago = async () => {
@@ -1011,8 +1017,8 @@ function TabPagos({
           try {
             // Serializar las formas de pago (sólo las con monto > 0).
             const formasValidas = formasPago
-              .filter(fp => (parseFloat(fp.monto) || 0) > 0)
-              .map(fp => ({ cuenta: fp.cuenta, monto: parseFloat(fp.monto) }));
+              .filter((fp: {cuenta:string, monto:string}) => (parseFloat(fp.monto) || 0) > 0)
+              .map((fp: {cuenta:string, monto:string}) => ({ cuenta: fp.cuenta, monto: parseFloat(fp.monto) }));
             const adelIds = (adelantosPendientes || []).map((a: any) => a.id);
 
             // Si la liq vino _generated (frontend la armó sin persistir),
@@ -1089,20 +1095,20 @@ function TabPagos({
                   </div>
                 )}
 
-                {formasPago.map((fp, i) => (
+                {formasPago.map((fp: {cuenta:string, monto:string}, i: number) => (
                   <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
                     <select className="search" style={{flex:1}} value={fp.cuenta}
-                      onChange={e => setFormasPago(prev => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
-                      {cuentasUsables.map(c => <option key={c}>{c}</option>)}
+                      onChange={e => setFormasPago((prev: {cuenta:string, monto:string}[]) => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
+                      {cuentasUsables.map((c: string) => <option key={c}>{c}</option>)}
                     </select>
                     <input type="number" className="search" style={{width:120}} placeholder="Monto" value={fp.monto}
-                      onChange={e => setFormasPago(prev => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
-                    <button className="btn btn-danger btn-sm" onClick={() => setFormasPago(prev => prev.filter((_, j) => j !== i))}>✕</button>
+                      onChange={e => setFormasPago((prev: {cuenta:string, monto:string}[]) => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
+                    <button className="btn btn-danger btn-sm" onClick={() => setFormasPago((prev: {cuenta:string, monto:string}[]) => prev.filter((_, j) => j !== i))}>✕</button>
                   </div>
                 ))}
 
                 <button className="btn btn-ghost btn-sm" style={{marginBottom:16}}
-                  onClick={() => setFormasPago(prev => [...prev, { cuenta: "Caja Efectivo", monto: restanteTrasEste > 0 ? String(restanteTrasEste) : "" }])}>
+                  onClick={() => setFormasPago((prev: {cuenta:string, monto:string}[]) => [...prev, { cuenta: "Caja Efectivo", monto: restanteTrasEste > 0 ? String(restanteTrasEste) : "" }])}>
                   + Agregar forma de pago
                 </button>
 
@@ -1151,9 +1157,9 @@ function TabPagos({
                 <select value={adelForm.empleado_id} onChange={e => setAdelForm({...adelForm, empleado_id: e.target.value})}>
                   <option value="">Seleccionar...</option>
                   {(allEmps || [])
-                    .filter(e => e.activo !== false)
-                    .filter(e => !pagoLocal || e.local_id === parseInt(String(pagoLocal)))
-                    .map(e => <option key={e.id} value={e.id}>{e.apellido}, {e.nombre}</option>)}
+                    .filter((e: any) => e.activo !== false)
+                    .filter((e: any) => !pagoLocal || e.local_id === parseInt(String(pagoLocal)))
+                    .map((e: any) => <option key={e.id} value={e.id}>{e.apellido}, {e.nombre}</option>)}
                 </select>
               </div>
               <div className="form2">
@@ -1166,7 +1172,7 @@ function TabPagos({
               </div>
               <div className="field"><label>Cuenta de egreso</label>
                 <select value={adelForm.cuenta} onChange={e => setAdelForm({...adelForm, cuenta: e.target.value})}>
-                  {cuentasUsables.map(c => <option key={c}>{c}</option>)}
+                  {cuentasUsables.map((c: string) => <option key={c}>{c}</option>)}
                 </select>
               </div>
               <div className="field"><label>Descripción (opcional)</label>
@@ -1202,14 +1208,14 @@ function TabHistorial({
         <input type="number" className="search" style={{width:70}} value={histAnio} onChange={e => setHistAnio(parseInt(e.target.value))} />
         <select className="search" style={{width:160}} value={String(histLocal || "")} onChange={e => setHistLocal(e.target.value)}>
           {!esEnc && <option value="">Todos los locales</option>}
-          {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+          {locsDisp.map((l: any) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
         </select>
       </div>
       {histLoading ? <div className="loading">Cargando...</div> : histData.length === 0 ? <div className="empty">Sin pagos en este período</div> : (
         <div className="panel">
           <table>
             <thead><tr><th>Fecha</th><th>Empleado</th><th>Puesto</th><th>Tipo</th><th style={{textAlign:"right"}}>Monto</th><th></th></tr></thead>
-            <tbody>{histData.map((h, i) => (
+            <tbody>{histData.map((h: any, i: number) => (
               <tr key={i}>
                 <td className="mono" style={{fontSize:11}}>{fmt_d(h.fecha)}</td>
                 <td style={{fontWeight:500,fontSize:12}}>{h.emp?.apellido}, {h.emp?.nombre}</td>
