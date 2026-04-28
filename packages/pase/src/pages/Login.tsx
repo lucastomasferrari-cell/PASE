@@ -1,12 +1,17 @@
 import { useState, useRef } from "react";
 import { db } from "../lib/supabase";
+import type { UsuarioRow } from "../types";
+
+interface LoginProps {
+  onLogin: (u: UsuarioRow) => void;
+}
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
-export default function Login({ onLogin }) {
+export default function Login({ onLogin }: LoginProps) {
   const [usuario, setUsuario] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
-  const passRef = useRef(null);
+  const passRef = useRef<HTMLInputElement>(null);
 
   const go = async () => {
     const password = passRef.current?.value || "";

@@ -2,8 +2,15 @@ import { useState } from "react";
 import Insumos from "./Insumos";
 import Recetas from "./Recetas";
 import ListaPrecios from "./ListaPrecios";
+import type { Usuario, Local } from "../types";
 
-export default function Costos({ user, locales, localActivo }) {
+interface CostosProps {
+  user: Usuario;
+  locales: Local[];
+  localActivo: number | null;
+}
+
+export default function Costos({ locales, localActivo }: CostosProps) {
   const [tab, setTab] = useState("insumos");
   const tabs: [string, string][] = [
     ["insumos", "Insumos"],

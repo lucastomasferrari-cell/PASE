@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "./lib/supabase";
 import { getPermisos, tienePermiso, AuthProvider, necesitaElegirLocal } from "./lib/auth";
+import type { Usuario, UsuarioRow, Local } from "./types";
 import { Sidebar, css } from "./components/Layout";
 import Login from "./pages/Login";
 import ForcePasswordChange from "./pages/ForcePasswordChange";
@@ -29,9 +30,9 @@ import Costos from "./pages/Costos";
 import Configuracion from "./pages/Configuracion";
 
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<Usuario | null>(null);
   const [section, setSection] = useState("dashboard");
-  const [locales, setLocales] = useState([]);
+  const [locales, setLocales] = useState<Local[]>([]);
   const [localActivo, setLocalActivo] = useState<number | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   // Bug #27: bloquea navegación mientras encargado con >1 local no elige uno.
@@ -101,16 +102,16 @@ export default function App() {
     return () => subscription.unsubscribe();
   },[]);
 
-  const applyLogin = async (u) => {
+  const applyLogin = async (u: UsuarioRow) => {
     // Load DB-driven permisos and locales
     const [{ data: permsData }, { data: locsData }] = await Promise.all([
       db.from("usuario_permisos").select("modulo_slug").eq("usuario_id", u.id),
       db.from("usuario_locales").select("local_id").eq("usuario_id", u.id),
     ]);
-    const enriched = {
+    const enriched: Usuario = {
       ...u,
-      _permisos: (permsData || []).map(p => p.modulo_slug),
-      _locales: (locsData || []).length ? (locsData || []).map(l => l.local_id) : (u.locales || []),
+      _permisos: (permsData || []).map((p: { modulo_slug: string }) => p.modulo_slug),
+      _locales: (locsData || []).length ? (locsData || []).map((l: { local_id: number }) => l.local_id) : (u.locales || []),
     };
     setUser(enriched);
     sessionStorage.setItem("pase_user", JSON.stringify(enriched));
@@ -134,7 +135,7 @@ export default function App() {
     }
   };
 
-  const login = (u) => {
+  const login = (u: UsuarioRow) => {
     applyLogin(u);
   };
 
@@ -142,15 +143,15 @@ export default function App() {
   // cerrar sesión. El dueño cambia permisos → el afectado hace click en
   // "Actualizar permisos" en el sidebar y ve el cambio al instante.
   const refreshPermisos = async () => {
-    if (!user?.id) return;
+    if (!user) return;
     const [{ data: permsData }, { data: locsData }] = await Promise.all([
       db.from("usuario_permisos").select("modulo_slug").eq("usuario_id", user.id),
       db.from("usuario_locales").select("local_id").eq("usuario_id", user.id),
     ]);
-    const enriched = {
+    const enriched: Usuario = {
       ...user,
-      _permisos: (permsData || []).map(p => p.modulo_slug),
-      _locales: (locsData || []).length ? (locsData || []).map(l => l.local_id) : (user.locales || []),
+      _permisos: (permsData || []).map((p: { modulo_slug: string }) => p.modulo_slug),
+      _locales: (locsData || []).length ? (locsData || []).map((l: { local_id: number }) => l.local_id) : (user.locales || []),
     };
     // Re-evaluar localActivo: si el dueño le agregó/quitó locales al usuario,
     // puede que el localActivo actual ya no esté en sus _locales → modal.
@@ -180,7 +181,7 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToast(""), 3000);
   };
 
-  const props = { user, locales, localActivo };
+  const props: { user: Usuario; locales: Local[]; localActivo: number | null } = { user: user!, locales, localActivo };
 
   const guardedNav = (slug: string) => {
     if (!tienePermiso(user, slug)) {
@@ -203,7 +204,7 @@ export default function App() {
       case "gastos":    return <Gastos {...props}/>;
       case "contador":  return <Contador {...props}/>;
       case "maxirest":  return <ImportarMaxirest {...props}/>;
-      case "insumos":   return <Insumos {...props}/>;
+      case "insumos":   return <Insumos />;
       case "lector_ia": return <LectorFacturasIA {...props}/>;
       case "recetas":   return <Recetas {...props}/>;
       case "mp":        return <ConciliacionMP {...props}/>;
@@ -227,7 +228,8 @@ export default function App() {
   if(!user) return <><style>{css}</style><Login onLogin={login}/></>;
 
   if (user.password_temporal) return <><style>{css}</style><ForcePasswordChange user={user} onDone={() => {
-    const updated = { ...user, password_temporal: false };
+    if (!user) return;
+    const updated: Usuario = { ...user, password_temporal: false };
     setUser(updated);
     sessionStorage.setItem("pase_user", JSON.stringify(updated));
   }}/></>;

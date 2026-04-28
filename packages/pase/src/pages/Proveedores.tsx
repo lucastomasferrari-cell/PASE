@@ -35,7 +35,7 @@ export default function Proveedores({ user, localActivo }: { user: any; locales?
       if(isNC)saldoPorProv.set(f.prov_id,(saldoPorProv.get(f.prov_id)||0)-Math.abs(f.total||0));
       else if(impagable)saldoPorProv.set(f.prov_id,(saldoPorProv.get(f.prov_id)||0)+Number(f.total||0));
     }
-    setProveedores((provs||[]).map(p=>({...p,saldo:saldoPorProv.get(p.id)||0})));
+    setProveedores((provs||[]).map((p: any)=>({...p,saldo:saldoPorProv.get(p.id)||0})));
     setLoading(false);
   };
   useEffect(()=>{load();},[localActivo]);
@@ -55,12 +55,12 @@ export default function Proveedores({ user, localActivo }: { user: any; locales?
     setEditModal(null);
     await load();
   };
-  const toggleEstado=async(p)=>{
+  const toggleEstado=async(p: any)=>{
     const {error}=await db.from("proveedores").update({estado:p.estado==="Activo"?"Inactivo":"Activo"}).eq("id",p.id);
     if(error){alert("Error: "+error.message);return;}
     await load();
   };
-  const abrirCta=async(p)=>{
+  const abrirCta=async(p: any)=>{
     setCtaFacts([]);
     setCtaMes(toISO(today).slice(0,7));
     setCtaModal(p);
@@ -138,16 +138,16 @@ export default function Proveedores({ user, localActivo }: { user: any; locales?
             const totalVencido=vencidas.reduce((s,f)=>s+(f.total||0),0);
             const totalNC=ncs.reduce((s,f)=>s+Math.abs(f.total||0),0);
             const deudaNeta=aPagar-totalNC;
-            const pagos=ctaFacts.flatMap(f=>(f.pagos||[]).map(p=>({...p,nro:f.nro})));
+            const pagos=ctaFacts.flatMap((f: any)=>(f.pagos||[]).map((p: any)=>({...p,nro:f.nro})));
 
             const [yr,mo]=ctaMes.split("-").map(Number);
             const desde=ctaMes+"-01";
             const hasta=ctaMes+"-"+String(new Date(yr,mo,0).getDate()).padStart(2,"0");
             const facturasDelMes=ctaFacts.filter(f=>(f.tipo||"factura")==="factura"&&f.fecha>=desde&&f.fecha<=hasta);
             const totalFacturadoMes=facturasDelMes.reduce((s,f)=>s+Number(f.total||0),0);
-            const totalPagadoMes=ctaFacts.reduce((s,f)=>{
-              const pagosDelMes=(f.pagos||[]).filter(p=>p.fecha>=desde&&p.fecha<=hasta);
-              return s+pagosDelMes.reduce((sp,p)=>sp+Number(p.monto||0),0);
+            const totalPagadoMes=ctaFacts.reduce((s: number,f: any)=>{
+              const pagosDelMes=(f.pagos||[]).filter((p: any)=>p.fecha>=desde&&p.fecha<=hasta);
+              return s+pagosDelMes.reduce((sp: number,p: any)=>sp+Number(p.monto||0),0);
             },0);
 
             return(<>

@@ -5,7 +5,7 @@ export function Sidebar({ user, section, onNav, onLogout, onRefreshPerms, locale
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
   const perms = getPermisos(user);
-  const localesDisp = (user.rol==="dueno" || user.rol==="admin") ? locales : locales.filter(l=>(user._locales||user.locales||[]).includes(l.id));
+  const localesDisp = (user.rol==="dueno" || user.rol==="admin") ? locales : locales.filter((l: { id: number })=>(user._locales||user.locales||[]).includes(l.id));
   const nav = [
     {id:"dashboard",label:"Dashboard",sec:"Principal",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="5" height="5" rx="1"/><rect x="8" y="1" width="5" height="5" rx="1"/><rect x="1" y="8" width="5" height="5" rx="1"/><rect x="8" y="8" width="5" height="5" rx="1"/></svg>`},
     {id:"ventas",label:"Ventas",sec:"Operaciones",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="1,11 4,6 7,8 10,4 13,6"/></svg>`},
@@ -39,7 +39,7 @@ export function Sidebar({ user, section, onNav, onLogout, onRefreshPerms, locale
           <div className="sb-local">
             <select value={localActivo||""} onChange={e=>setLocalActivo(e.target.value?parseInt(e.target.value):null)}>
               {user.rol==="dueno" && <option value="">Todos los locales</option>}
-              {localesDisp.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}
+              {localesDisp.map((l: { id: number; nombre: string })=><option key={l.id} value={l.id}>{l.nombre}</option>)}
             </select>
           </div>
         )}

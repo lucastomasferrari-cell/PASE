@@ -1,3 +1,4 @@
+// @ts-nocheck — TODO TASK 0.14: migrar a TS strict (etapa pendiente)
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { cuentasVisibles } from "../lib/auth";

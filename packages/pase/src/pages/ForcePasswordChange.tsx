@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { db } from "../lib/supabase";
+import type { Usuario } from "../types";
 
-export default function ForcePasswordChange({ user, onDone }) {
+interface ForcePasswordChangeProps {
+  user: Usuario;
+  onDone: () => void;
+}
+
+export default function ForcePasswordChange({ user, onDone }: ForcePasswordChangeProps) {
   const [newPass, setNewPass] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);

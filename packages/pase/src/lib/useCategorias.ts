@@ -35,7 +35,9 @@ export interface CategoriasState {
 const CACHE_KEY = "pase_categorias_v3";
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1h
 
-const FALLBACK: Omit<CategoriasState, "loading" | "source"> = {
+type CategoriasData = Omit<CategoriasState, "loading" | "source" | "refresh">;
+
+const FALLBACK: CategoriasData = {
   CATEGORIAS_COMPRA: [..._CC],
   GASTOS_FIJOS: [..._GF],
   GASTOS_VARIABLES: [..._GV],
@@ -50,7 +52,7 @@ const FALLBACK: Omit<CategoriasState, "loading" | "source"> = {
   ],
 };
 
-function readCache(): Omit<CategoriasState, "loading" | "source"> | null {
+function readCache(): CategoriasData | null {
   try {
     const raw = sessionStorage.getItem(CACHE_KEY);
     if (!raw) return null;
@@ -60,13 +62,13 @@ function readCache(): Omit<CategoriasState, "loading" | "source"> | null {
   } catch { return null; }
 }
 
-function writeCache(data: Omit<CategoriasState, "loading" | "source">) {
+function writeCache(data: CategoriasData) {
   try {
     sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
   } catch {}
 }
 
-function fromRows(rows: { tipo: string; nombre: string; orden: number; grupo: string | null; activo: boolean }[]): Omit<CategoriasState, "loading" | "source"> {
+function fromRows(rows: { tipo: string; nombre: string; orden: number; grupo: string | null; activo: boolean }[]): CategoriasData {
   const byTipo = (t: string) => rows
     .filter(r => r.tipo === t && r.activo)
     .sort((a, b) => (a.orden || 0) - (b.orden || 0))

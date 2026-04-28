@@ -1,8 +1,14 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { fmt_$ } from "../lib/utils";
+import type { Local } from "../types";
 
-export default function ListaPrecios({ locales, localActivo }) {
+interface ListaPreciosProps {
+  locales: Local[];
+  localActivo: number | null;
+}
+
+export default function ListaPrecios(_props: ListaPreciosProps) {
   const [recetas, setRecetas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
