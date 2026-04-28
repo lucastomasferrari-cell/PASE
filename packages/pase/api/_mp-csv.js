@@ -7,6 +7,9 @@
 
 // TRANSACTION_TYPEs del settlement_report mapeados a tipo PASE.
 // Cualquier valor no listado se ignora (con log) y NO se inserta.
+//
+// `sign` es informativo (no se aplica al cálculo). El signo del monto se
+// respeta del CSV — ver procesarFilaSettlement.
 export const SETTLEMENT_TIPOS = {
   SETTLEMENT: { tipo: 'liquidacion', sign: 1, descDefault: 'Liquidación MP' },
   WITHDRAWAL: { tipo: 'bank_transfer', sign: -1, descDefault: 'Transferencia enviada' },
@@ -92,11 +95,31 @@ export function procesarFilaSettlement(cells, header, localId) {
 
   // Monto: SETTLEMENT_NET_AMOUNT (lo que entra/sale del saldo released).
   // Fallback a TRANSACTION_AMOUNT si está vacío (filas pendientes).
+  // FIX: respetar signo natural del CSV. El bug previo hacía Math.abs() y
+  // multiplicaba por map.sign — eso convertía SETTLEMENTs negativos
+  // (egresos consolidados que MP entrega con NET<0) en liquidaciones
+  // positivas, mostrando egresos como ingresos en Conciliación.
   const netRaw = get('SETTLEMENT_NET_AMOUNT') || get('TRANSACTION_AMOUNT');
-  const netAbs = Math.abs(parseNumero(netRaw) || 0);
-  if (netAbs <= 0) return { skipped: true, transType, motivo: 'monto_cero' };
+  const netSigned = parseNumero(netRaw) || 0;
+  if (netSigned === 0) return { skipped: true, transType, motivo: 'monto_cero' };
 
-  const monto = round2(map.sign * netAbs);
+  // Para SETTLEMENT, el signo natural decide la categoría:
+  //  - positivo → liquidacion (cobros consolidados que entran al saldo).
+  //  - negativo → bank_transfer (egresos consolidados que salen del saldo).
+  // Para WITHDRAWAL / PAYOUT / REFUND / CHARGEBACK, el resultado siempre
+  // se fuerza a negativo: son egresos por definición.
+  let tipo = map.tipo;
+  let descripcion = map.descDefault;
+  let monto;
+  if (transType === 'SETTLEMENT') {
+    if (netSigned < 0) {
+      tipo = 'bank_transfer';
+      descripcion = 'Egreso consolidado MP';
+    }
+    monto = round2(netSigned);
+  } else {
+    monto = round2(-Math.abs(netSigned));
+  }
 
   // Fecha: SETTLEMENT_DATE (cuando se libera) preferido, fallback a
   // TRANSACTION_DATE (near-realtime).
@@ -118,13 +141,13 @@ export function procesarFilaSettlement(cells, header, localId) {
       id: `set-${uniqueKey}`,
       local_id: localId,
       fecha: fechaIso,
-      tipo: map.tipo,
-      descripcion: map.descDefault,
+      tipo,
+      descripcion,
       monto,
       saldo: null,
       estado: 'approved',
       referencia_id: extRef || sourceId || String(uniqueKey),
-      medio_pago: paymentMethod || (map.tipo === 'bank_transfer' ? 'bank_transfer' : null),
+      medio_pago: paymentMethod || (tipo === 'bank_transfer' ? 'bank_transfer' : null),
     },
   };
 }
