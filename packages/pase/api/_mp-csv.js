@@ -152,8 +152,18 @@ export function procesarFilaSettlement(cells, header, localId) {
   };
 }
 
-// Procesa una fila del CSV release (formato legacy). Mantiene comportamiento
-// idéntico al pre-PARTE C.
+// Procesa una fila del CSV release. Cubre los eventos de movimiento del
+// saldo released que MP entrega en este reporte:
+//   - payment             → liquidacion (cobro liberado al saldo)
+//   - payout              → bank_transfer (transferencia saliente final a CBU)
+//   - refund              → refund (reembolso al cliente)
+//   - chargeback          → chargeback (contracargo)
+//   - asset_management    → liquidacion (rendimiento del saldo MP)
+//
+// SKIP de filas intermedias: 'reserve_for_payout' viene en par debit/credit
+// que se cancelan a sí mismas — MP las emite cuando reserva fondos antes
+// del payout final. Procesar sólo el payout final evita 3 filas por
+// transferencia y mantiene el saldo coherente.
 export function procesarFilaRelease(cells, header, localId, i) {
   const idx = (col) => header.indexOf(col);
   const get = (col) => { const ii = idx(col); return ii !== -1 ? (cells[ii] || '') : ''; };
@@ -161,36 +171,49 @@ export function procesarFilaRelease(cells, header, localId, i) {
   const tipo = (get('RECORD_TYPE') || '').toLowerCase();
   if (tipo !== 'release') return { skipped: true, recordType: tipo };
 
+  const descRaw = (get('DESCRIPTION') || '').toLowerCase().trim();
+  if (descRaw === 'reserve_for_payout') {
+    return { skipped: true, recordType: tipo, description: descRaw, motivo: 'reserve_intermediate' };
+  }
+
   const netCredit = parseNumero(get('NET_CREDIT_AMOUNT')) || 0;
   const netDebit = parseNumero(get('NET_DEBIT_AMOUNT')) || 0;
-  if (netCredit <= 0 && netDebit <= 0) return { skipped: true, recordType: tipo, motivo: 'sin_monto' };
+  if (netCredit <= 0 && netDebit <= 0) return { skipped: true, recordType: tipo, description: descRaw, motivo: 'sin_monto' };
 
   const sourceId = get('SOURCE_ID');
   const extRef = get('EXTERNAL_REFERENCE');
   const rawDate = get('DATE');
-  const descripcionRaw = get('DESCRIPTION');
   const uniqueKey = sourceId || `${rawDate}-${extRef || i}`;
 
-  let monto, rowTipo, descripcionDefault;
+  let monto, rowTipo, descripcionFinal;
   if (netDebit > 0) {
     monto = round2(-netDebit);
-    rowTipo = 'bank_transfer';
-    descripcionDefault = 'Transferencia enviada';
+    if (descRaw === 'refund') {
+      rowTipo = 'refund';
+      descripcionFinal = 'Reembolso MP';
+    } else if (descRaw === 'chargeback') {
+      rowTipo = 'chargeback';
+      descripcionFinal = 'Contracargo MP';
+    } else {
+      rowTipo = 'bank_transfer';
+      descripcionFinal = descRaw === 'payout' ? 'Transferencia enviada' : 'Egreso MP';
+    }
   } else {
     monto = round2(netCredit);
     rowTipo = 'liquidacion';
-    descripcionDefault = 'Liquidación MP';
+    descripcionFinal = descRaw === 'asset_management' ? 'Rendimiento MP' : 'Liquidación MP';
   }
 
   return {
     skipped: false,
     recordType: tipo,
+    description: descRaw,
     row: {
       id: `rr-${uniqueKey}`,
       local_id: localId,
       fecha: fechaCsvToIso(rawDate),
       tipo: rowTipo,
-      descripcion: descripcionRaw || descripcionDefault,
+      descripcion: descripcionFinal,
       monto,
       saldo: null,
       estado: 'approved',

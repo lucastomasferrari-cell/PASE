@@ -2,12 +2,15 @@
 // Hace todo en una pasada: POST report → wait 90s → GET file → parse → upsert
 // → calcular saldo legacy → fetch saldo API → UPDATE.
 //
-// PARTE C de TASK 0.11:
+// PARTE C de TASK 0.11 + revisión 28/04:
 // - REMOVIDO el flow de /v1/payments/search (traía cobros tipo='point'/
 //   'payment' que no afectan saldo released).
-// - Usa settlement_report como fuente principal con TRANSACTION_TYPE
-//   explícito. Si MP devuelve 4xx en settlement, fallback automático a
-//   release_report (formato legacy con RECORD_TYPE='release').
+// - Usa release_report como fuente principal: tiene los eventos de
+//   movimiento del saldo (payments liberados, payouts a CBU, refunds,
+//   chargebacks, asset_management). Settlement_report (override
+//   opcional con ?source=settlement) lista pagos individuales pero
+//   omite payouts y eventos de release — descubrimiento del smoke
+//   28/04 cuando faltaban Outon -$223.263 y The Good Selection -$903.249.
 // - El parser detecta el formato del CSV por las columnas del header.
 
 import { createMpTokenGetter } from './_mp-token.js';
@@ -112,12 +115,17 @@ export default async function handler(req, res) {
       console.error('mp-sync: dedup cleanup exception', e);
     }
 
-    // Override manual: ?source=release fuerza release_report. Default
-    // = settlement. Sin fallback automático para no doblar la cuota MP
-    // cuando settlement rechaza (cada POST genera una task que cuenta
-    // contra el límite de 24/día por endpoint).
+    // Default: release_report. Settlement_report se quedó como override
+    // opcional (?source=settlement) tras la investigación del 28/04: el
+    // settlement_report no incluye payouts (transferencias salientes a
+    // CBU) ni eventos de release del saldo, sólo cobros con TRANSACTION_DATE
+    // original. Para conciliar contra el balance MP por movimiento, la
+    // fuente correcta es release_report (cubre payments liberados, payouts,
+    // refunds, chargebacks, asset_management). Sin fallback automático para
+    // no doblar la cuota MP (cada POST cuenta contra el límite de 24/día
+    // por endpoint).
     const sourceOverride = (req.query?.source || req.body?.source || '').toLowerCase();
-    const sourceDefault = sourceOverride === 'release' ? 'release' : 'settlement';
+    const sourceDefault = sourceOverride === 'settlement' ? 'settlement' : 'release';
 
     const resultados = [];
     let balanceTotalMP = 0;
