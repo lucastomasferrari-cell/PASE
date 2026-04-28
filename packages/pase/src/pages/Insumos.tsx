@@ -1,29 +1,49 @@
-// @ts-nocheck — TODO TASK 0.14: migrar a TS strict (etapa pendiente)
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { fmt_$ } from "../lib/utils";
+import type { Insumo } from "../types";
+
+// merma puede ser string mientras el usuario tipea en el input antes de
+// que parseFloat lo convierta al guardar.
+type InsumoEditable = Omit<Insumo, "merma"> & { merma: number | string };
+
+interface FormInsumo {
+  nombre: string;
+  unidad: string;
+  merma: number | string;
+  categoria: string;
+  stock_actual: number;
+  costo_promedio: number;
+}
+
+interface UnidadMeta {
+  label: string;
+  unit: string;
+  icon: string;
+  tip: string;
+}
 
 // ─── INSUMOS ──────────────────────────────────────────────────────────────────
 export default function Insumos() {
-  const [insumos,setInsumos]=useState([]);
+  const [insumos,setInsumos]=useState<Insumo[]>([]);
   const [loading,setLoading]=useState(true);
   const [modal,setModal]=useState(false);
-  const [editModal,setEditModal]=useState(null);
+  const [editModal,setEditModal]=useState<InsumoEditable | null>(null);
   const [search,setSearch]=useState("");
   const [mermaCal,setMermaCal]=useState({sucio:"",limpio:""});
   const [showMermaCal,setShowMermaCal]=useState(false);
 
-  const emptyForm={nombre:"",unidad:"peso",merma:0,categoria:"",stock_actual:0,costo_promedio:0};
-  const [form,setForm]=useState(emptyForm);
+  const emptyForm: FormInsumo={nombre:"",unidad:"peso",merma:0,categoria:"",stock_actual:0,costo_promedio:0};
+  const [form,setForm]=useState<FormInsumo>(emptyForm);
 
-  const UNIDAD_INFO={
+  const UNIDAD_INFO: Record<string, UnidadMeta>={
     peso:{label:"PESO",unit:"g",icon:"⚖️",tip:"Elegí esto para todo lo que puedas pesar (carnes, harinas, verduras). El sistema usará gramos. No importa si comprás por bolsa, cajón o bulto."},
     volumen:{label:"VOLUMEN",unit:"ml",icon:"💧",tip:"Ideal para líquidos (aceites, bebidas, limpieza). El sistema usará mililitros."},
     unidad:{label:"UNIDAD",unit:"u",icon:"📦",tip:"Solo para cosas que nunca se fraccionan (huevos, latas enteras). Si vas a usar 'media lata', mejor usá volumen o peso."},
   };
   const CATEGORIAS_INS=["PROTEINAS","VERDURAS Y FRUTAS","LACTEOS","SECOS Y ALMACEN","BEBIDAS","LIMPIEZA","PACKAGING","OTROS"];
 
-  const load=async()=>{setLoading(true);const {data}=await db.from("insumos").select("*").order("nombre");setInsumos(data||[]);setLoading(false);};
+  const load=async()=>{setLoading(true);const {data}=await db.from("insumos").select("*").order("nombre");setInsumos((data||[]) as Insumo[]);setLoading(false);};
   useEffect(()=>{load();},[]);
 
   const calcMerma=()=>{
@@ -34,12 +54,13 @@ export default function Insumos() {
 
   const guardar=async()=>{
     if(!form.nombre)return;
-    await db.from("insumos").insert([{...form,unidad_label:UNIDAD_INFO[form.unidad].unit,merma:parseFloat(form.merma)||0}]);
+    await db.from("insumos").insert([{...form,unidad_label:UNIDAD_INFO[form.unidad].unit,merma:parseFloat(String(form.merma))||0}]);
     setModal(false);setForm(emptyForm);setShowMermaCal(false);setMermaCal({sucio:"",limpio:""});load();
   };
 
   const guardarEdit=async()=>{
-    await db.from("insumos").update({nombre:editModal.nombre,categoria:editModal.categoria,merma:parseFloat(editModal.merma)||0,activo:editModal.activo}).eq("id",editModal.id);
+    if(!editModal)return;
+    await db.from("insumos").update({nombre:editModal.nombre,categoria:editModal.categoria,merma:parseFloat(String(editModal.merma))||0,activo:editModal.activo}).eq("id",editModal.id);
     setEditModal(null);load();
   };
 
@@ -111,13 +132,13 @@ export default function Insumos() {
             <label>¿Este insumo tiene merma o desperdicio al limpiarlo?</label>
             <div style={{display:"flex",gap:8,marginTop:6}}>
               <button className={`btn ${!showMermaCal&&form.merma===0?"btn-acc":"btn-sec"}`} onClick={()=>{setShowMermaCal(false);setForm({...form,merma:0});}}>No tiene merma</button>
-              <button className={`btn ${form.merma>0&&!showMermaCal?"btn-acc":"btn-sec"}`} onClick={()=>setShowMermaCal(false)}>Ya sé el porcentaje</button>
+              <button className={`btn ${Number(form.merma)>0&&!showMermaCal?"btn-acc":"btn-sec"}`} onClick={()=>setShowMermaCal(false)}>Ya sé el porcentaje</button>
               <button className={`btn ${showMermaCal?"btn-acc":"btn-sec"}`} onClick={()=>setShowMermaCal(true)}>Ayudame a calcular</button>
             </div>
 
             {!showMermaCal&&form.merma===0&&<div style={{marginTop:8,fontSize:11,color:"var(--muted2)"}}>El insumo se usa completo, sin desperdicio.</div>}
 
-            {!showMermaCal&&form.merma>=0&&<div style={{marginTop:8}}>
+            {!showMermaCal&&Number(form.merma)>=0&&<div style={{marginTop:8}}>
               <input type="number" value={form.merma} onChange={e=>setForm({...form,merma:e.target.value})} placeholder="Ej: 30" style={{width:120,background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--txt)",padding:"6px 10px",fontFamily:"'DM Mono',monospace",fontSize:12,borderRadius:"var(--r)"}}/>
               <span style={{fontSize:11,color:"var(--muted)",marginLeft:8}}>% de merma</span>
             </div>}

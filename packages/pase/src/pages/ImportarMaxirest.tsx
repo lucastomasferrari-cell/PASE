@@ -1,12 +1,34 @@
-// @ts-nocheck — TODO TASK 0.14: migrar a TS strict (etapa pendiente)
 import { useState } from "react";
 import { db } from "../lib/supabase";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import { useMediosCobro } from "../lib/useMediosCobro";
+import type { Local } from "../types";
 
-export default function ImportarMaxirest({ locales, localActivo, onImported }: { locales: any[]; localActivo?: number | null; onImported?: () => void }) {
+interface VentaMaxirest {
+  medio: string;
+  monto: number;
+  cant: number;
+  fecha: string;
+  turno: string;
+  local_id: number;
+}
+
+interface MaxirestPreview {
+  fecha: string;
+  turno: string;
+  local_id: number;
+  ventas: VentaMaxirest[];
+}
+
+interface ImportarMaxirestProps {
+  locales: Local[];
+  localActivo?: number | null;
+  onImported?: () => void;
+}
+
+export default function ImportarMaxirest({ locales, localActivo, onImported }: ImportarMaxirestProps) {
   const [texto,setTexto]=useState("");
-  const [preview,setPreview]=useState(null);
+  const [preview,setPreview]=useState<MaxirestPreview | null>(null);
   const [loading,setLoading]=useState(false);
   const { mediosDisponibles, cuentaDestino } = useMediosCobro();
 
@@ -18,7 +40,7 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: {
     }
     let fecha=toISO(today);
     const fm=texto.match(/(\w+)\s+(\d+)\s+de\s+(\w+)\s+de\s+(\d{4})/i);
-    if(fm){const ms={enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,octubre:10,noviembre:11,diciembre:12};const m=ms[fm[3].toLowerCase()];if(m)fecha=`${fm[4]}-${String(m).padStart(2,"0")}-${String(fm[2]).padStart(2,"0")}`;}
+    if(fm){const ms: Record<string, number>={enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,octubre:10,noviembre:11,diciembre:12};const m=ms[fm[3].toLowerCase()];if(m)fecha=`${fm[4]}-${String(m).padStart(2,"0")}-${String(fm[2]).padStart(2,"0")}`;}
     const tm=texto.match(/Turno\s+\d+\s+\((\w+)/i);
     const turno=tm?.[1]==="Noche"?"Noche":"Mediodía";
     // local_id viene SIEMPRE del sidebar (localActivo), nunca del CSV.
@@ -34,7 +56,7 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: {
       return catalogo.find(m=>m.nombre.trim().toUpperCase()===target);
     };
 
-    const ventas:any[]=[];
+    const ventas:VentaMaxirest[]=[];
     const matchedMedios:string[]=[];
     const mediosFaltantes:string[]=[];
     const idx=texto.indexOf("VENTAS POR FORMA DE COBRO");
@@ -115,7 +137,7 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: {
     // se importa nada. Un import parcial deja la caja desbalanceada y
     // el dueño no se entera de los faltantes.
     if(mediosFaltantes.length>0){
-      const localNombre=locales.find(l=>l.id===local_id)?.nombre||`local #${local_id}`;
+      const localNombre=locales.find((l: Local)=>l.id===local_id)?.nombre||`local #${local_id}`;
       alert(
         "No se pudo importar. Los siguientes medios no están configurados para "+localNombre+":\n\n"+
         mediosFaltantes.map(m=>"  • "+m).join("\n")+
@@ -144,7 +166,7 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: {
         setLoading(true);
       }
 
-      const ventasAInsertar=preview.ventas.map(v=>({...v,id:genId("V"),local_id:lid,origen:"maxirest"}));
+      const ventasAInsertar=preview.ventas.map((v: VentaMaxirest)=>({...v,id:genId("V"),local_id:lid,origen:"maxirest"}));
       console.log("[maxirest] Insert ventas: "+ventasAInsertar.length+" filas local_id="+lid);
       const {data:ventasIns,error:ventasErr}=await db.from("ventas").insert(ventasAInsertar).select();
       if(ventasErr) throw new Error("Error insertando ventas: "+ventasErr.message);
@@ -161,7 +183,7 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: {
       // eliminar_venta/editar_venta puedan ajustarlo atómicamente.
       const impactoPorCuenta:Record<string,number>={};
       const idsPorCuenta:Record<string,string[]>={};
-      (ventasIns||[]).forEach(v=>{
+      ((ventasIns||[]) as { id: string; medio: string; monto: number }[]).forEach(v=>{
         const cuenta=cuentaDestino(v.medio,lid);
         if(!cuenta) return;
         impactoPorCuenta[cuenta]=(impactoPorCuenta[cuenta]||0)+v.monto;
@@ -188,8 +210,8 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: {
       }
 
       setTexto("");setPreview(null);
-      console.log("[maxirest] Import OK: "+ventasIns.length+" filas persistidas, total "+fmt_$(preview.ventas.reduce((s,v)=>s+v.monto,0)));
-      alert("✓ Importado: "+ventasIns.length+" registros · Total: "+fmt_$(preview.ventas.reduce((s,v)=>s+v.monto,0)));
+      console.log("[maxirest] Import OK: "+ventasIns.length+" filas persistidas, total "+fmt_$(preview.ventas.reduce((s: number,v: VentaMaxirest)=>s+v.monto,0)));
+      alert("✓ Importado: "+ventasIns.length+" registros · Total: "+fmt_$(preview.ventas.reduce((s: number,v: VentaMaxirest)=>s+v.monto,0)));
       onImported?.();
     } catch (err: any) {
       console.error("[maxirest] confirmar error:",err);
@@ -210,13 +232,13 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: {
       </div>
       {preview&&(
         <div className="panel">
-          <div className="panel-hd"><span className="panel-title">Preview — {fmt_d(preview.fecha)} · {preview.turno} · {locales.find(l=>l.id===preview.local_id)?.nombre}</span></div>
+          <div className="panel-hd"><span className="panel-title">Preview — {fmt_d(preview.fecha)} · {preview.turno} · {locales.find((l: Local)=>l.id===preview.local_id)?.nombre}</span></div>
           <div style={{padding:16}}>
             {preview.ventas.length>0?(
               <>
                 <table style={{marginBottom:12}}><thead><tr><th>Forma de Cobro</th><th>Monto</th><th>Cant.</th></tr></thead>
-                <tbody>{preview.ventas.map((v,i)=><tr key={i}><td>{v.medio}</td><td><span className="num kpi-success">{fmt_$(v.monto)}</span></td><td style={{color:"var(--muted2)"}}>{v.cant}</td></tr>)}</tbody></table>
-                <div style={{fontFamily:"'Inter',sans-serif",fontSize:17,fontWeight:500,color:"var(--success)",marginBottom:16}}>Total: {fmt_$(preview.ventas.reduce((s,v)=>s+v.monto,0))}</div>
+                <tbody>{preview.ventas.map((v: VentaMaxirest,i: number)=><tr key={i}><td>{v.medio}</td><td><span className="num kpi-success">{fmt_$(v.monto)}</span></td><td style={{color:"var(--muted2)"}}>{v.cant}</td></tr>)}</tbody></table>
+                <div style={{fontFamily:"'Inter',sans-serif",fontSize:17,fontWeight:500,color:"var(--success)",marginBottom:16}}>Total: {fmt_$(preview.ventas.reduce((s: number,v: VentaMaxirest)=>s+v.monto,0))}</div>
               </>
             ):<div className="alert alert-warn">No se detectaron ventas. Verificá el formato.</div>}
             <div style={{display:"flex",gap:8}}>

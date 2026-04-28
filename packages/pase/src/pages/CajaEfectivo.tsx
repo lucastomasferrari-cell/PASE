@@ -1,14 +1,20 @@
-// @ts-nocheck — TODO TASK 0.14: migrar a TS strict (etapa pendiente)
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
+import type { Usuario, Local, MovimientoCajaEfectivo } from "../types";
 
-export default function CajaEfectivo({ user, locales, localActivo }) {
-  const [movimientos, setMovimientos] = useState([]);
+interface CajaEfectivoProps {
+  user: Usuario;
+  locales: Local[];
+  localActivo: number | null;
+}
+
+export default function CajaEfectivo({ user, locales, localActivo }: CajaEfectivoProps) {
+  const [movimientos, setMovimientos] = useState<MovimientoCajaEfectivo[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
-  const [filtLocal, setFiltLocal] = useState(localActivo || "");
+  const [filtLocal, setFiltLocal] = useState<number | "">(localActivo ?? "");
   const [filtDesde, setFiltDesde] = useState("");
   const [filtHasta, setFiltHasta] = useState("");
   const [form, setForm] = useState({ fecha: toISO(today), descripcion: "", monto: "", local_id: "", esIngreso: true });
@@ -22,7 +28,7 @@ export default function CajaEfectivo({ user, locales, localActivo }) {
     if (filtDesde) q = q.gte("fecha", filtDesde);
     if (filtHasta) q = q.lte("fecha", filtHasta);
     const { data } = await q;
-    setMovimientos(data || []);
+    setMovimientos((data || []) as MovimientoCajaEfectivo[]);
     setLoading(false);
   };
 
@@ -31,7 +37,7 @@ export default function CajaEfectivo({ user, locales, localActivo }) {
   const total = movimientos.reduce((s, m) => s + Number(m.monto), 0);
 
   // Saldo por local (sobre los movimientos filtrados por fecha, pero todos los locales)
-  const saldoPorLocal = {};
+  const saldoPorLocal: Record<number, number> = {};
   movimientos.forEach(m => {
     saldoPorLocal[m.local_id] = (saldoPorLocal[m.local_id] || 0) + Number(m.monto);
   });
@@ -41,7 +47,7 @@ export default function CajaEfectivo({ user, locales, localActivo }) {
     const df = a.fecha.localeCompare(b.fecha);
     return df !== 0 ? df : (a.created_at || "").localeCompare(b.created_at || "");
   });
-  const acum = {};
+  const acum: Record<string, number> = {};
   let runningTotal = 0;
   // Necesitamos el total de TODOS los movimientos para el acumulado, no solo los filtrados
   // Calculamos acumulado sobre los movimientos visibles
@@ -65,7 +71,7 @@ export default function CajaEfectivo({ user, locales, localActivo }) {
     load();
   };
 
-  const localNombre = (id) => locales.find(l => l.id === id)?.nombre || "—";
+  const localNombre = (id: number) => locales.find(l => l.id === id)?.nombre || "—";
 
   return (
     <div>
@@ -100,7 +106,7 @@ export default function CajaEfectivo({ user, locales, localActivo }) {
         <div className="panel-hd" style={{ flexWrap: "wrap", gap: 8 }}>
           <span className="panel-title">Movimientos</span>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <select className="search" style={{ width: 150 }} value={filtLocal} onChange={e => setFiltLocal(e.target.value ? parseInt(e.target.value) : "")}>
+            <select className="search" style={{ width: 150 }} value={filtLocal} onChange={e => setFiltLocal(e.target.value ? parseInt(e.target.value) : "")}>{/* filtLocal: number|"" — number cuando se selecciona local específico, "" para "Todos". */}
               <option value="">Todos los locales</option>
               {locales.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
             </select>
