@@ -1,31 +1,45 @@
-// @ts-nocheck — TODO TASK 0.14: migrar a TS strict (etapa pendiente)
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
 import { useMediosCobro } from "../lib/useMediosCobro";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import ImportarMaxirest from "./ImportarMaxirest";
+import type { Usuario, Local, Venta, CierreVentas } from "../types";
+
+interface VentasProps {
+  user: Usuario;
+  locales: Local[];
+  localActivo: number | null;
+}
+
+// editModal mantiene los valores del input mientras el usuario edita.
+// monto y local_id pueden ser string mientras el usuario tipea, antes
+// de ser parseados al guardar.
+type VentaEditable = Omit<Venta, "monto" | "local_id"> & {
+  monto: number | string;
+  local_id: number | string;
+};
 
 // ─── VENTAS ───────────────────────────────────────────────────────────────────
-export default function Ventas({ user, locales, localActivo }) {
-  const [ventas,setVentas]=useState([]);
+export default function Ventas({ user, locales, localActivo }: VentasProps) {
+  const [ventas,setVentas]=useState<Venta[]>([]);
   const [loading,setLoading]=useState(true);
   const [modalNuevo,setModalNuevo]=useState(false);
   const [showMaxirest,setShowMaxirest]=useState(false);
-  const [detalleModal,setDetalleModal]=useState(null);
-  const [editModal,setEditModal]=useState(null);
+  const [detalleModal,setDetalleModal]=useState<CierreVentas | null>(null);
+  const [editModal,setEditModal]=useState<VentaEditable | null>(null);
   const _mesActual=toISO(today).slice(0,7);
   const _ultDia=new Date(today.getFullYear(),today.getMonth()+1,0).getDate();
   const [filtDesde,setFiltDesde]=useState(_mesActual+"-01");
   const [filtHasta,setFiltHasta]=useState(_mesActual+"-"+String(_ultDia).padStart(2,"0"));
   const [form,setForm]=useState({local_id:"",fecha:toISO(today),turno:"Noche"});
   const [lineas,setLineas]=useState<{medio:string,monto:string}[]>([{medio:"EFECTIVO SALON",monto:""}]);
-  const localesDisp=user.rol==="dueno"?locales:locales.filter(l=>(user.locales||[]).includes(l.id));
+  const localesDisp=user.rol==="dueno"?locales:locales.filter((l: Local)=>(user.locales||[]).includes(l.id));
   const { mediosDisponibles, cuentaDestino } = useMediosCobro();
   // Catálogo en cada modal viene del local del form (no del localActivo del
   // sidebar) — el dueño puede cargar venta para cualquiera de sus locales.
   const mediosForm = mediosDisponibles(form.local_id ? parseInt(form.local_id) : null);
-  const mediosEdit = mediosDisponibles(editModal?.local_id ? parseInt(editModal.local_id) : null);
+  const mediosEdit = mediosDisponibles(editModal?.local_id ? parseInt(String(editModal.local_id)) : null);
   // El medio default de una nueva línea: el primero del catálogo del local
   // seleccionado o "EFECTIVO SALON" como último resort.
   const medioDefault = mediosForm[0]?.nombre || "EFECTIVO SALON";
@@ -40,14 +54,14 @@ export default function Ventas({ user, locales, localActivo }) {
     if(filtHasta) q=q.lte("fecha",filtHasta);
     q=applyLocalScope(q,user,localActivo);
     const {data}=await q.limit(500);
-    setVentas(data||[]);setLoading(false);
+    setVentas((data||[]) as Venta[]);setLoading(false);
   };
   useEffect(()=>{load();},[filtDesde,filtHasta,localActivo]);
-  useEffect(()=>{if(localesDisp.length>0&&!form.local_id)setForm(f=>({...f,local_id:localActivo||localesDisp[0]?.id||""}));},[locales,localActivo]);
+  useEffect(()=>{if(localesDisp.length>0&&!form.local_id)setForm(f=>({...f,local_id:String(localActivo||localesDisp[0]?.id||"")}));},[locales,localActivo]);
 
   // Group ventas by fecha + turno + local
-  const grupos=[];
-  const seen={};
+  const grupos: CierreVentas[]=[];
+  const seen: Record<string, CierreVentas>={};
   for(const v of ventas){
     const key=`${v.fecha}||${v.turno}||${v.local_id}`;
     if(!seen[key]){seen[key]={key,fecha:v.fecha,turno:v.turno,local_id:v.local_id,items:[],total:0};grupos.push(seen[key]);}
@@ -56,12 +70,12 @@ export default function Ventas({ user, locales, localActivo }) {
   }
   grupos.sort((a,b)=>a.fecha<b.fecha?1:a.fecha>b.fecha?-1:0);
 
-  const totalPeriodo=ventas.reduce((s,v)=>s+(v.monto||0),0);
+  const totalPeriodo=ventas.reduce((s: number,v: Venta)=>s+(v.monto||0),0);
 
   const guardar=async()=>{
     if(!form.local_id)return;
     const lid=parseInt(form.local_id);
-    const rows=lineas
+    const rows: Venta[]=lineas
       .filter(l=>parseFloat(l.monto)>0)
       .map(l=>({id:genId("V"),local_id:lid,fecha:form.fecha,turno:form.turno,medio:l.medio,monto:parseFloat(l.monto),origen:"manual"}));
     if(rows.length===0)return;
@@ -72,7 +86,7 @@ export default function Ventas({ user, locales, localActivo }) {
 
     const impactoPorCuenta:Record<string,number>={};
     const idsPorCuenta:Record<string,string[]>={};
-    (ventasIns||[]).forEach(v=>{
+    ((ventasIns||[]) as Venta[]).forEach(v=>{
       const cuenta=cuentaDestino(v.medio,lid);
       if(!cuenta) return; // medios no-efectivo no impactan en caja
       impactoPorCuenta[cuenta]=(impactoPorCuenta[cuenta]||0)+v.monto;
@@ -103,7 +117,7 @@ export default function Ventas({ user, locales, localActivo }) {
   const guardarEdit=async()=>{
     if(!editModal)return;
     const id=editModal.id;
-    const nuevoMonto=parseFloat(editModal.monto);
+    const nuevoMonto=parseFloat(String(editModal.monto));
     if(!Number.isFinite(nuevoMonto)||nuevoMonto<=0){
       alert("El monto debe ser un número mayor a 0");return;
     }
@@ -123,18 +137,18 @@ export default function Ventas({ user, locales, localActivo }) {
       fecha:editModal.fecha,
       turno:editModal.turno,
       medio:editModal.medio,
-      local_id:parseInt(editModal.local_id),
+      local_id:parseInt(String(editModal.local_id)),
     }).eq("id",id);
 
     setEditModal(null);
     if(detalleModal){
-      const updated=detalleModal.items.map(i=>i.id===id?{...i,...editModal,monto:nuevoMonto}:i);
+      const updated: Venta[]=detalleModal.items.map(i=>i.id===id?{...i,...editModal,monto:nuevoMonto,local_id:parseInt(String(editModal.local_id))}:i);
       setDetalleModal({...detalleModal,items:updated,total:updated.reduce((s,i)=>s+(i.monto||0),0)});
     }
     load();
   };
 
-  const eliminarLinea=async(id)=>{
+  const eliminarLinea=async(id: string)=>{
     if(!confirm("¿Eliminar este registro?"))return;
     // eliminar_venta RPC: borra venta + ajusta movimiento + saldos
     // atómicamente. Si el mov es legacy sin venta_ids, solo borra la venta.
@@ -143,12 +157,12 @@ export default function Ventas({ user, locales, localActivo }) {
     if(detalleModal){
       const updated=detalleModal.items.filter(i=>i.id!==id);
       if(updated.length===0){setDetalleModal(null);}
-      else{setDetalleModal({...detalleModal,items:updated,total:updated.reduce((s,i)=>s+(i.monto||0),0)});}
+      else{setDetalleModal({...detalleModal,items:updated,total:updated.reduce((s: number,i: Venta)=>s+(i.monto||0),0)});}
     }
     load();
   };
 
-  const eliminarBloque=async(grupo)=>{
+  const eliminarBloque=async(grupo: CierreVentas)=>{
     if(!confirm(`¿Eliminar el cierre completo del ${fmt_d(grupo.fecha)} ${grupo.turno}?`))return;
     // RPC eliminar_cierre: atómico a nivel cierre completo. Si falla en
     // mitad, rollback transaccional → no quedan estados parciales como
@@ -197,7 +211,7 @@ export default function Ventas({ user, locales, localActivo }) {
               <tr key={g.key}>
                 <td className="mono">{fmt_d(g.fecha)}</td>
                 <td><span className={`badge ${g.turno==="Noche"?"b-info":"b-warn"}`}>{g.turno}</span></td>
-                <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===g.local_id)?.nombre||"—"}</td>
+                <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find((l: Local)=>l.id===g.local_id)?.nombre||"—"}</td>
                 <td style={{fontSize:11,color:"var(--muted2)"}}>{g.items.length} formas de cobro</td>
                 <td><span className="num kpi-success">{fmt_$(g.total)}</span></td>
                 <td><button className="btn btn-ghost btn-sm" onClick={()=>setDetalleModal(g)}>Ver detalle →</button></td>
@@ -214,7 +228,7 @@ export default function Ventas({ user, locales, localActivo }) {
             <div className="modal-hd">
               <div>
                 <div className="modal-title">{fmt_d(detalleModal.fecha)} · {detalleModal.turno}</div>
-                <div style={{fontSize:11,color:"var(--muted2)",marginTop:2}}>{locales.find(l=>l.id===detalleModal.local_id)?.nombre} · Total: <span style={{color:"var(--success)",fontFamily:"'Inter',sans-serif",fontWeight:500}}>{fmt_$(detalleModal.total)}</span></div>
+                <div style={{fontSize:11,color:"var(--muted2)",marginTop:2}}>{locales.find((l: Local)=>l.id===detalleModal.local_id)?.nombre} · Total: <span style={{color:"var(--success)",fontFamily:"'Inter',sans-serif",fontWeight:500}}>{fmt_$(detalleModal.total)}</span></div>
               </div>
               <div style={{display:"flex",gap:6}}>
                 <button className="btn btn-danger btn-sm" onClick={()=>eliminarBloque(detalleModal)}>Eliminar cierre</button>
@@ -224,7 +238,7 @@ export default function Ventas({ user, locales, localActivo }) {
             <div className="modal-body" style={{padding:0}}>
               <table>
                 <thead><tr><th>Forma de Cobro</th><th>Monto</th><th>% del total</th><th></th></tr></thead>
-                <tbody>{detalleModal.items.sort((a,b)=>b.monto-a.monto).map(v=>(
+                <tbody>{detalleModal.items.sort((a: Venta,b: Venta)=>b.monto-a.monto).map((v: Venta)=>(
                   <tr key={v.id}>
                     <td style={{fontWeight:500}}>{v.medio}{v.origen==="maxirest"&&<span className="badge b-muted" style={{marginLeft:6,fontSize:8}}>Maxirest</span>}</td>
                     <td><span className="num kpi-success">{fmt_$(v.monto)}</span></td>
@@ -254,7 +268,7 @@ export default function Ventas({ user, locales, localActivo }) {
               <div className="field"><label>Forma de Cobro</label><select value={editModal.medio} onChange={e=>setEditModal({...editModal,medio:e.target.value})}>
                 {/* Si el medio actual no está en el catálogo (medio legacy o
                     desactivado), lo agregamos como opción para no perder el valor. */}
-                {!mediosEdit.some(m=>m.nombre===editModal.medio) && editModal.medio && <option key="legacy" value={editModal.medio}>{editModal.medio} (legacy)</option>}
+                {!mediosEdit.some(m=>m.nombre===editModal.medio) && editModal.medio && <option key="legacy" value={editModal.medio}>{String(editModal.medio)} (legacy)</option>}
                 {mediosEdit.map(m=><option key={m.id} value={m.nombre}>{m.nombre}</option>)}
               </select></div>
               <div className="field"><label>Monto $</label><input type="number" value={editModal.monto} onChange={e=>setEditModal({...editModal,monto:e.target.value})}/></div>
@@ -271,7 +285,7 @@ export default function Ventas({ user, locales, localActivo }) {
             <div className="modal-hd"><div className="modal-title">Nueva Venta</div><button className="close-btn" onClick={()=>setModalNuevo(false)}>✕</button></div>
             <div className="modal-body">
               <div className="form2">
-                <div className="field"><label>Local</label><select value={form.local_id} onChange={e=>setForm({...form,local_id:e.target.value})}><option value="">Seleccioná...</option>{localesDisp.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
+                <div className="field"><label>Local</label><select value={form.local_id} onChange={e=>setForm({...form,local_id:e.target.value})}><option value="">Seleccioná...</option>{localesDisp.map((l: Local)=><option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
                 <div className="field"><label>Fecha</label><input type="date" value={form.fecha} onChange={e=>setForm({...form,fecha:e.target.value})}/></div>
               </div>
               <div className="field"><label>Turno</label><select value={form.turno} onChange={e=>setForm({...form,turno:e.target.value})}><option>Mediodía</option><option>Noche</option></select></div>

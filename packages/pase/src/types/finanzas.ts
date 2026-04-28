@@ -72,3 +72,25 @@ export interface Proveedor {
   saldo: number;
   activo: boolean;
 }
+
+export interface Venta {
+  id: string;
+  local_id: number;
+  fecha: string;
+  turno: string;
+  medio: string;
+  monto: number;
+  origen: string | null;
+  venta_ids?: string[] | null;
+}
+
+// Agrupado en memoria por (fecha, turno, local_id) — lo que en la UI se
+// muestra como un "cierre" de turno.
+export interface CierreVentas {
+  key: string;
+  fecha: string;
+  turno: string;
+  local_id: number;
+  items: Venta[];
+  total: number;
+}
