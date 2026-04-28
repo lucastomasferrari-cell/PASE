@@ -70,7 +70,7 @@ export default async function handler(req, res) {
 
     const { data: creds, error: credsError } = await db
       .from('mp_credenciales')
-      .select('id, local_id, saldo_inicial, saldo_inicial_at, locales(nombre)')
+      .select('id, local_id, tenant_id, saldo_inicial, saldo_inicial_at, locales(nombre)')
       .eq('activo', true);
 
     if (credsError) {
@@ -268,6 +268,9 @@ export default async function handler(req, res) {
                     ? procesarFilaSettlement(cells, header, cred.local_id)
                     : procesarFilaRelease(cells, header, cred.local_id, i);
 
+                  // Multi-tenant: cada fila hereda tenant_id de la credencial.
+                  if (result.row && cred.tenant_id) result.row.tenant_id = cred.tenant_id;
+
                   if (result.skipped) {
                     if (result.transType && !SETTLEMENT_TIPOS[result.transType]) {
                       unknownTypes.set(result.transType, (unknownTypes.get(result.transType) || 0) + 1);
@@ -414,17 +417,28 @@ export default async function handler(req, res) {
       }
     }
 
-    // Actualizar saldo total en saldos_caja (legacy).
+    // Actualizar saldo total en saldos_caja (legacy, agregado del tenant Neko).
+    // Ver mp-process.js para razonamiento de mantener fila legacy con tenant_id.
     if (balanceConsultado) {
+      const { data: nekoTenant } = await db.from('tenants').select('id').eq('slug', 'neko').single();
+      const tenantId = nekoTenant?.id;
       const { data: existe } = await db
         .from('saldos_caja')
-        .select('cuenta')
+        .select('cuenta, local_id')
         .eq('cuenta', 'MercadoPago')
+        .is('local_id', null)
         .maybeSingle();
       if (existe) {
-        await db.from('saldos_caja').update({ saldo: balanceTotalMP }).eq('cuenta', 'MercadoPago');
-      } else {
-        await db.from('saldos_caja').insert([{ cuenta: 'MercadoPago', saldo: balanceTotalMP }]);
+        await db.from('saldos_caja')
+          .update({ saldo: balanceTotalMP })
+          .eq('cuenta', 'MercadoPago')
+          .is('local_id', null);
+      } else if (tenantId) {
+        await db.from('saldos_caja').insert([{
+          cuenta: 'MercadoPago',
+          saldo: balanceTotalMP,
+          tenant_id: tenantId,
+        }]);
       }
     }
 

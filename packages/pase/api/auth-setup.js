@@ -1,5 +1,9 @@
 // One-shot: crea usuario dueno@pase.local en Supabase Auth
 // y linkea con la tabla usuarios. Llamar una sola vez.
+//
+// TASK 0.15: este endpoint solo hace UPDATE de auth_id en usuarios.
+// La fila ya existe con tenant_id seteado por etapa 1, no necesitamos
+// pasar tenant_id en este UPDATE.
 export default async function handler(req, res) {
   try {
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
