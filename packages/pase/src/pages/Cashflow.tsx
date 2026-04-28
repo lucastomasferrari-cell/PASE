@@ -1,4 +1,3 @@
-// @ts-nocheck — TODO TASK 0.14: migrar a TS strict (etapa pendiente)
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasVisibles } from "../lib/auth";
@@ -107,7 +106,11 @@ export default function Cashflow({ user, locales, localActivo }: any) {
     const sueldosPendTotal = (sueldosPend || [])
       .filter(l => {
         if (!lid) return true;
-        const empLocal = l.rrhh_novedades?.rrhh_empleados?.local_id;
+        // Supabase tipa FKs nested como array; acá la relación es 1:1
+        // (rrhh_liquidaciones.novedad_id → rrhh_novedades.id, y novedad
+        // → empleado), por eso accedemos como objeto plano.
+        const nov = l.rrhh_novedades as unknown as { rrhh_empleados?: { local_id?: number | null } } | null;
+        const empLocal = nov?.rrhh_empleados?.local_id;
         return !empLocal || empLocal === lid;
       })
       .reduce((s, l) => s + Number(l.total_a_pagar), 0);

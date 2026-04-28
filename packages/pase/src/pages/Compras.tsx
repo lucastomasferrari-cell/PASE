@@ -1,4 +1,3 @@
-// @ts-nocheck — TODO TASK 0.14: migrar a TS strict (etapa pendiente)
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasVisibles } from "../lib/auth";
@@ -7,6 +6,13 @@ import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS, UNIDADES } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId, parseMonto } from "../lib/utils";
 import LectorFacturasIA from "./LectorFacturasIA";
+import type { Usuario, Local } from "../types";
+
+interface ComprasProps {
+  user: Usuario;
+  locales: Local[];
+  localActivo: number | null;
+}
 
 const estadoDot = (estado: string) => {
   const colors: Record<string,string> = { pendiente: "var(--muted2)", vencida: "var(--acc)", pagada: "var(--success)", revision: "var(--warn)" };
@@ -19,7 +25,7 @@ const estadoDot = (estado: string) => {
   );
 };
 
-export default function Compras({ user, locales, localActivo }) {
+export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const { CATEGORIAS_COMPRA } = useCategorias();
   const visCuentas = cuentasVisibles(user);
   const cuentasUsables = visCuentas === null ? CUENTAS : CUENTAS.filter(c => visCuentas.includes(c));
@@ -59,7 +65,7 @@ export default function Compras({ user, locales, localActivo }) {
   const [form, setForm] = useState<any>(emptyForm);
   const [items, setItems] = useState<any[]>([]);
   const [pagoForm, setPagoForm] = useState({ cuenta: "MercadoPago", monto: "", fecha: toISO(today) });
-  const localesDisp = user.rol === "dueno" ? locales : locales.filter(l => (user.locales || []).includes(l.id));
+  const localesDisp = user.rol === "dueno" ? locales : locales.filter((l: Local) => (user.locales || []).includes(l.id));
   const calcTotal = () =>
     parseMonto(form.neto) +
     parseMonto(form.iva21) +
@@ -322,7 +328,7 @@ export default function Compras({ user, locales, localActivo }) {
                     </div>
                   </td>
                   {!localActivo && (
-                    <td><span className="badge b-muted" style={{ fontSize: 10 }}>{locales.find(l => l.id === f.local_id)?.nombre || "—"}</span></td>
+                    <td><span className="badge b-muted" style={{ fontSize: 10 }}>{locales.find((l: Local) => l.id === f.local_id)?.nombre || "—"}</span></td>
                   )}
                   <td>
                     <div style={{ fontSize: 11, color: "var(--txt)" }}>{fmt_d(f.fecha)}</div>
@@ -356,7 +362,7 @@ export default function Compras({ user, locales, localActivo }) {
               <button className="close-btn" onClick={() => setLectorModal(false)}>✕</button>
             </div>
             <div className="modal-body">
-              <LectorFacturasIA user={user} locales={locales} localActivo={localActivo} onSaved={() => { load(); setLectorModal(false); }} />
+              <LectorFacturasIA locales={locales} localActivo={localActivo} onSaved={() => { load(); setLectorModal(false); }} />
             </div>
           </div>
         </div>
@@ -370,7 +376,7 @@ export default function Compras({ user, locales, localActivo }) {
             <div className="modal-body">
               <div className="form2">
                 <div className="field"><label>Tipo de comprobante</label><select value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })}><option value="factura">Factura</option><option value="nota_credito">Nota de Crédito</option></select></div>
-                <div className="field"><label>Local *</label><select value={form.local_id} onChange={e => setForm({ ...form, local_id: e.target.value })}><option value="">Seleccioná...</option>{localesDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
+                <div className="field"><label>Local *</label><select value={form.local_id} onChange={e => setForm({ ...form, local_id: e.target.value })}><option value="">Seleccioná...</option>{localesDisp.map((l: Local) => <option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
               </div>
               <div className="form2">
                 <div className="field"><label>Proveedor *</label><select value={form.prov_id} onChange={e => onProvChange(e.target.value)}><option value="">Seleccioná...</option>{proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></div>
@@ -433,7 +439,7 @@ export default function Compras({ user, locales, localActivo }) {
             <div className="modal-body">
               <div className="form2">
                 <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase" }}>Proveedor</span><div style={{ marginTop: 4 }}>{proveedores.find(p => p.id === verModal.prov_id)?.nombre}</div></div>
-                <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase" }}>Local</span><div style={{ marginTop: 4 }}>{locales.find(l => l.id === verModal.local_id)?.nombre}</div></div>
+                <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase" }}>Local</span><div style={{ marginTop: 4 }}>{locales.find((l: Local) => l.id === verModal.local_id)?.nombre}</div></div>
               </div>
               <div className="form3" style={{ marginTop: 12 }}>
                 <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase" }}>Fecha</span><div style={{ marginTop: 4 }}>{fmt_d(verModal.fecha)}</div></div>

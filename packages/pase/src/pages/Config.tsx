@@ -1,25 +1,44 @@
-// @ts-nocheck — TODO TASK 0.14: migrar a TS strict (etapa pendiente)
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { ROLES } from "../lib/auth";
+import type { Local, UsuarioRow } from "../types";
 
-async function sha256(text) {
+async function sha256(text: string) {
   const enc = new TextEncoder().encode(text);
   const buf = await crypto.subtle.digest("SHA-256", enc);
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+interface ConfigProps {
+  locales: Local[];
+}
+
+interface EditState {
+  id: number;
+  nombre: string;
+  auth_id: string | null;
+  password: string;
+}
+
+interface NuevoUsuarioForm {
+  nombre: string;
+  email: string;
+  password: string;
+  rol: string;
+  locales: number[];
+}
+
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-export default function Config({ locales }) {
-  const [usuarios,setUsuarios]=useState([]);
+export default function Config(_props: ConfigProps) {
+  const [usuarios,setUsuarios]=useState<UsuarioRow[]>([]);
   const [loading,setLoading]=useState(true);
   const [modal,setModal]=useState(false);
-  const [editModal,setEditModal]=useState(null);
-  const [form,setForm]=useState({nombre:"",email:"",password:"",rol:"cajero",locales:[]});
+  const [editModal,setEditModal]=useState<EditState | null>(null);
+  const [form,setForm]=useState<NuevoUsuarioForm>({nombre:"",email:"",password:"",rol:"cajero",locales:[]});
   const [saving,setSaving]=useState(false);
   const [formErr,setFormErr]=useState("");
 
-  const load=async()=>{setLoading(true);const {data}=await db.from("usuarios").select("*").order("rol");setUsuarios(data||[]);setLoading(false);};
+  const load=async()=>{setLoading(true);const {data}=await db.from("usuarios").select("*").order("rol");setUsuarios((data||[]) as UsuarioRow[]);setLoading(false);};
   useEffect(()=>{load();},[]);
 
   const guardar=async()=>{
@@ -34,12 +53,12 @@ export default function Config({ locales }) {
       const d=await r.json();
       if(!d.ok){setFormErr(d.error||"Error creando usuario");setSaving(false);return;}
       setModal(false);setForm({nombre:"",email:"",password:"",rol:"cajero",locales:[]});load();
-    }catch(e){setFormErr(e.message);}
+    }catch(e){setFormErr(e instanceof Error ? e.message : String(e));}
     setSaving(false);
   };
 
   const guardarEdit=async()=>{
-    if(!editModal.password)return;
+    if(!editModal||!editModal.password)return;
     setSaving(true);setFormErr("");
     if(editModal.auth_id){
       // Via Supabase Auth
@@ -51,7 +70,7 @@ export default function Config({ locales }) {
         });
         const d=await r.json();
         if(!d.ok){setFormErr(d.error||"Error cambiando contraseña");setSaving(false);return;}
-      }catch(e){setFormErr(e.message);setSaving(false);return;}
+      }catch(e){setFormErr(e instanceof Error ? e.message : String(e));setSaving(false);return;}
     }else{
       // Fallback: usuario no migrado — guardar hash
       const hash = await sha256(editModal.password);

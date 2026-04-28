@@ -1,4 +1,3 @@
-// @ts-nocheck — TODO TASK 0.14: migrar a TS strict (etapa pendiente)
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasVisibles } from "../lib/auth";
@@ -6,6 +5,13 @@ import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
+import type { Usuario, Local } from "../types";
+
+interface GastosProps {
+  user: Usuario;
+  locales: Local[];
+  localActivo: number | null;
+}
 
 const TIPOS = [
   { id: "todos", label: "Todos" },
@@ -15,7 +21,7 @@ const TIPOS = [
   { id: "impuesto", label: "Impuestos" },
   { id: "comision", label: "Comisiones" },
 ];
-export default function Gastos({ user, locales, localActivo }) {
+export default function Gastos({ user, locales, localActivo }: GastosProps) {
   const { GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, COMISIONES_CATS } = useCategorias();
   const ALL_CATS = [...GASTOS_FIJOS, ...GASTOS_VARIABLES, ...GASTOS_PUBLICIDAD, ...GASTOS_IMPUESTOS, ...COMISIONES_CATS];
   const catsByTipo = (t: string) =>
@@ -191,7 +197,7 @@ export default function Gastos({ user, locales, localActivo }) {
                     </div>
                     <div>
                       <div style={{ fontSize: 12, color: estado.pagado ? "var(--muted2)" : esPasado && !estado.pagado ? "var(--danger)" : "var(--txt)", textDecoration: estado.pagado ? "line-through" : "none" }}>{p.nombre}</div>
-                      <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 1 }}>{p.categoria}{p.local_id ? " · " + locales.find(l => l.id === p.local_id)?.nombre : " · Todos"}</div>
+                      <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 1 }}>{p.categoria}{p.local_id ? " · " + locales.find((l: Local) => l.id === p.local_id)?.nombre : " · Todos"}</div>
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -225,7 +231,7 @@ export default function Gastos({ user, locales, localActivo }) {
                   <td><span className="badge b-muted">{g.tipo}</span></td>
                   <td style={{ fontSize: 11 }}>{g.categoria}</td>
                   <td style={{ fontSize: 11, color: "var(--muted2)" }}>{g.detalle || "—"}</td>
-                  <td style={{ fontSize: 11, color: "var(--muted2)" }}>{locales.find(l => l.id === g.local_id)?.nombre || "Todos"}</td>
+                  <td style={{ fontSize: 11, color: "var(--muted2)" }}>{locales.find((l: Local) => l.id === g.local_id)?.nombre || "Todos"}</td>
                   <td style={{ fontSize: 11, color: "var(--muted2)" }}>{g.cuenta || "—"}</td>
                   <td style={{ textAlign: "right" }}><span className="num">{fmt_$(g.monto)}</span></td>
                 </tr>
@@ -258,7 +264,7 @@ export default function Gastos({ user, locales, localActivo }) {
                 <div className="field"><label>Local</label>
                   <select value={form.local_id} onChange={e => setForm({ ...form, local_id: e.target.value })}>
                     <option value="">Todos</option>
-                    {locales.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+                    {locales.map((l: Local) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
                   </select>
                 </div>
               </div>
@@ -285,7 +291,7 @@ export default function Gastos({ user, locales, localActivo }) {
             <div className="modal-hd"><div className="modal-title">Pagar — {pagarModal.nombre}</div><button className="close-btn" onClick={() => setPagarModal(null)}>✕</button></div>
             <div className="modal-body">
               <div className="alert alert-info" style={{ marginBottom: 14 }}>
-                {pagarModal.categoria} · {pagarModal.tipo} · {pagarModal.local_id ? locales.find(l => l.id === pagarModal.local_id)?.nombre : "Todos los locales"}
+                {pagarModal.categoria} · {pagarModal.tipo} · {pagarModal.local_id ? locales.find((l: Local) => l.id === pagarModal.local_id)?.nombre : "Todos los locales"}
               </div>
               <div className="form2">
                 <div className="field"><label>Monto $ *</label><input type="number" value={pagoPlantForm.monto} onChange={e => setPagoPlantForm({ ...pagoPlantForm, monto: e.target.value })} placeholder="0" /></div>
@@ -316,7 +322,7 @@ export default function Gastos({ user, locales, localActivo }) {
                       <td style={{ fontSize: 12 }}>{p.nombre}</td>
                       <td><span className="badge b-muted">{p.tipo}</span></td>
                       <td style={{ fontSize: 11, color: "var(--muted2)" }}>{p.categoria}</td>
-                      <td style={{ fontSize: 11, color: "var(--muted2)" }}>{locales.find(l => l.id === p.local_id)?.nombre || "Todos"}</td>
+                      <td style={{ fontSize: 11, color: "var(--muted2)" }}>{locales.find((l: Local) => l.id === p.local_id)?.nombre || "Todos"}</td>
                       <td><button className="btn btn-danger btn-sm" onClick={() => eliminarPlantilla(p.id)}>X</button></td>
                     </tr>
                   ))}</tbody>
@@ -342,7 +348,7 @@ export default function Gastos({ user, locales, localActivo }) {
                   <div className="field"><label>Local</label>
                     <select value={plantForm.local_id} onChange={e => setPlantForm({ ...plantForm, local_id: e.target.value })}>
                       <option value="">Todos</option>
-                      {locales.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+                      {locales.map((l: Local) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
                     </select>
                   </div>
                 </div>
