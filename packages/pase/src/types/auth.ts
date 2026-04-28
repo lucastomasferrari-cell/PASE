@@ -1,4 +1,4 @@
-export type RolUsuario = "dueno" | "admin" | "encargado" | "compras" | "cajero";
+export type RolUsuario = "superadmin" | "dueno" | "admin" | "encargado" | "compras" | "cajero";
 
 export interface UsuarioRow {
   id: number;

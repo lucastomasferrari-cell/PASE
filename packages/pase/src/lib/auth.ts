@@ -8,6 +8,11 @@ import { createContext, useContext } from "react";
 // rrhh_novedades.cargado_por = INTEGER
 
 export const ROLES: Record<string, { label: string; color: string; permisos?: string[] }> = {
+  // superadmin: rol externo a tenants (TASK 0.15). Ve todos los módulos
+  // como el dueño dentro de su tenant. La RPC auth_es_superadmin() lo
+  // identifica en backend; en frontend se trata igual que 'dueno' para
+  // permisos de UI (todos los módulos del MODULOS array).
+  superadmin:{ label:"Super Admin",color:"#DC2626" },
   dueno:     { label:"Dueño",      color:"#9333EA" },
   admin:     { label:"Admin",      color:"#3B82F6", permisos:["dashboard","ventas","compras","remitos","gastos","caja","cashflow","cierre","proveedores","rrhh","blindaje"] },
   encargado: { label:"Encargado",  color:"#6B7280", permisos:["dashboard"] },
@@ -39,14 +44,15 @@ export const MODULOS = [
 
 export function getPermisos(user: any): string[] {
   if (!user) return [];
-  if (user.rol === "dueno") return MODULOS.map(m => m.slug);
+  // superadmin (TASK 0.15) y dueño ven todos los módulos.
+  if (user.rol === "superadmin" || user.rol === "dueno") return MODULOS.map(m => m.slug);
   if (user._permisos?.length) return user._permisos;
   return ROLES[user.rol]?.permisos || [];
 }
 
 export function tienePermiso(user: any, slug: string): boolean {
   if (!user) return false;
-  if (user.rol === "dueno") return true;
+  if (user.rol === "superadmin" || user.rol === "dueno") return true;
   return getPermisos(user).includes(slug);
 }
 
