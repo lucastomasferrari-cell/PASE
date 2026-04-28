@@ -17,7 +17,7 @@ async function sha256(text: string) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-export default function Usuarios({ locales }: UsuariosProps) {
+export default function Usuarios({ user, locales }: UsuariosProps) {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<ModalState>(null); // null | "new" | user object (edit)
@@ -85,6 +85,10 @@ export default function Usuarios({ locales }: UsuariosProps) {
     setSaving(true); setErr("");
     try {
       let userId: number | null = null;
+      // tenant_id de la fila usuario_locales/usuario_permisos a insertar.
+      // Las RLS _mt requieren tenant_id = auth_tenant_id() (o superadmin),
+      // así que hay que pasarlo explícito en el payload.
+      let targetTenantId: string | null = null;
 
       if (modal === "new") {
         const r = await fetch("/api/auth-admin", {
@@ -93,11 +97,13 @@ export default function Usuarios({ locales }: UsuariosProps) {
         });
         const d = await r.json();
         if (!d.ok) { setErr(d.error || "Error creando usuario"); setSaving(false); return; }
-        const { data: newU } = await db.from("usuarios").select("id").eq("email", form.email).single();
+        const { data: newU } = await db.from("usuarios").select("id, tenant_id").eq("email", form.email).single();
         userId = newU?.id ?? null;
+        targetTenantId = newU?.tenant_id ?? user.tenant_id;
         if (userId) await db.from("usuarios").update({ activo:form.activo }).eq("id", userId);
       } else if (modal !== null) {
         userId = modal.id;
+        targetTenantId = modal.tenant_id ?? user.tenant_id;
         await db.from("usuarios").update({ nombre:form.nombre, activo:form.activo, locales:form.locales_ids }).eq("id", userId);
         if (form.password) {
           // Actualizar hash SHA-256 en tabla usuarios (usado por login fallback)
@@ -136,7 +142,7 @@ export default function Usuarios({ locales }: UsuariosProps) {
       await db.from("usuario_permisos").delete().eq("usuario_id", userId);
       if (userRol !== "dueno" && form.modulos.length) {
         const { error: permErr } = await db.from("usuario_permisos").insert(
-          form.modulos.map(slug => ({ usuario_id: userId as number, modulo_slug: slug }))
+          form.modulos.map(slug => ({ usuario_id: userId as number, modulo_slug: slug, tenant_id: targetTenantId }))
         );
         if (permErr) console.error("Error guardando permisos:", permErr.message);
       }
@@ -147,6 +153,7 @@ export default function Usuarios({ locales }: UsuariosProps) {
         const rows = form.locales_ids.map(lid => ({
           usuario_id: userId as number,
           local_id: Number(lid),
+          tenant_id: targetTenantId,
         }));
         const { error: locErr } = await db.from("usuario_locales").insert(rows);
         if (locErr) {
