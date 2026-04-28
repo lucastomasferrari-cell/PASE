@@ -56,13 +56,22 @@ export default function App() {
     }
   }, [localActivo]);
 
+  // Helper para (re)cargar locales del usuario actual. Extraído para
+  // poder llamarlo desde varios sitios: useEffect inicial, y handlers
+  // de TOKEN_REFRESHED / USER_UPDATED en onAuthStateChange.
+  const refetchLocales = async () => {
+    const { data } = await db.from("locales").select("*").order("id");
+    setLocales(data || []);
+  };
+
   // Refetch cuando user cambia (post-login, post-logout). Si no hay user,
   // skip — la query iría como rol anon y RLS la bloquea, dejando locales=[]
   // permanentemente para el resto de la sesión (race condition con
   // sesiones fresh tipo incógnito).
   useEffect(()=>{
     if (!user) return;
-    db.from("locales").select("*").order("id").then(({data})=>setLocales(data||[]));
+    refetchLocales();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[user]);
 
   // Restaurar sesión al cargar — única fuente de verdad: Supabase Auth
@@ -83,19 +92,38 @@ export default function App() {
     };
     restore();
 
+    // TASK 0.16: manejar todos los eventos de Supabase Auth para que la
+    // sesión se mantenga en sync sin necesidad de hard refresh manual.
+    // Evento → comportamiento:
+    //   SIGNED_OUT       → limpiar todo el state.
+    //   SIGNED_IN        → aplicar login (skip si ya hay user).
+    //   INITIAL_SESSION  → el client hidrató una sesión persistida; idem
+    //                      SIGNED_IN si trae user. Cubre el caso de
+    //                      reabrir pestaña con sesión válida.
+    //   TOKEN_REFRESHED  → JWT renovado. ANTES era no-op, lo cual causaba
+    //                      el bug de "0 locales tras 1h": las queries
+    //                      subsecuentes podían fallar si el listener no
+    //                      reaccionaba. Ahora re-fetcheamos locales para
+    //                      forzar uso del nuevo JWT y resetear cualquier
+    //                      state desincronizado.
+    //   USER_UPDATED     → el perfil cambió (ej: cambio de password,
+    //                      cambio de email). Re-leer la fila enriched.
     const { data: { subscription } } = db.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_OUT") {
         setUser(null);
         setSection("dashboard");
         setLocalActivo(null);
         setShowLocalModal(false);
+        setTenant(null);
+        setTenantOverride(null);
         sessionStorage.removeItem("pase_user");
         sessionStorage.removeItem("pase_local_activo");
+        sessionStorage.removeItem(TENANT_OVERRIDE_KEY);
         localStorage.removeItem("pase_uid");
         return;
       }
-      if (event === "SIGNED_IN" && session?.user) {
-        // Skip si ya hay user (login manual ya ejecutó applyLogin) — evita doble fetch
+      if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
+        // Skip si ya hay user (login manual o restore() ya ejecutó applyLogin)
         setUser(curr => {
           if (curr) return curr;
           db.from("usuarios").select("*").eq("auth_id", session.user.id).single().then(({ data: perfil }) => {
@@ -103,10 +131,28 @@ export default function App() {
           });
           return curr;
         });
+        return;
       }
-      // TOKEN_REFRESHED: no-op; la sesión se mantiene, no hace falta re-fetch
+      if (event === "TOKEN_REFRESHED" && session?.user) {
+        // JWT renovado: re-fetch locales para usar el nuevo token y
+        // recuperar de cualquier query stale que haya quedado vacía.
+        // No re-aplicamos login (sería caro y user/perms no cambiaron).
+        refetchLocales();
+        return;
+      }
+      if (event === "USER_UPDATED" && session?.user) {
+        // El perfil cambió (ej: ForcePasswordChange completó).
+        // Re-fetcheamos la fila para que el state refleje password_temporal=false.
+        const { data: perfil } = await db.from("usuarios")
+          .select("*").eq("auth_id", session.user.id).single();
+        if (perfil) {
+          setUser(curr => curr ? { ...curr, ...perfil } as Usuario : curr);
+        }
+        return;
+      }
     });
     return () => subscription.unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
   const applyLogin = async (u: UsuarioRow) => {
