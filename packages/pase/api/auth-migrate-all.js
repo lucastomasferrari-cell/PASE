@@ -2,6 +2,10 @@
 // Protegido con header x-admin-secret === process.env.ADMIN_MIGRATION_SECRET.
 // Devuelve las passwords temporales en la response (distribución fuera de banda).
 //
+// TASK 0.15: este endpoint solo hace UPDATE de auth_id + password_temporal en
+// usuarios existentes. Las filas ya tienen tenant_id seteado por etapa 1, no
+// necesitamos pasar tenant_id en estos UPDATEs.
+//
 // Uso:
 //   curl -X POST https://pase-yndx.vercel.app/api/auth-migrate-all \
 //     -H "x-admin-secret: <secret>"
