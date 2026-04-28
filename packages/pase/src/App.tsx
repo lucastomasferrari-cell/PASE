@@ -116,7 +116,7 @@ export default function App() {
     setUser(enriched);
     sessionStorage.setItem("pase_user", JSON.stringify(enriched));
     const perms = getPermisos(enriched);
-    if(!perms.includes("dashboard") && perms.length) setSection(perms[0]);
+    if(!perms.includes("dashboard") && perms.length && perms[0]) setSection(perms[0]);
 
     // Decisión de localActivo: ver necesitaElegirLocal() en auth.ts.
     // Bug #27: encargado con >1 local NUNCA puede quedar con localActivo=null

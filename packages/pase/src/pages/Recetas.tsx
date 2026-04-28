@@ -54,8 +54,11 @@ export default function Recetas({ locales, localActivo }: RecetasProps) {
 
   const addItem=()=>setItems([...items,{insumo_id:"",cantidad:"",unidad:"g"}]);
   const updateItem=(i: number,field: keyof RecetaItemForm,val: string)=>{
-    const ni=[...items];ni[i]={...ni[i],[field]:val};
-    if(field==="insumo_id"){const ins=insumos.find((x: any)=>x.id===parseInt(val));if(ins)ni[i].unidad=ins.unidad_label||"g";}
+    const ni=[...items];
+    const cur=ni[i];
+    if(!cur)return;
+    ni[i]={...cur,[field]:val};
+    if(field==="insumo_id"){const ins=insumos.find((x: any)=>x.id===parseInt(val));if(ins)ni[i]!.unidad=ins.unidad_label||"g";}
     setItems(ni);
   };
 

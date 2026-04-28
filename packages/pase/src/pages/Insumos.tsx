@@ -54,7 +54,7 @@ export default function Insumos() {
 
   const guardar=async()=>{
     if(!form.nombre)return;
-    await db.from("insumos").insert([{...form,unidad_label:UNIDAD_INFO[form.unidad].unit,merma:parseFloat(String(form.merma))||0}]);
+    await db.from("insumos").insert([{...form,unidad_label:UNIDAD_INFO[form.unidad]?.unit||"",merma:parseFloat(String(form.merma))||0}]);
     setModal(false);setForm(emptyForm);setShowMermaCal(false);setMermaCal({sucio:"",limpio:""});load();
   };
 

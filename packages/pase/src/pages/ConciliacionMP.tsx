@@ -1,30 +1,41 @@
-// @ts-nocheck — TODO TASK 0.14: migrar a TS strict (etapa pendiente)
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
 import { useCategorias } from "../lib/useCategorias";
 import { toISO, today, fmt_d, fmt_$, genId, fmt_dt_ar } from "../lib/utils";
+import type { Usuario, Local } from "../types";
 
-function ConciliacionMP({ user, locales, localActivo }) {
+interface ConciliacionMPProps {
+  user: Usuario;
+  locales: Local[];
+  localActivo: number | null;
+}
+
+interface ToastState {
+  kind: "ok" | "err";
+  msg: string;
+}
+
+function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   const { COMISIONES_CATS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD } = useCategorias();
-  const [credenciales,setCredenciales]=useState([]);
-  const [movimientos,setMovimientos]=useState([]);
-  const [facturas,setFacturas]=useState([]);
-  const [gastos,setGastos]=useState([]);
+  const [credenciales,setCredenciales]=useState<any[]>([]);
+  const [movimientos,setMovimientos]=useState<any[]>([]);
+  const [facturas,setFacturas]=useState<any[]>([]);
+  const [gastos,setGastos]=useState<any[]>([]);
   const [loading,setLoading]=useState(true);
   const [sincronizando,setSincronizando]=useState(false);
-  const [toast,setToast]=useState(null); // {kind:'ok'|'err', msg:string}
+  const [toast,setToast]=useState<ToastState | null>(null);
   const [tab,setTab]=useState("movimientos");
   const _hace30=new Date();_hace30.setDate(_hace30.getDate()-30);
   const [desde,setDesde]=useState(toISO(_hace30));
   const [hasta,setHasta]=useState(toISO(today));
   const [configModal,setConfigModal]=useState(false);
   const [configForm,setConfigForm]=useState({local_id:"",access_token:""});
-  const [conciliarModal,setConciliarModal]=useState(null); // movimiento a conciliar
+  const [conciliarModal,setConciliarModal]=useState<any | null>(null); // movimiento a conciliar
   const [conciliarTab,setConciliarTab]=useState("gasto"); // gasto | factura | nuevo
   const [nuevoGastoForm,setNuevoGastoForm]=useState({categoria:"",detalle:""});
   const [vinculoSel,setVinculoSel]=useState("");
-  const [saldoInicialModal,setSaldoInicialModal]=useState(null); // {local_id, monto}
+  const [saldoInicialModal,setSaldoInicialModal]=useState<{local_id: number, monto: string|number, fecha?: string} | null>(null);
 
   const load=async()=>{
     setLoading(true);
@@ -51,10 +62,10 @@ function ConciliacionMP({ user, locales, localActivo }) {
       if(gasRes.error)console.warn("gastos load error:",gasRes.error);
       const c=credRes.data||[], m=movRes.data||[], f=facRes.data||[], g=gasRes.data||[];
       console.log("[MP] load:",c.length,"credenciales /",m.length,"movimientos /",f.length,"facturas /",g.length,"gastos");
-      setCredenciales(c.filter(x=>!localActivo||x.local_id===localActivo));
-      setMovimientos(m);
-      setFacturas(f.filter(x=>!localActivo||x.local_id===localActivo));
-      setGastos(g.filter(x=>!localActivo||x.local_id===localActivo));
+      setCredenciales((c as any[]).filter((x: any)=>!localActivo||x.local_id===localActivo));
+      setMovimientos(m as any[]);
+      setFacturas((f as any[]).filter((x: any)=>!localActivo||x.local_id===localActivo));
+      setGastos((g as any[]).filter((x: any)=>!localActivo||x.local_id===localActivo));
     }catch(e){
       console.error("ConciliacionMP load error:",e);
     }finally{
@@ -64,7 +75,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
 
   useEffect(()=>{load();},[desde,hasta,localActivo]);
 
-  const showToast=(kind,msg)=>{
+  const showToast=(kind: "ok"|"err", msg: string)=>{
     setToast({kind,msg});
     setTimeout(()=>setToast(t=>t&&t.msg===msg?null:t),5000);
   };
@@ -89,7 +100,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
       }
 
       // Paso 2: countdown de 2 minutos
-      await new Promise(resolve=>{
+      await new Promise<void>(resolve=>{
         let remaining=120;
         const interval=setInterval(()=>{
           remaining--;
@@ -117,9 +128,9 @@ function ConciliacionMP({ user, locales, localActivo }) {
 
       if(d.ok){
         await load();
-        const totalMovs=(d.resultados||[]).reduce((s,x)=>s+(Number(x.movimientos)||0),0);
-        const saldoTotal=(d.resultados||[]).reduce((s,x)=>s+(Number(x.saldo_disponible)||0),0);
-        const csvNoEncontrado=(d.resultados||[]).some(x=>x.release_error&&x.release_error.includes("CSV no encontrado"));
+        const totalMovs=(d.resultados||[]).reduce((s: number,x: any)=>s+(Number(x.movimientos)||0),0);
+        const saldoTotal=(d.resultados||[]).reduce((s: number,x: any)=>s+(Number(x.saldo_disponible)||0),0);
+        const csvNoEncontrado=(d.resultados||[]).some((x: any)=>x.release_error&&x.release_error.includes("CSV no encontrado"));
         if(csvNoEncontrado){
           showToast("err","⚠ MercadoPago no generó el reporte a tiempo. Intentá sincronizar de nuevo en unos minutos.");
         }else{
@@ -128,9 +139,9 @@ function ConciliacionMP({ user, locales, localActivo }) {
       }else{
         showToast("err","⚠ Error procesando: "+(d.error||"desconocido"));
       }
-    }catch(e){
+    }catch(e: unknown){
       console.error("ConciliacionMP sincronizar error:",e);
-      showToast("err","⚠ Error al conectar con MP: "+(e?.message||""));
+      showToast("err","⚠ Error al conectar con MP: "+(e instanceof Error ? e.message : String(e)));
     }finally{
       setSincronizando(false);
       setSyncCountdown(0);
@@ -154,7 +165,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
   // Borra todos los mp_movimientos de un local y vuelve a sincronizar,
   // así los pagos se re-clasifican con la lógica actual. Útil después
   // de arreglar reglas de clasificación.
-  const resetearLocal=async(localId,nombre)=>{
+  const resetearLocal=async(localId: number, nombre: string)=>{
     if(!confirm(`Borrar todos los movimientos MP de ${nombre||"este local"} y re-sincronizar? Esta acción no se puede deshacer.`))return;
     setSincronizando(true);
     try{
@@ -162,18 +173,18 @@ function ConciliacionMP({ user, locales, localActivo }) {
       const d=await r.json();
       console.log("[MP] reset response:",d);
       if(d.ok){
-        const resetInfo=(d.reset||[]).map(x=>x.local_id+": "+(x.deleted??x.error)).join(", ");
+        const resetInfo=(d.reset||[]).map((x: any)=>x.local_id+": "+(x.deleted??x.error)).join(", ");
         await load();
         alert("Reset + sync completados\n"+resetInfo);
       }else{
         alert("Error en reset: "+(d.error||"desconocido"));
       }
-    }catch(e){alert("Error al resetear: "+(e?.message||""));}
+    }catch(e: unknown){alert("Error al resetear: "+(e instanceof Error ? e.message : String(e)));}
     setSincronizando(false);
   };
 
   // Comisiones/impuestos son egresos automáticos y se muestran aparte — no entran en conciliación manual.
-  const ES_AUTOMATICO=t=>t==="fee"||t==="tax";
+  const ES_AUTOMATICO=(t: string)=>t==="fee"||t==="tax";
 
   // Allowlist de tipos que afectan el saldo released de la cuenta MP. El
   // listado y las KPIs operan sobre estos. Las ventas/cobros pendientes
@@ -192,21 +203,21 @@ function ConciliacionMP({ user, locales, localActivo }) {
 
   // KPIs SIEMPRE sobre tipos released (independiente del toggle), para
   // que los totales reflejen el saldo real de la cuenta MP.
-  const movsReleased=movimientos.filter(m=>!ES_AUTOMATICO(m.tipo)&&TIPOS_VISIBLES.has(m.tipo));
+  const movsReleased=movimientos.filter((m: any)=>!ES_AUTOMATICO(m.tipo)&&TIPOS_VISIBLES.has(m.tipo));
   // Listado: aplica el toggle. Por default solo released; con toggle on,
   // todos los no-automáticos (incluye ventas/cobros pendientes).
-  const movsListado=movimientos.filter(m=>!ES_AUTOMATICO(m.tipo)&&(mostrarPendientes||TIPOS_VISIBLES.has(m.tipo)));
+  const movsListado=movimientos.filter((m: any)=>!ES_AUTOMATICO(m.tipo)&&(mostrarPendientes||TIPOS_VISIBLES.has(m.tipo)));
 
-  const ingresos=movsReleased.filter(m=>m.monto>0).reduce((s,m)=>s+m.monto,0);
-  const egresosList=movsReleased.filter(m=>m.monto<0);
-  const egresos=egresosList.reduce((s,m)=>s+Math.abs(m.monto),0);
+  const ingresos=movsReleased.filter((m: any)=>m.monto>0).reduce((s: number,m: any)=>s+m.monto,0);
+  const egresosList=movsReleased.filter((m: any)=>m.monto<0);
+  const egresos=egresosList.reduce((s: number,m: any)=>s+Math.abs(m.monto),0);
   // Comisiones se calculan sobre todos los movimientos crudos (fee/tax
   // son egresos automáticos que viven en su propia pestaña).
-  const comisionesList=movimientos.filter(m=>m.monto<0&&ES_AUTOMATICO(m.tipo));
-  const comisionesTotal=comisionesList.reduce((s,m)=>s+Math.abs(m.monto),0);
+  const comisionesList=movimientos.filter((m: any)=>m.monto<0&&ES_AUTOMATICO(m.tipo));
+  const comisionesTotal=comisionesList.reduce((s: number,m: any)=>s+Math.abs(m.monto),0);
   const egresosManualesList=egresosList; // egresosList ya excluye automáticos
   const egresosManualesTotal=egresos;
-  const egresosConciliados=egresosManualesList.filter(m=>m.conciliado).reduce((s,m)=>s+Math.abs(m.monto),0);
+  const egresosConciliados=egresosManualesList.filter((m: any)=>m.conciliado).reduce((s: number,m: any)=>s+Math.abs(m.monto),0);
   const egresosPendientes=egresosManualesTotal-egresosConciliados;
   const pendientesCount=egresosManualesList.filter(m=>!m.conciliado).length;
   const neto=ingresos-egresos;
@@ -232,7 +243,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
   const guardarSaldoInicial=async()=>{
     if(!saldoInicialModal||saldoInicialModal.monto===""||saldoInicialModal.monto==null)return;
     if(!saldoInicialModal.local_id)return;
-    const monto=parseFloat(saldoInicialModal.monto);
+    const monto=parseFloat(String(saldoInicialModal.monto));
     if(Number.isNaN(monto))return;
     // La fecha de corte viene del input del modal. Si el usuario dejó
     // una fecha sin hora, la convertimos a ISO tratándola como medianoche
@@ -266,7 +277,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
     load();
   };
 
-  const TIPO_LABELS={
+  const TIPO_LABELS: Record<string, string>={
     "payment":"Cobro Online","point":"Venta Presencial",
     "payment_out":"Pago saliente","recurring":"Servicio/Suscripción",
     "money_transfer":"Transferencia","transferencia":"Transferencia enviada",
@@ -279,23 +290,23 @@ function ConciliacionMP({ user, locales, localActivo }) {
   };
   // Formatter local con 2 decimales para mostrar los montos MP con
   // centavos (fmt_$ global trunca a enteros).
-  const fmt_mp=n=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n)||0);
+  const fmt_mp=(n: number)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n)||0);
 
-  const getTipoColor=(tipo,monto)=>{
+  const getTipoColor=(tipo: string,monto: number)=>{
     if(monto>0)return "var(--success)";
     if(tipo==="refund"||tipo==="dispute")return "var(--danger)";
     if(tipo==="fee"||tipo==="tax")return "var(--warn)";
     return "var(--muted2)";
   };
 
-  const abrirConciliar=(mov)=>{
+  const abrirConciliar=(mov: any)=>{
     setConciliarModal(mov);
     setConciliarTab("gasto");
     setVinculoSel("");
     setNuevoGastoForm({categoria:"",detalle:mov.descripcion||""});
   };
 
-  const vincularMovimiento=async(tipo,id)=>{
+  const vincularMovimiento=async(tipo: string,id: string|number)=>{
     if(!conciliarModal||!id)return;
     await db.from("mp_movimientos").update({
       conciliado:true,
@@ -338,7 +349,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
     await vincularMovimiento("gasto",nuevoId);
   };
 
-  const desconciliar=async(mov)=>{
+  const desconciliar=async(mov: any)=>{
     if(!confirm("¿Quitar la conciliación de este movimiento?"))return;
     await db.from("mp_movimientos").update({
       conciliado:false,
@@ -453,7 +464,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
       </div>
 
       <div className="tabs">
-        {[["movimientos","Movimientos"],["comisiones","Comisiones MP"]].map(([id,l])=>(
+        {([["movimientos","Movimientos"],["comisiones","Comisiones MP"]] as [string, string][]).map(([id,l])=>(
           <div key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>{l}</div>
         ))}
       </div>
@@ -557,7 +568,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
         const credSel=credenciales.find(x=>x.local_id===saldoInicialModal.local_id);
         const calculado=credSel?Number(credSel.saldo_disponible)||0:0;
         const inicialPrev=credSel?Number(credSel.saldo_inicial)||0:0;
-        const montoNum=saldoInicialModal.monto===""||saldoInicialModal.monto==null?null:parseFloat(saldoInicialModal.monto);
+        const montoNum=saldoInicialModal.monto===""||saldoInicialModal.monto==null?null:parseFloat(String(saldoInicialModal.monto));
         const diferencia=montoNum!=null&&!Number.isNaN(montoNum)?montoNum-calculado:null;
         return (
         <div className="overlay" onClick={()=>setSaldoInicialModal(null)}><div className="modal" style={{width:560}} onClick={e=>e.stopPropagation()}>
@@ -568,7 +579,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
             </div>
             <div className="field">
               <label>Local</label>
-              <select value={saldoInicialModal.local_id} onChange={e=>setSaldoInicialModal({...saldoInicialModal,local_id:parseInt(e.target.value)||e.target.value})}>
+              <select value={saldoInicialModal.local_id} onChange={e=>setSaldoInicialModal({...saldoInicialModal,local_id:parseInt(e.target.value)||0})}>
                 <option value="">Seleccioná...</option>
                 {credenciales.map(c=><option key={c.id} value={c.local_id}>{c.locales?.nombre||`Local ${c.local_id}`}</option>)}
               </select>
@@ -632,7 +643,7 @@ function ConciliacionMP({ user, locales, localActivo }) {
             </div>
           </div>
           <div className="tabs" style={{marginBottom:12}}>
-            {[["gasto","Gasto existente"],["factura","Factura existente"],["nuevo","Crear Gasto nuevo"]].map(([id,l])=>(
+            {([["gasto","Gasto existente"],["factura","Factura existente"],["nuevo","Crear Gasto nuevo"]] as [string, string][]).map(([id,l])=>(
               <div key={id} className={`tab ${conciliarTab===id?"active":""}`} onClick={()=>{setConciliarTab(id);setVinculoSel("");}}>{l}</div>
             ))}
           </div>

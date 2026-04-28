@@ -40,7 +40,7 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: I
     }
     let fecha=toISO(today);
     const fm=texto.match(/(\w+)\s+(\d+)\s+de\s+(\w+)\s+de\s+(\d{4})/i);
-    if(fm){const ms: Record<string, number>={enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,octubre:10,noviembre:11,diciembre:12};const m=ms[fm[3].toLowerCase()];if(m)fecha=`${fm[4]}-${String(m).padStart(2,"0")}-${String(fm[2]).padStart(2,"0")}`;}
+    if(fm){const ms: Record<string, number>={enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,octubre:10,noviembre:11,diciembre:12};const m=ms[(fm[3]||"").toLowerCase()];if(m)fecha=`${fm[4]}-${String(m).padStart(2,"0")}-${String(fm[2]).padStart(2,"0")}`;}
     const tm=texto.match(/Turno\s+\d+\s+\((\w+)/i);
     const turno=tm?.[1]==="Noche"?"Noche":"Mediodía";
     // local_id viene SIEMPRE del sidebar (localActivo), nunca del CSV.
@@ -82,12 +82,12 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: I
         let mr:string|null=null,montoStr:string|null=null,cantStr:string|null=null;
         const m=line.match(re);
         if(m){
-          mr=m[1].trim();montoStr=m[2];cantStr=m[3];
+          mr=(m[1]||"").trim();montoStr=m[2]||null;cantStr=m[3]||null;
           if(enBloqueVentas) console.log("[maxirest:parse] match raw='"+trimmed+"' medio='"+mr+"' monto='"+montoStr+"' cant='"+cantStr+"'");
         } else {
           const toks=trimmed.split(/[\s\u00a0]+/);
-          if(toks.length>=3 && /^\d+$/.test(toks[toks.length-1]) && /^[\d.,]+$/.test(toks[toks.length-2])){
-            cantStr=toks[toks.length-1];montoStr=toks[toks.length-2];
+          if(toks.length>=3 && /^\d+$/.test(toks[toks.length-1]||"") && /^[\d.,]+$/.test(toks[toks.length-2]||"")){
+            cantStr=toks[toks.length-1]||null;montoStr=toks[toks.length-2]||null;
             mr=toks.slice(0,-2).join(" ");
             if(enBloqueVentas) console.log("[maxirest:parse] fallback split raw='"+trimmed+"' medio='"+mr+"' monto='"+montoStr+"' cant='"+cantStr+"'");
           } else {

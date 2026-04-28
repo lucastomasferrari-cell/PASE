@@ -28,7 +28,7 @@ export const parseMonto = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
-export const toISO = (d: Date) => d.toISOString().split("T")[0];
+export const toISO = (d: Date): string => d.toISOString().split("T")[0]!;
 export const today = new Date();
 export const fmt_d = (d: string | null | undefined) => d ? new Date(d+"T12:00:00").toLocaleDateString("es-AR") : "—";
 // Siempre muestra 2 decimales (ej: $ 239.889,56 o $ 1.000,00). Antes

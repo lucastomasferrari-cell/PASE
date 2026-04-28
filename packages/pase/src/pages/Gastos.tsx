@@ -174,7 +174,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
         <span style={{fontSize:11,color:"var(--muted)"}}>→</span>
         <input type="date" className="search" value={hasta} onChange={e=>setHasta(e.target.value)} style={{width:120}}/>
         <div style={{width:1,height:14,background:"var(--bd)",margin:"0 4px"}}/>
-        {[["todos","Todos"],["fijo","Fijos"],["variable","Variables"],["publicidad","Publicidad"],["impuesto","Impuestos"],["comision","Comisiones"]].map(([id,l])=>(
+        {([["todos","Todos"],["fijo","Fijos"],["variable","Variables"],["publicidad","Publicidad"],["impuesto","Impuestos"],["comision","Comisiones"]] as [string, string][]).map(([id,l])=>(
           <div key={id} className={`pill ${tipoFiltro===id?"active":""}`} onClick={()=>setTipoFiltro(id)}>{l}</div>
         ))}
       </div>

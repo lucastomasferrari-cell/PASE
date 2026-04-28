@@ -28,7 +28,7 @@ function pickCuentaDestino(medios: MedioCobro[], nombre: string, localId: number
   const candidatos = medios.filter(m => m.activo && m.nombre === nombre && (m.local_id === null || m.local_id === localId));
   if (candidatos.length === 0) return null;
   const ganador = candidatos.find(m => m.local_id !== null) || candidatos[0];
-  return ganador.cuenta_destino;
+  return ganador?.cuenta_destino ?? null;
 }
 
 const mk = (over: Partial<MedioCobro>): MedioCobro => ({
@@ -70,8 +70,8 @@ describe("pickDisponibles", () => {
     ];
     const r = pickDisponibles(medios, 5);
     expect(r).toHaveLength(1);
-    expect(r[0].cuenta_destino).toBe("Caja Mayor");
-    expect(r[0].local_id).toBe(5);
+    expect(r[0]!.cuenta_destino).toBe("Caja Mayor");
+    expect(r[0]!.local_id).toBe(5);
   });
 
   it("con localId NULL devuelve solo globales", () => {

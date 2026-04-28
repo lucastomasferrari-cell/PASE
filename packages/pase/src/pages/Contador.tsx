@@ -12,7 +12,7 @@ export default function Contador({ user, locales, localActivo }: any) {
   useEffect(()=>{
     const load=async()=>{
       setLoading(true);
-      const [cyr,cmo]=mes.split("-").map(Number); const desde=mes+"-01",hasta=mes+"-"+String(new Date(cyr,cmo,0).getDate()).padStart(2,"0");
+      const [cyr,cmo]=mes.split("-").map(Number) as [number, number]; const desde=mes+"-01",hasta=mes+"-"+String(new Date(cyr,cmo,0).getDate()).padStart(2,"0");
       let fq = db.from("facturas").select("*").gte("fecha",desde).lte("fecha",hasta).neq("estado","anulada");
       fq = applyLocalScope(fq, user, localActivo);
       let vq = db.from("ventas").select("*").gte("fecha",desde).lte("fecha",hasta);
@@ -38,7 +38,7 @@ export default function Contador({ user, locales, localActivo }: any) {
         <input type="month" className="search" style={{width:160}} value={mes} onChange={e=>setMes(e.target.value)}/>
       </div>
       <div className="tabs">
-        {[["iva","Monitor IVA"],["compras","Libro IVA Compras"],["ventas_l","Libro IVA Ventas"]].map(([id,l])=>(
+        {([["iva","Monitor IVA"],["compras","Libro IVA Compras"],["ventas_l","Libro IVA Ventas"]] as [string, string][]).map(([id,l])=>(
           <div key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>{l}</div>
         ))}
       </div>

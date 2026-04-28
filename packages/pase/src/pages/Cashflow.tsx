@@ -13,7 +13,7 @@ export default function Cashflow({ user, locales, localActivo }: any) {
 
   const load = async () => {
     setLoading(true);
-    const [yr, mo] = mes.split("-").map(Number);
+    const [yr, mo] = mes.split("-").map(Number) as [number, number];
     const lastDay = new Date(yr, mo, 0).getDate();
     const desde = mes + "-01";
     const hasta = mes + "-" + String(lastDay).padStart(2, "0");
@@ -146,7 +146,7 @@ export default function Cashflow({ user, locales, localActivo }: any) {
     const porCobrar = Object.entries(ventasPorMedio)
       .filter(([medio]) => MEDIO_A_CAT_LIQ[medio] !== undefined)
       .map(([medio, vendido]) => {
-        const catLiq = MEDIO_A_CAT_LIQ[medio];
+        const catLiq = MEDIO_A_CAT_LIQ[medio]!;
         const cobrado = liqPorCat[catLiq] || 0;
         return { medio, catLiq, vendido, cobrado, pendiente: Math.max(0, vendido - cobrado) };
       })

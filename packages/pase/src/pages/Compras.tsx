@@ -297,7 +297,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
 
       {/* Pills */}
       <div className="pills">
-        {[["todas", "Todas"], ["pendiente", "Pendientes"], ["vencida", "Vencidas"], ["pagada", "Pagadas"], ["nc", "Notas de Crédito"]].map(([id, l]) => (
+        {([["todas", "Todas"], ["pendiente", "Pendientes"], ["vencida", "Vencidas"], ["pagada", "Pagadas"], ["nc", "Notas de Crédito"]] as [string, string][]).map(([id, l]) => (
           <div key={id} className={`pill ${pillEstado === id ? "active" : ""}`} onClick={() => setPillEstado(id)}>{l}</div>
         ))}
       </div>

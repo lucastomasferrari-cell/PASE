@@ -140,7 +140,7 @@ export default function Proveedores({ user, localActivo }: { user: any; locales?
             const deudaNeta=aPagar-totalNC;
             const pagos=ctaFacts.flatMap((f: any)=>(f.pagos||[]).map((p: any)=>({...p,nro:f.nro})));
 
-            const [yr,mo]=ctaMes.split("-").map(Number);
+            const [yr,mo]=ctaMes.split("-").map(Number) as [number, number];
             const desde=ctaMes+"-01";
             const hasta=ctaMes+"-"+String(new Date(yr,mo,0).getDate()).padStart(2,"0");
             const facturasDelMes=ctaFacts.filter(f=>(f.tipo||"factura")==="factura"&&f.fecha>=desde&&f.fecha<=hasta);

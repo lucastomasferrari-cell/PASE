@@ -7,7 +7,7 @@ export default function Cierre({ user, locales, localActivo }: any) {
   const hoy = toISO(today).slice(0, 7);
   // Default: mes actual vs mes anterior
   const mesAnterior = (() => {
-    const [yr, mo] = hoy.split("-").map(Number);
+    const [yr, mo] = hoy.split("-").map(Number) as [number, number];
     return mo === 1 ? `${yr-1}-12` : `${yr}-${String(mo-1).padStart(2,"0")}`;
   })();
 
@@ -18,7 +18,7 @@ export default function Cierre({ user, locales, localActivo }: any) {
   const [loading, setLoading] = useState(false);
 
   const cargarMes = async (mes: string) => {
-    const [yr, mo] = mes.split("-").map(Number);
+    const [yr, mo] = mes.split("-").map(Number) as [number, number];
     const lastDay = new Date(yr, mo, 0).getDate();
     const desde = mes + "-01";
     const hasta = mes + "-" + String(lastDay).padStart(2, "0");

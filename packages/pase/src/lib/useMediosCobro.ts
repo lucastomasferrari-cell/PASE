@@ -91,7 +91,7 @@ export function pickCuentaDestino(medios: MedioCobro[], nombre: string, localId:
   if (candidatos.length === 0) return null;
   // Prefiere el local-specific
   const ganador = candidatos.find(m => m.local_id !== null) || candidatos[0];
-  return ganador.cuenta_destino;
+  return ganador?.cuenta_destino ?? null;
 }
 
 export function useMediosCobro(): MediosCobroState {

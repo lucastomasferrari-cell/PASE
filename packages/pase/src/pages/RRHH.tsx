@@ -63,7 +63,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const locsDisp = visLocs === null ? locales : locales.filter((l: Local) => visLocs.includes(l.id));
   const esEnc = user?.rol === "encargado";
   const esDueno = user?.rol === "dueno" || user?.rol === "admin";
-  const defaultLocal = localActivo || (locsDisp.length === 1 ? locsDisp[0]?.id : (esEnc && locsDisp.length ? locsDisp[0].id : ""));
+  const defaultLocal = localActivo || (locsDisp.length === 1 ? locsDisp[0]?.id : (esEnc && locsDisp.length ? locsDisp[0]?.id : ""));
 
   // ─── SHARED STATE ──────────────────────────────────────────────────────────
   const [allEmps, setAllEmps] = useState<any[]>([]);
@@ -340,8 +340,8 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   // - Si tocó manualmente: respetar hasta que cambie de tab y vuelva.
   const lidDefault = (): string => {
     if (localActivo) return String(localActivo);
-    if (locsDisp.length === 1) return String(locsDisp[0].id);
-    if (esEnc && locsDisp.length) return String(locsDisp[0].id);
+    if (locsDisp.length === 1) return String(locsDisp[0]?.id ?? "");
+    if (esEnc && locsDisp.length) return String(locsDisp[0]?.id ?? "");
     return "";
   };
   // Reset + aplicar default al entrar al tab

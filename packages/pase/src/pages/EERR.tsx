@@ -21,7 +21,7 @@ export default function EERR({ user, locales, localActivo }: any) {
   useEffect(()=>{
     const load=async()=>{
       setLoading(true);
-      const [yr,mo]=mes.split("-").map(Number);
+      const [yr,mo]=mes.split("-").map(Number) as [number, number];
       const lastDay=new Date(yr,mo,0).getDate();
       const desde=mes+"-01", hasta=mes+"-"+String(lastDay).padStart(2,"0");
       const lid=localActivo?parseInt(String(localActivo)):null;
