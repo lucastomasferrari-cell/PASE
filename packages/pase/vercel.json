@@ -8,6 +8,10 @@
     {
       "path": "/api/backup-tenants",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/backup-cleanup",
+      "schedule": "0 5 * * 0"
     }
   ],
   "functions": {
@@ -25,6 +29,9 @@
     },
     "api/backup-tenants.js": {
       "maxDuration": 300
+    },
+    "api/backup-cleanup.js": {
+      "maxDuration": 60
     }
   },
   "headers": [
