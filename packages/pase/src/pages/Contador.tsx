@@ -1,12 +1,11 @@
-// @ts-nocheck — TODO TASK 0.14: migrar a TS strict (etapa pendiente)
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 
 export default function Contador({ user, locales, localActivo }: any) {
-  const [facturas,setFacturas]=useState([]);
-  const [ventas,setVentas]=useState([]);
+  const [facturas,setFacturas]=useState<any[]>([]);
+  const [ventas,setVentas]=useState<any[]>([]);
   const [loading,setLoading]=useState(true);
   const [tab,setTab]=useState("iva");
   const [mes,setMes]=useState(toISO(today).slice(0,7));
@@ -25,13 +24,13 @@ export default function Contador({ user, locales, localActivo }: any) {
     };
     load();
   },[mes,localActivo]);
-  const ivaC21=facturas.reduce((s,f)=>s+(f.iva21||0),0);
-  const ivaC105=facturas.reduce((s,f)=>s+(f.iva105||0),0);
+  const ivaC21=facturas.reduce((s: number,f: any)=>s+(f.iva21||0),0);
+  const ivaC105=facturas.reduce((s: number,f: any)=>s+(f.iva105||0),0);
   const totalIvaC=ivaC21+ivaC105;
-  const totalV=ventas.reduce((s,v)=>s+(v.monto||0),0);
+  const totalV=ventas.reduce((s: number,v: any)=>s+(v.monto||0),0);
   const ivaV=totalV/1.21*0.21;
   const pos=ivaV-totalIvaC;
-  const exportCSV=(rows,fn)=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"}));a.download=fn;a.click();};
+  const exportCSV=(rows: (string|number)[][],fn: string)=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"}));a.download=fn;a.click();};
   return (
     <div>
       <div className="ph-row">
@@ -53,7 +52,7 @@ export default function Contador({ user, locales, localActivo }: any) {
           <div className="panel">
             <div className="panel-hd"><span className="panel-title">Resumen Fiscal — {mes}</span></div>
             <div style={{padding:"8px 0 12px"}}>
-              {[["Débito Fiscal (IVA ventas)",ivaV,"var(--danger)"],["(-) Crédito Fiscal",-totalIvaC,"var(--success)"],["(=) Posición Neta",pos,pos>0?"var(--danger)":"var(--success)"]].map(([l,v,c],i)=>(
+              {([["Débito Fiscal (IVA ventas)",ivaV,"var(--danger)"],["(-) Crédito Fiscal",-totalIvaC,"var(--success)"],["(=) Posición Neta",pos,pos>0?"var(--danger)":"var(--success)"]] as [string, number, string][]).map(([l,v,c],i)=>(
                 <div key={i} className="eerr-row" style={i===2?{background:"var(--s2)",padding:"12px 16px"}:{}}>
                   <span style={{fontSize:i===2?13:12,fontWeight:i===2?600:400}}>{l}</span>
                   <span style={{fontFamily:"'Inter',sans-serif",fontSize:i===2?17:14,fontWeight:500,color:c}}>{fmt_$(v)}</span>
@@ -69,22 +68,22 @@ export default function Contador({ user, locales, localActivo }: any) {
         <div className="panel">
           <div className="panel-hd">
             <span className="panel-title">Libro IVA Compras — {mes} ({facturas.length} comp.)</span>
-            <button className="btn btn-acc btn-sm" onClick={()=>exportCSV([["Fecha","Nro Factura","Neto","IVA 21","IVA 10.5","IIBB","Total"],...facturas.map(f=>[f.fecha,f.nro,f.neto,f.iva21,f.iva105,f.iibb,f.total])],`libro_compras_${mes}.csv`)}>⬇ Exportar CSV</button>
+            <button className="btn btn-acc btn-sm" onClick={()=>exportCSV([["Fecha","Nro Factura","Neto","IVA 21","IVA 10.5","IIBB","Total"],...facturas.map((f: any)=>[f.fecha,f.nro,f.neto,f.iva21,f.iva105,f.iibb,f.total])],`libro_compras_${mes}.csv`)}>⬇ Exportar CSV</button>
           </div>
           {facturas.length===0?<div className="empty">Sin facturas</div>:(
             <table><thead><tr><th>Fecha</th><th>Nº Factura</th><th>Neto</th><th>IVA 21%</th><th>IVA 10.5%</th><th>IIBB</th><th>Total</th></tr></thead>
-            <tbody>{facturas.map(f=><tr key={f.id}><td className="mono">{fmt_d(f.fecha)}</td><td className="mono">{f.nro}</td><td>{fmt_$(f.neto)}</td><td style={{color:"var(--warn)"}}>{fmt_$(f.iva21)}</td><td style={{color:"var(--warn)"}}>{fmt_$(f.iva105)}</td><td style={{color:"var(--muted2)"}}>{fmt_$(f.iibb)}</td><td><span className="num kpi-acc">{fmt_$(f.total)}</span></td></tr>)}</tbody>
+            <tbody>{facturas.map((f: any)=><tr key={f.id}><td className="mono">{fmt_d(f.fecha)}</td><td className="mono">{f.nro}</td><td>{fmt_$(f.neto)}</td><td style={{color:"var(--warn)"}}>{fmt_$(f.iva21)}</td><td style={{color:"var(--warn)"}}>{fmt_$(f.iva105)}</td><td style={{color:"var(--muted2)"}}>{fmt_$(f.iibb)}</td><td><span className="num kpi-acc">{fmt_$(f.total)}</span></td></tr>)}</tbody>
           </table>)}
         </div>
       ):(
         <div className="panel">
           <div className="panel-hd">
             <span className="panel-title">Libro IVA Ventas — {mes} ({ventas.length} reg.)</span>
-            <button className="btn btn-acc btn-sm" onClick={()=>exportCSV([["Fecha","Local","Forma Cobro","Total","Neto Est","IVA 21 Est"],...ventas.map(v=>[v.fecha,locales.find(l=>l.id===v.local_id)?.nombre,v.medio,v.monto,(v.monto/1.21).toFixed(2),(v.monto/1.21*0.21).toFixed(2)])],`libro_ventas_${mes}.csv`)}>⬇ Exportar CSV</button>
+            <button className="btn btn-acc btn-sm" onClick={()=>exportCSV([["Fecha","Local","Forma Cobro","Total","Neto Est","IVA 21 Est"],...ventas.map((v: any)=>[v.fecha,locales.find((l: any)=>l.id===v.local_id)?.nombre||"",v.medio,v.monto,(v.monto/1.21).toFixed(2),(v.monto/1.21*0.21).toFixed(2)])],`libro_ventas_${mes}.csv`)}>⬇ Exportar CSV</button>
           </div>
           {ventas.length===0?<div className="empty">Sin ventas</div>:(
             <table><thead><tr><th>Fecha</th><th>Local</th><th>Forma de Cobro</th><th>Total</th><th>Neto Est.</th><th>IVA Est.</th></tr></thead>
-            <tbody>{ventas.map(v=><tr key={v.id}><td className="mono">{fmt_d(v.fecha)}</td><td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===v.local_id)?.nombre}</td><td>{v.medio}</td><td><span className="num kpi-success">{fmt_$(v.monto)}</span></td><td style={{color:"var(--muted2)"}}>{fmt_$(v.monto/1.21)}</td><td style={{color:"var(--warn)"}}>{fmt_$(v.monto/1.21*0.21)}</td></tr>)}</tbody>
+            <tbody>{ventas.map((v: any)=><tr key={v.id}><td className="mono">{fmt_d(v.fecha)}</td><td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find((l: any)=>l.id===v.local_id)?.nombre}</td><td>{v.medio}</td><td><span className="num kpi-success">{fmt_$(v.monto)}</span></td><td style={{color:"var(--muted2)"}}>{fmt_$(v.monto/1.21)}</td><td style={{color:"var(--warn)"}}>{fmt_$(v.monto/1.21*0.21)}</td></tr>)}</tbody>
           </table>)}
         </div>
       )}

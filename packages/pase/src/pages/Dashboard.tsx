@@ -1,4 +1,3 @@
-// @ts-nocheck — TODO TASK 0.14: migrar a TS strict (etapa pendiente)
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasVisibles } from "../lib/auth";
@@ -8,8 +7,8 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 export default function Dashboard({ user, locales, localActivo }: any) {
-  const [stats, setStats] = useState({saldos:{},deuda:0,vencidas:0,ventasHoy:0,remPend:0,blindajeVencidos:0,blindajePorVencer:0});
-  const [provDeuda, setProvDeuda] = useState([]);
+  const [stats, setStats] = useState<{saldos: Record<string, number>, deuda: number, vencidas: number, ventasHoy: number, remPend: number, blindajeVencidos: number, blindajePorVencer: number}>({saldos:{},deuda:0,vencidas:0,ventasHoy:0,remPend:0,blindajeVencidos:0,blindajePorVencer:0});
+  const [provDeuda, setProvDeuda] = useState<any[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const load = async (localId = localActivo) => {
@@ -52,8 +51,8 @@ export default function Dashboard({ user, locales, localActivo }: any) {
     })));
     const saldosObj: Record<string, number> = {};
     (saldos||[]).forEach(s => { saldosObj[s.cuenta] = (saldosObj[s.cuenta]||0) + (s.saldo||0); });
-    const matchLocal = (rowLocal) => !localId || String(rowLocal) === String(localId);
-    const fAct = (facturas||[]).filter(f=>f.estado!=="pagada"&&matchLocal(f.local_id));
+    const matchLocal = (rowLocal: number | null) => !localId || String(rowLocal) === String(localId);
+    const fAct = (facturas||[]).filter((f: any)=>f.estado!=="pagada"&&matchLocal(f.local_id));
     const ahora = Date.now();
     let blindajeVencidos = 0, blindajePorVencer = 0;
     (blindaje || []).forEach((d: any) => {
@@ -64,24 +63,24 @@ export default function Dashboard({ user, locales, localActivo }: any) {
     });
     setStats({
       saldos:saldosObj,
-      deuda:fAct.reduce((s,f)=>s+(f.total||0),0),
-      vencidas:fAct.filter(f=>f.estado==="vencida").length,
-      ventasHoy:(ventas||[]).filter(v=>matchLocal(v.local_id)).reduce((s,v)=>s+(v.monto||0),0),
-      remPend:(remitos||[]).filter(r=>r.estado==="sin_factura"&&matchLocal(r.local_id)).length,
+      deuda:fAct.reduce((s: number,f: any)=>s+(f.total||0),0),
+      vencidas:fAct.filter((f: any)=>f.estado==="vencida").length,
+      ventasHoy:(ventas||[]).filter((v: any)=>matchLocal(v.local_id)).reduce((s: number,v: any)=>s+(v.monto||0),0),
+      remPend:(remitos||[]).filter((r: any)=>r.estado==="sin_factura"&&matchLocal(r.local_id)).length,
       blindajeVencidos, blindajePorVencer,
     });
     if (localId) {
       const deudaPorProv: Record<number, number> = {};
-      fAct.forEach(f => { deudaPorProv[f.prov_id] = (deudaPorProv[f.prov_id]||0) + (f.total||0); });
-      setProvDeuda((provs||[]).map(p => ({...p, saldo: deudaPorProv[p.id] || 0})).filter(p => p.saldo > 0).sort((a,b)=>b.saldo-a.saldo).slice(0,8));
+      fAct.forEach((f: any) => { deudaPorProv[f.prov_id] = (deudaPorProv[f.prov_id]||0) + (f.total||0); });
+      setProvDeuda((provs||[]).map((p: any) => ({...p, saldo: deudaPorProv[p.id] || 0})).filter((p: any) => p.saldo > 0).sort((a: any,b: any)=>b.saldo-a.saldo).slice(0,8));
     } else {
-      setProvDeuda((provs||[]).sort((a,b)=>b.saldo-a.saldo).slice(0,8));
+      setProvDeuda((provs||[]).sort((a: any,b: any)=>b.saldo-a.saldo).slice(0,8));
     }
     setLoading(false);
   };
   useEffect(()=>{ load(localActivo); },[localActivo]);
   if(loading) return <div className="loading">Cargando...</div>;
-  const totalLiquidez = Object.values(stats.saldos).reduce((a,b)=>a+b,0);
+  const totalLiquidez = Object.values(stats.saldos).reduce((a: number,b: number)=>a+b,0);
   return (
     <div>
       <div style={{marginBottom:20}}>
@@ -104,7 +103,7 @@ export default function Dashboard({ user, locales, localActivo }: any) {
               <Tooltip
                 contentStyle={{background:"var(--s1)",border:"1px solid var(--bd2)",borderRadius:6,fontSize:11}}
                 labelStyle={{color:"var(--muted2)"}}
-                formatter={(v:number)=>[`$${v.toLocaleString("es-AR")}`, "Ventas"]}
+                formatter={(v: any)=>[`$${Number(v).toLocaleString("es-AR")}`, "Ventas"] as [string, string]}
               />
               <Line type="monotone" dataKey="ventas" stroke="var(--acc)" strokeWidth={2} dot={false} activeDot={{r:4,fill:"var(--acc)"}}/>
             </LineChart>
@@ -138,7 +137,7 @@ export default function Dashboard({ user, locales, localActivo }: any) {
         <div className="panel">
           <div className="panel-hd"><span className="panel-title">Deuda por Proveedor</span></div>
           <table><thead><tr><th>Proveedor</th><th>Categoría</th><th>Saldo</th></tr></thead>
-          <tbody>{provDeuda.map(p=>(
+          <tbody>{provDeuda.map((p: any)=>(
             <tr key={p.id} className="prov-row">
               <td style={{fontWeight:500}}>{p.nombre}</td>
               <td><span className="badge b-muted">{p.cat}</span></td>

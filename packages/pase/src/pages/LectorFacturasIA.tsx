@@ -1,4 +1,3 @@
-// @ts-nocheck — TODO TASK 0.14: migrar a TS strict (etapa pendiente)
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { fmt_d, fmt_$, genId, parseMonto } from "../lib/utils";
@@ -10,11 +9,11 @@ export default function LectorFacturasIA({ locales, localActivo, onSaved }: { lo
   const [archivo,setArchivo]=useState<File|null>(null);
   const [preview,setPreview]=useState<string|null>(null);
   const [loading,setLoading]=useState(false);
-  const [resultado,setResultado]=useState(null);
-  const [proveedores,setProveedores]=useState([]);
-  const [insumos,setInsumos]=useState([]);
+  const [resultado,setResultado]=useState<any>(null);
+  const [proveedores,setProveedores]=useState<any[]>([]);
+  const [insumos,setInsumos]=useState<any[]>([]);
   const [guardando,setGuardando]=useState(false);
-  const [form,setForm]=useState({local_id:localActivo||"",prov_id:"",fecha:"",venc:"",nro:"",neto:0,iva21:0,iva105:0,iibb:0,total:0,cat:""});
+  const [form,setForm]=useState<{local_id: string|number, prov_id: string, fecha: string, venc: string, nro: string, neto: number|string, iva21: number|string, iva105: number|string, iibb: number|string, total: number|string, cat: string}>({local_id:localActivo||"",prov_id:"",fecha:"",venc:"",nro:"",neto:0,iva21:0,iva105:0,iibb:0,total:0,cat:""});
   // Modal inline para crear un proveedor nuevo cuando el emisor detectado
   // por IA no matchea con ninguno existente.
   const [provModal,setProvModal]=useState<any>(null); // null | {nombre, cuit, cat}
@@ -27,9 +26,14 @@ export default function LectorFacturasIA({ locales, localActivo, onSaved }: { lo
     ]).then(([{data:p},{data:i}])=>{setProveedores(p||[]);setInsumos(i||[]);});
   },[]);
 
-  const toBase64=file=>new Promise((res,rej)=>{
+  const toBase64=(file: File): Promise<string>=>new Promise((res,rej)=>{
     const r=new FileReader();
-    r.onload=()=>res(r.result.split(",")[1]);
+    r.onload=()=>{
+      // FileReader.result puede ser string|ArrayBuffer; readAsDataURL siempre
+      // devuelve string ("data:tipo/sub;base64,xxx"), pero el tipo es union.
+      const result = typeof r.result === "string" ? r.result : "";
+      res(result.split(",")[1] || "");
+    };
     r.onerror=()=>rej(new Error("Error al leer"));
     r.readAsDataURL(file);
   });
@@ -97,7 +101,7 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
       });
 
       const data=await response.json();
-      const text=data.content?.map(c=>c.text||"").join("");
+      const text=data.content?.map((c: any)=>c.text||"").join("");
       const clean=text.replace(/```json|```/g,"").trim();
       const parsed=JSON.parse(clean);
 
@@ -215,7 +219,7 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
 
     const confGlobal=resultado?.confianza_global??100;
     const estado=confGlobal<70?"revision":"pendiente";
-    const {error:insErr}=await db.from("facturas").insert([{...form,id,prov_id:parseInt(form.prov_id),local_id:parseInt(form.local_id),neto:parseMonto(form.neto),iva21:parseMonto(form.iva21),iva105:parseMonto(form.iva105),iibb:parseMonto(form.iibb),total:parseMonto(form.total),estado,pagos:[],imagen_url,fecha:form.fecha||null,venc:form.venc||null}]);
+    const {error:insErr}=await db.from("facturas").insert([{...form,id,prov_id:parseInt(form.prov_id),local_id:parseInt(String(form.local_id)),neto:parseMonto(form.neto),iva21:parseMonto(form.iva21),iva105:parseMonto(form.iva105),iibb:parseMonto(form.iibb),total:parseMonto(form.total),estado,pagos:[],imagen_url,fecha:form.fecha||null,venc:form.venc||null}]);
     if(insErr){
       // Rollback del archivo si el insert falló, así no queda huérfano
       if(imagen_url) await db.storage.from("facturas").remove([imagen_url]);
@@ -224,7 +228,7 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
       return;
     }
 
-    const prov=proveedores.find(p=>p.id===parseInt(form.prov_id));
+    const prov=proveedores.find((p: any)=>p.id===parseInt(form.prov_id));
     if(prov)await db.from("proveedores").update({saldo:(prov.saldo||0)+parseMonto(form.total)}).eq("id",prov.id);
     setGuardando(false);setArchivo(null);setPreview(null);setResultado(null);
     setForm({local_id:localActivo||"",prov_id:"",fecha:"",venc:"",nro:"",neto:0,iva21:0,iva105:0,iibb:0,total:0,cat:""});
@@ -248,7 +252,7 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
         .single();
       if (error) { alert("No se pudo crear el proveedor: " + error.message); return; }
       if (data) {
-        setProveedores(prev => [...prev, data].sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "")));
+        setProveedores((prev: any[]) => [...prev, data].sort((a: any, b: any) => (a.nombre || "").localeCompare(b.nombre || "")));
         setForm(f => ({ ...f, prov_id: String(data.id), cat: data.cat || f.cat }));
         setProvModal(null);
       }
@@ -362,7 +366,7 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
                   {[["Neto Gravado","neto","neto_gravado"],["IVA 21%","iva21",null],["IVA 10.5%","iva105",null],["Perc. IIBB","iibb",null]].map(([l,k,confKey])=>(
                     <div key={k as string} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                       <span style={{fontSize:11,color:"var(--muted2)"}}>{l}</span>
-                      <input type="number" step="0.01" value={form[k as string]} onChange={e=>setForm({...form,[k as string]:e.target.value})}
+                      <input type="number" step="0.01" value={(form as any)[k as string]} onChange={e=>setForm({...form,[k as string]:e.target.value})}
                         style={{width:120,background:"var(--bg)",border:confKey?campoBorder(confKey as string):"1px solid var(--bd)",color:"var(--txt)",padding:"4px 8px",fontFamily:"'DM Mono',monospace",fontSize:12,borderRadius:"var(--r)",textAlign:"right"}}/>
                     </div>
                   ))}
