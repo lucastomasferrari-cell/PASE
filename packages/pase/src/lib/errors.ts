@@ -37,6 +37,13 @@ const MAP: Record<string, string> = {
   NOVEDAD_INVALIDA: "Novedad inválida",
   LIQ_FINAL_YA_EXISTE: "Este empleado ya tiene liquidación final registrada",
   MONTO_EXCEDE_PENDIENTE: "El monto asignado supera el pendiente",
+
+  // Restore tenant (TASK 0.17 etapa 4)
+  NO_AUTORIZADO: "Solo superadmin puede ejecutar esta operación",
+  TENANT_NOT_FOUND: "El tenant no existe",
+  BACKUP_INVALID: "El archivo de backup tiene un formato inválido",
+  CROSS_TENANT_RESTORE_BLOCKED: "El backup pertenece a otro tenant. Restore bloqueado por seguridad",
+  BACKUP_VERSION_UNSUPPORTED: "Versión del backup no soportada por el restore actual",
 };
 
 /**
@@ -50,6 +57,15 @@ export function translateRpcError(err: unknown): string {
   const raw = typeof err === "string" ? err : (err as any)?.message || String(err);
   if (!raw) return "Error desconocido";
   // Supabase/Postgres suele prefijar con "ERROR:  "; el código queda trim.
-  const code = raw.trim().replace(/^ERROR:\s*/i, "").trim();
-  return MAP[code] || raw;
+  const stripped = raw.trim().replace(/^ERROR:\s*/i, "").trim();
+  // Match exacto primero. Algunas RPCs (restore_tenant) emiten "CODE: detalle"
+  // con datos variables (UUIDs, nombres) detrás del código — para esas tomamos
+  // el prefijo antes del primer ":".
+  if (MAP[stripped]) return MAP[stripped];
+  const colonIdx = stripped.indexOf(":");
+  if (colonIdx > 0) {
+    const code = stripped.slice(0, colonIdx).trim();
+    if (MAP[code]) return MAP[code];
+  }
+  return raw;
 }
