@@ -56,6 +56,9 @@ export default async function handler(req, res) {
     if (inspectMode === 'ghost') {
       return await handleInspectGhost({ token, res });
     }
+    if (inspectMode === 'ghost-full') {
+      return await handleInspectGhostFull({ token, res });
+    }
 
     // Ventana — default 7 días, configurable
     const daysBack = parseInt(String(req.query?.days_back || req.body?.days_back || '7'), 10) || 7;
@@ -347,6 +350,81 @@ const GHOST_IDS = [
   { id: '157335675746', label: 'GHOST: Point Smart debvisa $87.777,80 (PASE 23:36)' },
   { id: '156568780899', label: 'CONTROL: INSTORE QR debvisa $67.571 (matchea MP UI)' },
 ];
+
+// Dump RAW completo de los payments + refunds endpoint + merchant_orders.
+// Sin filtrar ningún campo. Para que Lucas pueda buscar identificadores
+// específicos en MP UI.
+const GHOST_FULL_IDS = [
+  { id: '157334804646', label: 'GHOST 1: Point Smart visa $155.340,15 (PASE 22:26)' },
+  { id: '157335675746', label: 'GHOST 2: Point Smart debvisa $87.777,80 (PASE 22:36)' },
+  { id: '156560126051', label: 'CONTROL: Point Smart visa $74.673,9 (matchea MP UI)' },
+];
+
+async function handleInspectGhostFull({ token, res }) {
+  const out = { ts: new Date().toISOString(), payments: {} };
+  for (const { id, label } of GHOST_FULL_IDS) {
+    const entry = { label, payment_full: null, refunds_endpoint: null, merchant_orders: null };
+
+    // 1) GET /v1/payments/{id} — RAW response sin filtrar
+    try {
+      const r = await fetch(`https://api.mercadopago.com/v1/payments/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await r.text();
+      let parsed = null;
+      try { parsed = JSON.parse(body); } catch {}
+      entry.payment_full = {
+        http_status: r.status,
+        request_id: r.headers.get('x-request-id') || null,
+        // Si parseó OK, devolvemos el objeto entero sin tocar
+        body_parsed: parsed,
+        body_preview_if_unparseable: parsed ? null : body.slice(0, 1000),
+      };
+    } catch (e) {
+      entry.payment_full = { error: String(e?.message || e) };
+    }
+
+    // 2) GET /v1/payments/{id}/refunds — endpoint específico de refunds
+    try {
+      const r = await fetch(`https://api.mercadopago.com/v1/payments/${id}/refunds`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await r.text();
+      let parsed = null;
+      try { parsed = JSON.parse(body); } catch {}
+      entry.refunds_endpoint = {
+        http_status: r.status,
+        request_id: r.headers.get('x-request-id') || null,
+        body_parsed: parsed,
+        body_preview_if_unparseable: parsed ? null : body.slice(0, 500),
+      };
+    } catch (e) {
+      entry.refunds_endpoint = { error: String(e?.message || e) };
+    }
+
+    // 3) merchant_orders/search?payment_id={id} — orden vinculada
+    try {
+      const r = await fetch(
+        `https://api.mercadopago.com/merchant_orders/search?payment_id=${encodeURIComponent(id)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const body = await r.text();
+      let parsed = null;
+      try { parsed = JSON.parse(body); } catch {}
+      entry.merchant_orders = {
+        http_status: r.status,
+        request_id: r.headers.get('x-request-id') || null,
+        body_parsed: parsed,
+        body_preview_if_unparseable: parsed ? null : body.slice(0, 500),
+      };
+    } catch (e) {
+      entry.merchant_orders = { error: String(e?.message || e) };
+    }
+
+    out.payments[id] = entry;
+  }
+  return res.status(200).json({ ok: true, mode: 'inspect_ghost_full', ...out });
+}
 
 async function handleInspectGhost({ token, res }) {
   const out = { ts: new Date().toISOString(), payments: {} };
