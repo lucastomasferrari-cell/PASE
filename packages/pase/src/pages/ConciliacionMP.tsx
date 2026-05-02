@@ -546,17 +546,31 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
         </div>
       ):(
         (()=>{
-          // Comisiones y retenciones — resumen por tipo de cobro padre.
-          // Cada fee/tax referencia al pago original vía referencia_id, y
-          // ese pago tiene tipo 'payment' (online) o 'point' (presencial).
-          const fees=movimientos.filter(m=>ES_AUTOMATICO(m.tipo));
-          const porIdPago=new Map(movimientos.map(m=>[String(m.id),m]));
+          // Comisiones y retenciones — resumen por origen del cobro padre.
+          // TASK 0.18: cada fee-* tiene referencia_id == payment.id (mismo
+          // que su pay-* hermano). El padre que clasifica POS vs online es
+          // el pay-* (que tiene medio_pago='point_smart_*' para POS, otros
+          // valores para online).
+          const fees=dedupedMovs.filter(m=>ES_AUTOMATICO(m.tipo));
+          // Map referencia_id → fila no-fee (preferir pay-* > rr-* > set-*).
+          // Iteramos el array ya dedupeado, así el primer hit es el ganador.
+          const porPaymentId=new Map<string, any>();
+          for(const m of dedupedMovs){
+            if(ES_AUTOMATICO(m.tipo))continue;
+            if(!m.referencia_id)continue;
+            const k=String(m.referencia_id);
+            if(!porPaymentId.has(k))porPaymentId.set(k,m);
+          }
           let comisionOnline=0, comisionPresencial=0, comisionOtras=0;
           for(const f of fees){
-            const parent=porIdPago.get(String(f.referencia_id));
+            const parent=porPaymentId.get(String(f.referencia_id));
             const monto=Math.abs(Number(f.monto)||0);
-            if(parent?.tipo==="point")comisionPresencial+=monto;
-            else if(parent?.tipo==="payment")comisionOnline+=monto;
+            // POS: padre tiene medio_pago='point_smart_*'.
+            // Online: cualquier otro padre encontrado (CHECKOUT, INSTORE, etc).
+            // Otras: no se encontró padre en la ventana.
+            const mp=parent?.medio_pago;
+            if(typeof mp==="string"&&mp.startsWith("point_smart_"))comisionPresencial+=monto;
+            else if(parent)comisionOnline+=monto;
             else comisionOtras+=monto;
           }
           const total=comisionOnline+comisionPresencial+comisionOtras;
