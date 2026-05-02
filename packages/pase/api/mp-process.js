@@ -97,6 +97,9 @@ export default async function handler(req, res) {
 
     const resultados = [];
     let balanceTotalMP = 0;
+    // Agregado por tenant — la fila legacy de saldos_caja es 1 por tenant
+    // (post-multitenant). cred.tenant_id viene de la query de mp_credenciales.
+    const balancesPorTenant = new Map();
     let balanceConsultado = false;
 
     for (const cred of creds) {
@@ -315,6 +318,12 @@ export default async function handler(req, res) {
         );
 
         balanceTotalMP += credSaldoDisponible;
+        if (cred.tenant_id) {
+          balancesPorTenant.set(
+            cred.tenant_id,
+            (balancesPorTenant.get(cred.tenant_id) || 0) + credSaldoDisponible
+          );
+        }
         balanceConsultado = true;
 
         // UPDATE saldo legacy.
@@ -466,33 +475,34 @@ export default async function handler(req, res) {
       }
     }
 
-    // Actualizar saldo en saldos_caja (suma legacy de todos los locales del
-    // tenant Neko). En multi-tenant, este agregado solo cuenta los locales
-    // del tenant Neko porque las credenciales de otros tenants tienen sus
-    // propios saldos en mp_credenciales.saldo_disponible. La fila legacy
-    // sin local_id se mantiene para compat con frontend que aún la lee.
+    // Actualizar saldo en saldos_caja: una fila legacy por TENANT con la suma
+    // de saldo_disponible de las creds de ese tenant. Antes hardcodeaba neko;
+    // post-multitenant cada cred ya viene con su tenant_id correcto y agrupamos
+    // por ese campo. La fila legacy con local_id=NULL se mantiene para compat
+    // con frontend que aún la lee.
     if (balanceConsultado) {
-      const { data: nekoTenant } = await db.from('tenants').select('id').eq('slug', 'neko').single();
-      const tenantId = nekoTenant?.id;
-      const { data: existe } = await db
-        .from('saldos_caja')
-        .select('cuenta, local_id')
-        .eq('cuenta', 'MercadoPago')
-        .is('local_id', null)
-        .maybeSingle();
-      if (existe) {
-        await db.from('saldos_caja')
-          .update({ saldo: balanceTotalMP })
+      for (const [tenantId, total] of balancesPorTenant) {
+        if (!tenantId) continue;
+        const { data: existe } = await db
+          .from('saldos_caja')
+          .select('cuenta, local_id, tenant_id')
           .eq('cuenta', 'MercadoPago')
-          .is('local_id', null);
-      } else if (tenantId) {
-        // Insert con tenant_id (NOT NULL desde etapa 2). saldos_caja.local_id
-        // queda NULL (fila legacy agregada).
-        await db.from('saldos_caja').insert([{
-          cuenta: 'MercadoPago',
-          saldo: balanceTotalMP,
-          tenant_id: tenantId,
-        }]);
+          .is('local_id', null)
+          .eq('tenant_id', tenantId)
+          .maybeSingle();
+        if (existe) {
+          await db.from('saldos_caja')
+            .update({ saldo: total })
+            .eq('cuenta', 'MercadoPago')
+            .is('local_id', null)
+            .eq('tenant_id', tenantId);
+        } else {
+          await db.from('saldos_caja').insert([{
+            cuenta: 'MercadoPago',
+            saldo: total,
+            tenant_id: tenantId,
+          }]);
+        }
       }
     }
 
