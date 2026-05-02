@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     const getMpToken = createMpTokenGetter(db);
 
     const { data: cred, error: credErr } = await db.from('mp_credenciales')
-      .select('id, local_id, tenant_id, alias')
+      .select('id, local_id, tenant_id')
       .eq('local_id', TARGET_LOCAL_ID)
       .eq('activo', true)
       .maybeSingle();
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
     const out = {
       ventana_filtro_csv: DAY_FILTER,
       ventana_payments_search: { begin: PAYMENTS_BEGIN, end: PAYMENTS_END },
-      cred: { id: cred.id, local_id: cred.local_id, tenant_id: cred.tenant_id, alias: cred.alias || null },
+      cred: { id: cred.id, local_id: cred.local_id, tenant_id: cred.tenant_id },
       settlement: null,
       release: null,
       payments_search: null,
