@@ -546,14 +546,18 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
         </div>
       ):(
         (()=>{
-          // Comisiones y retenciones — resumen por origen del cobro padre.
-          // TASK 0.18: cada fee-* tiene referencia_id == payment.id (mismo
+          // Comisiones MP y retenciones impositivas — resumen por origen.
+          // TASK 0.18: cada fee-*/tax-* tiene referencia_id == payment.id (mismo
           // que su pay-* hermano). El padre que clasifica POS vs online es
-          // el pay-* (que tiene medio_pago='point_smart_*' para POS, otros
-          // valores para online).
-          const fees=dedupedMovs.filter(m=>ES_AUTOMATICO(m.tipo));
-          // Map referencia_id → fila no-fee (preferir pay-* > rr-* > set-*).
-          // Iteramos el array ya dedupeado, así el primer hit es el ganador.
+          // el pay-* (medio_pago='point_smart_*' para POS).
+          //
+          // Distinción CRÍTICA:
+          //   tipo='fee' → comisión MP (gasto operativo del negocio)
+          //   tipo='tax' → retención impositiva (crédito fiscal, ej IIBB CABA)
+          // Mezclarlos genera contabilidad equivocada.
+          const cargosFee=dedupedMovs.filter(m=>m.tipo==="fee");
+          const cargosTax=dedupedMovs.filter(m=>m.tipo==="tax");
+          // Map referencia_id → fila no-fee/tax (preferir pay-* > rr-* > set-*).
           const porPaymentId=new Map<string, any>();
           for(const m of dedupedMovs){
             if(ES_AUTOMATICO(m.tipo))continue;
@@ -562,45 +566,52 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
             if(!porPaymentId.has(k))porPaymentId.set(k,m);
           }
           let comisionOnline=0, comisionPresencial=0, comisionOtras=0;
-          for(const f of fees){
+          for(const f of cargosFee){
             const parent=porPaymentId.get(String(f.referencia_id));
             const monto=Math.abs(Number(f.monto)||0);
-            // POS: padre tiene medio_pago='point_smart_*'.
-            // Online: cualquier otro padre encontrado (CHECKOUT, INSTORE, etc).
-            // Otras: no se encontró padre en la ventana.
             const mp=parent?.medio_pago;
             if(typeof mp==="string"&&mp.startsWith("point_smart_"))comisionPresencial+=monto;
             else if(parent)comisionOnline+=monto;
             else comisionOtras+=monto;
           }
-          const total=comisionOnline+comisionPresencial+comisionOtras;
+          const retencionesTotal=cargosTax.reduce((s,t)=>s+Math.abs(Number(t.monto)||0),0);
+          const totalComisiones=comisionOnline+comisionPresencial+comisionOtras;
+          const totalCargos=totalComisiones+retencionesTotal;
+          const cargosCount=cargosFee.length+cargosTax.length;
           return (
             <div className="panel">
               <div className="panel-hd">
-                <span className="panel-title">Comisiones y Retenciones MP</span>
-                <span style={{fontSize:11,color:"var(--muted2)"}}>{fees.length} cargos en el período</span>
+                <span className="panel-title">Comisiones MP y Retenciones</span>
+                <span style={{fontSize:11,color:"var(--muted2)"}}>{cargosCount} cargos en el período · {cargosFee.length} comisión · {cargosTax.length} retención</span>
               </div>
-              {total===0?<div className="empty">Sin comisiones en este período</div>:(
+              {totalCargos===0?<div className="empty">Sin cargos en este período</div>:(
                 <div style={{padding:"20px 24px",display:"grid",gap:12,gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))"}}>
                   <div className="kpi">
-                    <div className="kpi-label">Cobro Online</div>
+                    <div className="kpi-label">Comisión MP — Online</div>
                     <div className="kpi-value kpi-warn">{fmt_mp(comisionOnline)}</div>
-                    <div className="kpi-sub">Comisiones por ventas online</div>
+                    <div className="kpi-sub">Checkout / Link / QR online</div>
                   </div>
                   <div className="kpi">
-                    <div className="kpi-label">Presencial</div>
+                    <div className="kpi-label">Comisión MP — Presencial</div>
                     <div className="kpi-value kpi-warn">{fmt_mp(comisionPresencial)}</div>
-                    <div className="kpi-sub">Comisiones Point / POS</div>
+                    <div className="kpi-sub">Point Smart / POS</div>
                   </div>
-                  <div className="kpi">
-                    <div className="kpi-label">Otras comisiones</div>
-                    <div className="kpi-value" style={{color:"var(--muted2)"}}>{fmt_mp(comisionOtras)}</div>
-                    <div className="kpi-sub">Sin pago padre en el período</div>
+                  <div className="kpi" style={{borderLeft:"3px solid var(--info)"}}>
+                    <div className="kpi-label">Retenciones impositivas</div>
+                    <div className="kpi-value" style={{color:"var(--info)"}}>{fmt_mp(retencionesTotal)}</div>
+                    <div className="kpi-sub">IIBB / IVA / Ganancias — crédito fiscal</div>
                   </div>
+                  {comisionOtras>0&&(
+                    <div className="kpi">
+                      <div className="kpi-label">Otras comisiones</div>
+                      <div className="kpi-value" style={{color:"var(--muted2)"}}>{fmt_mp(comisionOtras)}</div>
+                      <div className="kpi-sub">Sin pago padre en el período</div>
+                    </div>
+                  )}
                   <div className="kpi" style={{borderLeft:"3px solid var(--danger)"}}>
-                    <div className="kpi-label">TOTAL</div>
-                    <div className="kpi-value kpi-danger">{fmt_mp(total)}</div>
-                    <div className="kpi-sub">Todas las comisiones del período</div>
+                    <div className="kpi-label">TOTAL descontado</div>
+                    <div className="kpi-value kpi-danger">{fmt_mp(totalCargos)}</div>
+                    <div className="kpi-sub">Comisiones + retenciones</div>
                   </div>
                 </div>
               )}
