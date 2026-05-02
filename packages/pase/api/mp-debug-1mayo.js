@@ -321,10 +321,14 @@ async function probeAltEndpoints(token, begin, end) {
     // ── ORDERS API ────────────────────────────────────────────────────────────
     { label: 'orders/search v1 by date_created', url:
       `https://api.mercadopago.com/v1/orders/search?range=date_created&begin_date=${enc(begin)}&end_date=${enc(end)}&limit=50` },
+    { label: 'orders/search v1 plain', url:
+      `https://api.mercadopago.com/v1/orders/search?limit=50` },
     { label: 'orders/search v2 by date_created', url:
       `https://api.mercadopago.com/v2/orders/search?range=date_created&begin_date=${enc(begin)}&end_date=${enc(end)}&limit=50` },
     { label: 'merchant_orders/search', url:
-      `https://api.mercadopago.com/merchant_orders/search?range=date_created&begin_date=${enc(begin)}&end_date=${enc(end)}&limit=50` },
+      `https://api.mercadopago.com/merchant_orders/search?range=date_created&begin_date=${enc(begin)}&end_date=${enc(end)}&limit=10` },
+    { label: 'merchant_orders/search by site=MLA', url:
+      `https://api.mercadopago.com/merchant_orders/search?site=MLA&seller=73828709&limit=10` },
 
     // ── WITHDRAWALS / RETIROS A CBU ────────────────────────────────────────────
     { label: 'withdrawals (no search)', url: 'https://api.mercadopago.com/v1/withdrawals' },
@@ -376,18 +380,25 @@ async function probeAltEndpoints(token, begin, end) {
         slim.body_paging_total = bodyParsed?.paging?.total ?? bodyParsed?.total ?? null;
         slim.body_results_count = Array.isArray(bodyParsed?.results) ? bodyParsed.results.length
           : Array.isArray(bodyParsed?.devices) ? bodyParsed.devices.length
+          : Array.isArray(bodyParsed?.elements) ? bodyParsed.elements.length
+          : Array.isArray(bodyParsed?.events) ? bodyParsed.events.length
           : Array.isArray(bodyParsed) ? bodyParsed.length
           : null;
-        // Sample primeros 3 results / devices
         const arr = Array.isArray(bodyParsed?.results) ? bodyParsed.results
           : Array.isArray(bodyParsed?.devices) ? bodyParsed.devices
+          : Array.isArray(bodyParsed?.elements) ? bodyParsed.elements
           : Array.isArray(bodyParsed?.events) ? bodyParsed.events
           : Array.isArray(bodyParsed) ? bodyParsed
           : null;
         slim.body_first_3_items = arr ? arr.slice(0, 3) : null;
-        // Para errores: los errores de MP son JSON con error/message
+        slim.body_errors = bodyParsed?.errors ?? null;
         slim.error_field = bodyParsed?.error ?? null;
         slim.message_field = bodyParsed?.message ?? null;
+        slim.cause_field = bodyParsed?.cause ?? null;
+        // Para errores 4xx: incluir TODO el body parseado para diagnóstico (suele ser <2KB).
+        if (!r.ok && JSON.stringify(bodyParsed).length < 4000) {
+          slim.body_parsed_full = bodyParsed;
+        }
       } else {
         slim.body_preview = bodyText.slice(0, 400);
       }
