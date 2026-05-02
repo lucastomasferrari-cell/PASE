@@ -85,6 +85,7 @@ export default function Caja({ user, locales = [], localActivo }: any) {
   const [transfModal, setTransfModal] = useState(false);
   const [transfForm, setTransfForm] = useState({fecha:toISO(today),origen:"",destino:"",monto:"",detalle:""});
   const [transfSaving, setTransfSaving] = useState(false);
+  const [saving, setSaving] = useState(false);
   const esDueno = user?.rol === "dueno" || user?.rol === "admin";
   const necesitaSelectorLocal = lidImplicito == null && locsDisp.length > 1;
 
@@ -150,6 +151,7 @@ export default function Caja({ user, locales = [], localActivo }: any) {
   const totalLiquidez = Object.values(saldos).reduce((a,b)=>a+b,0);
 
   const guardar = async () => {
+    if (saving) return;
     if(!form.importe) return;
     const lid = lidImplicito != null ? lidImplicito : parseInt(localFormId);
     if (!Number.isFinite(lid)) return;
@@ -158,17 +160,22 @@ export default function Caja({ user, locales = [], localActivo }: any) {
     // con dirección egreso → "Gasto fijo". cat="Liquidación Rappi" con
     // ingreso → "Liquidación Plataforma".
     const tipoEfectivo = deriveTipoMov(form.cat, form.esEgreso);
-    const { error } = await db.rpc("crear_movimiento_caja", {
-      p_fecha: form.fecha,
-      p_cuenta: form.cuenta,
-      p_tipo: tipoEfectivo,
-      p_cat: form.cat || null,
-      p_importe: importe,
-      p_detalle: form.detalle || tipoEfectivo,
-      p_local_id: lid,
-    });
-    if (error) { alert(translateRpcError(error)); return; }
-    setModal(false); load();
+    setSaving(true);
+    try {
+      const { error } = await db.rpc("crear_movimiento_caja", {
+        p_fecha: form.fecha,
+        p_cuenta: form.cuenta,
+        p_tipo: tipoEfectivo,
+        p_cat: form.cat || null,
+        p_importe: importe,
+        p_detalle: form.detalle || tipoEfectivo,
+        p_local_id: lid,
+      });
+      if (error) { alert(translateRpcError(error)); return; }
+      setModal(false); load();
+    } finally {
+      setSaving(false);
+    }
   };
 
   const guardarTransferencia = async () => {
@@ -532,7 +539,7 @@ export default function Caja({ user, locales = [], localActivo }: any) {
               <div className="field"><label>Importe $</label><input type="number" value={form.importe} onChange={e=>setForm({...form,importe:e.target.value})} placeholder="0"/></div>
               <div className="field"><label>Detalle</label><input value={form.detalle} onChange={e=>setForm({...form,detalle:e.target.value})} placeholder="Descripción..."/></div>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={!form.importe || (necesitaSelectorLocal && !localFormId)}>Guardar</button></div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={saving || !form.importe || (necesitaSelectorLocal && !localFormId)}>{saving ? "Guardando..." : "Guardar"}</button></div>
           </div>
         </div>
       )}
