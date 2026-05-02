@@ -24,6 +24,11 @@ import {
   procesarFilaSettlement,
   procesarFilaRelease,
 } from './_mp-csv.js';
+import {
+  fetchPaymentsByDateCreated,
+  mapPaymentToRow,
+  formatArIso,
+} from './_mp-payments-search.js';
 
 export default async function handler(req, res) {
   try {
@@ -342,6 +347,93 @@ export default async function handler(req, res) {
           saldoApi = { error: e?.message || String(e) };
         }
 
+        // ── Payments-search: ingresos+egresos por date_created (TASK 0.18) ──
+        // Captura Point Smart, propinas, débitos automáticos y compras del
+        // merchant que ni release_report ni settlement_report cubren bien.
+        // Append-only: ON CONFLICT (id) DO NOTHING. NUNCA borra pay-* aunque
+        // una llamada particular no los devuelva (shard inconsistency MP).
+        // Si el call falla, log + seguir — no abortar el cron.
+        let paymentsSummary = null;
+        try {
+          // Resolver our account_id (necesario para distinguir
+          // ingreso/egreso en mapPaymentToRow). Best-effort.
+          let ourAccountId = null;
+          try {
+            const meRes = await fetch('https://api.mercadolibre.com/users/me', {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (meRes.ok) {
+              const me = await meRes.json();
+              ourAccountId = Number(me?.id) || null;
+            } else {
+              console.warn('[mp-process payments] /users/me failed', cred.local_id, meRes.status);
+            }
+          } catch (e) {
+            console.warn('[mp-process payments] /users/me threw', cred.local_id, e?.message);
+          }
+
+          if (ourAccountId) {
+            // Ventana últimos 7 días en horario AR.
+            const now = new Date();
+            const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            const beginIso = formatArIso(weekAgo);
+            const endIso = formatArIso(now);
+
+            const { payments, pages, pagingTotal, lotteryAttempts, firstRequestId } =
+              await fetchPaymentsByDateCreated(token, beginIso, endIso, {
+                threshold: 0, // sin lotería en cron — 30min × append-only converge.
+                fetchRetries: 3,
+                pageLimit: 100,
+                log: (event) => console.log('[mp-process payments]', JSON.stringify(event)),
+              });
+
+            const rows = [];
+            const skippedReasons = {};
+            for (const p of payments) {
+              const r = mapPaymentToRow(p, cred, ourAccountId);
+              if (r.skipped) {
+                skippedReasons[r.reason] = (skippedReasons[r.reason] || 0) + 1;
+              } else {
+                rows.push(r.row);
+              }
+            }
+
+            let inserted = 0;
+            let upsertError = null;
+            if (rows.length > 0) {
+              const { data: ins, error } = await db
+                .from('mp_movimientos')
+                .upsert(rows, { onConflict: 'id', ignoreDuplicates: true })
+                .select('id');
+              if (error) {
+                upsertError = error.message;
+                console.error('[mp-process payments] upsert error', cred.local_id, error.message);
+              } else {
+                inserted = (ins || []).length;
+              }
+            }
+
+            paymentsSummary = {
+              window: { begin: beginIso, end: endIso },
+              pages,
+              paging_total: pagingTotal,
+              lottery_attempts: lotteryAttempts,
+              first_request_id: firstRequestId,
+              payments_fetched: payments.length,
+              rows_built: rows.length,
+              rows_skipped: skippedReasons,
+              inserted,
+              upsert_error: upsertError || undefined,
+            };
+            console.log('[mp-process payments] summary', cred.local_id, JSON.stringify(paymentsSummary));
+          } else {
+            paymentsSummary = { error: 'no_account_id_resolved' };
+          }
+        } catch (e) {
+          console.error('[mp-process payments] failed', cred.local_id, e?.message);
+          paymentsSummary = { error: e?.message || String(e) };
+        }
+
         resultados.push({
           local: cred.locales?.nombre,
           local_id: cred.local_id,
@@ -360,6 +452,7 @@ export default async function handler(req, res) {
           movs_en_saldo: movDespuesCount,
           upd_error: updErr ? updErr.message : undefined,
           saldo_api: saldoApi,
+          payments_search: paymentsSummary,
         });
       } catch (err) {
         console.error('mp-process: error processing credential', cred?.local_id, err);
