@@ -47,6 +47,14 @@ export default async function handler(req, res) {
 
     const token = await getMpToken(cred.id);
 
+    // ─── ?inspect=1 → dump read-only de fee_details / charges_details / taxes
+    // de 3-4 payments concretos del 1/5. SIN DB writes. Sirve para investigar
+    // qué types emite MP y cómo separar comisión MP vs retención IIBB.
+    const inspectMode = req.query?.inspect === '1' || req.body?.inspect === '1';
+    if (inspectMode) {
+      return await handleInspect({ token, res });
+    }
+
     // Resolver our_account_id (necesario para clasificar ingreso/egreso)
     const meRes = await fetch('https://api.mercadolibre.com/users/me', {
       headers: { Authorization: `Bearer ${token}` },
@@ -152,6 +160,74 @@ export default async function handler(req, res) {
     console.error('mp-backfill-fees-1mayo error:', err);
     return res.status(500).json({ ok: false, error: err.message });
   }
+}
+
+// ─── Inspect mode (read-only) ────────────────────────────────────────────
+// Mix de payments del 1/5 elegidos para representar distintos casos:
+//   - POINT credit (visa)         → expecting MP fee + IIBB
+//   - CHECKOUT credit (visa)      → expecting MP fee + IIBB (online)
+//   - INSTORE debit (debvisa QR)  → expecting MP fee menor, posible IIBB
+//   - SUBSCRIPTIONS (Meli+)       → egreso, ver si trae fees del lado payer
+//   - account_money CHECKOUT      → cuenta sin fee (control)
+const INSPECT_IDS = [
+  { id: '157334804646', label: 'POINT credit visa $168.5k' },
+  { id: '156528808241', label: 'CHECKOUT credit visa $105.95k' },
+  { id: '156568780899', label: 'INSTORE QR debvisa $70k' },
+  { id: '157218501854', label: 'SUBSCRIPTIONS Meli+ $8.99k (egreso)' },
+];
+
+async function handleInspect({ token, res }) {
+  const out = { ts: new Date().toISOString(), payments: {} };
+  for (const { id, label } of INSPECT_IDS) {
+    try {
+      const r = await fetch(`https://api.mercadopago.com/v1/payments/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await r.text();
+      let p = null;
+      try { p = JSON.parse(body); } catch {}
+      if (!r.ok || !p) {
+        out.payments[id] = { label, status: r.status, body_preview: body.slice(0, 300) };
+        continue;
+      }
+      // Captura todas las arrays sospechosas de tener cargo MP / impuesto
+      out.payments[id] = {
+        label,
+        status: r.status,
+        request_id: r.headers.get('x-request-id') || null,
+        // Resumen
+        summary: {
+          status: p.status,
+          status_detail: p.status_detail,
+          payment_method_id: p.payment_method_id,
+          payment_type_id: p.payment_type_id,
+          point_of_interaction_type: p.point_of_interaction?.type ?? null,
+          transaction_amount: p.transaction_amount,
+          net_received_amount: p.transaction_details?.net_received_amount ?? null,
+          taxes_amount: p.taxes_amount ?? null,
+          // Diff calculado
+          diff_transaction_minus_net: (Number(p.transaction_amount) || 0)
+            - (Number(p.transaction_details?.net_received_amount) || 0),
+        },
+        // Arrays raw — los nombres exactos de fields varían según versión MP API
+        fee_details: p.fee_details ?? null,
+        charges_details: p.charges_details ?? null,
+        taxes: p.taxes ?? null,
+        // Algunos endpoints nuevos devuelven 'fee_total' agregado
+        fee_total: p.fee_total ?? null,
+        // Fields raw que pueden tener data útil sin estructura conocida
+        differential_pricing_id: p.differential_pricing_id ?? null,
+        installment_amount: p.installment_amount ?? null,
+        marketplace_fee: p.marketplace_fee ?? null,
+        shipping_amount: p.shipping_amount ?? null,
+        // El objeto de tax/comisión completo si MP lo expone
+        transaction_details_full: p.transaction_details ?? null,
+      };
+    } catch (e) {
+      out.payments[id] = { label, error: String(e?.message || e) };
+    }
+  }
+  return res.status(200).json({ ok: true, mode: 'inspect_fee_details', ...out });
 }
 
 async function countFeeRows(db, localId) {
