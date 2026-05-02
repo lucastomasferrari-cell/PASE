@@ -67,6 +67,9 @@ export default async function handler(req, res) {
     // 3c) ACCOUNT MOVEMENTS — egresos / withdrawals / outgoing payments
     out.account_movements = await fetchAccountMovements(token, PAYMENTS_BEGIN, PAYMENTS_END);
 
+    // 3d) Probes de endpoints alternativos para Point Smart + egresos
+    out.alt_endpoints = await probeAltEndpoints(token, PAYMENTS_BEGIN, PAYMENTS_END);
+
     // 4) Resumen comparativo
     out.resumen = {
       settlement: {
@@ -299,6 +302,102 @@ async function fetchAccountMovements(token, begin, end) {
       results[t.label] = { error: String(e?.message || e) };
     }
   }
+  return results;
+}
+
+// Probe genérico — hit URL + capturar status, headers relevantes, body preview.
+// Devuelve estructura compacta para no inflar el JSON. body_parsed se incluye solo
+// si el response es JSON pequeño (<8KB serializado).
+async function probeAltEndpoints(token, begin, end) {
+  const enc = encodeURIComponent;
+  // Para Point integration-api algunas APIs prefieren un formato distinto de fechas.
+  const beginShort = '2026-05-01T00:00:00.000-03:00';
+  const endShort   = '2026-05-02T00:00:00.000-03:00';
+  // Ventana corta también en formato YYYY-MM-DD por si algun endpoint la prefiere.
+  const beginDay = '2026-05-01';
+  const endDay   = '2026-05-02';
+
+  const urls = [
+    // ── ORDERS API ────────────────────────────────────────────────────────────
+    { label: 'orders/search v1 by date_created', url:
+      `https://api.mercadopago.com/v1/orders/search?range=date_created&begin_date=${enc(begin)}&end_date=${enc(end)}&limit=50` },
+    { label: 'orders/search v2 by date_created', url:
+      `https://api.mercadopago.com/v2/orders/search?range=date_created&begin_date=${enc(begin)}&end_date=${enc(end)}&limit=50` },
+    { label: 'merchant_orders/search', url:
+      `https://api.mercadopago.com/merchant_orders/search?range=date_created&begin_date=${enc(begin)}&end_date=${enc(end)}&limit=50` },
+
+    // ── WITHDRAWALS / RETIROS A CBU ────────────────────────────────────────────
+    { label: 'withdrawals (no search)', url: 'https://api.mercadopago.com/v1/withdrawals' },
+    { label: 'withdrawals/search', url:
+      `https://api.mercadopago.com/v1/withdrawals/search?begin_date=${enc(begin)}&end_date=${enc(end)}` },
+    { label: 'account/withdrawals', url: 'https://api.mercadopago.com/v1/account/withdrawals' },
+    { label: 'payments?operation_type=money_withdrawal', url:
+      `https://api.mercadopago.com/v1/payments/search?operation_type=money_withdrawal&range=date_created&begin_date=${enc(begin)}&end_date=${enc(end)}&limit=100` },
+
+    // ── POINT INTEGRATION API ─────────────────────────────────────────────────
+    { label: 'point v2 devices', url: 'https://api.mercadopago.com/v2/point/integration-api/devices' },
+    { label: 'point v1 devices', url: 'https://api.mercadopago.com/v1/point/integration-api/devices' },
+    { label: 'point payment-intents events', url:
+      `https://api.mercadopago.com/v1/point/integration-api/payment-intents/events?startDate=${enc(beginShort)}&endDate=${enc(endShort)}` },
+    { label: 'point v2 payment-intents events', url:
+      `https://api.mercadopago.com/v2/point/integration-api/payment-intents/events?startDate=${enc(beginShort)}&endDate=${enc(endShort)}` },
+    { label: 'point operations search', url:
+      `https://api.mercadopago.com/point/integration-api/operations/search?begin_date=${enc(beginDay)}&end_date=${enc(endDay)}` },
+
+    // ── BAJO-LEVEL (acaso devuelve algún index) ───────────────────────────────
+    { label: 'point root', url: 'https://api.mercadopago.com/point/integration-api' },
+  ];
+
+  const results = [];
+  for (const { label, url } of urls) {
+    try {
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const headers = {};
+      for (const [k, v] of r.headers.entries()) {
+        if (/x-|legacy|api-version|server-segment/i.test(k)) headers[k] = v;
+      }
+      const bodyText = await r.text();
+      let bodyParsed = null;
+      try { bodyParsed = JSON.parse(bodyText); } catch {}
+
+      const slim = {
+        label,
+        url: url.split('?')[0],
+        query_params: url.includes('?') ? '?' + url.split('?')[1] : null,
+        status: r.status,
+        ok: r.ok,
+        headers,
+      };
+
+      if (bodyParsed) {
+        slim.body_keys = bodyParsed && typeof bodyParsed === 'object' && !Array.isArray(bodyParsed)
+          ? Object.keys(bodyParsed) : null;
+        slim.body_is_array = Array.isArray(bodyParsed);
+        slim.body_paging_total = bodyParsed?.paging?.total ?? bodyParsed?.total ?? null;
+        slim.body_results_count = Array.isArray(bodyParsed?.results) ? bodyParsed.results.length
+          : Array.isArray(bodyParsed?.devices) ? bodyParsed.devices.length
+          : Array.isArray(bodyParsed) ? bodyParsed.length
+          : null;
+        // Sample primeros 3 results / devices
+        const arr = Array.isArray(bodyParsed?.results) ? bodyParsed.results
+          : Array.isArray(bodyParsed?.devices) ? bodyParsed.devices
+          : Array.isArray(bodyParsed?.events) ? bodyParsed.events
+          : Array.isArray(bodyParsed) ? bodyParsed
+          : null;
+        slim.body_first_3_items = arr ? arr.slice(0, 3) : null;
+        // Para errores: los errores de MP son JSON con error/message
+        slim.error_field = bodyParsed?.error ?? null;
+        slim.message_field = bodyParsed?.message ?? null;
+      } else {
+        slim.body_preview = bodyText.slice(0, 400);
+      }
+
+      results.push(slim);
+    } catch (e) {
+      results.push({ label, url: url.split('?')[0], error: String(e?.message || e) });
+    }
+  }
+
   return results;
 }
 
