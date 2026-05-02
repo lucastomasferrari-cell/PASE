@@ -53,6 +53,9 @@ export default async function handler(req, res) {
     if (inspectMode === 'all-1mayo') {
       return await handleInspectAll1Mayo({ token, res });
     }
+    if (inspectMode === 'ghost') {
+      return await handleInspectGhost({ token, res });
+    }
 
     // Ventana — default 7 días, configurable
     const daysBack = parseInt(String(req.query?.days_back || req.body?.days_back || '7'), 10) || 7;
@@ -336,6 +339,80 @@ async function handleInspectAll1Mayo({ token, res }) {
 }
 
 function round2(v) { return Math.round(v * 100) / 100; }
+
+// Inspect ghost: 2 IDs reportados como fantasma (no aparecen en MP UI) +
+// 1 control (sí aparece). Dump COMPLETO del response, sin filtros.
+const GHOST_IDS = [
+  { id: '157334804646', label: 'GHOST: Point Smart visa $155.340,15 (PASE 23:26)' },
+  { id: '157335675746', label: 'GHOST: Point Smart debvisa $87.777,80 (PASE 23:36)' },
+  { id: '156568780899', label: 'CONTROL: INSTORE QR debvisa $67.571 (matchea MP UI)' },
+];
+
+async function handleInspectGhost({ token, res }) {
+  const out = { ts: new Date().toISOString(), payments: {} };
+  for (const { id, label } of GHOST_IDS) {
+    try {
+      const r = await fetch(`https://api.mercadopago.com/v1/payments/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await r.text();
+      let p = null;
+      try { p = JSON.parse(body); } catch {}
+      if (!r.ok || !p) {
+        out.payments[id] = { label, http_status: r.status, body_preview: body.slice(0, 600) };
+        continue;
+      }
+      // Dump completo de los campos relevantes para detectar fantasmas
+      out.payments[id] = {
+        label,
+        http_status: r.status,
+        request_id: r.headers.get('x-request-id') || null,
+        // Campos de status / lifecycle
+        status: p.status,
+        status_detail: p.status_detail,
+        live_mode: p.live_mode,
+        operation_type: p.operation_type,
+        captured: p.captured,
+        cancelled_at: p.cancelled_at ?? null,
+        // Fechas
+        date_created: p.date_created,
+        date_approved: p.date_approved,
+        date_last_updated: p.date_last_updated,
+        money_release_date: p.money_release_date,
+        date_of_expiration: p.date_of_expiration ?? null,
+        // Montos
+        transaction_amount: p.transaction_amount,
+        transaction_amount_refunded: p.transaction_amount_refunded ?? 0,
+        net_received_amount: p.transaction_details?.net_received_amount ?? null,
+        // Refunds
+        refunds_count: Array.isArray(p.refunds) ? p.refunds.length : 0,
+        refunds: p.refunds ?? null,
+        // Identificadores
+        collector_id: p.collector_id ?? p.collector?.id ?? null,
+        payer_id: p.payer?.id ?? null,
+        application_id: p.application_id ?? null,
+        external_reference: p.external_reference ?? null,
+        // Medio / POI
+        payment_method_id: p.payment_method_id,
+        payment_type_id: p.payment_type_id,
+        point_of_interaction: p.point_of_interaction ?? null,
+        // Metadata adicional
+        api_response: p.api_response ?? null,
+        notification_url: p.notification_url ?? null,
+        sponsor_id: p.sponsor_id ?? null,
+        marketplace: p.marketplace ?? null,
+        marketplace_owner: p.marketplace_owner ?? null,
+        // Charges (para confirmar si los charges siguen vigentes)
+        charges_details: p.charges_details ?? null,
+        // Descripción
+        description: p.description ?? null,
+      };
+    } catch (e) {
+      out.payments[id] = { label, error: String(e?.message || e) };
+    }
+  }
+  return res.status(200).json({ ok: true, mode: 'inspect_ghost', ...out });
+}
 
 async function handleInspect({ token, res }) {
   const out = { ts: new Date().toISOString(), payments: {} };
