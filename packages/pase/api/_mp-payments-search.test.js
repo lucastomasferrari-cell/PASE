@@ -243,10 +243,11 @@ describe('mapPaymentToRows', () => {
     });
   });
 
-  it('ingreso CHECKOUT con charges_details → solo cargos del collector', () => {
-    // Caso real 156528808241: 3 charges, pero mercadopago_fee viene de
-    // application_owner (no collector) y debe ignorarse. Solo third_payment
-    // (fee, from collector) y tax_withholding-caba (tax, from collector).
+  it('ingreso CHECKOUT con application_id null → INCLUYE fee de application_owner', () => {
+    // Caso real 156528808241: 3 charges. application_id null = Lucas usa
+    // MP Checkout estándar = application_owner === Lucas → su mercadopago_fee
+    // de app_owner cuenta. third_payment (collector) + mercadopago_fee
+    // (app_owner) + tax_withholding-caba (collector).
     const rows = mapPaymentToRows({
       id: 156528808241,
       status: 'approved',
@@ -258,6 +259,7 @@ describe('mapPaymentToRows', () => {
       payment_method_id: 'visa',
       point_of_interaction: { type: 'CHECKOUT' },
       description: 'Pedido en Neko Sushi',
+      application_id: null,
       charges_details: [
         {
           id: '156528808241-001',
@@ -270,7 +272,7 @@ describe('mapPaymentToRows', () => {
           id: '156528808241-002',
           name: 'mercadopago_fee',
           type: 'fee',
-          accounts: { from: 'application_owner', to: 'mp' }, // ← NO collector
+          accounts: { from: 'application_owner', to: 'mp' },
           amounts: { original: 8338.27, refunded: 0 },
         },
         {
@@ -284,9 +286,8 @@ describe('mapPaymentToRows', () => {
         },
       ],
     }, CRED, OUR_ACCOUNT);
-    // 1 main + 1 fee (third_payment) + 1 tax (iibb). El mercadopago_fee
-    // de application_owner se filtra.
-    expect(rows).toHaveLength(3);
+    // 1 main + 2 fees (third_payment collector + mercadopago_fee app_owner) + 1 tax.
+    expect(rows).toHaveLength(4);
     expect(rows[0].row.tipo).toBe('liquidacion');
     expect(rows[1].row).toMatchObject({
       id: 'fee-156528808241-001',
@@ -295,11 +296,61 @@ describe('mapPaymentToRows', () => {
       descripcion: 'Comisión MP (Checkout)',
     });
     expect(rows[2].row).toMatchObject({
+      id: 'fee-156528808241-002',
+      tipo: 'fee',
+      monto: -8338.27,
+      descripcion: 'Comisión MP',
+    });
+    expect(rows[3].row).toMatchObject({
       id: 'tax-156528808241-003',
       tipo: 'tax',
       monto: -2648.75,
       descripcion: 'Retención IIBB CABA',
     });
+  });
+
+  it('ingreso CHECKOUT con application_id de TERCERO → excluye fee de application_owner', () => {
+    // Si la integración usa una app de tercero (application_id != null),
+    // application_owner NO es el merchant. El mercadopago_fee desde
+    // app_owner lo paga el dueño de la app (no el merchant). NO sumar.
+    const rows = mapPaymentToRows({
+      id: 156528808241,
+      status: 'approved',
+      date_created: '2026-05-01T16:54:00.000-04:00',
+      collector_id: OUR_ACCOUNT,
+      payer: { id: 222708650 },
+      transaction_amount: 105950,
+      transaction_details: { net_received_amount: 94337.88 },
+      payment_method_id: 'visa',
+      point_of_interaction: { type: 'CHECKOUT' },
+      application_id: 'app-de-tercero-12345',  // ← KEY: app de un tercero
+      charges_details: [
+        {
+          id: '156528808241-001',
+          name: 'third_payment',
+          type: 'fee',
+          accounts: { from: 'collector', to: 'marketplace_owner' },
+          amounts: { original: 8963.37, refunded: 0 },
+        },
+        {
+          id: '156528808241-002',
+          name: 'mercadopago_fee',
+          type: 'fee',
+          accounts: { from: 'application_owner', to: 'mp' },
+          amounts: { original: 8338.27, refunded: 0 },
+        },
+        {
+          id: '156528808241-003',
+          name: 'tax_withholding-caba',
+          type: 'tax',
+          accounts: { from: 'collector', to: 'mp' },
+          amounts: { original: 2648.75 },
+        },
+      ],
+    }, CRED, OUR_ACCOUNT);
+    // 1 main + 1 fee (third_payment) + 1 tax. mercadopago_fee app_owner ignorado.
+    expect(rows).toHaveLength(3);
+    expect(rows.some(r => r.row?.id === 'fee-156528808241-002')).toBe(false);
   });
 
   it('ingreso con charges_details vacío y commission > 0 → fallback fee-legacy', () => {

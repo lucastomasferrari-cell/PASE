@@ -254,10 +254,20 @@ export function mapPaymentToRows(payment, cred, ourAccountId) {
   if (!isIngress) return out;
 
   const charges = Array.isArray(payment.charges_details) ? payment.charges_details : [];
-  const ourCharges = charges.filter(c =>
-    c?.accounts?.from === 'collector' &&
-    (c?.type === 'fee' || c?.type === 'tax')
-  );
+  // payment.application_id == null significa que el merchant usa MP Checkout
+  // estándar (NO integración de tercero), en cuyo caso application_owner
+  // === merchant. Los charges from='application_owner' (típicamente
+  // 'mercadopago_fee' en CHECKOUT/UNSPECIFIED) son cargos que el merchant
+  // paga vía la app, así que también cuentan para él.
+  // Si application_id está set (3rd party app integrada), el app_owner es
+  // un tercero y no se debe contar — solo collector.
+  const isOwnApp = payment.application_id == null;
+  const ourCharges = charges.filter(c => {
+    const from = c?.accounts?.from;
+    if (from === 'collector') return c?.type === 'fee' || c?.type === 'tax';
+    if (from === 'application_owner' && isOwnApp) return c?.type === 'fee';
+    return false;
+  });
 
   if (ourCharges.length > 0) {
     for (const c of ourCharges) {
