@@ -4,7 +4,7 @@ import { applyLocalScope, cuentasVisibles as cuentasVisiblesFn, localesVisibles 
 import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS } from "../lib/constants";
-import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
+import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 
 // ─── TESORERÍA ────────────────────────────────────────────────────────────────
 export default function Caja({ user, locales = [], localActivo }: any) {
@@ -76,9 +76,6 @@ export default function Caja({ user, locales = [], localActivo }: any) {
   useEffect(() => {
     setForm(f => ({ ...f, cat: "" }));
   }, [form.esEgreso]);
-  const [movCajaEf, setMovCajaEf] = useState<any[]>([]);
-  const [modalCajaEf, setModalCajaEf] = useState(false);
-  const [formCajaEf, setFormCajaEf] = useState({fecha:toISO(today),descripcion:"",monto:"",esIngreso:true});
   // Transferencia entre cuentas: misma direccion (no afecta saldo total),
   // genera 2 movimientos (egreso en origen, ingreso en destino) vía RPC
   // transferencia_cuentas.
@@ -86,9 +83,7 @@ export default function Caja({ user, locales = [], localActivo }: any) {
   const [transfForm, setTransfForm] = useState({fecha:toISO(today),origen:"",destino:"",monto:"",detalle:""});
   const [transfSaving, setTransfSaving] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [savingCajaEf, setSavingCajaEf] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
-  const esDueno = user?.rol === "dueno" || user?.rol === "admin";
   const necesitaSelectorLocal = lidImplicito == null && locsDisp.length > 1;
 
   const load = async () => {
@@ -119,15 +114,6 @@ export default function Caja({ user, locales = [], localActivo }: any) {
     const obj: Record<string, number> = {};
     (s||[]).forEach(x=> { obj[x.cuenta] = (obj[x.cuenta]||0) + (x.saldo||0); });
     setSaldos(obj);
-    if (esDueno) {
-      let ceQ = db.from("caja_efectivo").select("*")
-        .order("fecha", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(50);
-      ceQ = applyLocalScope(ceQ, user, localActivo);
-      const { data: ce } = await ceQ;
-      setMovCajaEf(ce || []);
-    }
     setLoading(false);
   };
   useEffect(()=>{load();},[localActivo]);
@@ -281,29 +267,6 @@ export default function Caja({ user, locales = [], localActivo }: any) {
     }
   };
 
-  const guardarCajaEf = async () => {
-    if (savingCajaEf) return;
-    if (!formCajaEf.monto) return;
-    const lid = lidImplicito != null ? lidImplicito : parseInt(localFormId);
-    if (!Number.isFinite(lid)) return;
-    const monto = parseFloat(formCajaEf.monto) * (formCajaEf.esIngreso ? 1 : -1);
-    setSavingCajaEf(true);
-    try {
-      await db.from("caja_efectivo").insert([{
-        fecha: formCajaEf.fecha,
-        descripcion: formCajaEf.descripcion,
-        monto,
-        local_id: lid,
-        creado_por: user?.nombre || "—",
-      }]);
-      setModalCajaEf(false);
-      setFormCajaEf({fecha:toISO(today),descripcion:"",monto:"",esIngreso:true});
-      load();
-    } finally {
-      setSavingCajaEf(false);
-    }
-  };
-
   const cc = (c: string) => c==="Caja Chica"?"var(--acc)":c==="Caja Mayor"?"var(--acc2)":c==="MercadoPago"?"var(--acc3)":"var(--info)";
 
   return (
@@ -376,64 +339,6 @@ export default function Caja({ user, locales = [], localActivo }: any) {
         )}
       </div>
 
-      {esDueno && (
-        <div className="panel" style={{marginTop:16}}>
-          <div className="panel-hd">
-            <span className="panel-title">Caja Efectivo — Privado</span>
-            <button className="btn btn-acc btn-sm" onClick={() => setModalCajaEf(true)}>+ Movimiento</button>
-          </div>
-          {movCajaEf.length === 0 ? <div className="empty">Sin movimientos</div> : (
-            <table>
-              <thead><tr><th>Fecha</th><th>Descripción</th><th style={{textAlign:"right"}}>Monto</th></tr></thead>
-              <tbody>{movCajaEf.map(m => (
-                <tr key={m.id}>
-                  <td className="mono">{fmt_d(m.fecha)}</td>
-                  <td style={{fontSize:11}}>{m.descripcion}</td>
-                  <td style={{textAlign:"right"}}>
-                    <span className="num" style={{color: Number(m.monto) < 0 ? "var(--danger)" : "var(--success)"}}>
-                      {fmt_$(Number(m.monto))}
-                    </span>
-                  </td>
-                </tr>
-              ))}</tbody>
-            </table>
-          )}
-        </div>
-      )}
-
-      {modalCajaEf && (
-        <div className="overlay" onClick={() => setModalCajaEf(false)}>
-          <div className="modal" style={{width:460}} onClick={e => e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Caja Efectivo — Nuevo movimiento</div><button className="close-btn" onClick={() => setModalCajaEf(false)}>✕</button></div>
-            <div className="modal-body">
-              {necesitaSelectorLocal && (
-                <div className="field">
-                  <label>Local *</label>
-                  <select value={localFormId} onChange={e => setLocalFormId(e.target.value)} required>
-                    <option value="">Seleccioná el local...</option>
-                    {locsDisp.map((l:any) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-                  </select>
-                </div>
-              )}
-              <div className="field"><label>Tipo</label>
-                <select value={formCajaEf.esIngreso ? "ingreso" : "egreso"} onChange={e => setFormCajaEf({...formCajaEf, esIngreso: e.target.value === "ingreso"})}>
-                  <option value="ingreso">Ingreso (entra plata)</option>
-                  <option value="egreso">Egreso (sale plata)</option>
-                </select>
-              </div>
-              <div className="form2">
-                <div className="field"><label>Monto $</label><input type="number" value={formCajaEf.monto} onChange={e => setFormCajaEf({...formCajaEf, monto: e.target.value})} placeholder="0"/></div>
-                <div className="field"><label>Fecha</label><input type="date" value={formCajaEf.fecha} onChange={e => setFormCajaEf({...formCajaEf, fecha: e.target.value})}/></div>
-              </div>
-              <div className="field"><label>Descripción</label><input value={formCajaEf.descripcion} onChange={e => setFormCajaEf({...formCajaEf, descripcion: e.target.value})} placeholder="Ej: Retiro, ajuste..."/></div>
-            </div>
-            <div className="modal-ft">
-              <button className="btn btn-sec" onClick={() => setModalCajaEf(false)}>Cancelar</button>
-              <button className="btn btn-acc" onClick={guardarCajaEf} disabled={savingCajaEf || !formCajaEf.monto || (necesitaSelectorLocal && !localFormId)}>{savingCajaEf ? "Guardando..." : "Guardar"}</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {editMov && (
         <div className="overlay" onClick={() => setEditMov(null)}>

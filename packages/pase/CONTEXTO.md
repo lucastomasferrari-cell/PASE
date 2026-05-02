@@ -26,7 +26,7 @@
 
 ## Módulos activos
 - Dashboard, Ventas, Facturas, Remitos, Gastos, Proveedores
-- Import Maxirest, Caja & Bancos, Caja Efectivo
+- Import Maxirest, Caja & Bancos
 - Conciliación MP (MercadoPago), Estado de Resultados, Contador IVA
 - Lector Facturas IA, Insumos, Recetas
 - Empleados (módulo viejo, ocultar del sidebar — reemplazado por RRHH)
@@ -89,7 +89,7 @@ Modal Legajo accesible desde Empleados (botón "Legajo" por fila)
 - gastos, gastos_plantillas
 - remitos, remito_items
 - proveedores, insumos, recetas, receta_items
-- saldos_caja, caja_efectivo
+- saldos_caja
 - mp_credenciales (admin-only), mp_movimientos (`fecha` es timestamptz), mp_liquidaciones
 - empleado_archivos (FK uuid → rrhh_empleados; tabla legacy empleados eliminada en 202604261810)
 - rrhh_empleados, rrhh_novedades, rrhh_liquidaciones, rrhh_valores_doble, rrhh_historial_sueldos, rrhh_documentos, rrhh_pagos_especiales, rrhh_adelantos
@@ -196,16 +196,11 @@ En `src/pages/Cashflow.tsx`, panel informativo que deriva en runtime:
 
 Política Opción C (validada 2026-04-24): sólo efectivo dispara movimiento automático al cargar la venta. El resto se refleja en Cashflow cuando el usuario registra manualmente un movimiento de ingreso con la categoría de liquidación correspondiente (ver las 11 filas `cat_ingreso` en `config_categorias`).
 
-## Deuda técnica — Caja Efectivo
+## Caja Efectivo (track operativo único)
 
-Hoy existen dos representaciones paralelas para "Caja Efectivo":
+"Caja Efectivo" es ahora una `cuenta` más en `saldos_caja` y `movimientos`, alineada con Caja Chica/Mayor/Banco. La tabla privada `caja_efectivo` y el panel "Caja Efectivo — Privado" fueron eliminados (commit del 2026-05-02). El control de acceso por usuario se hace vía `usuarios.cuentas_visibles` (tipo TEXT[]; NULL = todas, array = filtro estricto).
 
-1. Fila en `saldos_caja` con `cuenta = 'Caja Efectivo'`. Las RPCs del batch α escriben ahí si el usuario elige esa cuenta como egreso.
-2. Tabla `caja_efectivo` (libro privado del dueño, panel "Caja Efectivo — Privado" en Tesorería).
-
-Cuando una venta con medio EFECTIVO SALON / EFECTIVO DELIVERY / PEYA EFECTIVO / EVENTO dispara movimiento automático, va a **Caja Chica** (no a Caja Efectivo). No están reconciliados. Para mover plata entre las dos representaciones hay que hacerlo manualmente.
-
-Pendiente para batch futuro: decidir si unificar las dos tablas o desambiguar nombres.
+Cuando una venta con medio EFECTIVO SALON / EFECTIVO DELIVERY / PEYA EFECTIVO / EVENTO dispara movimiento automático, va a **Caja Chica** (no a Caja Efectivo). Para mover plata entre cuentas se usa la RPC `transferencia_cuentas`.
 
 ## EERR vs Cashflow — diferencia conceptual
 
@@ -338,4 +333,4 @@ if (error) { alert(translateRpcError(error)); return; }
 - **`_actualizar_saldo_caja`** es el helper que actualiza saldos con INSERT ... ON CONFLICT DO UPDATE (nunca falla por "fila no existe"). Loguea `WARN_SALDO_NEGATIVO` en auditoria si el saldo queda en rojo, sin bloquear (flag `p_permitir_negativo` default true).
 - **Columnas de referencia en `movimientos`**: `liquidacion_id (uuid)`, `gasto_id_ref (text)`, `remito_id_ref (text)`, `adelanto_id_ref (uuid)`, `pago_especial_id_ref (uuid)`, `fact_id (text, existente)`. Las RPCs las setean al insertar para permitir propagación de anulaciones con vínculo duro.
 - **Cron MP (`mp-process.js`)**: el delta de las RPCs sobre `saldos_caja.MercadoPago` es efímero. El cron pisa con el saldo autoritativo de MP en la próxima sync. Documentado en el docstring de `pagar_factura` y `pagar_sueldo`.
-- **Deuda técnica abierta**: la cuenta "Caja Efectivo" en saldos_caja sigue existiendo aunque haya una tabla `caja_efectivo` para el libro privado del dueño. La separación queda pendiente para un refactor aparte. Las RPCs escriben a saldos_caja para mantener el comportamiento actual.
+- **Caja Efectivo unificada (2026-05-02)**: la tabla `caja_efectivo` y el panel privado fueron eliminados. La cuenta "Caja Efectivo" vive solo en `saldos_caja` + `movimientos`, gestionada por las RPCs estándar (`crear_movimiento_caja`, `editar_movimiento_caja`, `anular_movimiento`, `transferencia_cuentas`). El bot Telegram usa `crear_movimiento_caja_bot` (variante bot-friendly que recibe `p_usuario_id`).

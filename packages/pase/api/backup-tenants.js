@@ -40,7 +40,6 @@ const TABLAS_BACKUP = [
   'gastos',
   'gastos_plantillas',
   'saldos_caja',
-  'caja_efectivo',
   'mp_movimientos',
   'mp_liquidaciones',
   'blindaje_documentos',

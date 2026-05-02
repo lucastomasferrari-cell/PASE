@@ -21,7 +21,6 @@ import Insumos from "./pages/Insumos";
 import LectorFacturasIA from "./pages/LectorFacturasIA";
 import Recetas from "./pages/Recetas";
 import ConciliacionMP from "./pages/ConciliacionMP";
-import CajaEfectivo from "./pages/CajaEfectivo";
 import Cashflow from "./pages/Cashflow";
 import Cierre from "./pages/Cierre";
 import Blindaje from "./pages/Blindaje";
@@ -284,7 +283,6 @@ export default function App() {
       case "lector_ia": return <LectorFacturasIA {...props}/>;
       case "recetas":   return <Recetas {...props}/>;
       case "mp":        return <ConciliacionMP {...props}/>;
-      case "caja_efectivo": return <CajaEfectivo {...props}/>;
       case "cashflow": return <Cashflow {...props}/>;
       case "cierre": return <Cierre {...props}/>;
       case "blindaje": return <Blindaje {...props}/>;

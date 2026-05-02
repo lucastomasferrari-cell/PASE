@@ -1,0 +1,25 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Drop tabla caja_efectivo (ex "libro privado del dueño").
+--
+-- Contexto: la tabla era un track paralelo a movimientos/saldos_caja para
+-- el flow privado del dueño. Generaba confusión con la cuenta "Caja Efectivo"
+-- del track operativo. El control de acceso por usuario ahora se maneja vía
+-- usuarios.cuentas_visibles, así que la separación física de la tabla no
+-- aporta nada y solo introducía bugs (movimientos del bot Telegram que no
+-- se reflejaban en la card de Tesorería).
+--
+-- Antes de aplicar este DROP:
+--   * Frontend ya no la usa (panel "Caja Efectivo — Privado" eliminado de
+--     Caja.tsx, página CajaEfectivo.tsx eliminada, ruta del router
+--     eliminada en App.tsx, type MovimientoCajaEfectivo eliminado).
+--   * api/backup-tenants.js ya no la incluye en su lista.
+--   * api/telegram-webhook.js usa la RPC crear_movimiento_caja_bot que
+--     escribe en movimientos.
+--   * Tests de RLS ya no la testean (tests/rls_isolation.cjs).
+--
+-- CASCADE elimina policies/triggers/grants asociados. La data se pierde
+-- definitivamente — confirmar con el usuario que el SELECT de count no
+-- mostró filas valiosas antes de correr.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DROP TABLE IF EXISTS caja_efectivo CASCADE;

@@ -44,7 +44,7 @@ const dbUrl = fs.readFileSync(path.join(__dirname, '..', '..', '..', '.env.local
 // Lista de tablas con tenant_id que deben respetar el filtro.
 const TABLAS_CON_TENANT = [
   'locales', 'ventas', 'gastos', 'facturas', 'movimientos', 'remitos',
-  'saldos_caja', 'caja_efectivo', 'mp_credenciales', 'mp_movimientos',
+  'saldos_caja', 'mp_credenciales', 'mp_movimientos',
   'rrhh_empleados', 'blindaje_documentos', 'medios_cobro',
   'proveedores', 'insumos', 'recetas', 'config_categorias',
   'rrhh_valores_doble', 'blindaje_tipos_documento',

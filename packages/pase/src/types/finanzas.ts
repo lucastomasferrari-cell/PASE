@@ -95,13 +95,3 @@ export interface CierreVentas {
   total: number;
 }
 
-// Caja Efectivo privada (separada de Tesorería; flow del dueño).
-export interface MovimientoCajaEfectivo {
-  id: string;
-  fecha: string;
-  descripcion: string;
-  monto: number;
-  local_id: number;
-  creado_por: string | null;
-  created_at?: string | null;
-}
