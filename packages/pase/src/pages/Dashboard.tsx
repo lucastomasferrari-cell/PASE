@@ -114,8 +114,8 @@ export default function Dashboard({ user, locales, localActivo }: any) {
         <div className="panel">
           <div className="panel-hd"><span className="panel-title">Saldos en Tiempo Real</span></div>
           <div style={{padding:"12px 16px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            {CUENTAS.map(k=>(
-              <div key={k} className={`caja-card caja-${k==="Caja Chica"?"chica":k==="Caja Mayor"?"mayor":k==="MercadoPago"?"mp":"banco"}`}>
+            {CUENTAS.filter(k=>k!=="MercadoPago").map(k=>(
+              <div key={k} className={`caja-card caja-${k==="Caja Chica"?"chica":k==="Caja Mayor"?"mayor":"banco"}`}>
                 <div className="caja-name">{k}</div>
                 <div className="caja-saldo" style={{color:(stats.saldos[k]||0)<0?"var(--danger)":"var(--txt)"}}>{fmt_$(stats.saldos[k]||0)}</div>
               </div>
