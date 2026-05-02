@@ -86,6 +86,8 @@ export default function Caja({ user, locales = [], localActivo }: any) {
   const [transfForm, setTransfForm] = useState({fecha:toISO(today),origen:"",destino:"",monto:"",detalle:""});
   const [transfSaving, setTransfSaving] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingCajaEf, setSavingCajaEf] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
   const esDueno = user?.rol === "dueno" || user?.rol === "admin";
   const necesitaSelectorLocal = lidImplicito == null && locsDisp.length > 1;
 
@@ -216,79 +218,90 @@ export default function Caja({ user, locales = [], localActivo }: any) {
   };
 
   const guardarEditMov = async () => {
+    if (savingEdit) return;
     if (!editMov) return;
     if (!editMov.justificativo?.trim()) { alert("El justificativo es obligatorio"); return; }
     const original = movimientos.find(m => m.id === editMov.id);
     const lid = editMov.local_id;
+    setSavingEdit(true);
+    try {
+      if (original && lid && (original.importe !== parseFloat(editMov.importe) || original.cuenta !== editMov.cuenta)) {
+        const { data: cajaOrig } = await db.from("saldos_caja").select("saldo")
+          .eq("cuenta", original.cuenta).eq("local_id", lid).maybeSingle();
+        if (cajaOrig) await db.from("saldos_caja")
+          .update({ saldo: (cajaOrig.saldo || 0) - (original.importe || 0) })
+          .eq("cuenta", original.cuenta).eq("local_id", lid);
 
-    if (original && lid && (original.importe !== parseFloat(editMov.importe) || original.cuenta !== editMov.cuenta)) {
-      const { data: cajaOrig } = await db.from("saldos_caja").select("saldo")
-        .eq("cuenta", original.cuenta).eq("local_id", lid).maybeSingle();
-      if (cajaOrig) await db.from("saldos_caja")
-        .update({ saldo: (cajaOrig.saldo || 0) - (original.importe || 0) })
-        .eq("cuenta", original.cuenta).eq("local_id", lid);
+        const { data: cajaNueva } = await db.from("saldos_caja").select("saldo")
+          .eq("cuenta", editMov.cuenta).eq("local_id", lid).maybeSingle();
+        if (cajaNueva) await db.from("saldos_caja")
+          .update({ saldo: (cajaNueva.saldo || 0) + (parseFloat(editMov.importe) || 0) })
+          .eq("cuenta", editMov.cuenta).eq("local_id", lid);
+      }
 
-      const { data: cajaNueva } = await db.from("saldos_caja").select("saldo")
-        .eq("cuenta", editMov.cuenta).eq("local_id", lid).maybeSingle();
-      if (cajaNueva) await db.from("saldos_caja")
-        .update({ saldo: (cajaNueva.saldo || 0) + (parseFloat(editMov.importe) || 0) })
-        .eq("cuenta", editMov.cuenta).eq("local_id", lid);
+      // Si el signo o la categoría cambiaron, recalcular tipo usando
+      // deriveTipoMov(cat, esEgreso). Así un movimiento que pasa de egreso
+      // a ingreso con cat="Liquidación Rappi" queda como "Liquidación
+      // Plataforma" y no como tipo viejo incoherente.
+      const nuevoImporte = parseFloat(editMov.importe) || original?.importe || 0;
+      const signoOriginal = (original?.importe || 0) >= 0 ? 1 : -1;
+      const signoNuevo = nuevoImporte >= 0 ? 1 : -1;
+      const cambioSigno = signoOriginal !== signoNuevo;
+      const catCambio = editMov.cat !== original?.cat;
+      const tipoNuevo = (cambioSigno || catCambio)
+        ? deriveTipoMov(editMov.cat || "", signoNuevo < 0)
+        : original?.tipo;
+
+      await db.from("movimientos").update({
+        fecha: editMov.fecha,
+        detalle: editMov.detalle,
+        cat: editMov.cat || null,
+        importe: nuevoImporte,
+        cuenta: editMov.cuenta,
+        tipo: tipoNuevo,
+        editado: true,
+        editado_motivo: editMov.justificativo,
+        editado_at: new Date().toISOString(),
+      }).eq("id", editMov.id);
+
+      await db.from("auditoria").insert([{
+        tabla: "movimientos", accion: "EDICION",
+        detalle: JSON.stringify({
+          id: editMov.id,
+          antes: original,
+          despues: editMov,
+          justificativo: editMov.justificativo,
+        }),
+        fecha: new Date().toISOString(),
+      }]);
+
+      setEditMov(null); load();
+    } finally {
+      setSavingEdit(false);
     }
-
-    // Si el signo o la categoría cambiaron, recalcular tipo usando
-    // deriveTipoMov(cat, esEgreso). Así un movimiento que pasa de egreso
-    // a ingreso con cat="Liquidación Rappi" queda como "Liquidación
-    // Plataforma" y no como tipo viejo incoherente.
-    const nuevoImporte = parseFloat(editMov.importe) || original?.importe || 0;
-    const signoOriginal = (original?.importe || 0) >= 0 ? 1 : -1;
-    const signoNuevo = nuevoImporte >= 0 ? 1 : -1;
-    const cambioSigno = signoOriginal !== signoNuevo;
-    const catCambio = editMov.cat !== original?.cat;
-    const tipoNuevo = (cambioSigno || catCambio)
-      ? deriveTipoMov(editMov.cat || "", signoNuevo < 0)
-      : original?.tipo;
-
-    await db.from("movimientos").update({
-      fecha: editMov.fecha,
-      detalle: editMov.detalle,
-      cat: editMov.cat || null,
-      importe: nuevoImporte,
-      cuenta: editMov.cuenta,
-      tipo: tipoNuevo,
-      editado: true,
-      editado_motivo: editMov.justificativo,
-      editado_at: new Date().toISOString(),
-    }).eq("id", editMov.id);
-
-    await db.from("auditoria").insert([{
-      tabla: "movimientos", accion: "EDICION",
-      detalle: JSON.stringify({
-        id: editMov.id,
-        antes: original,
-        despues: editMov,
-        justificativo: editMov.justificativo,
-      }),
-      fecha: new Date().toISOString(),
-    }]);
-
-    setEditMov(null); load();
   };
 
   const guardarCajaEf = async () => {
+    if (savingCajaEf) return;
     if (!formCajaEf.monto) return;
     const lid = lidImplicito != null ? lidImplicito : parseInt(localFormId);
     if (!Number.isFinite(lid)) return;
     const monto = parseFloat(formCajaEf.monto) * (formCajaEf.esIngreso ? 1 : -1);
-    await db.from("caja_efectivo").insert([{
-      fecha: formCajaEf.fecha,
-      descripcion: formCajaEf.descripcion,
-      monto,
-      local_id: lid,
-      creado_por: user?.nombre || "—",
-    }]);
-    setModalCajaEf(false);
-    setFormCajaEf({fecha:toISO(today),descripcion:"",monto:"",esIngreso:true});
-    load();
+    setSavingCajaEf(true);
+    try {
+      await db.from("caja_efectivo").insert([{
+        fecha: formCajaEf.fecha,
+        descripcion: formCajaEf.descripcion,
+        monto,
+        local_id: lid,
+        creado_por: user?.nombre || "—",
+      }]);
+      setModalCajaEf(false);
+      setFormCajaEf({fecha:toISO(today),descripcion:"",monto:"",esIngreso:true});
+      load();
+    } finally {
+      setSavingCajaEf(false);
+    }
   };
 
   const cc = (c: string) => c==="Caja Chica"?"var(--acc)":c==="Caja Mayor"?"var(--acc2)":c==="MercadoPago"?"var(--acc3)":"var(--info)";
@@ -416,7 +429,7 @@ export default function Caja({ user, locales = [], localActivo }: any) {
             </div>
             <div className="modal-ft">
               <button className="btn btn-sec" onClick={() => setModalCajaEf(false)}>Cancelar</button>
-              <button className="btn btn-acc" onClick={guardarCajaEf} disabled={!formCajaEf.monto || (necesitaSelectorLocal && !localFormId)}>Guardar</button>
+              <button className="btn btn-acc" onClick={guardarCajaEf} disabled={savingCajaEf || !formCajaEf.monto || (necesitaSelectorLocal && !localFormId)}>{savingCajaEf ? "Guardando..." : "Guardar"}</button>
             </div>
           </div>
         </div>
@@ -463,7 +476,7 @@ export default function Caja({ user, locales = [], localActivo }: any) {
             </div>
             <div className="modal-ft">
               <button className="btn btn-sec" onClick={() => setEditMov(null)}>Cancelar</button>
-              <button className="btn btn-acc" onClick={guardarEditMov}>Guardar</button>
+              <button className="btn btn-acc" onClick={guardarEditMov} disabled={savingEdit}>{savingEdit ? "Guardando..." : "Guardar"}</button>
             </div>
           </div>
         </div>
