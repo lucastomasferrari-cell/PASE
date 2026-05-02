@@ -260,6 +260,7 @@ export default async function handler(req, res) {
                 reportInfo.error = 'formato CSV desconocido (sin TRANSACTION_TYPE ni RECORD_TYPE)';
               } else {
                 const unknownTypes = new Map();
+                const skippedMotivos = new Map();   // motivo → count, desglose de skips
                 // Pre-cargar referencia_ids ya importados para dedup pre-upsert.
                 const { data: existing } = await db
                   .from('mp_movimientos')
@@ -282,8 +283,12 @@ export default async function handler(req, res) {
                   if (result.skipped) {
                     if (result.transType && !SETTLEMENT_TIPOS[result.transType]) {
                       unknownTypes.set(result.transType, (unknownTypes.get(result.transType) || 0) + 1);
+                      skippedMotivos.set('unknown_settlement_type', (skippedMotivos.get('unknown_settlement_type') || 0) + 1);
                       reportInfo.rows_skipped_unknown_type++;
                     } else {
+                      const motivo = result.motivo
+                        || (result.recordType && result.recordType !== 'release' ? 'non_release_record' : 'other');
+                      skippedMotivos.set(motivo, (skippedMotivos.get(motivo) || 0) + 1);
                       reportInfo.rows_skipped_other++;
                     }
                     continue;
@@ -308,6 +313,12 @@ export default async function handler(req, res) {
                     .map(([type, count]) => ({ type, count }))
                     .sort((a, b) => b.count - a.count);
                   console.log('[mp-sync] TRANSACTION_TYPEs ignorados:', reportInfo.distinct_unknown_types);
+                }
+                if (skippedMotivos.size > 0) {
+                  reportInfo.skipped_motivos = Array.from(skippedMotivos.entries())
+                    .map(([motivo, count]) => ({ motivo, count }))
+                    .sort((a, b) => b.count - a.count);
+                  console.log('[mp-sync] skipped por motivo:', reportInfo.skipped_motivos);
                 }
               }
             }

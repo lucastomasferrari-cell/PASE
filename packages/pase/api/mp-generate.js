@@ -36,11 +36,12 @@ export default async function handler(req, res) {
     const resultados = [];
     const timestamp = Date.now();
 
-    // Override manual: ?source=release fuerza release_report (útil si por
-    // algún motivo el settlement_report está caído o el token no tiene
-    // scope para él). Default = settlement.
+    // Default: release_report. Es inclusivo (procesa Point Smart, propinas,
+    // débitos automáticos, etc.); settlement_report filtraba por whitelist
+    // incompleta y nos hizo perder ~$553k del 1/5/2026 (TASK 0.18).
+    // Override manual: ?source=settlement para casos especiales.
     const sourceOverride = (req.query?.source || req.body?.source || '').toLowerCase();
-    const source = sourceOverride === 'release' ? 'release' : 'settlement';
+    const source = sourceOverride === 'settlement' ? 'settlement' : 'release';
     const reportEndpoint = source === 'release'
       ? 'https://api.mercadopago.com/v1/account/release_report'
       : 'https://api.mercadopago.com/v1/account/settlement_report';

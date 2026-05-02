@@ -130,19 +130,22 @@ export default async function handler(req, res) {
           return { ok: true, baseUrl, target, fileName: target.file_name || target.fileName || target.name };
         };
 
-        // Si mp-generate eligió release explícitamente, ir directo a release.
+        // Default: release_report (inclusivo — captura Point Smart, propinas,
+        // débitos automáticos). Settlement_report filtra por whitelist
+        // incompleta y nos hizo perder ~$553k del 1/5/2026 (TASK 0.18).
+        // Override: ?source=settlement (de mp-generate) fuerza settlement.
         let probe = null;
-        if (generateSource === 'release') {
-          probe = await probarReporte('release');
-          reportInfo.source = 'release';
-        } else {
+        if (generateSource === 'settlement') {
           probe = await probarReporte('settlement');
+          reportInfo.source = 'settlement';
+        } else {
+          probe = await probarReporte('release');
           if (probe.ok) {
-            reportInfo.source = 'settlement';
-          } else {
-            console.warn('[mp-process] settlement_report sin CSV fresco, fallback a release', probe);
-            probe = await probarReporte('release');
             reportInfo.source = 'release';
+          } else {
+            console.warn('[mp-process] release_report sin CSV fresco, fallback a settlement', probe);
+            probe = await probarReporte('settlement');
+            reportInfo.source = 'settlement';
           }
         }
 
@@ -172,6 +175,7 @@ export default async function handler(req, res) {
               reportInfo.error = `formato CSV desconocido (header sin TRANSACTION_TYPE ni RECORD_TYPE)`;
             } else {
               const unknownTypes = new Map();
+              const skippedMotivos = new Map();   // motivo → count, desglose de skips
               // Pre-cargar referencia_ids ya importados (rr-* y set-*) para dedup
               // de seguridad antes del upsert.
               const { data: existing } = await db
@@ -198,8 +202,12 @@ export default async function handler(req, res) {
                 if (result.skipped) {
                   if (result.transType && !SETTLEMENT_TIPOS[result.transType]) {
                     unknownTypes.set(result.transType, (unknownTypes.get(result.transType) || 0) + 1);
+                    skippedMotivos.set('unknown_settlement_type', (skippedMotivos.get('unknown_settlement_type') || 0) + 1);
                     reportInfo.rows_skipped_unknown_type++;
                   } else {
+                    const motivo = result.motivo
+                      || (result.recordType && result.recordType !== 'release' ? 'non_release_record' : 'other');
+                    skippedMotivos.set(motivo, (skippedMotivos.get(motivo) || 0) + 1);
                     reportInfo.rows_skipped_other++;
                   }
                   continue;
@@ -232,6 +240,12 @@ export default async function handler(req, res) {
                   .map(([type, count]) => ({ type, count }))
                   .sort((a, b) => b.count - a.count);
                 console.log('[mp-process] TRANSACTION_TYPEs ignorados:', reportInfo.distinct_unknown_types);
+              }
+              if (skippedMotivos.size > 0) {
+                reportInfo.skipped_motivos = Array.from(skippedMotivos.entries())
+                  .map(([motivo, count]) => ({ motivo, count }))
+                  .sort((a, b) => b.count - a.count);
+                console.log('[mp-process] skipped por motivo:', reportInfo.skipped_motivos);
               }
             }
           }
