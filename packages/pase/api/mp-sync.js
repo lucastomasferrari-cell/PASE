@@ -100,13 +100,15 @@ export default async function handler(req, res) {
         const dupeIds = [];
         for (const m of allMovs) {
           const idStr = m.id ? String(m.id) : '';
-          // pay-* (TASK 0.18) son fuente complementaria por date_created vía
-          // payments/search. Conviven con rr-/set- por design — el conciliador
-          // dedupea por referencia_id en presentación. NUNCA borramos pay-*.
+          // pay-* y fee-* (TASK 0.18) son fuentes complementarias por
+          // date_created vía payments/search. Conviven con rr-/set- por
+          // design — el conciliador dedupea por referencia_id en presentación.
+          // NUNCA borramos pay-* ni fee-*.
           const isPrefixed =
             idStr.startsWith('rr-') ||
             idStr.startsWith('set-') ||
-            idStr.startsWith('pay-');
+            idStr.startsWith('pay-') ||
+            idStr.startsWith('fee-');
           if (idStr && !isPrefixed && m.referencia_id && releasedRefIds.has(String(m.referencia_id))) {
             dupeIds.push(idStr);
           }
