@@ -157,18 +157,25 @@ async function handleMovimiento(ctx, text, cmd) {
 
   const signo = cmd === '/ingreso' ? 1 : -1;
 
-  const { error } = await db.from('caja_efectivo').insert([{
-    fecha: new Date().toISOString().split('T')[0],
-    descripcion: descripcion.trim(),
-    monto: monto * signo,
-    local_id: local.id,
-    tenant_id: usuario.tenant_id,
-    creado_por: usuario.nombre + ' (Telegram)',
-  }]);
+  // RPC bot-friendly que valida usuario+local+tenant y hace el insert
+  // atómico en movimientos + saldos_caja (track operativo de Tesorería).
+  // Migración: 202605020900_rpc_crear_movimiento_caja_bot.sql.
+  const { error } = await db.rpc('crear_movimiento_caja_bot', {
+    p_fecha:      new Date().toISOString().split('T')[0],
+    p_cuenta:     'Caja Efectivo',
+    p_tipo:       cmd === '/ingreso' ? 'Ingreso Manual' : 'Egreso Manual',
+    p_cat:        null,
+    p_importe:    monto * signo,
+    p_detalle:    descripcion.trim(),
+    p_local_id:   local.id,
+    p_usuario_id: usuario.id,
+  });
 
   if (error) {
-    log({ chat_id: chatId, user_id: usuario.id, tenant_id: usuario.tenant_id, cmd, local_id: local.id, result: 'db_error' });
-    return send(token, chatId, '❌ Error al guardar: ' + error.message);
+    log({ chat_id: chatId, user_id: usuario.id, tenant_id: usuario.tenant_id, cmd, local_id: local.id, result: 'rpc_error', code: error.message });
+    // Mapeo de códigos conocidos de la RPC a mensajes amigables.
+    const msg = mapRpcError(error.message);
+    return send(token, chatId, msg);
   }
 
   log({ chat_id: chatId, user_id: usuario.id, tenant_id: usuario.tenant_id, cmd, local_id: local.id, result: 'ok' });
@@ -186,18 +193,18 @@ async function handleMovimiento(ctx, text, cmd) {
 }
 
 // ─── /saldo ───────────────────────────────────────────────────────────────────
+// Lee saldos_caja (cache que alimenta la card "Caja Efectivo" de Tesorería).
 async function handleSaldo(ctx) {
   const { db, token, chatId, usuario, locales } = ctx;
-  const { data } = await db.from('caja_efectivo')
-    .select('local_id, monto')
+  const { data } = await db.from('saldos_caja')
+    .select('local_id, saldo')
+    .eq('cuenta', 'Caja Efectivo')
     .eq('tenant_id', usuario.tenant_id);
-  const movs = data || [];
+  const filas = data || [];
 
-  const total = movs.reduce((s, m) => s + Number(m.monto), 0);
   const porLocal = {};
-  movs.forEach(m => {
-    porLocal[m.local_id] = (porLocal[m.local_id] || 0) + Number(m.monto);
-  });
+  filas.forEach(f => { porLocal[f.local_id] = Number(f.saldo) || 0; });
+  const total = Object.values(porLocal).reduce((s, v) => s + v, 0);
 
   const lines = ['💵 *CAJA EFECTIVO*', '', '*Total: $' + fmt(total) + '*', ''];
   locales.forEach(l => {
@@ -211,13 +218,16 @@ async function handleSaldo(ctx) {
 }
 
 // ─── /movimientos ─────────────────────────────────────────────────────────────
+// Lee movimientos del track operativo (cuenta='Caja Efectivo'), no anulados.
 async function handleMovimientos(ctx) {
   const { db, token, chatId, usuario, locales } = ctx;
-  const { data } = await db.from('caja_efectivo')
-    .select('*')
+  const { data } = await db.from('movimientos')
+    .select('id, fecha, importe, detalle, local_id, anulado')
+    .eq('cuenta', 'Caja Efectivo')
     .eq('tenant_id', usuario.tenant_id)
+    .not('anulado', 'is', true)   // anulado IS NOT TRUE → matchea null y false
     .order('fecha', { ascending: false })
-    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
     .limit(10);
 
   const movs = data || [];
@@ -229,16 +239,31 @@ async function handleMovimientos(ctx) {
   const lines = ['📋 *Últimos 10 movimientos*', ''];
   movs.forEach(m => {
     const localName = locales.find(l => l.id === m.local_id)?.nombre || '?';
-    const signo = Number(m.monto) >= 0 ? '+' : '';
+    const signo = Number(m.importe) >= 0 ? '+' : '';
     const fecha = m.fecha.split('-').reverse().join('/');
     lines.push(
       '`' + fecha + '` ' + localName + '\n' +
-      '  ' + m.descripcion + ' *' + signo + '$' + fmt(Number(m.monto)) + '*'
+      '  ' + (m.detalle || '—') + ' *' + signo + '$' + fmt(Number(m.importe)) + '*'
     );
   });
 
   log({ chat_id: chatId, user_id: usuario.id, tenant_id: usuario.tenant_id, cmd: '/movimientos', result: 'ok' });
   await send(token, chatId, lines.join('\n'));
+}
+
+// Mapea códigos de excepción de la RPC a mensajes amigables para el usuario.
+function mapRpcError(rawMsg) {
+  const m = String(rawMsg || '');
+  if (m.includes('USUARIO_NO_ENCONTRADO')) return '❌ Tu usuario no existe en PASE. Avisá al administrador.';
+  if (m.includes('USUARIO_INACTIVO'))      return '⛔ Tu usuario está inactivo.';
+  if (m.includes('USUARIO_SIN_TENANT'))    return '⛔ Tu usuario no tiene tenant asignado.';
+  if (m.includes('LOCAL_NO_ENCONTRADO'))   return '❌ Local no encontrado.';
+  if (m.includes('LOCAL_CROSS_TENANT'))    return '❌ No tenés permiso sobre ese local.';
+  if (m.includes('LOCAL_NO_AUTORIZADO'))   return '❌ No tenés permiso sobre ese local.';
+  if (m.includes('MONTO_INVALIDO'))        return '❌ Monto inválido.';
+  if (m.includes('CUENTA_INVALIDA'))       return '❌ Cuenta inválida.';
+  if (m.includes('TIPO_INVALIDO'))         return '❌ Tipo de movimiento inválido.';
+  return '❌ Error al guardar el movimiento. Probá de nuevo.';
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
