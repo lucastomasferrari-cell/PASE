@@ -187,8 +187,8 @@ async function fetchWithBackoff({ url, token, retries, fetchFn, log }) {
  *  - medio_pago heredado del main (point_smart_*, qr_*, etc.).
  */
 export function mapPaymentToRows(payment, cred, ourAccountId) {
-  if (!payment || payment.status !== 'approved') {
-    return [{ skipped: true, reason: 'not_approved' }];
+  if (!payment) {
+    return [{ skipped: true, reason: 'no_payment' }];
   }
 
   const collectorId = Number(payment.collector_id ?? payment.collector?.id ?? 0);
@@ -234,6 +234,15 @@ export function mapPaymentToRows(payment, cred, ourAccountId) {
 
   if (monto === 0) return [{ skipped: true, reason: 'monto_cero' }];
 
+  // Status del payment. Si != approved (charged_back, cancelled, refunded),
+  // emitimos la fila con anulado=true para que el conciliador la oculte.
+  // Antes hacíamos skip total al inicio, pero eso ocultaba la transición:
+  // un payment que pasaba de approved → cancelled quedaba huérfano en DB
+  // como approved hasta que el daily job lo corrigiera. Mejor emitirlo y
+  // dejar que el conciliador filtre por anulado.
+  const mpStatus = payment.status || null;
+  const isApproved = mpStatus === 'approved';
+
   const mainRow = {
     id: `pay-${payment.id}`,
     local_id: cred.local_id,
@@ -246,6 +255,16 @@ export function mapPaymentToRows(payment, cred, ourAccountId) {
     estado: 'approved',
     referencia_id: String(payment.id),
     medio_pago: medioPago,
+    // TASK 0.18 — fase final
+    monto_bruto: Math.round(transactionAmount * 100) / 100,
+    money_release_date: payment.money_release_date || null,
+    money_release_status: payment.money_release_status || null,
+    mp_status: mpStatus,
+    ...(isApproved ? {} : {
+      anulado: true,
+      anulado_motivo: 'mp_status_' + mpStatus,
+      anulado_at: new Date().toISOString(),
+    }),
   };
 
   const out = [{ skipped: false, row: mainRow }];
@@ -289,6 +308,10 @@ export function mapPaymentToRows(payment, cred, ourAccountId) {
           estado: 'approved',
           referencia_id: String(payment.id),
           medio_pago: medioPago,
+          // fee/tax heredan release del padre (mismo timing). NO heredan
+          // monto_bruto (no aplica) ni mp_status (siempre approved).
+          money_release_date: payment.money_release_date || null,
+          money_release_status: payment.money_release_status || null,
         },
       });
     }
@@ -312,6 +335,9 @@ export function mapPaymentToRows(payment, cred, ourAccountId) {
         monto: -Math.round(commission * 100) / 100,
         saldo: null,
         estado: 'approved',
+        // hereda release del padre, igual que fee/tax con charges_details.
+        money_release_date: payment.money_release_date || null,
+        money_release_status: payment.money_release_status || null,
         referencia_id: String(payment.id),
         medio_pago: medioPago,
       },

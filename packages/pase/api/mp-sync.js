@@ -316,7 +316,15 @@ export default async function handler(req, res) {
                     }
                   }
 
-                  await db.from('mp_movimientos').upsert([result.row], { onConflict: 'id' });
+                  // ignoreDuplicates: true → preserva la primera versión de
+                  // rr-/set-* en DB. release_report es authoritative; si una
+                  // pasada posterior trae datos distintos para el mismo id,
+                  // nos quedamos con la primera (raro pero defensa contra
+                  // rewrites accidentales). rr-/set-* no llevan los campos
+                  // money_release_* (no aplica a CSVs); no necesitan UPDATE
+                  // selectivo como pay-/fee-/tax-* en mp-process.js.
+                  await db.from('mp_movimientos')
+                    .upsert([result.row], { onConflict: 'id', ignoreDuplicates: true });
                   reportInfo.rows_upserted++;
                 }
 

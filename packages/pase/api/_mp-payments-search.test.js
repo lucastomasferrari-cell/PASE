@@ -164,11 +164,51 @@ const CRED = { local_id: 1, tenant_id: 'tenant-uuid' };
 const OUR_ACCOUNT = 73828709;
 
 describe('mapPaymentToRows', () => {
-  it('skip si status != approved', () => {
-    const rows = mapPaymentToRows({ id: 1, status: 'rejected' }, CRED, OUR_ACCOUNT);
-    expect(rows).toHaveLength(1);
-    expect(rows[0].skipped).toBe(true);
-    expect(rows[0].reason).toBe('not_approved');
+  it('payment con status=charged_back → row emitido con anulado=true', () => {
+    // Antes hacíamos skip total si status != approved. Ahora emitimos la fila
+    // con anulado=true para reflejar la transición y que el daily job o el
+    // conciliador la oculten correctamente.
+    const rows = mapPaymentToRows({
+      id: 999, status: 'charged_back',
+      date_created: '2026-05-01T00:00:00-04:00',
+      collector_id: OUR_ACCOUNT, payer: { id: 1 },
+      transaction_amount: 1000, transaction_details: { net_received_amount: 950 },
+      payment_method_id: 'visa', point_of_interaction: { type: 'POINT' },
+      money_release_date: '2026-05-11T00:00:00-04:00',
+      money_release_status: 'pending',
+    }, CRED, OUR_ACCOUNT);
+    // Main row + fee fallback
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    const main = rows[0].row;
+    expect(main.id).toBe('pay-999');
+    expect(main.mp_status).toBe('charged_back');
+    expect(main.anulado).toBe(true);
+    expect(main.anulado_motivo).toBe('mp_status_charged_back');
+    expect(main.anulado_at).toBeTruthy();
+  });
+
+  it('payment con status=cancelled → anulado=true, anulado_motivo=mp_status_cancelled', () => {
+    const rows = mapPaymentToRows({
+      id: 1, status: 'cancelled',
+      collector_id: OUR_ACCOUNT, payer: { id: 99 },
+      transaction_amount: 500, transaction_details: { net_received_amount: 470 },
+      payment_method_id: 'visa', point_of_interaction: { type: 'POINT' },
+    }, CRED, OUR_ACCOUNT);
+    expect(rows[0].row.anulado).toBe(true);
+    expect(rows[0].row.anulado_motivo).toBe('mp_status_cancelled');
+  });
+
+  it('payment approved → NO anulado, sin anulado_motivo', () => {
+    const rows = mapPaymentToRows({
+      id: 1, status: 'approved',
+      date_created: '2026-05-01T00:00:00-04:00',
+      collector_id: OUR_ACCOUNT, payer: { id: 99 },
+      transaction_amount: 1000, transaction_details: { net_received_amount: 950 },
+      payment_method_id: 'visa', point_of_interaction: { type: 'POINT' },
+    }, CRED, OUR_ACCOUNT);
+    expect(rows[0].row.anulado).toBeUndefined();
+    expect(rows[0].row.anulado_motivo).toBeUndefined();
+    expect(rows[0].row.mp_status).toBe('approved');
   });
 
   it('skip si transferencia interna (collector == payer == ours)', () => {
@@ -182,7 +222,7 @@ describe('mapPaymentToRows', () => {
     expect(rows[0].reason).toBe('internal_transfer');
   });
 
-  it('ingreso POINT con charges_details → main + fee + tax (3 filas)', () => {
+  it('ingreso POINT con charges_details + release fields → main + fee + tax (3 filas)', () => {
     const rows = mapPaymentToRows({
       id: 157334804646,
       status: 'approved',
@@ -194,6 +234,9 @@ describe('mapPaymentToRows', () => {
       payment_method_id: 'visa',
       payment_type_id: 'credit_card',
       point_of_interaction: { type: 'POINT' },
+      // TASK 0.18 final — release fields persistidos en main + heredados en fee/tax
+      money_release_date: '2026-05-11T22:26:22.000-04:00',
+      money_release_status: 'pending',
       // Caso real del 1/5/2026, dump del endpoint inspect
       charges_details: [
         {
@@ -216,14 +259,18 @@ describe('mapPaymentToRows', () => {
       ],
     }, CRED, OUR_ACCOUNT);
     expect(rows).toHaveLength(3);
-    // Main
+    // Main: persiste release fields + monto_bruto + mp_status
     expect(rows[0].row).toMatchObject({
       id: 'pay-157334804646',
       tipo: 'liquidacion',
-      monto: 155340.15,
+      monto: 155340.15,                      // neto
+      monto_bruto: 168500,                    // bruto = transaction_amount
+      mp_status: 'approved',
+      money_release_status: 'pending',
+      money_release_date: '2026-05-11T22:26:22.000-04:00',
       medio_pago: 'point_smart_visa',
     });
-    // Fee comisión MP
+    // Fee comisión MP — hereda money_release_*, NO tiene monto_bruto ni mp_status
     expect(rows[1].row).toMatchObject({
       id: 'fee-157334804646-001',
       tipo: 'fee',
@@ -231,8 +278,12 @@ describe('mapPaymentToRows', () => {
       descripcion: 'Comisión MP',
       referencia_id: '157334804646',
       medio_pago: 'point_smart_visa',
+      money_release_status: 'pending',
+      money_release_date: '2026-05-11T22:26:22.000-04:00',
     });
-    // Tax IIBB CABA
+    expect(rows[1].row.monto_bruto).toBeUndefined();
+    expect(rows[1].row.mp_status).toBeUndefined();
+    // Tax IIBB CABA — hereda money_release_*
     expect(rows[2].row).toMatchObject({
       id: 'tax-157334804646-002',
       tipo: 'tax',
@@ -240,7 +291,11 @@ describe('mapPaymentToRows', () => {
       descripcion: 'Retención IIBB CABA',
       referencia_id: '157334804646',
       medio_pago: 'point_smart_visa',
+      money_release_status: 'pending',
+      money_release_date: '2026-05-11T22:26:22.000-04:00',
     });
+    expect(rows[2].row.monto_bruto).toBeUndefined();
+    expect(rows[2].row.mp_status).toBeUndefined();
   });
 
   it('ingreso CHECKOUT con application_id null → INCLUYE fee de application_owner', () => {

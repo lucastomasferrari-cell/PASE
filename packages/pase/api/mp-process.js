@@ -401,7 +401,12 @@ export default async function handler(req, res) {
 
             let inserted = 0;
             let upsertError = null;
+            let releaseRefreshed = 0;
             if (rows.length > 0) {
+              // Paso 1: INSERT-only con ignoreDuplicates → solo filas nuevas.
+              // Las pre-existentes quedan sin tocar (campos inmutables: id,
+              // fecha, monto, descripcion, monto_bruto). Esto preserva la
+              // integridad histórica.
               const { data: ins, error } = await db
                 .from('mp_movimientos')
                 .upsert(rows, { onConflict: 'id', ignoreDuplicates: true })
@@ -411,6 +416,30 @@ export default async function handler(req, res) {
                 console.error('[mp-process payments] upsert error', cred.local_id, error.message);
               } else {
                 inserted = (ins || []).length;
+              }
+
+              // Paso 2: UPDATE selectivo de las 3 columnas que SÍ pueden
+              // refrescarse (money_release_status, money_release_date, mp_status)
+              // para filas existentes. Mitigación M1: el WHERE protege que
+              // payments ya 'released' NO vuelvan a 'pending' por una pasada
+              // stale del shard de payments/search. Solo se actualiza si el
+              // valor existente es NULL o distinto a 'released'.
+              for (const row of rows) {
+                const updatePayload = {};
+                if (row.money_release_status !== undefined) updatePayload.money_release_status = row.money_release_status;
+                if (row.money_release_date !== undefined) updatePayload.money_release_date = row.money_release_date;
+                if (row.mp_status !== undefined) updatePayload.mp_status = row.mp_status;
+                if (Object.keys(updatePayload).length === 0) continue;
+                const { error: updErr, count } = await db
+                  .from('mp_movimientos')
+                  .update(updatePayload, { count: 'exact' })
+                  .eq('id', row.id)
+                  .or('money_release_status.is.null,money_release_status.neq.released');
+                if (updErr) {
+                  console.error('[mp-process payments] release update error', row.id, updErr.message);
+                } else if (count) {
+                  releaseRefreshed += count;
+                }
               }
             }
 
@@ -424,6 +453,7 @@ export default async function handler(req, res) {
               rows_built: rows.length,
               rows_skipped: skippedReasons,
               inserted,
+              release_refreshed: releaseRefreshed,
               upsert_error: upsertError || undefined,
             };
             console.log('[mp-process payments] summary', cred.local_id, JSON.stringify(paymentsSummary));
