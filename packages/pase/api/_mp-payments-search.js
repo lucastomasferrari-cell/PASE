@@ -157,26 +157,35 @@ async function fetchWithBackoff({ url, token, retries, fetchFn, log }) {
 }
 
 /**
- * Convierte un objeto payment de MP a la forma { id, local_id, tenant_id, fecha,
- * tipo, descripcion, monto, saldo, estado, referencia_id, medio_pago } lista
- * para upsert en mp_movimientos. Devuelve { skipped: true, reason } si la fila
- * no debe insertarse.
+ * Convierte un objeto payment de MP a un array de filas listas para upsert en
+ * mp_movimientos. Devuelve:
+ *   - 1 fila { skipped: true, reason } cuando el payment se descarta.
+ *   - 1 fila main { skipped: false, row: <pay-*> } cuando NO aplica fee.
+ *   - 2 filas [main, fee] cuando es un ingreso con comisión MP > 0; fee es
+ *     una fila tipo='fee' con id 'fee-{payment.id}', monto negativo igual a
+ *     (transaction_amount - net_received_amount), y referencia_id apuntando
+ *     al mismo payment.id que el main. Esa estructura permite a la pestaña
+ *     "Comisiones MP" linkear el fee con su padre vía referencia_id.
  *
- * Convenciones:
+ * Convenciones del main (pay-*):
  *  - id: 'pay-{payment.id}'.
  *  - referencia_id: payment.id (string puro). NO usamos external_reference
- *    para evitar colisión con set-/rr- referencia_id en el dedup retroactivo
- *    del cron actual.
- *  - fecha: date_created tal cual viene de MP (ISO con offset). La presentación
- *    en hora AR la hace el frontend.
+ *    para evitar colisión con set-/rr- referencia_id en el dedup retroactivo.
+ *  - fecha: date_created tal cual viene de MP (ISO con offset).
  *  - signo: positivo cuando ourAccountId === collector_id (Lucas cobra),
  *    negativo cuando collector_id es otro (Lucas paga).
  *  - Transferencias internas (collector == payer == ourAccountId) se skipean.
  *  - Status != 'approved' se skipea.
+ *
+ * Convenciones del fee (fee-*):
+ *  - Solo se emite para ingresos con commission > 0. En egresos no aplica
+ *    (Lucas paga, otro recibe; el fee implícito es del receptor).
+ *  - referencia_id == payment.id (igual al main) → permite lookup en pestaña.
+ *  - medio_pago heredado del main para conservar la pista POI.
  */
-export function mapPaymentToRow(payment, cred, ourAccountId) {
+export function mapPaymentToRows(payment, cred, ourAccountId) {
   if (!payment || payment.status !== 'approved') {
-    return { skipped: true, reason: 'not_approved' };
+    return [{ skipped: true, reason: 'not_approved' }];
   }
 
   const collectorId = Number(payment.collector_id ?? payment.collector?.id ?? 0);
@@ -184,7 +193,7 @@ export function mapPaymentToRow(payment, cred, ourAccountId) {
   const ourId = Number(ourAccountId);
 
   if (collectorId === ourId && payerId === ourId) {
-    return { skipped: true, reason: 'internal_transfer' };
+    return [{ skipped: true, reason: 'internal_transfer' }];
   }
 
   const isIngress = collectorId === ourId;
@@ -220,24 +229,48 @@ export function mapPaymentToRow(payment, cred, ourAccountId) {
     medioPago = method;
   }
 
-  if (monto === 0) return { skipped: true, reason: 'monto_cero' };
+  if (monto === 0) return [{ skipped: true, reason: 'monto_cero' }];
 
-  return {
-    skipped: false,
-    row: {
-      id: `pay-${payment.id}`,
-      local_id: cred.local_id,
-      tenant_id: cred.tenant_id,
-      fecha: payment.date_created,
-      tipo,
-      descripcion: (descripcion || '').slice(0, 200),
-      monto: Math.round(monto * 100) / 100,
-      saldo: null,
-      estado: 'approved',
-      referencia_id: String(payment.id),
-      medio_pago: medioPago,
-    },
+  const mainRow = {
+    id: `pay-${payment.id}`,
+    local_id: cred.local_id,
+    tenant_id: cred.tenant_id,
+    fecha: payment.date_created,
+    tipo,
+    descripcion: (descripcion || '').slice(0, 200),
+    monto: Math.round(monto * 100) / 100,
+    saldo: null,
+    estado: 'approved',
+    referencia_id: String(payment.id),
+    medio_pago: medioPago,
   };
+
+  // Fila fee solo para ingresos con comisión real (> 1 centavo).
+  // En egresos no aplica (Lucas paga el bruto, no recibe nada → no hay fee
+  // del lado de Lucas). Tampoco si transaction == net (cuenta saldo MP).
+  const commission = transactionAmount - netReceived;
+  if (!isIngress || !(commission > 0.01)) {
+    return [{ skipped: false, row: mainRow }];
+  }
+
+  const feeRow = {
+    id: `fee-${payment.id}`,
+    local_id: cred.local_id,
+    tenant_id: cred.tenant_id,
+    fecha: payment.date_created,
+    tipo: 'fee',
+    descripcion: `Comisión ${descripcion || 'MP'}`.slice(0, 200),
+    monto: -Math.round(commission * 100) / 100,
+    saldo: null,
+    estado: 'approved',
+    referencia_id: String(payment.id),  // mismo que el main → permite lookup
+    medio_pago: medioPago,
+  };
+
+  return [
+    { skipped: false, row: mainRow },
+    { skipped: false, row: feeRow },
+  ];
 }
 
 /**

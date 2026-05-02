@@ -25,7 +25,7 @@ import {
 } from './_mp-csv.js';
 import {
   fetchPaymentsByDateCreated,
-  mapPaymentToRow,
+  mapPaymentToRows,
   formatArIso,
 } from './_mp-payments-search.js';
 
@@ -386,11 +386,13 @@ export default async function handler(req, res) {
             const rows = [];
             const skippedReasons = {};
             for (const p of payments) {
-              const r = mapPaymentToRow(p, cred, ourAccountId);
-              if (r.skipped) {
-                skippedReasons[r.reason] = (skippedReasons[r.reason] || 0) + 1;
-              } else {
-                rows.push(r.row);
+              const results = mapPaymentToRows(p, cred, ourAccountId);
+              for (const r of results) {
+                if (r.skipped) {
+                  skippedReasons[r.reason] = (skippedReasons[r.reason] || 0) + 1;
+                } else {
+                  rows.push(r.row);
+                }
               }
             }
 

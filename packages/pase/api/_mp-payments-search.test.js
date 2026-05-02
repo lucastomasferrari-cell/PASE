@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   fetchPaymentsByDateCreated,
-  mapPaymentToRow,
+  mapPaymentToRows,
   formatArIso,
 } from './_mp-payments-search.js';
 
@@ -158,30 +158,32 @@ describe('fetchPaymentsByDateCreated — reintentos en 429/5xx', () => {
   });
 });
 
-// ─── mapPaymentToRow ─────────────────────────────────────────────────────────
+// ─── mapPaymentToRows ────────────────────────────────────────────────────────
 
 const CRED = { local_id: 1, tenant_id: 'tenant-uuid' };
 const OUR_ACCOUNT = 73828709;
 
-describe('mapPaymentToRow', () => {
+describe('mapPaymentToRows', () => {
   it('skip si status != approved', () => {
-    const r = mapPaymentToRow({ id: 1, status: 'rejected' }, CRED, OUR_ACCOUNT);
-    expect(r.skipped).toBe(true);
-    expect(r.reason).toBe('not_approved');
+    const rows = mapPaymentToRows({ id: 1, status: 'rejected' }, CRED, OUR_ACCOUNT);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].skipped).toBe(true);
+    expect(rows[0].reason).toBe('not_approved');
   });
 
   it('skip si transferencia interna (collector == payer == ours)', () => {
-    const r = mapPaymentToRow({
+    const rows = mapPaymentToRows({
       id: 1, status: 'approved',
       collector_id: OUR_ACCOUNT, payer: { id: OUR_ACCOUNT },
       transaction_amount: 4000, transaction_details: { net_received_amount: 4000 },
     }, CRED, OUR_ACCOUNT);
-    expect(r.skipped).toBe(true);
-    expect(r.reason).toBe('internal_transfer');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].skipped).toBe(true);
+    expect(rows[0].reason).toBe('internal_transfer');
   });
 
-  it('ingreso Point Smart con tarjeta de crédito → tipo liquidacion + monto positivo', () => {
-    const r = mapPaymentToRow({
+  it('ingreso Point Smart con commission > 0 → main + fee (2 filas)', () => {
+    const rows = mapPaymentToRows({
       id: 157334804646,
       status: 'approved',
       date_created: '2026-05-01T22:26:00.000-04:00',
@@ -193,8 +195,10 @@ describe('mapPaymentToRow', () => {
       payment_type_id: 'credit_card',
       point_of_interaction: { type: 'POINT' },
     }, CRED, OUR_ACCOUNT);
-    expect(r.skipped).toBe(false);
-    expect(r.row).toMatchObject({
+    expect(rows).toHaveLength(2);
+    // Main row
+    expect(rows[0].skipped).toBe(false);
+    expect(rows[0].row).toMatchObject({
       id: 'pay-157334804646',
       local_id: 1,
       tenant_id: 'tenant-uuid',
@@ -206,10 +210,57 @@ describe('mapPaymentToRow', () => {
       referencia_id: '157334804646',
       fecha: '2026-05-01T22:26:00.000-04:00',
     });
+    // Fee row
+    expect(rows[1].skipped).toBe(false);
+    expect(rows[1].row).toMatchObject({
+      id: 'fee-157334804646',
+      tipo: 'fee',
+      monto: -13159.85,           // 168500 - 155340.15
+      referencia_id: '157334804646', // mismo que main → permite lookup
+      medio_pago: 'point_smart_visa', // hereda POI
+      tenant_id: 'tenant-uuid',
+      local_id: 1,
+    });
+    expect(rows[1].row.descripcion).toContain('Comisión');
   });
 
-  it('egreso (compra ML) → tipo bank_transfer + monto negativo basado en transaction_amount', () => {
-    const r = mapPaymentToRow({
+  it('ingreso CHECKOUT con commission > 0 → main + fee', () => {
+    const rows = mapPaymentToRows({
+      id: 156528808241,
+      status: 'approved',
+      date_created: '2026-05-01T16:54:00.000-04:00',
+      collector_id: OUR_ACCOUNT,
+      payer: { id: 222708650 },
+      transaction_amount: 105950,
+      transaction_details: { net_received_amount: 94337.88 },
+      payment_method_id: 'visa',
+      point_of_interaction: { type: 'CHECKOUT' },
+      description: 'Pedido en Neko Sushi',
+    }, CRED, OUR_ACCOUNT);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].row.medio_pago).toBe('visa');
+    expect(rows[1].row.tipo).toBe('fee');
+    expect(rows[1].row.monto).toBeCloseTo(-11612.12, 2);
+  });
+
+  it('ingreso con commission == 0 (account_money same as net) → SOLO main, sin fee', () => {
+    const rows = mapPaymentToRows({
+      id: 1234,
+      status: 'approved',
+      date_created: '2026-05-01T00:00:00-04:00',
+      collector_id: OUR_ACCOUNT,
+      payer: { id: 99 },
+      transaction_amount: 5000,
+      transaction_details: { net_received_amount: 5000 },
+      payment_method_id: 'account_money',
+      point_of_interaction: { type: 'CHECKOUT' },
+    }, CRED, OUR_ACCOUNT);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].row.tipo).toBe('liquidacion');
+  });
+
+  it('egreso (compra ML, Lucas paga) → SOLO main, sin fee', () => {
+    const rows = mapPaymentToRows({
       id: 156521696215,
       status: 'approved',
       date_created: '2026-05-01T15:55:32.000-04:00',
@@ -221,8 +272,8 @@ describe('mapPaymentToRow', () => {
       point_of_interaction: { type: 'CHECKOUT' },
       description: 'Rollos Etiquetas',
     }, CRED, OUR_ACCOUNT);
-    expect(r.skipped).toBe(false);
-    expect(r.row).toMatchObject({
+    expect(rows).toHaveLength(1);
+    expect(rows[0].row).toMatchObject({
       id: 'pay-156521696215',
       tipo: 'bank_transfer',
       monto: -33230.34,
@@ -230,8 +281,8 @@ describe('mapPaymentToRow', () => {
     });
   });
 
-  it('ingreso QR (INSTORE) → tipo liquidacion con medio qr_*', () => {
-    const r = mapPaymentToRow({
+  it('ingreso QR (INSTORE) → main con medio qr_* + fee', () => {
+    const rows = mapPaymentToRows({
       id: 156568780899,
       status: 'approved',
       date_created: '2026-05-01T22:11:00.000-04:00',
@@ -243,25 +294,27 @@ describe('mapPaymentToRow', () => {
       point_of_interaction: { type: 'INSTORE' },
       description: 'Producto de Neko Sushi',
     }, CRED, OUR_ACCOUNT);
-    expect(r.skipped).toBe(false);
-    expect(r.row.tipo).toBe('liquidacion');
-    expect(r.row.medio_pago).toBe('qr_debvisa');
-    expect(r.row.descripcion).toBe('Producto de Neko Sushi');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].row.tipo).toBe('liquidacion');
+    expect(rows[0].row.medio_pago).toBe('qr_debvisa');
+    expect(rows[1].row.tipo).toBe('fee');
+    expect(rows[1].row.medio_pago).toBe('qr_debvisa');  // hereda
+    expect(rows[1].row.monto).toBe(-2429);
   });
 
-  it('referencia_id es payment.id como string puro (no external_reference)', () => {
-    // Crítico para no chocar con dedup retroactivo del cron, que matchea por
-    // referencia_id contra rr-/set- referencia_ids (que usan external_reference).
-    const r = mapPaymentToRow({
+  it('referencia_id de main y fee es payment.id como string puro (no external_reference)', () => {
+    const rows = mapPaymentToRows({
       id: 999, status: 'approved',
       date_created: '2026-05-01T00:00:00-04:00',
       collector_id: OUR_ACCOUNT, payer: { id: 1 },
       transaction_amount: 100, transaction_details: { net_received_amount: 95 },
       payment_method_id: 'visa',
       point_of_interaction: { type: 'POINT' },
-      external_reference: 'Venta presencial', // ← NO usar este para referencia_id
+      external_reference: 'Venta presencial',
     }, CRED, OUR_ACCOUNT);
-    expect(r.row.referencia_id).toBe('999');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].row.referencia_id).toBe('999');
+    expect(rows[1].row.referencia_id).toBe('999');  // crítico para lookup
   });
 });
 
