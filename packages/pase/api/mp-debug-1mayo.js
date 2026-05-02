@@ -58,8 +58,14 @@ export default async function handler(req, res) {
     // 2) RELEASE (CSV existente, filtra filas con DATE = 1/5)
     out.release = await fetchAndFilterCsv(token, 'release', DAY_FILTER);
 
-    // 3) PAYMENTS_SEARCH (sincrónico, paginado)
-    out.payments_search = await fetchPaymentsSearch(token, PAYMENTS_BEGIN, PAYMENTS_END);
+    // 3) PAYMENTS_SEARCH (sincrónico, paginado, range=date_created)
+    out.payments_search = await fetchPaymentsSearch(token, PAYMENTS_BEGIN, PAYMENTS_END, 'date_created');
+
+    // 3b) PAYMENTS_SEARCH con range=date_last_updated — para chequear si MP soporta ese range
+    out.payments_search_by_updated = await fetchPaymentsSearch(token, PAYMENTS_BEGIN, PAYMENTS_END, 'date_last_updated');
+
+    // 3c) ACCOUNT MOVEMENTS — egresos / withdrawals / outgoing payments
+    out.account_movements = await fetchAccountMovements(token, PAYMENTS_BEGIN, PAYMENTS_END);
 
     // 4) Resumen comparativo
     out.resumen = {
@@ -79,6 +85,17 @@ export default async function handler(req, res) {
         suma_approved_transaction_amount: out.payments_search?.suma_approved_transaction ?? null,
         suma_approved_net_received: out.payments_search?.suma_approved_neto ?? null,
         error: out.payments_search?.error ?? null,
+      },
+      payments_search_by_updated: {
+        supported: out.payments_search_by_updated?.error ? false : true,
+        total: out.payments_search_by_updated?.total ?? 0,
+        error: out.payments_search_by_updated?.error ?? null,
+      },
+      account_movements: {
+        supported: out.account_movements?.all?.error ? false : true,
+        total: out.account_movements?.all?.total ?? 0,
+        fetched: out.account_movements?.all?.fetched ?? 0,
+        error: out.account_movements?.all?.error ?? null,
       },
     };
 
@@ -163,24 +180,32 @@ async function fetchAndFilterCsv(token, kind, dayFilter) {
   };
 }
 
-async function fetchPaymentsSearch(token, begin, end) {
+async function fetchPaymentsSearch(token, begin, end, rangeField = 'date_created') {
   const all = [];
   const limit = 100;
   let offset = 0;
   let pages = 0;
   let total = null;
+  let rateLimitHeaders = null;
 
   while (pages < 30) {
     const url =
       `https://api.mercadopago.com/v1/payments/search?` +
-      `sort=date_created&criteria=desc&` +
-      `range=date_created&` +
+      `sort=${rangeField}&criteria=desc&` +
+      `range=${rangeField}&` +
       `begin_date=${encodeURIComponent(begin)}&end_date=${encodeURIComponent(end)}&` +
       `limit=${limit}&offset=${offset}`;
     const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    // Capturar headers de rate limit en la primera respuesta
+    if (rateLimitHeaders == null) {
+      rateLimitHeaders = {};
+      for (const [k, v] of r.headers.entries()) {
+        if (/limit|ratelimit|x-/i.test(k)) rateLimitHeaders[k] = v;
+      }
+    }
     if (!r.ok) {
       const body = (await r.text()).slice(0, 400);
-      return { error: `payments/search ${r.status}: ${body}`, partial_count: all.length };
+      return { error: `payments/search range=${rangeField} ${r.status}: ${body}`, partial_count: all.length, rate_limit_headers: rateLimitHeaders };
     }
     const data = await r.json();
     if (total == null) total = data?.paging?.total ?? null;
@@ -191,16 +216,20 @@ async function fetchPaymentsSearch(token, begin, end) {
     offset += limit;
   }
 
-  // Slim a campos relevantes para no inflar el JSON
+  // Slim a campos relevantes (incluye campos para tracking de mutación / refunds)
   const slim = all.map(p => ({
     id: p.id,
     date_created: p.date_created,
     date_approved: p.date_approved,
-    date_released: p.money_release_date,
+    date_last_updated: p.date_last_updated,
+    money_release_date: p.money_release_date,
     status: p.status,
     status_detail: p.status_detail,
     transaction_amount: p.transaction_amount,
+    transaction_amount_refunded: p.transaction_amount_refunded ?? 0,
     net_received_amount: p.transaction_details?.net_received_amount ?? null,
+    refunds_count: Array.isArray(p.refunds) ? p.refunds.length : 0,
+    refunds_total: Array.isArray(p.refunds) ? p.refunds.reduce((s, r) => s + (Number(r.amount) || 0), 0) : 0,
     fee_total: p.fee_details ? p.fee_details.reduce((s, fd) => s + (Number(fd.amount) || 0), 0) : null,
     payment_method_id: p.payment_method_id,
     payment_type_id: p.payment_type_id,
@@ -209,6 +238,8 @@ async function fetchPaymentsSearch(token, begin, end) {
     description: p.description,
     external_reference: p.external_reference,
     operation_type: p.operation_type,
+    payer_id: p.payer?.id ?? null,
+    collector_id: p.collector_id ?? p.collector?.id ?? null,
   }));
 
   const approved = slim.filter(p => p.status === 'approved');
@@ -216,14 +247,59 @@ async function fetchPaymentsSearch(token, begin, end) {
   const sumApprovedNeto = approved.reduce((s, p) => s + (Number(p.net_received_amount) || 0), 0);
 
   return {
+    range_field: rangeField,
     total: total ?? slim.length,
     fetched: slim.length,
     pages,
     approved_count: approved.length,
     suma_approved_transaction: Math.round(sumApprovedTrans * 100) / 100,
     suma_approved_neto: Math.round(sumApprovedNeto * 100) / 100,
+    rate_limit_headers: rateLimitHeaders,
     payments: slim,
   };
+}
+
+// Probe del endpoint /v1/account/movements/search (egresos / withdrawals / etc).
+// Histórico: este endpoint apareció en commit f1ee254 como diagnóstico, después
+// el equipo se movió a release_report. Revivimos solo para descubrir si
+// los egresos (compra ML, retiros a CBU) viven acá.
+async function fetchAccountMovements(token, begin, end) {
+  const tries = [
+    {
+      label: 'all',
+      url: `https://api.mercadopago.com/v1/account/movements/search?` +
+        `filters.type=all&sort=date_created&criteria=desc&` +
+        `begin_date=${encodeURIComponent(begin)}&end_date=${encodeURIComponent(end)}&` +
+        `limit=50`,
+    },
+  ];
+
+  const results = {};
+  for (const t of tries) {
+    try {
+      const r = await fetch(t.url, { headers: { Authorization: `Bearer ${token}` } });
+      const headers = {};
+      for (const [k, v] of r.headers.entries()) {
+        if (/limit|ratelimit|x-/i.test(k)) headers[k] = v;
+      }
+      if (!r.ok) {
+        const body = (await r.text()).slice(0, 400);
+        results[t.label] = { error: `${r.status}: ${body}`, rate_limit_headers: headers };
+        continue;
+      }
+      const data = await r.json();
+      results[t.label] = {
+        total: data?.paging?.total ?? null,
+        fetched: Array.isArray(data?.results) ? data.results.length : 0,
+        rate_limit_headers: headers,
+        // Devolvemos los primeros 30 raw para poder explorar campos.
+        raw_first_30: Array.isArray(data?.results) ? data.results.slice(0, 30) : [],
+      };
+    } catch (e) {
+      results[t.label] = { error: String(e?.message || e) };
+    }
+  }
+  return results;
 }
 
 function parseAmount(raw) {
