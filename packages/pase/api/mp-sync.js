@@ -14,7 +14,6 @@
 // - El parser detecta el formato del CSV por las columnas del header.
 
 import { createMpTokenGetter } from './_mp-token.js';
-import { fetchMpBalance } from './_mp-balance.js';
 import {
   parseListBody,
   isCsv,
@@ -418,22 +417,6 @@ export default async function handler(req, res) {
           updErr = e.message;
         }
 
-        // ── 7. Saldo REAL desde API MP (PARTE B) ──
-        let saldoApi = null;
-        try {
-          const bal = await fetchMpBalance(token);
-          saldoApi = { available: bal.available, total: bal.total, unavailable: bal.unavailable };
-          await db.from('mp_credenciales').update({
-            saldo_mp_actual: bal.available,
-            saldo_mp_total: bal.total,
-            saldo_mp_unavailable: bal.unavailable,
-            saldo_mp_actualizado_at: new Date().toISOString(),
-          }).eq('id', cred.id);
-        } catch (e) {
-          console.error('[mp-sync] balance fetch failed', cred.local_id, e?.message);
-          saldoApi = { error: e?.message || String(e) };
-        }
-
         resultados.push({
           local: cred.locales?.nombre,
           local_id: cred.local_id,
@@ -444,7 +427,6 @@ export default async function handler(req, res) {
           por_acreditar: porAcreditar,
           movs_en_saldo: movDespuesCount,
           upd_error: updErr || undefined,
-          saldo_api: saldoApi,
         });
       } catch (err) {
         console.error('mp-sync: error processing credential', cred?.local_id, err);

@@ -14,7 +14,6 @@
 //   (parser legacy con RECORD_TYPE='release').
 
 import { createMpTokenGetter } from './_mp-token.js';
-import { fetchMpBalance } from './_mp-balance.js';
 import {
   SETTLEMENT_TIPOS,
   parseListBody,
@@ -344,24 +343,6 @@ export default async function handler(req, res) {
           }
         }
 
-        // ── Saldo REAL desde API MP (PARTE B de TASK 0.11) ──
-        // Best-effort: si falla, log + seguir. Las columnas saldo_mp_*
-        // quedan NULL hasta el próximo intento.
-        let saldoApi = null;
-        try {
-          const bal = await fetchMpBalance(token);
-          saldoApi = { available: bal.available, total: bal.total, unavailable: bal.unavailable };
-          await db.from('mp_credenciales').update({
-            saldo_mp_actual: bal.available,
-            saldo_mp_total: bal.total,
-            saldo_mp_unavailable: bal.unavailable,
-            saldo_mp_actualizado_at: new Date().toISOString(),
-          }).eq('id', cred.id);
-        } catch (e) {
-          console.error('[mp-process] balance fetch failed', cred.local_id, e?.message);
-          saldoApi = { error: e?.message || String(e) };
-        }
-
         // ── Payments-search: ingresos+egresos por date_created (TASK 0.18) ──
         // Captura Point Smart, propinas, débitos automáticos y compras del
         // merchant que ni release_report ni settlement_report cubren bien.
@@ -466,7 +447,6 @@ export default async function handler(req, res) {
           por_acreditar: porAcreditar,
           movs_en_saldo: movDespuesCount,
           upd_error: updErr ? updErr.message : undefined,
-          saldo_api: saldoApi,
           payments_search: paymentsSummary,
         });
       } catch (err) {
