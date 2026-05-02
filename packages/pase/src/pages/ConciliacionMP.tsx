@@ -40,11 +40,18 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   const load=async()=>{
     setLoading(true);
     try{
-      const desdeTs=desde+"T00:00:00";
-      const hastaTs=hasta+"T23:59:59";
+      // Rango por día calendario AR (UTC-3): convertimos los datepickers
+      // 'YYYY-MM-DD' AR-local a su rango UTC equivalente. desde 00:00 AR =
+      // {desde}T03:00:00Z; hasta 24:00 AR = {hasta+1}T03:00:00Z (exclusive).
+      // Equivale a (fecha AT TIME ZONE 'America/Argentina/Buenos_Aires')::date
+      // sin necesidad de RPC SQL.
+      const desdeTs=new Date(`${desde}T00:00:00-03:00`).toISOString();
+      const _hastaPlus=new Date(`${hasta}T00:00:00-03:00`);
+      _hastaPlus.setUTCDate(_hastaPlus.getUTCDate()+1);
+      const hastaTs=_hastaPlus.toISOString();
       // Filtramos mp_movimientos por local en el server cuando hay un
       // local activo, así evitamos traer filas que igual vamos a descartar.
-      let movQ=db.from("mp_movimientos").select("*").gte("fecha",desdeTs).lte("fecha",hastaTs).order("fecha",{ascending:false}).limit(5000);
+      let movQ=db.from("mp_movimientos").select("*").gte("fecha",desdeTs).lt("fecha",hastaTs).order("fecha",{ascending:false}).limit(5000);
       movQ=applyLocalScope(movQ,user,localActivo);
       let facQ=db.from("facturas").select("id,nro,fecha,total,local_id,cat,estado").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false});
       facQ=applyLocalScope(facQ,user,localActivo);
@@ -186,6 +193,44 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   // Comisiones/impuestos son egresos automáticos y se muestran aparte — no entran en conciliación manual.
   const ES_AUTOMATICO=(t: string)=>t==="fee"||t==="tax";
 
+  // ─── Dedup multi-fuente (TASK 0.18) ─────────────────────────────────────
+  // mp_movimientos puede tener hasta 3 filas para el mismo cobro:
+  //   pay-{X}  ← payments/search por date_created (cobro inmediato)
+  //   set-{X}  ← settlement_report por settlement_date
+  //   rr-{X}   ← release_report por release_date
+  // Las 3 representan el mismo movimiento desde ángulos distintos. Para el
+  // listado del conciliador agrupamos por core_id (id sin prefijo) y mostramos
+  // UNA sola fila preferiendo pay-* > rr-* > set-*. La fila ganadora lleva
+  // _fuentes con la lista de prefijos disponibles para badge visual.
+  // Saldo legacy NO usa esta lógica — sigue sumando solo rr-*/set-* via
+  // saldo_disponible (precalculado en mp_credenciales por mp-process).
+  const dedupedMovs = (() => {
+    const groups = new Map<string, any[]>();
+    const sinId: any[] = [];
+    for (const m of movimientos as any[]) {
+      const idStr = String(m.id || "");
+      if (!idStr) { sinId.push(m); continue; }
+      const core = idStr.startsWith("pay-") ? idStr.slice(4)
+        : idStr.startsWith("set-") ? idStr.slice(4)
+        : idStr.startsWith("rr-")  ? idStr.slice(3)
+        : idStr;
+      const arr = groups.get(core) || [];
+      arr.push(m);
+      groups.set(core, arr);
+    }
+    const prio = (id: string) =>
+      id.startsWith("pay-") ? 1 : id.startsWith("rr-") ? 2 : id.startsWith("set-") ? 3 : 4;
+    const tag = (id: string) =>
+      id.startsWith("pay-") ? "pay" : id.startsWith("rr-") ? "rr" : id.startsWith("set-") ? "set" : "leg";
+    const winners: any[] = [];
+    for (const arr of groups.values()) {
+      arr.sort((a, b) => prio(String(a.id)) - prio(String(b.id)));
+      const w = { ...arr[0], _fuentes: arr.map(m => tag(String(m.id))) };
+      winners.push(w);
+    }
+    return [...winners, ...sinId];
+  })();
+
   // Allowlist de tipos que afectan el saldo released de la cuenta MP. El
   // listado y las KPIs operan sobre estos. Las ventas/cobros pendientes
   // (tipo='point', tipo='payment' sin liberar) NO entran porque solo
@@ -203,17 +248,18 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
 
   // KPIs SIEMPRE sobre tipos released (independiente del toggle), para
   // que los totales reflejen el saldo real de la cuenta MP.
-  const movsReleased=movimientos.filter((m: any)=>!ES_AUTOMATICO(m.tipo)&&TIPOS_VISIBLES.has(m.tipo));
+  // Usamos dedupedMovs para no contar dos veces un cobro que tiene pay-+set-.
+  const movsReleased=dedupedMovs.filter((m: any)=>!ES_AUTOMATICO(m.tipo)&&TIPOS_VISIBLES.has(m.tipo));
   // Listado: aplica el toggle. Por default solo released; con toggle on,
   // todos los no-automáticos (incluye ventas/cobros pendientes).
-  const movsListado=movimientos.filter((m: any)=>!ES_AUTOMATICO(m.tipo)&&(mostrarPendientes||TIPOS_VISIBLES.has(m.tipo)));
+  const movsListado=dedupedMovs.filter((m: any)=>!ES_AUTOMATICO(m.tipo)&&(mostrarPendientes||TIPOS_VISIBLES.has(m.tipo)));
 
   const ingresos=movsReleased.filter((m: any)=>m.monto>0).reduce((s: number,m: any)=>s+m.monto,0);
   const egresosList=movsReleased.filter((m: any)=>m.monto<0);
   const egresos=egresosList.reduce((s: number,m: any)=>s+Math.abs(m.monto),0);
-  // Comisiones se calculan sobre todos los movimientos crudos (fee/tax
+  // Comisiones se calculan sobre todos los movimientos dedupeados (fee/tax
   // son egresos automáticos que viven en su propia pestaña).
-  const comisionesList=movimientos.filter((m: any)=>m.monto<0&&ES_AUTOMATICO(m.tipo));
+  const comisionesList=dedupedMovs.filter((m: any)=>m.monto<0&&ES_AUTOMATICO(m.tipo));
   const comisionesTotal=comisionesList.reduce((s: number,m: any)=>s+Math.abs(m.monto),0);
   const egresosManualesList=egresosList; // egresosList ya excluye automáticos
   const egresosManualesTotal=egresos;
@@ -223,8 +269,8 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   const neto=ingresos-egresos;
 
   // Ventas presenciales: Point devices (POS físico) - transaction_amount se mapea a monto.
-  const ventasPresenciales=movimientos.filter(m=>m.tipo==="point"&&m.monto>0).reduce((s,m)=>s+m.monto,0);
-  const ventasOnline=movimientos.filter(m=>m.tipo==="payment"&&m.monto>0).reduce((s,m)=>s+m.monto,0);
+  const ventasPresenciales=dedupedMovs.filter(m=>m.tipo==="point"&&m.monto>0).reduce((s,m)=>s+m.monto,0);
+  const ventasOnline=dedupedMovs.filter(m=>m.tipo==="payment"&&m.monto>0).reduce((s,m)=>s+m.monto,0);
 
   // Saldo legacy: saldo_inicial (manual) + SUM(rr-* approved post-corte).
   // /api/mp-sync y /api/mp-process lo guardan en saldo_disponible.
@@ -492,7 +538,15 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                 <tr key={m.id} style={pend?{background:"rgba(239,68,68,0.08)",borderLeft:"2px solid var(--danger)"}:undefined}>
                   <td className="mono" style={{fontSize:11}}>{fmt_dt_ar(m.fecha)}</td>
                   <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===m.local_id)?.nombre||"—"}</td>
-                  <td><span className="badge b-muted">{TIPO_LABELS[m.tipo]||m.tipo||"—"}</span></td>
+                  <td>
+                    <span className="badge b-muted">{TIPO_LABELS[m.tipo]||m.tipo||"—"}</span>
+                    {m._fuentes && m._fuentes.length > 0 && (
+                      <span title={`Fuentes: ${m._fuentes.join("+")}`} style={{marginLeft:6,fontSize:9,color:"var(--muted2)",fontFamily:"monospace"}}>
+                        {m._fuentes.includes("pay") && m._fuentes.length === 1 ? "@cobro" :
+                         m._fuentes.includes("pay") ? "@cobro+rel" : "@released"}
+                      </span>
+                    )}
+                  </td>
                   <td style={{fontSize:11,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.descripcion||"—"}</td>
                   <td><span className="num" style={{color:getTipoColor(m.tipo,m.monto)}}>{m.monto>0?"+":""}{fmt_mp(m.monto)}</span></td>
                   <td style={{color:"var(--muted2)"}}>{fmt_mp(m.saldo)}</td>
