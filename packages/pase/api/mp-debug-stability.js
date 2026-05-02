@@ -39,6 +39,12 @@ export default async function handler(req, res) {
     if (!cred) return res.status(404).json({ ok: false, error: 'No cred' });
     const token = await getMpToken(cred.id);
 
+    // ─── ?write=1 → backfill de pay-* del 1/5 ────────────────────────────────
+    const writeMode = req.query?.write === '1' || req.body?.write === '1';
+    if (writeMode) {
+      return await handleBackfill({ db, token, cred, res });
+    }
+
     const out = {
       ts: new Date().toISOString(),
       cred: { id: cred.id, local_id: cred.local_id, tenant_id: cred.tenant_id },
@@ -168,6 +174,187 @@ export default async function handler(req, res) {
     console.error('mp-debug-stability error:', err);
     return res.status(500).json({ ok: false, error: err.message });
   }
+}
+
+// ─── Backfill 1/5 ────────────────────────────────────────────────────────────
+// Lotería: la API de MP devuelve a veces 20 (con los 9 POINT) y a veces 11
+// (sin los 9 POINT) según routing del backend. Reintenta hasta capturar los 9
+// o cap MAX_RETRIES. Append-only: ON CONFLICT (id) DO NOTHING.
+async function handleBackfill({ db, token, cred, res }) {
+  const MAX_RETRIES = 12;
+  const TARGET_TOTAL = 20;
+
+  // Resolver account_id propio para distinguir ingresos vs egresos
+  const meRes = await fetch('https://api.mercadolibre.com/users/me', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!meRes.ok) {
+    return res.status(500).json({ ok: false, error: '/users/me failed', status: meRes.status });
+  }
+  const me = await meRes.json();
+  const ourAccountId = me?.id;
+
+  // Lotería: reintenta hasta capturar los 9 POINT o ≥20 results.
+  const attempts = [];
+  let bestPayments = [];
+  let gotAllDisappeared = false;
+  const url = `https://api.mercadopago.com/v1/payments/search?` +
+    `range=date_created&` +
+    `begin_date=${enc(BEGIN)}&end_date=${enc(END)}&` +
+    `limit=100&offset=0`;
+
+  for (let i = 1; i <= MAX_RETRIES; i++) {
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) {
+      attempts.push({ attempt: i, status: r.status, error: 'fetch_not_ok' });
+      continue;
+    }
+    const data = await r.json();
+    const payments = Array.isArray(data?.results) ? data.results : [];
+    const ids = new Set(payments.map(p => String(p.id)));
+    const missing9 = DISAPPEARED_IDS.filter(id => !ids.has(id));
+    attempts.push({
+      attempt: i,
+      total: payments.length,
+      paging_total: data?.paging?.total ?? null,
+      missing_disappeared: missing9.length,
+      request_id: r.headers.get('x-request-id') || null,
+    });
+    if (payments.length > bestPayments.length) bestPayments = payments;
+    if (payments.length >= TARGET_TOTAL && missing9.length === 0) {
+      gotAllDisappeared = true;
+      break;
+    }
+  }
+
+  if (bestPayments.length === 0) {
+    return res.status(500).json({ ok: false, error: 'No payments fetched after retries', attempts });
+  }
+
+  // Pre-count rows pay-* del 1/5 antes del upsert
+  const preCount = await countPayRows(db, cred.local_id);
+
+  // Construir filas (skip transferencias internas y status no-approved)
+  const rows = [];
+  const skippedReasons = {};
+  for (const p of bestPayments) {
+    const r = buildPayRow(p, cred, ourAccountId);
+    if (r.skipped) {
+      skippedReasons[r.reason] = (skippedReasons[r.reason] || 0) + 1;
+    } else {
+      rows.push(r.row);
+    }
+  }
+
+  // Append-only upsert
+  let insertedIds = [];
+  let upsertError = null;
+  if (rows.length > 0) {
+    const { data: ins, error } = await db
+      .from('mp_movimientos')
+      .upsert(rows, { onConflict: 'id', ignoreDuplicates: true })
+      .select('id');
+    if (error) upsertError = error.message;
+    else insertedIds = (ins || []).map(r => r.id);
+  }
+
+  const postCount = await countPayRows(db, cred.local_id);
+
+  return res.status(200).json({
+    ok: true,
+    mode: 'backfill',
+    attempts: attempts.length,
+    got_all_disappeared: gotAllDisappeared,
+    payments_fetched: bestPayments.length,
+    rows_built: rows.length,
+    rows_skipped: skippedReasons,
+    pre_count_pay_rows: preCount,
+    inserted_count: insertedIds.length,
+    post_count_pay_rows: postCount,
+    delta: postCount - preCount,
+    inserted_ids: insertedIds,
+    attempts_log: attempts,
+    upsert_error: upsertError,
+  });
+}
+
+async function countPayRows(db, localId) {
+  const { count } = await db
+    .from('mp_movimientos')
+    .select('id', { count: 'exact', head: true })
+    .eq('local_id', localId)
+    .gte('fecha', '2026-05-01T00:00:00')
+    .lt('fecha', '2026-05-02T03:00:01')
+    .like('id', 'pay-%');
+  return count ?? 0;
+}
+
+function buildPayRow(p, cred, ourAccountId) {
+  if (p.status !== 'approved') return { skipped: true, reason: 'not_approved' };
+
+  const collectorId = Number(p.collector_id ?? p.collector?.id ?? 0);
+  const payerId = Number(p.payer?.id ?? 0);
+
+  // Transferencias internas (collector == payer == nosotros) → skip por ahora.
+  if (collectorId === ourAccountId && payerId === ourAccountId) {
+    return { skipped: true, reason: 'internal_transfer' };
+  }
+
+  const isIngress = collectorId === ourAccountId;
+  const transactionAmount = Number(p.transaction_amount) || 0;
+  const netReceived = Number(p.transaction_details?.net_received_amount) || 0;
+  const poi = p.point_of_interaction?.type || null;
+  const method = p.payment_method_id || null;
+
+  let monto, tipo, descripcion, medioPago;
+  if (isIngress) {
+    monto = netReceived;
+    tipo = 'liquidacion';
+    if (poi === 'POINT') {
+      descripcion = `Point Smart — ${method}`;
+      medioPago = `point_smart_${method}`;
+    } else if (poi === 'INSTORE') {
+      descripcion = p.description || `QR — ${method}`;
+      medioPago = `qr_${method}`;
+    } else if (poi === 'CHECKOUT') {
+      descripcion = p.description || `Checkout — ${method}`;
+      medioPago = method;
+    } else if (poi === 'SUBSCRIPTIONS') {
+      descripcion = p.description || `Suscripción — ${method}`;
+      medioPago = method;
+    } else {
+      descripcion = p.description || `${poi || 'MP'} — ${method}`;
+      medioPago = method;
+    }
+  } else {
+    // Egreso: Lucas pagó (collector es alguien más)
+    monto = -transactionAmount;
+    tipo = 'bank_transfer';
+    descripcion = p.description || `Egreso MP — ${method}`;
+    medioPago = method;
+  }
+
+  if (monto === 0) return { skipped: true, reason: 'monto_cero' };
+
+  return {
+    skipped: false,
+    row: {
+      id: `pay-${p.id}`,
+      local_id: cred.local_id,
+      tenant_id: cred.tenant_id,
+      fecha: p.date_created,
+      tipo,
+      descripcion: (descripcion || '').slice(0, 200),
+      monto: Math.round(monto * 100) / 100,
+      saldo: null,
+      estado: 'approved',
+      // referencia_id distinta del payment.id que use rr-/set-: usamos el
+      // payment.id como string puro para evitar el cleanup retroactivo del
+      // cron (que matchea por external_reference de set-/rr-).
+      referencia_id: String(p.id),
+      medio_pago: medioPago,
+    },
+  };
 }
 
 async function fetchJson(token, url) {
