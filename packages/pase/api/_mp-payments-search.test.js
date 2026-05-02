@@ -182,7 +182,7 @@ describe('mapPaymentToRows', () => {
     expect(rows[0].reason).toBe('internal_transfer');
   });
 
-  it('ingreso Point Smart con commission > 0 → main + fee (2 filas)', () => {
+  it('ingreso POINT con charges_details → main + fee + tax (3 filas)', () => {
     const rows = mapPaymentToRows({
       id: 157334804646,
       status: 'approved',
@@ -194,37 +194,59 @@ describe('mapPaymentToRows', () => {
       payment_method_id: 'visa',
       payment_type_id: 'credit_card',
       point_of_interaction: { type: 'POINT' },
+      // Caso real del 1/5/2026, dump del endpoint inspect
+      charges_details: [
+        {
+          id: '157334804646-001',
+          name: 'mercadopago_fee',
+          type: 'fee',
+          accounts: { from: 'collector', to: 'mp' },
+          amounts: { original: 8947.35, refunded: 0 },
+          metadata: { source_detail: 'processing_fee_charge' },
+        },
+        {
+          id: '157334804646-002',
+          name: 'tax_withholding-caba',
+          type: 'tax',
+          accounts: { from: 'collector', to: 'mp' },
+          amounts: { original: 4212.5, refunded: 0 },
+          metadata: { mov_detail: 'tax_withholding', mov_financial_entity: 'caba',
+                      source_detail: 'iibb_caba_charge' },
+        },
+      ],
     }, CRED, OUR_ACCOUNT);
-    expect(rows).toHaveLength(2);
-    // Main row
-    expect(rows[0].skipped).toBe(false);
+    expect(rows).toHaveLength(3);
+    // Main
     expect(rows[0].row).toMatchObject({
       id: 'pay-157334804646',
-      local_id: 1,
-      tenant_id: 'tenant-uuid',
       tipo: 'liquidacion',
       monto: 155340.15,
-      estado: 'approved',
-      descripcion: 'Point Smart — visa',
       medio_pago: 'point_smart_visa',
-      referencia_id: '157334804646',
-      fecha: '2026-05-01T22:26:00.000-04:00',
     });
-    // Fee row
-    expect(rows[1].skipped).toBe(false);
+    // Fee comisión MP
     expect(rows[1].row).toMatchObject({
-      id: 'fee-157334804646',
+      id: 'fee-157334804646-001',
       tipo: 'fee',
-      monto: -13159.85,           // 168500 - 155340.15
-      referencia_id: '157334804646', // mismo que main → permite lookup
-      medio_pago: 'point_smart_visa', // hereda POI
-      tenant_id: 'tenant-uuid',
-      local_id: 1,
+      monto: -8947.35,
+      descripcion: 'Comisión MP',
+      referencia_id: '157334804646',
+      medio_pago: 'point_smart_visa',
     });
-    expect(rows[1].row.descripcion).toContain('Comisión');
+    // Tax IIBB CABA
+    expect(rows[2].row).toMatchObject({
+      id: 'tax-157334804646-002',
+      tipo: 'tax',
+      monto: -4212.5,
+      descripcion: 'Retención IIBB CABA',
+      referencia_id: '157334804646',
+      medio_pago: 'point_smart_visa',
+    });
   });
 
-  it('ingreso CHECKOUT con commission > 0 → main + fee', () => {
+  it('ingreso CHECKOUT con charges_details → solo cargos del collector', () => {
+    // Caso real 156528808241: 3 charges, pero mercadopago_fee viene de
+    // application_owner (no collector) y debe ignorarse. Solo third_payment
+    // (fee, from collector) y tax_withholding-caba (tax, from collector).
     const rows = mapPaymentToRows({
       id: 156528808241,
       status: 'approved',
@@ -236,14 +258,72 @@ describe('mapPaymentToRows', () => {
       payment_method_id: 'visa',
       point_of_interaction: { type: 'CHECKOUT' },
       description: 'Pedido en Neko Sushi',
+      charges_details: [
+        {
+          id: '156528808241-001',
+          name: 'third_payment',
+          type: 'fee',
+          accounts: { from: 'collector', to: 'marketplace_owner' },
+          amounts: { original: 8963.37, refunded: 0 },
+        },
+        {
+          id: '156528808241-002',
+          name: 'mercadopago_fee',
+          type: 'fee',
+          accounts: { from: 'application_owner', to: 'mp' }, // ← NO collector
+          amounts: { original: 8338.27, refunded: 0 },
+        },
+        {
+          id: '156528808241-003',
+          name: 'tax_withholding-caba',
+          type: 'tax',
+          accounts: { from: 'collector', to: 'mp' },
+          amounts: { original: 2648.75, refunded: 0 },
+          metadata: { mov_detail: 'tax_withholding', mov_financial_entity: 'caba',
+                      source_detail: 'iibb_caba_charge' },
+        },
+      ],
     }, CRED, OUR_ACCOUNT);
-    expect(rows).toHaveLength(2);
-    expect(rows[0].row.medio_pago).toBe('visa');
-    expect(rows[1].row.tipo).toBe('fee');
-    expect(rows[1].row.monto).toBeCloseTo(-11612.12, 2);
+    // 1 main + 1 fee (third_payment) + 1 tax (iibb). El mercadopago_fee
+    // de application_owner se filtra.
+    expect(rows).toHaveLength(3);
+    expect(rows[0].row.tipo).toBe('liquidacion');
+    expect(rows[1].row).toMatchObject({
+      id: 'fee-156528808241-001',
+      tipo: 'fee',
+      monto: -8963.37,
+      descripcion: 'Comisión MP (Checkout)',
+    });
+    expect(rows[2].row).toMatchObject({
+      id: 'tax-156528808241-003',
+      tipo: 'tax',
+      monto: -2648.75,
+      descripcion: 'Retención IIBB CABA',
+    });
   });
 
-  it('ingreso con commission == 0 (account_money same as net) → SOLO main, sin fee', () => {
+  it('ingreso con charges_details vacío y commission > 0 → fallback fee-legacy', () => {
+    // Caso edge: payment legacy donde MP no devuelve charges_details
+    const rows = mapPaymentToRows({
+      id: 999,
+      status: 'approved',
+      date_created: '2026-05-01T00:00:00-04:00',
+      collector_id: OUR_ACCOUNT,
+      payer: { id: 1 },
+      transaction_amount: 1000,
+      transaction_details: { net_received_amount: 950 },
+      payment_method_id: 'visa',
+      point_of_interaction: { type: 'POINT' },
+      // charges_details ausente
+    }, CRED, OUR_ACCOUNT);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].row.id).toBe('pay-999');
+    expect(rows[1].row.id).toBe('fee-999-legacy');
+    expect(rows[1].row.monto).toBe(-50);
+    expect(rows[1].row.tipo).toBe('fee');
+  });
+
+  it('ingreso con commission == 0 → SOLO main, sin fee/tax', () => {
     const rows = mapPaymentToRows({
       id: 1234,
       status: 'approved',
@@ -254,9 +334,56 @@ describe('mapPaymentToRows', () => {
       transaction_details: { net_received_amount: 5000 },
       payment_method_id: 'account_money',
       point_of_interaction: { type: 'CHECKOUT' },
+      charges_details: [],
     }, CRED, OUR_ACCOUNT);
     expect(rows).toHaveLength(1);
     expect(rows[0].row.tipo).toBe('liquidacion');
+  });
+
+  it('ingreso INSTORE con coupon (type=coupon) y mp_fee/tax → ignora coupon', () => {
+    // Caso real 156568780899: tiene coupon_off de mp→payer (descuento al
+    // cliente, NO toca al merchant). Solo emite el fee y tax del collector.
+    const rows = mapPaymentToRows({
+      id: 156568780899,
+      status: 'approved',
+      date_created: '2026-05-01T22:11:00.000-04:00',
+      collector_id: OUR_ACCOUNT,
+      payer: { id: 177378236 },
+      transaction_amount: 70000,
+      transaction_details: { net_received_amount: 67571 },
+      payment_method_id: 'debvisa',
+      point_of_interaction: { type: 'INSTORE' },
+      description: 'Producto de Neko Sushi',
+      charges_details: [
+        {
+          id: '156568780899-001',
+          name: 'coupon_off',
+          type: 'coupon',
+          accounts: { from: 'mp', to: 'payer' }, // ← descuento al cliente, ignorar
+          amounts: { original: 49000, refunded: 0 },
+        },
+        {
+          id: '156568780899-002',
+          name: 'mercadopago_fee',
+          type: 'fee',
+          accounts: { from: 'collector', to: 'mp' },
+          amounts: { original: 679, refunded: 0 },
+        },
+        {
+          id: '156568780899-003',
+          name: 'tax_withholding-caba',
+          type: 'tax',
+          accounts: { from: 'collector', to: 'mp' },
+          amounts: { original: 1750, refunded: 0 },
+          metadata: { mov_detail: 'tax_withholding', mov_financial_entity: 'caba',
+                      source_detail: 'iibb_caba_charge' },
+        },
+      ],
+    }, CRED, OUR_ACCOUNT);
+    expect(rows).toHaveLength(3);
+    expect(rows[0].row.medio_pago).toBe('qr_debvisa');
+    expect(rows[1].row).toMatchObject({ tipo: 'fee', monto: -679 });
+    expect(rows[2].row).toMatchObject({ tipo: 'tax', monto: -1750 });
   });
 
   it('egreso (compra ML, Lucas paga) → SOLO main, sin fee', () => {
@@ -281,28 +408,7 @@ describe('mapPaymentToRows', () => {
     });
   });
 
-  it('ingreso QR (INSTORE) → main con medio qr_* + fee', () => {
-    const rows = mapPaymentToRows({
-      id: 156568780899,
-      status: 'approved',
-      date_created: '2026-05-01T22:11:00.000-04:00',
-      collector_id: OUR_ACCOUNT,
-      payer: { id: 177378236 },
-      transaction_amount: 70000,
-      transaction_details: { net_received_amount: 67571 },
-      payment_method_id: 'debvisa',
-      point_of_interaction: { type: 'INSTORE' },
-      description: 'Producto de Neko Sushi',
-    }, CRED, OUR_ACCOUNT);
-    expect(rows).toHaveLength(2);
-    expect(rows[0].row.tipo).toBe('liquidacion');
-    expect(rows[0].row.medio_pago).toBe('qr_debvisa');
-    expect(rows[1].row.tipo).toBe('fee');
-    expect(rows[1].row.medio_pago).toBe('qr_debvisa');  // hereda
-    expect(rows[1].row.monto).toBe(-2429);
-  });
-
-  it('referencia_id de main y fee es payment.id como string puro (no external_reference)', () => {
+  it('referencia_id de main, fee y tax es payment.id puro (no external_reference)', () => {
     const rows = mapPaymentToRows({
       id: 999, status: 'approved',
       date_created: '2026-05-01T00:00:00-04:00',
@@ -311,10 +417,15 @@ describe('mapPaymentToRows', () => {
       payment_method_id: 'visa',
       point_of_interaction: { type: 'POINT' },
       external_reference: 'Venta presencial',
+      charges_details: [
+        { id: '999-001', name: 'mercadopago_fee', type: 'fee',
+          accounts: { from: 'collector', to: 'mp' }, amounts: { original: 5 } },
+      ],
     }, CRED, OUR_ACCOUNT);
     expect(rows).toHaveLength(2);
-    expect(rows[0].row.referencia_id).toBe('999');
-    expect(rows[1].row.referencia_id).toBe('999');  // crítico para lookup
+    for (const r of rows) {
+      expect(r.row.referencia_id).toBe('999');  // crítico para lookup
+    }
   });
 });
 

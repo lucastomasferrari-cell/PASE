@@ -160,28 +160,31 @@ async function fetchWithBackoff({ url, token, retries, fetchFn, log }) {
  * Convierte un objeto payment de MP a un array de filas listas para upsert en
  * mp_movimientos. Devuelve:
  *   - 1 fila { skipped: true, reason } cuando el payment se descarta.
- *   - 1 fila main { skipped: false, row: <pay-*> } cuando NO aplica fee.
- *   - 2 filas [main, fee] cuando es un ingreso con comisión MP > 0; fee es
- *     una fila tipo='fee' con id 'fee-{payment.id}', monto negativo igual a
- *     (transaction_amount - net_received_amount), y referencia_id apuntando
- *     al mismo payment.id que el main. Esa estructura permite a la pestaña
- *     "Comisiones MP" linkear el fee con su padre vía referencia_id.
+ *   - 1 fila main { skipped: false, row: <pay-*> } cuando NO aplica fee/tax.
+ *   - main + N filas { fee-* / tax-* } cuando es ingreso con cargos al
+ *     collector. Cada cargo viene de payment.charges_details (filtrado por
+ *     accounts.from === 'collector') y se desglosa por type:
+ *       type='fee' → fila id='fee-{charge.id}', tipo='fee'  (comisión MP)
+ *       type='tax' → fila id='tax-{charge.id}', tipo='tax'  (retención
+ *                    impositiva, ej. IIBB CABA)
+ *
+ * Fallback legacy: si charges_details está vacío pero transaction > net,
+ * emite UNA fila id='fee-{payment.id}-legacy' con la diferencia agregada.
+ * Cubre payments antiguos donde MP API no devuelve charges_details. El id
+ * con sufijo '-legacy' diferencia del formato viejo 'fee-{paymentId}' sin
+ * sufijo, que el backfill considera obsoleto.
  *
  * Convenciones del main (pay-*):
  *  - id: 'pay-{payment.id}'.
- *  - referencia_id: payment.id (string puro). NO usamos external_reference
- *    para evitar colisión con set-/rr- referencia_id en el dedup retroactivo.
- *  - fecha: date_created tal cual viene de MP (ISO con offset).
- *  - signo: positivo cuando ourAccountId === collector_id (Lucas cobra),
- *    negativo cuando collector_id es otro (Lucas paga).
- *  - Transferencias internas (collector == payer == ourAccountId) se skipean.
- *  - Status != 'approved' se skipea.
+ *  - referencia_id: payment.id (string puro). NO usamos external_reference.
+ *  - signo: positivo si collector === ourAccountId (ingreso), negativo si no.
+ *  - Skips: status != approved, transferencia interna.
  *
- * Convenciones del fee (fee-*):
- *  - Solo se emite para ingresos con commission > 0. En egresos no aplica
- *    (Lucas paga, otro recibe; el fee implícito es del receptor).
- *  - referencia_id == payment.id (igual al main) → permite lookup en pestaña.
- *  - medio_pago heredado del main para conservar la pista POI.
+ * Convenciones de fee/tax:
+ *  - Solo en ingresos. Egresos no emiten cargos (Lucas paga el bruto,
+ *    los cargos del lado del receptor no le tocan).
+ *  - referencia_id == payment.id (igual al main) → permite lookup pestaña.
+ *  - medio_pago heredado del main (point_smart_*, qr_*, etc.).
  */
 export function mapPaymentToRows(payment, cred, ourAccountId) {
   if (!payment || payment.status !== 'approved') {
@@ -245,32 +248,92 @@ export function mapPaymentToRows(payment, cred, ourAccountId) {
     medio_pago: medioPago,
   };
 
-  // Fila fee solo para ingresos con comisión real (> 1 centavo).
-  // En egresos no aplica (Lucas paga el bruto, no recibe nada → no hay fee
-  // del lado de Lucas). Tampoco si transaction == net (cuenta saldo MP).
-  const commission = transactionAmount - netReceived;
-  if (!isIngress || !(commission > 0.01)) {
-    return [{ skipped: false, row: mainRow }];
+  const out = [{ skipped: false, row: mainRow }];
+
+  // Fee/tax solo aplican a ingresos (collector === ours).
+  if (!isIngress) return out;
+
+  const charges = Array.isArray(payment.charges_details) ? payment.charges_details : [];
+  const ourCharges = charges.filter(c =>
+    c?.accounts?.from === 'collector' &&
+    (c?.type === 'fee' || c?.type === 'tax')
+  );
+
+  if (ourCharges.length > 0) {
+    for (const c of ourCharges) {
+      const amount = Number(c?.amounts?.original) || 0;
+      if (amount <= 0) continue;
+      const isTax = c.type === 'tax';
+      const chargeId = c.id || `${payment.id}-${out.length}`;
+      out.push({
+        skipped: false,
+        row: {
+          id: `${isTax ? 'tax' : 'fee'}-${chargeId}`,
+          local_id: cred.local_id,
+          tenant_id: cred.tenant_id,
+          fecha: payment.date_created,
+          tipo: isTax ? 'tax' : 'fee',
+          descripcion: deriveChargeDesc(c).slice(0, 200),
+          monto: -Math.round(amount * 100) / 100,
+          saldo: null,
+          estado: 'approved',
+          referencia_id: String(payment.id),
+          medio_pago: medioPago,
+        },
+      });
+    }
+    return out;
   }
 
-  const feeRow = {
-    id: `fee-${payment.id}`,
-    local_id: cred.local_id,
-    tenant_id: cred.tenant_id,
-    fecha: payment.date_created,
-    tipo: 'fee',
-    descripcion: `Comisión ${descripcion || 'MP'}`.slice(0, 200),
-    monto: -Math.round(commission * 100) / 100,
-    saldo: null,
-    estado: 'approved',
-    referencia_id: String(payment.id),  // mismo que el main → permite lookup
-    medio_pago: medioPago,
-  };
+  // Fallback legacy: charges_details vacío pero hay diff. Una fila fee
+  // agregada con sufijo '-legacy' (no choca con el delete de fee-{id} puros
+  // del backfill).
+  const commission = transactionAmount - netReceived;
+  if (commission > 0.01) {
+    out.push({
+      skipped: false,
+      row: {
+        id: `fee-${payment.id}-legacy`,
+        local_id: cred.local_id,
+        tenant_id: cred.tenant_id,
+        fecha: payment.date_created,
+        tipo: 'fee',
+        descripcion: `Comisión MP (sin desglose) — ${descripcion || 'MP'}`.slice(0, 200),
+        monto: -Math.round(commission * 100) / 100,
+        saldo: null,
+        estado: 'approved',
+        referencia_id: String(payment.id),
+        medio_pago: medioPago,
+      },
+    });
+  }
 
-  return [
-    { skipped: false, row: mainRow },
-    { skipped: false, row: feeRow },
-  ];
+  return out;
+}
+
+// Genera la descripción legible para una fila fee/tax desde charge.metadata.
+function deriveChargeDesc(charge) {
+  const m = charge?.metadata || {};
+  const name = String(charge?.name || '');
+  const sourceDetail = String(m.source_detail || '');
+  const ent = String(m.mov_financial_entity || '').toUpperCase();
+
+  // Retenciones impositivas
+  if (charge?.type === 'tax' || sourceDetail.includes('iibb') || sourceDetail.includes('tax_withholding')) {
+    if (sourceDetail.includes('iibb') && ent) return `Retención IIBB ${ent}`;
+    if (m.mov_detail === 'tax_withholding' && ent) return `Retención impositiva ${ent}`;
+    if (sourceDetail.includes('iva')) return 'Retención IVA';
+    if (sourceDetail.includes('ganancias')) return 'Retención Ganancias';
+    return 'Retención impositiva';
+  }
+
+  // Comisiones MP
+  if (name === 'mercadopago_fee' || sourceDetail === 'processing_fee_charge') return 'Comisión MP';
+  if (name === 'third_payment') return 'Comisión MP (Checkout)';
+  if (name === 'application_fee') return 'Comisión aplicación';
+
+  // Genérico
+  return charge?.type === 'tax' ? 'Retención impositiva' : 'Comisión MP';
 }
 
 /**
