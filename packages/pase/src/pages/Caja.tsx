@@ -299,8 +299,8 @@ export default function Caja({ user, locales = [], localActivo }: any) {
         <div className="empty" style={{padding:24,marginBottom:16}}>No tenés cuentas asignadas. Pedile a un administrador que te habilite.</div>
       ) : (
         <div className="grid4">
-          {cuentasVisibles.map(k=>(
-            <div key={k} className={`caja-card caja-${k==="Caja Chica"?"chica":k==="Caja Mayor"?"mayor":k==="MercadoPago"?"mp":"banco"}`}>
+          {cuentasVisibles.filter(k=>k!=="MercadoPago").map(k=>(
+            <div key={k} className={`caja-card caja-${k==="Caja Chica"?"chica":k==="Caja Mayor"?"mayor":"banco"}`}>
               <div className="caja-name">{k}</div>
               <div className="caja-saldo" style={{color:(saldos[k]||0)<0?"var(--danger)":"var(--txt)"}}>{fmt_$(saldos[k]||0)}</div>
             </div>
