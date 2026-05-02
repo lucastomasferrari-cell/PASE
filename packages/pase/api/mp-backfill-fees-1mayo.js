@@ -44,10 +44,14 @@ export default async function handler(req, res) {
 
     const token = await getMpToken(cred.id);
 
-    // ?inspect=1 — read-only dump de charges_details
-    const inspectMode = req.query?.inspect === '1' || req.body?.inspect === '1';
-    if (inspectMode) {
+    // ?inspect=1 — read-only dump de charges_details (4 payments selectos)
+    // ?inspect=all-1mayo — read-only dump de TODOS los payments del 1/5
+    const inspectMode = req.query?.inspect || req.body?.inspect;
+    if (inspectMode === '1') {
       return await handleInspect({ token, res });
+    }
+    if (inspectMode === 'all-1mayo') {
+      return await handleInspectAll1Mayo({ token, res });
     }
 
     // Ventana — default 7 días, configurable
@@ -235,6 +239,103 @@ const INSPECT_IDS = [
   { id: '156568780899', label: 'INSTORE QR debvisa $70k' },
   { id: '157218501854', label: 'SUBSCRIPTIONS Meli+ $8.99k (egreso)' },
 ];
+
+async function handleInspectAll1Mayo({ token, res }) {
+  // Trae todos los payments del 1/5 AR vía payments/search, hace GET detail
+  // por cada uno y dumpea charges_details COMPACTO (solo los campos clave).
+  const begin = '2026-05-01T00:00:00.000-03:00';
+  const end   = '2026-05-02T00:00:00.000-03:00';
+  const url = `https://api.mercadopago.com/v1/payments/search?` +
+    `range=date_created&begin_date=${enc(begin)}&end_date=${enc(end)}&limit=100&offset=0`;
+
+  // Lotería para maximizar cobertura
+  let bestPayments = [];
+  for (let i = 1; i <= 8; i++) {
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) continue;
+    const data = await r.json();
+    const payments = Array.isArray(data?.results) ? data.results : [];
+    if (payments.length > bestPayments.length) bestPayments = payments;
+    const pagingTotal = data?.paging?.total ?? null;
+    if (pagingTotal != null && payments.length >= pagingTotal) break;
+  }
+
+  const items = [];
+  for (const p of bestPayments) {
+    try {
+      const dr = await fetch(`https://api.mercadopago.com/v1/payments/${p.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!dr.ok) {
+        items.push({ id: p.id, error: `detail ${dr.status}` });
+        continue;
+      }
+      const d = await dr.json();
+      items.push({
+        id: d.id,
+        date_created: d.date_created?.slice(0, 16),
+        status: d.status,
+        operation_type: d.operation_type,
+        application_id: d.application_id ?? null,
+        collector_id: d.collector_id ?? d.collector?.id ?? null,
+        payer_id: d.payer?.id ?? null,
+        payment_method_id: d.payment_method_id,
+        payment_type_id: d.payment_type_id,
+        poi_type: d.point_of_interaction?.type ?? null,
+        transaction_amount: d.transaction_amount,
+        net_received_amount: d.transaction_details?.net_received_amount ?? null,
+        diff: (Number(d.transaction_amount) || 0) - (Number(d.transaction_details?.net_received_amount) || 0),
+        charges: (Array.isArray(d.charges_details) ? d.charges_details : []).map(c => ({
+          id: c.id,
+          name: c.name,
+          type: c.type,
+          from: c.accounts?.from,
+          to: c.accounts?.to,
+          amount: c.amounts?.original,
+          source_detail: c.metadata?.source_detail,
+        })),
+      });
+    } catch (e) {
+      items.push({ id: p.id, error: String(e?.message || e) });
+    }
+  }
+
+  // Resumen por categoría de filtro
+  let sumCollectorFee = 0, sumAppOwnerFee = 0, sumOtherFromFee = 0;
+  let sumCollectorTax = 0, sumOtherTax = 0;
+  for (const it of items) {
+    if (!it.charges) continue;
+    for (const c of it.charges) {
+      const a = Number(c.amount) || 0;
+      if (c.type === 'fee') {
+        if (c.from === 'collector') sumCollectorFee += a;
+        else if (c.from === 'application_owner') sumAppOwnerFee += a;
+        else sumOtherFromFee += a;
+      } else if (c.type === 'tax') {
+        if (c.from === 'collector') sumCollectorTax += a;
+        else sumOtherTax += a;
+      }
+    }
+  }
+
+  return res.status(200).json({
+    ok: true,
+    mode: 'inspect_all_1mayo',
+    count: items.length,
+    items,
+    sums: {
+      fee_from_collector: round2(sumCollectorFee),
+      fee_from_application_owner: round2(sumAppOwnerFee),
+      fee_from_other: round2(sumOtherFromFee),
+      tax_from_collector: round2(sumCollectorTax),
+      tax_from_other: round2(sumOtherTax),
+      total_collector: round2(sumCollectorFee + sumCollectorTax),
+      total_collector_plus_app_owner: round2(sumCollectorFee + sumAppOwnerFee + sumCollectorTax),
+    },
+  });
+}
+
+function round2(v) { return Math.round(v * 100) / 100; }
 
 async function handleInspect({ token, res }) {
   const out = { ts: new Date().toISOString(), payments: {} };
