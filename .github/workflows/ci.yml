@@ -1,0 +1,57 @@
+name: CI - PR validation
+
+# Corre en cada PR a main + push directo a main (safety net por si alguien
+# pushea sin PR). Detección de paquetes afectados via turbo --filter para
+# que un cambio en packages/comanda no corra los tests de pase y viceversa.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancela runs anteriores del mismo PR cuando hay push nuevo.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # fetch-depth: 2 alcanza para que turbo detecte cambios vs HEAD^1.
+          # En PRs, GH crea un merge ref donde HEAD^1 == base (main) y
+          # HEAD^2 == PR head, así que `...[HEAD^1]` selecciona los packages
+          # afectados por el PR.
+          fetch-depth: 2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Gate estricto: test + typecheck. Cualquier paquete afectado debe pasar.
+      - name: turbo run test typecheck (affected only)
+        run: pnpm exec turbo run test typecheck --filter='...[HEAD^1]'
+
+      # Lint corre informativo — packages/pase tiene 481 errores legacy
+      # (mostly @typescript-eslint/no-unused-vars en code histórico). Se
+      # limpian en un sprint dedicado. Cuando esté limpio, sacar el
+      # continue-on-error.
+      - name: turbo run lint (advisory, allows failures)
+        continue-on-error: true
+        run: pnpm exec turbo run lint --filter='...[HEAD^1]'
