@@ -74,9 +74,14 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
       // Bug 2 — Tab "Por cobrar" trae TODOS los pending sin filtro de fecha.
       // Datepicker no aplica acá: el cronograma de cobros futuro siempre se
       // muestra completo. Ordenado ASC para mostrar primero el más cercano.
+      // Bug 1.5 fix: solo tipo='liquidacion' (cobros). Antes incluía egresos
+      // bank_transfer (Lucas pagando a AySA/proveedores) cuyo
+      // money_release_status='pending' refleja el saldo del RECEPTOR, no de
+      // Lucas. Eso restaba ~\$592k erróneamente al total a cobrar.
       let porCobrarQ=db.from("mp_movimientos")
         .select("*")
         .like("id","pay-%")
+        .eq("tipo","liquidacion")
         .eq("money_release_status","pending")
         .eq("anulado",false)
         .order("money_release_date",{ascending:true})
@@ -629,7 +634,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
         // pendientes de liberación, ordenado ASC por fecha de release.
         <div className="panel">
           <div className="panel-hd">
-            <span className="panel-title">Por cobrar — {porCobrarMovs.length} pagos pendientes de liberación</span>
+            <span className="panel-title">Por cobrar — {porCobrarMovs.length} cobros pendientes de liberación</span>
             <span style={{fontSize:11,color:"var(--muted2)"}}>Cronograma completo · ignora datepicker · monto neto</span>
           </div>
           <div style={{padding:"16px 20px",display:"grid",gap:10,gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))"}}>
