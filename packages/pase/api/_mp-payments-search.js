@@ -260,7 +260,13 @@ export function mapPaymentToRows(payment, cred, ourAccountId) {
     money_release_date: payment.money_release_date || null,
     money_release_status: payment.money_release_status || null,
     mp_status: mpStatus,
-    ...(isApproved ? {} : {
+    // anulado SIEMPRE explícito. La columna es NOT NULL DEFAULT false en
+    // schema, pero supabase-js upsert manda explícitamente {anulado: null}
+    // cuando omitimos la key — Postgres rechaza con not-null violation y
+    // aborta el batch entero. Setear false explícito en approved.
+    ...(isApproved ? {
+      anulado: false,
+    } : {
       anulado: true,
       anulado_motivo: 'mp_status_' + mpStatus,
       anulado_at: new Date().toISOString(),
@@ -312,6 +318,10 @@ export function mapPaymentToRows(payment, cred, ourAccountId) {
           // monto_bruto (no aplica) ni mp_status (siempre approved).
           money_release_date: payment.money_release_date || null,
           money_release_status: payment.money_release_status || null,
+          // anulado explícito — columna NOT NULL en mp_movimientos, supabase-js
+          // manda null si la omitimos. Fee/tax solo se emiten para payments
+          // approved (rama isIngress alcanza acá), siempre false.
+          anulado: false,
         },
       });
     }
@@ -340,6 +350,8 @@ export function mapPaymentToRows(payment, cred, ourAccountId) {
         money_release_status: payment.money_release_status || null,
         referencia_id: String(payment.id),
         medio_pago: medioPago,
+        // anulado explícito — ver nota en main row.
+        anulado: false,
       },
     });
   }

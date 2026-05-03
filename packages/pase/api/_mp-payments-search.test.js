@@ -198,7 +198,10 @@ describe('mapPaymentToRows', () => {
     expect(rows[0].row.anulado_motivo).toBe('mp_status_cancelled');
   });
 
-  it('payment approved → NO anulado, sin anulado_motivo', () => {
+  it('payment approved → anulado=false explícito (NOT NULL), sin anulado_motivo', () => {
+    // anulado es NOT NULL en schema. Antes lo dejábamos undefined cuando
+    // approved y supabase-js lo serializaba como null → batch upsert fallaba
+    // con not-null constraint violation. Ahora false explícito.
     const rows = mapPaymentToRows({
       id: 1, status: 'approved',
       date_created: '2026-05-01T00:00:00-04:00',
@@ -206,9 +209,56 @@ describe('mapPaymentToRows', () => {
       transaction_amount: 1000, transaction_details: { net_received_amount: 950 },
       payment_method_id: 'visa', point_of_interaction: { type: 'POINT' },
     }, CRED, OUR_ACCOUNT);
-    expect(rows[0].row.anulado).toBeUndefined();
+    expect(rows[0].row.anulado).toBe(false);
     expect(rows[0].row.anulado_motivo).toBeUndefined();
+    expect(rows[0].row.anulado_at).toBeUndefined();
     expect(rows[0].row.mp_status).toBe('approved');
+  });
+
+  it('fee/tax de payment approved → anulado=false explícito heredado', () => {
+    // Mismo motivo: NOT NULL en schema. Las fee-/tax-* del batch caían junto
+    // con la pay-* main si alguna fila salía con anulado=null implícito.
+    const rows = mapPaymentToRows({
+      id: 12345,
+      status: 'approved',
+      date_created: '2026-05-01T00:00:00-04:00',
+      collector_id: OUR_ACCOUNT, payer: { id: 99 },
+      transaction_amount: 1000, transaction_details: { net_received_amount: 920 },
+      payment_method_id: 'visa', point_of_interaction: { type: 'POINT' },
+      money_release_date: '2026-05-11T00:00:00-04:00',
+      money_release_status: 'pending',
+      charges_details: [
+        { id: '12345-001', name: 'mercadopago_fee', type: 'fee',
+          accounts: { from: 'collector', to: 'mp' },
+          amounts: { original: 50, refunded: 0 } },
+        { id: '12345-002', name: 'tax_withholding-caba', type: 'tax',
+          accounts: { from: 'collector', to: 'mp' },
+          amounts: { original: 30, refunded: 0 },
+          metadata: { mov_detail: 'tax_withholding', mov_financial_entity: 'caba',
+                      source_detail: 'iibb_caba_charge' } },
+      ],
+    }, CRED, OUR_ACCOUNT);
+    expect(rows).toHaveLength(3);
+    expect(rows[0].row.anulado).toBe(false);
+    expect(rows[1].row.anulado).toBe(false);  // fee
+    expect(rows[2].row.anulado).toBe(false);  // tax
+  });
+
+  it('fee legacy fallback de payment approved → anulado=false explícito', () => {
+    // Sin charges_details pero con commission detectable por diff bruto-neto.
+    const rows = mapPaymentToRows({
+      id: 99999,
+      status: 'approved',
+      date_created: '2025-01-01T00:00:00-04:00',
+      collector_id: OUR_ACCOUNT, payer: { id: 88 },
+      transaction_amount: 1000, transaction_details: { net_received_amount: 940 },
+      payment_method_id: 'visa', point_of_interaction: { type: 'POINT' },
+    }, CRED, OUR_ACCOUNT);
+    // main + fee legacy
+    expect(rows.length).toBe(2);
+    expect(rows[0].row.anulado).toBe(false);
+    expect(rows[1].row.id).toBe('fee-99999-legacy');
+    expect(rows[1].row.anulado).toBe(false);
   });
 
   it('skip si transferencia interna (collector == payer == ours)', () => {
