@@ -1,0 +1,26 @@
+name: MP cron - generate CSV
+
+# Dispara mp-generate cada 30 min en :00 y :30. mp-process corre en su
+# propio workflow con offset 2min (mp-cron-process.yml). Split en 2
+# workflows para NO usar `sleep 120` dentro del runner — eso ahorra
+# ~96% del costo en minutos GH Actions vs un solo workflow secuencial.
+
+on:
+  schedule:
+    - cron: '0,30 * * * *'   # :00 y :30 UTC (cada 30 min)
+  workflow_dispatch:         # trigger manual desde Actions UI
+
+concurrency:
+  group: mp-cron-generate
+  cancel-in-progress: false  # si una corrida tarda >30min, la próxima espera
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: POST /api/mp-generate
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.MP_CRON_BEARER }}" \
+            'https://pase-yndx.vercel.app/api/mp-generate'

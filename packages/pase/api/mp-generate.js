@@ -1,7 +1,9 @@
 // mp-generate: POST a MP para generar CSV nuevo. Responde en <5s.
 import { createMpTokenGetter } from './_mp-token.js';
+import { checkCronAuth } from './_cron-auth.js';
 
 export default async function handler(req, res) {
+  if (!checkCronAuth(req, res)) return;
   try {
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
       return res.status(500).json({ ok: false, error: 'Missing env vars' });

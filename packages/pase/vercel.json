@@ -1,19 +1,5 @@
 {
   "outputDirectory": "dist",
-  "crons": [
-    {
-      "path": "/api/mp-sync",
-      "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/backup-tenants",
-      "schedule": "0 7 * * *"
-    },
-    {
-      "path": "/api/backup-cleanup",
-      "schedule": "0 5 * * 0"
-    }
-  ],
   "functions": {
     "api/mp-sync.js": {
       "maxDuration": 300

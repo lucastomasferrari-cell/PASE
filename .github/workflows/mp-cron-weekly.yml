@@ -1,0 +1,24 @@
+name: MP cron - weekly cleanup
+
+# Cron semanal domingos 08:00 UTC = 05:00 ART. backup-cleanup recorre
+# bucket tenant-backups y borra archivos >30 días.
+
+on:
+  schedule:
+    - cron: '0 8 * * 0'     # domingos 08:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: mp-cron-weekly
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: backup-cleanup (delete >30d backups)
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.MP_CRON_BEARER }}" \
+            'https://pase-yndx.vercel.app/api/backup-cleanup'

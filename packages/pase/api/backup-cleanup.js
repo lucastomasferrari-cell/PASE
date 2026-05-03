@@ -8,10 +8,13 @@
 // no parsee (estructura inesperada, backups manuales) los IGNORA — no
 // los borra. Defensive: evita borrar accidentalmente.
 
+import { checkCronAuth } from './_cron-auth.js';
+
 const RETENTION_DAYS = 30;
 const PATH_REGEX = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/(\d{4}-\d{2}-\d{2})\.json\.gz$/;
 
 export default async function handler(req, res) {
+  if (!checkCronAuth(req, res)) return;
   try {
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
       return res.status(500).json({

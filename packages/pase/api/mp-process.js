@@ -28,8 +28,10 @@ import {
   mapPaymentToRows,
   formatArIso,
 } from './_mp-payments-search.js';
+import { checkCronAuth } from './_cron-auth.js';
 
 export default async function handler(req, res) {
+  if (!checkCronAuth(req, res)) return;
   try {
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
       return res.status(500).json({ ok: false, error: 'Missing env vars' });

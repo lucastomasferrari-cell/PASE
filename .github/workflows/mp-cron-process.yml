@@ -1,0 +1,34 @@
+name: MP cron - process CSV
+
+# Dispara mp-process cada 30 min en :02 y :32, exactamente 2 min después
+# de mp-cron-generate.yml. Pareja: para cada cobranza completa, generate
+# pide a MP el CSV (~2min de prep en MP) y process lo descarga + procesa.
+#
+# Caveat conocido GH Actions: el scheduler puede atrasar el run hasta
+# ~10min en horarios busy. Si process sale on-time pero generate fue
+# atrasado, mp-process pesca el CSV anterior (no el nuevo) → procesa
+# duplicates con upsert ignoreDuplicates → idempotente, no rompe.
+#
+# mp-process no recibe ?ts ni ?source: usa el CSV más reciente que MP
+# devuelve. Más robusto que pasar timestamp porque acepta cualquier CSV
+# fresco aunque generate haya corrido en otra ventana.
+
+on:
+  schedule:
+    - cron: '2,32 * * * *'   # :02 y :32 UTC, offset 2min vs generate
+  workflow_dispatch:
+
+concurrency:
+  group: mp-cron-process
+  cancel-in-progress: false
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: POST /api/mp-process
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.MP_CRON_BEARER }}" \
+            'https://pase-yndx.vercel.app/api/mp-process'

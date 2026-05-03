@@ -1,0 +1,45 @@
+name: MP cron - daily
+
+# Cron diario 09:00 UTC = 06:00 ART. Dispara secuencial:
+#   1. mp-sync           → recompute saldos legacy + dedup global.
+#   2. mp-update-pending-releases → refresca release_status pending de
+#      pay-* (GET /v1/payments/{id} directo, evita shard inconsistency
+#      de payments/search).
+#   3. backup-tenants    → exporta cada tenant a JSON.gz en bucket
+#      tenant-backups (idempotente por path con fecha).
+#
+# Secuencial (no paralelo) porque mp-sync y mp-update-pending-releases
+# tocan la misma tabla mp_movimientos y queremos orden determinístico.
+# backup-tenants es independiente pero cuesta poco encadenarlo.
+
+on:
+  schedule:
+    - cron: '0 9 * * *'     # 09:00 UTC = 06:00 ART
+  workflow_dispatch:
+
+concurrency:
+  group: mp-cron-daily
+  cancel-in-progress: false
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: mp-sync (saldos legacy + dedup)
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.MP_CRON_BEARER }}" \
+            'https://pase-yndx.vercel.app/api/mp-sync'
+
+      - name: mp-update-pending-releases (refresh release fields)
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.MP_CRON_BEARER }}" \
+            'https://pase-yndx.vercel.app/api/mp-update-pending-releases'
+
+      - name: backup-tenants (export JSON gzipped)
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.MP_CRON_BEARER }}" \
+            'https://pase-yndx.vercel.app/api/backup-tenants'

@@ -11,6 +11,7 @@
 // la UI de superadmin (etapa 4).
 
 import { gzipSync } from 'node:zlib';
+import { checkCronAuth } from './_cron-auth.js';
 
 // 35 tablas con tenant_id + tenant_admins + empleado_archivos legacy, en orden
 // topológico (parents primero). Las marcadas como condicionales pueden no
@@ -67,6 +68,7 @@ const TABLAS_BACKUP = [
 const BUCKETS_CON_ARCHIVOS = ['facturas', 'blindaje', 'rrhh-documentos', 'empleados'];
 
 export default async function handler(req, res) {
+  if (!checkCronAuth(req, res)) return;
   try {
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
       return res.status(500).json({
