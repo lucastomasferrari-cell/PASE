@@ -3,11 +3,12 @@ import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasVisibles } from "../lib/auth";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_$ } from "../lib/utils";
+import { computeSaldoMP, type MovParaSaldo } from "../lib/saldoMP";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 export default function Dashboard({ user, locales, localActivo }: any) {
-  const [stats, setStats] = useState<{saldos: Record<string, number>, deuda: number, vencidas: number, ventasHoy: number, remPend: number, blindajeVencidos: number, blindajePorVencer: number}>({saldos:{},deuda:0,vencidas:0,ventasHoy:0,remPend:0,blindajeVencidos:0,blindajePorVencer:0});
+  const [stats, setStats] = useState<{saldos: Record<string, number>, deuda: number, vencidas: number, ventasHoy: number, remPend: number, blindajeVencidos: number, blindajePorVencer: number, saldoMpTotal: number, credsSinCorte: number}>({saldos:{},deuda:0,vencidas:0,ventasHoy:0,remPend:0,blindajeVencidos:0,blindajePorVencer:0,saldoMpTotal:0,credsSinCorte:0});
   const [provDeuda, setProvDeuda] = useState<any[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,7 +21,12 @@ export default function Dashboard({ user, locales, localActivo }: any) {
       d.setDate(d.getDate()-6+i);
       return d.toISOString().slice(0,10);
     });
-    let sq = db.from("saldos_caja").select("*");
+    // Saldos cajas tradicionales — EXCLUIR la fila legacy MercadoPago (la
+    // mantiene mp-process con saldoAprobado acumulado de rr-/set-, doble
+    // conteo + histórico desde el corte original = $108M inflado).
+    // El saldo MP correcto se calcula abajo via computeSaldoMP (mismo modelo
+    // que ConciliacionMP refactor — saldo_inicial + delta pay-* posteriores).
+    let sq = db.from("saldos_caja").select("*").neq("cuenta", "MercadoPago");
     sq = applyLocalScope(sq, user, lid);
     const visCuentas = cuentasVisibles(user);
     if (visCuentas !== null) {
@@ -36,7 +42,23 @@ export default function Dashboard({ user, locales, localActivo }: any) {
     rq = applyLocalScope(rq, user, lid);
     let vtq = db.from("ventas").select("*").eq("fecha",hoy);
     vtq = applyLocalScope(vtq, user, lid);
-    const [{data:saldos},{data:facturas},{data:remitos},{data:ventas},{data:provs},{data:blindaje},{data:ventasSemana}] = await Promise.all([
+
+    // Saldo MP — saldo_inicial + SUM(monto pay-* WHERE fecha > corte). Mismo
+    // modelo que ConciliacionMP card. Si user no ve cuenta "MercadoPago"
+    // (cuentas_visibles), se omite sin pegarle innecesario a la DB.
+    const includeMp = visCuentas === null || visCuentas.includes("MercadoPago");
+    let credsQ = db.from("mp_credenciales")
+      .select("local_id, tenant_id, saldo_inicial, saldo_inicial_at")
+      .eq("activo", true);
+    credsQ = applyLocalScope(credsQ, user, lid);
+    let saldoMovsQ = db.from("mp_movimientos")
+      .select("local_id, monto, fecha, anulado")
+      .like("id", "pay-%")
+      .eq("anulado", false)
+      .limit(20000);
+    saldoMovsQ = applyLocalScope(saldoMovsQ, user, lid);
+
+    const [{data:saldos},{data:facturas},{data:remitos},{data:ventas},{data:provs},{data:blindaje},{data:ventasSemana},credsMpRes,saldoMovsRes] = await Promise.all([
       sq,
       fq,
       rq,
@@ -44,7 +66,11 @@ export default function Dashboard({ user, locales, localActivo }: any) {
       db.from("proveedores").select("*").gt("saldo",0).eq("estado","Activo"),
       bq,
       vsq,
+      includeMp ? credsQ : Promise.resolve({ data: [] as any[] }),
+      includeMp ? saldoMovsQ : Promise.resolve({ data: [] as any[] }),
     ]);
+    const credsMp = (credsMpRes as any).data || [];
+    const saldoMovs = ((saldoMovsRes as any).data || []) as MovParaSaldo[];
     setChartData(ultimos7.map(d => ({
       dia: d.slice(5),
       ventas: (ventasSemana||[]).filter((v:any)=>v.fecha===d).reduce((s:number,v:any)=>s+Number(v.monto),0),
@@ -61,6 +87,26 @@ export default function Dashboard({ user, locales, localActivo }: any) {
       if (dias < 0) blindajeVencidos++;
       else if (dias <= 30) blindajePorVencer++;
     });
+    // Calcular saldo MP por cred: saldo_inicial + delta de pay-* posteriores
+    // al corte. Las creds sin corte fijado NO suman (aportan $0) pero las
+    // contamos para footnote. Una cred ignora movs de otros local_id (lo hace
+    // computeSaldoMP internamente).
+    let saldoMpTotal = 0;
+    let credsSinCorte = 0;
+    for (const cred of credsMp) {
+      if (!cred.saldo_inicial_at) {
+        credsSinCorte++;
+        continue;
+      }
+      const r = computeSaldoMP({
+        saldoInicial: cred.saldo_inicial,
+        saldoInicialAt: cred.saldo_inicial_at,
+        movs: saldoMovs,
+        localId: cred.local_id,
+      });
+      if (r.total != null) saldoMpTotal += r.total;
+    }
+
     setStats({
       saldos:saldosObj,
       deuda:fAct.reduce((s: number,f: any)=>s+(f.total||0),0),
@@ -68,6 +114,7 @@ export default function Dashboard({ user, locales, localActivo }: any) {
       ventasHoy:(ventas||[]).filter((v: any)=>matchLocal(v.local_id)).reduce((s: number,v: any)=>s+(v.monto||0),0),
       remPend:(remitos||[]).filter((r: any)=>r.estado==="sin_factura"&&matchLocal(r.local_id)).length,
       blindajeVencidos, blindajePorVencer,
+      saldoMpTotal, credsSinCorte,
     });
     if (localId) {
       const deudaPorProv: Record<number, number> = {};
@@ -80,14 +127,20 @@ export default function Dashboard({ user, locales, localActivo }: any) {
   };
   useEffect(()=>{ load(localActivo); },[localActivo]);
   if(loading) return <div className="loading">Cargando...</div>;
-  const totalLiquidez = Object.values(stats.saldos).reduce((a: number,b: number)=>a+b,0);
+  // Liquidez Total = cajas tradicionales (Caja Chica/Mayor/Efectivo/Banco) +
+  // saldo MP correcto (computeSaldoMP). La fila legacy saldos_caja MercadoPago
+  // queda excluida en la query (.neq("cuenta","MercadoPago")).
+  const totalLiquidez = Object.values(stats.saldos).reduce((a: number,b: number)=>a+b,0) + stats.saldoMpTotal;
+  const liquidezSub = stats.credsSinCorte > 0
+    ? `Todas las cuentas · ${stats.credsSinCorte} ${stats.credsSinCorte===1?'local sin':'locales sin'} saldo MP fijado`
+    : "Todas las cuentas";
   return (
     <div>
       <div style={{marginBottom:20}}>
         <div className="ph-title">Dashboard</div>
       </div>
       <div className="grid4">
-        <div className="kpi"><div className="kpi-label">Liquidez Total</div><div className="kpi-value kpi-acc">{fmt_$(totalLiquidez)}</div><div className="kpi-sub">Todas las cuentas</div></div>
+        <div className="kpi"><div className="kpi-label">Liquidez Total</div><div className="kpi-value kpi-acc">{fmt_$(totalLiquidez)}</div><div className="kpi-sub">{liquidezSub}</div></div>
         <div className="kpi"><div className="kpi-label">Ventas Hoy</div><div className="kpi-value kpi-success">{fmt_$(stats.ventasHoy)}</div></div>
         <div className="kpi"><div className="kpi-label">Deuda Proveedores</div><div className="kpi-value kpi-warn">{fmt_$(stats.deuda)}</div></div>
         <div className="kpi"><div className="kpi-label">Facturas Vencidas</div><div className="kpi-value kpi-danger">{stats.vencidas}</div></div>
