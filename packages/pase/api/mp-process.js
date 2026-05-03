@@ -58,44 +58,18 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, message: 'Sin credenciales configuradas' });
     }
 
-    // Dedup global: si quedaron filas viejas sin prefijo (de cuando se usaba
-    // payments-API directo) que tienen contraparte rr-* o set-*, las borramos.
-    let cleanupDedupDeleted = null;
-    try {
-      const { data: allMovs } = await db.from('mp_movimientos').select('id, referencia_id');
-      if (allMovs && allMovs.length) {
-        const releasedRefIds = new Set();
-        for (const m of allMovs) {
-          if (m.id && (String(m.id).startsWith('rr-') || String(m.id).startsWith('set-')) && m.referencia_id) {
-            releasedRefIds.add(String(m.referencia_id));
-          }
-        }
-        const dupeIds = [];
-        for (const m of allMovs) {
-          const idStr = m.id ? String(m.id) : '';
-          // pay-*, fee-*, tax-* (TASK 0.18) son fuentes complementarias por
-          // date_created vía payments/search. Conviven con rr-/set- por
-          // design — el conciliador dedupea por referencia_id en presentación.
-          // NUNCA borramos pay-*, fee-* ni tax-*.
-          const isPrefixed =
-            idStr.startsWith('rr-') ||
-            idStr.startsWith('set-') ||
-            idStr.startsWith('pay-') ||
-            idStr.startsWith('fee-') ||
-            idStr.startsWith('tax-');
-          if (idStr && !isPrefixed && m.referencia_id && releasedRefIds.has(String(m.referencia_id))) {
-            dupeIds.push(idStr);
-          }
-        }
-        if (dupeIds.length) {
-          const { count } = await db.from('mp_movimientos').delete({ count: 'exact' }).in('id', dupeIds);
-          cleanupDedupDeleted = count ?? dupeIds.length;
-          console.log('[mp-process] dedup cleanup deleted:', cleanupDedupDeleted);
-        }
-      }
-    } catch (e) {
-      console.error('mp-process: dedup cleanup exception', e);
-    }
+    // Cleanup dedup global removido (Hobby plan timeout fix). Era para borrar
+    // filas legacy SIN prefijo cuando aparecía la versión rr-/set-. Migration
+    // ya completada — 0 filas legacy en producción. Si en el futuro reaparecen
+    // (rollback de schema, restore parcial), correr la query manualmente:
+    //   DELETE FROM mp_movimientos m1
+    //   WHERE m1.id NOT LIKE 'rr-%' AND m1.id NOT LIKE 'set-%'
+    //     AND m1.id NOT LIKE 'pay-%' AND m1.id NOT LIKE 'fee-%' AND m1.id NOT LIKE 'tax-%'
+    //     AND EXISTS (
+    //       SELECT 1 FROM mp_movimientos m2
+    //       WHERE m2.referencia_id = m1.referencia_id
+    //         AND (m2.id LIKE 'rr-%' OR m2.id LIKE 'set-%')
+    //     );
 
     const resultados = [];
     let balanceTotalMP = 0;
@@ -205,6 +179,11 @@ export default async function handler(req, res) {
                 if (m.referencia_id) refIdToId.set(String(m.referencia_id), String(m.id || ''));
               }
 
+              // Acumulamos primero TODAS las rows válidas, luego upsert en
+              // batch chunked. Antes hacíamos 1 RTT por fila (Hobby plan
+              // timeout fix) — para CSV de 200-500 filas era 200-500 RTTs
+              // serializados. Batch de 500 reduce a 1-2 RTTs.
+              const rowsToUpsert = [];
               for (let i = 0; i < rows.length; i++) {
                 const cells = rows[i];
                 const result = formato === 'settlement'
@@ -235,20 +214,34 @@ export default async function handler(req, res) {
                 const refId = result.row.referencia_id;
                 const existingId = refIdToId.get(String(refId));
                 if (existingId && existingId !== result.row.id) {
-                  // Hay otra fila con el mismo referencia_id. Si es prefijada
-                  // (rr- o set-), la respetamos como autoritaria y skipeamos.
                   if (existingId.startsWith('rr-') || existingId.startsWith('set-')) {
                     reportInfo.rows_skipped_other++;
                     continue;
                   }
-                  // Si NO es prefijada (data legacy de payments-API), seguirá
-                  // existiendo pero quedará oculta por el filter de PARTE A.
-                  // El sweep dedup global del inicio del handler la borra
-                  // cuando aparece el set-* equivalente.
+                  // Si NO es prefijada (data legacy), la nueva fila prefijada
+                  // se inserta y la legacy queda oculta por filter de PARTE A.
                 }
 
-                await db.from('mp_movimientos').upsert([result.row], { onConflict: 'id' });
-                reportInfo.rows_upserted++;
+                rowsToUpsert.push(result.row);
+              }
+
+              // Batch upsert chunked. Si un chunk falla por constraint en una
+              // fila puntual, perdemos las 500 del chunk — log el error y
+              // seguimos con el siguiente. La pérdida es recuperable: la
+              // próxima corrida del cron 30min las re-procesa.
+              const CHUNK = 500;
+              for (let off = 0; off < rowsToUpsert.length; off += CHUNK) {
+                const slice = rowsToUpsert.slice(off, off + CHUNK);
+                const { error: upErr } = await db
+                  .from('mp_movimientos')
+                  .upsert(slice, { onConflict: 'id' });
+                if (upErr) {
+                  console.error('[mp-process] CSV batch upsert error', cred.local_id,
+                    `chunk ${off}-${off + slice.length}`, upErr.message);
+                  reportInfo.rows_skipped_other += slice.length;
+                } else {
+                  reportInfo.rows_upserted += slice.length;
+                }
               }
 
               if (unknownTypes.size > 0) {
@@ -401,9 +394,8 @@ export default async function handler(req, res) {
 
             let inserted = 0;
             let upsertError = null;
-            let releaseRefreshed = 0;
             if (rows.length > 0) {
-              // Paso 1: INSERT-only con ignoreDuplicates → solo filas nuevas.
+              // INSERT-only con ignoreDuplicates → solo filas nuevas.
               // Las pre-existentes quedan sin tocar (campos inmutables: id,
               // fecha, monto, descripcion, monto_bruto). Esto preserva la
               // integridad histórica.
@@ -418,45 +410,14 @@ export default async function handler(req, res) {
                 inserted = (ins || []).length;
               }
 
-              // Paso 2: UPDATE selectivo en DOS pasadas (no se pueden combinar
-              // porque tienen WHERE distintos):
-              //   2a. release fields (money_release_status/_date/mp_status)
-              //       con WHERE M1: el released NO se sobrescribe por un
-              //       pending stale del shard de payments/search.
-              //   2b. monto_bruto SOLO si actual IS NULL — defensa para llenar
-              //       filas pre-Fase 2 que quedaron con NULL (Bug 1). El IS NULL
-              //       es idempotente: las filas que ya tienen monto_bruto NO se
-              //       sobrescriben (eso preserva campos inmutables).
-              for (const row of rows) {
-                // 2a) release fields
-                const releasePayload = {};
-                if (row.money_release_status !== undefined) releasePayload.money_release_status = row.money_release_status;
-                if (row.money_release_date !== undefined) releasePayload.money_release_date = row.money_release_date;
-                if (row.mp_status !== undefined) releasePayload.mp_status = row.mp_status;
-                if (Object.keys(releasePayload).length > 0) {
-                  const { error: updErr, count } = await db
-                    .from('mp_movimientos')
-                    .update(releasePayload, { count: 'exact' })
-                    .eq('id', row.id)
-                    .or('money_release_status.is.null,money_release_status.neq.released');
-                  if (updErr) {
-                    console.error('[mp-process payments] release update error', row.id, updErr.message);
-                  } else if (count) {
-                    releaseRefreshed += count;
-                  }
-                }
-                // 2b) monto_bruto idempotente (solo si NULL)
-                if (row.monto_bruto != null) {
-                  const { error: brutoErr } = await db
-                    .from('mp_movimientos')
-                    .update({ monto_bruto: row.monto_bruto })
-                    .eq('id', row.id)
-                    .is('monto_bruto', null);
-                  if (brutoErr) {
-                    console.error('[mp-process payments] monto_bruto backfill error', row.id, brutoErr.message);
-                  }
-                }
-              }
+              // Refresh de release fields y monto_bruto MOVIDO al cron diario
+              // mp-update-pending-releases (Hobby plan timeout fix). Antes
+              // hacíamos hasta 600 RTTs serializados acá (2 UPDATEs por row
+              // del batch) — overhead crítico que tiraba el endpoint a >60s.
+              // Costo del move: las filas pre-existentes pueden quedar con
+              // release_status stale por hasta 24h. El daily fallback las
+              // refresca con GET por payment_id directo (mejor que payments/
+              // search shard inconsistency, además).
             }
 
             paymentsSummary = {
@@ -469,7 +430,6 @@ export default async function handler(req, res) {
               rows_built: rows.length,
               rows_skipped: skippedReasons,
               inserted,
-              release_refreshed: releaseRefreshed,
               upsert_error: upsertError || undefined,
             };
             console.log('[mp-process payments] summary', cred.local_id, JSON.stringify(paymentsSummary));
@@ -541,7 +501,6 @@ export default async function handler(req, res) {
       ok: true,
       resultados,
       balance_mp: balanceConsultado ? balanceTotalMP : null,
-      cleanup_dedup_deleted: cleanupDedupDeleted,
     });
   } catch (err) {
     console.error('mp-process: unhandled error', err);
