@@ -201,7 +201,7 @@ async function processCred({ db, getMpToken, cred, backfillMode, backfillDays })
   //                    Filtra por release_date pasado para no pegar a MP por
   //                    payments que todavía esperan release legítimo.
   let query = db.from('mp_movimientos')
-    .select('id, referencia_id, money_release_status, money_release_date, mp_status, anulado')
+    .select('id, referencia_id, money_release_status, money_release_date, mp_status, anulado, monto')
     .eq('local_id', cred.local_id)
     .eq('tenant_id', cred.tenant_id)  // M5: tenant filter explícito
     .like('id', 'pay-%')
@@ -330,8 +330,14 @@ async function processCred({ db, getMpToken, cred, backfillMode, backfillDays })
     const newReleaseStatus = payment.money_release_status || null;
     const newReleaseDate = payment.money_release_date || null;
     const newMpStatus = payment.status || null;
-    const newMontoBruto = Number.isFinite(Number(payment.transaction_amount))
-      ? Math.round(Number(payment.transaction_amount) * 100) / 100
+    // monto_bruto debe tener mismo signo que monto. El sign se infiere del
+    // candidate.monto ya persistido (mapPaymentToRows lo decidió correctamente
+    // según collector_id vs ourAccountId en su momento). Acá NO podemos pegarle
+    // a /users/me por payment, así que reusamos el signo existente.
+    const txAmount = Number(payment.transaction_amount);
+    const isEgress = Number(candidate.monto) < 0;
+    const newMontoBruto = Number.isFinite(txAmount)
+      ? Math.round((isEgress ? -Math.abs(txAmount) : Math.abs(txAmount)) * 100) / 100
       : null;
     const isApproved = newMpStatus === 'approved';
 

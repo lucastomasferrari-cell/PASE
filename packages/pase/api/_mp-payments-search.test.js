@@ -560,8 +560,38 @@ describe('mapPaymentToRows', () => {
       id: 'pay-156521696215',
       tipo: 'bank_transfer',
       monto: -33230.34,
+      monto_bruto: -33230.34,  // mismo signo que monto — egreso
       descripcion: 'Rollos Etiquetas',
     });
+  });
+
+  it('monto_bruto tiene mismo signo que monto — ingreso positivo, egreso negativo', () => {
+    // Bug encontrado en producción: monto_bruto siempre se emitía positivo,
+    // entonces SUM(monto_bruto) sobre rows mezcladas (ingresos + egresos)
+    // sumaba egresos positivos en vez de restarlos. Eso inflaba el saldo
+    // released calculado contra MP UI.
+    const ingreso = mapPaymentToRows({
+      id: 1, status: 'approved',
+      date_created: '2026-05-01T00:00:00-04:00',
+      collector_id: OUR_ACCOUNT, payer: { id: 99 },
+      transaction_amount: 1000, transaction_details: { net_received_amount: 950 },
+      payment_method_id: 'visa', point_of_interaction: { type: 'POINT' },
+    }, CRED, OUR_ACCOUNT);
+    expect(ingreso[0].row.monto).toBeGreaterThan(0);
+    expect(ingreso[0].row.monto_bruto).toBeGreaterThan(0);
+    expect(ingreso[0].row.monto_bruto).toBe(1000);
+
+    const egreso = mapPaymentToRows({
+      id: 2, status: 'approved',
+      date_created: '2026-04-30T00:00:00-04:00',
+      collector_id: 999, payer: { id: OUR_ACCOUNT },
+      transaction_amount: 73928, transaction_details: { net_received_amount: 73928 },
+      payment_method_id: 'account_money', point_of_interaction: { type: 'CHECKOUT' },
+      description: 'Aysa',
+    }, CRED, OUR_ACCOUNT);
+    expect(egreso[0].row.monto).toBeLessThan(0);
+    expect(egreso[0].row.monto_bruto).toBeLessThan(0);
+    expect(egreso[0].row.monto_bruto).toBe(-73928);
   });
 
   it('referencia_id de main, fee y tax es payment.id puro (no external_reference)', () => {

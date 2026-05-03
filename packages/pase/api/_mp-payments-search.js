@@ -256,7 +256,12 @@ export function mapPaymentToRows(payment, cred, ourAccountId) {
     referencia_id: String(payment.id),
     medio_pago: medioPago,
     // TASK 0.18 — fase final
-    monto_bruto: Math.round(transactionAmount * 100) / 100,
+    // monto_bruto debe tener el MISMO signo que monto. En ingresos ambos son
+    // positivos (transaction_amount > 0, net_received_amount > 0). En egresos
+    // monto = -transaction_amount (negativo), entonces monto_bruto también
+    // debe ser negativo. Antes lo dejábamos siempre positivo y eso inflaba
+    // SUM(monto_bruto) cuando se agregaba egresos al cálculo de saldo.
+    monto_bruto: Math.round((isIngress ? transactionAmount : -transactionAmount) * 100) / 100,
     money_release_date: payment.money_release_date || null,
     money_release_status: payment.money_release_status || null,
     mp_status: mpStatus,
