@@ -28,6 +28,11 @@
 // existentes. Útil pre-deploy del frontend con tabs nuevas.
 
 import { createMpTokenGetter } from './_mp-token.js';
+import {
+  fetchPaymentsByDateCreated,
+  mapPaymentToRows,
+  formatArIso,
+} from './_mp-payments-search.js';
 
 const enc = encodeURIComponent;
 
@@ -84,6 +89,79 @@ export default async function handler(req, res) {
 async function processCred({ db, getMpToken, cred, backfillMode, backfillDays }) {
   const token = await getMpToken(cred.id);
 
+  // ─── Pasada DE DESCUBRIMIENTO (solo backfillMode) ──────────────────────────
+  // Antes del SELECT, llamamos payments/search con ventana N días y hacemos
+  // upsert append-only. Eso descubre payments que NUNCA entraron a DB porque
+  // estaban fuera de la ventana 7d del cron 30min. Filas pre-existentes NO
+  // se tocan acá (ignoreDuplicates: true) — su update queda para la pasada
+  // siguiente, que cubre tanto las nuevas como las viejas.
+  let discoveredNew = 0;
+  let discoveredErrors = 0;
+  let discoveredAccountId = null;
+  if (backfillMode) {
+    try {
+      // Resolver our_account_id necesario para mapPaymentToRows (distingue
+      // ingreso/egreso por collector_id == ourAccountId).
+      const meRes = await fetch('https://api.mercadolibre.com/users/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!meRes.ok) {
+        console.warn('[mp-update-pending-releases] /users/me failed for cred', cred.local_id, meRes.status);
+      } else {
+        const me = await meRes.json();
+        discoveredAccountId = Number(me?.id) || null;
+      }
+    } catch (e) {
+      console.warn('[mp-update-pending-releases] /users/me threw', cred.local_id, e?.message);
+    }
+
+    if (discoveredAccountId) {
+      const beginIso = formatArIso(new Date(Date.now() - backfillDays * 24 * 60 * 60 * 1000));
+      const endIso = formatArIso(new Date());
+      try {
+        const { payments, lotteryAttempts, pagingTotal } = await fetchPaymentsByDateCreated(
+          token, beginIso, endIso, {
+            threshold: 0,
+            fetchRetries: 3,
+            pageLimit: 100,
+            log: (event) => console.log('[mp-update-pending-releases discovery]', JSON.stringify(event)),
+          }
+        );
+        const newRows = [];
+        for (const p of payments) {
+          const results = mapPaymentToRows(p, cred, discoveredAccountId);
+          for (const r of results) {
+            if (!r.skipped) newRows.push(r.row);
+          }
+        }
+        if (newRows.length > 0) {
+          // Append-only — preserva campos inmutables de filas pre-existentes.
+          const { data: ins, error } = await db
+            .from('mp_movimientos')
+            .upsert(newRows, { onConflict: 'id', ignoreDuplicates: true })
+            .select('id');
+          if (error) {
+            console.error('[mp-update-pending-releases discovery] upsert error', cred.local_id, error.message);
+            discoveredErrors++;
+          } else {
+            discoveredNew = (ins || []).length;
+          }
+        }
+        console.log('[mp-update-pending-releases discovery] summary', cred.local_id, JSON.stringify({
+          window: { begin: beginIso, end: endIso },
+          payments_fetched: payments.length,
+          paging_total: pagingTotal,
+          lottery_attempts: lotteryAttempts,
+          rows_built: newRows.length,
+          discovered_new: discoveredNew,
+        }));
+      } catch (e) {
+        console.error('[mp-update-pending-releases discovery] failed', cred.local_id, e?.message);
+        discoveredErrors++;
+      }
+    }
+  }
+
   // Query candidatos:
   //   - Backfill mode: TODOS los pay-* del rango N días (incluso released)
   //                    para popular columnas nuevas en filas existentes.
@@ -117,6 +195,9 @@ async function processCred({ db, getMpToken, cred, backfillMode, backfillDays })
     return {
       local: cred.locales?.nombre,
       local_id: cred.local_id,
+      mode: backfillMode ? `backfill_${backfillDays}d` : 'pending_only',
+      discovered_new: discoveredNew,
+      discovered_errors: discoveredErrors,
       candidates: 0,
       checked: 0,
       released: 0,
@@ -266,6 +347,9 @@ async function processCred({ db, getMpToken, cred, backfillMode, backfillDays })
     local: cred.locales?.nombre,
     local_id: cred.local_id,
     mode: backfillMode ? `backfill_${backfillDays}d` : 'pending_only',
+    discovered_new: discoveredNew,
+    discovered_errors: discoveredErrors,
+    discovered_account_id: discoveredAccountId,
     candidates: candidatesCount,
     checked,
     released: releasedCount,

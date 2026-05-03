@@ -29,6 +29,9 @@
     },
     "api/backup-cleanup.js": {
       "maxDuration": 60
+    },
+    "api/mp-update-pending-releases.js": {
+      "maxDuration": 300
     }
   },
   "headers": [
