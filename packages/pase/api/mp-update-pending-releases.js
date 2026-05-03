@@ -98,27 +98,46 @@ async function processCred({ db, getMpToken, cred, backfillMode, backfillDays })
   let discoveredNew = 0;
   let discoveredErrors = 0;
   let discoveredAccountId = null;
+  // Debug fields agregados al response del endpoint para diagnóstico sin
+  // depender de Vercel runtime logs (ej. cuando el plan es Hobby y no se
+  // tienen logs persistidos). Cualquier campo undefined NO aparece en JSON.
+  let discoveryStage = null;          // 'me' | 'search' | 'map' | 'upsert' | 'done' | 'skipped_no_account_id'
+  let discoveryErrorDetail = null;    // mensaje del primer error (si lo hubo)
+  let discoveryMeStatus = null;       // status HTTP de /users/me
+  let discoveryPaymentsFetched = null;// payments.length devueltos por MP
+  let discoveryPagingTotal = null;    // paging.total reportado por MP
+  let discoveryRowsBuilt = null;      // newRows.length antes del upsert
+  let discoveryWindow = null;         // { begin, end } usado en payments/search
   if (backfillMode) {
     try {
+      discoveryStage = 'me';
       // Resolver our_account_id necesario para mapPaymentToRows (distingue
       // ingreso/egreso por collector_id == ourAccountId).
       const meRes = await fetch('https://api.mercadolibre.com/users/me', {
         headers: { Authorization: `Bearer ${token}` },
       });
+      discoveryMeStatus = meRes.status;
       if (!meRes.ok) {
+        const body = await meRes.text().catch(() => '');
+        discoveryErrorDetail = `users/me ${meRes.status}: ${body.slice(0, 200)}`;
         console.warn('[mp-update-pending-releases] /users/me failed for cred', cred.local_id, meRes.status);
       } else {
         const me = await meRes.json();
         discoveredAccountId = Number(me?.id) || null;
       }
     } catch (e) {
+      discoveryErrorDetail = `users/me threw: ${e?.message || String(e)}`;
       console.warn('[mp-update-pending-releases] /users/me threw', cred.local_id, e?.message);
     }
 
-    if (discoveredAccountId) {
+    if (!discoveredAccountId) {
+      discoveryStage = 'skipped_no_account_id';
+    } else {
       const beginIso = formatArIso(new Date(Date.now() - backfillDays * 24 * 60 * 60 * 1000));
       const endIso = formatArIso(new Date());
+      discoveryWindow = { begin: beginIso, end: endIso };
       try {
+        discoveryStage = 'search';
         const { payments, lotteryAttempts, pagingTotal } = await fetchPaymentsByDateCreated(
           token, beginIso, endIso, {
             threshold: 0,
@@ -127,6 +146,10 @@ async function processCred({ db, getMpToken, cred, backfillMode, backfillDays })
             log: (event) => console.log('[mp-update-pending-releases discovery]', JSON.stringify(event)),
           }
         );
+        discoveryPaymentsFetched = payments.length;
+        discoveryPagingTotal = pagingTotal;
+
+        discoveryStage = 'map';
         const newRows = [];
         for (const p of payments) {
           const results = mapPaymentToRows(p, cred, discoveredAccountId);
@@ -134,19 +157,24 @@ async function processCred({ db, getMpToken, cred, backfillMode, backfillDays })
             if (!r.skipped) newRows.push(r.row);
           }
         }
+        discoveryRowsBuilt = newRows.length;
+
         if (newRows.length > 0) {
+          discoveryStage = 'upsert';
           // Append-only — preserva campos inmutables de filas pre-existentes.
           const { data: ins, error } = await db
             .from('mp_movimientos')
             .upsert(newRows, { onConflict: 'id', ignoreDuplicates: true })
             .select('id');
           if (error) {
+            discoveryErrorDetail = `upsert: ${error.message}${error.code ? ` (code=${error.code})` : ''}${error.details ? ` details=${error.details}` : ''}`;
             console.error('[mp-update-pending-releases discovery] upsert error', cred.local_id, error.message);
             discoveredErrors++;
           } else {
             discoveredNew = (ins || []).length;
           }
         }
+        discoveryStage = 'done';
         console.log('[mp-update-pending-releases discovery] summary', cred.local_id, JSON.stringify({
           window: { begin: beginIso, end: endIso },
           payments_fetched: payments.length,
@@ -156,7 +184,10 @@ async function processCred({ db, getMpToken, cred, backfillMode, backfillDays })
           discovered_new: discoveredNew,
         }));
       } catch (e) {
-        console.error('[mp-update-pending-releases discovery] failed', cred.local_id, e?.message);
+        // Stage queda en el último valor seteado antes del throw — sirve para
+        // saber si murió en search/map. (search es lo más probable.)
+        discoveryErrorDetail = `${discoveryStage || 'unknown'}: ${e?.message || String(e)}`;
+        console.error('[mp-update-pending-releases discovery] failed', cred.local_id, discoveryStage, e?.message);
         discoveredErrors++;
       }
     }
@@ -198,6 +229,14 @@ async function processCred({ db, getMpToken, cred, backfillMode, backfillDays })
       mode: backfillMode ? `backfill_${backfillDays}d` : 'pending_only',
       discovered_new: discoveredNew,
       discovered_errors: discoveredErrors,
+      discovered_account_id: discoveredAccountId,
+      discovery_stage: discoveryStage,
+      discovery_error_detail: discoveryErrorDetail,
+      discovery_me_status: discoveryMeStatus,
+      discovery_payments_fetched: discoveryPaymentsFetched,
+      discovery_paging_total: discoveryPagingTotal,
+      discovery_rows_built: discoveryRowsBuilt,
+      discovery_window: discoveryWindow,
       candidates: 0,
       checked: 0,
       released: 0,
@@ -350,6 +389,13 @@ async function processCred({ db, getMpToken, cred, backfillMode, backfillDays })
     discovered_new: discoveredNew,
     discovered_errors: discoveredErrors,
     discovered_account_id: discoveredAccountId,
+    discovery_stage: discoveryStage,
+    discovery_error_detail: discoveryErrorDetail,
+    discovery_me_status: discoveryMeStatus,
+    discovery_payments_fetched: discoveryPaymentsFetched,
+    discovery_paging_total: discoveryPagingTotal,
+    discovery_rows_built: discoveryRowsBuilt,
+    discovery_window: discoveryWindow,
     candidates: candidatesCount,
     checked,
     released: releasedCount,
