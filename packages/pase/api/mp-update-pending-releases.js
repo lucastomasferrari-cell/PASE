@@ -210,13 +210,20 @@ async function processCred({ db, getMpToken, cred, backfillMode, backfillDays })
     const newReleaseStatus = payment.money_release_status || null;
     const newReleaseDate = payment.money_release_date || null;
     const newMpStatus = payment.status || null;
+    const newMontoBruto = Number.isFinite(Number(payment.transaction_amount))
+      ? Math.round(Number(payment.transaction_amount) * 100) / 100
+      : null;
     const isApproved = newMpStatus === 'approved';
 
-    // Update del pay-*
+    // Update del pay-* — incluye monto_bruto para cubrir filas pre-Fase 2
+    // que quedaron con NULL en esa columna (Bug 1: total bruto < neto en
+    // tab Ventas porque las pay-* viejas tenían monto_bruto NULL y se
+    // sumaban como 0).
     const updatePayload = {
       money_release_status: newReleaseStatus,
       money_release_date: newReleaseDate,
       mp_status: newMpStatus,
+      monto_bruto: newMontoBruto,
     };
     // Si el status no es approved, marcar anulado=true (M4).
     if (!isApproved && newMpStatus) {

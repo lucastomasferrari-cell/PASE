@@ -21,6 +21,10 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   const [credenciales,setCredenciales]=useState<any[]>([]);
   const [movimientos,setMovimientos]=useState<any[]>([]);
   const [saldoMpReleasedTotal,setSaldoMpReleasedTotal]=useState(0);
+  // Bug 2 — tab "Por cobrar" carga TODOS los pending sin filtro de fecha
+  // (datepicker ignorado). Se trae en query separada al load() para no
+  // mezclar con la ventana de Ventas/Ingresos.
+  const [porCobrarAll,setPorCobrarAll]=useState<any[]>([]);
   const [facturas,setFacturas]=useState<any[]>([]);
   const [gastos,setGastos]=useState<any[]>([]);
   const [loading,setLoading]=useState(true);
@@ -67,28 +71,42 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
         .eq("money_release_status","released")
         .eq("anulado",false);
       saldoQ=applyLocalScope(saldoQ,user,localActivo);
+      // Bug 2 — Tab "Por cobrar" trae TODOS los pending sin filtro de fecha.
+      // Datepicker no aplica acá: el cronograma de cobros futuro siempre se
+      // muestra completo. Ordenado ASC para mostrar primero el más cercano.
+      let porCobrarQ=db.from("mp_movimientos")
+        .select("*")
+        .like("id","pay-%")
+        .eq("money_release_status","pending")
+        .eq("anulado",false)
+        .order("money_release_date",{ascending:true})
+        .limit(2000);
+      porCobrarQ=applyLocalScope(porCobrarQ,user,localActivo);
       let facQ=db.from("facturas").select("id,nro,fecha,total,local_id,cat,estado").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false});
       facQ=applyLocalScope(facQ,user,localActivo);
       let gasQ=db.from("gastos").select("id,fecha,categoria,detalle,monto,local_id,cuenta").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false});
       gasQ=applyLocalScope(gasQ,user,localActivo);
-      const [credRes,movRes,saldoRes,facRes,gasRes]=await Promise.all([
+      const [credRes,movRes,saldoRes,porCobrarRes,facRes,gasRes]=await Promise.all([
         db.from("mp_credenciales").select("id, local_id, activo, ultima_sync, access_token_last8, saldo_disponible, por_acreditar, balance_at, locales(nombre)"),
         movQ,
         saldoQ,
+        porCobrarQ,
         facQ,
         gasQ,
       ]);
       if(credRes.error)console.warn("mp_credenciales load error:",credRes.error);
       if(movRes.error)console.warn("mp_movimientos load error:",movRes.error);
       if(saldoRes.error)console.warn("saldo released load error:",saldoRes.error);
+      if(porCobrarRes.error)console.warn("por cobrar load error:",porCobrarRes.error);
       if(facRes.error)console.warn("facturas load error:",facRes.error);
       if(gasRes.error)console.warn("gastos load error:",gasRes.error);
-      const c=credRes.data||[], m=movRes.data||[], saldoRows=saldoRes.data||[], f=facRes.data||[], g=gasRes.data||[];
+      const c=credRes.data||[], m=movRes.data||[], saldoRows=saldoRes.data||[], pcAll=porCobrarRes.data||[], f=facRes.data||[], g=gasRes.data||[];
       const saldoSum=(saldoRows as any[]).reduce((s,r)=>s+(Number(r.monto)||0),0);
-      console.log("[MP] load:",c.length,"credenciales /",m.length,"movimientos /",f.length,"facturas /",g.length,"gastos / saldo released:",saldoSum);
+      console.log("[MP] load:",c.length,"credenciales /",m.length,"movimientos /",pcAll.length,"por cobrar (todos) /",f.length,"facturas /",g.length,"gastos / saldo released:",saldoSum);
       setCredenciales((c as any[]).filter((x: any)=>!localActivo||x.local_id===localActivo));
       setMovimientos(m as any[]);
       setSaldoMpReleasedTotal(saldoSum);
+      setPorCobrarAll(pcAll as any[]);
       setFacturas((f as any[]).filter((x: any)=>!localActivo||x.local_id===localActivo));
       setGastos((g as any[]).filter((x: any)=>!localActivo||x.local_id===localActivo));
     }catch(e){
@@ -278,18 +296,19 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
     inRange(m.fecha) &&
     m.anulado !== true
   );
-  const ventasBruto = ventasMovs.reduce((s, m) => s + (Number(m.monto_bruto) || 0), 0);
+  // Bug 1 fix C — solo sumamos rows con monto_bruto poblado. Las que tienen
+  // NULL se cuentan separadas en ventasSinBrutoCount para mostrar warning.
+  const ventasConBruto = ventasMovs.filter(m => m.monto_bruto != null);
+  const ventasSinBrutoCount = ventasMovs.length - ventasConBruto.length;
+  const ventasBruto = ventasConBruto.reduce((s, m) => s + (Number(m.monto_bruto) || 0), 0);
   const ventasNeto = ventasMovs.reduce((s, m) => s + (Number(m.monto) || 0), 0);
   const ventasCount = ventasMovs.length;
-  const ventasTicketProm = ventasCount > 0 ? ventasBruto / ventasCount : 0;
+  const ventasTicketProm = ventasConBruto.length > 0 ? ventasBruto / ventasConBruto.length : 0;
 
-  // Tab Por cobrar — pay-* pending con money_release_date en rango
-  const porCobrarMovs = (movimientos as any[]).filter(m =>
-    String(m.id || '').startsWith('pay-') &&
-    m.money_release_status === 'pending' &&
-    inRange(m.money_release_date) &&
-    m.anulado !== true
-  );
+  // Tab Por cobrar — Bug 2 fix: usa porCobrarAll (query separada en load(),
+  // SIN filtro de fecha) en lugar de filtrar `movimientos` por inRange. El
+  // datepicker NO afecta este tab — se muestra el cronograma completo.
+  const porCobrarMovs = porCobrarAll;
   const porCobrarTotal = porCobrarMovs.reduce((s, m) => s + (Number(m.monto) || 0), 0);
   const proximaFechaRelease = porCobrarMovs
     .map(m => m.money_release_date)
@@ -546,11 +565,16 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
             <span className="panel-title">Ventas — {ventasCount} cobros</span>
             <span style={{fontSize:11,color:"var(--muted2)"}}>Filtra por fecha de venta · monto en bruto</span>
           </div>
+          {ventasSinBrutoCount > 0 && (
+            <div className="alert alert-warn" style={{margin:"12px 16px",fontSize:11}}>
+              ⚠ {ventasSinBrutoCount} {ventasSinBrutoCount===1?"venta sin":"ventas sin"} monto bruto en el período — esperá próximo cron diario
+            </div>
+          )}
           <div style={{padding:"16px 20px",display:"grid",gap:10,gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))"}}>
             <div className="kpi">
               <div className="kpi-label">Total bruto</div>
               <div className="kpi-value kpi-success" style={{fontSize:16}}>{fmt_mp(ventasBruto)}</div>
-              <div className="kpi-sub">Cobrado del cliente</div>
+              <div className="kpi-sub">{ventasSinBrutoCount>0?`Excluye ${ventasSinBrutoCount} sin bruto`:"Cobrado del cliente"}</div>
             </div>
             <div className="kpi">
               <div className="kpi-label">Total neto a recibir</div>
@@ -581,7 +605,11 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                   <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===m.local_id)?.nombre||"—"}</td>
                   <td><span className="badge b-muted" style={{fontSize:9}}>{m.medio_pago||"—"}</span></td>
                   <td style={{fontSize:11,maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.descripcion||"—"}</td>
-                  <td style={{textAlign:"right"}}><span className="num kpi-success">{fmt_mp(Number(m.monto_bruto)||0)}</span></td>
+                  <td style={{textAlign:"right"}}>
+                    {m.monto_bruto != null
+                      ? <span className="num kpi-success">{fmt_mp(Number(m.monto_bruto)||0)}</span>
+                      : <span style={{color:"var(--muted)",fontSize:11}} title="Falta monto bruto — esperá próximo cron">—</span>}
+                  </td>
                   <td style={{textAlign:"right",color:"var(--muted2)"}}><span className="num">{fmt_mp(Number(m.monto)||0)}</span></td>
                   <td style={{fontSize:10}}>
                     {m.money_release_status==="released"?
@@ -596,11 +624,13 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
           )}
         </div>
       ):tab==="por_cobrar"?(
-        // ─── Tab POR COBRAR — pay-* pending con money_release_date en rango ───
+        // ─── Tab POR COBRAR — TODOS los pay-* pending (Bug 2 fix) ─────────────
+        // No filtra por rango del datepicker. Cronograma completo de cobros
+        // pendientes de liberación, ordenado ASC por fecha de release.
         <div className="panel">
           <div className="panel-hd">
             <span className="panel-title">Por cobrar — {porCobrarMovs.length} pagos pendientes de liberación</span>
-            <span style={{fontSize:11,color:"var(--muted2)"}}>Filtra por fecha de release · monto neto</span>
+            <span style={{fontSize:11,color:"var(--muted2)"}}>Cronograma completo · ignora datepicker · monto neto</span>
           </div>
           <div style={{padding:"16px 20px",display:"grid",gap:10,gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))"}}>
             <div className="kpi">
@@ -611,16 +641,21 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
             <div className="kpi">
               <div className="kpi-label">Próxima liberación</div>
               <div className="kpi-value" style={{fontSize:14}}>{proximaFechaRelease?fmt_d(String(proximaFechaRelease).slice(0,10)):"—"}</div>
-              <div className="kpi-sub">Fecha más cercana en el rango</div>
+              <div className="kpi-sub">Fecha más cercana</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-label">Cantidad</div>
+              <div className="kpi-value" style={{fontSize:16}}>{porCobrarMovs.length}</div>
+              <div className="kpi-sub">Pagos pending</div>
             </div>
           </div>
-          {porCobrarMovs.length===0?<div className="empty">Sin pagos pendientes en el período. Probá ampliar el rango futuro.</div>:(
+          {porCobrarMovs.length===0?<div className="empty">Sin pagos pendientes. Todo está liberado al saldo ✓</div>:(
             <table>
               <thead><tr>
                 <th>Release</th><th>Fecha venta</th><th>Local</th><th>Medio</th>
                 <th>Descripción</th><th style={{textAlign:"right"}}>Neto</th>
               </tr></thead>
-              <tbody>{porCobrarMovs.sort((a:any,b:any)=>String(a.money_release_date).localeCompare(String(b.money_release_date))).map((m:any)=>(
+              <tbody>{porCobrarMovs.map((m:any)=>(
                 <tr key={m.id}>
                   <td className="mono" style={{fontSize:11}}>{fmt_d(String(m.money_release_date||"").slice(0,10))}</td>
                   <td className="mono" style={{fontSize:11,color:"var(--muted2)"}}>{fmt_d(String(m.fecha||"").slice(0,10))}</td>

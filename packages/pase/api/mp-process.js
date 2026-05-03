@@ -418,27 +418,43 @@ export default async function handler(req, res) {
                 inserted = (ins || []).length;
               }
 
-              // Paso 2: UPDATE selectivo de las 3 columnas que SÍ pueden
-              // refrescarse (money_release_status, money_release_date, mp_status)
-              // para filas existentes. Mitigación M1: el WHERE protege que
-              // payments ya 'released' NO vuelvan a 'pending' por una pasada
-              // stale del shard de payments/search. Solo se actualiza si el
-              // valor existente es NULL o distinto a 'released'.
+              // Paso 2: UPDATE selectivo en DOS pasadas (no se pueden combinar
+              // porque tienen WHERE distintos):
+              //   2a. release fields (money_release_status/_date/mp_status)
+              //       con WHERE M1: el released NO se sobrescribe por un
+              //       pending stale del shard de payments/search.
+              //   2b. monto_bruto SOLO si actual IS NULL — defensa para llenar
+              //       filas pre-Fase 2 que quedaron con NULL (Bug 1). El IS NULL
+              //       es idempotente: las filas que ya tienen monto_bruto NO se
+              //       sobrescriben (eso preserva campos inmutables).
               for (const row of rows) {
-                const updatePayload = {};
-                if (row.money_release_status !== undefined) updatePayload.money_release_status = row.money_release_status;
-                if (row.money_release_date !== undefined) updatePayload.money_release_date = row.money_release_date;
-                if (row.mp_status !== undefined) updatePayload.mp_status = row.mp_status;
-                if (Object.keys(updatePayload).length === 0) continue;
-                const { error: updErr, count } = await db
-                  .from('mp_movimientos')
-                  .update(updatePayload, { count: 'exact' })
-                  .eq('id', row.id)
-                  .or('money_release_status.is.null,money_release_status.neq.released');
-                if (updErr) {
-                  console.error('[mp-process payments] release update error', row.id, updErr.message);
-                } else if (count) {
-                  releaseRefreshed += count;
+                // 2a) release fields
+                const releasePayload = {};
+                if (row.money_release_status !== undefined) releasePayload.money_release_status = row.money_release_status;
+                if (row.money_release_date !== undefined) releasePayload.money_release_date = row.money_release_date;
+                if (row.mp_status !== undefined) releasePayload.mp_status = row.mp_status;
+                if (Object.keys(releasePayload).length > 0) {
+                  const { error: updErr, count } = await db
+                    .from('mp_movimientos')
+                    .update(releasePayload, { count: 'exact' })
+                    .eq('id', row.id)
+                    .or('money_release_status.is.null,money_release_status.neq.released');
+                  if (updErr) {
+                    console.error('[mp-process payments] release update error', row.id, updErr.message);
+                  } else if (count) {
+                    releaseRefreshed += count;
+                  }
+                }
+                // 2b) monto_bruto idempotente (solo si NULL)
+                if (row.monto_bruto != null) {
+                  const { error: brutoErr } = await db
+                    .from('mp_movimientos')
+                    .update({ monto_bruto: row.monto_bruto })
+                    .eq('id', row.id)
+                    .is('monto_bruto', null);
+                  if (brutoErr) {
+                    console.error('[mp-process payments] monto_bruto backfill error', row.id, brutoErr.message);
+                  }
                 }
               }
             }
