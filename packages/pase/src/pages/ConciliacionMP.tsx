@@ -3,6 +3,7 @@ import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
 import { useCategorias } from "../lib/useCategorias";
 import { toISO, today, fmt_d, fmt_$, genId, fmt_dt_ar } from "../lib/utils";
+import { computeSaldoMP, pickEffectiveLocalId, type MovParaSaldo } from "../lib/saldoMP";
 import type { Usuario, Local } from "../types";
 
 interface ConciliacionMPProps {
@@ -20,7 +21,12 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   const { COMISIONES_CATS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD } = useCategorias();
   const [credenciales,setCredenciales]=useState<any[]>([]);
   const [movimientos,setMovimientos]=useState<any[]>([]);
-  const [saldoMpReleasedTotal,setSaldoMpReleasedTotal]=useState(0);
+  // pay-* (ingresos + egresos, no anulados) sin filtro de fecha — usados
+  // para calcular el saldo MP del header relativo al saldo_inicial_at de
+  // cada credencial. Se carga en load() y se filtra cliente-side por local
+  // y por fecha > corte. Reemplaza el viejo saldoMpReleasedTotal (acumulado
+  // histórico que daba un número 12x inflado).
+  const [saldoMovs,setSaldoMovs]=useState<MovParaSaldo[]>([]);
   // Bug 2 — tab "Por cobrar" carga TODOS los pending sin filtro de fecha
   // (datepicker ignorado). Se trae en query separada al load() para no
   // mezclar con la ventana de Ventas/Ingresos.
@@ -40,7 +46,10 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   const [conciliarTab,setConciliarTab]=useState("gasto"); // gasto | factura | nuevo
   const [nuevoGastoForm,setNuevoGastoForm]=useState({categoria:"",detalle:""});
   const [vinculoSel,setVinculoSel]=useState("");
-  const [saldoInicialModal,setSaldoInicialModal]=useState<{local_id: number, monto: string|number, fecha?: string} | null>(null);
+  // saldoInicialModal: SIN datepicker. El corte usa new Date() en el momento
+  // del clic en Guardar. La idea: el usuario fija el saldo "ahora" y entiende
+  // que ese es el momento exacto del corte.
+  const [saldoInicialModal,setSaldoInicialModal]=useState<{local_id: number, monto: string|number} | null>(null);
 
   const load=async()=>{
     setLoading(true);
@@ -62,15 +71,17 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
         `and(money_release_date.gte.${desdeTs},money_release_date.lt.${hastaTs})`;
       let movQ=db.from("mp_movimientos").select("*").or(orFilter).order("fecha",{ascending:false}).limit(5000);
       movQ=applyLocalScope(movQ,user,localActivo);
-      // Mitigación M6 — saldo header se calcula desde pay-* released cumulativo
-      // (no más rr-/set-* via saldo_disponible legacy). Sin filtro de fecha
-      // para reflejar el saldo TOTAL liberado, no solo el del rango activo.
-      let saldoQ=db.from("mp_movimientos")
-        .select("monto")
+      // Saldo MP: query sin filtro de fecha (necesitamos pay-* desde antes
+      // del rango del datepicker para sumar TODO lo posterior al corte
+      // saldo_inicial_at de cada cred). El filtro fecha > corte se hace
+      // cliente-side en computeSaldoMP. Versión A: sin filtro de
+      // money_release_status (incluye pending + released).
+      let saldoMovsQ=db.from("mp_movimientos")
+        .select("local_id,monto,fecha,anulado")
         .like("id","pay-%")
-        .eq("money_release_status","released")
-        .eq("anulado",false);
-      saldoQ=applyLocalScope(saldoQ,user,localActivo);
+        .eq("anulado",false)
+        .limit(20000);
+      saldoMovsQ=applyLocalScope(saldoMovsQ,user,localActivo);
       // Bug 2 — Tab "Por cobrar" trae TODOS los pending sin filtro de fecha.
       // Datepicker no aplica acá: el cronograma de cobros futuro siempre se
       // muestra completo. Ordenado ASC para mostrar primero el más cercano.
@@ -92,25 +103,27 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
       let gasQ=db.from("gastos").select("id,fecha,categoria,detalle,monto,local_id,cuenta").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false});
       gasQ=applyLocalScope(gasQ,user,localActivo);
       const [credRes,movRes,saldoRes,porCobrarRes,facRes,gasRes]=await Promise.all([
-        db.from("mp_credenciales").select("id, local_id, activo, ultima_sync, access_token_last8, saldo_disponible, por_acreditar, balance_at, locales(nombre)"),
+        // tenant_id es requerido para el WHERE compuesto del UPDATE de
+        // saldo_inicial (defensa-en-profundidad sobre RLS). saldo_inicial /
+        // saldo_inicial_at son las que el card del header lee.
+        db.from("mp_credenciales").select("id, local_id, tenant_id, activo, ultima_sync, access_token_last8, saldo_inicial, saldo_inicial_at, saldo_disponible, por_acreditar, balance_at, locales(nombre)"),
         movQ,
-        saldoQ,
+        saldoMovsQ,
         porCobrarQ,
         facQ,
         gasQ,
       ]);
       if(credRes.error)console.warn("mp_credenciales load error:",credRes.error);
       if(movRes.error)console.warn("mp_movimientos load error:",movRes.error);
-      if(saldoRes.error)console.warn("saldo released load error:",saldoRes.error);
+      if(saldoRes.error)console.warn("saldo movs load error:",saldoRes.error);
       if(porCobrarRes.error)console.warn("por cobrar load error:",porCobrarRes.error);
       if(facRes.error)console.warn("facturas load error:",facRes.error);
       if(gasRes.error)console.warn("gastos load error:",gasRes.error);
       const c=credRes.data||[], m=movRes.data||[], saldoRows=saldoRes.data||[], pcAll=porCobrarRes.data||[], f=facRes.data||[], g=gasRes.data||[];
-      const saldoSum=(saldoRows as any[]).reduce((s,r)=>s+(Number(r.monto)||0),0);
-      console.log("[MP] load:",c.length,"credenciales /",m.length,"movimientos /",pcAll.length,"por cobrar (todos) /",f.length,"facturas /",g.length,"gastos / saldo released:",saldoSum);
+      console.log("[MP] load:",c.length,"credenciales /",m.length,"movimientos /",pcAll.length,"por cobrar (todos) /",saldoRows.length,"pay-* para saldo /",f.length,"facturas /",g.length,"gastos");
       setCredenciales((c as any[]).filter((x: any)=>!localActivo||x.local_id===localActivo));
       setMovimientos(m as any[]);
-      setSaldoMpReleasedTotal(saldoSum);
+      setSaldoMovs(saldoRows as MovParaSaldo[]);
       setPorCobrarAll(pcAll as any[]);
       setFacturas((f as any[]).filter((x: any)=>!localActivo||x.local_id===localActivo));
       setGastos((g as any[]).filter((x: any)=>!localActivo||x.local_id===localActivo));
@@ -341,39 +354,57 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   );
   const pendientesCount = egresosPendientesList.length;
 
-  // Mitigación M6 — Saldo MP cumulativo desde pay-* released (no más
-  // saldo_disponible legacy de mp_credenciales). Viene del query separado
-  // en load() sin filtro de fecha, así refleja el saldo TOTAL liberado.
   const porAcreditarTotal = credenciales.reduce((s, c) => s + (Number(c.por_acreditar) || 0), 0);
+
+  // ─── Saldo MP del header ───────────────────────────────────────────────
+  // Lógica:
+  //   1. visibleLocalIds = creds que el user ve (RLS ya filtró).
+  //   2. effectiveLocalId = el local activo a mostrar (ver pickEffectiveLocalId).
+  //   3. Si null y >1 local visible → "Seleccioná un local primero".
+  //   4. Si la cred no tiene saldo_inicial_at → "Fijar saldo inicial".
+  //   5. Si la cred lo tiene → saldo_inicial + SUM(monto WHERE fecha > corte).
+  const visibleLocalIds = credenciales.map(c => Number(c.local_id)).filter(Number.isFinite);
+  const effectiveLocalId = pickEffectiveLocalId(localActivo, visibleLocalIds);
+  const credActiva = effectiveLocalId != null
+    ? credenciales.find(c => c.local_id === effectiveLocalId)
+    : null;
+  const saldoCalc = credActiva
+    ? computeSaldoMP({
+        saldoInicial: credActiva.saldo_inicial,
+        saldoInicialAt: credActiva.saldo_inicial_at,
+        movs: saldoMovs,
+        localId: effectiveLocalId as number,
+      })
+    : null;
+  const necesitaSeleccionLocal = effectiveLocalId == null && visibleLocalIds.length > 1;
+  const necesitaFijarInicial = credActiva != null && saldoCalc != null && saldoCalc.motivo === 'sin_corte';
 
   const guardarSaldoInicial=async()=>{
     if(!saldoInicialModal||saldoInicialModal.monto===""||saldoInicialModal.monto==null)return;
     if(!saldoInicialModal.local_id)return;
     const monto=parseFloat(String(saldoInicialModal.monto));
     if(Number.isNaN(monto))return;
-    // La fecha de corte viene del input del modal. Si el usuario dejó
-    // una fecha sin hora, la convertimos a ISO tratándola como medianoche
-    // local del día elegido. Eso queda guardado en saldo_inicial_at y
-    // el sync futuro sólo suma los movimientos posteriores a ese corte.
-    const rawFecha=saldoInicialModal.fecha;
-    let corteIso;
-    if(rawFecha){
-      const parsed=new Date(rawFecha.length===10?rawFecha+"T00:00:00":rawFecha);
-      corteIso=Number.isNaN(parsed.getTime())?new Date().toISOString():parsed.toISOString();
-    }else{
-      corteIso=new Date().toISOString();
+    // El corte se fija EN ESTE PRECISO MOMENTO (timestamp del clic). El
+    // usuario debe haber visto el saldo en MP UI antes de abrir el modal
+    // para garantizar coherencia. Refijar más tarde mueve el corte y
+    // reinicia automáticamente la suma (filtro fecha > saldo_inicial_at
+    // descarta movs previos sin tocarlos).
+    const corteIso=new Date().toISOString();
+    // Defensa-en-profundidad: tenant_id + local_id en el WHERE además de
+    // RLS. Si por alguna razón RLS no estuviese activo o el user tuviese
+    // scope ampliado, esto evita que se sobrescriba un saldo de otro
+    // tenant accidentalmente.
+    const credSel=credenciales.find(c=>c.local_id===saldoInicialModal.local_id);
+    if(!credSel){
+      alert("No se encontró la credencial del local seleccionado.");
+      return;
     }
-    // Al fijar un nuevo saldo inicial, reseteamos también saldo_disponible
-    // y por_acreditar para que la UI refleje el valor inmediatamente sin
-    // esperar al próximo sync. El sync posterior volverá a computarlos
-    // sumando los movimientos que ocurran después de este corte.
     const {error}=await db.from("mp_credenciales").update({
       saldo_inicial:monto,
       saldo_inicial_at:corteIso,
-      saldo_disponible:monto,
-      por_acreditar:0,
-      balance_at:new Date().toISOString(),
-    }).eq("local_id",saldoInicialModal.local_id);
+    })
+      .eq("local_id",saldoInicialModal.local_id)
+      .eq("tenant_id",credSel.tenant_id);
     if(error){
       console.error("guardarSaldoInicial error:",error);
       alert("No se pudo guardar el saldo inicial: "+error.message);
@@ -502,7 +533,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
             <input type="date" className="search" style={{width:140}} value={hasta} onChange={e=>setHasta(e.target.value)}/>
           </div>
           <button className="btn btn-ghost btn-sm" style={{fontSize:10}} onClick={()=>{const d=new Date();d.setDate(d.getDate()-30);setDesde(toISO(d));setHasta(toISO(today));}}>Últ. 30d</button>
-          <button className="btn btn-ghost" onClick={()=>setSaldoInicialModal({local_id:credenciales[0]?.local_id||"",monto:"",fecha:toISO(today)})}>⚙ Fijar saldo inicial</button>
+          <button className="btn btn-ghost" onClick={()=>setSaldoInicialModal({local_id:effectiveLocalId??(credenciales[0]?.local_id||0),monto:""})}>⚙ Fijar saldo inicial</button>
           <button className="btn btn-ghost" onClick={()=>setConfigModal(true)}>⚙ Cuentas MP</button>
           <button className="btn btn-acc" onClick={sincronizar} disabled={sincronizando}>
             {sincronizando?"🔄 Sincronizando...":"↻ Sincronizar ahora"}
@@ -527,16 +558,49 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
       )}
 
       <div className="grid3">
-        {/* Mitigación M6 — Saldo MP cumulativo: SUM(monto) de pay-* released
-            no anulados, sin filtro de fecha. Coherencia total con tab
-            "Ingresos al saldo". Reemplaza el saldo_disponible legacy de
-            mp_credenciales (que sumaba rr-/set-* approved post-corte). */}
+        {/* Saldo MP — saldo_inicial + SUM(monto WHERE fecha > saldo_inicial_at).
+            Valor relativo al corte fijado por el user, no acumulado histórico. */}
         <div className="kpi">
-          <div className="kpi-label" style={{color:"var(--muted)"}}>Saldo MP (released)</div>
-          <div className="kpi-value" style={{color:"var(--muted2)",fontFamily:"'Inter',sans-serif",fontSize:18,fontWeight:500}}>
-            {fmt_mp(saldoMpReleasedTotal)}
-          </div>
-          <div className="kpi-sub">Suma de cobros liberados al saldo</div>
+          <div className="kpi-label" style={{color:"var(--muted)"}}>Saldo MP</div>
+          {loading ? (
+            <div className="kpi-value" style={{color:"var(--muted2)",fontSize:18,fontWeight:500,opacity:0.4}}>—</div>
+          ) : necesitaSeleccionLocal ? (
+            <>
+              <div className="kpi-value" style={{color:"var(--muted2)",fontSize:13,fontWeight:500}}>
+                Seleccioná un local
+              </div>
+              <div className="kpi-sub">Cambiá de local en el sidebar para ver su saldo</div>
+            </>
+          ) : !credActiva ? (
+            <>
+              <div className="kpi-value" style={{color:"var(--muted2)",fontSize:13,fontWeight:500}}>
+                Sin credencial MP
+              </div>
+              <div className="kpi-sub">Configurá la cuenta MP del local primero</div>
+            </>
+          ) : necesitaFijarInicial ? (
+            <>
+              <div className="kpi-value" style={{color:"var(--muted2)",fontSize:13,fontWeight:500}}>
+                Fijar saldo inicial primero
+              </div>
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{fontSize:10,marginTop:6}}
+                onClick={()=>setSaldoInicialModal({local_id:credActiva.local_id,monto:""})}
+              >
+                ⚙ Fijar saldo inicial
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="kpi-value" style={{color:"var(--muted2)",fontFamily:"'Inter',sans-serif",fontSize:18,fontWeight:500}}>
+                {fmt_mp(saldoCalc?.total ?? 0)}
+              </div>
+              <div className="kpi-sub" style={{fontSize:10,color:"var(--muted2)"}}>
+                Inicial {fmt_mp(Number(credActiva.saldo_inicial)||0)} fijado el {fmt_dt_ar(credActiva.saldo_inicial_at)}
+              </div>
+            </>
+          )}
         </div>
         <div className="kpi">
           <div className="kpi-label">Egresos sin justificar</div>
@@ -792,16 +856,12 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
 
       {saldoInicialModal&&(()=>{
         const credSel=credenciales.find(x=>x.local_id===saldoInicialModal.local_id);
-        const calculado=credSel?Number(credSel.saldo_disponible)||0:0;
-        const inicialPrev=credSel?Number(credSel.saldo_inicial)||0:0;
-        const montoNum=saldoInicialModal.monto===""||saldoInicialModal.monto==null?null:parseFloat(String(saldoInicialModal.monto));
-        const diferencia=montoNum!=null&&!Number.isNaN(montoNum)?montoNum-calculado:null;
         return (
         <div className="overlay" onClick={()=>setSaldoInicialModal(null)}><div className="modal" style={{width:560}} onClick={e=>e.stopPropagation()}>
           <div className="modal-hd"><div className="modal-title">Fijar saldo inicial MP</div><button className="close-btn" onClick={()=>setSaldoInicialModal(null)}>✕</button></div>
           <div className="modal-body">
-            <div className="alert alert-warn" style={{marginBottom:12}}>
-              Ingresá el saldo real de tu cuenta MP y la fecha en que ese saldo es válido. A partir de ese corte el sistema va a sumar sólo los movimientos aprobados posteriores.
+            <div className="alert alert-warn" style={{marginBottom:12,fontSize:12,lineHeight:1.5}}>
+              <strong>Este es el saldo de MP en este preciso momento.</strong> PASE va a sumar/restar todos los movimientos posteriores. Si en MP UI faltan ingresos/egresos del día por mostrar, esperá a que aparezcan antes de fijar.
             </div>
             <div className="field">
               <label>Local</label>
@@ -811,45 +871,20 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
               </select>
             </div>
 
-            {credSel&&(
-              <div style={{padding:12,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)",marginBottom:12}}>
-                <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"var(--muted2)",marginBottom:6}}>Saldo calculado actual</div>
-                <div className="num" style={{fontSize:17,fontWeight:500,color:"var(--acc)",fontFamily:"'Inter',sans-serif"}}>{fmt_mp(calculado)}</div>
-                <div style={{fontSize:10,color:"var(--muted2)",marginTop:4}}>
-                  = saldo inicial {fmt_mp(inicialPrev)}{credSel.saldo_inicial_at?` (corte ${fmt_d(credSel.saldo_inicial_at.slice(0,10))})`:" (sin corte)"} + movimientos aprobados posteriores
-                </div>
-              </div>
-            )}
-
-            <div className="form2">
-              <div className="field">
-                <label>Fecha del corte</label>
-                <input type="date" value={saldoInicialModal.fecha||""} onChange={e=>setSaldoInicialModal({...saldoInicialModal,fecha:e.target.value})}/>
-              </div>
-              <div className="field">
-                <label>Saldo real en MP $</label>
-                <input type="number" value={saldoInicialModal.monto} onChange={e=>setSaldoInicialModal({...saldoInicialModal,monto:e.target.value})} placeholder="0"/>
-              </div>
+            <div className="field">
+              <label>Saldo real en MP $</label>
+              <input type="number" autoFocus value={saldoInicialModal.monto} onChange={e=>setSaldoInicialModal({...saldoInicialModal,monto:e.target.value})} placeholder="0"/>
             </div>
 
-            {credSel&&diferencia!=null&&(
-              <div style={{padding:"10px 12px",background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)",marginTop:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div style={{fontSize:11,color:"var(--muted2)"}}>Diferencia contra el calculado</div>
-                <div className="num" style={{color:Math.abs(diferencia)<1?"var(--success)":diferencia>0?"var(--acc3)":"var(--warn)",fontWeight:600}}>
-                  {diferencia>=0?"+":""}{fmt_mp(diferencia)}
-                </div>
-              </div>
-            )}
-
             {credSel&&credSel.saldo_inicial_at&&(
-              <div style={{fontSize:10,color:"var(--muted2)",marginTop:10}}>
-                Al guardar, el corte se mueve a la fecha que elijas y se reinicia la suma de movimientos posteriores.
+              <div style={{fontSize:11,color:"var(--muted2)",marginTop:4,padding:"8px 10px",background:"var(--s2)",borderRadius:"var(--r)"}}>
+                Saldo previo: {fmt_mp(Number(credSel.saldo_inicial)||0)} fijado el {fmt_dt_ar(credSel.saldo_inicial_at)}. Al guardar se reemplaza y el corte se mueve a este momento.
               </div>
             )}
           </div>
           <div className="modal-ft">
             <button className="btn btn-sec" onClick={()=>setSaldoInicialModal(null)}>Cancelar</button>
-            <button className="btn btn-acc" disabled={!saldoInicialModal.local_id||saldoInicialModal.monto===""||!saldoInicialModal.fecha} onClick={guardarSaldoInicial}>Guardar</button>
+            <button className="btn btn-acc" disabled={!saldoInicialModal.local_id||saldoInicialModal.monto===""} onClick={guardarSaldoInicial}>Guardar</button>
           </div>
         </div></div>
         );
