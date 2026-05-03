@@ -20,12 +20,13 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   const { COMISIONES_CATS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD } = useCategorias();
   const [credenciales,setCredenciales]=useState<any[]>([]);
   const [movimientos,setMovimientos]=useState<any[]>([]);
+  const [saldoMpReleasedTotal,setSaldoMpReleasedTotal]=useState(0);
   const [facturas,setFacturas]=useState<any[]>([]);
   const [gastos,setGastos]=useState<any[]>([]);
   const [loading,setLoading]=useState(true);
   const [sincronizando,setSincronizando]=useState(false);
   const [toast,setToast]=useState<ToastState | null>(null);
-  const [tab,setTab]=useState("movimientos");
+  const [tab,setTab]=useState("ventas");
   const _hace30=new Date();_hace30.setDate(_hace30.getDate()-30);
   const [desde,setDesde]=useState(toISO(_hace30));
   const [hasta,setHasta]=useState(toISO(today));
@@ -43,34 +44,51 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
       // Rango por día calendario AR (UTC-3): convertimos los datepickers
       // 'YYYY-MM-DD' AR-local a su rango UTC equivalente. desde 00:00 AR =
       // {desde}T03:00:00Z; hasta 24:00 AR = {hasta+1}T03:00:00Z (exclusive).
-      // Equivale a (fecha AT TIME ZONE 'America/Argentina/Buenos_Aires')::date
-      // sin necesidad de RPC SQL.
       const desdeTs=new Date(`${desde}T00:00:00-03:00`).toISOString();
       const _hastaPlus=new Date(`${hasta}T00:00:00-03:00`);
       _hastaPlus.setUTCDate(_hastaPlus.getUTCDate()+1);
       const hastaTs=_hastaPlus.toISOString();
-      // Filtramos mp_movimientos por local en el server cuando hay un
-      // local activo, así evitamos traer filas que igual vamos a descartar.
-      let movQ=db.from("mp_movimientos").select("*").gte("fecha",desdeTs).lt("fecha",hastaTs).order("fecha",{ascending:false}).limit(5000);
+      // Mitigación A1 — query con OR de 2 ventanas: trae filas cuya fecha
+      // (= date_created) cae en el rango O cuya money_release_date cae en
+      // el rango. Necesario porque tab "Ventas" filtra por fecha y tab
+      // "Ingresos al saldo" filtra por money_release_date — ambos tabs
+      // necesitan filas que pueden no estar en el otro rango.
+      const orFilter =
+        `and(fecha.gte.${desdeTs},fecha.lt.${hastaTs}),` +
+        `and(money_release_date.gte.${desdeTs},money_release_date.lt.${hastaTs})`;
+      let movQ=db.from("mp_movimientos").select("*").or(orFilter).order("fecha",{ascending:false}).limit(5000);
       movQ=applyLocalScope(movQ,user,localActivo);
+      // Mitigación M6 — saldo header se calcula desde pay-* released cumulativo
+      // (no más rr-/set-* via saldo_disponible legacy). Sin filtro de fecha
+      // para reflejar el saldo TOTAL liberado, no solo el del rango activo.
+      let saldoQ=db.from("mp_movimientos")
+        .select("monto")
+        .like("id","pay-%")
+        .eq("money_release_status","released")
+        .eq("anulado",false);
+      saldoQ=applyLocalScope(saldoQ,user,localActivo);
       let facQ=db.from("facturas").select("id,nro,fecha,total,local_id,cat,estado").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false});
       facQ=applyLocalScope(facQ,user,localActivo);
       let gasQ=db.from("gastos").select("id,fecha,categoria,detalle,monto,local_id,cuenta").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false});
       gasQ=applyLocalScope(gasQ,user,localActivo);
-      const [credRes,movRes,facRes,gasRes]=await Promise.all([
+      const [credRes,movRes,saldoRes,facRes,gasRes]=await Promise.all([
         db.from("mp_credenciales").select("id, local_id, activo, ultima_sync, access_token_last8, saldo_disponible, por_acreditar, balance_at, locales(nombre)"),
         movQ,
+        saldoQ,
         facQ,
         gasQ,
       ]);
       if(credRes.error)console.warn("mp_credenciales load error:",credRes.error);
       if(movRes.error)console.warn("mp_movimientos load error:",movRes.error);
+      if(saldoRes.error)console.warn("saldo released load error:",saldoRes.error);
       if(facRes.error)console.warn("facturas load error:",facRes.error);
       if(gasRes.error)console.warn("gastos load error:",gasRes.error);
-      const c=credRes.data||[], m=movRes.data||[], f=facRes.data||[], g=gasRes.data||[];
-      console.log("[MP] load:",c.length,"credenciales /",m.length,"movimientos /",f.length,"facturas /",g.length,"gastos");
+      const c=credRes.data||[], m=movRes.data||[], saldoRows=saldoRes.data||[], f=facRes.data||[], g=gasRes.data||[];
+      const saldoSum=(saldoRows as any[]).reduce((s,r)=>s+(Number(r.monto)||0),0);
+      console.log("[MP] load:",c.length,"credenciales /",m.length,"movimientos /",f.length,"facturas /",g.length,"gastos / saldo released:",saldoSum);
       setCredenciales((c as any[]).filter((x: any)=>!localActivo||x.local_id===localActivo));
       setMovimientos(m as any[]);
+      setSaldoMpReleasedTotal(saldoSum);
       setFacturas((f as any[]).filter((x: any)=>!localActivo||x.local_id===localActivo));
       setGastos((g as any[]).filter((x: any)=>!localActivo||x.local_id===localActivo));
     }catch(e){
@@ -231,52 +249,78 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
     return [...winners, ...sinId];
   })();
 
-  // Allowlist de tipos que afectan el saldo released de la cuenta MP. El
-  // listado y las KPIs operan sobre estos. Las ventas/cobros pendientes
-  // (tipo='point', tipo='payment' sin liberar) NO entran porque solo
-  // entran al saldo pendiente, no al released. El toggle de la UI
-  // permite incluirlas en el listado para auditoría visual on-demand.
-  const TIPOS_VISIBLES=new Set([
-    "liquidacion",
-    "bank_transfer",
-    "bank_transfer_in",
-    "pago_proveedor",
-    "refund",
-    "chargeback",
-  ]);
-  const [mostrarPendientes,setMostrarPendientes]=useState(false);
+  // ─── Mitigaciones A1+A2+A3 — Filtros por tab ──────────────────────────────
+  // Cada tab tiene su propio dataset filtrado. NUNCA agregar KPIs cross-tab
+  // sin chequear doble conteo: una venta del 1/5 con release 11/5 aparece
+  // en Ventas (date_created) Y en Ingresos al saldo (release_date) si el
+  // rango abarca ambas fechas. Para evitar contarla dos veces, cada tab
+  // calcula sus totales sobre SU propio array — NO sumar entre tabs.
+  // También: tab "Ventas" muestra monto_bruto (transaction_amount), tab
+  // "Por cobrar" e "Ingresos al saldo" muestran monto (net_received_amount).
+  // Mitigación A2 — etiquetar visualmente "bruto" vs "neto" en cada tab.
+  const desdeMs = new Date(`${desde}T00:00:00-03:00`).getTime();
+  const hastaMsExcl = (() => {
+    const d = new Date(`${hasta}T00:00:00-03:00`);
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.getTime();
+  })();
+  const inRange = (iso: any): boolean => {
+    if (!iso) return false;
+    const t = new Date(iso).getTime();
+    return Number.isFinite(t) && t >= desdeMs && t < hastaMsExcl;
+  };
 
-  // KPIs SIEMPRE sobre tipos released (independiente del toggle), para
-  // que los totales reflejen el saldo real de la cuenta MP.
-  // Usamos dedupedMovs para no contar dos veces un cobro que tiene pay-+set-.
-  const movsReleased=dedupedMovs.filter((m: any)=>!ES_AUTOMATICO(m.tipo)&&TIPOS_VISIBLES.has(m.tipo));
-  // Listado: aplica el toggle. Por default solo released; con toggle on,
-  // todos los no-automáticos (incluye ventas/cobros pendientes).
-  const movsListado=dedupedMovs.filter((m: any)=>!ES_AUTOMATICO(m.tipo)&&(mostrarPendientes||TIPOS_VISIBLES.has(m.tipo)));
+  // Tab Ventas — pay-* con fecha (date_created) en rango AR, no anulados
+  // Mitigación M7: filas con money_release_status=NULL aparecen acá igual
+  // (no filtramos por release_status), pero NO en Por cobrar / Ingresos.
+  const ventasMovs = (movimientos as any[]).filter(m =>
+    String(m.id || '').startsWith('pay-') &&
+    inRange(m.fecha) &&
+    m.anulado !== true
+  );
+  const ventasBruto = ventasMovs.reduce((s, m) => s + (Number(m.monto_bruto) || 0), 0);
+  const ventasNeto = ventasMovs.reduce((s, m) => s + (Number(m.monto) || 0), 0);
+  const ventasCount = ventasMovs.length;
+  const ventasTicketProm = ventasCount > 0 ? ventasBruto / ventasCount : 0;
 
-  const ingresos=movsReleased.filter((m: any)=>m.monto>0).reduce((s: number,m: any)=>s+m.monto,0);
-  const egresosList=movsReleased.filter((m: any)=>m.monto<0);
-  const egresos=egresosList.reduce((s: number,m: any)=>s+Math.abs(m.monto),0);
-  // Comisiones se calculan sobre todos los movimientos dedupeados (fee/tax
-  // son egresos automáticos que viven en su propia pestaña).
-  const comisionesList=dedupedMovs.filter((m: any)=>m.monto<0&&ES_AUTOMATICO(m.tipo));
-  const comisionesTotal=comisionesList.reduce((s: number,m: any)=>s+Math.abs(m.monto),0);
-  const egresosManualesList=egresosList; // egresosList ya excluye automáticos
-  const egresosManualesTotal=egresos;
-  const egresosConciliados=egresosManualesList.filter((m: any)=>m.conciliado).reduce((s: number,m: any)=>s+Math.abs(m.monto),0);
-  const egresosPendientes=egresosManualesTotal-egresosConciliados;
-  const pendientesCount=egresosManualesList.filter(m=>!m.conciliado).length;
-  const neto=ingresos-egresos;
+  // Tab Por cobrar — pay-* pending con money_release_date en rango
+  const porCobrarMovs = (movimientos as any[]).filter(m =>
+    String(m.id || '').startsWith('pay-') &&
+    m.money_release_status === 'pending' &&
+    inRange(m.money_release_date) &&
+    m.anulado !== true
+  );
+  const porCobrarTotal = porCobrarMovs.reduce((s, m) => s + (Number(m.monto) || 0), 0);
+  const proximaFechaRelease = porCobrarMovs
+    .map(m => m.money_release_date)
+    .filter(Boolean)
+    .sort()[0] || null;
 
-  // Ventas presenciales: Point devices (POS físico) - transaction_amount se mapea a monto.
-  const ventasPresenciales=dedupedMovs.filter(m=>m.tipo==="point"&&m.monto>0).reduce((s,m)=>s+m.monto,0);
-  const ventasOnline=dedupedMovs.filter(m=>m.tipo==="payment"&&m.monto>0).reduce((s,m)=>s+m.monto,0);
+  // Tab Ingresos al saldo — pay-* released con money_release_date en rango
+  const ingresosMovs = (movimientos as any[]).filter(m =>
+    String(m.id || '').startsWith('pay-') &&
+    m.money_release_status === 'released' &&
+    inRange(m.money_release_date) &&
+    m.anulado !== true
+  );
+  const ingresosTotal = ingresosMovs.reduce((s, m) => s + (Number(m.monto) || 0), 0);
+  const ingresosCount = ingresosMovs.length;
 
-  // Saldo legacy: saldo_inicial (manual) + SUM(rr-* approved post-corte).
-  // /api/mp-sync y /api/mp-process lo guardan en saldo_disponible.
-  const saldoLegacyTotal=credenciales.reduce((s,c)=>s+(Number(c.saldo_disponible)||0),0);
-  const porAcreditarTotal=credenciales.reduce((s,c)=>s+(Number(c.por_acreditar)||0),0);
-  const ultimaActualizacionBalance=credenciales.map(c=>c.balance_at).filter(Boolean).sort().pop();
+  // Egresos sin justificar (KPI del header) — egresos manuales en rango
+  // por fecha, no anulados, no conciliados, no automáticos (fee/tax).
+  const egresosPendientesList = dedupedMovs.filter((m: any) =>
+    Number(m.monto) < 0 &&
+    !ES_AUTOMATICO(m.tipo) &&
+    !m.conciliado &&
+    m.anulado !== true &&
+    inRange(m.fecha)
+  );
+  const pendientesCount = egresosPendientesList.length;
+
+  // Mitigación M6 — Saldo MP cumulativo desde pay-* released (no más
+  // saldo_disponible legacy de mp_credenciales). Viene del query separado
+  // en load() sin filtro de fecha, así refleja el saldo TOTAL liberado.
+  const porAcreditarTotal = credenciales.reduce((s, c) => s + (Number(c.por_acreditar) || 0), 0);
 
   const guardarSaldoInicial=async()=>{
     if(!saldoInicialModal||saldoInicialModal.monto===""||saldoInicialModal.monto==null)return;
@@ -459,18 +503,16 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
       )}
 
       <div className="grid3">
-        {/* Saldo calculado (legacy): suma manual de movimientos rr-/set-* sobre
-            saldo_inicial. Lo usa el dueño para auditar contra MP UI. */}
+        {/* Mitigación M6 — Saldo MP cumulativo: SUM(monto) de pay-* released
+            no anulados, sin filtro de fecha. Coherencia total con tab
+            "Ingresos al saldo". Reemplaza el saldo_disponible legacy de
+            mp_credenciales (que sumaba rr-/set-* approved post-corte). */}
         <div className="kpi">
-          <div className="kpi-label" style={{color:"var(--muted)"}}>Saldo calculado (legacy)</div>
+          <div className="kpi-label" style={{color:"var(--muted)"}}>Saldo MP (released)</div>
           <div className="kpi-value" style={{color:"var(--muted2)",fontFamily:"'Inter',sans-serif",fontSize:18,fontWeight:500}}>
-            {fmt_mp(saldoLegacyTotal)}
+            {fmt_mp(saldoMpReleasedTotal)}
           </div>
-          <div className="kpi-sub">
-            {ultimaActualizacionBalance
-              ? "Actualizado "+fmt_dt_ar(ultimaActualizacionBalance)
-              : "—"}
-          </div>
+          <div className="kpi-sub">Suma de cobros liberados al saldo</div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Egresos sin justificar</div>
@@ -487,60 +529,145 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
       </div>
 
       <div className="tabs">
-        {([["movimientos","Movimientos"],["comisiones","Comisiones MP"]] as [string, string][]).map(([id,l])=>(
+        {([
+          ["ventas","Ventas"],
+          ["por_cobrar","Por cobrar"],
+          ["ingresos","Ingresos al saldo"],
+          ["comisiones","Comisiones MP"],
+        ] as [string, string][]).map(([id,l])=>(
           <div key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>{l}</div>
         ))}
       </div>
 
-      {loading?<div className="loading">Cargando...</div>:tab==="movimientos"?(
+      {loading?<div className="loading">Cargando...</div>:tab==="ventas"?(
+        // ─── Tab VENTAS — pay-* con date_created en rango AR (M2 etiqueta bruto) ─
         <div className="panel">
           <div className="panel-hd">
-            <span className="panel-title">Movimientos — {movsListado.length} registros</span>
-            <div style={{display:"flex",gap:12,alignItems:"center"}}>
-              <label style={{fontSize:10,color:"var(--muted2)",display:"flex",gap:6,alignItems:"center",cursor:"pointer",userSelect:"none"}}>
-                <input type="checkbox" checked={mostrarPendientes} onChange={e=>setMostrarPendientes(e.target.checked)} style={{cursor:"pointer"}}/>
-                Mostrar ventas/cobros pendientes
-              </label>
-              <span style={{fontSize:11,color:"var(--muted2)"}}>Comisiones en pestaña aparte · se actualiza cada hora</span>
+            <span className="panel-title">Ventas — {ventasCount} cobros</span>
+            <span style={{fontSize:11,color:"var(--muted2)"}}>Filtra por fecha de venta · monto en bruto</span>
+          </div>
+          <div style={{padding:"16px 20px",display:"grid",gap:10,gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))"}}>
+            <div className="kpi">
+              <div className="kpi-label">Total bruto</div>
+              <div className="kpi-value kpi-success" style={{fontSize:16}}>{fmt_mp(ventasBruto)}</div>
+              <div className="kpi-sub">Cobrado del cliente</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-label">Total neto a recibir</div>
+              <div className="kpi-value" style={{color:"var(--muted2)",fontSize:16}}>{fmt_mp(ventasNeto)}</div>
+              <div className="kpi-sub">Después de comisión + retención</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-label">Cantidad</div>
+              <div className="kpi-value" style={{fontSize:16}}>{ventasCount}</div>
+              <div className="kpi-sub">Operaciones en el período</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-label">Ticket promedio</div>
+              <div className="kpi-value" style={{fontSize:16}}>{fmt_mp(ventasTicketProm)}</div>
+              <div className="kpi-sub">Bruto promedio por venta</div>
             </div>
           </div>
-          {movsListado.length===0?<div className="empty">{mostrarPendientes?"Sin movimientos. Sincronizá para traer los datos de MP.":"Sin movimientos del saldo released. Activá \"Mostrar ventas/cobros pendientes\" para ver cobros sin liberar."}</div>:(
+          {ventasCount===0?<div className="empty">Sin ventas en el período. Sincronizá para traer datos.</div>:(
             <table>
-              <thead><tr><th>Fecha</th><th>Local</th><th>Tipo</th><th>Descripción</th><th>Monto</th><th>Saldo</th><th>Conciliación</th></tr></thead>
-              <tbody>{movsListado.map(m=>{
-                const esEgreso=m.monto<0;
-                const esAuto=ES_AUTOMATICO(m.tipo);
-                const pend=esEgreso&&!esAuto&&!m.conciliado;
-                return (
-                <tr key={m.id} style={pend?{background:"rgba(239,68,68,0.08)",borderLeft:"2px solid var(--danger)"}:undefined}>
+              <thead><tr>
+                <th>Fecha venta</th><th>Local</th><th>Medio</th><th>Descripción</th>
+                <th style={{textAlign:"right"}}>Bruto</th><th style={{textAlign:"right"}}>Neto</th>
+                <th>Release</th>
+              </tr></thead>
+              <tbody>{ventasMovs.map(m=>(
+                <tr key={m.id}>
                   <td className="mono" style={{fontSize:11}}>{fmt_dt_ar(m.fecha)}</td>
                   <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===m.local_id)?.nombre||"—"}</td>
-                  <td>
-                    <span className="badge b-muted">{TIPO_LABELS[m.tipo]||m.tipo||"—"}</span>
-                    {m._fuentes && m._fuentes.length > 0 && (
-                      <span title={`Fuentes: ${m._fuentes.join("+")}`} style={{marginLeft:6,fontSize:9,color:"var(--muted2)",fontFamily:"monospace"}}>
-                        {m._fuentes.includes("pay") && m._fuentes.length === 1 ? "@cobro" :
-                         m._fuentes.includes("pay") ? "@cobro+rel" : "@released"}
-                      </span>
-                    )}
-                  </td>
-                  <td style={{fontSize:11,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.descripcion||"—"}</td>
-                  <td><span className="num" style={{color:getTipoColor(m.tipo,m.monto)}}>{m.monto>0?"+":""}{fmt_mp(m.monto)}</span></td>
-                  <td style={{color:"var(--muted2)"}}>{fmt_mp(m.saldo)}</td>
-                  <td>
-                    {!esEgreso?<span style={{fontSize:10,color:"var(--muted)"}}>—</span>:
-                      esAuto?<span className="badge b-muted" style={{fontSize:9}}>Automático</span>:
-                      m.conciliado?
-                        <span style={{display:"flex",gap:4,alignItems:"center"}}>
-                          <span className="badge b-success" style={{fontSize:9}}>✓ {m.vinculo_tipo||"ok"}</span>
-                          <button className="btn btn-ghost btn-sm" style={{fontSize:9,padding:"2px 6px"}} onClick={()=>desconciliar(m)}>✕</button>
-                        </span>
-                      :<button className="btn btn-warn btn-sm" style={{fontSize:10,padding:"3px 8px"}} onClick={()=>abrirConciliar(m)}>Conciliar</button>
-                    }
+                  <td><span className="badge b-muted" style={{fontSize:9}}>{m.medio_pago||"—"}</span></td>
+                  <td style={{fontSize:11,maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.descripcion||"—"}</td>
+                  <td style={{textAlign:"right"}}><span className="num kpi-success">{fmt_mp(Number(m.monto_bruto)||0)}</span></td>
+                  <td style={{textAlign:"right",color:"var(--muted2)"}}><span className="num">{fmt_mp(Number(m.monto)||0)}</span></td>
+                  <td style={{fontSize:10}}>
+                    {m.money_release_status==="released"?
+                      <span className="badge b-success" title={fmt_dt_ar(m.money_release_date)}>✓ liberado</span>:
+                     m.money_release_status==="pending"?
+                      <span className="badge b-warn" title={fmt_dt_ar(m.money_release_date)}>⏳ {fmt_d(String(m.money_release_date||"").slice(0,10))}</span>:
+                      <span style={{color:"var(--muted)"}}>—</span>}
                   </td>
                 </tr>
-                );
-              })}</tbody>
+              ))}</tbody>
+            </table>
+          )}
+        </div>
+      ):tab==="por_cobrar"?(
+        // ─── Tab POR COBRAR — pay-* pending con money_release_date en rango ───
+        <div className="panel">
+          <div className="panel-hd">
+            <span className="panel-title">Por cobrar — {porCobrarMovs.length} pagos pendientes de liberación</span>
+            <span style={{fontSize:11,color:"var(--muted2)"}}>Filtra por fecha de release · monto neto</span>
+          </div>
+          <div style={{padding:"16px 20px",display:"grid",gap:10,gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))"}}>
+            <div className="kpi">
+              <div className="kpi-label">Total a cobrar</div>
+              <div className="kpi-value kpi-warn" style={{fontSize:16}}>{fmt_mp(porCobrarTotal)}</div>
+              <div className="kpi-sub">Neto a liberarse al saldo</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-label">Próxima liberación</div>
+              <div className="kpi-value" style={{fontSize:14}}>{proximaFechaRelease?fmt_d(String(proximaFechaRelease).slice(0,10)):"—"}</div>
+              <div className="kpi-sub">Fecha más cercana en el rango</div>
+            </div>
+          </div>
+          {porCobrarMovs.length===0?<div className="empty">Sin pagos pendientes en el período. Probá ampliar el rango futuro.</div>:(
+            <table>
+              <thead><tr>
+                <th>Release</th><th>Fecha venta</th><th>Local</th><th>Medio</th>
+                <th>Descripción</th><th style={{textAlign:"right"}}>Neto</th>
+              </tr></thead>
+              <tbody>{porCobrarMovs.sort((a:any,b:any)=>String(a.money_release_date).localeCompare(String(b.money_release_date))).map((m:any)=>(
+                <tr key={m.id}>
+                  <td className="mono" style={{fontSize:11}}>{fmt_d(String(m.money_release_date||"").slice(0,10))}</td>
+                  <td className="mono" style={{fontSize:11,color:"var(--muted2)"}}>{fmt_d(String(m.fecha||"").slice(0,10))}</td>
+                  <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===m.local_id)?.nombre||"—"}</td>
+                  <td><span className="badge b-muted" style={{fontSize:9}}>{m.medio_pago||"—"}</span></td>
+                  <td style={{fontSize:11,maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.descripcion||"—"}</td>
+                  <td style={{textAlign:"right"}}><span className="num kpi-warn">{fmt_mp(Number(m.monto)||0)}</span></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
+        </div>
+      ):tab==="ingresos"?(
+        // ─── Tab INGRESOS AL SALDO — pay-* released con release en rango ──────
+        <div className="panel">
+          <div className="panel-hd">
+            <span className="panel-title">Ingresos al saldo — {ingresosCount} liberados</span>
+            <span style={{fontSize:11,color:"var(--muted2)"}}>Filtra por fecha de release · monto neto</span>
+          </div>
+          <div style={{padding:"16px 20px",display:"grid",gap:10,gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))"}}>
+            <div className="kpi">
+              <div className="kpi-label">Total ingresado</div>
+              <div className="kpi-value kpi-success" style={{fontSize:16}}>{fmt_mp(ingresosTotal)}</div>
+              <div className="kpi-sub">Neto que llegó al saldo</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-label">Cantidad</div>
+              <div className="kpi-value" style={{fontSize:16}}>{ingresosCount}</div>
+              <div className="kpi-sub">Cobros liberados en el período</div>
+            </div>
+          </div>
+          {ingresosCount===0?<div className="empty">Sin ingresos liberados en el período.</div>:(
+            <table>
+              <thead><tr>
+                <th>Release</th><th>Fecha venta</th><th>Local</th><th>Medio</th>
+                <th>Descripción</th><th style={{textAlign:"right"}}>Neto</th>
+              </tr></thead>
+              <tbody>{ingresosMovs.sort((a:any,b:any)=>String(b.money_release_date).localeCompare(String(a.money_release_date))).map((m:any)=>(
+                <tr key={m.id}>
+                  <td className="mono" style={{fontSize:11}}>{fmt_d(String(m.money_release_date||"").slice(0,10))}</td>
+                  <td className="mono" style={{fontSize:11,color:"var(--muted2)"}}>{fmt_d(String(m.fecha||"").slice(0,10))}</td>
+                  <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===m.local_id)?.nombre||"—"}</td>
+                  <td><span className="badge b-muted" style={{fontSize:9}}>{m.medio_pago||"—"}</span></td>
+                  <td style={{fontSize:11,maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.descripcion||"—"}</td>
+                  <td style={{textAlign:"right"}}><span className="num kpi-success">{fmt_mp(Number(m.monto)||0)}</span></td>
+                </tr>
+              ))}</tbody>
             </table>
           )}
         </div>
@@ -555,8 +682,11 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
           //   tipo='fee' → comisión MP (gasto operativo del negocio)
           //   tipo='tax' → retención impositiva (crédito fiscal, ej IIBB CABA)
           // Mezclarlos genera contabilidad equivocada.
-          const cargosFee=dedupedMovs.filter(m=>m.tipo==="fee");
-          const cargosTax=dedupedMovs.filter(m=>m.tipo==="tax");
+          // Filtrar por fecha de venta (date_created del padre, heredado por
+          // fee/tax). Consistencia con tab Ventas — comisiones del rango son
+          // las de las ventas del rango.
+          const cargosFee=dedupedMovs.filter(m=>m.tipo==="fee" && inRange(m.fecha));
+          const cargosTax=dedupedMovs.filter(m=>m.tipo==="tax" && inRange(m.fecha));
           // Map referencia_id → fila no-fee/tax (preferir pay-* > rr-* > set-*).
           const porPaymentId=new Map<string, any>();
           for(const m of dedupedMovs){
