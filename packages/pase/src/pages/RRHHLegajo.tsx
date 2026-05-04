@@ -13,45 +13,12 @@ import {
   type LiquidacionFinalResult,
 } from "../lib/calculos/rrhh";
 import type { Usuario, Local } from "../types/auth";
-import type { Empleado, Novedad, Liquidacion, PagoEspecial, HistorialSueldo } from "../types/rrhh";
+import type {
+  Empleado, Novedad, PagoEspecial, HistorialSueldo,
+  Adelanto, DocumentoLegajo, NovedadConLiquidaciones, LineaPago,
+} from "../types/rrhh";
 
-// Linea de pago (cuenta + monto en string desde el input). Se usa en vacLineas
-// y aguLineas — el monto viene como string desde el input numérico y se parsea
-// con parseFloat al sumar/enviar.
-interface LineaPago { cuenta: string; monto: string }
-
-// Forma del registro adelanto leído de DB (rrhh_adelantos). NO está en
-// types/rrhh.ts porque es interno a este archivo y al de RRHH.tsx; si después
-// hace falta compartirlo se mueve.
-interface Adelanto {
-  id: number;
-  empleado_id: string;
-  fecha: string;
-  monto: number;
-  cuenta: string | null;
-  descontado: boolean;
-}
-
-// Documento del legajo (rrhh_documentos).
-interface DocumentoLegajo {
-  id: number;
-  empleado_id: string;
-  tipo: string;
-  nombre_archivo: string;
-  url: string;
-  mes: number | null;
-  anio: number | null;
-  subido_at: string;
-  subido_por: number | null;
-}
-
-// Novedad con liquidaciones nested (Supabase devuelve liquidaciones como
-// array — la convención del codebase es tomar el [0] como la "actual").
-interface NovedadConLiquidaciones extends Novedad {
-  rrhh_liquidaciones?: Liquidacion[];
-}
-
-// Forma del state liqFinalForm.
+// Forma del state liqFinalForm — únicamente usado en este archivo.
 interface LiqFinalForm { fecha_egreso: string; motivo: string }
 
 const MESES = ["","Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];

@@ -110,3 +110,47 @@ export interface NovedadConEmpleado {
 export interface LiquidacionConEmpleado extends Liquidacion {
   rrhh_novedades: NovedadConEmpleado | null;
 }
+
+// ─── Tipos compartidos entre RRHH.tsx y RRHHLegajo.tsx ──────────────────────
+
+// Forma del registro en rrhh_valores_doble (config de valor por puesto).
+export interface ValorDoble {
+  id: number;
+  puesto: string;
+  valor: number;
+  updated_at?: string;
+}
+
+// Adelanto a empleado (rrhh_adelantos).
+export interface Adelanto {
+  id: number;
+  empleado_id: string;
+  fecha: string;
+  monto: number;
+  cuenta: string | null;
+  descontado: boolean;
+}
+
+// Documento del legajo (rrhh_documentos).
+export interface DocumentoLegajo {
+  id: number;
+  empleado_id: string;
+  tipo: string;
+  nombre_archivo: string;
+  url: string;
+  mes: number | null;
+  anio: number | null;
+  subido_at: string;
+  subido_por: number | null;
+}
+
+// Novedad con liquidaciones nested (Supabase devuelve liquidaciones como
+// array — la convención del codebase es tomar el [0] como la "actual").
+export interface NovedadConLiquidaciones extends Novedad {
+  rrhh_liquidaciones?: Liquidacion[];
+}
+
+// Linea de pago (cuenta + monto en string desde el input). Usada en formasPago,
+// vacLineas, aguLineas. El monto viene como string desde el input numérico
+// y se parsea con parseFloat al sumar/enviar.
+export interface LineaPago { cuenta: string; monto: string }

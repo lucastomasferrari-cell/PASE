@@ -10,6 +10,10 @@ import {
 } from "../lib/calculos/rrhh";
 import RRHHLegajo from "./RRHHLegajo";
 import type { Usuario, Local } from "../types";
+import type {
+  Empleado, Novedad, Liquidacion, PagoEspecial,
+  ValorDoble, Adelanto, LineaPago,
+} from "../types/rrhh";
 
 interface RRHHProps {
   user: Usuario;
@@ -17,8 +21,125 @@ interface RRHHProps {
   localActivo: number | null;
 }
 
+// Estructura del state empForm (form de creación/edición de empleado).
+// Difiere de Empleado en que sueldo_mensual y local_id vienen como string
+// desde el input (parsean al guardar).
+interface EmpForm {
+  local_id: string;
+  apellido: string;
+  nombre: string;
+  cuil: string;
+  puesto: string;
+  sueldo_mensual: string;
+  alias_mp: string;
+  fecha_inicio: string;
+  activo: boolean;
+}
+
+// State de empModal: null cuando cerrado, "new" cuando agregando nuevo,
+// Empleado cuando editando uno existente.
+type EmpModalState = Empleado | "new" | null;
+
+// State de novMap: map de empleado_id → novedad parcial editable. Difiere de
+// Novedad porque los campos opcionales pueden estar undefined antes del
+// confirmar y porque guardamos id si ya está persistida.
+interface NovedadEditable extends Partial<Novedad> {
+  fecha_inicio_mes?: string | null;
+}
+
+// Liquidación posiblemente generada en frontend (sin persistir todavía).
+// Los flags _generated, _novedadId se usan en pagar_sueldo RPC para que
+// la función SQL la cree on-the-fly con p_calc.
+interface LiquidacionConGenerated extends Partial<Liquidacion> {
+  _generated?: boolean;
+  _novedadId?: string;
+}
+
+// Fila del array pagoData — combina empleado, novedad confirmada y liquidación
+// (pre-generada o persistida).
+interface PagoDataRow {
+  emp: Empleado;
+  nov: Novedad;
+  liq: LiquidacionConGenerated;
+}
+
+// State del form de adelanto.
+interface AdelantoForm {
+  empleado_id: string;
+  monto: string;
+  cuenta: string;
+  fecha: string;
+  descripcion: string;
+}
+
+// Stats del Dashboard (calculadas en loadDashboard).
+interface DashStats {
+  total: number;
+  sinDatos: number;
+  conNovedades: number;
+  confirmadas: number;
+  pagados: number;
+  estimado: number;
+  totalSAC: number;
+  proxSAC: string;
+  diasSAC: number;
+  diasFinMes: number;
+  mes: number;
+  anio: number;
+}
+
+// Empleado info devuelto por joins de rrhh_pagos_especiales / rrhh_adelantos /
+// rrhh_novedades→rrhh_empleados (mismo subset en todas).
+interface EmpleadoMin {
+  nombre: string;
+  apellido: string;
+  puesto: string;
+  local_id: number;
+}
+
+// Novedad como viene del join de la query de Historial.
+interface NovedadHist extends Pick<Novedad, "mes" | "anio" | "empleado_id" | "inasistencias" | "presentismo" | "horas_extras" | "dobles" | "feriados" | "adelantos" | "observaciones"> {
+  rrhh_empleados: EmpleadoMin | null;
+}
+
+// Liquidación como viene del join.
+interface LiquidacionConNovedadHist extends Liquidacion {
+  rrhh_novedades: NovedadHist | null;
+}
+
+// Pago especial con join al empleado.
+interface PagoEspecialConEmpleado extends PagoEspecial {
+  rrhh_empleados: EmpleadoMin | null;
+}
+
+// Adelanto con join al empleado.
+interface AdelantoConEmpleado extends Adelanto {
+  rrhh_empleados: EmpleadoMin | null;
+}
+
+// Fila normalizada del array histData. Union de los 3 tipos de pagos
+// (sueldo, especial, adelanto) con sus campos comunes + detalle.
+interface HistRow {
+  tipo: string;
+  fecha: string | null | undefined;
+  emp: EmpleadoMin | null;
+  nov?: NovedadHist | null;
+  liq?: LiquidacionConNovedadHist;
+  monto: number;
+  label: string;
+  detalle?: PagoEspecialConEmpleado | AdelantoConEmpleado;
+}
+
+// Liquidación con efectivo/transferencia computados (lo que devuelve
+// calcLiquidacion). Compatible con Liquidacion completa pero parcial porque
+// no incluye id, novedad_id, etc. — el RPC los pone al persistir.
+type LiquidacionCalculada = ReturnType<typeof calcularTotalLiquidacion> & {
+  efectivo: number;
+  transferencia: number;
+};
+
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
-function calcLiquidacion(emp: any, nov: any, valorDoble: number) {
+function calcLiquidacion(emp: Empleado, nov: NovedadEditable, valorDoble: number): LiquidacionCalculada {
   const result = calcularTotalLiquidacion({
     sueldo_mensual: emp.sueldo_mensual,
     modo_pago: "MENSUAL",
@@ -47,7 +168,7 @@ const PRESENTISMO_OPTS = [
 ];
 const CUENTAS_PAGO = ["Caja Efectivo","Caja Chica","Caja Mayor","MercadoPago","Banco"];
 
-const inp: any = { padding:"3px 5px", background:"var(--bg)", border:"1px solid var(--bd)", color:"var(--txt)", fontFamily:"'DM Mono',monospace", fontSize:10, borderRadius:"var(--r)", textAlign:"center" };
+const inp: React.CSSProperties = { padding:"3px 5px", background:"var(--bg)", border:"1px solid var(--bd)", color:"var(--txt)", fontFamily:"'DM Mono',monospace", fontSize:10, borderRadius:"var(--r)", textAlign:"center" };
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function RRHH({ user, locales, localActivo }: RRHHProps) {
@@ -63,77 +184,83 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const locsDisp = visLocs === null ? locales : locales.filter((l: Local) => visLocs.includes(l.id));
   const esEnc = user?.rol === "encargado";
   const esDueno = user?.rol === "dueno" || user?.rol === "admin";
-  const defaultLocal = localActivo || (locsDisp.length === 1 ? locsDisp[0]?.id : (esEnc && locsDisp.length ? locsDisp[0]?.id : ""));
+  // Default explícito a "" en vez de undefined cuando no hay match — los
+  // selects luego usan String(...) y los handlers aceptan string vacío.
+  const defaultLocal: string | number = localActivo
+    || (locsDisp.length === 1 ? (locsDisp[0]?.id ?? "") : (esEnc && locsDisp.length ? (locsDisp[0]?.id ?? "") : ""));
 
   // ─── SHARED STATE ──────────────────────────────────────────────────────────
-  const [allEmps, setAllEmps] = useState<any[]>([]);
-  const [valoresDoble, setValoresDoble] = useState<any[]>([]);
+  const [allEmps, setAllEmps] = useState<Empleado[]>([]);
+  const [valoresDoble, setValoresDoble] = useState<ValorDoble[]>([]);
   const [empSearch, setEmpSearch] = useState("");
   const [vacTomadas, setVacTomadas] = useState<Record<string, number>>({});
   const [empFiltLocal, setEmpFiltLocal] = useState(defaultLocal);
-  const [empModal, setEmpModal] = useState<any>(null);
-  const empEmpty = { local_id:"", apellido:"", nombre:"", cuil:"", puesto:"", sueldo_mensual:"", alias_mp:"", fecha_inicio:"", activo:true };
-  const [empForm, setEmpForm] = useState(empEmpty);
+  const [empModal, setEmpModal] = useState<EmpModalState>(null);
+  const empEmpty: EmpForm = { local_id:"", apellido:"", nombre:"", cuil:"", puesto:"", sueldo_mensual:"", alias_mp:"", fecha_inicio:"", activo:true };
+  const [empForm, setEmpForm] = useState<EmpForm>(empEmpty);
 
   // Novedades
   const [novMes, setNovMes] = useState(today.getMonth() + 1);
   const [novAnio, setNovAnio] = useState(today.getFullYear());
   const [novLocal, setNovLocal] = useState(defaultLocal);
   const [novLocalTouched, setNovLocalTouched] = useState(false);
-  const [novEmps, setNovEmps] = useState<any[]>([]);
-  const [novMap, setNovMap] = useState<Record<string, any>>({});
+  const [novEmps, setNovEmps] = useState<Empleado[]>([]);
+  const [novMap, setNovMap] = useState<Record<string, NovedadEditable>>({});
   const [novLoading, setNovLoading] = useState(false);
-  const saveTimers = useRef<Record<string, any>>({});
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   // Pagos
   const [pagoMes, setPagoMes] = useState(today.getMonth() + 1);
   const [pagoAnio, setPagoAnio] = useState(today.getFullYear());
   const [pagoLocal, setPagoLocal] = useState(defaultLocal);
   const [pagoLocalTouched, setPagoLocalTouched] = useState(false);
-  const [pagoData, setPagoData] = useState<any[]>([]);
+  const [pagoData, setPagoData] = useState<PagoDataRow[]>([]);
   // Si se dispara "Pagar" desde el legajo, guardamos el emp.id acá para abrir
   // el modal automáticamente cuando loadPagos termine y la fila esté en pagoData.
   const [pendingPagoEmpId, setPendingPagoEmpId] = useState<string | null>(null);
   const [pagoLoading, setPagoLoading] = useState(false);
   const [pagando, setPagando] = useState(false);
-  const [pagoModal, setPagoModal] = useState<any>(null);
-  const [formasPago, setFormasPago] = useState<{cuenta:string, monto:string}[]>([]);
-  const [adelantosPendientes, setAdelantosPendientes] = useState<any[]>([]);
+  const [pagoModal, setPagoModal] = useState<PagoDataRow | null>(null);
+  const [formasPago, setFormasPago] = useState<LineaPago[]>([]);
+  const [adelantosPendientes, setAdelantosPendientes] = useState<Adelanto[]>([]);
   const [adelModal, setAdelModal] = useState(false);
-  const [adelForm, setAdelForm] = useState({ empleado_id:"", monto:"", cuenta:"Caja Efectivo", fecha:toISO(today), descripcion:"" });
+  const [adelForm, setAdelForm] = useState<AdelantoForm>({ empleado_id:"", monto:"", cuenta:"Caja Efectivo", fecha:toISO(today), descripcion:"" });
 
   // Dashboard
   const [dashLoading, setDashLoading] = useState(true);
-  const [dashStats, setDashStats] = useState<any>({});
+  const [dashStats, setDashStats] = useState<DashStats | Record<string, never>>({});
 
   // Historial
   const [histLocal, setHistLocal] = useState(defaultLocal);
   const [histMes, setHistMes] = useState(today.getMonth() + 1);
   const [histAnio, setHistAnio] = useState(today.getFullYear());
-  const [histData, setHistData] = useState<any[]>([]);
+  const [histData, setHistData] = useState<HistRow[]>([]);
   const [histLoading, setHistLoading] = useState(false);
-  const [histDetalle, setHistDetalle] = useState<any>(null);
+  const [histDetalle, setHistDetalle] = useState<HistRow | null>(null);
 
-  // Config
-  const [cfgEdit, setCfgEdit] = useState<any>(null);
+  // Config — el valor se edita como string (input number) y se parsea al
+  // guardar. Por eso tomamos los campos sin valor de ValorDoble y agregamos
+  // valor: string | number explícito.
+  const [cfgEdit, setCfgEdit] = useState<(Omit<ValorDoble, "valor"> & { valor: string | number }) | null>(null);
 
   // ─── LOAD FUNCTIONS ────────────────────────────────────────────────────────
   const loadValoresDoble = async () => {
     const { data } = await db.from("rrhh_valores_doble").select("*").order("puesto");
-    setValoresDoble(data || []);
+    setValoresDoble((data as ValorDoble[]) || []);
   };
 
   const loadEmpleados = async () => {
     let q = db.from("rrhh_empleados").select("*").order("apellido");
     q = applyLocalScope(q, user, localActivo);
     const { data } = await q;
-    setAllEmps(data || []);
+    const emps = (data as Empleado[]) || [];
+    setAllEmps(emps);
     // Cargar días de vacaciones tomadas (novedades confirmadas)
-    const empIds = (data || []).map(e => e.id);
+    const empIds = emps.map(e => e.id);
     if (empIds.length) {
       const { data: novs } = await db.from("rrhh_novedades").select("empleado_id, vacaciones_dias").eq("estado", "confirmado").in("empleado_id", empIds).gt("vacaciones_dias", 0);
       const map: Record<string, number> = {};
-      (novs || []).forEach(n => { map[n.empleado_id] = (map[n.empleado_id] || 0) + Number(n.vacaciones_dias || 0); });
+      (novs || []).forEach((n) => { map[n.empleado_id] = (map[n.empleado_id] || 0) + Number(n.vacaciones_dias || 0); });
       setVacTomadas(map);
     }
   };
@@ -142,18 +269,23 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     if (!novLocal) return;
     setNovLoading(true);
     const { data: emps } = await db.from("rrhh_empleados").select("*").eq("local_id", parseInt(String(novLocal))).eq("activo", true).order("apellido");
-    const empIds = (emps || []).map(e => e.id);
-    let novs: any[] = [];
+    const empleados = (emps as Empleado[]) || [];
+    const empIds = empleados.map(e => e.id);
+    let novs: Novedad[] = [];
     if (empIds.length) {
       const { data } = await db.from("rrhh_novedades").select("*").eq("mes", novMes).eq("anio", novAnio).in("empleado_id", empIds);
-      novs = data || [];
+      novs = (data as Novedad[]) || [];
     }
-    const map: Record<string, any> = {};
-    (emps || []).forEach(e => {
+    const map: Record<string, NovedadEditable> = {};
+    empleados.forEach(e => {
       const existing = novs.find(n => n.empleado_id === e.id);
-      map[e.id] = existing || { inasistencias:0, presentismo:"MANTIENE", horas_extras:0, dobles:0, feriados:0, adelantos:0, fecha_inicio_mes:null, observaciones:"", estado:"borrador" };
+      map[e.id] = existing || {
+        inasistencias: 0, presentismo: "MANTIENE", horas_extras: 0, dobles: 0,
+        feriados: 0, adelantos: 0, vacaciones_dias: 0, fecha_inicio_mes: null,
+        observaciones: "", estado: "borrador",
+      };
     });
-    setNovEmps(emps || []);
+    setNovEmps(empleados);
     setNovMap(map);
     setNovLoading(false);
   };
@@ -164,7 +296,8 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
 
     const { data: emps } = await db.from("rrhh_empleados")
       .select("*").eq("local_id", parseInt(String(pagoLocal))).eq("activo", true).order("apellido");
-    const empIds = (emps || []).map(e => e.id);
+    const empleados = (emps as Empleado[]) || [];
+    const empIds = empleados.map(e => e.id);
 
     if (!empIds.length) { setPagoData([]); setPagoLoading(false); return; }
 
@@ -173,31 +306,32 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       .eq("mes", pagoMes).eq("anio", pagoAnio)
       .eq("estado", "confirmado")
       .in("empleado_id", empIds);
+    const novedades = (novs as Novedad[]) || [];
 
-    const novIds = (novs || []).map(n => n.id);
+    const novIds = novedades.map(n => n.id).filter((id): id is string => !!id);
 
     // Query separada para liquidaciones (evita problemas con nested select y FK)
-    let liqs: any[] = [];
+    let liqs: Liquidacion[] = [];
     if (novIds.length) {
       const { data } = await db.from("rrhh_liquidaciones")
         .select("*").in("novedad_id", novIds);
-      liqs = data || [];
+      liqs = (data as Liquidacion[]) || [];
     }
 
-    const merged = (emps || []).map(emp => {
-      const nov = novs?.find(n => n.empleado_id === emp.id);
-      if (!nov) return null;
-
-      let liq = liqs.find(l => l.novedad_id === nov.id) || null;
-
-      if (!liq) {
-        const vd = valoresDoble.find((v: any) => v.puesto === emp.puesto)?.valor || 0;
+    const merged: PagoDataRow[] = empleados.flatMap((emp) => {
+      const nov = novedades.find(n => n.empleado_id === emp.id);
+      if (!nov) return [];
+      const persisted = liqs.find(l => l.novedad_id === nov.id);
+      let liq: LiquidacionConGenerated;
+      if (persisted) {
+        liq = persisted;
+      } else {
+        const vd = valoresDoble.find(v => v.puesto === emp.puesto)?.valor || 0;
         const calc = calcLiquidacion(emp, nov, vd);
         liq = { ...calc, total_a_pagar: Math.round(calc.total_a_pagar), estado: "pendiente", _novedadId: nov.id, _generated: true };
       }
-
-      return { emp, nov, liq };
-    }).filter(Boolean);
+      return [{ emp, nov, liq }];
+    });
 
     setPagoData(merged);
     setPagoLoading(false);
@@ -212,23 +346,23 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     const mes = today.getMonth() + 1;
     const anio = today.getFullYear();
     const empIds = activos.map(e => e.id);
-    let novsMes: any[] = [];
+    let novsMes: Novedad[] = [];
     if (empIds.length) {
       const { data } = await db.from("rrhh_novedades").select("*, rrhh_liquidaciones(*)").eq("mes", mes).eq("anio", anio).in("empleado_id", empIds);
-      novsMes = data || [];
+      novsMes = (data as Novedad[]) || [];
     }
     const sinDatos = activos.filter(e =>
       !e.cuil || !e.fecha_inicio || !e.sueldo_mensual || e.sueldo_mensual <= 0
     ).length;
     const conNovedades = novsMes.length;
     const confirmadas = novsMes.filter(n => n.estado === "confirmado").length;
-    const novIds = novsMes.map(n => n.id);
-    let liqsDash: any[] = [];
+    const novIds = novsMes.map(n => n.id).filter((id): id is string => !!id);
+    let liqsDash: Pick<Liquidacion, "novedad_id" | "estado" | "total_a_pagar">[] = [];
     if (novIds.length) {
       const { data: liqData } = await db.from("rrhh_liquidaciones")
         .select("novedad_id, estado, total_a_pagar")
         .in("novedad_id", novIds);
-      liqsDash = liqData || [];
+      liqsDash = (liqData as Pick<Liquidacion, "novedad_id" | "estado" | "total_a_pagar">[]) || [];
     }
     const pagados = novsMes.filter(n => {
       const liq = liqsDash.find(l => l.novedad_id === n.id);
@@ -291,17 +425,23 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       .gte("fecha", desde)
       .lte("fecha", hasta);
 
-    const sueldos = (liqs || []).map(l => ({
+    // Casts a unknown primero porque Supabase tipa nested FK como array
+    // — ver convención en types/rrhh.ts.
+    const liqRows = ((liqs as unknown) as LiquidacionConNovedadHist[]) || [];
+    const espRows = ((especiales as unknown) as PagoEspecialConEmpleado[]) || [];
+    const adelRows = ((adelantos as unknown) as AdelantoConEmpleado[]) || [];
+
+    const sueldos: HistRow[] = liqRows.map(l => ({
       tipo: "sueldo",
       fecha: l.pagado_at?.split("T")[0],
-      emp: l.rrhh_novedades?.rrhh_empleados,
+      emp: l.rrhh_novedades?.rrhh_empleados ?? null,
       nov: l.rrhh_novedades,
       liq: l,
       monto: l.total_a_pagar,
       label: `Sueldo ${MESES_NOMBRE[l.rrhh_novedades?.mes || 0]} ${l.rrhh_novedades?.anio || ""}`,
     }));
 
-    const esp = (especiales || []).map(e => ({
+    const esp: HistRow[] = espRows.map(e => ({
       tipo: e.tipo,
       fecha: e.pagado_at?.split("T")[0],
       emp: e.rrhh_empleados,
@@ -310,7 +450,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       detalle: e,
     }));
 
-    const adel = (adelantos || []).map(a => ({
+    const adel: HistRow[] = adelRows.map(a => ({
       tipo: "adelanto",
       fecha: a.fecha,
       emp: a.rrhh_empleados,
@@ -379,7 +519,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   // movimientos del legajo, cerramos el modal, cambiamos al tab Pagos y
   // prefiltramos local/mes/anio. El useEffect de abajo abre el modal de pago
   // cuando pagoData se carga con la fila del empleado.
-  const goToPagoFromLegajo = (emp: any, nov: any) => {
+  const goToPagoFromLegajo = (emp: Empleado, nov: Novedad) => {
     setLegajoId(null);
     setTab("pagos");
     if (emp.local_id) {
@@ -402,19 +542,21 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const guardarEmp = async () => {
     if (!empForm.apellido || !empForm.nombre || !empForm.local_id || !empForm.puesto || !empForm.sueldo_mensual || !empForm.fecha_inicio) return;
     const payload = { ...empForm, local_id: parseInt(empForm.local_id), sueldo_mensual: parseFloat(empForm.sueldo_mensual) || 0 };
-    if (empModal?.id) {
-      const sueldoAnt = Number(empModal.sueldo_mensual);
+    // Estrechar empModal: si tiene .id (no es "new" ni null), es Empleado.
+    const existing = empModal && empModal !== "new" ? empModal : null;
+    if (existing) {
+      const sueldoAnt = Number(existing.sueldo_mensual);
       if (sueldoAnt !== payload.sueldo_mensual && sueldoAnt > 0) {
         await db.from("rrhh_historial_sueldos").insert([{
-          empleado_id: empModal.id, sueldo_anterior: sueldoAnt, sueldo_nuevo: payload.sueldo_mensual,
+          empleado_id: existing.id, sueldo_anterior: sueldoAnt, sueldo_nuevo: payload.sueldo_mensual,
           motivo: "Edición desde listado", registrado_por: user?.id,
         }]);
       }
       // Strip de campos calculados/derivados que no van al UPDATE; los nombres
       // documentan qué se descarta (más legible que renombrar a `_x`).
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { valor_dia, valor_hora, creado_at, vacaciones_dias_acumulados, aguinaldo_acumulado, fecha_egreso, motivo_baja, ...upd } = payload as any;
-      await db.from("rrhh_empleados").update(upd).eq("id", empModal.id);
+      const { valor_dia, valor_hora, creado_at, vacaciones_dias_acumulados, aguinaldo_acumulado, fecha_egreso, motivo_baja, ...upd } = payload as Partial<Empleado> & Record<string, unknown>;
+      await db.from("rrhh_empleados").update(upd).eq("id", existing.id);
     } else {
       await db.from("rrhh_empleados").insert([payload]);
     }
@@ -422,22 +564,23 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   };
 
   const abrirEmpNuevo = () => { setEmpForm({ ...empEmpty, local_id: empFiltLocal ? String(empFiltLocal) : "" }); setEmpModal("new"); };
-  const abrirEmpEditar = (e: any) => {
+  const abrirEmpEditar = (e: Empleado) => {
     setEmpForm({ local_id: e.local_id ? String(e.local_id) : "", apellido:e.apellido, nombre:e.nombre, cuil:e.cuil||"", puesto:e.puesto, sueldo_mensual:String(e.sueldo_mensual), alias_mp:e.alias_mp||"", fecha_inicio:e.fecha_inicio||"", activo:e.activo });
     setEmpModal(e);
   };
 
   // ─── NOVEDADES ACTIONS ─────────────────────────────────────────────────────
-  const updateNov = (empId: string, field: string, value: any) => {
+  const updateNov = (empId: string, field: keyof NovedadEditable, value: string | number) => {
     setNovMap(prev => {
-      const updated = { ...prev, [empId]: { ...prev[empId], [field]: value } };
+      const nextNov: NovedadEditable = { ...prev[empId], [field]: value };
+      const updated = { ...prev, [empId]: nextNov };
       if (saveTimers.current[empId]) clearTimeout(saveTimers.current[empId]);
-      saveTimers.current[empId] = setTimeout(() => saveNovedad(empId, updated[empId]), 800);
+      saveTimers.current[empId] = setTimeout(() => saveNovedad(empId, nextNov), 800);
       return updated;
     });
   };
 
-  const saveNovedad = async (empId: string, nov: any) => {
+  const saveNovedad = async (empId: string, nov: NovedadEditable) => {
     const { id, estado, vacaciones_dias: _vac, ...rest } = nov;
     await db.from("rrhh_novedades").upsert({
       ...(id ? { id } : {}), empleado_id: empId, mes: novMes, anio: novAnio,
@@ -445,7 +588,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     }, { onConflict: "empleado_id,mes,anio" });
   };
 
-  const confirmarUno = async (emp: any) => {
+  const confirmarUno = async (emp: Empleado) => {
     const nov = novMap[emp.id];
     if (!nov) return;
     const { data: saved } = await db.from("rrhh_novedades").upsert({
@@ -465,7 +608,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     }, { onConflict: "empleado_id,mes,anio" }).select().single();
 
     if (saved) {
-      const vd = valoresDoble.find((v: any) => v.puesto === emp.puesto)?.valor || 0;
+      const vd = valoresDoble.find(v => v.puesto === emp.puesto)?.valor || 0;
       const calc = calcLiquidacion(emp, nov, vd);
       await db.from("rrhh_liquidaciones").upsert({
         novedad_id: saved.id, ...calc, estado: "pendiente",
@@ -489,7 +632,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   // esa fila, abrir el modal de pago con los datos correctos.
   useEffect(() => {
     if (!pendingPagoEmpId || !pagoData.length) return;
-    const row = pagoData.find((r: any) => r.emp?.id === pendingPagoEmpId);
+    const row = pagoData.find(r => r.emp?.id === pendingPagoEmpId);
     if (row && row.liq && row.liq.estado !== "pagado") {
       // TODO(lint-cleanup): abrirPagoSueldo se declara abajo (l.499). Patrón
       // efecto-llama-función-declarada-luego — funciona en runtime porque el
@@ -501,13 +644,13 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     setPendingPagoEmpId(null);
   }, [pagoData, pendingPagoEmpId]);
 
-  const abrirPagoSueldo = async (emp: any, nov: any, liq: any) => {
+  const abrirPagoSueldo = async (emp: Empleado, nov: Novedad, liq: LiquidacionConGenerated) => {
     const { data: adelantos } = await db.from("rrhh_adelantos")
       .select("*")
       .eq("empleado_id", emp.id)
       .eq("descontado", false)
       .order("fecha");
-    const pendientes = adelantos || [];
+    const pendientes = (adelantos as Adelanto[]) || [];
     const totalAdelantos = pendientes.reduce((s, a) => s + Number(a.monto), 0);
     const total = Math.round(Number(liq.total_a_pagar || 0));
     const yaPagado = Math.round(Number(liq.pagos_realizados || 0));
@@ -538,9 +681,9 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   };
 
   // ─── CONFIG ACTIONS ────────────────────────────────────────────────────────
-  const guardarValorDoble = async (item: any) => {
+  const guardarValorDoble = async (item: Omit<ValorDoble, "valor"> & { valor: string | number }) => {
     if (!item.puesto || !item.valor) return;
-    await db.from("rrhh_valores_doble").upsert({ ...item, valor: parseFloat(item.valor), updated_at: new Date().toISOString() }, { onConflict: "puesto" });
+    await db.from("rrhh_valores_doble").upsert({ ...item, valor: parseFloat(String(item.valor)), updated_at: new Date().toISOString() }, { onConflict: "puesto" });
     setCfgEdit(null); loadValoresDoble();
   };
   const agregarPuesto = async () => {
@@ -646,7 +789,6 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
           loadPagos={loadPagos}
           loadEmpleados={loadEmpleados}
           showToast={showToast}
-          user={user}
           allEmps={allEmps}
           adelModal={adelModal}
           setAdelModal={setAdelModal}
@@ -727,7 +869,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
 
 // ─── SUB-COMPONENTES ─────────────────────────────────────────────────────────
 
-function TabDashboard({ dashStats, dashLoading }: { dashStats: any; dashLoading: boolean }) {
+function TabDashboard({ dashStats, dashLoading }: { dashStats: DashStats | Record<string, never>; dashLoading: boolean }) {
   if (dashLoading) return <div className="loading">Cargando...</div>;
   const d = dashStats;
   return (
@@ -774,18 +916,39 @@ function TabDashboard({ dashStats, dashLoading }: { dashStats: any; dashLoading:
   );
 }
 
+interface TabEmpleadosProps {
+  empFiltLocal: string | number;
+  setEmpFiltLocal: React.Dispatch<React.SetStateAction<string | number>>;
+  empSearch: string;
+  setEmpSearch: React.Dispatch<React.SetStateAction<string>>;
+  esEnc: boolean;
+  locsDisp: Local[];
+  locales: Local[];
+  empsFilt: Empleado[];
+  vacTomadas: Record<string, number>;
+  puestos: string[];
+  empModal: EmpModalState;
+  setEmpModal: React.Dispatch<React.SetStateAction<EmpModalState>>;
+  empForm: EmpForm;
+  setEmpForm: React.Dispatch<React.SetStateAction<EmpForm>>;
+  abrirEmpNuevo: () => void;
+  abrirEmpEditar: (e: Empleado) => void;
+  guardarEmp: () => Promise<void>;
+  setLegajoId: React.Dispatch<React.SetStateAction<string | null>>;
+}
+
 function TabEmpleados({
   empFiltLocal, setEmpFiltLocal, empSearch, setEmpSearch,
   esEnc, locsDisp, locales, empsFilt, vacTomadas, puestos,
   empModal, setEmpModal, empForm, setEmpForm,
   abrirEmpNuevo, abrirEmpEditar, guardarEmp, setLegajoId,
-}: any) {
+}: TabEmpleadosProps) {
   return (
     <>
       <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
         <select className="search" style={{width:160}} value={empFiltLocal} onChange={e => setEmpFiltLocal(e.target.value)}>
           {!esEnc && <option value="">Todos los locales</option>}
-          {locsDisp.map((l: any) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+          {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
         </select>
         <input className="search" placeholder="Buscar..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} style={{width:160}} />
         <div style={{flex:1}} />
@@ -795,7 +958,7 @@ function TabEmpleados({
         {empsFilt.length === 0 ? <div className="empty">Sin empleados</div> : (
           <div style={{overflowX:"auto"}}>
           <table><thead><tr><th>Nombre</th><th>Local</th><th>Puesto</th><th style={{textAlign:"right"}}>Sueldo</th><th>Vacaciones</th><th>Alertas</th><th>Activo</th><th></th></tr></thead>
-          <tbody>{empsFilt.map((e: any) => {
+          <tbody>{empsFilt.map(e => {
             const vac = calcularVacaciones(e.fecha_inicio, vacTomadas[e.id] || 0);
             const vacColor = vac >= 14 ? "var(--success)" : vac >= 7 ? "var(--warn)" : "var(--muted2)";
             const alertas: string[] = [];
@@ -806,7 +969,7 @@ function TabEmpleados({
             return (
               <tr key={e.id} style={{opacity: e.activo === false ? 0.4 : 1}}>
                 <td style={{fontWeight:500,fontSize:12}}>{e.apellido}, {e.nombre}</td>
-                <td style={{fontSize:11}}>{locales.find((l: any) => l.id === e.local_id)?.nombre || "—"}</td>
+                <td style={{fontSize:11}}>{locales.find(l => l.id === e.local_id)?.nombre || "—"}</td>
                 <td><span className="badge b-muted" style={{fontSize:8}}>{e.puesto}</span></td>
                 <td style={{textAlign:"right"}}><span className="num kpi-acc">{fmt_$(e.sueldo_mensual)}</span></td>
                 <td style={{fontSize:11,color:vacColor}}>{vac >= 14 && "🌴 "}{vac.toFixed(1)}d</td>
@@ -836,10 +999,10 @@ function TabEmpleados({
                 <div className="field"><label>Nombre *</label><input value={empForm.nombre} onChange={e => setEmpForm({...empForm, nombre:e.target.value})} /></div>
               </div>
               <div className="form2">
-                <div className="field"><label>Local *</label><select value={empForm.local_id} onChange={e => setEmpForm({...empForm, local_id:e.target.value})}><option value="">Seleccionar...</option>{locsDisp.map((l: any) => <option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
+                <div className="field"><label>Local *</label><select value={empForm.local_id} onChange={e => setEmpForm({...empForm, local_id:e.target.value})}><option value="">Seleccionar...</option>{locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
                 <div className="field"><label>CUIL</label><input value={empForm.cuil} onChange={e => setEmpForm({...empForm, cuil:e.target.value})} placeholder="XX-XXXXXXXX-X" /></div>
               </div>
-              <div className="field"><label>Puesto *</label><select value={empForm.puesto} onChange={e => setEmpForm({...empForm, puesto:e.target.value})}><option value="">Seleccionar...</option>{puestos.map((p: any) => <option key={p} value={p}>{p}</option>)}<option value="__otro">-- Otro --</option></select>
+              <div className="field"><label>Puesto *</label><select value={empForm.puesto} onChange={e => setEmpForm({...empForm, puesto:e.target.value})}><option value="">Seleccionar...</option>{puestos.map(p => <option key={p} value={p}>{p}</option>)}<option value="__otro">-- Otro --</option></select>
                 {empForm.puesto === "__otro" && <input style={{marginTop:4}} placeholder="Escribir puesto..." onChange={e => setEmpForm({...empForm, puesto:e.target.value})} />}
               </div>
               <div className="form3">
@@ -857,11 +1020,29 @@ function TabEmpleados({
   );
 }
 
+interface TabNovedadesProps {
+  novMes: number;
+  setNovMes: React.Dispatch<React.SetStateAction<number>>;
+  novAnio: number;
+  setNovAnio: React.Dispatch<React.SetStateAction<number>>;
+  novLocal: string | number;
+  setNovLocal: (v: string) => void;
+  locsDisp: Local[];
+  novLoading: boolean;
+  novEmps: Empleado[];
+  novMap: Record<string, NovedadEditable>;
+  valoresDoble: ValorDoble[];
+  updateNov: (empId: string, field: keyof NovedadEditable, value: string | number) => void;
+  confirmarUno: (emp: Empleado) => Promise<void>;
+  editarNov: (empId: string) => Promise<void>;
+  esDueno: boolean;
+}
+
 function TabNovedades({
   novMes, setNovMes, novAnio, setNovAnio, novLocal, setNovLocal,
   locsDisp, novLoading, novEmps, novMap, valoresDoble,
   updateNov, confirmarUno, editarNov, esDueno,
-}: any) {
+}: TabNovedadesProps) {
   return (
     <>
       <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
@@ -871,7 +1052,7 @@ function TabNovedades({
         <input type="number" className="search" style={{width:70}} value={novAnio} onChange={e => setNovAnio(parseInt(e.target.value))} />
         <select className="search" style={{width:160}} value={String(novLocal || "")} onChange={e => setNovLocal(e.target.value)}>
           <option value="">Seleccionar local...</option>
-          {locsDisp.map((l: any) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+          {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
         </select>
       </div>
 
@@ -888,10 +1069,10 @@ function TabNovedades({
               <th style={{width:90,fontSize:8}}>Obs.</th>
               <th style={{textAlign:"right",width:80,fontSize:8}}>Preview</th><th style={{width:80,fontSize:8}}>Acción</th>
             </tr></thead>
-            <tbody>{novEmps.map((emp: any) => {
+            <tbody>{novEmps.map(emp => {
               const nov = novMap[emp.id] || {};
               const locked = nov.estado === "confirmado";
-              const vd = valoresDoble.find((v: any) => v.puesto === emp.puesto)?.valor || 0;
+              const vd = valoresDoble.find(v => v.puesto === emp.puesto)?.valor || 0;
               const preview = calcLiquidacion(emp, nov, vd).total_a_pagar;
               return (
                 <tr key={emp.id}>
@@ -929,6 +1110,41 @@ function TabNovedades({
   );
 }
 
+interface TabPagosProps {
+  pagoMes: number;
+  setPagoMes: React.Dispatch<React.SetStateAction<number>>;
+  pagoAnio: number;
+  setPagoAnio: React.Dispatch<React.SetStateAction<number>>;
+  pagoLocal: string | number;
+  setPagoLocal: (v: string) => void;
+  locsDisp: Local[];
+  esEnc: boolean;
+  esDueno: boolean;
+  pagoLoading: boolean;
+  pagoData: PagoDataRow[];
+  totalPagosPend: number;
+  totalGeneral: number;
+  pagoModal: PagoDataRow | null;
+  setPagoModal: React.Dispatch<React.SetStateAction<PagoDataRow | null>>;
+  formasPago: LineaPago[];
+  setFormasPago: React.Dispatch<React.SetStateAction<LineaPago[]>>;
+  pagando: boolean;
+  setPagando: React.Dispatch<React.SetStateAction<boolean>>;
+  loadPagos: () => Promise<void>;
+  loadEmpleados: () => Promise<void>;
+  showToast: (m: string) => void;
+  allEmps: Empleado[];
+  adelModal: boolean;
+  setAdelModal: React.Dispatch<React.SetStateAction<boolean>>;
+  adelForm: AdelantoForm;
+  setAdelForm: React.Dispatch<React.SetStateAction<AdelantoForm>>;
+  guardarAdelanto: () => Promise<void>;
+  adelantosPendientes: Adelanto[];
+  setAdelantosPendientes: React.Dispatch<React.SetStateAction<Adelanto[]>>;
+  abrirPagoSueldo: (emp: Empleado, nov: Novedad, liq: LiquidacionConGenerated) => Promise<void>;
+  cuentasUsables: string[];
+}
+
 function TabPagos({
   pagoMes, setPagoMes, pagoAnio, setPagoAnio, pagoLocal, setPagoLocal,
   locsDisp, esEnc, esDueno, pagoLoading, pagoData,
@@ -938,7 +1154,7 @@ function TabPagos({
   allEmps, adelModal, setAdelModal, adelForm, setAdelForm, guardarAdelanto,
   adelantosPendientes, setAdelantosPendientes, abrirPagoSueldo,
   cuentasUsables,
-}: any) {
+}: TabPagosProps) {
   return (
     <>
       <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
@@ -948,7 +1164,7 @@ function TabPagos({
         <input type="number" className="search" style={{width:70}} value={pagoAnio} onChange={e => setPagoAnio(parseInt(e.target.value))} />
         <select className="search" style={{width:160}} value={String(pagoLocal || "")} onChange={e => setPagoLocal(e.target.value)}>
           {!esEnc && <option value="">Seleccionar local...</option>}
-          {locsDisp.map((l: any) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+          {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
         </select>
         <div style={{flex:1}} />
         {totalPagosPend > 0 && <span style={{fontSize:11,color:"var(--muted2)"}}>{totalPagosPend} pendiente{totalPagosPend > 1 ? "s" : ""}</span>}
@@ -962,7 +1178,7 @@ function TabPagos({
           <div style={{overflowX:"auto"}}>
           <table>
             <thead><tr><th>Empleado</th><th>Puesto</th><th style={{textAlign:"right"}}>Total</th><th>CBU / Alias</th><th>Estado</th><th></th></tr></thead>
-            <tbody>{pagoData.map((row: any) => {
+            <tbody>{pagoData.map(row => {
               const { emp, nov, liq } = row;
               if (!liq) return null;
               const pagado = liq.estado === "pagado";
@@ -1010,13 +1226,13 @@ function TabPagos({
         const total = Math.round(Number(liq.total_a_pagar || 0));
         const yaPagado = Math.round(Number(liq.pagos_realizados || 0));
         const pendiente = Math.max(0, total - yaPagado);
-        const totalAdelantos = Math.round((adelantosPendientes || []).reduce((s: number, a: any) => s + Number(a.monto), 0));
-        const asignadoCash = Math.round(formasPago.reduce((s: number, f: {cuenta:string, monto:string}) => s + (parseFloat(f.monto) || 0), 0));
+        const totalAdelantos = Math.round((adelantosPendientes || []).reduce((s, a) => s + Number(a.monto), 0));
+        const asignadoCash = Math.round(formasPago.reduce((s, f) => s + (parseFloat(f.monto) || 0), 0));
         const asignadoTotal = asignadoCash + totalAdelantos;
         const restanteTrasEste = pendiente - asignadoTotal;
         const completaPago = asignadoTotal >= pendiente;
         const esPagoParcial = asignadoTotal > 0 && asignadoTotal < pendiente;
-        const puedeConfirmar = asignadoTotal > 0 && asignadoTotal <= pendiente && formasPago.every((f: {cuenta:string, monto:string}) => parseFloat(f.monto) > 0);
+        const puedeConfirmar = asignadoTotal > 0 && asignadoTotal <= pendiente && formasPago.every(f => parseFloat(f.monto) > 0);
         const cerrarModal = () => { setPagoModal(null); setFormasPago([]); setAdelantosPendientes([]); };
 
         const confirmarPago = async () => {
@@ -1025,13 +1241,13 @@ function TabPagos({
           try {
             // Serializar las formas de pago (sólo las con monto > 0).
             const formasValidas = formasPago
-              .filter((fp: {cuenta:string, monto:string}) => (parseFloat(fp.monto) || 0) > 0)
-              .map((fp: {cuenta:string, monto:string}) => ({ cuenta: fp.cuenta, monto: parseFloat(fp.monto) }));
-            const adelIds = (adelantosPendientes || []).map((a: any) => a.id);
+              .filter(fp => (parseFloat(fp.monto) || 0) > 0)
+              .map(fp => ({ cuenta: fp.cuenta, monto: parseFloat(fp.monto) }));
+            const adelIds = (adelantosPendientes || []).map(a => a.id);
 
             // Si la liq vino _generated (frontend la armó sin persistir),
             // la RPC la crea on-the-fly con p_crear_liq + p_calc.
-            let pCalc: any = null;
+            let pCalc: Partial<Liquidacion> | null = null;
             if (liq._generated) {
               const { _novedadId, _generated, id: _ignoreId, pagos_realizados: _ignorePag, ...calcFields } = liq;
               pCalc = calcFields;
@@ -1049,7 +1265,11 @@ function TabPagos({
             });
             if (error) throw error;
 
-            if ((data as any)?.completa) {
+            // RPC pagar_sueldo devuelve { completa: boolean, ... }. Tipo
+            // estrecho para no usar `any` y validar la propiedad antes de
+            // acceder.
+            const ok = (data && typeof data === "object" && "completa" in data && data.completa === true);
+            if (ok) {
               showToast("Pago completado");
             } else {
               showToast(`Pago parcial registrado — Resta ${fmt_$(restanteTrasEste)}`);
@@ -1057,8 +1277,10 @@ function TabPagos({
             cerrarModal();
             await loadPagos();
             await loadEmpleados();
-          } catch (err: any) {
-            alert(translateRpcError(err));
+          } catch (err) {
+            // RPC errors vienen como objects con shape PostgrestError. translateRpcError
+            // los acepta; cast a Parameters[0] para satisfacer TS sin perder semántica.
+            alert(translateRpcError(err as Parameters<typeof translateRpcError>[0]));
           } finally {
             setPagando(false);
           }
@@ -1087,7 +1309,7 @@ function TabPagos({
                 {totalAdelantos > 0 && (
                   <div style={{background:"var(--s2)",borderRadius:"var(--r)",padding:12,marginBottom:12}}>
                     <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Adelantos a descontar</div>
-                    {adelantosPendientes.map((a: any) => (
+                    {adelantosPendientes.map(a => (
                       <div key={a.id} style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:4}}>
                         <span style={{color:"var(--muted2)"}}>{fmt_d(a.fecha)} · {a.cuenta || "—"}</span>
                         <span style={{color:"var(--danger)"}}>−{fmt_$(a.monto)}</span>
@@ -1103,20 +1325,20 @@ function TabPagos({
                   </div>
                 )}
 
-                {formasPago.map((fp: {cuenta:string, monto:string}, i: number) => (
+                {formasPago.map((fp, i) => (
                   <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
                     <select className="search" style={{flex:1}} value={fp.cuenta}
-                      onChange={e => setFormasPago((prev: {cuenta:string, monto:string}[]) => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
-                      {cuentasUsables.map((c: string) => <option key={c}>{c}</option>)}
+                      onChange={e => setFormasPago(prev => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
+                      {cuentasUsables.map(c => <option key={c}>{c}</option>)}
                     </select>
                     <input type="number" className="search" style={{width:120}} placeholder="Monto" value={fp.monto}
-                      onChange={e => setFormasPago((prev: {cuenta:string, monto:string}[]) => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
-                    <button className="btn btn-danger btn-sm" onClick={() => setFormasPago((prev: {cuenta:string, monto:string}[]) => prev.filter((_, j) => j !== i))}>✕</button>
+                      onChange={e => setFormasPago(prev => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
+                    <button className="btn btn-danger btn-sm" onClick={() => setFormasPago(prev => prev.filter((_, j) => j !== i))}>✕</button>
                   </div>
                 ))}
 
                 <button className="btn btn-ghost btn-sm" style={{marginBottom:16}}
-                  onClick={() => setFormasPago((prev: {cuenta:string, monto:string}[]) => [...prev, { cuenta: "Caja Efectivo", monto: restanteTrasEste > 0 ? String(restanteTrasEste) : "" }])}>
+                  onClick={() => setFormasPago(prev => [...prev, { cuenta: "Caja Efectivo", monto: restanteTrasEste > 0 ? String(restanteTrasEste) : "" }])}>
                   + Agregar forma de pago
                 </button>
 
@@ -1165,9 +1387,9 @@ function TabPagos({
                 <select value={adelForm.empleado_id} onChange={e => setAdelForm({...adelForm, empleado_id: e.target.value})}>
                   <option value="">Seleccionar...</option>
                   {(allEmps || [])
-                    .filter((e: any) => e.activo !== false)
-                    .filter((e: any) => !pagoLocal || e.local_id === parseInt(String(pagoLocal)))
-                    .map((e: any) => <option key={e.id} value={e.id}>{e.apellido}, {e.nombre}</option>)}
+                    .filter(e => e.activo !== false)
+                    .filter(e => !pagoLocal || e.local_id === parseInt(String(pagoLocal)))
+                    .map(e => <option key={e.id} value={e.id}>{e.apellido}, {e.nombre}</option>)}
                 </select>
               </div>
               <div className="form2">
@@ -1180,7 +1402,7 @@ function TabPagos({
               </div>
               <div className="field"><label>Cuenta de egreso</label>
                 <select value={adelForm.cuenta} onChange={e => setAdelForm({...adelForm, cuenta: e.target.value})}>
-                  {cuentasUsables.map((c: string) => <option key={c}>{c}</option>)}
+                  {cuentasUsables.map(c => <option key={c}>{c}</option>)}
                 </select>
               </div>
               <div className="field"><label>Descripción (opcional)</label>
@@ -1203,10 +1425,25 @@ function TabPagos({
   );
 }
 
+interface TabHistorialProps {
+  histMes: number;
+  setHistMes: React.Dispatch<React.SetStateAction<number>>;
+  histAnio: number;
+  setHistAnio: React.Dispatch<React.SetStateAction<number>>;
+  histLocal: string | number;
+  setHistLocal: React.Dispatch<React.SetStateAction<string | number>>;
+  locsDisp: Local[];
+  esEnc: boolean;
+  histLoading: boolean;
+  histData: HistRow[];
+  histDetalle: HistRow | null;
+  setHistDetalle: React.Dispatch<React.SetStateAction<HistRow | null>>;
+}
+
 function TabHistorial({
   histMes, setHistMes, histAnio, setHistAnio, histLocal, setHistLocal,
   locsDisp, esEnc, histLoading, histData, histDetalle, setHistDetalle,
-}: any) {
+}: TabHistorialProps) {
   return (
     <>
       <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
@@ -1216,14 +1453,14 @@ function TabHistorial({
         <input type="number" className="search" style={{width:70}} value={histAnio} onChange={e => setHistAnio(parseInt(e.target.value))} />
         <select className="search" style={{width:160}} value={String(histLocal || "")} onChange={e => setHistLocal(e.target.value)}>
           {!esEnc && <option value="">Todos los locales</option>}
-          {locsDisp.map((l: any) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+          {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
         </select>
       </div>
       {histLoading ? <div className="loading">Cargando...</div> : histData.length === 0 ? <div className="empty">Sin pagos en este período</div> : (
         <div className="panel">
           <table>
             <thead><tr><th>Fecha</th><th>Empleado</th><th>Puesto</th><th>Tipo</th><th style={{textAlign:"right"}}>Monto</th><th></th></tr></thead>
-            <tbody>{histData.map((h: any, i: number) => (
+            <tbody>{histData.map((h, i) => (
               <tr key={i}>
                 <td className="mono" style={{fontSize:11}}>{fmt_d(h.fecha)}</td>
                 <td style={{fontWeight:500,fontSize:12}}>{h.emp?.apellido}, {h.emp?.nombre}</td>
