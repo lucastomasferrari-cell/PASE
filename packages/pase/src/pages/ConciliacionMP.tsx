@@ -342,7 +342,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
       const auth = await authHeader();
       console.log("[resetearLocal] headers a /api/mp-sync:", auth);
       if(!auth.Authorization){
-        alert("Sesión expirada. Recargá la página y volvé a entrar.");
+        showToast("err","⚠ Sesión expirada. Recargá la página y volvé a entrar.");
         setSincronizando(false);
         return;
       }
