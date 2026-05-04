@@ -92,7 +92,7 @@ export default function App() {
             await db.auth.signOut();
           }
         }
-      } catch {}
+      } catch { /* auth restore puede fallar (sin sesión / network) — no crítico */ }
       setAuthLoading(false);
     };
     restore();

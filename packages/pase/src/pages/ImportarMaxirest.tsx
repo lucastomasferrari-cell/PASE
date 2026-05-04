@@ -78,7 +78,7 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: I
         const line=rawLine.replace(/\r/g,"");
         const trimmed=line.trim();
         if(!trimmed){return;}
-        if(/^[~=\-]+$/.test(trimmed)){return;}
+        if(/^[~=-]+$/.test(trimmed)){return;}
         let mr:string|null=null,montoStr:string|null=null,cantStr:string|null=null;
         const m=line.match(re);
         if(m){

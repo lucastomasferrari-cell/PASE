@@ -48,7 +48,7 @@ export default function Cashflow({ user, localActivo }: any) {
     qFactPend = applyLocalScope(qFactPend, user, lid);
 
     // 5. Sueldos liquidados sin pagar
-    let qSueldosPend = db.from("rrhh_liquidaciones")
+    const qSueldosPend = db.from("rrhh_liquidaciones")
       .select("total_a_pagar, rrhh_novedades(empleado_id, rrhh_empleados(local_id))")
       .eq("estado", "pendiente").eq("anulado", false);
 

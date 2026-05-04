@@ -65,7 +65,7 @@ function readCache(): CategoriasData | null {
 function writeCache(data: CategoriasData) {
   try {
     sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
-  } catch {}
+  } catch { /* sessionStorage puede fallar en modo privado o quota lleno — no crítico */ }
 }
 
 function fromRows(rows: { tipo: string; nombre: string; orden: number; grupo: string | null; activo: boolean }[]): CategoriasData {
@@ -88,7 +88,7 @@ export function useCategorias(): CategoriasState {
   // refresh() invalida sessionStorage + re-fetcha. La definición está acá
   // arriba para que el initial useState pueda incluirla sin "ReferenceError".
   const refresh = useCallback(async () => {
-    try { sessionStorage.removeItem(CACHE_KEY); } catch {}
+    try { sessionStorage.removeItem(CACHE_KEY); } catch { /* idem writeCache */ }
     // TODO(lint-cleanup): setState se declara abajo (l.108). El comentario
     // de l.88-89 documenta que el orden es intencional para que el initial
     // useState pueda incluir refresh. La regla immutability pide invertir

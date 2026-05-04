@@ -57,11 +57,11 @@ function readCache(): MedioCobro[] | null {
 function writeCache(data: MedioCobro[]) {
   try {
     sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
-  } catch {}
+  } catch { /* sessionStorage puede fallar en modo privado o quota lleno — no crítico */ }
 }
 
 function clearCache() {
-  try { sessionStorage.removeItem(CACHE_KEY); } catch {}
+  try { sessionStorage.removeItem(CACHE_KEY); } catch { /* idem writeCache */ }
 }
 
 // Pure helpers — exportadas para testing sin entorno React.
