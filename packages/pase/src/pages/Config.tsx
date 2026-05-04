@@ -39,6 +39,8 @@ export default function Config(_props: ConfigProps) {
   const [formErr,setFormErr]=useState("");
 
   const load=async()=>{setLoading(true);const {data}=await db.from("usuarios").select("*").order("rol");setUsuarios((data||[]) as UsuarioRow[]);setLoading(false);};
+  // Patrón fetch-on-mount.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(()=>{load();},[]);
 
   const guardar=async()=>{

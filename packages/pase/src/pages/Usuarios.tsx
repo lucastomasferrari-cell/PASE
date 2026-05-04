@@ -43,6 +43,8 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
     setUsuarios(enriched);
     setLoading(false);
   };
+  // Patrón fetch-on-mount.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, []);
 
   const abrirNuevo = () => { setForm(emptyForm); setModal("new"); setErr(""); setShowPw(false); };

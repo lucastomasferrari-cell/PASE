@@ -80,6 +80,8 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
     setPlantillas((p as GastoPlantilla[]) || []);
     setLoading(false);
   };
+  // Patrón fetch-on-dep-change. No agregar load a deps (re-fetch infinito).
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [desde, hasta, localActivo]);
 
   const histFiltrado = gastos.filter(g => {

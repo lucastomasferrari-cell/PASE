@@ -83,6 +83,9 @@ export default function BackupsAdmin({ tenants }: BackupsAdminProps) {
     setLoading(false);
   };
 
+  // Patrón fetch-on-dep-change: loadBackups hace setState async post-fetch.
+  // No agregar loadBackups a deps (se recrea cada render → re-fetch infinito).
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { loadBackups(); }, [tenantId]);
 
   const descargar = async (file: BackupFile) => {

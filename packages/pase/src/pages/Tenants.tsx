@@ -51,8 +51,10 @@ export default function Tenants({ user }: TenantsProps) {
   // requiere mismo orden de hooks en cada render. La gate de superadmin se
   // mueve adentro del effect para preservar el comportamiento (no fetchear
   // tenants si el user no es superadmin).
+  // Patrón fetch-on-mount. No agregar load/user a deps (re-fetch infinito).
   useEffect(() => {
     if (user.rol !== "superadmin") return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

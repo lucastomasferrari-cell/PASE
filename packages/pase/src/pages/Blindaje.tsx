@@ -95,6 +95,8 @@ export default function Blindaje({ user, locales, localActivo }: BlindajeProps) 
     setLoading(false);
   };
 
+  // Patrón fetch-on-dep-change. No agregar loadAll a deps (re-fetch infinito).
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { loadAll(); }, [localActivo]);
 
   // ─── TIPOS ─────────────────────────────────────────────────────────────────

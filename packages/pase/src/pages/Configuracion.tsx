@@ -67,6 +67,8 @@ export default function Configuracion({ user, locales }: ConfiguracionProps) {
     setLoading(false);
   };
 
+  // Patrón fetch-on-dep-change. No agregar load a deps (re-fetch infinito).
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [tab]);
 
   const agregar = async () => {

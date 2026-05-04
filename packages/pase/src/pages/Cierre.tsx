@@ -93,6 +93,8 @@ export default function Cierre({ user, localActivo }: CierreProps) {
     setLoading(false);
   };
 
+  // Patrón fetch-on-dep-change. No agregar cargar a deps (re-fetch infinito).
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { cargar(); }, [mesA, mesB, localActivo]);
 
   const diff = (a: number, b: number) => {

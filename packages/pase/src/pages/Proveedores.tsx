@@ -49,6 +49,8 @@ export default function Proveedores({ user, localActivo }: ProveedoresProps) {
     setProveedores(((provs as Proveedor[]) || []).map(p => ({...p, saldo: saldoPorProv.get(p.id) || 0})));
     setLoading(false);
   };
+  // Patrón fetch-on-dep-change. No agregar load a deps (re-fetch infinito).
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(()=>{load();},[localActivo]);
   const pFilt=proveedores
     .filter(p=>verInactivos||p.estado!=="Inactivo")

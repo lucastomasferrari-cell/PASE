@@ -164,6 +164,8 @@ export default function Dashboard({ user, localActivo }: DashboardProps) {
     }
     setLoading(false);
   };
+  // Patrón fetch-on-dep-change. No agregar load a deps (re-fetch infinito).
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(()=>{ load(localActivo); },[localActivo]);
   if(loading) return <div className="loading">Cargando...</div>;
   // Liquidez Total = cajas tradicionales (Caja Chica/Mayor/Efectivo/Banco) +

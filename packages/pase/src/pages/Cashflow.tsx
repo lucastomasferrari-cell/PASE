@@ -208,6 +208,8 @@ export default function Cashflow({ user, localActivo }: CashflowProps) {
     setLoading(false);
   };
 
+  // Patrón fetch-on-dep-change. No agregar load a deps (re-fetch infinito).
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [mes, localActivo]);
 
   const { ingresosPorCuenta={}, totalIngresos=0, egresosPorTipo={}, totalEgresos=0,

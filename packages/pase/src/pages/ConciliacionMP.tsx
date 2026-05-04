@@ -214,6 +214,8 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
     }
   };
 
+  // Patrón fetch-on-dep-change. No agregar load a deps (re-fetch infinito).
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(()=>{load();},[desde,hasta,localActivo]);
 
   const showToast=(kind: "ok"|"err", msg: string)=>{

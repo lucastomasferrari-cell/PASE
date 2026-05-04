@@ -62,6 +62,8 @@ export default function Remitos({ user, locales, localActivo }: RemitosProps) {
     setProveedores((p as Proveedor[]) || []);
     setLoading(false);
   };
+  // Patrón fetch-on-dep-change. No agregar load a deps (re-fetch infinito).
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(()=>{load();},[localActivo]);
 
   const rFilt = remitos;
