@@ -225,12 +225,34 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
 
   const [syncCountdown,setSyncCountdown]=useState(0);
 
+  // Devuelve los headers de auth para los endpoints /api/mp-*. El backend
+  // (api/_cron-auth.js) valida el JWT contra Supabase Auth + tabla usuarios
+  // y solo deja pasar dueno/admin/cajero/superadmin.
+  // DEBUG TEMPORAL — logs de runtime para diagnosticar reportes de "POST sin
+  // header authorization en DevTools". Quitar una vez confirmado que llega
+  // siempre el JWT al backend (tracking en console del navegador).
+  const authHeader = async (): Promise<Record<string, string>> => {
+    const { data, error } = await db.auth.getSession();
+    console.log("[authHeader] session:", data?.session ? "OK" : "NULL", "error:", error);
+    const token = data?.session?.access_token;
+    if (!token) return {};
+    return { Authorization: `Bearer ${token}` };
+  };
+
   const sincronizar=async()=>{
     setSincronizando(true);
     setSyncCountdown(120);
     try{
+      const auth = await authHeader();
+      console.log("[sincronizar] headers a /api/mp-generate:", auth);
+      if(!auth.Authorization){
+        showToast("err","⚠ Sesión expirada. Recargá la página y volvé a entrar.");
+        setSincronizando(false);
+        setSyncCountdown(0);
+        return;
+      }
       // Paso 1: generar CSV (< 5s)
-      const genRes=await fetch("/api/mp-generate",{method:"POST"});
+      const genRes=await fetch("/api/mp-generate",{method:"POST",headers:auth});
       const genData=await genRes.json().catch(()=>({ok:false}));
       // TODO(lint-cleanup): Date.now() está dentro de un async event handler
       // (sincronizar()), no durante render — falso positivo del linter.
@@ -257,7 +279,9 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
 
       // Paso 3: procesar CSV + calcular saldo
       setSyncCountdown(-1); // indica "procesando"
-      const procRes=await fetch("/api/mp-process",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ts})});
+      const procHeaders={"Content-Type":"application/json",...auth};
+      console.log("[sincronizar] headers a /api/mp-process:", procHeaders);
+      const procRes=await fetch("/api/mp-process",{method:"POST",headers:procHeaders,body:JSON.stringify({ts})});
       const d=await procRes.json().catch(()=>({ok:false,error:"respuesta no-JSON del servidor"}));
 
       console.groupCollapsed("%c[MP] /api/mp-process response","color:#3ECFCF;font-weight:600");
@@ -315,7 +339,14 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
     if(!confirm(`Borrar todos los movimientos MP de ${nombre||"este local"} y re-sincronizar? Esta acción no se puede deshacer.`))return;
     setSincronizando(true);
     try{
-      const r=await fetch("/api/mp-sync?reset="+encodeURIComponent(localId),{method:"POST"});
+      const auth = await authHeader();
+      console.log("[resetearLocal] headers a /api/mp-sync:", auth);
+      if(!auth.Authorization){
+        showToast("err","⚠ Sesión expirada. Recargá la página y volvé a entrar.");
+        setSincronizando(false);
+        return;
+      }
+      const r=await fetch("/api/mp-sync?reset="+encodeURIComponent(localId),{method:"POST",headers:auth});
       const d=await r.json();
       console.log("[MP] reset response:",d);
       if(d.ok){
@@ -393,11 +424,21 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
     return Number.isFinite(t) && t >= desdeMs && t < hastaMsExcl;
   };
 
-  // Tab Ventas — pay-* con fecha (date_created) en rango AR, no anulados
+  // Tab Ventas — pay-* con fecha (date_created) en rango AR, no anulados.
   // Mitigación M7: filas con money_release_status=NULL aparecen acá igual
   // (no filtramos por release_status), pero NO en Por cobrar / Ingresos.
+  //
+  // BUG 6 — defensa contra "total bruto inflado":
+  //   Tipos en pay-*:
+  //     'liquidacion'   → ingreso/venta (collector=ours, monto_bruto>0)
+  //     'bank_transfer' → egreso/compra desde MP (monto_bruto<0 post-fix
+  //                       36a5716 + migration 202605030100)
+  //   Si la migration historica no se corrió, los egresos viejos pueden
+  //   tener monto_bruto>0 e inflar SUM. Excluimos tipo='bank_transfer' para
+  //   que esto no afecte el total — Tab "Ventas" debe ser solo ventas.
   const ventasMovs = movimientos.filter(m =>
     String(m.id || '').startsWith('pay-') &&
+    m.tipo !== 'bank_transfer' &&
     inRange(m.fecha) &&
     m.anulado !== true
   );

@@ -91,7 +91,14 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   const [loading, setLoading] = useState(true);
   const [detalleEdicion, setDetalleEdicion] = useState<Movimiento | null>(null);
   const [auditLog, setAuditLog] = useState<AuditDetalle | null>(null);
-  const [form, setForm] = useState({fecha:toISO(today),cuenta:"Caja Chica",tipo:"Pago Gasto",cat:"",importe:"",detalle:"",esEgreso:true});
+  const emptyForm = {fecha:toISO(today),cuenta:"Caja Chica",tipo:"Pago Gasto",cat:"",importe:"",detalle:"",esEgreso:true};
+  const [form, setForm] = useState(emptyForm);
+  // BUG 5: al abrir el modal de nuevo movimiento, resetear todos los campos
+  // a estado vacío (antes quedaban pre-llenados con el último movimiento).
+  const abrirNuevoMovimiento = () => {
+    setForm({...emptyForm, fecha: toISO(today)});
+    setModal(true);
+  };
   // Selector de local en el modal cuando no hay localActivo y hay >1 local visible.
   const [localFormId, setLocalFormId] = useState<string>(lidImplicito != null ? String(lidImplicito) : "");
   // Sincroniza el local del form modal cuando cambia el localActivo del
@@ -198,7 +205,9 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         p_local_id: lid,
       });
       if (error) { alert(translateRpcError(error)); return; }
-      setModal(false); load();
+      setModal(false);
+      setForm({...emptyForm, fecha: toISO(today)});
+      load();
     } finally {
       setSaving(false);
     }
@@ -313,7 +322,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         <div><div className="ph-title">Tesorería</div></div>
         <div style={{display:"flex",gap:8}}>
           <button className="btn btn-sec" onClick={()=>setTransfModal(true)} disabled={cuentasVisibles.length<2}>↔ Transferir</button>
-          <button className="btn btn-acc" onClick={()=>setModal(true)}>+ Movimiento</button>
+          <button className="btn btn-acc" onClick={abrirNuevoMovimiento}>+ Movimiento</button>
         </div>
       </div>
       {cuentasVisibles.length === 0 ? (

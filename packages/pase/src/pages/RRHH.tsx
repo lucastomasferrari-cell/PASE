@@ -195,6 +195,8 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const [empSearch, setEmpSearch] = useState("");
   const [vacTomadas, setVacTomadas] = useState<Record<string, number>>({});
   const [empFiltLocal, setEmpFiltLocal] = useState(defaultLocal);
+  // BUG 2: por defecto solo mostramos empleados activos. Toggle para incluir inactivos.
+  const [empMostrarInactivos, setEmpMostrarInactivos] = useState(false);
   const [empModal, setEmpModal] = useState<EmpModalState>(null);
   const empEmpty: EmpForm = { local_id:"", apellido:"", nombre:"", cuil:"", puesto:"", sueldo_mensual:"", alias_mp:"", fecha_inicio:"", activo:true };
   const [empForm, setEmpForm] = useState<EmpForm>(empEmpty);
@@ -552,6 +554,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   // ─── EMPLEADOS ACTIONS ─────────────────────────────────────────────────────
   const puestos = [...new Set(valoresDoble.map(v => v.puesto))];
   const empsFilt = allEmps.filter(e => {
+    if (!empMostrarInactivos && e.activo === false) return false;
     if (empFiltLocal && e.local_id !== parseInt(String(empFiltLocal))) return false;
     if (empSearch && !(`${e.apellido} ${e.nombre}`).toLowerCase().includes(empSearch.toLowerCase())) return false;
     return true;
@@ -643,6 +646,19 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     await db.from("rrhh_liquidaciones").delete().eq("novedad_id", nov.id);
     await db.from("rrhh_novedades").update({ estado: "borrador" }).eq("id", nov.id);
     setNovMap(prev => ({ ...prev, [empId]: { ...prev[empId], estado: "borrador" } }));
+  };
+
+  // BUG 4: bulk-confirmar todos los empleados en borrador. Cierra de un tirón
+  // las novedades del mes y crea las liquidaciones (estado "pendiente"), que
+  // es el equivalente a "listo para pago".
+  const confirmarTodas = async () => {
+    const enBorrador = novEmps.filter(e => (novMap[e.id]?.estado ?? "borrador") !== "confirmado");
+    if (enBorrador.length === 0) { showToast("Todas ya están confirmadas"); return; }
+    if (!confirm(`Confirmar novedades de ${enBorrador.length} empleado${enBorrador.length > 1 ? "s" : ""}? Pasan a estado "listo para pago".`)) return;
+    // Flush autosaves pendientes para no pisar el confirmar.
+    Object.values(saveTimers.current).forEach(t => clearTimeout(t));
+    for (const emp of enBorrador) await confirmarUno(emp);
+    showToast(`${enBorrador.length} novedad${enBorrador.length > 1 ? "es" : ""} confirmada${enBorrador.length > 1 ? "s" : ""} → listo para pago`);
   };
 
   // ─── ADELANTOS ─────────────────────────────────────────────────────────────
@@ -747,6 +763,8 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
           setEmpFiltLocal={setEmpFiltLocal}
           empSearch={empSearch}
           setEmpSearch={setEmpSearch}
+          empMostrarInactivos={empMostrarInactivos}
+          setEmpMostrarInactivos={setEmpMostrarInactivos}
           esEnc={esEnc}
           locsDisp={locsDisp}
           locales={locales}
@@ -779,6 +797,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
           valoresDoble={valoresDoble}
           updateNov={updateNov}
           confirmarUno={confirmarUno}
+          confirmarTodas={confirmarTodas}
           editarNov={editarNov}
           esDueno={esDueno}
         />
@@ -940,6 +959,8 @@ interface TabEmpleadosProps {
   setEmpFiltLocal: React.Dispatch<React.SetStateAction<string | number>>;
   empSearch: string;
   setEmpSearch: React.Dispatch<React.SetStateAction<string>>;
+  empMostrarInactivos: boolean;
+  setEmpMostrarInactivos: React.Dispatch<React.SetStateAction<boolean>>;
   esEnc: boolean;
   locsDisp: Local[];
   locales: Local[];
@@ -958,6 +979,7 @@ interface TabEmpleadosProps {
 
 function TabEmpleados({
   empFiltLocal, setEmpFiltLocal, empSearch, setEmpSearch,
+  empMostrarInactivos, setEmpMostrarInactivos,
   esEnc, locsDisp, locales, empsFilt, vacTomadas, puestos,
   empModal, setEmpModal, empForm, setEmpForm,
   abrirEmpNuevo, abrirEmpEditar, guardarEmp, setLegajoId,
@@ -970,6 +992,10 @@ function TabEmpleados({
           {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
         </select>
         <input className="search" placeholder="Buscar..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} style={{width:160}} />
+        <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"var(--muted2)",cursor:"pointer"}}>
+          <input type="checkbox" checked={empMostrarInactivos} onChange={e => setEmpMostrarInactivos(e.target.checked)} />
+          Mostrar inactivos
+        </label>
         <div style={{flex:1}} />
         <button className="btn btn-acc" onClick={abrirEmpNuevo}>+ Nuevo empleado</button>
       </div>
@@ -1053,6 +1079,7 @@ interface TabNovedadesProps {
   valoresDoble: ValorDoble[];
   updateNov: (empId: string, field: keyof NovedadEditable, value: string | number) => void;
   confirmarUno: (emp: Empleado) => Promise<void>;
+  confirmarTodas: () => Promise<void>;
   editarNov: (empId: string) => Promise<void>;
   esDueno: boolean;
 }
@@ -1060,8 +1087,9 @@ interface TabNovedadesProps {
 function TabNovedades({
   novMes, setNovMes, novAnio, setNovAnio, novLocal, setNovLocal,
   locsDisp, novLoading, novEmps, novMap, valoresDoble,
-  updateNov, confirmarUno, editarNov, esDueno,
+  updateNov, confirmarUno, confirmarTodas, editarNov, esDueno,
 }: TabNovedadesProps) {
+  const pendientesCount = novEmps.filter(e => (novMap[e.id]?.estado ?? "borrador") !== "confirmado").length;
   return (
     <>
       <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
@@ -1073,6 +1101,12 @@ function TabNovedades({
           <option value="">Seleccionar local...</option>
           {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
         </select>
+        <div style={{flex:1}} />
+        {esDueno && novLocal && novEmps.length > 0 && pendientesCount > 0 && (
+          <button className="btn btn-acc btn-sm" onClick={confirmarTodas}>
+            Confirmar todas ({pendientesCount}) → listo para pago
+          </button>
+        )}
       </div>
 
       {!novLocal ? <div className="alert alert-info">Seleccioná un local para cargar novedades</div> :

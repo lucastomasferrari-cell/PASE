@@ -279,32 +279,44 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
   };
 
   // ─── ACCIONES: DOCUMENTOS ─────────────────────────────────────────────────
+  // BUG 3: el bucket real en Supabase Storage se llama 'empleados' (con
+  // policies bucket_id='empleados'). El código apuntaba a 'rrhh-documentos'
+  // que no existe → INSERT/SELECT siempre fallaban (RLS default-deny).
+  // Path con prefijo tenant_id para pasar la policy 'empleados_*_mt' que
+  // valida (storage.foldername(name))[1] = auth_tenant_id()::text.
   const subirDoc = async (file: File) => {
     if (!file || uploading || !emp) return;
     setUploading(true);
     const ext = file.name.split(".").pop();
-    const path = `${emp.id}/${docForm.tipo}/${Date.now()}.${ext}`;
-    const { error: upErr } = await db.storage.from("rrhh-documentos").upload(path, file);
+    const tenantPrefix = user?.tenant_id ? `${user.tenant_id}/` : "";
+    const path = `${tenantPrefix}${emp.id}/${docForm.tipo}/${Date.now()}.${ext}`;
+    const { error: upErr } = await db.storage.from("empleados").upload(path, file);
     if (upErr) { showToast("Error subiendo: " + upErr.message); setUploading(false); return; }
 
-    await db.from("rrhh_documentos").insert([{
+    const { error: insErr } = await db.from("rrhh_documentos").insert([{
       empleado_id: emp.id, tipo: docForm.tipo, nombre_archivo: file.name, url: path,
       mes: docForm.mes ? parseInt(docForm.mes) : null, anio: docForm.anio ? parseInt(docForm.anio) : null,
       subido_por: user?.id,
     }]);
+    if (insErr) {
+      // Rollback storage si falló la inserción en la tabla.
+      await db.storage.from("empleados").remove([path]);
+      showToast("Error registrando: " + insErr.message);
+      setUploading(false); return;
+    }
     setUploading(false); setDocModal(false); setDocForm({ tipo:"otro", mes:"", anio:"" });
     showToast("Documento subido");
     loadDocs();
   };
 
   const verDoc = async (doc: DocumentoLegajo) => {
-    const { data } = await db.storage.from("rrhh-documentos").createSignedUrl(doc.url, 3600);
+    const { data } = await db.storage.from("empleados").createSignedUrl(doc.url, 3600);
     if (data?.signedUrl) window.open(data.signedUrl, "_blank");
   };
 
   const eliminarDoc = async (doc: DocumentoLegajo) => {
     if (!confirm("Eliminar documento?")) return;
-    await db.storage.from("rrhh-documentos").remove([doc.url]);
+    await db.storage.from("empleados").remove([doc.url]);
     await db.from("rrhh_documentos").delete().eq("id", doc.id);
     loadDocs();
   };
