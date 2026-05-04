@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
-import { localesVisibles, applyLocalScope, cuentasVisibles } from "../lib/auth";
+import { localesVisibles, applyLocalScope, cuentasOperables } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import {
@@ -172,8 +172,11 @@ const inp: React.CSSProperties = { padding:"3px 5px", background:"var(--bg)", bo
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function RRHH({ user, locales, localActivo }: RRHHProps) {
-  const visCuentas = cuentasVisibles(user);
-  const cuentasUsables = visCuentas === null ? CUENTAS_PAGO : CUENTAS_PAGO.filter(c => visCuentas.includes(c));
+  // Cuentas para los selects de "Cuenta de pago" (adelanto y formas de pago
+  // de sueldo). Filtra por cuentas_operables — un usuario con permiso de
+  // cargar adelantos puede no ver el saldo de la cuenta destino.
+  const opCuentas = cuentasOperables(user);
+  const cuentasUsables = opCuentas === null ? CUENTAS_PAGO : CUENTAS_PAGO.filter(c => opCuentas.includes(c));
   const [tab, setTab] = useState("dashboard");
   const [legajoId, setLegajoId] = useState<string | null>(null);
   const [cfgModal, setCfgModal] = useState(false);
@@ -226,7 +229,18 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const [formasPago, setFormasPago] = useState<LineaPago[]>([]);
   const [adelantosPendientes, setAdelantosPendientes] = useState<Adelanto[]>([]);
   const [adelModal, setAdelModal] = useState(false);
-  const [adelForm, setAdelForm] = useState<AdelantoForm>({ empleado_id:"", monto:"", cuenta:"Caja Efectivo", fecha:toISO(today), descripcion:"" });
+  // Bug Caja-1: default vacío en cuenta fuerza elección consciente del user.
+  const [adelForm, setAdelForm] = useState<AdelantoForm>({ empleado_id:"", monto:"", cuenta:"", fecha:toISO(today), descripcion:"" });
+
+  // Defensive: resetea adelForm.cuenta a "" si queda fuera de cuentasUsables.
+  // NO borrar — previene regresión del bug Caja-1.
+  useEffect(() => {
+    if (adelForm.cuenta && !cuentasUsables.includes(adelForm.cuenta)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAdelForm(a => ({ ...a, cuenta: "" }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adelForm.cuenta, cuentasUsables.join("|")]);
 
   // Dashboard
   const [dashLoading, setDashLoading] = useState(true);
@@ -692,7 +706,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     const pendienteCash = Math.max(0, total - yaPagado - Math.round(totalAdelantos));
     setAdelantosPendientes(pendientes);
     setPagoModal({ emp, nov, liq });
-    setFormasPago(pendienteCash > 0 ? [{ cuenta: "Caja Efectivo", monto: String(pendienteCash) }] : []);
+    setFormasPago(pendienteCash > 0 ? [{ cuenta: "", monto: String(pendienteCash) }] : []);
   };
 
   const guardarAdelanto = async () => {
@@ -711,7 +725,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
 
     showToast(`Adelanto registrado — ${emp.apellido}`);
     setAdelModal(false);
-    setAdelForm({ empleado_id:"", monto:"", cuenta:"Caja Efectivo", fecha:toISO(today), descripcion:"" });
+    setAdelForm({ empleado_id:"", monto:"", cuenta:"", fecha:toISO(today), descripcion:"" });
     if (tab === "pagos") await loadPagos();
   };
 
@@ -1285,7 +1299,10 @@ function TabPagos({
         const restanteTrasEste = pendiente - asignadoTotal;
         const completaPago = asignadoTotal >= pendiente;
         const esPagoParcial = asignadoTotal > 0 && asignadoTotal < pendiente;
-        const puedeConfirmar = asignadoTotal > 0 && asignadoTotal <= pendiente && formasPago.every(f => parseFloat(f.monto) > 0);
+        // Bug Caja-1: cada línea de pago debe tener cuenta seleccionada.
+        // Sin este check, una línea con cuenta="" colaba el placeholder y
+        // pagar_sueldo persistía cuenta vacía.
+        const puedeConfirmar = asignadoTotal > 0 && asignadoTotal <= pendiente && formasPago.every(f => parseFloat(f.monto) > 0 && !!f.cuenta);
         const cerrarModal = () => { setPagoModal(null); setFormasPago([]); setAdelantosPendientes([]); };
 
         const confirmarPago = async () => {
@@ -1294,7 +1311,7 @@ function TabPagos({
           try {
             // Serializar las formas de pago (sólo las con monto > 0).
             const formasValidas = formasPago
-              .filter(fp => (parseFloat(fp.monto) || 0) > 0)
+              .filter(fp => (parseFloat(fp.monto) || 0) > 0 && !!fp.cuenta)
               .map(fp => ({ cuenta: fp.cuenta, monto: parseFloat(fp.monto) }));
             const adelIds = (adelantosPendientes || []).map(a => a.id);
 
@@ -1382,7 +1399,8 @@ function TabPagos({
                   <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
                     <select className="search" style={{flex:1}} value={fp.cuenta}
                       onChange={e => setFormasPago(prev => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
-                      {cuentasUsables.map(c => <option key={c}>{c}</option>)}
+                      <option value="">Seleccioná una cuenta…</option>
+                      {cuentasUsables.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                     <input type="number" className="search" style={{width:120}} placeholder="Monto" value={fp.monto}
                       onChange={e => setFormasPago(prev => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
@@ -1391,7 +1409,7 @@ function TabPagos({
                 ))}
 
                 <button className="btn btn-ghost btn-sm" style={{marginBottom:16}}
-                  onClick={() => setFormasPago(prev => [...prev, { cuenta: "Caja Efectivo", monto: restanteTrasEste > 0 ? String(restanteTrasEste) : "" }])}>
+                  onClick={() => setFormasPago(prev => [...prev, { cuenta: "", monto: restanteTrasEste > 0 ? String(restanteTrasEste) : "" }])}>
                   + Agregar forma de pago
                 </button>
 
@@ -1455,7 +1473,8 @@ function TabPagos({
               </div>
               <div className="field"><label>Cuenta de egreso</label>
                 <select value={adelForm.cuenta} onChange={e => setAdelForm({...adelForm, cuenta: e.target.value})}>
-                  {cuentasUsables.map(c => <option key={c}>{c}</option>)}
+                  <option value="">Seleccioná una cuenta…</option>
+                  {cuentasUsables.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div className="field"><label>Descripción (opcional)</label>
