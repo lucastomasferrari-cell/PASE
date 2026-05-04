@@ -36,4 +36,4 @@ export interface Tenant {
   updated_at?: string;
 }
 
-export interface Perfil extends UsuarioRow {}
+export type Perfil = UsuarioRow;
