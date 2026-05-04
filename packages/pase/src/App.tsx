@@ -252,7 +252,7 @@ export default function App() {
   };
 
   const [toast, setToast] = useState("");
-  const toastTimer = useRef<any>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = (msg: string) => {
     setToast(msg);
     if (toastTimer.current) clearTimeout(toastTimer.current);
