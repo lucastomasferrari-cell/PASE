@@ -150,6 +150,9 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
       // Paso 1: generar CSV (< 5s)
       const genRes=await fetch("/api/mp-generate",{method:"POST"});
       const genData=await genRes.json().catch(()=>({ok:false}));
+      // TODO(lint-cleanup): Date.now() está dentro de un async event handler
+      // (sincronizar()), no durante render — falso positivo del linter.
+      // eslint-disable-next-line react-hooks/purity
       const ts=genData.timestamp||Date.now();
       console.log("[MP] mp-generate:",genData);
 

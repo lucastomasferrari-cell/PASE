@@ -89,6 +89,11 @@ export function useCategorias(): CategoriasState {
   // arriba para que el initial useState pueda incluirla sin "ReferenceError".
   const refresh = useCallback(async () => {
     try { sessionStorage.removeItem(CACHE_KEY); } catch {}
+    // TODO(lint-cleanup): setState se declara abajo (l.108). El comentario
+    // de l.88-89 documenta que el orden es intencional para que el initial
+    // useState pueda incluir refresh. La regla immutability pide invertir
+    // el orden — riesgoso reorganizar acá sin verificar.
+    // eslint-disable-next-line react-hooks/immutability
     setState(s => ({ ...s, loading: true }));
     try {
       const { data, error } = await db.from("config_categorias")

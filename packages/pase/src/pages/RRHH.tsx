@@ -491,6 +491,11 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     if (!pendingPagoEmpId || !pagoData.length) return;
     const row = pagoData.find((r: any) => r.emp?.id === pendingPagoEmpId);
     if (row && row.liq && row.liq.estado !== "pagado") {
+      // TODO(lint-cleanup): abrirPagoSueldo se declara abajo (l.499). Patrón
+      // efecto-llama-función-declarada-luego — funciona en runtime porque el
+      // efecto corre post-render. Reordenar implica mover ~50 líneas en flow
+      // de pagos críticos — PR dedicado.
+      // eslint-disable-next-line react-hooks/immutability
       abrirPagoSueldo(row.emp, row.nov, row.liq);
     }
     setPendingPagoEmpId(null);

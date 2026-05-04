@@ -81,6 +81,12 @@ export default function App() {
         if (session?.user) {
           const { data: perfil } = await db.from("usuarios").select("*").eq("auth_id", session.user.id).single();
           if (perfil && perfil.activo !== false) {
+            // TODO(lint-cleanup): applyLogin se declara abajo (l.157). El
+            // closure se crea en render pero se invoca POST render (effect),
+            // así que en runtime applyLogin ya existe. La regla immutability
+            // pide reordenar la declaración — refactor estructural en flow
+            // crítico de auth, mejor revisarlo en PR dedicado.
+            // eslint-disable-next-line react-hooks/immutability
             await applyLogin(perfil);
           } else {
             await db.auth.signOut();
@@ -349,6 +355,11 @@ export default function App() {
         </div>
         <main className="main" style={{position:"relative",zIndex:1}}>
           {toast && <div style={{position:"fixed",top:16,right:16,zIndex:200,padding:"10px 20px",background:"var(--danger)",color:"#fff",borderRadius:"var(--r)",fontSize:12,fontFamily:"'DM Mono',monospace",fontWeight:600,boxShadow:"0 4px 12px rgba(0,0,0,.5)"}}>{toast}</div>}
+          {/* TODO(lint-cleanup): renderSection() llama guardedNav() → showToast()
+              que escribe toastTimer.current durante render. La regla refs pide
+              mover la guard navigation a useEffect que reaccione a cambios de
+              `section`. Refactor arquitectural — PR dedicado. */}
+          {/* eslint-disable-next-line react-hooks/refs */}
           {renderSection()}
         </main>
       </div>

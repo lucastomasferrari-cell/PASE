@@ -25,11 +25,6 @@ export default function Tenants({ user }: TenantsProps) {
   const [flash, setFlash] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("tenants");
 
-  // Solo superadmin puede ver esta pantalla.
-  if (user.rol !== "superadmin") {
-    return <div className="empty">Acceso denegado: solo superadmin.</div>;
-  }
-
   const load = async () => {
     setLoading(true);
     const { data: ts, error: tsErr } = await db.from("tenants").select("*").order("created_at", { ascending: false });
@@ -52,7 +47,20 @@ export default function Tenants({ user }: TenantsProps) {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  // El useEffect debe declararse antes de cualquier early return — React
+  // requiere mismo orden de hooks en cada render. La gate de superadmin se
+  // mueve adentro del effect para preservar el comportamiento (no fetchear
+  // tenants si el user no es superadmin).
+  useEffect(() => {
+    if (user.rol !== "superadmin") return;
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Solo superadmin puede ver esta pantalla.
+  if (user.rol !== "superadmin") {
+    return <div className="empty">Acceso denegado: solo superadmin.</div>;
+  }
 
   const verComo = (tenant: Tenant) => {
     sessionStorage.setItem(TENANT_OVERRIDE_KEY, tenant.id);

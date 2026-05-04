@@ -140,6 +140,11 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: an
   const sinFechaInicio = !emp.fecha_inicio;
   const fechaInicio = emp.fecha_inicio ? new Date(emp.fecha_inicio + "T12:00:00") : null;
   const fechaInicioValida = fechaInicio && !isNaN(fechaInicio.getTime());
+  // TODO(lint-cleanup): Date.now() durante render hace que antiguedadMs
+  // re-calcule cada render. La diferencia es <1s entre renders, sin impacto
+  // visible. Fix correcto: useMemo o congelar al mount con useState. Refactor
+  // dejado para PR dedicado.
+  // eslint-disable-next-line react-hooks/purity
   const antiguedadMs = fechaInicioValida ? Date.now() - fechaInicio.getTime() : 0;
   const antiguedadAnios = antiguedadMs / (365.25 * 24 * 60 * 60 * 1000);
   const diasVacAnuales = diasVacacionesPorAnio(Math.floor(antiguedadAnios));
