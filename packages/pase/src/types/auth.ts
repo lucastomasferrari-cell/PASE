@@ -9,7 +9,13 @@ export interface UsuarioRow {
   activo: boolean;
   password_temporal: boolean;
   locales: number[] | null;
+  /** Cuentas cuyo SALDO el usuario puede ver (cards Tesorería, totales).
+   *  NULL = sin restricción. Coincide con la columna usuarios.cuentas_visibles. */
   cuentas_visibles: string[] | null;
+  /** Cuentas contra las que el usuario puede OPERAR (cargar pagos/gastos).
+   *  Migration 202605041700 agregó la columna; antes de correrla viene
+   *  undefined y el helper hace fallback a cuentas_visibles. */
+  cuentas_operables?: string[] | null;
   /** TASK 0.15: NULL para superadmin (fuera de tenants); UUID para resto. */
   tenant_id: string | null;
 }

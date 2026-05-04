@@ -158,10 +158,12 @@ export function applyLocalScope<Q extends LocalScopeFilterable>(
 }
 
 /**
- * Cuentas de Tesorería visibles por el usuario.
- *   null    → todas (dueno/admin, o usuario viejo sin setear)
- *   []      → ninguna
- *   string[]→ sólo esas
+ * Cuentas de Tesorería cuyo SALDO el usuario puede ver (cards Tesorería,
+ * totales del Cashflow). null = todas; [] = ninguna; string[] = solo esas.
+ *
+ * Llamada legacy `cuentasVisibles`. Mantenemos el nombre para no romper
+ * los call-sites existentes; el alias semántico nuevo `cuentasVerSaldo`
+ * apunta a la misma función.
  */
 export function cuentasVisibles(user: MaybeUser): string[] | null {
   if (!user) return [];
@@ -170,10 +172,61 @@ export function cuentasVisibles(user: MaybeUser): string[] | null {
   return user.cuentas_visibles;
 }
 
+/** Alias semántico de cuentasVisibles para código nuevo (Fase 2). */
+export const cuentasVerSaldo = cuentasVisibles;
+
+/**
+ * Cuentas contra las que el usuario puede OPERAR (cargar pagos/gastos en
+ * Compras, Remitos, RRHH, Caja, Gastos). null = todas; string[] = solo esas.
+ *
+ * Fallback histórico: la columna usuarios.cuentas_operables se agregó en
+ * migration 202605041700. Hasta que esa migration corra en prod, la columna
+ * llega undefined y caemos a cuentasVisibles (comportamiento previo).
+ * Cuando Lucas corra la migration y empiece a setear cuentas_operables
+ * desde el editor de Usuarios, este helper devuelve el array correcto.
+ */
+export function cuentasOperables(user: MaybeUser): string[] | null {
+  if (!user) return [];
+  if (user.rol === "dueno" || user.rol === "admin") return null;
+  // Fallback gradual: si todavía no se migró cuentas_operables, leer
+  // cuentas_visibles. Eso garantiza que el día que se mergee este código
+  // pero antes de correr la migration, nadie pierde permisos de operar.
+  if (user.cuentas_operables === undefined) return cuentasVisibles(user);
+  if (user.cuentas_operables === null) return null;
+  return user.cuentas_operables;
+}
+
 export function puedeVerCuenta(user: MaybeUser, cuenta: string): boolean {
   const vis = cuentasVisibles(user);
   if (vis === null) return true;
   return vis.includes(cuenta);
+}
+
+export function puedeOperarCuenta(user: MaybeUser, cuenta: string): boolean {
+  const op = cuentasOperables(user);
+  if (op === null) return true;
+  return op.includes(cuenta);
+}
+
+/**
+ * Cuentas que el usuario puede VER MOVIMIENTOS de (no saldos consolidados,
+ * solo el listado del ledger). Es la unión de visibles ∪ operables —
+ * coherente con "puedo pagar contra MP pero no veo cuánto hay en MP".
+ *
+ * null = sin restricción si CUALQUIERA de las dos es null. [] = ninguna.
+ */
+export function cuentasVisiblesParaListados(user: MaybeUser): string[] | null {
+  const ver = cuentasVisibles(user);
+  const op  = cuentasOperables(user);
+  if (ver === null || op === null) return null;
+  // Unión sin duplicados.
+  return Array.from(new Set([...ver, ...op]));
+}
+
+export function puedeVerMovimientosDeCuenta(user: MaybeUser, cuenta: string): boolean {
+  const lista = cuentasVisiblesParaListados(user);
+  if (lista === null) return true;
+  return lista.includes(cuenta);
 }
 
 // ─── REACT CONTEXT + HOOK ────────────────────────────────────────────────────
