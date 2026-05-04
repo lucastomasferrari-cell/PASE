@@ -4,6 +4,30 @@ import { tienePermiso } from "../lib/auth";
 import { useMediosCobro, type MedioCobro } from "../lib/useMediosCobro";
 import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS } from "../lib/constants";
+import type { Usuario, Local } from "../types";
+
+interface ConfigCategoriaItem {
+  id: number;
+  tipo: string;
+  nombre: string;
+  orden: number;
+  activo: boolean;
+  grupo: string | null;
+}
+
+interface ConfiguracionProps {
+  user: Usuario | null;
+  locales?: Local[];
+}
+
+interface MediosCobroSectionProps {
+  user: Usuario | null;
+  locales: Local[];
+}
+
+// Payload de insert/update sobre medios_cobro: Omite id (lo asigna la DB)
+// y permite que algunos campos vengan opcionales del Partial<MedioCobro>.
+type MedioCobroPayload = Omit<MedioCobro, "id"> & { updated_at: string };
 
 const TIPOS = [
   { id: "gasto_fijo", label: "Gastos Fijos" },
@@ -16,9 +40,9 @@ const TIPOS = [
   { id: "cat_ingreso", label: "Categorías de Ingreso" },
 ];
 
-export default function Configuracion({ user, locales }: { user: any; locales?: any[] }) {
+export default function Configuracion({ user, locales }: ConfiguracionProps) {
   const [tab, setTab] = useState("gasto_fijo");
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<ConfigCategoriaItem[]>([]);
   const [nuevo, setNuevo] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -39,7 +63,7 @@ export default function Configuracion({ user, locales }: { user: any; locales?: 
     setLoading(true);
     const { data } = await db.from("config_categorias")
       .select("*").eq("tipo", tab).eq("activo", true).order("orden");
-    setItems(data || []);
+    setItems((data as ConfigCategoriaItem[]) || []);
     setLoading(false);
   };
 
@@ -55,7 +79,7 @@ export default function Configuracion({ user, locales }: { user: any; locales?: 
     load();
   };
 
-  const eliminar = async (item: any) => {
+  const eliminar = async (item: ConfigCategoriaItem) => {
     const tipoGasto = tab.startsWith("gasto_") ? tab.replace("gasto_", "") : null;
     if (tipoGasto) {
       const { count } = await db.from("gastos").select("*", { count: "exact", head: true }).eq("categoria", item.nombre);
@@ -126,7 +150,7 @@ export default function Configuracion({ user, locales }: { user: any; locales?: 
 // CRUD de medios_cobro (tabla nueva del refactor C). Usa el hook
 // useMediosCobro para refrescar el cache global cuando cambia algo, así
 // los dropdowns en Ventas/Maxirest/etc se enteran sin refresh manual.
-function MediosCobroSection({ user, locales }: { user: any; locales: any[] }) {
+function MediosCobroSection({ user, locales }: MediosCobroSectionProps) {
   const { todosLosMedios, refresh, loading: hookLoading } = useMediosCobro();
   const [editing, setEditing] = useState<Partial<MedioCobro> | null>(null);
   const [saving, setSaving] = useState(false);
@@ -168,7 +192,7 @@ function MediosCobroSection({ user, locales }: { user: any; locales: any[] }) {
     const nombre = (editing.nombre || "").trim();
     if (!nombre) { alert("Nombre obligatorio"); return; }
     setSaving(true);
-    const payload: any = {
+    const payload: MedioCobroPayload = {
       nombre,
       local_id: editing.local_id ?? null,
       cuenta_destino: editing.cuenta_destino || null,
