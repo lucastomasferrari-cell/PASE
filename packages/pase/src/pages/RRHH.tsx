@@ -467,10 +467,18 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     setHistLoading(false);
   };
 
+  // Patrones fetch-on-mount / fetch-on-dep-change. Las funciones loadX
+  // hacen setState async post-fetch — agregarlas a deps causaría re-fetch
+  // infinito (se recrean cada render).
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { loadValoresDoble(); loadEmpleados(); }, []);
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { if (tab === "dashboard") loadDashboard(); }, [tab]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { if (tab === "novedades" && novLocal) loadNovedades(); }, [tab, novLocal, novMes, novAnio]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { if (tab === "pagos" && pagoLocal) loadPagos(); }, [tab, pagoLocal, pagoMes, pagoAnio]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { if (tab === "historial") loadHistorial(); }, [tab, histLocal, histMes, histAnio]);
 
   // Autoselección de local en Novedades/Pagos.
@@ -484,33 +492,43 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     if (esEnc && locsDisp.length) return String(locsDisp[0]?.id ?? "");
     return "";
   };
-  // Reset + aplicar default al entrar al tab
+  // Reset + aplicar default al entrar al tab. lidDefault depende de
+  // localActivo/locsDisp/esEnc — todos prop-derived. Adding lidDefault a
+  // deps re-fire si la fn ref cambia (cada render). Disable.
   useEffect(() => {
     if (tab === "novedades") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setNovLocalTouched(false);
       const v = lidDefault();
       if (v) setNovLocal(v);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
   useEffect(() => {
     if (tab === "pagos") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPagoLocalTouched(false);
       const v = lidDefault();
       if (v) setPagoLocal(v);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
   // Sync con localActivo o locales mientras está en el tab (si no se tocó)
   useEffect(() => {
     if (tab === "novedades" && !novLocalTouched) {
       const v = lidDefault();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (v) setNovLocal(v);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localActivo, locsDisp.length, locsDisp[0]?.id]);
   useEffect(() => {
     if (tab === "pagos" && !pagoLocalTouched) {
       const v = lidDefault();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (v) setPagoLocal(v);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localActivo, locsDisp.length, locsDisp[0]?.id]);
   const handleNovLocalChange = (v: string) => { setNovLocal(v); setNovLocalTouched(true); };
   const handlePagoLocalChange = (v: string) => { setPagoLocal(v); setPagoLocalTouched(true); };
@@ -641,6 +659,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       // eslint-disable-next-line react-hooks/immutability
       abrirPagoSueldo(row.emp, row.nov, row.liq);
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPendingPagoEmpId(null);
   }, [pagoData, pendingPagoEmpId]);
 
