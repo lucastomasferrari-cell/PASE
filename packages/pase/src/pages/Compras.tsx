@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope, cuentasVisibles } from "../lib/auth";
+import { applyLocalScope, cuentasOperables } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS, UNIDADES } from "../lib/constants";
@@ -57,8 +57,11 @@ const estadoDot = (estado: string) => {
 
 export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const { CATEGORIAS_COMPRA } = useCategorias();
-  const visCuentas = cuentasVisibles(user);
-  const cuentasUsables = visCuentas === null ? CUENTAS : CUENTAS.filter(c => visCuentas.includes(c));
+  // Cuentas para el dropdown de "Cuenta de egreso" en el modal de pago.
+  // Filtra por cuentas_operables (no por cuentas_visibles): un encargado
+  // puede tener permiso de pagar contra una cuenta cuyo saldo no ve.
+  const opCuentas = cuentasOperables(user);
+  const cuentasUsables = opCuentas === null ? CUENTAS : CUENTAS.filter(c => opCuentas.includes(c));
   const [facturas, setFacturas] = useState<Factura[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [search, setSearch] = useState("");
@@ -95,7 +98,22 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const emptyForm: FormFactura = { prov_id: "", local_id: localActivo ? String(localActivo) : "", nro: "", fecha: toISO(today), venc: "", neto: "", iva21: "", iva105: "", iibb: "", perc_iva: "", otros_cargos: "", descuentos: "", cat: "", detalle: "", tipo: "factura" };
   const [form, setForm] = useState<FormFactura>(emptyForm);
   const [items, setItems] = useState<ItemFactura[]>([]);
-  const [pagoForm, setPagoForm] = useState({ cuenta: "MercadoPago", monto: "", fecha: toISO(today) });
+  // Bug Caja-1: el default cuenta="MercadoPago" pisaba la elección del
+  // usuario cuando MP no estaba en cuentasUsables (encargados con cuentas
+  // restringidas). Default vacío fuerza la elección consciente.
+  const [pagoForm, setPagoForm] = useState({ cuenta: "", monto: "", fecha: toISO(today) });
+
+  // Defensive: si form.cuenta queda con un valor que no está en
+  // cuentasUsables (regression future, scope change), reseteamos a ""
+  // para que el placeholder del <select> aparezca. NO borrar — previene
+  // el retorno del bug Caja-1.
+  useEffect(() => {
+    if (pagoForm.cuenta && !cuentasUsables.includes(pagoForm.cuenta)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPagoForm(p => ({ ...p, cuenta: "" }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagoForm.cuenta, cuentasUsables.join("|")]);
   const localesDisp = user.rol === "dueno" ? locales : locales.filter((l: Local) => (user.locales || []).includes(l.id));
   const calcTotal = () =>
     parseMonto(form.neto) +
@@ -250,6 +268,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
 
   const pagar = async () => {
     if (pagando || !pagarModal) return;
+    if (!pagoForm.cuenta) { alert("Elegí una cuenta de egreso"); return; }
     setPagando(true);
     try {
       const f = pagarModal;
@@ -386,7 +405,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                   <td>
                     <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
                       <button className="btn btn-ghost btn-sm" onClick={() => setVerModal(f)}>Ver</button>
-                      {!isNC && f.estado !== "pagada" && <button className="btn btn-success btn-sm" onClick={() => { setPagarModal(f); setPagoForm({ cuenta: "MercadoPago", monto: String(f.total), fecha: toISO(today) }); }}>Pagar</button>}
+                      {!isNC && f.estado !== "pagada" && <button className="btn btn-success btn-sm" onClick={() => { setPagarModal(f); setPagoForm({ cuenta: "", monto: String(f.total), fecha: toISO(today) }); }}>Pagar</button>}
                       <button className="btn btn-danger btn-sm" onClick={() => anular(f)}>Anular</button>
                     </div>
                   </td>
@@ -548,11 +567,11 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
             <div className="modal-hd"><div className="modal-title">Registrar Pago</div><button className="close-btn" onClick={() => setPagarModal(null)}>✕</button></div>
             <div className="modal-body">
               <div className="alert alert-info">{pagarModal.nro} · Total: {fmt_$(pagarModal.total)}</div>
-              <div className="field"><label>Cuenta de egreso</label><select value={pagoForm.cuenta} onChange={e => setPagoForm({ ...pagoForm, cuenta: e.target.value })}>{cuentasUsables.map(c => <option key={c}>{c}</option>)}</select></div>
+              <div className="field"><label>Cuenta de egreso *</label><select value={pagoForm.cuenta} onChange={e => setPagoForm({ ...pagoForm, cuenta: e.target.value })}><option value="">Seleccioná una cuenta…</option>{cuentasUsables.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
               <div className="field"><label>Monto</label><input type="number" step="0.01" value={pagoForm.monto} onChange={e => setPagoForm({ ...pagoForm, monto: e.target.value })} /></div>
               <div className="field"><label>Fecha</label><input type="date" value={pagoForm.fecha} onChange={e => setPagoForm({ ...pagoForm, fecha: e.target.value })} /></div>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setPagarModal(null)}>Cancelar</button><button className="btn btn-success" onClick={pagar} disabled={pagando}>{pagando ? "Procesando..." : "Confirmar Pago"}</button></div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setPagarModal(null)}>Cancelar</button><button className="btn btn-success" onClick={pagar} disabled={pagando || !pagoForm.cuenta}>{pagando ? "Procesando..." : "Confirmar Pago"}</button></div>
           </div>
         </div>
       )}
