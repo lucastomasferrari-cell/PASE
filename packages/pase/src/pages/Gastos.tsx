@@ -59,11 +59,33 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
   const [saving, setSaving] = useState(false);
   const [pagandoPlant, setPagandoPlant] = useState(false);
 
-  const emptyForm = { fecha: toISO(today), local_id: localActivo ? String(localActivo) : "", categoria: "", tipo: "fijo", monto: "", detalle: "", cuenta: "MercadoPago", plantilla_id: null as number | null };
+  // Bug Caja-1 (4-mayo): el default cuenta="MercadoPago" pisaba la elección
+  // del usuario cuando "MercadoPago" no estaba en cuentasUsables (encargados
+  // con cuentas_visibles restringidas). Anti-pattern de controlled <select>:
+  // value que no aparece en options → el browser muestra el primer option
+  // visualmente, pero el state sigue con el default y el RPC persiste contra
+  // la cuenta invisible. Default vacío fuerza la elección consciente.
+  const emptyForm = { fecha: toISO(today), local_id: localActivo ? String(localActivo) : "", categoria: "", tipo: "fijo", monto: "", detalle: "", cuenta: "", plantilla_id: null as number | null };
   const [form, setForm] = useState(emptyForm);
 
-  const emptyPagoPlant = { monto: "", fecha: toISO(today), cuenta: "MercadoPago" };
+  const emptyPagoPlant = { monto: "", fecha: toISO(today), cuenta: "" };
   const [pagoPlantForm, setPagoPlantForm] = useState(emptyPagoPlant);
+
+  // Defensive: si por alguna razón form.cuenta queda con un valor que no
+  // está en cuentasUsables (default viejo persistido en sessionStorage,
+  // future regression, etc.), reseteamos a "" para que el placeholder
+  // del <select> aparezca y el user tenga que elegir. NO borrar — esto
+  // previene el retorno del bug Caja-1.
+  useEffect(() => {
+    if (form.cuenta && !cuentasUsables.includes(form.cuenta)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setForm(f => ({ ...f, cuenta: "" }));
+    }
+    if (pagoPlantForm.cuenta && !cuentasUsables.includes(pagoPlantForm.cuenta)) {
+      setPagoPlantForm(p => ({ ...p, cuenta: "" }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.cuenta, pagoPlantForm.cuenta, cuentasUsables.join("|")]);
 
   const emptyPlantForm = { nombre: "", categoria: "", tipo: "fijo", local_id: "" };
   const [plantForm, setPlantForm] = useState(emptyPlantForm);
@@ -107,6 +129,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
   // ─── ACCIONES ──────────────────────────────────────────────────────────────
   const guardar = async () => {
     if (saving || !form.monto || !form.categoria) return;
+    if (!form.cuenta) { alert("Elegí una cuenta de egreso"); return; }
     setSaving(true);
     try {
       const tipo = getTipo();
@@ -139,6 +162,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
 
   const confirmarPagoPlantilla = async () => {
     if (pagandoPlant || !pagarModal || !pagoPlantForm.monto) return;
+    if (!pagoPlantForm.cuenta) { alert("Elegí una cuenta de egreso"); return; }
     setPagandoPlant(true);
     try {
       const monto = parseFloat(pagoPlantForm.monto);
@@ -291,16 +315,17 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
               </div>
               <div className="form2">
                 <div className="field"><label>Fecha</label><input type="date" value={form.fecha} onChange={e => setForm({ ...form, fecha: e.target.value })} /></div>
-                <div className="field"><label>Cuenta de egreso</label>
+                <div className="field"><label>Cuenta de egreso *</label>
                   <select value={form.cuenta} onChange={e => setForm({ ...form, cuenta: e.target.value })}>
-                    {cuentasUsables.map(c => <option key={c}>{c}</option>)}
+                    <option value="">Seleccioná una cuenta…</option>
+                    {cuentasUsables.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
               <div className="field"><label>Monto $</label><input type="number" value={form.monto} onChange={e => setForm({ ...form, monto: e.target.value })} placeholder="0" /></div>
               <div className="field"><label>Detalle (opcional)</label><input value={form.detalle} onChange={e => setForm({ ...form, detalle: e.target.value })} placeholder="Descripción..." /></div>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={saving}>{saving ? "Guardando..." : "Guardar"}</button></div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={saving || !form.cuenta || !form.monto || !form.categoria}>{saving ? "Guardando..." : "Guardar"}</button></div>
           </div>
         </div>
       )}
@@ -318,13 +343,14 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                 <div className="field"><label>Monto $ *</label><input type="number" value={pagoPlantForm.monto} onChange={e => setPagoPlantForm({ ...pagoPlantForm, monto: e.target.value })} placeholder="0" /></div>
                 <div className="field"><label>Fecha</label><input type="date" value={pagoPlantForm.fecha} onChange={e => setPagoPlantForm({ ...pagoPlantForm, fecha: e.target.value })} /></div>
               </div>
-              <div className="field"><label>Cuenta de egreso</label>
+              <div className="field"><label>Cuenta de egreso *</label>
                 <select value={pagoPlantForm.cuenta} onChange={e => setPagoPlantForm({ ...pagoPlantForm, cuenta: e.target.value })}>
-                  {CUENTAS.map(c => <option key={c}>{c}</option>)}
+                  <option value="">Seleccioná una cuenta…</option>
+                  {cuentasUsables.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setPagarModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={confirmarPagoPlantilla} disabled={pagandoPlant}>{pagandoPlant ? "Procesando..." : "Confirmar pago"}</button></div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setPagarModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={confirmarPagoPlantilla} disabled={pagandoPlant || !pagoPlantForm.cuenta || !pagoPlantForm.monto}>{pagandoPlant ? "Procesando..." : "Confirmar pago"}</button></div>
           </div>
         </div>
       )}
