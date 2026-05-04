@@ -8,6 +8,11 @@ export interface Movimiento {
   detalle: string | null;
   local_id: number | null;
   fact_id: string | null;
+  // gasto_id_ref se rellena cuando el movimiento fue creado por la RPC
+  // crear_gasto (carga desde el módulo Gastos): hace doble-insert atómico
+  // en gastos + movimientos y deja el FK en movimientos. Tesorería lo usa
+  // para mostrar un badge "vía Gastos" y aclarar que NO es un duplicado.
+  gasto_id_ref?: string | null;
   anulado: boolean;
   anulado_motivo: string | null;
   editado: boolean;

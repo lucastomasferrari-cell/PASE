@@ -377,7 +377,16 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
               <td><span className="badge" style={{background:"transparent",color:cc(m.cuenta),border:`1px solid ${cc(m.cuenta)}44`}}>{m.cuenta}</span></td>
               <td style={{fontSize:11,color:"var(--muted2)"}}>{m.tipo}</td>
               <td>{m.cat?<span className="badge b-muted">{m.cat}</span>:"—"}</td>
-              <td style={{fontSize:11,maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.detalle}</td>
+              <td style={{fontSize:11,maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                {m.gasto_id_ref && (
+                  <span
+                    className="badge b-muted"
+                    style={{fontSize:8,marginRight:6}}
+                    title="Originado en el módulo Gastos. NO es duplicado: la RPC crear_gasto inserta en gastos (vista granular) y movimientos (ledger contable) atómicamente."
+                  >vía Gastos</span>
+                )}
+                {m.detalle}
+              </td>
               <td><span className="num" style={{color:m.importe<0?"var(--danger)":"var(--success)"}}>{fmt_$(m.importe)}</span></td>
               <td>
                 {m.anulado && (

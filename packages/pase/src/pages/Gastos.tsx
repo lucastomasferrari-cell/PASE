@@ -292,6 +292,9 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-hd"><div className="modal-title">Cargar Gasto</div><button className="close-btn" onClick={() => setModal(false)}>✕</button></div>
             <div className="modal-body">
+              <div style={{fontSize:11,color:"var(--muted2)",padding:"8px 10px",background:"var(--s2)",borderRadius:"var(--r)",marginBottom:12,lineHeight:1.5}}>
+                Al cargar acá se registra el gasto <b>y</b> el movimiento de caja correspondiente. No lo cargues también desde Tesorería.
+              </div>
               <div className="form2">
                 {tipoFiltro === "todos" && (
                   <div className="field"><label>Tipo *</label>
