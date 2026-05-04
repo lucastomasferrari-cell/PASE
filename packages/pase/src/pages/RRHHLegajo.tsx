@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { cuentasVisibles } from "../lib/auth";
+import { cuentasOperables } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import {
@@ -44,8 +44,12 @@ interface RRHHLegajoProps {
 }
 
 export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RRHHLegajoProps) {
-  const visCuentas = cuentasVisibles(user);
-  const cuentasUsables = visCuentas === null ? CUENTAS_LIQ : CUENTAS_LIQ.filter(c => visCuentas.includes(c));
+  // Cuentas para los selects de pago de vacaciones, aguinaldo y liquidación
+  // final. Filtra por cuentas_operables — un usuario con permiso de cargar
+  // pagos puede no ver el saldo consolidado de la cuenta.
+  const opCuentas = cuentasOperables(user);
+  const cuentasUsables = opCuentas === null ? CUENTAS_LIQ : CUENTAS_LIQ.filter(c => opCuentas.includes(c));
+  const cuentasKey = cuentasUsables.join("|");
   const [emp, setEmp] = useState<Empleado | null>(null);
   const [tab, setTab] = useState("datos");
   const [loading, setLoading] = useState(true);
@@ -65,9 +69,10 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
   const [vacTomadas, setVacTomadas] = useState(0);
   const [vacModal, setVacModal] = useState(false);
   const [vacDias, setVacDias] = useState("");
-  const [vacLineas, setVacLineas] = useState<LineaPago[]>([{cuenta:"Caja Chica", monto:""}]);
+  // Bug Caja-1: default vacío fuerza elección consciente del user.
+  const [vacLineas, setVacLineas] = useState<LineaPago[]>([{cuenta:"", monto:""}]);
   const [aguModal, setAguModal] = useState(false);
-  const [aguLineas, setAguLineas] = useState<LineaPago[]>([{cuenta:"Caja Chica", monto:""}]);
+  const [aguLineas, setAguLineas] = useState<LineaPago[]>([{cuenta:"", monto:""}]);
 
   // Documentos
   const [docs, setDocs] = useState<DocumentoLegajo[]>([]);
@@ -79,11 +84,29 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
   const [liqFinalModal, setLiqFinalModal] = useState(false);
   const [liqFinalForm, setLiqFinalForm] = useState<LiqFinalForm>({ fecha_egreso: toISO(today), motivo: "Renuncia" });
   const [liqFinalData, setLiqFinalData] = useState<LiquidacionFinalResult | null>(null);
-  const [liqFinalCuenta, setLiqFinalCuenta] = useState("Caja Efectivo");
+  const [liqFinalCuenta, setLiqFinalCuenta] = useState("");
   const [liqFinalOverrides, setLiqFinalOverrides] = useState<Record<string, string>>({});
   const [liqFinalLoading, setLiqFinalLoading] = useState(false);
 
   const [toast, setToast] = useState("");
+
+  // Defensive (Bug Caja-1): si cualquiera de los state values de cuenta queda
+  // con un valor que no está en cuentasUsables (regression future, scope
+  // change), reseteamos a "" para que el placeholder del <select> aparezca.
+  // NO borrar — previene regresión del bug.
+  useEffect(() => {
+    if (liqFinalCuenta && !cuentasUsables.includes(liqFinalCuenta)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLiqFinalCuenta("");
+    }
+    if (vacLineas.some(l => l.cuenta && !cuentasUsables.includes(l.cuenta))) {
+      setVacLineas(prev => prev.map(l => l.cuenta && !cuentasUsables.includes(l.cuenta) ? { ...l, cuenta: "" } : l));
+    }
+    if (aguLineas.some(l => l.cuenta && !cuentasUsables.includes(l.cuenta))) {
+      setAguLineas(prev => prev.map(l => l.cuenta && !cuentasUsables.includes(l.cuenta) ? { ...l, cuenta: "" } : l));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liqFinalCuenta, vacLineas, aguLineas, cuentasKey]);
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
   const esDueno = user?.rol === "dueno" || user?.rol === "admin";
 
@@ -233,8 +256,10 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
     if (dias <= 0 || totalPagado <= 0) return;
 
     const lineas = vacLineas
-      .filter(l => (parseFloat(l.monto) || 0) > 0)
+      .filter(l => (parseFloat(l.monto) || 0) > 0 && !!l.cuenta)
       .map(l => ({ cuenta: l.cuenta, monto: parseFloat(l.monto) }));
+
+    if (lineas.length === 0) { showToast("Elegí una cuenta para cada línea de pago"); return; }
 
     const { error } = await db.rpc("pagar_vacaciones", {
       p_empleado_id: emp.id,
@@ -247,7 +272,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
 
     const pendiente = totalPagado < montoEsperado - 0.01;
     setVacModal(false); setVacDias("");
-    setVacLineas([{cuenta:"Caja Chica", monto:""}]);
+    setVacLineas([{cuenta:"", monto:""}]);
     showToast(pendiente ? `Pago parcial — Resta ${fmt_$(montoEsperado - totalPagado)}` : "Vacaciones pagadas");
     loadAll();
   };
@@ -260,8 +285,10 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
     if (totalPagado <= 0) return;
 
     const lineas = aguLineas
-      .filter(l => (parseFloat(l.monto) || 0) > 0)
+      .filter(l => (parseFloat(l.monto) || 0) > 0 && !!l.cuenta)
       .map(l => ({ cuenta: l.cuenta, monto: parseFloat(l.monto) }));
+
+    if (lineas.length === 0) { showToast("Elegí una cuenta para cada línea de pago"); return; }
 
     const { error } = await db.rpc("pagar_aguinaldo", {
       p_empleado_id: emp.id,
@@ -273,7 +300,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
 
     const pendiente = totalPagado < montoEsperado - 0.01;
     setAguModal(false);
-    setAguLineas([{cuenta:"Caja Chica", monto:""}]);
+    setAguLineas([{cuenta:"", monto:""}]);
     showToast(pendiente ? `Pago parcial — Resta ${fmt_$(montoEsperado - totalPagado)}` : "Aguinaldo pagado");
     loadAll();
   };
@@ -567,6 +594,7 @@ function TabDatos({
 
         const confirmarLiqFinal = async () => {
           if (!liqFinalData || liqFinalLoading) return;
+          if (!liqFinalCuenta) { showToast("Elegí una cuenta de egreso"); return; }
           setLiqFinalLoading(true);
           try {
             const { error } = await db.rpc("liquidacion_final_empleado", {
@@ -624,9 +652,10 @@ function TabDatos({
                     <span>TOTAL</span><span className="num" style={{color:"var(--success)",fontSize:15,fontWeight:500}}>{fmt_$(total)}</span>
                   </div>
                 </div>
-                <div className="field" style={{marginTop:12}}><label>Cuenta de egreso</label>
+                <div className="field" style={{marginTop:12}}><label>Cuenta de egreso *</label>
                   <select value={liqFinalCuenta} onChange={e => setLiqFinalCuenta(e.target.value)}>
-                    {cuentasUsables.map((c: string) => <option key={c}>{c}</option>)}
+                    <option value="">Seleccioná una cuenta…</option>
+                    {cuentasUsables.map((c: string) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
@@ -815,7 +844,7 @@ function TabVacAgu({
             {esDueno && !sinFechaInicio && vacAcumuladas > 0 && (
               <button className="btn btn-acc btn-sm" onClick={() => {
                 setVacDias(String(vacAcumuladas.toFixed(1)));
-                setVacLineas([{cuenta:"Caja Chica", monto: String(Math.round(plusVacacional))}]);
+                setVacLineas([{cuenta:"", monto: String(Math.round(plusVacacional))}]);
                 setVacModal(true);
               }}>Pagar vacaciones</button>
             )}
@@ -838,7 +867,7 @@ function TabVacAgu({
             </div>
             {esDueno && !sinSueldo && sacAcumulado > 0 && (
               <button className="btn btn-acc btn-sm" onClick={() => {
-                setAguLineas([{cuenta:"Caja Chica", monto: String(Math.round(sacAcumulado))}]);
+                setAguLineas([{cuenta:"", monto: String(Math.round(sacAcumulado))}]);
                 setAguModal(true);
               }}>Pagar aguinaldo</button>
             )}
@@ -874,7 +903,7 @@ function TabVacAgu({
         const totalPagado = vacLineas.reduce((s, l) => s + (parseFloat(l.monto) || 0), 0);
         const restante = plusVacacional - totalPagado;
         const esParcial = totalPagado > 0 && totalPagado < plusVacacional - 0.01;
-        const puedeConfirmar = totalPagado > 0 && vacLineas.every((l) => parseFloat(l.monto) > 0);
+        const puedeConfirmar = totalPagado > 0 && vacLineas.every((l) => parseFloat(l.monto) > 0 && !!l.cuenta);
         return (
           <div className="overlay" onClick={() => setVacModal(false)}>
             <div className="modal" style={{width:480}} onClick={e => e.stopPropagation()}>
@@ -888,11 +917,14 @@ function TabVacAgu({
                   <span style={{fontSize:14,fontWeight:500,color:"var(--acc)"}}>{fmt_$(plusVacacional)}</span>
                 </div>
                 <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Formas de pago</div>
+                {/* Bug Caja-1 fix: cada línea tiene placeholder y la validación
+                    de "puedeConfirmar" exige cuenta != "". */}
                 {vacLineas.map((l, i) => (
                   <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
                     <select className="search" style={{flex:1}} value={l.cuenta}
                       onChange={e => setVacLineas((prev) => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
-                      {cuentasUsables.map((c: string) => <option key={c}>{c}</option>)}
+                      <option value="">Seleccioná una cuenta…</option>
+                      {cuentasUsables.map((c: string) => <option key={c} value={c}>{c}</option>)}
                     </select>
                     <input type="number" className="search" style={{width:120}} placeholder="Monto" value={l.monto}
                       onChange={e => setVacLineas((prev) => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
@@ -900,7 +932,7 @@ function TabVacAgu({
                   </div>
                 ))}
                 <button className="btn btn-ghost btn-sm" style={{marginBottom:12}}
-                  onClick={() => setVacLineas((prev) => [...prev, { cuenta: "Caja Chica", monto: restante > 0 ? String(Math.round(restante)) : "" }])}>
+                  onClick={() => setVacLineas((prev) => [...prev, { cuenta: "", monto: restante > 0 ? String(Math.round(restante)) : "" }])}>
                   + Agregar forma de pago
                 </button>
                 <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
@@ -928,7 +960,7 @@ function TabVacAgu({
         const totalPagado = aguLineas.reduce((s, l) => s + (parseFloat(l.monto) || 0), 0);
         const restante = sacAcumulado - totalPagado;
         const esParcial = totalPagado > 0 && totalPagado < sacAcumulado - 0.01;
-        const puedeConfirmar = totalPagado > 0 && aguLineas.every((l) => parseFloat(l.monto) > 0);
+        const puedeConfirmar = totalPagado > 0 && aguLineas.every((l) => parseFloat(l.monto) > 0 && !!l.cuenta);
         return (
           <div className="overlay" onClick={() => setAguModal(false)}>
             <div className="modal" style={{width:480}} onClick={e => e.stopPropagation()}>
@@ -944,7 +976,8 @@ function TabVacAgu({
                   <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
                     <select className="search" style={{flex:1}} value={l.cuenta}
                       onChange={e => setAguLineas((prev) => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
-                      {cuentasUsables.map((c: string) => <option key={c}>{c}</option>)}
+                      <option value="">Seleccioná una cuenta…</option>
+                      {cuentasUsables.map((c: string) => <option key={c} value={c}>{c}</option>)}
                     </select>
                     <input type="number" className="search" style={{width:120}} placeholder="Monto" value={l.monto}
                       onChange={e => setAguLineas((prev) => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
@@ -952,7 +985,7 @@ function TabVacAgu({
                   </div>
                 ))}
                 <button className="btn btn-ghost btn-sm" style={{marginBottom:12}}
-                  onClick={() => setAguLineas((prev) => [...prev, { cuenta: "Caja Chica", monto: restante > 0 ? String(Math.round(restante)) : "" }])}>
+                  onClick={() => setAguLineas((prev) => [...prev, { cuenta: "", monto: restante > 0 ? String(Math.round(restante)) : "" }])}>
                   + Agregar forma de pago
                 </button>
                 <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
