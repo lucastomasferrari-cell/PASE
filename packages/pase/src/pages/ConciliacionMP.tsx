@@ -225,12 +225,21 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
 
   const [syncCountdown,setSyncCountdown]=useState(0);
 
+  // Devuelve los headers de auth para los endpoints /api/mp-*. El backend
+  // (api/_cron-auth.js) valida el JWT contra Supabase Auth + tabla usuarios
+  // y solo deja pasar dueno/admin/cajero/superadmin.
+  const authHeader = async (): Promise<Record<string, string>> => {
+    const { data: { session } } = await db.auth.getSession();
+    return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+  };
+
   const sincronizar=async()=>{
     setSincronizando(true);
     setSyncCountdown(120);
     try{
+      const auth = await authHeader();
       // Paso 1: generar CSV (< 5s)
-      const genRes=await fetch("/api/mp-generate",{method:"POST"});
+      const genRes=await fetch("/api/mp-generate",{method:"POST",headers:auth});
       const genData=await genRes.json().catch(()=>({ok:false}));
       // TODO(lint-cleanup): Date.now() está dentro de un async event handler
       // (sincronizar()), no durante render — falso positivo del linter.
@@ -257,7 +266,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
 
       // Paso 3: procesar CSV + calcular saldo
       setSyncCountdown(-1); // indica "procesando"
-      const procRes=await fetch("/api/mp-process",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ts})});
+      const procRes=await fetch("/api/mp-process",{method:"POST",headers:{"Content-Type":"application/json",...auth},body:JSON.stringify({ts})});
       const d=await procRes.json().catch(()=>({ok:false,error:"respuesta no-JSON del servidor"}));
 
       console.groupCollapsed("%c[MP] /api/mp-process response","color:#3ECFCF;font-weight:600");
@@ -315,7 +324,8 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
     if(!confirm(`Borrar todos los movimientos MP de ${nombre||"este local"} y re-sincronizar? Esta acción no se puede deshacer.`))return;
     setSincronizando(true);
     try{
-      const r=await fetch("/api/mp-sync?reset="+encodeURIComponent(localId),{method:"POST"});
+      const auth = await authHeader();
+      const r=await fetch("/api/mp-sync?reset="+encodeURIComponent(localId),{method:"POST",headers:auth});
       const d=await r.json();
       console.log("[MP] reset response:",d);
       if(d.ok){
