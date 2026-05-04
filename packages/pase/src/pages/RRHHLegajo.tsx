@@ -10,7 +10,49 @@ import {
   calcularSACMejorSueldo,
   mesesTrabajadosEnSemestre,
   calcularLiquidacionFinal,
+  type LiquidacionFinalResult,
 } from "../lib/calculos/rrhh";
+import type { Usuario, Local } from "../types/auth";
+import type { Empleado, Novedad, Liquidacion, PagoEspecial, HistorialSueldo } from "../types/rrhh";
+
+// Linea de pago (cuenta + monto en string desde el input). Se usa en vacLineas
+// y aguLineas — el monto viene como string desde el input numérico y se parsea
+// con parseFloat al sumar/enviar.
+interface LineaPago { cuenta: string; monto: string }
+
+// Forma del registro adelanto leído de DB (rrhh_adelantos). NO está en
+// types/rrhh.ts porque es interno a este archivo y al de RRHH.tsx; si después
+// hace falta compartirlo se mueve.
+interface Adelanto {
+  id: number;
+  empleado_id: string;
+  fecha: string;
+  monto: number;
+  cuenta: string | null;
+  descontado: boolean;
+}
+
+// Documento del legajo (rrhh_documentos).
+interface DocumentoLegajo {
+  id: number;
+  empleado_id: string;
+  tipo: string;
+  nombre_archivo: string;
+  url: string;
+  mes: number | null;
+  anio: number | null;
+  subido_at: string;
+  subido_por: number | null;
+}
+
+// Novedad con liquidaciones nested (Supabase devuelve liquidaciones como
+// array — la convención del codebase es tomar el [0] como la "actual").
+interface NovedadConLiquidaciones extends Novedad {
+  rrhh_liquidaciones?: Liquidacion[];
+}
+
+// Forma del state liqFinalForm.
+interface LiqFinalForm { fecha_egreso: string; motivo: string }
 
 const MESES = ["","Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const DOC_TIPOS = [
@@ -23,42 +65,53 @@ const DOC_TIPOS = [
 ];
 const CUENTAS_LIQ = ["Caja Efectivo","Caja Chica","Caja Mayor","MercadoPago","Banco"];
 
-export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: any) {
+interface RRHHLegajoProps {
+  empleadoId: string;
+  user: Usuario;
+  locales: Local[];
+  // El parent (RRHH.tsx) pasa onClose pero el componente no lo usa internamente
+  // — el cierre del legajo viene del cambio de tab. Aceptado en el contrato
+  // para que el caller no rompa.
+  onClose?: () => void;
+  onGoToPago?: (emp: Empleado, nov: Novedad) => void;
+}
+
+export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RRHHLegajoProps) {
   const visCuentas = cuentasVisibles(user);
   const cuentasUsables = visCuentas === null ? CUENTAS_LIQ : CUENTAS_LIQ.filter(c => visCuentas.includes(c));
-  const [emp, setEmp] = useState<any>(null);
+  const [emp, setEmp] = useState<Empleado | null>(null);
   const [tab, setTab] = useState("datos");
   const [loading, setLoading] = useState(true);
 
   // Datos
-  const [histSueldos, setHistSueldos] = useState<any[]>([]);
+  const [histSueldos, setHistSueldos] = useState<HistorialSueldo[]>([]);
   const [sueldoModal, setSueldoModal] = useState(false);
   const [sueldoForm, setSueldoForm] = useState({ monto:"", motivo:"" });
 
   // Movimientos
-  const [movMeses, setMovMeses] = useState<any[]>([]);
+  const [movMeses, setMovMeses] = useState<NovedadConLiquidaciones[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   // Vacaciones/Aguinaldo
-  const [pagosEsp, setPagosEsp] = useState<any[]>([]);
-  const [adelantos, setAdelantos] = useState<any[]>([]);
+  const [pagosEsp, setPagosEsp] = useState<PagoEspecial[]>([]);
+  const [adelantos, setAdelantos] = useState<Adelanto[]>([]);
   const [vacTomadas, setVacTomadas] = useState(0);
   const [vacModal, setVacModal] = useState(false);
   const [vacDias, setVacDias] = useState("");
-  const [vacLineas, setVacLineas] = useState<{cuenta:string, monto:string}[]>([{cuenta:"Caja Chica", monto:""}]);
+  const [vacLineas, setVacLineas] = useState<LineaPago[]>([{cuenta:"Caja Chica", monto:""}]);
   const [aguModal, setAguModal] = useState(false);
-  const [aguLineas, setAguLineas] = useState<{cuenta:string, monto:string}[]>([{cuenta:"Caja Chica", monto:""}]);
+  const [aguLineas, setAguLineas] = useState<LineaPago[]>([{cuenta:"Caja Chica", monto:""}]);
 
   // Documentos
-  const [docs, setDocs] = useState<any[]>([]);
+  const [docs, setDocs] = useState<DocumentoLegajo[]>([]);
   const [docModal, setDocModal] = useState(false);
   const [docForm, setDocForm] = useState({ tipo:"otro", mes:"", anio:"" });
   const [uploading, setUploading] = useState(false);
 
   // Liquidación final
   const [liqFinalModal, setLiqFinalModal] = useState(false);
-  const [liqFinalForm, setLiqFinalForm] = useState({ fecha_egreso: toISO(today), motivo: "Renuncia" });
-  const [liqFinalData, setLiqFinalData] = useState<any>(null);
+  const [liqFinalForm, setLiqFinalForm] = useState<LiqFinalForm>({ fecha_egreso: toISO(today), motivo: "Renuncia" });
+  const [liqFinalData, setLiqFinalData] = useState<LiquidacionFinalResult | null>(null);
   const [liqFinalCuenta, setLiqFinalCuenta] = useState("Caja Efectivo");
   const [liqFinalOverrides, setLiqFinalOverrides] = useState<Record<string, string>>({});
   const [liqFinalLoading, setLiqFinalLoading] = useState(false);
@@ -70,18 +123,19 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: an
   // ─── LOAD ──────────────────────────────────────────────────────────────────
   const loadEmp = async () => {
     const { data } = await db.from("rrhh_empleados").select("*").eq("id", empleadoId).single();
-    setEmp(data);
-    return data;
+    const empData = (data as Empleado | null) ?? null;
+    setEmp(empData);
+    return empData;
   };
 
   const loadHistSueldos = async () => {
     const { data } = await db.from("rrhh_historial_sueldos").select("*").eq("empleado_id", empleadoId).order("fecha_cambio", { ascending: false });
-    setHistSueldos(data || []);
+    setHistSueldos((data as HistorialSueldo[]) || []);
   };
 
   const loadMovimientos = async () => {
     const { data: novs } = await db.from("rrhh_novedades").select("*, rrhh_liquidaciones(*)").eq("empleado_id", empleadoId).order("anio", { ascending: false }).order("mes", { ascending: false });
-    setMovMeses(novs || []);
+    setMovMeses((novs as NovedadConLiquidaciones[]) || []);
   };
 
   const loadVacTomadas = async () => {
@@ -92,17 +146,17 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: an
 
   const loadPagosEsp = async () => {
     const { data } = await db.from("rrhh_pagos_especiales").select("*").eq("empleado_id", empleadoId).order("pagado_at", { ascending: false });
-    setPagosEsp(data || []);
+    setPagosEsp((data as PagoEspecial[]) || []);
   };
 
   const loadAdelantos = async () => {
     const { data } = await db.from("rrhh_adelantos").select("*").eq("empleado_id", empleadoId).order("fecha", { ascending: false });
-    setAdelantos(data || []);
+    setAdelantos((data as Adelanto[]) || []);
   };
 
   const loadDocs = async () => {
     const { data } = await db.from("rrhh_documentos").select("*").eq("empleado_id", empleadoId).order("subido_at", { ascending: false });
-    setDocs(data || []);
+    setDocs((data as DocumentoLegajo[]) || []);
   };
 
   const loadAll = async () => {
@@ -115,14 +169,17 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: an
 
   // Recalcular liquidación final cuando cambia fecha/motivo o abre el modal
   useEffect(() => {
-    if (!liqFinalModal || !emp) return;
+    if (!liqFinalModal || !emp || !emp.fecha_inicio) return;
     const vacAcum = calcularVacaciones(emp.fecha_inicio, vacTomadas);
+    // El select del UI sólo permite estos 4 motivos — el cast estrecha el tipo
+    // string del state al union literal que espera calcularLiquidacionFinal.
+    const motivo = liqFinalForm.motivo as "Renuncia" | "Despido sin causa" | "Despido con causa" | "Acuerdo mutuo";
     const lf = calcularLiquidacionFinal({
       sueldo_mensual: Number(emp.sueldo_mensual),
       fecha_inicio: emp.fecha_inicio,
       fecha_egreso: liqFinalForm.fecha_egreso,
       vacaciones_acumuladas: vacAcum,
-      motivo: liqFinalForm.motivo as any,
+      motivo,
     });
     setLiqFinalData(lf);
   }, [liqFinalModal, liqFinalForm.fecha_egreso, liqFinalForm.motivo, emp?.sueldo_mensual, emp?.fecha_inicio, vacTomadas]);
@@ -132,7 +189,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: an
 
   if (loading || !emp) return <div className="loading">Cargando legajo...</div>;
 
-  const localNombre = locales.find((l: any) => l.id === emp.local_id)?.nombre || "—";
+  const localNombre = locales.find((l) => l.id === emp.local_id)?.nombre || "—";
   const valorDia = emp.sueldo_mensual / 30;
   const valorDiaVacacional = emp.sueldo_mensual / 25; // LCT Art 155
 
@@ -192,9 +249,10 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: an
   const plusVacacional = vacAcumuladas * valorDiaVacacional;
 
   const pagarVacaciones = async () => {
+    if (!emp) return;
     const dias = parseFloat(vacDias) || vacAcumuladas;
     const montoEsperado = plusVacacional;
-    const totalPagado = vacLineas.reduce((s: number, l: any) => s + (parseFloat(l.monto) || 0), 0);
+    const totalPagado = vacLineas.reduce((s, l) => s + (parseFloat(l.monto) || 0), 0);
     if (dias <= 0 || totalPagado <= 0) return;
 
     const lineas = vacLineas
@@ -219,8 +277,9 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: an
 
   // ─── ACCIONES: AGUINALDO ───────────────────────────────────────────────────
   const pagarAguinaldo = async () => {
+    if (!emp) return;
     const montoEsperado = sacAcumulado;
-    const totalPagado = aguLineas.reduce((s: number, l: any) => s + (parseFloat(l.monto) || 0), 0);
+    const totalPagado = aguLineas.reduce((s, l) => s + (parseFloat(l.monto) || 0), 0);
     if (totalPagado <= 0) return;
 
     const lineas = aguLineas
@@ -244,7 +303,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: an
 
   // ─── ACCIONES: DOCUMENTOS ─────────────────────────────────────────────────
   const subirDoc = async (file: File) => {
-    if (!file || uploading) return;
+    if (!file || uploading || !emp) return;
     setUploading(true);
     const ext = file.name.split(".").pop();
     const path = `${emp.id}/${docForm.tipo}/${Date.now()}.${ext}`;
@@ -261,12 +320,12 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: an
     loadDocs();
   };
 
-  const verDoc = async (doc: any) => {
+  const verDoc = async (doc: DocumentoLegajo) => {
     const { data } = await db.storage.from("rrhh-documentos").createSignedUrl(doc.url, 3600);
     if (data?.signedUrl) window.open(data.signedUrl, "_blank");
   };
 
-  const eliminarDoc = async (doc: any) => {
+  const eliminarDoc = async (doc: DocumentoLegajo) => {
     if (!confirm("Eliminar documento?")) return;
     await db.storage.from("rrhh-documentos").remove([doc.url]);
     await db.from("rrhh_documentos").delete().eq("id", doc.id);
@@ -325,7 +384,6 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: an
           setLiqFinalOverrides={setLiqFinalOverrides}
           liqFinalLoading={liqFinalLoading}
           setLiqFinalLoading={setLiqFinalLoading}
-          user={user}
           cuentasUsables={cuentasUsables}
           showToast={showToast}
           loadAll={loadAll}
@@ -397,6 +455,34 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: an
 
 // ─── SUB-COMPONENTES ─────────────────────────────────────────────────────────
 
+interface TabDatosProps {
+  emp: Empleado;
+  histSueldos: HistorialSueldo[];
+  antiguedadAnios: number;
+  vacAcumuladas: number;
+  esDueno: boolean;
+  sueldoModal: boolean;
+  setSueldoModal: React.Dispatch<React.SetStateAction<boolean>>;
+  sueldoForm: { monto: string; motivo: string };
+  setSueldoForm: React.Dispatch<React.SetStateAction<{ monto: string; motivo: string }>>;
+  guardarSueldo: () => Promise<void>;
+  toggleActivo: () => Promise<void>;
+  liqFinalModal: boolean;
+  setLiqFinalModal: React.Dispatch<React.SetStateAction<boolean>>;
+  liqFinalForm: LiqFinalForm;
+  setLiqFinalForm: React.Dispatch<React.SetStateAction<LiqFinalForm>>;
+  liqFinalData: LiquidacionFinalResult | null;
+  liqFinalCuenta: string;
+  setLiqFinalCuenta: React.Dispatch<React.SetStateAction<string>>;
+  liqFinalOverrides: Record<string, string>;
+  setLiqFinalOverrides: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  liqFinalLoading: boolean;
+  setLiqFinalLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  cuentasUsables: string[];
+  showToast: (msg: string) => void;
+  loadAll: () => Promise<void>;
+}
+
 function TabDatos({
   emp, histSueldos, antiguedadAnios, vacAcumuladas, esDueno,
   sueldoModal, setSueldoModal, sueldoForm, setSueldoForm, guardarSueldo, toggleActivo,
@@ -404,7 +490,7 @@ function TabDatos({
   liqFinalCuenta, setLiqFinalCuenta, liqFinalOverrides, setLiqFinalOverrides,
   liqFinalLoading, setLiqFinalLoading,
   cuentasUsables, showToast, loadAll,
-}: any) {
+}: TabDatosProps) {
   return (
     <>
       <div className="grid3" style={{marginBottom:16}}>
@@ -429,7 +515,7 @@ function TabDatos({
         </div>
         {histSueldos.length === 0 ? <div className="empty">Sin cambios de sueldo registrados</div> : (
           <table><thead><tr><th>Fecha</th><th style={{textAlign:"right"}}>Anterior</th><th style={{textAlign:"right"}}>Nuevo</th><th>Motivo</th></tr></thead>
-          <tbody>{histSueldos.map((h: any) => (
+          <tbody>{histSueldos.map((h) => (
             <tr key={h.id}>
               <td className="mono">{fmt_d(h.fecha_cambio)}</td>
               <td style={{textAlign:"right"}}><span className="num" style={{color:"var(--muted2)"}}>{fmt_$(h.sueldo_anterior)}</span></td>
@@ -463,7 +549,11 @@ function TabDatos({
         const esAcuerdoMutuo = liqFinalForm.motivo === "Acuerdo mutuo";
         const antAnios = Math.max(1, Math.floor(antiguedadAnios));
 
-        const conceptos: [string, string][] = [
+        // Las keys del array conceptos son CAMPOS de LiquidacionFinalResult.
+        // Tipar como keyof permite acceder liqFinalData?.[k] sin error de
+        // index signature.
+        type ConceptoKey = keyof LiquidacionFinalResult;
+        const conceptos: [ConceptoKey, string][] = [
           ["proporcional_mes", "Proporcional mes"],
           ["vacaciones_dinero", "Vacaciones (" + vacAcumuladas.toFixed(1) + " días)"],
           ["sac_proporcional", "SAC proporcional"],
@@ -471,10 +561,10 @@ function TabDatos({
             ["indemnizacion", "Indemnización (" + antAnios + " año" + (antAnios > 1 ? "s" : "") + ")"],
             ["preaviso", "Preaviso"],
             ["integracion_mes", "Integración mes despido"],
-          ] as [string, string][]) : []),
+          ] as [ConceptoKey, string][]) : []),
         ];
 
-        const getConceptoMonto = (key: string, calculado: number) => {
+        const getConceptoMonto = (key: ConceptoKey, calculado: number) => {
           if (esAcuerdoMutuo && liqFinalOverrides[key] !== undefined) {
             return parseFloat(liqFinalOverrides[key]) || 0;
           }
@@ -532,7 +622,7 @@ function TabDatos({
                           <input
                             type="number"
                             value={liqFinalOverrides[key] ?? String(calc)}
-                            onChange={e => setLiqFinalOverrides((prev: any) => ({...prev, [key]: e.target.value}))}
+                            onChange={e => setLiqFinalOverrides((prev) => ({...prev, [key]: e.target.value}))}
                             style={{width:130,background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--acc)",padding:"3px 6px",fontFamily:"'DM Mono',monospace",fontSize:11,textAlign:"right",borderRadius:"var(--r)"}}
                           />
                         ) : (
@@ -563,7 +653,17 @@ function TabDatos({
   );
 }
 
-function TabMovimientos({ emp, movMeses, expanded, setExpanded, esDueno, adelantos, onGoToPago }: any) {
+interface TabMovimientosProps {
+  emp: Empleado;
+  movMeses: NovedadConLiquidaciones[];
+  expanded: string | null;
+  setExpanded: React.Dispatch<React.SetStateAction<string | null>>;
+  esDueno: boolean;
+  adelantos: Adelanto[];
+  onGoToPago?: (emp: Empleado, nov: Novedad) => void;
+}
+
+function TabMovimientos({ emp, movMeses, expanded, setExpanded, esDueno, adelantos, onGoToPago }: TabMovimientosProps) {
   return (
     <>
       {(adelantos || []).length > 0 && (
@@ -571,7 +671,7 @@ function TabMovimientos({ emp, movMeses, expanded, setExpanded, esDueno, adelant
           <div className="panel-hd"><span className="panel-title">Adelantos</span></div>
           <table>
             <thead><tr><th>Fecha</th><th>Cuenta</th><th style={{textAlign:"right"}}>Monto</th><th>Estado</th></tr></thead>
-            <tbody>{adelantos.map((a: any) => (
+            <tbody>{adelantos.map((a) => (
               <tr key={a.id}>
                 <td className="mono">{fmt_d(a.fecha)}</td>
                 <td style={{fontSize:11,color:"var(--muted2)"}}>{a.cuenta || "—"}</td>
@@ -588,7 +688,7 @@ function TabMovimientos({ emp, movMeses, expanded, setExpanded, esDueno, adelant
         </div>
       )}
 
-      {movMeses.length === 0 ? <div className="empty">Sin movimientos registrados</div> : movMeses.map((nov: any) => {
+      {movMeses.length === 0 ? <div className="empty">Sin movimientos registrados</div> : movMeses.map((nov) => {
         const liqArr = Array.isArray(nov.rrhh_liquidaciones) ? nov.rrhh_liquidaciones : [];
         const liq = liqArr[0];
         const key = `${nov.anio}-${nov.mes}`;
@@ -660,6 +760,37 @@ function TabMovimientos({ emp, movMeses, expanded, setExpanded, esDueno, adelant
   );
 }
 
+interface TabVacAguProps {
+  vacAcumuladas: number;
+  vacTomadas: number;
+  valorDia: number;
+  plusVacacional: number;
+  diasVacAnuales: number;
+  diasVacPorMes: number;
+  antiguedadAnios: number;
+  sinFechaInicio: boolean;
+  sinSueldo: boolean;
+  sacAcumulado: number;
+  sacTeorico: number;
+  mesActual: number;
+  mesesEnSemestre: number;
+  pagosEsp: PagoEspecial[];
+  esDueno: boolean;
+  vacModal: boolean;
+  setVacModal: React.Dispatch<React.SetStateAction<boolean>>;
+  vacDias: string;
+  setVacDias: React.Dispatch<React.SetStateAction<string>>;
+  vacLineas: LineaPago[];
+  setVacLineas: React.Dispatch<React.SetStateAction<LineaPago[]>>;
+  aguModal: boolean;
+  setAguModal: React.Dispatch<React.SetStateAction<boolean>>;
+  aguLineas: LineaPago[];
+  setAguLineas: React.Dispatch<React.SetStateAction<LineaPago[]>>;
+  pagarVacaciones: () => Promise<void>;
+  pagarAguinaldo: () => Promise<void>;
+  cuentasUsables: string[];
+}
+
 function TabVacAgu({
   vacAcumuladas, vacTomadas, valorDia, plusVacacional,
   diasVacAnuales, diasVacPorMes, antiguedadAnios, sinFechaInicio, sinSueldo,
@@ -669,7 +800,7 @@ function TabVacAgu({
   aguModal, setAguModal, aguLineas, setAguLineas,
   pagarVacaciones, pagarAguinaldo,
   cuentasUsables,
-}: any) {
+}: TabVacAguProps) {
   return (
     <>
       <div className="grid2" style={{marginBottom:20}}>
@@ -731,7 +862,7 @@ function TabVacAgu({
         <div className="panel-hd"><span className="panel-title">Historial de pagos especiales</span></div>
         {pagosEsp.length === 0 ? <div className="empty">Sin pagos registrados</div> : (
           <table><thead><tr><th>Fecha</th><th>Tipo</th><th>Días</th><th style={{textAlign:"right"}}>Monto</th><th>Estado</th></tr></thead>
-          <tbody>{pagosEsp.map((p: any) => {
+          <tbody>{pagosEsp.map((p) => {
             const montoMostrado = Number(p.monto_pagado) > 0 ? Number(p.monto_pagado) : Number(p.monto);
             return (
               <tr key={p.id}>
@@ -751,10 +882,10 @@ function TabVacAgu({
 
       {/* Modal vacaciones */}
       {vacModal && (() => {
-        const totalPagado = vacLineas.reduce((s: number, l: any) => s + (parseFloat(l.monto) || 0), 0);
+        const totalPagado = vacLineas.reduce((s, l) => s + (parseFloat(l.monto) || 0), 0);
         const restante = plusVacacional - totalPagado;
         const esParcial = totalPagado > 0 && totalPagado < plusVacacional - 0.01;
-        const puedeConfirmar = totalPagado > 0 && vacLineas.every((l: any) => parseFloat(l.monto) > 0);
+        const puedeConfirmar = totalPagado > 0 && vacLineas.every((l) => parseFloat(l.monto) > 0);
         return (
           <div className="overlay" onClick={() => setVacModal(false)}>
             <div className="modal" style={{width:480}} onClick={e => e.stopPropagation()}>
@@ -768,19 +899,19 @@ function TabVacAgu({
                   <span style={{fontSize:14,fontWeight:500,color:"var(--acc)"}}>{fmt_$(plusVacacional)}</span>
                 </div>
                 <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Formas de pago</div>
-                {vacLineas.map((l: any, i: number) => (
+                {vacLineas.map((l, i) => (
                   <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
                     <select className="search" style={{flex:1}} value={l.cuenta}
-                      onChange={e => setVacLineas((prev: any) => prev.map((f: any, j: number) => j === i ? { ...f, cuenta: e.target.value } : f))}>
+                      onChange={e => setVacLineas((prev) => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
                       {cuentasUsables.map((c: string) => <option key={c}>{c}</option>)}
                     </select>
                     <input type="number" className="search" style={{width:120}} placeholder="Monto" value={l.monto}
-                      onChange={e => setVacLineas((prev: any) => prev.map((f: any, j: number) => j === i ? { ...f, monto: e.target.value } : f))} />
-                    {vacLineas.length > 1 && <button className="btn btn-danger btn-sm" onClick={() => setVacLineas((prev: any) => prev.filter((_: any, j: number) => j !== i))}>✕</button>}
+                      onChange={e => setVacLineas((prev) => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
+                    {vacLineas.length > 1 && <button className="btn btn-danger btn-sm" onClick={() => setVacLineas((prev) => prev.filter((_, j) => j !== i))}>✕</button>}
                   </div>
                 ))}
                 <button className="btn btn-ghost btn-sm" style={{marginBottom:12}}
-                  onClick={() => setVacLineas((prev: any) => [...prev, { cuenta: "Caja Chica", monto: restante > 0 ? String(Math.round(restante)) : "" }])}>
+                  onClick={() => setVacLineas((prev) => [...prev, { cuenta: "Caja Chica", monto: restante > 0 ? String(Math.round(restante)) : "" }])}>
                   + Agregar forma de pago
                 </button>
                 <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
@@ -805,10 +936,10 @@ function TabVacAgu({
 
       {/* Modal aguinaldo */}
       {aguModal && (() => {
-        const totalPagado = aguLineas.reduce((s: number, l: any) => s + (parseFloat(l.monto) || 0), 0);
+        const totalPagado = aguLineas.reduce((s, l) => s + (parseFloat(l.monto) || 0), 0);
         const restante = sacAcumulado - totalPagado;
         const esParcial = totalPagado > 0 && totalPagado < sacAcumulado - 0.01;
-        const puedeConfirmar = totalPagado > 0 && aguLineas.every((l: any) => parseFloat(l.monto) > 0);
+        const puedeConfirmar = totalPagado > 0 && aguLineas.every((l) => parseFloat(l.monto) > 0);
         return (
           <div className="overlay" onClick={() => setAguModal(false)}>
             <div className="modal" style={{width:480}} onClick={e => e.stopPropagation()}>
@@ -820,19 +951,19 @@ function TabVacAgu({
                 </div>
                 <div style={{fontSize:10,color:"var(--muted2)",marginBottom:12}}>Teórico semestre completo: {fmt_$(sacTeorico)}</div>
                 <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Formas de pago</div>
-                {aguLineas.map((l: any, i: number) => (
+                {aguLineas.map((l, i) => (
                   <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
                     <select className="search" style={{flex:1}} value={l.cuenta}
-                      onChange={e => setAguLineas((prev: any) => prev.map((f: any, j: number) => j === i ? { ...f, cuenta: e.target.value } : f))}>
+                      onChange={e => setAguLineas((prev) => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
                       {cuentasUsables.map((c: string) => <option key={c}>{c}</option>)}
                     </select>
                     <input type="number" className="search" style={{width:120}} placeholder="Monto" value={l.monto}
-                      onChange={e => setAguLineas((prev: any) => prev.map((f: any, j: number) => j === i ? { ...f, monto: e.target.value } : f))} />
-                    {aguLineas.length > 1 && <button className="btn btn-danger btn-sm" onClick={() => setAguLineas((prev: any) => prev.filter((_: any, j: number) => j !== i))}>✕</button>}
+                      onChange={e => setAguLineas((prev) => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
+                    {aguLineas.length > 1 && <button className="btn btn-danger btn-sm" onClick={() => setAguLineas((prev) => prev.filter((_, j) => j !== i))}>✕</button>}
                   </div>
                 ))}
                 <button className="btn btn-ghost btn-sm" style={{marginBottom:12}}
-                  onClick={() => setAguLineas((prev: any) => [...prev, { cuenta: "Caja Chica", monto: restante > 0 ? String(Math.round(restante)) : "" }])}>
+                  onClick={() => setAguLineas((prev) => [...prev, { cuenta: "Caja Chica", monto: restante > 0 ? String(Math.round(restante)) : "" }])}>
                   + Agregar forma de pago
                 </button>
                 <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
@@ -858,11 +989,24 @@ function TabVacAgu({
   );
 }
 
+interface TabDocumentosProps {
+  docs: DocumentoLegajo[];
+  esDueno: boolean;
+  docModal: boolean;
+  setDocModal: React.Dispatch<React.SetStateAction<boolean>>;
+  docForm: { tipo: string; mes: string; anio: string };
+  setDocForm: React.Dispatch<React.SetStateAction<{ tipo: string; mes: string; anio: string }>>;
+  uploading: boolean;
+  subirDoc: (file: File) => Promise<void>;
+  verDoc: (doc: DocumentoLegajo) => Promise<void>;
+  eliminarDoc: (doc: DocumentoLegajo) => Promise<void>;
+}
+
 function TabDocumentos({
   docs, esDueno,
   docModal, setDocModal, docForm, setDocForm,
   uploading, subirDoc, verDoc, eliminarDoc,
-}: any) {
+}: TabDocumentosProps) {
   return (
     <>
       <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
@@ -871,7 +1015,7 @@ function TabDocumentos({
       <div className="panel">
         {docs.length === 0 ? <div className="empty">Sin documentos</div> : (
           <table><thead><tr><th>Nombre</th><th>Tipo</th><th>Período</th><th>Fecha</th><th></th></tr></thead>
-          <tbody>{docs.map((d: any) => (
+          <tbody>{docs.map((d) => (
             <tr key={d.id}>
               <td style={{fontWeight:500,fontSize:11}}>{d.nombre_archivo}</td>
               <td><span className="badge b-info">{DOC_TIPOS.find(t => t.value === d.tipo)?.label || d.tipo}</span></td>

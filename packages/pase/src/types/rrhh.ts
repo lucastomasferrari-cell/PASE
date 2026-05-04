@@ -48,6 +48,10 @@ export interface Liquidacion {
   adelantos: number;
   pagos_realizados: number;
   total_a_pagar: number;
+  // Totales por forma de pago. Migration 20260423_rpc_pagos_atomicos los
+  // populates en INSERT desde p_calc->>'efectivo' / 'transferencia'.
+  efectivo: number;
+  transferencia: number;
   estado: "pendiente" | "pagado";
   gasto_id: string | null;
   pagado_at: string | null;
@@ -61,6 +65,12 @@ export interface PagoEspecial {
   empleado_id: string;
   tipo: "vacaciones" | "aguinaldo" | "liquidacion_final";
   monto: number;
+  // monto_pagado y pendiente reflejan el flow de "pago parcial". Si el user
+  // pagó solo una parte del monto esperado, monto_pagado < monto y
+  // pendiente = true. Migration 20260423_rpc_pagos_atomicos los popula en
+  // pagar_vacaciones / pagar_aguinaldo.
+  monto_pagado?: number;
+  pendiente?: boolean;
   dias?: number;
   gasto_id: string | null;
   pagado_por: string | null;
