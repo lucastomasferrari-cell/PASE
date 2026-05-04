@@ -76,3 +76,27 @@ export interface HistorialSueldo {
   registrado_por: string | null;
   fecha_cambio?: string;
 }
+
+// ─── Tipos de joins comunes ─────────────────────────────────────────────────
+// Supabase tipa los nested FK como array por default. Estas interfaces reflejan
+// que en este codebase las relaciones son conceptualmente 1:1 y siempre se
+// acceden como objeto (las cast manuales `as unknown as { ... }` se reemplazan
+// por estos tipos cuando aplican).
+
+export interface EmpleadoMin {
+  nombre: string;
+  apellido: string;
+  puesto: string;
+  local_id: number;
+}
+
+export interface NovedadConEmpleado {
+  mes: number;
+  anio: number;
+  empleado_id: string;
+  rrhh_empleados: EmpleadoMin | null;
+}
+
+export interface LiquidacionConEmpleado extends Liquidacion {
+  rrhh_novedades: NovedadConEmpleado | null;
+}

@@ -5,15 +5,23 @@ import { useCategorias } from "../lib/useCategorias";
 import { useMediosCobro } from "../lib/useMediosCobro";
 import { toISO, today, fmt_$ } from "../lib/utils";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import type { Usuario } from "../types/auth";
+import type { Venta, Factura, Gasto } from "../types/finanzas";
+import type { LiquidacionConEmpleado } from "../types/rrhh";
 
-export default function EERR({ user, localActivo }: any) {
+interface EERRProps {
+  user: Usuario;
+  localActivo: number | null;
+}
+
+export default function EERR({ user, localActivo }: EERRProps) {
   const { CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS } = useCategorias();
   const { mediosDisponibles } = useMediosCobro();
-  const [ventas,setVentas]=useState<any[]>([]);
-  const [facturas,setFacturas]=useState<any[]>([]);
-  const [gastos,setGastos]=useState<any[]>([]);
+  const [ventas,setVentas]=useState<Venta[]>([]);
+  const [facturas,setFacturas]=useState<Factura[]>([]);
+  const [gastos,setGastos]=useState<Gasto[]>([]);
   const [sueldos,setSueldos]=useState(0);
-  const [sueldosDetalle,setSueldosDetalle]=useState<any[]>([]);
+  const [sueldosDetalle,setSueldosDetalle]=useState<LiquidacionConEmpleado[]>([]);
   const [sueldosExpanded,setSueldosExpanded]=useState(false);
   const [mes,setMes]=useState(toISO(today).slice(0,7));
   const [loading,setLoading]=useState(true);
@@ -42,30 +50,31 @@ export default function EERR({ user, localActivo }: any) {
           .gte("calculado_at", desde+"T00:00:00")
           .lte("calculado_at", hasta+"T23:59:59"),
       ]);
-      setVentas(v||[]);
-      setFacturas(f||[]);
-      setGastos((g||[]).filter((x: any) => x.categoria !== "SUELDOS"));
-      const liqFiltradas=(liqData||[]).filter((l: any)=>{
-        // Supabase tipa nested FK como array; acá la relación liq → novedad
-        // → empleado es 1:1 y siempre se accedió como objeto.
-        const nov = l.rrhh_novedades as unknown as { rrhh_empleados?: { local_id?: number | null } } | null;
-        const emp=nov?.rrhh_empleados;
-        return !lid||parseInt(String(emp?.local_id))===lid;
+      setVentas((v as Venta[]) || []);
+      setFacturas((f as Factura[]) || []);
+      setGastos(((g as Gasto[]) || []).filter((x) => x.categoria !== "SUELDOS"));
+      // El cast a unknown primero salva el mismatch entre lo que Supabase tipa
+      // (nested FK como array) y la realidad 1:1 que LiquidacionConEmpleado
+      // refleja — convención existente del codebase, ver comentario del type.
+      const liqRows = ((liqData as unknown) as LiquidacionConEmpleado[]) || [];
+      const liqFiltradas = liqRows.filter((l) => {
+        const emp = l.rrhh_novedades?.rrhh_empleados;
+        return !lid || (emp ? emp.local_id === lid : false);
       });
       setSueldosDetalle(liqFiltradas);
-      setSueldos(liqFiltradas.reduce((s: number,l: any)=>s+(l.total_a_pagar||0),0));
+      setSueldos(liqFiltradas.reduce((s, l) => s + (l.total_a_pagar || 0), 0));
       setLoading(false);
     };
     load();
   },[mes,localActivo]);
 
-  const totalVentas=ventas.reduce((s: number,v: any)=>s+(v.monto||0),0);
-  const totalCMV=facturas.reduce((s: number,f: any)=>s+(f.total||0),0);
-  const totalGastosFijos=gastos.filter((g: any)=>g.tipo==="fijo").reduce((s: number,g: any)=>s+(g.monto||0),0);
-  const totalGastosVar=gastos.filter((g: any)=>g.tipo==="variable").reduce((s: number,g: any)=>s+(g.monto||0),0);
-  const totalPublicidad=gastos.filter((g: any)=>g.tipo==="publicidad").reduce((s: number,g: any)=>s+(g.monto||0),0);
-  const totalComisiones=gastos.filter((g: any)=>g.tipo==="comision").reduce((s: number,g: any)=>s+(g.monto||0),0);
-  const totalImpuestos=gastos.filter((g: any)=>g.tipo==="impuesto").reduce((s: number,g: any)=>s+(g.monto||0),0);
+  const totalVentas=ventas.reduce((s, v)=>s+(v.monto||0),0);
+  const totalCMV=facturas.reduce((s, f)=>s+(f.total||0),0);
+  const totalGastosFijos=gastos.filter((g)=>g.tipo==="fijo").reduce((s, g)=>s+(g.monto||0),0);
+  const totalGastosVar=gastos.filter((g)=>g.tipo==="variable").reduce((s, g)=>s+(g.monto||0),0);
+  const totalPublicidad=gastos.filter((g)=>g.tipo==="publicidad").reduce((s, g)=>s+(g.monto||0),0);
+  const totalComisiones=gastos.filter((g)=>g.tipo==="comision").reduce((s, g)=>s+(g.monto||0),0);
+  const totalImpuestos=gastos.filter((g)=>g.tipo==="impuesto").reduce((s, g)=>s+(g.monto||0),0);
   const totalGastos=totalGastosFijos+totalGastosVar;
   const utilBruta=totalVentas-totalCMV;
   const utilNeta=utilBruta-totalGastos-sueldos-totalPublicidad-totalComisiones-totalImpuestos;
@@ -91,12 +100,12 @@ export default function EERR({ user, localActivo }: any) {
       if(ob!==undefined) return 1;
       return b.t-a.t;
     });
-  const porCatCMV=CATEGORIAS_COMPRA.map(c=>({c,t:facturas.filter((f: any)=>f.cat===c).reduce((s: number,f: any)=>s+f.total,0)})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
-  const porCatFijos=GASTOS_FIJOS.map(c=>({c,t:gastos.filter((g: any)=>g.tipo==="fijo"&&g.categoria===c).reduce((s: number,g: any)=>s+g.monto,0)})).filter(x=>x.t>0);
-  const porCatVar=GASTOS_VARIABLES.map(c=>({c,t:gastos.filter((g: any)=>g.tipo==="variable"&&g.categoria===c).reduce((s: number,g: any)=>s+g.monto,0)})).filter(x=>x.t>0);
-  const porCatPub=GASTOS_PUBLICIDAD.map(c=>({c,t:gastos.filter((g: any)=>g.tipo==="publicidad"&&g.categoria===c).reduce((s: number,g: any)=>s+g.monto,0)})).filter(x=>x.t>0);
-  const porCatCom=COMISIONES_CATS.map(c=>({c,t:gastos.filter((g: any)=>g.tipo==="comision"&&g.categoria===c).reduce((s: number,g: any)=>s+g.monto,0)})).filter(x=>x.t>0);
-  const porCatImp=GASTOS_IMPUESTOS.map(c=>({c,t:gastos.filter((g: any)=>g.tipo==="impuesto"&&g.categoria===c).reduce((s: number,g: any)=>s+g.monto,0)})).filter(x=>x.t>0);
+  const porCatCMV=CATEGORIAS_COMPRA.map(c=>({c,t:facturas.filter((f)=>f.cat===c).reduce((s, f)=>s+f.total,0)})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
+  const porCatFijos=GASTOS_FIJOS.map(c=>({c,t:gastos.filter((g)=>g.tipo==="fijo"&&g.categoria===c).reduce((s, g)=>s+g.monto,0)})).filter(x=>x.t>0);
+  const porCatVar=GASTOS_VARIABLES.map(c=>({c,t:gastos.filter((g)=>g.tipo==="variable"&&g.categoria===c).reduce((s, g)=>s+g.monto,0)})).filter(x=>x.t>0);
+  const porCatPub=GASTOS_PUBLICIDAD.map(c=>({c,t:gastos.filter((g)=>g.tipo==="publicidad"&&g.categoria===c).reduce((s, g)=>s+g.monto,0)})).filter(x=>x.t>0);
+  const porCatCom=COMISIONES_CATS.map(c=>({c,t:gastos.filter((g)=>g.tipo==="comision"&&g.categoria===c).reduce((s, g)=>s+g.monto,0)})).filter(x=>x.t>0);
+  const porCatImp=GASTOS_IMPUESTOS.map(c=>({c,t:gastos.filter((g)=>g.tipo==="impuesto"&&g.categoria===c).reduce((s, g)=>s+g.monto,0)})).filter(x=>x.t>0);
 
   const ERow=({label,valor,color,big}: {label: string, valor: number, color: string, big?: boolean})=>(
     <div className="eerr-row" style={big?{background:"var(--s2)",padding:"12px 16px"}:{}}>
@@ -167,7 +176,7 @@ export default function EERR({ user, localActivo }: any) {
                     <YAxis hide/>
                     <Tooltip
                       contentStyle={{background:"var(--s1)",border:"1px solid var(--bd2)",borderRadius:6,fontSize:11}}
-                      formatter={(v: any)=>[`$${Number(v).toLocaleString("es-AR")}`, "CMV"] as [string, string]}
+                      formatter={(v)=>[`$${Number(v).toLocaleString("es-AR")}`, "CMV"] as [string, string]}
                     />
                     <Bar dataKey="monto" radius={[4,4,0,0]}>
                       {porCatCMV.map((_,i)=><Cell key={i} fill={i===0?"var(--warn)":i===1?"var(--acc)":"var(--info)"}/>)}
