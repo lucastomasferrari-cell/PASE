@@ -1,4 +1,11 @@
 import { useState } from "react";
+import type { Usuario, Local } from "../types";
+
+interface SeleccionarLocalModalProps {
+  user: Usuario | null;
+  locales: Local[];
+  onConfirm: (localId: number) => void;
+}
 
 // Modal bloqueante para encargados con >1 local asignado al inicio de
 // sesión. Forza a elegir con qué local van a operar — evita que queden con
@@ -7,9 +14,9 @@ import { useState } from "react";
 // es confirmar un local.
 export default function SeleccionarLocalModal({
   user, locales, onConfirm,
-}: { user: any; locales: any[]; onConfirm: (localId: number) => void }) {
+}: SeleccionarLocalModalProps) {
   const [selected, setSelected] = useState<string>("");
-  const localesDisp = (locales || []).filter((l: any) =>
+  const localesDisp = (locales || []).filter((l: Local) =>
     (user?._locales || user?.locales || []).includes(l.id),
   );
 
@@ -28,7 +35,7 @@ export default function SeleccionarLocalModal({
           <label>Local</label>
           <select value={selected} onChange={e => setSelected(e.target.value)}>
             <option value="">Seleccioná...</option>
-            {localesDisp.map((l: any) => (
+            {localesDisp.map((l: Local) => (
               <option key={l.id} value={l.id}>{l.nombre}</option>
             ))}
           </select>
