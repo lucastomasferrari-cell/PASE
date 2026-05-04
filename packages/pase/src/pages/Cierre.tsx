@@ -2,8 +2,34 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
 import { toISO, today, fmt_$ } from "../lib/utils";
+import type { Usuario } from "../types/auth";
+import type { Venta, Factura, Gasto } from "../types/finanzas";
 
-export default function Cierre({ user, localActivo }: any) {
+interface CierreProps {
+  user: Usuario;
+  localActivo: number | null;
+}
+
+// Datos calculados del mes (cargarMes() devuelve esta forma).
+interface MesData {
+  ventas: number;
+  cmv: number;
+  gastosFijos: number;
+  gastosVar: number;
+  publicidad: number;
+  sueldos: number;
+  utilBruta: number;
+  utilNeta: number;
+  pct: (n: number) => string;
+}
+
+// Subset de Liquidacion + nested join (mismo patrón que Cashflow).
+interface LiquidacionPendienteRow {
+  total_a_pagar: number;
+  rrhh_novedades: { rrhh_empleados: { local_id: number | null } | null } | null;
+}
+
+export default function Cierre({ user, localActivo }: CierreProps) {
   const hoy = toISO(today).slice(0, 7);
   // Default: mes actual vs mes anterior
   const mesAnterior = (() => {
@@ -13,11 +39,11 @@ export default function Cierre({ user, localActivo }: any) {
 
   const [mesA, setMesA] = useState(mesAnterior);
   const [mesB, setMesB] = useState(hoy);
-  const [dataA, setDataA] = useState<any>(null);
-  const [dataB, setDataB] = useState<any>(null);
+  const [dataA, setDataA] = useState<MesData | null>(null);
+  const [dataB, setDataB] = useState<MesData | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const cargarMes = async (mes: string) => {
+  const cargarMes = async (mes: string): Promise<MesData> => {
     const [yr, mo] = mes.split("-").map(Number) as [number, number];
     const lastDay = new Date(yr, mo, 0).getDate();
     const desde = mes + "-01";
@@ -39,15 +65,19 @@ export default function Cierre({ user, localActivo }: any) {
         .in("estado", ["pendiente", "pagado"]).eq("anulado", false)
         .gte("calculado_at", desde + "T00:00:00").lte("calculado_at", hasta + "T23:59:59"),
     ]);
-    const g = (g0 || []).filter((x: any) => x.categoria !== "SUELDOS");
+    const ventas_arr = (v as Venta[]) || [];
+    const facturas_arr = (f as Factura[]) || [];
+    const gastos_arr = ((g0 as Gasto[]) || []).filter(x => x.categoria !== "SUELDOS");
+    // Cast a unknown primero por convención del codebase para nested FK.
+    const liqRows = ((liq as unknown) as LiquidacionPendienteRow[]) || [];
 
-    const ventas = (v || []).reduce((s: number, x: any) => s + Number(x.monto), 0);
-    const cmv = (f || []).reduce((s: number, x: any) => s + Number(x.total), 0);
-    const gastosFijos = (g || []).filter((x: any) => x.tipo === "fijo").reduce((s: number, x: any) => s + Number(x.monto), 0);
-    const gastosVar = (g || []).filter((x: any) => x.tipo === "variable").reduce((s: number, x: any) => s + Number(x.monto), 0);
-    const publicidad = (g || []).filter((x: any) => x.tipo === "publicidad").reduce((s: number, x: any) => s + Number(x.monto), 0);
-    const liqFilt = (liq || []).filter((l: any) => !lid || parseInt(l.rrhh_novedades?.rrhh_empleados?.local_id) === lid);
-    const sueldos = liqFilt.reduce((s: number, l: any) => s + Number(l.total_a_pagar), 0);
+    const ventas = ventas_arr.reduce((s, x) => s + Number(x.monto), 0);
+    const cmv = facturas_arr.reduce((s, x) => s + Number(x.total), 0);
+    const gastosFijos = gastos_arr.filter(x => x.tipo === "fijo").reduce((s, x) => s + Number(x.monto), 0);
+    const gastosVar = gastos_arr.filter(x => x.tipo === "variable").reduce((s, x) => s + Number(x.monto), 0);
+    const publicidad = gastos_arr.filter(x => x.tipo === "publicidad").reduce((s, x) => s + Number(x.monto), 0);
+    const liqFilt = liqRows.filter(l => !lid || (l.rrhh_novedades?.rrhh_empleados?.local_id === lid));
+    const sueldos = liqFilt.reduce((s, l) => s + Number(l.total_a_pagar), 0);
     const utilBruta = ventas - cmv;
     const utilNeta = utilBruta - gastosFijos - gastosVar - sueldos - publicidad;
     const pct = (n: number) => ventas > 0 ? ((n / ventas) * 100).toFixed(1) + "%" : "—";
