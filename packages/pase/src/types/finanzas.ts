@@ -46,6 +46,9 @@ export interface Factura {
   perc_iva: number;
   otros_cargos: number;
   descuentos: number;
+  // Path al archivo de comprobante en Supabase Storage (bucket "facturas").
+  // Set por LectorFacturasIA al subir, leído por Compras → "Ver factura".
+  imagen_url?: string | null;
 }
 
 export interface PagoFactura {

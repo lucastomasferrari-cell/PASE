@@ -7,11 +7,41 @@ import { CUENTAS, UNIDADES } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId, parseMonto } from "../lib/utils";
 import LectorFacturasIA from "./LectorFacturasIA";
 import type { Usuario, Local } from "../types";
+import type { Proveedor, Factura, PagoFactura } from "../types/finanzas";
 
 interface ComprasProps {
   user: Usuario;
   locales: Local[];
   localActivo: number | null;
+}
+
+// Forma del state form (carga manual de factura). Los campos numéricos son
+// string desde el input (parseMonto al guardar).
+interface FormFactura {
+  prov_id: string;
+  local_id: string;
+  nro: string;
+  fecha: string;
+  venc: string;
+  neto: string;
+  iva21: string;
+  iva105: string;
+  iibb: string;
+  perc_iva: string;
+  otros_cargos: string;
+  descuentos: string;
+  cat: string;
+  detalle: string;
+  tipo: string;
+}
+
+// Item del detalle de insumos (form item editable).
+interface ItemFactura {
+  producto: string;
+  cantidad: string;
+  unidad: string;
+  precio_unitario: string;
+  subtotal: number;
 }
 
 const estadoDot = (estado: string) => {
@@ -29,8 +59,8 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const { CATEGORIAS_COMPRA } = useCategorias();
   const visCuentas = cuentasVisibles(user);
   const cuentasUsables = visCuentas === null ? CUENTAS : CUENTAS.filter(c => visCuentas.includes(c));
-  const [facturas, setFacturas] = useState<any[]>([]);
-  const [proveedores, setProveedores] = useState<any[]>([]);
+  const [facturas, setFacturas] = useState<Factura[]>([]);
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [search, setSearch] = useState("");
   const [desde, setDesde] = useState(toISO(new Date(today.getFullYear(), today.getMonth(), 1)));
   const [hasta, setHasta] = useState(toISO(today));
@@ -38,8 +68,8 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const [pillEstado, setPillEstado] = useState("todas");
   const [lectorModal, setLectorModal] = useState(false);
   const [modal, setModal] = useState(false);
-  const [pagarModal, setPagarModal] = useState<any>(null);
-  const [verModal, setVerModal] = useState<any>(null);
+  const [pagarModal, setPagarModal] = useState<Factura | null>(null);
+  const [verModal, setVerModal] = useState<Factura | null>(null);
   // Signed URL cargada on-demand cuando el modal ver se abre con imagen_url.
   // Se reinicia cuando el modal se cierra.
   const [imgUrl, setImgUrl] = useState<string | null>(null);
@@ -61,9 +91,9 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const [pagando, setPagando] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const emptyForm = { prov_id: "", local_id: localActivo ? String(localActivo) : "", nro: "", fecha: toISO(today), venc: "", neto: "", iva21: "", iva105: "", iibb: "", perc_iva: "", otros_cargos: "", descuentos: "", cat: "", detalle: "", tipo: "factura" };
-  const [form, setForm] = useState<any>(emptyForm);
-  const [items, setItems] = useState<any[]>([]);
+  const emptyForm: FormFactura = { prov_id: "", local_id: localActivo ? String(localActivo) : "", nro: "", fecha: toISO(today), venc: "", neto: "", iva21: "", iva105: "", iibb: "", perc_iva: "", otros_cargos: "", descuentos: "", cat: "", detalle: "", tipo: "factura" };
+  const [form, setForm] = useState<FormFactura>(emptyForm);
+  const [items, setItems] = useState<ItemFactura[]>([]);
   const [pagoForm, setPagoForm] = useState({ cuenta: "MercadoPago", monto: "", fecha: toISO(today) });
   const localesDisp = user.rol === "dueno" ? locales : locales.filter((l: Local) => (user.locales || []).includes(l.id));
   const calcTotal = () =>
@@ -83,7 +113,9 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       fq,
       db.from("proveedores").select("*").eq("estado", "Activo").order("nombre"),
     ]);
-    setFacturas(f || []); setProveedores(p || []); setLoading(false);
+    setFacturas((f as Factura[]) || []);
+    setProveedores((p as Proveedor[]) || []);
+    setLoading(false);
   };
   useEffect(() => { load(); }, [localActivo]);
 
@@ -121,18 +153,21 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
 
   const onProvChange = (prov_id: string) => {
     const prov = proveedores.find(p => p.id === parseInt(prov_id));
-    setForm((f: any) => ({ ...f, prov_id, cat: prov?.cat || f.cat }));
+    setForm(f => ({ ...f, prov_id, cat: prov?.cat || f.cat }));
   };
 
   const addItem = () => setItems([...items, { producto: "", cantidad: "", unidad: "kg", precio_unitario: "", subtotal: 0 }]);
-  const updateItem = (i: number, field: string, val: any) => {
-    const newItems = [...items];
-    newItems[i] = { ...newItems[i], [field]: val };
+  const updateItem = (i: number, field: keyof ItemFactura, val: string | number) => {
+    const current = items[i];
+    if (!current) return;
+    const updated: ItemFactura = { ...current, [field]: val };
     if (field === "cantidad" || field === "precio_unitario") {
-      const q = parseMonto(field === "cantidad" ? val : newItems[i].cantidad);
-      const p = parseMonto(field === "precio_unitario" ? val : newItems[i].precio_unitario);
-      newItems[i].subtotal = q * p;
+      const q = parseMonto(field === "cantidad" ? val : updated.cantidad);
+      const p = parseMonto(field === "precio_unitario" ? val : updated.precio_unitario);
+      updated.subtotal = q * p;
     }
+    const newItems = [...items];
+    newItems[i] = updated;
     setItems(newItems);
   };
   const removeItem = (i: number) => setItems(items.filter((_, idx) => idx !== i));
@@ -194,16 +229,16 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
         await db.from("proveedores").update({ saldo: Math.max(0, (prov.saldo || 0) + saldoDelta) }).eq("id", prov.id);
       }
       setModal(false); setForm(emptyForm); setItems([]); load();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error guardando factura:", err);
-      alert("Error al guardar: " + err.message);
+      alert("Error al guardar: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setSaving(false);
     }
   };
 
   const pagar = async () => {
-    if (pagando) return;
+    if (pagando || !pagarModal) return;
     setPagando(true);
     try {
       const f = pagarModal;
@@ -220,7 +255,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       if (error) throw error;
       setPagarModal(null);
       load();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error en pagar:", err);
       alert(translateRpcError(err));
     } finally {
@@ -228,7 +263,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     }
   };
 
-  const anular = async (f: any) => {
+  const anular = async (f: Factura) => {
     if (!confirm(`¿Anular factura ${f.nro}? Esta acción queda registrada.`)) return;
     const motivo = prompt("Motivo (opcional):") || "Anulada desde UI";
     const { error } = await db.rpc("anular_factura", { p_factura_id: f.id, p_motivo: motivo });
@@ -340,7 +375,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                   <td>
                     <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
                       <button className="btn btn-ghost btn-sm" onClick={() => setVerModal(f)}>Ver</button>
-                      {!isNC && f.estado !== "pagada" && <button className="btn btn-success btn-sm" onClick={() => { setPagarModal(f); setPagoForm({ cuenta: "MercadoPago", monto: f.total, fecha: toISO(today) }); }}>Pagar</button>}
+                      {!isNC && f.estado !== "pagada" && <button className="btn btn-success btn-sm" onClick={() => { setPagarModal(f); setPagoForm({ cuenta: "MercadoPago", monto: String(f.total), fecha: toISO(today) }); }}>Pagar</button>}
                       <button className="btn btn-danger btn-sm" onClick={() => anular(f)}>Anular</button>
                     </div>
                   </td>
@@ -457,7 +492,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
               {(verModal.pagos || []).length > 0 && (
                 <div style={{ marginTop: 12 }}>
                   <div style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase", marginBottom: 8 }}>Pagos registrados</div>
-                  {verModal.pagos.map((p: any, i: number) => (
+                  {verModal.pagos.map((p: PagoFactura, i: number) => (
                     <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--bd)", fontSize: 12 }}>
                       <span>{fmt_d(p.fecha)} · {p.cuenta}</span><span style={{ color: "var(--muted2)" }}>{fmt_$(p.monto)}</span>
                     </div>
