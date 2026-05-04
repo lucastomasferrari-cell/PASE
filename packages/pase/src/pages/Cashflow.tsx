@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope, cuentasVisibles } from "../lib/auth";
+import { applyLocalScope, cuentasVisibles, cuentasVisiblesParaListados } from "../lib/auth";
 import { fmt_$, toISO, today } from "../lib/utils";
 import { CUENTAS } from "../lib/constants";
 import type { Usuario } from "../types/auth";
@@ -59,15 +59,17 @@ export default function Cashflow({ user, localActivo }: CashflowProps) {
     const desde = mes + "-01";
     const hasta = mes + "-" + String(lastDay).padStart(2, "0");
     const lid = localActivo ? parseInt(String(localActivo)) : null;
+    // Saldos: solo cuentas_visibles (saldo = consolidado, semántico de "ver").
     const vis = cuentasVisibles(user);
-    // Constrain estructural Q al subset de PostgrestFilterBuilder que
-    // necesitamos. El cast `as Q` mantiene el tipo concreto del builder
-    // que el llamador pasó.
+    // Movimientos / liquidaciones del listado: visibles ∪ operables. Un
+    // user que ve solo Caja Chica pero opera MP debe ver los ingresos/
+    // egresos contra MP (pero NO el saldo — que se filtra solo por vis).
+    const visListado = cuentasVisiblesParaListados(user);
     type CuentasFilterable = { eq: (c: string, v: string) => unknown; in: (c: string, v: string[]) => unknown };
-    const aplicarCuentas = <Q extends CuentasFilterable>(q: Q): Q => {
-      if (vis === null) return q;
-      if (vis.length === 0) return q.eq("cuenta", "___NONE___") as Q;
-      return q.in("cuenta", vis) as Q;
+    const aplicarCuentas = <Q extends CuentasFilterable>(q: Q, lista: string[] | null): Q => {
+      if (lista === null) return q;
+      if (lista.length === 0) return q.eq("cuenta", "___NONE___") as Q;
+      return q.in("cuenta", lista) as Q;
     };
 
     // 1. Ingresos cobrados — movimientos tipo "Ingreso Venta"
@@ -75,19 +77,19 @@ export default function Cashflow({ user, localActivo }: CashflowProps) {
       .eq("tipo", "Ingreso Venta").eq("anulado", false)
       .gte("fecha", desde).lte("fecha", hasta);
     qIngresos = applyLocalScope(qIngresos, user, lid);
-    qIngresos = aplicarCuentas(qIngresos);
+    qIngresos = aplicarCuentas(qIngresos, visListado);
 
     // 2. Egresos pagados — todos los movimientos negativos excepto ingresos
     let qEgresos = db.from("movimientos").select("cuenta, tipo, cat, importe, detalle")
       .eq("anulado", false).lt("importe", 0)
       .gte("fecha", desde).lte("fecha", hasta);
     qEgresos = applyLocalScope(qEgresos, user, lid);
-    qEgresos = aplicarCuentas(qEgresos);
+    qEgresos = aplicarCuentas(qEgresos, visListado);
 
-    // 3. Saldos actuales de caja
+    // 3. Saldos actuales de caja — solo cuentas_visibles (no operables).
     let qSaldos = db.from("saldos_caja").select("*");
     qSaldos = applyLocalScope(qSaldos, user, lid);
-    qSaldos = aplicarCuentas(qSaldos);
+    qSaldos = aplicarCuentas(qSaldos, vis);
 
     // 4. Facturas pendientes de pago
     let qFactPend = db.from("facturas").select("total, cat")
@@ -110,7 +112,7 @@ export default function Cashflow({ user, localActivo }: CashflowProps) {
       .gte("fecha", desde).lte("fecha", hasta)
       .like("cat", "Liquidación %");
     qLiqMes = applyLocalScope(qLiqMes, user, lid);
-    qLiqMes = aplicarCuentas(qLiqMes);
+    qLiqMes = aplicarCuentas(qLiqMes, visListado);
 
     const [
       { data: ingresos },

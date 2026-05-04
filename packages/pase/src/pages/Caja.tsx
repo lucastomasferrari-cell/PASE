@@ -161,15 +161,19 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     setLoading(true);
     let q = db.from("movimientos").select("*").order("fecha", {ascending: false}).order("id", {ascending: false}).limit(80);
     q = applyLocalScope(q, user, localActivo);
-    // Defense-in-depth: si el usuario tiene cuentas restringidas, no traemos
-    // movimientos de cuentas ajenas ni saldos de cuentas ajenas.
-    if (vis !== null) {
-      if (vis.length === 0) {
+    // Tabla de movimientos: visibles ∪ operables. Coherente con
+    // "puedo ver el movimiento aunque no vea el saldo consolidado de la
+    // cuenta destino". visParaListado === null = sin restricción.
+    if (visParaListado !== null) {
+      if (visParaListado.length === 0) {
         q = q.eq("cuenta", "___NONE___"); // match imposible → 0 filas
       } else {
-        q = q.in("cuenta", vis);
+        q = q.in("cuenta", visParaListado);
       }
     }
+    // Saldos: SOLO cuentas_visibles. La separación de Fase 5 — operar sin
+    // ver saldo es intencional. Si el user no tiene la cuenta en visibles,
+    // la card no se renderiza pero los movimientos sí aparecen via la tabla.
     let sq = db.from("saldos_caja").select("*");
     sq = applyLocalScope(sq, user, localActivo);
     if (vis !== null) {
