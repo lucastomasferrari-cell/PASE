@@ -54,7 +54,11 @@ const MAP: Record<string, string> = {
  */
 export function translateRpcError(err: unknown): string {
   if (err == null) return "Error desconocido";
-  const raw = typeof err === "string" ? err : (err as any)?.message || String(err);
+  // err puede ser PostgrestError (de supabase) o Error nativo, ambos con .message.
+  // Otras shapes (objetos custom) caen al String(err) fallback.
+  const raw = typeof err === "string"
+    ? err
+    : (err as { message?: string })?.message || String(err);
   if (!raw) return "Error desconocido";
   // Supabase/Postgres suele prefijar con "ERROR:  "; el código queda trim.
   const stripped = raw.trim().replace(/^ERROR:\s*/i, "").trim();
