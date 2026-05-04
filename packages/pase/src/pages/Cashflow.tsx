@@ -3,11 +3,54 @@ import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasVisibles } from "../lib/auth";
 import { fmt_$, toISO, today } from "../lib/utils";
 import { CUENTAS } from "../lib/constants";
+import type { Usuario } from "../types/auth";
 
-export default function Cashflow({ user, localActivo }: any) {
+interface CashflowProps {
+  user: Usuario;
+  localActivo: number | null;
+}
+
+// Fila del array porCobrar (derivado en runtime). Cada medio de venta no-
+// efectivo se compara contra liquidaciones recibidas con la categoría
+// correspondiente.
+interface PorCobrarRow {
+  medio: string;
+  catLiq: string;
+  vendido: number;
+  cobrado: number;
+  pendiente: number;
+}
+
+// Shape del state data tras procesar las queries.
+interface CashflowData {
+  ingresosPorCuenta: Record<string, number>;
+  totalIngresos: number;
+  egresosPorTipo: Record<string, number>;
+  totalEgresos: number;
+  flujoNeto: number;
+  saldosPorCuenta: Record<string, number>;
+  totalDisponible: number;
+  deudaProveedores: number;
+  sueldosPendTotal: number;
+  porCobrar: PorCobrarRow[];
+  totalPorCobrar: number;
+}
+
+// Subset de Liquidacion + nested join devuelto por la query de sueldos
+// pendientes. Supabase tipa el FK nested como array por default; convención
+// del codebase: tomarlo como objeto plano (1:1).
+interface LiquidacionPendienteRow {
+  total_a_pagar: number;
+  rrhh_novedades: {
+    empleado_id: string;
+    rrhh_empleados: { local_id: number | null } | null;
+  } | null;
+}
+
+export default function Cashflow({ user, localActivo }: CashflowProps) {
   const [mes, setMes] = useState(toISO(today).slice(0,7));
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any>({});
+  const [data, setData] = useState<Partial<CashflowData>>({});
 
   const load = async () => {
     setLoading(true);
@@ -17,10 +60,14 @@ export default function Cashflow({ user, localActivo }: any) {
     const hasta = mes + "-" + String(lastDay).padStart(2, "0");
     const lid = localActivo ? parseInt(String(localActivo)) : null;
     const vis = cuentasVisibles(user);
-    const aplicarCuentas = <Q,>(q: Q): Q => {
+    // Constrain estructural Q al subset de PostgrestFilterBuilder que
+    // necesitamos. El cast `as Q` mantiene el tipo concreto del builder
+    // que el llamador pasó.
+    type CuentasFilterable = { eq: (c: string, v: string) => unknown; in: (c: string, v: string[]) => unknown };
+    const aplicarCuentas = <Q extends CuentasFilterable>(q: Q): Q => {
       if (vis === null) return q;
-      if (vis.length === 0) return (q as any).eq("cuenta", "___NONE___");
-      return (q as any).in("cuenta", vis);
+      if (vis.length === 0) return q.eq("cuenta", "___NONE___") as Q;
+      return q.in("cuenta", vis) as Q;
     };
 
     // 1. Ingresos cobrados — movimientos tipo "Ingreso Venta"
@@ -100,15 +147,13 @@ export default function Cashflow({ user, localActivo }: any) {
     // Deuda proveedores
     const deudaProveedores = (factPend || []).reduce((s, f) => s + Number(f.total), 0);
 
-    // Sueldos pendientes
-    const sueldosPendTotal = (sueldosPend || [])
+    // Sueldos pendientes — cast a unknown primero por convención (Supabase
+    // tipa FK nested como array, realidad es 1:1; ver LiquidacionPendienteRow).
+    const sueldosPendRows = ((sueldosPend as unknown) as LiquidacionPendienteRow[]) || [];
+    const sueldosPendTotal = sueldosPendRows
       .filter(l => {
         if (!lid) return true;
-        // Supabase tipa FKs nested como array; acá la relación es 1:1
-        // (rrhh_liquidaciones.novedad_id → rrhh_novedades.id, y novedad
-        // → empleado), por eso accedemos como objeto plano.
-        const nov = l.rrhh_novedades as unknown as { rrhh_empleados?: { local_id?: number | null } } | null;
-        const empLocal = nov?.rrhh_empleados?.local_id;
+        const empLocal = l.rrhh_novedades?.rrhh_empleados?.local_id;
         return !empLocal || empLocal === lid;
       })
       .reduce((s, l) => s + Number(l.total_a_pagar), 0);
@@ -213,7 +258,7 @@ export default function Cashflow({ user, localActivo }: any) {
             <table>
               <thead><tr><th>Medio</th><th>Categoría liquidación</th><th style={{textAlign:"right"}}>Vendido</th><th style={{textAlign:"right"}}>Cobrado</th><th style={{textAlign:"right"}}>Pendiente</th></tr></thead>
               <tbody>
-                {porCobrar.map((x: any) => (
+                {(porCobrar as PorCobrarRow[]).map(x => (
                   <tr key={x.medio}>
                     <td style={{fontSize:11}}>{x.medio}</td>
                     <td style={{fontSize:10,color:"var(--muted2)"}}>{x.catLiq}</td>
