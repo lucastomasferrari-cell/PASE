@@ -5,12 +5,39 @@ import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_$ } from "../lib/utils";
 import { computeSaldoMP, type MovParaSaldo } from "../lib/saldoMP";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import type { Usuario } from "../types/auth";
+import type { Factura, Proveedor, Venta, SaldoCaja } from "../types/finanzas";
+
+interface DashboardProps {
+  user: Usuario;
+  localActivo: number | null;
+}
+
+// Subset de mp_credenciales que el Dashboard lee para computar saldo MP.
+interface MpCredCompacta {
+  local_id: number;
+  tenant_id: string;
+  saldo_inicial: number | null;
+  saldo_inicial_at: string | null;
+}
+
+// Fila del array chartData (gráfico ventas últimos 7 días).
+interface ChartPoint { dia: string; ventas: number }
+
+// Subset de blindaje_documentos que el Dashboard lee.
+interface BlindajeDoc { vencimiento: string | null; local_id: number | null }
+
+// Proveedor + saldo computado en runtime (suma facturas pendientes por prov).
+interface ProveedorConSaldo extends Proveedor { saldo: number }
+
+// Subset de remitos que el Dashboard lee (solo para contar pendientes).
+interface RemitoMin { estado: string; local_id: number | null }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
-export default function Dashboard({ user, localActivo }: any) {
+export default function Dashboard({ user, localActivo }: DashboardProps) {
   const [stats, setStats] = useState<{saldos: Record<string, number>, deuda: number, vencidas: number, ventasHoy: number, remPend: number, blindajeVencidos: number, blindajePorVencer: number, saldoMpTotal: number, credsSinCorte: number}>({saldos:{},deuda:0,vencidas:0,ventasHoy:0,remPend:0,blindajeVencidos:0,blindajePorVencer:0,saldoMpTotal:0,credsSinCorte:0});
-  const [provDeuda, setProvDeuda] = useState<any[]>([]);
-  const [chartData, setChartData] = useState<any[]>([]);
+  const [provDeuda, setProvDeuda] = useState<ProveedorConSaldo[]>([]);
+  const [chartData, setChartData] = useState<ChartPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const load = async (localId = localActivo) => {
     setLoading(true);
@@ -66,22 +93,23 @@ export default function Dashboard({ user, localActivo }: any) {
       db.from("proveedores").select("*").gt("saldo",0).eq("estado","Activo"),
       bq,
       vsq,
-      includeMp ? credsQ : Promise.resolve({ data: [] as any[] }),
-      includeMp ? saldoMovsQ : Promise.resolve({ data: [] as any[] }),
+      includeMp ? credsQ : Promise.resolve({ data: [] as MpCredCompacta[] }),
+      includeMp ? saldoMovsQ : Promise.resolve({ data: [] as MovParaSaldo[] }),
     ]);
-    const credsMp = (credsMpRes as any).data || [];
-    const saldoMovs = ((saldoMovsRes as any).data || []) as MovParaSaldo[];
+    const credsMp = (credsMpRes.data as MpCredCompacta[]) || [];
+    const saldoMovs = (saldoMovsRes.data as MovParaSaldo[]) || [];
+    const ventasSem = (ventasSemana as Pick<Venta, "fecha" | "monto" | "local_id">[]) || [];
     setChartData(ultimos7.map(d => ({
       dia: d.slice(5),
-      ventas: (ventasSemana||[]).filter((v:any)=>v.fecha===d).reduce((s:number,v:any)=>s+Number(v.monto),0),
+      ventas: ventasSem.filter(v => v.fecha === d).reduce((s, v) => s + Number(v.monto), 0),
     })));
     const saldosObj: Record<string, number> = {};
-    (saldos||[]).forEach(s => { saldosObj[s.cuenta] = (saldosObj[s.cuenta]||0) + (s.saldo||0); });
+    ((saldos as SaldoCaja[]) || []).forEach(s => { saldosObj[s.cuenta] = (saldosObj[s.cuenta] || 0) + (s.saldo || 0); });
     const matchLocal = (rowLocal: number | null) => !localId || String(rowLocal) === String(localId);
-    const fAct = (facturas||[]).filter((f: any)=>f.estado!=="pagada"&&matchLocal(f.local_id));
+    const fAct = ((facturas as Factura[]) || []).filter(f => f.estado !== "pagada" && matchLocal(f.local_id));
     const ahora = Date.now();
     let blindajeVencidos = 0, blindajePorVencer = 0;
-    (blindaje || []).forEach((d: any) => {
+    ((blindaje as BlindajeDoc[]) || []).forEach(d => {
       if (!d.vencimiento) return;
       const dias = Math.floor((new Date(d.vencimiento + "T12:00:00").getTime() - ahora) / 86400000);
       if (dias < 0) blindajeVencidos++;
@@ -107,21 +135,32 @@ export default function Dashboard({ user, localActivo }: any) {
       if (r.total != null) saldoMpTotal += r.total;
     }
 
+    const ventasHoyArr = (ventas as Venta[]) || [];
+    const remitosArr = (remitos as RemitoMin[]) || [];
+    const provsArr = (provs as Proveedor[]) || [];
     setStats({
-      saldos:saldosObj,
-      deuda:fAct.reduce((s: number,f: any)=>s+(f.total||0),0),
-      vencidas:fAct.filter((f: any)=>f.estado==="vencida").length,
-      ventasHoy:(ventas||[]).filter((v: any)=>matchLocal(v.local_id)).reduce((s: number,v: any)=>s+(v.monto||0),0),
-      remPend:(remitos||[]).filter((r: any)=>r.estado==="sin_factura"&&matchLocal(r.local_id)).length,
+      saldos: saldosObj,
+      deuda: fAct.reduce((s, f) => s + (f.total || 0), 0),
+      vencidas: fAct.filter(f => f.estado === "vencida").length,
+      ventasHoy: ventasHoyArr.filter(v => matchLocal(v.local_id)).reduce((s, v) => s + (v.monto || 0), 0),
+      remPend: remitosArr.filter(r => r.estado === "sin_factura" && matchLocal(r.local_id)).length,
       blindajeVencidos, blindajePorVencer,
       saldoMpTotal, credsSinCorte,
     });
     if (localId) {
       const deudaPorProv: Record<number, number> = {};
-      fAct.forEach((f: any) => { deudaPorProv[f.prov_id] = (deudaPorProv[f.prov_id]||0) + (f.total||0); });
-      setProvDeuda((provs||[]).map((p: any) => ({...p, saldo: deudaPorProv[p.id] || 0})).filter((p: any) => p.saldo > 0).sort((a: any,b: any)=>b.saldo-a.saldo).slice(0,8));
+      fAct.forEach(f => { deudaPorProv[f.prov_id] = (deudaPorProv[f.prov_id] || 0) + (f.total || 0); });
+      setProvDeuda(
+        provsArr
+          .map<ProveedorConSaldo>(p => ({ ...p, saldo: deudaPorProv[p.id] || 0 }))
+          .filter(p => p.saldo > 0)
+          .sort((a, b) => b.saldo - a.saldo)
+          .slice(0, 8),
+      );
     } else {
-      setProvDeuda((provs||[]).sort((a: any,b: any)=>b.saldo-a.saldo).slice(0,8));
+      // Sin localId: mantener el saldo persistido de la fila proveedor (no
+      // recompute). provs ya es Proveedor[], saldo es number directo.
+      setProvDeuda(provsArr.slice().sort((a, b) => b.saldo - a.saldo).slice(0, 8));
     }
     setLoading(false);
   };
@@ -156,7 +195,7 @@ export default function Dashboard({ user, localActivo }: any) {
               <Tooltip
                 contentStyle={{background:"var(--s1)",border:"1px solid var(--bd2)",borderRadius:6,fontSize:11}}
                 labelStyle={{color:"var(--muted2)"}}
-                formatter={(v: any)=>[`$${Number(v).toLocaleString("es-AR")}`, "Ventas"] as [string, string]}
+                formatter={v => [`$${Number(v).toLocaleString("es-AR")}`, "Ventas"] as [string, string]}
               />
               <Line type="monotone" dataKey="ventas" stroke="var(--acc)" strokeWidth={2} dot={false} activeDot={{r:4,fill:"var(--acc)"}}/>
             </LineChart>
@@ -190,7 +229,7 @@ export default function Dashboard({ user, localActivo }: any) {
         <div className="panel">
           <div className="panel-hd"><span className="panel-title">Deuda por Proveedor</span></div>
           <table><thead><tr><th>Proveedor</th><th>Categoría</th><th>Saldo</th></tr></thead>
-          <tbody>{provDeuda.map((p: any)=>(
+          <tbody>{provDeuda.map(p => (
             <tr key={p.id} className="prov-row">
               <td style={{fontWeight:500}}>{p.nombre}</td>
               <td><span className="badge b-muted">{p.cat}</span></td>
