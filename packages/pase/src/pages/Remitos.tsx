@@ -6,6 +6,7 @@ import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import type { Usuario, Local } from "../types";
+import type { Proveedor, Factura } from "../types/finanzas";
 
 interface RemitosProps {
   user: Usuario;
@@ -13,16 +14,32 @@ interface RemitosProps {
   localActivo: number | null;
 }
 
+// Remito (table remitos) — registro de mercadería recibida sin factura
+// inmediata. Genera deuda provisoria al proveedor hasta vincular factura
+// o pagar directo.
+interface Remito {
+  id: string;
+  prov_id: number;
+  local_id: number;
+  nro: string;
+  fecha: string;
+  monto: number;
+  cat: string | null;
+  detalle: string | null;
+  estado: string;          // "sin_factura" | "vinculado" | "facturado" | "pagado" | "anulado"
+  factura_id: string | null;
+}
+
 export default function Remitos({ user, locales, localActivo }: RemitosProps) {
   const { CATEGORIAS_COMPRA } = useCategorias();
   const visCuentas = cuentasVisibles(user);
   const cuentasUsables = visCuentas === null ? CUENTAS : CUENTAS.filter(c => visCuentas.includes(c));
-  const [remitos, setRemitos] = useState<any[]>([]);
-  const [facturas, setFacturas] = useState<any[]>([]);
-  const [proveedores, setProveedores] = useState<any[]>([]);
+  const [remitos, setRemitos] = useState<Remito[]>([]);
+  const [facturas, setFacturas] = useState<Factura[]>([]);
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [modal, setModal] = useState(false);
-  const [vincModal, setVincModal] = useState<any | null>(null);
-  const [pagarModal, setPagarModal] = useState<any | null>(null);
+  const [vincModal, setVincModal] = useState<Remito | null>(null);
+  const [pagarModal, setPagarModal] = useState<Remito | null>(null);
   const [loading, setLoading] = useState(true);
   const emptyForm = {prov_id:"",local_id:localActivo?String(localActivo):"",nro:"",fecha:toISO(today),monto:"" as string|number,cat:"",detalle:""};
   const [form, setForm] = useState(emptyForm);
@@ -40,14 +57,17 @@ export default function Remitos({ user, locales, localActivo }: RemitosProps) {
       fq,
       db.from("proveedores").select("*").eq("estado","Activo").order("nombre"),
     ]);
-    setRemitos(r||[]); setFacturas(f||[]); setProveedores(p||[]); setLoading(false);
+    setRemitos((r as Remito[]) || []);
+    setFacturas((f as Factura[]) || []);
+    setProveedores((p as Proveedor[]) || []);
+    setLoading(false);
   };
   useEffect(()=>{load();},[localActivo]);
 
   const rFilt = remitos;
 
   const onProvChange = (prov_id: string) => {
-    const prov = proveedores.find((p: any)=>p.id===parseInt(prov_id));
+    const prov = proveedores.find(p => p.id === parseInt(prov_id));
     setForm(f=>({...f,prov_id,cat:prov?.cat||f.cat}));
   };
 
@@ -56,7 +76,7 @@ export default function Remitos({ user, locales, localActivo }: RemitosProps) {
     const nro = form.nro||`REM-${Date.now().toString().slice(-6)}`;
     const nuevo = {...form,id:genId("REM"),prov_id:parseInt(form.prov_id),local_id:parseInt(String(form.local_id)),nro,monto:parseFloat(String(form.monto)),estado:"sin_factura",factura_id:null};
     await db.from("remitos").insert([nuevo]);
-    const prov = proveedores.find((p: any)=>p.id===nuevo.prov_id);
+    const prov = proveedores.find(p => p.id === nuevo.prov_id);
     if(prov) await db.from("proveedores").update({saldo:(prov.saldo||0)+nuevo.monto}).eq("id",prov.id);
     setModal(false); setForm(emptyForm); load();
   };
@@ -64,9 +84,9 @@ export default function Remitos({ user, locales, localActivo }: RemitosProps) {
   const vincFact = async (fid: string) => {
     const r = vincModal;
     if(!r) return;
-    const f = facturas.find((f: any)=>f.id===fid);
+    const f = facturas.find(f => f.id === fid);
     // Cancelar deuda del remito y reemplazar por la de la factura (diferencia)
-    const prov = proveedores.find((p: any)=>p.id===r.prov_id);
+    const prov = proveedores.find(p => p.id === r.prov_id);
     if(prov) {
       const diff = (f?.total||0) - r.monto; // diferencia puede ser positiva o negativa
       // El saldo ya tiene la deuda del remito, solo ajustamos la diferencia
@@ -88,7 +108,7 @@ export default function Remitos({ user, locales, localActivo }: RemitosProps) {
       });
       if (error) throw error;
       setPagarModal(null); load();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error pagando remito:", err);
       alert(translateRpcError(err));
     } finally {
@@ -96,7 +116,7 @@ export default function Remitos({ user, locales, localActivo }: RemitosProps) {
     }
   };
 
-  const anular = async (r: any) => {
+  const anular = async (r: Remito) => {
     if(!confirm(`¿Anular remito ${r.nro}?`)) return;
     const motivo = prompt("Motivo (opcional):") || "Anulado desde UI";
     const { error } = await db.rpc("anular_remito", { p_remito_id: r.id, p_motivo: motivo });

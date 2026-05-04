@@ -4,24 +4,7 @@ import { applyLocalScope } from "../lib/auth";
 import { useCategorias } from "../lib/useCategorias";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import type { Usuario, Local } from "../types/auth";
-import type { Factura, PagoFactura } from "../types/finanzas";
-
-// Shape efectivo de la tabla proveedores. El type Proveedor en finanzas.ts
-// está parcialmente desactualizado (usa activo:boolean en vez de estado:string,
-// y tipa id como string cuando el runtime es number); este archivo es el único
-// consumidor real de los campos divergentes y lo refleja con un type local
-// hasta que se sincronice el tipo compartido en un PR dedicado.
-interface ProveedorRow {
-  id: number;
-  nombre: string;
-  cuit: string | null;
-  cat: string | null;
-  estado: string;          // "Activo" | "Inactivo"
-}
-
-// ProveedorRow + saldo computado en runtime (suma facturas pendientes
-// menos NCs).
-interface ProveedorConSaldo extends ProveedorRow { saldo: number }
+import type { Proveedor, Factura, PagoFactura } from "../types/finanzas";
 
 interface ProveedoresProps {
   user: Usuario;
@@ -32,10 +15,10 @@ interface ProveedoresProps {
 // ─── PROVEEDORES ──────────────────────────────────────────────────────────────
 export default function Proveedores({ user, localActivo }: ProveedoresProps) {
   const { CATEGORIAS_COMPRA } = useCategorias();
-  const [proveedores,setProveedores]=useState<ProveedorConSaldo[]>([]);
+  const [proveedores,setProveedores]=useState<Proveedor[]>([]);
   const [modal,setModal]=useState(false);
-  const [editModal,setEditModal]=useState<ProveedorConSaldo | null>(null);
-  const [ctaModal,setCtaModal]=useState<ProveedorConSaldo | null>(null);
+  const [editModal,setEditModal]=useState<Proveedor | null>(null);
+  const [ctaModal,setCtaModal]=useState<Proveedor | null>(null);
   const [ctaFacts,setCtaFacts]=useState<Factura[]>([]);
   const [ctaLoading,setCtaLoading]=useState(false);
   const [ctaMes,setCtaMes]=useState(toISO(today).slice(0,7));
@@ -63,7 +46,7 @@ export default function Proveedores({ user, localActivo }: ProveedoresProps) {
       if(isNC)saldoPorProv.set(provIdNum,(saldoPorProv.get(provIdNum)||0)-Math.abs(f.total||0));
       else if(impagable)saldoPorProv.set(provIdNum,(saldoPorProv.get(provIdNum)||0)+Number(f.total||0));
     }
-    setProveedores(((provs as ProveedorRow[]) || []).map(p => ({...p, saldo: saldoPorProv.get(p.id) || 0})));
+    setProveedores(((provs as Proveedor[]) || []).map(p => ({...p, saldo: saldoPorProv.get(p.id) || 0})));
     setLoading(false);
   };
   useEffect(()=>{load();},[localActivo]);
@@ -84,12 +67,12 @@ export default function Proveedores({ user, localActivo }: ProveedoresProps) {
     setEditModal(null);
     await load();
   };
-  const toggleEstado=async(p: ProveedorConSaldo)=>{
+  const toggleEstado=async(p: Proveedor)=>{
     const {error}=await db.from("proveedores").update({estado:p.estado==="Activo"?"Inactivo":"Activo"}).eq("id",p.id);
     if(error){alert("Error: "+error.message);return;}
     await load();
   };
-  const abrirCta=async(p: ProveedorConSaldo)=>{
+  const abrirCta=async(p: Proveedor)=>{
     setCtaFacts([]);
     setCtaMes(toISO(today).slice(0,7));
     setCtaModal(p);

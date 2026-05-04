@@ -24,7 +24,11 @@ export interface SaldoCaja {
 
 export interface Factura {
   id: string;
-  prov_id: string;
+  // prov_id es FK a proveedores.id (number). Antes estaba tipado como string
+  // por error — el codebase ya usaba parseInt(form.prov_id) o Number(f.prov_id)
+  // para comparar, lo cual funciona tanto con string como con number en runtime
+  // (parseInt de un number devuelve el número). Corrección sin impacto runtime.
+  prov_id: number;
   local_id: number;
   nro: string;
   fecha: string;
@@ -67,13 +71,17 @@ export interface Gasto {
   plantilla_id: number | null;
 }
 
+// Shape REAL de la tabla proveedores. Antes este type tenía id:string y
+// activo:boolean — ambos divergían del runtime (id es number, y la columna
+// es estado:string "Activo" | "Inactivo"). Cero consumidores del type
+// importan los campos divergentes hoy, así que lo corregimos al schema real.
 export interface Proveedor {
-  id: string;
+  id: number;
   nombre: string;
   cuit: string | null;
   cat: string | null;
   saldo: number;
-  activo: boolean;
+  estado: string;
 }
 
 export interface Venta {
