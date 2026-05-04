@@ -296,8 +296,6 @@ export default function App() {
       case "usuarios":  return <Usuarios {...props}/>;
       case "rrhh":      return <RRHHPage {...props}/>;
       case "costos":    return <Costos {...props}/>;
-      case "insumos":   return <Costos {...props}/>;
-      case "recetas":   return <Costos {...props}/>;
       case "configuracion": return <Configuracion user={user} locales={locales}/>;
       case "tenants":   return user?.rol === "superadmin" ? <Tenants user={user as Usuario} /> : <Dashboard {...props}/>;
       default: return null;
