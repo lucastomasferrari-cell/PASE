@@ -124,7 +124,13 @@ export function useMediosCobro(): MediosCobroState {
 
   useEffect(() => {
     if (source === "cache") return;
+    // fetchMedios llama setState async post-fetch. Patrón fetch-on-mount
+    // (deps vacías intencionalmente para no re-fetch en cada render).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchMedios(false);
+  // Deps vacías intencionales: agregar fetchMedios o source generaría
+  // re-fetch infinito (fetchMedios se recrea cada render; source cambia
+  // tras setState dentro del fetch).
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
