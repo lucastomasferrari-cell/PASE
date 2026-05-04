@@ -122,6 +122,14 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [localActivo]);
 
+  // BUG 1: Lector IA modal solo cierra con X o ESC, no con click en backdrop.
+  useEffect(() => {
+    if (!lectorModal) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setLectorModal(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lectorModal]);
+
   const fFilt = facturas.filter(f => {
     if (f.estado === "anulada") return false;
     const isNC = (f.tipo || "factura") === "nota_credito";
@@ -389,10 +397,10 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
         )}
       </div>
 
-      {/* MODAL LECTOR IA */}
+      {/* MODAL LECTOR IA — cierra solo con X o ESC, no con click en backdrop */}
       {lectorModal && (
-        <div className="overlay" onClick={() => setLectorModal(false)}>
-          <div className="modal" style={{ width: 720 }} onClick={e => e.stopPropagation()}>
+        <div className="overlay">
+          <div className="modal" style={{ width: 720 }}>
             <div className="modal-hd">
               <div className="modal-title">Lector Facturas IA</div>
               <button className="close-btn" onClick={() => setLectorModal(false)}>✕</button>

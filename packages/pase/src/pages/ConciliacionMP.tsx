@@ -403,11 +403,21 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
     return Number.isFinite(t) && t >= desdeMs && t < hastaMsExcl;
   };
 
-  // Tab Ventas — pay-* con fecha (date_created) en rango AR, no anulados
+  // Tab Ventas — pay-* con fecha (date_created) en rango AR, no anulados.
   // Mitigación M7: filas con money_release_status=NULL aparecen acá igual
   // (no filtramos por release_status), pero NO en Por cobrar / Ingresos.
+  //
+  // BUG 6 — defensa contra "total bruto inflado":
+  //   Tipos en pay-*:
+  //     'liquidacion'   → ingreso/venta (collector=ours, monto_bruto>0)
+  //     'bank_transfer' → egreso/compra desde MP (monto_bruto<0 post-fix
+  //                       36a5716 + migration 202605030100)
+  //   Si la migration historica no se corrió, los egresos viejos pueden
+  //   tener monto_bruto>0 e inflar SUM. Excluimos tipo='bank_transfer' para
+  //   que esto no afecte el total — Tab "Ventas" debe ser solo ventas.
   const ventasMovs = movimientos.filter(m =>
     String(m.id || '').startsWith('pay-') &&
+    m.tipo !== 'bank_transfer' &&
     inRange(m.fecha) &&
     m.anulado !== true
   );
