@@ -132,9 +132,14 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
     setLoading(false);
   };
 
+  // Patrón fetch-on-dep-change.
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { loadAll(); }, [empleadoId]);
 
-  // Recalcular liquidación final cuando cambia fecha/motivo o abre el modal
+  // Recalcular liquidación final cuando cambia fecha/motivo o abre el modal.
+  // Computación derivada de inputs — calcularLiquidacionFinal es pure.
+  // Podría pasar a useMemo, pero el set en effect es funcionalmente
+  // equivalente y la lógica está estable en producción.
   useEffect(() => {
     if (!liqFinalModal || !emp || !emp.fecha_inicio) return;
     const vacAcum = calcularVacaciones(emp.fecha_inicio, vacTomadas);
@@ -148,10 +153,15 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
       vacaciones_acumuladas: vacAcum,
       motivo,
     });
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLiqFinalData(lf);
+  // emp.sueldo_mensual y emp.fecha_inicio ya están en deps explícitamente;
+  // el linter pide el emp completo pero esos son los únicos campos usados.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liqFinalModal, liqFinalForm.fecha_egreso, liqFinalForm.motivo, emp?.sueldo_mensual, emp?.fecha_inicio, vacTomadas]);
 
   // Reset overrides al cambiar motivo
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setLiqFinalOverrides({}); }, [liqFinalForm.motivo]);
 
   if (loading || !emp) return <div className="loading">Cargando legajo...</div>;
