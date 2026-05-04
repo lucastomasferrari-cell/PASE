@@ -27,7 +27,6 @@ export const MODULOS = [
   { slug:"remitos", label:"Remitos", icon:"🚚" },
   { slug:"gastos", label:"Gastos", icon:"💸" },
   { slug:"proveedores", label:"Proveedores", icon:"🏭" },
-  { slug:"costos", label:"Costos", icon:"📋" },
   { slug:"mp", label:"Conciliación MP", icon:"💳" },
   { slug:"caja", label:"Tesorería", icon:"💰" },
   { slug:"cashflow", label:"Cashflow", icon:"📈" },

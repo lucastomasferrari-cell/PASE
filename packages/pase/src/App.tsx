@@ -17,15 +17,12 @@ import ImportarMaxirest from "./pages/ImportarMaxirest";
 import Gastos from "./pages/Gastos";
 import Proveedores from "./pages/Proveedores";
 import Usuarios from "./pages/Usuarios";
-import Insumos from "./pages/Insumos";
 import LectorFacturasIA from "./pages/LectorFacturasIA";
-import Recetas from "./pages/Recetas";
 import ConciliacionMP from "./pages/ConciliacionMP";
 import Cashflow from "./pages/Cashflow";
 import Cierre from "./pages/Cierre";
 import Blindaje from "./pages/Blindaje";
 import RRHHPage from "./pages/RRHH";
-import Costos from "./pages/Costos";
 import Configuracion from "./pages/Configuracion";
 import Tenants from "./pages/Tenants";
 
@@ -285,9 +282,7 @@ export default function App() {
       case "gastos":    return <Gastos {...props}/>;
       case "contador":  return <Contador {...props}/>;
       case "maxirest":  return <ImportarMaxirest {...props}/>;
-      case "insumos":   return <Insumos />;
       case "lector_ia": return <LectorFacturasIA {...props}/>;
-      case "recetas":   return <Recetas {...props}/>;
       case "mp":        return <ConciliacionMP {...props}/>;
       case "cashflow": return <Cashflow {...props}/>;
       case "cierre": return <Cierre {...props}/>;
@@ -295,7 +290,6 @@ export default function App() {
       case "proveedores": return <Proveedores {...props}/>;
       case "usuarios":  return <Usuarios {...props}/>;
       case "rrhh":      return <RRHHPage {...props}/>;
-      case "costos":    return <Costos {...props}/>;
       case "configuracion": return <Configuracion user={user} locales={locales}/>;
       case "tenants":   return user?.rol === "superadmin" ? <Tenants user={user as Usuario} /> : <Dashboard {...props}/>;
       default: return null;
