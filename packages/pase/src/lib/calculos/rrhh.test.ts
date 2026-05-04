@@ -264,7 +264,7 @@ describe("calcularMejorSueldoSemestre", () => {
 
   it("entrada con fecha_cambio inválida → se ignora", () => {
     const hist = [
-      { sueldo_nuevo: 999999, fecha_cambio: "basura" as any },
+      { sueldo_nuevo: 999999, fecha_cambio: "basura" },
       { sueldo_anterior: 500000, sueldo_nuevo: 600000, fecha_cambio: "2026-02-01" },
     ];
     expect(calcularMejorSueldoSemestre(600000, hist, 4, 2026)).toBe(600000);

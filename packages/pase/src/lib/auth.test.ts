@@ -42,12 +42,21 @@ describe("scopeLocales", () => {
 });
 
 describe("applyLocalScope", () => {
-  const mkQ = () => {
-    const calls: any[] = [];
-    const q: any = {
+  // Mock partial del query builder de Supabase. `unknown` para los values
+  // porque el mock acepta cualquier shape de filtro — el test inspecciona
+  // las llamadas registradas, no los tipos.
+  type Call = ["eq", string, unknown] | ["in", string, unknown[]];
+  type MockQ = {
+    calls: Call[];
+    eq: (col: string, val: unknown) => MockQ;
+    in: (col: string, vals: unknown[]) => MockQ;
+  };
+  const mkQ = (): MockQ => {
+    const calls: Call[] = [];
+    const q: MockQ = {
       calls,
-      eq: (col: string, val: any) => { calls.push(["eq", col, val]); return q; },
-      in: (col: string, vals: any[]) => { calls.push(["in", col, vals]); return q; },
+      eq: (col, val) => { calls.push(["eq", col, val]); return q; },
+      in: (col, vals) => { calls.push(["in", col, vals]); return q; },
     };
     return q;
   };

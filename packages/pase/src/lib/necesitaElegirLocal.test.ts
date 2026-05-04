@@ -60,7 +60,7 @@ describe("necesitaElegirLocal", () => {
   });
 
   it("strings/numbers: stored viene como string, locs como number", () => {
-    const r = necesitaElegirLocal({ rol: "encargado", _locales: [1, 2, 3] }, 2 as any);
+    const r = necesitaElegirLocal({ rol: "encargado", _locales: [1, 2, 3] }, 2);
     expect(r.action).toBe("setActivo");
     expect(r.localId).toBe(2);
   });
