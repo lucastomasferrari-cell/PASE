@@ -228,9 +228,15 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   // Devuelve los headers de auth para los endpoints /api/mp-*. El backend
   // (api/_cron-auth.js) valida el JWT contra Supabase Auth + tabla usuarios
   // y solo deja pasar dueno/admin/cajero/superadmin.
+  // DEBUG TEMPORAL — logs de runtime para diagnosticar reportes de "POST sin
+  // header authorization en DevTools". Quitar una vez confirmado que llega
+  // siempre el JWT al backend (tracking en console del navegador).
   const authHeader = async (): Promise<Record<string, string>> => {
-    const { data: { session } } = await db.auth.getSession();
-    return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+    const { data, error } = await db.auth.getSession();
+    console.log("[authHeader] session:", data?.session ? "OK" : "NULL", "error:", error);
+    const token = data?.session?.access_token;
+    if (!token) return {};
+    return { Authorization: `Bearer ${token}` };
   };
 
   const sincronizar=async()=>{
@@ -238,6 +244,13 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
     setSyncCountdown(120);
     try{
       const auth = await authHeader();
+      console.log("[sincronizar] headers a /api/mp-generate:", auth);
+      if(!auth.Authorization){
+        showToast("err","⚠ Sesión expirada. Recargá la página y volvé a entrar.");
+        setSincronizando(false);
+        setSyncCountdown(0);
+        return;
+      }
       // Paso 1: generar CSV (< 5s)
       const genRes=await fetch("/api/mp-generate",{method:"POST",headers:auth});
       const genData=await genRes.json().catch(()=>({ok:false}));
@@ -266,7 +279,9 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
 
       // Paso 3: procesar CSV + calcular saldo
       setSyncCountdown(-1); // indica "procesando"
-      const procRes=await fetch("/api/mp-process",{method:"POST",headers:{"Content-Type":"application/json",...auth},body:JSON.stringify({ts})});
+      const procHeaders={"Content-Type":"application/json",...auth};
+      console.log("[sincronizar] headers a /api/mp-process:", procHeaders);
+      const procRes=await fetch("/api/mp-process",{method:"POST",headers:procHeaders,body:JSON.stringify({ts})});
       const d=await procRes.json().catch(()=>({ok:false,error:"respuesta no-JSON del servidor"}));
 
       console.groupCollapsed("%c[MP] /api/mp-process response","color:#3ECFCF;font-weight:600");
@@ -325,6 +340,12 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
     setSincronizando(true);
     try{
       const auth = await authHeader();
+      console.log("[resetearLocal] headers a /api/mp-sync:", auth);
+      if(!auth.Authorization){
+        alert("Sesión expirada. Recargá la página y volvé a entrar.");
+        setSincronizando(false);
+        return;
+      }
       const r=await fetch("/api/mp-sync?reset="+encodeURIComponent(localId),{method:"POST",headers:auth});
       const d=await r.json();
       console.log("[MP] reset response:",d);
