@@ -56,7 +56,13 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
     const {data}=await q.limit(500);
     setVentas((data||[]) as Venta[]);setLoading(false);
   };
+  // Patrón fetch-on-dep-change.
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(()=>{load();},[filtDesde,filtHasta,localActivo]);
+  // Pre-llena form.local_id cuando hay locales disponibles y no se eligió uno.
+  // Patrón "init form state from outer prop". Refactor a useState callback
+  // requiere que el initial dependa de localesDisp que puede empezar [].
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(()=>{if(localesDisp.length>0&&!form.local_id)setForm(f=>({...f,local_id:String(localActivo||localesDisp[0]?.id||"")}));},[locales,localActivo]);
 
   // Group ventas by fecha + turno + local
