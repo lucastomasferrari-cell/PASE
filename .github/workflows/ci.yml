@@ -44,14 +44,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Gate estricto: test + typecheck. Cualquier paquete afectado debe pasar.
-      - name: turbo run test typecheck (affected only)
-        run: pnpm exec turbo run test typecheck --filter='...[HEAD^1]'
-
-      # Lint corre informativo — packages/pase tiene 481 errores legacy
-      # (mostly @typescript-eslint/no-unused-vars en code histórico). Se
-      # limpian en un sprint dedicado. Cuando esté limpio, sacar el
-      # continue-on-error.
-      - name: turbo run lint (advisory, allows failures)
-        continue-on-error: true
-        run: pnpm exec turbo run lint --filter='...[HEAD^1]'
+      # Gate estricto: test + typecheck + lint. Cualquier paquete afectado debe pasar.
+      # Lint pasó a bloqueante en PR8 (cleanup completo: 481 → 0 errors / 0 warnings).
+      - name: turbo run test typecheck lint (affected only)
+        run: pnpm exec turbo run test typecheck lint --filter='...[HEAD^1]'
