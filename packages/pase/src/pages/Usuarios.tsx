@@ -125,8 +125,8 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                 console.warn("Supabase Auth change_password falló:", d.error);
                 setErr("Contraseña actualizada en sistema local pero falló en Supabase Auth — el usuario puede seguir usando la contraseña anterior vía Auth");
               }
-            } catch (authErr: any) {
-              console.warn("Error llamando auth-admin:", authErr.message);
+            } catch (authErr) {
+              console.warn("Error llamando auth-admin:", authErr instanceof Error ? authErr.message : String(authErr));
               setErr("Contraseña actualizada localmente. Error de red al sincronizar con Supabase Auth.");
             }
           }
