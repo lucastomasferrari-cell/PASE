@@ -2,24 +2,72 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { fmt_d, fmt_$, genId, parseMonto } from "../lib/utils";
 import { useCategorias } from "../lib/useCategorias";
+import type { Local } from "../types/auth";
+import type { Proveedor } from "../types/finanzas";
 
-export default function LectorFacturasIA({ locales, localActivo, onSaved }: { locales: any[]; localActivo: number | null; onSaved?: () => void }) {
+// Shape del JSON que devuelve Claude vía /api/claude (cuando parseamos el
+// JSON estructurado de la factura). Refleja exactamente el formato pedido
+// en el prompt — campos numéricos pueden venir como number o como string
+// (la IA a veces devuelve "166.876,67" como string), por eso el front usa
+// parseMonto al consumirlos.
+interface IAFacturaItem {
+  descripcion: string;
+  cantidad: number;
+  unidad: string;
+  precio_unitario: number;
+  subtotal: number;
+}
+
+interface IAFacturaResponse {
+  razon_social?: string;
+  cuit_emisor?: string;
+  tipo_factura?: string;
+  nro_factura?: string;
+  fecha_emision?: string;
+  fecha_vencimiento?: string | null;
+  neto_gravado?: number | string;
+  iva_21?: number | string;
+  iva_105?: number | string;
+  percepciones_iibb?: number | string;
+  percepciones_iva?: number | string;
+  total?: number | string;
+  items?: IAFacturaItem[];
+  confianza?: Partial<Record<"razon_social" | "nro_factura" | "fecha_emision" | "total" | "neto_gravado", number>>;
+  confianza_global?: number;
+  advertencias?: string[];
+}
+
+// Forma mínima del state provModal (creación inline de proveedor desde
+// los datos detectados por la IA).
+interface ProvModalForm {
+  nombre: string;
+  cuit: string;
+  cat: string;
+}
+
+interface LectorFacturasIAProps {
+  locales: Local[];
+  localActivo: number | null;
+  onSaved?: () => void;
+}
+
+export default function LectorFacturasIA({ locales, localActivo, onSaved }: LectorFacturasIAProps) {
   const { CATEGORIAS_COMPRA } = useCategorias();
   const [archivo,setArchivo]=useState<File|null>(null);
   const [preview,setPreview]=useState<string|null>(null);
   const [loading,setLoading]=useState(false);
-  const [resultado,setResultado]=useState<any>(null);
-  const [proveedores,setProveedores]=useState<any[]>([]);
+  const [resultado,setResultado]=useState<IAFacturaResponse | null>(null);
+  const [proveedores,setProveedores]=useState<Proveedor[]>([]);
   const [guardando,setGuardando]=useState(false);
   const [form,setForm]=useState<{local_id: string|number, prov_id: string, fecha: string, venc: string, nro: string, neto: number|string, iva21: number|string, iva105: number|string, iibb: number|string, total: number|string, cat: string}>({local_id:localActivo||"",prov_id:"",fecha:"",venc:"",nro:"",neto:0,iva21:0,iva105:0,iibb:0,total:0,cat:""});
   // Modal inline para crear un proveedor nuevo cuando el emisor detectado
   // por IA no matchea con ninguno existente.
-  const [provModal,setProvModal]=useState<any>(null); // null | {nombre, cuit, cat}
+  const [provModal,setProvModal]=useState<ProvModalForm | null>(null);
   const [provSaving,setProvSaving]=useState(false);
 
   useEffect(()=>{
     db.from("proveedores").select("*").eq("estado","Activo").order("nombre")
-      .then(({data:p})=>setProveedores(p||[]));
+      .then(({data:p})=>setProveedores((p as Proveedor[]) || []));
   },[]);
 
   const toBase64=(file: File): Promise<string>=>new Promise((res,rej)=>{
@@ -96,10 +144,13 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
         })
       });
 
-      const data=await response.json();
-      const text=data.content?.map((c: any)=>c.text||"").join("");
+      // Response del proxy /api/claude: { content: Array<{ type, text? }> }
+      // (forma de la API de Anthropic Messages). Tipado mínimo con shape
+      // que solo necesita .text.
+      const data: { content?: Array<{ text?: string }> } = await response.json();
+      const text=data.content?.map(c => c.text || "").join("") || "";
       const clean=text.replace(/```json|```/g,"").trim();
-      const parsed=JSON.parse(clean);
+      const parsed: IAFacturaResponse = JSON.parse(clean);
 
       // Defensa en profundidad (bug #41 escalada): la IA puede alucinar
       // montos completos, no solo multiplicar por 100. Tres chequeos:
@@ -109,10 +160,10 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
       //  3. Coherencia desglose: neto+iva+percepciones >> total implica que
       //     uno de los componentes está inflado x100.
       const MAX_MONTO_RAZONABLE=10_000_000; // 10M ARS — ↓ desde 100M (bug #41)
-      const camposMonto=["neto_gravado","iva_21","iva_105","percepciones_iibb","percepciones_iva","total"];
-      const sospechososMagnitud=camposMonto.filter(c=>Number(parsed[c]||0)>MAX_MONTO_RAZONABLE);
+      const camposMonto: (keyof IAFacturaResponse)[] = ["neto_gravado","iva_21","iva_105","percepciones_iibb","percepciones_iva","total"];
+      const sospechososMagnitud=camposMonto.filter(c=>Number(parsed[c] || 0) > MAX_MONTO_RAZONABLE);
       const total=Number(parsed.total||0);
-      const sumaItems=Array.isArray(parsed.items)?parsed.items.reduce((s:number,it:any)=>s+Number(it.subtotal||0),0):0;
+      const sumaItems=Array.isArray(parsed.items)?parsed.items.reduce((s, it) => s + Number(it.subtotal || 0), 0) : 0;
       const sumaDesglose=Number(parsed.neto_gravado||0)+Number(parsed.iva_21||0)+Number(parsed.iva_105||0)+Number(parsed.percepciones_iibb||0)+Number(parsed.percepciones_iva||0);
       const incoherenciaItems=sumaItems>0&&total>0&&total>sumaItems*2;
       const incoherenciaDesglose=total>0&&sumaDesglose>total*1.5;
@@ -120,7 +171,7 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
         const lineas=[
           "⚠ La IA devolvió montos sospechosos:",
           "",
-          ...sospechososMagnitud.map(c=>"  • "+c+" excede $10M: $"+Number(parsed[c]).toLocaleString("es-AR")),
+          ...sospechososMagnitud.map(c => "  • " + c + " excede $10M: $" + Number(parsed[c]).toLocaleString("es-AR")),
           ...(incoherenciaItems?["  • total ($"+total.toLocaleString("es-AR")+") es >2x la suma de items ($"+sumaItems.toLocaleString("es-AR")+") — posible alucinación"]:[]),
           ...(incoherenciaDesglose?["  • neto+iva+percepciones ($"+sumaDesglose.toLocaleString("es-AR")+") >> total ($"+total.toLocaleString("es-AR")+") — un componente está inflado"]:[]),
           "",
@@ -146,7 +197,7 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
       });
       setForm(f=>({
         ...f,
-        prov_id:provMatch?.id||"",
+        prov_id: provMatch ? String(provMatch.id) : "",
         nro:parsed.nro_factura||"",
         fecha:parsed.fecha_emision||"",
         venc:parsed.fecha_vencimiento||"",
@@ -224,7 +275,7 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
       return;
     }
 
-    const prov=proveedores.find((p: any)=>p.id===parseInt(form.prov_id));
+    const prov=proveedores.find(p => p.id === parseInt(form.prov_id));
     if(prov)await db.from("proveedores").update({saldo:(prov.saldo||0)+parseMonto(form.total)}).eq("id",prov.id);
     setGuardando(false);setArchivo(null);setPreview(null);setResultado(null);
     setForm({local_id:localActivo||"",prov_id:"",fecha:"",venc:"",nro:"",neto:0,iva21:0,iva105:0,iibb:0,total:0,cat:""});
@@ -248,8 +299,9 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
         .single();
       if (error) { alert("No se pudo crear el proveedor: " + error.message); return; }
       if (data) {
-        setProveedores((prev: any[]) => [...prev, data].sort((a: any, b: any) => (a.nombre || "").localeCompare(b.nombre || "")));
-        setForm(f => ({ ...f, prov_id: String(data.id), cat: data.cat || f.cat }));
+        const nuevo = data as Proveedor;
+        setProveedores(prev => [...prev, nuevo].sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "")));
+        setForm(f => ({ ...f, prov_id: String(nuevo.id), cat: nuevo.cat || f.cat }));
         setProvModal(null);
       }
     } finally {
@@ -302,8 +354,9 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
               const globalColor=confGlobal>=80?"var(--success)":confGlobal>=50?"var(--warn)":"var(--danger)";
               const globalLabel=confGlobal>=80?"Alta confianza":confGlobal>=50?"Revisar campos marcados":"Baja confianza — revisá todo";
               const globalRgb=confGlobal>=80?"107,158,122":confGlobal>=50?"196,154,60":"196,97,74";
-              const campoBorder=(campo:string)=>{
-                const c=conf[campo];
+              type ConfKey = keyof NonNullable<IAFacturaResponse["confianza"]>;
+              const campoBorder = (campo: string) => {
+                const c = (conf as Partial<Record<ConfKey, number>>)[campo as ConfKey];
                 if(c===undefined||c===null) return "1px solid var(--bd)";
                 if(c>=80) return "1px solid var(--bd)";
                 if(c>=50) return "1px solid var(--warn)";
@@ -316,7 +369,7 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
                 </div>
                 {advertencias.length>0 && (
                   <div style={{marginBottom:12}}>
-                    {advertencias.map((a:string,i:number)=>(
+                    {advertencias.map((a, i) => (
                       <div key={i} style={{fontSize:10,color:"var(--warn)",marginBottom:4}}>⚠ {a}</div>
                     ))}
                   </div>
@@ -362,7 +415,7 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
                   {[["Neto Gravado","neto","neto_gravado"],["IVA 21%","iva21",null],["IVA 10.5%","iva105",null],["Perc. IIBB","iibb",null]].map(([l,k,confKey])=>(
                     <div key={k as string} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                       <span style={{fontSize:11,color:"var(--muted2)"}}>{l}</span>
-                      <input type="number" step="0.01" value={(form as any)[k as string]} onChange={e=>setForm({...form,[k as string]:e.target.value})}
+                      <input type="number" step="0.01" value={form[k as keyof typeof form] as string | number} onChange={e=>setForm({...form,[k as string]:e.target.value})}
                         style={{width:120,background:"var(--bg)",border:confKey?campoBorder(confKey as string):"1px solid var(--bd)",color:"var(--txt)",padding:"4px 8px",fontFamily:"'DM Mono',monospace",fontSize:12,borderRadius:"var(--r)",textAlign:"right"}}/>
                     </div>
                   ))}
@@ -373,25 +426,26 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
                   </div>
                 </div>
 
-                {resultado.items?.length>0&&(()=>{
+                {(resultado.items?.length ?? 0) > 0 && (() => {
                   // Bug #41 capa 3: si la suma de items no coincide con
                   // el neto detectado, mostrar warning sobre los ítems.
                   // Tolerancia 5% — los ítems típicos no incluyen IVA pero
                   // sí descuentos/redondeos chicos. Si la diferencia es mayor,
                   // probable alucinación o lectura incompleta.
-                  const sumaItems=resultado.items.reduce((s:number,it:any)=>s+Number(it.subtotal||0),0);
+                  const items = resultado.items ?? [];
+                  const sumaItems = items.reduce((s, it) => s + Number(it.subtotal || 0), 0);
                   const netoDet=parseMonto(form.neto);
                   const diff=netoDet>0?Math.abs(sumaItems-netoDet)/netoDet:0;
                   const incoherente=netoDet>0&&sumaItems>0&&diff>0.05;
                   return (
                     <div style={{marginBottom:12}}>
-                      <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"var(--muted)",marginBottom:8}}>Ítems detectados ({resultado.items.length})</div>
+                      <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"var(--muted)",marginBottom:8}}>Ítems detectados ({items.length})</div>
                       {incoherente&&(
                         <div className="alert alert-danger" style={{marginBottom:8,fontSize:11}}>
                           ⚠ Los items no suman al neto detectado — revisá manualmente. Suma items: <strong>{fmt_$(sumaItems)}</strong> vs neto: <strong>{fmt_$(netoDet)}</strong>.
                         </div>
                       )}
-                      {resultado.items.map((it:any,i:number)=>(
+                      {items.map((it, i) => (
                         <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid var(--bd)",fontSize:11}}>
                           <span>{it.descripcion}</span>
                           <span style={{color:"var(--muted2)"}}>{it.cantidad} {it.unidad} · {fmt_$(it.subtotal)}</span>
