@@ -5,9 +5,36 @@ import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
+import type { Usuario, Local } from "../types/auth";
+import type { Movimiento } from "../types/finanzas";
+
+interface CajaProps {
+  user: Usuario | null;
+  locales?: Local[];
+  localActivo: number | null;
+}
+
+// Movimiento en edición: extiende Movimiento con justificativo (obligatorio
+// en el modal) y permite que importe sea string mientras el usuario tipea
+// — el input numérico devuelve string en e.target.value y parseFloat lo
+// convierte al guardar.
+interface EditMovDraft extends Omit<Movimiento, "importe"> {
+  justificativo: string;
+  importe: number | string;
+}
+
+// Detalle JSON-parseado de la fila auditoria de tipo EDICION. antes/despues
+// son la fila movimiento serializada — se renderiza vía Object.entries
+// genérico, por eso Record<string, unknown>.
+interface AuditDetalle {
+  id: string;
+  antes: Record<string, unknown> | null;
+  despues: Record<string, unknown> | null;
+  justificativo: string;
+}
 
 // ─── TESORERÍA ────────────────────────────────────────────────────────────────
-export default function Caja({ user, locales = [], localActivo }: any) {
+export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   const {
     CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES,
     GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, COMISIONES_CATS, CATEGORIAS_INGRESO,
@@ -49,21 +76,21 @@ export default function Caja({ user, locales = [], localActivo }: any) {
 
   // Locales accesibles: dueno/admin = todos; encargado = los asignados.
   const visLocs = localesVisibles(user);
-  const locsDisp: any[] = visLocs === null ? (locales || []) : (locales || []).filter((l: any) => visLocs.includes(l.id));
+  const locsDisp: Local[] = visLocs === null ? (locales || []) : (locales || []).filter((l: Local) => visLocs.includes(l.id));
   // local_id implícito: si hay localActivo seteado o el usuario tiene un único local, no se pide selector.
   const lidImplicito: number | null = localActivo != null
     ? Number(localActivo)
-    : locsDisp.length === 1 ? Number(locsDisp[0].id) : null;
+    : locsDisp.length === 1 ? Number(locsDisp[0]!.id) : null;
 
-  const [movimientos, setMovimientos] = useState<any[]>([]);
+  const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [saldos, setSaldos] = useState<Record<string, number>>({});
   const [modal, setModal] = useState(false);
-  const [editMov, setEditMov] = useState<any>(null);
+  const [editMov, setEditMov] = useState<EditMovDraft | null>(null);
   const [filtCuenta, setFiltCuenta] = useState("Todas");
   const [mostrarAnulados, setMostrarAnulados] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [detalleEdicion, setDetalleEdicion] = useState<any>(null);
-  const [auditLog, setAuditLog] = useState<any>(null);
+  const [detalleEdicion, setDetalleEdicion] = useState<Movimiento | null>(null);
+  const [auditLog, setAuditLog] = useState<AuditDetalle | null>(null);
   const [form, setForm] = useState({fecha:toISO(today),cuenta:"Caja Chica",tipo:"Pago Gasto",cat:"",importe:"",detalle:"",esEgreso:true});
   // Selector de local en el modal cuando no hay localActivo y hay >1 local visible.
   const [localFormId, setLocalFormId] = useState<string>(lidImplicito != null ? String(lidImplicito) : "");
@@ -109,7 +136,7 @@ export default function Caja({ user, locales = [], localActivo }: any) {
       }
     }
     const [{data:m},{data:s}] = await Promise.all([q, sq]);
-    setMovimientos(m||[]);
+    setMovimientos((m as Movimiento[]) || []);
     // Si no hay localActivo, se agregan saldos de todos los locales por cuenta
     const obj: Record<string, number> = {};
     (s||[]).forEach(x=> { obj[x.cuenta] = (obj[x.cuenta]||0) + (x.saldo||0); });
@@ -129,7 +156,7 @@ export default function Caja({ user, locales = [], localActivo }: any) {
         const log = (data || []).find(l => {
           try { return JSON.parse(l.detalle)?.id === detalleEdicion.id; } catch { return false; }
         });
-        setAuditLog(log ? JSON.parse(log.detalle) : null);
+        setAuditLog(log ? (JSON.parse(log.detalle) as AuditDetalle) : null);
       });
   }, [detalleEdicion]);
 
@@ -191,7 +218,7 @@ export default function Caja({ user, locales = [], localActivo }: any) {
     }
   };
 
-  const eliminarMov = async (m: any) => {
+  const eliminarMov = async (m: Movimiento) => {
     const motivo = prompt("¿Por qué anulás este movimiento? (obligatorio)");
     if (!motivo?.trim()) return;
     const { error } = await db.rpc("anular_movimiento", {
@@ -210,7 +237,7 @@ export default function Caja({ user, locales = [], localActivo }: any) {
     const lid = editMov.local_id;
     setSavingEdit(true);
     try {
-      if (original && lid && (original.importe !== parseFloat(editMov.importe) || original.cuenta !== editMov.cuenta)) {
+      if (original && lid && (original.importe !== parseFloat(String(editMov.importe)) || original.cuenta !== editMov.cuenta)) {
         const { data: cajaOrig } = await db.from("saldos_caja").select("saldo")
           .eq("cuenta", original.cuenta).eq("local_id", lid).maybeSingle();
         if (cajaOrig) await db.from("saldos_caja")
@@ -220,7 +247,7 @@ export default function Caja({ user, locales = [], localActivo }: any) {
         const { data: cajaNueva } = await db.from("saldos_caja").select("saldo")
           .eq("cuenta", editMov.cuenta).eq("local_id", lid).maybeSingle();
         if (cajaNueva) await db.from("saldos_caja")
-          .update({ saldo: (cajaNueva.saldo || 0) + (parseFloat(editMov.importe) || 0) })
+          .update({ saldo: (cajaNueva.saldo || 0) + (parseFloat(String(editMov.importe)) || 0) })
           .eq("cuenta", editMov.cuenta).eq("local_id", lid);
       }
 
@@ -228,7 +255,7 @@ export default function Caja({ user, locales = [], localActivo }: any) {
       // deriveTipoMov(cat, esEgreso). Así un movimiento que pasa de egreso
       // a ingreso con cat="Liquidación Rappi" queda como "Liquidación
       // Plataforma" y no como tipo viejo incoherente.
-      const nuevoImporte = parseFloat(editMov.importe) || original?.importe || 0;
+      const nuevoImporte = parseFloat(String(editMov.importe)) || original?.importe || 0;
       const signoOriginal = (original?.importe || 0) >= 0 ? 1 : -1;
       const signoNuevo = nuevoImporte >= 0 ? 1 : -1;
       const cambioSigno = signoOriginal !== signoNuevo;
@@ -314,7 +341,7 @@ export default function Caja({ user, locales = [], localActivo }: any) {
               <td><span className="num" style={{color:m.importe<0?"var(--danger)":"var(--success)"}}>{fmt_$(m.importe)}</span></td>
               <td>
                 {m.anulado && (
-                  <span className="badge b-danger" style={{fontSize:8}} title={m.anulado_motivo}>Anulado</span>
+                  <span className="badge b-danger" style={{fontSize:8}} title={m.anulado_motivo ?? undefined}>Anulado</span>
                 )}
                 {m.editado && !m.anulado && (
                   <span
@@ -354,7 +381,7 @@ export default function Caja({ user, locales = [], localActivo }: any) {
                 <div className="field"><label>Categoría</label>
                   <select value={editMov.cat||""} onChange={e => setEditMov({...editMov, cat: e.target.value})}>
                     <option value="">Sin categoría</option>
-                    {((parseFloat(editMov.importe) || 0) < 0 ? catsEgreso : catsIngreso).map(c => <option key={c}>{c}</option>)}
+                    {((parseFloat(String(editMov.importe)) || 0) < 0 ? catsEgreso : catsIngreso).map(c => <option key={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
@@ -401,7 +428,7 @@ export default function Caja({ user, locales = [], localActivo }: any) {
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
                   <div>
                     <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1,color:"var(--muted)",marginBottom:8}}>Antes</div>
-                    {auditLog.antes && Object.entries(auditLog.antes).map(([k, v]: any) => (
+                    {auditLog.antes && Object.entries(auditLog.antes).map(([k, v]) => (
                       <div key={k} style={{fontSize:11,marginBottom:4}}>
                         <span style={{color:"var(--muted2)"}}>{k}:</span> <span style={{color:"var(--danger)"}}>{String(v??'—')}</span>
                       </div>
@@ -409,7 +436,7 @@ export default function Caja({ user, locales = [], localActivo }: any) {
                   </div>
                   <div>
                     <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1,color:"var(--muted)",marginBottom:8}}>Después</div>
-                    {auditLog.despues && Object.entries(auditLog.despues).map(([k, v]: any) => (
+                    {auditLog.despues && Object.entries(auditLog.despues).map(([k, v]) => (
                       <div key={k} style={{fontSize:11,marginBottom:4}}>
                         <span style={{color:"var(--muted2)"}}>{k}:</span> <span style={{color:"var(--success)"}}>{String(v??'—')}</span>
                       </div>
@@ -435,7 +462,7 @@ export default function Caja({ user, locales = [], localActivo }: any) {
                   <label>Local *</label>
                   <select value={localFormId} onChange={e=>setLocalFormId(e.target.value)} required>
                     <option value="">Seleccioná el local...</option>
-                    {locsDisp.map((l:any)=><option key={l.id} value={l.id}>{l.nombre}</option>)}
+                    {locsDisp.map((l: Local)=><option key={l.id} value={l.id}>{l.nombre}</option>)}
                   </select>
                 </div>
               )}
@@ -470,7 +497,7 @@ export default function Caja({ user, locales = [], localActivo }: any) {
                   <label>Local *</label>
                   <select value={localFormId} onChange={e=>setLocalFormId(e.target.value)} required>
                     <option value="">Seleccioná el local...</option>
-                    {locsDisp.map((l:any)=><option key={l.id} value={l.id}>{l.nombre}</option>)}
+                    {locsDisp.map((l: Local)=><option key={l.id} value={l.id}>{l.nombre}</option>)}
                   </select>
                 </div>
               )}
