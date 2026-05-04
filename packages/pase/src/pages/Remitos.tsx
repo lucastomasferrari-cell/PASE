@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope, cuentasVisibles } from "../lib/auth";
+import { applyLocalScope, cuentasOperables } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS } from "../lib/constants";
@@ -32,8 +32,10 @@ interface Remito {
 
 export default function Remitos({ user, locales, localActivo }: RemitosProps) {
   const { CATEGORIAS_COMPRA } = useCategorias();
-  const visCuentas = cuentasVisibles(user);
-  const cuentasUsables = visCuentas === null ? CUENTAS : CUENTAS.filter(c => visCuentas.includes(c));
+  // Cuentas para el dropdown del modal "Pagar Remito Directo" — filtra
+  // por cuentas_operables (no cuentas_visibles).
+  const opCuentas = cuentasOperables(user);
+  const cuentasUsables = opCuentas === null ? CUENTAS : CUENTAS.filter(c => opCuentas.includes(c));
   const [remitos, setRemitos] = useState<Remito[]>([]);
   const [facturas, setFacturas] = useState<Factura[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
@@ -43,7 +45,18 @@ export default function Remitos({ user, locales, localActivo }: RemitosProps) {
   const [loading, setLoading] = useState(true);
   const emptyForm = {prov_id:"",local_id:localActivo?String(localActivo):"",nro:"",fecha:toISO(today),monto:"" as string|number,cat:"",detalle:""};
   const [form, setForm] = useState(emptyForm);
-  const [pagoForm, setPagoForm] = useState<{cuenta: string, monto: string|number, fecha: string}>({cuenta:"MercadoPago",monto:"",fecha:toISO(today)});
+  // Bug Caja-1: default vacío fuerza elección consciente (ver doc en Compras.tsx).
+  const [pagoForm, setPagoForm] = useState<{cuenta: string, monto: string|number, fecha: string}>({cuenta:"",monto:"",fecha:toISO(today)});
+
+  // Defensive: resetea cuenta a "" si queda fuera de cuentasUsables.
+  // NO borrar — previene regresión del bug Caja-1.
+  useEffect(() => {
+    if (pagoForm.cuenta && !cuentasUsables.includes(pagoForm.cuenta)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPagoForm(p => ({ ...p, cuenta: "" }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagoForm.cuenta, cuentasUsables.join("|")]);
   const localesDisp = user.rol==="dueno"?locales:locales.filter((l: Local)=>(user.locales||[]).includes(l.id));
 
   const load = async () => {
@@ -100,7 +113,9 @@ export default function Remitos({ user, locales, localActivo }: RemitosProps) {
 
   const [pagandoRem,setPagandoRem]=useState(false);
   const pagarRemito = async () => {
-    if(pagandoRem||!pagarModal) return; setPagandoRem(true);
+    if(pagandoRem||!pagarModal) return;
+    if (!pagoForm.cuenta) { alert("Elegí una cuenta de egreso"); return; }
+    setPagandoRem(true);
     try {
       const r = pagarModal;
       const monto = parseFloat(String(pagoForm.monto))||r.monto;
@@ -157,7 +172,7 @@ export default function Remitos({ user, locales, localActivo }: RemitosProps) {
                     <div style={{display:"flex",gap:4,alignItems:"center"}}>
                       {r.estado==="sin_factura"&&<button className="btn btn-ghost btn-sm" onClick={()=>setVincModal(r)}>Vincular FC</button>}
                       {r.factura_id&&<span className="mono" style={{fontSize:10,color:"var(--info)"}}>{"→ "}{facturas.find(f=>f.id===r.factura_id)?.nro||r.factura_id}</span>}
-                      {r.estado==="sin_factura"&&<button className="btn btn-success btn-sm" onClick={()=>{setPagarModal(r);setPagoForm({cuenta:"MercadoPago",monto:r.monto,fecha:toISO(today)})}}>Pagar</button>}
+                      {r.estado==="sin_factura"&&<button className="btn btn-success btn-sm" onClick={()=>{setPagarModal(r);setPagoForm({cuenta:"",monto:r.monto,fecha:toISO(today)})}}>Pagar</button>}
                       {r.estado!=="pagado"&&<button className="btn btn-danger btn-sm" onClick={()=>anular(r)}>Anular</button>}
                     </div>
                   )}
@@ -223,11 +238,11 @@ export default function Remitos({ user, locales, localActivo }: RemitosProps) {
             <div className="modal-body">
               <div className="alert alert-info">Remito {pagarModal.nro} · {fmt_$(pagarModal.monto)}</div>
               <div className="alert alert-warn">Esto registra el pago sin factura. El gasto impacta en caja y en el EERR.</div>
-              <div className="field"><label>Cuenta de egreso</label><select value={pagoForm.cuenta} onChange={e=>setPagoForm({...pagoForm,cuenta:e.target.value})}>{cuentasUsables.map(c=><option key={c}>{c}</option>)}</select></div>
+              <div className="field"><label>Cuenta de egreso *</label><select value={pagoForm.cuenta} onChange={e=>setPagoForm({...pagoForm,cuenta:e.target.value})}><option value="">Seleccioná una cuenta…</option>{cuentasUsables.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
               <div className="field"><label>Monto</label><input type="number" value={pagoForm.monto} onChange={e=>setPagoForm({...pagoForm,monto:e.target.value})}/></div>
               <div className="field"><label>Fecha</label><input type="date" value={pagoForm.fecha} onChange={e=>setPagoForm({...pagoForm,fecha:e.target.value})}/></div>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setPagarModal(null)}>Cancelar</button><button className="btn btn-success" onClick={pagarRemito} disabled={pagandoRem}>{pagandoRem?"Procesando...":"Confirmar Pago"}</button></div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setPagarModal(null)}>Cancelar</button><button className="btn btn-success" onClick={pagarRemito} disabled={pagandoRem || !pagoForm.cuenta}>{pagandoRem?"Procesando...":"Confirmar Pago"}</button></div>
           </div>
         </div>
       )}
