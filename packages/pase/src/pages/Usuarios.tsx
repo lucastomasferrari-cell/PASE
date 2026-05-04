@@ -25,7 +25,10 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
   const [err, setErr] = useState("");
   const [showPw, setShowPw] = useState(false);
 
-  const emptyForm = { nombre:"", email:"", password:"", activo:true, modulos:[] as string[], locales_ids:[] as number[], cuentas_all:true, cuentas_visibles:[] as string[] };
+  // cuentas_all === true → user ve TODAS las cuentas (saldos y operar).
+  // false → personalizado: cuentas_visibles para SALDOS, cuentas_operables
+  // para CARGAR PAGOS. Son listas independientes desde el editor.
+  const emptyForm = { nombre:"", email:"", password:"", activo:true, modulos:[] as string[], locales_ids:[] as number[], cuentas_all:true, cuentas_visibles:[] as string[], cuentas_operables:[] as string[] };
   const [form, setForm] = useState(emptyForm);
 
   const load = async () => {
@@ -61,8 +64,18 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
       activo: u.activo !== false,
       modulos: u._permisos || [],
       locales_ids: finalLocs,
-      cuentas_all: u.cuentas_visibles === null || u.cuentas_visibles === undefined,
+      // cuentas_all reflejaba "ambas listas son NULL". Si visibles es NULL,
+      // operables también lo es por convención. Si una de las dos es array,
+      // pasamos a modo personalizado.
+      cuentas_all: (u.cuentas_visibles === null || u.cuentas_visibles === undefined)
+                && (u.cuentas_operables === null || u.cuentas_operables === undefined),
       cuentas_visibles: Array.isArray(u.cuentas_visibles) ? u.cuentas_visibles : [],
+      // Fallback: si la migration aún no corrió y cuentas_operables viene
+      // undefined, mostrarmos lo mismo que cuentas_visibles para que la UI
+      // refleje el estado real (al guardar se persiste explícitamente).
+      cuentas_operables: Array.isArray(u.cuentas_operables)
+        ? u.cuentas_operables
+        : (Array.isArray(u.cuentas_visibles) ? u.cuentas_visibles : []),
     });
     setModal(u); setErr(""); setShowPw(false);
   };
@@ -76,6 +89,9 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
   };
   const toggleCuenta = (c: string) => {
     setForm(f => ({ ...f, cuentas_visibles: f.cuentas_visibles.includes(c) ? f.cuentas_visibles.filter(x => x !== c) : [...f.cuentas_visibles, c] }));
+  };
+  const toggleCuentaOperable = (c: string) => {
+    setForm(f => ({ ...f, cuentas_operables: f.cuentas_operables.includes(c) ? f.cuentas_operables.filter(x => x !== c) : [...f.cuentas_operables, c] }));
   };
 
   const guardando = useRef(false);
@@ -169,9 +185,15 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
       // Actualizar también campo viejo usuarios.locales para backward compat
       await db.from("usuarios").update({ locales: form.locales_ids }).eq("id", userId);
 
-      // Cuentas visibles: null = todas; array (posiblemente vacío) = personalizado
-      const cuentasPayload = form.cuentas_all ? null : form.cuentas_visibles;
-      await db.from("usuarios").update({ cuentas_visibles: cuentasPayload }).eq("id", userId);
+      // Cuentas: null = todas; array = personalizado. cuentas_visibles
+      // controla saldos visibles; cuentas_operables controla los dropdowns
+      // de pago (Compras, Remitos, RRHH, Caja, Gastos).
+      const visiblesPayload = form.cuentas_all ? null : form.cuentas_visibles;
+      const operablesPayload = form.cuentas_all ? null : form.cuentas_operables;
+      await db.from("usuarios").update({
+        cuentas_visibles: visiblesPayload,
+        cuentas_operables: operablesPayload,
+      }).eq("id", userId);
 
       setModal(null); load();
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
@@ -290,11 +312,12 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                     </div>
                   </div>
 
-                  {/* Cuentas de Tesorería — visible para no-dueno */}
+                  {/* Cuentas de Tesorería — visible para no-dueno.
+                      Dos listas independientes: ver saldo vs operar. */}
                   {!isDueno && (
                     <div style={{ marginTop:16 }}>
                       <label style={{ display:"block", fontSize:9, letterSpacing:"1.5px", textTransform:"uppercase", color:"var(--muted)", marginBottom:8 }}>
-                        Cuentas de Tesorería visibles
+                        Cuentas de Tesorería
                       </label>
                       <div style={{ display:"flex", gap:16, marginBottom:8 }}>
                         <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, cursor:"pointer" }}>
@@ -310,11 +333,14 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                       </div>
                       {!form.cuentas_all && (
                         <>
+                          <div style={{ fontSize:10, color:"var(--muted2)", marginBottom:6, marginTop:8 }}>
+                            <strong style={{ color:"var(--txt)" }}>Cuentas para ver saldo</strong> — el usuario verá las cards con el saldo consolidado de estas cuentas.
+                          </div>
                           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                             {CUENTAS.map(c => {
                               const checked = form.cuentas_visibles.includes(c);
                               return (
-                                <label key={c} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11,
+                                <label key={`vs-${c}`} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11,
                                   color: checked ? "var(--txt)" : "var(--muted2)", cursor:"pointer",
                                   padding:"6px 10px", background: checked ? "var(--s3)" : "var(--s2)",
                                   borderRadius:"var(--r)", border:`1px solid ${checked ? "var(--acc)" : "var(--bd)"}` }}>
@@ -324,8 +350,25 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                               );
                             })}
                           </div>
-                          {form.cuentas_visibles.length === 0 && (
-                            <div className="alert alert-warn" style={{ marginTop:8 }}>Sin cuentas marcadas, el usuario no va a ver ninguna en Tesorería</div>
+                          <div style={{ fontSize:10, color:"var(--muted2)", marginTop:14, marginBottom:6 }}>
+                            <strong style={{ color:"var(--txt)" }}>Cuentas para operar</strong> — el usuario podrá cargar pagos, gastos, transferencias y adelantos contra estas cuentas. Puede operar sin ver el saldo consolidado.
+                          </div>
+                          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                            {CUENTAS.map(c => {
+                              const checked = form.cuentas_operables.includes(c);
+                              return (
+                                <label key={`op-${c}`} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11,
+                                  color: checked ? "var(--txt)" : "var(--muted2)", cursor:"pointer",
+                                  padding:"6px 10px", background: checked ? "var(--s3)" : "var(--s2)",
+                                  borderRadius:"var(--r)", border:`1px solid ${checked ? "var(--acc)" : "var(--bd)"}` }}>
+                                  <input type="checkbox" checked={checked} onChange={() => toggleCuentaOperable(c)} style={{ accentColor:"var(--acc)" }} />
+                                  {c}
+                                </label>
+                              );
+                            })}
+                          </div>
+                          {form.cuentas_visibles.length === 0 && form.cuentas_operables.length === 0 && (
+                            <div className="alert alert-warn" style={{ marginTop:8 }}>Sin cuentas marcadas (ni saldo ni operar), el usuario no podrá usar Tesorería</div>
                           )}
                         </>
                       )}
