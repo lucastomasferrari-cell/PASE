@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { fmt_d, fmt_$, genId, parseMonto } from "../lib/utils";
 import { useCategorias } from "../lib/useCategorias";
-import { UNIDADES } from "../lib/constants";
 
 export default function LectorFacturasIA({ locales, localActivo, onSaved }: { locales: any[]; localActivo: number | null; onSaved?: () => void }) {
   const { CATEGORIAS_COMPRA } = useCategorias();
@@ -11,6 +10,10 @@ export default function LectorFacturasIA({ locales, localActivo, onSaved }: { lo
   const [loading,setLoading]=useState(false);
   const [resultado,setResultado]=useState<any>(null);
   const [proveedores,setProveedores]=useState<any[]>([]);
+  // TODO(lint-cleanup): el state `insumos` se carga vía setInsumos pero el JSX
+  // nunca lo lee — parece work-in-progress que quedó orfano. Conservado con
+  // disable hasta que Lucas decida si re-cablear o borrar.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [insumos,setInsumos]=useState<any[]>([]);
   const [guardando,setGuardando]=useState(false);
   const [form,setForm]=useState<{local_id: string|number, prov_id: string, fecha: string, venc: string, nro: string, neto: number|string, iva21: number|string, iva105: number|string, iibb: number|string, total: number|string, cat: string}>({local_id:localActivo||"",prov_id:"",fecha:"",venc:"",nro:"",neto:0,iva21:0,iva105:0,iibb:0,total:0,cat:""});

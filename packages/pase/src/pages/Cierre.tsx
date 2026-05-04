@@ -3,7 +3,7 @@ import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
 import { toISO, today, fmt_$ } from "../lib/utils";
 
-export default function Cierre({ user, locales, localActivo }: any) {
+export default function Cierre({ user, localActivo }: any) {
   const hoy = toISO(today).slice(0, 7);
   // Default: mes actual vs mes anterior
   const mesAnterior = (() => {

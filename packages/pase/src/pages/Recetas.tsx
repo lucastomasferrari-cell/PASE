@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { fmt_d, fmt_$ } from "../lib/utils";
+import { fmt_$ } from "../lib/utils";
 import type { Local } from "../types";
 
 interface RecetasProps {
@@ -107,8 +107,6 @@ export default function Recetas({ locales, localActivo }: RecetasProps) {
           <table>
             <thead><tr><th>Nombre</th><th>Categoría</th><th>Local</th><th>Costo Teórico</th><th>Precio Venta</th><th>Margen</th><th>Estado</th><th></th></tr></thead>
             <tbody>{rFilt.map(r=>{
-              const costo=r._costo||0;
-              const margen=r.precio_venta>0?((r.precio_venta-costo)/r.precio_venta*100):0;
               return(
                 <tr key={r.id} style={{opacity:r.activo?1:0.4}}>
                   <td style={{fontWeight:500}}>{r.nombre}</td>

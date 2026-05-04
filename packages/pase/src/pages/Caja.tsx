@@ -136,7 +136,6 @@ export default function Caja({ user, locales = [], localActivo }: any) {
   const mFilt = movimientos
     .filter(m => filtCuenta === "Todas" || m.cuenta === filtCuenta)
     .filter(m => mostrarAnulados ? true : !m.anulado);
-  const totalLiquidez = Object.values(saldos).reduce((a,b)=>a+b,0);
 
   const guardar = async () => {
     if (saving) return;

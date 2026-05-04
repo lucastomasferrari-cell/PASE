@@ -1,6 +1,5 @@
 import { test, expect } from "@playwright/test";
 import { loginAs } from "./helpers/auth";
-import { goTo } from "./helpers/navigation";
 
 test.describe("Dashboard", () => {
   test.beforeEach(async ({ page }) => {
@@ -29,7 +28,7 @@ test.describe("Dashboard", () => {
     expect(allText).toMatch(/\$\s*[\d.,]+/);
   });
 
-  test.skip("como encargado: solo ve datos de su local", async ({ page }) => {
+  test.skip("como encargado: solo ve datos de su local", async () => {
     // TODO: necesita credenciales de encargado
   });
 });

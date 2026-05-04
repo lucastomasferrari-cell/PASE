@@ -22,7 +22,7 @@ test.describe("Autenticación", () => {
     await expect(page.locator(".sb")).not.toBeVisible();
   });
 
-  test.skip("login como encargado → solo ve sus módulos permitidos", async ({ page }) => {
+  test.skip("login como encargado → solo ve sus módulos permitidos", async () => {
     // TODO: necesita credenciales de encargado
   });
 

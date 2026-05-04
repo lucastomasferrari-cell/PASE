@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { cuentasVisibles } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
-import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
+import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import {
   diasVacacionesPorAnio,
   calcularVacaciones,
@@ -23,7 +23,7 @@ const DOC_TIPOS = [
 ];
 const CUENTAS_LIQ = ["Caja Efectivo","Caja Chica","Caja Mayor","MercadoPago","Banco"];
 
-export default function RRHHLegajo({ empleadoId, user, locales, onClose, onGoToPago }: any) {
+export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: any) {
   const visCuentas = cuentasVisibles(user);
   const cuentasUsables = visCuentas === null ? CUENTAS_LIQ : CUENTAS_LIQ.filter(c => visCuentas.includes(c));
   const [emp, setEmp] = useState<any>(null);
@@ -38,7 +38,6 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose, onGoToP
   // Movimientos
   const [movMeses, setMovMeses] = useState<any[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [pagando, setPagando] = useState(false);
 
   // Vacaciones/Aguinaldo
   const [pagosEsp, setPagosEsp] = useState<any[]>([]);
@@ -247,10 +246,6 @@ export default function RRHHLegajo({ empleadoId, user, locales, onClose, onGoToP
     const { error: upErr } = await db.storage.from("rrhh-documentos").upload(path, file);
     if (upErr) { showToast("Error subiendo: " + upErr.message); setUploading(false); return; }
 
-    // URL firmada 1 hora
-    const { data: signedData } = await db.storage.from("rrhh-documentos").createSignedUrl(path, 3600);
-    const url = signedData?.signedUrl || path;
-
     await db.from("rrhh_documentos").insert([{
       empleado_id: emp.id, tipo: docForm.tipo, nombre_archivo: file.name, url: path,
       mes: docForm.mes ? parseInt(docForm.mes) : null, anio: docForm.anio ? parseInt(docForm.anio) : null,
@@ -403,7 +398,7 @@ function TabDatos({
   liqFinalModal, setLiqFinalModal, liqFinalForm, setLiqFinalForm, liqFinalData,
   liqFinalCuenta, setLiqFinalCuenta, liqFinalOverrides, setLiqFinalOverrides,
   liqFinalLoading, setLiqFinalLoading,
-  user, cuentasUsables, showToast, loadAll,
+  cuentasUsables, showToast, loadAll,
 }: any) {
   return (
     <>
@@ -594,7 +589,6 @@ function TabMovimientos({ emp, movMeses, expanded, setExpanded, esDueno, adelant
         const key = `${nov.anio}-${nov.mes}`;
         const isExp = expanded === key;
         const pagado = liq?.estado === "pagado";
-        const puedePagar = esDueno && nov.estado === "confirmado" && liq && !pagado;
 
         return (
           <div key={key} className="panel" style={{marginBottom:8}}>

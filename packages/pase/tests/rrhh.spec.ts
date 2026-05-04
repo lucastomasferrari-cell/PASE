@@ -97,7 +97,7 @@ test.describe("RRHH", () => {
       await page.waitForTimeout(500);
     });
 
-    test.skip("como encargado: local se autoselecciona", async ({ page }) => {
+    test.skip("como encargado: local se autoselecciona", async () => {
       // TODO: necesita credenciales de encargado
     });
 

@@ -45,7 +45,6 @@ export default function Remitos({ user, locales, localActivo }: RemitosProps) {
   useEffect(()=>{load();},[localActivo]);
 
   const rFilt = remitos;
-  const sinFact = rFilt.filter((r: any)=>r.estado==="sin_factura");
 
   const onProvChange = (prov_id: string) => {
     const prov = proveedores.find((p: any)=>p.id===parseInt(prov_id));

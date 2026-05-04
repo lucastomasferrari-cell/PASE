@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
 import { localesVisibles, applyLocalScope, cuentasVisibles } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
-import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
+import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import {
   calcularVacaciones,
   calcularSACProporcional,
@@ -410,6 +410,9 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
           motivo: "Edición desde listado", registrado_por: user?.id,
         }]);
       }
+      // Strip de campos calculados/derivados que no van al UPDATE; los nombres
+      // documentan qué se descarta (más legible que renombrar a `_x`).
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { valor_dia, valor_hora, creado_at, vacaciones_dias_acumulados, aguinaldo_acumulado, fecha_egreso, motivo_baja, ...upd } = payload as any;
       await db.from("rrhh_empleados").update(upd).eq("id", empModal.id);
     } else {
@@ -926,7 +929,7 @@ function TabPagos({
   locsDisp, esEnc, esDueno, pagoLoading, pagoData,
   totalPagosPend, totalGeneral,
   pagoModal, setPagoModal, formasPago, setFormasPago,
-  pagando, setPagando, loadPagos, loadEmpleados, showToast, user,
+  pagando, setPagando, loadPagos, loadEmpleados, showToast,
   allEmps, adelModal, setAdelModal, adelForm, setAdelForm, guardarAdelanto,
   adelantosPendientes, setAdelantosPendientes, abrirPagoSueldo,
   cuentasUsables,

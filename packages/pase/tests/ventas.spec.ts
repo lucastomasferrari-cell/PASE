@@ -47,7 +47,7 @@ test.describe("Ventas", () => {
     }
   });
 
-  test.skip("filtro por local — encargado solo ve el suyo", async ({ page }) => {
+  test.skip("filtro por local — encargado solo ve el suyo", async () => {
     // TODO: necesita credenciales de encargado
   });
 });

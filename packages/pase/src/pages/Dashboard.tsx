@@ -7,7 +7,7 @@ import { computeSaldoMP, type MovParaSaldo } from "../lib/saldoMP";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
-export default function Dashboard({ user, locales, localActivo }: any) {
+export default function Dashboard({ user, localActivo }: any) {
   const [stats, setStats] = useState<{saldos: Record<string, number>, deuda: number, vencidas: number, ventasHoy: number, remPend: number, blindajeVencidos: number, blindajePorVencer: number, saldoMpTotal: number, credsSinCorte: number}>({saldos:{},deuda:0,vencidas:0,ventasHoy:0,remPend:0,blindajeVencidos:0,blindajePorVencer:0,saldoMpTotal:0,credsSinCorte:0});
   const [provDeuda, setProvDeuda] = useState<any[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);

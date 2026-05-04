@@ -19,5 +19,20 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // El codebase ya usa el prefix `_` para señalar "intencionalmente sin
+      // usar" (ej. _props, _vac, _novedadId). Hacemos que la regla respete
+      // esa convención. Sin esto, código como `function Foo(_props: P)`
+      // dispara false positive aunque el `_` documenta la intención.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          destructuredArrayIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
+    },
   },
 ])

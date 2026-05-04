@@ -1,4 +1,4 @@
-import { type Page, expect } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 // ─── Credenciales por rol ────────────────────────────────────────────────────
 const CREDS: Record<string, { usuario: string; password: string }> = {

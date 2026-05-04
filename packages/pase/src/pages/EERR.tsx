@@ -3,10 +3,10 @@ import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
 import { useCategorias } from "../lib/useCategorias";
 import { useMediosCobro } from "../lib/useMediosCobro";
-import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
+import { toISO, today, fmt_$ } from "../lib/utils";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
-export default function EERR({ user, locales, localActivo }: any) {
+export default function EERR({ user, localActivo }: any) {
   const { CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS } = useCategorias();
   const { mediosDisponibles } = useMediosCobro();
   const [ventas,setVentas]=useState<any[]>([]);

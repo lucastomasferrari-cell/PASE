@@ -4,9 +4,7 @@ import { applyLocalScope, cuentasVisibles } from "../lib/auth";
 import { fmt_$, toISO, today } from "../lib/utils";
 import { CUENTAS } from "../lib/constants";
 
-const MESES = ["","Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-
-export default function Cashflow({ user, locales, localActivo }: any) {
+export default function Cashflow({ user, localActivo }: any) {
   const [mes, setMes] = useState(toISO(today).slice(0,7));
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>({});

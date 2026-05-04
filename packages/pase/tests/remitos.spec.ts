@@ -26,10 +26,8 @@ test.describe("Remitos", () => {
   });
 
   test("alert de advertencia visible", async ({ page }) => {
-    const alert = page.locator(".alert-warn");
-    // Puede o no tener alert dependiendo del estado
-    const visible = await alert.isVisible().catch(() => false);
-    // No falla si no está, solo verifica que no hay errores
+    // Puede o no tener alert dependiendo del estado — no falla si no está,
+    // solo verifica que no hay errores en el render principal.
     const text = await page.locator(".main").innerText();
     expect(text).not.toContain("NaN");
   });

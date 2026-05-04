@@ -119,8 +119,6 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     return true;
   });
 
-  const fActivas = facturas.filter(f => f.estado !== "pagada" && f.estado !== "anulada" && (f.tipo || "factura") !== "nota_credito" && (!localActivo || String(f.local_id) === String(localActivo)));
-
   const onProvChange = (prov_id: string) => {
     const prov = proveedores.find(p => p.id === parseInt(prov_id));
     setForm((f: any) => ({ ...f, prov_id, cat: prov?.cat || f.cat }));
