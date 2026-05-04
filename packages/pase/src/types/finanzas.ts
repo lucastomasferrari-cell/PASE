@@ -61,7 +61,10 @@ export interface Gasto {
   detalle: string | null;
   cuenta: string | null;
   estado: string | null;
-  plantilla_id: string | null;
+  // plantilla_id apunta a gastos_plantillas.id (number). Antes estaba tipado
+  // como string por error — el único consumidor (Gastos.tsx) compara con
+  // plantilla.id que es number.
+  plantilla_id: number | null;
 }
 
 export interface Proveedor {

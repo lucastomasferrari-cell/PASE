@@ -6,11 +6,24 @@ import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import type { Usuario, Local } from "../types";
+import type { Gasto } from "../types/finanzas";
 
 interface GastosProps {
   user: Usuario;
   locales: Local[];
   localActivo: number | null;
+}
+
+// Plantilla recurrente de gasto (rrhh: rrhh_plantillas, gasto: gastos_plantillas).
+// Tabla gastos_plantillas creada en migration 202604281209 con tenant_id y RLS.
+interface GastoPlantilla {
+  id: number;
+  nombre: string;
+  tipo: string;
+  categoria: string;
+  local_id: number | null;
+  activo: boolean;
+  tenant_id?: string;
 }
 
 const TIPOS = [
@@ -37,11 +50,11 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
   const [desde, setDesde] = useState(toISO(new Date(today.getFullYear(), today.getMonth(), 1)));
   const [hasta, setHasta] = useState(toISO(today));
   const [tipoFiltro, setTipoFiltro] = useState("todos");
-  const [gastos, setGastos] = useState<any[]>([]);
-  const [plantillas, setPlantillas] = useState<any[]>([]);
+  const [gastos, setGastos] = useState<Gasto[]>([]);
+  const [plantillas, setPlantillas] = useState<GastoPlantilla[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
-  const [pagarModal, setPagarModal] = useState<any>(null);
+  const [pagarModal, setPagarModal] = useState<GastoPlantilla | null>(null);
   const [gestionarModal, setGestionarModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pagandoPlant, setPagandoPlant] = useState(false);
@@ -63,8 +76,8 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
     let pq = db.from("gastos_plantillas").select("*").eq("activo", true).order("nombre");
     pq = applyLocalScope(pq, user, localActivo);
     const { data: p } = await pq;
-    setGastos((g || []).filter(g => g.categoria !== "SUELDOS"));
-    setPlantillas(p || []);
+    setGastos(((g as Gasto[]) || []).filter(g => g.categoria !== "SUELDOS"));
+    setPlantillas((p as GastoPlantilla[]) || []);
     setLoading(false);
   };
   useEffect(() => { load(); }, [desde, hasta, localActivo]);
@@ -79,7 +92,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
 
   const totalPeriodo = histFiltrado.reduce((s, g) => s + (g.monto || 0), 0);
 
-  const getEstadoPlantilla = (plantilla: any) => {
+  const getEstadoPlantilla = (plantilla: GastoPlantilla) => {
     const pago = gastos.find(g => g.plantilla_id === plantilla.id);
     return pago ? { pagado: true, monto: pago.monto, fecha: pago.fecha } : { pagado: false };
   };
@@ -109,7 +122,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
       });
       if (error) throw error;
       setModal(false); setForm(emptyForm); load();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error guardando gasto:", err);
       alert(translateRpcError(err));
     } finally {
@@ -117,7 +130,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
     }
   };
 
-  const abrirPagarPlantilla = (p: any) => {
+  const abrirPagarPlantilla = (p: GastoPlantilla) => {
     setPagarModal(p);
     setPagoPlantForm({ ...emptyPagoPlant, fecha: toISO(today) });
   };
@@ -139,7 +152,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
       });
       if (error) throw error;
       setPagarModal(null); setPagoPlantForm(emptyPagoPlant); load();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error pago plantilla:", err);
       alert(translateRpcError(err));
     } finally {
@@ -149,7 +162,13 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
 
   const guardarPlantilla = async () => {
     if (!plantForm.nombre || !plantForm.categoria) return;
-    const payload: any = { nombre: plantForm.nombre, tipo: plantForm.tipo, categoria: plantForm.categoria, local_id: plantForm.local_id ? parseInt(plantForm.local_id) : null, activo: true };
+    const payload: Omit<GastoPlantilla, "id"> = {
+      nombre: plantForm.nombre,
+      tipo: plantForm.tipo,
+      categoria: plantForm.categoria,
+      local_id: plantForm.local_id ? parseInt(plantForm.local_id) : null,
+      activo: true,
+    };
     await db.from("gastos_plantillas").insert([payload]);
     setPlantForm(emptyPlantForm); load();
   };
