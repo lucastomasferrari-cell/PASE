@@ -66,8 +66,13 @@ export default function App() {
   // sesiones fresh tipo incógnito).
   useEffect(()=>{
     if (!user) return;
+    // refetchLocales internamente llama setLocales después del fetch async,
+    // pero el rule lo flaggea porque la setState está dentro del scope del
+    // effect. Es el patrón de fetch-on-dep-change estándar — agregar
+    // refetchLocales a deps generaría re-fetch infinito (la fn se recrea
+    // cada render).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refetchLocales();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[user]);
 
   // Restaurar sesión al cargar — única fuente de verdad: Supabase Auth
@@ -154,7 +159,6 @@ export default function App() {
       }
     });
     return () => subscription.unsubscribe();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
   const applyLogin = async (u: UsuarioRow) => {
