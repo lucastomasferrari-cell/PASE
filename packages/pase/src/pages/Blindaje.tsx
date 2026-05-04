@@ -2,6 +2,44 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
 import { toISO, today, fmt_d } from "../lib/utils";
+import type { Usuario, Local } from "../types";
+
+interface BlindajeTipo {
+  id: number;
+  nombre: string;
+  descripcion: string | null;
+  orden: number;
+  activo: boolean;
+}
+
+interface BlindajeDoc {
+  id: string;
+  local_id: number;
+  tipo_id: number;
+  tipo_nombre: string;
+  vencimiento: string | null;
+  archivo_url: string | null;
+  notas: string | null;
+  estado: string;
+  updated_at?: string;
+}
+
+interface BlindajeProps {
+  user: Usuario | null;
+  locales: Local[];
+  localActivo: number | null;
+}
+
+// El modal de tipos se abre con "new" para crear o con un BlindajeTipo
+// existente para editar. null = cerrado.
+type TipoModalState = BlindajeTipo | "new" | null;
+
+// El modal de documentos siempre conoce el tipo y el doc actual (puede
+// ser null si es la primera vez para ese tipo).
+interface DocModalState {
+  tipo: BlindajeTipo;
+  doc: BlindajeDoc | null;
+}
 
 const COLORES: Record<string, string> = {
   vigente: "var(--success)",
@@ -25,30 +63,30 @@ const getEstado = (venc: string | null): string => {
   return "vigente";
 };
 
-export default function Blindaje({ user, locales, localActivo }: any) {
+export default function Blindaje({ user, locales, localActivo }: BlindajeProps) {
   const esAdmin = user?.rol === "dueno" || user?.rol === "admin";
-  const [tipos, setTipos] = useState<any[]>([]);
-  const [documentos, setDocumentos] = useState<any[]>([]);
+  const [tipos, setTipos] = useState<BlindajeTipo[]>([]);
+  const [documentos, setDocumentos] = useState<BlindajeDoc[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [tipoModal, setTipoModal] = useState<any>(null);
+  const [tipoModal, setTipoModal] = useState<TipoModalState>(null);
   const [tipoForm, setTipoForm] = useState({ nombre: "", descripcion: "", orden: 0 });
 
-  const [docModal, setDocModal] = useState<any>(null);
+  const [docModal, setDocModal] = useState<DocModalState | null>(null);
   const [docForm, setDocForm] = useState({ vencimiento: "", notas: "" });
   const [archivo, setArchivo] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
   const loadTipos = async () => {
     const { data } = await db.from("blindaje_tipos_documento").select("*").order("orden").order("nombre");
-    setTipos(data || []);
+    setTipos((data as BlindajeTipo[]) || []);
   };
 
   const loadDocumentos = async () => {
     let q = db.from("blindaje_documentos").select("*");
     q = applyLocalScope(q, user, localActivo);
     const { data } = await q;
-    setDocumentos(data || []);
+    setDocumentos((data as BlindajeDoc[]) || []);
   };
 
   const loadAll = async () => {
@@ -64,13 +102,15 @@ export default function Blindaje({ user, locales, localActivo }: any) {
     setTipoForm({ nombre: "", descripcion: "", orden: tipos.length + 1 });
     setTipoModal("new");
   };
-  const abrirTipoEditar = (t: any) => {
+  const abrirTipoEditar = (t: BlindajeTipo) => {
     setTipoForm({ nombre: t.nombre, descripcion: t.descripcion || "", orden: t.orden || 0 });
     setTipoModal(t);
   };
   const guardarTipo = async () => {
     if (!tipoForm.nombre.trim()) return;
-    if (tipoModal?.id) {
+    // tipoModal puede ser "new" | BlindajeTipo | null. Si es BlindajeTipo
+    // tiene id (edición); si es "new" no (creación).
+    if (tipoModal && tipoModal !== "new" && tipoModal.id) {
       await db.from("blindaje_tipos_documento").update({ nombre: tipoForm.nombre, descripcion: tipoForm.descripcion || null, orden: tipoForm.orden }).eq("id", tipoModal.id);
     } else {
       await db.from("blindaje_tipos_documento").insert([{ nombre: tipoForm.nombre, descripcion: tipoForm.descripcion || null, orden: tipoForm.orden, activo: true }]);
@@ -78,13 +118,13 @@ export default function Blindaje({ user, locales, localActivo }: any) {
     setTipoModal(null);
     loadTipos();
   };
-  const toggleTipoActivo = async (t: any) => {
+  const toggleTipoActivo = async (t: BlindajeTipo) => {
     await db.from("blindaje_tipos_documento").update({ activo: !t.activo }).eq("id", t.id);
     loadTipos();
   };
 
   // ─── DOCUMENTOS ────────────────────────────────────────────────────────────
-  const abrirDoc = (tipo: any, doc: any | null) => {
+  const abrirDoc = (tipo: BlindajeTipo, doc: BlindajeDoc | null) => {
     setArchivo(null);
     setDocForm({
       vencimiento: doc?.vencimiento || "",
@@ -135,7 +175,7 @@ export default function Blindaje({ user, locales, localActivo }: any) {
     loadDocumentos();
   };
 
-  const verArchivo = async (doc: any) => {
+  const verArchivo = async (doc: BlindajeDoc) => {
     if (!doc.archivo_url) return;
     const { data } = await db.storage.from("blindaje").createSignedUrl(doc.archivo_url, 3600);
     if (data?.signedUrl) window.open(data.signedUrl, "_blank");
@@ -145,7 +185,7 @@ export default function Blindaje({ user, locales, localActivo }: any) {
   if (loading) return <div className="loading">Cargando...</div>;
 
   const tiposActivos = tipos.filter(t => t.activo);
-  const localNombre = locales.find((l: any) => l.id === parseInt(String(localActivo)))?.nombre || "—";
+  const localNombre = locales.find((l: Local) => l.id === parseInt(String(localActivo)))?.nombre || "—";
 
   return (
     <div>
