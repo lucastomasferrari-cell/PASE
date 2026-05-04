@@ -75,6 +75,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const [imgUrl, setImgUrl] = useState<string | null>(null);
   const [imgLoading, setImgLoading] = useState(false);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!verModal?.imagen_url) { setImgUrl(null); return; }
     let cancelled = false;
     setImgLoading(true);
@@ -117,6 +118,8 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     setProveedores((p as Proveedor[]) || []);
     setLoading(false);
   };
+  // Patrón fetch-on-dep-change.
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [localActivo]);
 
   const fFilt = facturas.filter(f => {
