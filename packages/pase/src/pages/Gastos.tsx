@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope, cuentasVisibles } from "../lib/auth";
+import { applyLocalScope, cuentasOperables } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS } from "../lib/constants";
@@ -44,8 +44,10 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
     t === "impuesto" ? GASTOS_IMPUESTOS :
     t === "comision" ? COMISIONES_CATS :
     ALL_CATS;
-  const visCuentas = cuentasVisibles(user);
-  const cuentasUsables = visCuentas === null ? CUENTAS : CUENTAS.filter(c => visCuentas.includes(c));
+  // Cuentas para el dropdown "Cuenta de egreso" — filtra por cuentas_operables
+  // (no visibles): un usuario puede pagar contra una cuenta cuyo saldo no ve.
+  const opCuentas = cuentasOperables(user);
+  const cuentasUsables = opCuentas === null ? CUENTAS : CUENTAS.filter(c => opCuentas.includes(c));
   const [search, setSearch] = useState("");
   const [desde, setDesde] = useState(toISO(new Date(today.getFullYear(), today.getMonth(), 1)));
   const [hasta, setHasta] = useState(toISO(today));

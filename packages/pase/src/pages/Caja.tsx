@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope, cuentasVisibles as cuentasVisiblesFn, localesVisibles } from "../lib/auth";
+import { applyLocalScope, cuentasVisibles as cuentasVisiblesFn, cuentasOperables as cuentasOperablesFn, cuentasVisiblesParaListados, localesVisibles } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS } from "../lib/constants";
@@ -70,9 +70,21 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     return "Egreso Manual";
   };
 
-  // cuentas_visibles del usuario (null = todas). Si null, usamos el listado completo.
+  // cuentas_visibles del usuario (null = todas) — para CARDS DE SALDO.
+  // Mantenemos el nombre legacy `cuentasVisibles` aquí para el array que
+  // consumen las cards (no romper call-sites más abajo).
   const vis = cuentasVisiblesFn(user);
   const cuentasVisibles = vis === null ? CUENTAS : vis;
+  // cuentas_operables del usuario (null = todas) — para los DROPDOWNS de
+  // "Nuevo Movimiento" y "Editar". Es separable de cuentas_visibles: un
+  // user puede operar contra MP sin ver su saldo.
+  const op = cuentasOperablesFn(user);
+  const cuentasOperablesList = op === null ? CUENTAS : op;
+  // cuentas_visibles ∪ cuentas_operables — para LISTADO de movimientos
+  // (tabla principal) y filtro de cuenta. Coherente con "puede ver el
+  // movimiento aunque no vea el saldo consolidado".
+  const visParaListado = cuentasVisiblesParaListados(user);
+  const cuentasParaListado = visParaListado === null ? CUENTAS : visParaListado;
 
   // Locales accesibles: dueno/admin = todos; encargado = los asignados.
   const visLocs = localesVisibles(user);
@@ -101,16 +113,16 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   const [form, setForm] = useState(emptyForm);
 
   // Defensive: si form.cuenta queda con un valor que no está en
-  // cuentasVisibles (edge cases de regression o cambio de scope del user),
-  // resetea a "" para que el placeholder del <select> aparezca y el user
-  // tenga que elegir. NO borrar — esto previene el retorno del bug Caja-1.
+  // cuentasOperablesList (edge cases de regression o cambio de scope), resetea
+  // a "" para que el placeholder del <select> aparezca y el user tenga que
+  // elegir. NO borrar — previene la regresión del bug Caja-1.
   useEffect(() => {
-    if (form.cuenta && !cuentasVisibles.includes(form.cuenta)) {
+    if (form.cuenta && !cuentasOperablesList.includes(form.cuenta)) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm(f => ({ ...f, cuenta: "" }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.cuenta, cuentasVisibles.join("|")]);
+  }, [form.cuenta, cuentasOperablesList.join("|")]);
   // BUG 5: al abrir el modal de nuevo movimiento, resetear todos los campos
   // a estado vacío (antes quedaban pre-llenados con el último movimiento).
   const abrirNuevoMovimiento = () => {
@@ -340,7 +352,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
       <div className="ph-row">
         <div><div className="ph-title">Tesorería</div></div>
         <div style={{display:"flex",gap:8}}>
-          <button className="btn btn-sec" onClick={()=>setTransfModal(true)} disabled={cuentasVisibles.length<2}>↔ Transferir</button>
+          <button className="btn btn-sec" onClick={()=>setTransfModal(true)} disabled={cuentasOperablesList.length<2}>↔ Transferir</button>
           <button className="btn btn-acc" onClick={abrirNuevoMovimiento}>+ Movimiento</button>
         </div>
       </div>
@@ -365,7 +377,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
               Ver anulados
             </label>
             <select className="search" style={{width:160}} value={filtCuenta} onChange={e=>setFiltCuenta(e.target.value)}>
-              <option>Todas</option>{cuentasVisibles.map(c=><option key={c}>{c}</option>)}
+              <option>Todas</option>{cuentasParaListado.map(c=><option key={c}>{c}</option>)}
             </select>
           </div>
         </div>
@@ -437,7 +449,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
               <div className="form2">
                 <div className="field"><label>Cuenta</label>
                   <select value={editMov.cuenta} onChange={e => setEditMov({...editMov, cuenta: e.target.value})}>
-                    {cuentasVisibles.map(c => <option key={c}>{c}</option>)}
+                    {cuentasOperablesList.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div className="field"><label>Importe $</label>
@@ -516,7 +528,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
                 </div>
               )}
               <div className="form2">
-                <div className="field"><label>Cuenta *</label><select value={form.cuenta} onChange={e=>setForm({...form,cuenta:e.target.value})}><option value="">Seleccioná una cuenta…</option>{cuentasVisibles.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+                <div className="field"><label>Cuenta *</label><select value={form.cuenta} onChange={e=>setForm({...form,cuenta:e.target.value})}><option value="">Seleccioná una cuenta…</option>{cuentasOperablesList.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
                 <div className="field"><label>Dirección</label><select value={form.esEgreso?"egreso":"ingreso"} onChange={e=>setForm({...form,esEgreso:e.target.value==="egreso"})}><option value="egreso">Egreso (sale plata)</option><option value="ingreso">Ingreso (entra plata)</option></select></div>
               </div>
               <div className="form2">
@@ -551,8 +563,8 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
                 </div>
               )}
               <div className="form2">
-                <div className="field"><label>Cuenta origen</label><select value={transfForm.origen} onChange={e=>setTransfForm({...transfForm,origen:e.target.value})}><option value="">— elegí cuenta —</option>{cuentasVisibles.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
-                <div className="field"><label>Cuenta destino</label><select value={transfForm.destino} onChange={e=>setTransfForm({...transfForm,destino:e.target.value})}><option value="">— elegí cuenta —</option>{cuentasVisibles.filter(c=>c!==transfForm.origen).map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+                <div className="field"><label>Cuenta origen</label><select value={transfForm.origen} onChange={e=>setTransfForm({...transfForm,origen:e.target.value})}><option value="">— elegí cuenta —</option>{cuentasOperablesList.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+                <div className="field"><label>Cuenta destino</label><select value={transfForm.destino} onChange={e=>setTransfForm({...transfForm,destino:e.target.value})}><option value="">— elegí cuenta —</option>{cuentasOperablesList.filter(c=>c!==transfForm.origen).map(c=><option key={c} value={c}>{c}</option>)}</select></div>
               </div>
               <div className="form2">
                 <div className="field"><label>Monto $</label><input type="number" value={transfForm.monto} onChange={e=>setTransfForm({...transfForm,monto:e.target.value})} placeholder="0"/></div>
