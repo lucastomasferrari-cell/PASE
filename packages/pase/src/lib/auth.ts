@@ -1,4 +1,5 @@
 import { createContext, useContext } from "react";
+import type { Usuario } from "../types/auth";
 
 // ─── TIPOS ───────────────────────────────────────────────────────────────────
 // usuarios.id = INTEGER, usuarios.rol = TEXT, usuarios.locales = INTEGER[]
@@ -6,6 +7,17 @@ import { createContext, useContext } from "react";
 // usuario_permisos.usuario_id = INTEGER
 // usuario_locales.usuario_id = INTEGER, local_id = INTEGER
 // rrhh_novedades.cargado_por = INTEGER
+
+// Las funciones de permisos pueden invocarse con:
+//   - Usuario completo (sesión activa, hidratada con _permisos/_locales).
+//   - null (sin sesión).
+//   - undefined (context sin hidratar).
+//   - Mocks parciales en tests (ej. \`{ rol: "encargado", _locales: [1,2] }\`)
+//     — los tests verifican solo la lógica rol-based sin construir Usuarios
+//     completos. Por eso usamos Partial<Usuario>: todos los campos opcionales,
+//     pero typesafe en lectura porque las funciones hacen \`if (!user) return\`
+//     y leen sólo lo que necesitan.
+type MaybeUser = Partial<Usuario> | null | undefined;
 
 export const ROLES: Record<string, { label: string; color: string; permisos?: string[] }> = {
   // superadmin: rol externo a tenants (TASK 0.15). Ve todos los módulos
@@ -44,18 +56,22 @@ export const MODULOS = [
 
 // ─── FUNCIONES PURAS ─────────────────────────────────────────────────────────
 
-export function getPermisos(user: any): string[] {
+export function getPermisos(user: MaybeUser): string[] {
   if (!user) return [];
   // superadmin (TASK 0.15) ve TODOS los módulos incluyendo 'tenants'.
   if (user.rol === "superadmin") return MODULOS.map(m => m.slug);
   // Dueño/admin del tenant ven todos los módulos EXCEPTO 'tenants' (que es
   // exclusivo de superadmin).
   if (user.rol === "dueno") return MODULOS.filter(m => m.slug !== "tenants").map(m => m.slug);
-  if (user._permisos?.length) return user._permisos.filter((s: string) => s !== "tenants");
-  return (ROLES[user.rol]?.permisos || []).filter((s: string) => s !== "tenants");
+  if (user._permisos?.length) return user._permisos.filter(s => s !== "tenants");
+  // user.rol puede ser undefined cuando se invoca con mock parcial. ROLES[""]
+  // devuelve undefined → ?.permisos → undefined → [] vacío. Comportamiento
+  // equivalente al previo (con `any` el index access no se chequeaba).
+  const rolKey = user.rol ?? "";
+  return (ROLES[rolKey]?.permisos || []).filter(s => s !== "tenants");
 }
 
-export function tienePermiso(user: any, slug: string): boolean {
+export function tienePermiso(user: MaybeUser, slug: string): boolean {
   if (!user) return false;
   // 'tenants' es exclusivo de superadmin sin importar otros permisos.
   if (slug === "tenants") return user.rol === "superadmin";
@@ -63,7 +79,7 @@ export function tienePermiso(user: any, slug: string): boolean {
   return getPermisos(user).includes(slug);
 }
 
-export function esEncargado(user: any): boolean {
+export function esEncargado(user: MaybeUser): boolean {
   return user?.rol === "encargado";
 }
 
@@ -79,7 +95,7 @@ export function esEncargado(user: any): boolean {
  * - encargado >1 locales + sin stored o stored inválido → "showModal"
  */
 export function necesitaElegirLocal(
-  user: any,
+  user: MaybeUser,
   storedLocalActivo: number | null,
 ): { action: "none" | "setActivo" | "showModal"; localId?: number } {
   if (!user) return { action: "none" };
@@ -94,7 +110,7 @@ export function necesitaElegirLocal(
 }
 
 /** null = todos los locales (dueno/admin). number[] para encargado. */
-export function localesVisibles(user: any): number[] | null {
+export function localesVisibles(user: MaybeUser): number[] | null {
   if (!user) return [];
   if (user.rol === "dueno" || user.rol === "admin") return null;
   return user._locales?.length ? user._locales : (user.locales || []);
@@ -106,7 +122,7 @@ export function localesVisibles(user: any): number[] | null {
  *  []       → ningún local accesible → la query debe devolver vacío
  *  number[] → filtrar por estos locales
  */
-export function scopeLocales(user: any, localActivo: number | null): number[] | null {
+export function scopeLocales(user: MaybeUser, localActivo: number | null): number[] | null {
   const visibles = localesVisibles(user);
   if (localActivo != null) {
     if (visibles === null) return [localActivo];
@@ -120,12 +136,25 @@ export function scopeLocales(user: any, localActivo: number | null): number[] | 
  *   let q = db.from("facturas").select("*").eq("prov_id", p.id);
  *   q = applyLocalScope(q, user, localActivo);
  */
-export function applyLocalScope<Q>(q: Q, user: any, localActivo: number | null, col = "local_id"): Q {
+// Constraint estructural minimal sobre Q: el query builder debe tener
+// .eq y .in chainables. Cualquier PostgrestFilterBuilder de Supabase los
+// expone. El cast \`as Q\` post-llamada preserva el tipo concreto del builder
+// que pasó el caller.
+type LocalScopeFilterable = {
+  eq: (col: string, val: number) => unknown;
+  in: (col: string, vals: number[]) => unknown;
+};
+export function applyLocalScope<Q extends LocalScopeFilterable>(
+  q: Q,
+  user: MaybeUser,
+  localActivo: number | null,
+  col = "local_id",
+): Q {
   const scope = scopeLocales(user, localActivo);
   if (scope === null) return q;
-  if (scope.length === 0) return (q as any).eq(col, -1); // match imposible
-  if (scope.length === 1) return (q as any).eq(col, scope[0]);
-  return (q as any).in(col, scope);
+  if (scope.length === 0) return q.eq(col, -1) as Q; // match imposible
+  if (scope.length === 1) return q.eq(col, scope[0]!) as Q;
+  return q.in(col, scope) as Q;
 }
 
 /**
@@ -134,14 +163,14 @@ export function applyLocalScope<Q>(q: Q, user: any, localActivo: number | null, 
  *   []      → ninguna
  *   string[]→ sólo esas
  */
-export function cuentasVisibles(user: any): string[] | null {
+export function cuentasVisibles(user: MaybeUser): string[] | null {
   if (!user) return [];
   if (user.rol === "dueno" || user.rol === "admin") return null;
   if (user.cuentas_visibles === null || user.cuentas_visibles === undefined) return null;
   return user.cuentas_visibles;
 }
 
-export function puedeVerCuenta(user: any, cuenta: string): boolean {
+export function puedeVerCuenta(user: MaybeUser, cuenta: string): boolean {
   const vis = cuentasVisibles(user);
   if (vis === null) return true;
   return vis.includes(cuenta);
@@ -154,18 +183,26 @@ export function puedeVerCuenta(user: any, cuenta: string): boolean {
 // El context guarda { user, refreshPermisos }. Retrocompat: si el value es
 // un objeto user plano (sin refreshPermisos), se sigue leyendo como antes.
 interface AuthContextValue {
-  user: any;
+  user: Usuario | null;
   refreshPermisos?: () => Promise<void>;
 }
-const AuthContext = createContext<any>(null);
+// El value del context puede ser:
+//   - AuthContextValue (forma nueva: { user, refreshPermisos? })
+//   - Usuario directo (forma legacy)
+//   - null (sin sesión)
+// useAuth() runtime-detecta cuál es por la presencia de .user.
+type AuthContextRaw = AuthContextValue | Usuario | null;
+const AuthContext = createContext<AuthContextRaw>(null);
 export const AuthProvider = AuthContext.Provider;
 
 export function useAuth() {
   const raw = useContext(AuthContext);
   // Permite dos formas de pasar el value: { user, refreshPermisos } (nuevo)
   // o el user directo (legacy). Detectamos por la presencia de .user.
-  const isWrapped = raw && typeof raw === "object" && "user" in raw;
-  const user = isWrapped ? (raw as AuthContextValue).user : raw;
+  // Usuario tiene id/email/rol/etc. pero NO tiene una key llamada "user", así
+  // que la presencia de "user" identifica AuthContextValue de forma única.
+  const isWrapped = raw !== null && typeof raw === "object" && "user" in raw;
+  const user: Usuario | null = isWrapped ? (raw as AuthContextValue).user : (raw as Usuario | null);
   const refreshPermisos = isWrapped ? (raw as AuthContextValue).refreshPermisos : undefined;
   return {
     user,
