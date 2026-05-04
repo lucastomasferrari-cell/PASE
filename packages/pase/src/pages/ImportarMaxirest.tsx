@@ -213,9 +213,9 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: I
       console.log("[maxirest] Import OK: "+ventasIns.length+" filas persistidas, total "+fmt_$(preview.ventas.reduce((s: number,v: VentaMaxirest)=>s+v.monto,0)));
       alert("✓ Importado: "+ventasIns.length+" registros · Total: "+fmt_$(preview.ventas.reduce((s: number,v: VentaMaxirest)=>s+v.monto,0)));
       onImported?.();
-    } catch (err: any) {
+    } catch (err) {
       console.error("[maxirest] confirmar error:",err);
-      alert("No se pudo importar: "+err.message);
+      alert("No se pudo importar: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setLoading(false);
     }
