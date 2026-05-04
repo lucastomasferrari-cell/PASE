@@ -17,10 +17,87 @@ interface ToastState {
   msg: string;
 }
 
+// Row consumida del table mp_movimientos. Cubre los campos que la página
+// efectivamente lee — la columna real puede tener más, no rompe (los
+// datos vienen via cast desde supabase agnóstico).
+interface MpMovimiento {
+  id: string;
+  tipo: string;
+  fecha: string | null;
+  monto: number;
+  monto_bruto?: number | null;
+  medio_pago?: string | null;
+  descripcion?: string | null;
+  local_id?: number | null;
+  anulado?: boolean | null;
+  conciliado?: boolean | null;
+  referencia_id?: string | null;
+  money_release_status?: string | null;
+  money_release_date?: string | null;
+}
+
+// Row de mp_credenciales con join 1:1 a locales(nombre). En supabase el
+// nested-select de FK 1-1 devuelve el objeto plano (o null si el FK está
+// roto / sin match).
+interface MpCredencial {
+  id: number;
+  local_id: number;
+  tenant_id: string;
+  activo: boolean;
+  ultima_sync: string | null;
+  access_token_last8: string | null;
+  saldo_inicial: number | null;
+  saldo_inicial_at: string | null;
+  saldo_disponible: number | null;
+  por_acreditar: number | null;
+  balance_at: string | null;
+  locales: { nombre: string } | null;
+}
+
+// Partial selects: la página solo trae las columnas usadas para los
+// dropdowns "vincular a factura/gasto existente" en el modal de conciliar.
+interface FacturaSlim {
+  id: string;
+  nro: string;
+  fecha: string;
+  total: number;
+  local_id: number;
+  cat: string;
+  estado: string;
+}
+
+interface GastoSlim {
+  id: string;
+  fecha: string;
+  categoria: string;
+  detalle: string | null;
+  monto: number;
+  local_id: number | null;
+  cuenta: string | null;
+}
+
+// Respuesta de /api/mp-process: array d.resultados con un item por local.
+interface MpProcessResultado {
+  local_id: number;
+  local: string;
+  movimientos: number;
+  release_rows: number;
+  saldo_disponible: number;
+  release_error?: string;
+  upd_error?: string;
+}
+
+// Respuesta de /api/mp-sync?reset: array d.reset con un item por local.
+interface MpResetResultado {
+  local_id: number;
+  deleted?: number;
+  error?: string;
+}
+
 function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   const { COMISIONES_CATS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD } = useCategorias();
-  const [credenciales,setCredenciales]=useState<any[]>([]);
-  const [movimientos,setMovimientos]=useState<any[]>([]);
+  const [credenciales,setCredenciales]=useState<MpCredencial[]>([]);
+  const [movimientos,setMovimientos]=useState<MpMovimiento[]>([]);
   // pay-* (ingresos + egresos, no anulados) sin filtro de fecha — usados
   // para calcular el saldo MP del header relativo al saldo_inicial_at de
   // cada credencial. Se carga en load() y se filtra cliente-side por local
@@ -30,9 +107,9 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   // Bug 2 — tab "Por cobrar" carga TODOS los pending sin filtro de fecha
   // (datepicker ignorado). Se trae en query separada al load() para no
   // mezclar con la ventana de Ventas/Ingresos.
-  const [porCobrarAll,setPorCobrarAll]=useState<any[]>([]);
-  const [facturas,setFacturas]=useState<any[]>([]);
-  const [gastos,setGastos]=useState<any[]>([]);
+  const [porCobrarAll,setPorCobrarAll]=useState<MpMovimiento[]>([]);
+  const [facturas,setFacturas]=useState<FacturaSlim[]>([]);
+  const [gastos,setGastos]=useState<GastoSlim[]>([]);
   const [loading,setLoading]=useState(true);
   const [sincronizando,setSincronizando]=useState(false);
   const [toast,setToast]=useState<ToastState | null>(null);
@@ -42,7 +119,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   const [hasta,setHasta]=useState(toISO(today));
   const [configModal,setConfigModal]=useState(false);
   const [configForm,setConfigForm]=useState({local_id:"",access_token:""});
-  const [conciliarModal,setConciliarModal]=useState<any | null>(null); // movimiento a conciliar
+  const [conciliarModal,setConciliarModal]=useState<MpMovimiento | null>(null); // movimiento a conciliar
   const [conciliarTab,setConciliarTab]=useState("gasto"); // gasto | factura | nuevo
   const [nuevoGastoForm,setNuevoGastoForm]=useState({categoria:"",detalle:""});
   const [vinculoSel,setVinculoSel]=useState("");
@@ -121,12 +198,15 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
       if(gasRes.error)console.warn("gastos load error:",gasRes.error);
       const c=credRes.data||[], m=movRes.data||[], saldoRows=saldoRes.data||[], pcAll=porCobrarRes.data||[], f=facRes.data||[], g=gasRes.data||[];
       console.log("[MP] load:",c.length,"credenciales /",m.length,"movimientos /",pcAll.length,"por cobrar (todos) /",saldoRows.length,"pay-* para saldo /",f.length,"facturas /",g.length,"gastos");
-      setCredenciales((c as any[]).filter((x: any)=>!localActivo||x.local_id===localActivo));
-      setMovimientos(m as any[]);
+      // Supabase tipa el nested-select locales(nombre) como { nombre }[]
+      // (FK genérica), pero en runtime devuelve objeto plano para 1:1.
+      // Cast vía unknown — patrón estándar en este codebase para FKs 1-1.
+      setCredenciales((c as unknown as MpCredencial[]).filter(x=>!localActivo||x.local_id===localActivo));
+      setMovimientos(m as MpMovimiento[]);
       setSaldoMovs(saldoRows as MovParaSaldo[]);
-      setPorCobrarAll(pcAll as any[]);
-      setFacturas((f as any[]).filter((x: any)=>!localActivo||x.local_id===localActivo));
-      setGastos((g as any[]).filter((x: any)=>!localActivo||x.local_id===localActivo));
+      setPorCobrarAll(pcAll as MpMovimiento[]);
+      setFacturas((f as FacturaSlim[]).filter(x=>!localActivo||x.local_id===localActivo));
+      setGastos((g as GastoSlim[]).filter(x=>!localActivo||x.local_id===localActivo));
     }catch(e){
       console.error("ConciliacionMP load error:",e);
     }finally{
@@ -192,9 +272,9 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
 
       if(d.ok){
         await load();
-        const totalMovs=(d.resultados||[]).reduce((s: number,x: any)=>s+(Number(x.movimientos)||0),0);
-        const saldoTotal=(d.resultados||[]).reduce((s: number,x: any)=>s+(Number(x.saldo_disponible)||0),0);
-        const csvNoEncontrado=(d.resultados||[]).some((x: any)=>x.release_error&&x.release_error.includes("CSV no encontrado"));
+        const totalMovs=(d.resultados||[]).reduce((s: number,x: MpProcessResultado)=>s+(Number(x.movimientos)||0),0);
+        const saldoTotal=(d.resultados||[]).reduce((s: number,x: MpProcessResultado)=>s+(Number(x.saldo_disponible)||0),0);
+        const csvNoEncontrado=(d.resultados||[]).some((x: MpProcessResultado)=>x.release_error&&x.release_error.includes("CSV no encontrado"));
         if(csvNoEncontrado){
           showToast("err","⚠ MercadoPago no generó el reporte a tiempo. Intentá sincronizar de nuevo en unos minutos.");
         }else{
@@ -229,7 +309,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   // Borra todos los mp_movimientos de un local y vuelve a sincronizar,
   // así los pagos se re-clasifican con la lógica actual. Útil después
   // de arreglar reglas de clasificación.
-  const resetearLocal=async(localId: number, nombre: string)=>{
+  const resetearLocal=async(localId: number, nombre: string | undefined)=>{
     if(!confirm(`Borrar todos los movimientos MP de ${nombre||"este local"} y re-sincronizar? Esta acción no se puede deshacer.`))return;
     setSincronizando(true);
     try{
@@ -237,7 +317,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
       const d=await r.json();
       console.log("[MP] reset response:",d);
       if(d.ok){
-        const resetInfo=(d.reset||[]).map((x: any)=>x.local_id+": "+(x.deleted??x.error)).join(", ");
+        const resetInfo=(d.reset||[]).map((x: MpResetResultado)=>x.local_id+": "+(x.deleted??x.error)).join(", ");
         await load();
         alert("Reset + sync completados\n"+resetInfo);
       }else{
@@ -261,10 +341,10 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   // _fuentes con la lista de prefijos disponibles para badge visual.
   // Saldo legacy NO usa esta lógica — sigue sumando solo rr-*/set-* via
   // saldo_disponible (precalculado en mp_credenciales por mp-process).
-  const dedupedMovs = (() => {
-    const groups = new Map<string, any[]>();
-    const sinId: any[] = [];
-    for (const m of movimientos as any[]) {
+  const dedupedMovs: MpMovimiento[] = (() => {
+    const groups = new Map<string, MpMovimiento[]>();
+    const sinId: MpMovimiento[] = [];
+    for (const m of movimientos) {
       const idStr = String(m.id || "");
       if (!idStr) { sinId.push(m); continue; }
       const core = idStr.startsWith("pay-") ? idStr.slice(4)
@@ -279,10 +359,12 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
       id.startsWith("pay-") ? 1 : id.startsWith("rr-") ? 2 : id.startsWith("set-") ? 3 : 4;
     const tag = (id: string) =>
       id.startsWith("pay-") ? "pay" : id.startsWith("rr-") ? "rr" : id.startsWith("set-") ? "set" : "leg";
-    const winners: any[] = [];
+    const winners: MpMovimiento[] = [];
     for (const arr of groups.values()) {
       arr.sort((a, b) => prio(String(a.id)) - prio(String(b.id)));
-      const w = { ...arr[0], _fuentes: arr.map(m => tag(String(m.id))) };
+      // arr siempre tiene >=1 elemento (lo armamos en el for de arriba con
+      // arr.push(m) antes de groups.set). El non-null assertion satisface a TS.
+      const w = { ...arr[0]!, _fuentes: arr.map(m => tag(String(m.id))) };
       winners.push(w);
     }
     return [...winners, ...sinId];
@@ -303,7 +385,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
     d.setUTCDate(d.getUTCDate() + 1);
     return d.getTime();
   })();
-  const inRange = (iso: any): boolean => {
+  const inRange = (iso: string | null | undefined): boolean => {
     if (!iso) return false;
     const t = new Date(iso).getTime();
     return Number.isFinite(t) && t >= desdeMs && t < hastaMsExcl;
@@ -312,7 +394,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   // Tab Ventas — pay-* con fecha (date_created) en rango AR, no anulados
   // Mitigación M7: filas con money_release_status=NULL aparecen acá igual
   // (no filtramos por release_status), pero NO en Por cobrar / Ingresos.
-  const ventasMovs = (movimientos as any[]).filter(m =>
+  const ventasMovs = movimientos.filter(m =>
     String(m.id || '').startsWith('pay-') &&
     inRange(m.fecha) &&
     m.anulado !== true
@@ -337,7 +419,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
     .sort()[0] || null;
 
   // Tab Ingresos al saldo — pay-* released con money_release_date en rango
-  const ingresosMovs = (movimientos as any[]).filter(m =>
+  const ingresosMovs = movimientos.filter(m =>
     String(m.id || '').startsWith('pay-') &&
     m.money_release_status === 'released' &&
     inRange(m.money_release_date) &&
@@ -348,7 +430,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
 
   // Egresos sin justificar (KPI del header) — egresos manuales en rango
   // por fecha, no anulados, no conciliados, no automáticos (fee/tax).
-  const egresosPendientesList = dedupedMovs.filter((m: any) =>
+  const egresosPendientesList = dedupedMovs.filter(m =>
     Number(m.monto) < 0 &&
     !ES_AUTOMATICO(m.tipo) &&
     !m.conciliado &&
@@ -701,7 +783,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                 <th>Release</th><th>Fecha venta</th><th>Local</th><th>Medio</th>
                 <th>Descripción</th><th style={{textAlign:"right"}}>Neto</th>
               </tr></thead>
-              <tbody>{porCobrarMovs.map((m:any)=>(
+              <tbody>{porCobrarMovs.map(m=>(
                 <tr key={m.id}>
                   <td className="mono" style={{fontSize:11}}>{fmt_d(String(m.money_release_date||"").slice(0,10))}</td>
                   <td className="mono" style={{fontSize:11,color:"var(--muted2)"}}>{fmt_d(String(m.fecha||"").slice(0,10))}</td>
@@ -739,7 +821,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                 <th>Release</th><th>Fecha venta</th><th>Local</th><th>Medio</th>
                 <th>Descripción</th><th style={{textAlign:"right"}}>Neto</th>
               </tr></thead>
-              <tbody>{ingresosMovs.sort((a:any,b:any)=>String(b.money_release_date).localeCompare(String(a.money_release_date))).map((m:any)=>(
+              <tbody>{ingresosMovs.sort((a,b)=>String(b.money_release_date).localeCompare(String(a.money_release_date))).map(m=>(
                 <tr key={m.id}>
                   <td className="mono" style={{fontSize:11}}>{fmt_d(String(m.money_release_date||"").slice(0,10))}</td>
                   <td className="mono" style={{fontSize:11,color:"var(--muted2)"}}>{fmt_d(String(m.fecha||"").slice(0,10))}</td>
@@ -769,7 +851,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
           const cargosFee=dedupedMovs.filter(m=>m.tipo==="fee" && inRange(m.fecha));
           const cargosTax=dedupedMovs.filter(m=>m.tipo==="tax" && inRange(m.fecha));
           // Map referencia_id → fila no-fee/tax (preferir pay-* > rr-* > set-*).
-          const porPaymentId=new Map<string, any>();
+          const porPaymentId=new Map<string, MpMovimiento>();
           for(const m of dedupedMovs){
             if(ES_AUTOMATICO(m.tipo))continue;
             if(!m.referencia_id)continue;
