@@ -1,7 +1,26 @@
 import { useState } from "react";
 import { ROLES, getPermisos } from "../lib/auth";
+import type { Usuario, Local, Tenant } from "../types";
 
-export function Sidebar({ user, section, onNav, onLogout, onRefreshPerms, locales, localActivo, setLocalActivo, tenant, tenantOverride, onClearOverride }: any) {
+interface SidebarProps {
+  user: Usuario;
+  section: string;
+  onNav: (section: string) => void;
+  onLogout: () => Promise<void> | void;
+  // Disponible cuando el AuthProvider value usa la forma { user, refreshPermisos }.
+  // Si no, queda undefined y el botón refresh-perms no llama nada.
+  onRefreshPerms?: () => Promise<void>;
+  locales: Local[];
+  localActivo: number | null;
+  setLocalActivo: (v: number | null) => void;
+  tenant: Tenant | null;
+  // UUID del tenant impersonado por superadmin (TASK 0.15). null = vista
+  // propia del superadmin (sin override).
+  tenantOverride: string | null;
+  onClearOverride: () => void;
+}
+
+export function Sidebar({ user, section, onNav, onLogout, onRefreshPerms, locales, localActivo, setLocalActivo, tenant, tenantOverride, onClearOverride }: SidebarProps) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
   const perms = getPermisos(user);
