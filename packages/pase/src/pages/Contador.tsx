@@ -31,6 +31,10 @@ export default function Contador({ user, locales, localActivo }: ContadorProps) 
       setLoading(false);
     };
     load();
+  // user no cambia durante el lifecycle del componente (App lo desmonta
+  // en logout, lo remonta en login con user ya seteado). Agregarlo a deps
+  // sería ruido sin cambio funcional.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[mes,localActivo]);
   const ivaC21=facturas.reduce((s, f) => s + (f.iva21 || 0), 0);
   const ivaC105=facturas.reduce((s, f) => s + (f.iva105 || 0), 0);

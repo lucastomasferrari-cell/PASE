@@ -80,6 +80,8 @@ export default function EERR({ user, localActivo }: EERRProps) {
       setLoading(false);
     };
     load();
+  // user no cambia durante el lifecycle (App desmonta en logout).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[mes,localActivo]);
 
   const totalVentas=ventas.reduce((s, v)=>s+(v.monto||0),0);
