@@ -432,27 +432,6 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   // centavos (fmt_$ global trunca a enteros).
   const fmt_mp=(n: number)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n)||0);
 
-  // TODO(lint-cleanup): getTipoColor declarado pero NO se invoca en este archivo.
-  // Conservado con disable hasta confirmar si hay re-cableo pendiente o
-  // re-introducción del color por tipo en un PR futuro.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const getTipoColor=(tipo: string,monto: number)=>{
-    if(monto>0)return "var(--success)";
-    if(tipo==="refund"||tipo==="dispute")return "var(--danger)";
-    if(tipo==="fee"||tipo==="tax")return "var(--warn)";
-    return "var(--muted2)";
-  };
-
-  // TODO(lint-cleanup): abrirConciliar declarado pero nunca invocado en JSX.
-  // Conservado para re-cablear el flow de conciliación manual desde la UI.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const abrirConciliar=(mov: any)=>{
-    setConciliarModal(mov);
-    setConciliarTab("gasto");
-    setVinculoSel("");
-    setNuevoGastoForm({categoria:"",detalle:mov.descripcion||""});
-  };
-
   const vincularMovimiento=async(tipo: string,id: string|number)=>{
     if(!conciliarModal||!id)return;
     await db.from("mp_movimientos").update({
@@ -494,22 +473,6 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
       local_id:conciliarModal.local_id||null,
     }]);
     await vincularMovimiento("gasto",nuevoId);
-  };
-
-  // TODO(lint-cleanup): desconciliar declarado pero nunca invocado en JSX.
-  // Conservado para re-cablear el botón "desconciliar" cuando se vuelva a
-  // mostrar en la UI (probablemente removido en un refactor previo).
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const desconciliar=async(mov: any)=>{
-    if(!confirm("¿Quitar la conciliación de este movimiento?"))return;
-    await db.from("mp_movimientos").update({
-      conciliado:false,
-      vinculo_tipo:null,
-      vinculo_id:null,
-      conciliado_at:null,
-      conciliado_por:null,
-    }).eq("id",mov.id);
-    load();
   };
 
   return (

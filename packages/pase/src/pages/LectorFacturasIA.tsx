@@ -10,11 +10,6 @@ export default function LectorFacturasIA({ locales, localActivo, onSaved }: { lo
   const [loading,setLoading]=useState(false);
   const [resultado,setResultado]=useState<any>(null);
   const [proveedores,setProveedores]=useState<any[]>([]);
-  // TODO(lint-cleanup): el state `insumos` se carga vía setInsumos pero el JSX
-  // nunca lo lee — parece work-in-progress que quedó orfano. Conservado con
-  // disable hasta que Lucas decida si re-cablear o borrar.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [insumos,setInsumos]=useState<any[]>([]);
   const [guardando,setGuardando]=useState(false);
   const [form,setForm]=useState<{local_id: string|number, prov_id: string, fecha: string, venc: string, nro: string, neto: number|string, iva21: number|string, iva105: number|string, iibb: number|string, total: number|string, cat: string}>({local_id:localActivo||"",prov_id:"",fecha:"",venc:"",nro:"",neto:0,iva21:0,iva105:0,iibb:0,total:0,cat:""});
   // Modal inline para crear un proveedor nuevo cuando el emisor detectado
@@ -23,10 +18,8 @@ export default function LectorFacturasIA({ locales, localActivo, onSaved }: { lo
   const [provSaving,setProvSaving]=useState(false);
 
   useEffect(()=>{
-    Promise.all([
-      db.from("proveedores").select("*").eq("estado","Activo").order("nombre"),
-      db.from("insumos").select("*").eq("activo",true).order("nombre"),
-    ]).then(([{data:p},{data:i}])=>{setProveedores(p||[]);setInsumos(i||[]);});
+    db.from("proveedores").select("*").eq("estado","Activo").order("nombre")
+      .then(({data:p})=>setProveedores(p||[]));
   },[]);
 
   const toBase64=(file: File): Promise<string>=>new Promise((res,rej)=>{
