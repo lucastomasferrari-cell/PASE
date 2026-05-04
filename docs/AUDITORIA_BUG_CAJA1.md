@@ -1,41 +1,60 @@
-# Auditoría — Bug Caja-1 (cuenta mal cargada por value-not-in-options)
+# Auditoría — Bug Caja-1 (extendida a Compras / Remitos / RRHH)
 
-**Generado**: 2026-05-04T19:57:45.755Z
-**Ventana**: gastos desde 2026-03-05 hasta hoy (60 días)
-**Método**: cruce de `gastos` × `auditoria` (detalle JSON) × `usuarios.cuentas_visibles`
+**Generado**: 2026-05-04T21:12:36.243Z
+**Ventana**: movimientos desde 2026-03-05 hasta hoy (60 días)
+**Método**: cruce de `movimientos` × `auditoria` (detalle JSON, indexado por FK) × `usuarios.cuentas_visibles`
 
-## Resultado
+## Resultado global
 
-- Total gastos en el período: **41**
-- **Gastos potencialmente mal cargados: 1**
-- Gastos sin fila de auditoría asociada (no se puede determinar quién los cargó): 7
-- Monto total afectado: **$160.000**
+- Total movimientos no-anulados en el período: **209**
+- Gastos en el período (puede haber doble-conteo con movimientos): 41
+- **Movimientos potencialmente mal cargados: 2**
+- Movimientos sin fila de auditoría asociada: 60
+- Monto absoluto total afectado: **$3.777.300,43**
 
-> Esto es **estimativo**. Algunos casos pueden ser legítimos: usuarios con permiso especial, cuentas otorgadas y luego revocadas, etc. Lucas decide caso por caso.
+> Esto es **estimativo**. Algunos casos pueden ser legítimos: cuentas otorgadas y luego revocadas, usuarios con scope cambiado entre carga y auditoría, etc. Lucas decide caso por caso.
+
+## Breakdown por path de carga
+
+| Path (módulo de carga) | Cantidad |
+|---|---:|
+| Gastos (cargar) | 1 |
+| Caja (movimiento manual) | 1 |
 
 ## Breakdown por usuario
 
 | Usuario | Cantidad |
 |---|---:|
 | CAJA BELGRANO (encargado) | 1 |
+| Agostina (encargado) | 1 |
 
 ## Breakdown por cuenta destino persistida
 
 | Cuenta persistida | Cantidad |
 |---|---:|
 | MercadoPago | 1 |
+| Caja Chica | 1 |
 
-## Lista detallada de gastos sospechosos
+## Lista detallada de movimientos sospechosos
 
-| Gasto ID | Fecha | Cuenta persistida | Monto | Usuario | cuentas_visibles del usuario | Detalle |
-|---|---|---|---:|---|---|---|
-| GASTO-1777916715-facf | 2026-05-04 | MercadoPago | $160.000 | CAJA BELGRANO (encargado) | Caja Chica, Caja Mayor | Sueldo Abril Daniel Sushi |
+| Mov ID | Path | Fecha | Cuenta | Importe | Usuario | cuentas_visibles | Detalle |
+|---|---|---|---|---:|---|---|---|
+| `MOV-1777916715-77bb` | Gastos (cargar) | 2026-05-04 | MercadoPago | $-160.000 | CAJA BELGRANO (encargado) | Caja Chica, Caja Mayor | Sueldo Abril Daniel Sushi |
+| `MOV-1777047907-4a6f` | Caja (movimiento manual) | 2026-04-01 | Caja Chica | $3.617.300,43 | Agostina (encargado) | MercadoPago, Banco | saldo inicial |
+
+## Movimientos legacy con local_id NULL
+
+Reportar (no tocar). Nota del prompt: hay un movimiento legacy con local_id=NULL contra MercadoPago. Listamos los del período por si aparecen más.
+
+| Mov ID | Fecha | Cuenta | Importe | Tipo | Detalle |
+|---|---|---|---:|---|---|
+| `MOV-1776870196619-b5wk` | 2026-04-21 | MercadoPago | $-9.545,65 | Gasto variable | ZILVER SA  |
 
 ## Notas
 
 - La auditoría **NO modifica ninguna fila**. Solo lee.
-- El fix de Caja-1 (commit en branch fix-bugs-camilo-caja) previene el bug a futuro pero **no corrige los gastos ya mal cargados**.
-- Para cada gasto sospechoso, Lucas decide:
-  - Si la cuenta persistida es la equivocada → corregir vía edición de movimiento (Caja.tsx ya tiene "Editar movimiento" con justificativo).
+- El refactor de permisos (PR refactor-permisos-cuentas) previene que el bug aparezca con el patrón controlled-select-value-not-in-options. NO corrige los movimientos ya mal cargados.
+- Para cada caso sospechoso, Lucas decide:
+  - Si la cuenta persistida es la equivocada → corregir vía edición de movimiento (Caja.tsx → Editar Movimiento, con justificativo).
   - Si era legítimo (permiso especial, cuenta antes-visible) → ignorar.
-- 7 gastos sin auditoría: pueden ser anteriores a la migración `20260418_auditoria.sql` o haber fallado el INSERT en auditoria por algún motivo.
+- 60 movimientos sin fila de auditoría: pueden ser anteriores a la migración `20260418_auditoria.sql`, INSERT directo desde código (no vía RPC), o haber fallado el INSERT en auditoria por algún motivo.
