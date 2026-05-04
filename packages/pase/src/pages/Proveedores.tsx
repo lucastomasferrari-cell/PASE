@@ -3,15 +3,40 @@ import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
 import { useCategorias } from "../lib/useCategorias";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
+import type { Usuario, Local } from "../types/auth";
+import type { Factura, PagoFactura } from "../types/finanzas";
+
+// Shape efectivo de la tabla proveedores. El type Proveedor en finanzas.ts
+// está parcialmente desactualizado (usa activo:boolean en vez de estado:string,
+// y tipa id como string cuando el runtime es number); este archivo es el único
+// consumidor real de los campos divergentes y lo refleja con un type local
+// hasta que se sincronice el tipo compartido en un PR dedicado.
+interface ProveedorRow {
+  id: number;
+  nombre: string;
+  cuit: string | null;
+  cat: string | null;
+  estado: string;          // "Activo" | "Inactivo"
+}
+
+// ProveedorRow + saldo computado en runtime (suma facturas pendientes
+// menos NCs).
+interface ProveedorConSaldo extends ProveedorRow { saldo: number }
+
+interface ProveedoresProps {
+  user: Usuario;
+  locales?: Local[];
+  localActivo: number | null;
+}
 
 // ─── PROVEEDORES ──────────────────────────────────────────────────────────────
-export default function Proveedores({ user, localActivo }: { user: any; locales?: any; localActivo: number | null }) {
+export default function Proveedores({ user, localActivo }: ProveedoresProps) {
   const { CATEGORIAS_COMPRA } = useCategorias();
-  const [proveedores,setProveedores]=useState<any[]>([]);
+  const [proveedores,setProveedores]=useState<ProveedorConSaldo[]>([]);
   const [modal,setModal]=useState(false);
-  const [editModal,setEditModal]=useState<any>(null);
-  const [ctaModal,setCtaModal]=useState<any>(null);
-  const [ctaFacts,setCtaFacts]=useState<any[]>([]);
+  const [editModal,setEditModal]=useState<ProveedorConSaldo | null>(null);
+  const [ctaModal,setCtaModal]=useState<ProveedorConSaldo | null>(null);
+  const [ctaFacts,setCtaFacts]=useState<Factura[]>([]);
   const [ctaLoading,setCtaLoading]=useState(false);
   const [ctaMes,setCtaMes]=useState(toISO(today).slice(0,7));
   const [search,setSearch]=useState("");
@@ -27,15 +52,18 @@ export default function Proveedores({ user, localActivo }: { user: any; locales?
     let fq=db.from("facturas").select("prov_id,total,tipo,estado").neq("estado","anulada");
     fq=applyLocalScope(fq,user,localActivo);
     const {data:facts}=await fq;
+    // El runtime usa prov_id como number aunque Factura type lo declare
+    // string — usar Number() para que la key del Map sea consistente.
     const saldoPorProv=new Map<number,number>();
-    for(const f of (facts||[])){
+    for(const f of ((facts as Factura[]) || [])){
       if(f.prov_id==null)continue;
+      const provIdNum=Number(f.prov_id);
       const isNC=(f.tipo||"factura")==="nota_credito";
       const impagable=f.estado==="pendiente"||f.estado==="vencida";
-      if(isNC)saldoPorProv.set(f.prov_id,(saldoPorProv.get(f.prov_id)||0)-Math.abs(f.total||0));
-      else if(impagable)saldoPorProv.set(f.prov_id,(saldoPorProv.get(f.prov_id)||0)+Number(f.total||0));
+      if(isNC)saldoPorProv.set(provIdNum,(saldoPorProv.get(provIdNum)||0)-Math.abs(f.total||0));
+      else if(impagable)saldoPorProv.set(provIdNum,(saldoPorProv.get(provIdNum)||0)+Number(f.total||0));
     }
-    setProveedores((provs||[]).map((p: any)=>({...p,saldo:saldoPorProv.get(p.id)||0})));
+    setProveedores(((provs as ProveedorRow[]) || []).map(p => ({...p, saldo: saldoPorProv.get(p.id) || 0})));
     setLoading(false);
   };
   useEffect(()=>{load();},[localActivo]);
@@ -50,17 +78,18 @@ export default function Proveedores({ user, localActivo }: { user: any; locales?
     await load();
   };
   const guardarEdit=async()=>{
+    if(!editModal) return;
     const {error}=await db.from("proveedores").update({nombre:editModal.nombre,cuit:editModal.cuit,cat:editModal.cat,estado:editModal.estado}).eq("id",editModal.id);
     if(error){alert("Error editando proveedor: "+error.message);return;}
     setEditModal(null);
     await load();
   };
-  const toggleEstado=async(p: any)=>{
+  const toggleEstado=async(p: ProveedorConSaldo)=>{
     const {error}=await db.from("proveedores").update({estado:p.estado==="Activo"?"Inactivo":"Activo"}).eq("id",p.id);
     if(error){alert("Error: "+error.message);return;}
     await load();
   };
-  const abrirCta=async(p: any)=>{
+  const abrirCta=async(p: ProveedorConSaldo)=>{
     setCtaFacts([]);
     setCtaMes(toISO(today).slice(0,7));
     setCtaModal(p);
@@ -69,7 +98,7 @@ export default function Proveedores({ user, localActivo }: { user: any; locales?
     q=applyLocalScope(q,user,localActivo);
     const {data,error}=await q;
     if(error)console.error("Error cargando estado de cuenta:",error);
-    setCtaFacts(data||[]);setCtaLoading(false);
+    setCtaFacts((data as Factura[]) || []);setCtaLoading(false);
   };
   return (
     <div>
@@ -120,7 +149,7 @@ export default function Proveedores({ user, localActivo }: { user: any; locales?
           <div className="field"><label>Razón Social</label><input value={editModal.nombre} onChange={e=>setEditModal({...editModal,nombre:e.target.value})}/></div>
           <div className="form2">
             <div className="field"><label>CUIT</label><input value={editModal.cuit||""} onChange={e=>setEditModal({...editModal,cuit:e.target.value})}/></div>
-            <div className="field"><label>Categoría EERR</label><select value={editModal.cat} onChange={e=>setEditModal({...editModal,cat:e.target.value})}>{CATEGORIAS_COMPRA.map(c=><option key={c}>{c}</option>)}</select></div>
+            <div className="field"><label>Categoría EERR</label><select value={editModal.cat||""} onChange={e=>setEditModal({...editModal,cat:e.target.value})}>{CATEGORIAS_COMPRA.map(c=><option key={c}>{c}</option>)}</select></div>
           </div>
         </div>
         <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setEditModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={guardarEdit}>Guardar</button></div>
@@ -138,17 +167,17 @@ export default function Proveedores({ user, localActivo }: { user: any; locales?
             const totalVencido=vencidas.reduce((s,f)=>s+(f.total||0),0);
             const totalNC=ncs.reduce((s,f)=>s+Math.abs(f.total||0),0);
             const deudaNeta=aPagar-totalNC;
-            const pagos=ctaFacts.flatMap((f: any)=>(f.pagos||[]).map((p: any)=>({...p,nro:f.nro})));
+            const pagos=ctaFacts.flatMap(f => (f.pagos || []).map((p: PagoFactura) => ({...p, nro: f.nro})));
 
             const [yr,mo]=ctaMes.split("-").map(Number) as [number, number];
             const desde=ctaMes+"-01";
             const hasta=ctaMes+"-"+String(new Date(yr,mo,0).getDate()).padStart(2,"0");
             const facturasDelMes=ctaFacts.filter(f=>(f.tipo||"factura")==="factura"&&f.fecha>=desde&&f.fecha<=hasta);
             const totalFacturadoMes=facturasDelMes.reduce((s,f)=>s+Number(f.total||0),0);
-            const totalPagadoMes=ctaFacts.reduce((s: number,f: any)=>{
-              const pagosDelMes=(f.pagos||[]).filter((p: any)=>p.fecha>=desde&&p.fecha<=hasta);
-              return s+pagosDelMes.reduce((sp: number,p: any)=>sp+Number(p.monto||0),0);
-            },0);
+            const totalPagadoMes=ctaFacts.reduce((s, f) => {
+              const pagosDelMes=(f.pagos || []).filter((p: PagoFactura) => p.fecha >= desde && p.fecha <= hasta);
+              return s + pagosDelMes.reduce((sp, p) => sp + Number(p.monto || 0), 0);
+            }, 0);
 
             return(<>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
