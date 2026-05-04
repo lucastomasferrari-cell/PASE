@@ -1,3 +1,17 @@
+/* eslint-disable react-hooks/static-components --
+ * ERow y ESection son componentes inner (definidos dentro de EERR) que
+ * capturan `pct` por closure. `pct` depende de `totalVentas` (state-derivado),
+ * por lo que mover los componentes afuera requiere pasarlo como prop —
+ * refactor que sale del scope del PR8 ("no mover funciones").
+ *
+ * Riesgo conocido: cada render crea referencias nuevas → React resetea state
+ * interno de los componentes hijos. ERow/ESection son puramente
+ * presentacionales (no tienen state), así que el impacto es solo en perf
+ * (re-mount innecesario), no en corrección.
+ *
+ * TODO(eerr-refactor): mover ERow/ESection a archivos separados con pct
+ * y totalVentas como props. Hacer en PR aparte cuando se toque la lógica.
+ */
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
