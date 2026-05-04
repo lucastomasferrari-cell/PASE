@@ -94,13 +94,20 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   const [form, setForm] = useState({fecha:toISO(today),cuenta:"Caja Chica",tipo:"Pago Gasto",cat:"",importe:"",detalle:"",esEgreso:true});
   // Selector de local en el modal cuando no hay localActivo y hay >1 local visible.
   const [localFormId, setLocalFormId] = useState<string>(lidImplicito != null ? String(lidImplicito) : "");
+  // Sincroniza el local del form modal cuando cambia el localActivo del
+  // sidebar. Patrón "derived form state from outer prop" — refactor a
+  // key-reset del modal sería más React-correcto pero requiere mover
+  // el modal al árbol bajo el local-prop.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLocalFormId(lidImplicito != null ? String(lidImplicito) : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localActivo, locsDisp.length]);
   // Al cambiar dirección (egreso↔ingreso), resetear cat porque el dropdown
   // cambia de opciones — dejar un valor de egreso cuando está en ingreso
   // sería incompatible.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm(f => ({ ...f, cat: "" }));
   }, [form.esEgreso]);
   // Transferencia entre cuentas: misma direccion (no afecta saldo total),
@@ -143,9 +150,14 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     setSaldos(obj);
     setLoading(false);
   };
+  // Patrón fetch-on-dep-change.
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(()=>{load();},[localActivo]);
 
+  // Carga el auditoría log cuando el usuario clickea "Ver edición" en
+  // un movimiento. setAuditLog es derivada del detalleEdicion.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!detalleEdicion) { setAuditLog(null); return; }
     db.from("auditoria")
       .select("*")
