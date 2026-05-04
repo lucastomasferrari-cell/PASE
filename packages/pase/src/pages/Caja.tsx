@@ -91,8 +91,26 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   const [loading, setLoading] = useState(true);
   const [detalleEdicion, setDetalleEdicion] = useState<Movimiento | null>(null);
   const [auditLog, setAuditLog] = useState<AuditDetalle | null>(null);
-  const emptyForm = {fecha:toISO(today),cuenta:"Caja Chica",tipo:"Pago Gasto",cat:"",importe:"",detalle:"",esEgreso:true};
+  // Bug Caja-1 (4-mayo): el default cuenta="Caja Chica" pisaba la elección
+  // del usuario cuando la cuenta no estaba en cuentasVisibles (encargados
+  // con cuentas restringidas). Anti-pattern de controlled <select>: value
+  // que no aparece en options → browser muestra el primer option visualmente
+  // pero el state queda con el default y el RPC persiste contra la cuenta
+  // invisible. Default vacío fuerza la elección consciente.
+  const emptyForm = {fecha:toISO(today),cuenta:"",tipo:"Pago Gasto",cat:"",importe:"",detalle:"",esEgreso:true};
   const [form, setForm] = useState(emptyForm);
+
+  // Defensive: si form.cuenta queda con un valor que no está en
+  // cuentasVisibles (edge cases de regression o cambio de scope del user),
+  // resetea a "" para que el placeholder del <select> aparezca y el user
+  // tenga que elegir. NO borrar — esto previene el retorno del bug Caja-1.
+  useEffect(() => {
+    if (form.cuenta && !cuentasVisibles.includes(form.cuenta)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setForm(f => ({ ...f, cuenta: "" }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.cuenta, cuentasVisibles.join("|")]);
   // BUG 5: al abrir el modal de nuevo movimiento, resetear todos los campos
   // a estado vacío (antes quedaban pre-llenados con el último movimiento).
   const abrirNuevoMovimiento = () => {
@@ -186,6 +204,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   const guardar = async () => {
     if (saving) return;
     if(!form.importe) return;
+    if (!form.cuenta) { alert("Elegí una cuenta"); return; }
     const lid = lidImplicito != null ? lidImplicito : parseInt(localFormId);
     if (!Number.isFinite(lid)) return;
     const importe = parseFloat(form.importe)*(form.esEgreso?-1:1);
@@ -358,7 +377,16 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
               <td><span className="badge" style={{background:"transparent",color:cc(m.cuenta),border:`1px solid ${cc(m.cuenta)}44`}}>{m.cuenta}</span></td>
               <td style={{fontSize:11,color:"var(--muted2)"}}>{m.tipo}</td>
               <td>{m.cat?<span className="badge b-muted">{m.cat}</span>:"—"}</td>
-              <td style={{fontSize:11,maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.detalle}</td>
+              <td style={{fontSize:11,maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                {m.gasto_id_ref && (
+                  <span
+                    className="badge b-muted"
+                    style={{fontSize:8,marginRight:6}}
+                    title="Originado en el módulo Gastos. NO es duplicado: la RPC crear_gasto inserta en gastos (vista granular) y movimientos (ledger contable) atómicamente."
+                  >vía Gastos</span>
+                )}
+                {m.detalle}
+              </td>
               <td><span className="num" style={{color:m.importe<0?"var(--danger)":"var(--success)"}}>{fmt_$(m.importe)}</span></td>
               <td>
                 {m.anulado && (
@@ -488,7 +516,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
                 </div>
               )}
               <div className="form2">
-                <div className="field"><label>Cuenta</label><select value={form.cuenta} onChange={e=>setForm({...form,cuenta:e.target.value})}>{cuentasVisibles.map(c=><option key={c}>{c}</option>)}</select></div>
+                <div className="field"><label>Cuenta *</label><select value={form.cuenta} onChange={e=>setForm({...form,cuenta:e.target.value})}><option value="">Seleccioná una cuenta…</option>{cuentasVisibles.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
                 <div className="field"><label>Dirección</label><select value={form.esEgreso?"egreso":"ingreso"} onChange={e=>setForm({...form,esEgreso:e.target.value==="egreso"})}><option value="egreso">Egreso (sale plata)</option><option value="ingreso">Ingreso (entra plata)</option></select></div>
               </div>
               <div className="form2">
@@ -504,7 +532,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
               <div className="field"><label>Importe $</label><input type="number" value={form.importe} onChange={e=>setForm({...form,importe:e.target.value})} placeholder="0"/></div>
               <div className="field"><label>Detalle</label><input value={form.detalle} onChange={e=>setForm({...form,detalle:e.target.value})} placeholder="Descripción..."/></div>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={saving || !form.importe || (necesitaSelectorLocal && !localFormId)}>{saving ? "Guardando..." : "Guardar"}</button></div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={saving || !form.importe || !form.cuenta || (necesitaSelectorLocal && !localFormId)}>{saving ? "Guardando..." : "Guardar"}</button></div>
           </div>
         </div>
       )}
