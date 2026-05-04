@@ -77,8 +77,8 @@ export default function OnboardingTenant({ onClose, onCreated }: OnboardingTenan
       }
       console.log("[onboarding] Tenant creado:", data);
       onCreated(paso1.slug);
-    } catch (e: any) {
-      setErr("Error inesperado: " + (e?.message || ""));
+    } catch (e) {
+      setErr("Error inesperado: " + (e instanceof Error ? e.message : String(e)));
     } finally {
       setCreating(false);
     }
