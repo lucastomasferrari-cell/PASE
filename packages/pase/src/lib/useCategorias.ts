@@ -68,7 +68,15 @@ function writeCache(data: CategoriasData) {
   } catch { /* sessionStorage puede fallar en modo privado o quota lleno — no crítico */ }
 }
 
-function fromRows(rows: { tipo: string; nombre: string; orden: number; grupo: string | null; activo: boolean }[]): CategoriasData {
+interface ConfigCategoriaRow {
+  tipo: string;
+  nombre: string;
+  orden: number;
+  grupo: string | null;
+  activo: boolean;
+}
+
+function fromRows(rows: ConfigCategoriaRow[]): CategoriasData {
   const byTipo = (t: string) => rows
     .filter(r => r.tipo === t && r.activo)
     .sort((a, b) => (a.orden || 0) - (b.orden || 0))
@@ -102,7 +110,7 @@ export function useCategorias(): CategoriasState {
         setState(s => ({ ...FALLBACK, loading: false, source: "fallback", refresh: s.refresh }));
         return;
       }
-      const next = fromRows(data as any);
+      const next = fromRows(data as ConfigCategoriaRow[]);
       writeCache(next);
       setState(s => ({ ...next, loading: false, source: "db", refresh: s.refresh }));
     } catch {
@@ -130,7 +138,7 @@ export function useCategorias(): CategoriasState {
           setState(s => ({ ...FALLBACK, loading: false, source: "fallback", refresh: s.refresh }));
           return;
         }
-        const next = fromRows(data as any);
+        const next = fromRows(data as ConfigCategoriaRow[]);
         writeCache(next);
         setState(s => ({ ...next, loading: false, source: "db", refresh: s.refresh }));
       } catch {
