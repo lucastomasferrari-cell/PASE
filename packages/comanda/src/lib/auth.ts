@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { db } from './supabase';
 import type { Usuario, Rol } from '../types/auth';
 
@@ -11,18 +11,29 @@ export function tienePermiso(user: Usuario | null, slug: string): boolean {
   return user.permisos.includes(slug);
 }
 
-// ─── Hook de sesión ────────────────────────────────────────────────────────
-// Carga usuario al montar + escucha onAuthStateChange. Hidrata permisos y
-// locales del usuario en una sola query (paralelo).
+// ─── Sesión ────────────────────────────────────────────────────────────────
+// El estado vive en un Context inicializado por <AuthProvider>. Los componentes
+// llaman useAuth() (lee del context). El hook useAuthInternal (no exportado)
+// hace el fetch real una sola vez por sesión.
 
-interface AuthState {
+export interface AuthState {
   user: Usuario | null;
   loading: boolean;
   error: string | null;
 }
 
+const INITIAL: AuthState = { user: null, loading: true, error: null };
+
+export const AuthContext = createContext<AuthState>(INITIAL);
+
 export function useAuth(): AuthState {
-  const [state, setState] = useState<AuthState>({ user: null, loading: true, error: null });
+  return useContext(AuthContext);
+}
+
+// useAuthInternal: hook que vive dentro del AuthProvider. No usar directamente
+// desde componentes de pantalla — usar useAuth().
+export function useAuthInternal(): AuthState {
+  const [state, setState] = useState<AuthState>(INITIAL);
 
   useEffect(() => {
     let mounted = true;

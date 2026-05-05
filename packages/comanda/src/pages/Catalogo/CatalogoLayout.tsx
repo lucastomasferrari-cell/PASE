@@ -17,33 +17,18 @@ const TABS: Array<{ key: TabKey; label: string; emoji: string }> = [
 ];
 
 export function CatalogoLayout() {
-  const { user, loading, error } = useAuth();
+  const { user } = useAuth();
   const [tab, setTab] = useState<TabKey>('items');
 
-  if (loading) {
-    return <div style={{ padding: 32, color: '#6B7280' }}>Cargando…</div>;
-  }
-  if (error) {
-    return <div style={{ padding: 32, color: '#DC2626' }}>Error de sesión: {error}</div>;
-  }
-  if (!user) {
-    return (
-      <div style={{ padding: 32 }}>
-        <h2>COMANDA — Catálogo</h2>
-        <p style={{ color: '#6B7280' }}>
-          No hay sesión. Iniciá sesión en PASE primero, después volvé a esta URL.
-        </p>
-      </div>
-    );
-  }
+  // ProtectedShell garantiza user no-null cuando llegamos acá. Esta guarda
+  // existe sólo para que TS pueda estrechar el tipo y los <Tabs user={...} />
+  // reciban Usuario en vez de Usuario|null.
+  if (!user) return null;
 
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto', padding: '24px 16px', fontFamily: 'system-ui, sans-serif' }}>
       <header style={{ marginBottom: 16 }}>
         <h1 style={{ margin: 0, fontSize: 22 }}>Catálogo</h1>
-        <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6B7280' }}>
-          Hola {user.nombre} · {user.rol}
-        </p>
       </header>
 
       <nav
