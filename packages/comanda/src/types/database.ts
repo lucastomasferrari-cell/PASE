@@ -342,6 +342,7 @@ export interface VentaPosOverride {
   valor_anterior: number | null;
   valor_nuevo: number | null;
   monto_afectado: number | null;
+  ip_origen: string | null;
   created_at: string;
   metadata: Record<string, unknown> | null;
 }
