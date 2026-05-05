@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope } from "../lib/auth";
+import { applyLocalScope, cuentasOperables as cuentasOperablesFn } from "../lib/auth";
+import { CUENTAS } from "../lib/constants";
 import { useCategorias } from "../lib/useCategorias";
-import { toISO, today, fmt_d, fmt_$, genId, fmt_dt_ar } from "../lib/utils";
+import { toISO, today, fmt_d, fmt_$, fmt_dt_ar } from "../lib/utils";
 import { computeSaldoMP, pickEffectiveLocalId, type MovParaSaldo } from "../lib/saldoMP";
 import type { Usuario, Local } from "../types";
 
@@ -34,7 +35,19 @@ interface MpMovimiento {
   referencia_id?: string | null;
   money_release_status?: string | null;
   money_release_date?: string | null;
+  // Sistema de justificativos (migration 202605080900). Reemplaza el viejo
+  // par conciliado/vinculo_tipo que nunca se llegó a poblar correctamente
+  // (vinculo_id estaba tipado UUID pero los ids destino son TEXT). Las RPCs
+  // fn_conciliar_mp_con_* setean estas columnas atómicamente.
+  justificativo_tipo?: JustifTipo | null;
+  justificativo_id?: string | null;
+  justificativo_at?: string | null;
+  justificativo_por?: number | null;
 }
+
+type JustifTipo =
+  | 'factura' | 'remito' | 'gasto' | 'egreso_manual'
+  | 'movimiento_interno' | 'comision_mp' | 'retiro_automatico';
 
 // Row de mp_credenciales con join 1:1 a locales(nombre). En supabase el
 // nested-select de FK 1-1 devuelve el objeto plano (o null si el FK está
@@ -66,14 +79,13 @@ interface FacturaSlim {
   estado: string;
 }
 
-interface GastoSlim {
+interface RemitoSlim {
   id: string;
+  nro: string | null;
   fecha: string;
-  categoria: string;
-  detalle: string | null;
   monto: number;
-  local_id: number | null;
-  cuenta: string | null;
+  local_id: number;
+  estado: string | null;
 }
 
 // Respuesta de /api/mp-process: array d.resultados con un item por local.
@@ -109,19 +121,28 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   // mezclar con la ventana de Ventas/Ingresos.
   const [porCobrarAll,setPorCobrarAll]=useState<MpMovimiento[]>([]);
   const [facturas,setFacturas]=useState<FacturaSlim[]>([]);
-  const [gastos,setGastos]=useState<GastoSlim[]>([]);
+  const [remitos,setRemitos]=useState<RemitoSlim[]>([]);
   const [loading,setLoading]=useState(true);
   const [sincronizando,setSincronizando]=useState(false);
+  const [conciliando,setConciliando]=useState(false);
   const [toast,setToast]=useState<ToastState | null>(null);
   const [tab,setTab]=useState("ventas");
+  // setFiltroSinJustif se cablea al toggle del header en el commit 5 (badge
+  // + filtro + card). Por ahora solo se lee, defaultea false → muestra todos
+  // los egresos en el tab. Renombrado con _ para no romper lint.
+  const [filtroSinJustif,_setFiltroSinJustif]=useState(false);
   const _hace30=new Date();_hace30.setDate(_hace30.getDate()-30);
   const [desde,setDesde]=useState(toISO(_hace30));
   const [hasta,setHasta]=useState(toISO(today));
   const [configModal,setConfigModal]=useState(false);
   const [configForm,setConfigForm]=useState({local_id:"",access_token:""});
   const [conciliarModal,setConciliarModal]=useState<MpMovimiento | null>(null); // movimiento a conciliar
-  const [conciliarTab,setConciliarTab]=useState("gasto"); // gasto | factura | nuevo
-  const [nuevoGastoForm,setNuevoGastoForm]=useState({categoria:"",detalle:""});
+  // Tabs del modal nuevo (5 tipos del brief): factura/remito (existentes) y
+  // gasto/egreso_manual/movimiento_interno (creación + linkeo atómico).
+  const [conciliarTab,setConciliarTab]=useState<"factura"|"remito"|"gasto"|"egreso_manual"|"movimiento_interno">("gasto");
+  const [nuevoGastoForm,setNuevoGastoForm]=useState({categoria:"",detalle:"",tipo:"variable"});
+  const [egresoManualForm,setEgresoManualForm]=useState({detalle:"",cat:""});
+  const [movInternoForm,setMovInternoForm]=useState({destino:"",detalle:""});
   const [vinculoSel,setVinculoSel]=useState("");
   // saldoInicialModal: SIN datepicker. El corte usa new Date() en el momento
   // del clic en Guardar. La idea: el usuario fija el saldo "ahora" y entiende
@@ -177,9 +198,9 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
       porCobrarQ=applyLocalScope(porCobrarQ,user,localActivo);
       let facQ=db.from("facturas").select("id,nro,fecha,total,local_id,cat,estado").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false});
       facQ=applyLocalScope(facQ,user,localActivo);
-      let gasQ=db.from("gastos").select("id,fecha,categoria,detalle,monto,local_id,cuenta").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false});
-      gasQ=applyLocalScope(gasQ,user,localActivo);
-      const [credRes,movRes,saldoRes,porCobrarRes,facRes,gasRes]=await Promise.all([
+      let remQ=db.from("remitos").select("id,nro,fecha,monto,local_id,estado").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false});
+      remQ=applyLocalScope(remQ,user,localActivo);
+      const [credRes,movRes,saldoRes,porCobrarRes,facRes,remRes]=await Promise.all([
         // tenant_id es requerido para el WHERE compuesto del UPDATE de
         // saldo_inicial (defensa-en-profundidad sobre RLS). saldo_inicial /
         // saldo_inicial_at son las que el card del header lee.
@@ -188,16 +209,16 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
         saldoMovsQ,
         porCobrarQ,
         facQ,
-        gasQ,
+        remQ,
       ]);
       if(credRes.error)console.warn("mp_credenciales load error:",credRes.error);
       if(movRes.error)console.warn("mp_movimientos load error:",movRes.error);
       if(saldoRes.error)console.warn("saldo movs load error:",saldoRes.error);
       if(porCobrarRes.error)console.warn("por cobrar load error:",porCobrarRes.error);
       if(facRes.error)console.warn("facturas load error:",facRes.error);
-      if(gasRes.error)console.warn("gastos load error:",gasRes.error);
-      const c=credRes.data||[], m=movRes.data||[], saldoRows=saldoRes.data||[], pcAll=porCobrarRes.data||[], f=facRes.data||[], g=gasRes.data||[];
-      console.log("[MP] load:",c.length,"credenciales /",m.length,"movimientos /",pcAll.length,"por cobrar (todos) /",saldoRows.length,"pay-* para saldo /",f.length,"facturas /",g.length,"gastos");
+      if(remRes.error)console.warn("remitos load error:",remRes.error);
+      const c=credRes.data||[], m=movRes.data||[], saldoRows=saldoRes.data||[], pcAll=porCobrarRes.data||[], f=facRes.data||[], r=remRes.data||[];
+      console.log("[MP] load:",c.length,"credenciales /",m.length,"movimientos /",pcAll.length,"por cobrar (todos) /",saldoRows.length,"pay-* para saldo /",f.length,"facturas /",r.length,"remitos");
       // Supabase tipa el nested-select locales(nombre) como { nombre }[]
       // (FK genérica), pero en runtime devuelve objeto plano para 1:1.
       // Cast vía unknown — patrón estándar en este codebase para FKs 1-1.
@@ -206,7 +227,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
       setSaldoMovs(saldoRows as MovParaSaldo[]);
       setPorCobrarAll(pcAll as MpMovimiento[]);
       setFacturas((f as FacturaSlim[]).filter(x=>!localActivo||x.local_id===localActivo));
-      setGastos((g as GastoSlim[]).filter(x=>!localActivo||x.local_id===localActivo));
+      setRemitos((r as RemitoSlim[]).filter(x=>!localActivo||x.local_id===localActivo));
     }catch(e){
       console.error("ConciliacionMP load error:",e);
     }finally{
@@ -471,15 +492,17 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   const ingresosTotal = ingresosMovs.reduce((s, m) => s + (Number(m.monto) || 0), 0);
   const ingresosCount = ingresosMovs.length;
 
-  // Egresos sin justificar (KPI del header) — egresos manuales en rango
-  // por fecha, no anulados, no conciliados, no automáticos (fee/tax).
-  const egresosPendientesList = dedupedMovs.filter(m =>
+  // Egresos manuales en rango (no anulados, no automáticos). Es la base
+  // del nuevo tab "Egresos" — independiente de si están justificados o no.
+  const egresosManuales = dedupedMovs.filter(m =>
     Number(m.monto) < 0 &&
     !ES_AUTOMATICO(m.tipo) &&
-    !m.conciliado &&
     m.anulado !== true &&
     inRange(m.fecha)
-  );
+  ).sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||'')));
+
+  // Subconjunto sin justificar — alimenta KPI header + filtro del tab.
+  const egresosPendientesList = egresosManuales.filter(m => !m.justificativo_tipo);
   const pendientesCount = egresosPendientesList.length;
 
   const porAcreditarTotal = credenciales.reduce((s, c) => s + (Number(c.por_acreditar) || 0), 0);
@@ -557,47 +580,68 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   // centavos (fmt_$ global trunca a enteros).
   const fmt_mp=(n: number)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n)||0);
 
-  const vincularMovimiento=async(tipo: string,id: string|number)=>{
-    if(!conciliarModal||!id)return;
-    await db.from("mp_movimientos").update({
-      conciliado:true,
-      vinculo_tipo:tipo,
-      vinculo_id:String(id),
-      conciliado_at:new Date().toISOString(),
-      conciliado_por:user?.nombre||user?.email||null,
-    }).eq("id",conciliarModal.id);
+  // ─── Wrappers de las RPCs fn_conciliar_mp_con_* ───────────────────────────
+  // Cada wrapper cierra el modal + recarga al éxito; en error muestra toast
+  // y deja el modal abierto para reintento.
+  const cerrarConciliar=()=>{
     setConciliarModal(null);
-    load();
+    setVinculoSel("");
+    setNuevoGastoForm({categoria:"",detalle:"",tipo:"variable"});
+    setEgresoManualForm({detalle:"",cat:""});
+    setMovInternoForm({destino:"",detalle:""});
+    setConciliarTab("gasto");
   };
 
-  const crearGastoYConciliar=async()=>{
+  const justificarConExistente=async(tipo:"factura"|"remito"|"gasto",justifId:string)=>{
+    if(!conciliarModal||!justifId)return;
+    setConciliando(true);
+    const {error}=await db.rpc("fn_conciliar_mp_con_existente",{
+      p_mp_mov_id:conciliarModal.id, p_tipo:tipo, p_justif_id:justifId,
+    });
+    setConciliando(false);
+    if(error){showToast("err","No se pudo conciliar: "+error.message);return;}
+    showToast("ok","Egreso justificado contra "+tipo);
+    cerrarConciliar(); load();
+  };
+
+  const justificarConGastoNuevo=async()=>{
     if(!conciliarModal||!nuevoGastoForm.categoria)return;
-    const montoAbs=Math.abs(conciliarModal.monto||0);
-    const esComision=conciliarModal.tipo==="fee"||conciliarModal.tipo==="tax";
-    const gastoTipo=esComision?"comision":"variable";
-    const nuevoId=genId("GASTO");
-    await db.from("gastos").insert([{
-      id:nuevoId,
-      fecha:(conciliarModal.fecha||"").split("T")[0]||toISO(today),
-      local_id:conciliarModal.local_id||null,
-      categoria:nuevoGastoForm.categoria,
-      monto:montoAbs,
-      detalle:nuevoGastoForm.detalle||conciliarModal.descripcion||"",
-      tipo:gastoTipo,
-      cuenta:"MercadoPago",
-    }]);
-    await db.from("movimientos").insert([{
-      id:genId("MOV"),
-      fecha:(conciliarModal.fecha||"").split("T")[0]||toISO(today),
-      cuenta:"MercadoPago",
-      tipo:"Conciliación MP "+(TIPO_LABELS[conciliarModal.tipo]||conciliarModal.tipo||""),
-      cat:nuevoGastoForm.categoria,
-      importe:-montoAbs,
-      detalle:nuevoGastoForm.detalle||conciliarModal.descripcion||"",
-      fact_id:null,
-      local_id:conciliarModal.local_id||null,
-    }]);
-    await vincularMovimiento("gasto",nuevoId);
+    setConciliando(true);
+    const {error}=await db.rpc("fn_conciliar_mp_con_gasto",{
+      p_mp_mov_id:conciliarModal.id,
+      p_gasto_data:{categoria:nuevoGastoForm.categoria, detalle:nuevoGastoForm.detalle, tipo:nuevoGastoForm.tipo},
+    });
+    setConciliando(false);
+    if(error){showToast("err","No se pudo crear el gasto: "+error.message);return;}
+    showToast("ok","Gasto creado y conciliado");
+    cerrarConciliar(); load();
+  };
+
+  const justificarConEgresoManual=async()=>{
+    if(!conciliarModal)return;
+    setConciliando(true);
+    const {error}=await db.rpc("fn_conciliar_mp_con_egreso_manual",{
+      p_mp_mov_id:conciliarModal.id,
+      p_egreso_data:{detalle:egresoManualForm.detalle, cat:egresoManualForm.cat},
+    });
+    setConciliando(false);
+    if(error){showToast("err","No se pudo crear el egreso: "+error.message);return;}
+    showToast("ok","Egreso manual creado y conciliado");
+    cerrarConciliar(); load();
+  };
+
+  const justificarConMovimientoInterno=async()=>{
+    if(!conciliarModal||!movInternoForm.destino)return;
+    setConciliando(true);
+    const {error}=await db.rpc("fn_conciliar_mp_con_movimiento_interno",{
+      p_mp_mov_id:conciliarModal.id,
+      p_destino_cuenta:movInternoForm.destino,
+      p_detalle:movInternoForm.detalle||null,
+    });
+    setConciliando(false);
+    if(error){showToast("err","No se pudo registrar la transferencia: "+error.message);return;}
+    showToast("ok","Transferencia registrada");
+    cerrarConciliar(); load();
   };
 
   return (
@@ -723,9 +767,10 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
           ["ventas","Ventas"],
           ["por_cobrar","Por cobrar"],
           ["ingresos","Ingresos al saldo"],
+          ["egresos","Egresos"],
           ["comisiones","Comisiones MP"],
         ] as [string, string][]).map(([id,l])=>(
-          <div key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>{l}</div>
+          <div key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>{l}{id==="egresos"&&pendientesCount>0?<span className="badge b-warn" style={{marginLeft:6,fontSize:9}}>{pendientesCount}</span>:null}</div>
         ))}
       </div>
 
@@ -877,6 +922,54 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
             </table>
           )}
         </div>
+      ):tab==="egresos"?(
+        // ─── Tab EGRESOS — egresos manuales en rango (sin fee/tax) ────────────
+        // El brief: cualquier usuario con acceso al módulo puede conciliar.
+        // Cada fila tiene botón "Conciliar" si justificativo_tipo es null.
+        // Si está justificado, badge con tipo en la última columna.
+        (()=>{
+          const lista = filtroSinJustif ? egresosManuales.filter(m=>!m.justificativo_tipo) : egresosManuales;
+          const totalLista = lista.reduce((s,m)=>s+Math.abs(Number(m.monto)||0),0);
+          return (
+            <div className="panel">
+              <div className="panel-hd">
+                <span className="panel-title">Egresos — {lista.length} {lista.length===1?"egreso":"egresos"}{filtroSinJustif?" sin justificar":""}</span>
+                <span style={{fontSize:11,color:"var(--muted2)"}}>Transferencias y pagos del período · monto neto</span>
+              </div>
+              <div style={{padding:"16px 20px",display:"grid",gap:10,gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))"}}>
+                <div className="kpi">
+                  <div className="kpi-label">Total egresado</div>
+                  <div className="kpi-value kpi-danger" style={{fontSize:16}}>{fmt_mp(totalLista)}</div>
+                  <div className="kpi-sub">{filtroSinJustif?"Solo sin justificar":"Manuales (sin comisiones)"}</div>
+                </div>
+                <div className="kpi">
+                  <div className="kpi-label">Sin justificar</div>
+                  <div className="kpi-value kpi-warn" style={{fontSize:16}}>{pendientesCount}</div>
+                  <div className="kpi-sub">{pendientesCount===0?"Todos justificados ✓":"Requieren conciliación"}</div>
+                </div>
+              </div>
+              {lista.length===0?<div className="empty">{filtroSinJustif?"Sin egresos pendientes. Todo justificado ✓":"Sin egresos manuales en el período."}</div>:(
+                <table>
+                  <thead><tr>
+                    <th>Fecha</th><th>Local</th><th>Tipo</th><th>Descripción</th>
+                    <th style={{textAlign:"right"}}>Monto</th><th>Justif.</th><th></th>
+                  </tr></thead>
+                  <tbody>{lista.map(m=>(
+                    <tr key={m.id}>
+                      <td className="mono" style={{fontSize:11}}>{fmt_d(String(m.fecha||"").slice(0,10))}</td>
+                      <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===m.local_id)?.nombre||"—"}</td>
+                      <td><span className="badge b-muted" style={{fontSize:9}}>{TIPO_LABELS[m.tipo]||m.tipo}</span></td>
+                      <td style={{fontSize:11,maxWidth:240,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.descripcion||"—"}</td>
+                      <td style={{textAlign:"right"}}><span className="num kpi-danger">{fmt_mp(Number(m.monto)||0)}</span></td>
+                      <td>{m.justificativo_tipo?<span className="badge b-success" style={{fontSize:9}}>{m.justificativo_tipo}</span>:<span className="badge b-warn" style={{fontSize:9}}>sin justificar</span>}</td>
+                      <td>{!m.justificativo_tipo && <button className="btn btn-acc btn-sm" style={{fontSize:10,padding:"4px 10px"}} onClick={()=>setConciliarModal(m)}>Conciliar</button>}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              )}
+            </div>
+          );
+        })()
       ):(
         (()=>{
           // Comisiones MP y retenciones impositivas — resumen por origen.
@@ -992,8 +1085,8 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
         );
       })()}
 
-      {conciliarModal&&(<div className="overlay" onClick={()=>setConciliarModal(null)}><div className="modal" style={{width:640}} onClick={e=>e.stopPropagation()}>
-        <div className="modal-hd"><div className="modal-title">Conciliar egreso MP</div><button className="close-btn" onClick={()=>setConciliarModal(null)}>✕</button></div>
+      {conciliarModal&&(<div className="overlay" onClick={cerrarConciliar}><div className="modal" style={{width:680}} onClick={e=>e.stopPropagation()}>
+        <div className="modal-hd"><div className="modal-title">Conciliar egreso MP</div><button className="close-btn" onClick={cerrarConciliar}>✕</button></div>
         <div className="modal-body">
           <div style={{padding:12,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)",marginBottom:12}}>
             <div style={{fontSize:10,color:"var(--muted2)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Movimiento a justificar</div>
@@ -1006,50 +1099,88 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
             </div>
           </div>
           <div className="tabs" style={{marginBottom:12}}>
-            {([["gasto","Gasto existente"],["factura","Factura existente"],["nuevo","Crear Gasto nuevo"]] as [string, string][]).map(([id,l])=>(
+            {([
+              ["factura","A · Factura existente"],
+              ["remito","B · Remito existente"],
+              ["gasto","C · Gasto nuevo"],
+              ["egreso_manual","D · Egreso manual"],
+              ["movimiento_interno","E · Mov. interno"],
+            ] as [typeof conciliarTab, string][]).map(([id,l])=>(
               <div key={id} className={`tab ${conciliarTab===id?"active":""}`} onClick={()=>{setConciliarTab(id);setVinculoSel("");}}>{l}</div>
             ))}
           </div>
-          {conciliarTab==="gasto"&&(
-            <div>
-              <div className="field"><label>Seleccioná un gasto del mes</label>
-                <select value={vinculoSel} onChange={e=>setVinculoSel(e.target.value)}>
-                  <option value="">— Elegir gasto —</option>
-                  {gastos.map(g=><option key={g.id} value={g.id}>{fmt_d(g.fecha)} · {g.categoria} · {fmt_$(g.monto)} · {g.detalle||""}</option>)}
-                </select>
-              </div>
-              {gastos.length===0&&<div style={{fontSize:11,color:"var(--muted2)"}}>No hay gastos cargados este mes. Creá uno nuevo en la pestaña "Crear Gasto nuevo".</div>}
-            </div>
-          )}
           {conciliarTab==="factura"&&(
             <div>
-              <div className="field"><label>Seleccioná una factura del mes</label>
+              <div className="field"><label>Seleccioná la factura</label>
                 <select value={vinculoSel} onChange={e=>setVinculoSel(e.target.value)}>
                   <option value="">— Elegir factura —</option>
                   {facturas.map(f=><option key={f.id} value={f.id}>{fmt_d(f.fecha)} · #{f.nro} · {fmt_$(f.total)} · {f.estado}</option>)}
                 </select>
               </div>
-              {facturas.length===0&&<div style={{fontSize:11,color:"var(--muted2)"}}>No hay facturas cargadas este mes.</div>}
+              {facturas.length===0&&<div style={{fontSize:11,color:"var(--muted2)"}}>No hay facturas cargadas en el período. Probá con remito, gasto nuevo o egreso manual.</div>}
             </div>
           )}
-          {conciliarTab==="nuevo"&&(
+          {conciliarTab==="remito"&&(
             <div>
-              <div className="alert alert-warn" style={{marginBottom:12}}>Se creará un gasto por {fmt_$(Math.abs(conciliarModal.monto||0))} con cuenta MercadoPago y se vinculará automáticamente.</div>
+              <div className="field"><label>Seleccioná el remito</label>
+                <select value={vinculoSel} onChange={e=>setVinculoSel(e.target.value)}>
+                  <option value="">— Elegir remito —</option>
+                  {remitos.map(r=><option key={r.id} value={r.id}>{fmt_d(r.fecha)} · #{r.nro||r.id.slice(-6)} · {fmt_$(r.monto)} · {r.estado||""}</option>)}
+                </select>
+              </div>
+              {remitos.length===0&&<div style={{fontSize:11,color:"var(--muted2)"}}>No hay remitos cargados en el período.</div>}
+            </div>
+          )}
+          {conciliarTab==="gasto"&&(
+            <div>
+              <div className="alert alert-warn" style={{marginBottom:12}}>Crea un gasto por {fmt_$(Math.abs(conciliarModal.monto||0))} (cuenta MercadoPago) y lo vincula. Movimiento contable atómico.</div>
               <div className="field"><label>Categoría *</label>
                 <select value={nuevoGastoForm.categoria} onChange={e=>setNuevoGastoForm({...nuevoGastoForm,categoria:e.target.value})}>
                   <option value="">Seleccioná...</option>
-                  {(conciliarModal.tipo==="fee"||conciliarModal.tipo==="tax"?COMISIONES_CATS:[...GASTOS_VARIABLES,...GASTOS_FIJOS,...GASTOS_PUBLICIDAD]).map(c=><option key={c}>{c}</option>)}
+                  {[...GASTOS_VARIABLES,...GASTOS_FIJOS,...GASTOS_PUBLICIDAD,...COMISIONES_CATS].map(c=><option key={c}>{c}</option>)}
                 </select>
               </div>
-              <div className="field"><label>Detalle</label><input value={nuevoGastoForm.detalle} onChange={e=>setNuevoGastoForm({...nuevoGastoForm,detalle:e.target.value})} placeholder="Descripción..."/></div>
+              <div className="field"><label>Tipo</label>
+                <select value={nuevoGastoForm.tipo} onChange={e=>setNuevoGastoForm({...nuevoGastoForm,tipo:e.target.value})}>
+                  <option value="variable">Variable</option>
+                  <option value="fijo">Fijo</option>
+                  <option value="publicidad">Publicidad</option>
+                  <option value="comision">Comisión</option>
+                </select>
+              </div>
+              <div className="field"><label>Detalle</label><input value={nuevoGastoForm.detalle} onChange={e=>setNuevoGastoForm({...nuevoGastoForm,detalle:e.target.value})} placeholder={conciliarModal.descripcion||"Descripción..."}/></div>
+            </div>
+          )}
+          {conciliarTab==="egreso_manual"&&(
+            <div>
+              <div className="alert alert-warn" style={{marginBottom:12}}>Crea solo un movimiento contable (sin gasto categorizado) por {fmt_$(Math.abs(conciliarModal.monto||0))}. Para egresos sueltos sin imputación específica.</div>
+              <div className="field"><label>Categoría / etiqueta libre</label><input value={egresoManualForm.cat} onChange={e=>setEgresoManualForm({...egresoManualForm,cat:e.target.value})} placeholder="EGRESO_MANUAL"/></div>
+              <div className="field"><label>Detalle</label><input value={egresoManualForm.detalle} onChange={e=>setEgresoManualForm({...egresoManualForm,detalle:e.target.value})} placeholder={conciliarModal.descripcion||"Descripción..."}/></div>
+            </div>
+          )}
+          {conciliarTab==="movimiento_interno"&&(
+            <div>
+              <div className="alert alert-warn" style={{marginBottom:12}}>Refleja una transferencia entre cuentas propias: baja MercadoPago y sube la cuenta destino. Crea 2 movimientos atómicamente.</div>
+              <div className="field"><label>Cuenta destino *</label>
+                <select value={movInternoForm.destino} onChange={e=>setMovInternoForm({...movInternoForm,destino:e.target.value})}>
+                  <option value="">Seleccioná la cuenta receptora...</option>
+                  {(()=>{const op=cuentasOperablesFn(user); const list=op===null?CUENTAS:op; return list.filter(c=>c!=="MercadoPago").map(c=><option key={c} value={c}>{c}</option>);})()}
+                </select>
+              </div>
+              <div className="field"><label>Detalle</label><input value={movInternoForm.detalle} onChange={e=>setMovInternoForm({...movInternoForm,detalle:e.target.value})} placeholder={`Transferencia MP → ${movInternoForm.destino||"…"}`}/></div>
             </div>
           )}
         </div>
         <div className="modal-ft">
-          <button className="btn btn-sec" onClick={()=>setConciliarModal(null)}>Cancelar</button>
-          {conciliarTab==="nuevo"?
-            <button className="btn btn-acc" disabled={!nuevoGastoForm.categoria} onClick={crearGastoYConciliar}>Crear y conciliar</button>
-            :<button className="btn btn-acc" disabled={!vinculoSel} onClick={()=>vincularMovimiento(conciliarTab,vinculoSel)}>Vincular</button>
+          <button className="btn btn-sec" onClick={cerrarConciliar} disabled={conciliando}>Cancelar</button>
+          {conciliarTab==="factura"||conciliarTab==="remito"?
+            <button className="btn btn-acc" disabled={!vinculoSel||conciliando} onClick={()=>justificarConExistente(conciliarTab,vinculoSel)}>{conciliando?"Conciliando...":"Vincular"}</button>
+          :conciliarTab==="gasto"?
+            <button className="btn btn-acc" disabled={!nuevoGastoForm.categoria||conciliando} onClick={justificarConGastoNuevo}>{conciliando?"Creando...":"Crear gasto y conciliar"}</button>
+          :conciliarTab==="egreso_manual"?
+            <button className="btn btn-acc" disabled={conciliando} onClick={justificarConEgresoManual}>{conciliando?"Creando...":"Registrar egreso y conciliar"}</button>
+          :
+            <button className="btn btn-acc" disabled={!movInternoForm.destino||conciliando} onClick={justificarConMovimientoInterno}>{conciliando?"Registrando...":"Registrar transferencia"}</button>
           }
         </div>
       </div></div>)}
