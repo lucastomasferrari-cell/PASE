@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet } from 'react-router-dom';
-import { ArrowLeft, Wallet } from 'lucide-react';
+import { ArrowLeft, Wallet, Search } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import { usePermiso } from '@/lib/usePermiso';
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { PosSidebar } from '@/components/PosSidebar';
 import { UserAvatarMenu } from '@/components/UserAvatarMenu';
+import { AllChecksModal } from '@/components/AllChecksModal';
 
 // Layout principal POS: header sticky con marca + turno + acciones,
 // sidebar permanente de 72px (Salón/Mostrador/Pedidos), contenido en
@@ -19,6 +20,7 @@ export function PosLayout() {
   const [localId] = useLocalActivo(user);
   const [turno, setTurno] = useState<TurnoCaja | null>(null);
   const puedeAdmin = usePermiso('comanda.config.editar');
+  const [allChecksOpen, setAllChecksOpen] = useState(false);
 
   useEffect(() => {
     if (localId === null) return;
@@ -28,6 +30,19 @@ export function PosLayout() {
     });
     return () => { cancelled = true; };
   }, [localId]);
+
+  // Atajo: tecla "/" abre el modal de todas las cuentas (no en inputs).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== '/') return;
+      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || (e.target as HTMLElement)?.isContentEditable) return;
+      e.preventDefault();
+      setAllChecksOpen(true);
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
 
   const minutosTurno = turno
     ? Math.max(0, Math.floor((Date.now() - new Date(turno.abierto_at).getTime()) / 60_000))
@@ -76,6 +91,16 @@ export function PosLayout() {
 
           {/* Derecha: acciones */}
           <div className="flex items-center gap-2 flex-shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setAllChecksOpen(true)}
+              title="Buscar cuentas (atajo: /)"
+            >
+              <Search className="h-4 w-4" />
+              <span className="sr-only">Buscar cuentas</span>
+            </Button>
+
             <ThemeToggle />
 
             <Button variant="outline" asChild>
@@ -98,6 +123,8 @@ export function PosLayout() {
           </div>
         </div>
       </header>
+
+      <AllChecksModal open={allChecksOpen} onOpenChange={setAllChecksOpen} />
 
       {/* Body: sidebar + content */}
       <div className="flex-1 flex min-h-0">
