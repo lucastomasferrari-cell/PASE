@@ -15,11 +15,11 @@ import { CajaEstado } from './pages/Caja/CajaEstado';
 import { CajaCerrar } from './pages/Caja/CajaCerrar';
 
 import { PosLayout } from './pages/Pos/PosLayout';
-import { PosSelectorModo } from './pages/Pos/PosSelectorModo';
 import { SalonView } from './pages/Pos/SalonView';
 import { MostradorView } from './pages/Pos/MostradorView';
 import { PedidosPlaceholder } from './pages/Pos/PedidosPlaceholder';
 import { VentaScreen } from './pages/Pos/VentaScreen';
+import { DefaultModeRedirect } from './components/DefaultModeRedirect';
 
 // AuthGate: variante "headless" de ProtectedShell — verifica sesión Supabase
 // pero NO renderiza header (lo provee PosLayout). Si no hay sesión, /login.
@@ -54,8 +54,8 @@ export default function App() {
             <Route element={<AuthGate />}>
               <Route element={<PinGate />}>
                 <Route element={<PosLayout />}>
-                  <Route path="/" element={<PosSelectorModo />} />
-                  <Route path="/pos" element={<PosSelectorModo />} />
+                  <Route path="/" element={<DefaultModeRedirect />} />
+                  <Route path="/pos" element={<DefaultModeRedirect />} />
                   <Route path="/pos/salon" element={<SalonView />} />
                   <Route path="/pos/mostrador" element={<MostradorView />} />
                   <Route path="/pos/pedidos" element={<PedidosPlaceholder />} />
