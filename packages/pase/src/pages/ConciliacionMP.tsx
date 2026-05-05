@@ -79,6 +79,17 @@ interface FacturaSlim {
   estado: string;
 }
 
+interface GastoSlim {
+  id: string;
+  fecha: string;
+  categoria: string;
+  subcategoria: string | null;
+  detalle: string | null;
+  monto: number;
+  local_id: number | null;
+  cuenta: string | null;
+}
+
 interface RemitoSlim {
   id: string;
   nro: string | null;
@@ -122,6 +133,14 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   const [porCobrarAll,setPorCobrarAll]=useState<MpMovimiento[]>([]);
   const [facturas,setFacturas]=useState<FacturaSlim[]>([]);
   const [remitos,setRemitos]=useState<RemitoSlim[]>([]);
+  const [gastos,setGastos]=useState<GastoSlim[]>([]);
+  // mp_movs ya conciliados a un gasto en el tenant — sirve para
+  // ocultar/marcar gastos que ya tienen un egreso MP linkeado.
+  const [gastosConciliadosIds,setGastosConciliadosIds]=useState<Set<string>>(new Set());
+  // Filtros del combobox del tab F.
+  const [tabFQuery,setTabFQuery]=useState("");
+  const [tabFSoloNoConciliados,setTabFSoloNoConciliados]=useState(true);
+  const [tabFSugerirSimilares,setTabFSugerirSimilares]=useState(true);
   const [loading,setLoading]=useState(true);
   const [sincronizando,setSincronizando]=useState(false);
   const [conciliando,setConciliando]=useState(false);
@@ -136,9 +155,10 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   const [configModal,setConfigModal]=useState(false);
   const [configForm,setConfigForm]=useState({local_id:"",access_token:""});
   const [conciliarModal,setConciliarModal]=useState<MpMovimiento | null>(null); // movimiento a conciliar
-  // Tabs del modal nuevo (5 tipos del brief): factura/remito (existentes) y
-  // gasto/egreso_manual/movimiento_interno (creación + linkeo atómico).
-  const [conciliarTab,setConciliarTab]=useState<"factura"|"remito"|"gasto"|"egreso_manual"|"movimiento_interno">("gasto");
+  // Tabs del modal nuevo (6 tipos): factura/remito/gasto-existente (linking
+  // a registros previos) y gasto/egreso_manual/movimiento_interno (crean
+  // entidad + linkean atómicamente).
+  const [conciliarTab,setConciliarTab]=useState<"factura"|"remito"|"gasto_existente"|"gasto"|"egreso_manual"|"movimiento_interno">("gasto");
   const [nuevoGastoForm,setNuevoGastoForm]=useState({categoria:"",detalle:"",tipo:"variable"});
   const [egresoManualForm,setEgresoManualForm]=useState({detalle:"",cat:""});
   const [movInternoForm,setMovInternoForm]=useState({destino:"",detalle:""});
@@ -199,7 +219,21 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
       facQ=applyLocalScope(facQ,user,localActivo);
       let remQ=db.from("remitos").select("id,nro,fecha,monto,local_id,estado").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false});
       remQ=applyLocalScope(remQ,user,localActivo);
-      const [credRes,movRes,saldoRes,porCobrarRes,facRes,remRes]=await Promise.all([
+      // Tab F necesita gastos para vincular. Trae ventana ±15d a cada lado del rango
+      // para sugerir gastos cercanos a egresos MP del borde sin tener que ampliar
+      // el datepicker. cuenta=MercadoPago se prioriza visualmente pero no se filtra
+      // — un gasto pagado con efectivo y mal cargado podría ser el correcto link.
+      const desdeAmpl=new Date(`${desde}T00:00:00-03:00`);desdeAmpl.setUTCDate(desdeAmpl.getUTCDate()-15);
+      const hastaAmpl=new Date(`${hasta}T00:00:00-03:00`);hastaAmpl.setUTCDate(hastaAmpl.getUTCDate()+15);
+      const desdeGas=desdeAmpl.toISOString().slice(0,10);
+      const hastaGas=hastaAmpl.toISOString().slice(0,10);
+      let gasQ=db.from("gastos").select("id,fecha,categoria,subcategoria,detalle,monto,local_id,cuenta").gte("fecha",desdeGas).lte("fecha",hastaGas).order("fecha",{ascending:false}).limit(2000);
+      gasQ=applyLocalScope(gasQ,user,localActivo);
+      // mp_movimientos ya conciliados a un gasto — para excluirlos del combobox
+      // del tab F. Trae solo ids para minimizar payload.
+      let mpJustifQ=db.from("mp_movimientos").select("justificativo_id").eq("justificativo_tipo","gasto").not("justificativo_id","is",null).limit(20000);
+      mpJustifQ=applyLocalScope(mpJustifQ,user,localActivo);
+      const [credRes,movRes,saldoRes,porCobrarRes,facRes,remRes,gasRes,mpJustifRes]=await Promise.all([
         // tenant_id es requerido para el WHERE compuesto del UPDATE de
         // saldo_inicial (defensa-en-profundidad sobre RLS). saldo_inicial /
         // saldo_inicial_at son las que el card del header lee.
@@ -209,6 +243,8 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
         porCobrarQ,
         facQ,
         remQ,
+        gasQ,
+        mpJustifQ,
       ]);
       if(credRes.error)console.warn("mp_credenciales load error:",credRes.error);
       if(movRes.error)console.warn("mp_movimientos load error:",movRes.error);
@@ -216,8 +252,10 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
       if(porCobrarRes.error)console.warn("por cobrar load error:",porCobrarRes.error);
       if(facRes.error)console.warn("facturas load error:",facRes.error);
       if(remRes.error)console.warn("remitos load error:",remRes.error);
-      const c=credRes.data||[], m=movRes.data||[], saldoRows=saldoRes.data||[], pcAll=porCobrarRes.data||[], f=facRes.data||[], r=remRes.data||[];
-      console.log("[MP] load:",c.length,"credenciales /",m.length,"movimientos /",pcAll.length,"por cobrar (todos) /",saldoRows.length,"pay-* para saldo /",f.length,"facturas /",r.length,"remitos");
+      if(gasRes.error)console.warn("gastos load error:",gasRes.error);
+      if(mpJustifRes.error)console.warn("mp justif load error:",mpJustifRes.error);
+      const c=credRes.data||[], m=movRes.data||[], saldoRows=saldoRes.data||[], pcAll=porCobrarRes.data||[], f=facRes.data||[], r=remRes.data||[], g=gasRes.data||[];
+      console.log("[MP] load:",c.length,"credenciales /",m.length,"movimientos /",pcAll.length,"por cobrar (todos) /",saldoRows.length,"pay-* para saldo /",f.length,"facturas /",r.length,"remitos /",g.length,"gastos");
       // Supabase tipa el nested-select locales(nombre) como { nombre }[]
       // (FK genérica), pero en runtime devuelve objeto plano para 1:1.
       // Cast vía unknown — patrón estándar en este codebase para FKs 1-1.
@@ -227,6 +265,8 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
       setPorCobrarAll(pcAll as MpMovimiento[]);
       setFacturas((f as FacturaSlim[]).filter(x=>!localActivo||x.local_id===localActivo));
       setRemitos((r as RemitoSlim[]).filter(x=>!localActivo||x.local_id===localActivo));
+      setGastos((g as GastoSlim[]).filter(x=>!localActivo||x.local_id===localActivo));
+      setGastosConciliadosIds(new Set(((mpJustifRes.data||[]) as {justificativo_id:string|null}[]).map(x=>String(x.justificativo_id||"")).filter(Boolean)));
     }catch(e){
       console.error("ConciliacionMP load error:",e);
     }finally{
@@ -626,6 +666,22 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
     setConciliando(false);
     if(error){showToast("err","No se pudo crear el egreso: "+error.message);return;}
     showToast("ok","Egreso manual creado y conciliado");
+    cerrarConciliar(); load();
+  };
+
+  const justificarConGastoExistente=async(gastoId:string)=>{
+    if(!conciliarModal||!gastoId)return;
+    setConciliando(true);
+    const {data,error}=await db.rpc("fn_conciliar_mp_con_gasto_existente",{
+      p_mp_mov_id:conciliarModal.id, p_gasto_id:gastoId,
+    });
+    setConciliando(false);
+    if(error){showToast("err","No se pudo vincular: "+error.message);return;}
+    // RPC devuelve {warning:string|null}. Si hay warning de monto, lo
+    // mostramos como info en lugar de éxito plano — la conciliación
+    // sí ocurrió, Lucas debe estar consciente de la diferencia.
+    const warning=(data as {warning?:string|null}|null)?.warning||null;
+    showToast(warning?"err":"ok",warning?("Vinculado con discrepancia: "+warning):"Egreso vinculado al gasto existente");
     cerrarConciliar(); load();
   };
 
@@ -1111,15 +1167,16 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
               <div className="num kpi-danger" style={{fontSize:14}}>{fmt_$(conciliarModal.monto)}</div>
             </div>
           </div>
-          <div className="tabs" style={{marginBottom:12}}>
+          <div className="tabs" style={{marginBottom:12,flexWrap:"wrap"}}>
             {([
               ["factura","A · Factura existente"],
               ["remito","B · Remito existente"],
               ["gasto","C · Gasto nuevo"],
               ["egreso_manual","D · Egreso manual"],
               ["movimiento_interno","E · Mov. interno"],
+              ["gasto_existente","F · Gasto existente"],
             ] as [typeof conciliarTab, string][]).map(([id,l])=>(
-              <div key={id} className={`tab ${conciliarTab===id?"active":""}`} onClick={()=>{setConciliarTab(id);setVinculoSel("");}}>{l}</div>
+              <div key={id} className={`tab ${conciliarTab===id?"active":""}`} onClick={()=>{setConciliarTab(id);setVinculoSel("");setTabFQuery("");}}>{l}</div>
             ))}
           </div>
           {conciliarTab==="factura"&&(
@@ -1144,6 +1201,66 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
               {remitos.length===0&&<div style={{fontSize:11,color:"var(--muted2)"}}>No hay remitos cargados en el período.</div>}
             </div>
           )}
+          {conciliarTab==="gasto_existente"&&(()=>{
+            // Tab F — Vincular a un gasto ya cargado en PASE. La RPC
+            // fn_conciliar_mp_con_gasto_existente devuelve warning si los
+            // montos no coinciden (no bloquea). El combobox sugiere por
+            // monto similar (±5%) y fecha cercana (±7d) cuando el toggle
+            // "Sugerir similares" está activo.
+            const mpMonto=Math.abs(Number(conciliarModal.monto)||0);
+            const mpFechaTs=conciliarModal.fecha?new Date(conciliarModal.fecha).getTime():0;
+            const SIETE_DIAS_MS=7*24*60*60*1000;
+            const tol=mpMonto*0.05;
+            const q=tabFQuery.trim().toLowerCase();
+            const lista=gastos
+              .filter(g=>!tabFSoloNoConciliados||!gastosConciliadosIds.has(g.id))
+              .filter(g=>{
+                if(!q)return true;
+                const hay=(g.detalle||"")+" "+g.categoria+" "+(g.subcategoria||"")+" "+(g.cuenta||"");
+                return hay.toLowerCase().includes(q);
+              })
+              .map(g=>{
+                // Score: cercanía de monto y fecha. Solo se usa para ordenar
+                // si "Sugerir similares" está activo. 0 = match exacto.
+                const dMonto=Math.abs(Number(g.monto)-mpMonto);
+                const dFecha=mpFechaTs?Math.abs(new Date(g.fecha).getTime()-mpFechaTs):Infinity;
+                const cercanoMonto=dMonto<=tol;
+                const cercanoFecha=dFecha<=SIETE_DIAS_MS;
+                const score=(cercanoMonto?0:1000)+(cercanoFecha?0:100)+dMonto/Math.max(mpMonto,1);
+                return {...g,_score:score,_cercanoMonto:cercanoMonto,_cercanoFecha:cercanoFecha};
+              })
+              .sort((a,b)=>tabFSugerirSimilares?(a._score-b._score):(String(b.fecha).localeCompare(String(a.fecha))))
+              .slice(0,200);
+            const sugeridos=lista.filter(g=>g._cercanoMonto&&g._cercanoFecha).length;
+            return (
+              <div>
+                <div className="alert alert-warn" style={{marginBottom:12}}>Linkea este egreso MP de {fmt_$(mpMonto)} a un gasto ya cargado. Si el monto no coincide queda warning pero la conciliación se aplica igual.</div>
+                <div className="field"><label>Buscar por categoría / detalle / cuenta</label>
+                  <input value={tabFQuery} onChange={e=>setTabFQuery(e.target.value)} placeholder="Aysa, Metrogas, sueldo..."/>
+                </div>
+                <div style={{display:"flex",gap:14,marginBottom:8,fontSize:11,color:"var(--muted2)"}}>
+                  <label style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer"}}>
+                    <input type="checkbox" checked={tabFSoloNoConciliados} onChange={e=>setTabFSoloNoConciliados(e.target.checked)}/>
+                    Solo gastos no conciliados
+                  </label>
+                  <label style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer"}}>
+                    <input type="checkbox" checked={tabFSugerirSimilares} onChange={e=>setTabFSugerirSimilares(e.target.checked)}/>
+                    Sugerir similares (±5% monto / ±7d fecha)
+                  </label>
+                  {sugeridos>0&&<span className="badge b-success" style={{fontSize:9}}>{sugeridos} sugeridos</span>}
+                </div>
+                <div className="field"><label>Gasto a vincular</label>
+                  <select value={vinculoSel} onChange={e=>setVinculoSel(e.target.value)} size={Math.min(8,Math.max(3,lista.length))} style={{height:"auto"}}>
+                    {lista.length===0?<option value="" disabled>— Sin gastos disponibles —</option>:lista.map(g=>{
+                      const flag=g._cercanoMonto&&g._cercanoFecha?"⭐ ":g._cercanoMonto?"💲 ":g._cercanoFecha?"📅 ":"";
+                      return <option key={g.id} value={g.id}>{flag}{fmt_d(g.fecha)} · {g.categoria}{g.subcategoria?" / "+g.subcategoria:""} · {fmt_$(g.monto)} · {g.cuenta||"—"} · {g.detalle||""}</option>;
+                    })}
+                  </select>
+                </div>
+                {gastos.length===0&&<div style={{fontSize:11,color:"var(--muted2)"}}>No hay gastos cargados en el período (incluye ±15 días). Probá ampliando el datepicker o cargando el gasto desde la pestaña Gastos.</div>}
+              </div>
+            );
+          })()}
           {conciliarTab==="gasto"&&(
             <div>
               <div className="alert alert-warn" style={{marginBottom:12}}>Crea un gasto por {fmt_$(Math.abs(conciliarModal.monto||0))} (cuenta MercadoPago) y lo vincula. Movimiento contable atómico.</div>
@@ -1188,6 +1305,8 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
           <button className="btn btn-sec" onClick={cerrarConciliar} disabled={conciliando}>Cancelar</button>
           {conciliarTab==="factura"||conciliarTab==="remito"?
             <button className="btn btn-acc" disabled={!vinculoSel||conciliando} onClick={()=>justificarConExistente(conciliarTab,vinculoSel)}>{conciliando?"Conciliando...":"Vincular"}</button>
+          :conciliarTab==="gasto_existente"?
+            <button className="btn btn-acc" disabled={!vinculoSel||conciliando} onClick={()=>justificarConGastoExistente(vinculoSel)}>{conciliando?"Vinculando...":"Vincular y conciliar"}</button>
           :conciliarTab==="gasto"?
             <button className="btn btn-acc" disabled={!nuevoGastoForm.categoria||conciliando} onClick={justificarConGastoNuevo}>{conciliando?"Creando...":"Crear gasto y conciliar"}</button>
           :conciliarTab==="egreso_manual"?
