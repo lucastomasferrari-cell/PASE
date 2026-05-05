@@ -26,6 +26,55 @@ interface ImportarMaxirestProps {
   onImported?: () => void;
 }
 
+type TurnoNombre = "Mediodía" | "Noche";
+
+// Detecta turno con prioridad: campo "Turno: <valor>" → header "Turno N (XXX)"
+// → fallback por hora de cierre. La comparación es case/accent-insensitive
+// y "Turno 1/2" también mapea como red de seguridad por si el nombre viene
+// en idioma o variante no reconocida. Si campo y hora no coinciden, gana
+// el campo y queda warning en consola para auditoría.
+function detectarTurnoMaxirest(texto: string): TurnoNombre {
+  const norm = (s: string): TurnoNombre | null => {
+    const x = s.trim().toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
+    if (x === "noche") return "Noche";
+    if (x === "mediodia") return "Mediodía";
+    return null;
+  };
+
+  let porCampo: TurnoNombre | null = null;
+  let porHeader: TurnoNombre | null = null;
+  let porHora: TurnoNombre | null = null;
+
+  const campo = texto.match(/Turno\s*:\s*([A-Za-zÁÉÍÓÚáéíóúñÑ]+)/i);
+  if (campo?.[1]) {
+    porCampo = norm(campo[1]);
+    if (!porCampo) console.warn("[maxirest:turno] valor no reconocido en 'Turno:':", campo[1]);
+  }
+
+  const header = texto.match(/Turno\s+(\d+)\s+\(\s*([A-Za-zÁÉÍÓÚáéíóúñÑ]+)/i);
+  if (header) {
+    const num = parseInt(header[1] || "0", 10);
+    porHeader = (header[2] ? norm(header[2]) : null) ?? (num === 1 ? "Mediodía" : num === 2 ? "Noche" : null);
+  }
+
+  const cierre = texto.match(/Cierre\s*:\s*(\d{1,2}):(\d{2})/i);
+  if (cierre) {
+    const h = parseInt(cierre[1] || "0", 10);
+    porHora = h < 16 ? "Mediodía" : "Noche";
+  }
+
+  const elegido: TurnoNombre = porCampo ?? porHeader ?? porHora ?? "Mediodía";
+
+  if (porCampo && porHora && porCampo !== porHora) {
+    console.warn("[maxirest:turno] DISCREPANCIA: campo='" + porCampo + "' vs hora cierre='" + porHora + "' → priorizo campo");
+  }
+  if (!porCampo && !porHeader && !porHora) {
+    console.warn("[maxirest:turno] NO se pudo detectar turno (sin campo, sin header válido, sin hora cierre); default Mediodía");
+  }
+  console.log("[maxirest:turno] detectado='" + elegido + "' (campo=" + porCampo + ", header=" + porHeader + ", hora=" + porHora + ")");
+  return elegido;
+}
+
 export default function ImportarMaxirest({ locales, localActivo, onImported }: ImportarMaxirestProps) {
   const [texto,setTexto]=useState("");
   const [preview,setPreview]=useState<MaxirestPreview | null>(null);
@@ -41,8 +90,7 @@ export default function ImportarMaxirest({ locales, localActivo, onImported }: I
     let fecha=toISO(today);
     const fm=texto.match(/(\w+)\s+(\d+)\s+de\s+(\w+)\s+de\s+(\d{4})/i);
     if(fm){const ms: Record<string, number>={enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,octubre:10,noviembre:11,diciembre:12};const m=ms[(fm[3]||"").toLowerCase()];if(m)fecha=`${fm[4]}-${String(m).padStart(2,"0")}-${String(fm[2]).padStart(2,"0")}`;}
-    const tm=texto.match(/Turno\s+\d+\s+\((\w+)/i);
-    const turno=tm?.[1]==="Noche"?"Noche":"Mediodía";
+    const turno=detectarTurnoMaxirest(texto);
     // local_id viene SIEMPRE del sidebar (localActivo), nunca del CSV.
     const local_id=Number(localActivo);
 
