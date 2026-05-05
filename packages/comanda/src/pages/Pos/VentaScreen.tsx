@@ -1,6 +1,9 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Wallet, MoreHorizontal } from 'lucide-react';
+import { toast } from 'sonner';
+import {
+  ArrowLeft, Send, Wallet, MoreHorizontal, Package,
+} from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
 import { listItems, type ItemConGrupo } from '../../services/itemsService';
@@ -8,25 +11,32 @@ import { listGrupos } from '../../services/gruposService';
 import {
   getVenta, listVentasItems, agregarItem, modificarItem, mandarCurso,
 } from '../../services/ventasService';
-import { listMetodosCobroActivos } from '../../services/configService';
-import { cobrar, newIdempotencyKey } from '../../services/pagosService';
-import type { VentaPos, VentaPosItem, ItemGrupo, MetodoCobro } from '../../types/database';
+import type { VentaPos, VentaPosItem, ItemGrupo } from '../../types/database';
 import { Badge } from '../../components/Badge';
 import { SearchInput } from '../../components/SearchInput';
 import { Stepper } from '../../components/Stepper';
-import { MoneyInput } from '../../components/MoneyInput';
 import { formatARS, relativoCorto } from '../../lib/format';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog';
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { ModifiersDialog } from '@/components/dialogs/ModifiersDialog';
+import { PaymentDialog } from '@/components/dialogs/PaymentDialog';
+import { DiscountDialog } from '@/components/dialogs/DiscountDialog';
+import { TransferMesaDialog } from '@/components/dialogs/TransferMesaDialog';
+import { MergeMesasDialog } from '@/components/dialogs/MergeMesasDialog';
+import { SplitCheckDialog } from '@/components/dialogs/SplitCheckDialog';
+import { ManagerOverrideDialog } from '@/components/dialogs/ManagerOverrideDialog';
+import { anularVenta } from '@/services/overridesService';
+import { db } from '@/lib/supabase';
+import { EstadoVentaBadge } from '@/components/EstadoBadge';
 import { cn } from '@/lib/utils';
 
-// Pantalla principal de venta. Catálogo izq + check der.
-// Sprint 2 simplificado: sin modifiers dialog, sin payment rico (1 solo método),
-// sin coursing visual avanzado (botón "Mandar curso 1" directo).
-// Refactor de layout queda para Sprint 3 (split-screen 60/40 con tooltip, etc).
+const CURSO_COLORS: Record<number, string> = {
+  1: 'bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100 border-amber-200 dark:border-amber-800',
+  2: 'bg-orange-100 text-orange-900 dark:bg-orange-900/30 dark:text-orange-100 border-orange-200 dark:border-orange-800',
+  3: 'bg-purple-100 text-purple-900 dark:bg-purple-900/30 dark:text-purple-100 border-purple-200 dark:border-purple-800',
+};
 
 export function VentaScreen() {
   const { ventaId: idStr } = useParams<{ ventaId: string }>();
@@ -41,9 +51,20 @@ export function VentaScreen() {
   const [grupos, setGrupos] = useState<ItemGrupo[]>([]);
   const [grupoSel, setGrupoSel] = useState<number | null>(null);
   const [search, setSearch] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [cursoActivo, setCursoActivo] = useState<number>(1);
+
+  // Dialogs
   const [showCobro, setShowCobro] = useState(false);
+  const [showDescuento, setShowDescuento] = useState(false);
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [showMerge, setShowMerge] = useState(false);
+  const [showSplit, setShowSplit] = useState(false);
+  const [showAnular, setShowAnular] = useState(false);
+  const [pendingModifiers, setPendingModifiers] = useState<ItemConGrupo | null>(null);
+
+  // Cache de qué items tienen modifier_groups asignados (para decidir si abre dialog)
+  const [itemsConModifiers, setItemsConModifiers] = useState<Set<number>>(new Set());
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -53,7 +74,7 @@ export function VentaScreen() {
       listItems({ tenantId: user?.tenant_id ?? null }),
       listGrupos(user?.tenant_id ?? null),
     ]);
-    if (vRes.error) setError(vRes.error);
+    if (vRes.error) toast.error(vRes.error);
     setVenta(vRes.data);
     setItems(iRes.data);
     setCatalogo(cRes.data);
@@ -62,6 +83,17 @@ export function VentaScreen() {
   }, [ventaId, user?.tenant_id]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // Cache: qué items tienen modifiers asignados
+  useEffect(() => {
+    if (catalogo.length === 0) return;
+    const ids = catalogo.map((c) => c.id);
+    db.from('item_modifier_groups').select('item_id').in('item_id', ids).then(({ data }) => {
+      const set = new Set<number>();
+      for (const r of data ?? []) set.add((r as { item_id: number }).item_id);
+      setItemsConModifiers(set);
+    });
+  }, [catalogo]);
 
   const catalogoFiltrado = useMemo(() => {
     return catalogo.filter((it) => {
@@ -73,44 +105,92 @@ export function VentaScreen() {
     });
   }, [catalogo, grupoSel, search]);
 
-  if (loading) {
-    return <div className="py-12 text-center text-muted-foreground">Cargando…</div>;
+  // Items agrupados por curso
+  const itemsPorCurso = useMemo(() => {
+    const map = new Map<number, VentaPosItem[]>();
+    for (const it of items) {
+      const c = it.curso ?? 1;
+      if (!map.has(c)) map.set(c, []);
+      map.get(c)!.push(it);
+    }
+    return new Map([...map.entries()].sort((a, b) => a[0] - b[0]));
+  }, [items]);
+
+  // Hold count por curso (para badge "EN HOLD")
+  function holdCount(curso: number): number {
+    return (itemsPorCurso.get(curso) ?? []).filter((i) => i.estado === 'hold').length;
   }
-  if (!venta) {
-    return <div className="py-12 text-center text-destructive">Venta no encontrada</div>;
-  }
-  if (!empleado) {
-    return <div className="py-12 text-center text-muted-foreground">Sesión POS requerida</div>;
-  }
+
+  if (loading) return <div className="py-12 text-center text-muted-foreground">Cargando…</div>;
+  if (!venta) return <div className="py-12 text-center text-destructive">Venta no encontrada</div>;
+  if (!empleado) return <div className="py-12 text-center text-muted-foreground">Sesión POS requerida</div>;
 
   const editable = venta.estado !== 'cobrada' && venta.estado !== 'anulada';
 
-  async function addItem(it: ItemConGrupo) {
-    if (!editable) return;
-    const { error: err } = await agregarItem({
-      ventaId, itemId: it.id, cantidad: 1, curso: 1, cargadoPor: empleado!.id,
+  async function addItem(it: ItemConGrupo, modificadores: { nombre: string; precio_extra: number; modifier_id?: number }[] = [], notas: string | null = null) {
+    if (!editable || !empleado) return;
+    const { error } = await agregarItem({
+      ventaId, itemId: it.id, cantidad: 1, curso: cursoActivo,
+      modificadores: modificadores.length > 0 ? modificadores : null,
+      notas,
+      cargadoPor: empleado.id,
     });
-    if (err) { setError(err); return; }
+    if (error) { toast.error(error); return; }
+    toast.success(`${it.nombre} agregado al curso ${cursoActivo}`);
     reload();
+  }
+
+  async function clickItem(it: ItemConGrupo) {
+    if (!editable) return;
+    if (itemsConModifiers.has(it.id)) {
+      setPendingModifiers(it);
+    } else {
+      await addItem(it);
+    }
   }
 
   async function changeQty(itemRow: VentaPosItem, qty: number) {
     if (qty <= 0) return;
-    const { error: err } = await modificarItem(itemRow.id, { cantidad: qty });
-    if (err) { setError(err); return; }
+    const { error } = await modificarItem(itemRow.id, { cantidad: qty });
+    if (error) { toast.error(error); return; }
     reload();
   }
 
-  async function mandar() {
-    const { error: err } = await mandarCurso(ventaId, 1);
-    if (err) { setError(err); return; }
+  async function mandarCursoHandler(curso: number) {
+    const { error } = await mandarCurso(ventaId, curso);
+    if (error) { toast.error(error); return; }
+    toast.success(`Curso ${curso} enviado a cocina`);
     reload();
   }
+
+  const cursosExistentes = Array.from(itemsPorCurso.keys());
+  const maxCurso = Math.max(3, ...cursosExistentes);
 
   return (
     <div className="grid grid-cols-[1fr_380px] min-h-[calc(100vh-60px)]">
-      {/* CATÁLOGO IZQUIERDA */}
+      {/* CATÁLOGO IZQ */}
       <div className="p-4 overflow-y-auto border-r border-border bg-card">
+        {/* Selector de curso */}
+        {editable && (
+          <div className="mb-3 flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Cargando en:</span>
+            {Array.from({ length: maxCurso }, (_, i) => i + 1).map((c) => (
+              <Button
+                key={c}
+                type="button"
+                variant={cursoActivo === c ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setCursoActivo(c)}
+              >
+                Curso {c}
+              </Button>
+            ))}
+            <Button type="button" variant="ghost" size="sm" onClick={() => setCursoActivo(maxCurso + 1)}>
+              + Curso {maxCurso + 1}
+            </Button>
+          </div>
+        )}
+
         <div className="mb-3">
           <SearchInput value={search} onChange={setSearch} placeholder="Buscar producto…" />
         </div>
@@ -130,13 +210,13 @@ export function VentaScreen() {
               item={it}
               grupo={grupos.find((g) => g.id === it.grupo_id) ?? null}
               disabled={!editable}
-              onClick={() => addItem(it)}
+              onClick={() => clickItem(it)}
             />
           ))}
         </div>
       </div>
 
-      {/* CHECK DERECHA */}
+      {/* CHECK DER */}
       <aside className="bg-muted/40 border-l border-border flex flex-col">
         <div className="p-3 border-b border-border bg-card">
           <div className="flex items-center gap-2">
@@ -145,7 +225,7 @@ export function VentaScreen() {
               Volver
             </Button>
             <strong className="text-base">#{venta.numero_local}</strong>
-            <Badge variant={estadoBadge(venta.estado)}>{venta.estado}</Badge>
+            <EstadoVentaBadge estado={venta.estado} />
           </div>
           <div className="text-xs text-muted-foreground mt-1">
             {venta.modo === 'salon' && venta.mesa_id && 'Mesa · '}
@@ -153,44 +233,62 @@ export function VentaScreen() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2">
+        <div className="flex-1 overflow-y-auto p-2 space-y-3">
           {items.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground text-sm">
-              Sin items todavía. Tocá productos del catálogo para agregar.
+              Sin items. Tocá productos del catálogo para agregar.
             </div>
           ) : (
-            items.map((it) => (
-              <CheckRow
-                key={it.id}
-                item={it}
-                catalogo={catalogo}
-                onQty={(n) => changeQty(it, n)}
-                editable={editable}
-              />
-            ))
+            Array.from(itemsPorCurso.entries()).map(([curso, itemsCurso]) => {
+              const hold = holdCount(curso);
+              return (
+                <div key={curso}>
+                  <div className={cn(
+                    'flex items-center justify-between gap-2 px-2 py-1.5 rounded-md border text-xs font-medium',
+                    CURSO_COLORS[curso] ?? 'bg-muted',
+                  )}>
+                    <span>Curso {curso}</span>
+                    {hold > 0 ? (
+                      <Badge variant="amber">{hold} en hold</Badge>
+                    ) : (
+                      <Badge variant="green">Enviado</Badge>
+                    )}
+                  </div>
+                  {hold > 0 && editable && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full mt-1.5"
+                      onClick={() => mandarCursoHandler(curso)}
+                    >
+                      <Send className="h-3.5 w-3.5 mr-1.5" />
+                      Mandar curso {curso} ({hold})
+                    </Button>
+                  )}
+                  <div className="mt-1">
+                    {itemsCurso.map((it) => (
+                      <CheckRow
+                        key={it.id}
+                        item={it}
+                        catalogo={catalogo}
+                        onQty={(n) => changeQty(it, n)}
+                        editable={editable}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
 
-        <div className="p-3 border-t border-border bg-card">
+        <div className="p-3 border-t border-border bg-card space-y-2">
           <Row label="Subtotal" value={formatARS(venta.subtotal)} />
           {venta.descuento_total > 0 && (
             <Row label="Descuento" value={'−' + formatARS(venta.descuento_total)} />
           )}
           {venta.propina > 0 && <Row label="Propina" value={formatARS(venta.propina)} />}
           <Row label="Total" value={formatARS(venta.total)} bold />
-
-          {/* CTAs Toast-style: primario coral grande para mandar a cocina,
-              luego par 2-col verde "Cobrar y enviar" + ghost "Más" */}
-          <Button
-            type="button"
-            size="pos"
-            className="w-full mt-3"
-            onClick={mandar}
-            disabled={!editable || items.length === 0}
-          >
-            <Send className="h-4 w-4 mr-2" />
-            Enviar a cocina
-          </Button>
 
           <div className="grid grid-cols-[1fr_auto] gap-2 mt-2">
             <Button
@@ -203,41 +301,130 @@ export function VentaScreen() {
               <Wallet className="h-4 w-4 mr-2" />
               Cobrar y enviar
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              aria-label="Más opciones"
-              disabled={!editable}
-              title="Próximamente: descuento, anular, transferir mesa"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-              <span className="hidden sm:inline ml-1">Más</span>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  aria-label="Más opciones"
+                  disabled={!editable}
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuItem onClick={() => setShowDescuento(true)}>
+                  Aplicar descuento
+                </DropdownMenuItem>
+                {venta.modo === 'salon' && (
+                  <>
+                    <DropdownMenuItem onClick={() => setShowTransfer(true)}>
+                      Cambiar mesa
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setShowMerge(true)}>
+                      Unir con otra mesa
+                    </DropdownMenuItem>
+                  </>
+                )}
+                <DropdownMenuItem onClick={() => setShowSplit(true)}>
+                  Partir cuenta
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => setShowAnular(true)}
+                >
+                  Anular venta
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
-
-        {error && (
-          <div className="m-3 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
-            {error}
-          </div>
-        )}
       </aside>
 
-      {showCobro && (
-        <CobroDialog
-          venta={venta}
-          empleadoId={empleado.id}
-          onClose={() => setShowCobro(false)}
-          onCobrado={() => {
-            setShowCobro(false);
-            reload();
-            // Si es salón → volver al plano
-            setTimeout(() => navigate(venta.modo === 'salon' ? '/pos/salon' : '/pos/mostrador'), 800);
+      {/* Dialogs */}
+      {pendingModifiers && (
+        <ModifiersDialog
+          open={true}
+          onOpenChange={(o) => { if (!o) setPendingModifiers(null); }}
+          item={pendingModifiers}
+          onConfirm={async (mods, notas) => {
+            await addItem(pendingModifiers, mods, notas);
+            setPendingModifiers(null);
           }}
-          onError={setError}
         />
       )}
+
+      {showCobro && (
+        <PaymentDialog
+          open={showCobro}
+          onOpenChange={setShowCobro}
+          venta={venta}
+          empleadoId={empleado.id}
+          onCobrado={() => {
+            reload();
+            setTimeout(() => navigate(venta.modo === 'salon' ? '/pos/salon' : '/pos/mostrador'), 800);
+          }}
+        />
+      )}
+
+      {showDescuento && (
+        <DiscountDialog
+          open={showDescuento}
+          onOpenChange={setShowDescuento}
+          ventaId={ventaId}
+          subtotal={Number(venta.subtotal)}
+          total={Number(venta.total)}
+          onAplicado={reload}
+        />
+      )}
+
+      {showTransfer && (
+        <TransferMesaDialog
+          open={showTransfer}
+          onOpenChange={setShowTransfer}
+          ventaId={ventaId}
+          localId={venta.local_id}
+          mesaActualId={venta.mesa_id}
+          onTransferida={reload}
+        />
+      )}
+
+      {showMerge && (
+        <MergeMesasDialog
+          open={showMerge}
+          onOpenChange={setShowMerge}
+          ventaDestinoId={ventaId}
+          localId={venta.local_id}
+          onUnida={reload}
+        />
+      )}
+
+      {showSplit && (
+        <SplitCheckDialog
+          open={showSplit}
+          onOpenChange={setShowSplit}
+          ventaId={ventaId}
+          tenantId={user?.tenant_id ?? ''}
+          onPartida={(nueva) => {
+            toast.success(`Cuenta partida — venta nueva #${nueva}`);
+            reload();
+          }}
+        />
+      )}
+
+      <ManagerOverrideDialog
+        open={showAnular}
+        onOpenChange={setShowAnular}
+        accion="Anular venta"
+        descripcion={`Anular venta #${venta.numero_local} por ${formatARS(venta.total)}.`}
+        onAuthorized={async ({ managerId, motivo }) => {
+          const { error } = await anularVenta(ventaId, managerId, motivo);
+          if (error) throw new Error(error);
+          toast.success('Venta anulada');
+          navigate(venta.modo === 'salon' ? '/pos/salon' : '/pos/mostrador');
+        }}
+      />
     </div>
   );
 }
@@ -270,9 +457,12 @@ function CheckRow({ item, catalogo, onQty, editable }:
       <div className="text-base">{it?.emoji ?? '📦'}</div>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium truncate">{it?.nombre ?? `Item #${item.item_id}`}</div>
-        {item.notas && (
-          <div className="text-xs text-warning italic">{item.notas}</div>
+        {item.modificadores && item.modificadores.length > 0 && (
+          <div className="text-xs text-muted-foreground">
+            {item.modificadores.map((m) => m.nombre).join(' · ')}
+          </div>
         )}
+        {item.notas && <div className="text-xs text-warning italic">{item.notas}</div>}
         <div className="text-xs text-muted-foreground mt-0.5">
           {formatARS(item.precio_unitario)} c/u · {item.estado}
         </div>
@@ -303,161 +493,7 @@ function Row({ label, value, bold }: { label: string; value: string; bold?: bool
   );
 }
 
-function estadoBadge(e: string): 'gray' | 'amber' | 'green' | 'red' | 'blue' {
-  if (e === 'abierta') return 'gray';
-  if (e === 'enviada') return 'amber';
-  if (e === 'lista') return 'blue';
-  if (e === 'cobrada') return 'green';
-  if (e === 'anulada') return 'red';
-  return 'gray';
-}
-
-interface CobroProps {
-  venta: VentaPos;
-  empleadoId: string;
-  onClose: () => void;
-  onCobrado: () => void;
-  onError: (msg: string) => void;
-}
-
-function CobroDialog({ venta, empleadoId, onClose, onCobrado, onError }: CobroProps) {
-  const [metodos, setMetodos] = useState<MetodoCobro[]>([]);
-  const [metodoSlug, setMetodoSlug] = useState<string>('efectivo');
-  const [propina, setPropina] = useState(0);
-  const [montoEntregado, setMontoEntregado] = useState(0);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    listMetodosCobroActivos(venta.local_id).then((r) => {
-      setMetodos(r.data);
-      if (r.data.length > 0 && r.data[0]) setMetodoSlug(r.data[0].slug);
-    });
-  }, [venta.local_id]);
-
-  const totalConPropina = Number(venta.subtotal) - Number(venta.descuento_total) + propina;
-  const metodoSel = metodos.find((m) => m.slug === metodoSlug);
-  const pideVuelto = metodoSel?.pide_vuelto ?? false;
-  const vuelto = pideVuelto && montoEntregado >= totalConPropina ? montoEntregado - totalConPropina : 0;
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    const monto = totalConPropina;
-    const pago = {
-      metodo: metodoSlug,
-      monto,
-      idempotency_key: newIdempotencyKey(),
-      vuelto: pideVuelto ? vuelto : null,
-    };
-    const { error: err } = await cobrar(venta.id, [pago], propina, empleadoId);
-    setSaving(false);
-    if (err) { onError(err); return; }
-    onCobrado();
-  }
-
-  const propinaPcts = [0, 0.10, 0.15, 0.20];
-
-  return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Cobrar venta #{venta.numero_local}</DialogTitle>
-        </DialogHeader>
-
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div className="space-y-1 text-sm">
-            <div className="flex justify-between py-1 border-b border-border">
-              <span className="text-muted-foreground">Subtotal</span>
-              <strong className="tabular-nums">{formatARS(venta.subtotal)}</strong>
-            </div>
-            {venta.descuento_total > 0 && (
-              <div className="flex justify-between py-1">
-                <span className="text-muted-foreground">Descuento</span>
-                <span className="tabular-nums">−{formatARS(venta.descuento_total)}</span>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label>Propina</Label>
-            <div className="flex gap-2 items-center flex-wrap">
-              {propinaPcts.map((p) => {
-                const monto = Math.round((Number(venta.subtotal) - Number(venta.descuento_total)) * p);
-                const sel = Math.abs(propina - monto) < 0.01;
-                return (
-                  <Button
-                    key={p}
-                    type="button"
-                    variant={sel ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setPropina(monto)}
-                    className="rounded-full"
-                  >
-                    {p === 0 ? 'Sin' : `${p * 100}%`}
-                  </Button>
-                );
-              })}
-              <div className="flex-1 min-w-[100px]">
-                <MoneyInput value={propina} onChange={setPropina} />
-              </div>
-            </div>
-          </div>
-
-          <div className="p-3 rounded-md bg-primary/10 flex justify-between items-center text-base">
-            <strong>Total</strong>
-            <strong className="tabular-nums text-lg">{formatARS(totalConPropina)}</strong>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Método de cobro</Label>
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(110px,1fr))] gap-2">
-              {metodos.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => setMetodoSlug(m.slug)}
-                  className={cn(
-                    'p-2 rounded-md text-sm border transition-colors h-11',
-                    metodoSlug === m.slug
-                      ? 'border-primary border-2 bg-primary/5'
-                      : 'border-input bg-background hover:bg-accent',
-                  )}
-                >
-                  {m.emoji} {m.nombre}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {pideVuelto && (
-            <div className="space-y-2">
-              <Label>Monto entregado por el cliente</Label>
-              <MoneyInput value={montoEntregado} onChange={setMontoEntregado} />
-              {vuelto > 0 && (
-                <div className="p-2 rounded-md bg-warning/10 text-warning text-sm border border-warning/30">
-                  Vuelto: <strong className="tabular-nums">{formatARS(vuelto)}</strong>
-                </div>
-              )}
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-              Cancelar
-            </Button>
-            <Button type="submit" variant="success" disabled={saving}>
-              {saving ? 'Cobrando…' : `Cobrar ${formatARS(totalConPropina)}`}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ─── ProductTile ──────────────────────────────────────────────────────────
-// Tile con color_ramp del grupo + foto/emoji/iniciales como fallback.
-
+// ProductTile (Sprint 3) — color_ramp con clases Tailwind nativas
 const RAMP_CLASSES: Record<string, string> = {
   amber:  'bg-amber-100 text-amber-900 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-100 dark:hover:bg-amber-900/50',
   pink:   'bg-pink-100 text-pink-900 hover:bg-pink-200 dark:bg-pink-900/30 dark:text-pink-100 dark:hover:bg-pink-900/50',
@@ -469,9 +505,7 @@ const RAMP_CLASSES: Record<string, string> = {
   gray:   'bg-muted text-foreground hover:bg-accent',
 };
 
-function ProductTile({
-  item, grupo, disabled, onClick,
-}: {
+function ProductTile({ item, grupo, disabled, onClick }: {
   item: ItemConGrupo;
   grupo: ItemGrupo | null;
   disabled: boolean;
@@ -479,7 +513,6 @@ function ProductTile({
 }) {
   const ramp = grupo?.color_ramp ?? 'gray';
   const cls = RAMP_CLASSES[ramp] ?? RAMP_CLASSES.gray;
-
   return (
     <button
       type="button"
@@ -497,7 +530,10 @@ function ProductTile({
       ) : item.emoji ? (
         <div className="text-3xl">{item.emoji}</div>
       ) : (
-        <div className="text-2xl font-medium leading-none">{getInitials(item.nombre)}</div>
+        <div className="text-2xl font-medium leading-none">
+          {item.nombre.split(' ').filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('')}
+          <Package className="hidden" />
+        </div>
       )}
       <div className="text-[10px] text-center line-clamp-2 leading-tight opacity-80">
         {item.nombre}
@@ -507,13 +543,4 @@ function ProductTile({
       </div>
     </button>
   );
-}
-
-function getInitials(nombre: string): string {
-  return nombre
-    .split(' ')
-    .filter((p) => p.length > 0)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? '')
-    .join('');
 }
