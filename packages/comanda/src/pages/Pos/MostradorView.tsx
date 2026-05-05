@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Plus, Coffee } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
 import { useLocalActivo } from '../../lib/localActivo';
@@ -8,6 +9,8 @@ import { listCanales } from '../../services/canalesService';
 import type { VentaPos } from '../../types/database';
 import { formatARS, relativoCorto } from '../../lib/format';
 import { Badge } from '../../components/Badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 export function MostradorView() {
   const { user } = useAuth();
@@ -49,47 +52,71 @@ export function MostradorView() {
     navigate(`/pos/venta/${ventaId}`);
   }
 
-  if (loading) return <div style={{ padding: 32, textAlign: 'center', color: '#6B7280' }}>Cargando…</div>;
+  if (loading) {
+    return <div className="container py-8 text-center text-muted-foreground">Cargando…</div>;
+  }
 
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 16px' }}>
-      <header style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 22 }}>Mostrador</h2>
-        <span style={{ fontSize: 13, color: '#6B7280' }}>{ventas.length} órdenes activas</span>
-        <button type="button" onClick={nuevaOrden} disabled={creando} style={{ marginLeft: 'auto', ...btnPrimary }}>
-          {creando ? 'Creando…' : '+ Nueva orden'}
-        </button>
+    <div className="container py-6">
+      <header className="flex items-center gap-3 mb-5">
+        <h1 className="text-2xl font-bold tracking-tight">Mostrador</h1>
+        <span className="text-sm text-muted-foreground">{ventas.length} órdenes activas</span>
+        <Button
+          onClick={nuevaOrden}
+          disabled={creando}
+          variant="success"
+          size="lg"
+          className="ml-auto"
+        >
+          <Plus className="h-5 w-5 mr-2" />
+          {creando ? 'Creando…' : 'Nueva orden'}
+        </Button>
       </header>
 
-      {error && <div style={errBox}>{error}</div>}
+      {error && (
+        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
+      )}
 
       {ventas.length === 0 ? (
-        <div style={{ padding: 48, border: '1px dashed #D1D5DB', borderRadius: 8, textAlign: 'center', color: '#6B7280' }}>
-          No hay órdenes abiertas. Tocá "+ Nueva orden" para crear una.
-        </div>
+        <Card>
+          <CardContent className="py-16 text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-muted mb-4">
+              <Coffee className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-medium mb-1">Sin órdenes abiertas</h3>
+            <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-4">
+              Tocá "Nueva orden" para empezar a tomar pedidos del mostrador o la barra.
+            </p>
+            <Button onClick={nuevaOrden} disabled={creando} variant="success">
+              <Plus className="h-5 w-5 mr-2" />
+              Nueva orden
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           {ventas.map((v) => (
-            <button
+            <Card
               key={v.id}
-              type="button"
+              className="cursor-pointer transition-colors hover:bg-accent"
               onClick={() => navigate(`/pos/venta/${v.id}`)}
-              style={card}
             >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <strong style={{ fontSize: 15 }}>#{v.numero_local}</strong>
-                <Badge variant={estadoColor(v.estado)}>{v.estado}</Badge>
-              </div>
-              <div style={{ marginTop: 4, fontSize: 13, color: '#6B7280' }}>
-                {v.cliente_nombre ?? 'Sin nombre'}
-              </div>
-              <div style={{ marginTop: 8, fontSize: 18, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                {formatARS(v.total)}
-              </div>
-              <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>
-                {relativoCorto(v.abierta_at)}
-              </div>
-            </button>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <strong className="text-base">#{v.numero_local}</strong>
+                  <Badge variant={estadoColor(v.estado)}>{v.estado}</Badge>
+                </div>
+                <div className="mt-2 text-sm text-muted-foreground truncate">
+                  {v.cliente_nombre ?? 'Sin nombre'}
+                </div>
+                <div className="mt-3 text-xl font-bold tabular-nums">
+                  {formatARS(v.total)}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {relativoCorto(v.abierta_at)}
+                </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}
@@ -100,14 +127,7 @@ export function MostradorView() {
 function estadoColor(e: string): 'gray' | 'amber' | 'green' | 'blue' {
   if (e === 'abierta') return 'gray';
   if (e === 'enviada') return 'amber';
-  if (e === 'lista')   return 'blue';
+  if (e === 'lista') return 'blue';
   if (e === 'entregada') return 'green';
   return 'gray';
 }
-
-const card: React.CSSProperties = {
-  textAlign: 'left', padding: 12, border: '1px solid #E5E7EB', borderRadius: 8,
-  background: '#FFFFFF', cursor: 'pointer', fontFamily: 'inherit',
-};
-const btnPrimary: React.CSSProperties = { padding: '8px 16px', border: 'none', borderRadius: 6, background: '#2563EB', color: '#FFFFFF', cursor: 'pointer', fontSize: 14, fontWeight: 500 };
-const errBox: React.CSSProperties = { padding: 10, background: '#FEE2E2', color: '#991B1B', borderRadius: 6, fontSize: 13, marginBottom: 12 };
