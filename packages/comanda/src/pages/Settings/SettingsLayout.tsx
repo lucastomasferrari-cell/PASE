@@ -1,15 +1,18 @@
+import { Users, Settings as SettingsIcon, ArmchairIcon, CreditCard, ClipboardList } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import { SettingsEmpleados } from './SettingsEmpleados';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Card, CardContent } from '@/components/ui/card';
 
-type Tab = 'empleados' | 'general' | 'mesas' | 'metodos' | 'catalogo';
+type Tab = 'empleados' | 'general' | 'mesas' | 'metodos';
 
-const TABS: Array<{ key: Tab; label: string; emoji: string; disabled?: boolean }> = [
-  { key: 'empleados', label: 'Empleados POS', emoji: '👥' },
-  { key: 'general',   label: 'General',       emoji: '⚙️', disabled: true },
-  { key: 'mesas',     label: 'Mesas',         emoji: '🪑', disabled: true },
-  { key: 'metodos',   label: 'Métodos cobro', emoji: '💳', disabled: true },
-  { key: 'catalogo',  label: 'Catálogo →',    emoji: '📋' },
+const TABS = [
+  { key: 'empleados' as const, label: 'Empleados POS', Icon: Users },
+  { key: 'general' as const,   label: 'General',       Icon: SettingsIcon, disabled: true },
+  { key: 'mesas' as const,     label: 'Mesas',         Icon: ArmchairIcon, disabled: true },
+  { key: 'metodos' as const,   label: 'Métodos cobro', Icon: CreditCard, disabled: true },
 ];
 
 export function SettingsLayout() {
@@ -19,60 +22,51 @@ export function SettingsLayout() {
   if (!user) return null;
 
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px 16px', fontFamily: 'system-ui, sans-serif' }}>
-      <header style={{ marginBottom: 16 }}>
-        <h1 style={{ margin: 0, fontSize: 22 }}>Configuración</h1>
+    <div className="container py-8">
+      <header className="mb-6 flex items-center justify-between flex-wrap gap-3">
+        <h1 className="text-3xl font-bold tracking-tight">Configuración</h1>
+        <Link
+          to="/catalogo"
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ClipboardList className="h-4 w-4" />
+          Ir al Catálogo →
+        </Link>
       </header>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 24 }}>
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {TABS.map((t) => {
-            const active = tab === t.key;
-            const onClick = () => {
-              if (t.key === 'catalogo') { window.location.href = '/catalogo'; return; }
-              if (!t.disabled) setTab(t.key);
-            };
-            return (
-              <button
-                key={t.key}
-                type="button"
-                onClick={onClick}
-                disabled={t.disabled}
-                style={{
-                  textAlign: 'left',
-                  padding: '8px 12px',
-                  border: 'none',
-                  borderRadius: 6,
-                  background: active ? '#EEF2FF' : 'transparent',
-                  color: active ? '#1E40AF' : t.disabled ? '#9CA3AF' : '#374151',
-                  cursor: t.disabled ? 'default' : 'pointer',
-                  fontSize: 14,
-                  fontWeight: active ? 600 : 400,
-                }}
-              >
-                <span style={{ marginRight: 6 }}>{t.emoji}</span>
-                {t.label}
-                {t.disabled && <span style={{ fontSize: 10, marginLeft: 6, color: '#9CA3AF' }}>(próx.)</span>}
-              </button>
-            );
-          })}
-        </nav>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
+        <TabsList className="bg-transparent border-b border-border w-full justify-start rounded-none h-auto p-0 mb-6">
+          {TABS.map((t) => (
+            <TabsTrigger
+              key={t.key}
+              value={t.key}
+              disabled={t.disabled}
+              className="data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent px-4 py-3 gap-2"
+            >
+              <t.Icon className="h-4 w-4" />
+              {t.label}
+              {t.disabled && <span className="text-[10px] text-muted-foreground ml-1">(próx.)</span>}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-        <main>
-          {tab === 'empleados' && <SettingsEmpleados user={user} />}
-          {tab === 'general' && <Placeholder>Sección General — próximo sprint.</Placeholder>}
-          {tab === 'mesas' && <Placeholder>CRUD de mesas — próximo sprint.</Placeholder>}
-          {tab === 'metodos' && <Placeholder>Métodos de cobro — próximo sprint.</Placeholder>}
-        </main>
-      </div>
+        <TabsContent value="empleados">
+          <SettingsEmpleados user={user} />
+        </TabsContent>
+        <TabsContent value="general"><Placeholder>Sección General — próximo sprint.</Placeholder></TabsContent>
+        <TabsContent value="mesas"><Placeholder>CRUD de mesas — próximo sprint.</Placeholder></TabsContent>
+        <TabsContent value="metodos"><Placeholder>Métodos de cobro — próximo sprint.</Placeholder></TabsContent>
+      </Tabs>
     </div>
   );
 }
 
 function Placeholder({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ padding: 32, border: '1px dashed #D1D5DB', borderRadius: 8, color: '#6B7280', textAlign: 'center' }}>
-      {children}
-    </div>
+    <Card>
+      <CardContent className="py-16 text-center text-muted-foreground">
+        {children}
+      </CardContent>
+    </Card>
   );
 }

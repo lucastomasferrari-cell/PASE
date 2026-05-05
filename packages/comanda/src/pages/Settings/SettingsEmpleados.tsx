@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { CheckCircle2, Users } from 'lucide-react';
 import type { Usuario } from '../../types/auth';
 import type { EmpleadoPos, RolPos } from '../../types/database';
 import {
@@ -8,6 +9,13 @@ import { listLocalesAccesibles, type LocalSimple } from '../../services/configSe
 import { useLocalActivo } from '../../lib/localActivo';
 import { Badge } from '../../components/Badge';
 import { PinDialog } from './PinDialog';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 
 interface Props { user: Usuario }
 
@@ -42,98 +50,128 @@ export function SettingsEmpleados({ user }: Props) {
   useEffect(() => { reload(); }, [reload]);
 
   if (localId === null) {
-    return <div style={{ padding: 24 }}>No hay local seleccionado.</div>;
+    return (
+      <Card>
+        <CardContent className="py-16 text-center text-muted-foreground">
+          No hay local seleccionado.
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-        <strong style={{ fontSize: 14 }}>Local:</strong>
-        <select
-          value={localId}
-          onChange={(e) => setLocalActivo(Number(e.target.value))}
-          style={{ padding: '6px 10px', border: '1px solid #D1D5DB', borderRadius: 6, fontSize: 14 }}
-        >
-          {locales.map((l) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-        </select>
-        <p style={{ fontSize: 13, color: '#6B7280', margin: 0, marginLeft: 'auto' }}>
+      <div className="flex items-center gap-3 mb-6 flex-wrap">
+        <Label className="text-sm font-semibold">Local:</Label>
+        <Select value={String(localId)} onValueChange={(v) => setLocalActivo(Number(v))}>
+          <SelectTrigger className="w-[280px] h-10">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {locales.map((l) => (
+              <SelectItem key={l.id} value={String(l.id)}>{l.nombre}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-sm text-muted-foreground ml-auto">
           Asigná rol POS y PIN a los empleados que van a operar la caja.
         </p>
       </div>
 
-      {error && <div style={{ padding: 10, background: '#FEE2E2', color: '#991B1B', borderRadius: 6, marginBottom: 12 }}>{error}</div>}
+      {error && (
+        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
+      )}
 
-      <div style={{ border: '1px solid #E5E7EB', borderRadius: 8, overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-          <thead style={{ background: '#F9FAFB' }}>
-            <tr>
-              <th style={th}>Empleado</th>
-              <th style={th}>Puesto</th>
-              <th style={th}>Rol POS</th>
-              <th style={th}>PIN</th>
-              <th style={th}>Activo POS</th>
-              <th style={th}>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: '#6B7280' }}>Cargando…</td></tr>}
-            {!loading && empleados.length === 0 && (
-              <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: '#6B7280' }}>
-                No hay empleados activos en este local. Cargalos desde PASE → RRHH.
-              </td></tr>
-            )}
-            {empleados.map((e) => {
-              const tienePin = !!e.pin_actualizado_at;
-              const rolBadge = ROLES.find((r) => r.value === e.rol_pos);
-              return (
-                <tr key={e.id} style={{ borderTop: '1px solid #E5E7EB' }}>
-                  <td style={td}><strong>{e.apellido} {e.nombre}</strong></td>
-                  <td style={td}>{e.puesto}</td>
-                  <td style={td}>
-                    <select
-                      value={e.rol_pos ?? ''}
-                      onChange={async (ev) => {
-                        const v = ev.target.value as RolPos | '';
-                        const { error: err } = await setRolPos(e.id, v || null);
-                        if (err) setError(err); else reload();
-                      }}
-                      style={{ padding: '4px 8px', border: '1px solid #D1D5DB', borderRadius: 4, fontSize: 13 }}
-                    >
-                      <option value="">— sin rol —</option>
-                      {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                    </select>
-                    {rolBadge && <span style={{ marginLeft: 8 }}><Badge variant={rolBadge.color}>{rolBadge.label}</Badge></span>}
-                  </td>
-                  <td style={td}>
-                    {tienePin ? <Badge variant="green">✓ Seteado</Badge> : <Badge variant="gray">—</Badge>}
-                  </td>
-                  <td style={td}>
-                    <input
-                      type="checkbox"
-                      checked={e.pos_activo}
-                      onChange={async (ev) => {
-                        const { error: err } = await setPosActivo(e.id, ev.target.checked);
-                        if (err) setError(err); else reload();
-                      }}
-                    />
-                  </td>
-                  <td style={td}>
-                    <button
-                      type="button"
-                      onClick={() => setPinDialog(e)}
-                      disabled={!e.rol_pos}
-                      title={!e.rol_pos ? 'Asigná un rol POS primero' : ''}
-                      style={btnSm}
-                    >
-                      {tienePin ? 'Cambiar PIN' : 'Asignar PIN'}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {loading ? (
+        <Card><CardContent className="py-16 text-center text-muted-foreground">Cargando…</CardContent></Card>
+      ) : empleados.length === 0 ? (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-muted mb-4">
+              <Users className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-medium mb-1">Sin empleados en este local</h3>
+            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+              Cargalos desde PASE → RRHH para que aparezcan acá y puedan operar el POS.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="overflow-hidden">
+          <div className="grid grid-cols-[2fr_1fr_220px_140px_120px_180px] gap-4 px-6 py-3 border-b border-border bg-muted/40 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <div>Empleado</div>
+            <div>Puesto</div>
+            <div>Rol POS</div>
+            <div>PIN</div>
+            <div>Activo POS</div>
+            <div className="text-right">Acciones</div>
+          </div>
+          {empleados.map((e, idx) => {
+            const tienePin = !!e.pin_actualizado_at;
+            const rolBadge = ROLES.find((r) => r.value === e.rol_pos);
+            return (
+              <div
+                key={e.id}
+                className={`grid grid-cols-[2fr_1fr_220px_140px_120px_180px] gap-4 px-6 py-4 items-center transition-colors hover:bg-muted/30 ${
+                  idx !== empleados.length - 1 ? 'border-b border-border' : ''
+                }`}
+              >
+                <div className="font-medium truncate">{e.apellido} {e.nombre}</div>
+                <div className="text-sm text-muted-foreground truncate">{e.puesto}</div>
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={e.rol_pos ?? ''}
+                    onValueChange={async (v) => {
+                      const next = (v === '_none' ? null : v) as RolPos | null;
+                      const { error: err } = await setRolPos(e.id, next);
+                      if (err) setError(err); else reload();
+                    }}
+                  >
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="— sin rol —" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">— sin rol —</SelectItem>
+                      {ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {rolBadge && <Badge variant={rolBadge.color}>{rolBadge.label}</Badge>}
+                </div>
+                <div>
+                  {tienePin ? (
+                    <Badge variant="green">
+                      <CheckCircle2 className="h-3 w-3 mr-1 inline" />
+                      Seteado
+                    </Badge>
+                  ) : (
+                    <Badge variant="gray">—</Badge>
+                  )}
+                </div>
+                <div>
+                  <Switch
+                    checked={e.pos_activo}
+                    onCheckedChange={async (checked) => {
+                      const { error: err } = await setPosActivo(e.id, checked);
+                      if (err) setError(err); else reload();
+                    }}
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPinDialog(e)}
+                    disabled={!e.rol_pos}
+                    title={!e.rol_pos ? 'Asigná un rol POS primero' : ''}
+                  >
+                    {tienePin ? 'Cambiar PIN' : 'Asignar PIN'}
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </Card>
+      )}
 
       {pinDialog && (
         <PinDialog
@@ -146,7 +184,3 @@ export function SettingsEmpleados({ user }: Props) {
     </div>
   );
 }
-
-const th: React.CSSProperties = { textAlign: 'left', padding: '10px 12px', fontWeight: 600, color: '#374151', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 };
-const td: React.CSSProperties = { padding: '10px 12px', verticalAlign: 'middle' };
-const btnSm: React.CSSProperties = { padding: '4px 10px', border: '1px solid #D1D5DB', borderRadius: 4, background: '#FFFFFF', cursor: 'pointer', fontSize: 12 };
