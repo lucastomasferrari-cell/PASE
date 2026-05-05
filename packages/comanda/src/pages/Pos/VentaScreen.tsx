@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Send, CreditCard, Package } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
 import { listItems, type ItemConGrupo } from '../../services/itemsService';
@@ -15,10 +16,17 @@ import { SearchInput } from '../../components/SearchInput';
 import { Stepper } from '../../components/Stepper';
 import { MoneyInput } from '../../components/MoneyInput';
 import { formatARS, relativoCorto } from '../../lib/format';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 // Pantalla principal de venta. Catálogo izq + check der.
 // Sprint 2 simplificado: sin modifiers dialog, sin payment rico (1 solo método),
 // sin coursing visual avanzado (botón "Mandar curso 1" directo).
+// Refactor de layout queda para Sprint 3 (split-screen 60/40 con tooltip, etc).
 
 export function VentaScreen() {
   const { ventaId: idStr } = useParams<{ ventaId: string }>();
@@ -65,9 +73,15 @@ export function VentaScreen() {
     });
   }, [catalogo, grupoSel, search]);
 
-  if (loading) return <div style={{ padding: 32, textAlign: 'center', color: '#6B7280' }}>Cargando…</div>;
-  if (!venta) return <div style={{ padding: 32, textAlign: 'center', color: '#DC2626' }}>Venta no encontrada</div>;
-  if (!empleado) return <div style={{ padding: 32, textAlign: 'center', color: '#6B7280' }}>Sesión POS requerida</div>;
+  if (loading) {
+    return <div className="py-12 text-center text-muted-foreground">Cargando…</div>;
+  }
+  if (!venta) {
+    return <div className="py-12 text-center text-destructive">Venta no encontrada</div>;
+  }
+  if (!empleado) {
+    return <div className="py-12 text-center text-muted-foreground">Sesión POS requerida</div>;
+  }
 
   const editable = venta.estado !== 'cobrada' && venta.estado !== 'anulada';
 
@@ -94,80 +108,114 @@ export function VentaScreen() {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 0, minHeight: 'calc(100vh - 50px)' }}>
+    <div className="grid grid-cols-[1fr_380px] min-h-[calc(100vh-60px)]">
       {/* CATÁLOGO IZQUIERDA */}
-      <div style={{ padding: 16, overflowY: 'auto', borderRight: '1px solid #E5E7EB', background: '#FFFFFF' }}>
-        <div style={{ marginBottom: 12 }}>
+      <div className="p-4 overflow-y-auto border-r border-border bg-card">
+        <div className="mb-3">
           <SearchInput value={search} onChange={setSearch} placeholder="Buscar producto…" />
         </div>
-        <div style={{ display: 'flex', gap: 4, marginBottom: 12, flexWrap: 'wrap' }}>
-          <button type="button" onClick={() => setGrupoSel(null)}
-            style={grupoSel === null ? tabActive : tab}>Todos</button>
+        <div className="flex gap-1 mb-3 flex-wrap">
+          <GrupoTab active={grupoSel === null} onClick={() => setGrupoSel(null)}>Todos</GrupoTab>
           {grupos.map((g) => (
-            <button key={g.id} type="button" onClick={() => setGrupoSel(g.id)}
-              style={grupoSel === g.id ? tabActive : tab}>
+            <GrupoTab key={g.id} active={grupoSel === g.id} onClick={() => setGrupoSel(g.id)}>
               {g.emoji ?? ''} {g.nombre}
-            </button>
+            </GrupoTab>
           ))}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2">
           {catalogoFiltrado.map((it) => (
             <button
-              key={it.id} type="button" onClick={() => addItem(it)}
+              key={it.id}
+              type="button"
+              onClick={() => addItem(it)}
               disabled={!editable}
-              style={tile}
+              className={cn(
+                'p-2 border border-border rounded-lg bg-background text-center min-h-[100px]',
+                'transition-colors hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed',
+                'flex flex-col items-center justify-center',
+              )}
             >
-              <div style={{ fontSize: 28 }}>{it.emoji ?? '📦'}</div>
-              <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4 }}>{it.nombre}</div>
-              <div style={{ fontSize: 12, color: '#059669', marginTop: 2 }}>{formatARS(it.precio_madre)}</div>
+              <div className="text-3xl">{it.emoji ?? <Package className="h-7 w-7 text-muted-foreground" />}</div>
+              <div className="text-sm font-semibold mt-1 line-clamp-2">{it.nombre}</div>
+              <div className="text-xs text-success mt-0.5 tabular-nums">{formatARS(it.precio_madre)}</div>
             </button>
           ))}
         </div>
       </div>
 
       {/* CHECK DERECHA */}
-      <aside style={{ background: '#F9FAFB', borderLeft: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: 12, borderBottom: '1px solid #E5E7EB' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button type="button" onClick={() => navigate(-1)} style={btnSm}>← Volver</button>
-            <strong>#{venta.numero_local}</strong>
+      <aside className="bg-muted/40 border-l border-border flex flex-col">
+        <div className="p-3 border-b border-border bg-card">
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={() => navigate(-1)}>
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Volver
+            </Button>
+            <strong className="text-base">#{venta.numero_local}</strong>
             <Badge variant={estadoBadge(venta.estado)}>{venta.estado}</Badge>
           </div>
-          <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
-            {venta.modo === 'salon' && venta.mesa_id && `Mesa · `}
+          <div className="text-xs text-muted-foreground mt-1">
+            {venta.modo === 'salon' && venta.mesa_id && 'Mesa · '}
             {venta.cliente_nombre ?? 'Sin cliente'} · abierta {relativoCorto(venta.abierta_at)}
           </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
+        <div className="flex-1 overflow-y-auto p-2">
           {items.length === 0 ? (
-            <div style={{ padding: 24, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>
+            <div className="py-8 text-center text-muted-foreground text-sm">
               Sin items todavía. Tocá productos del catálogo para agregar.
             </div>
           ) : (
             items.map((it) => (
-              <CheckRow key={it.id} item={it} catalogo={catalogo}
-                onQty={(n) => changeQty(it, n)} editable={editable} />
+              <CheckRow
+                key={it.id}
+                item={it}
+                catalogo={catalogo}
+                onQty={(n) => changeQty(it, n)}
+                editable={editable}
+              />
             ))
           )}
         </div>
 
-        <div style={{ padding: 12, borderTop: '1px solid #E5E7EB', background: '#FFFFFF' }}>
+        <div className="p-3 border-t border-border bg-card">
           <Row label="Subtotal" value={formatARS(venta.subtotal)} />
-          {venta.descuento_total > 0 && <Row label="Descuento" value={'−' + formatARS(venta.descuento_total)} />}
+          {venta.descuento_total > 0 && (
+            <Row label="Descuento" value={'−' + formatARS(venta.descuento_total)} />
+          )}
           {venta.propina > 0 && <Row label="Propina" value={formatARS(venta.propina)} />}
           <Row label="Total" value={formatARS(venta.total)} bold />
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
-            <button type="button" onClick={mandar} disabled={!editable}
-              style={btnSecondary}>Mandar curso 1</button>
-            <button type="button" onClick={() => setShowCobro(true)}
-              disabled={!editable || venta.total <= 0} style={btnPrimary}>Cobrar</button>
+          <div className="grid grid-cols-2 gap-2 mt-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              onClick={mandar}
+              disabled={!editable}
+            >
+              <Send className="h-4 w-4 mr-2" />
+              Mandar
+            </Button>
+            <Button
+              type="button"
+              variant="success"
+              size="lg"
+              onClick={() => setShowCobro(true)}
+              disabled={!editable || venta.total <= 0}
+            >
+              <CreditCard className="h-4 w-4 mr-2" />
+              Cobrar
+            </Button>
           </div>
         </div>
 
-        {error && <div style={{ ...errBox, margin: 12 }}>{error}</div>}
+        {error && (
+          <div className="m-3 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+            {error}
+          </div>
+        )}
       </aside>
 
       {showCobro && (
@@ -188,26 +236,48 @@ export function VentaScreen() {
   );
 }
 
+function GrupoTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'px-3 h-9 rounded-md text-xs font-medium transition-colors',
+        active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 function CheckRow({ item, catalogo, onQty, editable }:
   { item: VentaPosItem; catalogo: ItemConGrupo[]; onQty: (n: number) => void; editable: boolean }) {
   const it = catalogo.find((c) => c.id === item.item_id);
   return (
-    <div style={{ padding: 8, borderBottom: '1px solid #F3F4F6', display: 'flex', gap: 8, alignItems: 'flex-start', opacity: item.estado === 'anulado' ? 0.4 : 1 }}>
-      <div style={{ fontSize: 16 }}>{it?.emoji ?? '📦'}</div>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 13, fontWeight: 500 }}>{it?.nombre ?? `Item #${item.item_id}`}</div>
-        {item.notas && <div style={{ fontSize: 11, color: '#D97706', fontStyle: 'italic' }}>{item.notas}</div>}
-        <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
+    <div
+      className={cn(
+        'p-2 border-b border-border flex gap-2 items-start',
+        item.estado === 'anulado' && 'opacity-40',
+      )}
+    >
+      <div className="text-base">{it?.emoji ?? '📦'}</div>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium truncate">{it?.nombre ?? `Item #${item.item_id}`}</div>
+        {item.notas && (
+          <div className="text-xs text-warning italic">{item.notas}</div>
+        )}
+        <div className="text-xs text-muted-foreground mt-0.5">
           {formatARS(item.precio_unitario)} c/u · {item.estado}
         </div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+      <div className="flex flex-col items-end gap-1">
         {editable && item.estado === 'hold' ? (
           <Stepper value={Number(item.cantidad)} onChange={onQty} min={0} max={99} />
         ) : (
-          <span style={{ fontSize: 12 }}>x{item.cantidad}</span>
+          <span className="text-xs">x{item.cantidad}</span>
         )}
-        <strong style={{ fontSize: 14, fontVariantNumeric: 'tabular-nums' }}>{formatARS(item.subtotal)}</strong>
+        <strong className="text-sm tabular-nums">{formatARS(item.subtotal)}</strong>
       </div>
     </div>
   );
@@ -215,9 +285,14 @@ function CheckRow({ item, catalogo, onQty, editable }:
 
 function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: bold ? 16 : 13, fontWeight: bold ? 600 : 400 }}>
-      <span style={{ color: bold ? '#111827' : '#6B7280' }}>{label}</span>
-      <span style={{ fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+    <div
+      className={cn(
+        'flex justify-between py-1',
+        bold ? 'text-base font-semibold text-foreground' : 'text-sm font-normal text-muted-foreground',
+      )}
+    >
+      <span>{label}</span>
+      <span className="tabular-nums text-foreground">{value}</span>
     </div>
   );
 }
@@ -225,7 +300,7 @@ function Row({ label, value, bold }: { label: string; value: string; bold?: bool
 function estadoBadge(e: string): 'gray' | 'amber' | 'green' | 'red' | 'blue' {
   if (e === 'abierta') return 'gray';
   if (e === 'enviada') return 'amber';
-  if (e === 'lista')   return 'blue';
+  if (e === 'lista') return 'blue';
   if (e === 'cobrada') return 'green';
   if (e === 'anulada') return 'red';
   return 'gray';
@@ -274,89 +349,102 @@ function CobroDialog({ venta, empleadoId, onClose, onCobrado, onError }: CobroPr
     onCobrado();
   }
 
+  const propinaPcts = [0, 0.10, 0.15, 0.20];
+
   return (
-    <div role="dialog" style={overlay} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <form onSubmit={onSubmit} style={modal}>
-        <h3 style={{ margin: 0, fontSize: 18, marginBottom: 16 }}>Cobrar venta #{venta.numero_local}</h3>
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Cobrar venta #{venta.numero_local}</DialogTitle>
+        </DialogHeader>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #E5E7EB' }}>
-          <span>Subtotal</span><strong>{formatARS(venta.subtotal)}</strong>
-        </div>
-        {venta.descuento_total > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-            <span>Descuento</span><span>−{formatARS(venta.descuento_total)}</span>
-          </div>
-        )}
-
-        <label style={{ display: 'block', fontSize: 13, marginTop: 12, marginBottom: 12 }}>
-          <div style={{ marginBottom: 4, fontWeight: 500 }}>Propina</div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {[0, 0.10, 0.15, 0.20].map((p) => {
-              const monto = Math.round((Number(venta.subtotal) - Number(venta.descuento_total)) * p);
-              const sel = Math.abs(propina - monto) < 0.01;
-              return (
-                <button key={p} type="button" onClick={() => setPropina(monto)}
-                  style={{ ...chip, background: sel ? '#2563EB' : '#FFFFFF', color: sel ? '#FFFFFF' : '#374151' }}>
-                  {p === 0 ? 'Sin' : `${p * 100}%`}
-                </button>
-              );
-            })}
-            <div style={{ flex: 1 }}>
-              <MoneyInput value={propina} onChange={setPropina} />
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between py-1 border-b border-border">
+              <span className="text-muted-foreground">Subtotal</span>
+              <strong className="tabular-nums">{formatARS(venta.subtotal)}</strong>
             </div>
-          </div>
-        </label>
-
-        <div style={{ padding: 8, background: '#F0F9FF', borderRadius: 6, marginBottom: 16, fontSize: 16, display: 'flex', justifyContent: 'space-between' }}>
-          <strong>Total</strong>
-          <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{formatARS(totalConPropina)}</strong>
-        </div>
-
-        <label style={{ display: 'block', fontSize: 13, marginBottom: 16 }}>
-          <div style={{ marginBottom: 4, fontWeight: 500 }}>Método de cobro</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 6 }}>
-            {metodos.map((m) => (
-              <button key={m.id} type="button" onClick={() => setMetodoSlug(m.slug)}
-                style={{
-                  padding: 8, border: metodoSlug === m.slug ? '2px solid #2563EB' : '1px solid #D1D5DB',
-                  borderRadius: 6, background: '#FFFFFF', cursor: 'pointer', fontSize: 13,
-                }}>
-                {m.emoji} {m.nombre}
-              </button>
-            ))}
-          </div>
-        </label>
-
-        {pideVuelto && (
-          <label style={{ display: 'block', fontSize: 13, marginBottom: 16 }}>
-            <div style={{ marginBottom: 4, fontWeight: 500 }}>Monto entregado por el cliente</div>
-            <MoneyInput value={montoEntregado} onChange={setMontoEntregado} />
-            {vuelto > 0 && (
-              <div style={{ marginTop: 6, padding: 8, background: '#FEF3C7', borderRadius: 6, fontSize: 14 }}>
-                Vuelto: <strong>{formatARS(vuelto)}</strong>
+            {venta.descuento_total > 0 && (
+              <div className="flex justify-between py-1">
+                <span className="text-muted-foreground">Descuento</span>
+                <span className="tabular-nums">−{formatARS(venta.descuento_total)}</span>
               </div>
             )}
-          </label>
-        )}
+          </div>
 
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button type="button" onClick={onClose} style={btnSecondary} disabled={saving}>Cancelar</button>
-          <button type="submit" disabled={saving} style={btnPrimary}>
-            {saving ? 'Cobrando…' : `Cobrar ${formatARS(totalConPropina)}`}
-          </button>
-        </div>
-      </form>
-    </div>
+          <div className="space-y-2">
+            <Label>Propina</Label>
+            <div className="flex gap-2 items-center flex-wrap">
+              {propinaPcts.map((p) => {
+                const monto = Math.round((Number(venta.subtotal) - Number(venta.descuento_total)) * p);
+                const sel = Math.abs(propina - monto) < 0.01;
+                return (
+                  <Button
+                    key={p}
+                    type="button"
+                    variant={sel ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setPropina(monto)}
+                    className="rounded-full"
+                  >
+                    {p === 0 ? 'Sin' : `${p * 100}%`}
+                  </Button>
+                );
+              })}
+              <div className="flex-1 min-w-[100px]">
+                <MoneyInput value={propina} onChange={setPropina} />
+              </div>
+            </div>
+          </div>
+
+          <div className="p-3 rounded-md bg-primary/10 flex justify-between items-center text-base">
+            <strong>Total</strong>
+            <strong className="tabular-nums text-lg">{formatARS(totalConPropina)}</strong>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Método de cobro</Label>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(110px,1fr))] gap-2">
+              {metodos.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setMetodoSlug(m.slug)}
+                  className={cn(
+                    'p-2 rounded-md text-sm border transition-colors h-11',
+                    metodoSlug === m.slug
+                      ? 'border-primary border-2 bg-primary/5'
+                      : 'border-input bg-background hover:bg-accent',
+                  )}
+                >
+                  {m.emoji} {m.nombre}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {pideVuelto && (
+            <div className="space-y-2">
+              <Label>Monto entregado por el cliente</Label>
+              <MoneyInput value={montoEntregado} onChange={setMontoEntregado} />
+              {vuelto > 0 && (
+                <div className="p-2 rounded-md bg-warning/10 text-warning text-sm border border-warning/30">
+                  Vuelto: <strong className="tabular-nums">{formatARS(vuelto)}</strong>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="success" disabled={saving}>
+              {saving ? 'Cobrando…' : `Cobrar ${formatARS(totalConPropina)}`}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
-
-const tab: React.CSSProperties = { padding: '4px 10px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, color: '#6B7280', borderRadius: 6 };
-const tabActive: React.CSSProperties = { ...tab, background: '#EEF2FF', color: '#1E40AF', fontWeight: 600 };
-const tile: React.CSSProperties = { padding: 8, border: '1px solid #E5E7EB', borderRadius: 8, background: '#FFFFFF', cursor: 'pointer', textAlign: 'center', minHeight: 100, fontFamily: 'inherit' };
-const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 };
-const modal: React.CSSProperties = { background: '#FFFFFF', borderRadius: 8, padding: 24, maxWidth: 480, width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' };
-const btnPrimary: React.CSSProperties = { padding: '10px 16px', border: 'none', borderRadius: 6, background: '#10B981', color: '#FFFFFF', cursor: 'pointer', fontSize: 14, fontWeight: 500 };
-const btnSecondary: React.CSSProperties = { padding: '6px 14px', border: '1px solid #D1D5DB', borderRadius: 6, background: '#FFFFFF', cursor: 'pointer', fontSize: 14 };
-const btnSm: React.CSSProperties = { padding: '4px 10px', border: '1px solid #D1D5DB', borderRadius: 4, background: '#FFFFFF', cursor: 'pointer', fontSize: 12 };
-const chip: React.CSSProperties = { padding: '6px 10px', border: '1px solid #D1D5DB', borderRadius: 999, cursor: 'pointer', fontSize: 12 };
-const errBox: React.CSSProperties = { padding: 10, background: '#FEE2E2', color: '#991B1B', borderRadius: 6, fontSize: 13 };
