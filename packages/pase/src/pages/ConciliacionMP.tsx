@@ -127,10 +127,9 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   const [conciliando,setConciliando]=useState(false);
   const [toast,setToast]=useState<ToastState | null>(null);
   const [tab,setTab]=useState("ventas");
-  // setFiltroSinJustif se cablea al toggle del header en el commit 5 (badge
-  // + filtro + card). Por ahora solo se lee, defaultea false → muestra todos
-  // los egresos en el tab. Renombrado con _ para no romper lint.
-  const [filtroSinJustif,_setFiltroSinJustif]=useState(false);
+  // Filtro "solo sin justificar" del tab Egresos. Lo activa también el card
+  // del header al click ("X egresos sin justificar" → tab Egresos + filtro).
+  const [filtroSinJustif,setFiltroSinJustif]=useState(false);
   const _hace30=new Date();_hace30.setDate(_hace30.getDate()-30);
   const [desde,setDesde]=useState(toISO(_hace30));
   const [hasta,setHasta]=useState(toISO(today));
@@ -748,11 +747,17 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
             </>
           )}
         </div>
-        <div className="kpi">
+        <button
+          type="button"
+          className="kpi"
+          style={{cursor:pendientesCount>0?"pointer":"default",textAlign:"left",border:pendientesCount>0?"1px solid var(--bd2)":undefined,background:"transparent",padding:"inherit"}}
+          onClick={()=>{ if(pendientesCount>0){ setTab("egresos"); setFiltroSinJustif(true); } }}
+          aria-label={pendientesCount>0?"Ir a tab Egresos con filtro sin justificar":undefined}
+        >
           <div className="kpi-label">Egresos sin justificar</div>
-          <div className="kpi-value kpi-warn" style={{fontFamily:"'Inter',sans-serif",fontSize:18,fontWeight:500}}>{pendientesCount}</div>
-          <div className="kpi-sub">{pendientesCount===0?"Todos conciliados ✓":"Requieren conciliación manual"}</div>
-        </div>
+          <div className={`kpi-value ${pendientesCount>0?"kpi-danger":""}`} style={{fontFamily:"'Inter',sans-serif",fontSize:18,fontWeight:500}}>{pendientesCount}</div>
+          <div className="kpi-sub">{pendientesCount===0?"Todos conciliados ✓":"Click para revisar"}</div>
+        </button>
         {porAcreditarTotal>0&&(
           <div className="kpi">
             <div className="kpi-label">Por acreditar</div>
@@ -770,7 +775,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
           ["egresos","Egresos"],
           ["comisiones","Comisiones MP"],
         ] as [string, string][]).map(([id,l])=>(
-          <div key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>{l}{id==="egresos"&&pendientesCount>0?<span className="badge b-warn" style={{marginLeft:6,fontSize:9}}>{pendientesCount}</span>:null}</div>
+          <div key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>{l}{id==="egresos"&&pendientesCount>0?<span className="badge b-danger" style={{marginLeft:6,fontSize:9}}>{pendientesCount}</span>:null}</div>
         ))}
       </div>
 
@@ -932,9 +937,15 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
           const totalLista = lista.reduce((s,m)=>s+Math.abs(Number(m.monto)||0),0);
           return (
             <div className="panel">
-              <div className="panel-hd">
-                <span className="panel-title">Egresos — {lista.length} {lista.length===1?"egreso":"egresos"}{filtroSinJustif?" sin justificar":""}</span>
-                <span style={{fontSize:11,color:"var(--muted2)"}}>Transferencias y pagos del período · monto neto</span>
+              <div className="panel-hd" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+                <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                  <span className="panel-title">Egresos — {lista.length} {lista.length===1?"egreso":"egresos"}{filtroSinJustif?" sin justificar":""}</span>
+                  <span style={{fontSize:11,color:"var(--muted2)"}}>Transferencias y pagos del período · monto neto</span>
+                </div>
+                <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,cursor:"pointer",userSelect:"none",color:"var(--muted2)"}}>
+                  <input type="checkbox" checked={filtroSinJustif} onChange={e=>setFiltroSinJustif(e.target.checked)} style={{cursor:"pointer"}}/>
+                  Solo sin justificar
+                </label>
               </div>
               <div style={{padding:"16px 20px",display:"grid",gap:10,gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))"}}>
                 <div className="kpi">
@@ -961,7 +972,9 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                       <td><span className="badge b-muted" style={{fontSize:9}}>{TIPO_LABELS[m.tipo]||m.tipo}</span></td>
                       <td style={{fontSize:11,maxWidth:240,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.descripcion||"—"}</td>
                       <td style={{textAlign:"right"}}><span className="num kpi-danger">{fmt_mp(Number(m.monto)||0)}</span></td>
-                      <td>{m.justificativo_tipo?<span className="badge b-success" style={{fontSize:9}}>{m.justificativo_tipo}</span>:<span className="badge b-warn" style={{fontSize:9}}>sin justificar</span>}</td>
+                      <td>{m.justificativo_tipo
+                        ?<span className="badge b-success" style={{fontSize:9}}>{m.justificativo_tipo.replace('_',' ')}</span>
+                        :<span className="badge b-danger" style={{fontSize:9}}>sin justificar</span>}</td>
                       <td>{!m.justificativo_tipo && <button className="btn btn-acc btn-sm" style={{fontSize:10,padding:"4px 10px"}} onClick={()=>setConciliarModal(m)}>Conciliar</button>}</td>
                     </tr>
                   ))}</tbody>
