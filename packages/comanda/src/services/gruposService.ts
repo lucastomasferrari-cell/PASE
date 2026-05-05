@@ -14,7 +14,10 @@ export async function listGrupos(tenantId: string | null): Promise<{ data: ItemG
   return { data: data ?? [], error: null };
 }
 
-export type GrupoDraft = Pick<ItemGrupo, 'nombre' | 'color' | 'emoji' | 'orden' | 'tax_rate_id' | 'estacion_default'> & {
+export type GrupoDraft = Pick<
+  ItemGrupo,
+  'nombre' | 'color' | 'color_ramp' | 'emoji' | 'orden' | 'tax_rate_id' | 'estacion_default'
+> & {
   tenant_id: string;
   local_id: number | null;
 };

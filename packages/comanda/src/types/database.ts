@@ -21,6 +21,9 @@ export interface TaxRate {
   es_default: boolean;
 }
 
+export type ColorRamp =
+  | 'amber' | 'pink' | 'purple' | 'blue' | 'gray' | 'coral' | 'teal' | 'green';
+
 export interface ItemGrupo {
   id: number;
   tenant_id: string;
@@ -32,11 +35,16 @@ export interface ItemGrupo {
   updated_by: number | null;
   nombre: string;
   color: string | null;
+  color_ramp: ColorRamp | null;
   emoji: string | null;
   orden: number;
   tax_rate_id: number | null;
   estacion_default: Estacion | null;
 }
+
+// PosModo es alias de ModoVenta (el tipo "canónico" de Sprint 2). Lo
+// declaramos para que features_pos_modos sea legible al instante.
+export type PosModo = ModoVenta;
 
 export interface Item {
   id: number;
@@ -366,6 +374,7 @@ export interface ComandaLocalSettings {
   tienda_activa: boolean;
   acepta_delivery: boolean;
   autolock_minutos: number;
+  features_pos_modos: PosModo[];
 }
 
 export interface EmpleadoPos {

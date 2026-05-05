@@ -1,5 +1,5 @@
 import { db } from '../lib/supabase';
-import type { ComandaLocalSettings, MetodoCobro } from '../types/database';
+import type { ComandaLocalSettings, MetodoCobro, PosModo } from '../types/database';
 
 // ─── Métodos de cobro ────────────────────────────────────────────────────
 
@@ -58,4 +58,22 @@ export async function listLocalesAccesibles(): Promise<{ data: LocalSimple[]; er
     .order('id', { ascending: true });
   if (error) return { data: [], error: error.message };
   return { data: (data ?? []) as LocalSimple[], error: null };
+}
+
+// ─── Features POS por local ──────────────────────────────────────────────
+// Lee comanda_local_settings.features_pos_modos. Fallback a los 3 modos si
+// no hay row de settings o la query falla.
+
+const DEFAULT_MODOS: PosModo[] = ['salon', 'mostrador', 'pedidos'];
+
+export async function getFeaturesPosModos(localId: number): Promise<PosModo[]> {
+  const { data, error } = await db
+    .from('comanda_local_settings')
+    .select('features_pos_modos')
+    .eq('local_id', localId)
+    .is('deleted_at', null)
+    .limit(1);
+  if (error || !data?.[0]) return DEFAULT_MODOS;
+  const modos = (data[0] as { features_pos_modos?: PosModo[] }).features_pos_modos;
+  return Array.isArray(modos) && modos.length > 0 ? modos : DEFAULT_MODOS;
 }

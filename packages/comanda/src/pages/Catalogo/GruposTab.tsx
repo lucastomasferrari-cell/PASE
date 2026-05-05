@@ -204,6 +204,9 @@ function GrupoFormDialog({ user, taxRates, grupo, onClose, onSaved }: GrupoFormP
       nombre: nombre.trim(), emoji, color, orden,
       tax_rate_id: taxRateId, estacion_default: estacion || null,
       tenant_id: user.tenant_id, local_id: null,
+      // color_ramp se preserva si el grupo ya lo tenía; null para grupos nuevos
+      // hasta que agreguemos selector en otro sprint.
+      color_ramp: grupo?.color_ramp ?? null,
     };
     const { error: err } = grupo ? await updateGrupo(grupo.id, draft) : await createGrupo(draft);
     setSaving(false);
