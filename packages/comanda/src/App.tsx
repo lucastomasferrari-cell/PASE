@@ -5,6 +5,7 @@ import { AuthPosProvider } from './lib/AuthPosProvider';
 import { ProtectedShell } from './components/ProtectedShell';
 import { RedirectIfAuth } from './components/RedirectIfAuth';
 import { PinGate } from './components/PinGate';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { useAuth } from './lib/auth';
 
 import { LoginPage } from './pages/Login/LoginPage';
@@ -53,6 +54,7 @@ export default function App() {
               },
             }}
           />
+          <ErrorBoundary>
           <Routes>
             <Route path="/login" element={<RedirectIfAuth><LoginPage /></RedirectIfAuth>} />
 
@@ -82,6 +84,7 @@ export default function App() {
 
             <Route path="*" element={<Navigate to="/pos" replace />} />
           </Routes>
+          </ErrorBoundary>
         </AuthPosProvider>
       </BrowserRouter>
     </AuthProvider>
