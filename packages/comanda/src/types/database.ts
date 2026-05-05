@@ -172,7 +172,211 @@ export interface ComboComponente {
   precio_extra: number;
 }
 
-// Nota: el cliente Supabase NO se generica con Database (ver lib/supabase.ts);
-// los services usan los types Row de arriba en sus signatures, y las queries
-// internas son loose-typed. Cuando regeneremos con `supabase gen types`,
-// reactivamos el generic.
+// ─── Sprint 2: POS, Caja, Tienda ──────────────────────────────────────────
+
+export type RolPos = 'cajero' | 'encargado' | 'manager' | 'dueno';
+export type ModoVenta = 'salon' | 'mostrador' | 'pedidos';
+export type EstadoVenta =
+  | 'abierta' | 'enviada' | 'lista' | 'entregada' | 'cobrada' | 'anulada'
+  | 'necesita_aprobacion' | 'programada';
+export type EstadoVentaItem = 'hold' | 'enviado' | 'listo' | 'entregado' | 'anulado';
+export type EstadoMesa = 'libre' | 'ocupada' | 'hold' | 'inactiva';
+export type FormaMesa = 'cuadrado' | 'redondo' | 'rectangular';
+export type EstadoTurno = 'abierto' | 'cerrado';
+export type TipoMovimientoCaja =
+  | 'apertura' | 'cierre' | 'venta' | 'venta_anulada'
+  | 'retiro' | 'deposito' | 'ajuste';
+export type EstadoPago = 'pendiente' | 'confirmado' | 'fallido' | 'reembolsado';
+export type AccionOverride =
+  | 'void' | 'comp' | 'discount' | 'refund' | 'reopen'
+  | 'transfer_table' | 'cambio_mozo' | 'merge_mesas' | 'split_check';
+export type OrigenVenta = 'pos' | 'tienda_online' | 'menu_qr';
+export type TipoEntrega = 'retiro' | 'delivery';
+
+export interface Mesa {
+  id: number;
+  tenant_id: string;
+  local_id: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  numero: string;
+  zona: string | null;
+  capacidad: number | null;
+  pos_x: number | null;
+  pos_y: number | null;
+  forma: FormaMesa;
+  estado: EstadoMesa;
+}
+
+export interface TurnoCaja {
+  id: number;
+  tenant_id: string;
+  local_id: number;
+  numero: number;
+  cajero_id: string;
+  abierto_at: string;
+  cerrado_at: string | null;
+  cerrado_por: string | null;
+  monto_inicial: number;
+  monto_final_declarado: number | null;
+  monto_final_calculado: number | null;
+  diferencia: number | null;
+  notas: string | null;
+  estado: EstadoTurno;
+}
+
+export interface MovimientoCaja {
+  id: number;
+  tenant_id: string;
+  local_id: number;
+  created_at: string;
+  turno_caja_id: number;
+  empleado_id: string;
+  tipo: TipoMovimientoCaja;
+  monto: number;
+  metodo: string;
+  motivo: string | null;
+  venta_id: number | null;
+}
+
+export interface VentaPos {
+  id: number;
+  tenant_id: string;
+  local_id: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  numero_local: number;
+  modo: ModoVenta;
+  canal_id: number;
+  turno_caja_id: number | null;
+  mesa_id: number | null;
+  mozo_id: string | null;
+  cajero_id: string | null;
+  cliente_nombre: string | null;
+  cliente_telefono: string | null;
+  cliente_direccion: string | null;
+  covers: number | null;
+  estado: EstadoVenta;
+  origen: OrigenVenta;
+  programada_para: string | null;
+  tipo_entrega: TipoEntrega | null;
+  subtotal: number;
+  descuento_total: number;
+  propina: number;
+  total: number;
+  abierta_at: string;
+  enviada_at: string | null;
+  cobrada_at: string | null;
+  anulada_at: string | null;
+  notas: string | null;
+}
+
+export interface VentaPosItemModificador {
+  nombre: string;
+  precio_extra: number;
+  modifier_id?: number;
+}
+
+export interface VentaPosItem {
+  id: number;
+  tenant_id: string;
+  local_id: number;
+  venta_id: number;
+  item_id: number;
+  cantidad: number;
+  precio_unitario: number;
+  subtotal: number;
+  descuento: number;
+  modificadores: VentaPosItemModificador[] | null;
+  curso: number | null;
+  combo_padre_id: number | null;
+  es_combo_padre: boolean;
+  estado: EstadoVentaItem;
+  enviado_at: string | null;
+  listo_at: string | null;
+  anulado_at: string | null;
+  anulado_motivo: string | null;
+  notas: string | null;
+  cargado_por: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VentaPosPago {
+  id: number;
+  tenant_id: string;
+  local_id: number;
+  venta_id: number;
+  metodo: string;
+  monto: number;
+  idempotency_key: string;
+  vuelto: number | null;
+  propina_incluida: number;
+  cobrado_por: string | null;
+  estado: EstadoPago;
+  confirmado_at: string | null;
+  reembolsado_at: string | null;
+  created_at: string;
+}
+
+export interface VentaPosOverride {
+  id: number;
+  tenant_id: string;
+  local_id: number;
+  venta_id: number;
+  venta_item_id: number | null;
+  cajero_id: string;
+  manager_id: string;
+  accion: AccionOverride;
+  motivo: string;
+  valor_anterior: number | null;
+  valor_nuevo: number | null;
+  monto_afectado: number | null;
+  created_at: string;
+  metadata: Record<string, unknown> | null;
+}
+
+export interface MetodoCobro {
+  id: number;
+  tenant_id: string;
+  local_id: number | null;
+  nombre: string;
+  slug: string;
+  emoji: string | null;
+  pide_vuelto: boolean;
+  activo: boolean;
+  orden: number;
+}
+
+export interface ComandaLocalSettings {
+  id: number;
+  tenant_id: string;
+  local_id: number;
+  slug: string;
+  direccion: string | null;
+  telefono: string | null;
+  instagram: string | null;
+  web: string | null;
+  mp_qr_url: string | null;
+  costo_envio_default: number;
+  tiempo_retiro_min: number;
+  tiempo_delivery_min: number;
+  tienda_activa: boolean;
+  acepta_delivery: boolean;
+  autolock_minutos: number;
+}
+
+export interface EmpleadoPos {
+  id: string;
+  local_id: number | null;
+  apellido: string;
+  nombre: string;
+  puesto: string;
+  activo: boolean;
+  pos_activo: boolean;
+  rol_pos: RolPos | null;
+  pin_actualizado_at: string | null;
+  // pin_pos NUNCA se expone en clientes
+}
