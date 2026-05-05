@@ -51,7 +51,12 @@ function detectarTurnoMaxirest(texto: string): TurnoNombre {
     if (!porCampo) console.warn("[maxirest:turno] valor no reconocido en 'Turno:':", campo[1]);
   }
 
-  const header = texto.match(/Turno\s+(\d+)\s+\(\s*([A-Za-zÁÉÍÓÚáéíóúñÑ]+)/i);
+  // El header acepta paréntesis redondos `(Noche)` (formato Villa Crespo) y
+  // corchetes cuadrados `[Noche]` (formato Devoto, reportado 2026-05-08).
+  // Maxirest aparentemente alterna según local sin patrón consistente, así
+  // que ambos delimitadores son válidos. Si hay otro formato (`{}`, `<>`),
+  // agregar acá.
+  const header = texto.match(/Turno\s+(\d+)\s*[([]\s*([A-Za-zÁÉÍÓÚáéíóúñÑ]+)/i);
   if (header) {
     const num = parseInt(header[1] || "0", 10);
     porHeader = (header[2] ? norm(header[2]) : null) ?? (num === 1 ? "Mediodía" : num === 2 ? "Noche" : null);
