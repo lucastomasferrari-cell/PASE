@@ -1,28 +1,21 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DoorOpen, ArrowDownToLine, ArrowUpFromLine, Lock } from 'lucide-react';
+import { DoorOpen, ArrowDownToLine, ArrowUpFromLine, Lock, AlertTriangle, History } from 'lucide-react';
+import { MovimientoCajaDialog, type TipoMovimiento } from '../../components/dialogs/MovimientoCajaDialog';
 import { useAuth } from '../../lib/auth';
-import { useAuthPos } from '../../lib/authPos';
 import { useLocalActivo } from '../../lib/localActivo';
 import {
-  getTurnoAbierto, listMovimientos, totalesPorMetodo, registrarMovimiento,
+  getTurnoAbierto, listMovimientos, totalesPorMetodo,
   type TotalesPorMetodo,
 } from '../../services/turnosCajaService';
 import type { TurnoCaja, MovimientoCaja } from '../../types/database';
 import { formatARS, formatHoraAR, relativoCorto } from '../../lib/format';
 import { Badge } from '../../components/Badge';
-import { MoneyInput } from '../../components/MoneyInput';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog';
 
 export function CajaEstado() {
   const { user } = useAuth();
-  const { empleado } = useAuthPos();
   const [localId] = useLocalActivo(user);
   const navigate = useNavigate();
 
@@ -30,8 +23,7 @@ export function CajaEstado() {
   const [movs, setMovs] = useState<MovimientoCaja[]>([]);
   const [totales, setTotales] = useState<TotalesPorMetodo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [movDialog, setMovDialog] = useState<'retiro' | 'deposito' | null>(null);
+  const [movDialog, setMovDialog] = useState<TipoMovimiento | null>(null);
 
   const reload = useCallback(async () => {
     if (localId === null) return;
@@ -100,17 +92,21 @@ export function CajaEstado() {
             <ArrowDownToLine className="h-4 w-4 mr-2" />
             Depósito
           </Button>
+          <Button variant="outline" onClick={() => setMovDialog('ajuste')}>
+            <AlertTriangle className="h-4 w-4 mr-2" />
+            Ajuste
+          </Button>
+          <Button variant="ghost" onClick={() => navigate('/caja/historico')}>
+            <History className="h-4 w-4 mr-2" />
+            Histórico
+          </Button>
           <Button variant="destructive" onClick={() => navigate('/caja/cerrar')}>
             Cerrar caja
           </Button>
         </div>
       </header>
 
-      {error && (
-        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
-          {error}
-        </div>
-      )}
+
 
       {/* Cards de totales */}
       <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-8">
@@ -162,13 +158,11 @@ export function CajaEstado() {
       )}
 
       {movDialog && (
-        <MovimientoDialog
+        <MovimientoCajaDialog
+          open={true}
+          onOpenChange={(o) => { if (!o) setMovDialog(null); }}
           tipo={movDialog}
-          onClose={() => setMovDialog(null)}
-          onDone={() => { setMovDialog(null); reload(); }}
-          localId={localId!}
-          empleadoId={empleado?.id ?? ''}
-          onError={setError}
+          onConfirmado={() => { setMovDialog(null); reload(); }}
         />
       )}
     </div>
@@ -194,73 +188,5 @@ function tipoBadgeVariant(t: string): 'green' | 'red' | 'gray' | 'amber' {
   return 'gray';
 }
 
-interface MovDialogProps {
-  tipo: 'retiro' | 'deposito';
-  localId: number;
-  empleadoId: string;
-  onClose: () => void;
-  onDone: () => void;
-  onError: (msg: string) => void;
-}
-
-function MovimientoDialog({ tipo, localId, empleadoId, onClose, onDone, onError }: MovDialogProps) {
-  const [monto, setMonto] = useState(0);
-  const [motivo, setMotivo] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (monto <= 0 || !motivo.trim()) return;
-    setSaving(true);
-    const { error: err } = await registrarMovimiento(
-      localId, empleadoId, tipo, monto, 'efectivo', motivo.trim(),
-    );
-    setSaving(false);
-    if (err) { onError(err); return; }
-    onDone();
-  }
-
-  return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {tipo === 'retiro' ? 'Retiro de caja' : 'Depósito a caja'}
-          </DialogTitle>
-        </DialogHeader>
-
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Monto</Label>
-            <MoneyInput value={monto} onChange={setMonto} autoFocus />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="motivo">Motivo</Label>
-            <Input
-              id="motivo"
-              value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              required
-              placeholder={
-                tipo === 'retiro'
-                  ? 'Pago proveedor, viático, etc.'
-                  : 'Refuerzo, propina depositada, etc.'
-              }
-              className="h-11"
-            />
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={saving || monto <= 0 || !motivo.trim()}>
-              {saving ? 'Guardando…' : 'Confirmar'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
+// Legacy MovimientoDialog reemplazado por MovimientoCajaDialog (Sprint 4),
+// que soporta ajustes con override automático.

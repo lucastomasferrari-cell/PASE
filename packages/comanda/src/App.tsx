@@ -14,6 +14,7 @@ import { SettingsLayout } from './pages/Settings/SettingsLayout';
 import { CajaAbrir } from './pages/Caja/CajaAbrir';
 import { CajaEstado } from './pages/Caja/CajaEstado';
 import { CajaCerrar } from './pages/Caja/CajaCerrar';
+import { CajaHistorico } from './pages/Caja/CajaHistorico';
 
 import { PosLayout } from './pages/Pos/PosLayout';
 import { SalonView } from './pages/Pos/SalonView';
@@ -74,6 +75,7 @@ export default function App() {
                   <Route path="/caja" element={<CajaEstado />} />
                   <Route path="/caja/abrir" element={<CajaAbrir />} />
                   <Route path="/caja/cerrar" element={<CajaCerrar />} />
+                  <Route path="/caja/historico" element={<CajaHistorico />} />
                 </Route>
               </Route>
             </Route>
