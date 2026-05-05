@@ -1,19 +1,19 @@
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../lib/auth';
-import { useAuthPos } from '../../lib/authPos';
-import { useLocalActivo } from '../../lib/localActivo';
-import { db } from '../../lib/supabase';
-import { getTurnoAbierto } from '../../services/turnosCajaService';
-import type { TurnoCaja } from '../../types/database';
-import { Badge } from '../../components/Badge';
-import { relativoCorto } from '../../lib/format';
+import { Lock, Settings as SettingsIcon, LogOut } from 'lucide-react';
+import { useAuth } from '@/lib/auth';
+import { useAuthPos } from '@/lib/authPos';
+import { useLocalActivo } from '@/lib/localActivo';
+import { db } from '@/lib/supabase';
+import { getTurnoAbierto } from '@/services/turnosCajaService';
+import type { TurnoCaja } from '@/types/database';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface Props { children?: ReactNode }
 
-// Header global de POS: empleado activo, turno, local, botones rápidos.
-// Acepta children o Outlet.
 export function PosLayout({ children }: Props) {
   const { user } = useAuth();
   const { empleado, logout: logoutPos } = useAuthPos();
@@ -34,70 +34,73 @@ export function PosLayout({ children }: Props) {
   }
 
   const esManager = empleado?.rol_pos === 'manager' || empleado?.rol_pos === 'dueno';
+  const minutosTurno = turno
+    ? Math.max(0, Math.floor((Date.now() - new Date(turno.abierto_at).getTime()) / 60_000))
+    : 0;
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F9FAFB', fontFamily: 'system-ui' }}>
-      <header style={header}>
-        <Link to="/pos" style={{ fontWeight: 700, fontSize: 16, color: '#111827', textDecoration: 'none' }}>COMANDA</Link>
-        <span style={{ fontSize: 12, color: '#9CA3AF' }}>·</span>
-        <Link to="/caja" style={turnoLinkStyle(turno)}>
-          {turno ? <>🟢 Turno #{turno.numero} · abierto {relativoCorto(turno.abierto_at)}</> : <>🔴 Sin turno abierto</>}
-        </Link>
+    <div className="min-h-screen bg-background flex flex-col">
+      <header className="border-b border-border bg-card sticky top-0 z-10">
+        <div className="px-6 py-3 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <Link to="/pos" className="text-lg font-bold tracking-tight">
+              COMANDA
+            </Link>
+            <span className="text-muted-foreground">·</span>
+            <Link to="/caja" className="flex items-center gap-2">
+              {turno ? (
+                <>
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    Turno #{turno.numero} · abierto hace {minutosTurno} min
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="h-2 w-2 rounded-full bg-destructive" />
+                  <span className="text-sm text-destructive font-medium">
+                    Sin turno abierto
+                  </span>
+                </>
+              )}
+            </Link>
+          </div>
 
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center' }}>
-          {empleado && (
-            <span style={{ fontSize: 13 }}>
-              <strong>{empleado.nombre}</strong>
-              <Badge variant={rolColor(empleado.rol_pos)}>{empleado.rol_pos}</Badge>
-            </span>
-          )}
-          <button type="button" onClick={logoutPos} style={btnSm} title="Cambiar empleado (volver al PinPad)">
-            🔒
-          </button>
-          {esManager && (
-            <Link to="/settings" style={{ ...btnSm, textDecoration: 'none', display: 'inline-block' }} title="Settings">⚙</Link>
-          )}
-          <button type="button" onClick={fullLogout} style={btnSm} title="Cerrar sesión Supabase">↩</button>
+          <div className="flex items-center gap-3">
+            {empleado && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">{empleado.nombre}</span>
+                <Badge variant="secondary" className="text-xs">
+                  {empleado.rol_pos}
+                </Badge>
+              </div>
+            )}
+            <div className="flex items-center gap-1">
+              <ThemeToggle />
+              <Button variant="outline" size="icon" onClick={logoutPos} title="Bloquear (cambiar empleado)">
+                <Lock className="h-4 w-4" />
+                <span className="sr-only">Bloquear</span>
+              </Button>
+              {esManager && (
+                <Button variant="outline" size="icon" asChild title="Settings">
+                  <Link to="/settings">
+                    <SettingsIcon className="h-4 w-4" />
+                    <span className="sr-only">Settings</span>
+                  </Link>
+                </Button>
+              )}
+              <Button variant="outline" size="icon" onClick={fullLogout} title="Cerrar sesión">
+                <LogOut className="h-4 w-4" />
+                <span className="sr-only">Cerrar sesión</span>
+              </Button>
+            </div>
+          </div>
         </div>
       </header>
-      <main>{children ?? <Outlet />}</main>
+      <main className="flex-1">{children ?? <Outlet />}</main>
     </div>
   );
 }
-
-function rolColor(r: string): 'gray' | 'blue' | 'violet' | 'red' {
-  if (r === 'cajero') return 'gray';
-  if (r === 'encargado') return 'blue';
-  if (r === 'manager') return 'violet';
-  return 'red';
-}
-
-function turnoLinkStyle(turno: TurnoCaja | null): React.CSSProperties {
-  return {
-    fontSize: 12,
-    color: turno ? '#065F46' : '#991B1B',
-    textDecoration: 'none',
-    fontWeight: 500,
-  };
-}
-
-const header: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 12,
-  padding: '8px 16px',
-  borderBottom: '1px solid #E5E7EB',
-  background: '#FFFFFF',
-  position: 'sticky',
-  top: 0,
-  zIndex: 10,
-};
-
-const btnSm: React.CSSProperties = {
-  padding: '4px 10px',
-  border: '1px solid #D1D5DB',
-  borderRadius: 6,
-  background: '#FFFFFF',
-  cursor: 'pointer',
-  fontSize: 13,
-};
