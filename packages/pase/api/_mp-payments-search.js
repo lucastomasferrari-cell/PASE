@@ -327,6 +327,10 @@ export function mapPaymentToRows(payment, cred, ourAccountId) {
           // manda null si la omitimos. Fee/tax solo se emiten para payments
           // approved (rama isIngress alcanza acá), siempre false.
           anulado: false,
+          // Auto-justificación: fee/tax son cargos automáticos de MP, no
+          // requieren conciliación manual. Los marcamos al importar para
+          // que no aparezcan en el KPI "Egresos sin justificar".
+          justificativo_tipo: 'comision_mp',
         },
       });
     }
@@ -357,6 +361,9 @@ export function mapPaymentToRows(payment, cred, ourAccountId) {
         medio_pago: medioPago,
         // anulado explícito — ver nota en main row.
         anulado: false,
+        // Auto-justificación (legacy fallback): es una fee, igual que la rama
+        // con charges_details — siempre comision_mp.
+        justificativo_tipo: 'comision_mp',
       },
     });
   }
