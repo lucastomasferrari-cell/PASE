@@ -1,4 +1,5 @@
 import { db } from '../lib/supabase';
+import { dbAnon } from '../lib/supabaseAnon';
 import type { TipoEntrega, VentaPos } from '../types/database';
 
 // Vista pública del catálogo de tienda online. Lectura anon (RLS no aplica a vistas).
@@ -35,7 +36,9 @@ export interface LocalPublico {
 }
 
 export async function getLocalPorSlug(slug: string): Promise<{ data: LocalPublico | null; error: string | null }> {
-  const { data, error } = await db
+  // dbAnon: la tienda online se accede sin login. v_locales_publicos tiene
+  // GRANT a anon.
+  const { data, error } = await dbAnon
     .from('v_locales_publicos')
     .select('*')
     .eq('slug', slug)
@@ -45,7 +48,7 @@ export async function getLocalPorSlug(slug: string): Promise<{ data: LocalPublic
 }
 
 export async function getCatalogoPorSlug(slug: string): Promise<{ data: CatalogoPublicoItem[]; error: string | null }> {
-  const { data, error } = await db
+  const { data, error } = await dbAnon
     .from('v_catalogo_publico')
     .select('*')
     .eq('local_slug', slug)
@@ -53,6 +56,26 @@ export async function getCatalogoPorSlug(slug: string): Promise<{ data: Catalogo
     .order('nombre', { ascending: true });
   if (error) return { data: [], error: error.message };
   return { data: (data ?? []) as CatalogoPublicoItem[], error: null };
+}
+
+// Tracking público — cliente verifica con su número de teléfono.
+export interface PedidoPublicoEstado {
+  estado: string;
+  numero_local: number;
+  total: number;
+  programada_para: string | null;
+  tipo_entrega: string | null;
+  abierta_at: string;
+  rechazo_motivo: string | null;
+}
+
+export async function getPedidoPublico(ventaId: number, telefono: string): Promise<{ data: PedidoPublicoEstado | null; error: string | null }> {
+  const { data, error } = await dbAnon.rpc('fn_get_pedido_publico_comanda', {
+    p_venta_id: ventaId, p_telefono: telefono,
+  });
+  if (error) return { data: null, error: error.message };
+  const arr = data as PedidoPublicoEstado[] | null;
+  return { data: arr?.[0] ?? null, error: null };
 }
 
 export interface CrearPedidoArgs {
@@ -71,7 +94,9 @@ export interface CrearPedidoArgs {
 }
 
 export async function crearPedidoPublico(args: CrearPedidoArgs): Promise<{ ventaId: number | null; numero: number | null; error: string | null }> {
-  const { data, error } = await db.rpc('fn_crear_pedido_publico_comanda', {
+  // dbAnon — la tienda no requiere login. fn_crear_pedido_publico_comanda
+  // es SECURITY DEFINER y valida slug + features_pos_modos.
+  const { data, error } = await dbAnon.rpc('fn_crear_pedido_publico_comanda', {
     p_local_slug: args.localSlug,
     p_cliente_nombre: args.cliente.nombre,
     p_cliente_telefono: args.cliente.telefono,
