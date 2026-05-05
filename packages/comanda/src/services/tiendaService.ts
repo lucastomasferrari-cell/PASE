@@ -33,6 +33,7 @@ export interface LocalPublico {
   tiempo_delivery_min: number;
   tienda_activa: boolean;
   acepta_delivery: boolean;
+  features_pos_modos: string[] | null;
 }
 
 export async function getLocalPorSlug(slug: string): Promise<{ data: LocalPublico | null; error: string | null }> {
