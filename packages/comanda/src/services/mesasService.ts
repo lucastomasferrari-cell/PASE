@@ -86,3 +86,64 @@ export async function softDeleteMesa(id: number): Promise<{ error: string | null
   const { error } = await db.from('mesas').update({ deleted_at: new Date().toISOString() }).eq('id', id);
   return { error: error?.message ?? null };
 }
+
+// ─── Operaciones de mesa con override (Sprint 4) ──────────────────────────
+
+export async function transferirMesaService(
+  ventaId: number,
+  mesaDestinoId: number,
+  managerId: string,
+  motivo: string,
+): Promise<{ error: string | null }> {
+  const { error } = await db.rpc('fn_transferir_mesa_comanda', {
+    p_venta_id: ventaId,
+    p_mesa_destino: mesaDestinoId,
+    p_manager_id: managerId,
+    p_motivo: motivo,
+  });
+  return { error: error?.message ?? null };
+}
+
+export async function unirMesasService(
+  ventaOrigenId: number,
+  ventaDestinoId: number,
+  managerId: string,
+  motivo: string,
+): Promise<{ error: string | null }> {
+  const { error } = await db.rpc('fn_unir_mesas_comanda', {
+    p_venta_origen_id: ventaOrigenId,
+    p_venta_destino_id: ventaDestinoId,
+    p_manager_id: managerId,
+    p_motivo: motivo,
+  });
+  return { error: error?.message ?? null };
+}
+
+export async function partirCuentaService(
+  ventaId: number,
+  itemIds: number[],
+  managerId: string,
+  motivo: string,
+): Promise<{ ventaNuevaId: number | null; error: string | null }> {
+  const { data, error } = await db.rpc('fn_partir_cuenta_comanda', {
+    p_venta_id: ventaId,
+    p_item_ids: itemIds,
+    p_manager_id: managerId,
+    p_motivo: motivo,
+  });
+  if (error) return { ventaNuevaId: null, error: error.message };
+  return { ventaNuevaId: data as number, error: null };
+}
+
+// Mesas libres del local (para selectores en Transfer/Merge dialogs)
+export async function listMesasLibres(localId: number): Promise<{ data: Array<{ id: number; numero: string; zona: string | null }>; error: string | null }> {
+  const { data, error } = await db
+    .from('mesas')
+    .select('id, numero, zona')
+    .eq('local_id', localId)
+    .eq('estado', 'libre')
+    .is('deleted_at', null)
+    .order('numero', { ascending: true });
+  if (error) return { data: [], error: error.message };
+  return { data: (data ?? []) as Array<{ id: number; numero: string; zona: string | null }>, error: null };
+}

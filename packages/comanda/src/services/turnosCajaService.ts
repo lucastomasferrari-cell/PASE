@@ -105,3 +105,17 @@ export async function totalesPorMetodo(turnoId: number): Promise<{ data: Totales
   }));
   return { data: out, error: null };
 }
+
+// ─── Sprint 4: histórico de turnos ────────────────────────────────────────
+
+export async function listHistoricoTurnos(localId: number, limit = 50): Promise<{ data: TurnoCaja[]; error: string | null }> {
+  const { data, error } = await db
+    .from('turnos_caja')
+    .select('*')
+    .eq('local_id', localId)
+    .eq('estado', 'cerrado')
+    .order('numero', { ascending: false })
+    .limit(limit);
+  if (error) return { data: [], error: error.message };
+  return { data: (data ?? []) as TurnoCaja[], error: null };
+}

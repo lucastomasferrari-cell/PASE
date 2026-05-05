@@ -54,3 +54,31 @@ export async function refundVenta(
   if (error) return { totalReembolsado: 0, error: error.message };
   return { totalReembolsado: Number(data ?? 0), error: null };
 }
+
+// ─── Multi-pago (Sprint 4) ────────────────────────────────────────────────
+// Pago parcial idempotente. Cuando la suma cubra el total, fn_agregar_pago
+// marca la venta cobrada automáticamente y libera mesa.
+
+export interface AgregarPagoArgs {
+  ventaId: number;
+  metodo: string;
+  monto: number;
+  idempotencyKey: string;
+  cobradoPor?: string | null;
+  vuelto?: number | null;
+  propinaIncluida?: number;
+}
+
+export async function agregarPago(args: AgregarPagoArgs): Promise<{ pagoId: number | null; error: string | null }> {
+  const { data, error } = await db.rpc('fn_agregar_pago_venta_comanda', {
+    p_venta_id: args.ventaId,
+    p_metodo: args.metodo,
+    p_monto: args.monto,
+    p_idempotency_key: args.idempotencyKey,
+    p_cobrado_por: args.cobradoPor ?? null,
+    p_vuelto: args.vuelto ?? null,
+    p_propina_incluida: args.propinaIncluida ?? 0,
+  });
+  if (error) return { pagoId: null, error: error.message };
+  return { pagoId: data as number, error: null };
+}
