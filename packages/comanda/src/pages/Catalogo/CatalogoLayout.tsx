@@ -1,81 +1,65 @@
 import { useState } from 'react';
-import { useAuth } from '../../lib/auth';
+import { ClipboardList, FolderClosed, ShoppingBag, DollarSign, Settings2 } from 'lucide-react';
+import { useAuth } from '@/lib/auth';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ItemsTab } from './ItemsTab';
 import { GruposTab } from './GruposTab';
 import { CanalesTab } from './CanalesTab';
 import { ListaPreciosTab } from './ListaPreciosTab';
 import { ModificadoresTab } from './ModificadoresTab';
 
-type TabKey = 'items' | 'grupos' | 'canales' | 'precios' | 'modificadores';
+const TABS = [
+  { key: 'items',         label: 'Items',            Icon: ClipboardList },
+  { key: 'grupos',        label: 'Grupos',           Icon: FolderClosed },
+  { key: 'canales',       label: 'Canales',          Icon: ShoppingBag },
+  { key: 'precios',       label: 'Lista de precios', Icon: DollarSign },
+  { key: 'modificadores', label: 'Modificadores',    Icon: Settings2 },
+] as const;
 
-const TABS: Array<{ key: TabKey; label: string; emoji: string }> = [
-  { key: 'items',         label: 'Items',           emoji: '📋' },
-  { key: 'grupos',        label: 'Grupos',          emoji: '🗂️' },
-  { key: 'canales',       label: 'Canales',         emoji: '🛍️' },
-  { key: 'precios',       label: 'Lista de precios', emoji: '💲' },
-  { key: 'modificadores', label: 'Modificadores',   emoji: '🎚️' },
-];
+type TabKey = typeof TABS[number]['key'];
 
 export function CatalogoLayout() {
   const { user } = useAuth();
   const [tab, setTab] = useState<TabKey>('items');
 
-  // ProtectedShell garantiza user no-null cuando llegamos acá. Esta guarda
-  // existe sólo para que TS pueda estrechar el tipo y los <Tabs user={...} />
-  // reciban Usuario en vez de Usuario|null.
   if (!user) return null;
 
   return (
-    <div style={{ maxWidth: 1400, margin: '0 auto', padding: '24px 16px', fontFamily: 'system-ui, sans-serif' }}>
-      <header style={{ marginBottom: 16 }}>
-        <h1 style={{ margin: 0, fontSize: 22 }}>Catálogo</h1>
+    <div className="container py-8">
+      <header className="mb-6">
+        <h1 className="text-3xl font-bold tracking-tight">Catálogo</h1>
       </header>
 
-      <nav
-        role="tablist"
-        style={{
-          display: 'flex',
-          gap: 4,
-          borderBottom: '1px solid #E5E7EB',
-          marginBottom: 20,
-          overflowX: 'auto',
-        }}
-      >
-        {TABS.map((t) => {
-          const active = tab === t.key;
-          return (
-            <button
+      <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
+        <TabsList className="bg-transparent border-b border-border w-full justify-start rounded-none h-auto p-0 mb-6">
+          {TABS.map((t) => (
+            <TabsTrigger
               key={t.key}
-              role="tab"
-              aria-selected={active}
-              onClick={() => setTab(t.key)}
-              style={{
-                padding: '10px 16px',
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                fontSize: 14,
-                fontWeight: active ? 600 : 400,
-                color: active ? '#111827' : '#6B7280',
-                borderBottom: active ? '2px solid #2563EB' : '2px solid transparent',
-                marginBottom: -1,
-                whiteSpace: 'nowrap',
-              }}
+              value={t.key}
+              className="data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent px-4 py-3 gap-2"
             >
-              <span style={{ marginRight: 6 }}>{t.emoji}</span>
+              <t.Icon className="h-4 w-4" />
               {t.label}
-            </button>
-          );
-        })}
-      </nav>
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-      <div role="tabpanel">
-        {tab === 'items' && <ItemsTab user={user} />}
-        {tab === 'grupos' && <GruposTab user={user} />}
-        {tab === 'canales' && <CanalesTab user={user} />}
-        {tab === 'precios' && <ListaPreciosTab user={user} />}
-        {tab === 'modificadores' && <ModificadoresTab user={user} />}
-      </div>
+        <TabsContent value="items">
+          <ItemsTab user={user} />
+        </TabsContent>
+        <TabsContent value="grupos">
+          <GruposTab user={user} />
+        </TabsContent>
+        <TabsContent value="canales">
+          <CanalesTab user={user} />
+        </TabsContent>
+        <TabsContent value="precios">
+          <ListaPreciosTab user={user} />
+        </TabsContent>
+        <TabsContent value="modificadores">
+          <ModificadoresTab user={user} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

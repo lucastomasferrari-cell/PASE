@@ -1,14 +1,20 @@
 import { useEffect, useState, useCallback } from 'react';
-import type { Usuario } from '../../types/auth';
-import type { ItemConGrupo } from '../../services/itemsService';
-import { listItems, softDeleteItem } from '../../services/itemsService';
-import { listGrupos } from '../../services/gruposService';
-import type { ItemGrupo, ItemEstado } from '../../types/database';
-import { tienePermiso } from '../../lib/auth';
-import { Badge } from '../../components/Badge';
-import { SearchInput } from '../../components/SearchInput';
-import { ConfirmDialog } from '../../components/ConfirmDialog';
-import { formatARS } from '../../lib/format';
+import { Search, Plus, Pencil, Ban, Trash2, Package } from 'lucide-react';
+import type { Usuario } from '@/types/auth';
+import type { ItemConGrupo } from '@/services/itemsService';
+import { listItems, softDeleteItem } from '@/services/itemsService';
+import { listGrupos } from '@/services/gruposService';
+import type { ItemGrupo, ItemEstado } from '@/types/database';
+import { tienePermiso } from '@/lib/auth';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { formatARS } from '@/lib/utils';
 import { ItemForm } from './ItemForm';
 import { AgotarDialog } from './AgotarDialog';
 
@@ -22,8 +28,8 @@ export function ItemsTab({ user }: Props) {
   const [items, setItems] = useState<ItemConGrupo[]>([]);
   const [grupos, setGrupos] = useState<ItemGrupo[]>([]);
   const [search, setSearch] = useState('');
-  const [grupoId, setGrupoId] = useState<number | null>(null);
-  const [estado, setEstado] = useState<EstadoFilter>('todos');
+  const [grupoFilter, setGrupoFilter] = useState<string>('todos');
+  const [estadoFilter, setEstadoFilter] = useState<EstadoFilter>('todos');
   const [loading, setLoading] = useState(true);
   const [editingItem, setEditingItem] = useState<ItemConGrupo | 'new' | null>(null);
   const [agotarItem, setAgotarItem] = useState<ItemConGrupo | null>(null);
@@ -35,121 +41,160 @@ export function ItemsTab({ user }: Props) {
 
   const reload = useCallback(async () => {
     setLoading(true);
+    const grupoIdNum = grupoFilter === 'todos' ? null : Number(grupoFilter);
     const [itemsRes, gruposRes] = await Promise.all([
-      listItems({ search, grupoId, estado, tenantId: user.tenant_id }),
+      listItems({ search, grupoId: grupoIdNum, estado: estadoFilter, tenantId: user.tenant_id }),
       listGrupos(user.tenant_id),
     ]);
     if (itemsRes.error) setError(itemsRes.error);
     setItems(itemsRes.data);
     setGrupos(gruposRes.data);
     setLoading(false);
-  }, [search, grupoId, estado, user.tenant_id]);
+  }, [search, grupoFilter, estadoFilter, user.tenant_id]);
 
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => {
+    reload();
+  }, [reload]);
 
-  function badgeEstado(e: ItemEstado) {
-    if (e === 'disponible') return <Badge variant="green">Disponible</Badge>;
-    if (e === 'agotado') return <Badge variant="amber">Agotado</Badge>;
-    return <Badge variant="gray">Inactivo</Badge>;
-  }
+  const hasFilters = search !== '' || grupoFilter !== 'todos' || estadoFilter !== 'todos';
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
-        <div style={{ flex: '1 1 240px', minWidth: 200 }}>
-          <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre…" />
-        </div>
-        <select
-          value={grupoId ?? ''}
-          onChange={(e) => setGrupoId(e.target.value ? Number(e.target.value) : null)}
-          style={{ padding: '6px 10px', border: '1px solid #D1D5DB', borderRadius: 6, fontSize: 14 }}
-        >
-          <option value="">Todos los grupos</option>
-          {grupos.map((g) => (
-            <option key={g.id} value={g.id}>{g.emoji ?? ''} {g.nombre}</option>
-          ))}
-        </select>
-        <select
-          value={estado}
-          onChange={(e) => setEstado(e.target.value as EstadoFilter)}
-          style={{ padding: '6px 10px', border: '1px solid #D1D5DB', borderRadius: 6, fontSize: 14 }}
-        >
-          <option value="todos">Todos</option>
-          <option value="disponible">Disponibles</option>
-          <option value="agotado">Agotados</option>
-          <option value="inactivo">Inactivos</option>
-        </select>
-        <div style={{ flex: 1 }} />
+      {/* Header con CTA */}
+      <div className="flex items-center justify-between mb-6">
+        <p className="text-sm text-muted-foreground">
+          {items.length} items
+        </p>
         {puedeEditar && (
-          <button
-            type="button"
-            onClick={() => setEditingItem('new')}
-            style={{
-              padding: '8px 16px', border: 'none', borderRadius: 6,
-              background: '#2563EB', color: '#FFFFFF', cursor: 'pointer',
-              fontSize: 14, fontWeight: 500,
-            }}
-          >+ Nuevo item</button>
+          <Button size="lg" onClick={() => setEditingItem('new')}>
+            <Plus className="h-5 w-5" />
+            Nuevo item
+          </Button>
         )}
       </div>
 
-      {error && <div style={{ padding: 12, background: '#FEE2E2', color: '#991B1B', borderRadius: 6, marginBottom: 12 }}>{error}</div>}
+      {error && (
+        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+          {error}
+        </div>
+      )}
 
-      <div style={{ overflowX: 'auto', border: '1px solid #E5E7EB', borderRadius: 8 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-          <thead style={{ background: '#F9FAFB' }}>
-            <tr>
-              <th style={th}>Item</th>
-              <th style={th}>Grupo</th>
-              <th style={{ ...th, textAlign: 'right' }}>Precio</th>
-              <th style={th}>Estado</th>
-              <th style={th}>Visibilidad</th>
-              <th style={th}>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr><td colSpan={6} style={{ padding: 32, textAlign: 'center', color: '#6B7280' }}>Cargando…</td></tr>
-            )}
-            {!loading && items.length === 0 && (
-              <tr><td colSpan={6} style={{ padding: 32, textAlign: 'center', color: '#6B7280' }}>Sin items.</td></tr>
-            )}
-            {items.map((it) => (
-              <tr key={it.id} style={{ borderTop: '1px solid #E5E7EB' }}>
-                <td style={td}>
-                  <span style={{ marginRight: 6, fontSize: 18 }}>{it.emoji ?? '📦'}</span>
-                  <strong>{it.nombre}</strong>
-                  {it.descripcion && <div style={{ fontSize: 12, color: '#6B7280' }}>{it.descripcion}</div>}
-                </td>
-                <td style={td}>{it.grupo ? `${it.grupo.emoji ?? ''} ${it.grupo.nombre}` : <span style={{ color: '#9CA3AF' }}>—</span>}</td>
-                <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{formatARS(it.precio_madre)}</td>
-                <td style={td}>{badgeEstado(it.estado)}</td>
-                <td style={td}>
-                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                    {it.visible_pos && <Badge variant="blue">POS</Badge>}
-                    {it.visible_qr && <Badge variant="violet">QR</Badge>}
-                    {it.visible_tienda && <Badge variant="green">Tienda</Badge>}
-                  </div>
-                </td>
-                <td style={td}>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    {puedeEditar && (
-                      <button type="button" onClick={() => setEditingItem(it)} style={btnSm}>Editar</button>
-                    )}
-                    {puedeEditar && it.estado === 'disponible' && (
-                      <button type="button" onClick={() => setAgotarItem(it)} style={btnSm}>Agotar</button>
-                    )}
-                    {puedeEliminar && (
-                      <button type="button" onClick={() => setConfirmDelete(it)} style={{ ...btnSm, color: '#DC2626' }}>Eliminar</button>
-                    )}
-                  </div>
-                </td>
-              </tr>
+      {/* Filtros */}
+      <div className="flex gap-3 mb-6 flex-wrap">
+        <div className="relative flex-1 min-w-[240px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            placeholder="Buscar por nombre…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10 h-11"
+          />
+        </div>
+        <Select value={grupoFilter} onValueChange={setGrupoFilter}>
+          <SelectTrigger className="w-[200px] h-11">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos los grupos</SelectItem>
+            {grupos.map((g) => (
+              <SelectItem key={g.id} value={String(g.id)}>{g.nombre}</SelectItem>
             ))}
-          </tbody>
-        </table>
+          </SelectContent>
+        </Select>
+        <Select value={estadoFilter} onValueChange={(v) => setEstadoFilter(v as EstadoFilter)}>
+          <SelectTrigger className="w-[180px] h-11">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos los estados</SelectItem>
+            <SelectItem value="disponible">Disponibles</SelectItem>
+            <SelectItem value="agotado">Agotados</SelectItem>
+            <SelectItem value="inactivo">Inactivos</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
+      {/* Tabla / Empty state */}
+      {loading ? (
+        <Card><CardContent className="py-16 text-center text-muted-foreground">Cargando…</CardContent></Card>
+      ) : items.length === 0 ? (
+        <EmptyState onNewItem={() => setEditingItem('new')} hasFilters={hasFilters} canEdit={puedeEditar} />
+      ) : (
+        <Card className="overflow-hidden">
+          <div className="grid grid-cols-[2fr_1fr_140px_140px_180px_220px] gap-4 px-6 py-3 border-b border-border bg-muted/40 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <div>Item</div>
+            <div>Grupo</div>
+            <div className="text-right">Precio</div>
+            <div>Estado</div>
+            <div>Visibilidad</div>
+            <div className="text-right">Acciones</div>
+          </div>
+          {items.map((item, idx) => (
+            <div
+              key={item.id}
+              className={`grid grid-cols-[2fr_1fr_140px_140px_180px_220px] gap-4 px-6 py-4 items-center transition-colors hover:bg-muted/30 ${
+                idx !== items.length - 1 ? 'border-b border-border' : ''
+              }`}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-10 w-10 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  {item.emoji ? (
+                    <span className="text-lg" aria-hidden>{item.emoji}</span>
+                  ) : (
+                    <Package className="h-5 w-5 text-primary" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="font-medium truncate">{item.nombre}</div>
+                  {item.descripcion && (
+                    <div className="text-sm text-muted-foreground truncate">{item.descripcion}</div>
+                  )}
+                </div>
+              </div>
+              <div className="text-sm text-muted-foreground truncate">
+                {item.grupo ? item.grupo.nombre : '—'}
+              </div>
+              <div className="text-right tabular-nums font-medium">
+                {formatARS(item.precio_madre)}
+              </div>
+              <div>
+                <EstadoBadge estado={item.estado} />
+              </div>
+              <div className="flex gap-1.5 flex-wrap">
+                {item.visible_pos && <Badge variant="secondary" className="text-xs">POS</Badge>}
+                {item.visible_qr && <Badge variant="secondary" className="text-xs">QR</Badge>}
+                {item.visible_tienda && <Badge variant="secondary" className="text-xs">Tienda</Badge>}
+              </div>
+              <div className="flex justify-end gap-1">
+                {puedeEditar && (
+                  <Button variant="ghost" size="sm" onClick={() => setEditingItem(item)}>
+                    <Pencil className="h-4 w-4" />
+                    Editar
+                  </Button>
+                )}
+                {puedeEditar && item.estado === 'disponible' && (
+                  <Button variant="ghost" size="sm" onClick={() => setAgotarItem(item)}>
+                    <Ban className="h-4 w-4" />
+                    Agotar
+                  </Button>
+                )}
+                {puedeEliminar && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => setConfirmDelete(item)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </Card>
+      )}
+
+      {/* Dialogs (mantienen design existente — fuera de scope sprint) */}
       {editingItem !== null && (
         <ItemForm
           user={user}
@@ -166,25 +211,87 @@ export function ItemsTab({ user }: Props) {
           onDone={() => { setAgotarItem(null); reload(); }}
         />
       )}
-      <ConfirmDialog
-        open={confirmDelete !== null}
-        title="Eliminar item"
-        destructive
-        message={confirmDelete ? <>¿Borrar <strong>{confirmDelete.nombre}</strong>? Se podrá restaurar después desde la base de datos (soft delete).</> : ''}
-        confirmLabel="Eliminar"
-        onCancel={() => setConfirmDelete(null)}
-        onConfirm={async () => {
-          if (!confirmDelete) return;
-          const { error: e } = await softDeleteItem(confirmDelete.id);
-          if (e) setError(e);
-          setConfirmDelete(null);
-          reload();
-        }}
-      />
+
+      {/* Confirm delete con shadcn Dialog */}
+      <Dialog open={confirmDelete !== null} onOpenChange={(open) => !open && setConfirmDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Eliminar item</DialogTitle>
+            <DialogDescription>
+              ¿Borrar <strong>{confirmDelete?.nombre}</strong>? Se podrá restaurar después
+              desde la base de datos (soft delete).
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(null)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (!confirmDelete) return;
+                const { error: e } = await softDeleteItem(confirmDelete.id);
+                if (e) setError(e);
+                setConfirmDelete(null);
+                reload();
+              }}
+            >Eliminar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-const th: React.CSSProperties = { textAlign: 'left', padding: '10px 12px', fontWeight: 600, color: '#374151', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 };
-const td: React.CSSProperties = { padding: '10px 12px', verticalAlign: 'top' };
-const btnSm: React.CSSProperties = { padding: '4px 10px', border: '1px solid #D1D5DB', borderRadius: 4, background: '#FFFFFF', cursor: 'pointer', fontSize: 12 };
+function EstadoBadge({ estado }: { estado: ItemEstado }) {
+  if (estado === 'disponible') {
+    return (
+      <Badge variant="outline" className="bg-success/10 text-success border-success/20">
+        Disponible
+      </Badge>
+    );
+  }
+  if (estado === 'agotado') {
+    return (
+      <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
+        Agotado
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="bg-muted text-muted-foreground border-border">
+      Inactivo
+    </Badge>
+  );
+}
+
+function EmptyState({ onNewItem, hasFilters, canEdit }: { onNewItem: () => void; hasFilters: boolean; canEdit: boolean }) {
+  if (hasFilters) {
+    return (
+      <Card>
+        <CardContent className="py-16 text-center">
+          <Search className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-lg font-medium mb-1">No encontramos items</h3>
+          <p className="text-sm text-muted-foreground">
+            Probá con otros filtros o ajustá la búsqueda.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <CardContent className="py-16 text-center">
+        <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+        <h3 className="text-lg font-medium mb-1">Sin items en el catálogo</h3>
+        <p className="text-sm text-muted-foreground mb-6">
+          Empezá creando tu primer item para venderlo en el POS.
+        </p>
+        {canEdit && (
+          <Button onClick={onNewItem}>
+            <Plus className="h-5 w-5" />
+            Crear primer item
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
