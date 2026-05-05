@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
+import { ComandasActivasPanel } from '@/components/ComandasActivasPanel';
 import { cn } from '@/lib/utils';
 
 export function SalonView() {
@@ -49,44 +50,56 @@ export function SalonView() {
     return mesas.filter((m) => m.zona === zona);
   }, [mesas, zona]);
 
-  if (loading) {
-    return <div className="container py-8 text-center text-muted-foreground">Cargando mesas…</div>;
-  }
   if (!empleado) {
-    return <div className="container py-8 text-center text-muted-foreground">Sesión POS requerida.</div>;
+    return <div className="p-8 text-center text-muted-foreground">Sesión POS requerida.</div>;
   }
 
   return (
-    <div className="container py-6">
-      <header className="flex items-center gap-3 mb-5 flex-wrap">
-        <h1 className="text-2xl font-bold tracking-tight">Salón</h1>
-        <nav className="flex gap-1 ml-2">
-          <ZoneButton active={zona === null} onClick={() => setZona(null)}>
-            Todas ({mesas.length})
-          </ZoneButton>
-          {zonas.map((z) => (
-            <ZoneButton key={z} active={zona === z} onClick={() => setZona(z)}>
-              {z}
-            </ZoneButton>
-          ))}
-        </nav>
-      </header>
+    <div className="flex h-full">
+      {/* Panel izq: comandas activas (solo lg+ por espacio) */}
+      <ComandasActivasPanel
+        className="w-[240px] border-r border-border flex-shrink-0 hidden lg:flex"
+        modos={['salon']}
+      />
 
-      {error && (
-        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
-      )}
+      {/* Centro: plano de mesas */}
+      <div className="flex-1 min-w-0 overflow-auto">
+        <div className="p-6">
+          <header className="flex items-center gap-3 mb-5 flex-wrap">
+            <h1 className="text-2xl font-bold tracking-tight">Salón</h1>
+            <nav className="flex gap-1 ml-2">
+              <ZoneButton active={zona === null} onClick={() => setZona(null)}>
+                Todas ({mesas.length})
+              </ZoneButton>
+              {zonas.map((z) => (
+                <ZoneButton key={z} active={zona === z} onClick={() => setZona(z)}>
+                  {z}
+                </ZoneButton>
+              ))}
+            </nav>
+          </header>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        {mesasFiltradas.map((m) => (
-          <MesaTile
-            key={m.id}
-            mesa={m}
-            onClick={() => {
-              if (m.estado === 'libre') setAbrirDialog(m);
-              else if (m.venta_abierta_id) navigate(`/pos/venta/${m.venta_abierta_id}`);
-            }}
-          />
-        ))}
+          {error && (
+            <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
+          )}
+
+          {loading ? (
+            <div className="py-8 text-center text-muted-foreground">Cargando mesas…</div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
+              {mesasFiltradas.map((m) => (
+                <MesaTile
+                  key={m.id}
+                  mesa={m}
+                  onClick={() => {
+                    if (m.estado === 'libre') setAbrirDialog(m);
+                    else if (m.venta_abierta_id) navigate(`/pos/venta/${m.venta_abierta_id}`);
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {abrirDialog && (
