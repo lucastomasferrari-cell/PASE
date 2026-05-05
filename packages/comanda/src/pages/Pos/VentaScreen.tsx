@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, CreditCard, Package } from 'lucide-react';
+import { ArrowLeft, Send, Wallet, MoreHorizontal } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
 import { listItems, type ItemConGrupo } from '../../services/itemsService';
@@ -125,21 +125,13 @@ export function VentaScreen() {
 
         <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2">
           {catalogoFiltrado.map((it) => (
-            <button
+            <ProductTile
               key={it.id}
-              type="button"
-              onClick={() => addItem(it)}
+              item={it}
+              grupo={grupos.find((g) => g.id === it.grupo_id) ?? null}
               disabled={!editable}
-              className={cn(
-                'p-2 border border-border rounded-lg bg-background text-center min-h-[100px]',
-                'transition-colors hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed',
-                'flex flex-col items-center justify-center',
-              )}
-            >
-              <div className="text-3xl">{it.emoji ?? <Package className="h-7 w-7 text-muted-foreground" />}</div>
-              <div className="text-sm font-semibold mt-1 line-clamp-2">{it.nombre}</div>
-              <div className="text-xs text-success mt-0.5 tabular-nums">{formatARS(it.precio_madre)}</div>
-            </button>
+              onClick={() => addItem(it)}
+            />
           ))}
         </div>
       </div>
@@ -187,17 +179,20 @@ export function VentaScreen() {
           {venta.propina > 0 && <Row label="Propina" value={formatARS(venta.propina)} />}
           <Row label="Total" value={formatARS(venta.total)} bold />
 
-          <div className="grid grid-cols-2 gap-2 mt-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              onClick={mandar}
-              disabled={!editable}
-            >
-              <Send className="h-4 w-4 mr-2" />
-              Mandar
-            </Button>
+          {/* CTAs Toast-style: primario coral grande para mandar a cocina,
+              luego par 2-col verde "Cobrar y enviar" + ghost "Más" */}
+          <Button
+            type="button"
+            size="pos"
+            className="w-full mt-3"
+            onClick={mandar}
+            disabled={!editable || items.length === 0}
+          >
+            <Send className="h-4 w-4 mr-2" />
+            Enviar a cocina
+          </Button>
+
+          <div className="grid grid-cols-[1fr_auto] gap-2 mt-2">
             <Button
               type="button"
               variant="success"
@@ -205,8 +200,19 @@ export function VentaScreen() {
               onClick={() => setShowCobro(true)}
               disabled={!editable || venta.total <= 0}
             >
-              <CreditCard className="h-4 w-4 mr-2" />
-              Cobrar
+              <Wallet className="h-4 w-4 mr-2" />
+              Cobrar y enviar
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              aria-label="Más opciones"
+              disabled={!editable}
+              title="Próximamente: descuento, anular, transferir mesa"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+              <span className="hidden sm:inline ml-1">Más</span>
             </Button>
           </div>
         </div>
@@ -447,4 +453,67 @@ function CobroDialog({ venta, empleadoId, onClose, onCobrado, onError }: CobroPr
       </DialogContent>
     </Dialog>
   );
+}
+
+// ─── ProductTile ──────────────────────────────────────────────────────────
+// Tile con color_ramp del grupo + foto/emoji/iniciales como fallback.
+
+const RAMP_CLASSES: Record<string, string> = {
+  amber:  'bg-amber-100 text-amber-900 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-100 dark:hover:bg-amber-900/50',
+  pink:   'bg-pink-100 text-pink-900 hover:bg-pink-200 dark:bg-pink-900/30 dark:text-pink-100 dark:hover:bg-pink-900/50',
+  purple: 'bg-purple-100 text-purple-900 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-100 dark:hover:bg-purple-900/50',
+  blue:   'bg-blue-100 text-blue-900 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-100 dark:hover:bg-blue-900/50',
+  coral:  'bg-orange-100 text-orange-900 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-100 dark:hover:bg-orange-900/50',
+  teal:   'bg-teal-100 text-teal-900 hover:bg-teal-200 dark:bg-teal-900/30 dark:text-teal-100 dark:hover:bg-teal-900/50',
+  green:  'bg-green-100 text-green-900 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-100 dark:hover:bg-green-900/50',
+  gray:   'bg-muted text-foreground hover:bg-accent',
+};
+
+function ProductTile({
+  item, grupo, disabled, onClick,
+}: {
+  item: ItemConGrupo;
+  grupo: ItemGrupo | null;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  const ramp = grupo?.color_ramp ?? 'gray';
+  const cls = RAMP_CLASSES[ramp] ?? RAMP_CLASSES.gray;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        'aspect-[4/3] rounded-lg p-3 flex flex-col items-center justify-center gap-1',
+        'transition-transform active:scale-[0.98] touch-target-lg',
+        'disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100',
+        cls,
+      )}
+    >
+      {item.foto_url ? (
+        <img src={item.foto_url} alt="" className="w-12 h-12 object-cover rounded" />
+      ) : item.emoji ? (
+        <div className="text-3xl">{item.emoji}</div>
+      ) : (
+        <div className="text-2xl font-medium leading-none">{getInitials(item.nombre)}</div>
+      )}
+      <div className="text-[10px] text-center line-clamp-2 leading-tight opacity-80">
+        {item.nombre}
+      </div>
+      <div className="text-xs font-medium tabular-nums">
+        {formatARS(item.precio_madre)}
+      </div>
+    </button>
+  );
+}
+
+function getInitials(nombre: string): string {
+  return nombre
+    .split(' ')
+    .filter((p) => p.length > 0)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? '')
+    .join('');
 }
