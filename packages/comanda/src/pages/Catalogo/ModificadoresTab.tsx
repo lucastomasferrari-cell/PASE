@@ -75,11 +75,11 @@ export function ModificadoresTab({ user }: Props) {
       )}
       <ConfirmDialog
         open={confirmDelete !== null}
+        onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}
         title="Eliminar grupo de modificadores"
         destructive
-        message={confirmDelete ? <>¿Borrar <strong>{confirmDelete.nombre}</strong>? Las asignaciones a items se mantienen pero el grupo desaparece de los desplegables.</> : ''}
+        description={confirmDelete ? <>¿Borrar <strong>{confirmDelete.nombre}</strong>? Las asignaciones a items se mantienen pero el grupo desaparece de los desplegables.</> : ''}
         confirmLabel="Eliminar"
-        onCancel={() => setConfirmDelete(null)}
         onConfirm={async () => {
           if (!confirmDelete) return;
           const { error: err } = await softDeleteModifierGroup(confirmDelete.id);
@@ -195,7 +195,7 @@ function ModifierGroupCard({ group, puedeEditar, tenantId, onEdit, onDelete }: C
               style={{ flex: 2, padding: '4px 8px', fontSize: 12, border: '1px solid #D1D5DB', borderRadius: 4 }}
             />
             <div style={{ flex: 1 }}>
-              <MoneyInput value={nuevoPrecio} onChange={setNuevoPrecio} placeholder="$0,00" style={{ fontSize: 12, padding: '4px 6px' }} />
+              <MoneyInput value={nuevoPrecio} onChange={setNuevoPrecio} placeholder="$0,00" className="h-9 text-xs" />
             </div>
             <button type="button" onClick={addOpcion} style={{ ...btnSm, fontSize: 12 }}>OK</button>
             <button type="button" onClick={() => { setShowAdd(false); setNuevoNombre(''); setNuevoPrecio(0); }} style={{ ...btnSm, fontSize: 12 }}>×</button>

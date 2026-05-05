@@ -1,52 +1,27 @@
-import { useEffect, useState } from 'react';
+import { Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 
-export interface SearchInputProps {
+interface Props {
   value: string;
-  onChange: (q: string) => void;
+  onChange: (v: string) => void;
   placeholder?: string;
-  debounceMs?: number;
-  style?: React.CSSProperties;
+  autoFocus?: boolean;
+  className?: string;
 }
 
-export function SearchInput({ value, onChange, placeholder = 'Buscar…', debounceMs = 200, style }: SearchInputProps) {
-  const [local, setLocal] = useState(value);
-  useEffect(() => setLocal(value), [value]);
-  useEffect(() => {
-    const t = setTimeout(() => {
-      if (local !== value) onChange(local);
-    }, debounceMs);
-    return () => clearTimeout(t);
-  }, [local, value, debounceMs, onChange]);
-
+export function SearchInput({ value, onChange, placeholder = 'Buscar…', autoFocus, className }: Props) {
   return (
-    <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
-      <input
-        type="text"
-        value={local}
-        onChange={(e) => setLocal(e.target.value)}
+    <div className={cn('relative', className)}>
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+      <Input
+        type="search"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        style={{
-          padding: '6px 28px 6px 10px',
-          border: '1px solid #D1D5DB',
-          borderRadius: 6,
-          fontSize: 14,
-          width: '100%',
-          ...style,
-        }}
+        autoFocus={autoFocus}
+        className="pl-10 h-11"
       />
-      {local && (
-        <button
-          type="button"
-          onClick={() => { setLocal(''); onChange(''); }}
-          aria-label="Limpiar"
-          style={{
-            position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)',
-            border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14, color: '#6B7280',
-          }}
-        >
-          ✕
-        </button>
-      )}
     </div>
   );
 }

@@ -1,20 +1,32 @@
+import { Minus, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+
 interface Props {
   value: number;
   onChange: (n: number) => void;
   min?: number;
   max?: number;
   step?: number;
+  size?: 'default' | 'lg';
 }
 
-export function Stepper({ value, onChange, min = 0, max = 999, step = 1 }: Props) {
+export function Stepper({ value, onChange, min = 0, max = 999, step = 1, size = 'default' }: Props) {
+  const btnSize = size === 'lg' ? 'h-11 w-11' : 'h-9 w-9';
+  const inputWidth = size === 'lg' ? 'w-16 text-lg' : 'w-12';
+
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, border: '1px solid #D1D5DB', borderRadius: 6, overflow: 'hidden' }}>
-      <button
+    <div className="inline-flex items-center border border-input rounded-md overflow-hidden bg-background">
+      <Button
         type="button"
+        variant="ghost"
+        size="icon"
         onClick={() => onChange(Math.max(min, value - step))}
-        style={btn}
+        className={cn(btnSize, 'rounded-none border-r border-input')}
         aria-label="Restar"
-      >−</button>
+      >
+        <Minus className="h-4 w-4" />
+      </Button>
       <input
         type="number"
         value={value}
@@ -22,24 +34,23 @@ export function Stepper({ value, onChange, min = 0, max = 999, step = 1 }: Props
           const n = Number(e.target.value);
           if (!Number.isNaN(n)) onChange(Math.max(min, Math.min(max, n)));
         }}
-        style={input}
+        className={cn(
+          inputWidth,
+          'text-center bg-transparent border-0 outline-none tabular-nums text-base',
+        )}
         min={min}
         max={max}
       />
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="icon"
         onClick={() => onChange(Math.min(max, value + step))}
-        style={btn}
+        className={cn(btnSize, 'rounded-none border-l border-input')}
         aria-label="Sumar"
-      >+</button>
+      >
+        <Plus className="h-4 w-4" />
+      </Button>
     </div>
   );
 }
-
-const btn: React.CSSProperties = {
-  width: 28, height: 28, border: 'none', background: '#F3F4F6', cursor: 'pointer', fontSize: 16, fontWeight: 600,
-};
-const input: React.CSSProperties = {
-  width: 50, textAlign: 'center', border: 'none', outline: 'none', fontSize: 14, padding: 4,
-  fontVariantNumeric: 'tabular-nums',
-};

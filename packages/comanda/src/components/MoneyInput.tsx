@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
+import { Input } from '@/components/ui/input';
 import { formatARS, parseARS } from '../lib/format';
+import { cn } from '@/lib/utils';
 
 export interface MoneyInputProps {
   value: number;
@@ -8,13 +10,13 @@ export interface MoneyInputProps {
   autoFocus?: boolean;
   placeholder?: string;
   ariaLabel?: string;
-  style?: React.CSSProperties;
+  className?: string;
   onBlur?: () => void;
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 }
 
 export function MoneyInput({
-  value, onChange, disabled, autoFocus, placeholder, ariaLabel, style, onBlur, onKeyDown,
+  value, onChange, disabled, autoFocus, placeholder, ariaLabel, className, onBlur, onKeyDown,
 }: MoneyInputProps) {
   const [text, setText] = useState<string>(formatARS(value));
   const [focused, setFocused] = useState(false);
@@ -24,7 +26,7 @@ export function MoneyInput({
   }, [value, focused]);
 
   return (
-    <input
+    <Input
       type="text"
       inputMode="decimal"
       value={text}
@@ -34,7 +36,6 @@ export function MoneyInput({
       autoFocus={autoFocus}
       onFocus={() => {
         setFocused(true);
-        // Mostrar el número crudo al focusear, más fácil de editar
         setText(value === 0 ? '' : String(value).replace('.', ','));
       }}
       onChange={(e) => setText(e.target.value)}
@@ -46,15 +47,7 @@ export function MoneyInput({
         onBlur?.();
       }}
       onKeyDown={onKeyDown}
-      style={{
-        padding: '6px 10px',
-        border: '1px solid #D1D5DB',
-        borderRadius: 6,
-        fontSize: 14,
-        textAlign: 'right',
-        width: '100%',
-        ...style,
-      }}
+      className={cn('h-11 text-right tabular-nums', className)}
     />
   );
 }

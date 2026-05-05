@@ -1,6 +1,11 @@
-import { useState } from 'react';
-import { NumericPad } from '../../components/NumericPad';
+import { useEffect, useState } from 'react';
 import { setPin } from '../../services/empleadosService';
+import { NumericPad } from '@/components/NumericPad';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 interface Props {
   empleadoId: string;
@@ -16,6 +21,20 @@ export function PinDialog({ empleadoId, empleadoNombre, onClose, onDone }: Props
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Auto-avance step 1 → step 2 al llegar a 4 dígitos
+  useEffect(() => {
+    if (step === 1 && pin1.length === 4) {
+      setStep(2);
+    }
+  }, [pin1, step]);
+
+  // Auto-commit al llegar a 4 dígitos en step 2
+  useEffect(() => {
+    if (step === 2 && pin2.length === 4 && !saving) {
+      void commit();
+    }
+  }, [pin2, step, saving]);
+
   async function commit() {
     if (pin1.length !== 4) { setError('PIN debe ser de 4 dígitos'); return; }
     if (pin1 !== pin2) {
@@ -30,51 +49,79 @@ export function PinDialog({ empleadoId, empleadoNombre, onClose, onDone }: Props
     onDone();
   }
 
-  return (
-    <div role="dialog" aria-modal="true" style={overlay} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={modal}>
-        <h3 style={{ margin: 0, fontSize: 18, marginBottom: 4 }}>Asignar PIN</h3>
-        <p style={{ margin: 0, fontSize: 13, color: '#6B7280', marginBottom: 16 }}>
-          {empleadoNombre} · {step === 1 ? 'Ingresá un PIN de 4 dígitos' : 'Confirmá el PIN'}
-        </p>
+  const currentPin = step === 1 ? pin1 : pin2;
+  const setCurrentPin = step === 1 ? setPin1 : setPin2;
 
-        {step === 1 ? (
-          <NumericPad
-            value={pin1}
-            maxLength={4}
-            showDots
-            onChange={(v) => { setPin1(v); setError(null); }}
-            onSubmit={() => setStep(2)}
-            ariaLabel="PIN"
-          />
-        ) : (
-          <NumericPad
-            value={pin2}
-            maxLength={4}
-            showDots
-            onChange={(v) => { setPin2(v); setError(null); }}
-            onSubmit={commit}
-            ariaLabel="Confirmar PIN"
-            disabled={saving}
-          />
+  function handleDigit(d: string) {
+    if (saving) return;
+    if (currentPin.length < 4) {
+      setCurrentPin(currentPin + d);
+      setError(null);
+    }
+  }
+
+  function handleDelete() {
+    setCurrentPin(currentPin.slice(0, -1));
+    setError(null);
+  }
+
+  function handleClear() {
+    setCurrentPin('');
+    setError(null);
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Asignar PIN</DialogTitle>
+          <DialogDescription>
+            {empleadoNombre} · {step === 1 ? 'Ingresá un PIN de 4 dígitos' : 'Confirmá el PIN'}
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* PIN dots */}
+        <div className="flex justify-center gap-3 my-4" aria-live="polite">
+          {[0, 1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className={cn(
+                'h-4 w-4 rounded-full border-2 transition-colors',
+                currentPin.length > i
+                  ? 'bg-primary border-primary'
+                  : 'border-border-strong bg-transparent',
+              )}
+            />
+          ))}
+        </div>
+
+        {error && (
+          <div className="text-center text-sm text-destructive font-medium mb-2">
+            {error}
+          </div>
         )}
 
-        {error && <div style={errBox}>{error}</div>}
+        <NumericPad
+          onDigit={handleDigit}
+          onDelete={handleDelete}
+          onClear={handleClear}
+          disabled={saving}
+        />
 
-        <div style={{ marginTop: 16, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <DialogFooter>
           {step === 2 && !saving && (
-            <button type="button" onClick={() => { setStep(1); setPin1(''); setPin2(''); setError(null); }} style={btnSecondary}>
+            <Button
+              variant="outline"
+              onClick={() => { setStep(1); setPin1(''); setPin2(''); setError(null); }}
+            >
               Volver
-            </button>
+            </Button>
           )}
-          <button type="button" onClick={onClose} style={btnSecondary} disabled={saving}>Cancelar</button>
-        </div>
-      </div>
-    </div>
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            Cancelar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
-
-const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 };
-const modal: React.CSSProperties = { background: '#FFFFFF', borderRadius: 8, padding: 24, maxWidth: 360, width: '100%', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' };
-const btnSecondary: React.CSSProperties = { padding: '6px 14px', border: '1px solid #D1D5DB', borderRadius: 6, background: '#FFFFFF', cursor: 'pointer', fontSize: 14 };
-const errBox: React.CSSProperties = { marginTop: 12, padding: 10, background: '#FEE2E2', color: '#991B1B', borderRadius: 6, fontSize: 13 };

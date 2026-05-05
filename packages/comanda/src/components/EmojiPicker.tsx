@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 const EMOJIS_GASTRO = [
   '🍔', '🌭', '🍕', '🌮', '🌯', '🥙', '🥗', '🍝', '🍜', '🍣',
@@ -14,64 +17,46 @@ export interface EmojiPickerProps {
 
 export function EmojiPicker({ value, onChange }: EmojiPickerProps) {
   const [open, setOpen] = useState(false);
+
   return (
-    <div style={{ position: 'relative', display: 'inline-block' }}>
-      <button
+    <div className="relative inline-block">
+      <Button
         type="button"
+        variant="outline"
         onClick={() => setOpen((o) => !o)}
-        style={{
-          padding: '6px 12px',
-          fontSize: 20,
-          border: '1px solid #D1D5DB',
-          borderRadius: 6,
-          background: '#FFFFFF',
-          cursor: 'pointer',
-          minWidth: 48,
-        }}
         aria-label="Elegir emoji"
+        className="h-11 min-w-[48px] text-xl px-3"
       >
         {value ?? '😀'}
-      </button>
+      </Button>
+
       {open && (
         <div
-          style={{
-            position: 'absolute',
-            top: '100%',
-            left: 0,
-            zIndex: 50,
-            marginTop: 4,
-            padding: 8,
-            border: '1px solid #D1D5DB',
-            borderRadius: 8,
-            background: '#FFFFFF',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            display: 'grid',
-            gridTemplateColumns: 'repeat(8, 1fr)',
-            gap: 4,
-            width: 280,
-          }}
+          className="absolute top-full left-0 z-50 mt-1 p-2 grid grid-cols-8 gap-1 w-72 rounded-lg border border-border bg-popover text-popover-foreground shadow-md"
+          role="dialog"
+          aria-label="Selector de emoji"
         >
           <button
             type="button"
             onClick={() => { onChange(null); setOpen(false); }}
-            style={{ padding: 4, fontSize: 14, border: 'none', background: 'transparent', cursor: 'pointer' }}
             title="Sin emoji"
+            className={cn(
+              'flex items-center justify-center h-9 w-9 rounded-md',
+              'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+            )}
           >
-            ✕
+            <X className="h-4 w-4" />
           </button>
           {EMOJIS_GASTRO.map((e) => (
             <button
               key={e}
               type="button"
               onClick={() => { onChange(e); setOpen(false); }}
-              style={{
-                padding: 4,
-                fontSize: 20,
-                border: value === e ? '2px solid #2563EB' : '1px solid transparent',
-                borderRadius: 4,
-                background: 'transparent',
-                cursor: 'pointer',
-              }}
+              className={cn(
+                'flex items-center justify-center h-9 w-9 rounded-md text-xl',
+                'hover:bg-accent transition-colors',
+                value === e && 'ring-2 ring-primary',
+              )}
             >
               {e}
             </button>

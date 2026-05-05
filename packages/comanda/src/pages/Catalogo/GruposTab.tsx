@@ -95,11 +95,11 @@ export function GruposTab({ user }: Props) {
       )}
       <ConfirmDialog
         open={confirmDelete !== null}
+        onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}
         title="Eliminar grupo"
         destructive
-        message={confirmDelete ? <>¿Borrar grupo <strong>{confirmDelete.nombre}</strong>?</> : ''}
+        description={confirmDelete ? <>¿Borrar grupo <strong>{confirmDelete.nombre}</strong>?</> : ''}
         confirmLabel="Eliminar"
-        onCancel={() => setConfirmDelete(null)}
         onConfirm={async () => {
           if (!confirmDelete) return;
           const { error: err } = await softDeleteGrupo(confirmDelete.id);
