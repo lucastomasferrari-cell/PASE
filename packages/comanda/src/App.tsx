@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { Toaster } from 'sonner';
 import { AuthProvider } from './lib/AuthProvider';
 import { AuthPosProvider } from './lib/AuthPosProvider';
 import { ProtectedShell } from './components/ProtectedShell';
@@ -41,6 +42,16 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <AuthPosProvider>
+          <Toaster
+            position="top-center"
+            richColors
+            closeButton
+            toastOptions={{
+              classNames: {
+                toast: 'font-sans',
+              },
+            }}
+          />
           <Routes>
             <Route path="/login" element={<RedirectIfAuth><LoginPage /></RedirectIfAuth>} />
 
