@@ -1,106 +1,111 @@
-import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import { Link, Outlet, useNavigate } from 'react-router-dom';
-import { Lock, Settings as SettingsIcon, LogOut } from 'lucide-react';
+import { Link, Outlet } from 'react-router-dom';
+import { ArrowLeft, Wallet } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { useAuthPos } from '@/lib/authPos';
 import { useLocalActivo } from '@/lib/localActivo';
-import { db } from '@/lib/supabase';
+import { usePermiso } from '@/lib/usePermiso';
 import { getTurnoAbierto } from '@/services/turnosCajaService';
 import type { TurnoCaja } from '@/types/database';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { PosSidebar } from '@/components/PosSidebar';
+import { UserAvatarMenu } from '@/components/UserAvatarMenu';
 
-interface Props { children?: ReactNode }
-
-export function PosLayout({ children }: Props) {
+// Layout principal POS: header sticky con marca + turno + acciones,
+// sidebar permanente de 72px (Salón/Mostrador/Pedidos), contenido en
+// <Outlet />. Reemplaza el layout viejo con íconos sueltos en el header.
+export function PosLayout() {
   const { user } = useAuth();
-  const { empleado, logout: logoutPos } = useAuthPos();
   const [localId] = useLocalActivo(user);
   const [turno, setTurno] = useState<TurnoCaja | null>(null);
-  const navigate = useNavigate();
+  const puedeAdmin = usePermiso('comanda.config.editar');
 
   useEffect(() => {
-    if (localId !== null) {
-      getTurnoAbierto(localId).then((res) => setTurno(res.data));
-    }
+    if (localId === null) return;
+    let cancelled = false;
+    getTurnoAbierto(localId).then((res) => {
+      if (!cancelled) setTurno(res.data);
+    });
+    return () => { cancelled = true; };
   }, [localId]);
 
-  async function fullLogout() {
-    logoutPos();
-    await db.auth.signOut();
-    navigate('/login', { replace: true });
-  }
-
-  const esManager = empleado?.rol_pos === 'manager' || empleado?.rol_pos === 'dueno';
   const minutosTurno = turno
     ? Math.max(0, Math.floor((Date.now() - new Date(turno.abierto_at).getTime()) / 60_000))
     : 0;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <header className="border-b border-border bg-card sticky top-0 z-10">
-        <div className="px-6 py-3 flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3">
-            <Link to="/pos" className="text-lg font-bold tracking-tight">
+      {/* Header */}
+      <header className="border-b border-border bg-card sticky top-0 z-10 flex-shrink-0">
+        <div className="px-5 py-3 flex items-center justify-between gap-3 h-14">
+          {/* Izquierda: marca + turno */}
+          <div className="flex items-center gap-3 min-w-0">
+            <Link to="/" className="text-lg font-medium tracking-wide text-primary flex-shrink-0">
               COMANDA
             </Link>
-            <span className="text-muted-foreground">·</span>
-            <Link to="/caja" className="flex items-center gap-2">
-              {turno ? (
-                <>
-                  <span className="relative flex h-2 w-2">
+            {turno && (
+              <>
+                <span className="text-muted-foreground hidden md:inline">·</span>
+                <Link
+                  to="/caja"
+                  className="hidden md:flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors min-w-0"
+                >
+                  <span className="relative flex h-2 w-2 flex-shrink-0">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
                   </span>
-                  <span className="text-sm text-muted-foreground">
+                  <span className="truncate">
                     Turno #{turno.numero} · abierto hace {minutosTurno} min
                   </span>
-                </>
-              ) : (
-                <>
-                  <span className="h-2 w-2 rounded-full bg-destructive" />
-                  <span className="text-sm text-destructive font-medium">
-                    Sin turno abierto
-                  </span>
-                </>
-              )}
-            </Link>
+                </Link>
+              </>
+            )}
+            {!turno && (
+              <>
+                <span className="text-muted-foreground hidden md:inline">·</span>
+                <Link
+                  to="/caja"
+                  className="hidden md:flex items-center gap-2 text-sm text-destructive font-medium hover:opacity-80 transition-opacity"
+                >
+                  <span className="h-2 w-2 rounded-full bg-destructive flex-shrink-0" />
+                  Sin turno abierto
+                </Link>
+              </>
+            )}
           </div>
 
-          <div className="flex items-center gap-3">
-            {empleado && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{empleado.nombre}</span>
-                <Badge variant="secondary" className="text-xs">
-                  {empleado.rol_pos}
-                </Badge>
-              </div>
+          {/* Derecha: acciones */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <ThemeToggle />
+
+            <Button variant="outline" asChild>
+              <Link to="/caja" className="flex items-center gap-2">
+                <Wallet className="h-4 w-4" />
+                <span className="hidden sm:inline">Caja</span>
+              </Link>
+            </Button>
+
+            <UserAvatarMenu />
+
+            {puedeAdmin && (
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/catalogo" className="flex items-center gap-1.5">
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  Admin
+                </Link>
+              </Button>
             )}
-            <div className="flex items-center gap-1">
-              <ThemeToggle />
-              <Button variant="outline" size="icon" onClick={logoutPos} title="Bloquear (cambiar empleado)">
-                <Lock className="h-4 w-4" />
-                <span className="sr-only">Bloquear</span>
-              </Button>
-              {esManager && (
-                <Button variant="outline" size="icon" asChild title="Settings">
-                  <Link to="/settings">
-                    <SettingsIcon className="h-4 w-4" />
-                    <span className="sr-only">Settings</span>
-                  </Link>
-                </Button>
-              )}
-              <Button variant="outline" size="icon" onClick={fullLogout} title="Cerrar sesión">
-                <LogOut className="h-4 w-4" />
-                <span className="sr-only">Cerrar sesión</span>
-              </Button>
-            </div>
           </div>
         </div>
       </header>
-      <main className="flex-1">{children ?? <Outlet />}</main>
+
+      {/* Body: sidebar + content */}
+      <div className="flex-1 flex min-h-0">
+        <PosSidebar />
+        <main className="flex-1 min-w-0 overflow-auto">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
