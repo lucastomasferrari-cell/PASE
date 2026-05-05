@@ -1,15 +1,15 @@
 import type { ReactNode } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { db } from '../lib/supabase';
 
 interface Props {
-  children: ReactNode;
+  children?: ReactNode;
 }
 
 // Gate de rutas autenticadas. Si no hay sesión redirige a /login.
 // Si hay sesión renderiza el header global (email + cerrar sesión)
-// y el contenido debajo.
+// y el contenido debajo. Acepta children (Sprint 1) u Outlet (Sprint 2).
 export function ProtectedShell({ children }: Props) {
   const { user, loading, error } = useAuth();
   const navigate = useNavigate();
@@ -46,7 +46,7 @@ export function ProtectedShell({ children }: Props) {
           </button>
         </div>
       </header>
-      {children}
+      {children ?? <Outlet />}
     </>
   );
 }
