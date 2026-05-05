@@ -7,7 +7,11 @@ import { PinPad } from '../pages/Pos/PinPad';
 export function PinGate() {
   const { empleado, loading } = useAuthPos();
   if (loading) {
-    return <div style={{ minHeight: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280' }}>Cargando…</div>;
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center text-muted-foreground">
+        Cargando…
+      </div>
+    );
   }
   if (!empleado) return <PinPad />;
   return <Outlet />;

@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { Plus, Pencil, X, Settings2 } from 'lucide-react';
 import type { Usuario } from '../../types/auth';
 import type { ModifierGroup, Modifier, ModifierTipo } from '../../types/database';
 import {
@@ -11,6 +12,18 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { MoneyInput } from '../../components/MoneyInput';
 import { validarNombre, validarMinMax } from '../../lib/validate';
 import { formatARS } from '../../lib/format';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 
 interface Props { user: Usuario }
 
@@ -35,35 +48,56 @@ export function ModificadoresTab({ user }: Props) {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+      <div className="flex items-center justify-between mb-6">
+        <p className="text-sm text-muted-foreground">
           Grupos de modificadores reusables. Cada grupo se asigna a varios items.
         </p>
         {puedeEditar && (
-          <button type="button" onClick={() => setEditing('new')} style={btnPrimary}>+ Nuevo grupo</button>
+          <Button size="lg" onClick={() => setEditing('new')}>
+            <Plus className="h-5 w-5" />
+            Nuevo grupo
+          </Button>
         )}
       </div>
 
-      {error && <div style={{ padding: 10, background: '#FEE2E2', color: '#991B1B', borderRadius: 6, marginBottom: 12 }}>{error}</div>}
+      {error && (
+        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
+      )}
 
-      {loading && <div style={{ padding: 24, textAlign: 'center', color: '#6B7280' }}>Cargando…</div>}
-      {!loading && groups.length === 0 && (
-        <div style={{ padding: 32, border: '1px dashed #D1D5DB', borderRadius: 8, textAlign: 'center', color: '#6B7280' }}>
-          No hay grupos de modificadores. Tocá "+ Nuevo grupo" para crear el primero.
+      {loading ? (
+        <Card><CardContent className="py-16 text-center text-muted-foreground">Cargando…</CardContent></Card>
+      ) : groups.length === 0 ? (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-muted mb-4">
+              <Settings2 className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-medium mb-1">Sin grupos de modificadores</h3>
+            <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-6">
+              Los modificadores son opciones (cocción, extras, sin sal) que se asignan a items.
+            </p>
+            {puedeEditar && (
+              <Button onClick={() => setEditing('new')}>
+                <Plus className="h-5 w-5" />
+                Crear primer grupo
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {groups.map((g) => (
+            <ModifierGroupCard
+              key={g.id}
+              group={g}
+              puedeEditar={puedeEditar}
+              tenantId={user.tenant_id}
+              onEdit={() => setEditing(g)}
+              onDelete={() => setConfirmDelete(g)}
+            />
+          ))}
         </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 12 }}>
-        {groups.map((g) => (
-          <ModifierGroupCard
-            key={g.id}
-            group={g}
-            puedeEditar={puedeEditar}
-            tenantId={user.tenant_id}
-            onEdit={() => setEditing(g)}
-            onDelete={() => setConfirmDelete(g)}
-          />
-        ))}
-      </div>
 
       {editing && (
         <GroupForm
@@ -130,92 +164,120 @@ function ModifierGroupCard({ group, puedeEditar, tenantId, onEdit, onDelete }: C
   }
 
   return (
-    <div style={{ border: '1px solid #E5E7EB', borderRadius: 8, padding: 12, background: '#FFFFFF' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <div>
-          <strong>{group.nombre}</strong>
-          <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
-            <Badge variant="violet">{tipoLabel(group.tipo)}</Badge>
-            {group.requerido && <Badge variant="amber">Requerido</Badge>}
-            <Badge variant="gray">
-              min {group.min_seleccion} / max {group.max_seleccion ?? '∞'}
-            </Badge>
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <strong className="text-base">{group.nombre}</strong>
+            <div className="flex gap-1 mt-1 flex-wrap">
+              <Badge variant="violet">{tipoLabel(group.tipo)}</Badge>
+              {group.requerido && <Badge variant="amber">Requerido</Badge>}
+              <Badge variant="gray">
+                min {group.min_seleccion} / max {group.max_seleccion ?? '∞'}
+              </Badge>
+            </div>
           </div>
+          {puedeEditar && (
+            <div className="flex gap-1 flex-shrink-0">
+              <Button variant="ghost" size="sm" onClick={onEdit}>
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={onDelete}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
         </div>
-        {puedeEditar && (
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button type="button" onClick={onEdit} style={btnSm}>Editar</button>
-            <button type="button" onClick={onDelete} style={{ ...btnSm, color: '#DC2626' }}>×</button>
-          </div>
+
+        {group.descripcion && (
+          <div className="mt-2 text-sm text-muted-foreground">{group.descripcion}</div>
         )}
-      </div>
 
-      {group.descripcion && <div style={{ marginTop: 8, fontSize: 13, color: '#6B7280' }}>{group.descripcion}</div>}
-
-      <div style={{ marginTop: 12, borderTop: '1px solid #F3F4F6', paddingTop: 12 }}>
-        <div style={{ fontSize: 12, fontWeight: 500, color: '#374151', marginBottom: 6 }}>Opciones</div>
-        {loading && <div style={{ fontSize: 12, color: '#9CA3AF' }}>…</div>}
-        {!loading && opciones.length === 0 && <div style={{ fontSize: 12, color: '#9CA3AF' }}>Sin opciones</div>}
-        {opciones.map((op) => (
-          <div key={op.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0', fontSize: 13 }}>
-            <span>{op.nombre}</span>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              {Number(op.precio_extra) > 0 && <span style={{ fontSize: 11, color: '#059669' }}>+{formatARS(op.precio_extra)}</span>}
-              {puedeEditar && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!confirm(`Borrar opción "${op.nombre}"?`)) return;
-                    await softDeleteModifier(op.id);
-                    reload();
-                  }}
-                  style={{ ...btnSm, padding: '2px 8px', fontSize: 11 }}
-                >×</button>
-              )}
-              {puedeEditar && (
-                <ToggleActivo
-                  initial={op.activo}
-                  onChange={async (v) => { await updateModifier(op.id, { activo: v }); reload(); }}
-                />
-              )}
+        <div className="mt-3 pt-3 border-t border-border">
+          <div className="text-xs font-medium text-foreground mb-2">Opciones</div>
+          {loading && <div className="text-xs text-muted-foreground">…</div>}
+          {!loading && opciones.length === 0 && (
+            <div className="text-xs text-muted-foreground">Sin opciones</div>
+          )}
+          {opciones.map((op) => (
+            <div key={op.id} className="flex items-center justify-between py-1 text-sm">
+              <span>{op.nombre}</span>
+              <div className="flex gap-2 items-center">
+                {Number(op.precio_extra) > 0 && (
+                  <span className="text-xs text-success tabular-nums">
+                    +{formatARS(op.precio_extra)}
+                  </span>
+                )}
+                {puedeEditar && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={async () => {
+                      if (!confirm(`Borrar opción "${op.nombre}"?`)) return;
+                      await softDeleteModifier(op.id);
+                      reload();
+                    }}
+                    aria-label={`Borrar ${op.nombre}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                )}
+                {puedeEditar && (
+                  <Switch
+                    checked={op.activo}
+                    onCheckedChange={async (v) => { await updateModifier(op.id, { activo: v }); reload(); }}
+                    aria-label={`Activar ${op.nombre}`}
+                  />
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
 
-        {puedeEditar && !showAdd && (
-          <button type="button" onClick={() => setShowAdd(true)} style={{ ...btnSm, marginTop: 8, fontSize: 12 }}>+ Agregar opción</button>
-        )}
-        {puedeEditar && showAdd && (
-          <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
-            <input
-              value={nuevoNombre}
-              onChange={(e) => setNuevoNombre(e.target.value)}
-              placeholder="Nombre"
-              autoFocus
-              style={{ flex: 2, padding: '4px 8px', fontSize: 12, border: '1px solid #D1D5DB', borderRadius: 4 }}
-            />
-            <div style={{ flex: 1 }}>
-              <MoneyInput value={nuevoPrecio} onChange={setNuevoPrecio} placeholder="$0,00" className="h-9 text-xs" />
+          {puedeEditar && !showAdd && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2 text-xs"
+              onClick={() => setShowAdd(true)}
+            >
+              <Plus className="h-3 w-3" />
+              Agregar opción
+            </Button>
+          )}
+          {puedeEditar && showAdd && (
+            <div className="mt-2 flex gap-1.5">
+              <Input
+                value={nuevoNombre}
+                onChange={(e) => setNuevoNombre(e.target.value)}
+                placeholder="Nombre"
+                autoFocus
+                className="h-9 text-xs flex-[2]"
+              />
+              <div className="flex-1">
+                <MoneyInput value={nuevoPrecio} onChange={setNuevoPrecio} placeholder="$0,00" className="h-9 text-xs" />
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={addOpcion}>
+                OK
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => { setShowAdd(false); setNuevoNombre(''); setNuevoPrecio(0); }}
+              >
+                <X className="h-3 w-3" />
+              </Button>
             </div>
-            <button type="button" onClick={addOpcion} style={{ ...btnSm, fontSize: 12 }}>OK</button>
-            <button type="button" onClick={() => { setShowAdd(false); setNuevoNombre(''); setNuevoPrecio(0); }} style={{ ...btnSm, fontSize: 12 }}>×</button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ToggleActivo({ initial, onChange }: { initial: boolean; onChange: (v: boolean) => void }) {
-  const [v, setV] = useState(initial);
-  return (
-    <input
-      type="checkbox"
-      checked={v}
-      onChange={(e) => { setV(e.target.checked); onChange(e.target.checked); }}
-      title="Activo"
-      style={{ cursor: 'pointer' }}
-    />
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -256,59 +318,74 @@ function GroupForm({ user, group, onClose, onSaved }: { user: Usuario; group: Mo
   }
 
   return (
-    <div role="dialog" aria-modal="true" style={overlay} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <form onSubmit={onSubmit} style={modal}>
-        <h3 style={{ margin: 0, fontSize: 18, marginBottom: 16 }}>{group ? 'Editar grupo' : 'Nuevo grupo de modificadores'}</h3>
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{group ? 'Editar grupo' : 'Nuevo grupo de modificadores'}</DialogTitle>
+        </DialogHeader>
 
-        <Field label="Nombre *"><input value={nombre} onChange={(e) => setNombre(e.target.value)} required style={input} autoFocus /></Field>
-        <Field label="Descripción"><textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} style={{ ...input, minHeight: 50 }} /></Field>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="m-nombre">Nombre *</Label>
+            <Input id="m-nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} required autoFocus className="h-11" />
+          </div>
 
-        <Field label="Tipo">
-          <select value={tipo} onChange={(e) => setTipo(e.target.value as ModifierTipo)} style={input}>
-            <option value="opcion">Opción única (cocción)</option>
-            <option value="extra">Extra múltiple (guarniciones)</option>
-            <option value="aclaracion">Aclaración (texto libre)</option>
-            <option value="sin_con">Sin / Con (ingredientes)</option>
-          </select>
-        </Field>
+          <div className="space-y-2">
+            <Label htmlFor="m-desc">Descripción</Label>
+            <Textarea id="m-desc" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} />
+          </div>
 
-        <Field label="">
-          <label style={{ fontSize: 14 }}>
-            <input type="checkbox" checked={requerido} onChange={(e) => setRequerido(e.target.checked)} /> Requerido
-          </label>
-        </Field>
+          <div className="space-y-2">
+            <Label>Tipo</Label>
+            <Select value={tipo} onValueChange={(v) => setTipo(v as ModifierTipo)}>
+              <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="opcion">Opción única (cocción)</SelectItem>
+                <SelectItem value="extra">Extra múltiple (guarniciones)</SelectItem>
+                <SelectItem value="aclaracion">Aclaración (texto libre)</SelectItem>
+                <SelectItem value="sin_con">Sin / Con (ingredientes)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="Mín selección"><input type="number" min={0} value={minSel} onChange={(e) => setMinSel(Number(e.target.value))} style={input} /></Field>
-          <Field label="Máx selección (vacío = sin límite)">
-            <input type="number" min={0} value={maxSel ?? ''} onChange={(e) => setMaxSel(e.target.value ? Number(e.target.value) : null)} style={input} />
-          </Field>
-        </div>
+          <div className="flex items-center justify-between rounded-md border border-border p-3">
+            <Label className="cursor-pointer">Requerido</Label>
+            <Switch checked={requerido} onCheckedChange={setRequerido} />
+          </div>
 
-        {error && <div style={errBox}>{error}</div>}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="m-min">Mín selección</Label>
+              <Input
+                id="m-min" type="number" min={0} value={minSel}
+                onChange={(e) => setMinSel(Number(e.target.value))}
+                className="h-11 tabular-nums"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="m-max">Máx selección (vacío = sin límite)</Label>
+              <Input
+                id="m-max" type="number" min={0} value={maxSel ?? ''}
+                onChange={(e) => setMaxSel(e.target.value ? Number(e.target.value) : null)}
+                className="h-11 tabular-nums"
+              />
+            </div>
+          </div>
 
-        <div style={{ marginTop: 20, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button type="button" onClick={onClose} style={btnSecondary}>Cancelar</button>
-          <button type="submit" disabled={saving} style={btnPrimary}>{saving ? 'Guardando…' : 'Guardar'}</button>
-        </div>
-      </form>
-    </div>
+          {error && (
+            <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
+          )}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? 'Guardando…' : 'Guardar'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label style={{ display: 'block', marginBottom: 12, fontSize: 13 }}>
-      {label && <div style={{ marginBottom: 4, fontWeight: 500, color: '#374151' }}>{label}</div>}
-      {children}
-    </label>
-  );
-}
-
-const btnSm: React.CSSProperties = { padding: '4px 10px', border: '1px solid #D1D5DB', borderRadius: 4, background: '#FFFFFF', cursor: 'pointer', fontSize: 12 };
-const btnPrimary: React.CSSProperties = { padding: '8px 16px', border: 'none', borderRadius: 6, background: '#2563EB', color: '#FFFFFF', cursor: 'pointer', fontSize: 14, fontWeight: 500 };
-const btnSecondary: React.CSSProperties = { padding: '6px 14px', border: '1px solid #D1D5DB', borderRadius: 6, background: '#FFFFFF', cursor: 'pointer', fontSize: 14 };
-const input: React.CSSProperties = { padding: '6px 10px', border: '1px solid #D1D5DB', borderRadius: 6, fontSize: 14, width: '100%', fontFamily: 'inherit' };
-const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 };
-const modal: React.CSSProperties = { background: '#FFFFFF', borderRadius: 8, padding: 24, maxWidth: 480, width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' };
-const errBox: React.CSSProperties = { padding: 10, background: '#FEE2E2', color: '#991B1B', borderRadius: 6, fontSize: 13, marginTop: 8 };

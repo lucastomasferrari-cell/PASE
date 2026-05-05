@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
+import { Link2, Pencil, TrendingUp } from 'lucide-react';
 import type { Usuario } from '../../types/auth';
 import type { Canal, ItemGrupo, ItemPrecioCanal, Item } from '../../types/database';
 import { listItems } from '../../services/itemsService';
@@ -9,6 +10,12 @@ import { tienePermiso } from '../../lib/auth';
 import { formatARS, parseARS, relativoCorto } from '../../lib/format';
 import { SearchInput } from '../../components/SearchInput';
 import { AumentoMasivoDialog } from './AumentoMasivoDialog';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 interface Props { user: Usuario }
 
@@ -18,7 +25,7 @@ export function ListaPreciosTab({ user }: Props) {
   const [canales, setCanales] = useState<Canal[]>([]);
   const [precios, setPrecios] = useState<ItemPrecioCanal[]>([]);
   const [search, setSearch] = useState('');
-  const [grupoFilter, setGrupoFilter] = useState<number | null>(null);
+  const [grupoFilter, setGrupoFilter] = useState<string>('todos');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAumento, setShowAumento] = useState(false);
@@ -46,25 +53,23 @@ export function ListaPreciosTab({ user }: Props) {
   useEffect(() => { reload(); }, [reload]);
 
   const itemsFiltrados = useMemo(() => {
+    const grupoIdNum = grupoFilter === 'todos' ? null : Number(grupoFilter);
     return items.filter((i) => {
-      if (grupoFilter !== null && i.grupo_id !== grupoFilter) return false;
+      if (grupoIdNum !== null && i.grupo_id !== grupoIdNum) return false;
       if (search.trim() && !i.nombre.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
   }, [items, search, grupoFilter]);
 
-  // Map (item_id, canal_id) → ipc
   const precioMap = useMemo(() => {
     const m = new Map<string, ItemPrecioCanal>();
     for (const p of precios) m.set(`${p.item_id}-${p.canal_id}`, p);
     return m;
   }, [precios]);
 
-  // Calcula precio efectivo: si hay ipc usa ese, si no calcula desde madre + canal.atado_madre
   function precioEfectivo(item: Item, canal: Canal): { valor: number; manual: boolean; existe: boolean } {
     const ipc = precioMap.get(`${item.id}-${canal.id}`);
     if (ipc) return { valor: Number(ipc.precio), manual: ipc.edicion_manual, existe: true };
-    // Calcular implícito desde madre
     const ajustado = Number(item.precio_madre) * (1 + Number(canal.ajuste_madre_pct) / 100);
     const redondeado = Math.round(ajustado / canal.redondeo_a) * canal.redondeo_a;
     return { valor: redondeado, manual: false, existe: false };
@@ -72,59 +77,92 @@ export function ListaPreciosTab({ user }: Props) {
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
-        <div style={{ flex: '1 1 240px', minWidth: 200 }}>
+      <div className="flex gap-3 items-center flex-wrap mb-4">
+        <div className="flex-1 min-w-[240px]">
           <SearchInput value={search} onChange={setSearch} placeholder="Buscar item…" />
         </div>
-        <select
-          value={grupoFilter ?? ''}
-          onChange={(e) => setGrupoFilter(e.target.value ? Number(e.target.value) : null)}
-          style={{ padding: '6px 10px', border: '1px solid #D1D5DB', borderRadius: 6, fontSize: 14 }}
-        >
-          <option value="">Todos los grupos</option>
-          {grupos.map((g) => <option key={g.id} value={g.id}>{g.emoji ?? ''} {g.nombre}</option>)}
-        </select>
-        <div style={{ flex: 1, fontSize: 12, color: '#6B7280', textAlign: 'right' }}>
+        <Select value={grupoFilter} onValueChange={setGrupoFilter}>
+          <SelectTrigger className="w-[200px] h-11">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos los grupos</SelectItem>
+            {grupos.map((g) => (
+              <SelectItem key={g.id} value={String(g.id)}>{g.emoji ?? ''} {g.nombre}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="flex-1 text-xs text-muted-foreground text-right">
           {itemsFiltrados.length} items
           {lastChange && <> · última modificación {relativoCorto(lastChange)}</>}
         </div>
         {puedeAumento && (
-          <button type="button" onClick={() => setShowAumento(true)} style={btnPrimary}>📈 Aumento masivo</button>
+          <Button size="lg" onClick={() => setShowAumento(true)}>
+            <TrendingUp className="h-5 w-5" />
+            Aumento masivo
+          </Button>
         )}
       </div>
 
-      {error && <div style={{ padding: 10, background: '#FEE2E2', color: '#991B1B', borderRadius: 6, marginBottom: 12 }}>{error}</div>}
+      {error && (
+        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
+      )}
 
-      <div style={{ border: '1px solid #E5E7EB', borderRadius: 8, overflow: 'auto', maxHeight: '70vh' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead style={{ background: '#F9FAFB', position: 'sticky', top: 0, zIndex: 1 }}>
+      <Card className="overflow-auto max-h-[70vh]">
+        <table className="w-full border-collapse text-sm">
+          <thead className="sticky top-0 z-[1] bg-muted/40">
             <tr>
-              <th style={{ ...thSticky, left: 0, zIndex: 2, minWidth: 180 }}>Item</th>
-              <th style={{ ...th, background: '#FEF2F2', borderLeft: '2px solid #FCA5A5', minWidth: 120 }}>
-                🔗 Madre
+              <th className="text-left px-3 py-2 sticky left-0 z-[2] bg-muted/40 min-w-[180px] font-semibold text-xs uppercase tracking-wide text-muted-foreground border-b border-border">
+                Item
+              </th>
+              <th className="text-right px-3 py-2 min-w-[120px] font-semibold text-xs uppercase tracking-wide text-primary bg-primary/5 border-l-2 border-primary/30 border-b border-border">
+                <div className="flex items-center justify-end gap-1">
+                  <Link2 className="h-3 w-3" />
+                  Madre
+                </div>
               </th>
               {canales.map((c) => (
-                <th key={c.id} style={{ ...th, minWidth: 110 }}>
-                  <div>{c.emoji ?? ''} {c.nombre}</div>
-                  <div style={{ fontSize: 10, color: '#6B7280', fontWeight: 400 }}>
-                    {c.atado_madre ? `🔗 ${c.ajuste_madre_pct >= 0 ? '+' : ''}${Number(c.ajuste_madre_pct)}%` : '✏️ Indep'}
+                <th key={c.id} className="text-right px-3 py-2 min-w-[110px] font-semibold text-xs text-muted-foreground border-b border-border">
+                  <div className="text-foreground">{c.emoji ?? ''} {c.nombre}</div>
+                  <div className="text-[10px] font-normal text-muted-foreground">
+                    {c.atado_madre ? (
+                      <>
+                        <Link2 className="h-2.5 w-2.5 inline mr-0.5" />
+                        {c.ajuste_madre_pct >= 0 ? '+' : ''}{Number(c.ajuste_madre_pct)}%
+                      </>
+                    ) : (
+                      <>
+                        <Pencil className="h-2.5 w-2.5 inline mr-0.5" />
+                        Indep
+                      </>
+                    )}
                   </div>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {loading && <tr><td colSpan={2 + canales.length} style={{ padding: 24, textAlign: 'center', color: '#6B7280' }}>Cargando…</td></tr>}
+            {loading && (
+              <tr>
+                <td colSpan={2 + canales.length} className="py-12 text-center text-muted-foreground">
+                  Cargando…
+                </td>
+              </tr>
+            )}
             {!loading && itemsFiltrados.length === 0 && (
-              <tr><td colSpan={2 + canales.length} style={{ padding: 24, textAlign: 'center', color: '#6B7280' }}>Sin items.</td></tr>
+              <tr>
+                <td colSpan={2 + canales.length} className="py-12 text-center text-muted-foreground">
+                  Sin items.
+                </td>
+              </tr>
             )}
             {itemsFiltrados.map((it) => (
-              <tr key={it.id} style={{ borderTop: '1px solid #F3F4F6' }}>
-                <td style={{ ...tdSticky, left: 0, background: '#FFFFFF', zIndex: 1 }}>
-                  <span style={{ marginRight: 4 }}>{it.emoji ?? '📦'}</span>
+              <tr key={it.id} className="border-t border-border">
+                <td className="px-3 py-2 sticky left-0 z-[1] bg-card">
+                  <span className="mr-1">{it.emoji ?? '📦'}</span>
                   {it.nombre}
                 </td>
-                <td style={{ ...tdNum, background: '#FEF2F2', borderLeft: '2px solid #FCA5A5', fontWeight: 600 }}>
+                <td className="px-3 py-2 text-right tabular-nums font-semibold bg-primary/5 border-l-2 border-primary/30">
                   {formatARS(it.precio_madre)}
                 </td>
                 {canales.map((c) => {
@@ -146,10 +184,16 @@ export function ListaPreciosTab({ user }: Props) {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
 
-      <div style={{ marginTop: 12, fontSize: 12, color: '#6B7280' }}>
-        🔗 atado al madre · ✏️ editado a mano (sigue atado, próximo aumento masivo lo pisa)
+      <div className="mt-3 text-xs text-muted-foreground flex items-center gap-3 flex-wrap">
+        <span className="inline-flex items-center gap-1">
+          <Link2 className="h-3 w-3" /> atado al madre
+        </span>
+        <span>·</span>
+        <span className="inline-flex items-center gap-1">
+          <Pencil className="h-3 w-3 text-warning" /> editado a mano (sigue atado, próximo aumento masivo lo pisa)
+        </span>
       </div>
 
       {showAumento && (
@@ -198,40 +242,49 @@ function PrecioCell({ item, canal, precio, manual, editable, tenantId, onSaved }
     onSaved();
   }
 
-  const isEdited = manual;
-  const bg = isEdited ? '#D1FAE5' : '#F9FAFB';
-  const border = isEdited ? '1px solid #6EE7B7' : '1px solid transparent';
-  const indicador = isEdited ? '✏️ manual' : '🔗 atado';
-
   if (editing) {
     return (
-      <td style={{ ...tdNum, background: '#FFFBEB' }}>
+      <td className="px-2 py-1 bg-warning/10">
         <input
           autoFocus
           value={text}
           onChange={(e) => setText(e.target.value)}
           onBlur={commit}
-          onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setText(formatARS(precio)); setEditing(false); } }}
-          style={{ width: '100%', padding: 4, border: '1px solid #FCD34D', borderRadius: 4, fontSize: 13, textAlign: 'right' }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit();
+            if (e.key === 'Escape') { setText(formatARS(precio)); setEditing(false); }
+          }}
+          className="w-full px-1 py-1 border border-warning rounded bg-background text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-warning"
         />
       </td>
     );
   }
 
+  const isEdited = manual;
   return (
     <td
-      style={{ ...tdNum, background: bg, border, cursor: editable ? 'pointer' : 'default', position: 'relative' }}
+      className={cn(
+        'px-3 py-2 text-right tabular-nums text-sm',
+        isEdited ? 'bg-success/10 border border-success/30' : 'bg-muted/30',
+        editable ? 'cursor-pointer' : 'cursor-default',
+      )}
       onClick={() => editable && setEditing(true)}
-      title={`${formatARS(precio)} · ${indicador}`}
+      title={isEdited ? `${formatARS(precio)} · manual` : `${formatARS(precio)} · atado`}
     >
       {saving ? '…' : formatARS(precio)}
-      <div style={{ fontSize: 9, color: isEdited ? '#065F46' : '#6B7280' }}>{indicador}</div>
+      <div className="text-[9px] mt-0.5 inline-flex items-center justify-end w-full gap-0.5">
+        {isEdited ? (
+          <>
+            <Pencil className="h-2.5 w-2.5 text-success" />
+            <span className="text-success">manual</span>
+          </>
+        ) : (
+          <>
+            <Link2 className="h-2.5 w-2.5 text-muted-foreground" />
+            <span className="text-muted-foreground">atado</span>
+          </>
+        )}
+      </div>
     </td>
   );
 }
-
-const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: '#374151', fontSize: 12, background: '#F9FAFB' };
-const thSticky: React.CSSProperties = { ...th, position: 'sticky' };
-const tdNum: React.CSSProperties = { padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 13 };
-const tdSticky: React.CSSProperties = { padding: '6px 10px', position: 'sticky', fontSize: 13 };
-const btnPrimary: React.CSSProperties = { padding: '6px 14px', border: 'none', borderRadius: 6, background: '#2563EB', color: '#FFFFFF', cursor: 'pointer', fontSize: 14, fontWeight: 500 };

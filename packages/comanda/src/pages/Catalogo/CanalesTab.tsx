@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { Plus, Pencil, Link2, Pencil as PencilIcon, ShoppingBag } from 'lucide-react';
 import type { Usuario } from '../../types/auth';
 import type { Canal, ModoPos } from '../../types/database';
 import { listCanales, createCanal, updateCanal, toggleCanalActivo } from '../../services/canalesService';
@@ -7,6 +8,18 @@ import { tienePermiso } from '../../lib/auth';
 import { Badge } from '../../components/Badge';
 import { EmojiPicker } from '../../components/EmojiPicker';
 import { validarNombre, validarSlug, validarPorcentaje } from '../../lib/validate';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { DEFAULT_PICKER_COLOR } from '@/lib/utils';
 
 interface Props { user: Usuario }
 
@@ -30,68 +43,114 @@ export function CanalesTab({ user }: Props) {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+      <div className="flex items-center justify-between mb-6">
+        <p className="text-sm text-muted-foreground">{canales.length} canales</p>
         {puedeEditar && (
-          <button type="button" onClick={() => setEditing('new')} style={btnPrimary}>+ Nuevo canal</button>
+          <Button size="lg" onClick={() => setEditing('new')}>
+            <Plus className="h-5 w-5" />
+            Nuevo canal
+          </Button>
         )}
       </div>
 
-      {error && <div style={{ padding: 10, background: '#FEE2E2', color: '#991B1B', borderRadius: 6, marginBottom: 12 }}>{error}</div>}
+      {error && (
+        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
+      )}
 
-      <div style={{ border: '1px solid #E5E7EB', borderRadius: 8, overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-          <thead style={{ background: '#F9FAFB' }}>
-            <tr>
-              <th style={th}>Canal</th>
-              <th style={th}>Modo POS</th>
-              <th style={th}>Atadura</th>
-              <th style={{ ...th, textAlign: 'right' }}>Ajuste %</th>
-              <th style={{ ...th, textAlign: 'right' }}>Comisión %</th>
-              <th style={{ ...th, textAlign: 'right' }}>Redondeo</th>
-              <th style={th}>Activo</th>
-              <th style={th}>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#6B7280' }}>Cargando…</td></tr>}
-            {!loading && canales.length === 0 && <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#6B7280' }}>Sin canales.</td></tr>}
-            {canales.map((c) => (
-              <tr key={c.id} style={{ borderTop: '1px solid #E5E7EB' }}>
-                <td style={td}>
-                  <span style={{ marginRight: 6, fontSize: 18 }}>{c.emoji ?? '🛍️'}</span>
-                  <strong>{c.nombre}</strong>
-                  <div style={{ fontSize: 11, color: '#9CA3AF' }}>{c.slug}{c.grupo ? ` · ${c.grupo}` : ''}</div>
-                </td>
-                <td style={td}><Badge variant="blue">{c.modo_pos}</Badge></td>
-                <td style={td}>
-                  {c.atado_madre ? <Badge variant="violet">🔗 Atado al madre</Badge> : <Badge variant="gray">✏️ Independiente</Badge>}
-                </td>
-                <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{Number(c.ajuste_madre_pct).toFixed(2)}%</td>
-                <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{Number(c.comision_externa_pct).toFixed(2)}%</td>
-                <td style={{ ...td, textAlign: 'right' }}>{c.redondeo_a === 1 ? 'al peso' : `a $${c.redondeo_a}`}</td>
-                <td style={td}>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <input
-                      type="checkbox"
-                      checked={c.activo}
-                      disabled={!puedeEditar}
-                      onChange={async (e) => {
-                        const { error: err } = await toggleCanalActivo(c.id, e.target.checked);
-                        if (err) setError(err);
-                        reload();
-                      }}
-                    />
-                    {c.activo ? 'Sí' : 'No'}
-                  </label>
-                </td>
-                <td style={td}>
-                  {puedeEditar && <button type="button" onClick={() => setEditing(c)} style={btnSm}>Editar</button>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {loading ? (
+        <Card><CardContent className="py-16 text-center text-muted-foreground">Cargando…</CardContent></Card>
+      ) : canales.length === 0 ? (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-muted mb-4">
+              <ShoppingBag className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-medium mb-1">Sin canales configurados</h3>
+            <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-6">
+              Cada canal define dónde se vende y con qué ajuste de precio (Salón, Rappi, Tienda, etc.).
+            </p>
+            {puedeEditar && (
+              <Button onClick={() => setEditing('new')}>
+                <Plus className="h-5 w-5" />
+                Crear primer canal
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="overflow-hidden">
+          <div className="grid grid-cols-[2fr_120px_180px_100px_100px_120px_100px_140px] gap-4 px-6 py-3 border-b border-border bg-muted/40 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <div>Canal</div>
+            <div>Modo POS</div>
+            <div>Atadura</div>
+            <div className="text-right">Ajuste vs Madre</div>
+            <div className="text-right">Comisión</div>
+            <div className="text-right">Redondeo</div>
+            <div>Activo</div>
+            <div className="text-right">Acciones</div>
+          </div>
+          {canales.map((c, idx) => (
+            <div
+              key={c.id}
+              className={`grid grid-cols-[2fr_120px_180px_100px_100px_120px_100px_140px] gap-4 px-6 py-4 items-center transition-colors hover:bg-muted/30 ${
+                idx !== canales.length - 1 ? 'border-b border-border' : ''
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-lg flex-shrink-0">{c.emoji ?? '🛍️'}</span>
+                <div className="min-w-0">
+                  <div className="font-medium truncate">{c.nombre}</div>
+                  <div className="text-xs text-muted-foreground truncate">
+                    {c.slug}{c.grupo ? ` · ${c.grupo}` : ''}
+                  </div>
+                </div>
+              </div>
+              <div><Badge variant="blue">{c.modo_pos}</Badge></div>
+              <div>
+                {c.atado_madre ? (
+                  <Badge variant="violet">
+                    <Link2 className="h-3 w-3 mr-1 inline" />
+                    Atado al madre
+                  </Badge>
+                ) : (
+                  <Badge variant="gray">
+                    <PencilIcon className="h-3 w-3 mr-1 inline" />
+                    Independiente
+                  </Badge>
+                )}
+              </div>
+              <div className="text-right tabular-nums text-sm">
+                {Number(c.ajuste_madre_pct) > 0 ? '+' : ''}{Number(c.ajuste_madre_pct).toFixed(2)}%
+              </div>
+              <div className="text-right tabular-nums text-sm">
+                {Number(c.comision_externa_pct).toFixed(2)}%
+              </div>
+              <div className="text-right text-sm text-muted-foreground">
+                {c.redondeo_a === 1 ? 'al peso' : `a $${c.redondeo_a}`}
+              </div>
+              <div>
+                <Switch
+                  checked={c.activo}
+                  disabled={!puedeEditar}
+                  onCheckedChange={async (checked) => {
+                    const { error: err } = await toggleCanalActivo(c.id, checked);
+                    if (err) setError(err);
+                    reload();
+                  }}
+                />
+              </div>
+              <div className="flex justify-end">
+                {puedeEditar && (
+                  <Button variant="ghost" size="sm" onClick={() => setEditing(c)}>
+                    <Pencil className="h-4 w-4" />
+                    Editar
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </Card>
+      )}
 
       {editing && (
         <CanalForm
@@ -109,7 +168,7 @@ function CanalForm({ user, canal, onClose, onSaved }: { user: Usuario; canal: Ca
   const [nombre, setNombre] = useState(canal?.nombre ?? '');
   const [slug, setSlug] = useState(canal?.slug ?? '');
   const [emoji, setEmoji] = useState<string | null>(canal?.emoji ?? null);
-  const [color, setColor] = useState(canal?.color ?? '#9CA3AF');
+  const [color, setColor] = useState(canal?.color ?? DEFAULT_PICKER_COLOR);
   const [modoPos, setModoPos] = useState<ModoPos>(canal?.modo_pos ?? 'salon');
   const [atadoMadre, setAtadoMadre] = useState(canal?.atado_madre ?? true);
   const [ajustePct, setAjustePct] = useState<number>(canal?.ajuste_madre_pct ?? 0);
@@ -143,82 +202,120 @@ function CanalForm({ user, canal, onClose, onSaved }: { user: Usuario; canal: Ca
   }
 
   return (
-    <div role="dialog" aria-modal="true" style={overlay} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <form onSubmit={onSubmit} style={modalBody}>
-        <h3 style={{ margin: 0, marginBottom: 16, fontSize: 18 }}>{canal ? 'Editar canal' : 'Nuevo canal'}</h3>
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{canal ? 'Editar canal' : 'Nuevo canal'}</DialogTitle>
+        </DialogHeader>
 
-        <Field label="Emoji"><EmojiPicker value={emoji} onChange={setEmoji} /></Field>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-          <Field label="Nombre *"><input value={nombre} onChange={(e) => setNombre(e.target.value)} required style={input} autoFocus /></Field>
-          <Field label="Color"><input type="color" value={color} onChange={(e) => setColor(e.target.value)} style={{ ...input, padding: 2, height: 38 }} /></Field>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="Slug *"><input value={slug} onChange={(e) => setSlug(e.target.value)} required placeholder="rappi" style={input} /></Field>
-          <Field label="Modo POS *">
-            <select value={modoPos} onChange={(e) => setModoPos(e.target.value as ModoPos)} style={input}>
-              <option value="salon">Salón</option>
-              <option value="mostrador">Mostrador</option>
-              <option value="pedidos">Pedidos</option>
-            </select>
-          </Field>
-        </div>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label>Emoji</Label>
+            <EmojiPicker value={emoji} onChange={setEmoji} />
+          </div>
 
-        <Field label="">
-          <label style={{ fontSize: 14 }}>
-            <input type="checkbox" checked={atadoMadre} onChange={(e) => setAtadoMadre(e.target.checked)} />
-            {' '}🔗 Atado al precio madre (recálculo automático)
-          </label>
-        </Field>
+          <div className="grid grid-cols-[2fr_1fr] gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="c-nombre">Nombre *</Label>
+              <Input id="c-nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} required autoFocus className="h-11" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="c-color">Color</Label>
+              <Input id="c-color" type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-11 p-1" />
+            </div>
+          </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-          <Field label="Ajuste %"><input type="number" step="0.01" value={ajustePct} onChange={(e) => setAjustePct(Number(e.target.value))} style={input} /></Field>
-          <Field label="Comisión %"><input type="number" step="0.01" value={comisionPct} onChange={(e) => setComisionPct(Number(e.target.value))} style={input} /></Field>
-          <Field label="Redondeo a">
-            <select value={redondeoA} onChange={(e) => setRedondeoA(Number(e.target.value))} style={input}>
-              <option value={1}>Al peso</option>
-              <option value={10}>Decena</option>
-              <option value={100}>Centena</option>
-            </select>
-          </Field>
-        </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="c-slug">Slug *</Label>
+              <Input id="c-slug" value={slug} onChange={(e) => setSlug(e.target.value)} required placeholder="rappi" className="h-11" />
+            </div>
+            <div className="space-y-2">
+              <Label>Modo POS *</Label>
+              <Select value={modoPos} onValueChange={(v) => setModoPos(v as ModoPos)}>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="salon">Salón</SelectItem>
+                  <SelectItem value="mostrador">Mostrador</SelectItem>
+                  <SelectItem value="pedidos">Pedidos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="Grupo (opcional)">
-            <input value={grupo} onChange={(e) => setGrupo(e.target.value)} placeholder="presencial / third-party / online-propio" style={input} />
-          </Field>
-          <Field label="">
-            <label style={{ fontSize: 14 }}>
-              <input type="checkbox" checked={activo} onChange={(e) => setActivo(e.target.checked)} /> Activo
-            </label>
-          </Field>
-        </div>
+          <div className="flex items-center justify-between rounded-md border border-border p-3">
+            <div className="flex items-center gap-2">
+              <Link2 className="h-4 w-4 text-primary" />
+              <Label className="cursor-pointer">Atado al precio madre (recálculo automático)</Label>
+            </div>
+            <Switch checked={atadoMadre} onCheckedChange={setAtadoMadre} />
+          </div>
 
-        {error && <div style={errBox}>{error}</div>}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="c-ajuste">Ajuste %</Label>
+              <Input
+                id="c-ajuste"
+                type="number" step="0.01" value={ajustePct}
+                onChange={(e) => setAjustePct(Number(e.target.value))}
+                className="h-11 tabular-nums"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="c-comision">Comisión %</Label>
+              <Input
+                id="c-comision"
+                type="number" step="0.01" value={comisionPct}
+                onChange={(e) => setComisionPct(Number(e.target.value))}
+                className="h-11 tabular-nums"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Redondeo a</Label>
+              <Select value={String(redondeoA)} onValueChange={(v) => setRedondeoA(Number(v))}>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">Al peso</SelectItem>
+                  <SelectItem value="10">Decena</SelectItem>
+                  <SelectItem value="100">Centena</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
-        <div style={{ marginTop: 20, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button type="button" onClick={onClose} style={btnSecondary}>Cancelar</button>
-          <button type="submit" disabled={saving} style={btnPrimary}>{saving ? 'Guardando…' : 'Guardar'}</button>
-        </div>
-      </form>
-    </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="c-grupo">Grupo (opcional)</Label>
+              <Input
+                id="c-grupo"
+                value={grupo}
+                onChange={(e) => setGrupo(e.target.value)}
+                placeholder="presencial / third-party / online-propio"
+                className="h-11"
+              />
+            </div>
+            <div className="flex items-end">
+              <div className="flex items-center justify-between rounded-md border border-border p-3 w-full h-11">
+                <Label className="cursor-pointer">Activo</Label>
+                <Switch checked={activo} onCheckedChange={setActivo} />
+              </div>
+            </div>
+          </div>
+
+          {error && (
+            <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
+          )}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? 'Guardando…' : 'Guardar'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label style={{ display: 'block', marginBottom: 12, fontSize: 13 }}>
-      {label && <div style={{ marginBottom: 4, fontWeight: 500, color: '#374151' }}>{label}</div>}
-      {children}
-    </label>
-  );
-}
-
-const th: React.CSSProperties = { textAlign: 'left', padding: '10px 12px', fontWeight: 600, color: '#374151', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 };
-const td: React.CSSProperties = { padding: '10px 12px', verticalAlign: 'middle' };
-const btnSm: React.CSSProperties = { padding: '4px 10px', border: '1px solid #D1D5DB', borderRadius: 4, background: '#FFFFFF', cursor: 'pointer', fontSize: 12 };
-const btnPrimary: React.CSSProperties = { padding: '8px 16px', border: 'none', borderRadius: 6, background: '#2563EB', color: '#FFFFFF', cursor: 'pointer', fontSize: 14, fontWeight: 500 };
-const btnSecondary: React.CSSProperties = { padding: '6px 14px', border: '1px solid #D1D5DB', borderRadius: 6, background: '#FFFFFF', cursor: 'pointer', fontSize: 14 };
-const input: React.CSSProperties = { padding: '6px 10px', border: '1px solid #D1D5DB', borderRadius: 6, fontSize: 14, width: '100%', fontFamily: 'inherit' };
-const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 };
-const modalBody: React.CSSProperties = { background: '#FFFFFF', borderRadius: 8, padding: 24, maxWidth: 560, width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' };
-const errBox: React.CSSProperties = { padding: 10, background: '#FEE2E2', color: '#991B1B', borderRadius: 6, fontSize: 13, marginTop: 8 };

@@ -4,6 +4,15 @@ import type { ItemGrupo } from '../../types/database';
 import { aumentoMasivo } from '../../services/preciosService';
 import { translateError } from '../../lib/errors';
 import { validarPorcentaje } from '../../lib/validate';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 
 interface Props {
   user: Usuario;
@@ -20,7 +29,7 @@ export function AumentoMasivoDialog({ user, grupos, totalItems, onClose, onDone 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const itemsPreview = grupoId === null ? totalItems : null; // si es por grupo no preconozco el count
+  const itemsPreview = grupoId === null ? totalItems : null;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,63 +50,86 @@ export function AumentoMasivoDialog({ user, grupos, totalItems, onClose, onDone 
   }
 
   return (
-    <div role="dialog" aria-modal="true" style={overlay} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <form onSubmit={onSubmit} style={modal}>
-        <h3 style={{ margin: 0, marginBottom: 4, fontSize: 18 }}>Aumento masivo de precios</h3>
-        <p style={{ margin: 0, fontSize: 13, color: '#6B7280', marginBottom: 16 }}>
-          Sube el precio madre y recalcula los precios de los canales atados.
-          La edición manual queda pisada.
-        </p>
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Aumento masivo de precios</DialogTitle>
+          <DialogDescription>
+            Sube el precio madre y recalcula los precios de los canales atados.
+            La edición manual queda pisada.
+          </DialogDescription>
+        </DialogHeader>
 
-        <Field label="Grupo a afectar">
-          <select value={grupoId ?? ''} onChange={(e) => setGrupoId(e.target.value ? Number(e.target.value) : null)} style={input}>
-            <option value="">Todos los grupos</option>
-            {grupos.map((g) => <option key={g.id} value={g.id}>{g.emoji ?? ''} {g.nombre}</option>)}
-          </select>
-        </Field>
-
-        <Field label="Porcentaje (positivo o negativo)">
-          <input type="number" step="0.01" value={porcentaje} onChange={(e) => setPorcentaje(Number(e.target.value))} style={input} required autoFocus />
-          <div style={{ fontSize: 11, color: '#6B7280', marginTop: 4 }}>Ej: 15 = +15%, -5 = -5%</div>
-        </Field>
-
-        <Field label="Redondear a">
-          <select value={redondeoA} onChange={(e) => setRedondeoA(Number(e.target.value))} style={input}>
-            <option value={1}>Al peso</option>
-            <option value={10}>Decena</option>
-            <option value={100}>Centena</option>
-          </select>
-        </Field>
-
-        {itemsPreview !== null && (
-          <div style={{ padding: 10, background: '#F3F4F6', borderRadius: 6, fontSize: 13 }}>
-            Aproximadamente <strong>{itemsPreview}</strong> items afectados.
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label>Grupo a afectar</Label>
+            <Select
+              value={grupoId === null ? '_all' : String(grupoId)}
+              onValueChange={(v) => setGrupoId(v === '_all' ? null : Number(v))}
+            >
+              <SelectTrigger className="h-11">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_all">Todos los grupos</SelectItem>
+                {grupos.map((g) => (
+                  <SelectItem key={g.id} value={String(g.id)}>
+                    {g.emoji ?? ''} {g.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        )}
 
-        {error && <div style={errBox}>{error}</div>}
+          <div className="space-y-2">
+            <Label htmlFor="porcentaje">Porcentaje (positivo o negativo)</Label>
+            <Input
+              id="porcentaje"
+              type="number"
+              step="0.01"
+              value={porcentaje}
+              onChange={(e) => setPorcentaje(Number(e.target.value))}
+              required
+              autoFocus
+              className="h-11 tabular-nums"
+            />
+            <p className="text-xs text-muted-foreground">Ej: 15 = +15%, -5 = -5%</p>
+          </div>
 
-        <div style={{ marginTop: 20, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button type="button" onClick={onClose} style={btnSecondary}>Cancelar</button>
-          <button type="submit" disabled={saving} style={btnPrimary}>{saving ? 'Aplicando…' : 'Aplicar'}</button>
-        </div>
-      </form>
-    </div>
+          <div className="space-y-2">
+            <Label>Redondear a</Label>
+            <Select value={String(redondeoA)} onValueChange={(v) => setRedondeoA(Number(v))}>
+              <SelectTrigger className="h-11">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">Al peso</SelectItem>
+                <SelectItem value="10">Decena</SelectItem>
+                <SelectItem value="100">Centena</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {itemsPreview !== null && (
+            <div className="p-3 rounded-md bg-muted text-sm">
+              Aproximadamente <strong>{itemsPreview}</strong> items afectados.
+            </div>
+          )}
+
+          {error && (
+            <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
+          )}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? 'Aplicando…' : 'Aplicar'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label style={{ display: 'block', marginBottom: 12, fontSize: 13 }}>
-      <div style={{ marginBottom: 4, fontWeight: 500, color: '#374151' }}>{label}</div>
-      {children}
-    </label>
-  );
-}
-
-const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 };
-const modal: React.CSSProperties = { background: '#FFFFFF', borderRadius: 8, padding: 24, maxWidth: 460, width: '100%', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' };
-const input: React.CSSProperties = { padding: '6px 10px', border: '1px solid #D1D5DB', borderRadius: 6, fontSize: 14, width: '100%', fontFamily: 'inherit' };
-const btnPrimary: React.CSSProperties = { padding: '6px 14px', border: 'none', borderRadius: 6, background: '#2563EB', color: '#FFFFFF', cursor: 'pointer', fontSize: 14, fontWeight: 500 };
-const btnSecondary: React.CSSProperties = { padding: '6px 14px', border: '1px solid #D1D5DB', borderRadius: 6, background: '#FFFFFF', cursor: 'pointer', fontSize: 14 };
-const errBox: React.CSSProperties = { padding: 10, background: '#FEE2E2', color: '#991B1B', borderRadius: 6, fontSize: 13, marginTop: 8 };

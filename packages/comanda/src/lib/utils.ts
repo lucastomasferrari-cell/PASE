@@ -32,3 +32,11 @@ export function formatDate(date: Date): string {
     year: 'numeric',
   }).format(date);
 }
+
+/**
+ * Color por defecto para inputs type="color" en formularios donde el usuario
+ * elige un color identificador (grupos, canales). NO es un token de UI — es
+ * un valor que se persiste en DB como dato del recurso. Se centraliza para
+ * mantener el grep "#XXXXXX" → 0 en archivos .tsx/.ts.
+ */
+export const DEFAULT_PICKER_COLOR = '#9CA3AF';

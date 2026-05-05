@@ -8,6 +8,17 @@ import { recalcularAtadosDeItem } from '../../services/preciosService';
 import { validarNombre, validarPrecio } from '../../lib/validate';
 import { MoneyInput } from '../../components/MoneyInput';
 import { EmojiPicker } from '../../components/EmojiPicker';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 
 interface Props {
   user: Usuario;
@@ -17,8 +28,8 @@ interface Props {
   onSaved: () => void;
 }
 
-const ESTACIONES: { value: Estacion | ''; label: string }[] = [
-  { value: '',                label: '— heredar del grupo —' },
+const ESTACIONES: { value: Estacion | '_none'; label: string }[] = [
+  { value: '_none',           label: '— heredar del grupo —' },
   { value: 'cocina_caliente', label: 'Cocina caliente' },
   { value: 'cocina_fria',     label: 'Cocina fría' },
   { value: 'barra',           label: 'Barra' },
@@ -93,105 +104,158 @@ export function ItemForm({ user, grupos, item, onClose, onSaved }: Props) {
   }
 
   return (
-    <div
-      role="dialog" aria-modal="true"
-      style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <form
-        onSubmit={onSubmit}
-        style={{
-          background: '#FFFFFF', borderRadius: 8, padding: 24, maxWidth: 560, width: '100%',
-          maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
-        }}
-      >
-        <h3 style={{ margin: 0, fontSize: 18, marginBottom: 16 }}>{isEdit ? 'Editar item' : 'Nuevo item'}</h3>
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? 'Editar item' : 'Nuevo item'}</DialogTitle>
+        </DialogHeader>
 
-        <Field label="Emoji">
-          <EmojiPicker value={emoji} onChange={setEmoji} />
-        </Field>
-
-        <Field label="Nombre *">
-          <input value={nombre} onChange={(e) => setNombre(e.target.value)} required style={input} autoFocus />
-        </Field>
-
-        <Field label="Descripción">
-          <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} style={{ ...input, minHeight: 60 }} />
-        </Field>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="Código interno">
-            <input value={codigo} onChange={(e) => setCodigo(e.target.value)} style={input} />
-          </Field>
-          <Field label="Grupo">
-            <select value={grupoId ?? ''} onChange={(e) => setGrupoId(e.target.value ? Number(e.target.value) : null)} style={input}>
-              <option value="">— sin grupo —</option>
-              {grupos.map((g) => <option key={g.id} value={g.id}>{g.emoji ?? ''} {g.nombre}</option>)}
-            </select>
-          </Field>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="Precio madre *">
-            <MoneyInput value={precio} onChange={setPrecio} />
-          </Field>
-          <Field label="Tax rate">
-            <select value={taxRateId ?? ''} onChange={(e) => setTaxRateId(e.target.value ? Number(e.target.value) : null)} style={input}>
-              <option value="">— heredar del grupo —</option>
-              {taxRates.map((t) => <option key={t.id} value={t.id}>{t.nombre} ({t.porcentaje}%)</option>)}
-            </select>
-          </Field>
-        </div>
-
-        <Field label="Estación cocina">
-          <select value={estacion} onChange={(e) => setEstacion(e.target.value as Estacion | '')} style={input}>
-            {ESTACIONES.map((est) => <option key={est.value} value={est.value}>{est.label}</option>)}
-          </select>
-        </Field>
-
-        <Field label="Visibilidad">
-          <div style={{ display: 'flex', gap: 16, fontSize: 14 }}>
-            <label><input type="checkbox" checked={visiblePos} onChange={(e) => setVisiblePos(e.target.checked)} /> POS</label>
-            <label><input type="checkbox" checked={visibleQr} onChange={(e) => setVisibleQr(e.target.checked)} /> QR</label>
-            <label><input type="checkbox" checked={visibleTienda} onChange={(e) => setVisibleTienda(e.target.checked)} /> Tienda</label>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label>Emoji</Label>
+            <EmojiPicker value={emoji} onChange={setEmoji} />
           </div>
-        </Field>
 
-        <Field label="">
-          <label style={{ fontSize: 14 }}>
-            <input type="checkbox" checked={esCombo} onChange={(e) => setEsCombo(e.target.checked)} /> Es combo (la UI de componentes va en sprint siguiente)
-          </label>
-        </Field>
+          <div className="space-y-2">
+            <Label htmlFor="nombre">Nombre *</Label>
+            <Input
+              id="nombre"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              required
+              autoFocus
+              className="h-11"
+            />
+          </div>
 
-        {error && <div style={{ padding: 10, background: '#FEE2E2', color: '#991B1B', borderRadius: 6, fontSize: 13, marginTop: 8 }}>{error}</div>}
+          <div className="space-y-2">
+            <Label htmlFor="descripcion">Descripción</Label>
+            <Textarea
+              id="descripcion"
+              value={descripcion}
+              onChange={(e) => setDescripcion(e.target.value)}
+              rows={2}
+            />
+          </div>
 
-        <div style={{ marginTop: 20, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button type="button" onClick={onClose} style={btnSecondary}>Cancelar</button>
-          <button type="submit" disabled={saving} style={btnPrimary}>{saving ? 'Guardando…' : isEdit ? 'Guardar' : 'Crear'}</button>
-        </div>
-      </form>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="codigo">Código interno</Label>
+              <Input
+                id="codigo"
+                value={codigo}
+                onChange={(e) => setCodigo(e.target.value)}
+                className="h-11"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Grupo</Label>
+              <Select
+                value={grupoId === null ? '_none' : String(grupoId)}
+                onValueChange={(v) => setGrupoId(v === '_none' ? null : Number(v))}
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— sin grupo —</SelectItem>
+                  {grupos.map((g) => (
+                    <SelectItem key={g.id} value={String(g.id)}>
+                      {g.emoji ?? ''} {g.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Precio madre *</Label>
+              <MoneyInput value={precio} onChange={setPrecio} />
+            </div>
+            <div className="space-y-2">
+              <Label>Tax rate</Label>
+              <Select
+                value={taxRateId === null ? '_none' : String(taxRateId)}
+                onValueChange={(v) => setTaxRateId(v === '_none' ? null : Number(v))}
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— heredar del grupo —</SelectItem>
+                  {taxRates.map((t) => (
+                    <SelectItem key={t.id} value={String(t.id)}>
+                      {t.nombre} ({t.porcentaje}%)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Estación cocina</Label>
+            <Select
+              value={estacion === '' ? '_none' : estacion}
+              onValueChange={(v) => setEstacion(v === '_none' ? '' : (v as Estacion))}
+            >
+              <SelectTrigger className="h-11">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ESTACIONES.map((est) => (
+                  <SelectItem key={est.value} value={est.value}>
+                    {est.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-3">
+            <Label>Visibilidad por canal</Label>
+            <VisibilityToggle label="POS" checked={visiblePos} onCheckedChange={setVisiblePos} />
+            <VisibilityToggle label="QR" checked={visibleQr} onCheckedChange={setVisibleQr} />
+            <VisibilityToggle label="Tienda online" checked={visibleTienda} onCheckedChange={setVisibleTienda} />
+          </div>
+
+          <div className="flex items-center justify-between rounded-md border border-border p-3">
+            <div>
+              <Label className="cursor-pointer">Es combo</Label>
+              <p className="text-xs text-muted-foreground">
+                La UI de componentes va en sprint siguiente
+              </p>
+            </div>
+            <Switch checked={esCombo} onCheckedChange={setEsCombo} />
+          </div>
+
+          {error && (
+            <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
+          )}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? 'Guardando…' : isEdit ? 'Guardar' : 'Crear'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function VisibilityToggle({
+  label, checked, onCheckedChange,
+}: { label: string; checked: boolean; onCheckedChange: (b: boolean) => void }) {
+  return (
+    <div className="flex items-center justify-between rounded-md border border-border p-3">
+      <Label className="cursor-pointer">{label}</Label>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>
   );
 }
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label style={{ display: 'block', marginBottom: 12, fontSize: 13, color: '#374151' }}>
-      {label && <div style={{ marginBottom: 4, fontWeight: 500 }}>{label}</div>}
-      {children}
-    </label>
-  );
-}
-
-const input: React.CSSProperties = {
-  padding: '6px 10px', border: '1px solid #D1D5DB', borderRadius: 6, fontSize: 14, width: '100%', fontFamily: 'inherit',
-};
-const btnSecondary: React.CSSProperties = {
-  padding: '6px 14px', border: '1px solid #D1D5DB', borderRadius: 6, background: '#FFFFFF', cursor: 'pointer', fontSize: 14,
-};
-const btnPrimary: React.CSSProperties = {
-  padding: '6px 14px', border: 'none', borderRadius: 6, background: '#2563EB', color: '#FFFFFF', cursor: 'pointer', fontSize: 14, fontWeight: 500,
-};
