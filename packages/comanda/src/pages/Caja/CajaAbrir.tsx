@@ -1,10 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { DoorOpen } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
 import { useLocalActivo } from '../../lib/localActivo';
 import { abrirTurno, getTurnoAbierto } from '../../services/turnosCajaService';
 import { MoneyInput } from '../../components/MoneyInput';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
 export function CajaAbrir() {
   const { user } = useAuth();
@@ -18,7 +23,6 @@ export function CajaAbrir() {
   const [saving, setSaving] = useState(false);
   const [chequeando, setChequeando] = useState(true);
 
-  // Si ya hay turno abierto, mandar a estado
   useEffect(() => {
     if (localId === null) return;
     getTurnoAbierto(localId).then((res) => {
@@ -27,67 +31,88 @@ export function CajaAbrir() {
     });
   }, [localId, navigate]);
 
-  if (chequeando) return <Centered>Verificando turno…</Centered>;
-  if (!empleado) return <Centered>Necesitás iniciar sesión POS primero.</Centered>;
-  if (localId === null) return <Centered>Sin local activo.</Centered>;
+  if (chequeando) return <CenteredCard>Verificando turno…</CenteredCard>;
+  if (!empleado) return <CenteredCard>Necesitás iniciar sesión POS primero.</CenteredCard>;
+  if (localId === null) return <CenteredCard>Sin local activo.</CenteredCard>;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!empleado) return;
-    if (localId === null) return;
-    setSaving(true); setError(null);
-    const { turnoId, error: err } = await abrirTurno(localId, empleado.id, montoInicial, notas.trim() || null);
+    if (!empleado || localId === null) return;
+    setSaving(true);
+    setError(null);
+    const { turnoId, error: err } = await abrirTurno(
+      localId, empleado.id, montoInicial, notas.trim() || null,
+    );
     setSaving(false);
-    if (err || !turnoId) { setError(err ?? 'Error desconocido'); return; }
+    if (err || !turnoId) {
+      setError(err ?? 'Error desconocido');
+      return;
+    }
     navigate('/caja', { replace: true });
   }
 
   return (
-    <div style={page}>
-      <form onSubmit={onSubmit} style={card}>
-        <h2 style={{ margin: 0, fontSize: 22 }}>Abrir caja</h2>
-        <p style={{ margin: '4px 0 20px', fontSize: 13, color: '#6B7280' }}>
-          Cajero: {empleado.nombre}
-        </p>
+    <div className="container max-w-md py-8">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-success/10 flex-shrink-0">
+              <DoorOpen className="h-5 w-5 text-success" />
+            </div>
+            <div>
+              <CardTitle>Abrir caja</CardTitle>
+              <CardDescription>Cajero: {empleado.nombre}</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Monto inicial (efectivo en caja)</Label>
+              <MoneyInput value={montoInicial} onChange={setMontoInicial} autoFocus />
+            </div>
 
-        <Field label="Monto inicial (efectivo en caja)">
-          <MoneyInput value={montoInicial} onChange={setMontoInicial} autoFocus />
-        </Field>
+            <div className="space-y-2">
+              <Label htmlFor="notas">Notas (opcional)</Label>
+              <Textarea
+                id="notas"
+                value={notas}
+                onChange={(e) => setNotas(e.target.value)}
+                rows={3}
+                placeholder="Cambio inicial, observaciones del turno…"
+              />
+            </div>
 
-        <Field label="Notas (opcional)">
-          <textarea
-            value={notas}
-            onChange={(e) => setNotas(e.target.value)}
-            rows={3}
-            style={{ ...input, minHeight: 60 }}
-          />
-        </Field>
+            {error && (
+              <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+                {error}
+              </div>
+            )}
 
-        {error && <div style={errBox}>{error}</div>}
-
-        <button type="submit" disabled={saving} style={btnPrimary}>
-          {saving ? 'Abriendo…' : 'Abrir caja'}
-        </button>
-      </form>
+            <Button
+              type="submit"
+              disabled={saving}
+              variant="success"
+              size="lg"
+              className="w-full"
+            >
+              {saving ? 'Abriendo…' : 'Abrir caja'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function CenteredCard({ children }: { children: React.ReactNode }) {
   return (
-    <label style={{ display: 'block', marginBottom: 16, fontSize: 13 }}>
-      <div style={{ marginBottom: 4, fontWeight: 500, color: '#374151' }}>{label}</div>
-      {children}
-    </label>
+    <div className="container max-w-md py-8">
+      <Card>
+        <CardContent className="py-12 text-center text-muted-foreground">
+          {children}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
-
-function Centered({ children }: { children: React.ReactNode }) {
-  return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280', fontFamily: 'system-ui' }}>{children}</div>;
-}
-
-const page: React.CSSProperties = { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: '#F9FAFB', fontFamily: 'system-ui' };
-const card: React.CSSProperties = { background: '#FFFFFF', borderRadius: 8, padding: 32, maxWidth: 420, width: '100%', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #E5E7EB' };
-const input: React.CSSProperties = { padding: '8px 10px', border: '1px solid #D1D5DB', borderRadius: 6, fontSize: 14, width: '100%', fontFamily: 'inherit', boxSizing: 'border-box' };
-const btnPrimary: React.CSSProperties = { marginTop: 4, padding: '10px 16px', border: 'none', borderRadius: 6, background: '#10B981', color: '#FFFFFF', cursor: 'pointer', fontSize: 14, fontWeight: 500, width: '100%' };
-const errBox: React.CSSProperties = { padding: 10, background: '#FEE2E2', color: '#991B1B', borderRadius: 6, fontSize: 13, marginBottom: 12 };

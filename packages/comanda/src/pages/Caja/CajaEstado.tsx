@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { DoorOpen, ArrowDownToLine, ArrowUpFromLine, Lock } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
 import { useLocalActivo } from '../../lib/localActivo';
@@ -11,6 +12,13 @@ import type { TurnoCaja, MovimientoCaja } from '../../types/database';
 import { formatARS, formatHoraAR, relativoCorto } from '../../lib/format';
 import { Badge } from '../../components/Badge';
 import { MoneyInput } from '../../components/MoneyInput';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 
 export function CajaEstado() {
   const { user } = useAuth();
@@ -40,71 +48,118 @@ export function CajaEstado() {
 
   useEffect(() => { reload(); }, [reload]);
 
-  if (loading) return <Centered>Cargando…</Centered>;
+  if (loading) {
+    return (
+      <div className="container py-8">
+        <Card>
+          <CardContent className="py-16 text-center text-muted-foreground">
+            Cargando…
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!turno) {
     return (
-      <div style={page}>
-        <div style={card}>
-          <h2>Caja cerrada</h2>
-          <p style={{ color: '#6B7280' }}>No hay turno abierto en este local.</p>
-          <button type="button" onClick={() => navigate('/caja/abrir')} style={btnPrimary}>Abrir caja</button>
-        </div>
+      <div className="container max-w-md py-12">
+        <Card>
+          <CardContent className="py-12 text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-muted mb-4">
+              <Lock className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <h2 className="text-xl font-semibold mb-2">Caja cerrada</h2>
+            <p className="text-sm text-muted-foreground mb-6">
+              No hay turno abierto en este local.
+            </p>
+            <Button variant="success" size="lg" onClick={() => navigate('/caja/abrir')}>
+              <DoorOpen className="h-5 w-5 mr-2" />
+              Abrir caja
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px', fontFamily: 'system-ui' }}>
-      <header style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <h2 style={{ margin: 0, fontSize: 22 }}>Caja</h2>
+    <div className="container py-8">
+      {/* Header */}
+      <header className="flex items-center gap-3 mb-6 flex-wrap">
+        <h1 className="text-3xl font-bold tracking-tight">Caja</h1>
         <Badge variant="green">Turno #{turno.numero} abierto</Badge>
-        <span style={{ fontSize: 13, color: '#6B7280' }}>desde {formatHoraAR(turno.abierto_at)} · {relativoCorto(turno.abierto_at)}</span>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <button type="button" onClick={() => setMovDialog('retiro')} style={btnSecondary}>Retiro</button>
-          <button type="button" onClick={() => setMovDialog('deposito')} style={btnSecondary}>Depósito</button>
-          <button type="button" onClick={() => navigate('/caja/cerrar')} style={btnDanger}>Cerrar caja</button>
+        <span className="text-sm text-muted-foreground">
+          desde {formatHoraAR(turno.abierto_at)} · {relativoCorto(turno.abierto_at)}
+        </span>
+        <div className="ml-auto flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={() => setMovDialog('retiro')}>
+            <ArrowUpFromLine className="h-4 w-4 mr-2" />
+            Retiro
+          </Button>
+          <Button variant="outline" onClick={() => setMovDialog('deposito')}>
+            <ArrowDownToLine className="h-4 w-4 mr-2" />
+            Depósito
+          </Button>
+          <Button variant="destructive" onClick={() => navigate('/caja/cerrar')}>
+            Cerrar caja
+          </Button>
         </div>
       </header>
 
-      {error && <div style={errBox}>{error}</div>}
+      {error && (
+        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+          {error}
+        </div>
+      )}
 
-      {/* Cards por método */}
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginBottom: 24 }}>
-        <Card title="Monto inicial" valor={formatARS(turno.monto_inicial)} subtitle="al abrir" />
+      {/* Cards de totales */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-8">
+        <TotalCard title="Monto inicial" valor={formatARS(turno.monto_inicial)} subtitle="al abrir" />
         {totales.map((t) => (
-          <Card key={t.metodo} title={t.metodo} valor={formatARS(t.total)} subtitle={`${t.cantidad} mov.`} />
+          <TotalCard
+            key={t.metodo}
+            title={t.metodo}
+            valor={formatARS(t.total)}
+            subtitle={`${t.cantidad} mov.`}
+          />
         ))}
       </section>
 
-      {/* Movimientos del turno */}
-      <h3 style={{ fontSize: 14, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 0 }}>
+      {/* Movimientos */}
+      <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
         Movimientos del turno ({movs.length})
-      </h3>
-      <div style={{ border: '1px solid #E5E7EB', borderRadius: 8, overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-          <thead style={{ background: '#F9FAFB' }}>
-            <tr>
-              <th style={th}>Hora</th>
-              <th style={th}>Tipo</th>
-              <th style={th}>Método</th>
-              <th style={{ ...th, textAlign: 'right' }}>Monto</th>
-              <th style={th}>Motivo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {movs.length === 0 && <tr><td colSpan={5} style={{ padding: 24, textAlign: 'center', color: '#6B7280' }}>Sin movimientos.</td></tr>}
-            {movs.map((m) => (
-              <tr key={m.id} style={{ borderTop: '1px solid #F3F4F6' }}>
-                <td style={td}>{formatHoraAR(m.created_at)}</td>
-                <td style={td}><Badge variant={tipoBadgeVariant(m.tipo)}>{m.tipo}</Badge></td>
-                <td style={td}>{m.metodo}</td>
-                <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{formatARS(m.monto)}</td>
-                <td style={{ ...td, color: '#6B7280' }}>{m.motivo ?? '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      </h2>
+      {movs.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            Sin movimientos.
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="overflow-hidden">
+          <div className="grid grid-cols-[100px_120px_140px_140px_1fr] gap-4 px-6 py-3 border-b border-border bg-muted/40 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <div>Hora</div>
+            <div>Tipo</div>
+            <div>Método</div>
+            <div className="text-right">Monto</div>
+            <div>Motivo</div>
+          </div>
+          {movs.map((m, idx) => (
+            <div
+              key={m.id}
+              className={`grid grid-cols-[100px_120px_140px_140px_1fr] gap-4 px-6 py-3 items-center text-sm ${
+                idx !== movs.length - 1 ? 'border-b border-border' : ''
+              }`}
+            >
+              <div className="text-muted-foreground">{formatHoraAR(m.created_at)}</div>
+              <div><Badge variant={tipoBadgeVariant(m.tipo)}>{m.tipo}</Badge></div>
+              <div>{m.metodo}</div>
+              <div className="text-right tabular-nums font-medium">{formatARS(m.monto)}</div>
+              <div className="text-muted-foreground truncate">{m.motivo ?? '—'}</div>
+            </div>
+          ))}
+        </Card>
+      )}
 
       {movDialog && (
         <MovimientoDialog
@@ -120,17 +175,19 @@ export function CajaEstado() {
   );
 }
 
-function Card({ title, valor, subtitle }: { title: string; valor: string; subtitle: string }) {
+function TotalCard({ title, valor, subtitle }: { title: string; valor: string; subtitle: string }) {
   return (
-    <div style={{ border: '1px solid #E5E7EB', borderRadius: 8, padding: 12, background: '#FFFFFF' }}>
-      <div style={{ fontSize: 11, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>{title}</div>
-      <div style={{ fontSize: 22, fontWeight: 600, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{valor}</div>
-      <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>{subtitle}</div>
-    </div>
+    <Card>
+      <CardContent className="p-4">
+        <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">{title}</div>
+        <div className="text-2xl font-bold tabular-nums mt-1">{valor}</div>
+        <div className="text-xs text-muted-foreground mt-1">{subtitle}</div>
+      </CardContent>
+    </Card>
   );
 }
 
-function tipoBadgeVariant(t: string): 'green' | 'red' | 'gray' | 'blue' | 'amber' {
+function tipoBadgeVariant(t: string): 'green' | 'red' | 'gray' | 'amber' {
   if (t === 'venta' || t === 'deposito' || t === 'apertura') return 'green';
   if (t === 'retiro' || t === 'venta_anulada') return 'red';
   if (t === 'ajuste') return 'amber';
@@ -153,61 +210,57 @@ function MovimientoDialog({ tipo, localId, empleadoId, onClose, onDone, onError 
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (monto <= 0) return;
-    if (!motivo.trim()) return;
+    if (monto <= 0 || !motivo.trim()) return;
     setSaving(true);
-    const { error: err } = await registrarMovimiento(localId, empleadoId, tipo, monto, 'efectivo', motivo.trim());
+    const { error: err } = await registrarMovimiento(
+      localId, empleadoId, tipo, monto, 'efectivo', motivo.trim(),
+    );
     setSaving(false);
     if (err) { onError(err); return; }
     onDone();
   }
 
   return (
-    <div role="dialog" style={overlay} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <form onSubmit={onSubmit} style={modal}>
-        <h3 style={{ margin: 0, fontSize: 18, marginBottom: 16 }}>
-          {tipo === 'retiro' ? 'Retiro de caja' : 'Depósito a caja'}
-        </h3>
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {tipo === 'retiro' ? 'Retiro de caja' : 'Depósito a caja'}
+          </DialogTitle>
+        </DialogHeader>
 
-        <label style={{ display: 'block', marginBottom: 12, fontSize: 13 }}>
-          <div style={{ marginBottom: 4, fontWeight: 500 }}>Monto</div>
-          <MoneyInput value={monto} onChange={setMonto} autoFocus />
-        </label>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label>Monto</Label>
+            <MoneyInput value={monto} onChange={setMonto} autoFocus />
+          </div>
 
-        <label style={{ display: 'block', marginBottom: 16, fontSize: 13 }}>
-          <div style={{ marginBottom: 4, fontWeight: 500 }}>Motivo</div>
-          <input
-            value={motivo}
-            onChange={(e) => setMotivo(e.target.value)}
-            required
-            placeholder={tipo === 'retiro' ? 'Pago proveedor, viático, etc.' : 'Refuerzo, propina depositada, etc.'}
-            style={input}
-          />
-        </label>
+          <div className="space-y-2">
+            <Label htmlFor="motivo">Motivo</Label>
+            <Input
+              id="motivo"
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              required
+              placeholder={
+                tipo === 'retiro'
+                  ? 'Pago proveedor, viático, etc.'
+                  : 'Refuerzo, propina depositada, etc.'
+              }
+              className="h-11"
+            />
+          </div>
 
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button type="button" onClick={onClose} style={btnSecondary} disabled={saving}>Cancelar</button>
-          <button type="submit" disabled={saving} style={btnPrimary}>
-            {saving ? 'Guardando…' : 'Confirmar'}
-          </button>
-        </div>
-      </form>
-    </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={saving || monto <= 0 || !motivo.trim()}>
+              {saving ? 'Guardando…' : 'Confirmar'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
-
-function Centered({ children }: { children: React.ReactNode }) {
-  return <div style={{ minHeight: '40vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280', fontFamily: 'system-ui' }}>{children}</div>;
-}
-
-const page: React.CSSProperties = { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, fontFamily: 'system-ui' };
-const card: React.CSSProperties = { background: '#FFFFFF', borderRadius: 8, padding: 32, maxWidth: 420, width: '100%', border: '1px solid #E5E7EB', textAlign: 'center' };
-const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 };
-const modal: React.CSSProperties = { background: '#FFFFFF', borderRadius: 8, padding: 24, maxWidth: 380, width: '100%', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' };
-const th: React.CSSProperties = { textAlign: 'left', padding: '10px 12px', fontWeight: 600, color: '#374151', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 };
-const td: React.CSSProperties = { padding: '10px 12px' };
-const btnPrimary: React.CSSProperties = { padding: '8px 16px', border: 'none', borderRadius: 6, background: '#2563EB', color: '#FFFFFF', cursor: 'pointer', fontSize: 14, fontWeight: 500 };
-const btnSecondary: React.CSSProperties = { padding: '6px 14px', border: '1px solid #D1D5DB', borderRadius: 6, background: '#FFFFFF', cursor: 'pointer', fontSize: 14 };
-const btnDanger: React.CSSProperties = { padding: '6px 14px', border: 'none', borderRadius: 6, background: '#DC2626', color: '#FFFFFF', cursor: 'pointer', fontSize: 14, fontWeight: 500 };
-const input: React.CSSProperties = { padding: '6px 10px', border: '1px solid #D1D5DB', borderRadius: 6, fontSize: 14, width: '100%', fontFamily: 'inherit', boxSizing: 'border-box' };
-const errBox: React.CSSProperties = { padding: 10, background: '#FEE2E2', color: '#991B1B', borderRadius: 6, fontSize: 13, marginBottom: 12 };

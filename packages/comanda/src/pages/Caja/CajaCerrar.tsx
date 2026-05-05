@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Lock, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
 import { useLocalActivo } from '../../lib/localActivo';
@@ -9,6 +10,11 @@ import {
 import type { TurnoCaja } from '../../types/database';
 import { formatARS, formatHoraAR } from '../../lib/format';
 import { MoneyInput } from '../../components/MoneyInput';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 
 export function CajaCerrar() {
   const { user } = useAuth();
@@ -47,98 +53,156 @@ export function CajaCerrar() {
   const efectivoEntrante = totales.find((t) => t.metodo === 'efectivo')?.total ?? 0;
   const calculadoEfectivo = Number(turno.monto_inicial) + efectivoEntrante;
   const diferencia = montoEfectivoDeclarado - calculadoEfectivo;
+  const difState = difStateFor(diferencia);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!empleado || !turno) return;
-    setSaving(true); setError(null);
-    const { error: err } = await cerrarTurno(turno.id, empleado.id, montoEfectivoDeclarado, notas.trim() || null);
+    setSaving(true);
+    setError(null);
+    const { error: err } = await cerrarTurno(
+      turno.id, empleado.id, montoEfectivoDeclarado, notas.trim() || null,
+    );
     setSaving(false);
     if (err) { setError(err); return; }
     navigate('/caja/abrir', { replace: true });
   }
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: '24px 16px', fontFamily: 'system-ui' }}>
-      <h2 style={{ margin: 0, fontSize: 22 }}>Cerrar caja</h2>
-      <p style={{ margin: '4px 0 24px', color: '#6B7280', fontSize: 13 }}>
-        Turno #{turno.numero} · abierto {formatHoraAR(turno.abierto_at)}
-      </p>
+    <div className="container max-w-2xl py-8">
+      <header className="mb-6">
+        <h1 className="text-3xl font-bold tracking-tight">Cerrar caja</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Turno #{turno.numero} · abierto {formatHoraAR(turno.abierto_at)}
+        </p>
+      </header>
 
-      <section style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 8, padding: 16, marginBottom: 16 }}>
-        <h3 style={{ margin: 0, fontSize: 13, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          Totales del turno (sistema)
-        </h3>
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12, fontSize: 14 }}>
-          <tbody>
-            <tr style={{ borderBottom: '1px solid #E5E7EB' }}>
-              <td style={tdL}>Monto inicial (efectivo)</td>
-              <td style={tdR}>{formatARS(turno.monto_inicial)}</td>
-            </tr>
+      {/* Totales del turno */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-xs text-muted-foreground uppercase tracking-wide font-medium">
+            Totales del turno (sistema)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-sm">
+            <Row label="Monto inicial (efectivo)" valor={formatARS(turno.monto_inicial)} />
             {totales.map((t) => (
-              <tr key={t.metodo} style={{ borderBottom: '1px solid #F3F4F6' }}>
-                <td style={tdL}>{t.metodo} ({t.cantidad} mov.)</td>
-                <td style={tdR}>{formatARS(t.total)}</td>
-              </tr>
+              <Row key={t.metodo} label={`${t.metodo} (${t.cantidad} mov.)`} valor={formatARS(t.total)} />
             ))}
-            <tr style={{ background: '#FEF2F2', fontWeight: 600 }}>
-              <td style={tdL}>Esperado en efectivo al cierre</td>
-              <td style={tdR}>{formatARS(calculadoEfectivo)}</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <form onSubmit={onSubmit}>
-        <label style={{ display: 'block', marginBottom: 16, fontSize: 13 }}>
-          <div style={{ marginBottom: 4, fontWeight: 500, color: '#374151' }}>
-            Efectivo en caja al cierre (lo que contás físicamente)
+            <Row
+              label="Esperado en efectivo al cierre"
+              valor={formatARS(calculadoEfectivo)}
+              highlight
+            />
           </div>
-          <MoneyInput value={montoEfectivoDeclarado} onChange={setMontoEfectivoDeclarado} autoFocus />
-        </label>
+        </CardContent>
+      </Card>
 
-        <div style={{ padding: 12, background: difBg(diferencia), borderRadius: 6, marginBottom: 16, fontSize: 14, fontWeight: 500 }}>
-          Diferencia: <span style={{ fontVariantNumeric: 'tabular-nums', marginLeft: 8 }}>
-            {diferencia > 0 ? '+' : ''}{formatARS(diferencia)}
-          </span>
-          <div style={{ fontSize: 12, marginTop: 4, fontWeight: 400 }}>
-            {Math.abs(diferencia) < 0.01 ? '✓ Coincide con el sistema'
-              : diferencia > 0 ? '↑ Sobra plata respecto al sistema'
-              : '↓ Falta plata respecto al sistema'}
+      {/* Form */}
+      <form onSubmit={onSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <Label>Efectivo en caja al cierre (lo que contás físicamente)</Label>
+          <MoneyInput value={montoEfectivoDeclarado} onChange={setMontoEfectivoDeclarado} autoFocus />
+        </div>
+
+        {/* Diferencia con semáforo */}
+        <div
+          className={cn(
+            'p-3 rounded-md border text-sm font-medium flex items-start gap-3',
+            difState.classes,
+          )}
+        >
+          <difState.Icon className="h-5 w-5 flex-shrink-0 mt-0.5" />
+          <div>
+            <div>
+              Diferencia:{' '}
+              <span className="tabular-nums ml-1">
+                {diferencia > 0 ? '+' : ''}{formatARS(diferencia)}
+              </span>
+            </div>
+            <div className="text-xs font-normal mt-0.5 opacity-80">{difState.label}</div>
           </div>
         </div>
 
-        <label style={{ display: 'block', marginBottom: 16, fontSize: 13 }}>
-          <div style={{ marginBottom: 4, fontWeight: 500 }}>Notas del cierre (opcional)</div>
-          <textarea value={notas} onChange={(e) => setNotas(e.target.value)} rows={3} style={{ ...input, minHeight: 60 }} />
-        </label>
+        <div className="space-y-2">
+          <Label htmlFor="notas">Notas del cierre (opcional)</Label>
+          <Textarea
+            id="notas"
+            value={notas}
+            onChange={(e) => setNotas(e.target.value)}
+            rows={3}
+          />
+        </div>
 
-        {error && <div style={errBox}>{error}</div>}
+        {error && (
+          <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
+        )}
 
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button type="button" onClick={() => navigate('/caja')} style={btnSecondary} disabled={saving}>Volver</button>
-          <button type="submit" disabled={saving} style={btnPrimary}>
+        <div className="flex gap-2 justify-end">
+          <Button type="button" variant="outline" onClick={() => navigate('/caja')} disabled={saving}>
+            Volver
+          </Button>
+          <Button type="submit" variant="destructive" disabled={saving}>
             {saving ? 'Cerrando…' : 'Confirmar cierre'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>
   );
 }
 
-function difBg(d: number): string {
-  if (Math.abs(d) < 0.01) return '#D1FAE5';
-  if (Math.abs(d) < 500) return '#FEF3C7';
-  return '#FEE2E2';
+function Row({ label, valor, highlight }: { label: string; valor: string; highlight?: boolean }) {
+  return (
+    <div
+      className={cn(
+        'flex justify-between py-2 border-b border-border last:border-b-0',
+        highlight && 'font-semibold pt-3 mt-1 border-t border-border bg-warning/5 px-2 -mx-2 rounded',
+      )}
+    >
+      <span>{label}</span>
+      <span className="tabular-nums">{valor}</span>
+    </div>
+  );
+}
+
+interface DifState {
+  classes: string;
+  Icon: React.ComponentType<{ className?: string }>;
+  label: string;
+}
+
+function difStateFor(d: number): DifState {
+  if (Math.abs(d) < 0.01) {
+    return {
+      classes: 'bg-success/10 text-success border-success/20',
+      Icon: CheckCircle2,
+      label: 'Coincide con el sistema',
+    };
+  }
+  if (Math.abs(d) < 500) {
+    return {
+      classes: 'bg-warning/10 text-warning border-warning/30',
+      Icon: AlertTriangle,
+      label: d > 0 ? 'Sobra plata respecto al sistema' : 'Falta plata respecto al sistema',
+    };
+  }
+  return {
+    classes: 'bg-destructive/10 text-destructive border-destructive/20',
+    Icon: d > 0 ? TrendingUp : TrendingDown,
+    label: d > 0 ? 'Sobra plata respecto al sistema' : 'Falta plata respecto al sistema',
+  };
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
-  return <div style={{ minHeight: '40vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280', fontFamily: 'system-ui' }}>{children}</div>;
+  return (
+    <div className="container max-w-md py-12">
+      <Card>
+        <CardContent className="py-12 text-center">
+          <Lock className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+          <p className="text-muted-foreground">{children}</p>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
-
-const tdL: React.CSSProperties = { padding: '6px 4px' };
-const tdR: React.CSSProperties = { padding: '6px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
-const input: React.CSSProperties = { padding: '6px 10px', border: '1px solid #D1D5DB', borderRadius: 6, fontSize: 14, width: '100%', fontFamily: 'inherit', boxSizing: 'border-box' };
-const btnPrimary: React.CSSProperties = { padding: '8px 16px', border: 'none', borderRadius: 6, background: '#DC2626', color: '#FFFFFF', cursor: 'pointer', fontSize: 14, fontWeight: 500 };
-const btnSecondary: React.CSSProperties = { padding: '6px 14px', border: '1px solid #D1D5DB', borderRadius: 6, background: '#FFFFFF', cursor: 'pointer', fontSize: 14 };
-const errBox: React.CSSProperties = { padding: 10, background: '#FEE2E2', color: '#991B1B', borderRadius: 6, fontSize: 13, marginBottom: 12 };
