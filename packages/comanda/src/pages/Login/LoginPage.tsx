@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Lock } from 'lucide-react';
 import { db } from '../../lib/supabase';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -29,7 +35,6 @@ export function LoginPage() {
     });
     setLoading(false);
     if (err) {
-      // Supabase devuelve mensajes en inglés. Traducimos los más comunes.
       setError(traducirError(err.message));
       return;
     }
@@ -37,53 +42,65 @@ export function LoginPage() {
   }
 
   return (
-    <div style={page}>
-      <form onSubmit={onSubmit} style={card}>
-        <h1 style={{ margin: 0, fontSize: 24, fontWeight: 600 }}>COMANDA</h1>
-        <p style={{ margin: '4px 0 24px', fontSize: 13, color: '#6B7280' }}>
-          Iniciá sesión con tu email y contraseña de PASE.
-        </p>
+    <div className="min-h-screen flex items-center justify-center bg-background p-6 relative">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
 
-        <Field label="Email">
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoFocus
-            autoComplete="email"
-            required
-            placeholder="tu@email.com"
-            style={input}
-          />
-        </Field>
+      <Card className="w-full max-w-md shadow-lg">
+        <CardContent className="p-8">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4">
+              <Lock className="h-8 w-8 text-primary" />
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight">COMANDA</h1>
+            <p className="text-sm text-muted-foreground mt-2">
+              Iniciá sesión con tu email y contraseña de PASE
+            </p>
+          </div>
 
-        <Field label="Contraseña">
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            required
-            style={input}
-          />
-        </Field>
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoFocus
+                autoComplete="email"
+                required
+                placeholder="tu@email.com"
+                className="h-11"
+              />
+            </div>
 
-        {error && <div style={errBox}>{error}</div>}
+            <div className="space-y-2">
+              <Label htmlFor="password">Contraseña</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+                className="h-11"
+              />
+            </div>
 
-        <button type="submit" disabled={loading} style={loading ? btnDisabled : btnPrimary}>
-          {loading ? 'Iniciando sesión…' : 'Iniciar sesión'}
-        </button>
-      </form>
+            {error && (
+              <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+                {error}
+              </div>
+            )}
+
+            <Button type="submit" disabled={loading} className="w-full h-11" size="lg">
+              {loading ? 'Iniciando sesión…' : 'Iniciar sesión'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label style={{ display: 'block', marginBottom: 14, fontSize: 13 }}>
-      <div style={{ marginBottom: 4, fontWeight: 500, color: '#374151' }}>{label}</div>
-      {children}
-    </label>
   );
 }
 
@@ -100,61 +117,3 @@ function traducirError(msg: string): string {
   }
   return msg;
 }
-
-const page: React.CSSProperties = {
-  minHeight: '100vh',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: 16,
-  background: '#F9FAFB',
-  fontFamily: 'system-ui, -apple-system, sans-serif',
-};
-
-const card: React.CSSProperties = {
-  background: '#FFFFFF',
-  border: '1px solid #E5E7EB',
-  borderRadius: 8,
-  padding: 32,
-  maxWidth: 400,
-  width: '100%',
-  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-};
-
-const input: React.CSSProperties = {
-  padding: '8px 10px',
-  border: '1px solid #D1D5DB',
-  borderRadius: 6,
-  fontSize: 14,
-  width: '100%',
-  fontFamily: 'inherit',
-  boxSizing: 'border-box',
-};
-
-const btnPrimary: React.CSSProperties = {
-  marginTop: 8,
-  padding: '10px 16px',
-  border: 'none',
-  borderRadius: 6,
-  background: '#2563EB',
-  color: '#FFFFFF',
-  cursor: 'pointer',
-  fontSize: 14,
-  fontWeight: 500,
-  width: '100%',
-};
-
-const btnDisabled: React.CSSProperties = {
-  ...btnPrimary,
-  background: '#9CA3AF',
-  cursor: 'wait',
-};
-
-const errBox: React.CSSProperties = {
-  padding: 10,
-  background: '#FEE2E2',
-  color: '#991B1B',
-  borderRadius: 6,
-  fontSize: 13,
-  marginBottom: 12,
-};

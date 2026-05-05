@@ -1,9 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider } from './lib/AuthProvider';
 import { AuthPosProvider } from './lib/AuthPosProvider';
 import { ProtectedShell } from './components/ProtectedShell';
 import { RedirectIfAuth } from './components/RedirectIfAuth';
 import { PinGate } from './components/PinGate';
+import { useAuth } from './lib/auth';
 
 import { LoginPage } from './pages/Login/LoginPage';
 import { CatalogoLayout } from './pages/Catalogo/CatalogoLayout';
@@ -20,6 +21,21 @@ import { MostradorView } from './pages/Pos/MostradorView';
 import { PedidosPlaceholder } from './pages/Pos/PedidosPlaceholder';
 import { VentaScreen } from './pages/Pos/VentaScreen';
 
+// AuthGate: variante "headless" de ProtectedShell — verifica sesión Supabase
+// pero NO renderiza header (lo provee PosLayout). Si no hay sesión, /login.
+function AuthGate() {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-muted-foreground bg-background">
+        Cargando…
+      </div>
+    );
+  }
+  if (!user) return <Navigate to="/login" replace />;
+  return <Outlet />;
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -28,7 +44,7 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<RedirectIfAuth><LoginPage /></RedirectIfAuth>} />
 
-            {/* Rutas con header global Sprint 1 (catalogo, settings) */}
+            {/* Rutas con header global de ProtectedShell (catálogo, settings) */}
             <Route element={<ProtectedShell />}>
               <Route path="/catalogo" element={<CatalogoLayout />} />
               <Route path="/settings" element={<SettingsLayout />} />
@@ -57,21 +73,4 @@ export default function App() {
       </BrowserRouter>
     </AuthProvider>
   );
-}
-
-// AuthGate: variante "headless" de ProtectedShell — verifica sesión Supabase
-// pero NO renderiza header (lo provee PosLayout). Si no hay sesión, /login.
-import { Navigate as Nav, Outlet } from 'react-router-dom';
-import { useAuth } from './lib/auth';
-function AuthGate() {
-  const { user, loading } = useAuth();
-  if (loading) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280', fontFamily: 'system-ui' }}>
-        Cargando…
-      </div>
-    );
-  }
-  if (!user) return <Nav to="/login" replace />;
-  return <Outlet />;
 }
