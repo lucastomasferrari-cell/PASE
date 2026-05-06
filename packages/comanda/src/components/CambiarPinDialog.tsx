@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { db } from '@/lib/supabase';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -75,7 +76,7 @@ export function CambiarPinDialog({ open, onOpenChange, empleadoId }: Props) {
     }
     setSaving(true);
     setError(null);
-    const { error: err } = await db.rpc('fn_cambiar_pin_pos', {
+    const { data, error: err } = await db.rpc('fn_cambiar_pin_pos', {
       p_empleado_id: empleadoId,
       p_pin_actual: pinActual,
       p_pin_nuevo: pinNuevo,
@@ -83,6 +84,7 @@ export function CambiarPinDialog({ open, onOpenChange, empleadoId }: Props) {
     setSaving(false);
     if (err) {
       const msg = err.message ?? '';
+      console.error('[CambiarPinDialog] fn_cambiar_pin_pos error:', err);
       if (msg.includes('PIN_ACTUAL_INCORRECTO')) {
         setError('PIN actual incorrecto.');
         setPinActual('');
@@ -96,9 +98,20 @@ export function CambiarPinDialog({ open, onOpenChange, empleadoId }: Props) {
         setStep('nuevo');
       } else {
         setError(msg || 'No se pudo cambiar el PIN');
+        toast.error('No se pudo cambiar el PIN. Probá de nuevo.');
       }
       return;
     }
+    // El RPC devuelve TRUE en éxito (ver migration 202605061200). Si por
+    // cualquier motivo devuelve null/false sin tirar error, NO mostramos
+    // success — sería el bug "dice guardado pero no guardó".
+    if (data !== true) {
+      console.error('[CambiarPinDialog] RPC sin error pero data !== true:', data);
+      setError('La operación no se confirmó. Probá de nuevo.');
+      toast.error('No se pudo confirmar el cambio de PIN.');
+      return;
+    }
+    toast.success('PIN actualizado correctamente.');
     onOpenChange(false);
   }
 
