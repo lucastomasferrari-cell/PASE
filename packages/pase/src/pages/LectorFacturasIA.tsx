@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { fmt_d, fmt_$, genId, parseMonto } from "../lib/utils";
 import { useCategorias } from "../lib/useCategorias";
-import type { Local } from "../types/auth";
+import { localesVisibles } from "../lib/auth";
+import type { Usuario, Local } from "../types/auth";
 import type { Proveedor } from "../types/finanzas";
 
 // Shape del JSON que devuelve Claude vía /api/claude (cuando parseamos el
@@ -46,12 +47,16 @@ interface ProvModalForm {
 }
 
 interface LectorFacturasIAProps {
+  user: Usuario;
   locales: Local[];
   localActivo: number | null;
   onSaved?: () => void;
 }
 
-export default function LectorFacturasIA({ locales, localActivo, onSaved }: LectorFacturasIAProps) {
+export default function LectorFacturasIA({ user, locales, localActivo, onSaved }: LectorFacturasIAProps) {
+  // Locales del dropdown — solo los autorizados (encargado/admin/dueño).
+  const visLocs = localesVisibles(user);
+  const localesDisp = visLocs === null ? locales : locales.filter((l: Local) => visLocs.includes(l.id));
   const { CATEGORIAS_COMPRA } = useCategorias();
   const [archivo,setArchivo]=useState<File|null>(null);
   const [preview,setPreview]=useState<string|null>(null);
@@ -93,6 +98,11 @@ export default function LectorFacturasIA({ locales, localActivo, onSaved }: Lect
       const response=await fetch("/api/claude",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
+        // El proxy /api/claude reenvía la request a la API de Anthropic con
+        // la API key del server. Si responde 4xx puede ser: Vercel auth
+        // (HTML), error de Anthropic (JSON con `error.message`), o el
+        // proxy mismo. El catch al final detecta cada caso y muestra el
+        // mensaje real al user, en lugar del genérico "no se puede leer".
         body:JSON.stringify({
           // Bug #41 fase final, Capa 2: Opus 4.7 tiene 98.5% en visual-acuity
           // benchmark vs ~54% de Sonnet 4 — específicamente bueno para
@@ -144,13 +154,37 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
         })
       });
 
+      // Si el proxy/Anthropic respondió con error, leer el body y construir
+      // un mensaje útil. Antes el catch genérico transformaba todo en
+      // "imagen poco clara" — confundía al usuario porque el problema
+      // real era de red/autorización.
+      if (!response.ok) {
+        let detalle = `HTTP ${response.status}`;
+        try {
+          const ct = response.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const err: { error?: { message?: string }; message?: string } = await response.json();
+            detalle = err.error?.message || err.message || JSON.stringify(err).slice(0, 200);
+          } else {
+            const txt = await response.text();
+            detalle = txt.slice(0, 200);
+          }
+        } catch { /* ignore body read errors */ }
+        throw new Error(`La API de la IA respondió con error (${response.status}): ${detalle}`);
+      }
+
       // Response del proxy /api/claude: { content: Array<{ type, text? }> }
       // (forma de la API de Anthropic Messages). Tipado mínimo con shape
-      // que solo necesita .text.
-      const data: { content?: Array<{ text?: string }> } = await response.json();
+      // que solo necesita .text. Anthropic puede devolver también
+      // { error: {...} } con status 200 si el modelo rechazó el contenido.
+      const data: { content?: Array<{ text?: string }>; error?: { message?: string; type?: string } } = await response.json();
+      if (data.error) throw new Error(`La IA rechazó la solicitud: ${data.error.message || data.error.type || 'error'}`);
       const text=data.content?.map(c => c.text || "").join("") || "";
+      if (!text.trim()) throw new Error('La IA respondió vacío. Probá con otra foto o intentalo de nuevo.');
       const clean=text.replace(/```json|```/g,"").trim();
-      const parsed: IAFacturaResponse = JSON.parse(clean);
+      let parsed: IAFacturaResponse;
+      try { parsed = JSON.parse(clean); }
+      catch { throw new Error('La IA devolvió texto no-JSON (formato inesperado). Probá con otra foto. Detalle completo en la consola.'); }
 
       // Defensa en profundidad (bug #41 escalada): la IA puede alucinar
       // montos completos, no solo multiplicar por 100. Tres chequeos:
@@ -209,8 +243,9 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
         cat:provMatch?.cat||"",
       }));
     }catch(err){
-      alert("Error al leer la factura. Intentá con una imagen más clara o cargala manualmente.");
-      console.error(err);
+      const msg = err instanceof Error ? err.message : String(err);
+      alert("No se pudo leer la factura.\n\n" + msg + "\n\nSi el error persiste, copiá el detalle de la consola del navegador y mandáselo a Lucas.");
+      console.error('[LectorFacturasIA] error en leerConIA:', err);
     }
     setLoading(false);
   };
@@ -398,7 +433,7 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
                   <div className="field"><label>Local *</label>
                     <select value={form.local_id} onChange={e=>setForm({...form,local_id:e.target.value})}>
                       <option value="">Seleccioná...</option>
-                      {locales.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}
+                      {localesDisp.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}
                     </select>
                   </div>
                   <div className="field"><label>Nº Factura</label>

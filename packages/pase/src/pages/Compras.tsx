@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope, cuentasOperables } from "../lib/auth";
+import { applyLocalScope, cuentasOperables, localesVisibles } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS, UNIDADES } from "../lib/constants";
@@ -114,7 +114,10 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagoForm.cuenta, cuentasUsables.join("|")]);
-  const localesDisp = user.rol === "dueno" ? locales : locales.filter((l: Local) => (user.locales || []).includes(l.id));
+  // Reportado 2026-05-06: el filtro `user.rol === "dueno"` excluía admin/
+  // superadmin. Ahora usa el helper canónico que cubre todos los casos.
+  const visLocs = localesVisibles(user);
+  const localesDisp = visLocs === null ? locales : locales.filter((l: Local) => visLocs.includes(l.id));
   const calcTotal = () =>
     parseMonto(form.neto) +
     parseMonto(form.iva21) +
@@ -425,7 +428,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
               <button className="close-btn" onClick={() => setLectorModal(false)}>✕</button>
             </div>
             <div className="modal-body">
-              <LectorFacturasIA locales={locales} localActivo={localActivo} onSaved={() => { load(); setLectorModal(false); }} />
+              <LectorFacturasIA user={user} locales={locales} localActivo={localActivo} onSaved={() => { load(); setLectorModal(false); }} />
             </div>
           </div>
         </div>
