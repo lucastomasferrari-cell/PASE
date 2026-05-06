@@ -319,8 +319,8 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
       return;
     }
 
-    const prov=proveedores.find(p => p.id === parseInt(form.prov_id));
-    if(prov)await db.from("proveedores").update({saldo:(prov.saldo||0)+parseMonto(form.total)}).eq("id",prov.id);
+    // El trigger trg_saldo_prov_facturas (migration 202605070900) recalcula
+    // proveedores.saldo automáticamente al insertar la factura.
     setGuardando(false);setArchivo(null);setPreview(null);setResultado(null);
     setForm({local_id:localActivo||"",prov_id:"",fecha:"",venc:"",nro:"",neto:0,iva21:0,iva105:0,iibb:0,total:0,cat:""});
     alert("✓ Factura cargada correctamente");

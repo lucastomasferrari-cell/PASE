@@ -255,11 +255,9 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
         const itemsToInsert = items.filter(it => it.producto).map(it => ({ ...it, factura_id: id, cantidad: parseMonto(it.cantidad), precio_unitario: parseMonto(it.precio_unitario), subtotal: it.subtotal }));
         if (itemsToInsert.length > 0) await db.from("factura_items").insert(itemsToInsert);
       }
-      const prov = proveedores.find(p => p.id === nueva.prov_id);
-      if (prov) {
-        const saldoDelta = isNC ? -Math.abs(totalAbs) : totalAbs;
-        await db.from("proveedores").update({ saldo: Math.max(0, (prov.saldo || 0) + saldoDelta) }).eq("id", prov.id);
-      }
+      // El trigger trg_saldo_prov_facturas (migration 202605070900) recalcula
+      // proveedores.saldo automáticamente al insertar la factura/NC. Antes
+      // este flow hacía un UPDATE manual con race condition latente.
       setModal(false); setForm(emptyForm); setItems([]); load();
     } catch (err) {
       console.error("Error guardando factura:", err);

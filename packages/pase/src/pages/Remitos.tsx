@@ -94,29 +94,17 @@ export default function Remitos({ user, locales, localActivo }: RemitosProps) {
     const nro = form.nro||`REM-${Date.now().toString().slice(-6)}`;
     const nuevo = {...form,id:genId("REM"),prov_id:parseInt(form.prov_id),local_id:parseInt(String(form.local_id)),nro,monto:parseFloat(String(form.monto)),estado:"sin_factura",factura_id:null};
     await db.from("remitos").insert([nuevo]);
-    const prov = proveedores.find(p => p.id === nuevo.prov_id);
-    if(prov) await db.from("proveedores").update({saldo:(prov.saldo||0)+nuevo.monto}).eq("id",prov.id);
+    // El trigger trg_saldo_prov_remitos (migration 202605070900) recalcula
+    // proveedores.saldo automáticamente al insertar el remito.
     setModal(false); setForm(emptyForm); load();
   };
 
   const vincFact = async (fid: string) => {
     const r = vincModal;
     if(!r) return;
-    // Modelo confirmado por Lucas (2026-05-06): cuando un remito se vincula
-    // a una factura existente, deja de contar (su monto ya está cubierto
-    // por la factura que se cargó aparte). El saldo persistido tiene
-    // `+monto` del remito desde su carga; al vincular, restamos ese monto
-    // y NO sumamos nada de la factura (la factura ya hizo su +total al
-    // cargarse).
-    //
-    // Bug previo: hacía `saldo += (factura.total - remito.monto)` que
-    // duplicaba el total de la factura.
-    const prov = proveedores.find(p => p.id === r.prov_id);
-    if (prov) {
-      await db.from("proveedores")
-        .update({ saldo: Math.max(0, (prov.saldo || 0) - r.monto) })
-        .eq("id", prov.id);
-    }
+    // El trigger trg_saldo_prov_remitos recalcula proveedores.saldo cuando
+    // se actualiza el remito (factura_id IS NOT NULL → el remito deja de
+    // sumar). La factura ya estaba sumada por el trigger de facturas.
     await db.from("remitos").update({estado:"vinculado",factura_id:fid}).eq("id",r.id);
     setVincModal(null); load();
   };
