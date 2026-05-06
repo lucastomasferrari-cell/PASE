@@ -44,6 +44,17 @@ export function CambiarPinDialog({ open, onOpenChange, empleadoId }: Props) {
     }
   }, [open]);
 
+  // Workaround radix-ui issue #1241: cuando un DropdownMenu se cierra y
+  // abre un Dialog en cascada, radix puede dejar `pointer-events: none`
+  // en <body>, bloqueando todos los clicks del NumericPad. Se manifiesta
+  // como "los botones no responden con mouse, sí con teclado".
+  // Forzamos pointer-events: auto cada vez que el dialog se abre.
+  useEffect(() => {
+    if (open) {
+      document.body.style.pointerEvents = 'auto';
+    }
+  }, [open]);
+
   // Auto-avance al paso siguiente cuando se llega a 4 dígitos
   useEffect(() => {
     if (saving) return;

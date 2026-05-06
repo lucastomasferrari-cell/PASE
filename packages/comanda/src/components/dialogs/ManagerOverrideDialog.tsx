@@ -47,6 +47,15 @@ export function ManagerOverrideDialog({
     }
   }, [open]);
 
+  // Workaround radix-ui issue #1241 (ver CambiarPinDialog): si este dialog
+  // se abre desde un DropdownMenu o Popover, radix puede dejar
+  // `pointer-events: none` en <body>, bloqueando los clicks del NumericPad.
+  useEffect(() => {
+    if (open) {
+      document.body.style.pointerEvents = 'auto';
+    }
+  }, [open]);
+
   async function confirmar() {
     if (motivo.trim().length < MOTIVO_MIN) {
       setError(`El motivo debe tener al menos ${MOTIVO_MIN} caracteres`);
