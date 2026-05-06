@@ -95,14 +95,23 @@ export default function LectorFacturasIA({ user, locales, localActivo, onSaved }
       const isImg=archivo.type.startsWith("image/");
       const mediaType=isImg?archivo.type:"application/pdf";
 
+      // El proxy /api/claude requiere Authorization: Bearer <supabase_jwt>
+      // desde el sprint 2026-05-06 (cerramos el endpoint que estaba abierto
+      // al mundo). Levantamos el access_token de la sesión actual.
+      const sess = (await db.auth.getSession()).data.session;
+      if (!sess?.access_token) {
+        throw new Error('Sesión expirada. Recargá la página y volvé a entrar.');
+      }
       const response=await fetch("/api/claude",{
         method:"POST",
-        headers:{"Content-Type":"application/json"},
-        // El proxy /api/claude reenvía la request a la API de Anthropic con
-        // la API key del server. Si responde 4xx puede ser: Vercel auth
-        // (HTML), error de Anthropic (JSON con `error.message`), o el
-        // proxy mismo. El catch al final detecta cada caso y muestra el
-        // mensaje real al user, en lugar del genérico "no se puede leer".
+        headers:{
+          "Content-Type":"application/json",
+          "Authorization": `Bearer ${sess.access_token}`,
+        },
+        // Si la API responde 4xx puede ser: Vercel auth (HTML), error de
+        // Anthropic (JSON con `error.message`), nuestro propio _user-auth
+        // (401/403/500), o el proxy mismo. El catch al final detecta cada
+        // caso y muestra el mensaje real al user.
         body:JSON.stringify({
           // Bug #41 fase final, Capa 2: Opus 4.7 tiene 98.5% en visual-acuity
           // benchmark vs ~54% de Sonnet 4 — específicamente bueno para
