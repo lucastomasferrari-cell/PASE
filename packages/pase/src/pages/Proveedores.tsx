@@ -3,6 +3,7 @@ import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
 import { useCategorias } from "../lib/useCategorias";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
+import { calcularSaldosPorProveedor } from "../lib/saldoProveedor";
 import type { Usuario, Local } from "../types/auth";
 import type { Proveedor, Factura, PagoFactura } from "../types/finanzas";
 
@@ -31,21 +32,19 @@ export default function Proveedores({ user, localActivo }: ProveedoresProps) {
     setLoading(true);
     // proveedores es global (sin local_id)
     const {data:provs}=await db.from("proveedores").select("*").order("nombre");
-    // facturas scoped para recalcular saldo por proveedor dentro del alcance del usuario
-    let fq=db.from("facturas").select("prov_id,total,tipo,estado").neq("estado","anulada");
+    // facturas + remitos scoped al alcance del usuario. Antes solo se
+    // miraban facturas y subreportaba la deuda cuando había remitos sin
+    // facturar. Ahora ambas tablas se combinan vía calcularSaldosPorProveedor
+    // (helper compartido con Dashboard.tsx para garantizar el mismo número).
+    let fq=db.from("facturas").select("prov_id,total,tipo,estado,pagos,local_id").neq("estado","anulada");
     fq=applyLocalScope(fq,user,localActivo);
-    const {data:facts}=await fq;
-    // El runtime usa prov_id como number aunque Factura type lo declare
-    // string — usar Number() para que la key del Map sea consistente.
-    const saldoPorProv=new Map<number,number>();
-    for(const f of ((facts as Factura[]) || [])){
-      if(f.prov_id==null)continue;
-      const provIdNum=Number(f.prov_id);
-      const isNC=(f.tipo||"factura")==="nota_credito";
-      const impagable=f.estado==="pendiente"||f.estado==="vencida";
-      if(isNC)saldoPorProv.set(provIdNum,(saldoPorProv.get(provIdNum)||0)-Math.abs(f.total||0));
-      else if(impagable)saldoPorProv.set(provIdNum,(saldoPorProv.get(provIdNum)||0)+Number(f.total||0));
-    }
+    let rq=db.from("remitos").select("prov_id,monto,estado,factura_id,local_id");
+    rq=applyLocalScope(rq,user,localActivo);
+    const [{data:facts},{data:rems}]=await Promise.all([fq,rq]);
+    const saldoPorProv = calcularSaldosPorProveedor(
+      (facts as Factura[]) || [],
+      (rems as Array<{ prov_id: number | null; monto: number; estado: string; factura_id: string | null }>) || [],
+    );
     setProveedores(((provs as Proveedor[]) || []).map(p => ({...p, saldo: saldoPorProv.get(p.id) || 0})));
     setLoading(false);
   };

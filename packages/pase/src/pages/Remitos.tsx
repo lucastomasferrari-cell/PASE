@@ -102,13 +102,20 @@ export default function Remitos({ user, locales, localActivo }: RemitosProps) {
   const vincFact = async (fid: string) => {
     const r = vincModal;
     if(!r) return;
-    const f = facturas.find(f => f.id === fid);
-    // Cancelar deuda del remito y reemplazar por la de la factura (diferencia)
+    // Modelo confirmado por Lucas (2026-05-06): cuando un remito se vincula
+    // a una factura existente, deja de contar (su monto ya está cubierto
+    // por la factura que se cargó aparte). El saldo persistido tiene
+    // `+monto` del remito desde su carga; al vincular, restamos ese monto
+    // y NO sumamos nada de la factura (la factura ya hizo su +total al
+    // cargarse).
+    //
+    // Bug previo: hacía `saldo += (factura.total - remito.monto)` que
+    // duplicaba el total de la factura.
     const prov = proveedores.find(p => p.id === r.prov_id);
-    if(prov) {
-      const diff = (f?.total||0) - r.monto; // diferencia puede ser positiva o negativa
-      // El saldo ya tiene la deuda del remito, solo ajustamos la diferencia
-      await db.from("proveedores").update({saldo:Math.max(0,(prov.saldo||0)+diff)}).eq("id",prov.id);
+    if (prov) {
+      await db.from("proveedores")
+        .update({ saldo: Math.max(0, (prov.saldo || 0) - r.monto) })
+        .eq("id", prov.id);
     }
     await db.from("remitos").update({estado:"vinculado",factura_id:fid}).eq("id",r.id);
     setVincModal(null); load();

@@ -4,6 +4,7 @@ import { applyLocalScope, cuentasVisibles } from "../lib/auth";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_$ } from "../lib/utils";
 import { computeSaldoMP, type MovParaSaldo } from "../lib/saldoMP";
+import { calcularSaldosPorProveedor } from "../lib/saldoProveedor";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import type { Usuario } from "../types/auth";
 import type { Factura, Proveedor, Venta, SaldoCaja } from "../types/finanzas";
@@ -90,7 +91,9 @@ export default function Dashboard({ user, localActivo }: DashboardProps) {
       fq,
       rq,
       vtq,
-      db.from("proveedores").select("*").gt("saldo",0).eq("estado","Activo"),
+      // Antes filtraba por saldo>0 persistido pero la columna estaba
+      // sobreestimada; el filtro real ahora se hace runtime con el helper.
+      db.from("proveedores").select("*").eq("estado","Activo"),
       bq,
       vsq,
       includeMp ? credsQ : Promise.resolve({ data: [] as MpCredCompacta[] }),
@@ -138,30 +141,37 @@ export default function Dashboard({ user, localActivo }: DashboardProps) {
     const ventasHoyArr = (ventas as Venta[]) || [];
     const remitosArr = (remitos as RemitoMin[]) || [];
     const provsArr = (provs as Proveedor[]) || [];
+
+    // Cálculo unificado del saldo por proveedor (mismo helper que Proveedores.tsx).
+    // Antes había 2 paths: con localId recomputaba SOLO facturas (sin remitos
+    // ni pagos parciales), sin localId leía la columna persistida (sobreestimada).
+    // Resultado: los 3 lugares (Dashboard con loc / sin loc / pantalla
+    // Proveedores) mostraban montos distintos. Ahora todos cuadran.
+    const facturasParaCalc = ((facturas as Factura[]) || []).filter(f => matchLocal(f.local_id));
+    const remitosParaCalc = remitosArr.filter(r => matchLocal(r.local_id));
+    const saldoPorProv = calcularSaldosPorProveedor(
+      facturasParaCalc as unknown as Parameters<typeof calcularSaldosPorProveedor>[0],
+      remitosParaCalc as unknown as Parameters<typeof calcularSaldosPorProveedor>[1],
+    );
+    const deudaTotal = Array.from(saldoPorProv.values()).reduce((s, v) => s + v, 0);
+
     setStats({
       saldos: saldosObj,
-      deuda: fAct.reduce((s, f) => s + (f.total || 0), 0),
+      deuda: deudaTotal,
       vencidas: fAct.filter(f => f.estado === "vencida").length,
       ventasHoy: ventasHoyArr.filter(v => matchLocal(v.local_id)).reduce((s, v) => s + (v.monto || 0), 0),
       remPend: remitosArr.filter(r => r.estado === "sin_factura" && matchLocal(r.local_id)).length,
       blindajeVencidos, blindajePorVencer,
       saldoMpTotal, credsSinCorte,
     });
-    if (localId) {
-      const deudaPorProv: Record<number, number> = {};
-      fAct.forEach(f => { deudaPorProv[f.prov_id] = (deudaPorProv[f.prov_id] || 0) + (f.total || 0); });
-      setProvDeuda(
-        provsArr
-          .map<ProveedorConSaldo>(p => ({ ...p, saldo: deudaPorProv[p.id] || 0 }))
-          .filter(p => p.saldo > 0)
-          .sort((a, b) => b.saldo - a.saldo)
-          .slice(0, 8),
-      );
-    } else {
-      // Sin localId: mantener el saldo persistido de la fila proveedor (no
-      // recompute). provs ya es Proveedor[], saldo es number directo.
-      setProvDeuda(provsArr.slice().sort((a, b) => b.saldo - a.saldo).slice(0, 8));
-    }
+
+    setProvDeuda(
+      provsArr
+        .map<ProveedorConSaldo>(p => ({ ...p, saldo: saldoPorProv.get(p.id) || 0 }))
+        .filter(p => p.saldo > 0)
+        .sort((a, b) => b.saldo - a.saldo)
+        .slice(0, 8),
+    );
     setLoading(false);
   };
   // Patrón fetch-on-dep-change. No agregar load a deps (re-fetch infinito).
