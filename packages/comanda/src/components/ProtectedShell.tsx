@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Navigate, Outlet, useNavigate, Link } from 'react-router-dom';
-import { LogOut, BarChart3 } from 'lucide-react';
+import { LogOut, BarChart3, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { db } from '../lib/supabase';
 import { usePermiso } from '../lib/usePermiso';
@@ -51,6 +51,11 @@ export function ProtectedShell({ children }: Props) {
             )}
           </div>
           <div className="flex items-center gap-1">
+            <Link to="/pos">
+              <Button variant="ghost" size="sm" className="gap-2">
+                <ArrowLeft className="h-4 w-4" /> POS
+              </Button>
+            </Link>
             {puedeReportes && (
               <Link to="/reportes">
                 <Button variant="ghost" size="sm" className="gap-2">
@@ -59,9 +64,11 @@ export function ProtectedShell({ children }: Props) {
               </Link>
             )}
             <ThemeToggle />
-            <Button variant="outline" size="icon" onClick={logout} title="Cerrar sesión">
-              <LogOut className="h-4 w-4" />
-              <span className="sr-only">Cerrar sesión</span>
+            {/* Botón explícitamente labeleado para evitar confusión con
+                back arrow (bug A3 sprint 5: usuarios clickeaban el icon-only
+                LogOut creyendo que era "volver"). */}
+            <Button variant="outline" size="sm" onClick={logout} className="gap-2">
+              <LogOut className="h-4 w-4" /> Cerrar sesión
             </Button>
           </div>
         </div>
