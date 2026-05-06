@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope } from "../lib/auth";
+import { applyLocalScope, localesVisibles } from "../lib/auth";
 import { useMediosCobro } from "../lib/useMediosCobro";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import ImportarMaxirest from "./ImportarMaxirest";
@@ -34,7 +34,9 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
   const [filtHasta,setFiltHasta]=useState(_mesActual+"-"+String(_ultDia).padStart(2,"0"));
   const [form,setForm]=useState({local_id:"",fecha:toISO(today),turno:"Noche"});
   const [lineas,setLineas]=useState<{medio:string,monto:string}[]>([{medio:"EFECTIVO SALON",monto:""}]);
-  const localesDisp=user.rol==="dueno"?locales:locales.filter((l: Local)=>(user.locales||[]).includes(l.id));
+  // localesVisibles cubre dueño/admin/superadmin/encargado.
+  const visLocs = localesVisibles(user);
+  const localesDisp = visLocs === null ? locales : locales.filter((l: Local)=>visLocs.includes(l.id));
   const { mediosDisponibles, cuentaDestino } = useMediosCobro();
   // Catálogo en cada modal viene del local del form (no del localActivo del
   // sidebar) — el dueño puede cargar venta para cualquiera de sus locales.

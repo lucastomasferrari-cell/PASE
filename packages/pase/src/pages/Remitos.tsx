@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope, cuentasOperables } from "../lib/auth";
+import { applyLocalScope, cuentasOperables, localesVisibles } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS } from "../lib/constants";
@@ -57,7 +57,10 @@ export default function Remitos({ user, locales, localActivo }: RemitosProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagoForm.cuenta, cuentasUsables.join("|")]);
-  const localesDisp = user.rol==="dueno"?locales:locales.filter((l: Local)=>(user.locales||[]).includes(l.id));
+  // localesVisibles cubre dueño/admin/superadmin/encargado, vs el filtro
+  // viejo que solo exceptuaba "dueno" (excluía admin del acceso total).
+  const visLocs = localesVisibles(user);
+  const localesDisp = visLocs === null ? locales : locales.filter((l: Local) => visLocs.includes(l.id));
 
   const load = async () => {
     setLoading(true);

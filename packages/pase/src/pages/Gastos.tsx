@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope, cuentasOperables } from "../lib/auth";
+import { applyLocalScope, cuentasOperables, localesVisibles } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS } from "../lib/constants";
@@ -48,6 +48,13 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
   // (no visibles): un usuario puede pagar contra una cuenta cuyo saldo no ve.
   const opCuentas = cuentasOperables(user);
   const cuentasUsables = opCuentas === null ? CUENTAS : CUENTAS.filter(c => opCuentas.includes(c));
+  // Locales del dropdown — solo los que el usuario tiene autorizados.
+  // Reportado 2026-05-06: el cajero veía locales ajenos en el dropdown
+  // del modal de gasto (encima del local activo del sidebar). Patrón
+  // canónico: localesVisibles(user) devuelve null para dueño/admin
+  // (acceso total) o array para encargado.
+  const visLocs = localesVisibles(user);
+  const locsDisp: Local[] = visLocs === null ? locales : locales.filter((l: Local) => visLocs.includes(l.id));
   const [search, setSearch] = useState("");
   const [desde, setDesde] = useState(toISO(new Date(today.getFullYear(), today.getMonth(), 1)));
   const [hasta, setHasta] = useState(toISO(today));
@@ -67,7 +74,13 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
   // value que no aparece en options → el browser muestra el primer option
   // visualmente, pero el state sigue con el default y el RPC persiste contra
   // la cuenta invisible. Default vacío fuerza la elección consciente.
-  const emptyForm = { fecha: toISO(today), local_id: localActivo ? String(localActivo) : "", categoria: "", tipo: "fijo", monto: "", detalle: "", cuenta: "", plantilla_id: null as number | null };
+  // Si el usuario tiene un solo local autorizado, default a ese (aunque el
+  // sidebar no haya seteado localActivo). Encargados no pueden cargar gastos
+  // con local_id NULL (= todos), así que NO sirve dejar "" en ese caso.
+  const lidImplicito: number | null = localActivo != null
+    ? Number(localActivo)
+    : (locsDisp.length === 1 ? Number(locsDisp[0]!.id) : null);
+  const emptyForm = { fecha: toISO(today), local_id: lidImplicito != null ? String(lidImplicito) : "", categoria: "", tipo: "fijo", monto: "", detalle: "", cuenta: "", plantilla_id: null as number | null };
   const [form, setForm] = useState(emptyForm);
 
   const emptyPagoPlant = { monto: "", fecha: toISO(today), cuenta: "" };
@@ -311,12 +324,21 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                     {catsByTipo(tipoFiltro === "todos" ? form.tipo : tipoFiltro).map(c => <option key={c}>{c}</option>)}
                   </select>
                 </div>
-                <div className="field"><label>Local</label>
-                  <select value={form.local_id} onChange={e => setForm({ ...form, local_id: e.target.value })}>
-                    <option value="">Todos</option>
-                    {locales.map((l: Local) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-                  </select>
-                </div>
+                {locsDisp.length === 1 ? (
+                  // Si el usuario solo tiene 1 local autorizado, no
+                  // dropdown — mostramos el local fijo. El form usa el
+                  // mismo `local_id` por consistencia con la lógica de save.
+                  <div className="field"><label>Local</label>
+                    <input type="text" value={locsDisp[0]!.nombre} disabled readOnly />
+                  </div>
+                ) : (
+                  <div className="field"><label>Local</label>
+                    <select value={form.local_id} onChange={e => setForm({ ...form, local_id: e.target.value })}>
+                      <option value="">Todos</option>
+                      {locsDisp.map((l: Local) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+                    </select>
+                  </div>
+                )}
               </div>
               <div className="form2">
                 <div className="field"><label>Fecha</label><input type="date" value={form.fecha} onChange={e => setForm({ ...form, fecha: e.target.value })} /></div>
@@ -400,7 +422,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                   <div className="field"><label>Local</label>
                     <select value={plantForm.local_id} onChange={e => setPlantForm({ ...plantForm, local_id: e.target.value })}>
                       <option value="">Todos</option>
-                      {locales.map((l: Local) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+                      {locsDisp.map((l: Local) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
                     </select>
                   </div>
                 </div>
