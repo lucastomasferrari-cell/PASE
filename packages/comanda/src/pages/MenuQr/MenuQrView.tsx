@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useParams } from 'react-router-dom';
 import { Plus, Minus, ShoppingCart, X, Check } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
@@ -20,10 +20,12 @@ export function MenuQrView() {
   const [confirmado, setConfirmado] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const carrito = useSyncExternalStore(
-    cb => menuQrCart.subscribe(tk, cb),
-    () => menuQrCart.get(tk),
-  );
+  // useCallback fija las refs entre renders (bug A5 sprint 5): sin esto
+  // el primer arg de useSyncExternalStore es una closure nueva por render
+  // → React desuscribe + resuscribe en cada commit.
+  const subscribe = useCallback((cb: () => void) => menuQrCart.subscribe(tk, cb), [tk]);
+  const getSnapshot = useCallback(() => menuQrCart.get(tk), [tk]);
+  const carrito = useSyncExternalStore(subscribe, getSnapshot);
   const subtotal = carrito.reduce((s, x) => s + x.precio * x.cantidad, 0);
 
   useEffect(() => {
