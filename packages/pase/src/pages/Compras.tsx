@@ -306,7 +306,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     <div>
       <div className="ph-row">
         <div>
-          <div className="ph-title">Facturas</div>
+          <div className="ph-title">Compras</div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="btn btn-sec" onClick={() => setLectorModal(true)}>Lector IA</button>

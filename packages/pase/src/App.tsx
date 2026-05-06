@@ -9,7 +9,6 @@ import SeleccionarLocalModal from "./components/SeleccionarLocalModal";
 import Dashboard from "./pages/Dashboard";
 import Ventas from "./pages/Ventas";
 import Compras from "./pages/Compras";
-import Remitos from "./pages/Remitos";
 import Caja from "./pages/Caja";
 import EERR from "./pages/EERR";
 import Contador from "./pages/Contador";
@@ -280,7 +279,10 @@ export default function App() {
       case "dashboard": return <Dashboard {...props}/>;
       case "ventas":    return <Ventas {...props}/>;
       case "compras":   return <Compras {...props}/>;
-      case "remitos":   return <Remitos {...props}/>;
+      // Defensive: si algún user tiene section="remitos" persistido en
+      // sessionStorage (de antes de la unificación 2026-05-07), redirigir
+      // a Compras donde ahora viven los remitos.
+      case "remitos":   return <Compras {...props}/>;
       case "caja":      return <Caja {...props}/>;
       case "eerr":      return <EERR {...props}/>;
       case "gastos":    return <Gastos {...props}/>;
