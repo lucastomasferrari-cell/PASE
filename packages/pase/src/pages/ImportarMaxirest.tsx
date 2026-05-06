@@ -1,20 +1,17 @@
 import { useMemo, useState } from "react";
 import { db } from "../lib/supabase";
-import { fmt_d, fmt_$, genId } from "../lib/utils";
+import { fmt_d, fmt_$, genId, toISO } from "../lib/utils";
 import { useMediosCobro } from "../lib/useMediosCobro";
-import { parseCierreMaxirest } from "../lib/maxirest/parser";
-import { PARSER_VERSION } from "../lib/maxirest/types";
-import type { CierreMaxirest } from "../lib/maxirest/types";
+import { parseCierre, PARSER_VERSION, type ParseError, type ParsedCierre } from "../lib/maxirest/parser";
 
 interface ImportarMaxirestProps {
-  // Compatible con la prop existente en App.tsx (no se usa pero se acepta).
+  // Compat con App.tsx (no se usa pero se acepta para no romper).
   locales?: unknown;
   localActivo?: number | null;
   onImported?: () => void;
 }
 
 interface MedioMapeado {
-  /** Nombre crudo como vino del cierre. */
   raw: string;
   /** Nombre del medio en el catálogo del local (null si no matchea). */
   matched: string | null;
@@ -22,75 +19,73 @@ interface MedioMapeado {
   cantidad: number;
 }
 
-// Razones por las que el cierre no se puede importar. Si hay alguna,
-// el botón Importar queda deshabilitado y se muestra un mensaje claro.
 type Bloqueo =
   | { tipo: 'sin_local' }
-  | { tipo: 'campo_faltante'; campo: 'fecha' | 'turno' | 'total' | 'medios' }
   | { tipo: 'medio_no_configurado'; nombre: string };
 
 export default function ImportarMaxirest({ localActivo, onImported }: ImportarMaxirestProps) {
   const [texto, setTexto] = useState('');
-  const [cierre, setCierre] = useState<CierreMaxirest | null>(null);
+  const [parsed, setParsed] = useState<ParsedCierre | null>(null);
+  const [errores, setErrores] = useState<ParseError[]>([]);
   const [loading, setLoading] = useState(false);
   const { mediosDisponibles } = useMediosCobro();
 
   function procesar() {
     if (!texto.trim()) return;
-    setCierre(parseCierreMaxirest(texto));
+    const r = parseCierre(texto);
+    if (r.ok) { setParsed(r.data); setErrores([]); }
+    else { setParsed(null); setErrores(r.errores); }
   }
 
-  function reset() { setCierre(null); setTexto(''); }
+  function reset() { setParsed(null); setErrores([]); setTexto(''); }
 
-  // Mapeo de medios del cierre al catálogo del local activo. Match exacto
-  // case-insensitive sobre el nombre.
+  // Mapeo medios → catálogo del local activo (case-insensitive exacto).
   const medios: MedioMapeado[] = useMemo(() => {
-    if (!cierre || !cierre.ventasPorMedio.valor || localActivo == null) return [];
+    if (!parsed || localActivo == null) return [];
     const cat = mediosDisponibles(Number(localActivo));
-    return cierre.ventasPorMedio.valor.map(m => {
-      const target = m.raw.trim().toUpperCase();
+    return parsed.medios.map(m => {
+      const target = m.nombre.trim().toUpperCase();
       const found = cat.find(c => c.nombre.trim().toUpperCase() === target);
-      return { raw: m.raw, matched: found?.nombre ?? null, monto: m.monto, cantidad: m.cantidad };
+      return { raw: m.nombre, matched: found?.nombre ?? null, monto: m.monto, cantidad: m.cantidad };
     });
-  }, [cierre, localActivo, mediosDisponibles]);
+  }, [parsed, localActivo, mediosDisponibles]);
 
   const totalCierre = medios.reduce((s, m) => s + m.monto, 0);
 
   const bloqueo: Bloqueo | null = useMemo(() => {
+    if (!parsed) return null;
     if (localActivo == null) return { tipo: 'sin_local' };
-    if (!cierre) return null;
-    if (cierre.fecha.valor == null) return { tipo: 'campo_faltante', campo: 'fecha' };
-    if (cierre.turno.valor == null) return { tipo: 'campo_faltante', campo: 'turno' };
-    if (medios.length === 0)        return { tipo: 'campo_faltante', campo: 'medios' };
-    if (totalCierre <= 0)            return { tipo: 'campo_faltante', campo: 'total' };
     const sinConfig = medios.find(m => !m.matched);
     if (sinConfig) return { tipo: 'medio_no_configurado', nombre: sinConfig.raw };
     return null;
-  }, [cierre, medios, totalCierre, localActivo]);
+  }, [parsed, medios, localActivo]);
 
   async function importar() {
-    if (!cierre || !cierre.fecha.valor || !cierre.turno.valor || localActivo == null || bloqueo) return;
+    if (!parsed || localActivo == null || bloqueo) return;
     setLoading(true);
     try {
       const lid = Number(localActivo);
-      const fecha = cierre.fecha.valor;
-      const turno = cierre.turno.valor;
+      const fechaIso = toISO(parsed.fecha);
+      // El schema histórico usa "Mediodía" / "Noche" (con tilde y mayúscula).
+      const turnoDB = parsed.turno === 'noche' ? 'Noche' : 'Mediodía';
 
       // Idempotency: si ya hay un cierre del mismo (fecha, turno, local), confirmar.
       const { data: dup } = await db.from('ventas').select('id')
-        .eq('fecha', fecha).eq('turno', turno).eq('local_id', lid).limit(1);
+        .eq('fecha', fechaIso).eq('turno', turnoDB).eq('local_id', lid).limit(1);
       if (dup && dup.length > 0) {
-        if (!confirm(`Ya existe un cierre del ${fmt_d(fecha)} turno ${turno} para este local. ¿Importar igual?`)) {
+        if (!confirm(`Ya existe un cierre del ${fmt_d(fechaIso)} turno ${turnoDB} para este local. ¿Importar igual?`)) {
           setLoading(false); return;
         }
       }
 
       const ventas = medios.map(m => ({
         id: genId('V'),
-        medio: m.matched!,         // bloqueo previene null acá
+        medio: m.matched!,        // bloqueo previene null
         monto: m.monto,
         cant: m.cantidad,
-        fecha, turno, local_id: lid,
+        fecha: fechaIso,
+        turno: turnoDB,
+        local_id: lid,
         origen: 'maxirest',
         parser_version: PARSER_VERSION,
       }));
@@ -113,6 +108,8 @@ export default function ImportarMaxirest({ localActivo, onImported }: ImportarMa
     <div>
       <div className="ph-row"><div><div className="ph-title">Importar Maxirest</div></div></div>
 
+      {errores.length > 0 && <PanelErrores errores={errores} />}
+
       <div className="panel">
         <div className="panel-hd"><span className="panel-title">Texto del cierre</span></div>
         <div style={{ padding: 16 }}>
@@ -130,14 +127,16 @@ export default function ImportarMaxirest({ localActivo, onImported }: ImportarMa
             <button className="btn btn-acc" onClick={procesar} disabled={!texto.trim()}>
               Procesar cierre
             </button>
-            {cierre && <button className="btn btn-sec" onClick={reset}>Limpiar</button>}
+            {(parsed || errores.length > 0) && (
+              <button className="btn btn-sec" onClick={reset}>Limpiar</button>
+            )}
           </div>
         </div>
       </div>
 
-      {cierre && (
+      {parsed && (
         <Preview
-          cierre={cierre}
+          parsed={parsed}
           medios={medios}
           totalCierre={totalCierre}
           bloqueo={bloqueo}
@@ -149,8 +148,30 @@ export default function ImportarMaxirest({ localActivo, onImported }: ImportarMa
   );
 }
 
+function PanelErrores({ errores }: { errores: ParseError[] }) {
+  return (
+    <div className="panel" style={{ borderColor: 'var(--danger)' }}>
+      <div className="panel-hd" style={{ background: 'rgba(239,68,68,0.1)' }}>
+        <span className="panel-title" style={{ color: 'var(--danger)' }}>
+          ⚠️ No se pudo procesar el cierre
+        </span>
+      </div>
+      <div style={{ padding: 16 }}>
+        <ul style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 6 }}>
+          {errores.map((e, i) => (
+            <li key={i} style={{ fontSize: 13 }}>{e.mensaje}</li>
+          ))}
+        </ul>
+        <p style={{ fontSize: 12, color: 'var(--muted2)', marginTop: 12, marginBottom: 0 }}>
+          Verificá el texto del cierre y volvé a procesar.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 interface PreviewProps {
-  cierre: CierreMaxirest;
+  parsed: ParsedCierre;
   medios: MedioMapeado[];
   totalCierre: number;
   bloqueo: Bloqueo | null;
@@ -158,15 +179,15 @@ interface PreviewProps {
   onImportar: () => void;
 }
 
-function Preview({ cierre, medios, totalCierre, bloqueo, loading, onImportar }: PreviewProps) {
-  if (bloqueo) return <BloqueoMsg bloqueo={bloqueo} cierre={cierre} />;
-
+function Preview({ parsed, medios, totalCierre, bloqueo, loading, onImportar }: PreviewProps) {
+  if (bloqueo) return <BloqueoMsg bloqueo={bloqueo} />;
+  const turnoLabel = parsed.turno === 'noche' ? 'Noche' : 'Mediodía';
   return (
     <div className="panel">
       <div className="panel-hd"><span className="panel-title">Cierre detectado</span></div>
       <div style={{ padding: 16, display: 'grid', gap: 12 }}>
-        <Linea label="Fecha" valor={cierre.fecha.valor ? fmt_d(cierre.fecha.valor) : '—'} />
-        <Linea label="Turno" valor={cierre.turno.valor ?? '—'} />
+        <Linea label="Fecha" valor={fmt_d(toISO(parsed.fecha))} />
+        <Linea label="Turno" valor={turnoLabel} />
         <Linea label="Total" valor={fmt_$(totalCierre)} />
 
         <div style={{ marginTop: 4 }}>
@@ -202,40 +223,16 @@ function Linea({ label, valor }: { label: string; valor: string }) {
   );
 }
 
-function BloqueoMsg({ bloqueo, cierre }: { bloqueo: Bloqueo; cierre: CierreMaxirest }) {
+function BloqueoMsg({ bloqueo }: { bloqueo: Bloqueo }) {
+  const msg = bloqueo.tipo === 'sin_local'
+    ? 'Tenés que tener un local activo seleccionado en el sidebar para importar.'
+    : `El medio "${bloqueo.nombre}" no está configurado en el catálogo del local. Andá a Configuración → Medios de cobro, agregalo, y volvé a procesar el cierre.`;
   return (
     <div className="panel">
-      <div className="panel-hd"><span className="panel-title">No se pudo procesar el cierre</span></div>
+      <div className="panel-hd"><span className="panel-title">No se puede importar</span></div>
       <div style={{ padding: 16 }}>
-        <div className="alert alert-warn" style={{ fontSize: 13, lineHeight: 1.6 }}>
-          {textoBloqueo(bloqueo, cierre)}
-        </div>
+        <div className="alert alert-warn" style={{ fontSize: 13, lineHeight: 1.6 }}>{msg}</div>
       </div>
     </div>
   );
-}
-
-function textoBloqueo(b: Bloqueo, cierre: CierreMaxirest): string {
-  if (b.tipo === 'sin_local') {
-    return 'Tenés que tener un local activo seleccionado en el sidebar para importar.';
-  }
-  if (b.tipo === 'campo_faltante') {
-    if (b.campo === 'fecha') {
-      return 'No se detectó la FECHA del cierre. Verificá que el texto incluya la fecha (ej: "Lunes 4 de Mayo de 2026") y volvé a procesar.';
-    }
-    if (b.campo === 'turno') {
-      return 'No se detectó el TURNO. Verificá que el texto incluya la línea "Turno: Mediodía" o "Turno: Noche" y volvé a procesar.';
-    }
-    if (b.campo === 'medios') {
-      return 'No se detectaron MEDIOS DE COBRO. Verificá que el texto incluya la sección "VENTAS POR FORMA DE COBRO" con sus filas y volvé a procesar.';
-    }
-    if (b.campo === 'total') {
-      const f = cierre.fecha.valor ? fmt_d(cierre.fecha.valor) : '';
-      return `Los medios detectados suman 0 ${f ? `(cierre ${f})` : ''}. Probablemente el texto está incompleto. Volvé a copiar el cierre completo y procesalo de nuevo.`;
-    }
-  }
-  if (b.tipo === 'medio_no_configurado') {
-    return `El medio "${b.nombre}" no está configurado en el catálogo del local. Andá a Configuración → Medios de cobro, agregalo, y volvé a procesar el cierre.`;
-  }
-  return 'No se pudo procesar el cierre. Volvé a copiarlo completo y procesalo de nuevo.';
 }
