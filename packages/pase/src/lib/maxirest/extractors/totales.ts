@@ -16,7 +16,7 @@ import { bloqueOTodo } from '../tokenizer';
 export function parseMontoAR(raw: string): number | null {
   if (!raw) return null;
   // Sacar $, espacios, NBSP. Conservar dígitos, coma, punto y signo.
-  let s = raw.replace(/[$\s ]/g, '');
+  let s = raw.replace(/[$\s\u00a0]/g, '');
   if (!s) return null;
   // Si hay coma decimal y punto separador miles → quitar puntos y cambiar coma por punto.
   // Si solo hay punto decimal → dejar.
@@ -30,7 +30,7 @@ export function parseMontoAR(raw: string): number | null {
     s = s.replace(',', '.');
   }
   // En este punto s solo debería tener un punto decimal y un signo opcional.
-  s = s.replace(/[^\d.\-]/g, '');
+  s = s.replace(/[^\d.-]/g, '');
   if (!s) return null;
   const n = parseFloat(s);
   return Number.isFinite(n) ? n : null;
@@ -45,19 +45,19 @@ const ETIQUETAS: Record<'ingresos' | 'egresos' | 'saldo', Etiqueta> = {
   ingresos: {
     fuente: 'etiqueta ingresos',
     patrones: [
-      /(?:Subtotal\s+Ingresos|Total\s+Ingresos|Ingresos\s+Totales|Ingresos\s+del\s+Cierre)\s*:?\s*\$?\s*([\d., \s\-]+)/i,
+      /(?:Subtotal\s+Ingresos|Total\s+Ingresos|Ingresos\s+Totales|Ingresos\s+del\s+Cierre)\s*:?\s*\$?\s*([\d.,\u00a0\s-]+)/i,
     ],
   },
   egresos: {
     fuente: 'etiqueta egresos',
     patrones: [
-      /(?:Subtotal\s+Egresos|Total\s+Egresos|Egresos\s+Totales|Egresos\s+del\s+Cierre)\s*:?\s*\$?\s*([\d., \s\-]+)/i,
+      /(?:Subtotal\s+Egresos|Total\s+Egresos|Egresos\s+Totales|Egresos\s+del\s+Cierre)\s*:?\s*\$?\s*([\d.,\u00a0\s-]+)/i,
     ],
   },
   saldo: {
     fuente: 'etiqueta saldo',
     patrones: [
-      /(?:Saldo\s+de\s+Caja|Saldo\s+del\s+Cierre|Saldo\s+Final|Total\s+Caja)\s*:?\s*\$?\s*([\d., \s\-]+)/i,
+      /(?:Saldo\s+de\s+Caja|Saldo\s+del\s+Cierre|Saldo\s+Final|Total\s+Caja)\s*:?\s*\$?\s*([\d.,\u00a0\s-]+)/i,
     ],
   },
 };

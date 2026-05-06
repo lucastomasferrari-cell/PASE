@@ -46,7 +46,7 @@ function parseLineaMedio(linea: string): Parsed | null {
   // Tokens separados por espacios (o NBSP). El último debe ser un entero
   // (cantidad). El penúltimo debe ser un número con dígitos+coma+punto
   // (monto). Lo previo es el nombre del medio.
-  const toks = trimmed.split(/[\s ]+/);
+  const toks = trimmed.split(/[\s\u00a0]+/);
   if (toks.length < 3) return null;
   const cantStr = toks[toks.length - 1]!;
   const montoStr = toks[toks.length - 2]!;

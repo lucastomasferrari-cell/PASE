@@ -11,7 +11,7 @@
 //
 // Tolerancias:
 // - Mayúsculas / minúsculas / acentos.
-// - Espaciado: NBSP ( ), tabs, múltiples espacios.
+// - Espaciado: NBSP (\u00a0), tabs, múltiples espacios.
 // - Separadores decorativos (~, =, -, ·) que rodean los anchors.
 // - Líneas vacías intermedias.
 // ────────────────────────────────────────────────────────────────────────────
@@ -24,7 +24,7 @@ export function normalizar(s: string): string {
     .normalize('NFD')
     .replace(/\p{M}/gu, '')
     .toLowerCase()
-    .replace(/[ \t]+/g, ' ')
+    .replace(/[\u00a0\t]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }

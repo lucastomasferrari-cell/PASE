@@ -51,7 +51,7 @@ const ESTRATEGIAS: Estrategia[] = [
     fuente: 'fecha numérica DD/MM/YYYY',
     ejecutar(texto) {
       // Acepta separador / o -.
-      const m = texto.match(/\b(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})\b/);
+      const m = texto.match(/\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/);
       if (!m || !m[1] || !m[2] || !m[3]) return null;
       const yRaw = parseInt(m[3], 10);
       const y = m[3].length === 2 ? 2000 + yRaw : yRaw;
