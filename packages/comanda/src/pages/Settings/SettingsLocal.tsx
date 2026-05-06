@@ -62,8 +62,22 @@ export function SettingsLocal() {
     if (Object.keys(patch).length === 0) { toast.info('Sin cambios'); return; }
 
     if (patch.slug && patch.slug !== settings.slug) {
+      // Validación cliente: solo letras minúsculas, números y guiones.
+      if (!/^[a-z0-9-]+$/.test(patch.slug)) {
+        toast.error('Slug inválido', {
+          description: 'Solo letras minúsculas, números y guiones (sin espacios ni acentos).',
+        });
+        return;
+      }
+      if (patch.slug.length < 2 || patch.slug.length > 50) {
+        toast.error('Slug debe tener entre 2 y 50 caracteres');
+        return;
+      }
       const { disponible } = await validarSlugUnico(patch.slug, settings.local_id);
-      if (!disponible) { toast.error('Slug ya usado por otro local'); return; }
+      if (!disponible) {
+        toast.error('Ya hay otro local con este slug. Elegí otro.');
+        return;
+      }
     }
     setSaving(true);
     const { error } = await updateLocalSettings(settings.id, patch);
@@ -76,13 +90,24 @@ export function SettingsLocal() {
   async function handleUploadQr(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !settings || !user?.tenant_id) return;
+    // Validación cliente: imagen + < 2MB
+    if (!file.type.startsWith('image/')) {
+      toast.error('El archivo debe ser una imagen (PNG/JPG/WEBP)');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Imagen muy grande', { description: 'Máximo 2 MB.' });
+      e.target.value = '';
+      return;
+    }
     setUploading(true);
     const { url, error } = await subirMpQr(user.tenant_id, settings.local_id, file);
     if (error || !url) { toast.error(error ?? 'Error subiendo'); setUploading(false); return; }
     const { error: upErr } = await updateLocalSettings(settings.id, { mp_qr_url: url });
     setUploading(false);
     if (upErr) { toast.error(upErr); return; }
-    toast.success('QR de MP guardado');
+    toast.success('QR de MP guardado correctamente');
     await refrescar();
     e.target.value = '';
   }
@@ -127,7 +152,16 @@ export function SettingsLocal() {
                 onChange={(e) => setField('slug', e.target.value.toLowerCase().trim())}
                 placeholder="villa-crespo"
                 className="h-11"
+                pattern="^[a-z0-9-]+$"
               />
+              {merged.slug && (
+                <p className="text-xs text-muted-foreground">
+                  Tu tienda va a estar en:{' '}
+                  <code className="px-1 py-0.5 rounded bg-muted text-[10px]">
+                    /tienda/{merged.slug}
+                  </code>
+                </p>
+              )}
             </Field>
             <Field label="Dirección">
               <Input
