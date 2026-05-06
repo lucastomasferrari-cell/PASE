@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope, cuentasOperables, localesVisibles } from "../lib/auth";
+import { applyLocalScope, cuentasOperables, localesVisibles, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS, UNIDADES } from "../lib/constants";
@@ -8,6 +8,22 @@ import { toISO, today, fmt_d, fmt_$, genId, parseMonto } from "../lib/utils";
 import LectorFacturasIA from "./LectorFacturasIA";
 import type { Usuario, Local } from "../types";
 import type { Proveedor, Factura, PagoFactura } from "../types/finanzas";
+
+// Remito (table remitos) — registro de mercadería recibida sin factura
+// inmediata. Modelo separado en DB pero unificado en UI con Compras desde
+// 2026-05-07. Estados: 'sin_factura'/'vinculado'/'facturado'/'pagado'/'anulado'.
+interface Remito {
+  id: string;
+  prov_id: number;
+  local_id: number;
+  nro: string;
+  fecha: string;
+  monto: number;
+  cat: string | null;
+  detalle: string | null;
+  estado: string;
+  factura_id: string | null;
+}
 
 interface ComprasProps {
   user: Usuario;
@@ -62,13 +78,33 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   // puede tener permiso de pagar contra una cuenta cuyo saldo no ve.
   const opCuentas = cuentasOperables(user);
   const cuentasUsables = opCuentas === null ? CUENTAS : CUENTAS.filter(c => opCuentas.includes(c));
+  const puedeFacturas = tienePermiso(user, "compras");
+  const puedeRemitos  = tienePermiso(user, "remitos");
   const [facturas, setFacturas] = useState<Factura[]>([]);
+  const [remitos, setRemitos] = useState<Remito[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [search, setSearch] = useState("");
   const [desde, setDesde] = useState(toISO(new Date(today.getFullYear(), today.getMonth(), 1)));
   const [hasta, setHasta] = useState(toISO(today));
   const [provFiltro, setProvFiltro] = useState("");
-  const [pillEstado, setPillEstado] = useState("todas");
+  // Si el user solo tiene permiso de remitos, default al pill remitos.
+  const [pillEstado, setPillEstado] = useState<string>(puedeFacturas ? "todas" : "remitos");
+  // Estados para los flows de remito (modales y form).
+  const [remModal, setRemModal] = useState(false);
+  const [vincModal, setVincModal] = useState<Remito | null>(null);
+  const [pagarRemModal, setPagarRemModal] = useState<Remito | null>(null);
+  const [pagandoRem, setPagandoRem] = useState(false);
+  const emptyRemForm = { prov_id: "", local_id: localActivo ? String(localActivo) : "", nro: "", fecha: toISO(today), monto: "" as string | number, cat: "", detalle: "" };
+  const [remForm, setRemForm] = useState(emptyRemForm);
+  const [remPagoForm, setRemPagoForm] = useState<{ cuenta: string; monto: string | number; fecha: string }>({ cuenta: "", monto: "", fecha: toISO(today) });
+
+  useEffect(() => {
+    if (remPagoForm.cuenta && !cuentasUsables.includes(remPagoForm.cuenta)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRemPagoForm(p => ({ ...p, cuenta: "" }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remPagoForm.cuenta, cuentasUsables.join("|")]);
   const [lectorModal, setLectorModal] = useState(false);
   const [modal, setModal] = useState(false);
   const [pagarModal, setPagarModal] = useState<Factura | null>(null);
@@ -131,11 +167,15 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     setLoading(true);
     let fq = db.from("facturas").select("*").order("fecha", { ascending: false });
     fq = applyLocalScope(fq, user, localActivo);
-    const [{ data: f }, { data: p }] = await Promise.all([
+    let rq = db.from("remitos").select("*").order("fecha", { ascending: false });
+    rq = applyLocalScope(rq, user, localActivo);
+    const [{ data: f }, { data: r }, { data: p }] = await Promise.all([
       fq,
+      rq,
       db.from("proveedores").select("*").eq("estado", "Activo").order("nombre"),
     ]);
     setFacturas((f as Factura[]) || []);
+    setRemitos((r as Remito[]) || []);
     setProveedores((p as Proveedor[]) || []);
     setLoading(false);
   };
@@ -302,6 +342,81 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     load();
   };
 
+  // ─── Remitos ────────────────────────────────────────────────────────────
+  // Lógica heredada de Remitos.tsx (eliminado 2026-05-07). Mismas RPCs:
+  // pagar_remito y anular_remito. La inserción es un INSERT directo; los
+  // triggers de migration 202605070900 actualizan proveedores.saldo.
+
+  const onRemProvChange = (prov_id: string) => {
+    const prov = proveedores.find(p => p.id === parseInt(prov_id));
+    setRemForm(f => ({ ...f, prov_id, cat: prov?.cat || f.cat }));
+  };
+
+  const guardarRemito = async () => {
+    if (!remForm.prov_id || !remForm.monto || !remForm.local_id) return;
+    const nro = remForm.nro || `REM-${Date.now().toString().slice(-6)}`;
+    const nuevo = {
+      ...remForm, id: genId("REM"),
+      prov_id: parseInt(remForm.prov_id),
+      local_id: parseInt(String(remForm.local_id)),
+      nro, monto: parseFloat(String(remForm.monto)),
+      estado: "sin_factura", factura_id: null,
+    };
+    await db.from("remitos").insert([nuevo]);
+    setRemModal(false); setRemForm(emptyRemForm); load();
+  };
+
+  const vincularRemitoAFactura = async (fid: string) => {
+    const r = vincModal;
+    if (!r) return;
+    await db.from("remitos").update({ estado: "vinculado", factura_id: fid }).eq("id", r.id);
+    setVincModal(null); load();
+  };
+
+  const pagarRemito = async () => {
+    if (pagandoRem || !pagarRemModal) return;
+    if (!remPagoForm.cuenta) { alert("Elegí una cuenta de egreso"); return; }
+    setPagandoRem(true);
+    try {
+      const r = pagarRemModal;
+      const monto = parseFloat(String(remPagoForm.monto)) || r.monto;
+      const { error } = await db.rpc("pagar_remito", {
+        p_remito_id: r.id, p_monto: monto,
+        p_cuenta: remPagoForm.cuenta, p_fecha: remPagoForm.fecha,
+      });
+      if (error) throw error;
+      setPagarRemModal(null); load();
+    } catch (err) {
+      console.error("Error pagando remito:", err);
+      alert(translateRpcError(err));
+    } finally {
+      setPagandoRem(false);
+    }
+  };
+
+  const anularRemito = async (r: Remito) => {
+    if (!confirm(`¿Anular remito ${r.nro}?`)) return;
+    const motivo = prompt("Motivo (opcional):") || "Anulado desde UI";
+    const { error } = await db.rpc("anular_remito", { p_remito_id: r.id, p_motivo: motivo });
+    if (error) { alert(translateRpcError(error)); return; }
+    load();
+  };
+
+  // Filtro de remitos respeta el local activo del sidebar y el provFiltro.
+  const rFilt = remitos.filter(r => {
+    if (localActivo && String(r.local_id) !== String(localActivo)) return false;
+    if (provFiltro && String(r.prov_id) !== String(provFiltro)) return false;
+    if (search) {
+      const prov = proveedores.find(p => p.id === r.prov_id);
+      const matchProv = prov?.nombre.toLowerCase().includes(search.toLowerCase());
+      const matchNro = (r.nro || "").toLowerCase().includes(search.toLowerCase());
+      if (!matchProv && !matchNro) return false;
+    }
+    if (desde && r.fecha < desde) return false;
+    if (hasta && r.fecha > hasta) return false;
+    return true;
+  });
+
   return (
     <div>
       <div className="ph-row">
@@ -309,8 +424,13 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
           <div className="ph-title">Compras</div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-sec" onClick={() => setLectorModal(true)}>Lector IA</button>
-          <button className="btn btn-acc" onClick={() => { setForm({ ...emptyForm, local_id: localActivo ? String(localActivo) : "" }); setItems([]); setModal(true); }}>+ Cargar Factura</button>
+          {puedeFacturas && <button className="btn btn-sec" onClick={() => setLectorModal(true)}>Lector IA</button>}
+          {puedeRemitos && (
+            <button className="btn btn-sec" onClick={() => { setRemForm({ ...emptyRemForm, local_id: localActivo ? String(localActivo) : "" }); setRemModal(true); }}>+ Cargar Remito</button>
+          )}
+          {puedeFacturas && (
+            <button className="btn btn-acc" onClick={() => { setForm({ ...emptyForm, local_id: localActivo ? String(localActivo) : "" }); setItems([]); setModal(true); }}>+ Cargar Factura</button>
+          )}
         </div>
       </div>
 
@@ -359,14 +479,72 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
         );
       })()}
 
-      {/* Pills */}
+      {/* Pills — facturas + (opcional) remitos.
+          Si user solo tiene permiso de remitos, NO mostramos los pills de
+          facturas (state default ya queda en "remitos"). */}
       <div className="pills">
-        {([["todas", "Todas"], ["pendiente", "Pendientes"], ["vencida", "Vencidas"], ["pagada", "Pagadas"], ["nc", "Notas de Crédito"]] as [string, string][]).map(([id, l]) => (
-          <div key={id} className={`pill ${pillEstado === id ? "active" : ""}`} onClick={() => setPillEstado(id)}>{l}</div>
-        ))}
+        {puedeFacturas && (
+          ([["todas", "Todas"], ["pendiente", "Pendientes"], ["vencida", "Vencidas"], ["pagada", "Pagadas"], ["nc", "Notas de Crédito"]] as [string, string][]).map(([id, l]) => (
+            <div key={id} className={`pill ${pillEstado === id ? "active" : ""}`} onClick={() => setPillEstado(id)}>{l}</div>
+          ))
+        )}
+        {puedeRemitos && (
+          <div className={`pill ${pillEstado === "remitos" ? "active" : ""}`} onClick={() => setPillEstado("remitos")}>Remitos</div>
+        )}
       </div>
 
-      {/* Tabla */}
+      {/* Tabla — switch entre facturas y remitos según pillEstado. */}
+      {pillEstado === "remitos" ? (
+        <div className="panel">
+          {loading ? <div className="loading">Cargando...</div> : rFilt.length === 0 ? <div className="empty">No hay remitos con esos filtros</div> : (
+            <table>
+              <thead><tr>
+                <th>Proveedor · Nº</th>
+                {!localActivo && <th>Local</th>}
+                <th>Fecha</th>
+                <th>Categoría</th>
+                <th style={{ textAlign: "right" }}>Monto</th>
+                <th>Estado</th>
+                <th></th>
+              </tr></thead>
+              <tbody>{rFilt.map(r => {
+                const prov = proveedores.find(p => p.id === r.prov_id);
+                const isAnulado = r.estado === "anulado";
+                return (
+                  <tr key={r.id} className={isAnulado ? "anulada-row" : ""}>
+                    <td>
+                      <div style={{ fontSize: 12, fontWeight: 500, color: "var(--txt)" }}>{prov?.nombre || "—"}</div>
+                      <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 1 }}>{r.nro}</div>
+                    </td>
+                    {!localActivo && (
+                      <td><span className="badge b-muted" style={{ fontSize: 10 }}>{locales.find((l: Local) => l.id === r.local_id)?.nombre || "—"}</span></td>
+                    )}
+                    <td className="mono">{fmt_d(r.fecha)}</td>
+                    <td><span className="badge b-muted">{r.cat || "—"}</span></td>
+                    <td style={{ textAlign: "right" }}><span className="num kpi-warn">{fmt_$(r.monto)}</span></td>
+                    <td>
+                      {r.estado === "sin_factura" && <span className="badge b-warn">Sin Factura</span>}
+                      {(r.estado === "facturado" || r.estado === "vinculado") && <span className="badge b-success">Vinculado</span>}
+                      {r.estado === "pagado" && <span className="badge b-info">Pagado</span>}
+                      {r.estado === "anulado" && <span className="badge b-anulada">Anulado</span>}
+                    </td>
+                    <td>
+                      {!isAnulado && (
+                        <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "flex-end" }}>
+                          {r.estado === "sin_factura" && <button className="btn btn-ghost btn-sm" onClick={() => setVincModal(r)}>Vincular FC</button>}
+                          {r.factura_id && <span className="mono" style={{ fontSize: 10, color: "var(--info)" }}>→ {facturas.find(f => f.id === r.factura_id)?.nro || r.factura_id}</span>}
+                          {r.estado === "sin_factura" && <button className="btn btn-success btn-sm" onClick={() => { setPagarRemModal(r); setRemPagoForm({ cuenta: "", monto: r.monto, fecha: toISO(today) }); }}>Pagar</button>}
+                          {r.estado !== "pagado" && <button className="btn btn-danger btn-sm" onClick={() => anularRemito(r)}>Anular</button>}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}</tbody>
+            </table>
+          )}
+        </div>
+      ) : (
       <div className="panel">
         {loading ? <div className="loading">Cargando...</div> : fFilt.length === 0 ? <div className="empty">No hay facturas con esos filtros</div> : (
           <table>
@@ -416,6 +594,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
           </table>
         )}
       </div>
+      )}
 
       {/* MODAL LECTOR IA — cierra solo con X o ESC, no con click en backdrop */}
       {lectorModal && (
@@ -573,6 +752,73 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
               <div className="field"><label>Fecha</label><input type="date" value={pagoForm.fecha} onChange={e => setPagoForm({ ...pagoForm, fecha: e.target.value })} /></div>
             </div>
             <div className="modal-ft"><button className="btn btn-sec" onClick={() => setPagarModal(null)}>Cancelar</button><button className="btn btn-success" onClick={pagar} disabled={pagando || !pagoForm.cuenta}>{pagando ? "Procesando..." : "Confirmar Pago"}</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CARGAR REMITO — portado de Remitos.tsx (eliminado 2026-05-07) */}
+      {remModal && (
+        <div className="overlay" onClick={() => setRemModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-hd"><div className="modal-title">Nuevo Remito Valorado</div><button className="close-btn" onClick={() => setRemModal(false)}>✕</button></div>
+            <div className="modal-body">
+              <div className="alert alert-info">Para compras informales. Si llega factura, la vinculás. Si no llega, pagás directo.</div>
+              <div className="form2">
+                <div className="field"><label>Proveedor *</label><select value={remForm.prov_id} onChange={e => onRemProvChange(e.target.value)}><option value="">Seleccioná...</option>{proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></div>
+                <div className="field"><label>Local *</label><select value={remForm.local_id} onChange={e => setRemForm({ ...remForm, local_id: e.target.value })}><option value="">Seleccioná...</option>{localesDisp.map((l: Local) => <option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
+              </div>
+              <div className="form2">
+                <div className="field"><label>Nº Remito (opcional)</label><input value={remForm.nro} onChange={e => setRemForm({ ...remForm, nro: e.target.value })} placeholder="Se genera automático" /></div>
+                <div className="field"><label>Categoría EERR</label><select value={remForm.cat} onChange={e => setRemForm({ ...remForm, cat: e.target.value })}><option value="">Seleccioná...</option>{CATEGORIAS_COMPRA.map(c => <option key={c}>{c}</option>)}</select></div>
+              </div>
+              <div className="form2">
+                <div className="field"><label>Fecha</label><input type="date" value={remForm.fecha} onChange={e => setRemForm({ ...remForm, fecha: e.target.value })} /></div>
+                <div className="field"><label>Monto *</label><input type="number" value={remForm.monto} onChange={e => setRemForm({ ...remForm, monto: e.target.value })} placeholder="0" /></div>
+              </div>
+              <div className="field"><label>Descripción / Folio</label><input value={remForm.detalle} onChange={e => setRemForm({ ...remForm, detalle: e.target.value })} placeholder="Folio 1234 - Detalle..." /></div>
+            </div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setRemModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardarRemito}>Confirmar</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL VINCULAR REMITO A FACTURA */}
+      {vincModal && (
+        <div className="overlay" onClick={() => setVincModal(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-hd"><div className="modal-title">Vincular a Factura</div><button className="close-btn" onClick={() => setVincModal(null)}>✕</button></div>
+            <div className="modal-body">
+              <div className="alert alert-warn">Remito {vincModal.nro} · {fmt_$(vincModal.monto)}</div>
+              <p style={{ fontSize: 11, color: "var(--muted2)", marginBottom: 12 }}>Al vincular, la deuda provisoria del remito se ajusta con la deuda fiscal de la factura.</p>
+              <table><thead><tr><th>Factura</th><th>Fecha</th><th>Total</th><th>Diferencia</th><th></th></tr></thead>
+                <tbody>{facturas.filter(f => f.prov_id === vincModal.prov_id && f.estado === "pendiente").map(f => {
+                  const diff = (f.total || 0) - (vincModal.monto || 0);
+                  return (<tr key={f.id}>
+                    <td className="mono">{f.nro}</td><td>{fmt_d(f.fecha)}</td>
+                    <td className="num">{fmt_$(f.total)}</td>
+                    <td style={{ color: diff > 0 ? "var(--danger)" : diff < 0 ? "var(--success)" : "var(--muted2)" }}>{diff > 0 ? "+" : ""}{fmt_$(diff)}</td>
+                    <td><button className="btn btn-acc btn-sm" onClick={() => vincularRemitoAFactura(f.id)}>Vincular</button></td>
+                  </tr>);
+                })}</tbody></table>
+              {facturas.filter(f => f.prov_id === vincModal.prov_id && f.estado === "pendiente").length === 0 && <div className="empty">No hay facturas pendientes de este proveedor</div>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PAGAR REMITO DIRECTO */}
+      {pagarRemModal && (
+        <div className="overlay" onClick={() => setPagarRemModal(null)}>
+          <div className="modal" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-hd"><div className="modal-title">Pagar Remito Directo</div><button className="close-btn" onClick={() => setPagarRemModal(null)}>✕</button></div>
+            <div className="modal-body">
+              <div className="alert alert-info">Remito {pagarRemModal.nro} · {fmt_$(pagarRemModal.monto)}</div>
+              <div className="alert alert-warn">Esto registra el pago sin factura. El gasto impacta en caja y en el EERR.</div>
+              <div className="field"><label>Cuenta de egreso *</label><select value={remPagoForm.cuenta} onChange={e => setRemPagoForm({ ...remPagoForm, cuenta: e.target.value })}><option value="">Seleccioná una cuenta…</option>{cuentasUsables.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+              <div className="field"><label>Monto</label><input type="number" value={remPagoForm.monto} onChange={e => setRemPagoForm({ ...remPagoForm, monto: e.target.value })} /></div>
+              <div className="field"><label>Fecha</label><input type="date" value={remPagoForm.fecha} onChange={e => setRemPagoForm({ ...remPagoForm, fecha: e.target.value })} /></div>
+            </div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setPagarRemModal(null)}>Cancelar</button><button className="btn btn-success" onClick={pagarRemito} disabled={pagandoRem || !remPagoForm.cuenta}>{pagandoRem ? "Procesando..." : "Confirmar Pago"}</button></div>
           </div>
         </div>
       )}
