@@ -37,19 +37,14 @@ interface AuditDetalle {
 export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   const {
     CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES,
-    GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, COMISIONES_CATS, CATEGORIAS_INGRESO,
+    GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, COMISIONES_CATS,
   } = useCategorias();
-  // Listas por dirección para el dropdown de Categoría del Nuevo Movimiento.
-  // Egreso: unión de todas las categorías que pueden aparecer en un egreso
-  // (CMV + 5 grupos de Gastos). Ingreso: las 11 cat_ingreso de config.
-  const catsEgreso = [
-    ...CATEGORIAS_COMPRA, ...GASTOS_FIJOS, ...GASTOS_VARIABLES,
-    ...GASTOS_PUBLICIDAD, ...GASTOS_IMPUESTOS, ...COMISIONES_CATS,
-  ];
-  const catsIngreso = CATEGORIAS_INGRESO;
 
-  // Deriva tipo del movimiento a partir de cat + dirección. Se usa tanto
-  // en guardar() como en guardarEditMov() cuando cambia el signo.
+  // Deriva tipo del movimiento a partir de cat + dirección. Movimientos
+  // nuevos siempre llegan con cat="" (el dropdown se eliminó del modal),
+  // por lo que esta función solo aporta valor en guardarEditMov() cuando
+  // cambia el signo de un movimiento que ya tenía cat seteada (legacy o
+  // creada por el sistema vía RPC).
   const deriveTipoMov = (cat: string, esEgreso: boolean): string => {
     if (!esEgreso) {
       // Ingresos
@@ -109,7 +104,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   // que no aparece en options → browser muestra el primer option visualmente
   // pero el state queda con el default y el RPC persiste contra la cuenta
   // invisible. Default vacío fuerza la elección consciente.
-  const emptyForm = {fecha:toISO(today),cuenta:"",tipo:"Pago Gasto",cat:"",importe:"",detalle:"",esEgreso:true};
+  const emptyForm = {fecha:toISO(today),cuenta:"",tipo:"Pago Gasto",importe:"",detalle:"",esEgreso:true};
   const [form, setForm] = useState(emptyForm);
 
   // Defensive: si form.cuenta queda con un valor que no está en
@@ -224,17 +219,16 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     const lid = lidImplicito != null ? lidImplicito : parseInt(localFormId);
     if (!Number.isFinite(lid)) return;
     const importe = parseFloat(form.importe)*(form.esEgreso?-1:1);
-    // Tipo derivado de cat + dirección (ver deriveTipoMov). Ej: cat="ALQUILER"
-    // con dirección egreso → "Gasto fijo". cat="Liquidación Rappi" con
-    // ingreso → "Liquidación Plataforma".
-    const tipoEfectivo = deriveTipoMov(form.cat, form.esEgreso);
+    // Sin dropdown de Categoría, deriveTipoMov("") devuelve "Egreso Manual"
+    // o "Ingreso Manual" según la dirección.
+    const tipoEfectivo = deriveTipoMov("", form.esEgreso);
     setSaving(true);
     try {
       const { error } = await db.rpc("crear_movimiento_caja", {
         p_fecha: form.fecha,
         p_cuenta: form.cuenta,
         p_tipo: tipoEfectivo,
-        p_cat: form.cat || null,
+        p_cat: null,
         p_importe: importe,
         p_detalle: form.detalle || tipoEfectivo,
         p_local_id: lid,
@@ -439,16 +433,8 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
               <button className="close-btn" onClick={() => setEditMov(null)}>✕</button>
             </div>
             <div className="modal-body">
-              <div className="form2">
-                <div className="field"><label>Fecha</label>
-                  <input type="date" value={editMov.fecha} onChange={e => setEditMov({...editMov, fecha: e.target.value})}/>
-                </div>
-                <div className="field"><label>Categoría</label>
-                  <select value={editMov.cat||""} onChange={e => setEditMov({...editMov, cat: e.target.value})}>
-                    <option value="">Sin categoría</option>
-                    {((parseFloat(String(editMov.importe)) || 0) < 0 ? catsEgreso : catsIngreso).map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </div>
+              <div className="field"><label>Fecha</label>
+                <input type="date" value={editMov.fecha} onChange={e => setEditMov({...editMov, fecha: e.target.value})}/>
               </div>
               <div className="form2">
                 <div className="field"><label>Cuenta</label>
@@ -535,16 +521,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
                 <div className="field"><label>Cuenta *</label><select value={form.cuenta} onChange={e=>setForm({...form,cuenta:e.target.value})}><option value="">Seleccioná una cuenta…</option>{cuentasOperablesList.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
                 <div className="field"><label>Dirección</label><select value={form.esEgreso?"egreso":"ingreso"} onChange={e=>setForm({...form,esEgreso:e.target.value==="egreso"})}><option value="egreso">Egreso (sale plata)</option><option value="ingreso">Ingreso (entra plata)</option></select></div>
               </div>
-              <div className="form2">
-                <div className="field">
-                  <label>Categoría</label>
-                  <select value={form.cat} onChange={e=>setForm({...form,cat:e.target.value})}>
-                    <option value="">{form.esEgreso ? "Sin categoría" : "— elegí una categoría"}</option>
-                    {(form.esEgreso ? catsEgreso : catsIngreso).map(c=><option key={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div className="field"><label>Fecha</label><input type="date" value={form.fecha} onChange={e=>setForm({...form,fecha:e.target.value})}/></div>
-              </div>
+              <div className="field"><label>Fecha</label><input type="date" value={form.fecha} onChange={e=>setForm({...form,fecha:e.target.value})}/></div>
               <div className="field"><label>Importe $</label><input type="number" value={form.importe} onChange={e=>setForm({...form,importe:e.target.value})} placeholder="0"/></div>
               <div className="field"><label>Detalle</label><input value={form.detalle} onChange={e=>setForm({...form,detalle:e.target.value})} placeholder="Descripción..."/></div>
             </div>
