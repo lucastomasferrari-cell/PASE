@@ -23,8 +23,18 @@ function esLineaTotal(upper: string): boolean {
   return SUBTOTALES_IGNORAR.has(upper);
 }
 
+// Una línea es "decorador" si está compuesta SOLO por chars decorativos
+// y tiene al menos 3 chars decorativos (sin contar espacios). Esto evita
+// dos errores opuestos:
+//   - Considerar un guión suelto o doble guión como decorador (puede ser
+//     texto legítimo, ej "VISA - DÉBITO").
+//   - Atarse a longitudes específicas de un local (Villa Crespo usa 35
+//     tildes, Maneki/Balpecia/Devoto usan 13). El umbral 3 es semántico:
+//     si hay 3 o más chars decorativos consecutivos, claramente es un
+//     separador.
 function esDecorador(linea: string): boolean {
-  return /^[~=\-·•*_\s]+$/.test(linea);
+  const sinEspacios = linea.replace(/\s/g, '');
+  return sinEspacios.length >= 3 && /^[~=\-·•*_]+$/.test(sinEspacios);
 }
 
 interface Parsed {

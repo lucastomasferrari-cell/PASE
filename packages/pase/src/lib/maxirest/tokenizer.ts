@@ -84,8 +84,11 @@ function localizarAnchors(texto: string): MarcadorEncontrado[] {
     const norm = normalizar(linea);
     for (const a of ANCHORS) {
       // Aceptar patrón aunque la línea tenga decoradores (~, =, -, ·) alrededor.
-      // Sustraemos esos chars antes de comparar.
-      const limpio = norm.replace(/[=~\-·•*_]+/g, ' ').replace(/\s+/g, ' ').trim();
+      // Sustraemos esos chars antes de comparar. Mínimo 3 consecutivos para
+      // no consumir guiones legítimos (ej "TURNO 1 - MEDIODIA"). Independiente
+      // de la longitud específica que use cada local (Villa Crespo: 35 tildes;
+      // Maneki/Balpecia/Devoto: 13).
+      const limpio = norm.replace(/[=~\-·•*_]{3,}/g, ' ').replace(/\s+/g, ' ').trim();
       for (const p of a.patrones) {
         if (limpio === p || limpio.startsWith(p + ' ') || limpio.startsWith(p + ':')) {
           marcadores.push({ tipo: a.tipo, offset, linea, patron: p });

@@ -250,3 +250,116 @@ describe('parseCierreMaxirest — bordes raros', () => {
     expect(r.localNombre.valor).toBe('Cantiña Ñ');
   });
 });
+
+// ─── Independencia de longitud de separadores decorativos ───────────────────
+// Cada local de Maxirest emite separadores con distinta cantidad de tildes:
+//   Villa Crespo  → 35 tildes
+//   Maneki/Balpecia/Devoto → 13 tildes
+// El parser debe ser independiente de la longitud específica. Mínimo 3 chars
+// consecutivos para considerarlo "decorador"; un guión suelto no cuenta.
+
+function cierreConSeparador(sep: string): string {
+  return [
+    'Sucursal: Test',
+    'CUIT: 30-12345678-9',
+    'Lunes 4 de Mayo de 2026',
+    'Turno 2 (Noche)',
+    'Turno: Noche',
+    'Apertura: 18:30',
+    'Cierre: 23:09',
+    'Cierre n° 100',
+    sep,
+    'VENTAS POR FORMA DE COBRO',
+    sep,
+    'EFECTIVO 30000,00 5',
+    'TARJETA DEBITO 50000,00 10',
+    'RAPPI ONLINE 100000,00 8',
+    sep,
+    'TOTAL VENTAS 180000,00 23',
+    sep,
+    'TOTALES DE CAJA',
+    'Subtotal Ingresos: $ 180.000,00',
+    'Subtotal Egresos: $ 0,00',
+    'Saldo de Caja: $ 180.000,00',
+  ].join('\n');
+}
+
+describe('parseCierreMaxirest — separadores de longitudes distintas', () => {
+  it('separador de 3 tildes (mínimo)', () => {
+    const r = parseCierreMaxirest(cierreConSeparador('~~~'));
+    const m = r.ventasPorMedio.valor!;
+    expect(m).not.toBeNull();
+    expect(m.length).toBe(3);
+    expect(m.map(x => x.raw).sort()).toEqual(['EFECTIVO', 'RAPPI ONLINE', 'TARJETA DEBITO']);
+  });
+
+  it('separador de 13 tildes (Maneki/Balpecia/Devoto)', () => {
+    const r = parseCierreMaxirest(cierreConSeparador('~~~~~~~~~~~~~'));
+    const m = r.ventasPorMedio.valor!;
+    expect(m.length).toBe(3);
+    expect(m.find(x => x.raw === 'TARJETA DEBITO')?.monto).toBe(50000);
+  });
+
+  it('separador de 35 tildes (Villa Crespo)', () => {
+    const r = parseCierreMaxirest(cierreConSeparador('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'));
+    const m = r.ventasPorMedio.valor!;
+    expect(m.length).toBe(3);
+    expect(m.find(x => x.raw === 'RAPPI ONLINE')?.cantidad).toBe(8);
+  });
+
+  it('separadores mixtos: 3 tildes en una sección, 35 en otra', () => {
+    const txt = [
+      'Sucursal: Test',
+      'CUIT: 30-12345678-9',
+      'Lunes 4 de Mayo de 2026',
+      'Turno 2 (Noche)',
+      'Turno: Noche',
+      'Cierre: 23:09',
+      '~~~',
+      'VENTAS POR FORMA DE COBRO',
+      '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+      'EFECTIVO 30000,00 5',
+      'TARJETA DEBITO 50000,00 10',
+      '~~~~~~~~~~~~~',
+      'TOTAL VENTAS 80000,00 15',
+      '===',
+      'TOTALES DE CAJA',
+      'Subtotal Ingresos: $ 80.000,00',
+    ].join('\n');
+    const r = parseCierreMaxirest(txt);
+    const m = r.ventasPorMedio.valor!;
+    expect(m.length).toBe(2);
+    expect(m.map(x => x.raw).sort()).toEqual(['EFECTIVO', 'TARJETA DEBITO']);
+  });
+
+  it('separador con iguales (===) también funciona', () => {
+    const r = parseCierreMaxirest(cierreConSeparador('========================'));
+    expect(r.ventasPorMedio.valor!.length).toBe(3);
+  });
+
+  it('separador con guiones (-----) también funciona', () => {
+    const r = parseCierreMaxirest(cierreConSeparador('-----------'));
+    expect(r.ventasPorMedio.valor!.length).toBe(3);
+  });
+
+  it('un guión solo NO es separador (puede ser texto legítimo)', () => {
+    // Si "VISA - DEBITO 100,00 1" llegara como línea de medio, NO debería
+    // descartarse como decorador.
+    const txt = [
+      'Sucursal: Test',
+      'Lunes 4 de Mayo de 2026',
+      'Turno: Noche',
+      'Cierre: 23:09',
+      'VENTAS POR FORMA DE COBRO',
+      'VISA - DEBITO 100,00 1',
+      'TOTAL 100,00 1',
+      'TOTALES DE CAJA',
+      'Subtotal Ingresos: $ 100,00',
+    ].join('\n');
+    const r = parseCierreMaxirest(txt);
+    const m = r.ventasPorMedio.valor!;
+    expect(m).not.toBeNull();
+    expect(m.length).toBe(1);
+    expect(m[0]?.raw).toBe('VISA - DEBITO');
+  });
+});
