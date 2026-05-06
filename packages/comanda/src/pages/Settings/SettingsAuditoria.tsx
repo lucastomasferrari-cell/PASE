@@ -1,11 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
-import { ShieldCheck, Eye } from 'lucide-react';
+import { ShieldCheck, Eye, Download, Rows3, GanttChartSquare } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import { listOverrides, getOverride } from '@/services/auditoriaService';
+import { downloadCSV } from '@/services/reportesService';
 import type { VentaPosOverride, AccionOverride } from '@/types/database';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/Badge';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -26,6 +28,20 @@ const ACCIONES: { value: AccionOverride | 'todos'; label: string }[] = [
   { value: 'split_check', label: 'Partir cuenta' },
 ];
 
+type Vista = 'tabla' | 'timeline';
+
+const ACCION_COLOR: Record<AccionOverride, string> = {
+  void: 'bg-red-500',
+  comp: 'bg-amber-500',
+  discount: 'bg-blue-500',
+  refund: 'bg-red-600',
+  reopen: 'bg-cyan-500',
+  transfer_table: 'bg-violet-500',
+  cambio_mozo: 'bg-zinc-500',
+  merge_mesas: 'bg-violet-600',
+  split_check: 'bg-violet-400',
+};
+
 export function SettingsAuditoria() {
   const { user } = useAuth();
   const [localId] = useLocalActivo(user);
@@ -33,6 +49,11 @@ export function SettingsAuditoria() {
   const [loading, setLoading] = useState(true);
   const [filtroAccion, setFiltroAccion] = useState<AccionOverride | 'todos'>('todos');
   const [detalle, setDetalle] = useState<VentaPosOverride | null>(null);
+  const [vista, setVista] = useState<Vista>('tabla');
+  const [desdeStr, setDesdeStr] = useState('');
+  const [hastaStr, setHastaStr] = useState('');
+  const [montoMin, setMontoMin] = useState('');
+  const [montoMax, setMontoMax] = useState('');
 
   const reload = useCallback(async () => {
     if (localId === null) return;
@@ -40,27 +61,82 @@ export function SettingsAuditoria() {
     const { data } = await listOverrides({
       localId,
       accion: filtroAccion === 'todos' ? undefined : filtroAccion,
-      limit: 200,
+      desde: desdeStr ? new Date(`${desdeStr}T00:00:00`) : undefined,
+      hasta: hastaStr ? new Date(`${hastaStr}T23:59:59`) : undefined,
+      limit: 500,
     });
-    setOverrides(data);
+    let rows = data;
+    const min = montoMin ? parseFloat(montoMin) : null;
+    const max = montoMax ? parseFloat(montoMax) : null;
+    if (min !== null) rows = rows.filter(o => Number(o.monto_afectado ?? 0) >= min);
+    if (max !== null) rows = rows.filter(o => Number(o.monto_afectado ?? 0) <= max);
+    setOverrides(rows);
     setLoading(false);
-  }, [localId, filtroAccion]);
+  }, [localId, filtroAccion, desdeStr, hastaStr, montoMin, montoMax]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  function exportar() {
+    downloadCSV('auditoria.csv',
+      ['Fecha', 'Hora', 'Acción', 'Venta', 'Item', 'Cajero', 'Manager', 'Motivo', 'Monto afectado', 'Valor anterior', 'Valor nuevo', 'IP'],
+      overrides.map(o => [
+        formatFechaAR(o.created_at), formatHoraAR(o.created_at),
+        o.accion, o.venta_id, o.venta_item_id ?? '',
+        o.cajero_id, o.manager_id, o.motivo,
+        o.monto_afectado != null ? Number(o.monto_afectado).toFixed(2) : '',
+        o.valor_anterior != null ? Number(o.valor_anterior).toFixed(2) : '',
+        o.valor_nuevo != null ? Number(o.valor_nuevo).toFixed(2) : '',
+        o.ip_origen ?? '',
+      ]),
+    );
+  }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground flex-1 min-w-[200px]">
           Registro inmutable de overrides (anular, descuento, reembolso, etc.).
           Solo lectura.
         </p>
-        <Select value={filtroAccion} onValueChange={(v) => setFiltroAccion(v as AccionOverride | 'todos')}>
-          <SelectTrigger className="w-[200px] h-10"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {ACCIONES.map((a) => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Button variant={vista === 'tabla' ? 'default' : 'outline'} size="sm" onClick={() => setVista('tabla')}>
+            <Rows3 className="h-3 w-3 mr-1" /> Tabla
+          </Button>
+          <Button variant={vista === 'timeline' ? 'default' : 'outline'} size="sm" onClick={() => setVista('timeline')}>
+            <GanttChartSquare className="h-3 w-3 mr-1" /> Timeline
+          </Button>
+          <Button variant="outline" size="sm" onClick={exportar} disabled={overrides.length === 0}>
+            <Download className="h-3 w-3 mr-1" /> CSV
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2 mb-3 p-3 rounded-md border border-border bg-muted/20">
+        <div>
+          <label className="text-[10px] uppercase text-muted-foreground tracking-wide">Acción</label>
+          <Select value={filtroAccion} onValueChange={(v) => setFiltroAccion(v as AccionOverride | 'todos')}>
+            <SelectTrigger className="w-[180px] h-9 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {ACCIONES.map((a) => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="text-[10px] uppercase text-muted-foreground tracking-wide">Desde</label>
+          <Input type="date" value={desdeStr} onChange={e => setDesdeStr(e.target.value)} className="h-9 text-xs" />
+        </div>
+        <div>
+          <label className="text-[10px] uppercase text-muted-foreground tracking-wide">Hasta</label>
+          <Input type="date" value={hastaStr} onChange={e => setHastaStr(e.target.value)} className="h-9 text-xs" />
+        </div>
+        <div>
+          <label className="text-[10px] uppercase text-muted-foreground tracking-wide">Monto min</label>
+          <Input type="number" inputMode="decimal" value={montoMin} onChange={e => setMontoMin(e.target.value)} className="h-9 text-xs w-24" />
+        </div>
+        <div>
+          <label className="text-[10px] uppercase text-muted-foreground tracking-wide">Monto max</label>
+          <Input type="number" inputMode="decimal" value={montoMax} onChange={e => setMontoMax(e.target.value)} className="h-9 text-xs w-24" />
+        </div>
       </div>
 
       {loading ? (
@@ -73,7 +149,7 @@ export function SettingsAuditoria() {
             Cuando se anule un item o se aplique un descuento grande, aparecerá acá.
           </p>
         </CardContent></Card>
-      ) : (
+      ) : vista === 'tabla' ? (
         <Card className="overflow-hidden">
           <div className="grid grid-cols-[140px_120px_100px_140px_140px_1fr_80px] gap-3 px-6 py-3 border-b border-border bg-muted/40 text-xs font-medium text-muted-foreground uppercase tracking-wide">
             <div>Fecha / Hora</div><div>Acción</div><div>Venta</div><div>Cajero</div><div>Manager</div><div>Motivo</div><div className="text-right">Detalle</div>
@@ -96,6 +172,36 @@ export function SettingsAuditoria() {
               </div>
             </div>
           ))}
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-6">
+            <ol className="relative border-l-2 border-border ml-3 space-y-4">
+              {overrides.map(o => (
+                <li key={o.id} className="relative pl-6">
+                  <span className={`absolute -left-[9px] top-1.5 h-4 w-4 rounded-full border-2 border-background ${ACCION_COLOR[o.accion] ?? 'bg-zinc-500'}`} />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] text-muted-foreground tabular-nums">{formatFechaAR(o.created_at)} · {formatHoraAR(o.created_at)}</span>
+                    <AccionBadge accion={o.accion} />
+                    <span className="text-xs text-muted-foreground">venta #{o.venta_id}</span>
+                    {o.monto_afectado != null && <span className="text-xs font-medium">{formatARS(Number(o.monto_afectado))}</span>}
+                  </div>
+                  <p className="text-sm mt-1">{o.motivo}</p>
+                  <div className="text-[10px] text-muted-foreground mt-1">
+                    cajero {o.cajero_id.slice(0, 8)}… · manager {o.manager_id.slice(0, 8)}…
+                    {o.ip_origen ? ` · IP ${o.ip_origen}` : ''}
+                  </div>
+                  <button
+                    type="button"
+                    className="text-[10px] underline mt-1 text-primary"
+                    onClick={() => void getOverride(o.id).then((r) => r.data && setDetalle(r.data))}
+                  >
+                    Ver metadata completa
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </CardContent>
         </Card>
       )}
 

@@ -1,9 +1,74 @@
 # Deuda técnica COMANDA
 
-Última actualización: 2026-05-07 (final de Sprint 4 — Sesión A).
+Última actualización: 2026-05-08 (final de Sprint 4 — Sesión B).
 
 Este documento lista lo que se decidió postergar, no lo que está roto.
 Todo lo de acá funciona; simplemente queda margen para crecer.
+
+## Sprint 4 (Sesión B)
+
+### Tienda online + KDS + Menú QR
+
+- **Realtime Supabase** para tickets KDS, tracking de pedidos públicos
+  y pedidos nuevos en `PedidosPlaceholder`. Hoy todos pollean
+  (KDS 10s, tienda 15s, menú QR 15s, POS 30s). Implementación: canales
+  por (local_id, estacion) o (local_id) + replicación habilitada.
+
+- **Notificación "Llamar mozo"** desde menú QR: hoy es un toast
+  cliente-side ("Pedile al mozo"). Falta crear tabla `mesa_pedidos_atencion`
+  o emitir un broadcast que aparezca en POS como notificación push.
+
+- **Notificación al POS de pedidos nuevos** desde tienda online y menú
+  QR: hoy se descubren via polling de `PedidosPlaceholder`. Mismo
+  patrón Realtime que arriba.
+
+- **Print CSS optimizado para QR de mesa**: el botón "Imprimir" del
+  dialog de Menú QR usa `window.print()` directamente. La página
+  imprime con todo el chrome — falta `@media print` que oculte
+  navbar/sidebar y fuerce un layout centrado del QR.
+
+- **Polígonos de delivery / radios de zona**: hoy hay solo
+  `costo_envio_default` fijo por local. Postergado.
+
+- **Idempotency_key en `fn_crear_pedido_publico_comanda`**: la RPC
+  Sprint 2 NO recibe idempotency. Si el cliente toca dos veces
+  "Confirmar" muy rápido se generan duplicados. Mitigación actual:
+  setEnviando(true) deshabilita el botón. Para fix definitivo,
+  agregar `p_idempotency_key TEXT` a la RPC y hacer SELECT antes
+  del INSERT.
+
+- **Sonido KDS sin asset**: el beep se genera con Web Audio API
+  inline. Funciona pero limitado al primer "user gesture". Si Lucas
+  quiere un sonido más prolijo, agregar `public/sounds/ticket.mp3`
+  y reproducirlo con `<audio>` o `new Audio()`.
+
+- **Insights ML en reportes**: hoy heurística simple (valor crudo en
+  cards). Falta comparación con período anterior con flecha y % de
+  variación, y banners "Caída de volumen en X (-Y%)".
+
+- **Charts library**: el gráfico de "Ventas por canal" es SVG/CSS
+  plano (barras horizontales). Si se quiere histograma de hora del
+  día, line charts, etc., conviene una librería liviana
+  (recharts o chart.js).
+
+- **Tests E2E Playwright** para flow tienda → POS → KDS y menú QR
+  modos asistido/autónomo. Hoy solo unit tests.
+
+- **Menú QR tracking de venta abierta** (MenuQrTracking del brief):
+  postergado. La RPC `fn_menu_qr_get_local_comanda` ya existe pero
+  no se construyó la pantalla con la lista de items + estado +
+  total acumulado + "pedir cuenta".
+
+- **Tienda online: variantes/tamaños** (S/M/L) por producto:
+  postergado, requiere modelado nuevo de `item_variantes`.
+
+- **Multi-foto producto** en tienda: hoy solo `foto_url` única.
+
+- **Integración MP real** (Point + checkout): hoy QR estático
+  embebido. Pago real fuera del sistema, sin notificación de pago
+  recibido al pedido.
+
+- **Integración impresora térmica** para tickets KDS: hoy todo digital.
 
 ## Sprint 4 (Sesión A)
 

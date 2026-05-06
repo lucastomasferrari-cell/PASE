@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 import { Navigate, Outlet, useNavigate, Link } from 'react-router-dom';
-import { LogOut } from 'lucide-react';
+import { LogOut, BarChart3 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { db } from '../lib/supabase';
+import { usePermiso } from '../lib/usePermiso';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -18,6 +19,7 @@ interface Props {
 export function ProtectedShell({ children }: Props) {
   const { user, loading, error } = useAuth();
   const navigate = useNavigate();
+  const puedeReportes = usePermiso('comanda.reportes.ver');
 
   if (loading) return <CenteredMsg>Cargando…</CenteredMsg>;
   if (error) return <CenteredMsg variant="error">Error de sesión: {error}</CenteredMsg>;
@@ -49,6 +51,13 @@ export function ProtectedShell({ children }: Props) {
             )}
           </div>
           <div className="flex items-center gap-1">
+            {puedeReportes && (
+              <Link to="/reportes">
+                <Button variant="ghost" size="sm" className="gap-2">
+                  <BarChart3 className="h-4 w-4" /> Reportes
+                </Button>
+              </Link>
+            )}
             <ThemeToggle />
             <Button variant="outline" size="icon" onClick={logout} title="Cerrar sesión">
               <LogOut className="h-4 w-4" />

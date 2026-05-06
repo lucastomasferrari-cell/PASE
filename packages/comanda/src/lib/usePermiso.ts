@@ -31,6 +31,7 @@ const PERMISOS_POR_ROL_POS: Record<RolPos, string[]> = {
     'comanda.config.editar',
     'comanda.empleados.editar_pos',
     'comanda.tienda.aprobar',
+    'comanda.reportes.ver',
   ],
   dueno: ['*'],
 };
