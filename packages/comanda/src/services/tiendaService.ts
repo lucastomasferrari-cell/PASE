@@ -115,6 +115,65 @@ export async function crearPedidoPublico(args: CrearPedidoArgs): Promise<{ venta
   return { ventaId: row.venta_id, numero: row.numero_local, error: null };
 }
 
+// ─── Sprint 5: Populares + Discounts ─────────────────────────────────────
+
+export interface PopularItem {
+  item_id: number;
+  nombre: string;
+  descripcion: string | null;
+  emoji: string | null;
+  foto_url: string | null;
+  precio_canal: number;
+  grupo_id: number | null;
+  grupo_nombre: string | null;
+  grupo_color_ramp: string | null;
+  cantidad_vendida: number;
+}
+
+// Populares para sección "Popular" de Tienda online. Mira ventas reales
+// de los últimos `dias` días. Si no alcanza, el frontend hace fallback
+// a items con destacado_tienda=TRUE (filtra del catálogo cargado).
+export async function getPopulares(
+  slug: string,
+  dias = 30,
+  limit = 8,
+): Promise<{ data: PopularItem[]; error: string | null }> {
+  const { data, error } = await dbAnon.rpc('fn_get_populares_tienda_comanda', {
+    p_local_slug: slug,
+    p_dias: dias,
+    p_limit: limit,
+  });
+  if (error) return { data: [], error: error.message };
+  const rows = (data ?? []) as Array<{
+    item_id: number;
+    nombre: string;
+    descripcion: string | null;
+    emoji: string | null;
+    foto_url: string | null;
+    precio_canal: string | number;
+    grupo_id: number | null;
+    grupo_nombre: string | null;
+    grupo_color_ramp: string | null;
+    cantidad_vendida: string | number;
+  }>;
+  return {
+    data: rows.map((r) => ({
+      ...r,
+      precio_canal: Number(r.precio_canal),
+      cantidad_vendida: Number(r.cantidad_vendida),
+    })),
+    error: null,
+  };
+}
+
+// Stub: sistema de promociones/discounts no está implementado aún.
+// Cuando se implemente, agregar parámetro slug y consultar tabla de
+// promociones. Por ahora devuelve [] siempre y el frontend oculta
+// la sección Discounts si data.length === 0.
+export async function getDescuentos(): Promise<{ data: PopularItem[]; error: string | null }> {
+  return { data: [], error: null };
+}
+
 export async function listPedidosPorAprobar(localId: number): Promise<{ data: VentaPos[]; error: string | null }> {
   const { data, error } = await db
     .from('ventas_pos')
