@@ -19,6 +19,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { DEFAULT_PICKER_COLOR } from '@/lib/utils';
+import { ColorRampPicker, type ColorRamp, COLOR_RAMPS } from '@/components/ColorRampPicker';
 
 interface Props {
   user: Usuario;
@@ -188,6 +189,12 @@ function GrupoFormDialog({ user, taxRates, grupo, onClose, onSaved }: GrupoFormP
   const [nombre, setNombre] = useState(grupo?.nombre ?? '');
   const [emoji, setEmoji] = useState<string | null>(grupo?.emoji ?? null);
   const [color, setColor] = useState(grupo?.color ?? DEFAULT_PICKER_COLOR);
+  // Validamos que el color_ramp existente esté en el set canónico.
+  // Migration 202605061200 ya lo hace via CHECK, pero defensivo en cliente.
+  const initialRamp = grupo?.color_ramp && (COLOR_RAMPS as readonly string[]).includes(grupo.color_ramp)
+    ? (grupo.color_ramp as ColorRamp)
+    : null;
+  const [colorRamp, setColorRamp] = useState<ColorRamp | null>(initialRamp);
   const [orden, setOrden] = useState(grupo?.orden ?? 0);
   const [taxRateId, setTaxRateId] = useState<number | null>(grupo?.tax_rate_id ?? null);
   const [estacion, setEstacion] = useState<Estacion | ''>((grupo?.estacion_default as Estacion) ?? '');
@@ -204,9 +211,7 @@ function GrupoFormDialog({ user, taxRates, grupo, onClose, onSaved }: GrupoFormP
       nombre: nombre.trim(), emoji, color, orden,
       tax_rate_id: taxRateId, estacion_default: estacion || null,
       tenant_id: user.tenant_id, local_id: null,
-      // color_ramp se preserva si el grupo ya lo tenía; null para grupos nuevos
-      // hasta que agreguemos selector en otro sprint.
-      color_ramp: grupo?.color_ramp ?? null,
+      color_ramp: colorRamp,
     };
     const { error: err } = grupo ? await updateGrupo(grupo.id, draft) : await createGrupo(draft);
     setSaving(false);
@@ -237,7 +242,7 @@ function GrupoFormDialog({ user, taxRates, grupo, onClose, onSaved }: GrupoFormP
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="color">Color</Label>
+              <Label htmlFor="color">Color UI</Label>
               <Input
                 id="color" type="color" value={color}
                 onChange={(e) => setColor(e.target.value)}
@@ -252,6 +257,15 @@ function GrupoFormDialog({ user, taxRates, grupo, onClose, onSaved }: GrupoFormP
                 className="h-11"
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Color para los tiles del POS</Label>
+            <ColorRampPicker value={colorRamp} onChange={setColorRamp} />
+            <p className="text-xs text-muted-foreground">
+              Define el tono de los tiles del POS y el fallback de las cards
+              de la tienda online cuando el item no tiene foto.
+            </p>
           </div>
 
           <div className="space-y-2">
