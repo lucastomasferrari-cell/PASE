@@ -65,6 +65,9 @@ export function CajaCerrar() {
     );
     setSaving(false);
     if (err) { setError(err); return; }
+    // Notificar a PosLayout para que refetchee el turno y el header
+    // pase a rojo sin requerir F5 (bug A4 sprint 5).
+    window.dispatchEvent(new Event('comanda:turno-changed'));
     navigate('/caja/abrir', { replace: true });
   }
 

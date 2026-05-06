@@ -26,10 +26,22 @@ export function PosLayout() {
   useEffect(() => {
     if (localId === null) return;
     let cancelled = false;
-    getTurnoAbierto(localId).then((res) => {
-      if (!cancelled) setTurno(res.data);
-    });
-    return () => { cancelled = true; };
+    function refetch() {
+      if (localId === null) return;
+      getTurnoAbierto(localId).then((res) => {
+        if (!cancelled) setTurno(res.data);
+      });
+    }
+    refetch();
+    // CajaAbrir y CajaCerrar disparan este evento en éxito. PosLayout
+    // queda montado en /caja/* (router nesting) por lo que el efecto de
+    // mount no se vuelve a ejecutar al volver al POS — usar un evento
+    // global es más liviano que un context y no requiere refactor.
+    window.addEventListener('comanda:turno-changed', refetch);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('comanda:turno-changed', refetch);
+    };
   }, [localId]);
 
   // Atajo: tecla "/" abre el modal de todas las cuentas (no en inputs).

@@ -48,6 +48,9 @@ export function CajaAbrir() {
       setError(err ?? 'Error desconocido');
       return;
     }
+    // Notificar a PosLayout para que refetchee el turno y el header
+    // pase a verde sin requerir F5 (bug A4 sprint 5).
+    window.dispatchEvent(new Event('comanda:turno-changed'));
     navigate('/caja', { replace: true });
   }
 
