@@ -1,6 +1,6 @@
 import {
   Users, Settings as SettingsIcon, Armchair, CreditCard, ClipboardList,
-  KeyRound, ShieldCheck,
+  KeyRound, ShieldCheck, Smartphone, ChefHat,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
@@ -11,17 +11,23 @@ import { SettingsMesas } from './SettingsMesas';
 import { SettingsMetodosCobro } from './SettingsMetodosCobro';
 import { SettingsPermisos } from './SettingsPermisos';
 import { SettingsAuditoria } from './SettingsAuditoria';
+import { SettingsKds } from './SettingsKds';
+import { SettingsMenuQr } from './SettingsMenuQr';
+import { SettingsEstaciones } from './SettingsEstaciones';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
-type Tab = 'empleados' | 'local' | 'mesas' | 'metodos' | 'permisos' | 'auditoria';
+type Tab = 'empleados' | 'local' | 'mesas' | 'metodos' | 'permisos' | 'auditoria' | 'kds' | 'menuqr' | 'estaciones';
 
 const TABS = [
-  { key: 'empleados' as const, label: 'Empleados POS', Icon: Users },
-  { key: 'local' as const,     label: 'General',       Icon: SettingsIcon },
-  { key: 'mesas' as const,     label: 'Mesas',         Icon: Armchair },
-  { key: 'metodos' as const,   label: 'Métodos cobro', Icon: CreditCard },
-  { key: 'permisos' as const,  label: 'Permisos',      Icon: KeyRound },
-  { key: 'auditoria' as const, label: 'Auditoría',     Icon: ShieldCheck },
+  { key: 'empleados' as const,  label: 'Empleados POS', Icon: Users },
+  { key: 'local' as const,      label: 'General',       Icon: SettingsIcon },
+  { key: 'mesas' as const,      label: 'Mesas',         Icon: Armchair },
+  { key: 'estaciones' as const, label: 'Estaciones',    Icon: ChefHat },
+  { key: 'kds' as const,        label: 'KDS',           Icon: ChefHat },
+  { key: 'menuqr' as const,     label: 'Menú QR',       Icon: Smartphone },
+  { key: 'metodos' as const,    label: 'Métodos cobro', Icon: CreditCard },
+  { key: 'permisos' as const,   label: 'Permisos',      Icon: KeyRound },
+  { key: 'auditoria' as const,  label: 'Auditoría',     Icon: ShieldCheck },
 ];
 
 export function SettingsLayout() {
@@ -60,6 +66,9 @@ export function SettingsLayout() {
         <TabsContent value="empleados"><SettingsEmpleados user={user} /></TabsContent>
         <TabsContent value="local"><SettingsLocal /></TabsContent>
         <TabsContent value="mesas"><SettingsMesas /></TabsContent>
+        <TabsContent value="estaciones"><SettingsEstaciones /></TabsContent>
+        <TabsContent value="kds"><SettingsKds /></TabsContent>
+        <TabsContent value="menuqr"><SettingsMenuQr /></TabsContent>
         <TabsContent value="metodos"><SettingsMetodosCobro /></TabsContent>
         <TabsContent value="permisos"><SettingsPermisos /></TabsContent>
         <TabsContent value="auditoria"><SettingsAuditoria /></TabsContent>
