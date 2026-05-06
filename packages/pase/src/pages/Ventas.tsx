@@ -78,8 +78,6 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
   }
   grupos.sort((a,b)=>a.fecha<b.fecha?1:a.fecha>b.fecha?-1:0);
 
-  const totalPeriodo=ventas.reduce((s: number,v: Venta)=>s+(v.monto||0),0);
-
   const guardar=async()=>{
     if(!form.local_id)return;
     const lid=parseInt(form.local_id);
@@ -202,8 +200,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
 
       {/* SECCIÓN INFERIOR: filtros + historial */}
       <div className="panel">
-        <div className="panel-hd" style={{flexWrap:"wrap",gap:8}}>
-          <span className="panel-title">Historial — {grupos.length} cierres · {fmt_$(totalPeriodo)}</span>
+        <div className="panel-hd" style={{flexWrap:"wrap",gap:8,justifyContent:"flex-end"}}>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
             <input type="date" className="search" style={{width:155}} value={filtDesde}
               onChange={e=>setFiltDesde(e.target.value)}/>

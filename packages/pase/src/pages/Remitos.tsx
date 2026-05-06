@@ -145,8 +145,7 @@ export default function Remitos({ user, locales, localActivo }: RemitosProps) {
         <div><div className="ph-title">Remitos</div></div>
         <button className="btn btn-acc" onClick={()=>{setForm(emptyForm);setModal(true)}}>+ Remito Valorado</button>
       </div>
-      <div className="alert alert-warn">Los remitos generan <strong>deuda provisoria</strong>. Vinculalos a la factura cuando llegue, o registrá el pago directo si no viene factura.</div>
-      <div className="panel">
+<div className="panel">
         {loading?<div className="loading">Cargando...</div>:rFilt.length===0?<div className="empty">No hay remitos</div>:(
           <table><thead><tr><th>Proveedor</th><th>Nº Remito</th><th>Fecha</th><th>Categoría</th><th>Monto</th><th>Estado</th><th></th></tr></thead>
           <tbody>{rFilt.map(r=>{
