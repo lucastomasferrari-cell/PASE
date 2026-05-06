@@ -1,19 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link, useOutletContext, useParams } from 'react-router-dom';
-import { Check, Clock, ChefHat, Package } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { getPedidoPublico, type PedidoPublicoEstado } from '@/services/tiendaService';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { formatARS } from '@/lib/format';
 import type { TiendaCtx } from './TiendaLayout';
+import { EstadoPedidoTimeline, PASOS_DELIVERY, PASOS_RETIRO } from './components/EstadoPedidoTimeline';
 
 const POLL_MS = 15000;
-
-const PASOS = [
-  { key: 'necesita_aprobacion', label: 'Esperando aprobación', icon: Clock },
-  { key: 'enviada',             label: 'En cocina',            icon: ChefHat },
-  { key: 'lista',               label: 'Lista para retirar',   icon: Package },
-  { key: 'entregada',           label: 'Entregada',            icon: Check },
-];
 
 export function TiendaConfirmacion() {
   const { local } = useOutletContext<TiendaCtx>();
@@ -39,72 +34,99 @@ export function TiendaConfirmacion() {
     return () => { cancelled = true; clearInterval(interval); };
   }, [id, telefono]);
 
-  if (loading) return <div className="p-6 text-center text-sm text-muted-foreground">Cargando…</div>;
+  if (loading) {
+    return (
+      <div className="max-w-md mx-auto px-5 py-12">
+        <div className="text-center space-y-3 mb-8">
+          <Skeleton className="h-16 w-16 rounded-full mx-auto" />
+          <Skeleton className="h-6 w-48 mx-auto" />
+          <Skeleton className="h-4 w-32 mx-auto" />
+        </div>
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-md" />)}
+        </div>
+      </div>
+    );
+  }
+
   if (notFound) {
     return (
-      <div className="max-w-md mx-auto p-6 text-center">
+      <div className="max-w-md mx-auto p-12 text-center">
         <div className="text-4xl mb-3">🤔</div>
-        <h2 className="font-semibold">No encontramos tu pedido</h2>
-        <p className="text-sm text-muted-foreground mt-2">Probá desde "Mi pedido" en el header.</p>
-        <Link to={`/tienda/${local.slug}/seguimiento`} className="text-sm underline text-primary mt-4 inline-block">Buscar mi pedido</Link>
+        <h2 className="text-xl font-medium">No encontramos tu pedido</h2>
+        <p className="text-sm text-foreground/60 mt-3">
+          Probá desde "Mi pedido" en el header con tu número de teléfono.
+        </p>
+        <Link to={`/tienda/${local.slug}/seguimiento`} className="inline-block mt-6 text-sm underline text-primary">
+          Buscar mi pedido
+        </Link>
       </div>
     );
   }
   if (!estado) return null;
 
-  const pasoActualIdx = PASOS.findIndex(p => p.key === estado.estado);
-  const labelEntrega = estado.tipo_entrega === 'delivery' ? 'Camino a tu dirección' : 'Listo para retirar';
-  const tiempoEstimado = estado.tipo_entrega === 'delivery'
-    ? local.tiempo_delivery_min : local.tiempo_retiro_min;
   const rechazada = estado.estado === 'anulada';
+  const pasos = estado.tipo_entrega === 'delivery' ? PASOS_DELIVERY : PASOS_RETIRO;
+  const tiempoEstimado = estado.tipo_entrega === 'delivery'
+    ? local.tiempo_delivery_min
+    : local.tiempo_retiro_min;
+  const labelPago = estado.tipo_entrega === 'delivery' ? 'Pago al recibir' : 'Pagás al retirar';
 
   return (
-    <div className="max-w-md mx-auto p-4">
-      <div className="text-center py-6">
-        <div className="text-5xl mb-2">🎉</div>
-        <h1 className="text-xl font-semibold">Pedido recibido</h1>
-        <p className="text-sm text-muted-foreground">N° {estado.numero_local} · {formatARS(estado.total)}</p>
-        {tiempoEstimado > 0 && !rechazada && (
-          <p className="text-xs text-muted-foreground mt-1">Tiempo estimado: {tiempoEstimado} min</p>
-        )}
+    <div className="max-w-md mx-auto px-5 py-8 sm:py-12">
+      {/* Hero éxito */}
+      <div className="text-center mb-10">
+        <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-primary text-primary-foreground mb-5">
+          <Check className="h-8 w-8" strokeWidth={3} />
+        </div>
+        <h1 className="text-2xl font-medium">¡Pedido recibido!</h1>
+        <p className="text-sm text-foreground/60 mt-1.5">Pedido #{estado.numero_local}</p>
       </div>
 
-      {rechazada ? (
-        <div className="rounded-md border border-destructive bg-destructive/5 p-4 text-center">
-          <p className="text-sm font-medium text-destructive">Tu pedido fue cancelado</p>
-          <p className="text-xs text-muted-foreground mt-2">Comunicate con el local: {local.telefono ?? '(sin teléfono)'}</p>
-        </div>
-      ) : (
-        <div className="space-y-3 my-4">
-          {PASOS.map((p, idx) => {
-            const Icon = p.icon;
-            const realLabel = p.key === 'lista' ? labelEntrega : p.label;
-            const completado = pasoActualIdx >= idx;
-            const enCurso = pasoActualIdx === idx;
-            return (
-              <div
-                key={p.key}
-                className={`flex items-center gap-3 p-3 rounded-md border ${
-                  enCurso ? 'border-primary bg-primary/5' : completado ? 'border-border bg-muted/30' : 'border-border'
-                }`}
-              >
-                <div className={`h-9 w-9 rounded-full flex items-center justify-center ${
-                  completado ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-                }`}>
-                  <Icon className="h-4 w-4" />
-                </div>
-                <div className="flex-1">
-                  <div className={`text-sm ${enCurso ? 'font-semibold' : 'font-medium'}`}>{realLabel}</div>
-                  {enCurso && <div className="text-[10px] text-muted-foreground">Estado actual</div>}
-                </div>
-              </div>
-            );
-          })}
+      {/* Info clave */}
+      {!rechazada && (
+        <div className="rounded-xl bg-gray-50 p-5 mb-8 space-y-2 text-sm">
+          {tiempoEstimado > 0 && (
+            <div className="flex justify-between">
+              <span className="text-foreground/60">Tiempo estimado</span>
+              <span className="font-medium">{tiempoEstimado} min</span>
+            </div>
+          )}
+          <div className="flex justify-between">
+            <span className="text-foreground/60">Pago</span>
+            <span className="font-medium">{labelPago}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-foreground/60">Total</span>
+            <span className="font-medium">{formatARS(estado.total)}</span>
+          </div>
         </div>
       )}
 
-      <Link to={`/tienda/${local.slug}`} className="block">
-        <Button variant="outline" className="w-full">Hacer otro pedido</Button>
+      {/* Estado */}
+      {rechazada ? (
+        <div className="rounded-md border border-destructive bg-destructive/5 p-5 text-center mb-8">
+          <p className="text-sm font-medium text-destructive">Tu pedido fue cancelado</p>
+          {estado.rechazo_motivo && (
+            <p className="text-xs text-foreground/70 mt-2">"{estado.rechazo_motivo}"</p>
+          )}
+          <p className="text-xs text-foreground/60 mt-3">
+            Comunicate con el local: {local.telefono ?? '(sin teléfono)'}
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="text-xs uppercase tracking-wide text-foreground/60 mb-4">
+            Estado del pedido
+          </div>
+          <EstadoPedidoTimeline pasos={pasos} estadoActual={estado.estado} />
+        </>
+      )}
+
+      <Link to={`/tienda/${local.slug}`} className="block mt-8">
+        <Button variant="outline" className="w-full h-12 text-base">
+          Hacer otro pedido
+        </Button>
       </Link>
     </div>
   );
