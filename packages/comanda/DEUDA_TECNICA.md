@@ -1,9 +1,72 @@
 # Deuda técnica COMANDA
 
-Última actualización: 2026-05-07 (final de Sprint 6 — Sidebar admin Toast-style).
+Última actualización: 2026-05-07 (final de Sprint 7 — fix BLOCKERs + HIGH auditoría).
 
 Este documento lista lo que se decidió postergar, no lo que está roto.
 Todo lo de acá funciona; simplemente queda margen para crecer.
+
+## Sprint 7 — Fixes seguridad/integridad financiera
+
+### Bloqueadores diferidos (no urgentes hoy)
+
+- **Eliminación del branch legacy storage facturas**: la policy
+  `facturas_read_mt` permite paths sin UUID prefix si el caller es
+  Neko. Antes de onboardear el segundo tenant productivo, ejecutar
+  `packages/pase/scripts/backfill_storage_facturas_legacy.sql` y
+  crear migration de cleanup que elimina el branch legacy. Anotado
+  con `COMMENT ON POLICY` en migration 202605091230.
+
+- **Rate limiting de tokens KDS y Menú QR**: necesario si se filtra
+  un token o si aumenta el volumen. Implementación en aplicación o
+  edge function de Supabase.
+
+- **Tabla `rol_pos_permisos` formal**: hoy mapeo está hardcoded en
+  `usePermiso.ts`. Cuando se cree UI de "asignar permisos a roles
+  POS" en `/empleados/permisos`, mover a DB. JSDoc `@deprecated` ya
+  agregado en `Usuario.permisos`.
+
+- **`comanda_local_settings.umbral_override_retiro`**: sprint 7
+  hardcodeó $5000 como `CONSTANT v_umbral_override` en
+  `fn_movimiento_caja_comanda`. Mover a config por local cuando un
+  cliente con tickets más altos lo necesite.
+
+- **Lint rule custom `no-permisos-includes`**: prevenir regresiones
+  del patrón legacy `user.permisos.includes(slug)`. Hoy 0 ocurrencias
+  en components, pero falta lint que lo bloquee.
+
+- **Tests SQL/integration con DB local**: verificar el comportamiento
+  real de las RPCs del sprint 7 (RAISE EXCEPTION en
+  `fn_recalc_total_venta` con descuento > subtotal, FOR UPDATE en
+  `fn_agregar_pago_venta_comanda` bajo concurrencia, asserts IDOR).
+  Hoy solo se mockea Supabase a nivel JS — tests reales requieren
+  Supabase local + scripts seed.
+
+### HIGH no atendidos en Sprint 7 (del informe auditoría)
+
+- **Triggers de recalculo `movimientos_caja` cuando se anula venta**:
+  cuando se anula una venta cobrada, no hay trigger que reverse los
+  movimientos de caja asociados. El turno cierra con cuadre incorrecto.
+
+- **`useLocalActivo` con potencial loop de re-render**: agent de
+  auditoría lo flageo pero no se verificó en este sprint. Revisar en
+  próximo.
+
+### MEDIUM/LOW pendientes (no prioritarios)
+
+- **Timezone hardcoded** `'America/Argentina/Buenos_Aires'` en
+  `lib/format.ts` — extraer a config por tenant cuando aplique.
+- **Tests para servicios sin coverage**: `mesasService`,
+  `empleadosService`, `combosService`, `gruposService`,
+  `metodosCobroService`.
+- **Tests de casos negativos en `descuentosService`**.
+- **Coverage configurado en `vitest.config.ts`** — agregar
+  `coverage: { provider: 'v8' }` para reportes %.
+- **Drawer mobile sin focus trap** (`AdminLayout.tsx`).
+- **Inputs date sin labels** en `ReportesLayout.tsx`.
+- **Migration histórica `20260414_rls_policies.sql`** mover a
+  `_history/` para que futuras auditorías no la confundan con
+  policies activas.
+- **`getDescuentos()` stub deprecation**.
 
 ## Sprint 6 — Refactor admin a sidebar + stubs
 
