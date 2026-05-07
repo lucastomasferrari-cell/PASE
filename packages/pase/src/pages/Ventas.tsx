@@ -28,10 +28,9 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
   const [showMaxirest,setShowMaxirest]=useState(false);
   const [detalleModal,setDetalleModal]=useState<CierreVentas | null>(null);
   const [editModal,setEditModal]=useState<VentaEditable | null>(null);
-  const _mesActual=toISO(today).slice(0,7);
-  const _ultDia=new Date(today.getFullYear(),today.getMonth()+1,0).getDate();
-  const [filtDesde,setFiltDesde]=useState(_mesActual+"-01");
-  const [filtHasta,setFiltHasta]=useState(_mesActual+"-"+String(_ultDia).padStart(2,"0"));
+  // Default: últimos 90 días (consistente con Compras/Gastos/ConciliacionMP).
+  const [filtDesde,setFiltDesde]=useState(()=>{const d=new Date(today);d.setDate(d.getDate()-90);return toISO(d);});
+  const [filtHasta,setFiltHasta]=useState(toISO(today));
   const [form,setForm]=useState({local_id:"",fecha:toISO(today),turno:"Noche"});
   const [lineas,setLineas]=useState<{medio:string,monto:string}[]>([{medio:"EFECTIVO SALON",monto:""}]);
   // localesVisibles cubre dueño/admin/superadmin/encargado.

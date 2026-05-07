@@ -36,7 +36,7 @@ export interface KpisPeriodo {
   cantidad_productos: number;
 }
 
-export type PeriodoReporte = 'hoy' | 'ayer' | 'semana' | 'mes' | 'custom';
+export type PeriodoReporte = 'hoy' | 'ayer' | 'semana' | 'mes' | 'trimestre' | 'custom';
 
 export function getRangoPeriodo(p: PeriodoReporte, customDesde?: string, customHasta?: string): { desde: string; hasta: string } {
   const now = new Date();
@@ -56,6 +56,10 @@ export function getRangoPeriodo(p: PeriodoReporte, customDesde?: string, customH
     case 'mes': {
       const m = new Date(now); m.setDate(m.getDate() - 30);
       return { desde: startOfDay(m).toISOString(), hasta: endOfDay(now).toISOString() };
+    }
+    case 'trimestre': {
+      const q = new Date(now); q.setDate(q.getDate() - 90);
+      return { desde: startOfDay(q).toISOString(), hasta: endOfDay(now).toISOString() };
     }
     case 'custom':
       return {

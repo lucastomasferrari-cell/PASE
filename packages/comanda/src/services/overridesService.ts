@@ -14,7 +14,7 @@ export async function listOverridesVenta(ventaId: number): Promise<{ data: Venta
   return { data: (data ?? []) as VentaPosOverride[], error: null };
 }
 
-export async function listOverridesLocal(localId: number, days = 30): Promise<{ data: VentaPosOverride[]; error: string | null }> {
+export async function listOverridesLocal(localId: number, days = 90): Promise<{ data: VentaPosOverride[]; error: string | null }> {
   const since = new Date(Date.now() - days * 86400_000).toISOString();
   const { data, error } = await db
     .from('ventas_pos_overrides')

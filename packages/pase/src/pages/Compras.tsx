@@ -89,7 +89,10 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const [remitos, setRemitos] = useState<Remito[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [search, setSearch] = useState("");
-  const [desde, setDesde] = useState(toISO(new Date(today.getFullYear(), today.getMonth(), 1)));
+  // Default: últimos 90 días. Antes era inicio del mes (~15 días promedio)
+  // pero los usuarios reportaron faltarles facturas viejas — mejor mostrar
+  // 3 meses por default y que filtren manual si quieren ventana más chica.
+  const [desde, setDesde] = useState(() => { const d = new Date(today); d.setDate(d.getDate() - 90); return toISO(d); });
   const [hasta, setHasta] = useState(toISO(today));
   const [provFiltro, setProvFiltro] = useState("");
   // Si el user solo tiene permiso de remitos, default al pill remitos.

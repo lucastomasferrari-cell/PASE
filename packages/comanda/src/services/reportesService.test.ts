@@ -24,6 +24,13 @@ describe('getRangoPeriodo', () => {
     expect(ms).toBeLessThan(8 * 24 * 3600 * 1000);
   });
 
+  it('trimestre: ~90 días de rango', () => {
+    const { desde, hasta } = getRangoPeriodo('trimestre');
+    const ms = new Date(hasta).getTime() - new Date(desde).getTime();
+    expect(ms).toBeGreaterThan(89 * 24 * 3600 * 1000);
+    expect(ms).toBeLessThan(91 * 24 * 3600 * 1000);
+  });
+
   it('custom: usa fechas provistas', () => {
     const { desde, hasta } = getRangoPeriodo('custom', '2026-01-01', '2026-01-15');
     expect(new Date(desde).getUTCDate()).toBeGreaterThanOrEqual(1);

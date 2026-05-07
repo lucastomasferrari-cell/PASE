@@ -56,7 +56,8 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
   const visLocs = localesVisibles(user);
   const locsDisp: Local[] = visLocs === null ? locales : locales.filter((l: Local) => visLocs.includes(l.id));
   const [search, setSearch] = useState("");
-  const [desde, setDesde] = useState(toISO(new Date(today.getFullYear(), today.getMonth(), 1)));
+  // Default: últimos 90 días (consistente con Compras y demás filtros del admin).
+  const [desde, setDesde] = useState(() => { const d = new Date(today); d.setDate(d.getDate() - 90); return toISO(d); });
   const [hasta, setHasta] = useState(toISO(today));
   const [tipoFiltro, setTipoFiltro] = useState("todos");
   const [gastos, setGastos] = useState<Gasto[]>([]);

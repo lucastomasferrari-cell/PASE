@@ -1,7 +1,7 @@
 import { db } from '../lib/supabase';
 import type { VentaPos, ModoVenta, EstadoVenta } from '../types/database';
 
-export type PeriodoFiltro = 'hoy' | 'ayer' | 'semana' | 'mes' | 'custom';
+export type PeriodoFiltro = 'hoy' | 'ayer' | 'semana' | 'mes' | 'trimestre' | 'custom';
 
 function getPeriodoRange(periodo: PeriodoFiltro, customDesde?: Date, customHasta?: Date): { desde: Date; hasta: Date } {
   const now = new Date();
@@ -19,6 +19,10 @@ function getPeriodoRange(periodo: PeriodoFiltro, customDesde?: Date, customHasta
   if (periodo === 'mes') {
     const m = new Date(now); m.setDate(m.getDate() - 30);
     return { desde: startOfDay(m), hasta: endOfDay(now) };
+  }
+  if (periodo === 'trimestre') {
+    const q = new Date(now); q.setDate(q.getDate() - 90);
+    return { desde: startOfDay(q), hasta: endOfDay(now) };
   }
   return {
     desde: customDesde ?? startOfDay(now),

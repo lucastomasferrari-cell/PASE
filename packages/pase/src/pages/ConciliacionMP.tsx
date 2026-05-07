@@ -149,8 +149,10 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   // Filtro "solo sin justificar" del tab Egresos. Lo activa también el card
   // del header al click ("X egresos sin justificar" → tab Egresos + filtro).
   const [filtroSinJustif,setFiltroSinJustif]=useState(false);
-  const _hace30=new Date();_hace30.setDate(_hace30.getDate()-30);
-  const [desde,setDesde]=useState(toISO(_hace30));
+  // Default: últimos 90 días. El botón "Últ. 30d" del toolbar permite
+  // restringir a 30 si el usuario quiere ventana más chica.
+  const _hace90=new Date();_hace90.setDate(_hace90.getDate()-90);
+  const [desde,setDesde]=useState(toISO(_hace90));
   const [hasta,setHasta]=useState(toISO(today));
   const [configModal,setConfigModal]=useState(false);
   const [configForm,setConfigForm]=useState({local_id:"",access_token:""});

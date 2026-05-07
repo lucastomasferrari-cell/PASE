@@ -16,7 +16,9 @@ export interface ReportesCtx {
 export function ReportesLayout() {
   const { user } = useAuth();
   const [localId] = useLocalActivo(user);
-  const [periodo, setPeriodo] = useState<PeriodoReporte>('hoy');
+  // Default 'trimestre' (90 días) — alineado con filtros admin de PASE.
+  // Antes era 'hoy' pero usuarios reportaban tener que cambiarlo siempre.
+  const [periodo, setPeriodo] = useState<PeriodoReporte>('trimestre');
   const [customDesde, setCustomDesde] = useState('');
   const [customHasta, setCustomHasta] = useState('');
   const exportRef = useMemo<{ current: (() => void) | null }>(() => ({ current: null }), []);
@@ -40,14 +42,14 @@ export function ReportesLayout() {
       </div>
 
       <div className="flex items-center gap-2 flex-wrap text-sm">
-        {(['hoy', 'ayer', 'semana', 'mes', 'custom'] as PeriodoReporte[]).map(p => (
+        {(['hoy', 'ayer', 'semana', 'mes', 'trimestre', 'custom'] as PeriodoReporte[]).map(p => (
           <button
             key={p}
             type="button"
             onClick={() => setPeriodo(p)}
             className={`px-3 h-9 rounded-full border ${periodo === p ? 'bg-primary text-primary-foreground border-primary' : 'border-border'}`}
           >
-            {p === 'hoy' ? 'Hoy' : p === 'ayer' ? 'Ayer' : p === 'semana' ? 'Última semana' : p === 'mes' ? 'Último mes' : 'Custom'}
+            {p === 'hoy' ? 'Hoy' : p === 'ayer' ? 'Ayer' : p === 'semana' ? 'Última semana' : p === 'mes' ? 'Último mes' : p === 'trimestre' ? 'Últ. 90 días' : 'Custom'}
           </button>
         ))}
         {periodo === 'custom' && (
