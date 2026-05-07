@@ -30,13 +30,23 @@ import { db } from "./supabase";
 // Versión PASE: idéntica funcionalmente a la de COMANDA pero adaptada al
 // shape del Usuario de este package (user.locales | user._locales).
 
+// EVENTS_DEFAULT — referencia estable. Bug fix: si se usaba el array
+// literal inline como default (`events = ["INSERT", "UPDATE", "DELETE"]`)
+// React generaba un nuevo array en cada render → useEffect detectaba
+// "cambio" → cleanup + re-suscribe constante. Con la migration NO
+// aplicada en producción, cada nueva suscripción terminaba en
+// CHANNEL_ERROR → activaba polling 30s → cleanup del próximo render lo
+// cancelaba → loop de re-suscripciones costoso visible como titileo en
+// pantallas con múltiples hooks (Compras tiene 3).
+const EVENTS_DEFAULT: readonly ("INSERT" | "UPDATE" | "DELETE")[] = ["INSERT", "UPDATE", "DELETE"];
+
 interface UseRealtimeTableOptions {
   table: string;
   onChange: () => void;
   scopeByTenant?: boolean;
   scopeByLocal?: boolean;
   extraFilter?: string;
-  events?: ("INSERT" | "UPDATE" | "DELETE")[];
+  events?: readonly ("INSERT" | "UPDATE" | "DELETE")[];
   debounceMs?: number;
   fallbackPollMs?: number;
   enabled?: boolean;
@@ -74,7 +84,7 @@ export function useRealtimeTable({
   scopeByTenant = true,
   scopeByLocal = false,
   extraFilter,
-  events = ["INSERT", "UPDATE", "DELETE"],
+  events = EVENTS_DEFAULT,
   debounceMs = 200,
   fallbackPollMs = 30000,
   enabled = true,
@@ -135,10 +145,16 @@ export function useRealtimeTable({
       pollTimer = setInterval(() => onChangeRef.current(), fallbackPollMs);
     }
 
+    // Visibility refresh: throttleado por instancia para no disparar bursts
+    // de N reloads cuando hay N hooks en la misma pantalla. Si el callback
+    // ya corrió hace <5s, ignorar.
+    let lastVisibilityRefresh = 0;
     function handleVisibility() {
-      if (document.visibilityState === "visible") {
-        onChangeRef.current();
-      }
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastVisibilityRefresh < 5000) return;
+      lastVisibilityRefresh = now;
+      onChangeRef.current();
     }
     document.addEventListener("visibilitychange", handleVisibility);
 
@@ -150,5 +166,8 @@ export function useRealtimeTable({
         try { db.removeChannel(channel); } catch { /* ya cerrado */ }
       }
     };
-  }, [table, tenantId, localId, extraFilter, events, debounceMs, fallbackPollMs, enabled, scopeByTenant, scopeByLocal]);
+    // eventsKey: estabiliza la dep por valor — un caller que pase un array
+    // literal nuevo cada render no causa re-corrida del effect si los
+    // events son los mismos.
+  }, [table, tenantId, localId, extraFilter, events.join(","), debounceMs, fallbackPollMs, enabled, scopeByTenant, scopeByLocal]); // eslint-disable-line react-hooks/exhaustive-deps
 }

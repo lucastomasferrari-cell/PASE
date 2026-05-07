@@ -36,6 +36,14 @@ import { db } from './supabase';
 //     Aunque el filtro tenant_id se olvide, las filas de OTROS tenants no
 //     llegan al cliente (defense in depth).
 
+// EVENTS_DEFAULT — referencia estable. Bug fix: si se usaba el array
+// literal inline como default React generaba un nuevo array en cada
+// render → useEffect detectaba "cambio" → cleanup + re-suscribe constante
+// → con la migration NO aplicada en producción, cada nueva suscripción
+// terminaba en CHANNEL_ERROR → loop visible como titileo en pantallas
+// con múltiples hooks (Compras tiene 3).
+const EVENTS_DEFAULT: readonly ('INSERT' | 'UPDATE' | 'DELETE')[] = ['INSERT', 'UPDATE', 'DELETE'];
+
 interface UseRealtimeTableOptions {
   /** Nombre de la tabla en Postgres (sin schema). */
   table: string;
@@ -48,7 +56,7 @@ interface UseRealtimeTableOptions {
   /** Filtro PostgREST extra, ej: 'estado=eq.activo'. */
   extraFilter?: string;
   /** Eventos a escuchar. Default todos. */
-  events?: ('INSERT' | 'UPDATE' | 'DELETE')[];
+  events?: readonly ('INSERT' | 'UPDATE' | 'DELETE')[];
   /** Debounce en ms para callback. Default 200. */
   debounceMs?: number;
   /** Polling fallback en ms si Realtime falla. Default 30000. */
@@ -91,7 +99,7 @@ export function useRealtimeTable({
   scopeByTenant = true,
   scopeByLocal = false,
   extraFilter,
-  events = ['INSERT', 'UPDATE', 'DELETE'],
+  events = EVENTS_DEFAULT,
   debounceMs = 200,
   fallbackPollMs = 30000,
   enabled = true,
@@ -167,13 +175,15 @@ export function useRealtimeTable({
       pollTimer = setInterval(() => onChangeRef.current(), fallbackPollMs);
     }
 
-    // Visibility: pausar suscripción cuando tab oculta. Al volver visible,
-    // disparar onChange inmediato para sincronizar lo que pudo perderse.
+    // Visibility refresh: throttleado por instancia para no disparar bursts
+    // de N reloads cuando hay N hooks suscritos en la misma pantalla.
+    let lastVisibilityRefresh = 0;
     function handleVisibility() {
-      if (document.visibilityState === 'visible') {
-        // Refrescar inmediato al volver.
-        onChangeRef.current();
-      }
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastVisibilityRefresh < 5000) return;
+      lastVisibilityRefresh = now;
+      onChangeRef.current();
     }
     document.addEventListener('visibilitychange', handleVisibility);
 
@@ -185,7 +195,7 @@ export function useRealtimeTable({
         try { db.removeChannel(channel); } catch { /* ya cerrado */ }
       }
     };
-    // events.join(',') estabiliza la dep — el array literal cambia
-    // referencia cada render, el string sí es comparable.
-  }, [table, tenantId, localId, extraFilter, events, debounceMs, fallbackPollMs, enabled, scopeByTenant, scopeByLocal]);
+    // events.join(',') estabiliza la dep por valor — el array literal del
+    // caller cambia referencia cada render, el string sí es comparable.
+  }, [table, tenantId, localId, extraFilter, events.join(','), debounceMs, fallbackPollMs, enabled, scopeByTenant, scopeByLocal]);
 }
