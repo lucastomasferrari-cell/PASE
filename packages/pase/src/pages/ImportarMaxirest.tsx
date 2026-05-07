@@ -28,7 +28,7 @@ export default function ImportarMaxirest({ localActivo, onImported }: ImportarMa
   const [parsed, setParsed] = useState<ParsedCierre | null>(null);
   const [errores, setErrores] = useState<ParseError[]>([]);
   const [loading, setLoading] = useState(false);
-  const { mediosDisponibles } = useMediosCobro();
+  const { mediosDisponibles, cuentaDestino } = useMediosCobro();
 
   function procesar() {
     if (!texto.trim()) return;
@@ -90,11 +90,65 @@ export default function ImportarMaxirest({ localActivo, onImported }: ImportarMa
         parser_version: PARSER_VERSION,
       }));
       const { data: ins, error } = await db.from('ventas').insert(ventas).select();
-      if (error) throw new Error(error.message);
+      if (error) throw new Error('INSERT ventas: ' + error.message);
       if (!ins || ins.length === 0) {
         throw new Error('Insert no devolvió filas — RLS bloqueando o permisos del local.');
       }
-      alert('✓ Importado: ' + ins.length + ' filas · Total: ' + fmt_$(totalCierre));
+      const insertedIds = (ins as { id: string }[]).map(r => r.id);
+
+      // Generar movimientos en caja por medio con cuenta_destino mapeada.
+      // Replica el flow de Ventas.tsx:guardar — sin esta parte el cierre
+      // queda en `ventas` pero no aparece en /caja. Bug histórico
+      // (refactor 27932a2 perdió esta lógica al simplificar el UI).
+      // No es atómico: si falla un INSERT de movimiento, rollback manual
+      // borrando las ventas recién creadas para no dejar estado parcial.
+      const impactoPorCuenta: Record<string, number> = {};
+      const idsPorCuenta: Record<string, string[]> = {};
+      for (const v of ins as { id: string; medio: string; monto: number }[]) {
+        const cuenta = cuentaDestino(v.medio, lid);
+        if (!cuenta) continue; // medios no-efectivo (MP/Rappi/PEYA online/tarjetas) no impactan caja
+        impactoPorCuenta[cuenta] = (impactoPorCuenta[cuenta] || 0) + Number(v.monto || 0);
+        (idsPorCuenta[cuenta] = idsPorCuenta[cuenta] || []).push(v.id);
+      }
+
+      try {
+        for (const [cuenta, monto] of Object.entries(impactoPorCuenta)) {
+          if (!cuenta) continue;
+          const { error: movErr } = await db.from('movimientos').insert([{
+            id: genId('MOV'),
+            fecha: fechaIso,
+            cuenta,
+            tipo: 'Ingreso Venta',
+            cat: 'VENTAS',
+            importe: monto,
+            detalle: `Ventas ${turnoDB} - ${fechaIso} (Maxirest)`,
+            local_id: lid,
+            venta_ids: idsPorCuenta[cuenta] || [],
+          }]);
+          if (movErr) throw new Error('INSERT movimientos[' + cuenta + ']: ' + movErr.message);
+
+          const { data: caja, error: cajaErr } = await db.from('saldos_caja').select('saldo')
+            .eq('cuenta', cuenta).eq('local_id', lid).maybeSingle();
+          if (cajaErr) throw new Error('SELECT saldos_caja[' + cuenta + ']: ' + cajaErr.message);
+          if (caja) {
+            const { error: updErr } = await db.from('saldos_caja')
+              .update({ saldo: (caja.saldo || 0) + monto })
+              .eq('cuenta', cuenta).eq('local_id', lid);
+            if (updErr) throw new Error('UPDATE saldos_caja[' + cuenta + ']: ' + updErr.message);
+          }
+        }
+      } catch (movFail) {
+        // Rollback: borrar las ventas recién insertadas para no dejar
+        // un cierre "huérfano" en lista sin movimientos.
+        await db.from('ventas').delete().in('id', insertedIds);
+        throw movFail;
+      }
+
+      const cuentasImpactadas = Object.keys(impactoPorCuenta);
+      const detalle = cuentasImpactadas.length > 0
+        ? ' · Impacto caja: ' + cuentasImpactadas.map(c => c + ' ' + fmt_$(impactoPorCuenta[c]!)).join(', ')
+        : '';
+      alert('✓ Importado: ' + ins.length + ' filas · Total: ' + fmt_$(totalCierre) + detalle);
       reset();
       onImported?.();
     } catch (e: unknown) {
