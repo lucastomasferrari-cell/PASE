@@ -1,7 +1,4 @@
-import { useState, useEffect } from 'react';
-import { Input } from '@/components/ui/input';
-import { formatARS, parseARS } from '../lib/format';
-import { cn } from '@/lib/utils';
+import { CurrencyInput } from './CurrencyInput';
 
 export interface MoneyInputProps {
   value: number;
@@ -15,39 +12,31 @@ export interface MoneyInputProps {
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 }
 
+// Wrapper de retrocompatibilidad: MoneyInput se usa en 9 callers
+// (Caja, MovimientoCajaDialog, PaymentDialog, ItemForm,
+// ModificadoresTab, SettingsLocal). Sprint CurrencyInput reemplazó
+// la implementación interna por currency mask sin formato libre,
+// manteniendo la signature original.
+//
+// Para nuevos callers, importar directamente CurrencyInput.
+// Este wrapper se elimina cuando todos los callers se migren.
 export function MoneyInput({
-  value, onChange, disabled, autoFocus, placeholder, ariaLabel, className, onBlur, onKeyDown,
+  value, onChange, disabled, autoFocus, placeholder, ariaLabel, className, onBlur,
 }: MoneyInputProps) {
-  const [text, setText] = useState<string>(formatARS(value));
-  const [focused, setFocused] = useState(false);
-
-  useEffect(() => {
-    if (!focused) setText(formatARS(value));
-  }, [value, focused]);
-
   return (
-    <Input
-      type="text"
-      inputMode="decimal"
-      value={text}
-      placeholder={placeholder ?? '$0,00'}
-      aria-label={ariaLabel ?? 'monto'}
+    <CurrencyInput
+      value={value}
+      onChange={onChange}
       disabled={disabled}
       autoFocus={autoFocus}
-      onFocus={() => {
-        setFocused(true);
-        setText(value === 0 ? '' : String(value).replace('.', ','));
-      }}
-      onChange={(e) => setText(e.target.value)}
-      onBlur={() => {
-        setFocused(false);
-        const n = parseARS(text);
-        onChange(n);
-        setText(formatARS(n));
-        onBlur?.();
-      }}
-      onKeyDown={onKeyDown}
-      className={cn('h-11 text-right tabular-nums', className)}
+      placeholder={placeholder}
+      aria-label={ariaLabel ?? 'monto'}
+      className={className}
+      // El viejo onBlur no recibía evento. Adaptamos para preservar la API.
+      onBlur={onBlur ? () => onBlur() : undefined}
+      // currencySymbol={null} si querés sin símbolo, pero el viejo no lo
+      // mostraba — por compat NO mostramos símbolo en MoneyInput.
+      currencySymbol={null}
     />
   );
 }
