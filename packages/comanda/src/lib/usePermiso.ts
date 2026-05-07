@@ -16,22 +16,53 @@ import { useAuthPos } from './authPos';
 import { tienePermiso as userTienePermiso } from './auth';
 import type { RolPos } from '../types/database';
 
+// Mapeo provisional rol_pos → slugs concedidos. Sprint 6 lo amplía con
+// los slugs nuevos del sidebar admin (empleados, salon, pagos, online,
+// hardware, marketing, clientes, integraciones, configuracion,
+// suscripcion). Cuando exista la tabla rol_pos_permisos formal este
+// mapeo se reemplaza por una query.
+//
+// Convención: 'comanda.X.ver' (lectura) ⊂ 'comanda.X.editar/gestionar'
+// (escritura). Si tenés escritura siempre tenés lectura.
+//
+// suscripcion.gestionar es exclusivo de dueño (cobranza al titular).
 const PERMISOS_POR_ROL_POS: Record<RolPos, string[]> = {
   cajero: [
     'comanda.ventas.cobrar',
+    'comanda.reportes.ver',
   ],
   encargado: [
     'comanda.ventas.cobrar',
     'comanda.ventas.descuento',
+    'comanda.reportes.ver',
+    'comanda.salon.editar',
+    'comanda.clientes.ver',
+    'comanda.pagos.ver',
+    'comanda.empleados.ver',
+    'comanda.catalogo.ver',
   ],
   manager: [
     'comanda.ventas.cobrar',
     'comanda.ventas.descuento',
     'comanda.ventas.anular',
     'comanda.config.editar',
+    'comanda.configuracion.editar',
+    'comanda.catalogo.ver',
+    'comanda.catalogo.editar',
+    'comanda.empleados.ver',
+    'comanda.empleados.editar',
     'comanda.empleados.editar_pos',
+    'comanda.salon.editar',
+    'comanda.pagos.ver',
+    'comanda.pagos.editar',
+    'comanda.online.gestionar',
     'comanda.tienda.aprobar',
     'comanda.reportes.ver',
+    'comanda.hardware.gestionar',
+    'comanda.marketing.gestionar',
+    'comanda.clientes.ver',
+    'comanda.clientes.editar',
+    'comanda.integraciones.gestionar',
   ],
   dueno: ['*'],
 };
