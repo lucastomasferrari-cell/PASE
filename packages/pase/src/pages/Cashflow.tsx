@@ -80,8 +80,15 @@ export default function Cashflow({ user, localActivo }: CashflowProps) {
     qIngresos = aplicarCuentas(qIngresos, visListado);
 
     // 2. Egresos pagados — todos los movimientos negativos excepto ingresos
+    //    y excepto transferencias internas. Una "Transferencia Salida"
+    //    siempre tiene su par "Transferencia Entrada" en otra cuenta del
+    //    mismo negocio (ej: Caja Chica → Caja Mayor); contarla como
+    //    egreso infla el total. Reportado por usuario 7-may: Belgrano
+    //    mostraba $14.5M en Transferencia Salida (todos retiros internos
+    //    a Caja Mayor / Banco) sumando al total de "Egresos pagados".
     let qEgresos = db.from("movimientos").select("cuenta, tipo, cat, importe, detalle")
       .eq("anulado", false).lt("importe", 0)
+      .not("tipo", "in", "(Transferencia Salida,Transferencia Entrada)")
       .gte("fecha", desde).lte("fecha", hasta);
     qEgresos = applyLocalScope(qEgresos, user, lid);
     qEgresos = aplicarCuentas(qEgresos, visListado);
