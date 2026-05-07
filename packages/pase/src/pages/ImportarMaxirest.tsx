@@ -28,7 +28,7 @@ export default function ImportarMaxirest({ localActivo, onImported }: ImportarMa
   const [parsed, setParsed] = useState<ParsedCierre | null>(null);
   const [errores, setErrores] = useState<ParseError[]>([]);
   const [loading, setLoading] = useState(false);
-  const { mediosDisponibles, cuentaDestino } = useMediosCobro();
+  const { mediosDisponibles } = useMediosCobro();
 
   function procesar() {
     if (!texto.trim()) return;
@@ -97,57 +97,88 @@ export default function ImportarMaxirest({ localActivo, onImported }: ImportarMa
       const insertedIds = (ins as { id: string }[]).map(r => r.id);
 
       // Generar movimientos en caja por medio con cuenta_destino mapeada.
-      // Replica el flow de Ventas.tsx:guardar — sin esta parte el cierre
-      // queda en `ventas` pero no aparece en /caja. Bug histórico
-      // (refactor 27932a2 perdió esta lógica al simplificar el UI).
-      // No es atómico: si falla un INSERT de movimiento, rollback manual
-      // borrando las ventas recién creadas para no dejar estado parcial.
+      //
+      // CRÍTICO — fix bug 7-may: la versión anterior usaba el cache del
+      // hook useMediosCobro (cuentaDestino()) para resolver cuenta_destino.
+      // El cache podía estar en FALLBACK (constants.ts) que NO tiene
+      // "EFECTIVO" pelado (solo EFECTIVO SALON/DELIVERY) → resolvía null
+      // y se saltaban TODOS los movs sin error. Ahora consultamos
+      // medios_cobro directo en BD para garantizar consistencia.
+      //
+      // ATÓMICO via RPC: usamos crear_movimiento_caja (la misma RPC que
+      // usa Caja.tsx:guardar para nuevos movs manuales). La RPC hace
+      // INSERT mov + UPSERT saldo en una transacción server-side con
+      // ON CONFLICT DO UPDATE — race-safe contra doble click. Reemplaza
+      // el SELECT-then-UPDATE viejo que tenía race condition.
+      const mediosUsados = Array.from(new Set((ins as { medio: string }[]).map(r => r.medio)));
+      const { data: catRows, error: catErr } = await db.from('medios_cobro')
+        .select('nombre, local_id, cuenta_destino, activo')
+        .in('nombre', mediosUsados)
+        .or(`local_id.is.null,local_id.eq.${lid}`);
+      if (catErr) throw new Error('SELECT medios_cobro: ' + catErr.message);
+      // Resolver cuenta_destino por medio: prefiere local-specific sobre global,
+      // ignora inactivos. Mismo criterio que pickCuentaDestino del hook.
+      function resolverCuenta(medio: string): string | null {
+        const candidatos = (catRows || []).filter(r => r.activo && r.nombre === medio);
+        if (candidatos.length === 0) return null;
+        const ganador = candidatos.find(r => r.local_id !== null) || candidatos[0];
+        return ganador?.cuenta_destino ?? null;
+      }
+
       const impactoPorCuenta: Record<string, number> = {};
       const idsPorCuenta: Record<string, string[]> = {};
       for (const v of ins as { id: string; medio: string; monto: number }[]) {
-        const cuenta = cuentaDestino(v.medio, lid);
-        if (!cuenta) continue; // medios no-efectivo (MP/Rappi/PEYA online/tarjetas) no impactan caja
+        const cuenta = resolverCuenta(v.medio);
+        if (!cuenta) continue; // medios no-efectivo no impactan caja
         impactoPorCuenta[cuenta] = (impactoPorCuenta[cuenta] || 0) + Number(v.monto || 0);
         (idsPorCuenta[cuenta] = idsPorCuenta[cuenta] || []).push(v.id);
       }
 
+      const movsCreados: string[] = [];
       try {
         for (const [cuenta, monto] of Object.entries(impactoPorCuenta)) {
           if (!cuenta) continue;
-          const { error: movErr } = await db.from('movimientos').insert([{
-            id: genId('MOV'),
-            fecha: fechaIso,
-            cuenta,
-            tipo: 'Ingreso Venta',
-            cat: 'VENTAS',
-            importe: monto,
-            detalle: `Ventas ${turnoDB} - ${fechaIso} (Maxirest)`,
-            local_id: lid,
-            venta_ids: idsPorCuenta[cuenta] || [],
-          }]);
-          if (movErr) throw new Error('INSERT movimientos[' + cuenta + ']: ' + movErr.message);
+          // RPC server-side atómica: INSERT mov + UPSERT saldo en una sola
+          // transacción. Race-safe (ON CONFLICT DO UPDATE saldo = saldo + delta).
+          const { data: rpcData, error: rpcErr } = await db.rpc('crear_movimiento_caja', {
+            p_fecha: fechaIso,
+            p_cuenta: cuenta,
+            p_tipo: 'Ingreso Venta',
+            p_cat: 'VENTAS',
+            p_importe: monto,
+            p_detalle: `Ventas ${turnoDB} - ${fechaIso} (Maxirest)`,
+            p_local_id: lid,
+          });
+          if (rpcErr) throw new Error('RPC crear_movimiento_caja[' + cuenta + ']: ' + rpcErr.message);
+          const movId = (rpcData as { mov_id?: string } | null)?.mov_id;
+          if (!movId) throw new Error('RPC crear_movimiento_caja[' + cuenta + '] no devolvió mov_id');
+          movsCreados.push(movId);
 
-          const { data: caja, error: cajaErr } = await db.from('saldos_caja').select('saldo')
-            .eq('cuenta', cuenta).eq('local_id', lid).maybeSingle();
-          if (cajaErr) throw new Error('SELECT saldos_caja[' + cuenta + ']: ' + cajaErr.message);
-          if (caja) {
-            const { error: updErr } = await db.from('saldos_caja')
-              .update({ saldo: (caja.saldo || 0) + monto })
-              .eq('cuenta', cuenta).eq('local_id', lid);
-            if (updErr) throw new Error('UPDATE saldos_caja[' + cuenta + ']: ' + updErr.message);
+          // Vincular el mov con sus ventas (la RPC no lo hace).
+          // Necesario para que eliminar_cierre RPC pueda limpiar atómicamente.
+          // Si falla solo el linkeo, el saldo ya se movió OK — solo loguear.
+          const ventaIds = idsPorCuenta[cuenta] || [];
+          if (ventaIds.length > 0) {
+            const { error: linkErr } = await db.from('movimientos')
+              .update({ venta_ids: ventaIds }).eq('id', movId);
+            if (linkErr) console.warn('No se pudo vincular venta_ids al mov ' + movId + ': ' + linkErr.message);
           }
         }
       } catch (movFail) {
-        // Rollback: borrar las ventas recién insertadas para no dejar
-        // un cierre "huérfano" en lista sin movimientos.
+        // Rollback: borrar ventas + movs ya creados para no dejar estado parcial.
+        // El saldo de cada mov creado quedará "inflado" hasta que el usuario lo
+        // anule manualmente (la RPC no expone un reverse atómico de saldo).
         await db.from('ventas').delete().in('id', insertedIds);
+        for (const movId of movsCreados) {
+          await db.from('movimientos').delete().eq('id', movId);
+        }
         throw movFail;
       }
 
       const cuentasImpactadas = Object.keys(impactoPorCuenta);
       const detalle = cuentasImpactadas.length > 0
         ? ' · Impacto caja: ' + cuentasImpactadas.map(c => c + ' ' + fmt_$(impactoPorCuenta[c]!)).join(', ')
-        : '';
+        : ' · ⚠️ NO impactó caja (ningún medio tiene cuenta_destino mapeada)';
       alert('✓ Importado: ' + ins.length + ' filas · Total: ' + fmt_$(totalCierre) + detalle);
       reset();
       onImported?.();
