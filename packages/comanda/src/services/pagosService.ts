@@ -22,6 +22,7 @@ export async function cobrar(
   pagos: PagoInput[],
   propina: number,
   cobradoPor: string | null,
+  idempotencyKey?: string,
 ): Promise<{ totalCobrado: number; error: string | null }> {
   if (!pagos.length) return { totalCobrado: 0, error: 'No hay pagos para registrar' };
   const { data, error } = await db.rpc('fn_cobrar_venta_comanda', {
@@ -29,6 +30,7 @@ export async function cobrar(
     p_pagos: pagos,
     p_propina: propina,
     p_cobrado_por: cobradoPor,
+    p_idempotency_key: idempotencyKey ?? null,
   });
   if (error) return { totalCobrado: 0, error: error.message };
   return { totalCobrado: Number(data ?? 0), error: null };
@@ -47,9 +49,13 @@ export async function listPagosVenta(ventaId: number): Promise<{ data: VentaPosP
 
 export async function refundVenta(
   ventaId: number, managerId: string, motivo: string,
+  idempotencyKey?: string,
 ): Promise<{ totalReembolsado: number; error: string | null }> {
   const { data, error } = await db.rpc('fn_refund_venta_comanda', {
-    p_venta_id: ventaId, p_manager_id: managerId, p_motivo: motivo,
+    p_venta_id: ventaId,
+    p_manager_id: managerId,
+    p_motivo: motivo,
+    p_idempotency_key: idempotencyKey ?? null,
   });
   if (error) return { totalReembolsado: 0, error: error.message };
   return { totalReembolsado: Number(data ?? 0), error: null };

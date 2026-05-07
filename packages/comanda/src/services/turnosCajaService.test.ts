@@ -29,6 +29,7 @@ describe('abrirTurno', () => {
     const res = await abrirTurno(1, 'emp-uuid', 5000, 'apertura matutina');
     expect(mockRpc).toHaveBeenCalledWith('fn_abrir_turno_caja_comanda', {
       p_local_id: 1, p_cajero_id: 'emp-uuid', p_monto_inicial: 5000, p_notas: 'apertura matutina',
+      p_idempotency_key: null,
     });
     expect(res).toEqual({ turnoId: 42, error: null });
   });

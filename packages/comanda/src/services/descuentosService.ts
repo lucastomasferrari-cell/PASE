@@ -26,10 +26,12 @@ export interface AplicarDescuentoArgs {
   valor: number;
   motivo: string;
   managerId?: string | null;
+  idempotencyKey?: string;
 }
 
 // Reusa fn_aplicar_descuento_comanda del Sprint 2 (recibe monto YA calculado).
 // El cliente decide si requiere override, y si sí, pasa managerId.
+// Sprint 7: idempotencyKey opcional previene doble-aplicación por doble-click.
 export async function aplicarDescuento(
   args: AplicarDescuentoArgs,
   subtotal: number,
@@ -42,6 +44,7 @@ export async function aplicarDescuento(
     p_monto: monto,
     p_motivo: args.motivo,
     p_manager_id: args.managerId ?? null,
+    p_idempotency_key: args.idempotencyKey ?? null,
   });
   return { error: error?.message ?? null };
 }

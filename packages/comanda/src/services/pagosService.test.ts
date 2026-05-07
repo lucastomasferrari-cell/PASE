@@ -34,6 +34,7 @@ describe('cobrar', () => {
     const res = await cobrar(10, pagos, 100, 'emp-uuid');
     expect(mockRpc).toHaveBeenCalledWith('fn_cobrar_venta_comanda', {
       p_venta_id: 10, p_pagos: pagos, p_propina: 100, p_cobrado_por: 'emp-uuid',
+      p_idempotency_key: null,
     });
     expect(res.totalCobrado).toBe(1500);
   });
@@ -52,6 +53,7 @@ describe('refundVenta', () => {
     const res = await refundVenta(7, 'mgr', 'cliente arrepentido');
     expect(mockRpc).toHaveBeenCalledWith('fn_refund_venta_comanda', {
       p_venta_id: 7, p_manager_id: 'mgr', p_motivo: 'cliente arrepentido',
+      p_idempotency_key: null,
     });
     expect(res.totalReembolsado).toBe(5000);
   });

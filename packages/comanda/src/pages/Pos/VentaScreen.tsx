@@ -419,7 +419,11 @@ export function VentaScreen() {
         accion="Anular venta"
         descripcion={`Anular venta #${venta.numero_local} por ${formatARS(venta.total)}.`}
         onAuthorized={async ({ managerId, motivo }) => {
-          const { error } = await anularVenta(ventaId, managerId, motivo);
+          // Sprint 7 BLOCKER #3: idempotency_key derivado de venta_id +
+          // ventana de tiempo. Doble-click sobre el mismo botón "Confirmar"
+          // reusa el key y la RPC retorna el mismo override sin duplicar.
+          const idempotencyKey = `anular-${ventaId}-${Math.floor(Date.now() / 5000)}`;
+          const { error } = await anularVenta(ventaId, managerId, motivo, idempotencyKey);
           if (error) throw new Error(error);
           toast.success('Venta anulada');
           navigate(venta.modo === 'salon' ? '/pos/salon' : '/pos/mostrador');

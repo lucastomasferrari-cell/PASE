@@ -119,9 +119,15 @@ export async function modificarItem(
   return { error: error?.message ?? null };
 }
 
-export async function anularItem(itemId: number, managerId: string, motivo: string): Promise<{ error: string | null }> {
+export async function anularItem(
+  itemId: number, managerId: string, motivo: string,
+  idempotencyKey?: string,
+): Promise<{ error: string | null }> {
   const { error } = await db.rpc('fn_anular_item_comanda', {
-    p_item_id: itemId, p_manager_id: managerId, p_motivo: motivo,
+    p_item_id: itemId,
+    p_manager_id: managerId,
+    p_motivo: motivo,
+    p_idempotency_key: idempotencyKey ?? null,
   });
   return { error: error?.message ?? null };
 }
@@ -136,16 +142,27 @@ export async function mandarCurso(ventaId: number, curso: number): Promise<{ cou
 
 export async function aplicarDescuento(
   ventaId: number, monto: number, motivo: string, managerId: string | null,
+  idempotencyKey?: string,
 ): Promise<{ error: string | null }> {
   const { error } = await db.rpc('fn_aplicar_descuento_comanda', {
-    p_venta_id: ventaId, p_monto: monto, p_motivo: motivo, p_manager_id: managerId,
+    p_venta_id: ventaId,
+    p_monto: monto,
+    p_motivo: motivo,
+    p_manager_id: managerId,
+    p_idempotency_key: idempotencyKey ?? null,
   });
   return { error: error?.message ?? null };
 }
 
-export async function anularVenta(ventaId: number, managerId: string, motivo: string): Promise<{ error: string | null }> {
+export async function anularVenta(
+  ventaId: number, managerId: string, motivo: string,
+  idempotencyKey?: string,
+): Promise<{ error: string | null }> {
   const { error } = await db.rpc('fn_anular_venta_comanda', {
-    p_venta_id: ventaId, p_manager_id: managerId, p_motivo: motivo,
+    p_venta_id: ventaId,
+    p_manager_id: managerId,
+    p_motivo: motivo,
+    p_idempotency_key: idempotencyKey ?? null,
   });
   return { error: error?.message ?? null };
 }

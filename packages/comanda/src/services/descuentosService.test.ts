@@ -52,6 +52,7 @@ describe('aplicarDescuento', () => {
       p_monto: 100,
       p_motivo: 'cliente frec',
       p_manager_id: null,
+      p_idempotency_key: null,
     });
     expect(res.error).toBeNull();
   });

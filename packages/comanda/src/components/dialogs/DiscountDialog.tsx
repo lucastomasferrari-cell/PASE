@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   type DescuentoTipo, requiereOverride, calcularMontoDescuento, aplicarDescuento,
 } from '@/services/descuentosService';
+import { useIdempotencyKey } from '@/lib/idempotency';
 import { ManagerOverrideDialog } from './ManagerOverrideDialog';
 import { formatARS } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -32,6 +33,7 @@ export function DiscountDialog({ open, onOpenChange, ventaId, subtotal, total, o
   const [motivo, setMotivo] = useState('');
   const [showOverride, setShowOverride] = useState(false);
   const [saving, setSaving] = useState(false);
+  const idempotencyKey = useIdempotencyKey(open ? `${ventaId}-open` : 'closed');
 
   useEffect(() => {
     if (open) { setTipo('porcentaje'); setValor(10); setMotivo(''); setShowOverride(false); setSaving(false); }
@@ -49,7 +51,11 @@ export function DiscountDialog({ open, onOpenChange, ventaId, subtotal, total, o
     if (monto <= 0) { toast.error('Monto inválido'); return; }
     setSaving(true);
     const { error } = await aplicarDescuento(
-      { ventaId, tipo, valor, motivo: motivo.trim(), managerId: args?.managerId },
+      {
+        ventaId, tipo, valor, motivo: motivo.trim(),
+        managerId: args?.managerId,
+        idempotencyKey,
+      },
       subtotal,
     );
     setSaving(false);

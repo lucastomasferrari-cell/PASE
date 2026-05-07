@@ -56,14 +56,18 @@ export async function verificarPinManager(
   return { empleadoId: id, error: null };
 }
 
-// Anular item con manager override (Sprint 2 RPC)
+// Anular item con manager override (Sprint 2 RPC + sprint 7 idempotency)
 export async function anularItem(
   itemId: number,
   managerId: string,
   motivo: string,
+  idempotencyKey?: string,
 ): Promise<{ error: string | null }> {
   const { error } = await db.rpc('fn_anular_item_comanda', {
-    p_item_id: itemId, p_manager_id: managerId, p_motivo: motivo,
+    p_item_id: itemId,
+    p_manager_id: managerId,
+    p_motivo: motivo,
+    p_idempotency_key: idempotencyKey ?? null,
   });
   return { error: error?.message ?? null };
 }
@@ -73,9 +77,13 @@ export async function anularVenta(
   ventaId: number,
   managerId: string,
   motivo: string,
+  idempotencyKey?: string,
 ): Promise<{ error: string | null }> {
   const { error } = await db.rpc('fn_anular_venta_comanda', {
-    p_venta_id: ventaId, p_manager_id: managerId, p_motivo: motivo,
+    p_venta_id: ventaId,
+    p_manager_id: managerId,
+    p_motivo: motivo,
+    p_idempotency_key: idempotencyKey ?? null,
   });
   return { error: error?.message ?? null };
 }

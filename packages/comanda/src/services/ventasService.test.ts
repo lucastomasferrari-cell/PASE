@@ -69,6 +69,7 @@ describe('anularItem requiere managerId', () => {
     await anularItem(50, 'mgr-uuid', 'cliente cambió de opinión');
     expect(mockRpc).toHaveBeenCalledWith('fn_anular_item_comanda', {
       p_item_id: 50, p_manager_id: 'mgr-uuid', p_motivo: 'cliente cambió de opinión',
+      p_idempotency_key: null,
     });
   });
 });

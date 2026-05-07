@@ -17,12 +17,14 @@ export async function abrirTurno(
   cajeroId: string,
   montoInicial: number,
   notas: string | null,
+  idempotencyKey?: string,
 ): Promise<{ turnoId: number | null; error: string | null }> {
   const { data, error } = await db.rpc('fn_abrir_turno_caja_comanda', {
     p_local_id: localId,
     p_cajero_id: cajeroId,
     p_monto_inicial: montoInicial,
     p_notas: notas,
+    p_idempotency_key: idempotencyKey ?? null,
   });
   if (error) return { turnoId: null, error: error.message };
   return { turnoId: data as number, error: null };
@@ -64,6 +66,8 @@ export async function registrarMovimiento(
   monto: number,
   metodo: string,
   motivo: string,
+  idempotencyKey?: string,
+  managerId?: string | null,
 ): Promise<{ id: number | null; error: string | null }> {
   const { data, error } = await db.rpc('fn_movimiento_caja_comanda', {
     p_local_id: localId,
@@ -72,6 +76,8 @@ export async function registrarMovimiento(
     p_monto: monto,
     p_metodo: metodo,
     p_motivo: motivo,
+    p_idempotency_key: idempotencyKey ?? null,
+    p_manager_id: managerId ?? null,
   });
   if (error) return { id: null, error: error.message };
   return { id: data as number, error: null };
