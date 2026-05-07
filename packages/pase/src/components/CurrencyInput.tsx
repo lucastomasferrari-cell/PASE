@@ -39,6 +39,11 @@ const FORMATTER_AR = new Intl.NumberFormat('es-AR', {
   maximumFractionDigits: 2,
 });
 
+/* eslint-disable react-refresh/only-export-components --
+ * Estos helpers viven en el mismo archivo que el componente para mantener
+ * el módulo cohesionado y porque NO se importan desde fuera (son internos
+ * + testeables). React-refresh no los detecta como componentes y se queja,
+ * pero el módulo es estable (no hot-reload de helpers). */
 export function formatCents(cents: number): string {
   return FORMATTER_AR.format(cents / 100);
 }

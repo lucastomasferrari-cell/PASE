@@ -6,6 +6,7 @@ import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS, UNIDADES } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId, parseMonto } from "../lib/utils";
 import LectorFacturasIA from "./LectorFacturasIA";
+import { CurrencyInput } from "../components/CurrencyInput";
 import type { Usuario, Local } from "../types";
 import type { Proveedor, Factura, PagoFactura } from "../types/finanzas";
 
@@ -39,13 +40,16 @@ interface FormFactura {
   nro: string;
   fecha: string;
   venc: string;
-  neto: string;
-  iva21: string;
-  iva105: string;
-  iibb: string;
-  perc_iva: string;
-  otros_cargos: string;
-  descuentos: string;
+  // Sprint CurrencyInput: campos de plata como number (antes string).
+  // El currency mask del CurrencyInput trabaja directo con number;
+  // elimina el bug del neto gravado por type=number rechazando coma AR.
+  neto: number;
+  iva21: number;
+  iva105: number;
+  iibb: number;
+  perc_iva: number;
+  otros_cargos: number;
+  descuentos: number;
   cat: string;
   detalle: string;
   tipo: string;
@@ -94,9 +98,10 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const [vincModal, setVincModal] = useState<Remito | null>(null);
   const [pagarRemModal, setPagarRemModal] = useState<Remito | null>(null);
   const [pagandoRem, setPagandoRem] = useState(false);
-  const emptyRemForm = { prov_id: "", local_id: localActivo ? String(localActivo) : "", nro: "", fecha: toISO(today), monto: "" as string | number, cat: "", detalle: "" };
+  // monto: number con CurrencyInput (sprint CurrencyInput).
+  const emptyRemForm = { prov_id: "", local_id: localActivo ? String(localActivo) : "", nro: "", fecha: toISO(today), monto: 0, cat: "", detalle: "" };
   const [remForm, setRemForm] = useState(emptyRemForm);
-  const [remPagoForm, setRemPagoForm] = useState<{ cuenta: string; monto: string | number; fecha: string }>({ cuenta: "", monto: "", fecha: toISO(today) });
+  const [remPagoForm, setRemPagoForm] = useState<{ cuenta: string; monto: number; fecha: string }>({ cuenta: "", monto: 0, fecha: toISO(today) });
 
   useEffect(() => {
     if (remPagoForm.cuenta && !cuentasUsables.includes(remPagoForm.cuenta)) {
@@ -131,13 +136,13 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const [pagando, setPagando] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const emptyForm: FormFactura = { prov_id: "", local_id: localActivo ? String(localActivo) : "", nro: "", fecha: toISO(today), venc: "", neto: "", iva21: "", iva105: "", iibb: "", perc_iva: "", otros_cargos: "", descuentos: "", cat: "", detalle: "", tipo: "factura" };
+  const emptyForm: FormFactura = { prov_id: "", local_id: localActivo ? String(localActivo) : "", nro: "", fecha: toISO(today), venc: "", neto: 0, iva21: 0, iva105: 0, iibb: 0, perc_iva: 0, otros_cargos: 0, descuentos: 0, cat: "", detalle: "", tipo: "factura" };
   const [form, setForm] = useState<FormFactura>(emptyForm);
   const [items, setItems] = useState<ItemFactura[]>([]);
   // Bug Caja-1: el default cuenta="MercadoPago" pisaba la elección del
   // usuario cuando MP no estaba en cuentasUsables (encargados con cuentas
   // restringidas). Default vacío fuerza la elección consciente.
-  const [pagoForm, setPagoForm] = useState({ cuenta: "", monto: "", fecha: toISO(today) });
+  const [pagoForm, setPagoForm] = useState<{ cuenta: string; monto: number; fecha: string }>({ cuenta: "", monto: 0, fecha: toISO(today) });
 
   // Defensive: si form.cuenta queda con un valor que no está en
   // cuentasUsables (regression future, scope change), reseteamos a ""
@@ -154,14 +159,10 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   // superadmin. Ahora usa el helper canónico que cubre todos los casos.
   const visLocs = localesVisibles(user);
   const localesDisp = visLocs === null ? locales : locales.filter((l: Local) => visLocs.includes(l.id));
+  // CurrencyInput entrega number directo — no necesita parseMonto.
   const calcTotal = () =>
-    parseMonto(form.neto) +
-    parseMonto(form.iva21) +
-    parseMonto(form.iva105) +
-    parseMonto(form.iibb) +
-    parseMonto(form.perc_iva) +
-    parseMonto(form.otros_cargos) -
-    parseMonto(form.descuentos);
+    form.neto + form.iva21 + form.iva105 + form.iibb + form.perc_iva +
+    form.otros_cargos - form.descuentos;
 
   const load = async () => {
     setLoading(true);
@@ -248,7 +249,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     if (saving) return;
     if (!form.prov_id) { alert("Seleccioná un proveedor"); return; }
     if (!form.nro) { alert("Ingresá el número de factura"); return; }
-    if (!form.neto) { alert("Ingresá el neto gravado"); return; }
+    if (form.neto <= 0) { alert("Ingresá el neto gravado"); return; }
     if (!form.local_id) { alert("Seleccioná un local"); return; }
     const isNC = form.tipo === "nota_credito";
     const totalAbs = calcTotal();
@@ -287,7 +288,8 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       // Campos date: "" → null. Postgres rechaza string vacío en columnas
       // date con "invalid input syntax for type date: \"\"". Común en NC
       // que no siempre tienen vencimiento.
-      const nueva = { ...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(form.local_id), neto: parseMonto(form.neto), iva21: parseMonto(form.iva21), iva105: parseMonto(form.iva105), iibb: parseMonto(form.iibb), perc_iva: parseMonto(form.perc_iva), otros_cargos: parseMonto(form.otros_cargos), descuentos: parseMonto(form.descuentos), total, estado: isNC ? "pagada" : "pendiente", pagos: [], tipo: form.tipo, fecha: form.fecha || null, venc: form.venc || null };
+      // CurrencyInput entrega number directo — no necesita parseMonto.
+      const nueva = { ...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(form.local_id), total, estado: isNC ? "pagada" : "pendiente", pagos: [], tipo: form.tipo, fecha: form.fecha || null, venc: form.venc || null };
       const { error: factErr } = await db.from("facturas").insert([nueva]);
       if (factErr) throw new Error("Error guardando factura: " + factErr.message);
 
@@ -313,7 +315,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     setPagando(true);
     try {
       const f = pagarModal;
-      const monto = parseMonto(pagoForm.monto) || f.total;
+      const monto = pagoForm.monto > 0 ? pagoForm.monto : f.total;
       const prov = proveedores.find(p => p.id === f.prov_id);
       const detalle = `Pago ${prov?.nombre || ""} - Fact ${f.nro}`;
       const { error } = await db.rpc("pagar_factura", {
@@ -353,13 +355,13 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   };
 
   const guardarRemito = async () => {
-    if (!remForm.prov_id || !remForm.monto || !remForm.local_id) return;
+    if (!remForm.prov_id || remForm.monto <= 0 || !remForm.local_id) return;
     const nro = remForm.nro || `REM-${Date.now().toString().slice(-6)}`;
     const nuevo = {
       ...remForm, id: genId("REM"),
       prov_id: parseInt(remForm.prov_id),
       local_id: parseInt(String(remForm.local_id)),
-      nro, monto: parseFloat(String(remForm.monto)),
+      nro, monto: remForm.monto,
       estado: "sin_factura", factura_id: null,
     };
     await db.from("remitos").insert([nuevo]);
@@ -379,7 +381,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     setPagandoRem(true);
     try {
       const r = pagarRemModal;
-      const monto = parseFloat(String(remPagoForm.monto)) || r.monto;
+      const monto = remPagoForm.monto > 0 ? remPagoForm.monto : r.monto;
       const { error } = await db.rpc("pagar_remito", {
         p_remito_id: r.id, p_monto: monto,
         p_cuenta: remPagoForm.cuenta, p_fecha: remPagoForm.fecha,
@@ -584,7 +586,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                   <td>
                     <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
                       <button className="btn btn-ghost btn-sm" onClick={() => setVerModal(f)}>Ver</button>
-                      {!isNC && f.estado !== "pagada" && <button className="btn btn-success btn-sm" onClick={() => { setPagarModal(f); setPagoForm({ cuenta: "", monto: String(f.total), fecha: toISO(today) }); }}>Pagar</button>}
+                      {!isNC && f.estado !== "pagada" && <button className="btn btn-success btn-sm" onClick={() => { setPagarModal(f); setPagoForm({ cuenta: "", monto: Number(f.total) || 0, fecha: toISO(today) }); }}>Pagar</button>}
                       <button className="btn btn-danger btn-sm" onClick={() => anular(f)}>Anular</button>
                     </div>
                   </td>
@@ -631,17 +633,17 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
               </div>
               <div className="form2">
                 <div className="field"><label>Vencimiento</label><input type="date" value={form.venc} onChange={e => setForm({ ...form, venc: e.target.value })} /></div>
-                <div className="field"><label>Neto Gravado *</label><input type="number" step="0.01" value={form.neto} onChange={e => setForm({ ...form, neto: e.target.value })} placeholder="0" /></div>
+                <div className="field"><label>Neto Gravado *</label><CurrencyInput value={form.neto} onChange={v => setForm({ ...form, neto: v })} aria-label="Neto gravado" /></div>
               </div>
               <div className="form3">
-                <div className="field"><label>IVA 21%</label><input type="number" step="0.01" value={form.iva21} onChange={e => setForm({ ...form, iva21: e.target.value })} placeholder="0" /></div>
-                <div className="field"><label>IVA 10.5%</label><input type="number" step="0.01" value={form.iva105} onChange={e => setForm({ ...form, iva105: e.target.value })} placeholder="0" /></div>
-                <div className="field"><label>Perc. IIBB</label><input type="number" step="0.01" value={form.iibb} onChange={e => setForm({ ...form, iibb: e.target.value })} placeholder="0" /></div>
+                <div className="field"><label>IVA 21%</label><CurrencyInput value={form.iva21} onChange={v => setForm({ ...form, iva21: v })} aria-label="IVA 21%" /></div>
+                <div className="field"><label>IVA 10.5%</label><CurrencyInput value={form.iva105} onChange={v => setForm({ ...form, iva105: v })} aria-label="IVA 10.5%" /></div>
+                <div className="field"><label>Perc. IIBB</label><CurrencyInput value={form.iibb} onChange={v => setForm({ ...form, iibb: v })} aria-label="Percepción IIBB" /></div>
               </div>
               <div className="form3">
-                <div className="field"><label>Perc. IVA</label><input type="number" step="0.01" value={form.perc_iva} onChange={e => setForm({ ...form, perc_iva: e.target.value })} placeholder="0" /></div>
-                <div className="field"><label>Otros Cargos</label><input type="number" step="0.01" value={form.otros_cargos} onChange={e => setForm({ ...form, otros_cargos: e.target.value })} placeholder="0" /></div>
-                <div className="field"><label>Descuentos (−)</label><input type="number" step="0.01" value={form.descuentos} onChange={e => setForm({ ...form, descuentos: e.target.value })} placeholder="0" /></div>
+                <div className="field"><label>Perc. IVA</label><CurrencyInput value={form.perc_iva} onChange={v => setForm({ ...form, perc_iva: v })} aria-label="Percepción IVA" /></div>
+                <div className="field"><label>Otros Cargos</label><CurrencyInput value={form.otros_cargos} onChange={v => setForm({ ...form, otros_cargos: v })} aria-label="Otros cargos" /></div>
+                <div className="field"><label>Descuentos (−)</label><CurrencyInput value={form.descuentos} onChange={v => setForm({ ...form, descuentos: v })} aria-label="Descuentos" /></div>
               </div>
               <div className="field"><label>Total calculado</label><input readOnly value={fmt_$(calcTotal())} style={{ color: "var(--acc)", fontFamily: "'Inter',sans-serif", fontWeight: 500 }} /></div>
               <div className="field"><label>Descripción</label><input value={form.detalle} onChange={e => setForm({ ...form, detalle: e.target.value })} placeholder="Detalle general..." /></div>
@@ -748,7 +750,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
             <div className="modal-body">
               <div className="alert alert-info">{pagarModal.nro} · Total: {fmt_$(pagarModal.total)}</div>
               <div className="field"><label>Cuenta de egreso *</label><select value={pagoForm.cuenta} onChange={e => setPagoForm({ ...pagoForm, cuenta: e.target.value })}><option value="">Seleccioná una cuenta…</option>{cuentasUsables.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-              <div className="field"><label>Monto</label><input type="number" step="0.01" value={pagoForm.monto} onChange={e => setPagoForm({ ...pagoForm, monto: e.target.value })} /></div>
+              <div className="field"><label>Monto</label><CurrencyInput value={pagoForm.monto} onChange={v => setPagoForm({ ...pagoForm, monto: v })} aria-label="Monto del pago" /></div>
               <div className="field"><label>Fecha</label><input type="date" value={pagoForm.fecha} onChange={e => setPagoForm({ ...pagoForm, fecha: e.target.value })} /></div>
             </div>
             <div className="modal-ft"><button className="btn btn-sec" onClick={() => setPagarModal(null)}>Cancelar</button><button className="btn btn-success" onClick={pagar} disabled={pagando || !pagoForm.cuenta}>{pagando ? "Procesando..." : "Confirmar Pago"}</button></div>
@@ -773,7 +775,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
               </div>
               <div className="form2">
                 <div className="field"><label>Fecha</label><input type="date" value={remForm.fecha} onChange={e => setRemForm({ ...remForm, fecha: e.target.value })} /></div>
-                <div className="field"><label>Monto *</label><input type="number" value={remForm.monto} onChange={e => setRemForm({ ...remForm, monto: e.target.value })} placeholder="0" /></div>
+                <div className="field"><label>Monto *</label><CurrencyInput value={remForm.monto} onChange={v => setRemForm({ ...remForm, monto: v })} aria-label="Monto del remito" /></div>
               </div>
               <div className="field"><label>Descripción / Folio</label><input value={remForm.detalle} onChange={e => setRemForm({ ...remForm, detalle: e.target.value })} placeholder="Folio 1234 - Detalle..." /></div>
             </div>
@@ -815,7 +817,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
               <div className="alert alert-info">Remito {pagarRemModal.nro} · {fmt_$(pagarRemModal.monto)}</div>
               <div className="alert alert-warn">Esto registra el pago sin factura. El gasto impacta en caja y en el EERR.</div>
               <div className="field"><label>Cuenta de egreso *</label><select value={remPagoForm.cuenta} onChange={e => setRemPagoForm({ ...remPagoForm, cuenta: e.target.value })}><option value="">Seleccioná una cuenta…</option>{cuentasUsables.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-              <div className="field"><label>Monto</label><input type="number" value={remPagoForm.monto} onChange={e => setRemPagoForm({ ...remPagoForm, monto: e.target.value })} /></div>
+              <div className="field"><label>Monto</label><CurrencyInput value={remPagoForm.monto} onChange={v => setRemPagoForm({ ...remPagoForm, monto: v })} aria-label="Monto del pago al remito" /></div>
               <div className="field"><label>Fecha</label><input type="date" value={remPagoForm.fecha} onChange={e => setRemPagoForm({ ...remPagoForm, fecha: e.target.value })} /></div>
             </div>
             <div className="modal-ft"><button className="btn btn-sec" onClick={() => setPagarRemModal(null)}>Cancelar</button><button className="btn btn-success" onClick={pagarRemito} disabled={pagandoRem || !remPagoForm.cuenta}>{pagandoRem ? "Procesando..." : "Confirmar Pago"}</button></div>
