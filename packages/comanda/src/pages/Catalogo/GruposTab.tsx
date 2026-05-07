@@ -5,6 +5,7 @@ import type { ItemGrupo, TaxRate, Estacion } from '../../types/database';
 import { listGrupos, createGrupo, updateGrupo, softDeleteGrupo, countItemsPorGrupo } from '../../services/gruposService';
 import { listTaxRates } from '../../services/taxRatesService';
 import { tienePermiso } from '../../lib/auth';
+import { useRealtimeTable } from '../../lib/useRealtimeTable';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { EmojiPicker } from '../../components/EmojiPicker';
 import { validarNombre } from '../../lib/validate';
@@ -50,6 +51,9 @@ export function GruposTab({ user }: Props) {
   }, [user.tenant_id]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // Sprint Realtime: cambios remotos en item_grupos del mismo tenant.
+  useRealtimeTable({ table: 'item_grupos', onChange: () => reload() });
 
   return (
     <div>

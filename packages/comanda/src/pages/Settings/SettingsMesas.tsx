@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Armchair } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import {
   listMesas, createMesa, updateMesa, softDeleteMesa, type MesaDraft,
 } from '@/services/mesasService';
@@ -40,6 +41,9 @@ export function SettingsMesas() {
   }, [localId]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // Sprint Realtime: cambios remotos en mesas del mismo tenant.
+  useRealtimeTable({ table: 'mesas', onChange: () => reload() });
 
   const filtered = mesas.filter((m) =>
     !search || m.numero.toLowerCase().includes(search.toLowerCase()) || (m.zona ?? '').toLowerCase().includes(search.toLowerCase()),

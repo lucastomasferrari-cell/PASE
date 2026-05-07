@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Plus, Trash2, CreditCard, Pencil } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import {
   listMetodos, createMetodo, updateMetodo, softDeleteMetodo, toggleActivo,
   type MetodoDraft,
@@ -31,6 +32,10 @@ export function SettingsMetodosCobro() {
   }, [user?.tenant_id]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // Sprint Realtime: cualquier cambio remoto en metodos_cobro del mismo
+  // tenant dispara reload. No reemplaza el reload tras mutación local.
+  useRealtimeTable({ table: 'metodos_cobro', onChange: () => reload() });
 
   return (
     <div>

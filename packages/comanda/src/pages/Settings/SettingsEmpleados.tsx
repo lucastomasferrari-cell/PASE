@@ -7,6 +7,7 @@ import {
 } from '../../services/empleadosService';
 import { listLocalesAccesibles, type LocalSimple } from '../../services/configService';
 import { useLocalActivo } from '../../lib/localActivo';
+import { useRealtimeTable } from '../../lib/useRealtimeTable';
 import { Badge } from '../../components/Badge';
 import { PinDialog } from './PinDialog';
 import { Card, CardContent } from '@/components/ui/card';
@@ -48,6 +49,11 @@ export function SettingsEmpleados({ user }: Props) {
   }, [localId]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // Sprint Realtime: cambios remotos en rrhh_empleados (rol_pos, pos_activo,
+  // PIN, etc) del mismo tenant. Si otro admin cambia el rol POS de un
+  // empleado, se ve sin F5.
+  useRealtimeTable({ table: 'rrhh_empleados', onChange: () => reload() });
 
   if (localId === null) {
     return (
