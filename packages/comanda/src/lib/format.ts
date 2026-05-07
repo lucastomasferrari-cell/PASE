@@ -21,7 +21,12 @@ export function parseARS(s: string): number {
   return Number(cleaned) || 0;
 }
 
-export function formatFechaAR(iso: string | Date | null | undefined): string {
+// Sprint 8 tarea 3: timezone configurable. Default Buenos Aires; los
+// componentes pueden pasar un timezone distinto leído de useTimezone()
+// para cuando entren clientes fuera de Argentina.
+export const DEFAULT_TIMEZONE = 'America/Argentina/Buenos_Aires';
+
+export function formatFecha(iso: string | Date | null | undefined, timezone: string = DEFAULT_TIMEZONE): string {
   if (!iso) return '';
   const d = typeof iso === 'string' ? new Date(iso) : iso;
   if (Number.isNaN(d.getTime())) return '';
@@ -29,19 +34,29 @@ export function formatFechaAR(iso: string | Date | null | undefined): string {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-    timeZone: 'America/Argentina/Buenos_Aires',
+    timeZone: timezone,
   }).format(d);
 }
 
-export function formatHoraAR(iso: string | Date | null | undefined): string {
+export function formatHora(iso: string | Date | null | undefined, timezone: string = DEFAULT_TIMEZONE): string {
   if (!iso) return '';
   const d = typeof iso === 'string' ? new Date(iso) : iso;
   if (Number.isNaN(d.getTime())) return '';
   return new Intl.DateTimeFormat('es-AR', {
     hour: '2-digit',
     minute: '2-digit',
-    timeZone: 'America/Argentina/Buenos_Aires',
+    timeZone: timezone,
   }).format(d);
+}
+
+/** @deprecated Sprint 8: usar formatFecha(iso, useTimezone()) en componentes. */
+export function formatFechaAR(iso: string | Date | null | undefined): string {
+  return formatFecha(iso);
+}
+
+/** @deprecated Sprint 8: usar formatHora(iso, useTimezone()) en componentes. */
+export function formatHoraAR(iso: string | Date | null | undefined): string {
+  return formatHora(iso);
 }
 
 export function relativoCorto(iso: string | null | undefined): string {

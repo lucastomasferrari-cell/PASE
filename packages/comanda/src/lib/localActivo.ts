@@ -24,6 +24,23 @@ export function writeLocalActivo(localId: number | null) {
 }
 
 // Hook: devuelve el local activo + setter. Default razonable según user.
+//
+// NOTA sprint 8 — auditoría 2026-05-07 marcó este effect como "potencial
+// loop". Análisis: NO hay loop real bajo asumptions normales:
+//   1. Lazy initializer del useState ya cubre el caso de user existente
+//      al mount (calcula def y setea inicial).
+//   2. El useEffect es defensive para el caso async: user llega DESPUÉS
+//      del mount (login lento, refetch). Cuando llega:
+//        - Effect corre con localId=null, user existe.
+//        - Setea localId=def. Re-render.
+//        - Effect re-corre (deps cambiaron). Ahora localId !== null →
+//          if guard salta. NO LOOP.
+//   3. setLocalId(null) manual nunca lo hacemos — el setter `set` solo
+//      acepta `id: number`. Por lo tanto la transición localId=null →
+//      def es one-way después del mount.
+//
+// El effect es redundante con el lazy init para el caso síncrono, pero
+// hace falta para el caso async. Mantener.
 export function useLocalActivo(user: Usuario | null): [number | null, (id: number) => void] {
   const [localId, setLocalId] = useState<number | null>(() => {
     const stored = readLocalActivo();
@@ -37,6 +54,8 @@ export function useLocalActivo(user: Usuario | null): [number | null, (id: numbe
   });
 
   useEffect(() => {
+    // Solo dispara cuando el user llegó async post-mount con localId=null.
+    // El guard de localId previene re-disparos en cadena.
     if (localId === null && user) {
       const def = user.locales[0] ?? (user.rol === 'superadmin' || user.rol === 'dueno' ? 1 : null);
       if (def !== null) setLocalId(def);
