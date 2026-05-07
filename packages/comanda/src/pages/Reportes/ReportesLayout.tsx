@@ -52,9 +52,21 @@ export function ReportesLayout() {
         ))}
         {periodo === 'custom' && (
           <div className="flex items-center gap-1">
-            <input type="date" value={customDesde} onChange={e => setCustomDesde(e.target.value)} className="h-9 px-2 rounded border border-border bg-background text-sm" />
-            <span className="text-xs">→</span>
-            <input type="date" value={customHasta} onChange={e => setCustomHasta(e.target.value)} className="h-9 px-2 rounded border border-border bg-background text-sm" />
+            <input
+              type="date"
+              value={customDesde}
+              onChange={e => setCustomDesde(e.target.value)}
+              className="h-9 px-2 rounded border border-border bg-background text-sm"
+              aria-label="Fecha desde"
+            />
+            <span className="text-xs" aria-hidden>→</span>
+            <input
+              type="date"
+              value={customHasta}
+              onChange={e => setCustomHasta(e.target.value)}
+              className="h-9 px-2 rounded border border-border bg-background text-sm"
+              aria-label="Fecha hasta"
+            />
           </div>
         )}
       </div>

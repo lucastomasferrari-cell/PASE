@@ -166,10 +166,19 @@ export async function getPopulares(
   };
 }
 
-// Stub: sistema de promociones/discounts no está implementado aún.
-// Cuando se implemente, agregar parámetro slug y consultar tabla de
-// promociones. Por ahora devuelve [] siempre y el frontend oculta
-// la sección Discounts si data.length === 0.
+/**
+ * @deprecated Stub hasta implementar sistema de promociones/discounts
+ * (sprint dedicado). Por ahora devuelve [] siempre. El frontend oculta
+ * la sección "Discounts" de la Tienda online si data.length === 0.
+ *
+ * Cuando se implemente:
+ *   1. Crear tabla `descuentos_tienda` con start_at, end_at, tipo
+ *      (porcentaje/monto), valor, items_aplicables.
+ *   2. Agregar parámetro `slug: string` y consultar la tabla.
+ *   3. Eliminar este JSDoc.
+ *
+ * Anotado en DEUDA_TECNICA.md (Sprint 5).
+ */
 export async function getDescuentos(): Promise<{ data: PopularItem[]; error: string | null }> {
   return { data: [], error: null };
 }

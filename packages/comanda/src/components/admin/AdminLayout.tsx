@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth';
@@ -50,6 +50,52 @@ export function AdminLayout() {
     if (drawerOpen) document.body.style.pointerEvents = 'auto';
   }, [drawerOpen]);
 
+  // Sprint 8 tarea 6: a11y del drawer mobile. Cuando abre:
+  //   - Auto-focus al primer link del sidebar.
+  //   - Escape cierra el drawer.
+  //   - Tab queda atrapado dentro del drawer (no se "escapa" al
+  //     contenido principal).
+  // Implementación manual porque el drawer NO usa shadcn Dialog (que
+  // hace esto automático). Ver DEUDA: migrar a Dialog/Sheet en futuro.
+  const drawerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const drawer = drawerRef.current;
+    if (!drawer) return;
+
+    // Auto-focus el primer focusable visible.
+    const focusables = drawer.querySelectorAll<HTMLElement>(
+      'a, button, input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    );
+    focusables[0]?.focus();
+
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setDrawerOpen(false);
+        return;
+      }
+      if (e.key === 'Tab' && drawer) {
+        const items = drawer.querySelectorAll<HTMLElement>(
+          'a, button, input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        );
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (!first || !last) return;
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [drawerOpen]);
+
   // Si la ruta tiene permiso requerido y el user no lo tiene → redirect.
   // Solo ejecuta si user ya cargó (evita redirects falsos durante loading).
   useEffect(() => {
@@ -82,6 +128,7 @@ export function AdminLayout() {
       {/* Mobile drawer */}
       {drawerOpen && (
         <div
+          ref={drawerRef}
           className="fixed inset-0 z-50 lg:hidden"
           role="dialog"
           aria-modal="true"

@@ -1,9 +1,79 @@
 # Deuda técnica COMANDA
 
-Última actualización: 2026-05-07 (final de Sprint Fix CurrencyInput — bug neto gravado).
+Última actualización: 2026-05-07 (final de Sprint 8 — service de motor).
 
 Este documento lista lo que se decidió postergar, no lo que está roto.
 Todo lo de acá funciona; simplemente queda margen para crecer.
+
+## Sprint 8 — Service de motor
+
+### Tarea 1 (anulación)
+
+- **Cola de reversos pendientes**: cuando se anula una venta cobrada
+  pero no hay turno abierto en el local, el trigger
+  `fn_trg_revertir_movimientos_al_anular_venta` emite `RAISE NOTICE`
+  y NO genera el reverso. El cuadre queda con dinero "fantasma" hasta
+  que se ajusta a mano vía Auditoría. Solución futura: tabla
+  `reversos_pendientes(venta_id, local_id, monto, estado)` que se
+  procesa al abrir el siguiente turno.
+
+### Tarea 3 (timezone)
+
+- **Migrar call sites legacy de formatFechaAR/formatHoraAR a
+  formatFecha/formatHora con useTimezone()**. Sprint 8 dejó las
+  funciones nuevas pero NO migró los call sites (refactor mecánico
+  amplio). `useTimezone` es el hook a usar.
+
+- **Selector de timezone en SettingsLocal** cuando entre el primer
+  cliente fuera de Argentina. Hoy `comanda_local_settings.timezone`
+  acepta el cambio vía DB pero no hay UI.
+
+- **Lista de zonas horarias en CHECK constraint** — extender cuando
+  se onboardee un país nuevo no incluido (ver migration
+  `202605101010_sprint8_timezone_configurable.sql`).
+
+### Tarea 4 (tests)
+
+- **Tests UI con `@testing-library/react`** — postergado, no crítico
+  hoy. Cuando se quieran tests de componentes complejos (dialogs con
+  flow multi-step, breadcrumb dinámico) hace falta esta dep.
+
+- **Tests E2E con Playwright** — flow login → POS → cobrar → cerrar
+  caja. No hay nada hoy.
+
+- **Tests SQL reales (DB local + integration)** — los tests actuales
+  mockean Supabase a nivel JS. NO testean: triggers (incluyendo el
+  reverso de movimientos del sprint 8 y el saldo proveedor del sprint
+  5), CHECK constraints, RLS policies, race conditions con
+  `FOR UPDATE`.
+
+- **Servicios sin tests pendientes**: `allChecksService`,
+  `canalesService`, `combosService`, `configService`, `itemsService`,
+  `kdsTokensService`, `localSettingsService`, `menuQrTokensService`,
+  `modifiersService`, `recetasService`, `recetaPasosService`,
+  `settingsLocalesService`, `tiendaService`.
+
+### Tarea 5 (coverage)
+
+- **Subir thresholds de coverage gradualmente**: hoy 25% (línea con
+  realidad post-sprint 8). Roadmap:
+  - Sprint 9: 35%.
+  - Sprint 10: 45%.
+  - Pre-launch SaaS: 60%.
+
+- **`pnpm test --coverage` no funciona via turbo** (intercepta el
+  flag). Hay que usar `node_modules/.bin/vitest run --coverage`.
+  Documentado en TESTING.md. Si se quiere fix, configurar turbo para
+  pasar args.
+
+### General (mantener desde sprints previos)
+
+- **Auditoría de seguridad externa (pentest)** antes del primer
+  cliente pago.
+- **Backups automáticos documentados + drill de restore** semestral.
+- **Status page público y monitoring** (Uptime Kuma o similar).
+- **Cliente Supabase sin generic Database** — regenerar tipos cuando
+  el schema sea estable.
 
 ## Sprint Fix CurrencyInput
 
