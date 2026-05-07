@@ -1,9 +1,60 @@
 # Deuda técnica COMANDA
 
-Última actualización: 2026-05-07 (final de Sprint 7 — fix BLOCKERs + HIGH auditoría).
+Última actualización: 2026-05-07 (final de Sprint Fix CurrencyInput — bug neto gravado).
 
 Este documento lista lo que se decidió postergar, no lo que está roto.
 Todo lo de acá funciona; simplemente queda margen para crecer.
+
+## Sprint Fix CurrencyInput
+
+### Migrado en este sprint
+
+**PASE — Compras.tsx (form factura manual)**:
+- Neto Gravado, IVA 21%, IVA 10.5%, Perc. IIBB, Perc. IVA, Otros
+  Cargos, Descuentos (7 inputs).
+- Modal Registrar Pago (factura): Monto.
+- Modal Nuevo Remito Valorado: Monto.
+- Modal Pagar Remito Directo: Monto.
+
+**COMANDA — vía wrapper MoneyInput** (delegado a CurrencyInput):
+- MovimientoCajaDialog (monto retiro/depósito/ajuste).
+- PaymentDialog (propina, montoNuevo, montoEntregado de cada pago).
+- CajaAbrir (montoInicial), CajaCerrar (montoEfectivoDeclarado).
+- SettingsLocal (costo_envio_default).
+- ItemForm (precio), ModificadoresTab (nuevoPrecio).
+
+### Pendiente de migrar (próximo sprint)
+
+- **PASE — LectorFacturasIA**: campos editables del OCR (neto, IVA,
+  total). Hoy son `<input type="number">`. El bug de coma podría
+  reaparecer si el usuario edita los valores. Migrar similar a
+  Compras.tsx. Los inputs están en líneas ~462 y ~468 del archivo.
+
+- **PASE — Items detalle factura (Compras.tsx:662-664)**: cantidad
+  + precio_unitario en celdas de tabla. Cantidad NO es plata
+  (queda type=number). Precio_unitario sí es plata pero la celda
+  es 70-90px de ancho — CurrencyInput puede verse apretado.
+  Decisión pendiente: o se migra con `currencySymbol={null}` y
+  className compacta, o se deja con type=number (los items son
+  opcionales, no bloquean el flow del bug original).
+
+### Notas arquitecturales
+
+- **Componente CurrencyInput duplicado** entre PASE (sin tailwind,
+  styles inline) y COMANDA (con shadcn + tailwind). Cuando se
+  consolide `@pase/shared`, extraer a uno solo con styling más
+  versátil.
+
+- **MoneyInput es un wrapper deprecable**. Para nuevos componentes,
+  usar `CurrencyInput` directo (más explícito: currencySymbol,
+  allowNegative, maxIntegerDigits, ref forwarding).
+
+- **Variantes futuras a considerar**:
+  - `<PercentageInput />` para IVA, comisiones, descuentos %.
+    NO migrar % a CurrencyInput — son lógicas distintas (0-100,
+    no centavos).
+  - `<CurrencyInput currency="USD" />` si en el futuro se aceptan
+    dólares (formato US sería el default).
 
 ## Sprint 7 — Fixes seguridad/integridad financiera
 
