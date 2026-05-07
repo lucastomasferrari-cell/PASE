@@ -1,9 +1,65 @@
 # Deuda técnica COMANDA
 
-Última actualización: 2026-05-09 (final de Sprint 5 — Bugs + Estética V2 Tienda).
+Última actualización: 2026-05-07 (final de Sprint 6 — Sidebar admin Toast-style).
 
 Este documento lista lo que se decidió postergar, no lo que está roto.
 Todo lo de acá funciona; simplemente queda margen para crecer.
+
+## Sprint 6 — Refactor admin a sidebar + stubs
+
+### Sidebar admin
+
+- **Keyboard navigation en el sidebar**: hoy navegación solo con
+  mouse/touch. Falta soporte de Arrow keys / Enter / Esc para
+  accesibilidad.
+
+- **Buscador global del header**: input visual stub. Click en el campo
+  dispara toast "Próximamente — vas a poder buscar items, mesas,
+  empleados, ventas desde acá". Implementación real requiere
+  índice cliente (Fuse.js) o RPC de búsqueda multi-tabla.
+
+- **Notificaciones del header**: campana stub. Click → toast
+  "Próximamente". Implementación requiere tabla de notificaciones
+  + Realtime + suscripción por user.
+
+- **Multi-tenant selector con search**: si en el futuro hay >5 tenants
+  (caso superadmin), el selector actual de locales se vuelve incómodo.
+  Falta selector con search.
+
+- **Toast-style "publicar cambios" con banner amarillo**: futuro flow
+  donde los cambios al menú son drafts hasta que el manager publica.
+  Hoy todos los cambios son inmediatos.
+
+- **Tabla rol_pos_permisos formal**: sigue como deuda — Sprint 6
+  sumó más slugs al mapeo provisional en usePermiso (empleados,
+  salon, pagos, online, hardware, marketing, clientes, integraciones,
+  configuracion, suscripcion). Cuando se cree una pantalla de
+  "asignar permisos a roles POS" en /empleados/permisos, mover el
+  mapping a DB.
+
+- **Permission matrix completo documentado**: hoy el mapeo está en
+  código (usePermiso.ts). Falta documento que explique qué slug
+  corresponde a qué rol y qué pantalla protege.
+
+### Stubs implementados (~30) — implementación real pendiente
+
+Cada uno tiene copy específico en `src/lib/stubsCopy.ts` con el
+detalle de features esperadas. Los listo agrupados por categoría:
+
+- **Reportes**: ventas, empleados (performance individual)
+- **Menú**: combos, disponibilidad (86 items)
+- **Salón**: servicios y turnos, reservas
+- **Empleados**: horarios y turnos, performance
+- **Pagos**: caja chica, histórico turnos, conciliación MP
+  (link a PASE), settlements (link a PASE)
+- **Online**: tienda online (config), tracking pedidos
+- **Hardware**: impresoras, cajón de dinero, MP Point, tablets KDS
+- **Marketing**: promociones, cupones, fidelidad, campañas
+- **Clientes**: lista, historial, reseñas
+- **Integraciones**: MP, Rappi, PedidosYa, WhatsApp, contabilidad,
+  webhooks/API
+- **Configuración**: branding, notificaciones, recibos, idioma, backup
+- **Suscripción**: plan, facturación, métodos de pago, historial
 
 ## Sprint 5
 
