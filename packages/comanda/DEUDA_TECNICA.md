@@ -1,9 +1,69 @@
 # Deuda técnica COMANDA
 
-Última actualización: 2026-05-08 (final de Sprint 4 — Sesión B).
+Última actualización: 2026-05-09 (final de Sprint 5 — Bugs + Estética V2 Tienda).
 
 Este documento lista lo que se decidió postergar, no lo que está roto.
 Todo lo de acá funciona; simplemente queda margen para crecer.
+
+## Sprint 5
+
+### Tienda online — diferida a próxima iteración
+
+- **Sistema de promociones / discounts**: la sección "Discounts" del
+  rediseño Roc N Ramen requiere modelado de promos (porcentaje, 2x1,
+  cupones). Hoy `tiendaService.getDescuentos()` es stub que devuelve
+  []. Cuando se implemente, agregar tabla `promociones` (con start/end,
+  tipo, porcentaje, items asociados) + RPC + UI en /catalogo.
+
+- **Programar pedido para más tarde** (pickup/delivery time): el
+  selector de hora del rediseño hoy solo muestra "ASAP". Para
+  programar, generar slots de 15 min hasta cierre del local (mirar
+  schedule del local en `comanda_local_settings`) + pasar
+  `programada_para` a `fn_crear_pedido_publico_comanda`.
+
+- **destacado_tienda en vista pública**: agregamos la columna
+  `items.destacado_tienda` (migration sprint 5) para fallback de
+  Popular cuando no hay ventas reales. Pero `v_catalogo_publico` NO
+  expone el flag, así que el fallback no se materializa en el frontend
+  todavía. Si hay 0 populares por ventas, la sección se oculta en vez
+  de mostrar destacados manuales. Migration de la vista pendiente.
+
+- **Estética V2 KDS, Menú QR, Reportes**: Sprint 5 solo cubrió la
+  Tienda online. Las otras 3 superficies siguen con el look del
+  Sprint 4. Misma filosofía Roc N Ramen, próximo sprint.
+
+- **TiendaSeguimiento sin rediseño**: la pantalla pública para
+  trackear pedido por teléfono (sin login) quedó con el estilo viejo.
+  Refactor cosmético menor.
+
+- **ModifiersDialogTienda**: el rediseño asumió que la mayoría de
+  pedidos tienda no tienen modifiers (la vista `v_catalogo_publico`
+  no expone modifier_groups). Cuando se sumen modifiers a la tienda
+  online, hace falta una variante con estética V2 del ModifiersDialog
+  POS (~250 líneas).
+
+- **Buscador en sidebar de Tienda**: el input de search está y filtra
+  por nombre + descripción client-side. Cuando el catálogo sea grande
+  (200+ items), conviene mover a SQL con FTS / trigram.
+
+- **IntersectionObserver fallback** para navegadores muy viejos: el
+  rediseño de TiendaHome usa IntersectionObserver para resaltar la
+  categoría visible al scrollear. Soportado en todos los modernos,
+  pero IE11 no.
+
+- **Open Graph + meta description**: hoy solo seteamos
+  `document.title`. `react-helmet-async` no está instalado y no se
+  agregó dep para evitar bundle bloat. Si se quiere preview rico al
+  compartir el link, hay que agregarla.
+
+- **Progress bar real durante upload de MP QR**: el SDK supabase-js
+  no expone `onProgress` para storage uploads. Si se quiere progreso
+  visible (más que un spinner), implementar con XHR raw + signed URL.
+
+### Bugs cerrados (no son deuda)
+Los 5 bugs del bloque A (NumericPad mouse, CambiarPinDialog error
+handling, header back button, turno status sin F5, MenuQrView
+useCallback) quedaron resueltos.
 
 ## Sprint 4 (Sesión B)
 
@@ -115,12 +175,6 @@ Todo lo de acá funciona; simplemente queda margen para crecer.
   Falta integración con un servicio de monitoreo (Sentry / PostHog).
 
 ### Catálogo
-
-- **Selector de `color_ramp` en form de grupos**: el backfill heurístico
-  Sprint 3 cubre los grupos existentes; nuevos quedan en gris. Cuando
-  alguien quiera cambiar el color, hay que tocar DB directamente.
-  Selector visual de los 8 colores en `GruposTab` queda para próximo
-  sprint.
 
 - **Combos UI completa**: el modelo (`item.es_combo`,
   `combo_componentes`) está. La UI para definir combos en Settings y
