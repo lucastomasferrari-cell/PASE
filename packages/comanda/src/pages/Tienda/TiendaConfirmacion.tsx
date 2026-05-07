@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useOutletContext, useParams } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import { getPedidoPublico, type PedidoPublicoEstado } from '@/services/tiendaService';
+import { useVisiblePolling } from '@/lib/useVisiblePolling';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatARS } from '@/lib/format';
@@ -20,19 +21,19 @@ export function TiendaConfirmacion() {
 
   const telefono = sessionStorage.getItem(`comanda-tel-${id}`) ?? '';
 
+  const tick = useCallback(async () => {
+    if (!id || !telefono) return;
+    const { data } = await getPedidoPublico(id, telefono);
+    if (!data) setNotFound(true); else setEstado(data);
+    setLoading(false);
+  }, [id, telefono]);
+
+  // Sprint 7 PERF: useVisiblePolling pausa cuando la pestaña se oculta.
   useEffect(() => {
     if (!id || !telefono) { setLoading(false); setNotFound(true); return; }
-    let cancelled = false;
-    async function tick() {
-      const { data } = await getPedidoPublico(id, telefono);
-      if (cancelled) return;
-      if (!data) setNotFound(true); else setEstado(data);
-      setLoading(false);
-    }
-    tick();
-    const interval = setInterval(tick, POLL_MS);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [id, telefono]);
+    void tick();
+  }, [id, telefono, tick]);
+  useVisiblePolling(tick, POLL_MS);
 
   if (loading) {
     return (

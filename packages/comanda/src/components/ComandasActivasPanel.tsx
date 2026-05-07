@@ -4,6 +4,7 @@ import { Inbox } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import { listVentas } from '@/services/ventasService';
+import { useVisiblePolling } from '@/lib/useVisiblePolling';
 import type { VentaPos, ModoVenta } from '@/types/database';
 import { formatARS, relativoCorto } from '@/lib/format';
 import { Badge } from '@/components/Badge';
@@ -35,11 +36,9 @@ export function ComandasActivasPanel({ className, modos }: Props) {
     setLoading(false);
   }, [localId, modos]);
 
-  useEffect(() => {
-    reload();
-    const interval = setInterval(reload, 15_000);
-    return () => clearInterval(interval);
-  }, [reload]);
+  // Sprint 7 PERF: useVisiblePolling pausa cuando la pestaña esta oculta.
+  useEffect(() => { reload(); }, [reload]);
+  useVisiblePolling(reload, 15_000);
 
   return (
     <aside className={cn('bg-card flex flex-col', className)}>

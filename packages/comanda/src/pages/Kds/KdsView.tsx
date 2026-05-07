@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { Volume2, VolumeX, Undo2 } from 'lucide-react';
 import { getTickets, marcarListo, recall, type KdsTicket } from '@/services/kdsService';
 import { ESTACIONES, type EstacionKds } from '@/services/kdsTokensService';
+import { useVisiblePolling } from '@/lib/useVisiblePolling';
 
 const POLL_MS = 10000;
 
@@ -53,11 +54,12 @@ export function KdsView() {
     setTickets(data);
   }, [token, estacionValida, sonido]);
 
-  useEffect(() => {
-    fetchTickets();
-    const i = setInterval(fetchTickets, POLL_MS);
-    return () => clearInterval(i);
-  }, [fetchTickets]);
+  // Sprint 7 PERF: useVisiblePolling pausa cuando la pestaña KDS está
+  // oculta (cocinero abre otra app, navega a otra tab) y reanuda al
+  // volver. Reduce queries desperdiciadas — KDS pollea cada 10s, en
+  // turno de 8h con tab oculta serían ~2880 requests innecesarios/día.
+  useEffect(() => { fetchTickets(); }, [fetchTickets]);
+  useVisiblePolling(fetchTickets, POLL_MS);
 
   useEffect(() => {
     const t = setInterval(() => {
