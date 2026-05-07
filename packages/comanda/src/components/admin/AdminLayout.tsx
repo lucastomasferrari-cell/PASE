@@ -32,8 +32,12 @@ export function AdminLayout() {
   const sub = cat ? findActiveSubItem(cat, pathname) : null;
   const requiredCat = cat?.requiredPermission;
   const requiredSub = sub?.requiredPermission;
-  const tieneCat = usePermiso(requiredCat ?? '');
-  const tieneSub = usePermiso(requiredSub ?? '');
+  // Sprint 7 HIGH #3: pasar slug imposible 'NEVER_MATCH' cuando no hay
+  // permiso requerido. usePermiso devuelve false consistentemente para
+  // este slug, evitando ambigüedad de '' (slug vacío) que algunas
+  // implementaciones podrían tratar diferente.
+  const tieneCat = usePermiso(requiredCat || 'NEVER_MATCH');
+  const tieneSub = usePermiso(requiredSub || 'NEVER_MATCH');
 
   // ── Effects (todos antes de cualquier early return para no romper
   // las reglas de hooks) ─────────────────────────────────────────────

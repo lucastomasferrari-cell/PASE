@@ -17,7 +17,8 @@ const TEL_AR = /^\+?54?\s?\d{10,11}$/;
 export function TiendaCheckout() {
   const { local } = useOutletContext<TiendaCtx>();
   const navigate = useNavigate();
-  const subscribe = useCallback((cb: () => void) => carritoStore.subscribe(cb), []);
+  // Sprint 7 HIGH #3: subscribe debe incluir local.slug en deps.
+  const subscribe = useCallback((cb: () => void) => carritoStore.subscribe(cb), [local.slug]);
   const getSnapshot = useCallback(() => carritoStore.get(local.slug), [local.slug]);
   const carrito = useSyncExternalStore(subscribe, getSnapshot);
 

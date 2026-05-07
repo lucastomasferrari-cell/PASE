@@ -84,15 +84,20 @@ export function VentaScreen() {
 
   useEffect(() => { reload(); }, [reload]);
 
-  // Cache: qué items tienen modifiers asignados
+  // Cache: qué items tienen modifiers asignados.
+  // Sprint 7 HIGH #3: cleanup con `cancelled` flag para evitar setState
+  // post-unmount cuando la query resuelve después de navegar fuera.
   useEffect(() => {
     if (catalogo.length === 0) return;
+    let cancelled = false;
     const ids = catalogo.map((c) => c.id);
     db.from('item_modifier_groups').select('item_id').in('item_id', ids).then(({ data }) => {
+      if (cancelled) return;
       const set = new Set<number>();
       for (const r of data ?? []) set.add((r as { item_id: number }).item_id);
       setItemsConModifiers(set);
     });
+    return () => { cancelled = true; };
   }, [catalogo]);
 
   const catalogoFiltrado = useMemo(() => {

@@ -52,7 +52,9 @@ export function TiendaHome() {
   const [search, setSearch] = useState('');
   const seccionesRef = useRef<Map<string, HTMLElement>>(new Map());
 
-  const subscribe = useCallback((cb: () => void) => carritoStore.subscribe(cb), []);
+  // Sprint 7 HIGH #3: subscribe debe incluir local.slug en deps. Sin esto,
+  // si el user navega a otra tienda, queda suscrito al store del slug anterior.
+  const subscribe = useCallback((cb: () => void) => carritoStore.subscribe(cb), [local.slug]);
   const getSnapshot = useCallback(() => carritoStore.get(local.slug), [local.slug]);
   const carrito = useSyncExternalStore(subscribe, getSnapshot);
 
