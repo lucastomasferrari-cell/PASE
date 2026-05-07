@@ -3,6 +3,7 @@ import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasOperables, localesVisibles, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
+import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { CUENTAS, UNIDADES } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId, parseMonto } from "../lib/utils";
 import LectorFacturasIA from "./LectorFacturasIA";
@@ -183,6 +184,13 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   // Patrón fetch-on-dep-change.
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [localActivo]);
+
+  // Sprint Realtime: cambios remotos en facturas, remitos o proveedores
+  // del mismo tenant disparan reload. Cubre el flow de "carga manual de
+  // factura en una compu, otra debe ver el cambio sin F5".
+  useRealtimeTable({ table: 'facturas', onChange: () => load() });
+  useRealtimeTable({ table: 'remitos', onChange: () => load() });
+  useRealtimeTable({ table: 'proveedores', onChange: () => load() });
 
   // BUG 1: Lector IA modal solo cierra con X o ESC, no con click en backdrop.
   useEffect(() => {

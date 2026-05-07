@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
 import { ROLES, MODULOS } from "../lib/auth";
+import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { CUENTAS } from "../lib/constants";
 import type { Usuario, Local } from "../types";
 
@@ -49,6 +50,13 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
   // Patrón fetch-on-mount.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, []);
+
+  // Sprint Realtime: cambios remotos en usuarios o usuario_permisos del
+  // mismo tenant disparan reload. Si otro admin agrega permisos a un
+  // user, se ve sin F5.
+  useRealtimeTable({ table: 'usuarios', onChange: () => load() });
+  useRealtimeTable({ table: 'usuario_permisos', onChange: () => load() });
+  useRealtimeTable({ table: 'usuario_locales', onChange: () => load() });
 
   const abrirNuevo = () => { setForm(emptyForm); setModal("new"); setErr(""); setShowPw(false); };
 

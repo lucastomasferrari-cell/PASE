@@ -3,6 +3,7 @@ import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasVisibles as cuentasVisiblesFn, cuentasOperables as cuentasOperablesFn, cuentasVisiblesParaListados, localesVisibles } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
+import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import type { Usuario, Local } from "../types/auth";
@@ -189,6 +190,12 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   // Patrón fetch-on-dep-change.
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(()=>{load();},[localActivo]);
+
+  // Sprint Realtime: cualquier cambio remoto en movimientos o saldos_caja
+  // del mismo tenant dispara reload. Refresca la card de saldos + lista
+  // de movimientos sin necesidad de F5.
+  useRealtimeTable({ table: 'movimientos', onChange: () => load() });
+  useRealtimeTable({ table: 'saldos_caja', onChange: () => load() });
 
   // Carga el auditoría log cuando el usuario clickea "Ver edición" en
   // un movimiento. setAuditLog es derivada del detalleEdicion.

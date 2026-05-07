@@ -3,6 +3,7 @@ import { db } from "../lib/supabase";
 import { tienePermiso } from "../lib/auth";
 import { useMediosCobro, type MedioCobro } from "../lib/useMediosCobro";
 import { useCategorias } from "../lib/useCategorias";
+import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { CUENTAS } from "../lib/constants";
 import type { Usuario, Local } from "../types";
 
@@ -70,6 +71,16 @@ export default function Configuracion({ user, locales }: ConfiguracionProps) {
   // Patrón fetch-on-dep-change. No agregar load a deps (re-fetch infinito).
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [tab]);
+
+  // Sprint Realtime: cualquier cambio remoto en config_categorias del
+  // mismo tenant dispara reload de la sección Categorías. El refresh
+  // del hook useCategorias también se invalida tras detectar el cambio
+  // (corre en otros componentes — no acá, su effect lo maneja).
+  useRealtimeTable({
+    table: 'config_categorias',
+    onChange: () => { load(); refreshCategorias(); },
+    enabled: !esMediosCobroTab,
+  });
 
   const agregar = async () => {
     if (!nuevo.trim()) return;
@@ -156,6 +167,13 @@ function MediosCobroSection({ user, locales }: MediosCobroSectionProps) {
   const { todosLosMedios, refresh, loading: hookLoading } = useMediosCobro();
   const [editing, setEditing] = useState<Partial<MedioCobro> | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Sprint Realtime: cambios remotos en medios_cobro del mismo tenant
+  // disparan refresh del hook (que invalida sessionStorage + re-fetch).
+  useRealtimeTable({
+    table: 'medios_cobro',
+    onChange: () => refresh(),
+  });
 
   // Filtrar locales visibles para el usuario. Dueño/admin ven todos.
   const localesVisibles = (user?.rol === "dueno" || user?.rol === "admin")
