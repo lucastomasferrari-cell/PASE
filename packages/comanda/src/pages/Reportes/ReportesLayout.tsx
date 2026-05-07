@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Outlet, NavLink, useOutletContext } from 'react-router-dom';
+import { Outlet, useOutletContext } from 'react-router-dom';
 import { Download } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
@@ -59,25 +59,8 @@ export function ReportesLayout() {
         )}
       </div>
 
-      <nav className="flex gap-2 flex-wrap text-sm border-b border-border">
-        {[
-          { to: '/reportes', label: 'Dashboard', end: true },
-          { to: '/reportes/canales', label: 'Canales' },
-          { to: '/reportes/productos', label: 'Productos' },
-          { to: '/reportes/tiempos', label: 'Tiempos' },
-        ].map(t => (
-          <NavLink
-            key={t.to}
-            to={t.to}
-            end={t.end}
-            className={({ isActive }) =>
-              `px-3 h-10 inline-flex items-center text-sm border-b-2 ${isActive ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground'}`
-            }
-          >
-            {t.label}
-          </NavLink>
-        ))}
-      </nav>
+      {/* Inner nav removida en sprint 6: el sidebar admin maneja la
+          navegación entre dashboard / canales / productos / tiempos. */}
 
       {!localId ? (
         <div className="rounded-md border border-border p-8 text-center text-sm text-muted-foreground">

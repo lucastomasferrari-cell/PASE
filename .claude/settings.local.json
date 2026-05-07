@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat C:\\\\\\\\Users\\\\\\\\lucas\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\C--Users-Lucas-Documents-PASE\\\\\\\\60cfbf93-bab7-4c2e-a21c-3f20066838f9\\\\\\\\tasks\\\\\\\\bi15cb43o.output)",
+      "Bash(npx supabase:*)",
+      "Bash(curl -s 'https://pduxydviqiaxfqnshhdc.supabase.co/rest/v1/mp_movimientos?select=id,tipo,monto,referencia_id,fecha&local_id=eq.1&fecha=gte.2026-04-13&tipo=in.\\(bank_transfer,payment_out,liquidacion\\)&order=fecha.desc' -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkdXh5ZHZpcWlheGZxbnNoaGRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NDExNDAsImV4cCI6MjA5MTMxNzE0MH0.oh0ObrthoSjmHeAEC3_kfvDnZeOY22ShGAsxv6_2o08' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkdXh5ZHZpcWlheGZxbnNoaGRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NDExNDAsImV4cCI6MjA5MTMxNzE0MH0.oh0ObrthoSjmHeAEC3_kfvDnZeOY22ShGAsxv6_2o08')",
+      "Bash(python -m json.tool)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(curl:*)"
+    ]
+  }
+}
