@@ -64,4 +64,77 @@ describe('aplicarDescuento', () => {
     expect(mockRpc).not.toHaveBeenCalled();
     expect(res.error).toBeTruthy();
   });
+
+  // Sprint 8 — casos negativos del backend (RAISE EXCEPTION mapeados al frontend).
+  it('mapea SIN_PERMISO_DESCUENTO sin manager', async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { message: 'SIN_PERMISO_DESCUENTO' },
+    });
+    const res = await aplicarDescuento(
+      { ventaId: 1, tipo: 'porcentaje', valor: 5, motivo: 'cliente' },
+      1000,
+    );
+    expect(res.error).toBe('SIN_PERMISO_DESCUENTO');
+  });
+
+  it('mapea MANAGER_REQUERIDO_DESCUENTO_GRANDE (>15% sin manager)', async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { message: 'MANAGER_REQUERIDO_DESCUENTO_GRANDE' },
+    });
+    const res = await aplicarDescuento(
+      { ventaId: 1, tipo: 'porcentaje', valor: 20, motivo: 'cliente' },
+      1000,
+    );
+    expect(res.error).toContain('MANAGER_REQUERIDO');
+  });
+
+  it('mapea MANAGER_INVALIDO (manager no existe o no tiene rol)', async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { message: 'MANAGER_INVALIDO' },
+    });
+    const res = await aplicarDescuento(
+      { ventaId: 1, tipo: 'porcentaje', valor: 20, motivo: 'x', managerId: 'fake-uuid' },
+      1000,
+    );
+    expect(res.error).toBe('MANAGER_INVALIDO');
+  });
+
+  it('mapea EMPLEADO_NO_EN_LOCAL (sprint 7 IDOR — manager de otro local)', async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { message: 'EMPLEADO_NO_EN_LOCAL: empleado abc no pertenece al local 5' },
+    });
+    const res = await aplicarDescuento(
+      { ventaId: 1, tipo: 'porcentaje', valor: 20, motivo: 'x', managerId: 'mgr-other-local' },
+      1000,
+    );
+    expect(res.error).toContain('EMPLEADO_NO_EN_LOCAL');
+  });
+
+  it('mapea VENTA_NO_ENCONTRADA', async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { message: 'VENTA_NO_ENCONTRADA' },
+    });
+    const res = await aplicarDescuento(
+      { ventaId: 999, tipo: 'porcentaje', valor: 5, motivo: 'x' },
+      1000,
+    );
+    expect(res.error).toBe('VENTA_NO_ENCONTRADA');
+  });
+
+  it('mapea DESCUENTO_INVALIDO (sprint 7 — supera subtotal+propina)', async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { message: 'DESCUENTO_INVALIDO: el descuento (200) supera el subtotal+propina (100)' },
+    });
+    const res = await aplicarDescuento(
+      { ventaId: 1, tipo: 'monto', valor: 200, motivo: 'x' },
+      100,
+    );
+    expect(res.error).toContain('DESCUENTO_INVALIDO');
+  });
 });
