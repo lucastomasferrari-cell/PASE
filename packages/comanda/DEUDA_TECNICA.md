@@ -1,9 +1,89 @@
 # Deuda técnica COMANDA
 
-Última actualización: 2026-05-07 (final de Sprint 8 — service de motor).
+Última actualización: 2026-05-07 (final de Sprint Realtime — primera ola).
 
 Este documento lista lo que se decidió postergar, no lo que está roto.
 Todo lo de acá funciona; simplemente queda margen para crecer.
+
+## Sprint Realtime — pendientes de aplicar el hook
+
+El hook `useRealtimeTable` (`src/lib/useRealtimeTable.ts`) está creado
+y testado (11 tests). La migration
+`202605101100_sprint_realtime_publication.sql` habilita Realtime en
+~40 tablas críticas. Aplicado en sprint a:
+
+**PASE**: Configuracion (categorias + medios), Caja, Compras, Usuarios.
+**COMANDA**: SettingsMetodosCobro, SettingsMesas, SettingsEmpleados,
+GruposTab.
+
+### Patrón de aplicación pendiente (1 línea por pantalla)
+
+Buscar la línea `useEffect(() => { reload(); }, [reload]);` (o
+equivalente) y agregar inmediatamente después:
+
+```ts
+useRealtimeTable({ table: '<TABLA>', onChange: () => reload() });
+```
+
+Filtros opcionales:
+- `scopeByLocal: true` para tablas con local_id donde el user trabaja
+  en un local específico (mesas, ventas_pos, movimientos_caja).
+- `extraFilter: 'estado=eq.abierta'` para listas filtradas (PostgREST).
+- `scopeByTenant: false` para tablas sin tenant_id.
+
+### Pantallas COMANDA pendientes
+
+| Pantalla | Tabla(s) | Notas |
+|---|---|---|
+| `Catalogo/ItemsTab.tsx` | `items` | |
+| `Catalogo/CanalesTab.tsx` | `canales` | |
+| `Catalogo/ListaPreciosTab.tsx` | `item_precios_canal` | Debounce ya cubre bursts. |
+| `Catalogo/ModificadoresTab.tsx` | `item_modifier_groups`, `item_modifier_options` | 2 hooks. |
+| `Settings/SettingsLocal.tsx` | `comanda_local_settings` | scopeByLocal=true. |
+| `Settings/SettingsKds.tsx` | `kds_tokens` | Verificar tenant_id. |
+| `Settings/SettingsMenuQr.tsx` | `menu_qr_tokens` | Verificar tenant_id. |
+| `Settings/SettingsEstaciones.tsx` | `item_grupos` | |
+| `Settings/SettingsPermisos.tsx` | `usuario_permisos`, `usuario_locales` | Crítico. |
+| `Settings/SettingsAuditoria.tsx` | `ventas_pos_overrides` | Append-only. |
+| `Pos/SalonView.tsx` | `mesas`, `ventas_pos` | scopeByLocal=true. **Crítico** mesas live. |
+| `Pos/MostradorView.tsx` | `ventas_pos` | extraFilter='estado=eq.abierta'. |
+| `Pos/PedidosPlaceholder.tsx` | `ventas_pos` (origen tienda) | Reemplazo polling. |
+| `Pos/VentaScreen.tsx` | `ventas_pos_items`, `ventas_pos_pagos` | extraFilter por venta_id. |
+| `Caja/CajaEstado.tsx` | `turnos_caja`, `movimientos_caja` | scopeByLocal=true. |
+| `ComandasActivasPanel.tsx` | `ventas_pos` | Reemplazar `useVisiblePolling`. |
+| `Kds/KdsView.tsx` | `ventas_pos_items` | extraFilter por estación. Reemplaza polling 10s. |
+
+### Pantallas PASE pendientes
+
+| Pantalla | Tabla(s) |
+|---|---|
+| `Proveedores.tsx` | `proveedores` |
+| `Gastos.tsx` | `movimientos` (extraFilter='tipo=in.(...)') |
+| `RRHH.tsx` | `rrhh_empleados`, `rrhh_novedades`, `rrhh_liquidaciones`, `rrhh_pagos_especiales` (4 hooks) |
+| `RRHHLegajo.tsx` | `rrhh_documentos` |
+| `Blindaje.tsx` | `blindaje_tipos_documento`, `blindaje_documentos` |
+| `Ventas.tsx` | `ventas`, `movimientos` |
+| `LectorFacturasIA.tsx` | `facturas` |
+| `ConciliacionMP.tsx` | `mp_movimientos`, `movimientos` |
+| `EERR.tsx`, `Cashflow.tsx`, `Cierre.tsx`, `Dashboard.tsx`, `Contador.tsx` | varios — read-only, baja prioridad |
+
+### Notas operativas Realtime
+
+- **Migration NO aplicada automáticamente**: la migration
+  `202605101100_sprint_realtime_publication.sql` se commiteó pero NO
+  se ejecutó en producción. Aplicar via Supabase dashboard SQL Editor
+  o `supabase db push` cuando se decida.
+
+- **Rate limit Supabase Realtime**: el plan free soporta ~200
+  conexiones concurrentes. El hook reusa channel por
+  `(tabla, tenant, local)` así que componentes que suscriben la misma
+  tabla con mismo scope comparten conexión. Distintas tablas suman.
+
+- **Fallback a polling 30s**: si Realtime falla (CHANNEL_ERROR,
+  TIMED_OUT, CLOSED), el hook cae automático a polling sin error
+  visible. Conexión recuperada → vuelve a Realtime.
+
+- **Indicador "Sincronizado en vivo / offline"**: postergado.
 
 ## Sprint 8 — Service de motor
 
