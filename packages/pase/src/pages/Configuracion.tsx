@@ -31,25 +31,43 @@ interface MediosCobroSectionProps {
 type MedioCobroPayload = Omit<MedioCobro, "id"> & { updated_at: string };
 
 const TIPOS = [
-  { id: "gasto_fijo", label: "Gastos Fijos" },
-  { id: "gasto_variable", label: "Gastos Variables" },
-  { id: "gasto_publicidad", label: "Publicidad y MKT" },
-  { id: "gasto_impuesto", label: "Impuestos" },
-  { id: "gasto_comision", label: "Comisiones" },
-  { id: "medio_cobro", label: "Medios de Cobro" },
+  // "categorias_gastos" es un tab virtual que agrupa los 5 tipos de gasto en
+  // una sola tabla con columna "Tipo" editable. No es un valor real en la
+  // columna config_categorias.tipo — solo identifica el tab en la UI.
+  { id: "categorias_gastos", label: "Categorías de Gastos" },
   { id: "cat_compra", label: "Categorías de Compra" },
   { id: "cat_ingreso", label: "Categorías de Ingreso" },
+  { id: "medio_cobro", label: "Medios de Cobro" },
 ];
 
+// Sub-tipos de gasto: estos son los valores reales en config_categorias.tipo.
+// El label es lo que se muestra al usuario (más corto que el viejo "Gastos Fijos").
+const TIPOS_GASTO: { id: string; label: string }[] = [
+  { id: "gasto_fijo", label: "Fijo" },
+  { id: "gasto_variable", label: "Variable" },
+  { id: "gasto_publicidad", label: "Publicidad" },
+  { id: "gasto_comision", label: "Comisión" },
+  { id: "gasto_impuesto", label: "Impuesto" },
+];
+const TIPOS_GASTO_IDS = TIPOS_GASTO.map(t => t.id);
+const labelTipoGasto = (id: string): string =>
+  TIPOS_GASTO.find(t => t.id === id)?.label || id;
+
 export default function Configuracion({ user, locales }: ConfiguracionProps) {
-  const [tab, setTab] = useState("gasto_fijo");
+  const [tab, setTab] = useState("categorias_gastos");
   const [items, setItems] = useState<ConfigCategoriaItem[]>([]);
   const [nuevo, setNuevo] = useState("");
+  // Tipo de gasto seleccionado en el form de "Agregar" cuando estamos en el
+  // tab unificado "Categorías de Gastos". Se ignora en los otros tabs.
+  const [nuevoTipoGasto, setNuevoTipoGasto] = useState<string>("gasto_fijo");
   const [loading, setLoading] = useState(false);
 
   // El tab "medio_cobro" usa la tabla medios_cobro (refactor C), no
   // config_categorias — tiene su propio panel con CRUD multi-campo.
   const esMediosCobroTab = tab === "medio_cobro";
+  // Tab unificado de Gastos: agrupa los 5 sub-tipos. Cada categoría tiene
+  // un tipo (Fijo/Variable/Publicidad/Comisión/Impuesto) editable inline.
+  const esCategoriasGastosTab = tab === "categorias_gastos";
   // Para cat_ingreso preservamos el casing tal como Lucas lo escribe
   // (las existentes son "Liquidación X", "Ingreso Socio", etc en mixed
   // case). Para los otros tipos seguimos forzando UPPERCASE como antes.
@@ -62,8 +80,10 @@ export default function Configuracion({ user, locales }: ConfiguracionProps) {
   const load = async () => {
     if (esMediosCobroTab) return; // ese tab maneja su propia data
     setLoading(true);
-    const { data } = await db.from("config_categorias")
-      .select("*").eq("tipo", tab).eq("activo", true).order("orden");
+    const q = db.from("config_categorias").select("*").eq("activo", true).order("orden");
+    const { data } = esCategoriasGastosTab
+      ? await q.in("tipo", TIPOS_GASTO_IDS)
+      : await q.eq("tipo", tab);
     setItems((data as ConfigCategoriaItem[]) || []);
     setLoading(false);
   };
@@ -85,15 +105,28 @@ export default function Configuracion({ user, locales }: ConfiguracionProps) {
   const agregar = async () => {
     if (!nuevo.trim()) return;
     const nombre = preservarCasing ? nuevo.trim() : nuevo.trim().toUpperCase();
+    const tipoARegistrar = esCategoriasGastosTab ? nuevoTipoGasto : tab;
     const maxOrden = items.length > 0 ? Math.max(...items.map(i => i.orden)) + 1 : 1;
-    await db.from("config_categorias").insert([{ tipo: tab, nombre, orden: maxOrden, activo: true }]);
+    await db.from("config_categorias").insert([{ tipo: tipoARegistrar, nombre, orden: maxOrden, activo: true }]);
     setNuevo("");
     await refreshCategorias();
     load();
   };
 
+  // Cambia el sub-tipo de una categoría existente. Solo aplica en el tab
+  // unificado de Gastos (los otros tabs no permiten cambiar el tipo).
+  // Importante: los gastos ya cargados con esta categoría conservan el
+  // valor del campo gastos.tipo que tenían al momento de creación — solo
+  // futuros gastos toman el tipo nuevo.
+  const cambiarTipo = async (item: ConfigCategoriaItem, nuevoTipo: string) => {
+    if (item.tipo === nuevoTipo) return;
+    await db.from("config_categorias").update({ tipo: nuevoTipo }).eq("id", item.id);
+    await refreshCategorias();
+    load();
+  };
+
   const eliminar = async (item: ConfigCategoriaItem) => {
-    const tipoGasto = tab.startsWith("gasto_") ? tab.replace("gasto_", "") : null;
+    const tipoGasto = item.tipo.startsWith("gasto_") ? item.tipo.replace("gasto_", "") : null;
     if (tipoGasto) {
       const { count } = await db.from("gastos").select("*", { count: "exact", head: true }).eq("categoria", item.nombre);
       if (count && count > 0) {
@@ -136,15 +169,53 @@ export default function Configuracion({ user, locales }: ConfiguracionProps) {
                 onKeyDown={e => e.key === "Enter" && agregar()}
                 placeholder="Nuevo concepto..."
               />
+              {esCategoriasGastosTab && (
+                <select
+                  value={nuevoTipoGasto}
+                  onChange={e => setNuevoTipoGasto(e.target.value)}
+                  style={{ minWidth: 130 }}
+                  title="Tipo de gasto"
+                >
+                  {TIPOS_GASTO.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </select>
+              )}
               <button className="btn btn-acc" onClick={agregar}>+ Agregar</button>
             </div>
             {loading ? <div className="loading">Cargando...</div> : (
               <table>
-                <thead><tr><th>Nombre</th><th></th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>Nombre</th>
+                    {esCategoriasGastosTab && <th style={{ width: 150 }}>Tipo</th>}
+                    <th></th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {items.map(item => (
+                  {(esCategoriasGastosTab
+                    ? [...items].sort((a, b) => {
+                        // Agrupar visualmente por tipo siguiendo el orden de TIPOS_GASTO
+                        // (Fijo, Variable, Publicidad, Comisión, Impuesto), después
+                        // alfabético dentro del tipo.
+                        const ia = TIPOS_GASTO_IDS.indexOf(a.tipo);
+                        const ib = TIPOS_GASTO_IDS.indexOf(b.tipo);
+                        if (ia !== ib) return ia - ib;
+                        return a.nombre.localeCompare(b.nombre);
+                      })
+                    : items
+                  ).map(item => (
                     <tr key={item.id}>
                       <td>{item.nombre}</td>
+                      {esCategoriasGastosTab && (
+                        <td>
+                          <select
+                            value={item.tipo}
+                            onChange={e => cambiarTipo(item, e.target.value)}
+                            style={{ fontSize: 11, padding: "4px 6px" }}
+                          >
+                            {TIPOS_GASTO.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                          </select>
+                        </td>
+                      )}
                       <td style={{ textAlign: "right" }}>
                         <button className="btn btn-danger btn-sm" onClick={() => eliminar(item)}>Eliminar</button>
                       </td>
