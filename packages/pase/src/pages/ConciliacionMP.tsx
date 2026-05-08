@@ -129,11 +129,21 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   const [remitos,setRemitos]=useState<RemitoSlim[]>([]);
   const [gastos,setGastos]=useState<GastoSlim[]>([]);
   const [proveedores,setProveedores]=useState<Proveedor[]>([]);
-  // mp_movs ya conciliados a un gasto en el tenant — sirve para
-  // ocultar/marcar gastos que ya tienen un egreso MP linkeado.
+  // Sets de ids de entidades ya conciliadas con un mp_mov en el tenant.
+  // Las usamos para ocultar gastos/facturas/remitos que ya están vinculados
+  // a otro egreso MP — evitar listarlos dos veces y prevenir doble linkeo.
   const [gastosConciliadosIds,setGastosConciliadosIds]=useState<Set<string>>(new Set());
+  const [facturasConciliadasIds,setFacturasConciliadasIds]=useState<Set<string>>(new Set());
+  const [remitosConciliadosIds,setRemitosConciliadosIds]=useState<Set<string>>(new Set());
   // Buscador unificado del modal de conciliar (aplica a tabs gasto/factura/remito).
   const [busquedaModal,setBusquedaModal]=useState("");
+  // Filtro "primero seleccioná proveedor" para los tabs Factura y Remito —
+  // antes el dropdown listaba TODAS las facturas (pendientes y pagadas) lo
+  // cual era ruido. Ahora dos pasos: proveedor → factura. "" = todos.
+  const [provFiltro,setProvFiltro]=useState("");
+  // Mismo patrón pero para Gasto: como no hay proveedor, filtramos por
+  // categoría. "" = todas las categorías.
+  const [catFiltro,setCatFiltro]=useState("");
   const [tabFSoloNoConciliados,setTabFSoloNoConciliados]=useState(true);
   const [tabFSugerirSimilares,setTabFSugerirSimilares]=useState(true);
   const [loading,setLoading]=useState(true);
@@ -197,9 +207,13 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
       const hastaGas=hastaAmpl.toISOString().slice(0,10);
       let gasQ=db.from("gastos").select("id,fecha,categoria,subcategoria,detalle,monto,local_id,cuenta").gte("fecha",desdeGas).lte("fecha",hastaGas).order("fecha",{ascending:false}).limit(2000);
       gasQ=applyLocalScope(gasQ,user,localActivo);
-      // mp_movimientos ya conciliados a un gasto — para excluirlos del combobox
-      // del tab F. Trae solo ids para minimizar payload.
-      let mpJustifQ=db.from("mp_movimientos").select("justificativo_id").eq("justificativo_tipo","gasto").not("justificativo_id","is",null).limit(20000);
+      // mp_movimientos ya vinculados a un gasto/factura/remito — para excluirlos
+      // del dropdown del modal y prevenir doble linkeo.
+      let mpJustifQ=db.from("mp_movimientos")
+        .select("justificativo_tipo,justificativo_id")
+        .in("justificativo_tipo",["gasto","factura","remito"])
+        .not("justificativo_id","is",null)
+        .limit(20000);
       mpJustifQ=applyLocalScope(mpJustifQ,user,localActivo);
       const [credRes,movRes,facRes,remRes,gasRes,mpJustifRes,provRes]=await Promise.all([
         db.from("mp_credenciales").select("id, local_id, tenant_id, activo, ultima_sync, access_token_last8, saldo_inicial, saldo_inicial_at, saldo_disponible, por_acreditar, balance_at, locales(nombre)"),
@@ -228,7 +242,19 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
       setRemitos((r as RemitoSlim[]).filter(x=>!localActivo||x.local_id===localActivo));
       setGastos((g as GastoSlim[]).filter(x=>!localActivo||x.local_id===localActivo));
       setProveedores(p as Proveedor[]);
-      setGastosConciliadosIds(new Set(((mpJustifRes.data||[]) as {justificativo_id:string|null}[]).map(x=>String(x.justificativo_id||"")).filter(Boolean)));
+      // Splittear los justificativos por tipo en 3 sets independientes.
+      const justifRows=(mpJustifRes.data||[]) as {justificativo_tipo:string|null,justificativo_id:string|null}[];
+      const setG=new Set<string>(), setF=new Set<string>(), setR=new Set<string>();
+      for(const j of justifRows){
+        const id=String(j.justificativo_id||"");
+        if(!id) continue;
+        if(j.justificativo_tipo==="gasto") setG.add(id);
+        else if(j.justificativo_tipo==="factura") setF.add(id);
+        else if(j.justificativo_tipo==="remito") setR.add(id);
+      }
+      setGastosConciliadosIds(setG);
+      setFacturasConciliadasIds(setF);
+      setRemitosConciliadosIds(setR);
     }catch(e){
       console.error("ConciliacionMP load error:",e);
     }finally{
@@ -493,6 +519,8 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
     setConciliarModal(null);
     setVinculoSel("");
     setBusquedaModal("");
+    setProvFiltro("");
+    setCatFiltro("");
     setNuevoGastoForm({categoria:"",detalle:""});
     setNuevaFacturaForm({prov_id:"",nro:"",fecha:"",cat:"",detalle:""});
     setNuevoRemitoForm({prov_id:"",nro:"",fecha:"",cat:"",detalle:""});
@@ -856,7 +884,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
               ["remito","Remito"],
               ["movimiento_interno","Mov. interno"],
             ] as [typeof conciliarTab, string][]).map(([id,l])=>(
-              <div key={id} className={`tab ${conciliarTab===id?"active":""}`} onClick={()=>{setConciliarTab(id);setVinculoSel("");setBusquedaModal("");}}>{l}</div>
+              <div key={id} className={`tab ${conciliarTab===id?"active":""}`} onClick={()=>{setConciliarTab(id);setVinculoSel("");setBusquedaModal("");setProvFiltro("");setCatFiltro("");}}>{l}</div>
             ))}
           </div>
 
@@ -869,8 +897,14 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
             const SIETE_DIAS_MS=7*24*60*60*1000;
             const tol=mpMonto*0.05;
             const q=busquedaModal.trim().toLowerCase();
-            const lista=gastos
-              .filter(g=>!tabFSoloNoConciliados||!gastosConciliadosIds.has(g.id))
+            // Filtro por categoría tipo dropdown — análogo al filtro por
+            // proveedor en Factura/Remito. "" = ver todas. Las categorías
+            // mostradas en el select son SOLO las que tienen al menos un
+            // gasto no-conciliado en la ventana cargada.
+            const gastosNoConciliados=gastos.filter(g=>!tabFSoloNoConciliados||!gastosConciliadosIds.has(g.id));
+            const categoriasDisponibles=Array.from(new Set(gastosNoConciliados.map(g=>g.categoria).filter(Boolean))).sort();
+            const lista=gastosNoConciliados
+              .filter(g=>!catFiltro||g.categoria===catFiltro)
               .filter(g=>{
                 if(!q)return true;
                 const hay=(g.detalle||"")+" "+g.categoria+" "+(g.subcategoria||"")+" "+(g.cuenta||"");
@@ -891,7 +925,14 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
             return (
               <div>
                 <div className="alert alert-warn" style={{marginBottom:12}}>Egreso de {fmt_$(mpMonto)} → vincular a un gasto existente o crear uno nuevo.</div>
-                <div className="field"><label>Buscar por categoría / detalle / cuenta</label>
+                <div className="field"><label>Categoría</label>
+                  <select value={catFiltro} onChange={e=>setCatFiltro(e.target.value)}>
+                    <option value="">— Todas las categorías —</option>
+                    {categoriasDisponibles.map(c=><option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <div style={{fontSize:10,color:"var(--muted)",marginTop:4}}>{categoriasDisponibles.length===0?"Sin gastos pendientes en el período.":`${categoriasDisponibles.length} categoría${categoriasDisponibles.length===1?"":"s"} con gastos pendientes`}</div>
+                </div>
+                <div className="field"><label>Buscar por detalle / cuenta</label>
                   <input value={busquedaModal} onChange={e=>setBusquedaModal(e.target.value)} placeholder="Aysa, Metrogas, sueldo..."/>
                 </div>
                 <div style={{display:"flex",gap:14,marginBottom:8,fontSize:11,color:"var(--muted2)"}}>
@@ -939,28 +980,46 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
           })()}
 
           {conciliarTab==="factura"&&(()=>{
-            const provNombre=(id:number|null)=>id!=null?(proveedores.find(p=>p.id===id)?.nombre||"—"):"—";
-            const q=busquedaModal.trim().toLowerCase();
-            const lista=facturas.filter(f=>{
-              if(!q)return true;
-              const provName=provNombre(f.prov_id).toLowerCase();
-              const hay=provName+" "+f.nro+" "+(f.cat||"")+" "+(f.estado||"");
-              return hay.includes(q);
-            }).slice(0,200);
+            // Patrón "primero proveedor, después factura": el dropdown de
+            // facturas solo se llena cuando el usuario eligió un proveedor.
+            // Antes listaba TODAS las facturas (pendientes + pagadas), lo cual
+            // era ruido. Filtramos también las ya conciliadas con otro mp_mov
+            // — no tiene sentido vincular dos veces la misma factura.
+            const noConciliadas=facturas.filter(f=>!facturasConciliadasIds.has(f.id));
+            const provIdsConFacturas=new Set(noConciliadas.map(f=>f.prov_id).filter((x):x is number=>x!=null));
+            const provsActivos=proveedores.filter(p=>provIdsConFacturas.has(p.id));
+            const provIdNum=provFiltro?parseInt(provFiltro):null;
+            const lista=provIdNum!=null
+              ? noConciliadas
+                  .filter(f=>f.prov_id===provIdNum)
+                  .sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)))
+                  .slice(0,200)
+              : [];
             return (
               <div>
                 <div className="alert alert-warn" style={{marginBottom:12}}>Egreso de {fmt_$(Math.abs(conciliarModal.monto||0))} → vincular a una factura existente o crear una nueva.</div>
-                <div className="field"><label>Buscar por proveedor / número / categoría</label>
-                  <input value={busquedaModal} onChange={e=>setBusquedaModal(e.target.value)} placeholder="Mercado Libre, AySA..."/>
-                </div>
-                <div className="field"><label>Factura a vincular</label>
-                  <select value={vinculoSel} onChange={e=>setVinculoSel(e.target.value)} size={Math.min(8,Math.max(3,lista.length+1))} style={{height:"auto"}}>
-                    <option value="__NUEVO__">+ Crear factura nueva</option>
-                    {lista.length===0?<option value="" disabled>— Sin facturas en el período —</option>:lista.map(f=>(
-                      <option key={f.id} value={f.id}>{provNombre(f.prov_id)} · #{f.nro} · {fmt_d(f.fecha)} · {fmt_$(f.total)} · {f.estado}</option>
-                    ))}
+                <div className="field"><label>Proveedor</label>
+                  <select value={provFiltro} onChange={e=>{setProvFiltro(e.target.value);setVinculoSel("");}}>
+                    <option value="">— Seleccioná un proveedor —</option>
+                    {provsActivos.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
                   </select>
+                  <div style={{fontSize:10,color:"var(--muted)",marginTop:4}}>{provsActivos.length===0?"Ningún proveedor con facturas pendientes de conciliar en el período.":`${provsActivos.length} proveedor${provsActivos.length===1?"":"es"} con facturas pendientes de conciliar`}</div>
                 </div>
+                {provIdNum!=null&&(
+                  <div className="field"><label>Factura a vincular ({lista.length} disponibles · más nueva arriba)</label>
+                    <select value={vinculoSel} onChange={e=>setVinculoSel(e.target.value)} size={Math.min(8,Math.max(3,lista.length+1))} style={{height:"auto"}}>
+                      <option value="__NUEVO__">+ Crear factura nueva</option>
+                      {lista.length===0?<option value="" disabled>— Sin facturas pendientes de este proveedor —</option>:lista.map(f=>(
+                        <option key={f.id} value={f.id}>#{f.nro} · {fmt_d(f.fecha)} · {fmt_$(f.total)} · {f.estado}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {provIdNum==null&&(
+                  <div style={{marginTop:8,padding:"10px 12px",background:"var(--s2)",borderRadius:"var(--r)",border:"1px dashed var(--bd2)",fontSize:11,color:"var(--muted2)"}}>
+                    Elegí un proveedor arriba para ver sus facturas pendientes, o <button type="button" className="btn btn-link" style={{padding:0,fontSize:11,textDecoration:"underline"}} onClick={()=>{setVinculoSel("__NUEVO__");}}>crear una factura nueva directamente</button>.
+                  </div>
+                )}
                 {vinculoSel==="__NUEVO__"&&(
                   <div style={{marginTop:12,padding:14,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)"}}>
                     <div style={{fontSize:11,fontWeight:600,marginBottom:10,color:"var(--muted2)",letterSpacing:1}}>NUEVA FACTURA · total {fmt_$(Math.abs(conciliarModal.monto||0))}</div>
@@ -984,28 +1043,41 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
           })()}
 
           {conciliarTab==="remito"&&(()=>{
-            const provNombre=(id:number|null)=>id!=null?(proveedores.find(p=>p.id===id)?.nombre||"—"):"—";
-            const q=busquedaModal.trim().toLowerCase();
-            const lista=remitos.filter(r=>{
-              if(!q)return true;
-              const provName=provNombre(r.prov_id).toLowerCase();
-              const hay=provName+" "+(r.nro||"")+" "+(r.estado||"");
-              return hay.includes(q);
-            }).slice(0,200);
+            const noConciliados=remitos.filter(r=>!remitosConciliadosIds.has(r.id));
+            const provIdsConRemitos=new Set(noConciliados.map(r=>r.prov_id).filter((x):x is number=>x!=null));
+            const provsActivos=proveedores.filter(p=>provIdsConRemitos.has(p.id));
+            const provIdNum=provFiltro?parseInt(provFiltro):null;
+            const lista=provIdNum!=null
+              ? noConciliados
+                  .filter(r=>r.prov_id===provIdNum)
+                  .sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)))
+                  .slice(0,200)
+              : [];
             return (
               <div>
                 <div className="alert alert-warn" style={{marginBottom:12}}>Egreso de {fmt_$(Math.abs(conciliarModal.monto||0))} → vincular a un remito existente o crear uno nuevo.</div>
-                <div className="field"><label>Buscar por proveedor / número</label>
-                  <input value={busquedaModal} onChange={e=>setBusquedaModal(e.target.value)} placeholder="Proveedor X, R-001..."/>
-                </div>
-                <div className="field"><label>Remito a vincular</label>
-                  <select value={vinculoSel} onChange={e=>setVinculoSel(e.target.value)} size={Math.min(8,Math.max(3,lista.length+1))} style={{height:"auto"}}>
-                    <option value="__NUEVO__">+ Crear remito nuevo</option>
-                    {lista.length===0?<option value="" disabled>— Sin remitos en el período —</option>:lista.map(r=>(
-                      <option key={r.id} value={r.id}>{provNombre(r.prov_id)} · #{r.nro||r.id.slice(-6)} · {fmt_d(r.fecha)} · {fmt_$(r.monto)} · {r.estado||""}</option>
-                    ))}
+                <div className="field"><label>Proveedor</label>
+                  <select value={provFiltro} onChange={e=>{setProvFiltro(e.target.value);setVinculoSel("");}}>
+                    <option value="">— Seleccioná un proveedor —</option>
+                    {provsActivos.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
                   </select>
+                  <div style={{fontSize:10,color:"var(--muted)",marginTop:4}}>{provsActivos.length===0?"Ningún proveedor con remitos pendientes de conciliar en el período.":`${provsActivos.length} proveedor${provsActivos.length===1?"":"es"} con remitos pendientes de conciliar`}</div>
                 </div>
+                {provIdNum!=null&&(
+                  <div className="field"><label>Remito a vincular ({lista.length} disponibles · más nuevo arriba)</label>
+                    <select value={vinculoSel} onChange={e=>setVinculoSel(e.target.value)} size={Math.min(8,Math.max(3,lista.length+1))} style={{height:"auto"}}>
+                      <option value="__NUEVO__">+ Crear remito nuevo</option>
+                      {lista.length===0?<option value="" disabled>— Sin remitos pendientes de este proveedor —</option>:lista.map(r=>(
+                        <option key={r.id} value={r.id}>#{r.nro||r.id.slice(-6)} · {fmt_d(r.fecha)} · {fmt_$(r.monto)} · {r.estado||""}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {provIdNum==null&&(
+                  <div style={{marginTop:8,padding:"10px 12px",background:"var(--s2)",borderRadius:"var(--r)",border:"1px dashed var(--bd2)",fontSize:11,color:"var(--muted2)"}}>
+                    Elegí un proveedor arriba para ver sus remitos pendientes, o <button type="button" className="btn btn-link" style={{padding:0,fontSize:11,textDecoration:"underline"}} onClick={()=>{setVinculoSel("__NUEVO__");}}>crear un remito nuevo directamente</button>.
+                  </div>
+                )}
                 {vinculoSel==="__NUEVO__"&&(
                   <div style={{marginTop:12,padding:14,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)"}}>
                     <div style={{fontSize:11,fontWeight:600,marginBottom:10,color:"var(--muted2)",letterSpacing:1}}>NUEVO REMITO · monto {fmt_$(Math.abs(conciliarModal.monto||0))}</div>
