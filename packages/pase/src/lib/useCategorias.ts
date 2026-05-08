@@ -22,22 +22,46 @@ export interface CategoriasState {
   COMISIONES_CATS: string[];    // grupo = Comisiones
   GASTOS_IMPUESTOS: string[];   // grupo = Impuestos
   CATEGORIAS_INGRESO: string[]; // grupo = INGRESOS (nuevas)
+  // Mapa categoría (nombre) → tipo de gasto (variable/fijo/publicidad/comision/impuesto).
+  // Permite que los forms muestren el tipo derivado de la categoría como
+  // readonly, en vez de aceptar combos incoherentes.
+  categoriaToTipo: Record<string, string>;
   loading: boolean;
   source: "cache" | "db" | "fallback";
   refresh: () => Promise<void>; // invalida sessionStorage y re-fetcha
 }
 
-// Bump v2→v3: invalida cache de sesiones que escribieron antes del fix
-// del CRUD de cat_ingreso. Lucas agregaba/eliminaba categorías desde
-// Conceptos pero el cache no se invalidaba — los dropdowns mostraban
-// data vieja por hasta 1h. Ahora Configuracion.tsx llama refresh() tras
-// cada cambio, pero el bump fuerza fresh-fetch en sesiones existentes.
-const CACHE_KEY = "pase_categorias_v3";
+// Bump v3→v4: incorpora categoriaToTipo. Caches v3 no lo tienen y los
+// dropdowns que dependen del map quedarían rotos hasta el siguiente
+// fetch. El bump fuerza re-fetch en todas las sesiones existentes.
+const CACHE_KEY = "pase_categorias_v4";
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1h
 
 type CategoriasData = Omit<CategoriasState, "loading" | "source" | "refresh">;
 
-const FALLBACK: CategoriasData = {
+// Mapa tipo-en-DB → tipo-en-form. La columna gastos.tipo guarda los valores
+// sin prefijo "gasto_". Si en config_categorias hay un tipo no listado acá,
+// el form caerá en string vacío y el usuario tendrá que arreglarlo desde
+// Configuración → Conceptos.
+const TIPO_DB_TO_FORM: Record<string, string> = {
+  gasto_fijo: "fijo",
+  gasto_variable: "variable",
+  gasto_publicidad: "publicidad",
+  gasto_comision: "comision",
+  gasto_impuesto: "impuesto",
+};
+
+function buildCategoriaToTipo(data: Omit<CategoriasData, "categoriaToTipo">): Record<string, string> {
+  const m: Record<string, string> = {};
+  for (const c of data.GASTOS_FIJOS)      m[c] = "fijo";
+  for (const c of data.GASTOS_VARIABLES)  m[c] = "variable";
+  for (const c of data.GASTOS_PUBLICIDAD) m[c] = "publicidad";
+  for (const c of data.COMISIONES_CATS)   m[c] = "comision";
+  for (const c of data.GASTOS_IMPUESTOS)  m[c] = "impuesto";
+  return m;
+}
+
+const _FALLBACK_BASE: Omit<CategoriasData, "categoriaToTipo"> = {
   CATEGORIAS_COMPRA: [..._CC],
   GASTOS_FIJOS: [..._GF],
   GASTOS_VARIABLES: [..._GV],
@@ -50,6 +74,11 @@ const FALLBACK: CategoriasData = {
     "Liquidación Nave", "Ingreso Socio", "Devolución Proveedor",
     "Otro Ingreso", "Transferencia Varios",
   ],
+};
+
+const FALLBACK: CategoriasData = {
+  ..._FALLBACK_BASE,
+  categoriaToTipo: buildCategoriaToTipo(_FALLBACK_BASE),
 };
 
 function readCache(): CategoriasData | null {
@@ -81,7 +110,7 @@ function fromRows(rows: ConfigCategoriaRow[]): CategoriasData {
     .filter(r => r.tipo === t && r.activo)
     .sort((a, b) => (a.orden || 0) - (b.orden || 0))
     .map(r => r.nombre);
-  return {
+  const base: Omit<CategoriasData, "categoriaToTipo"> = {
     CATEGORIAS_COMPRA: byTipo("cat_compra"),
     GASTOS_FIJOS: byTipo("gasto_fijo"),
     GASTOS_VARIABLES: byTipo("gasto_variable"),
@@ -90,6 +119,16 @@ function fromRows(rows: ConfigCategoriaRow[]): CategoriasData {
     GASTOS_IMPUESTOS: byTipo("gasto_impuesto"),
     CATEGORIAS_INGRESO: byTipo("cat_ingreso"),
   };
+  // El map se arma directo desde los rows para soportar cualquier categoría
+  // que viva en config_categorias bajo un tipo conocido — incluso si el
+  // nombre se duplica entre tipos, la última gana (no debería pasar).
+  const map: Record<string, string> = {};
+  for (const r of rows) {
+    if (!r.activo) continue;
+    const formTipo = TIPO_DB_TO_FORM[r.tipo];
+    if (formTipo) map[r.nombre] = formTipo;
+  }
+  return { ...base, categoriaToTipo: map };
 }
 
 export function useCategorias(): CategoriasState {

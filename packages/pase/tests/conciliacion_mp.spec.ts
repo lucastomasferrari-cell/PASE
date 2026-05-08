@@ -23,8 +23,8 @@ test.describe("Conciliación MP", () => {
     expect(text).toMatch(/\$\s*[\d.,]+/);
   });
 
-  test("tabs (Movimientos, Comisiones MP) funcionan", async ({ page }) => {
-    for (const label of ["Movimientos", "Comisiones"]) {
+  test("tabs (Egresos, Comisiones MP) funcionan", async ({ page }) => {
+    for (const label of ["Egresos", "Comisiones"]) {
       const tab = page.locator(".tab", { hasText: label });
       if (await tab.isVisible().catch(() => false)) {
         await tab.click();
