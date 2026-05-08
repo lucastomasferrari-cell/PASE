@@ -21,6 +21,9 @@ export interface CategoriasState {
   GASTOS_PUBLICIDAD: string[];  // grupo = Publicidad y MKT
   COMISIONES_CATS: string[];    // grupo = Comisiones
   GASTOS_IMPUESTOS: string[];   // grupo = Impuestos
+  // Retiro de socios — distribución de utilidades, NO gasto operativo.
+  // EERR los muestra en sección post-Util.Neta (no resta al cálculo).
+  RETIROS_SOCIOS: string[];     // tipo = retiro_socio
   CATEGORIAS_INGRESO: string[]; // grupo = INGRESOS (nuevas)
   // Mapa categoría (nombre) → tipo de gasto (variable/fijo/publicidad/comision/impuesto).
   // Permite que los forms muestren el tipo derivado de la categoría como
@@ -37,9 +40,8 @@ export interface CategoriasState {
   refresh: () => Promise<void>; // invalida sessionStorage y re-fetcha
 }
 
-// Bump v4→v5: incorpora categoriaToBucket. Caches v4 no lo tienen y los
-// flujos que dependen del map quedarían sin clasificar facturas.
-const CACHE_KEY = "pase_categorias_v5";
+// Bump v5→v6: incorpora RETIROS_SOCIOS (distribución de utilidades).
+const CACHE_KEY = "pase_categorias_v6";
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1h
 
 type CategoriasData = Omit<CategoriasState, "loading" | "source" | "refresh">;
@@ -48,12 +50,17 @@ type CategoriasData = Omit<CategoriasState, "loading" | "source" | "refresh">;
 // sin prefijo "gasto_". Si en config_categorias hay un tipo no listado acá,
 // el form caerá en string vacío y el usuario tendrá que arreglarlo desde
 // Configuración → Conceptos.
+//
+// retiro_socio NO se transforma — mantiene su nombre completo en gastos.tipo
+// porque conceptualmente NO es gasto operativo (es distribución de util.
+// neta) y no calza en el patrón fijo/variable/etc.
 const TIPO_DB_TO_FORM: Record<string, string> = {
   gasto_fijo: "fijo",
   gasto_variable: "variable",
   gasto_publicidad: "publicidad",
   gasto_comision: "comision",
   gasto_impuesto: "impuesto",
+  retiro_socio: "retiro_socio",
 };
 
 type BaseData = Omit<CategoriasData, "categoriaToTipo" | "categoriaToBucket">;
@@ -65,6 +72,7 @@ function buildCategoriaToTipo(data: BaseData): Record<string, string> {
   for (const c of data.GASTOS_PUBLICIDAD) m[c] = "publicidad";
   for (const c of data.COMISIONES_CATS)   m[c] = "comision";
   for (const c of data.GASTOS_IMPUESTOS)  m[c] = "impuesto";
+  for (const c of data.RETIROS_SOCIOS)    m[c] = "retiro_socio";
   return m;
 }
 
@@ -86,6 +94,7 @@ const _FALLBACK_BASE: BaseData = {
   GASTOS_PUBLICIDAD: [..._GP],
   COMISIONES_CATS: [..._CO],
   GASTOS_IMPUESTOS: [..._GI],
+  RETIROS_SOCIOS: [],
   CATEGORIAS_INGRESO: [
     "Liquidación Rappi", "Liquidación MercadoPago", "Liquidación PedidosYa",
     "Liquidación Evento", "Liquidación Bigbox", "Liquidación Fanbag",
@@ -136,6 +145,7 @@ function fromRows(rows: ConfigCategoriaRow[]): CategoriasData {
     GASTOS_PUBLICIDAD: byTipo("gasto_publicidad"),
     COMISIONES_CATS: byTipo("gasto_comision"),
     GASTOS_IMPUESTOS: byTipo("gasto_impuesto"),
+    RETIROS_SOCIOS: byTipo("retiro_socio"),
     CATEGORIAS_INGRESO: byTipo("cat_ingreso"),
   };
   // Maps directos desde los rows para soportar cualquier categoría que viva

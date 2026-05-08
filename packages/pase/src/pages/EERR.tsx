@@ -57,7 +57,7 @@ const fmtMesLabel = (mes: string): string => {
 };
 
 export default function EERR({ user, localActivo }: EERRProps) {
-  const { CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS } = useCategorias();
+  const { CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS, RETIROS_SOCIOS } = useCategorias();
   const { mediosDisponibles } = useMediosCobro();
   const [ventas,setVentas]=useState<Venta[]>([]);
   const [facturas,setFacturas]=useState<Factura[]>([]);
@@ -196,9 +196,16 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const totalPublicidad=gastos.filter((g)=>g.tipo==="publicidad").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_publicidad"),"total");
   const totalComisiones=gastos.filter((g)=>g.tipo==="comision").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_comision"),"total");
   const totalImpuestos=gastos.filter((g)=>g.tipo==="impuesto").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_impuesto"),"total");
+  // Retiros de socios: distribución de utilidades, NO suma a gastos
+  // operativos. Se muestra DESPUÉS de Util. Neta. Solo se cargan via la
+  // pantalla Gastos (no facturas).
+  const totalRetiros=gastos.filter((g)=>g.tipo==="retiro_socio").reduce((s, g)=>s+(g.monto||0),0);
   const totalGastos=totalGastosFijos+totalGastosVar;
   const utilBruta=totalVentas-totalCMV;
   const utilNeta=utilBruta-totalGastos-sueldos-totalPublicidad-totalComisiones-totalImpuestos;
+  // utilNetaPostRetiros: lo que queda al socio después de retirar lo que
+  // efectivamente retiró. Si retiró todo, es ~0; si no retiró, == utilNeta.
+  const utilNetaPostRetiros=utilNeta-totalRetiros;
   const pct=(n: number)=>totalVentas>0?((n/totalVentas)*100).toFixed(1)+"%":"0%";
 
   // Itera sobre los medios que tienen ventas en el período (no sobre un
@@ -238,6 +245,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const porCatPub=GASTOS_PUBLICIDAD.map(c=>({c,t:tGastoCat(c, "publicidad") + tFactCat(c, "gasto_publicidad")})).filter(x=>x.t>0);
   const porCatCom=COMISIONES_CATS.map(c=>({c,t:tGastoCat(c, "comision") + tFactCat(c, "gasto_comision")})).filter(x=>x.t>0);
   const porCatImp=GASTOS_IMPUESTOS.map(c=>({c,t:tGastoCat(c, "impuesto") + tFactCat(c, "gasto_impuesto")})).filter(x=>x.t>0);
+  const porCatRet=RETIROS_SOCIOS.map(c=>({c,t:tGastoCat(c, "retiro_socio")})).filter(x=>x.t>0);
 
   const ERow=({label,valor,color,big}: {label: string, valor: number, color: string, big?: boolean})=>(
     <div className="eerr-row" style={big?{background:"var(--s2)",padding:"12px 16px"}:{}}>
@@ -419,6 +427,17 @@ export default function EERR({ user, localActivo }: EERRProps) {
                   <ERow label="(-) Comisiones" valor={-totalComisiones} color="var(--danger)" big={false}/>
                   <ERow label="(-) Impuestos" valor={-totalImpuestos} color="var(--danger)" big={false}/>
                   <ERow label="(=) Utilidad Neta" valor={utilNeta} color={utilNeta>=0?"var(--success)":"var(--danger)"} big={true}/>
+                  {/* Retiros de socios: distribución de utilidades. NO restan
+                      a Util. Neta arriba — la utilidad del negocio se ve sin
+                      contar lo que se llevaron los socios. Esta sección
+                      informa cuánto se distribuyó. */}
+                  {totalRetiros !== 0 && (
+                    <>
+                      <div style={{borderTop:"1px dashed var(--bd2)",margin:"8px 0"}}/>
+                      <ERow label="Retiros de Socios" valor={-totalRetiros} color="var(--info)" big={false}/>
+                      <ERow label="Resultado del socio" valor={utilNetaPostRetiros} color={utilNetaPostRetiros>=0?"var(--success)":"var(--danger)"} big={false}/>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div style={{padding:"4px 0 12px",overflowX:"auto"}}>
@@ -534,6 +553,9 @@ export default function EERR({ user, localActivo }: EERRProps) {
             <ESection title="PUBLICIDAD Y MKT" items={porCatPub} total={totalPublicidad} color="var(--info)"/>
             <ESection title="COMISIONES" items={porCatCom} total={totalComisiones} color="var(--acc2)"/>
             <ESection title="IMPUESTOS" items={porCatImp} total={totalImpuestos} color="var(--danger)"/>
+            {totalRetiros !== 0 && (
+              <ESection title="RETIROS DE SOCIOS (post Util. Neta)" items={porCatRet} total={totalRetiros} color="var(--info)"/>
+            )}
           </div>
         </>
       )}

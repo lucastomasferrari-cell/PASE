@@ -123,7 +123,7 @@ interface MpResetResultado {
 }
 
 function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
-  const { CATEGORIAS_COMPRA, COMISIONES_CATS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, categoriaToTipo } = useCategorias();
+  const { CATEGORIAS_COMPRA, COMISIONES_CATS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, RETIROS_SOCIOS, categoriaToTipo } = useCategorias();
   const [credenciales,setCredenciales]=useState<MpCredencial[]>([]);
   const [movimientos,setMovimientos]=useState<MpMovimiento[]>([]);
   const [facturas,setFacturas]=useState<FacturaSlim[]>([]);
@@ -973,8 +973,9 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                           ...GASTOS_PUBLICIDAD.map(c=>({value:c,label:c,group:"Publicidad"})),
                           ...COMISIONES_CATS.map(c=>({value:c,label:c,group:"Comisiones"})),
                           ...GASTOS_IMPUESTOS.map(c=>({value:c,label:c,group:"Impuestos"})),
+                          ...RETIROS_SOCIOS.map(c=>({value:c,label:c,group:"Retiros de Socios"})),
                         ]}
-                        groupOrder={["Variables","Fijos","Publicidad","Comisiones","Impuestos"]}
+                        groupOrder={["Variables","Fijos","Publicidad","Comisiones","Impuestos","Retiros de Socios"]}
                         placeholder="Buscar o elegir categoría..."
                         clearable
                       />

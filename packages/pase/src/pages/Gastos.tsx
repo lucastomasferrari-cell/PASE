@@ -34,16 +34,18 @@ const TIPOS = [
   { id: "publicidad", label: "Publicidad" },
   { id: "impuesto", label: "Impuestos" },
   { id: "comision", label: "Comisiones" },
+  { id: "retiro_socio", label: "Retiro de Socios" },
 ];
 export default function Gastos({ user, locales, localActivo }: GastosProps) {
-  const { GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, COMISIONES_CATS } = useCategorias();
-  const ALL_CATS = [...GASTOS_FIJOS, ...GASTOS_VARIABLES, ...GASTOS_PUBLICIDAD, ...GASTOS_IMPUESTOS, ...COMISIONES_CATS];
+  const { GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, COMISIONES_CATS, RETIROS_SOCIOS } = useCategorias();
+  const ALL_CATS = [...GASTOS_FIJOS, ...GASTOS_VARIABLES, ...GASTOS_PUBLICIDAD, ...GASTOS_IMPUESTOS, ...COMISIONES_CATS, ...RETIROS_SOCIOS];
   const catsByTipo = (t: string) =>
     t === "fijo" ? GASTOS_FIJOS :
     t === "variable" ? GASTOS_VARIABLES :
     t === "publicidad" ? GASTOS_PUBLICIDAD :
     t === "impuesto" ? GASTOS_IMPUESTOS :
     t === "comision" ? COMISIONES_CATS :
+    t === "retiro_socio" ? RETIROS_SOCIOS :
     ALL_CATS;
   // Cuentas para el dropdown "Cuenta de egreso" — filtra por cuentas_operables
   // (no visibles): un usuario puede pagar contra una cuenta cuyo saldo no ve.

@@ -40,14 +40,17 @@ const TIPOS = [
   { id: "medio_cobro", label: "Medios de Cobro" },
 ];
 
-// Sub-tipos de gasto: estos son los valores reales en config_categorias.tipo.
-// El label es lo que se muestra al usuario (más corto que el viejo "Gastos Fijos").
+// Sub-tipos que viven bajo el tab unificado "Categorías de Gastos".
+// retiro_socio NO es gasto operativo (es distribución de utilidades) pero
+// se administra acá porque la salida de plata sigue siendo via la pantalla
+// Gastos. EERR los muestra en sección post-Util.Neta.
 const TIPOS_GASTO: { id: string; label: string }[] = [
   { id: "gasto_fijo", label: "Fijo" },
   { id: "gasto_variable", label: "Variable" },
   { id: "gasto_publicidad", label: "Publicidad" },
   { id: "gasto_comision", label: "Comisión" },
   { id: "gasto_impuesto", label: "Impuesto" },
+  { id: "retiro_socio", label: "Retiro de Socios" },
 ];
 const TIPOS_GASTO_IDS = TIPOS_GASTO.map(t => t.id);
 const labelTipoGasto = (id: string): string =>
