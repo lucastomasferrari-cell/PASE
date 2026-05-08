@@ -26,15 +26,20 @@ export interface CategoriasState {
   // Permite que los forms muestren el tipo derivado de la categoría como
   // readonly, en vez de aceptar combos incoherentes.
   categoriaToTipo: Record<string, string>;
+  // Mapa categoría (nombre) → bucket de DB sin transformar (cat_compra,
+  // gasto_fijo, gasto_variable, etc). Es el valor crudo de
+  // config_categorias.tipo. A diferencia de categoriaToTipo (que va a la
+  // columna gastos.tipo, sin prefijo), este es el valor que va a
+  // facturas.bucket — se usa para clasificar la factura en el EERR.
+  categoriaToBucket: Record<string, string>;
   loading: boolean;
   source: "cache" | "db" | "fallback";
   refresh: () => Promise<void>; // invalida sessionStorage y re-fetcha
 }
 
-// Bump v3→v4: incorpora categoriaToTipo. Caches v3 no lo tienen y los
-// dropdowns que dependen del map quedarían rotos hasta el siguiente
-// fetch. El bump fuerza re-fetch en todas las sesiones existentes.
-const CACHE_KEY = "pase_categorias_v4";
+// Bump v4→v5: incorpora categoriaToBucket. Caches v4 no lo tienen y los
+// flujos que dependen del map quedarían sin clasificar facturas.
+const CACHE_KEY = "pase_categorias_v5";
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1h
 
 type CategoriasData = Omit<CategoriasState, "loading" | "source" | "refresh">;
@@ -51,7 +56,9 @@ const TIPO_DB_TO_FORM: Record<string, string> = {
   gasto_impuesto: "impuesto",
 };
 
-function buildCategoriaToTipo(data: Omit<CategoriasData, "categoriaToTipo">): Record<string, string> {
+type BaseData = Omit<CategoriasData, "categoriaToTipo" | "categoriaToBucket">;
+
+function buildCategoriaToTipo(data: BaseData): Record<string, string> {
   const m: Record<string, string> = {};
   for (const c of data.GASTOS_FIJOS)      m[c] = "fijo";
   for (const c of data.GASTOS_VARIABLES)  m[c] = "variable";
@@ -61,7 +68,18 @@ function buildCategoriaToTipo(data: Omit<CategoriasData, "categoriaToTipo">): Re
   return m;
 }
 
-const _FALLBACK_BASE: Omit<CategoriasData, "categoriaToTipo"> = {
+function buildCategoriaToBucket(data: BaseData): Record<string, string> {
+  const m: Record<string, string> = {};
+  for (const c of data.CATEGORIAS_COMPRA)  m[c] = "cat_compra";
+  for (const c of data.GASTOS_FIJOS)       m[c] = "gasto_fijo";
+  for (const c of data.GASTOS_VARIABLES)   m[c] = "gasto_variable";
+  for (const c of data.GASTOS_PUBLICIDAD)  m[c] = "gasto_publicidad";
+  for (const c of data.COMISIONES_CATS)    m[c] = "gasto_comision";
+  for (const c of data.GASTOS_IMPUESTOS)   m[c] = "gasto_impuesto";
+  return m;
+}
+
+const _FALLBACK_BASE: BaseData = {
   CATEGORIAS_COMPRA: [..._CC],
   GASTOS_FIJOS: [..._GF],
   GASTOS_VARIABLES: [..._GV],
@@ -79,6 +97,7 @@ const _FALLBACK_BASE: Omit<CategoriasData, "categoriaToTipo"> = {
 const FALLBACK: CategoriasData = {
   ..._FALLBACK_BASE,
   categoriaToTipo: buildCategoriaToTipo(_FALLBACK_BASE),
+  categoriaToBucket: buildCategoriaToBucket(_FALLBACK_BASE),
 };
 
 function readCache(): CategoriasData | null {
@@ -110,7 +129,7 @@ function fromRows(rows: ConfigCategoriaRow[]): CategoriasData {
     .filter(r => r.tipo === t && r.activo)
     .sort((a, b) => (a.orden || 0) - (b.orden || 0))
     .map(r => r.nombre);
-  const base: Omit<CategoriasData, "categoriaToTipo"> = {
+  const base: BaseData = {
     CATEGORIAS_COMPRA: byTipo("cat_compra"),
     GASTOS_FIJOS: byTipo("gasto_fijo"),
     GASTOS_VARIABLES: byTipo("gasto_variable"),
@@ -119,16 +138,22 @@ function fromRows(rows: ConfigCategoriaRow[]): CategoriasData {
     GASTOS_IMPUESTOS: byTipo("gasto_impuesto"),
     CATEGORIAS_INGRESO: byTipo("cat_ingreso"),
   };
-  // El map se arma directo desde los rows para soportar cualquier categoría
-  // que viva en config_categorias bajo un tipo conocido — incluso si el
-  // nombre se duplica entre tipos, la última gana (no debería pasar).
-  const map: Record<string, string> = {};
+  // Maps directos desde los rows para soportar cualquier categoría que viva
+  // en config_categorias bajo un tipo conocido — incluso si el nombre se
+  // duplica entre tipos, la última gana (no debería pasar).
+  const mapTipo: Record<string, string> = {};
+  const mapBucket: Record<string, string> = {};
   for (const r of rows) {
     if (!r.activo) continue;
     const formTipo = TIPO_DB_TO_FORM[r.tipo];
-    if (formTipo) map[r.nombre] = formTipo;
+    if (formTipo) mapTipo[r.nombre] = formTipo;
+    // bucket: cualquier tipo de gasto + cat_compra. cat_ingreso queda fuera —
+    // los ingresos no van a facturas.
+    if (r.tipo === "cat_compra" || r.tipo.startsWith("gasto_")) {
+      mapBucket[r.nombre] = r.tipo;
+    }
   }
-  return { ...base, categoriaToTipo: map };
+  return { ...base, categoriaToTipo: mapTipo, categoriaToBucket: mapBucket };
 }
 
 export function useCategorias(): CategoriasState {

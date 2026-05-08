@@ -54,6 +54,11 @@ export interface Factura {
   // Path al archivo de comprobante en Supabase Storage (bucket "facturas").
   // Set por LectorFacturasIA al subir, leído por Compras → "Ver factura".
   imagen_url?: string | null;
+  // Bucket: clasifica a qué línea del EERR pertenece. Derivado del tipo de
+  // la categoría en config_categorias (cat_compra | gasto_fijo | gasto_variable
+  // | gasto_publicidad | gasto_comision | gasto_impuesto). NULL = factura
+  // legacy (pre-2026-05-13): EERR la trata como CMV. Migration 202605130000.
+  bucket?: string | null;
 }
 
 export interface PagoFactura {

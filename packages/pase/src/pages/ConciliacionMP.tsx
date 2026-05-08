@@ -123,7 +123,7 @@ interface MpResetResultado {
 }
 
 function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
-  const { COMISIONES_CATS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, categoriaToTipo } = useCategorias();
+  const { CATEGORIAS_COMPRA, COMISIONES_CATS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, categoriaToTipo } = useCategorias();
   const [credenciales,setCredenciales]=useState<MpCredencial[]>([]);
   const [movimientos,setMovimientos]=useState<MpMovimiento[]>([]);
   const [facturas,setFacturas]=useState<FacturaSlim[]>([]);
@@ -1051,7 +1051,23 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                     <div className="field"><label>Fecha</label><input type="date" value={nuevaFacturaForm.fecha} onChange={e=>setNuevaFacturaForm({...nuevaFacturaForm,fecha:e.target.value})}/>
                       <div style={{fontSize:10,color:"var(--muted)",marginTop:4}}>Si dejás vacío usa la fecha del egreso MP.</div>
                     </div>
-                    <div className="field"><label>Categoría</label><input value={nuevaFacturaForm.cat} onChange={e=>setNuevaFacturaForm({...nuevaFacturaForm,cat:e.target.value})} placeholder="Insumos, Servicios..."/></div>
+                    <div className="field"><label>Categoría</label>
+                      <Combobox
+                        value={nuevaFacturaForm.cat}
+                        onChange={v=>setNuevaFacturaForm({...nuevaFacturaForm,cat:v})}
+                        options={[
+                          ...CATEGORIAS_COMPRA.map(c=>({value:c,label:c,group:"Mercadería (CMV)"})),
+                          ...GASTOS_FIJOS.map(c=>({value:c,label:c,group:"Gastos Fijos"})),
+                          ...GASTOS_VARIABLES.map(c=>({value:c,label:c,group:"Gastos Variables"})),
+                          ...GASTOS_PUBLICIDAD.map(c=>({value:c,label:c,group:"Publicidad y MKT"})),
+                          ...COMISIONES_CATS.map(c=>({value:c,label:c,group:"Comisiones"})),
+                          ...GASTOS_IMPUESTOS.map(c=>({value:c,label:c,group:"Impuestos"})),
+                        ]}
+                        groupOrder={["Mercadería (CMV)","Gastos Fijos","Gastos Variables","Publicidad y MKT","Comisiones","Impuestos"]}
+                        placeholder="Buscar categoría..."
+                        clearable
+                      />
+                    </div>
                     <div className="field"><label>Detalle</label><input value={nuevaFacturaForm.detalle} onChange={e=>setNuevaFacturaForm({...nuevaFacturaForm,detalle:e.target.value})} placeholder={conciliarModal.descripcion||"Descripción..."}/></div>
                     <div style={{fontSize:10,color:"var(--muted)",marginTop:4}}>IVA y percepciones quedan en 0 — completalos después en Compras si los necesitás.</div>
                   </div>

@@ -8,6 +8,7 @@ import { CUENTAS, UNIDADES } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId, parseMonto } from "../lib/utils";
 import LectorFacturasIA from "./LectorFacturasIA";
 import { CurrencyInput } from "../components/CurrencyInput";
+import { Combobox } from "../components/Combobox";
 import type { Usuario, Local } from "../types";
 import type { Proveedor, Factura, PagoFactura } from "../types/finanzas";
 
@@ -77,7 +78,7 @@ const estadoDot = (estado: string) => {
 };
 
 export default function Compras({ user, locales, localActivo }: ComprasProps) {
-  const { CATEGORIAS_COMPRA } = useCategorias();
+  const { CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS, categoriaToBucket } = useCategorias();
   // Cuentas para el dropdown de "Cuenta de egreso" en el modal de pago.
   // Filtra por cuentas_operables (no por cuentas_visibles): un encargado
   // puede tener permiso de pagar contra una cuenta cuyo saldo no ve.
@@ -300,7 +301,12 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       // date con "invalid input syntax for type date: \"\"". Común en NC
       // que no siempre tienen vencimiento.
       // CurrencyInput entrega number directo — no necesita parseMonto.
-      const nueva = { ...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(form.local_id), total, estado: isNC ? "pagada" : "pendiente", pagos: [], tipo: form.tipo, fecha: form.fecha || null, venc: form.venc || null };
+      // bucket: deriva del tipo crudo de la cat en config_categorias
+      // (cat_compra | gasto_fijo | gasto_variable | gasto_publicidad |
+      // gasto_comision | gasto_impuesto). Si la cat no está mapeada (libre
+      // o legacy), bucket queda null y EERR la trata como CMV.
+      const bucket = form.cat ? (categoriaToBucket[form.cat] ?? null) : null;
+      const nueva = { ...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(form.local_id), total, estado: isNC ? "pagada" : "pendiente", pagos: [], tipo: form.tipo, fecha: form.fecha || null, venc: form.venc || null, bucket };
       const { error: factErr } = await db.from("facturas").insert([nueva]);
       if (factErr) throw new Error("Error guardando factura: " + factErr.message);
 
@@ -639,7 +645,34 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                 <div className="field"><label>Nº Factura *</label><input value={form.nro} onChange={e => setForm({ ...form, nro: e.target.value })} placeholder="A-0001-00001234" /></div>
               </div>
               <div className="form2">
-                <div className="field"><label>Categoría EERR</label><select value={form.cat} onChange={e => setForm({ ...form, cat: e.target.value })}><option value="">Seleccioná...</option>{CATEGORIAS_COMPRA.map(c => <option key={c}>{c}</option>)}</select></div>
+                <div className="field"><label>Categoría EERR</label>
+                  <Combobox
+                    value={form.cat}
+                    onChange={v => setForm({ ...form, cat: v })}
+                    options={[
+                      ...CATEGORIAS_COMPRA.map(c => ({ value: c, label: c, group: "Mercadería (CMV)" })),
+                      ...GASTOS_FIJOS.map(c => ({ value: c, label: c, group: "Gastos Fijos" })),
+                      ...GASTOS_VARIABLES.map(c => ({ value: c, label: c, group: "Gastos Variables" })),
+                      ...GASTOS_PUBLICIDAD.map(c => ({ value: c, label: c, group: "Publicidad y MKT" })),
+                      ...COMISIONES_CATS.map(c => ({ value: c, label: c, group: "Comisiones" })),
+                      ...GASTOS_IMPUESTOS.map(c => ({ value: c, label: c, group: "Impuestos" })),
+                    ]}
+                    groupOrder={["Mercadería (CMV)", "Gastos Fijos", "Gastos Variables", "Publicidad y MKT", "Comisiones", "Impuestos"]}
+                    placeholder="Buscar o elegir categoría..."
+                    clearable
+                  />
+                  {form.cat && (
+                    <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 4 }}>
+                      {(() => {
+                        const b = categoriaToBucket[form.cat];
+                        if (!b) return "Categoría libre — entrará al CMV";
+                        if (b === "cat_compra") return "Tipo: Mercadería → suma al CMV";
+                        const labels: Record<string, string> = { gasto_fijo: "Gasto fijo", gasto_variable: "Gasto variable", gasto_publicidad: "Publicidad", gasto_comision: "Comisión", gasto_impuesto: "Impuesto" };
+                        return `Tipo: ${labels[b] || b} → suma a ese bucket de gastos`;
+                      })()}
+                    </div>
+                  )}
+                </div>
                 <div className="field"><label>Fecha</label><input type="date" value={form.fecha} onChange={e => setForm({ ...form, fecha: e.target.value })} /></div>
               </div>
               <div className="form2">

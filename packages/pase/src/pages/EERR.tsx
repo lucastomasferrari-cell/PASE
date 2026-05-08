@@ -100,12 +100,17 @@ export default function EERR({ user, localActivo }: EERRProps) {
     const gastosArr = ((g0 as Gasto[]) || []).filter(x => x.categoria !== "SUELDOS");
     const liqRows = ((liq as unknown) as LiquidacionPendienteRow[]) || [];
     const ventas = ventasArr.reduce((s, x) => s + Number(x.monto), 0);
-    const cmv = facturasArr.reduce((s, x) => s + Number(x.total), 0);
-    const gastosFijos = gastosArr.filter(x => x.tipo === "fijo").reduce((s, x) => s + Number(x.monto), 0);
-    const gastosVar = gastosArr.filter(x => x.tipo === "variable").reduce((s, x) => s + Number(x.monto), 0);
-    const publicidad = gastosArr.filter(x => x.tipo === "publicidad").reduce((s, x) => s + Number(x.monto), 0);
-    const comisiones = gastosArr.filter(x => x.tipo === "comision").reduce((s, x) => s + Number(x.monto), 0);
-    const impuestos = gastosArr.filter(x => x.tipo === "impuesto").reduce((s, x) => s + Number(x.monto), 0);
+    // Clasificación por bucket: facturas legacy (bucket=null) o cat_compra
+    // suman al CMV; el resto suma a su bucket de gastos correspondiente.
+    const facsCMV = facturasArr.filter(x => !x.bucket || x.bucket === "cat_compra");
+    const facsBucket = (b: string) => facturasArr.filter(x => x.bucket === b);
+    const sumF = (arr: Factura[]) => arr.reduce((s, x) => s + Number(x.total), 0);
+    const cmv = sumF(facsCMV);
+    const gastosFijos = gastosArr.filter(x => x.tipo === "fijo").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_fijo"));
+    const gastosVar = gastosArr.filter(x => x.tipo === "variable").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_variable"));
+    const publicidad = gastosArr.filter(x => x.tipo === "publicidad").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_publicidad"));
+    const comisiones = gastosArr.filter(x => x.tipo === "comision").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_comision"));
+    const impuestos = gastosArr.filter(x => x.tipo === "impuesto").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_impuesto"));
     const liqFilt = liqRows.filter(l => !lid || (l.rrhh_novedades?.rrhh_empleados?.local_id === lid));
     const sueldos = liqFilt.reduce((s, l) => s + Number(l.total_a_pagar), 0);
     const utilBruta = ventas - cmv;
@@ -177,12 +182,20 @@ export default function EERR({ user, localActivo }: EERRProps) {
   },[mes,localActivo]);
 
   const totalVentas=ventas.reduce((s, v)=>s+(v.monto||0),0);
-  const totalCMV=facturas.reduce((s, f)=>s+(f.total||0),0);
-  const totalGastosFijos=gastos.filter((g)=>g.tipo==="fijo").reduce((s, g)=>s+(g.monto||0),0);
-  const totalGastosVar=gastos.filter((g)=>g.tipo==="variable").reduce((s, g)=>s+(g.monto||0),0);
-  const totalPublicidad=gastos.filter((g)=>g.tipo==="publicidad").reduce((s, g)=>s+(g.monto||0),0);
-  const totalComisiones=gastos.filter((g)=>g.tipo==="comision").reduce((s, g)=>s+(g.monto||0),0);
-  const totalImpuestos=gastos.filter((g)=>g.tipo==="impuesto").reduce((s, g)=>s+(g.monto||0),0);
+  // Clasificación por bucket: facturas con bucket NULL (legacy) o
+  // bucket='cat_compra' van al CMV. Facturas con bucket='gasto_*' suman al
+  // bucket de gastos correspondiente, junto con la tabla `gastos`.
+  // Esto permite cargar servicios (AySA, Edenor, MP, Rappi) por Compras sin
+  // inflar el CMV. Migration 202605130000 introdujo facturas.bucket.
+  const facturasBucket=(b: string|null)=>facturas.filter(f=>(f.bucket||null)===b);
+  const facturasCMV=[...facturas.filter(f=>!f.bucket), ...facturasBucket("cat_compra")];
+  const sumarMonto=<T extends {total?:number,monto?:number}>(rows:T[],key:"total"|"monto"="total")=>rows.reduce((s,x)=>s+(Number(x[key])||0),0);
+  const totalCMV=sumarMonto(facturasCMV,"total");
+  const totalGastosFijos=gastos.filter((g)=>g.tipo==="fijo").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_fijo"),"total");
+  const totalGastosVar=gastos.filter((g)=>g.tipo==="variable").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_variable"),"total");
+  const totalPublicidad=gastos.filter((g)=>g.tipo==="publicidad").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_publicidad"),"total");
+  const totalComisiones=gastos.filter((g)=>g.tipo==="comision").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_comision"),"total");
+  const totalImpuestos=gastos.filter((g)=>g.tipo==="impuesto").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_impuesto"),"total");
   const totalGastos=totalGastosFijos+totalGastosVar;
   const utilBruta=totalVentas-totalCMV;
   const utilNeta=utilBruta-totalGastos-sueldos-totalPublicidad-totalComisiones-totalImpuestos;
@@ -208,12 +221,23 @@ export default function EERR({ user, localActivo }: EERRProps) {
       if(ob!==undefined) return 1;
       return b.t-a.t;
     });
-  const porCatCMV=CATEGORIAS_COMPRA.map(c=>({c,t:facturas.filter((f)=>f.cat===c).reduce((s, f)=>s+f.total,0)})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
-  const porCatFijos=GASTOS_FIJOS.map(c=>({c,t:gastos.filter((g)=>g.tipo==="fijo"&&g.categoria===c).reduce((s, g)=>s+g.monto,0)})).filter(x=>x.t>0);
-  const porCatVar=GASTOS_VARIABLES.map(c=>({c,t:gastos.filter((g)=>g.tipo==="variable"&&g.categoria===c).reduce((s, g)=>s+g.monto,0)})).filter(x=>x.t>0);
-  const porCatPub=GASTOS_PUBLICIDAD.map(c=>({c,t:gastos.filter((g)=>g.tipo==="publicidad"&&g.categoria===c).reduce((s, g)=>s+g.monto,0)})).filter(x=>x.t>0);
-  const porCatCom=COMISIONES_CATS.map(c=>({c,t:gastos.filter((g)=>g.tipo==="comision"&&g.categoria===c).reduce((s, g)=>s+g.monto,0)})).filter(x=>x.t>0);
-  const porCatImp=GASTOS_IMPUESTOS.map(c=>({c,t:gastos.filter((g)=>g.tipo==="impuesto"&&g.categoria===c).reduce((s, g)=>s+g.monto,0)})).filter(x=>x.t>0);
+  // Detalle por categoría: cada bucket suma sus categorías de gastos +
+  // las facturas con ese bucket. Las facturas con bucket=cat_compra (o
+  // legacy null) van al CMV junto con CATEGORIAS_COMPRA del catálogo.
+  const tFactCat = (cat: string, bucket: string | null) =>
+    facturas.filter(f => f.cat === cat && (bucket === null
+      ? (!f.bucket || f.bucket === "cat_compra")
+      : f.bucket === bucket
+    )).reduce((s, f) => s + Number(f.total || 0), 0);
+  const tGastoCat = (cat: string, tipo: string) =>
+    gastos.filter(g => g.tipo === tipo && g.categoria === cat).reduce((s, g) => s + Number(g.monto || 0), 0);
+
+  const porCatCMV=CATEGORIAS_COMPRA.map(c=>({c,t:tFactCat(c, null)})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
+  const porCatFijos=GASTOS_FIJOS.map(c=>({c,t:tGastoCat(c, "fijo") + tFactCat(c, "gasto_fijo")})).filter(x=>x.t>0);
+  const porCatVar=GASTOS_VARIABLES.map(c=>({c,t:tGastoCat(c, "variable") + tFactCat(c, "gasto_variable")})).filter(x=>x.t>0);
+  const porCatPub=GASTOS_PUBLICIDAD.map(c=>({c,t:tGastoCat(c, "publicidad") + tFactCat(c, "gasto_publicidad")})).filter(x=>x.t>0);
+  const porCatCom=COMISIONES_CATS.map(c=>({c,t:tGastoCat(c, "comision") + tFactCat(c, "gasto_comision")})).filter(x=>x.t>0);
+  const porCatImp=GASTOS_IMPUESTOS.map(c=>({c,t:tGastoCat(c, "impuesto") + tFactCat(c, "gasto_impuesto")})).filter(x=>x.t>0);
 
   const ERow=({label,valor,color,big}: {label: string, valor: number, color: string, big?: boolean})=>(
     <div className="eerr-row" style={big?{background:"var(--s2)",padding:"12px 16px"}:{}}>
