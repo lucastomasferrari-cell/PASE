@@ -42,7 +42,11 @@ export function Sidebar({ user, section, onNav, onLogout, onRefreshPerms, locale
     // (probablemente con un importador de banco análogo al de Maxirest). Para
     // reactivar, descomentar este item.
     // {id:"cashflow",label:"Cashflow",sec:"Números",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="1,10 4,6 7,8 10,4 13,7"/><line x1="1" y1="13" x2="13" y2="13"/></svg>`},
-    {id:"cierre",label:"Cierre",sec:"Números",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="3" height="5"/><rect x="6" y="4" width="3" height="8"/><rect x="10" y="2" width="2" height="10"/></svg>`},
+    // Cierre Comparativo fusionado en EERR (Lucas, 2026-05-08): ahora EERR
+    // tiene botón "+ Comparar mes" que agrega columnas comparativas + gráfico
+    // de evolución. La pantalla Cierre.tsx queda como código muerto;
+    // descomentar este item para reactivar si hace falta.
+    // {id:"cierre",label:"Cierre",sec:"Números",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="3" height="5"/><rect x="6" y="4" width="3" height="8"/><rect x="10" y="2" width="2" height="10"/></svg>`},
     {id:"eerr",label:"Estado de Result.",sec:"Números",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="2" y1="11" x2="2" y2="5"/><line x1="6" y1="11" x2="6" y2="3"/><line x1="10" y1="11" x2="10" y2="7"/></svg>`},
     {id:"contador",label:"Contador / IVA",sec:"Números",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="1" width="10" height="12" rx="1"/><line x1="5" y1="5" x2="9" y2="5"/><line x1="5" y1="8" x2="9" y2="8"/></svg>`},
     {id:"rrhh",label:"RRHH",sec:"RRHH",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="5" r="2.5"/><path d="M1 13c0-2.5 2-4 4-4s4 1.5 4 4"/><circle cx="10" cy="5" r="2"/><path d="M13 13c0-2 -1-3.5-3-3.5"/></svg>`},

@@ -295,7 +295,11 @@ export default function App() {
       // case se mantienen comentados para reactivar fácil cuando se resuelva
       // el flujo de ingresos no-MP.
       case "cashflow": return <Dashboard {...props}/>;
-      case "cierre": return <Cierre {...props}/>;
+      // Cierre Comparativo fusionado en EERR (Lucas, 2026-05-08). Sesiones
+      // viejas con localStorage "cierre" caen a EERR (que ahora soporta
+      // comparativa de meses). El componente Cierre.tsx queda como código
+      // muerto disponible para reactivar.
+      case "cierre": return <EERR {...props}/>;
       case "blindaje": return <Blindaje {...props}/>;
       case "proveedores": return <Proveedores {...props}/>;
       case "usuarios":  return <Usuarios {...props}/>;
