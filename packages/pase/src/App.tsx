@@ -290,7 +290,11 @@ export default function App() {
       case "maxirest":  return <ImportarMaxirest {...props}/>;
       case "lector_ia": return <LectorFacturasIA {...props}/>;
       case "mp":        return <ConciliacionMP {...props}/>;
-      case "cashflow": return <Cashflow {...props}/>;
+      // Cashflow oculto temporalmente (Lucas, 2026-05-08): si una sesión vieja
+      // tiene "cashflow" en localStorage, fallback a Dashboard. Componente y
+      // case se mantienen comentados para reactivar fácil cuando se resuelva
+      // el flujo de ingresos no-MP.
+      case "cashflow": return <Dashboard {...props}/>;
       case "cierre": return <Cierre {...props}/>;
       case "blindaje": return <Blindaje {...props}/>;
       case "proveedores": return <Proveedores {...props}/>;

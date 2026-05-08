@@ -26,7 +26,7 @@ export const ROLES: Record<string, { label: string; color: string; permisos?: st
   // permisos de UI (todos los módulos del MODULOS array).
   superadmin:{ label:"Super Admin",color:"#DC2626" },
   dueno:     { label:"Dueño",      color:"#9333EA" },
-  admin:     { label:"Admin",      color:"#3B82F6", permisos:["dashboard","ventas","compras","remitos","gastos","caja","cashflow","cierre","proveedores","rrhh","blindaje"] },
+  admin:     { label:"Admin",      color:"#3B82F6", permisos:["dashboard","ventas","compras","remitos","gastos","caja","cierre","proveedores","rrhh","blindaje"] },
   encargado: { label:"Encargado",  color:"#6B7280", permisos:["dashboard"] },
   compras:   { label:"Compras",    color:"#8B5CF6", permisos:["compras","remitos","proveedores"] },
   cajero:    { label:"Cajero",     color:"#10B981", permisos:["caja","dashboard"] },
@@ -53,7 +53,9 @@ export const MODULOS = [
   { slug:"proveedores", label:"Proveedores", icon:"🏭" },
   { slug:"mp", label:"Conciliación MP", icon:"💳" },
   { slug:"caja", label:"Tesorería", icon:"💰" },
-  { slug:"cashflow", label:"Cashflow", icon:"📈" },
+  // Cashflow oculto temporalmente (Lucas, 2026-05-08): no aparece en sidebar
+  // ni en Usuarios → Permisos. Para reactivar, descomentar acá + en Layout.tsx.
+  // { slug:"cashflow", label:"Cashflow", icon:"📈" },
   { slug:"cierre", label:"Cierre Comparativo", icon:"📊" },
   { slug:"eerr", label:"Estado de Result.", icon:"📊" },
   { slug:"contador", label:"Contador / IVA", icon:"🧾" },
