@@ -5,6 +5,7 @@ import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
+import { Combobox } from "../components/Combobox";
 import type { Usuario, Local } from "../types";
 import type { Gasto } from "../types/finanzas";
 
@@ -228,16 +229,23 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
         <button className="btn btn-acc" onClick={() => { setForm(emptyForm); setModal(true); }}>+ Cargar Gasto</button>
       </div>
 
-      {/* Filtros + Pills unificados */}
+      {/* Filtros: búsqueda + rango fechas + dropdown de tipo (antes pills inline,
+           se rompe visualmente al sumar tipos nuevos). */}
       <div style={{display:"flex",gap:8,marginBottom:16,alignItems:"center",flexWrap:"wrap"}}>
         <input className="search" placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)} style={{width:140}}/>
         <input type="date" className="search" value={desde} onChange={e=>setDesde(e.target.value)} style={{width:120}}/>
         <span style={{fontSize:11,color:"var(--muted)"}}>→</span>
         <input type="date" className="search" value={hasta} onChange={e=>setHasta(e.target.value)} style={{width:120}}/>
         <div style={{width:1,height:14,background:"var(--bd)",margin:"0 4px"}}/>
-        {([["todos","Todos"],["fijo","Fijos"],["variable","Variables"],["publicidad","Publicidad"],["impuesto","Impuestos"],["comision","Comisiones"]] as [string, string][]).map(([id,l])=>(
-          <div key={id} className={`pill ${tipoFiltro===id?"active":""}`} onClick={()=>setTipoFiltro(id)}>{l}</div>
-        ))}
+        <div style={{width:200}}>
+          <Combobox
+            value={tipoFiltro==="todos"?"":tipoFiltro}
+            onChange={v=>setTipoFiltro(v||"todos")}
+            options={TIPOS.filter(t=>t.id!=="todos").map(t=>({value:t.id,label:t.label}))}
+            placeholder="Todos los tipos"
+            clearable
+          />
+        </div>
       </div>
 
       {/* Recurrentes del período */}

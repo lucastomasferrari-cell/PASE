@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope, cuentasVisibles as cuentasVisiblesFn, cuentasOperables as cuentasOperablesFn, cuentasVisiblesParaListados, localesVisibles } from "../lib/auth";
+import { applyLocalScope, cuentasVisibles as cuentasVisiblesFn, cuentasOperables as cuentasOperablesFn, cuentasVisiblesParaListados, localesVisibles, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { useRealtimeTable } from "../lib/useRealtimeTable";
@@ -377,10 +377,12 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         <div className="panel-hd">
           <span className="panel-title">Movimientos</span>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"var(--muted2)",cursor:"pointer"}}>
-              <input type="checkbox" checked={mostrarAnulados} onChange={e => setMostrarAnulados(e.target.checked)}/>
-              Ver anulados
-            </label>
+            {tienePermiso(user, "ver_anulados") && (
+              <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"var(--muted2)",cursor:"pointer"}}>
+                <input type="checkbox" checked={mostrarAnulados} onChange={e => setMostrarAnulados(e.target.checked)}/>
+                Ver anulados
+              </label>
+            )}
             <select className="search" style={{width:160}} value={filtCuenta} onChange={e=>setFiltCuenta(e.target.value)}>
               <option>Todas</option>{cuentasParaListado.map(c=><option key={c}>{c}</option>)}
             </select>

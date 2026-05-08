@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope, localesVisibles } from "../lib/auth";
+import { applyLocalScope, localesVisibles, tienePermiso } from "../lib/auth";
 import { useMediosCobro } from "../lib/useMediosCobro";
 import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
 import ImportarMaxirest from "./ImportarMaxirest";
@@ -197,7 +197,12 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
 
       {showMaxirest&&<div style={{marginBottom:16}}><ImportarMaxirest locales={locales} localActivo={localActivo} onImported={load}/></div>}
 
-      {/* SECCIÓN INFERIOR: filtros + historial */}
+      {/* SECCIÓN INFERIOR: filtros + historial.
+          Visible solo para usuarios con permiso 'ventas_historico'. Sin el
+          permiso (típicamente cajero), solo puede cargar ventas/cierres pero
+          no ver el histórico de cierres anteriores — evita que pueda
+          calcular cuánto facturó el local. */}
+      {tienePermiso(user, "ventas_historico") && (
       <div className="panel">
         <div className="panel-hd" style={{flexWrap:"wrap",gap:8,justifyContent:"flex-end"}}>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
@@ -224,6 +229,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
           </table>
         )}
       </div>
+      )}
 
       {/* DETALLE MODAL */}
       {detalleModal&&(

@@ -32,6 +32,18 @@ export const ROLES: Record<string, { label: string; color: string; permisos?: st
   cajero:    { label:"Cajero",     color:"#10B981", permisos:["caja","dashboard"] },
 };
 
+// Permisos avanzados que NO son módulos navegables — son flags que controlan
+// comportamientos finos dentro de pantallas existentes. Se gestionan desde
+// la pantalla de Usuarios igual que los módulos, pero no aparecen en el
+// sidebar. Default: ningún rol no-dueño los tiene; admin/dueño/superadmin
+// los tienen siempre vía short-circuit en `tienePermiso`.
+export const PERMISOS_EXTRAS = [
+  { slug:"ventas_historico", label:"Ver histórico de ventas",
+    descripcion:"Sin este permiso, el usuario solo ve el cierre que cargó en su sesión, no los cierres anteriores." },
+  { slug:"ver_anulados", label:"Ver anulados / inactivos",
+    descripcion:"Habilita los toggles 'Ver anulados' y 'Ver inactivos' en Caja, Proveedores y RRHH." },
+];
+
 export const MODULOS = [
   { slug:"dashboard", label:"Dashboard", icon:"▦" },
   { slug:"ventas", label:"Ventas", icon:"↑" },

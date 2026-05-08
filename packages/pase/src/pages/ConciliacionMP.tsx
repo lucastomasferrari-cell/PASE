@@ -4,6 +4,7 @@ import { applyLocalScope, cuentasOperables as cuentasOperablesFn } from "../lib/
 import { CUENTAS } from "../lib/constants";
 import { useCategorias } from "../lib/useCategorias";
 import { toISO, today, fmt_d, fmt_$, fmt_dt_ar } from "../lib/utils";
+import { Combobox } from "../components/Combobox";
 import type { Usuario, Local } from "../types";
 import type { Proveedor } from "../types/finanzas";
 
@@ -926,10 +927,14 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
               <div>
                 <div className="alert alert-warn" style={{marginBottom:12}}>Egreso de {fmt_$(mpMonto)} → vincular a un gasto existente o crear uno nuevo.</div>
                 <div className="field"><label>Categoría</label>
-                  <select value={catFiltro} onChange={e=>setCatFiltro(e.target.value)}>
-                    <option value="">— Todas las categorías —</option>
-                    {categoriasDisponibles.map(c=><option key={c} value={c}>{c}</option>)}
-                  </select>
+                  <Combobox
+                    value={catFiltro}
+                    onChange={v=>setCatFiltro(v)}
+                    options={categoriasDisponibles.map(c=>({value:c,label:c}))}
+                    placeholder="Todas las categorías"
+                    clearable
+                    emptyMessage="Sin categorías con gastos pendientes"
+                  />
                   <div style={{fontSize:10,color:"var(--muted)",marginTop:4}}>{categoriasDisponibles.length===0?"Sin gastos pendientes en el período.":`${categoriasDisponibles.length} categoría${categoriasDisponibles.length===1?"":"s"} con gastos pendientes`}</div>
                 </div>
                 <div className="field"><label>Buscar por detalle / cuenta</label>
@@ -959,14 +964,20 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                   <div style={{marginTop:12,padding:14,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)"}}>
                     <div style={{fontSize:11,fontWeight:600,marginBottom:10,color:"var(--muted2)",letterSpacing:1}}>NUEVO GASTO · {fmt_$(mpMonto)}</div>
                     <div className="field"><label>Categoría *</label>
-                      <select value={nuevoGastoForm.categoria} onChange={e=>setNuevoGastoForm({...nuevoGastoForm,categoria:e.target.value})}>
-                        <option value="">Seleccioná...</option>
-                        <optgroup label="Variables">{GASTOS_VARIABLES.map(c=><option key={c}>{c}</option>)}</optgroup>
-                        <optgroup label="Fijos">{GASTOS_FIJOS.map(c=><option key={c}>{c}</option>)}</optgroup>
-                        <optgroup label="Publicidad">{GASTOS_PUBLICIDAD.map(c=><option key={c}>{c}</option>)}</optgroup>
-                        <optgroup label="Comisiones">{COMISIONES_CATS.map(c=><option key={c}>{c}</option>)}</optgroup>
-                        <optgroup label="Impuestos">{GASTOS_IMPUESTOS.map(c=><option key={c}>{c}</option>)}</optgroup>
-                      </select>
+                      <Combobox
+                        value={nuevoGastoForm.categoria}
+                        onChange={v=>setNuevoGastoForm({...nuevoGastoForm,categoria:v})}
+                        options={[
+                          ...GASTOS_VARIABLES.map(c=>({value:c,label:c,group:"Variables"})),
+                          ...GASTOS_FIJOS.map(c=>({value:c,label:c,group:"Fijos"})),
+                          ...GASTOS_PUBLICIDAD.map(c=>({value:c,label:c,group:"Publicidad"})),
+                          ...COMISIONES_CATS.map(c=>({value:c,label:c,group:"Comisiones"})),
+                          ...GASTOS_IMPUESTOS.map(c=>({value:c,label:c,group:"Impuestos"})),
+                        ]}
+                        groupOrder={["Variables","Fijos","Publicidad","Comisiones","Impuestos"]}
+                        placeholder="Buscar o elegir categoría..."
+                        clearable
+                      />
                     </div>
                     <div className="field"><label>Tipo (auto, según categoría)</label>
                       <input type="text" readOnly value={tipoDerivado||"—"} style={{background:"var(--bg)",color:"var(--muted2)",cursor:"not-allowed"}}/>
@@ -999,10 +1010,14 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
               <div>
                 <div className="alert alert-warn" style={{marginBottom:12}}>Egreso de {fmt_$(Math.abs(conciliarModal.monto||0))} → vincular a una factura existente o crear una nueva.</div>
                 <div className="field"><label>Proveedor</label>
-                  <select value={provFiltro} onChange={e=>{setProvFiltro(e.target.value);setVinculoSel("");}}>
-                    <option value="">— Seleccioná un proveedor —</option>
-                    {provsActivos.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
-                  </select>
+                  <Combobox
+                    value={provFiltro}
+                    onChange={v=>{setProvFiltro(v);setVinculoSel("");}}
+                    options={provsActivos.map(p=>({value:String(p.id),label:p.nombre}))}
+                    placeholder="Buscar proveedor..."
+                    clearable
+                    emptyMessage="Sin proveedores con facturas pendientes"
+                  />
                   <div style={{fontSize:10,color:"var(--muted)",marginTop:4}}>{provsActivos.length===0?"Ningún proveedor con facturas pendientes de conciliar en el período.":`${provsActivos.length} proveedor${provsActivos.length===1?"":"es"} con facturas pendientes de conciliar`}</div>
                 </div>
                 {provIdNum!=null&&(
@@ -1024,10 +1039,13 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                   <div style={{marginTop:12,padding:14,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)"}}>
                     <div style={{fontSize:11,fontWeight:600,marginBottom:10,color:"var(--muted2)",letterSpacing:1}}>NUEVA FACTURA · total {fmt_$(Math.abs(conciliarModal.monto||0))}</div>
                     <div className="field"><label>Proveedor *</label>
-                      <select value={nuevaFacturaForm.prov_id} onChange={e=>setNuevaFacturaForm({...nuevaFacturaForm,prov_id:e.target.value})}>
-                        <option value="">Seleccioná proveedor...</option>
-                        {proveedores.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
-                      </select>
+                      <Combobox
+                        value={nuevaFacturaForm.prov_id}
+                        onChange={v=>setNuevaFacturaForm({...nuevaFacturaForm,prov_id:v})}
+                        options={proveedores.map(p=>({value:String(p.id),label:p.nombre}))}
+                        placeholder="Buscar proveedor..."
+                        clearable
+                      />
                     </div>
                     <div className="field"><label>Número *</label><input value={nuevaFacturaForm.nro} onChange={e=>setNuevaFacturaForm({...nuevaFacturaForm,nro:e.target.value})} placeholder="0001-00000123"/></div>
                     <div className="field"><label>Fecha</label><input type="date" value={nuevaFacturaForm.fecha} onChange={e=>setNuevaFacturaForm({...nuevaFacturaForm,fecha:e.target.value})}/>
@@ -1057,10 +1075,14 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
               <div>
                 <div className="alert alert-warn" style={{marginBottom:12}}>Egreso de {fmt_$(Math.abs(conciliarModal.monto||0))} → vincular a un remito existente o crear uno nuevo.</div>
                 <div className="field"><label>Proveedor</label>
-                  <select value={provFiltro} onChange={e=>{setProvFiltro(e.target.value);setVinculoSel("");}}>
-                    <option value="">— Seleccioná un proveedor —</option>
-                    {provsActivos.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
-                  </select>
+                  <Combobox
+                    value={provFiltro}
+                    onChange={v=>{setProvFiltro(v);setVinculoSel("");}}
+                    options={provsActivos.map(p=>({value:String(p.id),label:p.nombre}))}
+                    placeholder="Buscar proveedor..."
+                    clearable
+                    emptyMessage="Sin proveedores con remitos pendientes"
+                  />
                   <div style={{fontSize:10,color:"var(--muted)",marginTop:4}}>{provsActivos.length===0?"Ningún proveedor con remitos pendientes de conciliar en el período.":`${provsActivos.length} proveedor${provsActivos.length===1?"":"es"} con remitos pendientes de conciliar`}</div>
                 </div>
                 {provIdNum!=null&&(
@@ -1082,10 +1104,13 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                   <div style={{marginTop:12,padding:14,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)"}}>
                     <div style={{fontSize:11,fontWeight:600,marginBottom:10,color:"var(--muted2)",letterSpacing:1}}>NUEVO REMITO · monto {fmt_$(Math.abs(conciliarModal.monto||0))}</div>
                     <div className="field"><label>Proveedor *</label>
-                      <select value={nuevoRemitoForm.prov_id} onChange={e=>setNuevoRemitoForm({...nuevoRemitoForm,prov_id:e.target.value})}>
-                        <option value="">Seleccioná proveedor...</option>
-                        {proveedores.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
-                      </select>
+                      <Combobox
+                        value={nuevoRemitoForm.prov_id}
+                        onChange={v=>setNuevoRemitoForm({...nuevoRemitoForm,prov_id:v})}
+                        options={proveedores.map(p=>({value:String(p.id),label:p.nombre}))}
+                        placeholder="Buscar proveedor..."
+                        clearable
+                      />
                     </div>
                     <div className="field"><label>Número *</label><input value={nuevoRemitoForm.nro} onChange={e=>setNuevoRemitoForm({...nuevoRemitoForm,nro:e.target.value})} placeholder="R-0001"/></div>
                     <div className="field"><label>Fecha</label><input type="date" value={nuevoRemitoForm.fecha} onChange={e=>setNuevoRemitoForm({...nuevoRemitoForm,fecha:e.target.value})}/>

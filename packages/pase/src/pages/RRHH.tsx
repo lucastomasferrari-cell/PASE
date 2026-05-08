@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
-import { localesVisibles, applyLocalScope, cuentasOperables } from "../lib/auth";
+import { localesVisibles, applyLocalScope, cuentasOperables, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import {
@@ -12,8 +12,16 @@ import RRHHLegajo from "./RRHHLegajo";
 import type { Usuario, Local } from "../types";
 import type {
   Empleado, Novedad, Liquidacion, PagoEspecial,
-  ValorDoble, Adelanto, LineaPago,
+  Adelanto, LineaPago,
 } from "../types/rrhh";
+
+// Cálculo del valor del día doble: deriva del sueldo mensual del empleado
+// (sueldo / 30 * 2). Antes existía una tabla rrhh_valores_doble que guardaba
+// un valor fijo por puesto — eliminado porque dos empleados del mismo puesto
+// pueden tener sueldos distintos. Liquidaciones ya persistidas conservan el
+// valor histórico que se calculó en su momento; solo afecta cálculos nuevos.
+const calcularValorDoble = (emp: Pick<Empleado, "sueldo_mensual">): number =>
+  (Number(emp.sueldo_mensual) || 0) / 30 * 2;
 
 interface RRHHProps {
   user: Usuario;
@@ -179,7 +187,6 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const cuentasUsables = opCuentas === null ? CUENTAS_PAGO : CUENTAS_PAGO.filter(c => opCuentas.includes(c));
   const [tab, setTab] = useState("dashboard");
   const [legajoId, setLegajoId] = useState<string | null>(null);
-  const [cfgModal, setCfgModal] = useState(false);
   const [toast, setToast] = useState("");
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(""), 3000); };
 
@@ -194,7 +201,6 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
 
   // ─── SHARED STATE ──────────────────────────────────────────────────────────
   const [allEmps, setAllEmps] = useState<Empleado[]>([]);
-  const [valoresDoble, setValoresDoble] = useState<ValorDoble[]>([]);
   const [empSearch, setEmpSearch] = useState("");
   const [vacTomadas, setVacTomadas] = useState<Record<string, number>>({});
   const [empFiltLocal, setEmpFiltLocal] = useState(defaultLocal);
@@ -254,16 +260,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const [histLoading, setHistLoading] = useState(false);
   const [histDetalle, setHistDetalle] = useState<HistRow | null>(null);
 
-  // Config — el valor se edita como string (input number) y se parsea al
-  // guardar. Por eso tomamos los campos sin valor de ValorDoble y agregamos
-  // valor: string | number explícito.
-  const [cfgEdit, setCfgEdit] = useState<(Omit<ValorDoble, "valor"> & { valor: string | number }) | null>(null);
-
   // ─── LOAD FUNCTIONS ────────────────────────────────────────────────────────
-  const loadValoresDoble = async () => {
-    const { data } = await db.from("rrhh_valores_doble").select("*").order("puesto");
-    setValoresDoble((data as ValorDoble[]) || []);
-  };
 
   const loadEmpleados = async () => {
     let q = db.from("rrhh_empleados").select("*").order("apellido");
@@ -342,7 +339,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       if (persisted) {
         liq = persisted;
       } else {
-        const vd = valoresDoble.find(v => v.puesto === emp.puesto)?.valor || 0;
+        const vd = calcularValorDoble(emp);
         const calc = calcLiquidacion(emp, nov, vd);
         liq = { ...calc, total_a_pagar: Math.round(calc.total_a_pagar), estado: "pendiente", _novedadId: nov.id, _generated: true };
       }
@@ -487,7 +484,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   // hacen setState async post-fetch — agregarlas a deps causaría re-fetch
   // infinito (se recrean cada render).
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
-  useEffect(() => { loadValoresDoble(); loadEmpleados(); }, []);
+  useEffect(() => { loadEmpleados(); }, []);
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { if (tab === "dashboard") loadDashboard(); }, [tab]);
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
@@ -566,7 +563,11 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   };
 
   // ─── EMPLEADOS ACTIONS ─────────────────────────────────────────────────────
-  const puestos = [...new Set(valoresDoble.map(v => v.puesto))];
+  // Lista de puestos para autocompletar el form de empleado. Se deriva de
+  // los empleados existentes (antes salía de rrhh_valores_doble que se
+  // eliminó). Si Lucas crea un empleado con puesto nuevo, aparecerá en el
+  // dropdown desde la siguiente carga.
+  const puestos = [...new Set(allEmps.map(e => e.puesto).filter(Boolean))].sort();
   const empsFilt = allEmps.filter(e => {
     if (!empMostrarInactivos && e.activo === false) return false;
     if (empFiltLocal && e.local_id !== parseInt(String(empFiltLocal))) return false;
@@ -643,7 +644,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     }, { onConflict: "empleado_id,mes,anio" }).select().single();
 
     if (saved) {
-      const vd = valoresDoble.find(v => v.puesto === emp.puesto)?.valor || 0;
+      const vd = calcularValorDoble(emp);
       const calc = calcLiquidacion(emp, nov, vd);
       await db.from("rrhh_liquidaciones").upsert({
         novedad_id: saved.id, ...calc, estado: "pendiente",
@@ -729,21 +730,6 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     if (tab === "pagos") await loadPagos();
   };
 
-  // ─── CONFIG ACTIONS ────────────────────────────────────────────────────────
-  const guardarValorDoble = async (item: Omit<ValorDoble, "valor"> & { valor: string | number }) => {
-    if (!item.puesto || !item.valor) return;
-    await db.from("rrhh_valores_doble").upsert({ ...item, valor: parseFloat(String(item.valor)), updated_at: new Date().toISOString() }, { onConflict: "puesto" });
-    setCfgEdit(null); loadValoresDoble();
-  };
-  const agregarPuesto = async () => {
-    const puesto = prompt("Nombre del puesto (MAYÚSCULAS):");
-    if (!puesto) return;
-    const valor = prompt("Valor del doble ($):");
-    if (!valor) return;
-    await db.from("rrhh_valores_doble").insert([{ puesto: puesto.toUpperCase(), valor: parseFloat(valor) || 0 }]);
-    loadValoresDoble();
-  };
-
   // ─── DERIVED ───────────────────────────────────────────────────────────────
   const totalPagosPend = pagoData.filter(r => r.liq && r.liq.estado !== "pagado").length;
   const totalGeneral = pagoData.reduce((s, r) => s + (r.liq ? Number(r.liq.total_a_pagar || 0) : 0), 0);
@@ -762,7 +748,6 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
 
       <div className="ph-row">
         <div><div className="ph-title">RRHH</div></div>
-        {esDueno && <button className="btn btn-ghost btn-sm" onClick={() => { loadValoresDoble(); setCfgModal(true); }} style={{fontSize:16,padding:"4px 8px"}}>⚙</button>}
       </div>
 
       <div className="tabs">
@@ -793,6 +778,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
           abrirEmpEditar={abrirEmpEditar}
           guardarEmp={guardarEmp}
           setLegajoId={setLegajoId}
+          puedeVerInactivos={tienePermiso(user, "ver_anulados")}
         />
       )}
 
@@ -808,7 +794,6 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
           novLoading={novLoading}
           novEmps={novEmps}
           novMap={novMap}
-          valoresDoble={valoresDoble}
           updateNov={updateNov}
           confirmarUno={confirmarUno}
           confirmarTodas={confirmarTodas}
@@ -886,35 +871,6 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
         </div>
       )}
 
-      {/* ═══ CONFIG MODAL ═════════════════════════════════════════════════ */}
-      {cfgModal && (
-        <div className="overlay" onClick={() => setCfgModal(false)}>
-          <div className="modal" style={{width:500}} onClick={e => e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Configuración — Valores de dobles</div><button className="close-btn" onClick={() => setCfgModal(false)}>✕</button></div>
-            <div className="modal-body">
-              <table>
-                <thead><tr><th>Puesto</th><th style={{textAlign:"right"}}>Valor doble $</th><th></th></tr></thead>
-                <tbody>{valoresDoble.map(v => (
-                  <tr key={v.id}>
-                    <td style={{fontWeight:500,fontSize:11}}>{v.puesto}</td>
-                    <td style={{textAlign:"right"}}>
-                      {cfgEdit?.id === v.id
-                        ? <input type="number" style={{...inp,width:100}} value={cfgEdit.valor} onChange={e => setCfgEdit({...cfgEdit, valor:e.target.value})} onKeyDown={e => e.key === "Enter" && guardarValorDoble(cfgEdit)} autoFocus />
-                        : <span className="num kpi-acc">{fmt_$(v.valor)}</span>}
-                    </td>
-                    <td style={{textAlign:"right"}}>
-                      {cfgEdit?.id === v.id
-                        ? <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}><button className="btn btn-acc btn-sm" onClick={() => guardarValorDoble(cfgEdit)}>OK</button><button className="btn btn-ghost btn-sm" onClick={() => setCfgEdit(null)}>X</button></div>
-                        : <button className="btn btn-ghost btn-sm" onClick={() => setCfgEdit({...v})}>Editar</button>}
-                    </td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            </div>
-            <div className="modal-ft"><button className="btn btn-acc btn-sm" onClick={agregarPuesto}>+ Agregar puesto</button><div style={{flex:1}}/><button className="btn btn-sec" onClick={() => setCfgModal(false)}>Cerrar</button></div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -989,6 +945,7 @@ interface TabEmpleadosProps {
   abrirEmpEditar: (e: Empleado) => void;
   guardarEmp: () => Promise<void>;
   setLegajoId: React.Dispatch<React.SetStateAction<string | null>>;
+  puedeVerInactivos: boolean;
 }
 
 function TabEmpleados({
@@ -996,7 +953,7 @@ function TabEmpleados({
   empMostrarInactivos, setEmpMostrarInactivos,
   esEnc, locsDisp, locales, empsFilt, vacTomadas, puestos,
   empModal, setEmpModal, empForm, setEmpForm,
-  abrirEmpNuevo, abrirEmpEditar, guardarEmp, setLegajoId,
+  abrirEmpNuevo, abrirEmpEditar, guardarEmp, setLegajoId, puedeVerInactivos,
 }: TabEmpleadosProps) {
   return (
     <>
@@ -1006,10 +963,12 @@ function TabEmpleados({
           {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
         </select>
         <input className="search" placeholder="Buscar..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} style={{width:160}} />
-        <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"var(--muted2)",cursor:"pointer"}}>
-          <input type="checkbox" checked={empMostrarInactivos} onChange={e => setEmpMostrarInactivos(e.target.checked)} />
-          Mostrar inactivos
-        </label>
+        {puedeVerInactivos && (
+          <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"var(--muted2)",cursor:"pointer"}}>
+            <input type="checkbox" checked={empMostrarInactivos} onChange={e => setEmpMostrarInactivos(e.target.checked)} />
+            Mostrar inactivos
+          </label>
+        )}
         <div style={{flex:1}} />
         <button className="btn btn-acc" onClick={abrirEmpNuevo}>+ Nuevo empleado</button>
       </div>
@@ -1090,7 +1049,6 @@ interface TabNovedadesProps {
   novLoading: boolean;
   novEmps: Empleado[];
   novMap: Record<string, NovedadEditable>;
-  valoresDoble: ValorDoble[];
   updateNov: (empId: string, field: keyof NovedadEditable, value: string | number) => void;
   confirmarUno: (emp: Empleado) => Promise<void>;
   confirmarTodas: () => Promise<void>;
@@ -1100,7 +1058,7 @@ interface TabNovedadesProps {
 
 function TabNovedades({
   novMes, setNovMes, novAnio, setNovAnio, novLocal, setNovLocal,
-  locsDisp, novLoading, novEmps, novMap, valoresDoble,
+  locsDisp, novLoading, novEmps, novMap,
   updateNov, confirmarUno, confirmarTodas, editarNov, esDueno,
 }: TabNovedadesProps) {
   const pendientesCount = novEmps.filter(e => (novMap[e.id]?.estado ?? "borrador") !== "confirmado").length;
@@ -1139,7 +1097,7 @@ function TabNovedades({
             <tbody>{novEmps.map(emp => {
               const nov = novMap[emp.id] || {};
               const locked = nov.estado === "confirmado";
-              const vd = valoresDoble.find(v => v.puesto === emp.puesto)?.valor || 0;
+              const vd = calcularValorDoble(emp);
               const preview = calcLiquidacion(emp, nov, vd).total_a_pagar;
               return (
                 <tr key={emp.id}>

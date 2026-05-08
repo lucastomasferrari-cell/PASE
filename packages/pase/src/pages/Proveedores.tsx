@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope } from "../lib/auth";
+import { applyLocalScope, tienePermiso } from "../lib/auth";
 import { useCategorias } from "../lib/useCategorias";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import { calcularSaldosPorProveedor } from "../lib/saldoProveedor";
@@ -89,10 +89,12 @@ export default function Proveedores({ user, localActivo }: ProveedoresProps) {
       <div className="ph-row">
         <div><div className="ph-title">Proveedores</div></div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"var(--muted2)",cursor:"pointer"}}>
-            <input type="checkbox" checked={verInactivos} onChange={e=>setVerInactivos(e.target.checked)} style={{accentColor:"var(--acc)"}}/>
-            Ver inactivos
-          </label>
+          {tienePermiso(user, "ver_anulados") && (
+            <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"var(--muted2)",cursor:"pointer"}}>
+              <input type="checkbox" checked={verInactivos} onChange={e=>setVerInactivos(e.target.checked)} style={{accentColor:"var(--acc)"}}/>
+              Ver inactivos
+            </label>
+          )}
           <input className="search" placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)}/>
           <button className="btn btn-acc" onClick={()=>setModal(true)}>+ Nuevo</button>
         </div>

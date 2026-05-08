@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
-import { ROLES, MODULOS } from "../lib/auth";
+import { ROLES, MODULOS, PERMISOS_EXTRAS } from "../lib/auth";
 import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { CUENTAS } from "../lib/constants";
 import type { Usuario, Local } from "../types";
@@ -314,6 +314,32 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                             <input type="checkbox" checked={checked} disabled={isDueno}
                               onChange={() => !isDueno && toggleModulo(m.slug)} style={{ accentColor:"var(--acc)" }} />
                             <span>{m.icon}</span> {m.label}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Permisos avanzados — flags granulares dentro de pantallas
+                      ya habilitadas. No aparecen como módulos en sidebar. */}
+                  <div style={{ marginTop:16, marginBottom:16 }}>
+                    <label style={{ display:"block", fontSize:9, letterSpacing:"1.5px", textTransform:"uppercase", color:"var(--muted)", marginBottom:8 }}>
+                      Permisos avanzados
+                    </label>
+                    <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                      {PERMISOS_EXTRAS.map(p => {
+                        const checked = isDueno || form.modulos.includes(p.slug);
+                        return (
+                          <label key={p.slug} style={{ display:"flex", alignItems:"flex-start", gap:8, fontSize:11,
+                            color: isDueno ? "var(--muted)" : checked ? "var(--txt)" : "var(--muted2)",
+                            cursor: isDueno ? "default" : "pointer", padding:"6px 8px",
+                            background: checked ? "var(--s3)" : "transparent", borderRadius:"var(--r)" }}>
+                            <input type="checkbox" checked={checked} disabled={isDueno}
+                              onChange={() => !isDueno && toggleModulo(p.slug)} style={{ accentColor:"var(--acc)", marginTop:2 }} />
+                            <div>
+                              <div style={{ fontWeight:500 }}>{p.label}</div>
+                              <div style={{ fontSize:10, color:"var(--muted)", marginTop:2 }}>{p.descripcion}</div>
+                            </div>
                           </label>
                         );
                       })}

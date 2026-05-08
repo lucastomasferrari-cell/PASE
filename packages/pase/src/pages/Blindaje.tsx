@@ -9,7 +9,6 @@ interface BlindajeTipo {
   nombre: string;
   descripcion: string | null;
   orden: number;
-  activo: boolean;
 }
 
 interface BlindajeDoc {
@@ -115,14 +114,44 @@ export default function Blindaje({ user, locales, localActivo }: BlindajeProps) 
     if (tipoModal && tipoModal !== "new" && tipoModal.id) {
       await db.from("blindaje_tipos_documento").update({ nombre: tipoForm.nombre, descripcion: tipoForm.descripcion || null, orden: tipoForm.orden }).eq("id", tipoModal.id);
     } else {
-      await db.from("blindaje_tipos_documento").insert([{ nombre: tipoForm.nombre, descripcion: tipoForm.descripcion || null, orden: tipoForm.orden, activo: true }]);
+      await db.from("blindaje_tipos_documento").insert([{ nombre: tipoForm.nombre, descripcion: tipoForm.descripcion || null, orden: tipoForm.orden }]);
     }
     setTipoModal(null);
     loadTipos();
   };
-  const toggleTipoActivo = async (t: BlindajeTipo) => {
-    await db.from("blindaje_tipos_documento").update({ activo: !t.activo }).eq("id", t.id);
-    loadTipos();
+
+  // Eliminación real (cascade). Cuenta los documentos de TODOS los locales
+  // que cargaron PDFs bajo este tipo y pide confirmación con el número.
+  // Si confirma: borra los archivos del storage, los registros y el tipo.
+  const eliminarTipo = async (t: BlindajeTipo) => {
+    // Contamos contra DB (no contra el state local — que solo trae los del
+    // localActivo via applyLocalScope). Necesitamos la cuenta global.
+    const { count } = await db.from("blindaje_documentos")
+      .select("*", { count: "exact", head: true })
+      .eq("tipo_id", t.id);
+    const n = count || 0;
+    const msg = n > 0
+      ? `"${t.nombre}" tiene ${n} documento${n === 1 ? "" : "s"} cargado${n === 1 ? "" : "s"}. Si continuás se borran TODOS, junto con los PDFs subidos. ¿Seguir?`
+      : `Eliminar el tipo "${t.nombre}"?`;
+    if (!confirm(msg)) return;
+
+    if (n > 0) {
+      // Traemos solo el archivo_url de los documentos para limpiarlos del
+      // storage. La RLS puede limitar lo que vemos pero igual borramos los
+      // que sí podamos — el resto queda huérfano (acceptable, no bloqueante).
+      const { data: docs } = await db.from("blindaje_documentos")
+        .select("id, archivo_url")
+        .eq("tipo_id", t.id);
+      const paths = ((docs || []) as { archivo_url: string | null }[])
+        .map(d => d.archivo_url)
+        .filter((x): x is string => !!x);
+      if (paths.length > 0) {
+        await db.storage.from("blindaje").remove(paths);
+      }
+      await db.from("blindaje_documentos").delete().eq("tipo_id", t.id);
+    }
+    await db.from("blindaje_tipos_documento").delete().eq("id", t.id);
+    loadAll();
   };
 
   // ─── DOCUMENTOS ────────────────────────────────────────────────────────────
@@ -186,7 +215,6 @@ export default function Blindaje({ user, locales, localActivo }: BlindajeProps) 
   // ─── RENDER ────────────────────────────────────────────────────────────────
   if (loading) return <div className="loading">Cargando...</div>;
 
-  const tiposActivos = tipos.filter(t => t.activo);
   const localNombre = locales.find((l: Local) => l.id === parseInt(String(localActivo)))?.nombre || "—";
 
   return (
@@ -198,74 +226,57 @@ export default function Blindaje({ user, locales, localActivo }: BlindajeProps) 
             Gestor de documentos del local — {localActivo ? localNombre : "Sin local seleccionado"}
           </div>
         </div>
+        {esAdmin && <button className="btn btn-acc btn-sm" onClick={abrirTipoNuevo}>+ Agregar tipo</button>}
       </div>
 
       {!localActivo ? (
         <div className="alert alert-info">Seleccioná un local en el sidebar para gestionar sus documentos.</div>
       ) : (
-        <div className="grid3" style={{ marginBottom: 16 }}>
-          {tiposActivos.length === 0
-            ? <div className="empty">No hay tipos de documento configurados</div>
-            : tiposActivos.map(tipo => {
-              const doc = documentos.find(d => d.tipo_id === tipo.id) || null;
-              const estado = getEstado(doc?.vencimiento || null);
-              const color = COLORES[estado];
-              return (
-                <div key={tipo.id} className="panel" style={{ marginBottom: 0 }}>
-                  <div style={{ padding: 14, borderLeft: `3px solid ${color}` }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                      <div>
-                        <div style={{ fontFamily: "'Inter',sans-serif", fontWeight: 500, fontSize: 13, color: "var(--txt)" }}>{tipo.nombre}</div>
-                        {tipo.descripcion && <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 2 }}>{tipo.descripcion}</div>}
-                      </div>
+        <div className="panel">
+          {tipos.length === 0 ? (
+            <div className="empty">No hay tipos de documento configurados.{esAdmin && " Agregá uno con el botón de arriba."}</div>
+          ) : (
+            <table>
+              <thead><tr>
+                <th style={{ width: 60 }}>Orden</th>
+                <th>Nombre</th>
+                <th>Descripción</th>
+                <th style={{ width: 110 }}>Vencimiento</th>
+                <th style={{ width: 100 }}>Estado</th>
+                <th style={{ width: 320 }}></th>
+              </tr></thead>
+              <tbody>{tipos.map(t => {
+                const doc = documentos.find(d => d.tipo_id === t.id) || null;
+                const estado = getEstado(doc?.vencimiento || null);
+                const color = COLORES[estado];
+                return (
+                  <tr key={t.id}>
+                    <td className="mono" style={{ color: "var(--muted2)" }}>{t.orden}</td>
+                    <td style={{ fontWeight: 500 }}>{t.nombre}</td>
+                    <td style={{ fontSize: 11, color: "var(--muted2)" }}>{t.descripcion || "—"}</td>
+                    <td style={{ fontSize: 11 }}>
+                      {doc?.vencimiento
+                        ? <span style={{ color }}>{fmt_d(doc.vencimiento)}</span>
+                        : <span style={{ color: "var(--muted)" }}>—</span>}
+                    </td>
+                    <td>
                       <span className="badge" style={{ background: "transparent", color, border: `1px solid ${color}66`, fontSize: 8 }}>
                         {LABELS[estado]}
                       </span>
-                    </div>
-                    <div style={{ fontSize: 11, color: "var(--muted2)", marginBottom: 6 }}>
-                      {doc?.vencimiento ? <>Vence: <strong style={{ color }}>{fmt_d(doc.vencimiento)}</strong></> : "Sin fecha de vencimiento"}
-                    </div>
-                    {doc?.notas && <div style={{ fontSize: 10, color: "var(--muted2)", marginBottom: 8 }}>{doc.notas}</div>}
-                    <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                      <button className="btn btn-acc btn-sm" onClick={() => abrirDoc(tipo, doc)}>
-                        {doc ? "Actualizar" : "Cargar"}
-                      </button>
-                      {doc?.archivo_url && <button className="btn btn-ghost btn-sm" onClick={() => verArchivo(doc)}>Ver archivo</button>}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-        </div>
-      )}
-
-      {esAdmin && (
-        <div className="panel">
-          <div className="panel-hd">
-            <span className="panel-title">Tipos de documento</span>
-            <button className="btn btn-acc btn-sm" onClick={abrirTipoNuevo}>+ Agregar tipo</button>
-          </div>
-          {tipos.length === 0 ? <div className="empty">Sin tipos cargados</div> : (
-            <table>
-              <thead><tr><th>Orden</th><th>Nombre</th><th>Descripción</th><th>Estado</th><th></th></tr></thead>
-              <tbody>{tipos.map(t => (
-                <tr key={t.id} style={{ opacity: t.activo ? 1 : 0.4 }}>
-                  <td className="mono" style={{ color: "var(--muted2)" }}>{t.orden}</td>
-                  <td style={{ fontWeight: 500 }}>{t.nombre}</td>
-                  <td style={{ fontSize: 11, color: "var(--muted2)" }}>{t.descripcion || "—"}</td>
-                  <td>
-                    <span className={`badge ${t.activo ? "b-success" : "b-muted"}`} style={{ fontSize: 8 }}>
-                      {t.activo ? "Activo" : "Inactivo"}
-                    </span>
-                  </td>
-                  <td>
-                    <div style={{ display: "flex", gap: 4 }}>
-                      <button className="btn btn-ghost btn-sm" onClick={() => abrirTipoEditar(t)}>Editar</button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => toggleTipoActivo(t)}>{t.activo ? "Desactivar" : "Activar"}</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}</tbody>
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                        <button className="btn btn-acc btn-sm" onClick={() => abrirDoc(t, doc)}>
+                          {doc ? "Actualizar" : "Subir"}
+                        </button>
+                        {doc?.archivo_url && <button className="btn btn-ghost btn-sm" onClick={() => verArchivo(doc)}>Ver</button>}
+                        {esAdmin && <button className="btn btn-ghost btn-sm" onClick={() => abrirTipoEditar(t)}>Editar</button>}
+                        {esAdmin && <button className="btn btn-danger btn-sm" onClick={() => eliminarTipo(t)}>Eliminar</button>}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}</tbody>
             </table>
           )}
         </div>
