@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasVisibles } from "../lib/auth";
 import { CUENTAS } from "../lib/constants";
-import { toISO, today, fmt_$ } from "../lib/utils";
+import { toISO, today, fmt_$, estadoFactura } from "../lib/utils";
 import { computeSaldoMP, type MovParaSaldo } from "../lib/saldoMP";
 import { calcularSaldosPorProveedor } from "../lib/saldoProveedor";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
@@ -158,7 +158,7 @@ export default function Dashboard({ user, localActivo }: DashboardProps) {
     setStats({
       saldos: saldosObj,
       deuda: deudaTotal,
-      vencidas: fAct.filter(f => f.estado === "vencida").length,
+      vencidas: fAct.filter(f => estadoFactura(f) === "vencida").length,
       ventasHoy: ventasHoyArr.filter(v => matchLocal(v.local_id)).reduce((s, v) => s + (v.monto || 0), 0),
       remPend: remitosArr.filter(r => r.estado === "sin_factura" && matchLocal(r.local_id)).length,
       blindajeVencidos, blindajePorVencer,

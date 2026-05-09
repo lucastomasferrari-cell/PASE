@@ -5,7 +5,7 @@ import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { CUENTAS, UNIDADES } from "../lib/constants";
-import { toISO, today, fmt_d, fmt_$, genId, parseMonto } from "../lib/utils";
+import { toISO, today, fmt_d, fmt_$, genId, parseMonto, estadoFactura } from "../lib/utils";
 import LectorFacturasIA from "./LectorFacturasIA";
 import { CurrencyInput } from "../components/CurrencyInput";
 import { Combobox } from "../components/Combobox";
@@ -221,7 +221,10 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       // pasa todo (factura o NC)
     } else {
       if (isNC) return false;
-      if (f.estado !== pillEstado) return false;
+      // estadoFactura() deriva "vencida" cuando estado=pendiente y la fecha
+      // de vencimiento ya pasó. Permite filtrar correctamente sin depender
+      // de un trigger SQL que mantenga el campo estado actualizado.
+      if (estadoFactura(f) !== pillEstado) return false;
     }
     if (localActivo && String(f.local_id) !== String(localActivo)) return false;
     if (provFiltro && String(f.prov_id) !== String(provFiltro)) return false;
@@ -475,8 +478,8 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
           (f.tipo || "factura") === "factura" &&
           (f.estado === "pendiente" || f.estado === "vencida"),
         );
-        const pendientes = deuda.filter(f => f.estado === "pendiente");
-        const vencidas = deuda.filter(f => f.estado === "vencida");
+        const pendientes = deuda.filter(f => estadoFactura(f) === "pendiente");
+        const vencidas = deuda.filter(f => estadoFactura(f) === "vencida");
         const totalPend = pendientes.reduce((s, f) => s + Number(f.total || 0), 0);
         const totalVenc = vencidas.reduce((s, f) => s + Number(f.total || 0), 0);
         const totalAll = totalPend + totalVenc;
@@ -597,12 +600,12 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                   </td>
                   <td>
                     {f.venc
-                      ? <span style={{ fontSize: 11, color: f.estado === "vencida" ? "var(--acc)" : "var(--muted2)" }}>{fmt_d(f.venc)}</span>
+                      ? <span style={{ fontSize: 11, color: estadoFactura(f) === "vencida" ? "var(--danger)" : "var(--muted2)" }}>{fmt_d(f.venc)}</span>
                       : <span style={{ fontSize: 11, color: "var(--muted)" }}>—</span>}
                   </td>
                   <td><span className="badge b-muted">{f.cat || "—"}</span></td>
                   <td style={{ textAlign: "right" }}><span className="num" style={isNC ? { color: "var(--info)" } : undefined}>{fmt_$(f.total)}</span></td>
-                  <td>{isNC ? <span className="badge b-info">NC disponible</span> : estadoDot(f.estado)}</td>
+                  <td>{isNC ? <span className="badge b-info">NC disponible</span> : estadoDot(estadoFactura(f))}</td>
                   <td>
                     <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
                       <button className="btn btn-ghost btn-sm" onClick={() => setVerModal(f)}>Ver</button>

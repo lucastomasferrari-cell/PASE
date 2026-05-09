@@ -30,6 +30,21 @@ export const parseMonto = (v: unknown): number => {
 
 export const toISO = (d: Date): string => d.toISOString().split("T")[0]!;
 export const today = new Date();
+
+// Estado efectivo de una factura — deriva "vencida" al vuelo cuando el
+// estado guardado es "pendiente" y la fecha de vencimiento ya pasó.
+// Antes los reportes y filtros hacían `factura.estado === 'vencida'` y
+// dependían de un trigger SQL que actualice ese campo, pero no existe →
+// facturas pendientes con vencimiento pasado se mostraban como
+// "pendientes" en vez de "vencidas". Esta función calcula sin necesidad
+// de mantener estado en DB.
+export const estadoFactura = (
+  f: { estado: string; venc?: string | null },
+  hoyStr: string = toISO(today)
+): string => {
+  if (f.estado === "pendiente" && f.venc && f.venc < hoyStr) return "vencida";
+  return f.estado;
+};
 export const fmt_d = (d: string | null | undefined) => d ? new Date(d+"T12:00:00").toLocaleDateString("es-AR") : "—";
 // Siempre muestra 2 decimales (ej: $ 239.889,56 o $ 1.000,00). Antes
 // usaba maximumFractionDigits:0 que truncaba y escondía los centavos

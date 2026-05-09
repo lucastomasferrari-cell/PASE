@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope, tienePermiso } from "../lib/auth";
 import { useCategorias } from "../lib/useCategorias";
-import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
+import { toISO, today, fmt_d, fmt_$, estadoFactura } from "../lib/utils";
 import { calcularSaldosPorProveedor } from "../lib/saldoProveedor";
 import type { Usuario, Local } from "../types/auth";
 import type { Proveedor, Factura, PagoFactura } from "../types/finanzas";
@@ -146,8 +146,8 @@ export default function Proveedores({ user, localActivo }: ProveedoresProps) {
         <div className="modal-hd"><div className="modal-title">{ctaModal.nombre} — Estado de Cuenta</div><button className="close-btn" onClick={()=>setCtaModal(null)}>✕</button></div>
         <div className="modal-body">
           {ctaLoading?<div className="loading">Cargando...</div>:(()=>{
-            const pendientes=ctaFacts.filter(f=>f.estado==="pendiente"&&(f.tipo||"factura")==="factura");
-            const vencidas=ctaFacts.filter(f=>f.estado==="vencida"&&(f.tipo||"factura")==="factura");
+            const pendientes=ctaFacts.filter(f=>estadoFactura(f)==="pendiente"&&(f.tipo||"factura")==="factura");
+            const vencidas=ctaFacts.filter(f=>estadoFactura(f)==="vencida"&&(f.tipo||"factura")==="factura");
             const ncs=ctaFacts.filter(f=>(f.tipo||"factura")==="nota_credito");
             const aPagar=pendientes.reduce((s,f)=>s+(f.total||0),0)+vencidas.reduce((s,f)=>s+(f.total||0),0);
             const totalVencido=vencidas.reduce((s,f)=>s+(f.total||0),0);
@@ -183,9 +183,11 @@ export default function Proveedores({ user, localActivo }: ProveedoresProps) {
               {(pendientes.length>0||vencidas.length>0)&&(<div className="panel" style={{marginBottom:12}}>
                 <div className="panel-hd"><span className="panel-title">Facturas Impagas</span></div>
                 <table><thead><tr><th>Nº Factura</th><th>Fecha</th><th>Vencimiento</th><th style={{textAlign:"right"}}>Total</th><th>Estado</th></tr></thead>
-                <tbody>{[...vencidas,...pendientes].map(f=>(
-                  <tr key={f.id}><td className="mono">{f.nro}</td><td className="mono">{fmt_d(f.fecha)}</td><td className="mono" style={{color:f.estado==="vencida"?"var(--danger)":"var(--muted2)"}}>{fmt_d(f.venc)}</td><td style={{textAlign:"right"}}><span className="num kpi-warn">{fmt_$(f.total)}</span></td><td><span className={`badge ${f.estado==="vencida"?"b-danger":"b-warn"}`}>{f.estado==="vencida"?"Vencida":"Pendiente"}</span></td></tr>
-                ))}</tbody></table>
+                <tbody>{[...vencidas,...pendientes].map(f=>{
+                  const efectivo=estadoFactura(f);
+                  const esV=efectivo==="vencida";
+                  return <tr key={f.id}><td className="mono">{f.nro}</td><td className="mono">{fmt_d(f.fecha)}</td><td className="mono" style={{color:esV?"var(--danger)":"var(--muted2)"}}>{fmt_d(f.venc)}</td><td style={{textAlign:"right"}}><span className="num kpi-warn">{fmt_$(f.total)}</span></td><td><span className={`badge ${esV?"b-danger":"b-warn"}`}>{esV?"Vencida":"Pendiente"}</span></td></tr>;
+                })}</tbody></table>
               </div>)}
               {/* Bug #32: las NC del proveedor también se listan acá. El estado
                   "Disponible" es estimado: hoy el sistema no tiene flow de
