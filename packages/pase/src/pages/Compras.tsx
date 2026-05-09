@@ -570,7 +570,8 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
             <thead><tr>
               <th>Proveedor · Nº</th>
               {!localActivo && <th>Local</th>}
-              <th>Fecha · Vence</th>
+              <th>Fecha</th>
+              <th>Vencimiento</th>
               <th>Categoría</th>
               <th style={{ textAlign: "right" }}>Total</th>
               <th>Estado</th>
@@ -592,10 +593,12 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                     <td><span className="badge b-muted" style={{ fontSize: 10 }}>{locales.find((l: Local) => l.id === f.local_id)?.nombre || "—"}</span></td>
                   )}
                   <td>
-                    <div style={{ fontSize: 11, color: "var(--txt)" }}>{fmt_d(f.fecha)}</div>
-                    <div style={{ fontSize: 10, color: f.estado === "vencida" ? "var(--acc)" : "var(--muted2)", marginTop: 1 }}>
-                      {f.venc ? "Vence " + fmt_d(f.venc) : "—"}
-                    </div>
+                    <span style={{ fontSize: 11, color: "var(--txt)" }}>{fmt_d(f.fecha)}</span>
+                  </td>
+                  <td>
+                    {f.venc
+                      ? <span style={{ fontSize: 11, color: f.estado === "vencida" ? "var(--acc)" : "var(--muted2)" }}>{fmt_d(f.venc)}</span>
+                      : <span style={{ fontSize: 11, color: "var(--muted)" }}>—</span>}
                   </td>
                   <td><span className="badge b-muted">{f.cat || "—"}</span></td>
                   <td style={{ textAlign: "right" }}><span className="num" style={isNC ? { color: "var(--info)" } : undefined}>{fmt_$(f.total)}</span></td>
