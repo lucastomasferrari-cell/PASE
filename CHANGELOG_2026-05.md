@@ -203,6 +203,61 @@ Ahora: aplicación parcial trazable, NC consumida queda inhabilitada.
 
 ---
 
+## 2026-05-09 a 2026-05-11
+
+### `2388fa3` — test(e2e): 6 mutantes + helper createDuenoClient + smoke/mutante project split
+
+Stage 3 del plan E2E: 6 mutant specs cubriendo ventas_efectivo, gastos, facturas_cargar, facturas_pagar, sueldo_pagar y conciliacion_mp_egreso. Patrón establecido (`Local Prueba 2` + `Proveedor Prueba` + sentinel numérico distintivo + DB-only asserts estrictas + cleanup híbrido). Playwright separa proyectos: `smoke` paralelo (53 tests) y `mutante` serial (`--workers=1`, 6 tests). Helper `createDuenoClient` en `tests/helpers/supabaseClient.ts`.
+
+---
+
+### `435f664` — perf(bundle): F5 lazy-load 18 páginas + Suspense en App.tsx
+
+F5 del plan sunny-creek. 21 imports eager en `App.tsx` migrados a `lazy()` + `<Suspense>`. Login queda eager (entry point). Bundle inicial: **1130 kB → 405 kB (-64%)**. LineChart de recharts (345 kB) se separa automático a chunk on-demand. Gate del 15% del plan pasa con margen.
+
+---
+
+### `7f53947` — fix(onboarding): refactor crear_tenant a endpoint serverless
+
+La RPC original `crear_tenant` (migration 202604281205) crasheaba con `function digest(text, unknown) does not exist` al intentar onboardear el primer tenant nuevo. Dos bugs combinados:
+1. pgcrypto está en schema `extensions` pero la RPC tiene `SET search_path = public`.
+2. Aún arreglando search_path, el hash quedaba en `usuarios.password` legacy (Supabase Auth tomó su lugar en commit `3805ea7`). El dueño creado no podría loguear.
+
+**Solución:** endpoint serverless `api/crear-tenant.js` con `SUPABASE_SERVICE_KEY` que (1) valida JWT del caller, (2) verifica que es superadmin, (3) crea `auth.user` via `auth.admin.createUser`, (4) llama RPC nueva `crear_tenant_v2` con el `p_auth_id` resultante, (5) hace rollback (`deleteUser`) si la RPC falla.
+
+**Migration aplicada:** sí (`202605102318_rpc_crear_tenant_v2.sql`). La RPC vieja queda con `COMMENT 'DEPRECATED'`.
+
+---
+
+### `781c01d` — feat(tesoreria): F4 filtro fecha + paginación cursor + C6 useDebouncedValue
+
+Bug reportado por Lucas: "En Tesorería no hay filtro de fechas y no sé si muestra todos los movimientos históricos o qué". Código tenía `.limit(80)` sin filtro fecha, mostrando los 80 movs más recientes — rango efectivo dependía del volumen del local (de días a semanas, sin claridad).
+
+**Cambios en `Caja.tsx`:** 2 inputs date (desde/hasta) en panel header, default últimos 90 días. `queryMovimientos(offset, limit)` reutilizable con `.gte/.lte/.range`. `load()` primera página (80 filas). `loadMore()` concatena siguiente bloque. Contador "Mostrando X de Y+". Botón "Cargar más". Saldos NO se paginan ni filtran (son estado actual).
+
+**Helper nuevo `src/lib/useDebouncedValue.ts`:** convención C6 del plan sunny-creek. Hook genérico `useDebouncedValue<T>(value, delayMs=300)` — evita flood de queries por tecla en inputs de búsqueda/filtro.
+
+---
+
+### `33080aa` — chore(api): eliminar 3 endpoints serverless one-shot legacy
+
+**Root cause del incidente de deploy:** Vercel plan Hobby tiene límite hard de 12 serverless functions por deployment. El commit `7f53947` introdujo `api/crear-tenant.js` como la función #13. Build pasaba OK en logs pero "Deploying outputs..." fallaba con `state=ERROR` sin mensaje claro. Los deploys de `7f53947` y `781c01d` quedaron en ERROR, dejando prod corriendo `435f664` sin F4 ni el refactor de onboarding.
+
+**Eliminadas (3 one-shots ya cumplidos, sin uso en `src/`):**
+- `api/auth-hash-passwords.js` — hasheaba passwords legacy (pre-Auth).
+- `api/auth-migrate-all.js` — creaba auth.users masivamente.
+- `api/auth-setup.js` — bootstrap one-shot del dueño.
+
+Total: 13 → 10 functions. 2 slots libres para futuras additions. Recuperables desde git history si en algún momento se necesita repetir el bootstrap.
+
+---
+
+### `71572a0` — docs(claude.md): registrar límite de 12 functions del plan Vercel Hobby
+
+Convención agregada a `CLAUDE.md` para que el incidente no se repita. Incluye comando de conteo (`ls api/*.js | grep -v "^_" | grep -v "\.test\.js$" | wc -l`) y síntoma específico (`state=ERROR` justo después de "Deploying outputs..." sin error claro en build logs).
+
+---
+
 ## Decisiones de producto durables (NO en commits, pero relevantes)
 
 ### Compras vs Gastos

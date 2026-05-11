@@ -2,7 +2,40 @@
 
 **Fecha:** 2026-04-28
 **Branch:** main
-**Status:** Diseño completo. Esperando OK de Lucas para arrancar Etapa 1.
+**Status original:** Diseño completo. Esperando OK de Lucas para arrancar Etapa 1.
+
+---
+
+## ⚠ ESTADO REAL al 2026-05-11
+
+El plan se ejecutó. Las migraciones 202604281200-202604281209 implementaron
+el grueso del multi-tenant (tenant_id en todas las tablas + RLS dual +
+auth_tenant_id() + función auth_es_superadmin()). El 2026-05-10/11 se
+completó el onboarding via wizard + endpoint serverless.
+
+### Estado de las 10 decisiones de la sección 9
+
+| # | Decisión | Estado | Detalle |
+|---|---|---|---|
+| 1 | Slug tenant Neko | ✅ resuelto | `neko` en `tenants.slug` |
+| 2 | Email superadmin | ✅ resuelto | `lucastomasferrari@gmail.com` |
+| 3 | Catálogos per-tenant | ✅ implementado | tenant_id en proveedores, insumos, recetas, config_categorias, medios_cobro, rrhh_valores_doble |
+| 4 | Etapa 3 doble policy | ✅ swap completo | RLS dual `tenant_id = auth_tenant_id() AND <scope local>` activo |
+| 5 | Storage migration | ⏸ deuda controlada | 37 archivos legacy sin prefix UUID — policy dual-mode los cubre. Migration UUID-prefix pendiente para Sprint B (COMANDA pre-launch) |
+| 6 | Roles permitidos | ✅ resuelto | superadmin/dueno/admin/encargado/compras/cajero |
+| 7 | Plan en tenants | ✅ resuelto | columna `plan` con 'trial'/'basic'/'pro' (sin billing real aún) |
+| 8 | Onboarding wizard | ✅ implementado | `OnboardingTenant.tsx` + endpoint `/api/crear-tenant` (refactor 2026-05-11 commit 7f53947 — la RPC vieja `crear_tenant` tenía bug `digest()` por search_path) |
+| 9 | `tenant_admins` vs `usuarios.rol` | ✅ coexisten | Ambas tablas, RPC `crear_tenant_v2` inserta en las dos. RLS usa `usuarios.tenant_id` |
+| 10 | Branch separado vs main | ✅ resuelto | Todo fue directo a main (workflow estándar) |
+
+### Pendientes verdaderos al 2026-05-11
+
+- **Smoke test manual del wizard** end-to-end por Lucas (crear tenant de prueba, loguear como dueño nuevo, verificar aislamiento contra Neko).
+- **`SUPERADMIN_PASSWORD`** seteado en `packages/pase/.env.local` para destrabar el test mutante automático `onboarding_tenant_mutante.spec.ts`.
+- **Storage migration a UUID-prefix paths** — diferido a Sprint B (no urgente, cubierto por policy dual-mode).
+- **Activación de Leaked Password Protection** en Supabase — requiere SMTP configurado primero (deuda del Sprint A original, no del MVP).
+
+El resto del documento queda como artefacto histórico del diseño.
 
 ---
 

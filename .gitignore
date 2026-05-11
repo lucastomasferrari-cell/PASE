@@ -21,6 +21,18 @@ dist-ssr
 # PASE-specific working files
 EXPORT_CONTEXTO_CHAT.md
 
+# Test outputs (Playwright)
+packages/pase/playwright-report/
+packages/pase/screenshots/
+packages/pase/test-results/
+
+# One-off audit / migration helper scripts (personal, no compartidos)
+packages/pase/scripts/audit_*.cjs
+packages/pase/scripts/audit-*.mjs
+packages/pase/scripts/apply_mig_*.cjs
+packages/pase/scripts/test_*.cjs
+packages/pase/scripts/verify_*.cjs
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
