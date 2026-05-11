@@ -1,31 +1,49 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { db } from "./lib/supabase";
 import { getPermisos, tienePermiso, AuthProvider, necesitaElegirLocal } from "./lib/auth";
 import type { Usuario, UsuarioRow, Local, Tenant } from "./types";
 import { Sidebar, css } from "./components/Layout";
 import Login from "./pages/Login";
-import ForcePasswordChange from "./pages/ForcePasswordChange";
-import SeleccionarLocalModal from "./components/SeleccionarLocalModal";
-import Dashboard from "./pages/Dashboard";
-import Ventas from "./pages/Ventas";
-import Compras from "./pages/Compras";
-import Caja from "./pages/Caja";
-import EERR from "./pages/EERR";
-import Contador from "./pages/Contador";
-import ImportarMaxirest from "./pages/ImportarMaxirest";
-import Gastos from "./pages/Gastos";
-import Proveedores from "./pages/Proveedores";
-import Usuarios from "./pages/Usuarios";
-import LectorFacturasIA from "./pages/LectorFacturasIA";
-import ConciliacionMP from "./pages/ConciliacionMP";
-// Cashflow y Cierre están "ocultos" del sidebar (Lucas, 2026-05-08): sus
-// cases en el switch redirigen a Dashboard/EERR respectivamente. Los imports
-// quedan como código muerto — reactivar agregando back el import + el item
-// del nav cuando corresponda.
-import Blindaje from "./pages/Blindaje";
-import RRHHPage from "./pages/RRHH";
-import Configuracion from "./pages/Configuracion";
-import Tenants from "./pages/Tenants";
+
+// F5 (plan sunny-creek): code-splitting por página. Login queda eager porque
+// es entry point para users sin sesión (no querés latencia extra ahí). El
+// resto se lazy-loadea — el switch de renderSection() solo monta una página
+// a la vez, así que el costo se distribuye sobre las navegaciones que el
+// usuario realmente hace. Los dos early-returns (ForcePasswordChange,
+// SeleccionarLocalModal) son flujos raros (primer login con password temp,
+// encargado con >1 local) — lazy ahí libera ~5-10kB que casi nadie carga.
+// Cashflow y Cierre quedan fuera del lazy: sus cases del switch redirigen
+// a Dashboard/EERR respectivamente (oculos del sidebar 2026-05-08).
+const ForcePasswordChange = lazy(() => import("./pages/ForcePasswordChange"));
+const SeleccionarLocalModal = lazy(() => import("./components/SeleccionarLocalModal"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Ventas = lazy(() => import("./pages/Ventas"));
+const Compras = lazy(() => import("./pages/Compras"));
+const Caja = lazy(() => import("./pages/Caja"));
+const EERR = lazy(() => import("./pages/EERR"));
+const Contador = lazy(() => import("./pages/Contador"));
+const ImportarMaxirest = lazy(() => import("./pages/ImportarMaxirest"));
+const Gastos = lazy(() => import("./pages/Gastos"));
+const Proveedores = lazy(() => import("./pages/Proveedores"));
+const Usuarios = lazy(() => import("./pages/Usuarios"));
+const LectorFacturasIA = lazy(() => import("./pages/LectorFacturasIA"));
+const ConciliacionMP = lazy(() => import("./pages/ConciliacionMP"));
+const Blindaje = lazy(() => import("./pages/Blindaje"));
+const RRHHPage = lazy(() => import("./pages/RRHH"));
+const Configuracion = lazy(() => import("./pages/Configuracion"));
+const Tenants = lazy(() => import("./pages/Tenants"));
+
+// Loader full-page (mismo look-and-feel que authLoading) para los
+// early-returns lazy.
+const FullPageLoader = () => (
+  <div className="login-wrap">
+    <div className="login-bg"/>
+    <div className="login-card" style={{textAlign:"center",padding:40}}>Cargando...</div>
+  </div>
+);
+// Loader inline para el switch de renderSection() — la sidebar ya está
+// montada, solo cargamos la página en el área principal.
+const PageLoader = () => <div className="loading">Cargando...</div>;
 
 const TENANT_OVERRIDE_KEY = "pase_tenant_override";
 
@@ -316,17 +334,17 @@ export default function App() {
 
   if(!user) return <><style>{css}</style><Login onLogin={login}/></>;
 
-  if (user.password_temporal) return <><style>{css}</style><ForcePasswordChange user={user} onDone={() => {
+  if (user.password_temporal) return <><style>{css}</style><Suspense fallback={<FullPageLoader/>}><ForcePasswordChange user={user} onDone={() => {
     if (!user) return;
     const updated: Usuario = { ...user, password_temporal: false };
     setUser(updated);
     sessionStorage.setItem("pase_user", JSON.stringify(updated));
-  }}/></>;
+  }}/></Suspense></>;
 
-  if (showLocalModal) return <><style>{css}</style><SeleccionarLocalModal user={user} locales={locales} onConfirm={(id) => {
+  if (showLocalModal) return <><style>{css}</style><Suspense fallback={<FullPageLoader/>}><SeleccionarLocalModal user={user} locales={locales} onConfirm={(id) => {
     setLocalActivo(id);
     setShowLocalModal(false);
-  }}/></>;
+  }}/></Suspense></>;
 
   return (
     <AuthProvider value={{ user, refreshPermisos }}>
@@ -368,7 +386,7 @@ export default function App() {
               mover la guard navigation a useEffect que reaccione a cambios de
               `section`. Refactor arquitectural — PR dedicado. */}
           {/* eslint-disable-next-line react-hooks/refs */}
-          {renderSection()}
+          <Suspense fallback={<PageLoader/>}>{renderSection()}</Suspense>
         </main>
       </div>
     </AuthProvider>
