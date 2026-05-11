@@ -44,11 +44,18 @@ interface MpMovimiento {
   justificativo_id?: string | null;
   justificativo_at?: string | null;
   justificativo_por?: number | null;
+  // Migration 202605111900: "ignorado" marca egresos que no requieren
+  // conciliación (reverso, duplicado, etc.). Excluidos del KPI sin-justificar.
+  ignorado?: boolean | null;
+  ignorado_motivo?: string | null;
+  ignorado_at?: string | null;
+  ignorado_por?: number | null;
 }
 
 type JustifTipo =
   | 'factura' | 'remito' | 'gasto' | 'egreso_manual'
-  | 'movimiento_interno' | 'comision_mp' | 'retiro_automatico';
+  | 'movimiento_interno' | 'comision_mp' | 'retiro_automatico'
+  | 'multi_factura';
 
 // Row de mp_credenciales con join 1:1 a locales(nombre). En supabase el
 // nested-select de FK 1-1 devuelve el objeto plano (o null si el FK está
@@ -172,7 +179,18 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   const [nuevoRemitoForm,setNuevoRemitoForm]=useState({prov_id:"",nro:"",fecha:"",cat:"",detalle:""});
   const [movInternoForm,setMovInternoForm]=useState({destino:"",detalle:""});
   // vinculoSel: id seleccionado en el dropdown. "__NUEVO__" activa form inline.
+  // "__MULTI__" activa el modo multi-factura.
   const [vinculoSel,setVinculoSel]=useState("");
+  // Multi-factura (Lucas 2026-05-11): array de {factura_id, monto_aplicado}.
+  // Solo se usa cuando conciliarTab='factura' y vinculoSel='__MULTI__'.
+  const [lineasMulti,setLineasMulti]=useState<{factura_id:string,monto:string}[]>([]);
+  // Idempotency key (convención C1): se regenera al abrir el modal, evita
+  // duplicar conciliación si el operador hace doble-click en Confirmar.
+  const [idempKey,setIdempKey]=useState<string>(() => crypto.randomUUID());
+  // Input para el motivo de "Ignorar" en el modal.
+  const [motivoIgnorar,setMotivoIgnorar]=useState("");
+  // Toggle del filtro "ver ignorados" (default: ocultos).
+  const [mostrarIgnorados,setMostrarIgnorados]=useState(false);
 
   const load=async()=>{
     setLoading(true);
@@ -483,7 +501,8 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
   ).sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||'')));
 
   // Subconjunto sin justificar — alimenta KPI header + filtro del tab.
-  const egresosPendientesList = egresosManuales.filter(m => !m.justificativo_tipo);
+  // Excluye ignorados: los marcados a propósito no cuentan como "pendientes".
+  const egresosPendientesList = egresosManuales.filter(m => !m.justificativo_tipo && !m.ignorado);
   const pendientesCount = egresosPendientesList.length;
 
   // ─── Header consolidado ────────────────────────────────────────────────
@@ -527,6 +546,59 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
     setNuevoRemitoForm({prov_id:"",nro:"",fecha:"",cat:"",detalle:""});
     setMovInternoForm({destino:"",detalle:""});
     setConciliarTab("gasto");
+    setLineasMulti([]);
+    setMotivoIgnorar("");
+    // Nuevo idempotency_key para el próximo modal — si el operador reabre
+    // a conciliar otro mp_mov, no debe reusar la key del anterior.
+    setIdempKey(crypto.randomUUID());
+  };
+
+  // ── Multi-factura: pagar varias facturas con un solo MP. La suma puede
+  // diferir del monto MP (Lucas pidió no bloquear): la UI muestra el delta.
+  const justificarConMultiplesFacturas=async()=>{
+    if(!conciliarModal)return;
+    const lineasValidas=lineasMulti
+      .filter(l=>l.factura_id && parseFloat(l.monto)>0)
+      .map(l=>({factura_id:l.factura_id, monto_aplicado:parseFloat(l.monto)}));
+    if(lineasValidas.length===0){
+      showToast("err","Tenés que elegir al menos una factura con monto > 0");
+      return;
+    }
+    setConciliando(true);
+    const {error}=await db.rpc("fn_conciliar_mp_con_facturas",{
+      p_mp_mov_id:conciliarModal.id,
+      p_lineas:lineasValidas,
+      p_idempotency_key:idempKey,
+    });
+    setConciliando(false);
+    if(error){showToast("err","No se pudo conciliar: "+error.message);return;}
+    showToast("ok",`Conciliado contra ${lineasValidas.length} factura${lineasValidas.length===1?"":"s"}`);
+    cerrarConciliar(); load();
+  };
+
+  // ── Ignorar: marca el egreso como "no requiere conciliación". El KPI lo
+  // excluye, pero el rastro queda con motivo + usuario + timestamp.
+  const ignorarMP=async()=>{
+    if(!conciliarModal)return;
+    setConciliando(true);
+    const {error}=await db.rpc("fn_ignorar_mp",{
+      p_mp_mov_id:conciliarModal.id,
+      p_motivo:motivoIgnorar.trim()||null,
+    });
+    setConciliando(false);
+    if(error){showToast("err","No se pudo ignorar: "+error.message);return;}
+    showToast("ok","Egreso ignorado");
+    cerrarConciliar(); load();
+  };
+
+  // ── Des-ignorar: revertir un "ignorado" (típicamente porque fue error).
+  const designorarMP=async(mp_mov_id:string)=>{
+    setConciliando(true);
+    const {error}=await db.rpc("fn_designorar_mp",{p_mp_mov_id:mp_mov_id});
+    setConciliando(false);
+    if(error){showToast("err","No se pudo des-ignorar: "+error.message);return;}
+    showToast("ok","Egreso vuelto a pendiente");
+    load();
   };
 
   const justificarConExistente=async(tipo:"factura"|"remito"|"gasto",justifId:string)=>{
@@ -724,19 +796,32 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
         // Cada fila tiene botón "Conciliar" si justificativo_tipo es null.
         // Si está justificado, badge con tipo en la última columna.
         (()=>{
-          const lista = filtroSinJustif ? egresosManuales.filter(m=>!m.justificativo_tipo) : egresosManuales;
+          // Filtros: filtroSinJustif (solo pendientes) + mostrarIgnorados
+          // (ocultos por default — el operador puede destildar para verlos
+          // y eventualmente des-ignorar si fue un error).
+          const baseLista = filtroSinJustif ? egresosManuales.filter(m=>!m.justificativo_tipo && !m.ignorado) : egresosManuales;
+          const lista = mostrarIgnorados ? baseLista : baseLista.filter(m=>!m.ignorado);
           const totalLista = lista.reduce((s,m)=>s+Math.abs(Number(m.monto)||0),0);
+          const cantIgnorados = egresosManuales.filter(m=>m.ignorado).length;
           return (
             <div className="panel">
-              <div className="panel-hd" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+              <div className="panel-hd" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
                 <div style={{display:"flex",flexDirection:"column",gap:2}}>
                   <span className="panel-title">Egresos — {lista.length} {lista.length===1?"egreso":"egresos"}{filtroSinJustif?" sin justificar":""}</span>
                   <span style={{fontSize:11,color:"var(--muted2)"}}>Transferencias y pagos del período · monto neto</span>
                 </div>
-                <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,cursor:"pointer",userSelect:"none",color:"var(--muted2)"}}>
-                  <input type="checkbox" checked={filtroSinJustif} onChange={e=>setFiltroSinJustif(e.target.checked)} style={{cursor:"pointer"}}/>
-                  Solo sin justificar
-                </label>
+                <div style={{display:"flex",gap:14,alignItems:"center",flexWrap:"wrap"}}>
+                  <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,cursor:"pointer",userSelect:"none",color:"var(--muted2)"}}>
+                    <input type="checkbox" checked={filtroSinJustif} onChange={e=>setFiltroSinJustif(e.target.checked)} style={{cursor:"pointer"}}/>
+                    Solo sin justificar
+                  </label>
+                  {cantIgnorados>0&&(
+                    <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,cursor:"pointer",userSelect:"none",color:"var(--muted2)"}}>
+                      <input type="checkbox" checked={mostrarIgnorados} onChange={e=>setMostrarIgnorados(e.target.checked)} style={{cursor:"pointer"}}/>
+                      Mostrar ignorados ({cantIgnorados})
+                    </label>
+                  )}
+                </div>
               </div>
               <div style={{padding:"16px 20px",display:"grid",gap:10,gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))"}}>
                 <div className="kpi">
@@ -757,16 +842,22 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                     <th style={{textAlign:"right"}}>Monto</th><th>Justif.</th><th></th>
                   </tr></thead>
                   <tbody>{lista.map(m=>(
-                    <tr key={m.id}>
+                    <tr key={m.id} style={m.ignorado?{opacity:0.55}:undefined}>
                       <td className="mono" style={{fontSize:11}}>{fmt_d(String(m.fecha||"").slice(0,10))}</td>
                       <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===m.local_id)?.nombre||"—"}</td>
                       <td><span className="badge b-muted" style={{fontSize:9}}>{TIPO_LABELS[m.tipo]||m.tipo}</span></td>
                       <td style={{fontSize:11,maxWidth:240,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.descripcion||"—"}</td>
                       <td style={{textAlign:"right"}}><span className="num kpi-danger">{fmt_mp(Number(m.monto)||0)}</span></td>
-                      <td>{m.justificativo_tipo
-                        ?<span className="badge b-success" style={{fontSize:9}}>{m.justificativo_tipo.replace('_',' ')}</span>
-                        :<span className="badge b-danger" style={{fontSize:9}}>sin justificar</span>}</td>
-                      <td>{!m.justificativo_tipo && <button className="btn btn-acc btn-sm" style={{fontSize:10,padding:"4px 10px"}} onClick={()=>setConciliarModal(m)}>Conciliar</button>}</td>
+                      <td>{m.ignorado
+                        ?<span className="badge b-muted" style={{fontSize:9}} title={m.ignorado_motivo?`Motivo: ${m.ignorado_motivo}`:"Sin motivo"}>ignorado</span>
+                        :m.justificativo_tipo
+                          ?<span className="badge b-success" style={{fontSize:9}}>{m.justificativo_tipo==='multi_factura'?'multi-factura':m.justificativo_tipo.replace('_',' ')}</span>
+                          :<span className="badge b-danger" style={{fontSize:9}}>sin justificar</span>}</td>
+                      <td>
+                        {m.ignorado
+                          ? <button className="btn btn-ghost btn-sm" style={{fontSize:10,padding:"4px 10px"}} onClick={()=>designorarMP(m.id)} disabled={conciliando}>Des-ignorar</button>
+                          : !m.justificativo_tipo && <button className="btn btn-acc btn-sm" style={{fontSize:10,padding:"4px 10px"}} onClick={()=>setConciliarModal(m)}>Conciliar</button>}
+                      </td>
                     </tr>
                   ))}</tbody>
                 </table>
@@ -1023,8 +1114,13 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                 </div>
                 {provIdNum!=null&&(
                   <div className="field"><label>Factura a vincular ({lista.length} disponibles · más nueva arriba)</label>
-                    <select value={vinculoSel} onChange={e=>setVinculoSel(e.target.value)} size={Math.min(8,Math.max(3,lista.length+1))} style={{height:"auto"}}>
+                    <select value={vinculoSel} onChange={e=>{
+                      const v=e.target.value; setVinculoSel(v);
+                      // Al activar __MULTI__: precargar con una fila vacía.
+                      if(v==="__MULTI__" && lineasMulti.length===0) setLineasMulti([{factura_id:"",monto:""}]);
+                    }} size={Math.min(8,Math.max(3,lista.length+2))} style={{height:"auto"}}>
                       <option value="__NUEVO__">+ Crear factura nueva</option>
+                      <option value="__MULTI__">⊕ Pagar varias facturas con este MP</option>
                       {lista.length===0?<option value="" disabled>— Sin facturas pendientes de este proveedor —</option>:lista.map(f=>(
                         <option key={f.id} value={f.id}>#{f.nro} · {fmt_d(f.fecha)} · {fmt_$(f.total)} · {f.estado}</option>
                       ))}
@@ -1036,6 +1132,59 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                     Elegí un proveedor arriba para ver sus facturas pendientes, o <button type="button" className="btn btn-link" style={{padding:0,fontSize:11,textDecoration:"underline"}} onClick={()=>{setVinculoSel("__NUEVO__");}}>crear una factura nueva directamente</button>.
                   </div>
                 )}
+                {vinculoSel==="__MULTI__"&&provIdNum!=null&&(()=>{
+                  // Modo multi-factura: el operador elige N facturas del proveedor
+                  // y reparte el monto MP entre ellas. La suma puede diferir del
+                  // monto MP (Lucas) — la UI muestra el delta pero no bloquea.
+                  const montoMp=Math.abs(conciliarModal.monto||0);
+                  const totalAplicado=lineasMulti.reduce((s,l)=>s+(parseFloat(l.monto)||0),0);
+                  const diferencia=montoMp-totalAplicado;
+                  const facsElegibles=lista; // ya filtra por proveedor + no conciliadas
+                  return (
+                    <div style={{marginTop:12,padding:14,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)"}}>
+                      <div style={{fontSize:11,fontWeight:600,marginBottom:10,color:"var(--muted2)",letterSpacing:1}}>VARIAS FACTURAS · MP {fmt_$(montoMp)}</div>
+                      {lineasMulti.map((linea,i)=>{
+                        const facIds=lineasMulti.filter((_,j)=>j!==i).map(l=>l.factura_id);
+                        const facsDisp=facsElegibles.filter(f=>!facIds.includes(f.id));
+                        return (
+                          <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 130px 28px",gap:8,alignItems:"center",marginBottom:6}}>
+                            <select value={linea.factura_id} onChange={e=>{
+                              const fac=facsElegibles.find(f=>f.id===e.target.value);
+                              setLineasMulti(prev=>prev.map((l,j)=>j===i?{factura_id:e.target.value,monto:fac?String(fac.total):l.monto}:l));
+                            }}>
+                              <option value="">— Elegir factura —</option>
+                              {facsDisp.map(f=><option key={f.id} value={f.id}>#{f.nro} · {fmt_d(f.fecha)} · {fmt_$(f.total)}</option>)}
+                            </select>
+                            <input type="number" step="0.01" placeholder="Monto a aplicar" value={linea.monto}
+                              onChange={e=>setLineasMulti(prev=>prev.map((l,j)=>j===i?{...l,monto:e.target.value}:l))}/>
+                            <button type="button" className="btn btn-ghost btn-sm" title="Quitar línea" style={{padding:"3px 8px"}}
+                              onClick={()=>setLineasMulti(prev=>prev.filter((_,j)=>j!==i))}>✕</button>
+                          </div>
+                        );
+                      })}
+                      <button type="button" className="btn btn-sec btn-sm" style={{marginTop:4}}
+                        onClick={()=>setLineasMulti(prev=>[...prev,{factura_id:"",monto:""}])}
+                        disabled={lineasMulti.length>=facsElegibles.length}>+ Agregar otra factura</button>
+                      <div style={{marginTop:14,padding:"10px 12px",background:"var(--bg)",borderRadius:"var(--r)",border:"1px solid var(--bd)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                        <div style={{fontSize:11,color:"var(--muted2)"}}>
+                          Aplicado: <span className="num" style={{color:"var(--txt)"}}>{fmt_$(totalAplicado)}</span> · MP: <span className="num" style={{color:"var(--txt)"}}>{fmt_$(montoMp)}</span>
+                        </div>
+                        <div style={{fontSize:11}}>
+                          {Math.abs(diferencia)<0.005
+                            ? <span style={{color:"var(--success)"}}>✓ Cuadra exacto</span>
+                            : diferencia>0
+                              ? <span style={{color:"var(--warn)"}}>Falta aplicar {fmt_$(diferencia)}</span>
+                              : <span style={{color:"var(--warn)"}}>Sobra {fmt_$(-diferencia)} (suma &gt; MP)</span>
+                          }
+                        </div>
+                      </div>
+                      <div style={{fontSize:10,color:"var(--muted)",marginTop:8,lineHeight:1.5}}>
+                        El monto pre-cargado al elegir cada factura es el total de la factura. Editalo si la pagás solo en parte.
+                        El saldo de Mercado&nbsp;Pago siempre baja por el monto real del MP ({fmt_$(montoMp)}), no por la suma aplicada.
+                      </div>
+                    </div>
+                  );
+                })()}
                 {vinculoSel==="__NUEVO__"&&(
                   <div style={{marginTop:12,padding:14,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)"}}>
                     <div style={{fontSize:11,fontWeight:600,marginBottom:10,color:"var(--muted2)",letterSpacing:1}}>NUEVA FACTURA · total {fmt_$(Math.abs(conciliarModal.monto||0))}</div>
@@ -1154,26 +1303,43 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
             </div>
           )}
         </div>
-        <div className="modal-ft">
-          <button className="btn btn-sec" onClick={cerrarConciliar} disabled={conciliando}>Cancelar</button>
-          {(()=>{
-            if(conciliarTab==="gasto"){
-              if(vinculoSel==="__NUEVO__")
-                return <button className="btn btn-acc" disabled={!nuevoGastoForm.categoria||conciliando} onClick={justificarConGastoNuevo}>Crear gasto y conciliar</button>;
-              return <button className="btn btn-acc" disabled={!vinculoSel||conciliando} onClick={()=>justificarConExistente("gasto",vinculoSel)}>Vincular y conciliar</button>;
-            }
-            if(conciliarTab==="factura"){
-              if(vinculoSel==="__NUEVO__")
-                return <button className="btn btn-acc" disabled={!nuevaFacturaForm.prov_id||!nuevaFacturaForm.nro||conciliando} onClick={justificarConFacturaNueva}>Crear factura y conciliar</button>;
-              return <button className="btn btn-acc" disabled={!vinculoSel||conciliando} onClick={()=>justificarConExistente("factura",vinculoSel)}>Vincular y conciliar</button>;
-            }
-            if(conciliarTab==="remito"){
-              if(vinculoSel==="__NUEVO__")
-                return <button className="btn btn-acc" disabled={!nuevoRemitoForm.prov_id||!nuevoRemitoForm.nro||conciliando} onClick={justificarConRemitoNuevo}>Crear remito y conciliar</button>;
-              return <button className="btn btn-acc" disabled={!vinculoSel||conciliando} onClick={()=>justificarConExistente("remito",vinculoSel)}>Vincular y conciliar</button>;
-            }
-            return <button className="btn btn-acc" disabled={!movInternoForm.destino||conciliando} onClick={justificarConMovimientoInterno}>Registrar transferencia</button>;
-          })()}
+        <div className="modal-ft" style={{flexDirection:"column",alignItems:"stretch",gap:8}}>
+          {/* Fila opcional "Ignorar" — sobre los botones principales. El operador
+              puede marcar un egreso como ignorado en vez de conciliar (Lucas
+              2026-05-11) cuando es un reverso, duplicado de banco, etc. */}
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",fontSize:11,color:"var(--muted2)"}}>
+            <span style={{whiteSpace:"nowrap"}}>¿No querés conciliar?</span>
+            <input value={motivoIgnorar} onChange={e=>setMotivoIgnorar(e.target.value)}
+              placeholder="Motivo (opcional, ej: duplicado, reverso)..."
+              style={{flex:1,minWidth:180,padding:"5px 8px",background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--txt)",fontSize:11,borderRadius:"var(--r)"}}
+              disabled={conciliando}/>
+            <button className="btn btn-ghost btn-sm" onClick={ignorarMP} disabled={conciliando}>Ignorar egreso</button>
+          </div>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            <button className="btn btn-sec" onClick={cerrarConciliar} disabled={conciliando}>Cancelar</button>
+            {(()=>{
+              if(conciliarTab==="gasto"){
+                if(vinculoSel==="__NUEVO__")
+                  return <button className="btn btn-acc" disabled={!nuevoGastoForm.categoria||conciliando} onClick={justificarConGastoNuevo}>Crear gasto y conciliar</button>;
+                return <button className="btn btn-acc" disabled={!vinculoSel||conciliando} onClick={()=>justificarConExistente("gasto",vinculoSel)}>Vincular y conciliar</button>;
+              }
+              if(conciliarTab==="factura"){
+                if(vinculoSel==="__NUEVO__")
+                  return <button className="btn btn-acc" disabled={!nuevaFacturaForm.prov_id||!nuevaFacturaForm.nro||conciliando} onClick={justificarConFacturaNueva}>Crear factura y conciliar</button>;
+                if(vinculoSel==="__MULTI__"){
+                  const hayLineas=lineasMulti.some(l=>l.factura_id && parseFloat(l.monto)>0);
+                  return <button className="btn btn-acc" disabled={!hayLineas||conciliando} onClick={justificarConMultiplesFacturas}>Conciliar contra {lineasMulti.filter(l=>l.factura_id).length} factura{lineasMulti.filter(l=>l.factura_id).length===1?"":"s"}</button>;
+                }
+                return <button className="btn btn-acc" disabled={!vinculoSel||conciliando} onClick={()=>justificarConExistente("factura",vinculoSel)}>Vincular y conciliar</button>;
+              }
+              if(conciliarTab==="remito"){
+                if(vinculoSel==="__NUEVO__")
+                  return <button className="btn btn-acc" disabled={!nuevoRemitoForm.prov_id||!nuevoRemitoForm.nro||conciliando} onClick={justificarConRemitoNuevo}>Crear remito y conciliar</button>;
+                return <button className="btn btn-acc" disabled={!vinculoSel||conciliando} onClick={()=>justificarConExistente("remito",vinculoSel)}>Vincular y conciliar</button>;
+              }
+              return <button className="btn btn-acc" disabled={!movInternoForm.destino||conciliando} onClick={justificarConMovimientoInterno}>Registrar transferencia</button>;
+            })()}
+          </div>
         </div>
       </div></div>)}
 
