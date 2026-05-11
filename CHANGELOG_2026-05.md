@@ -310,6 +310,72 @@ Drift de schema descubierto en audit: columnas `monto_pagado` y `pendiente` exis
 
 ---
 
+## 2026-05-11 (cont. — sesión tarde/noche)
+
+### `3283366` — fix(mobile): hamburger más visible + safe-area + breakpoint 1024px
+
+Botón hamburguesa con bajo contraste y sin respeto al notch del iPhone. Cambios: color de acento, sombra, `font-size:20px`, `top/left` con `env(safe-area-inset-*)`, breakpoint mobile/tablet bajado a 1024px (para iPad portrait).
+
+### `d58b984` — feat(ventas): F1 RPC atómica `crear_cierre_ventas` + tabla `idempotency_keys`
+
+Cierra F1 del plan sunny-creek. Reemplaza los 3 inserts secuenciales de `Ventas.tsx::guardar()` (ventas + movimientos + saldos_caja) por una RPC en transacción única. Si algo falla, rollback completo — no más "caja fantasma" cuando Internet se corta a mitad.
+
+- RPC `SECURITY INVOKER`, respeta RLS.
+- Resuelve `cuenta_destino` server-side (override por local).
+- Helper `_gen_id_compat` usa el mismo formato que `genId()` del frontend.
+- Idempotency key (convención C1): cada apertura del modal genera UUID, doble-click no duplica.
+- Tabla nueva `idempotency_keys (rpc_name, key, result jsonb)` con RLS multi-tenant.
+
+**Migration `202605111800_rpc_crear_cierre_ventas.sql` aplicada.** Test mutante existente sigue verde.
+
+### `5087231` — fix(mobile): sidebar tapado por main al desplegar hamburger
+
+Continuación de `3283366`. Lucas reportó "está el ícono pero si lo aprieto no me despliega el menú". Causa: el wrapper del Sidebar y `<main>` en `App.tsx` tenían el mismo `zIndex:1`; en mobile el sidebar se deslizaba pero quedaba detrás del contenido del main (mismo stacking context, orden DOM gana). Fix: subir wrapper Sidebar a `zIndex:2`.
+
+### `b3c123c` — feat(mp): conciliar multi-factura + ignorar egreso
+
+Dos pedidos del operador (la empleada de Lucas hacía la pregunta y no había forma de resolverla):
+
+**1) MULTI-FACTURA — un pago MP cubre N facturas del mismo proveedor.**
+- Tabla puente `mp_movimiento_facturas (mp_mov_id × factura_id × monto_aplicado)` con RLS multi-tenant.
+- Tipo nuevo `'multi_factura'` en `mp_movimientos.justificativo_tipo` (id queda NULL, las facturas viven en la puente).
+- RPC `fn_conciliar_mp_con_facturas` atómica con `FOR UPDATE` en cada factura. Mismo proveedor enforced.
+- Idempotency key (convención C1).
+- Trade-off contable: la suma aplicada PUEDE diferir del monto MP (sobra o falta). `saldos_caja` baja por monto MP completo, `proveedores.saldo` baja por suma aplicada. Diferencia visible como warning en UI, no bloquea.
+- UI: radio "⊕ Pagar varias facturas con este MP" en el tab Factura. Lista de facturas del proveedor con monto editable + indicador "Aplicado: $X · MP: $Y · Falta/Sobra".
+
+**2) IGNORAR — egresos que no requieren conciliación pero tampoco cuentan como "sin justificar"** (reverso de prueba, duplicado de banco, etc).
+- Columnas `mp_movimientos.ignorado/ignorado_motivo/ignorado_at/ignorado_por`.
+- RPCs `fn_ignorar_mp(motivo)` y `fn_designorar_mp` (reversible).
+- Index `idx_mp_mov_sin_justificar` refrescado para excluir ignorados del KPI.
+- UI: input "Motivo" + botón "Ignorar egreso" en footer del modal. Toggle "Mostrar ignorados (N)" en header.
+
+Tests mutantes nuevos (DB-only):
+- `conciliacion_mp_multifactura_mutante.spec.ts` — 7 asserts (puente, pagos JSONB, estados, saldos, idempotency).
+- `conciliacion_mp_ignorar_mutante.spec.ts` — ignorar + des-ignorar + dobles rechazados.
+
+**Migration `202605111900_mp_multifactura_e_ignorar.sql` aplicada.**
+
+### `19b9fcb` — feat(idempotency): F8 — anti doble-click en las 4 RPCs financieras
+
+Cierra F8 del plan sunny-creek. Las 4 RPCs financieras de PASE (`pagar_factura`, `pagar_remito`, `pagar_sueldo`, `crear_gasto`) aceptan ahora `p_idempotency_key` opcional. Doble-click en "Pagar/Guardar" no duplica.
+
+**Hallazgo al inicio del trabajo:** la migration `202605091220_sprint7_idempotency_pase_pagos.sql` estaba en el repo desde hace 2 días pero **nunca se había aplicado a la DB**. Se aplicó manualmente como parte de este sprint. Las 4 RPCs en prod estaban sin idempotency y los 4 callers frontend pasaban 0 keys.
+
+Patrones usados:
+- **A) `movimientos.idempotency_key` + UNIQUE INDEX parcial** para RPCs que crean exactamente UN movimiento: `pagar_factura`, `pagar_remito`, `crear_gasto`.
+- **B) Tabla `idempotency_keys` con result cacheado** para `pagar_sueldo` (crea N movimientos según `p_formas_pago`).
+
+Frontend: idempotency keys generadas al abrir cada modal (Compras → factura/remito, Gastos → manual/plantilla, RRHH → sueldo), pasadas como parámetro al RPC.
+
+Tests mutantes extendidos: `facturas_pagar`, `gastos`, `sueldo_pagar` con test #2 idempotency. `remitos_pagar_mutante.spec.ts` nuevo (no existía).
+
+Cleanup técnico: `DROP` de overloads viejos sin `p_idempotency_key` (las 4 funciones quedan con 1 versión cada una, sin ambigüedad para PostgREST).
+
+**Migrations aplicadas:** `202605091220` (deuda histórica) y `202605112000_idempotency_sueldo_gasto.sql` nueva.
+
+---
+
 ## Decisiones de producto durables (NO en commits, pero relevantes)
 
 ### Compras vs Gastos

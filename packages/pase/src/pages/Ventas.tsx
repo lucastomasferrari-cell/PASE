@@ -137,7 +137,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
     // pasar de EFECTIVO a TARJETA). Para esos casos hay que borrar y
     // re-cargar manualmente. La UI debería desactivar esos campos en
     // un sprint futuro.
-    // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F1: editar_venta RPC solo cubre monto; el update del resto de campos también debería ir por RPC dedicada.
+    // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4: editar_venta RPC solo cubre monto; cambiar fecha/turno/medio/local_id va por UPDATE directo. Necesita RPC editar_venta_completa para ser 100% atómico — F1 ya cerró la creación, esto es deuda residual del flow de edición.
     await db.from("ventas").update({
       fecha:editModal.fecha,
       turno:editModal.turno,
