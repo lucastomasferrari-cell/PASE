@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope, localesVisibles, tienePermiso } from "../lib/auth";
 import { useMediosCobro } from "../lib/useMediosCobro";
-import { toISO, today, fmt_d, fmt_$, genId } from "../lib/utils";
+import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import ImportarMaxirest from "./ImportarMaxirest";
 import type { Usuario, Local, Venta, CierreVentas } from "../types";
 
@@ -36,7 +36,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
   // localesVisibles cubre dueño/admin/superadmin/encargado.
   const visLocs = localesVisibles(user);
   const localesDisp = visLocs === null ? locales : locales.filter((l: Local)=>visLocs.includes(l.id));
-  const { mediosDisponibles, cuentaDestino } = useMediosCobro();
+  const { mediosDisponibles } = useMediosCobro();
   // Catálogo en cada modal viene del local del form (no del localActivo del
   // sidebar) — el dueño puede cargar venta para cualquiera de sus locales.
   const mediosForm = mediosDisponibles(form.local_id ? parseInt(form.local_id) : null);
@@ -77,49 +77,45 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
   }
   grupos.sort((a,b)=>a.fecha<b.fecha?1:a.fecha>b.fecha?-1:0);
 
-  const guardar=async()=>{
-    if(!form.local_id)return;
-    const lid=parseInt(form.local_id);
-    const rows: Venta[]=lineas
-      .filter(l=>parseFloat(l.monto)>0)
-      .map(l=>({id:genId("V"),local_id:lid,fecha:form.fecha,turno:form.turno,medio:l.medio,monto:parseFloat(l.monto),origen:"manual"}));
-    if(rows.length===0)return;
-    // .select() para obtener las filas insertadas (con sus ids confirmados),
-    // que después usamos como venta_ids en el insert del movimiento.
-    // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F1: estos 3 inserts (ventas + movimientos + saldos_caja UPDATE) deben fusionarse en RPC atómica crear_cierre_ventas. Caso histórico detectado al armar ventas_efectivo_mutante.
-    const {data:ventasIns,error:ventasErr}=await db.from("ventas").insert(rows).select();
-    if(ventasErr){alert("Error al guardar venta: "+ventasErr.message);return;}
+  // idempotency_key se genera al abrir el modal. Si Lucas hace doble-click
+  // en "Confirmar", la 2da llamada con el mismo key devuelve el resultado
+  // cacheado de la 1ra (no duplica ventas). Se renueva al cerrar el modal.
+  const [idempKey, setIdempKey] = useState<string>(() => crypto.randomUUID());
+  const [guardando, setGuardando] = useState(false);
 
-    const impactoPorCuenta:Record<string,number>={};
-    const idsPorCuenta:Record<string,string[]>={};
-    ((ventasIns||[]) as Venta[]).forEach(v=>{
-      const cuenta=cuentaDestino(v.medio,lid);
-      if(!cuenta) return; // medios no-efectivo no impactan en caja
-      impactoPorCuenta[cuenta]=(impactoPorCuenta[cuenta]||0)+v.monto;
-      (idsPorCuenta[cuenta]=idsPorCuenta[cuenta]||[]).push(v.id);
-    });
-    for(const [cuenta,monto] of Object.entries(impactoPorCuenta)){
-      if(!cuenta) continue;
-      // venta_ids linkea cada movimiento con sus ventas. Las RPCs
-      // eliminar_venta/editar_venta lo usan para ajustar atómicamente.
-      // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F1: parte del flow no-atómico (ver línea ~89).
-      await db.from("movimientos").insert([{
-        id:genId("MOV"),fecha:form.fecha,cuenta,
-        tipo:"Ingreso Venta",cat:"VENTAS",
-        importe:monto,detalle:`Ventas ${form.turno} - ${form.fecha}`,
-        local_id:lid,
-        venta_ids:idsPorCuenta[cuenta]||[],
-      }]);
-      const {data:caja}=await db.from("saldos_caja").select("saldo")
-        .eq("cuenta",cuenta).eq("local_id",lid).maybeSingle();
-      // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F1: parte del flow no-atómico (ver línea ~89). Además read-then-write race.
-      if(caja) await db.from("saldos_caja")
-        .update({saldo:(caja.saldo||0)+monto})
-        .eq("cuenta",cuenta).eq("local_id",lid);
+  const guardar = async () => {
+    if (!form.local_id || guardando) return;
+    const lid = parseInt(form.local_id);
+    const lineasValidas = lineas
+      .filter(l => parseFloat(l.monto) > 0)
+      .map(l => ({ medio: l.medio, monto: parseFloat(l.monto) }));
+    if (lineasValidas.length === 0) return;
+
+    setGuardando(true);
+    try {
+      // RPC atómica: si cualquier paso falla (insert venta, movimiento o
+      // update saldos_caja), rollback completo — no quedan estados parciales.
+      // Reemplazó los 3 inserts secuenciales del flow viejo (F1 del plan
+      // sunny-creek). La cuenta_destino se resuelve server-side en la RPC
+      // (lookup en medios_cobro con override por local).
+      const { error } = await db.rpc("crear_cierre_ventas", {
+        p_local_id: lid,
+        p_fecha: form.fecha,
+        p_turno: form.turno,
+        p_lineas: lineasValidas,
+        p_idempotency_key: idempKey,
+      });
+      if (error) {
+        alert("Error al guardar venta: " + error.message);
+        return;
+      }
+      setLineas([{ medio: medioDefault, monto: "" }]);
+      setIdempKey(crypto.randomUUID());
+      setModalNuevo(false);
+      load();
+    } finally {
+      setGuardando(false);
     }
-
-    setLineas([{medio:medioDefault,monto:""}]);
-    setModalNuevo(false);load();
   };
 
   const guardarEdit=async()=>{
