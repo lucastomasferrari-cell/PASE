@@ -37,3 +37,39 @@ export async function createDuenoClient(): Promise<SupabaseClient> {
   if (error) throw new Error(`Login dueño falló: ${error.message}`);
   return client;
 }
+
+// Email Auth del superadmin (creado 2026-05-10 con flow manual: row en
+// `usuarios` via pg + auth.user creado por Lucas en Supabase Dashboard).
+const SUPERADMIN_EMAIL = "superadmin@pase.local";
+
+function loadSuperadminPassword(): string | null {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const envPath = resolve(here, "..", "..", ".env.local");
+  const raw = readFileSync(envPath, "utf-8");
+  const m = raw.match(/^SUPERADMIN_PASSWORD=(.+)$/m);
+  return m && m[1] ? m[1].trim() : null;
+}
+
+/**
+ * Cliente Supabase autenticado como superadmin, para tests E2E de operaciones
+ * que requieren ese rol (crear/eliminar tenants, ver data cross-tenant).
+ * Gateado por env var `SUPERADMIN_PASSWORD` en `packages/pase/.env.local` —
+ * si no está seteada, el llamador debería skipar el test. Esto evita
+ * commitear el password y no asume su existencia en CI.
+ *
+ * Retorna null si la env var no está disponible — el test debe manejar el
+ * caso con `test.skip()` y mensaje accionable.
+ */
+export async function createSuperadminClient(): Promise<SupabaseClient | null> {
+  const pwd = loadSuperadminPassword();
+  if (!pwd) return null;
+  const client = createClient(SUPABASE_URL, loadAnonKey(), {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { error } = await client.auth.signInWithPassword({
+    email: SUPERADMIN_EMAIL,
+    password: pwd,
+  });
+  if (error) throw new Error(`Login superadmin falló: ${error.message}`);
+  return client;
+}

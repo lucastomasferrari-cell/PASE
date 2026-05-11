@@ -56,25 +56,61 @@ export default function OnboardingTenant({ onClose, onCreated }: OnboardingTenan
     setCreating(true);
     setErr("");
     try {
-      const { data, error } = await db.rpc("crear_tenant", {
-        p_nombre: paso1.nombre.trim(),
-        p_slug: paso1.slug.trim(),
-        p_plan: paso1.plan,
-        p_dueno_email: paso2.dueno_email.trim(),
-        p_dueno_nombre: paso2.dueno_nombre.trim(),
-        p_dueno_password: paso2.dueno_password,
-        p_local_nombre: paso3.local_nombre.trim(),
-        p_local_direccion: paso3.local_direccion.trim() || null,
-        p_trial_dias: paso1.trial_dias,
-      });
-      if (error) {
-        const msg = error.message || "";
-        if (msg.includes("NOT_SUPERADMIN")) setErr("No tenés permisos para crear tenants (debe ser superadmin).");
-        else if (msg.includes("SLUG_DUPLICATED")) setErr("El slug ya existe. Elegí otro.");
-        else if (msg.includes("EMAIL_DUPLICATED")) setErr("El email del dueño ya está en uso por otro usuario.");
-        else setErr("Error: " + msg);
+      // Endpoint serverless que: valida superadmin → crea auth.user →
+      // llama RPC crear_tenant_v2 con el auth_id → rollback si falla.
+      // Sustituye la RPC vieja `crear_tenant` que crasheaba por
+      // `digest(text, unknown) does not exist` y además guardaba password
+      // en `usuarios.password` legacy (Supabase Auth ya no lo usa).
+      const { data: { session } } = await db.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        setErr("Sesión expirada. Volvé a loguear como superadmin.");
         return;
       }
+
+      const resp = await fetch("/api/crear-tenant", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          nombre: paso1.nombre.trim(),
+          slug: paso1.slug.trim(),
+          plan: paso1.plan,
+          dueno_email: paso2.dueno_email.trim(),
+          dueno_nombre: paso2.dueno_nombre.trim(),
+          dueno_password: paso2.dueno_password,
+          local_nombre: paso3.local_nombre.trim(),
+          local_direccion: paso3.local_direccion.trim() || null,
+          trial_dias: paso1.trial_dias,
+        }),
+      });
+
+      const data = await resp.json().catch(() => ({ ok: false, error: "RESPUESTA_INVALIDA" }));
+
+      if (!resp.ok || !data?.ok) {
+        const code = data?.error || "";
+        if (code === "NOT_SUPERADMIN" || code === "CALLER_NOT_FOUND" || code === "CALLER_INACTIVE") {
+          setErr("No tenés permisos para crear tenants (debe ser superadmin).");
+        } else if (code === "NO_TOKEN" || code === "TOKEN_INVALID") {
+          setErr("Sesión expirada. Volvé a loguear.");
+        } else if (code === "SLUG_DUPLICATED") {
+          setErr("El slug ya existe. Elegí otro.");
+        } else if (code === "EMAIL_DUPLICATED" || code === "EMAIL_ALREADY_IN_AUTH") {
+          setErr("El email del dueño ya está en uso. Elegí otro.");
+        } else if (code === "PASSWORD_TOO_SHORT") {
+          setErr("Password debe tener al menos 8 caracteres.");
+        } else if (code === "SLUG_INVALID_FORMAT") {
+          setErr("Slug solo puede tener letras minúsculas, números y guiones.");
+        } else if (code === "MISSING_FIELDS") {
+          setErr("Faltan campos obligatorios.");
+        } else {
+          setErr("Error: " + (code || `HTTP ${resp.status}`));
+        }
+        return;
+      }
+       
       console.log("[onboarding] Tenant creado:", data);
       onCreated(paso1.slug);
     } catch (e) {
