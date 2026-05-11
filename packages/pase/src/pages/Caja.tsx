@@ -297,12 +297,14 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
       if (original && lid && (original.importe !== parseFloat(String(editMov.importe)) || original.cuenta !== editMov.cuenta)) {
         const { data: cajaOrig } = await db.from("saldos_caja").select("saldo")
           .eq("cuenta", original.cuenta).eq("local_id", lid).maybeSingle();
+        // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F11: editar movimiento debe pasar por RPC editar_movimiento atómica (que internamente revierta saldo viejo + aplique saldo nuevo).
         if (cajaOrig) await db.from("saldos_caja")
           .update({ saldo: (cajaOrig.saldo || 0) - (original.importe || 0) })
           .eq("cuenta", original.cuenta).eq("local_id", lid);
 
         const { data: cajaNueva } = await db.from("saldos_caja").select("saldo")
           .eq("cuenta", editMov.cuenta).eq("local_id", lid).maybeSingle();
+        // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F11: idem línea anterior.
         if (cajaNueva) await db.from("saldos_caja")
           .update({ saldo: (cajaNueva.saldo || 0) + (parseFloat(String(editMov.importe)) || 0) })
           .eq("cuenta", editMov.cuenta).eq("local_id", lid);
@@ -321,6 +323,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         ? deriveTipoMov(editMov.cat || "", signoNuevo < 0)
         : original?.tipo;
 
+      // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F11: este UPDATE va dentro de la RPC editar_movimiento pendiente.
       await db.from("movimientos").update({
         fecha: editMov.fecha,
         detalle: editMov.detalle,

@@ -646,6 +646,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     if (saved) {
       const vd = calcularValorDoble(emp);
       const calc = calcLiquidacion(emp, nov, vd);
+      // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F14: el upsert de liquidación al confirmar novedad debe ir por RPC confirmar_novedad atómica. Hoy si el upsert falla, la novedad queda confirmada pero sin liquidación calculada.
       await db.from("rrhh_liquidaciones").upsert({
         novedad_id: saved.id, ...calc, estado: "pendiente",
         calculado_at: new Date().toISOString(),
@@ -658,6 +659,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const editarNov = async (empId: string) => {
     const nov = novMap[empId];
     if (!nov?.id) return;
+    // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F14: rollback novedad→borrador debe pasar por RPC editar_novedad que borre liq + cambie estado atómicamente.
     await db.from("rrhh_liquidaciones").delete().eq("novedad_id", nov.id);
     await db.from("rrhh_novedades").update({ estado: "borrador" }).eq("id", nov.id);
     setNovMap(prev => ({ ...prev, [empId]: { ...prev[empId], estado: "borrador" } }));

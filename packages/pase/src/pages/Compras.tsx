@@ -316,11 +316,13 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       // o legacy), bucket queda null y EERR la trata como CMV.
       const bucket = form.cat ? (categoriaToBucket[form.cat] ?? null) : null;
       const nueva = { ...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(form.local_id), total, estado: isNC ? "pagada" : "pendiente", pagos: [], tipo: form.tipo, fecha: form.fecha || null, venc: form.venc || null, bucket };
+      // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F12: factura + factura_items deben fusionarse en RPC crear_factura_completa (atómica). El trigger trg_saldo_proveedor cubre proveedor.saldo OK, pero si falla el INSERT de items queda factura sin detalle.
       const { error: factErr } = await db.from("facturas").insert([nueva]);
       if (factErr) throw new Error("Error guardando factura: " + factErr.message);
 
       if (items.length > 0) {
         const itemsToInsert = items.filter(it => it.producto).map(it => ({ ...it, factura_id: id, cantidad: parseMonto(it.cantidad), precio_unitario: parseMonto(it.precio_unitario), subtotal: it.subtotal }));
+        // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F12: parte del flow no-atómico (ver línea anterior).
         if (itemsToInsert.length > 0) await db.from("factura_items").insert(itemsToInsert);
       }
       // El trigger trg_saldo_prov_facturas (migration 202605070900) recalcula
@@ -421,6 +423,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       nro, monto: remForm.monto,
       estado: "sin_factura", factura_id: null,
     };
+    // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F12: cargar remito debe ir por RPC crear_remito atómica. Hoy el trigger trg_saldo_proveedor cubre proveedor.saldo, pero el control de duplicados queda client-side.
     await db.from("remitos").insert([nuevo]);
     setRemModal(false); setRemForm(emptyRemForm); load();
   };
@@ -428,6 +431,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const vincularRemitoAFactura = async (fid: string) => {
     const r = vincModal;
     if (!r) return;
+    // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F12: vincular remito↔factura debe pasar por RPC vincular_remito que valide consistencia (proveedor, monto) atomicamente.
     await db.from("remitos").update({ estado: "vinculado", factura_id: fid }).eq("id", r.id);
     setVincModal(null); load();
   };

@@ -86,6 +86,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
     if(rows.length===0)return;
     // .select() para obtener las filas insertadas (con sus ids confirmados),
     // que después usamos como venta_ids en el insert del movimiento.
+    // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F1: estos 3 inserts (ventas + movimientos + saldos_caja UPDATE) deben fusionarse en RPC atómica crear_cierre_ventas. Caso histórico detectado al armar ventas_efectivo_mutante.
     const {data:ventasIns,error:ventasErr}=await db.from("ventas").insert(rows).select();
     if(ventasErr){alert("Error al guardar venta: "+ventasErr.message);return;}
 
@@ -101,6 +102,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
       if(!cuenta) continue;
       // venta_ids linkea cada movimiento con sus ventas. Las RPCs
       // eliminar_venta/editar_venta lo usan para ajustar atómicamente.
+      // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F1: parte del flow no-atómico (ver línea ~89).
       await db.from("movimientos").insert([{
         id:genId("MOV"),fecha:form.fecha,cuenta,
         tipo:"Ingreso Venta",cat:"VENTAS",
@@ -110,6 +112,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
       }]);
       const {data:caja}=await db.from("saldos_caja").select("saldo")
         .eq("cuenta",cuenta).eq("local_id",lid).maybeSingle();
+      // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F1: parte del flow no-atómico (ver línea ~89). Además read-then-write race.
       if(caja) await db.from("saldos_caja")
         .update({saldo:(caja.saldo||0)+monto})
         .eq("cuenta",cuenta).eq("local_id",lid);
@@ -138,6 +141,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
     // pasar de EFECTIVO a TARJETA). Para esos casos hay que borrar y
     // re-cargar manualmente. La UI debería desactivar esos campos en
     // un sprint futuro.
+    // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F1: editar_venta RPC solo cubre monto; el update del resto de campos también debería ir por RPC dedicada.
     await db.from("ventas").update({
       fecha:editModal.fecha,
       turno:editModal.turno,

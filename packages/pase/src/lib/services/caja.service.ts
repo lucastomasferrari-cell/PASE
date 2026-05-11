@@ -24,6 +24,7 @@ export const cajaService = {
   },
 
   async insertMovimiento(mov: Omit<Movimiento, "anulado" | "anulado_motivo" | "editado" | "editado_motivo" | "editado_at">): Promise<void> {
+    // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F11: este service debe llamar a RPC crear_movimiento_caja (atómica). Refactor pendiente.
     const { error } = await db.from("movimientos").insert([mov]);
     if (error) throw error;
   },
@@ -32,6 +33,7 @@ export const cajaService = {
     const { data: caja } = await db.from("saldos_caja").select("saldo")
       .eq("cuenta", cuenta).eq("local_id", localId).maybeSingle();
     if (!caja) return;
+    // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F11: ajuste de saldo debe pasar por RPC _actualizar_saldo_caja, no UPDATE manual (read-then-write tiene race condition).
     const { error } = await db.from("saldos_caja")
       .update({ saldo: (caja.saldo || 0) + delta })
       .eq("cuenta", cuenta).eq("local_id", localId);

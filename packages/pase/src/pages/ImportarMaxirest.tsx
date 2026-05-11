@@ -89,6 +89,7 @@ export default function ImportarMaxirest({ localActivo, onImported }: ImportarMa
         origen: 'maxirest',
         parser_version: PARSER_VERSION,
       }));
+      // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F13: importador batch debe ir por RPC importar_maxirest_batch que en una transacción inserte ventas + movimientos + ajuste saldos. Hoy el rollback manual (línea ~171) deja saldos inflados si falla a mitad.
       const { data: ins, error } = await db.from('ventas').insert(ventas).select();
       if (error) throw new Error('INSERT ventas: ' + error.message);
       if (!ins || ins.length === 0) {
@@ -159,6 +160,7 @@ export default function ImportarMaxirest({ localActivo, onImported }: ImportarMa
           // Si falla solo el linkeo, el saldo ya se movió OK — solo loguear.
           const ventaIds = idsPorCuenta[cuenta] || [];
           if (ventaIds.length > 0) {
+            // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F13: parte del importer batch (ver línea ~92).
             const { error: linkErr } = await db.from('movimientos')
               .update({ venta_ids: ventaIds }).eq('id', movId);
             if (linkErr) console.warn('No se pudo vincular venta_ids al mov ' + movId + ': ' + linkErr.message);
@@ -168,8 +170,10 @@ export default function ImportarMaxirest({ localActivo, onImported }: ImportarMa
         // Rollback: borrar ventas + movs ya creados para no dejar estado parcial.
         // El saldo de cada mov creado quedará "inflado" hasta que el usuario lo
         // anule manualmente (la RPC no expone un reverse atómico de saldo).
+        // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F13: rollback manual del importer. La RPC pendiente lo haría con transacción.
         await db.from('ventas').delete().in('id', insertedIds);
         for (const movId of movsCreados) {
+          // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F13: idem.
           await db.from('movimientos').delete().eq('id', movId);
         }
         throw movFail;
