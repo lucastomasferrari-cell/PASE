@@ -153,6 +153,7 @@ Plantillas SQL exactas en `packages/pase/CONTEXTO.md` sección "Cómo agregar un
 - Errores RPC: `RAISE EXCEPTION 'CODIGO_UPPER_SNAKE'` → `translateRpcError` mapea a español; código no mapeado se muestra raw (fallback transparente).
 - Caja Efectivo es ahora una `cuenta` más en `saldos_caja` + `movimientos` (la tabla privada `caja_efectivo` fue eliminada el 2026-05-02).
 - El módulo Empleados viejo está deprecado — RRHH es el reemplazo. La tabla legacy `empleados` se eliminó en 202604261810.
+- **Vercel plan Hobby — límite de 12 serverless functions**. Antes de agregar un archivo en `packages/pase/api/` contar `ls packages/pase/api/*.js | grep -v "^_" | grep -v "\.test\.js$" | wc -l`. Si llega a 12, no se puede sumar otra sin eliminar legacy o renombrar con prefix `_` (los archivos `_*.js` son helpers privados, no endpoints HTTP). Síntoma de exceso: build pasa OK pero el deploy queda en `state=ERROR` justo después de "Deploying outputs..." (incidente 2026-05-11 con `crear-tenant.js` como function #13). Después de cada push siempre verificar `state=READY` antes de asumir que prod tomó el cambio.
 
 ## Convenciones para features nuevas (Capa 1)
 
