@@ -118,6 +118,11 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const [lectorModal, setLectorModal] = useState(false);
   const [modal, setModal] = useState(false);
   const [pagarModal, setPagarModal] = useState<Factura | null>(null);
+  // Idempotency keys (convención C1): se regeneran al abrir cada modal de
+  // pago. Si el operador hace doble-click en "Confirmar", la 2da llamada
+  // con la misma key devuelve el resultado cacheado (no duplica el pago).
+  const [idempKeyPagarFac, setIdempKeyPagarFac] = useState<string>(() => crypto.randomUUID());
+  const [idempKeyPagarRem, setIdempKeyPagarRem] = useState<string>(() => crypto.randomUUID());
   // NCs disponibles del proveedor de la factura abierta + saldo restante de
   // cada una. Saldo viene del frontend: nc.total - SUM(pagos[]) — los pagos
   // ya incluyen las aplicaciones previas (tipo='nc').
@@ -375,6 +380,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
           p_cuenta: pagoForm.cuenta,
           p_fecha: pagoForm.fecha,
           p_detalle: detalle,
+          p_idempotency_key: idempKeyPagarFac,
         });
         if (error) throw error;
       } else if (totalNcAplicado === 0) {
@@ -446,6 +452,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       const { error } = await db.rpc("pagar_remito", {
         p_remito_id: r.id, p_monto: monto,
         p_cuenta: remPagoForm.cuenta, p_fecha: remPagoForm.fecha,
+        p_idempotency_key: idempKeyPagarRem,
       });
       if (error) throw error;
       setPagarRemModal(null); load();
@@ -596,7 +603,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                         <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "flex-end" }}>
                           {r.estado === "sin_factura" && <button className="btn btn-ghost btn-sm" onClick={() => setVincModal(r)}>Vincular FC</button>}
                           {r.factura_id && <span className="mono" style={{ fontSize: 10, color: "var(--info)" }}>→ {facturas.find(f => f.id === r.factura_id)?.nro || r.factura_id}</span>}
-                          {r.estado === "sin_factura" && <button className="btn btn-success btn-sm" onClick={() => { setPagarRemModal(r); setRemPagoForm({ cuenta: "", monto: r.monto, fecha: toISO(today) }); }}>Pagar</button>}
+                          {r.estado === "sin_factura" && <button className="btn btn-success btn-sm" onClick={() => { setPagarRemModal(r); setRemPagoForm({ cuenta: "", monto: r.monto, fecha: toISO(today) }); setIdempKeyPagarRem(crypto.randomUUID()); }}>Pagar</button>}
                           {r.estado !== "pagado" && <button className="btn btn-danger btn-sm" onClick={() => anularRemito(r)}>Anular</button>}
                         </div>
                       )}
@@ -650,7 +657,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                   <td>
                     <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
                       <button className="btn btn-ghost btn-sm" onClick={() => setVerModal(f)}>Ver</button>
-                      {!isNC && f.estado !== "pagada" && <button className="btn btn-success btn-sm" onClick={() => { setPagarModal(f); setPagoForm({ cuenta: "", monto: Number(f.total) || 0, fecha: toISO(today) }); }}>Pagar</button>}
+                      {!isNC && f.estado !== "pagada" && <button className="btn btn-success btn-sm" onClick={() => { setPagarModal(f); setPagoForm({ cuenta: "", monto: Number(f.total) || 0, fecha: toISO(today) }); setIdempKeyPagarFac(crypto.randomUUID()); }}>Pagar</button>}
                       <button className="btn btn-danger btn-sm" onClick={() => anular(f)}>Anular</button>
                     </div>
                   </td>

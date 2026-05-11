@@ -232,6 +232,9 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const [pagoLoading, setPagoLoading] = useState(false);
   const [pagando, setPagando] = useState(false);
   const [pagoModal, setPagoModal] = useState<PagoDataRow | null>(null);
+  // Idempotency key (convención C1) anti doble-click al confirmar pago de
+  // sueldo. Se regenera al abrir el modal (línea ~711).
+  const [idempKeyPagarSueldo, setIdempKeyPagarSueldo] = useState<string>(() => crypto.randomUUID());
   const [formasPago, setFormasPago] = useState<LineaPago[]>([]);
   const [adelantosPendientes, setAdelantosPendientes] = useState<Adelanto[]>([]);
   const [adelModal, setAdelModal] = useState(false);
@@ -709,6 +712,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     const pendienteCash = Math.max(0, total - yaPagado - Math.round(totalAdelantos));
     setAdelantosPendientes(pendientes);
     setPagoModal({ emp, nov, liq });
+    setIdempKeyPagarSueldo(crypto.randomUUID());
     setFormasPago(pendienteCash > 0 ? [{ cuenta: "", monto: String(pendienteCash) }] : []);
   };
 
@@ -838,6 +842,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
           setAdelantosPendientes={setAdelantosPendientes}
           abrirPagoSueldo={abrirPagoSueldo}
           cuentasUsables={cuentasUsables}
+          idempKeyPagarSueldo={idempKeyPagarSueldo}
         />
       )}
 
@@ -1170,6 +1175,7 @@ interface TabPagosProps {
   setAdelantosPendientes: React.Dispatch<React.SetStateAction<Adelanto[]>>;
   abrirPagoSueldo: (emp: Empleado, nov: Novedad, liq: LiquidacionConGenerated) => Promise<void>;
   cuentasUsables: string[];
+  idempKeyPagarSueldo: string;
 }
 
 function TabPagos({
@@ -1180,7 +1186,7 @@ function TabPagos({
   pagando, setPagando, loadPagos, loadEmpleados, showToast,
   allEmps, adelModal, setAdelModal, adelForm, setAdelForm, guardarAdelanto,
   adelantosPendientes, setAdelantosPendientes, abrirPagoSueldo,
-  cuentasUsables,
+  cuentasUsables, idempKeyPagarSueldo,
 }: TabPagosProps) {
   return (
     <>
@@ -1292,6 +1298,7 @@ function TabPagos({
               p_anio: pagoAnio,
               p_crear_liq: !!liq._generated,
               p_calc: pCalc,
+              p_idempotency_key: idempKeyPagarSueldo,
             });
             if (error) throw error;
 

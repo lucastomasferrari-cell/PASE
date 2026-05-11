@@ -220,4 +220,51 @@ test.describe("Facturas — pagar mutante", () => {
     expect(provFinalErr).toBeNull();
     expect(provFinal?.saldo).toBe(saldoProvInicial);
   });
+
+  // ── Test mutante #2: idempotency (anti doble-click). DB-only. ──────────
+  // F8 del plan sunny-creek: la RPC acepta p_idempotency_key. Si se llama
+  // 2da vez con el mismo key + mismo fact_id, devuelve el resultado de la
+  // 1ra llamada sin duplicar pago/movimiento/saldo.
+  test("pagar_factura con idempotency_key: 2da llamada no duplica efectos", async () => {
+    const idempKey = `test-fac-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const { data: r1, error: e1 } = await db.rpc("pagar_factura", {
+      p_factura_id: facturaId,
+      p_monto: SENTINEL,
+      p_cuenta: CUENTA,
+      p_fecha: todayISO(),
+      p_idempotency_key: idempKey,
+    });
+    expect(e1).toBeNull();
+    const movIdPrimero = (r1 as { mov_id: string }).mov_id;
+    movId = movIdPrimero;
+
+    // 2da llamada con misma key.
+    const { data: r2, error: e2 } = await db.rpc("pagar_factura", {
+      p_factura_id: facturaId,
+      p_monto: SENTINEL,
+      p_cuenta: CUENTA,
+      p_fecha: todayISO(),
+      p_idempotency_key: idempKey,
+    });
+    expect(e2).toBeNull();
+    expect((r2 as { idempotent_replay?: boolean }).idempotent_replay).toBe(true);
+    expect((r2 as { mov_id: string }).mov_id).toBe(movIdPrimero);
+
+    // No se duplicó el movimiento (solo 1 fila con fact_id = facturaId).
+    const { data: movsAfter } = await db
+      .from("movimientos").select("id").eq("fact_id", facturaId);
+    expect(movsAfter?.length).toBe(1);
+
+    // facturas.pagos tiene solo 1 entry (no duplicado).
+    const { data: facsAfter } = await db
+      .from("facturas").select("estado, pagos").eq("id", facturaId);
+    expect(facsAfter?.[0]?.estado).toBe("pagada");
+    expect((facsAfter?.[0]?.pagos as unknown[] || []).length).toBe(1);
+
+    // saldos_caja bajó por SENTINEL exacto (no 2x).
+    const { data: saldoAfter } = await db
+      .from("saldos_caja").select("saldo")
+      .eq("cuenta", CUENTA).eq("local_id", localId).maybeSingle();
+    expect(saldoAfter?.saldo).toBe(saldoCajaInicial - SENTINEL);
+  });
 });

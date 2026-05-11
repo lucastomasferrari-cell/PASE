@@ -176,4 +176,59 @@ test.describe("Gastos — mutante", () => {
     expect(saldoFinalErr).toBeNull();
     expect(saldoFinal?.saldo).toBe(saldoInicial - SENTINEL);
   });
+
+  // ── Test mutante #2: idempotency (F8). DB-only. ─────────────────────────
+  // crear_gasto acepta p_idempotency_key. 2da llamada con misma key devuelve
+  // el resultado original sin crear gasto/movimiento/saldo adicionales.
+  test("crear_gasto con idempotency_key: 2da llamada no duplica efectos", async () => {
+    const idempKey = `test-gasto-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const SENTINEL_IDEM = 234001.23; // distinto del test #1 para no colisionar
+
+    const { data: r1, error: e1 } = await db.rpc("crear_gasto", {
+      p_fecha: new Date().toISOString().slice(0, 10),
+      p_local_id: localId,
+      p_categoria: CATEGORIA,
+      p_tipo: "fijo",
+      p_monto: SENTINEL_IDEM,
+      p_detalle: "e2e idempotency",
+      p_cuenta: CUENTA,
+      p_plantilla_id: null,
+      p_idempotency_key: idempKey,
+    });
+    expect(e1).toBeNull();
+    gastoId = (r1 as { gasto_id: string }).gasto_id;
+    movId = (r1 as { mov_id: string }).mov_id;
+
+    const saldoTrasUno = (await db.from("saldos_caja").select("saldo")
+      .eq("cuenta", CUENTA).eq("local_id", localId).maybeSingle()).data?.saldo;
+
+    const { data: r2, error: e2 } = await db.rpc("crear_gasto", {
+      p_fecha: new Date().toISOString().slice(0, 10),
+      p_local_id: localId,
+      p_categoria: CATEGORIA,
+      p_tipo: "fijo",
+      p_monto: SENTINEL_IDEM,
+      p_detalle: "e2e idempotency",
+      p_cuenta: CUENTA,
+      p_plantilla_id: null,
+      p_idempotency_key: idempKey,
+    });
+    expect(e2).toBeNull();
+    expect((r2 as { idempotent_replay?: boolean }).idempotent_replay).toBe(true);
+    expect((r2 as { gasto_id: string }).gasto_id).toBe(gastoId);
+    expect((r2 as { mov_id: string }).mov_id).toBe(movId);
+
+    // No se creó otro gasto/movimiento.
+    const { data: gastosAfter } = await db.from("gastos").select("id")
+      .eq("monto", SENTINEL_IDEM).eq("local_id", localId);
+    expect(gastosAfter?.length).toBe(1);
+    const { data: movsAfter } = await db.from("movimientos").select("id")
+      .eq("gasto_id_ref", gastoId);
+    expect(movsAfter?.length).toBe(1);
+
+    // Saldo no cambió tras la 2da llamada (replay no impacta).
+    const saldoTrasDos = (await db.from("saldos_caja").select("saldo")
+      .eq("cuenta", CUENTA).eq("local_id", localId).maybeSingle()).data?.saldo;
+    expect(saldoTrasDos).toBe(saldoTrasUno);
+  });
 });

@@ -68,6 +68,10 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
   const [pagarModal, setPagarModal] = useState<GastoPlantilla | null>(null);
+  // Idempotency keys (convención C1) — anti doble-click en los dos modales
+  // que invocan crear_gasto. Se regeneran al abrir cada modal.
+  const [idempKeyCrearGasto, setIdempKeyCrearGasto] = useState<string>(() => crypto.randomUUID());
+  const [idempKeyPagarPlant, setIdempKeyPagarPlant] = useState<string>(() => crypto.randomUUID());
   const [gestionarModal, setGestionarModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pagandoPlant, setPagandoPlant] = useState(false);
@@ -163,6 +167,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
         p_detalle: form.detalle || form.categoria,
         p_cuenta: form.cuenta,
         p_plantilla_id: form.plantilla_id || null,
+        p_idempotency_key: idempKeyCrearGasto,
       });
       if (error) throw error;
       setModal(false); setForm(emptyForm); load();
@@ -177,6 +182,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
   const abrirPagarPlantilla = (p: GastoPlantilla) => {
     setPagarModal(p);
     setPagoPlantForm({ ...emptyPagoPlant, fecha: toISO(today) });
+    setIdempKeyPagarPlant(crypto.randomUUID());
   };
 
   const confirmarPagoPlantilla = async () => {
@@ -194,6 +200,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
         p_detalle: pagarModal.nombre,
         p_cuenta: pagoPlantForm.cuenta,
         p_plantilla_id: pagarModal.id,
+        p_idempotency_key: idempKeyPagarPlant,
       });
       if (error) throw error;
       setPagarModal(null); setPagoPlantForm(emptyPagoPlant); load();
@@ -228,7 +235,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
     <div>
       <div className="ph-row">
         <div><div className="ph-title">Gastos</div></div>
-        <button className="btn btn-acc" onClick={() => { setForm(emptyForm); setModal(true); }}>+ Cargar Gasto</button>
+        <button className="btn btn-acc" onClick={() => { setForm(emptyForm); setModal(true); setIdempKeyCrearGasto(crypto.randomUUID()); }}>+ Cargar Gasto</button>
       </div>
 
       {/* Filtros: búsqueda + rango fechas + dropdown de tipo (antes pills inline,

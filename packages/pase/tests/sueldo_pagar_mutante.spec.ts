@@ -269,4 +269,78 @@ test.describe("Sueldo — pagar mutante", () => {
     expect(saldoFinalErr).toBeNull();
     expect(saldoFinal?.saldo).toBe(saldoCajaInicial - SENTINEL);
   });
+
+  // ── Test mutante #2: idempotency (F8). DB-only. ─────────────────────────
+  // pagar_sueldo acepta p_idempotency_key. 2da llamada con misma key debe
+  // devolver el resultado cacheado SIN tirar LIQUIDACION_YA_PAGADA. Esto
+  // garantiza que el check de idempotency corre ANTES de las validaciones
+  // de estado de la liquidación.
+  test("pagar_sueldo con idempotency_key: 2da llamada devuelve cacheado, no falla", async () => {
+    const idempKey = `test-sueldo-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    // Calc inline (mismo shape que el frontend cuando liq._generated=true):
+    // 100% efectivo, sin extras, sin presentismo, total = SENTINEL.
+    const pCalc = {
+      sueldo_base: SENTINEL,
+      descuento_ausencias: 0,
+      total_horas_extras: 0,
+      total_dobles: 0,
+      total_feriados: 0,
+      total_vacaciones: 0,
+      subtotal1: SENTINEL,
+      monto_presentismo: 0,
+      subtotal2: SENTINEL,
+      adelantos: 0,
+      total_a_pagar: SENTINEL,
+      efectivo: SENTINEL,
+      transferencia: 0,
+    };
+    const formasPago = [{ cuenta: CUENTA, monto: SENTINEL }];
+
+    const { data: r1, error: e1 } = await db.rpc("pagar_sueldo", {
+      p_nov_id: novId,
+      p_formas_pago: formasPago,
+      p_adelantos_ids: [],
+      p_fecha: new Date().toISOString().slice(0, 10),
+      p_mes: MES,
+      p_anio: ANIO,
+      p_crear_liq: true,
+      p_calc: pCalc,
+      p_idempotency_key: idempKey,
+    });
+    expect(e1).toBeNull();
+    expect((r1 as { completa: boolean }).completa).toBe(true);
+    const movIdsPrimero = (r1 as { mov_ids: string[] }).mov_ids;
+    liqId = (r1 as { liquidacion_id: string }).liquidacion_id;
+    if (movIdsPrimero && movIdsPrimero.length > 0) movId = movIdsPrimero[0]!;
+
+    const saldoTrasUno = (await db.from("saldos_caja").select("saldo")
+      .eq("cuenta", CUENTA).eq("local_id", localId).maybeSingle()).data?.saldo;
+
+    // 2da llamada con misma key — debe devolver cacheado, NO tirar
+    // LIQUIDACION_YA_PAGADA. Esto valida que el cache se chequea al inicio.
+    const { data: r2, error: e2 } = await db.rpc("pagar_sueldo", {
+      p_nov_id: novId,
+      p_formas_pago: formasPago,
+      p_adelantos_ids: [],
+      p_fecha: new Date().toISOString().slice(0, 10),
+      p_mes: MES,
+      p_anio: ANIO,
+      p_crear_liq: true,
+      p_calc: pCalc,
+      p_idempotency_key: idempKey,
+    });
+    expect(e2).toBeNull();
+    expect((r2 as { idempotent_replay?: boolean }).idempotent_replay).toBe(true);
+    expect((r2 as { mov_ids: string[] }).mov_ids).toEqual(movIdsPrimero);
+
+    // No se duplicaron movimientos.
+    const { data: movsAfter } = await db.from("movimientos").select("id")
+      .eq("liquidacion_id", liqId);
+    expect(movsAfter?.length).toBe(formasPago.length);
+
+    // Saldo no cambió tras la 2da llamada.
+    const saldoTrasDos = (await db.from("saldos_caja").select("saldo")
+      .eq("cuenta", CUENTA).eq("local_id", localId).maybeSingle()).data?.saldo;
+    expect(saldoTrasDos).toBe(saldoTrasUno);
+  });
 });
