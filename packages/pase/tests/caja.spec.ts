@@ -5,7 +5,7 @@ import { goTo } from "./helpers/navigation";
 test.describe("Caja & Bancos", () => {
   test.beforeEach(async ({ page }) => {
     await loginAs(page, "dueno");
-    await goTo(page, "Caja & Bancos");
+    await goTo(page, "Tesorería");
     await page.waitForTimeout(1000);
   });
 

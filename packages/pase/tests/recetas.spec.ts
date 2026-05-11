@@ -2,7 +2,9 @@ import { test, expect } from "@playwright/test";
 import { loginAs } from "./helpers/auth";
 import { goTo } from "./helpers/navigation";
 
-test.describe("Recetas", () => {
+// Módulo Recetas eliminado: no existe página dedicada en el sidebar actual.
+// Specs en hold hasta decidir si el módulo vuelve o si se borran del repo.
+test.describe.skip("Recetas", () => {
   test.beforeEach(async ({ page }) => {
     await loginAs(page, "dueno");
     await goTo(page, "Recetas");

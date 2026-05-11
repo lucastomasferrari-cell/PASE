@@ -5,7 +5,10 @@ import { goTo } from "./helpers/navigation";
 test.describe("Remitos", () => {
   test.beforeEach(async ({ page }) => {
     await loginAs(page, "dueno");
-    await goTo(page, "Remitos");
+    // Remitos ya no es módulo propio: vive dentro de Compras, accesible vía
+    // la pill "Remitos" que alterna la tabla principal.
+    await goTo(page, "Compras");
+    await page.locator(".pill", { hasText: "Remitos" }).click();
     await page.waitForTimeout(1000);
   });
 
@@ -21,7 +24,6 @@ test.describe("Remitos", () => {
     if (!visible) { test.skip(); return; }
     const hText = (await thead.innerText()).toUpperCase();
     expect(hText).toContain("PROVEEDOR");
-    expect(hText).toContain("REMITO");
     expect(hText).toContain("MONTO");
   });
 

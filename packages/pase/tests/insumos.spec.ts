@@ -2,7 +2,10 @@ import { test, expect } from "@playwright/test";
 import { loginAs } from "./helpers/auth";
 import { goTo } from "./helpers/navigation";
 
-test.describe("Insumos", () => {
+// Módulo Insumos eliminado: ya no hay página dedicada (los insumos viven
+// como ítems dentro de Compras/Facturas). Specs en hold hasta decidir si se
+// reescriben para cubrir la lista interna o si se borran.
+test.describe.skip("Insumos", () => {
   test.beforeEach(async ({ page }) => {
     await loginAs(page, "dueno");
     await goTo(page, "Insumos");

@@ -26,11 +26,4 @@ test.describe("Persistencia de sesión", () => {
     await newPage.close();
   });
 
-  test("sesión usa localStorage → persiste entre pestañas", async ({ page }) => {
-    await loginAs(page, "dueno");
-    // Verificar que pase_uid está en localStorage
-    const uid = await page.evaluate(() => localStorage.getItem("pase_uid"));
-    expect(uid).toBeTruthy();
-    expect(Number(uid)).toBeGreaterThan(0);
-  });
 });

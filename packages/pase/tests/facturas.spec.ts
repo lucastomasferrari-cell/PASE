@@ -1,13 +1,13 @@
 import { test, expect } from "@playwright/test";
 import { loginAs } from "./helpers/auth";
+import { goTo } from "./helpers/navigation";
 
 test.describe("Facturas", () => {
   test.beforeEach(async ({ page }) => {
     await loginAs(page, "dueno");
-    // "Facturas" matchea también "Lector Facturas IA", usar locator exacto
-    const navItem = page.locator(".nav-item").filter({ hasText: /^.*📄.*Facturas$/ });
-    await navItem.waitFor({ state: "visible", timeout: 10_000 });
-    await navItem.click();
+    // Facturas vive dentro de Compras: el default es la pill "todas" que ya
+    // muestra facturas. Remitos es otra pill en la misma pantalla.
+    await goTo(page, "Compras");
     await page.waitForTimeout(1000);
   });
 
@@ -24,7 +24,7 @@ test.describe("Facturas", () => {
     if (!visible) { test.skip(); return; }
     const hText = (await thead.innerText()).toUpperCase();
     expect(hText).toContain("PROVEEDOR");
-    expect(hText).toContain("FACTURA");
+    expect(hText).toContain("VENCIMIENTO");
     expect(hText).toContain("TOTAL");
   });
 
