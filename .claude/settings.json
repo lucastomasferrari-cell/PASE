@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm typecheck)",
+      "Bash(pnpm lint)",
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(node --check *)",
+      "Bash(yarn type-check)",
+      "Bash(php -l *)",
+      "Bash(bash .claude/hooks/*)",
+      "Bash(pnpm --filter pase typecheck)",
+      "Bash(pnpm --filter comanda typecheck)",
+      "mcp__claude_ai_Vercel__list_deployments",
+      "mcp__claude_ai_Vercel__get_deployment"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/typecheck-on-edit.sh",
+            "timeout": 90,
+            "statusMessage": "Typechecking..."
+          }
+        ]
+      }
+    ]
+  }
+}
