@@ -53,8 +53,6 @@ const TIPOS_GASTO: { id: string; label: string }[] = [
   { id: "retiro_socio", label: "Retiro de Socios" },
 ];
 const TIPOS_GASTO_IDS = TIPOS_GASTO.map(t => t.id);
-const labelTipoGasto = (id: string): string =>
-  TIPOS_GASTO.find(t => t.id === id)?.label || id;
 
 export default function Configuracion({ user, locales }: ConfiguracionProps) {
   const [tab, setTab] = useState("categorias_gastos");

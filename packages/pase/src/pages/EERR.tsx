@@ -122,6 +122,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
   // mesesComp o cambia localActivo (los datos cacheados se invalidan porque
   // pueden ser de otro local).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- el setState sincrónico es intencional: limpiar dataComp cuando el usuario quita todos los meses. No hay ciclo: si mesesComp ya era [], el effect no se re-dispara.
     if (mesesComp.length === 0) { setDataComp({}); return; }
     let cancelled = false;
     setLoadingComp(true);

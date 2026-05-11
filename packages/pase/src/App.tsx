@@ -18,8 +18,10 @@ import Proveedores from "./pages/Proveedores";
 import Usuarios from "./pages/Usuarios";
 import LectorFacturasIA from "./pages/LectorFacturasIA";
 import ConciliacionMP from "./pages/ConciliacionMP";
-import Cashflow from "./pages/Cashflow";
-import Cierre from "./pages/Cierre";
+// Cashflow y Cierre están "ocultos" del sidebar (Lucas, 2026-05-08): sus
+// cases en el switch redirigen a Dashboard/EERR respectivamente. Los imports
+// quedan como código muerto — reactivar agregando back el import + el item
+// del nav cuando corresponda.
 import Blindaje from "./pages/Blindaje";
 import RRHHPage from "./pages/RRHH";
 import Configuracion from "./pages/Configuracion";
