@@ -13,7 +13,7 @@
 
 ### Hallazgos por prioridad
 
-- **BLOCKER:** 4 hallazgos
+- **BLOCKER:** 4 hallazgos (2 resueltos al 2026-05-11: #1.1 IDOR caja y #2.1 total negativo)
 - **HIGH:** 8 hallazgos
 - **MEDIUM:** 11 hallazgos
 - **LOW:** 9 hallazgos
@@ -98,7 +98,16 @@ El primer sub-agent reportó como BLOCKER que existían **32 policies `USING (tr
 
 ### 1. Seguridad crítica
 
-#### 1.1 [BLOCKER] IDOR en RPCs de caja COMANDA
+#### 1.1 [BLOCKER] IDOR en RPCs de caja COMANDA — ✅ RESUELTO PARCIAL (2026-05-11)
+
+**Resuelto en migration `202605111700_comanda_blockers_fix.sql`** (commit `e3885c1`):
+- Helper `_check_local_y_empleado_comanda(p_local_id, p_empleado_id)` valida que el caller tenga el local asignado y que el empleado pertenezca al tenant + local.
+- `fn_abrir_turno_caja_comanda` y `fn_movimiento_caja_comanda` ahora llaman al helper al inicio.
+- Dueño/admin/superadmin bypasean el check de local pero NO el de tenant/local del empleado.
+
+**Pendiente:** las otras 2 RPCs flageadas (`fn_anular_item_comanda`, `fn_aplicar_descuento_comanda`) NO se tocaron — usan `p_manager_id` como override y necesitan semántica distinta (manager puede ser de otro local).
+
+---
 
 **Archivo:** `packages/pase/supabase/migrations/202605051800_comanda_sprint_2.sql:600-668`
 
@@ -199,7 +208,15 @@ CREATE POLICY "cls_mt" ON comanda_local_settings FOR ALL TO authenticated
 
 ### 2. Integridad financiera
 
-#### 2.1 [BLOCKER] `fn_recalc_total_venta` permite total negativo
+#### 2.1 [BLOCKER] `fn_recalc_total_venta` permite total negativo — ✅ RESUELTO (2026-05-11)
+
+**Resuelto en migration `202605111700_comanda_blockers_fix.sql`** (commit `e3885c1`):
+`total = GREATEST(0, v_subtotal - descuento_total + propina)`. La validación
+principal de "descuento no puede superar subtotal" sigue pendiente en
+`fn_aplicar_descuento_comanda` (hallazgo separado) pero este floor previene
+el efecto contable downstream (movimiento_caja, EERR).
+
+---
 
 **Archivo:** `202605051800_comanda_sprint_2.sql:781-794`
 

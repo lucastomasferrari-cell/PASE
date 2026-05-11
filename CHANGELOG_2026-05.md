@@ -258,6 +258,58 @@ Convención agregada a `CLAUDE.md` para que el incidente no se repita. Incluye c
 
 ---
 
+## 2026-05-11 (continuación — sesión Lucas despierto)
+
+### `85ad834` — fix: remitos proveedor opcional + blindaje dedup + manejo de errores
+
+Dos pedidos de Lucas vía WhatsApp.
+
+**Remitos — proveedor ahora opcional:**
+- `Compras.tsx::guardarRemito`: quitar `!remForm.prov_id` del guard.
+- Form: label "Proveedor *" → "Proveedor", option default "Sin proveedor".
+- INSERT manda `null` (no `NaN`) cuando no se selecciona proveedor.
+- Migration `202605111400` (idempotente, doc retroactiva): la columna `remitos.prov_id` ya era nullable; queda en repo como decisión explícita.
+- RPC `pagar_remito` ya manejaba `prov_id NULL` correctamente.
+
+**Blindaje — causa raíz del "no deja modificar":**
+- En DB había **5 tipos de documento duplicados** (IDs 6-10 copia exacta de 1-5, mismo nombre/orden/tenant). Al editar uno, el duplicado quedaba con el nombre viejo — parecía que "no se modificaba".
+- Migration `202605111500` (aplicada): DELETE de duplicados (conservando id mínimo por `(tenant_id, nombre)`) + ADD UNIQUE constraint para prevenir futuros duplicados.
+- Frontend `Blindaje.tsx`: agregar manejo de error con alert en `guardarTipo` / `eliminarTipo` / `guardarDoc`. Antes el modal se cerraba silenciosamente aunque la operación fallara. Error 23505 (UNIQUE violation) se traduce a "Ya existe un tipo con el nombre X".
+
+---
+
+### `137b84e` — feat(pwa): versión mínima — instalable desde el browser del celular
+
+Lucas pidió "una app para usar desde el celu". Versión mínima del backlog (sin service worker, sin push).
+
+- `packages/pase/public/manifest.webmanifest`: name=PASE, display=standalone (sin barra del browser), theme color violeta `#863bff` (matchea el favicon), background_color dark. Íconos apuntan al `favicon.svg` existente.
+- `packages/pase/index.html`: title "Vite + React + TS" → "PASE", lang="es-AR", link al manifest, apple-touch-icon, meta theme-color, apple-mobile-web-app-capable + title, viewport con `viewport-fit=cover` para respetar el notch del iPhone en standalone.
+
+**Cómo instalar:**
+- Android Chrome: menú ⋮ → "Instalar app" / "Agregar a pantalla de inicio".
+- iOS Safari: botón compartir → "Agregar a pantalla de inicio".
+
+---
+
+### `e3885c1` — feat(comanda): cerrar BLOCKERs #1 (IDOR caja) y #2 (total negativo) + catch-up schema
+
+**Migration `202605111600` — `rrhh_pagos_especiales` catch-up retroactivo:**
+Drift de schema descubierto en audit: columnas `monto_pagado` y `pendiente` existen en DB pero no estaban en migrations del repo (alguien las agregó manual). Las RPCs `pagar_vacaciones` y `pagar_aguinaldo` las usan en INSERT. Sin esta migration, si la DB se recrea desde cero las RPCs fallaban. Idempotente con `IF NOT EXISTS`.
+
+**Migration `202605111700` — BLOCKERs de COMANDA (AUDITORIA_TECNICA_2026-05-07):**
+
+*BLOCKER #2 — `fn_recalc_total_venta` total negativo (1 línea):*
+`total = subtotal - descuento_total + propina` quedaba < 0 si el descuento supera `subtotal+propina`, y se propagaba a movimiento_caja como egreso fantasma. Fix: `GREATEST(0, ...)`.
+
+*BLOCKER #1 — IDOR en RPCs de caja:*
+`fn_abrir_turno_caja_comanda` y `fn_movimiento_caja_comanda` aceptaban `p_local_id` + `p_cajero_id/p_empleado_id` arbitrarios. Un encargado del Local A podía abrir un turno en el Local B asignando un cajero del Local B. Fix: helper `_check_local_y_empleado_comanda(local, empleado)` que valida (a) `p_local_id ∈ auth_locales_visibles()`, (b) empleado pertenece al tenant del caller, (c) si el empleado tiene `local_id` concreto, matchea. Dueño/admin/superadmin bypasean (a) pero NO (b)/(c). Empleados con `local_id` NULL (manager regional) pasan ok.
+
+*Diferidos:* BLOCKER #3 (idempotency en 8 RPCs) — refactor mayor con cambio de signature. BLOCKER #4 (storage UUID prefix) — backfill grande, diferido hasta pre-onboarding del 2do tenant. `fn_anular_item_comanda` y `fn_aplicar_descuento_comanda` también están en BLOCKER #1 pero usan `p_manager_id` (override de otro local) — semántica distinta, análisis aparte.
+
+**Verificado en prod:** 2 columnas presentes, 4 funciones actualizadas, helper privado creado.
+
+---
+
 ## Decisiones de producto durables (NO en commits, pero relevantes)
 
 ### Compras vs Gastos
