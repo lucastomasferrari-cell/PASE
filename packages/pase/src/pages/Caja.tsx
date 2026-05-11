@@ -4,10 +4,16 @@ import { applyLocalScope, cuentasVisibles as cuentasVisiblesFn, cuentasOperables
 import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { useRealtimeTable } from "../lib/useRealtimeTable";
+import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import type { Usuario, Local } from "../types/auth";
 import type { Movimiento } from "../types/finanzas";
+
+// Tamaño de página de Tesorería. 80 cubre ~1 semana en un local con
+// volumen alto, ~1 mes en uno de volumen bajo. Botón "Cargar más" trae
+// otros 80 cuando hace falta.
+const TESORERIA_PAGE_SIZE = 80;
 
 interface CajaProps {
   user: Usuario | null;
@@ -97,6 +103,16 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   const [filtCuenta, setFiltCuenta] = useState("Todas");
   const [mostrarAnulados, setMostrarAnulados] = useState(false);
   const [loading, setLoading] = useState(true);
+  // F4 (sunny-creek): filtros de fecha + paginación cursor. Default 90d
+  // (consistente con Compras/Gastos/ConciliacionMP). hasMore=true mientras
+  // la última query devolvió exactamente PAGE_SIZE filas.
+  const [filtDesde, setFiltDesde] = useState(() => { const d = new Date(today); d.setDate(d.getDate() - 90); return toISO(d); });
+  const [filtHasta, setFiltHasta] = useState(toISO(today));
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  // Debounce: evita disparar fetch en cada keystroke del datepicker.
+  const debDesde = useDebouncedValue(filtDesde, 300);
+  const debHasta = useDebouncedValue(filtHasta, 300);
   const [detalleEdicion, setDetalleEdicion] = useState<Movimiento | null>(null);
   const [auditLog, setAuditLog] = useState<AuditDetalle | null>(null);
   // Bug Caja-1 (4-mayo): el default cuenta="Caja Chica" pisaba la elección
@@ -153,23 +169,37 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   const [savingEdit, setSavingEdit] = useState(false);
   const necesitaSelectorLocal = lidImplicito == null && locsDisp.length > 1;
 
-  const load = async () => {
-    setLoading(true);
-    let q = db.from("movimientos").select("*").order("fecha", {ascending: false}).order("id", {ascending: false}).limit(80);
+  // Query reutilizable para movimientos con filtros + paginación.
+  // offset/limit usa .range(from, to) que en supabase-js es [from, to]
+  // inclusivo. PAGE_SIZE filas: range(0, PAGE-1), range(PAGE, 2*PAGE-1), etc.
+  const queryMovimientos = (offset: number, limit: number) => {
+    let q = db.from("movimientos").select("*")
+      .gte("fecha", debDesde)
+      .lte("fecha", debHasta)
+      .order("fecha", { ascending: false })
+      .order("id", { ascending: false })
+      .range(offset, offset + limit - 1);
     q = applyLocalScope(q, user, localActivo);
-    // Tabla de movimientos: visibles ∪ operables. Coherente con
-    // "puedo ver el movimiento aunque no vea el saldo consolidado de la
-    // cuenta destino". visParaListado === null = sin restricción.
     if (visParaListado !== null) {
       if (visParaListado.length === 0) {
-        q = q.eq("cuenta", "___NONE___"); // match imposible → 0 filas
+        q = q.eq("cuenta", "___NONE___");
       } else {
         q = q.in("cuenta", visParaListado);
       }
     }
+    return q;
+  };
+
+  const load = async () => {
+    setLoading(true);
+    // Tabla de movimientos: visibles ∪ operables. Coherente con
+    // "puedo ver el movimiento aunque no vea el saldo consolidado de la
+    // cuenta destino". visParaListado === null = sin restricción.
+    const mQ = queryMovimientos(0, TESORERIA_PAGE_SIZE);
     // Saldos: SOLO cuentas_visibles. La separación de Fase 5 — operar sin
     // ver saldo es intencional. Si el user no tiene la cuenta en visibles,
     // la card no se renderiza pero los movimientos sí aparecen via la tabla.
+    // Los saldos son estado actual — NO se filtran por fecha.
     let sq = db.from("saldos_caja").select("*");
     sq = applyLocalScope(sq, user, localActivo);
     if (vis !== null) {
@@ -179,17 +209,32 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         sq = sq.in("cuenta", vis);
       }
     }
-    const [{data:m},{data:s}] = await Promise.all([q, sq]);
-    setMovimientos((m as Movimiento[]) || []);
+    const [{data:m},{data:s}] = await Promise.all([mQ, sq]);
+    const movs = (m as Movimiento[]) || [];
+    setMovimientos(movs);
+    setHasMore(movs.length === TESORERIA_PAGE_SIZE);
     // Si no hay localActivo, se agregan saldos de todos los locales por cuenta
     const obj: Record<string, number> = {};
     (s||[]).forEach(x=> { obj[x.cuenta] = (obj[x.cuenta]||0) + (x.saldo||0); });
     setSaldos(obj);
     setLoading(false);
   };
-  // Patrón fetch-on-dep-change.
+
+  // Pagination forward: trae el siguiente bloque y lo concatena. No resetea
+  // el listado actual ni los saldos.
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const { data: m } = await queryMovimientos(movimientos.length, TESORERIA_PAGE_SIZE);
+    const nuevos = (m as Movimiento[]) || [];
+    setMovimientos(prev => [...prev, ...nuevos]);
+    setHasMore(nuevos.length === TESORERIA_PAGE_SIZE);
+    setLoadingMore(false);
+  };
+
+  // Patrón fetch-on-dep-change. Re-fetch al cambiar local o rango de fechas.
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
-  useEffect(()=>{load();},[localActivo]);
+  useEffect(()=>{load();},[localActivo, debDesde, debHasta]);
 
   // Sprint Realtime: cualquier cambio remoto en movimientos o saldos_caja
   // del mismo tenant dispara reload. Refresca la card de saldos + lista
@@ -377,9 +422,14 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         </div>
       )}
       <div className="panel">
-        <div className="panel-hd">
+        <div className="panel-hd" style={{flexWrap:"wrap",gap:8}}>
           <span className="panel-title">Movimientos</span>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            <input type="date" className="search" style={{width:140}} value={filtDesde}
+              onChange={e=>setFiltDesde(e.target.value)} title="Desde" />
+            <span style={{color:"var(--muted2)",fontSize:11}}>→</span>
+            <input type="date" className="search" style={{width:140}} value={filtHasta}
+              onChange={e=>setFiltHasta(e.target.value)} title="Hasta" />
             {tienePermiso(user, "ver_anulados") && (
               <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"var(--muted2)",cursor:"pointer"}}>
                 <input type="checkbox" checked={mostrarAnulados} onChange={e => setMostrarAnulados(e.target.checked)}/>
@@ -433,6 +483,19 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
               </td>
             </tr>
           ))}</tbody></table>
+        )}
+        {/* Contador + paginación. Total exacto del rango lo trae el conteo
+            del último query (proxy con movimientos.length + hasMore=true ⇒
+            "X+"). Si hasMore, botón "Cargar más" trae otro bloque. */}
+        {!loading && movimientos.length > 0 && (
+          <div style={{padding:"8px 12px",borderTop:"1px solid var(--bd)",display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:11,color:"var(--muted2)"}}>
+            <span>Mostrando {mFilt.length} de {movimientos.length}{hasMore ? "+" : ""} movimientos en el rango</span>
+            {hasMore && (
+              <button className="btn btn-ghost btn-sm" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore ? "Cargando..." : "Cargar más"}
+              </button>
+            )}
+          </div>
         )}
       </div>
 
