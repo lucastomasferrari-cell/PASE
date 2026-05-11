@@ -373,7 +373,9 @@ export default function App() {
             filter: "blur(40px)"
           }}/>
         </div>
-        <div style={{position:"relative",zIndex:1}}>
+        {/* zIndex:2 (mayor al main de zIndex:1) para que en mobile el sidebar
+            quede por encima del contenido del main cuando se despliega. */}
+        <div style={{position:"relative",zIndex:2}}>
           <Sidebar user={user} section={section} onNav={setSection}
             onLogout={logout} onRefreshPerms={refreshPermisos}
             locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo}
