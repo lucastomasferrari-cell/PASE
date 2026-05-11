@@ -245,16 +245,22 @@ td{padding:9px 12px;font-size:12.5px}
 .pill.active{background:var(--s3);color:var(--txt);border-color:var(--bd2)}
 /* build: 2026-04-16-12 */
 
-/* ─── MOBILE ≤768px ─────────────────────────────────────────────────── */
-@media (max-width: 768px) {
+/* ─── MOBILE/TABLET ≤1024px ────────────────────────────────────────── */
+/* Breakpoint a 1024 para que iPad portrait también use hamburger. */
+@media (max-width: 1024px) {
   .sb {
     transform: translateX(-100%);
     transition: transform 0.25s ease;
     z-index: 50;
-    width: 220px;
+    width: 240px;
   }
   .sb.open { transform: translateX(0); }
-  .main { margin-left: 0; padding: 16px; }
+  /* padding-top deja lugar para el hamburger fijo + safe-area en iOS standalone. */
+  .main {
+    margin-left: 0;
+    padding: 16px;
+    padding-top: calc(60px + env(safe-area-inset-top, 0px));
+  }
   .grid4 { grid-template-columns: repeat(2,1fr); }
   .grid3 { grid-template-columns: repeat(2,1fr); }
   .grid2 { grid-template-columns: 1fr; }
@@ -272,22 +278,27 @@ td{padding:9px 12px;font-size:12.5px}
 }
 
 /* ─── HAMBURGER BUTTON ───────────────────────────────────────────────── */
+/* Botón muy visible: color acento + sombra. Respeta safe-area del iPhone
+   notch cuando la app corre en standalone (PWA). */
 .hamburger {
   display: none;
   position: fixed;
-  top: 12px;
-  left: 12px;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  left: calc(12px + env(safe-area-inset-left, 0px));
   z-index: 60;
-  background: var(--s2);
-  border: 1px solid var(--bd);
-  border-radius: 6px;
-  padding: 6px 8px;
+  background: var(--acc);
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
   cursor: pointer;
-  color: var(--txt);
-  font-size: 16px;
+  color: #fff;
+  font-size: 20px;
   line-height: 1;
+  font-weight: 700;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.5);
 }
-@media (max-width: 768px) {
+.hamburger:active { transform: scale(0.96); }
+@media (max-width: 1024px) {
   .hamburger { display: flex; align-items: center; justify-content: center; }
   .overlay-sb {
     display: none;
