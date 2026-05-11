@@ -11,7 +11,7 @@
 - src/components/Layout.tsx → sidebar + navegación
 - src/lib/supabase.ts → cliente Supabase (anon key desde VITE_SUPABASE_ANON_KEY)
 - src/lib/auth.ts → hook useAuth(), tienePermiso(), esEncargado(), localesVisibles(), scopeLocales(), applyLocalScope(), cuentasVisibles(), puedeVerCuenta()
-- api/ → endpoints serverless (mp-sync, mp-generate, mp-process, claude, telegram-webhook, auth-admin, auth-setup, auth-hash-passwords, auth-migrate-all)
+- api/ → endpoints serverless (mp-sync, mp-generate, mp-process, mp-update-pending-releases, claude, telegram-webhook, auth-admin, crear-tenant, backup-tenants, backup-cleanup)
 
 ## Autenticación
 - Login exclusivo vía Supabase Auth (`db.auth.signInWithPassword`). El fallback SHA-256 se eliminó en commit 3805ea7.
@@ -22,7 +22,7 @@
 - Cuentas visibles en Tesorería por usuario: columna `usuarios.cuentas_visibles TEXT[]` (NULL = todas, array = filtro estricto, array vacío = ninguna).
 - Password temporal: columna `usuarios.password_temporal BOOLEAN`. Si es true, el componente `src/pages/ForcePasswordChange.tsx` bloquea navegación hasta cambiar password.
 - Para resetear password: Supabase Dashboard → Authentication → Users → "Reset password", opcionalmente después `UPDATE usuarios SET password_temporal = true WHERE id = X` para forzar cambio al próximo login.
-- Endpoint admin `api/auth-migrate-all.js` para migrar masivamente usuarios sin auth_id (protegido con header `x-admin-secret`, requiere env var `ADMIN_MIGRATION_SECRET` en Vercel).
+- Los endpoints one-shot `auth-setup`, `auth-hash-passwords` y `auth-migrate-all` se eliminaron el 2026-05-11 (ya cumplieron su propósito en la migración inicial a Supabase Auth). Recuperables desde git history si hiciera falta repetir el bootstrap.
 
 ## Módulos activos
 - Dashboard, Ventas, Facturas, Remitos, Gastos, Proveedores
