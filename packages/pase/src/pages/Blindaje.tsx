@@ -111,10 +111,20 @@ export default function Blindaje({ user, locales, localActivo }: BlindajeProps) 
     if (!tipoForm.nombre.trim()) return;
     // tipoModal puede ser "new" | BlindajeTipo | null. Si es BlindajeTipo
     // tiene id (edición); si es "new" no (creación).
-    if (tipoModal && tipoModal !== "new" && tipoModal.id) {
-      await db.from("blindaje_tipos_documento").update({ nombre: tipoForm.nombre, descripcion: tipoForm.descripcion || null, orden: tipoForm.orden }).eq("id", tipoModal.id);
-    } else {
-      await db.from("blindaje_tipos_documento").insert([{ nombre: tipoForm.nombre, descripcion: tipoForm.descripcion || null, orden: tipoForm.orden }]);
+    // El UNIQUE (tenant_id, nombre) puede tirar 23505 si ya existe un tipo
+    // con el mismo nombre — el catch lo traduce a mensaje claro.
+    const isEdit = tipoModal && tipoModal !== "new" && tipoModal.id;
+    const payload = { nombre: tipoForm.nombre.trim(), descripcion: tipoForm.descripcion || null, orden: tipoForm.orden };
+    const { error } = isEdit
+      ? await db.from("blindaje_tipos_documento").update(payload).eq("id", (tipoModal as BlindajeTipo).id)
+      : await db.from("blindaje_tipos_documento").insert([payload]);
+    if (error) {
+      if (error.code === "23505") {
+        alert(`Ya existe un tipo de documento con el nombre "${payload.nombre}".`);
+      } else {
+        alert("No se pudo guardar: " + error.message);
+      }
+      return; // dejar el modal abierto para que pueda corregir
     }
     setTipoModal(null);
     loadTipos();
@@ -148,9 +158,11 @@ export default function Blindaje({ user, locales, localActivo }: BlindajeProps) 
       if (paths.length > 0) {
         await db.storage.from("blindaje").remove(paths);
       }
-      await db.from("blindaje_documentos").delete().eq("tipo_id", t.id);
+      const { error: docErr } = await db.from("blindaje_documentos").delete().eq("tipo_id", t.id);
+      if (docErr) { alert("No se pudieron borrar los documentos: " + docErr.message); return; }
     }
-    await db.from("blindaje_tipos_documento").delete().eq("id", t.id);
+    const { error } = await db.from("blindaje_tipos_documento").delete().eq("id", t.id);
+    if (error) { alert("No se pudo eliminar el tipo: " + error.message); return; }
     loadAll();
   };
 
@@ -198,9 +210,12 @@ export default function Blindaje({ user, locales, localActivo }: BlindajeProps) 
       estado,
       updated_at: new Date().toISOString(),
     };
-    await db.from("blindaje_documentos").upsert([payload], { onConflict: "id" });
-
+    const { error } = await db.from("blindaje_documentos").upsert([payload], { onConflict: "id" });
     setUploading(false);
+    if (error) {
+      alert("No se pudo guardar el documento: " + error.message);
+      return;
+    }
     setDocModal(null);
     setArchivo(null);
     loadDocumentos();

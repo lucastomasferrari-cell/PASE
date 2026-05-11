@@ -414,11 +414,11 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   };
 
   const guardarRemito = async () => {
-    if (!remForm.prov_id || remForm.monto <= 0 || !remForm.local_id) return;
+    if (remForm.monto <= 0 || !remForm.local_id) return;
     const nro = remForm.nro || `REM-${Date.now().toString().slice(-6)}`;
     const nuevo = {
       ...remForm, id: genId("REM"),
-      prov_id: parseInt(remForm.prov_id),
+      prov_id: remForm.prov_id ? parseInt(remForm.prov_id) : null,
       local_id: parseInt(String(remForm.local_id)),
       nro, monto: remForm.monto,
       estado: "sin_factura", factura_id: null,
@@ -947,7 +947,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
             <div className="modal-body">
               <div className="alert alert-info">Para compras informales. Si llega factura, la vinculás. Si no llega, pagás directo.</div>
               <div className="form2">
-                <div className="field"><label>Proveedor *</label><select value={remForm.prov_id} onChange={e => onRemProvChange(e.target.value)}><option value="">Seleccioná...</option>{proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></div>
+                <div className="field"><label>Proveedor</label><select value={remForm.prov_id} onChange={e => onRemProvChange(e.target.value)}><option value="">Sin proveedor</option>{proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></div>
                 <div className="field"><label>Local *</label><select value={remForm.local_id} onChange={e => setRemForm({ ...remForm, local_id: e.target.value })}><option value="">Seleccioná...</option>{localesDisp.map((l: Local) => <option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
               </div>
               <div className="form2">
