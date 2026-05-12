@@ -19,11 +19,16 @@ interface ConfigCategoriaItem {
 interface ConfiguracionProps {
   user: Usuario | null;
   locales?: Local[];
+  // Local activo del sidebar — usado por MediosCobroSection para filtrar
+  // el catálogo por defecto (globales + del local activo). Dueño/admin/
+  // superadmin pueden override con el toggle "Mostrar todos los locales".
+  localActivo: number | null;
 }
 
 interface MediosCobroSectionProps {
   user: Usuario | null;
   locales: Local[];
+  localActivo: number | null;
 }
 
 // Payload de insert/update sobre medios_cobro: Omite id (lo asigna la DB)
@@ -54,7 +59,7 @@ const TIPOS_GASTO: { id: string; label: string }[] = [
 ];
 const TIPOS_GASTO_IDS = TIPOS_GASTO.map(t => t.id);
 
-export default function Configuracion({ user, locales }: ConfiguracionProps) {
+export default function Configuracion({ user, locales, localActivo }: ConfiguracionProps) {
   const [tab, setTab] = useState("categorias_gastos");
   const [items, setItems] = useState<ConfigCategoriaItem[]>([]);
   const [nuevo, setNuevo] = useState("");
@@ -154,7 +159,7 @@ export default function Configuracion({ user, locales }: ConfiguracionProps) {
         ))}
       </div>
       {esMediosCobroTab ? (
-        <MediosCobroSection user={user} locales={locales || []} />
+        <MediosCobroSection user={user} locales={locales || []} localActivo={localActivo} />
       ) : (
         <div className="panel">
           <div className="panel-hd">
@@ -235,10 +240,27 @@ export default function Configuracion({ user, locales }: ConfiguracionProps) {
 // CRUD de medios_cobro (tabla nueva del refactor C). Usa el hook
 // useMediosCobro para refrescar el cache global cuando cambia algo, así
 // los dropdowns en Ventas/Maxirest/etc se enteran sin refresh manual.
-function MediosCobroSection({ user, locales }: MediosCobroSectionProps) {
+function MediosCobroSection({ user, locales, localActivo }: MediosCobroSectionProps) {
   const { todosLosMedios, refresh, loading: hookLoading } = useMediosCobro();
   const [editing, setEditing] = useState<Partial<MedioCobro> | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Toggle "Mostrar todos los locales" — solo visible para dueño/admin/
+  // superadmin. Default: OFF (filtra por local activo del sidebar). Persiste
+  // por usuario en localStorage para que al volver a entrar a Conceptos no
+  // tenga que volver a activarlo manualmente.
+  const puedeVerTodos = user?.rol === "dueno" || user?.rol === "admin" || user?.rol === "superadmin";
+  const storageKey = user?.id ? `conceptos_mostrar_todos_locales_${user.id}` : null;
+  const [mostrarTodos, setMostrarTodos] = useState<boolean>(() => {
+    if (!puedeVerTodos || !storageKey) return false;
+    try { return localStorage.getItem(storageKey) === "1"; } catch { return false; }
+  });
+  const toggleMostrarTodos = (v: boolean) => {
+    setMostrarTodos(v);
+    if (storageKey) {
+      try { localStorage.setItem(storageKey, v ? "1" : "0"); } catch { /* localStorage puede fallar en modo privado o quota lleno */ }
+    }
+  };
 
   // Sprint Realtime: cambios remotos en medios_cobro del mismo tenant
   // disparan refresh del hook (que invalida sessionStorage + re-fetch).
@@ -252,13 +274,30 @@ function MediosCobroSection({ user, locales }: MediosCobroSectionProps) {
     ? locales
     : locales.filter(l => Array.isArray(user?._locales) && user._locales.includes(l.id));
 
+  // Bug 2026-05-11: la pantalla mostraba TODOS los medios del tenant (Lucas
+  // veía medios de Belgrano/Palermo/Cantina estando en Villa Crespo). Fix:
+  // por default filtrar por (global) + (local activo). Dueño/admin/super
+  // puede destildar "Solo local activo" con el toggle para ver todos.
   const items = todosLosMedios()
+    .filter(m => {
+      // Si toggle ON (mostrar todos) o no puede usar el toggle (encargado):
+      // mostrar solo los visibles según RLS — la RLS ya filtra para encargado
+      // por (global + locales autorizados), así que para él no cambia. Para
+      // dueño con toggle ON, muestra los 5 locales.
+      if (mostrarTodos && puedeVerTodos) return true;
+      // Default: globales + del local activo.
+      return m.local_id == null || m.local_id === localActivo;
+    })
     .slice()
     .sort((a, b) => {
       // Globales primero, luego por orden
       if ((a.local_id == null) !== (b.local_id == null)) return a.local_id == null ? -1 : 1;
       return (a.orden || 0) - (b.orden || 0);
     });
+
+  const nombreLocalActivo = localActivo != null
+    ? (locales.find(l => l.id === localActivo)?.nombre ?? `Local #${localActivo}`)
+    : "(sin local activo)";
 
   const nombreLocal = (id: number | null): string => {
     if (id == null) return "Global";
@@ -315,9 +354,30 @@ function MediosCobroSection({ user, locales }: MediosCobroSectionProps) {
   return (
     <>
       <div className="panel">
-        <div className="panel-hd">
-          <span className="panel-title">Medios de Cobro</span>
-          <button className="btn btn-acc btn-sm" onClick={abrirNuevo}>+ Nuevo medio</button>
+        <div className="panel-hd" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span className="panel-title">Medios de Cobro</span>
+            {/* Indicador del scope vigente: contexto claro al operador sobre
+                qué subset está viendo. */}
+            {mostrarTodos && puedeVerTodos ? (
+              <span className="badge b-warn" style={{ fontSize: 9, letterSpacing: 0.5 }}>
+                Vista admin · todos los locales
+              </span>
+            ) : (
+              <span style={{ fontSize: 10, color: "var(--muted2)" }}>
+                Local activo: <strong style={{ color: "var(--txt)" }}>{nombreLocalActivo}</strong> + globales
+              </span>
+            )}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {puedeVerTodos && (
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, cursor: "pointer", userSelect: "none", color: "var(--muted2)" }}>
+                <input type="checkbox" checked={mostrarTodos} onChange={e => toggleMostrarTodos(e.target.checked)} style={{ cursor: "pointer" }} />
+                Mostrar todos los locales
+              </label>
+            )}
+            <button className="btn btn-acc btn-sm" onClick={abrirNuevo}>+ Nuevo medio</button>
+          </div>
         </div>
         <div style={{ padding: "12px 16px" }}>
           {hookLoading ? <div className="loading">Cargando...</div> : (
