@@ -36,14 +36,18 @@ export default function Proveedores({ user, localActivo }: ProveedoresProps) {
     // miraban facturas y subreportaba la deuda cuando había remitos sin
     // facturar. Ahora ambas tablas se combinan vía calcularSaldosPorProveedor
     // (helper compartido con Dashboard.tsx para garantizar el mismo número).
-    let fq=db.from("facturas").select("prov_id,total,tipo,estado,pagos,local_id").neq("estado","anulada");
+    let fq=db.from("facturas").select("id,prov_id,total,tipo,estado,pagos,local_id").neq("estado","anulada");
     fq=applyLocalScope(fq,user,localActivo);
     let rq=db.from("remitos").select("prov_id,monto,estado,factura_id,local_id");
     rq=applyLocalScope(rq,user,localActivo);
-    const [{data:facts},{data:rems}]=await Promise.all([fq,rq]);
+    // T-19 auditoría: cargar nc_aplicaciones para que las NCs parcialmente
+    // aplicadas resten solo su saldo restante, no el total completo.
+    const naq=db.from("nc_aplicaciones").select("nc_id,monto");
+    const [{data:facts},{data:rems},{data:apls}]=await Promise.all([fq,rq,naq]);
     const saldoPorProv = calcularSaldosPorProveedor(
       (facts as Factura[]) || [],
       (rems as Array<{ prov_id: number | null; monto: number; estado: string; factura_id: string | null }>) || [],
+      (apls as Array<{ nc_id: string; monto: number }>) || [],
     );
     setProveedores(((provs as Proveedor[]) || []).map(p => ({...p, saldo: saldoPorProv.get(p.id) || 0})));
     setLoading(false);

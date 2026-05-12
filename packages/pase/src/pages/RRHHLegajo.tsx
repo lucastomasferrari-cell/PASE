@@ -233,15 +233,20 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
   const sacTeorico = calcularSACTeorico(sueldoNum);
 
   // ─── ACCIONES: SUELDO ──────────────────────────────────────────────────────
+  // RPC atómica: INSERT historial + UPDATE sueldo_mensual en TX única
+  // (deuda C4 cerrada). Antes podían quedar inconsistentes si el INSERT
+  // pasaba y el UPDATE fallaba → historial mostraba cambio pero legajo
+  // seguía con sueldo viejo.
   const guardarSueldo = async () => {
     const nuevo = parseFloat(sueldoForm.monto);
     if (!nuevo || nuevo === emp.sueldo_mensual) return;
-    await db.from("rrhh_historial_sueldos").insert([{
-      empleado_id: emp.id, sueldo_anterior: emp.sueldo_mensual,
-      sueldo_nuevo: nuevo, motivo: sueldoForm.motivo || null,
-      registrado_por: user?.id,
-    }]);
-    await db.from("rrhh_empleados").update({ sueldo_mensual: nuevo }).eq("id", emp.id);
+    const { error } = await db.rpc("cambiar_sueldo_empleado", {
+      p_emp_id: emp.id,
+      p_nuevo_sueldo: nuevo,
+      p_motivo: sueldoForm.motivo || null,
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    if (error) { alert(translateRpcError(error)); return; }
     setSueldoModal(false); setSueldoForm({ monto:"", motivo:"" });
     loadEmp(); loadHistSueldos();
     showToast("Sueldo actualizado");

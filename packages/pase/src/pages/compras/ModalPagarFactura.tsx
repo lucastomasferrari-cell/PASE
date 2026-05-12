@@ -1,11 +1,17 @@
 import { fmt_d, fmt_$ } from "../../lib/utils";
 import { CurrencyInput } from "../../components/CurrencyInput";
+import { aplicacionesPorNc, saldoNcRestante } from "../../lib/saldoProveedor";
 import type { Factura, PagoFactura } from "../../types/finanzas";
 
 interface ModalPagarFacturaProps {
   pagarModal: Factura | null;
   setPagarModal: React.Dispatch<React.SetStateAction<Factura | null>>;
   facturas: Factura[];
+  // Aplicaciones de NC ya hechas (tabla puente nc_aplicaciones). Se usan
+  // para calcular el saldo restante real de cada NC — el array facturas.pagos
+  // de las NCs siempre está vacío porque la RPC aplicar_nc_a_factura
+  // modifica pagos de la FACTURA destino, no de la NC.
+  ncAplicaciones: Array<{ nc_id: string; monto: number | string | null }>;
   ncsAplicar: Record<string, number>;
   setNcsAplicar: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   pagoForm: { cuenta: string; monto: number; fecha: string };
@@ -20,27 +26,26 @@ interface ModalPagarFacturaProps {
 // + pago en plata por el restante. Extraído de Compras.tsx en F9
 // (2026-05-11).
 export function ModalPagarFactura({
-  pagarModal, setPagarModal, facturas, ncsAplicar, setNcsAplicar,
+  pagarModal, setPagarModal, facturas, ncAplicaciones, ncsAplicar, setNcsAplicar,
   pagoForm, setPagoForm, cuentasUsables, pagar, pagando,
 }: ModalPagarFacturaProps) {
   if (!pagarModal) return null;
   const f = pagarModal;
-  // Ya pagado de la factura (incluye aplicaciones de NC previas — el
-  // RPC las agrega al array pagos con tipo='nc').
+  // Ya pagado de la factura (incluye aplicaciones de NC previas — la RPC
+  // las agrega al array pagos con tipo='nc').
   const yaPagado = (f.pagos || []).reduce((s: number, p: PagoFactura) => s + Number(p.monto || 0), 0);
   const saldoFactura = Math.max(0, Number(f.total || 0) - yaPagado);
-  // NCs disponibles del proveedor: filas tipo='nota_credito', estado
-  // distinto de pagada/anulada (las consumidas pasaron a 'pagada'),
-  // y con saldo > 0. saldo = abs(total) - sum(pagos[]).
+  // NCs disponibles: misma RPC aplicar_nc_a_factura inserta en
+  // nc_aplicaciones la fila por cada uso parcial. saldoNc = abs(total) -
+  // SUM(nc_aplicaciones). Antes (bug T-19) se calculaba con f.pagos que
+  // siempre está vacío para NCs → mostraba el total entero como disponible
+  // aunque la NC ya hubiera sido usada en otra factura.
+  const aplicMap = aplicacionesPorNc(ncAplicaciones);
   const ncsDisponibles = facturas
     .filter(x => (x.tipo || "factura") === "nota_credito")
     .filter(x => String(x.prov_id) === String(f.prov_id))
     .filter(x => x.estado !== "anulada" && x.estado !== "pagada")
-    .map(x => {
-      const aplicado = (x.pagos || []).reduce((s: number, p: PagoFactura) => s + Number(p.monto || 0), 0);
-      const saldoNc = Math.max(0, Math.abs(Number(x.total || 0)) - aplicado);
-      return { nc: x, saldoNc };
-    })
+    .map(x => ({ nc: x, saldoNc: saldoNcRestante(x, aplicMap) }))
     .filter(x => x.saldoNc > 0);
   const totalNcAplicado = Object.values(ncsAplicar).reduce((s, m) => s + (Number(m) || 0), 0);
   const restanteAPagar = Math.max(0, saldoFactura - totalNcAplicado);

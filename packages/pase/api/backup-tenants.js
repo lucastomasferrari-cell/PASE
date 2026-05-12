@@ -189,7 +189,27 @@ export default async function handler(req, res) {
       });
     }
 
-    return res.status(200).json({ ok: true, fecha: today, resumen });
+    // Cleanup oportunista de idempotency_keys (regla A-11 de la auditoría):
+    // borra keys con created_at > 30 días. No es bloqueante — si falla, el
+    // backup sigue siendo exitoso. Se hace acá para evitar gastar un slot
+    // dedicado de Vercel Function (estamos a 10/12).
+    let idempotencyCleanup = null;
+    try {
+      const corte = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const { error: errCleanup, count } = await db
+        .from('idempotency_keys')
+        .delete({ count: 'exact' })
+        .lt('created_at', corte);
+      if (errCleanup) {
+        idempotencyCleanup = { ok: false, error: errCleanup.message };
+      } else {
+        idempotencyCleanup = { ok: true, borradas: count ?? 0, corte };
+      }
+    } catch (e) {
+      idempotencyCleanup = { ok: false, error: e?.message || String(e) };
+    }
+
+    return res.status(200).json({ ok: true, fecha: today, resumen, idempotencyCleanup });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e?.message || String(e) });
   }

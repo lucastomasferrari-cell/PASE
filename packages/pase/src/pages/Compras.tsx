@@ -7,7 +7,8 @@ import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId, parseMonto, estadoFactura } from "../lib/utils";
 import type { Usuario, Local } from "../types";
-import type { Proveedor, Factura, PagoFactura } from "../types/finanzas";
+import type { Proveedor, Factura } from "../types/finanzas";
+import { aplicacionesPorNc, saldoNcRestante } from "../lib/saldoProveedor";
 import type { Remito, FormFactura, FormRemito, FormPagoRemito, ItemFactura } from "./compras/types";
 import { estadoDot } from "./compras/helpers";
 import { ModalPagarFactura } from "./compras/ModalPagarFactura";
@@ -36,6 +37,10 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const [facturas, setFacturas] = useState<Factura[]>([]);
   const [remitos, setRemitos] = useState<Remito[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  // T-19 auditoría: aplicaciones de NC para calcular saldo restante real
+  // (facturas.pagos de las NCs siempre está vacío — la RPC modifica pagos
+  // de la factura destino, no de la NC).
+  const [ncAplicaciones, setNcAplicaciones] = useState<Array<{ nc_id: string; monto: number | string }>>([]);
   const [search, setSearch] = useState("");
   // Default: últimos 90 días. Antes era inicio del mes (~15 días promedio)
   // pero los usuarios reportaron faltarles facturas viejas — mejor mostrar
@@ -115,14 +120,18 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     fq = applyLocalScope(fq, user, localActivo);
     let rq = db.from("remitos").select("*").order("fecha", { ascending: false });
     rq = applyLocalScope(rq, user, localActivo);
-    const [{ data: f }, { data: r }, { data: p }] = await Promise.all([
+    // nc_aplicaciones no tiene local_id — su RLS filtra por tenant.
+    const naq = db.from("nc_aplicaciones").select("nc_id, monto");
+    const [{ data: f }, { data: r }, { data: p }, { data: na }] = await Promise.all([
       fq,
       rq,
       db.from("proveedores").select("*").eq("estado", "Activo").order("nombre"),
+      naq,
     ]);
     setFacturas((f as Factura[]) || []);
     setRemitos((r as Remito[]) || []);
     setProveedores((p as Proveedor[]) || []);
+    setNcAplicaciones((na as Array<{ nc_id: string; monto: number | string }>) || []);
     setLoading(false);
   };
   // Patrón fetch-on-dep-change.
@@ -143,6 +152,11 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [lectorModal]);
+
+  // Map<nc_id, monto_aplicado> derivado de nc_aplicaciones. Necesario para
+  // saber el saldo real de las NCs en el listado y modal pagar (la columna
+  // facturas.pagos de las NCs siempre está vacía — bug T-19).
+  const ncAplicMap = aplicacionesPorNc(ncAplicaciones);
 
   const fFilt = facturas.filter(f => {
     if (f.estado === "anulada") return false;
@@ -250,18 +264,20 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       // o legacy), bucket queda null y EERR la trata como CMV.
       const bucket = form.cat ? (categoriaToBucket[form.cat] ?? null) : null;
       const nueva = { ...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(form.local_id), total, estado: "pendiente", pagos: [], tipo: form.tipo, fecha: form.fecha || null, venc: form.venc || null, bucket };
-      // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F12: factura + factura_items deben fusionarse en RPC crear_factura_completa (atómica). El trigger trg_saldo_proveedor cubre proveedor.saldo OK, pero si falla el INSERT de items queda factura sin detalle.
-      const { error: factErr } = await db.from("facturas").insert([nueva]);
-      if (factErr) throw new Error("Error guardando factura: " + factErr.message);
-
-      if (items.length > 0) {
-        const itemsToInsert = items.filter(it => it.producto).map(it => ({ ...it, factura_id: id, cantidad: parseMonto(it.cantidad), precio_unitario: parseMonto(it.precio_unitario), subtotal: it.subtotal }));
-        // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F12: parte del flow no-atómico (ver línea anterior).
-        if (itemsToInsert.length > 0) await db.from("factura_items").insert(itemsToInsert);
-      }
+      const itemsToInsert = items.length > 0
+        ? items.filter(it => it.producto).map(it => ({ ...it, cantidad: parseMonto(it.cantidad), precio_unitario: parseMonto(it.precio_unitario), subtotal: it.subtotal }))
+        : [];
+      // RPC atómica (deuda C4-F12 cerrada): INSERT factura + INSERT items en
+      // una sola TX con idempotency key. Antes podía quedar factura sin items
+      // si el segundo INSERT fallaba.
+      const { error: factErr } = await db.rpc("crear_factura_completa", {
+        p_factura: nueva,
+        p_items: itemsToInsert,
+        p_idempotency_key: crypto.randomUUID(),
+      });
+      if (factErr) throw new Error("Error guardando factura: " + (factErr.message || factErr));
       // El trigger trg_saldo_prov_facturas (migration 202605070900) recalcula
-      // proveedores.saldo automáticamente al insertar la factura/NC. Antes
-      // este flow hacía un UPDATE manual con race condition latente.
+      // proveedores.saldo automáticamente al insertar la factura/NC.
       setModal(false); setForm(emptyForm); setItems([]); load();
     } catch (err) {
       console.error("Error guardando factura:", err);
@@ -533,7 +549,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                           {r.estado === "sin_factura" && <button className="btn btn-ghost btn-sm" onClick={() => setVincModal(r)}>Vincular FC</button>}
                           {r.factura_id && <span className="mono" style={{ fontSize: 10, color: "var(--info)" }}>→ {facturas.find(f => f.id === r.factura_id)?.nro || r.factura_id}</span>}
                           {r.estado === "sin_factura" && <button className="btn btn-success btn-sm" onClick={() => { setPagarRemModal(r); setRemPagoForm({ cuenta: "", monto: r.monto, fecha: toISO(today) }); setIdempKeyPagarRem(crypto.randomUUID()); }}>Pagar</button>}
-                          {r.estado !== "pagado" && <button className="btn btn-danger btn-sm" onClick={() => anularRemito(r)}>Anular</button>}
+                          {r.estado !== "pagado" && tienePermiso(user, "compras_anular") && <button className="btn btn-danger btn-sm" onClick={() => anularRemito(r)}>Anular</button>}
                         </div>
                       )}
                     </td>
@@ -585,8 +601,9 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                   <td>{isNC
                     ? (() => {
                         if (f.estado === "anulada") return <span className="badge b-muted">NC anulada</span>;
-                        const aplicado = (f.pagos || []).reduce((s: number, p: PagoFactura) => s + Number(p.monto || 0), 0);
-                        const saldoNc = Math.max(0, Math.abs(Number(f.total || 0)) - aplicado);
+                        // T-19: usar saldo real desde nc_aplicaciones, no f.pagos
+                        // (que siempre está vacío para NCs).
+                        const saldoNc = saldoNcRestante(f, ncAplicMap);
                         if (f.estado === "pagada" || saldoNc <= 0) return <span className="badge b-muted">NC consumida</span>;
                         return <span className="badge b-info">NC disponible</span>;
                       })()
@@ -595,7 +612,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                     <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
                       <button className="btn btn-ghost btn-sm" onClick={() => setVerModal(f)}>Ver</button>
                       {!isNC && f.estado !== "pagada" && <button className="btn btn-success btn-sm" onClick={() => { setPagarModal(f); setPagoForm({ cuenta: "", monto: Number(f.total) || 0, fecha: toISO(today) }); setIdempKeyPagarFac(crypto.randomUUID()); }}>Pagar</button>}
-                      <button className="btn btn-danger btn-sm" onClick={() => anular(f)}>Anular</button>
+                      {tienePermiso(user, "compras_anular") && <button className="btn btn-danger btn-sm" onClick={() => anular(f)}>Anular</button>}
                     </div>
                   </td>
                 </tr>
@@ -638,6 +655,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       <ModalPagarFactura
         pagarModal={pagarModal} setPagarModal={setPagarModal}
         facturas={facturas}
+        ncAplicaciones={ncAplicaciones}
         ncsAplicar={ncsAplicar} setNcsAplicar={setNcsAplicar}
         pagoForm={pagoForm} setPagoForm={setPagoForm}
         cuentasUsables={cuentasUsables} pagar={pagar} pagando={pagando}

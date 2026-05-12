@@ -28,8 +28,11 @@ export const ROLES: Record<string, { label: string; color: string; permisos?: st
   dueno:     { label:"Dueño",      color:"#9333EA" },
   admin:     { label:"Admin",      color:"#3B82F6", permisos:["dashboard","ventas","compras","remitos","gastos","caja","proveedores","rrhh","blindaje"] },
   encargado: { label:"Encargado",  color:"#6B7280", permisos:["dashboard"] },
-  compras:   { label:"Compras",    color:"#8B5CF6", permisos:["compras","remitos","proveedores"] },
-  cajero:    { label:"Cajero",     color:"#10B981", permisos:["caja","dashboard"] },
+  // Rol "compras" incluye compras_anular por retro-compatibilidad (antes
+  // anulaba sin chequeo). Si querés un "compras lite" sin poder anular,
+  // creá usuario sin rol fijo y asignale solo los slugs base via Usuarios.
+  compras:   { label:"Compras",    color:"#8B5CF6", permisos:["compras","remitos","proveedores","compras_anular"] },
+  cajero:    { label:"Cajero",     color:"#10B981", permisos:["caja","dashboard","caja_anular"] },
 };
 
 // Permisos avanzados que NO son módulos navegables — son flags que controlan
@@ -42,6 +45,16 @@ export const PERMISOS_EXTRAS = [
     descripcion:"Sin este permiso, el usuario solo ve el cierre que cargó en su sesión, no los cierres anteriores." },
   { slug:"ver_anulados", label:"Ver anulados / inactivos",
     descripcion:"Habilita los toggles 'Ver anulados' y 'Ver inactivos' en Caja, Proveedores y RRHH." },
+  // Permisos *_anular (A-2 de la auditoría): separar "puedo entrar al módulo"
+  // de "puedo anular operaciones financieras". Hoy quien tiene 'compras'
+  // puede anular facturas vía RPC. Si no tiene 'compras_anular', el botón
+  // queda disabled en UI; el backend igual valida (defense-in-depth).
+  { slug:"compras_anular", label:"Anular facturas/remitos",
+    descripcion:"Permite anular facturas y remitos desde Compras. Sin esto, el módulo es de solo carga/lectura." },
+  { slug:"ventas_anular", label:"Anular ventas/cierres",
+    descripcion:"Permite anular cierres de ventas. Sin esto, solo puede crear cierres pero no revertirlos." },
+  { slug:"caja_anular", label:"Anular movimientos de caja",
+    descripcion:"Permite anular movimientos en Tesorería. Sin esto, solo puede ver/editar; anular bloqueado." },
 ];
 
 export const MODULOS = [

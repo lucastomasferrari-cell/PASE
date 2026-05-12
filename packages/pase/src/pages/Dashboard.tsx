@@ -86,7 +86,12 @@ export default function Dashboard({ user, localActivo }: DashboardProps) {
       .limit(20000);
     saldoMovsQ = applyLocalScope(saldoMovsQ, user, lid);
 
-    const [{data:saldos},{data:facturas},{data:remitos},{data:ventas},{data:provs},{data:blindaje},{data:ventasSemana},credsMpRes,saldoMovsRes] = await Promise.all([
+    // T-19 auditoría: cargamos nc_aplicaciones (sin scope local — la tabla
+    // puente no tiene local_id, su RLS filtra por tenant) para que el helper
+    // calcule el saldo restante real de NCs parcialmente aplicadas.
+    const naq = db.from("nc_aplicaciones").select("nc_id,monto");
+
+    const [{data:saldos},{data:facturas},{data:remitos},{data:ventas},{data:provs},{data:blindaje},{data:ventasSemana},credsMpRes,saldoMovsRes,{data:ncApls}] = await Promise.all([
       sq,
       fq,
       rq,
@@ -98,6 +103,7 @@ export default function Dashboard({ user, localActivo }: DashboardProps) {
       vsq,
       includeMp ? credsQ : Promise.resolve({ data: [] as MpCredCompacta[] }),
       includeMp ? saldoMovsQ : Promise.resolve({ data: [] as MovParaSaldo[] }),
+      naq,
     ]);
     const credsMp = (credsMpRes.data as MpCredCompacta[]) || [];
     const saldoMovs = (saldoMovsRes.data as MovParaSaldo[]) || [];
@@ -152,6 +158,7 @@ export default function Dashboard({ user, localActivo }: DashboardProps) {
     const saldoPorProv = calcularSaldosPorProveedor(
       facturasParaCalc as unknown as Parameters<typeof calcularSaldosPorProveedor>[0],
       remitosParaCalc as unknown as Parameters<typeof calcularSaldosPorProveedor>[1],
+      (ncApls as Array<{ nc_id: string; monto: number }>) || [],
     );
     const deudaTotal = Array.from(saldoPorProv.values()).reduce((s, v) => s + v, 0);
 

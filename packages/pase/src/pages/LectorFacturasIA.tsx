@@ -311,14 +311,17 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
 
     const confGlobal=resultado?.confianza_global??100;
     const estado=confGlobal<70?"revision":"pendiente";
-    // INSERT con local_id explícito del form (validado arriba).
-    // C3: disable porque no es lectura; C4: deuda F12 (debe ir por RPC crear_factura_completa, idéntico al flow Compras.tsx).
-    // eslint-disable-next-line pase-local/no-direct-financiera-write, pase-local/require-apply-local-scope
-    const {error:insErr}=await db.from("facturas").insert([{...form,id,prov_id:parseInt(form.prov_id),local_id:parseInt(String(form.local_id)),neto:parseMonto(form.neto),iva21:parseMonto(form.iva21),iva105:parseMonto(form.iva105),iibb:parseMonto(form.iibb),total:parseMonto(form.total),estado,pagos:[],imagen_url,fecha:form.fecha||null,venc:form.venc||null}]);
+    // RPC atómica (deuda C4-F12 cerrada).
+    const nueva = {...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(String(form.local_id)), neto: parseMonto(form.neto), iva21: parseMonto(form.iva21), iva105: parseMonto(form.iva105), iibb: parseMonto(form.iibb), total: parseMonto(form.total), estado, pagos: [], imagen_url, fecha: form.fecha || null, venc: form.venc || null};
+    const {error:insErr} = await db.rpc("crear_factura_completa", {
+      p_factura: nueva,
+      p_items: [],
+      p_idempotency_key: crypto.randomUUID(),
+    });
     if(insErr){
       // Rollback del archivo si el insert falló, así no queda huérfano
       if(imagen_url) await db.storage.from("facturas").remove([imagen_url]);
-      alert("Error guardando la factura: "+insErr.message);
+      alert("Error guardando la factura: "+(insErr.message || insErr));
       setGuardando(false);
       return;
     }

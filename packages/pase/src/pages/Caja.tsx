@@ -100,6 +100,9 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   const [saldos, setSaldos] = useState<Record<string, number>>({});
   const [modal, setModal] = useState(false);
   const [editMov, setEditMov] = useState<EditMovDraft | null>(null);
+  // Idempotency key (regla C1) — anti doble-click en el modal de editar mov.
+  // Se regenera cada vez que se abre el modal.
+  const [idempKeyEditMov, setIdempKeyEditMov] = useState<string>(() => crypto.randomUUID());
   const [filtCuenta, setFiltCuenta] = useState("Todas");
   const [mostrarAnulados, setMostrarAnulados] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -336,29 +339,11 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     if (!editMov) return;
     if (!editMov.justificativo?.trim()) { alert("El justificativo es obligatorio"); return; }
     const original = movimientos.find(m => m.id === editMov.id);
-    const lid = editMov.local_id;
     setSavingEdit(true);
     try {
-      if (original && lid && (original.importe !== parseFloat(String(editMov.importe)) || original.cuenta !== editMov.cuenta)) {
-        const { data: cajaOrig } = await db.from("saldos_caja").select("saldo")
-          .eq("cuenta", original.cuenta).eq("local_id", lid).maybeSingle();
-        // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F11: editar movimiento debe pasar por RPC editar_movimiento atómica (que internamente revierta saldo viejo + aplique saldo nuevo).
-        if (cajaOrig) await db.from("saldos_caja")
-          .update({ saldo: (cajaOrig.saldo || 0) - (original.importe || 0) })
-          .eq("cuenta", original.cuenta).eq("local_id", lid);
-
-        const { data: cajaNueva } = await db.from("saldos_caja").select("saldo")
-          .eq("cuenta", editMov.cuenta).eq("local_id", lid).maybeSingle();
-        // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F11: idem línea anterior.
-        if (cajaNueva) await db.from("saldos_caja")
-          .update({ saldo: (cajaNueva.saldo || 0) + (parseFloat(String(editMov.importe)) || 0) })
-          .eq("cuenta", editMov.cuenta).eq("local_id", lid);
-      }
-
-      // Si el signo o la categoría cambiaron, recalcular tipo usando
-      // deriveTipoMov(cat, esEgreso). Así un movimiento que pasa de egreso
-      // a ingreso con cat="Liquidación Rappi" queda como "Liquidación
-      // Plataforma" y no como tipo viejo incoherente.
+      // Si el signo o la categoría cambiaron, recalcular tipo. deriveTipoMov
+      // mantiene la coherencia (ej: cat="Liquidación Rappi" + ingreso →
+      // "Liquidación Plataforma", no el tipo viejo).
       const nuevoImporte = parseFloat(String(editMov.importe)) || original?.importe || 0;
       const signoOriginal = (original?.importe || 0) >= 0 ? 1 : -1;
       const signoNuevo = nuevoImporte >= 0 ? 1 : -1;
@@ -368,30 +353,21 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         ? deriveTipoMov(editMov.cat || "", signoNuevo < 0)
         : original?.tipo;
 
-      // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F11: este UPDATE va dentro de la RPC editar_movimiento pendiente.
-      await db.from("movimientos").update({
-        fecha: editMov.fecha,
-        detalle: editMov.detalle,
-        cat: editMov.cat || null,
-        importe: nuevoImporte,
-        cuenta: editMov.cuenta,
-        tipo: tipoNuevo,
-        editado: true,
-        editado_motivo: editMov.justificativo,
-        editado_at: new Date().toISOString(),
-      }).eq("id", editMov.id);
-
-      await db.from("auditoria").insert([{
-        tabla: "movimientos", accion: "EDICION",
-        detalle: JSON.stringify({
-          id: editMov.id,
-          antes: original,
-          despues: editMov,
-          justificativo: editMov.justificativo,
-        }),
-        fecha: new Date().toISOString(),
-      }]);
-
+      // RPC atómica: ajusta saldos + actualiza movimiento + auditoria en una
+      // sola TX. Antes era 4 operaciones sueltas (deuda C4-F11) que podían
+      // dejar saldos descalibrados si fallaban a mitad.
+      const { error } = await db.rpc("editar_movimiento_caja", {
+        p_mov_id: editMov.id,
+        p_fecha: editMov.fecha,
+        p_detalle: editMov.detalle,
+        p_cat: editMov.cat || null,
+        p_importe: nuevoImporte,
+        p_cuenta: editMov.cuenta,
+        p_tipo: tipoNuevo,
+        p_justificativo: editMov.justificativo,
+        p_idempotency_key: idempKeyEditMov,
+      });
+      if (error) { alert(translateRpcError(error)); return; }
       setEditMov(null); load();
     } finally {
       setSavingEdit(false);
@@ -477,8 +453,8 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
               </td>
               <td>
                 <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
-                  {!m.anulado && <button className="btn btn-ghost btn-sm" onClick={() => setEditMov({...m, justificativo: ""})}>Editar</button>}
-                  {!m.anulado && <button className="btn btn-danger btn-sm" onClick={() => eliminarMov(m)}>Anular</button>}
+                  {!m.anulado && <button className="btn btn-ghost btn-sm" onClick={() => { setEditMov({...m, justificativo: ""}); setIdempKeyEditMov(crypto.randomUUID()); }}>Editar</button>}
+                  {!m.anulado && tienePermiso(user, "caja_anular") && <button className="btn btn-danger btn-sm" onClick={() => eliminarMov(m)}>Anular</button>}
                 </div>
               </td>
             </tr>
