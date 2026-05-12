@@ -264,15 +264,18 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       // o legacy), bucket queda null y EERR la trata como CMV.
       const bucket = form.cat ? (categoriaToBucket[form.cat] ?? null) : null;
       const nueva = { ...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(form.local_id), total, estado: "pendiente", pagos: [], tipo: form.tipo, fecha: form.fecha || null, venc: form.venc || null, bucket };
-      // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F12: la RPC crear_factura_completa fue creada (migration 202605121720) pero su uso desde acá falla en tests mutantes — bug en jsonb_populate_record con campos del form, investigar antes de habilitar. Mientras tanto vuelve al INSERT directo (status quo previo).
-      const { error: factErr } = await db.from("facturas").insert([nueva]);
-      if (factErr) throw new Error("Error guardando factura: " + factErr.message);
-
-      if (items.length > 0) {
-        const itemsToInsert = items.filter(it => it.producto).map(it => ({ ...it, factura_id: id, cantidad: parseMonto(it.cantidad), precio_unitario: parseMonto(it.precio_unitario), subtotal: it.subtotal }));
-        // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F12: idem línea anterior.
-        if (itemsToInsert.length > 0) await db.from("factura_items").insert(itemsToInsert);
-      }
+      const itemsToInsert = items.length > 0
+        ? items.filter(it => it.producto).map(it => ({ ...it, cantidad: parseMonto(it.cantidad), precio_unitario: parseMonto(it.precio_unitario), subtotal: it.subtotal }))
+        : [];
+      // RPC atómica (deuda C4-F12 cerrada): INSERT factura + INSERT items en
+      // una sola TX con idempotency key. Antes podía quedar factura sin items
+      // si el segundo INSERT fallaba.
+      const { error: factErr } = await db.rpc("crear_factura_completa", {
+        p_factura: nueva,
+        p_items: itemsToInsert,
+        p_idempotency_key: crypto.randomUUID(),
+      });
+      if (factErr) throw new Error("Error guardando factura: " + (factErr.message || factErr));
       // El trigger trg_saldo_prov_facturas (migration 202605070900) recalcula
       // proveedores.saldo automáticamente al insertar la factura/NC.
       setModal(false); setForm(emptyForm); setItems([]); load();

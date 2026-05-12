@@ -63,8 +63,8 @@ BEGIN
   IF v_local_id IS NULL THEN RAISE EXCEPTION 'LOCAL_REQUIRED'; END IF;
   IF v_prov_id IS NULL THEN RAISE EXCEPTION 'PROVEEDOR_REQUERIDO'; END IF;
 
-  -- Validar local autorizado para el caller (helper estándar).
-  PERFORM _validar_local_autorizado(v_local_id, v_tenant);
+  -- Validar local autorizado para el caller (helper estándar, 1 arg).
+  PERFORM _validar_local_autorizado(v_local_id);
 
   -- Validar signo de total para NCs (alineado con CHECK constraint).
   IF v_tipo = 'nota_credito' AND v_total >= 0 THEN

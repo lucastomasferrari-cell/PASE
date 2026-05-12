@@ -47,43 +47,25 @@ test.describe("Onboarding tenant — mutante", () => {
   });
 
   test.afterEach(async () => {
-    // Cleanup en orden inverso a FK. Cada paso en su try/catch.
-    // El auth.user se borra con supabaseAdmin pero desde el cliente normal
-    // no podemos. La forma de revertir es vía endpoint dedicado o vía
-    // las RPCs/DELETEs. Como mejor approach: el FK ON DELETE CASCADE de
-    // tenant_admins → tenants debería limpiar tenant_admins al borrar tenant.
-    // Las filas en usuarios y locales necesitan DELETE explícito porque
-    // FK no es CASCADE (cada uno tiene su tenant_id pero rompería integrity
-    // si borramos antes el tenant — orden correcto: locales/usuarios primero,
-    // tenant_admins por cascade al borrar tenant, tenant al final).
+    // Cleanup unificado: RPC eliminar_tenant_completo (migration 202605121400)
+    // desactiva los triggers append-only de auditoria, borra todas las
+    // tablas con tenant_id en orden topológico y borra el tenant en una
+    // sola TX. Antes hacíamos DELETEs sueltos en orden inverso a FK, pero
+    // si el endpoint /api/crear-tenant insertaba en auditoria, el DELETE
+    // de tenants fallaba con "still referenced".
     //
-    // El auth.user queda huérfano. Sin endpoint admin desde el client, se
-    // limpia con el rollback del endpoint si fallaba ahí — pero acá pasó
-    // OK. Lucas tendría que limpiarlo manualmente desde Supabase Dashboard
-    // si quedara orfano. Como mitigación, marcamos el email como sentinel
-    // único (incluye timestamp) — fácil de filtrar después.
+    // El auth.user queda huérfano (no hay forma de borrarlo desde el
+    // client normal). Sentinel email con timestamp permite limpieza
+    // manual posterior desde Supabase Dashboard.
     if (duenoDb) {
       try { await duenoDb.auth.signOut(); } catch { /* idempotente */ }
     }
     if (!superdb) return;
-    if (localId != null) {
-      try {
-        const { error } = await superdb.from("locales").delete().eq("id", localId);
-        if (error) console.error(`[cleanup] delete locales(${localId}): ${error.message}`);
-      } catch (e) { console.error("[cleanup] delete locales threw:", e); }
-    }
-    if (usuarioId != null) {
-      try {
-        const { error } = await superdb.from("usuarios").delete().eq("id", usuarioId);
-        if (error) console.error(`[cleanup] delete usuarios(${usuarioId}): ${error.message}`);
-      } catch (e) { console.error("[cleanup] delete usuarios threw:", e); }
-    }
     if (tenantId) {
       try {
-        // tenant_admins ON DELETE CASCADE — se borra automáticamente.
-        const { error } = await superdb.from("tenants").delete().eq("id", tenantId);
-        if (error) console.error(`[cleanup] delete tenants(${tenantId}): ${error.message}`);
-      } catch (e) { console.error("[cleanup] delete tenants threw:", e); }
+        const { error } = await superdb.rpc("eliminar_tenant_completo", { p_tenant_id: tenantId });
+        if (error) console.error(`[cleanup] eliminar_tenant_completo(${tenantId}): ${error.message}`);
+      } catch (e) { console.error("[cleanup] rpc threw:", e); }
     }
     try { await superdb.auth.signOut(); } catch { /* idempotente */ }
   });
