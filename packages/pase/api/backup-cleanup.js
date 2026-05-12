@@ -2,7 +2,13 @@
 //
 // Cron semanal (domingos 05:00 UTC = 02:00 ART). Recorre el bucket
 // tenant-backups, parsea la fecha del path y borra los archivos con
-// más de 30 días.
+// más de 365 días.
+//
+// Política de retención actualizada 2026-05-11 (Lucas): el backup
+// corre diario y se mantiene 1 año (365 snapshots por tenant). Storage
+// estimado por tenant: ~7-10 GB comprimidos. Da granularidad de restore
+// día a día durante el último año — mejor que la semanal-365 originalmente
+// pedida (1 año pero solo 52 puntos de recuperación).
 //
 // Path esperado: <tenant_id>/<YYYY-MM-DD>.json.gz. Archivos cuyo path
 // no parsee (estructura inesperada, backups manuales) los IGNORA — no
@@ -10,7 +16,7 @@
 
 import { checkCronAuth } from './_cron-auth.js';
 
-const RETENTION_DAYS = 30;
+const RETENTION_DAYS = 365;
 const PATH_REGEX = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/(\d{4}-\d{2}-\d{2})\.json\.gz$/;
 
 export default async function handler(req, res) {
