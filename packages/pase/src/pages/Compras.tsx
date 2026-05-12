@@ -4,16 +4,19 @@ import { applyLocalScope, cuentasOperables, localesVisibles, tienePermiso } from
 import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { useRealtimeTable } from "../lib/useRealtimeTable";
-import { CUENTAS, UNIDADES } from "../lib/constants";
+import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId, parseMonto, estadoFactura } from "../lib/utils";
-import LectorFacturasIA from "./LectorFacturasIA";
-import { CurrencyInput } from "../components/CurrencyInput";
-import { Combobox } from "../components/Combobox";
 import type { Usuario, Local } from "../types";
-import type { Proveedor, Factura, PagoFactura } from "../types/finanzas";
-import type { Remito, FormFactura, ItemFactura } from "./compras/types";
+import type { Proveedor, Factura } from "../types/finanzas";
+import type { Remito, FormFactura, FormRemito, FormPagoRemito, ItemFactura } from "./compras/types";
 import { estadoDot } from "./compras/helpers";
 import { ModalPagarFactura } from "./compras/ModalPagarFactura";
+import { ModalLectorIA } from "./compras/ModalLectorIA";
+import { ModalVerFactura } from "./compras/ModalVerFactura";
+import { ModalCargarFactura } from "./compras/ModalCargarFactura";
+import { ModalCargarRemito } from "./compras/ModalCargarRemito";
+import { ModalVincularRemito } from "./compras/ModalVincularRemito";
+import { ModalPagarRemitoDirecto } from "./compras/ModalPagarRemitoDirecto";
 
 interface ComprasProps {
   user: Usuario;
@@ -48,9 +51,9 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const [pagarRemModal, setPagarRemModal] = useState<Remito | null>(null);
   const [pagandoRem, setPagandoRem] = useState(false);
   // monto: number con CurrencyInput (sprint CurrencyInput).
-  const emptyRemForm = { prov_id: "", local_id: localActivo ? String(localActivo) : "", nro: "", fecha: toISO(today), monto: 0, cat: "", detalle: "" };
-  const [remForm, setRemForm] = useState(emptyRemForm);
-  const [remPagoForm, setRemPagoForm] = useState<{ cuenta: string; monto: number; fecha: string }>({ cuenta: "", monto: 0, fecha: toISO(today) });
+  const emptyRemForm: FormRemito = { prov_id: "", local_id: localActivo ? String(localActivo) : "", nro: "", fecha: toISO(today), monto: 0, cat: "", detalle: "" };
+  const [remForm, setRemForm] = useState<FormRemito>(emptyRemForm);
+  const [remPagoForm, setRemPagoForm] = useState<FormPagoRemito>({ cuenta: "", monto: 0, fecha: toISO(today) });
 
   useEffect(() => {
     if (remPagoForm.cuenta && !cuentasUsables.includes(remPagoForm.cuenta)) {
@@ -74,24 +77,6 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   // las RPCs aplicar_nc_a_factura por cada una y pagar_factura por el resto.
   const [ncsAplicar, setNcsAplicar] = useState<Record<string, number>>({});
   const [verModal, setVerModal] = useState<Factura | null>(null);
-  // Signed URL cargada on-demand cuando el modal ver se abre con imagen_url.
-  // Se reinicia cuando el modal se cierra.
-  const [imgUrl, setImgUrl] = useState<string | null>(null);
-  const [imgLoading, setImgLoading] = useState(false);
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (!verModal?.imagen_url) { setImgUrl(null); return; }
-    let cancelled = false;
-    setImgLoading(true);
-    db.storage.from("facturas").createSignedUrl(verModal.imagen_url, 3600)
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        setImgLoading(false);
-        if (error || !data) { setImgUrl(null); return; }
-        setImgUrl(data.signedUrl);
-      });
-    return () => { cancelled = true; };
-  }, [verModal?.imagen_url]);
   const [loading, setLoading] = useState(true);
   const [pagando, setPagando] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -613,176 +598,33 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       </div>
       )}
 
-      {/* MODAL LECTOR IA — cierra solo con X o ESC, no con click en backdrop */}
-      {lectorModal && (
-        <div className="overlay">
-          <div className="modal" style={{ width: 720 }}>
-            <div className="modal-hd">
-              <div className="modal-title">Lector Facturas IA</div>
-              <button className="close-btn" onClick={() => setLectorModal(false)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <LectorFacturasIA user={user} locales={locales} localActivo={localActivo} onSaved={() => { load(); setLectorModal(false); }} />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* MODAL LECTOR IA */}
+      <ModalLectorIA
+        abierto={lectorModal} user={user} locales={locales} localActivo={localActivo}
+        onClose={() => setLectorModal(false)}
+        onSaved={() => { load(); setLectorModal(false); }}
+      />
 
       {/* MODAL CARGAR FACTURA */}
-      {modal && (
-        <div className="overlay" onClick={() => setModal(false)}>
-          <div className="modal" style={{ width: 680 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">{form.tipo === "nota_credito" ? "Cargar Nota de Crédito" : "Cargar Factura"}</div><button className="close-btn" onClick={() => setModal(false)}>✕</button></div>
-            <div className="modal-body">
-              <div className="form2">
-                <div className="field"><label>Tipo de comprobante</label><select value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })}><option value="factura">Factura</option><option value="nota_credito">Nota de Crédito</option></select></div>
-                <div className="field"><label>Local *</label><select value={form.local_id} onChange={e => setForm({ ...form, local_id: e.target.value })}><option value="">Seleccioná...</option>{localesDisp.map((l: Local) => <option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
-              </div>
-              <div className="form2">
-                <div className="field"><label>Proveedor *</label><select value={form.prov_id} onChange={e => onProvChange(e.target.value)}><option value="">Seleccioná...</option>{proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></div>
-                <div className="field"><label>Nº Factura *</label><input value={form.nro} onChange={e => setForm({ ...form, nro: e.target.value })} placeholder="A-0001-00001234" /></div>
-              </div>
-              <div className="form2">
-                <div className="field"><label>Categoría EERR</label>
-                  <Combobox
-                    value={form.cat}
-                    onChange={v => setForm({ ...form, cat: v })}
-                    options={[
-                      ...CATEGORIAS_COMPRA.map(c => ({ value: c, label: c, group: "Mercadería (CMV)" })),
-                      ...GASTOS_FIJOS.map(c => ({ value: c, label: c, group: "Gastos Fijos" })),
-                      ...GASTOS_VARIABLES.map(c => ({ value: c, label: c, group: "Gastos Variables" })),
-                      ...GASTOS_PUBLICIDAD.map(c => ({ value: c, label: c, group: "Publicidad y MKT" })),
-                      ...COMISIONES_CATS.map(c => ({ value: c, label: c, group: "Comisiones" })),
-                      ...GASTOS_IMPUESTOS.map(c => ({ value: c, label: c, group: "Impuestos" })),
-                    ]}
-                    groupOrder={["Mercadería (CMV)", "Gastos Fijos", "Gastos Variables", "Publicidad y MKT", "Comisiones", "Impuestos"]}
-                    placeholder="Buscar o elegir categoría..."
-                    clearable
-                  />
-                  {form.cat && (
-                    <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 4 }}>
-                      {(() => {
-                        const b = categoriaToBucket[form.cat];
-                        if (!b) return "Categoría libre — entrará al CMV";
-                        if (b === "cat_compra") return "Tipo: Mercadería → suma al CMV";
-                        const labels: Record<string, string> = { gasto_fijo: "Gasto fijo", gasto_variable: "Gasto variable", gasto_publicidad: "Publicidad", gasto_comision: "Comisión", gasto_impuesto: "Impuesto" };
-                        return `Tipo: ${labels[b] || b} → suma a ese bucket de gastos`;
-                      })()}
-                    </div>
-                  )}
-                </div>
-                <div className="field"><label>Fecha</label><input type="date" value={form.fecha} onChange={e => setForm({ ...form, fecha: e.target.value })} /></div>
-              </div>
-              <div className="form2">
-                <div className="field"><label>Vencimiento</label><input type="date" value={form.venc} onChange={e => setForm({ ...form, venc: e.target.value })} /></div>
-                <div className="field"><label>Neto Gravado *</label><CurrencyInput value={form.neto} onChange={v => setForm({ ...form, neto: v })} aria-label="Neto gravado" /></div>
-              </div>
-              <div className="form3">
-                <div className="field"><label>IVA 21%</label><CurrencyInput value={form.iva21} onChange={v => setForm({ ...form, iva21: v })} aria-label="IVA 21%" /></div>
-                <div className="field"><label>IVA 10.5%</label><CurrencyInput value={form.iva105} onChange={v => setForm({ ...form, iva105: v })} aria-label="IVA 10.5%" /></div>
-                <div className="field"><label>Perc. IIBB</label><CurrencyInput value={form.iibb} onChange={v => setForm({ ...form, iibb: v })} aria-label="Percepción IIBB" /></div>
-              </div>
-              <div className="form3">
-                <div className="field"><label>Perc. IVA</label><CurrencyInput value={form.perc_iva} onChange={v => setForm({ ...form, perc_iva: v })} aria-label="Percepción IVA" /></div>
-                <div className="field"><label>Otros Cargos</label><CurrencyInput value={form.otros_cargos} onChange={v => setForm({ ...form, otros_cargos: v })} aria-label="Otros cargos" /></div>
-                <div className="field"><label>Descuentos (−)</label><CurrencyInput value={form.descuentos} onChange={v => setForm({ ...form, descuentos: v })} aria-label="Descuentos" /></div>
-              </div>
-              <div className="field"><label>Total calculado</label><input readOnly value={fmt_$(calcTotal())} style={{ color: "var(--acc)", fontFamily: "'Inter',sans-serif", fontWeight: 500 }} /></div>
-              <div className="field"><label>Descripción</label><input value={form.detalle} onChange={e => setForm({ ...form, detalle: e.target.value })} placeholder="Detalle general..." /></div>
-
-              {/* DETALLE DE INSUMOS */}
-              <div style={{ marginTop: 16, borderTop: "1px solid var(--bd)", paddingTop: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <span style={{ fontSize: 10, letterSpacing: .8, textTransform: "uppercase", color: "var(--muted2)" }}>Detalle de Insumos (opcional)</span>
-                  <button className="btn btn-ghost btn-sm" onClick={addItem}>+ Agregar ítem</button>
-                </div>
-                {items.length > 0 && (
-                  <table className="items-table">
-                    <thead><tr><th>Producto</th><th>Cantidad</th><th>Unidad</th><th>Precio unit.</th><th>Subtotal</th><th></th></tr></thead>
-                    <tbody>{items.map((it, i) => (
-                      <tr key={i}>
-                        <td><input style={{ width: "100%", background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.producto} onChange={e => updateItem(i, "producto", e.target.value)} placeholder="Ej: Salmón" /></td>
-                        <td><input type="number" step="0.01" style={{ width: 70, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.cantidad} onChange={e => updateItem(i, "cantidad", e.target.value)} /></td>
-                        <td><select style={{ background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.unidad} onChange={e => updateItem(i, "unidad", e.target.value)}>{UNIDADES.map(u => <option key={u}>{u}</option>)}</select></td>
-                        <td><input type="number" step="0.01" style={{ width: 90, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.precio_unitario} onChange={e => updateItem(i, "precio_unitario", e.target.value)} /></td>
-                        <td style={{ color: "var(--acc)", fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 500 }}>{fmt_$(it.subtotal)}</td>
-                        <td><button className="btn btn-danger btn-sm" onClick={() => removeItem(i)}>✕</button></td>
-                      </tr>
-                    ))}</tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={saving}>{saving ? "Guardando..." : "Guardar"}</button></div>
-          </div>
-        </div>
-      )}
+      <ModalCargarFactura
+        abierto={modal} onClose={() => setModal(false)}
+        form={form} setForm={setForm}
+        proveedores={proveedores} localesDisp={localesDisp}
+        categorias={{
+          compra: CATEGORIAS_COMPRA, fijos: GASTOS_FIJOS, variables: GASTOS_VARIABLES,
+          publicidad: GASTOS_PUBLICIDAD, comisiones: COMISIONES_CATS, impuestos: GASTOS_IMPUESTOS,
+          bucketMap: categoriaToBucket,
+        }}
+        onProvChange={onProvChange} calcTotal={calcTotal}
+        items={items} addItem={addItem} updateItem={updateItem} removeItem={removeItem}
+        guardar={guardar} saving={saving}
+      />
 
       {/* MODAL VER FACTURA */}
-      {verModal && (
-        <div className="overlay" onClick={() => setVerModal(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Factura {verModal.nro}</div><button className="close-btn" onClick={() => setVerModal(null)}>✕</button></div>
-            <div className="modal-body">
-              <div className="form2">
-                <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase" }}>Proveedor</span><div style={{ marginTop: 4 }}>{proveedores.find(p => p.id === verModal.prov_id)?.nombre}</div></div>
-                <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase" }}>Local</span><div style={{ marginTop: 4 }}>{locales.find((l: Local) => l.id === verModal.local_id)?.nombre}</div></div>
-              </div>
-              <div className="form3" style={{ marginTop: 12 }}>
-                <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase" }}>Fecha</span><div style={{ marginTop: 4 }}>{fmt_d(verModal.fecha)}</div></div>
-                <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase" }}>Vencimiento</span><div style={{ marginTop: 4 }}>{fmt_d(verModal.venc)}</div></div>
-                <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase" }}>Categoría</span><div style={{ marginTop: 4 }}>{verModal.cat}</div></div>
-              </div>
-              <div style={{ marginTop: 16, background: "var(--s2)", padding: 12, borderRadius: "var(--r)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12 }}><span>Neto Gravado</span><span>{fmt_$(verModal.neto)}</span></div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12 }}><span>IVA 21%</span><span>{fmt_$(verModal.iva21)}</span></div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12 }}><span>IVA 10.5%</span><span>{fmt_$(verModal.iva105)}</span></div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12 }}><span>Perc. IIBB</span><span>{fmt_$(verModal.iibb)}</span></div>
-                {Number(verModal.perc_iva) > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12 }}><span>Perc. IVA</span><span>{fmt_$(verModal.perc_iva)}</span></div>}
-                {Number(verModal.otros_cargos) > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12 }}><span>Otros Cargos</span><span>{fmt_$(verModal.otros_cargos)}</span></div>}
-                {Number(verModal.descuentos) > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12, color: "var(--danger)" }}><span>Descuentos</span><span>− {fmt_$(verModal.descuentos)}</span></div>}
-                <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid var(--bd)", paddingTop: 8, fontFamily: "'Inter',sans-serif", fontSize: 16, fontWeight: 500 }}><span>TOTAL</span><span style={{ color: "var(--acc)" }}>{fmt_$(verModal.total)}</span></div>
-              </div>
-              {(verModal.pagos || []).length > 0 && (
-                <div style={{ marginTop: 12 }}>
-                  <div style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase", marginBottom: 8 }}>Pagos registrados</div>
-                  {verModal.pagos.map((p: PagoFactura, i: number) => (
-                    <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--bd)", fontSize: 12 }}>
-                      <span>{fmt_d(p.fecha)} · {p.cuenta}</span><span style={{ color: "var(--muted2)" }}>{fmt_$(p.monto)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {verModal.imagen_url && (
-                <div style={{ marginTop: 16 }}>
-                  <div style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase", marginBottom: 8 }}>Comprobante</div>
-                  {imgLoading && <div className="loading">Cargando comprobante...</div>}
-                  {!imgLoading && imgUrl && (() => {
-                    const isPdf = /\.pdf$/i.test(verModal.imagen_url);
-                    return isPdf ? (
-                      <div>
-                        <iframe src={imgUrl} style={{ width: "100%", height: 500, border: "1px solid var(--bd)", borderRadius: "var(--r)", background: "#fff" }} />
-                        <div style={{ marginTop: 6, fontSize: 11 }}>
-                          <a href={imgUrl} target="_blank" rel="noreferrer" style={{ color: "var(--acc)" }}>Abrir en nueva pestaña →</a>
-                        </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <a href={imgUrl} target="_blank" rel="noreferrer">
-                          <img src={imgUrl} alt="Comprobante" style={{ width: "100%", maxHeight: 500, objectFit: "contain", borderRadius: "var(--r)", border: "1px solid var(--bd)", background: "#fff" }} />
-                        </a>
-                      </div>
-                    );
-                  })()}
-                  {!imgLoading && !imgUrl && (
-                    <div className="alert alert-warn" style={{ fontSize: 11 }}>No se pudo cargar el comprobante. El archivo puede haber sido eliminado.</div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <ModalVerFactura
+        factura={verModal} onClose={() => setVerModal(null)}
+        proveedores={proveedores} locales={locales}
+      />
 
       {/* MODAL PAGAR */}
       <ModalPagarFactura
@@ -794,71 +636,26 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       />
 
       {/* MODAL CARGAR REMITO — portado de Remitos.tsx (eliminado 2026-05-07) */}
-      {remModal && (
-        <div className="overlay" onClick={() => setRemModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Nuevo Remito Valorado</div><button className="close-btn" onClick={() => setRemModal(false)}>✕</button></div>
-            <div className="modal-body">
-              <div className="alert alert-info">Para compras informales. Si llega factura, la vinculás. Si no llega, pagás directo.</div>
-              <div className="form2">
-                <div className="field"><label>Proveedor</label><select value={remForm.prov_id} onChange={e => onRemProvChange(e.target.value)}><option value="">Sin proveedor</option>{proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></div>
-                <div className="field"><label>Local *</label><select value={remForm.local_id} onChange={e => setRemForm({ ...remForm, local_id: e.target.value })}><option value="">Seleccioná...</option>{localesDisp.map((l: Local) => <option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
-              </div>
-              <div className="form2">
-                <div className="field"><label>Nº Remito (opcional)</label><input value={remForm.nro} onChange={e => setRemForm({ ...remForm, nro: e.target.value })} placeholder="Se genera automático" /></div>
-                <div className="field"><label>Categoría EERR</label><select value={remForm.cat} onChange={e => setRemForm({ ...remForm, cat: e.target.value })}><option value="">Seleccioná...</option>{CATEGORIAS_COMPRA.map(c => <option key={c}>{c}</option>)}</select></div>
-              </div>
-              <div className="form2">
-                <div className="field"><label>Fecha</label><input type="date" value={remForm.fecha} onChange={e => setRemForm({ ...remForm, fecha: e.target.value })} /></div>
-                <div className="field"><label>Monto *</label><CurrencyInput value={remForm.monto} onChange={v => setRemForm({ ...remForm, monto: v })} aria-label="Monto del remito" /></div>
-              </div>
-              <div className="field"><label>Descripción / Folio</label><input value={remForm.detalle} onChange={e => setRemForm({ ...remForm, detalle: e.target.value })} placeholder="Folio 1234 - Detalle..." /></div>
-            </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setRemModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardarRemito}>Confirmar</button></div>
-          </div>
-        </div>
-      )}
+      <ModalCargarRemito
+        abierto={remModal} onClose={() => setRemModal(false)}
+        form={remForm} setForm={setRemForm}
+        proveedores={proveedores} localesDisp={localesDisp}
+        categoriasCompra={CATEGORIAS_COMPRA}
+        onProvChange={onRemProvChange} guardar={guardarRemito}
+      />
 
       {/* MODAL VINCULAR REMITO A FACTURA */}
-      {vincModal && (
-        <div className="overlay" onClick={() => setVincModal(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Vincular a Factura</div><button className="close-btn" onClick={() => setVincModal(null)}>✕</button></div>
-            <div className="modal-body">
-              <div className="alert alert-warn">Remito {vincModal.nro} · {fmt_$(vincModal.monto)}</div>
-              <p style={{ fontSize: 11, color: "var(--muted2)", marginBottom: 12 }}>Al vincular, la deuda provisoria del remito se ajusta con la deuda fiscal de la factura.</p>
-              <table><thead><tr><th>Factura</th><th>Fecha</th><th>Total</th><th>Diferencia</th><th></th></tr></thead>
-                <tbody>{facturas.filter(f => f.prov_id === vincModal.prov_id && f.estado === "pendiente").map(f => {
-                  const diff = (f.total || 0) - (vincModal.monto || 0);
-                  return (<tr key={f.id}>
-                    <td className="mono">{f.nro}</td><td>{fmt_d(f.fecha)}</td>
-                    <td className="num">{fmt_$(f.total)}</td>
-                    <td style={{ color: diff > 0 ? "var(--danger)" : diff < 0 ? "var(--success)" : "var(--muted2)" }}>{diff > 0 ? "+" : ""}{fmt_$(diff)}</td>
-                    <td><button className="btn btn-acc btn-sm" onClick={() => vincularRemitoAFactura(f.id)}>Vincular</button></td>
-                  </tr>);
-                })}</tbody></table>
-              {facturas.filter(f => f.prov_id === vincModal.prov_id && f.estado === "pendiente").length === 0 && <div className="empty">No hay facturas pendientes de este proveedor</div>}
-            </div>
-          </div>
-        </div>
-      )}
+      <ModalVincularRemito
+        remito={vincModal} onClose={() => setVincModal(null)}
+        facturas={facturas} onVincular={vincularRemitoAFactura}
+      />
 
       {/* MODAL PAGAR REMITO DIRECTO */}
-      {pagarRemModal && (
-        <div className="overlay" onClick={() => setPagarRemModal(null)}>
-          <div className="modal" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Pagar Remito Directo</div><button className="close-btn" onClick={() => setPagarRemModal(null)}>✕</button></div>
-            <div className="modal-body">
-              <div className="alert alert-info">Remito {pagarRemModal.nro} · {fmt_$(pagarRemModal.monto)}</div>
-              <div className="alert alert-warn">Esto registra el pago sin factura. El gasto impacta en caja y en el EERR.</div>
-              <div className="field"><label>Cuenta de egreso *</label><select value={remPagoForm.cuenta} onChange={e => setRemPagoForm({ ...remPagoForm, cuenta: e.target.value })}><option value="">Seleccioná una cuenta…</option>{cuentasUsables.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-              <div className="field"><label>Monto</label><CurrencyInput value={remPagoForm.monto} onChange={v => setRemPagoForm({ ...remPagoForm, monto: v })} aria-label="Monto del pago al remito" /></div>
-              <div className="field"><label>Fecha</label><input type="date" value={remPagoForm.fecha} onChange={e => setRemPagoForm({ ...remPagoForm, fecha: e.target.value })} /></div>
-            </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setPagarRemModal(null)}>Cancelar</button><button className="btn btn-success" onClick={pagarRemito} disabled={pagandoRem || !remPagoForm.cuenta}>{pagandoRem ? "Procesando..." : "Confirmar Pago"}</button></div>
-          </div>
-        </div>
-      )}
+      <ModalPagarRemitoDirecto
+        remito={pagarRemModal} onClose={() => setPagarRemModal(null)}
+        form={remPagoForm} setForm={setRemPagoForm}
+        cuentasUsables={cuentasUsables} pagar={pagarRemito} pagando={pagandoRem}
+      />
     </div>
   );
 }

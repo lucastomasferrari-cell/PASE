@@ -40,6 +40,24 @@ export interface FormFactura {
   tipo: string;
 }
 
+// Forma del state form (cargar remito valorado).
+export interface FormRemito {
+  prov_id: string;
+  local_id: string;
+  nro: string;
+  fecha: string;
+  monto: number;
+  cat: string;
+  detalle: string;
+}
+
+// Forma del state form (pagar remito directo, sin factura previa).
+export interface FormPagoRemito {
+  cuenta: string;
+  monto: number;
+  fecha: string;
+}
+
 // Item del detalle de insumos (form item editable).
 export interface ItemFactura {
   producto: string;
