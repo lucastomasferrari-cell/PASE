@@ -36,12 +36,9 @@ export function Sidebar({ user, section, onNav, onLogout, onRefreshPerms, locale
     {id:"proveedores",label:"Proveedores",sec:"Operaciones",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="5" r="2.5"/><path d="M2 13c0-3 2-4.5 5-4.5s5 1.5 5 4.5"/></svg>`},
     {id:"caja",label:"Tesorería",sec:"Finanzas",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="5" width="12" height="8" rx="1"/><path d="M4 5V4a3 3 0 0 1 6 0v1"/></svg>`},
     {id:"mp",label:"Conciliación MP",sec:"Finanzas",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="12" height="8" rx="1"/><line x1="1" y1="7" x2="13" y2="7"/></svg>`},
-    // Cashflow oculto temporalmente (Lucas, 2026-05-08): la pantalla muestra
-    // solo ingresos cobrados de MercadoPago — faltan los de efectivo y banco.
-    // Se va a retomar cuando se resuelva el ingreso de plata por canales no-MP
-    // (probablemente con un importador de banco análogo al de Maxirest). Para
-    // reactivar, descomentar este item.
-    // {id:"cashflow",label:"Cashflow",sec:"Números",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="1,10 4,6 7,8 10,4 13,7"/><line x1="1" y1="13" x2="13" y2="13"/></svg>`},
+    // Cashflow eliminado del producto (Lucas, 2026-05-11). El módulo no
+    // resolvía el caso de uso real (solo cubría ingresos MP, no efectivo
+    // ni banco) y se decidió no continuar el desarrollo. Archivo eliminado.
     // Cierre Comparativo fusionado en EERR (Lucas, 2026-05-08): ahora EERR
     // tiene botón "+ Comparar mes" que agrega columnas comparativas + gráfico
     // de evolución. La pantalla Cierre.tsx queda como código muerto;

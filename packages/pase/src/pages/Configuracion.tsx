@@ -386,6 +386,27 @@ function MediosCobroSection({ user, locales, localActivo }: MediosCobroSectionPr
     }
   };
 
+  // ¿La fila es un override "genuino" de un medio Global? (es decir, hay
+  // OTRA fila con el mismo nombre y local_id=null que sigue activa o no).
+  // Si sí: ofrecemos botón "Volver al Global" que borra el override.
+  const tieneGlobalContraparte = (m: MedioCobro): boolean =>
+    m.local_id != null && todosLosMedios().some(x => x.nombre === m.nombre && x.local_id === null);
+
+  // Borra una fila override sin tocar el Global. El local vuelve a usar
+  // el medio Global tal cual (valores y estado activo del Global).
+  const borrarOverride = async (m: MedioCobro) => {
+    if (m.local_id == null) { alert("Esta fila no es un override (es Global)."); return; }
+    if (!confirm(`¿Quitar el override de "${m.nombre}" en ${nombreLocal(m.local_id)}? Volverá a usar el medio Global.`)) return;
+    setSaving(true);
+    try {
+      const { error } = await db.from("medios_cobro").delete().eq("id", m.id);
+      if (error) { alert("No se pudo borrar el override: " + error.message); return; }
+      refresh();
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const guardar = async () => {
     if (!editing) return;
     const nombre = (editing.nombre || "").trim();
@@ -472,9 +493,14 @@ function MediosCobroSection({ user, locales, localActivo }: MediosCobroSectionPr
                     <td style={{ textAlign: "center", color: "var(--muted2)" }}>{m.orden}</td>
                     <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                       <button className="btn btn-sec btn-sm" disabled={saving} onClick={() => abrirEditar(m)} style={{ marginRight: 6 }}>Editar</button>
-                      <button className="btn btn-sec btn-sm" disabled={saving} onClick={() => toggleActivo(m)}>
+                      <button className="btn btn-sec btn-sm" disabled={saving} onClick={() => toggleActivo(m)} style={{ marginRight: tieneGlobalContraparte(m) ? 6 : 0 }}>
                         {m.activo ? "Desactivar" : "Reactivar"}
                       </button>
+                      {tieneGlobalContraparte(m) && (
+                        <button className="btn btn-ghost btn-sm" disabled={saving} onClick={() => borrarOverride(m)} title="Borra el override y vuelve a usar el medio Global tal cual">
+                          Volver al Global
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

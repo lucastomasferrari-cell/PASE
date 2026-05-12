@@ -53,9 +53,7 @@ export const MODULOS = [
   { slug:"proveedores", label:"Proveedores", icon:"🏭" },
   { slug:"mp", label:"Conciliación MP", icon:"💳" },
   { slug:"caja", label:"Tesorería", icon:"💰" },
-  // Cashflow oculto temporalmente (Lucas, 2026-05-08): no aparece en sidebar
-  // ni en Usuarios → Permisos. Para reactivar, descomentar acá + en Layout.tsx.
-  // { slug:"cashflow", label:"Cashflow", icon:"📈" },
+  // Cashflow eliminado del producto (Lucas, 2026-05-11).
   // Cierre Comparativo fusionado en EERR (Lucas, 2026-05-08). Para reactivar
   // descomentar acá + en Layout.tsx + restaurar case "cierre" en App.tsx.
   // { slug:"cierre", label:"Cierre Comparativo", icon:"📊" },

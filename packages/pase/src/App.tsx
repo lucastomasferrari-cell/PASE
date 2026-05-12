@@ -12,8 +12,9 @@ import Login from "./pages/Login";
 // usuario realmente hace. Los dos early-returns (ForcePasswordChange,
 // SeleccionarLocalModal) son flujos raros (primer login con password temp,
 // encargado con >1 local) — lazy ahí libera ~5-10kB que casi nadie carga.
-// Cashflow y Cierre quedan fuera del lazy: sus cases del switch redirigen
-// a Dashboard/EERR respectivamente (oculos del sidebar 2026-05-08).
+// Cierre queda fuera del lazy: su case del switch redirige a EERR
+// (fusionado 2026-05-08; el archivo Cierre.tsx queda como código muerto
+// para reactivar si hace falta).
 const ForcePasswordChange = lazy(() => import("./pages/ForcePasswordChange"));
 const SeleccionarLocalModal = lazy(() => import("./components/SeleccionarLocalModal"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -310,10 +311,8 @@ export default function App() {
       case "maxirest":  return <ImportarMaxirest {...props}/>;
       case "lector_ia": return <LectorFacturasIA {...props}/>;
       case "mp":        return <ConciliacionMP {...props}/>;
-      // Cashflow oculto temporalmente (Lucas, 2026-05-08): si una sesión vieja
-      // tiene "cashflow" en localStorage, fallback a Dashboard. Componente y
-      // case se mantienen comentados para reactivar fácil cuando se resuelva
-      // el flujo de ingresos no-MP.
+      // Cashflow eliminado del producto (Lucas, 2026-05-11). Si una sesión
+      // muy vieja tiene "cashflow" en localStorage, fallback a Dashboard.
       case "cashflow": return <Dashboard {...props}/>;
       // Cierre Comparativo fusionado en EERR (Lucas, 2026-05-08). Sesiones
       // viejas con localStorage "cierre" caen a EERR (que ahora soporta

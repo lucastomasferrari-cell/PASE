@@ -4,6 +4,7 @@ import { applyLocalScope, cuentasOperables as cuentasOperablesFn } from "../lib/
 import { CUENTAS } from "../lib/constants";
 import { useCategorias } from "../lib/useCategorias";
 import { toISO, today, fmt_d, fmt_$, fmt_dt_ar } from "../lib/utils";
+import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { Combobox } from "../components/Combobox";
 import type { Usuario, Local } from "../types";
 import type { Proveedor } from "../types/finanzas";
@@ -281,9 +282,12 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
     }
   };
 
+  // Debounce de date pickers (C6) — evita fetches al editar manualmente.
+  const debDesde = useDebouncedValue(desde, 300);
+  const debHasta = useDebouncedValue(hasta, 300);
   // Patrón fetch-on-dep-change. No agregar load a deps (re-fetch infinito).
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
-  useEffect(()=>{load();},[desde,hasta,localActivo]);
+  useEffect(()=>{load();},[debDesde,debHasta,localActivo]);
 
   const showToast=(kind: "ok"|"err", msg: string)=>{
     setToast({kind,msg});

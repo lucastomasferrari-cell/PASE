@@ -5,6 +5,7 @@ import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
+import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { Combobox } from "../components/Combobox";
 import type { Usuario, Local } from "../types";
 import type { Gasto } from "../types/finanzas";
@@ -125,9 +126,12 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
     setPlantillas((p as GastoPlantilla[]) || []);
     setLoading(false);
   };
+  // Debounce de date pickers (C6) — evita fetches en cada tecla al editar.
+  const debDesde = useDebouncedValue(desde, 300);
+  const debHasta = useDebouncedValue(hasta, 300);
   // Patrón fetch-on-dep-change. No agregar load a deps (re-fetch infinito).
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, [desde, hasta, localActivo]);
+  useEffect(() => { load(); }, [debDesde, debHasta, localActivo]);
 
   const histFiltrado = gastos.filter(g => {
     const matchTipo = tipoFiltro === "todos" || g.tipo === tipoFiltro;

@@ -3,6 +3,7 @@ import { db } from "../lib/supabase";
 import { applyLocalScope, localesVisibles, tienePermiso } from "../lib/auth";
 import { useMediosCobro } from "../lib/useMediosCobro";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
+import { useDebouncedValue } from "../lib/useDebouncedValue";
 import ImportarMaxirest from "./ImportarMaxirest";
 import type { Usuario, Local, Venta, CierreVentas } from "../types";
 
@@ -57,9 +58,13 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
     const {data}=await q.limit(500);
     setVentas((data||[]) as Venta[]);setLoading(false);
   };
+  // Debounce de los date pickers: evita un fetch por cada tecla cuando el
+  // usuario tipea YYYY-MM-DD manualmente (convención C6).
+  const debDesde = useDebouncedValue(filtDesde, 300);
+  const debHasta = useDebouncedValue(filtHasta, 300);
   // Patrón fetch-on-dep-change.
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
-  useEffect(()=>{load();},[filtDesde,filtHasta,localActivo]);
+  useEffect(()=>{load();},[debDesde,debHasta,localActivo]);
   // Pre-llena form.local_id cuando hay locales disponibles y no se eligió uno.
   // Patrón "init form state from outer prop". Refactor a useState callback
   // requiere que el initial dependa de localesDisp que puede empezar [].
