@@ -131,7 +131,7 @@ interface MpResetResultado {
 }
 
 function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
-  const { CATEGORIAS_COMPRA, COMISIONES_CATS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, RETIROS_SOCIOS, categoriaToTipo } = useCategorias();
+  const { COMISIONES_CATS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, RETIROS_SOCIOS, categoriaToTipo } = useCategorias();
   const [credenciales,setCredenciales]=useState<MpCredencial[]>([]);
   const [movimientos,setMovimientos]=useState<MpMovimiento[]>([]);
   const [facturas,setFacturas]=useState<FacturaSlim[]>([]);
@@ -647,7 +647,8 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
         prov_id:parseInt(nuevaFacturaForm.prov_id),
         nro:nuevaFacturaForm.nro,
         fecha:nuevaFacturaForm.fecha||null,
-        cat:nuevaFacturaForm.cat,
+        // cat ya no se pasa: la RPC la deriva de proveedor.cat por default
+        // (fallback a "Conciliación MP" si el proveedor no tiene cat seteada).
         detalle:nuevaFacturaForm.detalle,
       },
     });
@@ -1046,9 +1047,16 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                   </label>
                   {sugeridos>0&&<span className="badge b-success" style={{fontSize:9}}>{sugeridos} sugeridos</span>}
                 </div>
-                <div className="field"><label>Gasto a vincular</label>
+                {/* Patrón "botón + select separados": antes "+ Crear gasto nuevo"
+                    vivía como primer <option> del <select size>. Bug: el browser
+                    highlightea el primer option pero React state queda en "" —
+                    clickear no disparaba onChange. Además el texto del option
+                    heredaba colores que se veían mal contra el fondo oscuro. */}
+                <button className="btn btn-acc btn-sm" style={{marginBottom:8}}
+                  onClick={()=>setVinculoSel("__NUEVO__")}>+ Crear gasto nuevo</button>
+                <div className="field"><label>O vincular a gasto existente</label>
                   <select value={vinculoSel} onChange={e=>setVinculoSel(e.target.value)} size={Math.min(8,Math.max(3,lista.length+1))} style={{height:"auto"}}>
-                    <option value="__NUEVO__">+ Crear gasto nuevo</option>
+                    <option value="" disabled>— Elegí un gasto —</option>
                     {lista.length===0?<option value="" disabled>— Sin gastos en el período —</option>:lista.map(g=>{
                       const flag=g._cercanoMonto&&g._cercanoFecha?"⭐ ":g._cercanoMonto?"💲 ":g._cercanoFecha?"📅 ":"";
                       return <option key={g.id} value={g.id}>{flag}{fmt_d(g.fecha)} · {g.categoria}{g.subcategoria?" / "+g.subcategoria:""} · {fmt_$(g.monto)} · {g.cuenta||"—"} · {g.detalle||""}</option>;
@@ -1205,25 +1213,11 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                     <div className="field"><label>Fecha</label><input type="date" value={nuevaFacturaForm.fecha} onChange={e=>setNuevaFacturaForm({...nuevaFacturaForm,fecha:e.target.value})}/>
                       <div style={{fontSize:10,color:"var(--muted)",marginTop:4}}>Si dejás vacío usa la fecha del egreso MP.</div>
                     </div>
-                    <div className="field"><label>Categoría</label>
-                      <Combobox
-                        value={nuevaFacturaForm.cat}
-                        onChange={v=>setNuevaFacturaForm({...nuevaFacturaForm,cat:v})}
-                        options={[
-                          ...CATEGORIAS_COMPRA.map(c=>({value:c,label:c,group:"Mercadería (CMV)"})),
-                          ...GASTOS_FIJOS.map(c=>({value:c,label:c,group:"Gastos Fijos"})),
-                          ...GASTOS_VARIABLES.map(c=>({value:c,label:c,group:"Gastos Variables"})),
-                          ...GASTOS_PUBLICIDAD.map(c=>({value:c,label:c,group:"Publicidad y MKT"})),
-                          ...COMISIONES_CATS.map(c=>({value:c,label:c,group:"Comisiones"})),
-                          ...GASTOS_IMPUESTOS.map(c=>({value:c,label:c,group:"Impuestos"})),
-                        ]}
-                        groupOrder={["Mercadería (CMV)","Gastos Fijos","Gastos Variables","Publicidad y MKT","Comisiones","Impuestos"]}
-                        placeholder="Buscar categoría..."
-                        clearable
-                      />
-                    </div>
+                    {/* Sin field Categoría: la cat se deriva del proveedor.cat
+                        (lookup en la RPC fn_conciliar_mp_con_factura_nueva). Si
+                        querés editar después, se hace desde Compras. */}
                     <div className="field"><label>Detalle</label><input value={nuevaFacturaForm.detalle} onChange={e=>setNuevaFacturaForm({...nuevaFacturaForm,detalle:e.target.value})} placeholder={conciliarModal.descripcion||"Descripción..."}/></div>
-                    <div style={{fontSize:10,color:"var(--muted)",marginTop:4}}>IVA y percepciones quedan en 0 — completalos después en Compras si los necesitás.</div>
+                    <div style={{fontSize:10,color:"var(--muted)",marginTop:4}}>Categoría e IVA toman defaults del proveedor — editalos después en Compras si hace falta.</div>
                   </div>
                 )}
               </div>
