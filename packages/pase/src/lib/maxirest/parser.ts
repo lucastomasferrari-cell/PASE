@@ -70,14 +70,31 @@ function normalizar(s: string): string {
   return s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
 }
 
+// Mapeo de etiquetas reconocidas → tipo canónico interno. AM/PM lo usa el
+// local René (2026-05-12): "Turno 1 (AM)" o "Turno 1 (PM)". Mediodía/Noche
+// es el formato estándar del resto de los locales.
+const TURNO_LABELS: Record<string, Turno> = {
+  'mediodia': 'mediodia',
+  'am': 'mediodia',
+  'noche': 'noche',
+  'pm': 'noche',
+};
+
 export function extraerTurno(texto: string): Turno | null {
-  // Primer match de "Turno: <palabra>" (case insensitive). El header
-  // "Turno 2 (Noche)" / "[Noche]" NO matchea porque exige los dos puntos.
-  const m = texto.match(/turno\s*:\s*([A-Za-záéíóúÁÉÍÓÚñÑ]+)/i);
-  if (!m || !m[1]) return null;
-  const v = normalizar(m[1]);
-  if (v === 'noche') return 'noche';
-  if (v === 'mediodia') return 'mediodia';
+  // Formato 1: "Turno: <palabra>" — los locales nuevos (mayoría).
+  const conColon = texto.match(/turno\s*:\s*([A-Za-záéíóúÁÉÍÓÚñÑ]+)/i);
+  if (conColon && conColon[1]) {
+    const t = TURNO_LABELS[normalizar(conColon[1])];
+    if (t) return t;
+  }
+  // Formato 2: "Turno N (X)" — René usa "Turno 1 (AM)" / "Turno 1 (PM)".
+  // Soporta también "Turno 2 (Mediodía)" o "Turno 2 (Noche)" para uniformidad.
+  // El espacio dentro del paréntesis es tolerado ("(AM )", "( PM )").
+  const conParen = texto.match(/turno\s+\d+\s*\(\s*([A-Za-záéíóúÁÉÍÓÚñÑ]+)\s*\)/i);
+  if (conParen && conParen[1]) {
+    const t = TURNO_LABELS[normalizar(conParen[1])];
+    if (t) return t;
+  }
   return null;
 }
 

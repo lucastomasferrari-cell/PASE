@@ -28,10 +28,9 @@ describe('parseCierre — sintéticos', () => {
     expect(r.data.medios.length).toBe(2);
   });
 
-  it('2. cierre sin línea "Turno:" → error en turno', () => {
+  it('2. cierre sin ninguna línea de turno → error en turno', () => {
     const txt = [
       'Lunes 4 de Mayo de 2026',
-      'Turno 2 (Noche)',                           // header sin dos puntos
       'VENTAS POR FORMA DE COBRO',
       'Forma de cobro Total Cant',
       'EFECTIVO 100,00 1',
@@ -40,6 +39,48 @@ describe('parseCierre — sintéticos', () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.errores.find(e => e.campo === 'turno')).toBeDefined();
+  });
+
+  it('2b. cierre con formato "Turno 1 (AM)" → mediodia (formato René)', () => {
+    const txt = [
+      'Viernes 1 de Mayo de 2026',
+      'Turno 1 (AM )',
+      'VENTAS POR FORMA DE COBRO',
+      'Forma de cobro Total Cant',
+      'EFECTIVO 100,00 1',
+    ].join('\n');
+    const r = parseCierre(txt);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.data.turno).toBe('mediodia');
+  });
+
+  it('2c. cierre con formato "Turno 2 (PM)" → noche', () => {
+    const txt = [
+      'Viernes 1 de Mayo de 2026',
+      'Turno 2 (PM)',
+      'VENTAS POR FORMA DE COBRO',
+      'Forma de cobro Total Cant',
+      'EFECTIVO 100,00 1',
+    ].join('\n');
+    const r = parseCierre(txt);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.data.turno).toBe('noche');
+  });
+
+  it('2d. cierre con formato "Turno 2 (Noche)" → noche (compat)', () => {
+    const txt = [
+      'Lunes 4 de Mayo de 2026',
+      'Turno 2 (Noche)',
+      'VENTAS POR FORMA DE COBRO',
+      'Forma de cobro Total Cant',
+      'EFECTIVO 100,00 1',
+    ].join('\n');
+    const r = parseCierre(txt);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.data.turno).toBe('noche');
   });
 
   it('3. cierre sin sección "VENTAS POR FORMA DE COBRO" → error en medios', () => {
