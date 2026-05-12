@@ -11,71 +11,14 @@ import { CurrencyInput } from "../components/CurrencyInput";
 import { Combobox } from "../components/Combobox";
 import type { Usuario, Local } from "../types";
 import type { Proveedor, Factura, PagoFactura } from "../types/finanzas";
-
-// Remito (table remitos) — registro de mercadería recibida sin factura
-// inmediata. Modelo separado en DB pero unificado en UI con Compras desde
-// 2026-05-07. Estados: 'sin_factura'/'vinculado'/'facturado'/'pagado'/'anulado'.
-interface Remito {
-  id: string;
-  prov_id: number;
-  local_id: number;
-  nro: string;
-  fecha: string;
-  monto: number;
-  cat: string | null;
-  detalle: string | null;
-  estado: string;
-  factura_id: string | null;
-}
+import type { Remito, FormFactura, ItemFactura } from "./compras/types";
+import { estadoDot } from "./compras/helpers";
 
 interface ComprasProps {
   user: Usuario;
   locales: Local[];
   localActivo: number | null;
 }
-
-// Forma del state form (carga manual de factura). Los campos numéricos son
-// string desde el input (parseMonto al guardar).
-interface FormFactura {
-  prov_id: string;
-  local_id: string;
-  nro: string;
-  fecha: string;
-  venc: string;
-  // Sprint CurrencyInput: campos de plata como number (antes string).
-  // El currency mask del CurrencyInput trabaja directo con number;
-  // elimina el bug del neto gravado por type=number rechazando coma AR.
-  neto: number;
-  iva21: number;
-  iva105: number;
-  iibb: number;
-  perc_iva: number;
-  otros_cargos: number;
-  descuentos: number;
-  cat: string;
-  detalle: string;
-  tipo: string;
-}
-
-// Item del detalle de insumos (form item editable).
-interface ItemFactura {
-  producto: string;
-  cantidad: string;
-  unidad: string;
-  precio_unitario: string;
-  subtotal: number;
-}
-
-const estadoDot = (estado: string) => {
-  const colors: Record<string,string> = { pendiente: "var(--muted2)", vencida: "var(--acc)", pagada: "var(--success)", revision: "var(--warn)" };
-  const labels: Record<string,string> = { pendiente: "Pendiente", vencida: "Vencida", pagada: "Pagada", anulada: "Anulada", revision: "⚠ Revisión" };
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: estado === "revision" ? "var(--warn)" : "var(--muted2)" }}>
-      <div style={{ width: 5, height: 5, borderRadius: "50%", background: colors[estado] || "var(--bd2)", flexShrink: 0 }} />
-      {labels[estado] || estado}
-    </div>
-  );
-};
 
 export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const { CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS, categoriaToBucket } = useCategorias();
