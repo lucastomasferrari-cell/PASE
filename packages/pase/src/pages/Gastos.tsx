@@ -1,14 +1,26 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { applyLocalScope, cuentasOperables, localesVisibles } from "../lib/auth";
+import { applyLocalScope, cuentasOperables, localesVisibles, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import { useDebouncedValue } from "../lib/useDebouncedValue";
+import { useToast } from "../hooks/useToast";
 import { Combobox } from "../components/Combobox";
 import type { Usuario, Local } from "../types";
 import type { Gasto } from "../types/finanzas";
+
+// Gasto extendido con campos de auditoría (anulado_*/editado_*) agregados en
+// migration 202605122300. El tipo base Gasto no los incluye todavía.
+type GastoExt = Gasto & {
+  estado?: string | null;
+  anulado_motivo?: string | null;
+  anulado_at?: string | null;
+  editado?: boolean | null;
+  editado_motivo?: string | null;
+  editado_at?: string | null;
+};
 
 interface GastosProps {
   user: Usuario;
@@ -64,7 +76,15 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
   const [desde, setDesde] = useState(() => { const d = new Date(today); d.setDate(d.getDate() - 90); return toISO(d); });
   const [hasta, setHasta] = useState(toISO(today));
   const [tipoFiltro, setTipoFiltro] = useState("todos");
-  const [gastos, setGastos] = useState<Gasto[]>([]);
+  const [gastos, setGastos] = useState<GastoExt[]>([]);
+  const [mostrarAnulados, setMostrarAnulados] = useState(false);
+  // Modal de editar gasto
+  const [editModal, setEditModal] = useState<(GastoExt & { justificativo: string }) | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [idempKeyEditGasto, setIdempKeyEditGasto] = useState<string>(() => crypto.randomUUID());
+  const puedeEditarAnular = tienePermiso(user, "compras_anular");
+  const puedeVerAnulados = tienePermiso(user, "ver_anulados");
+  const { toast, showToast } = useToast();
   const [plantillas, setPlantillas] = useState<GastoPlantilla[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
@@ -122,7 +142,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
     let pq = db.from("gastos_plantillas").select("*").eq("activo", true).order("nombre");
     pq = applyLocalScope(pq, user, localActivo);
     const { data: p } = await pq;
-    setGastos(((g as Gasto[]) || []).filter(g => g.categoria !== "SUELDOS"));
+    setGastos(((g as GastoExt[]) || []).filter(g => g.categoria !== "SUELDOS"));
     setPlantillas((p as GastoPlantilla[]) || []);
     setLoading(false);
   };
@@ -134,6 +154,9 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
   useEffect(() => { load(); }, [debDesde, debHasta, localActivo]);
 
   const histFiltrado = gastos.filter(g => {
+    // Anulados: solo se ven si el toggle "Mostrar anulados" está activo y
+    // el usuario tiene permiso ver_anulados.
+    if (g.estado === "anulado" && !(mostrarAnulados && puedeVerAnulados)) return false;
     const matchTipo = tipoFiltro === "todos" || g.tipo === tipoFiltro;
     const matchSearch = !search ||
       g.categoria?.toLowerCase().includes(search.toLowerCase()) ||
@@ -181,6 +204,52 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
     } finally {
       setSaving(false);
     }
+  };
+
+  // ─── EDITAR / ANULAR GASTO (migration 202605122300) ──────────────────────
+  const abrirEditar = (g: GastoExt) => {
+    setEditModal({ ...g, justificativo: "" });
+    setIdempKeyEditGasto(crypto.randomUUID());
+  };
+
+  const guardarEdit = async () => {
+    if (savingEdit || !editModal) return;
+    if (!editModal.justificativo?.trim()) { alert("El motivo de la edición es obligatorio"); return; }
+    if (!editModal.cuenta || !editModal.categoria || !editModal.monto) {
+      alert("Cuenta, categoría y monto son obligatorios"); return;
+    }
+    setSavingEdit(true);
+    try {
+      const { error } = await db.rpc("editar_gasto", {
+        p_gasto_id: editModal.id,
+        p_fecha: editModal.fecha,
+        p_categoria: editModal.categoria,
+        p_tipo: editModal.tipo,
+        p_monto: typeof editModal.monto === "number" ? editModal.monto : parseFloat(String(editModal.monto)),
+        p_cuenta: editModal.cuenta,
+        p_detalle: editModal.detalle || "",
+        p_justificativo: editModal.justificativo,
+        p_idempotency_key: idempKeyEditGasto,
+      });
+      if (error) { alert(translateRpcError(error)); return; }
+      showToast("Gasto editado · saldos actualizados");
+      setEditModal(null);
+      load();
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const anularGasto = async (g: GastoExt) => {
+    const motivo = prompt(`¿Por qué anulás el gasto ${g.categoria} de ${fmt_$(g.monto || 0)}? (obligatorio)`);
+    if (!motivo?.trim()) return;
+    const { error } = await db.rpc("anular_gasto", {
+      p_gasto_id: g.id,
+      p_motivo: motivo,
+    });
+    if (error) { alert(translateRpcError(error)); return; }
+    showToast("Gasto anulado · movimiento revertido");
+    load();
   };
 
   const abrirPagarPlantilla = (p: GastoPlantilla) => {
@@ -301,27 +370,110 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
       <div className="section">
         <div className="section-hd">
           <span className="section-title">Historial</span>
-          <span className="section-total">{histFiltrado.length} movimientos · {fmt_$(totalPeriodo)}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {puedeVerAnulados && (
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--muted2)", cursor: "pointer" }}>
+                <input type="checkbox" checked={mostrarAnulados} onChange={e => setMostrarAnulados(e.target.checked)} />
+                Mostrar anulados
+              </label>
+            )}
+            <span className="section-total">{histFiltrado.length} movimientos · {fmt_$(totalPeriodo)}</span>
+          </div>
         </div>
         <div className="panel">
           {loading ? <div className="loading">Cargando...</div> : histFiltrado.length === 0 ? <div className="empty">Sin movimientos en el período</div> : (
             <table>
-              <thead><tr><th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Detalle</th><th>Local</th><th>Cuenta</th><th style={{ textAlign: "right" }}>Monto</th></tr></thead>
-              <tbody>{histFiltrado.map(g => (
-                <tr key={g.id}>
+              <thead><tr><th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Detalle</th><th>Local</th><th>Cuenta</th><th style={{ textAlign: "right" }}>Monto</th>{puedeEditarAnular && <th></th>}</tr></thead>
+              <tbody>{histFiltrado.map(g => {
+                const anulado = g.estado === "anulado";
+                return (
+                <tr key={g.id} style={anulado ? { opacity: 0.5, textDecoration: "line-through" } : undefined}>
                   <td className="mono">{fmt_d(g.fecha)}</td>
-                  <td><span className="badge b-muted">{g.tipo}</span></td>
+                  <td>
+                    <span className="badge b-muted">{g.tipo}</span>
+                    {anulado && <span className="badge b-danger" style={{ marginLeft: 4, fontSize: 9 }}>ANULADO</span>}
+                    {g.editado && !anulado && <span className="badge b-warn" style={{ marginLeft: 4, fontSize: 9 }} title={g.editado_motivo || ""}>EDITADO</span>}
+                  </td>
                   <td style={{ fontSize: 11 }}>{g.categoria}</td>
                   <td style={{ fontSize: 11, color: "var(--muted2)" }}>{g.detalle || "—"}</td>
-                  <td style={{ fontSize: 11, color: "var(--muted2)" }}>{locales.find((l: Local) => l.id === g.local_id)?.nombre || "Todos"}</td>
+                  <td style={{ fontSize: 11, color: "var(--muted2)" }}>{locales.find((l: Local) => String(l.id) === String(g.local_id))?.nombre || "Todos"}</td>
                   <td style={{ fontSize: 11, color: "var(--muted2)" }}>{g.cuenta || "—"}</td>
                   <td style={{ textAlign: "right" }}><span className="num">{fmt_$(g.monto)}</span></td>
+                  {puedeEditarAnular && (
+                    <td>
+                      <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                        {!anulado && <button className="btn btn-ghost btn-sm" onClick={() => abrirEditar(g)}>Editar</button>}
+                        {!anulado && <button className="btn btn-danger btn-sm" onClick={() => anularGasto(g)}>Anular</button>}
+                      </div>
+                    </td>
+                  )}
                 </tr>
-              ))}</tbody>
+                );
+              })}</tbody>
             </table>
           )}
         </div>
       </div>
+
+      {/* MODAL EDITAR GASTO */}
+      {editModal && (
+        <div className="overlay" onClick={() => setEditModal(null)}>
+          <div className="modal" style={{ width: 480 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-hd">
+              <div className="modal-title">Editar gasto</div>
+              <button className="close-btn" onClick={() => setEditModal(null)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="alert alert-warn" style={{ marginBottom: 12 }}>
+                Cambiar cuenta o monto ajusta automáticamente los saldos en Tesorería (revierte el viejo + aplica el nuevo).
+              </div>
+              <div className="field"><label>Fecha</label>
+                <input type="date" value={editModal.fecha || ""} onChange={e => setEditModal({ ...editModal, fecha: e.target.value })} />
+              </div>
+              <div className="field"><label>Categoría</label>
+                <Combobox
+                  value={editModal.categoria || ""}
+                  onChange={v => setEditModal({ ...editModal, categoria: v })}
+                  options={ALL_CATS.map(c => ({ value: c, label: c }))}
+                  placeholder="Buscar..."
+                  clearable
+                />
+              </div>
+              <div className="field"><label>Monto</label>
+                <input type="number" step="0.01" value={editModal.monto || ""} onChange={e => setEditModal({ ...editModal, monto: parseFloat(e.target.value) || 0 })} />
+              </div>
+              <div className="field"><label>Cuenta de egreso</label>
+                <select value={editModal.cuenta || ""} onChange={e => setEditModal({ ...editModal, cuenta: e.target.value })}>
+                  <option value="" disabled>Seleccionar...</option>
+                  {cuentasUsables.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="field"><label>Detalle</label>
+                <input value={editModal.detalle || ""} onChange={e => setEditModal({ ...editModal, detalle: e.target.value })} />
+              </div>
+              <div className="field"><label>Motivo de la edición *</label>
+                <input value={editModal.justificativo} onChange={e => setEditModal({ ...editModal, justificativo: e.target.value })} placeholder="Por qué editás (queda en auditoría)..." />
+              </div>
+            </div>
+            <div className="modal-ft">
+              <button className="btn btn-sec" onClick={() => setEditModal(null)} disabled={savingEdit}>Cancelar</button>
+              <button className="btn btn-acc" onClick={guardarEdit} disabled={savingEdit || !editModal.justificativo?.trim()}>{savingEdit ? "Guardando..." : "Guardar cambios"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TOAST */}
+      {toast && (
+        <div style={{
+          position: "fixed", top: 16, right: 16, zIndex: 200,
+          padding: "10px 20px",
+          background: toast.type === "error" ? "var(--danger)" : "var(--success)",
+          color: "#fff", borderRadius: "var(--r)", fontSize: 12,
+          fontFamily: "'DM Mono',monospace", fontWeight: 600,
+          boxShadow: "0 4px 12px rgba(0,0,0,.5)",
+        }}>{toast.message}</div>
+      )}
 
       {/* Modal cargar gasto manual */}
       {modal && (
