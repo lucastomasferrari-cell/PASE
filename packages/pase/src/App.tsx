@@ -241,35 +241,6 @@ export default function App() {
     applyLogin(u);
   };
 
-  // Refetch de usuario_permisos y usuario_locales del usuario activo sin
-  // cerrar sesión. El dueño cambia permisos → el afectado hace click en
-  // "Actualizar permisos" en el sidebar y ve el cambio al instante.
-  const refreshPermisos = async () => {
-    if (!user) return;
-    const [{ data: permsData }, { data: locsData }] = await Promise.all([
-      db.from("usuario_permisos").select("modulo_slug").eq("usuario_id", user.id),
-      db.from("usuario_locales").select("local_id").eq("usuario_id", user.id),
-    ]);
-    const enriched: Usuario = {
-      ...user,
-      _permisos: (permsData || []).map((p: { modulo_slug: string }) => p.modulo_slug),
-      _locales: (locsData || []).length ? (locsData || []).map((l: { local_id: number }) => l.local_id) : (user.locales || []),
-    };
-    // Re-evaluar localActivo: si el dueño le agregó/quitó locales al usuario,
-    // puede que el localActivo actual ya no esté en sus _locales → modal.
-    const decision = necesitaElegirLocal(enriched, localActivo);
-    if (decision.action === "showModal") {
-      setLocalActivo(null);
-      setShowLocalModal(true);
-    } else if (decision.action === "setActivo") {
-      setLocalActivo(decision.localId!);
-      setShowLocalModal(false);
-    }
-    setUser(enriched);
-    sessionStorage.setItem("pase_user", JSON.stringify(enriched));
-    showToast("Permisos actualizados");
-  };
-
   const logout = async () => {
     await db.auth.signOut();
     // SIGNED_OUT en onAuthStateChange limpia el resto del state
@@ -346,7 +317,7 @@ export default function App() {
   }}/></Suspense></>;
 
   return (
-    <AuthProvider value={{ user, refreshPermisos }}>
+    <AuthProvider value={user}>
       <style>{css}</style>
       <div className="app">
         {/* Fondo decorativo para glassmorphism */}
@@ -376,7 +347,7 @@ export default function App() {
             quede por encima del contenido del main cuando se despliega. */}
         <div style={{position:"relative",zIndex:2}}>
           <Sidebar user={user} section={section} onNav={setSection}
-            onLogout={logout} onRefreshPerms={refreshPermisos}
+            onLogout={logout}
             locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo}
             tenant={tenant} tenantOverride={tenantOverride} onClearOverride={clearTenantOverride}/>
         </div>

@@ -70,8 +70,6 @@ export async function loginAs(
  * Hace logout y espera la pantalla de login.
  */
 export async function logout(page: Page) {
-  // .sb-logout se reusa para el botón "Actualizar permisos ↻"; filtramos por
-  // texto para evitar el strict-mode violation.
   await page.locator(".sb-logout", { hasText: "Cerrar sesión" }).click();
   await page.waitForSelector(".login-card", { timeout: 10_000 });
 }

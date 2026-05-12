@@ -247,30 +247,11 @@ export function puedeVerMovimientosDeCuenta(user: MaybeUser, cuenta: string): bo
 // user en sesión: { id: number, nombre, email, rol: string, activo: boolean,
 //   _permisos: string[], _locales: number[] }
 
-// El context guarda { user, refreshPermisos }. Retrocompat: si el value es
-// un objeto user plano (sin refreshPermisos), se sigue leyendo como antes.
-interface AuthContextValue {
-  user: Usuario | null;
-  refreshPermisos?: () => Promise<void>;
-}
-// El value del context puede ser:
-//   - AuthContextValue (forma nueva: { user, refreshPermisos? })
-//   - Usuario directo (forma legacy)
-//   - null (sin sesión)
-// useAuth() runtime-detecta cuál es por la presencia de .user.
-type AuthContextRaw = AuthContextValue | Usuario | null;
-const AuthContext = createContext<AuthContextRaw>(null);
+const AuthContext = createContext<Usuario | null>(null);
 export const AuthProvider = AuthContext.Provider;
 
 export function useAuth() {
-  const raw = useContext(AuthContext);
-  // Permite dos formas de pasar el value: { user, refreshPermisos } (nuevo)
-  // o el user directo (legacy). Detectamos por la presencia de .user.
-  // Usuario tiene id/email/rol/etc. pero NO tiene una key llamada "user", así
-  // que la presencia de "user" identifica AuthContextValue de forma única.
-  const isWrapped = raw !== null && typeof raw === "object" && "user" in raw;
-  const user: Usuario | null = isWrapped ? (raw as AuthContextValue).user : (raw as Usuario | null);
-  const refreshPermisos = isWrapped ? (raw as AuthContextValue).refreshPermisos : undefined;
+  const user = useContext(AuthContext);
   return {
     user,
     tienePermiso: (slug: string) => tienePermiso(user, slug),
@@ -279,6 +260,5 @@ export function useAuth() {
     scopeLocales: (localActivo: number | null) => scopeLocales(user, localActivo),
     cuentasVisibles: () => cuentasVisibles(user),
     puedeVerCuenta: (cuenta: string) => puedeVerCuenta(user, cuenta),
-    refreshPermisos,
   };
 }

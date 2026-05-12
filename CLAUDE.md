@@ -149,7 +149,7 @@ Plantillas SQL exactas en `packages/pase/CONTEXTO.md` sección "Cómo agregar un
 
 - `local_id` y `usuario_id` son `INTEGER`, no UUID (legado pre-multi-tenant).
 - Anon key fuera del código — `VITE_SUPABASE_ANON_KEY`. Procedimiento de rotación en `ROTATE_ANON_KEY.md`.
-- Cache de permisos en `sessionStorage` (`pase_user`); botón "Actualizar permisos ↻" en sidebar refresca sin logout. RLS server-side siempre lee fresh — el cache stale es UX, no security bypass.
+- Cache de permisos en `sessionStorage` (`pase_user`). Si el dueño cambia permisos de un usuario logueado, el cache queda stale hasta el próximo logout/login. RLS server-side siempre lee fresh — el cache stale es UX, no security bypass.
 - Errores RPC: `RAISE EXCEPTION 'CODIGO_UPPER_SNAKE'` → `translateRpcError` mapea a español; código no mapeado se muestra raw (fallback transparente).
 - Caja Efectivo es ahora una `cuenta` más en `saldos_caja` + `movimientos` (la tabla privada `caja_efectivo` fue eliminada el 2026-05-02).
 - El módulo Empleados viejo está deprecado — RRHH es el reemplazo. La tabla legacy `empleados` se eliminó en 202604261810.

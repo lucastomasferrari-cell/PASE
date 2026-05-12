@@ -152,7 +152,7 @@ Al agregar una tabla nueva al sistema:
 
 ### Cache de permisos
 
-Los permisos se cachean en `sessionStorage` (clave `pase_user`) al login. Si el dueño cambia permisos de un usuario activo, el usuario puede refrescar via botón **"Actualizar permisos ↻"** en el panel de usuario del sidebar (abajo, al lado de "Cerrar sesión"), sin cerrar sesión. El RLS del backend siempre lee DB fresh, así que aunque el cache quede stale, no hay bypass de seguridad — sólo UX (el frontend muestra/oculta botones en base al cache).
+Los permisos se cachean en `sessionStorage` (clave `pase_user`) al login. Si el dueño cambia permisos de un usuario activo, el cache queda stale hasta que ese usuario cierre y vuelva a abrir sesión. El RLS del backend siempre lee DB fresh, así que aunque el cache quede stale, no hay bypass de seguridad — sólo UX (el frontend muestra/oculta botones en base al cache).
 
 ## Taxonomía canónica (movimientos.tipo, categorías, grupos)
 

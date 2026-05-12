@@ -7,9 +7,6 @@ interface SidebarProps {
   section: string;
   onNav: (section: string) => void;
   onLogout: () => Promise<void> | void;
-  // Disponible cuando el AuthProvider value usa la forma { user, refreshPermisos }.
-  // Si no, queda undefined y el botón refresh-perms no llama nada.
-  onRefreshPerms?: () => Promise<void>;
   locales: Local[];
   localActivo: number | null;
   setLocalActivo: (v: number | null) => void;
@@ -20,7 +17,7 @@ interface SidebarProps {
   onClearOverride: () => void;
 }
 
-export function Sidebar({ user, section, onNav, onLogout, onRefreshPerms, locales, localActivo, setLocalActivo, tenant, tenantOverride, onClearOverride }: SidebarProps) {
+export function Sidebar({ user, section, onNav, onLogout, locales, localActivo, setLocalActivo, tenant, tenantOverride, onClearOverride }: SidebarProps) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
   const perms = getPermisos(user);
@@ -103,14 +100,6 @@ export function Sidebar({ user, section, onNav, onLogout, onRefreshPerms, locale
         <div className="sb-user">
           <div className="sb-uname">{user.nombre}</div>
           <div style={{fontSize:10,color:ROLES[user.rol]?.color}}>{ROLES[user.rol]?.label}</div>
-          {onRefreshPerms && (
-            <button
-              className="sb-logout"
-              style={{marginBottom:4,color:"var(--muted2)"}}
-              onClick={() => onRefreshPerms()}
-              title="Traer desde la DB los permisos actuales sin cerrar sesión"
-            >Actualizar permisos ↻</button>
-          )}
           <button className="sb-logout" onClick={onLogout}>Cerrar sesión →</button>
         </div>
       </div>
