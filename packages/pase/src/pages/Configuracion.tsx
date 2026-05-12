@@ -248,18 +248,19 @@ function MediosCobroSection({ user, locales, localActivo }: MediosCobroSectionPr
 
   // Toggle "Mostrar todos los locales" — solo visible para dueño/admin/
   // superadmin. Default: OFF (filtra por local activo del sidebar). Persiste
-  // por usuario en localStorage para que al volver a entrar a Conceptos no
-  // tenga que volver a activarlo manualmente.
+  // en sessionStorage (no localStorage) para que NO sobreviva entre sesiones
+  // — evita sorpresas tipo "abro la app días después y veo todos los locales
+  // sin haberlo elegido".
   const puedeVerTodos = user?.rol === "dueno" || user?.rol === "admin" || user?.rol === "superadmin";
   const storageKey = user?.id ? `conceptos_mostrar_todos_locales_${user.id}` : null;
   const [mostrarTodos, setMostrarTodos] = useState<boolean>(() => {
     if (!puedeVerTodos || !storageKey) return false;
-    try { return localStorage.getItem(storageKey) === "1"; } catch { return false; }
+    try { return sessionStorage.getItem(storageKey) === "1"; } catch { return false; }
   });
   const toggleMostrarTodos = (v: boolean) => {
     setMostrarTodos(v);
     if (storageKey) {
-      try { localStorage.setItem(storageKey, v ? "1" : "0"); } catch { /* localStorage puede fallar en modo privado o quota lleno */ }
+      try { sessionStorage.setItem(storageKey, v ? "1" : "0"); } catch { /* sessionStorage puede fallar en modo privado */ }
     }
   };
 

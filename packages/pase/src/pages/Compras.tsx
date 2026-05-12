@@ -171,7 +171,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     if (desde && f.fecha < desde) return false;
     if (hasta && f.fecha > hasta) return false;
     if (search) {
-      const prov = proveedores.find(p => p.id === f.prov_id);
+      const prov = proveedores.find(p => String(p.id) === String(f.prov_id));
       const matchProv = prov?.nombre.toLowerCase().includes(search.toLowerCase());
       const matchNro = (f.nro || "").toLowerCase().includes(search.toLowerCase());
       if (!matchProv && !matchNro) return false;
@@ -180,7 +180,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   });
 
   const onProvChange = (prov_id: string) => {
-    const prov = proveedores.find(p => p.id === parseInt(prov_id));
+    const prov = proveedores.find(p => String(p.id) === String(prov_id));
     setForm(f => ({ ...f, prov_id, cat: prov?.cat || f.cat }));
   };
 
@@ -276,7 +276,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     setPagando(true);
     try {
       const f = pagarModal;
-      const prov = proveedores.find(p => p.id === f.prov_id);
+      const prov = proveedores.find(p => String(p.id) === String(f.prov_id));
       const detalle = `Pago ${prov?.nombre || ""} - Fact ${f.nro}`;
 
       // 1) Aplicar NCs seleccionadas. Cada una en su propia llamada RPC para
@@ -406,7 +406,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     if (localActivo && String(r.local_id) !== String(localActivo)) return false;
     if (provFiltro && String(r.prov_id) !== String(provFiltro)) return false;
     if (search) {
-      const prov = proveedores.find(p => p.id === r.prov_id);
+      const prov = proveedores.find(p => String(p.id) === String(r.prov_id));
       const matchProv = prov?.nombre.toLowerCase().includes(search.toLowerCase());
       const matchNro = (r.nro || "").toLowerCase().includes(search.toLowerCase());
       if (!matchProv && !matchNro) return false;
@@ -507,7 +507,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                 <th></th>
               </tr></thead>
               <tbody>{rFilt.map(r => {
-                const prov = proveedores.find(p => p.id === r.prov_id);
+                const prov = proveedores.find(p => String(p.id) === String(r.prov_id));
                 const isAnulado = r.estado === "anulado";
                 return (
                   <tr key={r.id} className={isAnulado ? "anulada-row" : ""}>
@@ -558,7 +558,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
               <th></th>
             </tr></thead>
             <tbody>{fFilt.map(f => {
-              const prov = proveedores.find(p => p.id === f.prov_id);
+              const prov = proveedores.find(p => String(p.id) === String(f.prov_id));
               const isNC = (f.tipo || "factura") === "nota_credito";
               return (
                 <tr key={f.id}>

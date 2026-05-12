@@ -67,7 +67,7 @@ export function TabEmpleados({
             return (
               <tr key={e.id} style={{opacity: e.activo === false ? 0.4 : 1}}>
                 <td style={{fontWeight:500,fontSize:12}}>{e.apellido}, {e.nombre}</td>
-                <td style={{fontSize:11}}>{locales.find(l => l.id === e.local_id)?.nombre || "—"}</td>
+                <td style={{fontSize:11}}>{locales.find(l => String(l.id) === String(e.local_id))?.nombre || "—"}</td>
                 <td><span className="badge b-muted" style={{fontSize:8}}>{e.puesto}</span></td>
                 <td style={{textAlign:"right"}}><span className="num kpi-acc">{fmt_$(e.sueldo_mensual)}</span></td>
                 <td style={{fontSize:11,color:vacColor}}>{vac >= 14 && "🌴 "}{vac.toFixed(1)}d</td>

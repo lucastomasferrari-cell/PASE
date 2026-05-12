@@ -18,6 +18,20 @@ const MAP: Record<string, string> = {
   FACTURA_YA_PAGADA: "Esta factura ya está pagada",
   FACTURA_ANULADA: "La factura está anulada",
   FACTURA_YA_ANULADA: "La factura ya estaba anulada",
+  FACTURA_MONTO_EXCEDE_PENDIENTE: "El monto a aplicar supera el saldo pendiente de la factura",
+  FACTURA_TIPO_INVALIDO: "El comprobante no es una factura válida para esta operación",
+  FACTURA_CROSS_TENANT: "Esa factura pertenece a otro tenant",
+  FACTURAS_DE_PROVEEDORES_DISTINTOS: "Las facturas seleccionadas son de proveedores distintos",
+  GASTO_NO_ENCONTRADO: "El gasto no existe",
+
+  // Notas de Crédito
+  NC_NO_ENCONTRADA: "La nota de crédito no existe",
+  NC_YA_CONSUMIDA: "Esta nota de crédito ya está totalmente aplicada",
+  NC_TIPO_INVALIDO: "El comprobante no es una nota de crédito",
+  NC_PROVEEDOR_DISTINTO: "La nota de crédito es de un proveedor distinto al de la factura",
+  NC_SALDO_INSUFICIENTE: "La nota de crédito no tiene saldo suficiente para aplicar ese monto",
+  NC_ANULADA: "La nota de crédito está anulada",
+  NC_CROSS_TENANT: "Esa nota de crédito pertenece a otro tenant",
 
   // Remitos
   REMITO_NO_ENCONTRADO: "El remito no existe",
@@ -29,6 +43,19 @@ const MAP: Record<string, string> = {
   MOVIMIENTO_NO_ENCONTRADO: "El movimiento no existe",
   MOVIMIENTO_YA_ANULADO: "El movimiento ya estaba anulado",
 
+  // Ventas / cierres
+  VENTA_ANULADA: "La venta está anulada",
+  NO_HAY_LINEAS_VALIDAS: "No hay líneas con monto y medio válidos para cerrar",
+  LINEAS_REQUERIDAS: "Hay que cargar al menos una línea de venta",
+  LINEAS_REQUIRED: "Hay que cargar al menos una línea de venta",
+  TURNO_REQUERIDO: "Seleccioná un turno",
+  TURNO_REQUIRED: "Seleccioná un turno",
+  FECHA_REQUERIDA: "Seleccioná una fecha",
+  FECHA_REQUIRED: "Seleccioná una fecha",
+  FECHA_INVALIDA: "La fecha es inválida",
+  LOCAL_REQUIRED: "Seleccioná un local",
+  LINEA_INVALIDA: "Una de las líneas no tiene monto o medio válido",
+
   // RRHH
   EMPLEADO_NO_ENCONTRADO: "El empleado no existe",
   LIQUIDACION_NO_ENCONTRADA: "No hay liquidación para esa novedad",
@@ -37,6 +64,15 @@ const MAP: Record<string, string> = {
   NOVEDAD_INVALIDA: "Novedad inválida",
   LIQ_FINAL_YA_EXISTE: "Este empleado ya tiene liquidación final registrada",
   MONTO_EXCEDE_PENDIENTE: "El monto asignado supera el pendiente",
+  JUSTIFICATIVO_NO_ENCONTRADO: "No se encontró el justificativo asociado",
+
+  // MP multi-factura
+  OVER_ASSIGNMENT: "El total asignado a las facturas supera el monto del movimiento",
+  MOV_NO_ENCONTRADO: "El movimiento de MercadoPago no existe",
+
+  // Auth / tenant
+  AUTH_SIN_TENANT: "Sesión sin tenant — volvé a entrar",
+  TENANT_ES_DEL_CALLER: "No podés borrar el tenant en el que estás autenticado",
 
   // Restore tenant (TASK 0.17 etapa 4)
   NO_AUTORIZADO: "Solo superadmin puede ejecutar esta operación",

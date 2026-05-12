@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { db } from "./supabase";
+import { useRealtimeTable } from "./useRealtimeTable";
 import {
   CATEGORIAS_COMPRA as _CC, GASTOS_FIJOS as _GF, GASTOS_VARIABLES as _GV,
   GASTOS_PUBLICIDAD as _GP, COMISIONES_CATS as _CO, GASTOS_IMPUESTOS as _GI,
@@ -181,13 +182,18 @@ export function useCategorias(): CategoriasState {
       const { data, error } = await db.from("config_categorias")
         .select("tipo, nombre, orden, grupo, activo");
       if (error || !data || data.length === 0) {
+        console.warn(
+          "[useCategorias] usando FALLBACK hardcoded de constants.ts — los datos pueden estar desactualizados.",
+          { cause: error?.message || (data?.length === 0 ? "0 rows (RLS bloqueando? user sin permiso para SELECT?)" : "no data") }
+        );
         setState(s => ({ ...FALLBACK, loading: false, source: "fallback", refresh: s.refresh }));
         return;
       }
       const next = fromRows(data as ConfigCategoriaRow[]);
       writeCache(next);
       setState(s => ({ ...next, loading: false, source: "db", refresh: s.refresh }));
-    } catch {
+    } catch (e) {
+      console.warn("[useCategorias] usando FALLBACK por excepción:", e);
       setState(s => ({ ...FALLBACK, loading: false, source: "fallback", refresh: s.refresh }));
     }
   }, []);
@@ -208,20 +214,32 @@ export function useCategorias(): CategoriasState {
           .select("tipo, nombre, orden, grupo, activo");
         if (cancelled) return;
         if (error || !data || data.length === 0) {
-          // Fallback silencioso a constants.ts — no interrumpe UX.
+          console.warn(
+            "[useCategorias] mount-fetch retornó vacío — usando FALLBACK constants.ts.",
+            { cause: error?.message || "0 rows (RLS o falta de datos)" }
+          );
           setState(s => ({ ...FALLBACK, loading: false, source: "fallback", refresh: s.refresh }));
           return;
         }
         const next = fromRows(data as ConfigCategoriaRow[]);
         writeCache(next);
         setState(s => ({ ...next, loading: false, source: "db", refresh: s.refresh }));
-      } catch {
-        if (!cancelled) setState(s => ({ ...FALLBACK, loading: false, source: "fallback", refresh: s.refresh }));
+      } catch (e) {
+        if (!cancelled) {
+          console.warn("[useCategorias] mount-fetch excepción — usando FALLBACK:", e);
+          setState(s => ({ ...FALLBACK, loading: false, source: "fallback", refresh: s.refresh }));
+        }
       }
     })();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Invalidación cross-tab: si alguien edita categorías en otra pestaña o
+  // máquina, cada consumer del hook se entera y refetcha. Antes esto solo
+  // funcionaba si la página tenía useRealtimeTable a mano (Configuracion.tsx);
+  // los demás módulos quedaban con cache stale hasta logout o TTL 1h.
+  useRealtimeTable({ table: "config_categorias", onChange: () => refresh() });
 
   return state;
 }

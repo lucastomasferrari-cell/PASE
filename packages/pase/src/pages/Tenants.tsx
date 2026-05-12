@@ -14,7 +14,7 @@ interface TenantWithCounts extends Tenant {
   num_usuarios: number;
 }
 
-const TENANT_OVERRIDE_KEY = "pase_tenant_override";
+const TENANT_OVERRIDE_KEY = "pase_tenant_override__superadmin_only";
 
 type Tab = "tenants" | "backups";
 

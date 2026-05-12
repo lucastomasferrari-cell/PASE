@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { db } from "./supabase";
+import { useRealtimeTable } from "./useRealtimeTable";
 import { MEDIOS_COBRO as _MC, MEDIO_A_CUENTA as _MAC } from "./constants";
 
 // Fuente de verdad: tabla medios_cobro (migration 20260424).
@@ -120,6 +121,10 @@ export function useMediosCobro(): MediosCobroState {
       const { data, error } = await db.from("medios_cobro")
         .select("id, nombre, local_id, cuenta_destino, activo, orden");
       if (error || !data || data.length === 0) {
+        console.warn(
+          "[useMediosCobro] usando FALLBACK hardcoded — los datos pueden estar desactualizados.",
+          { cause: error?.message || (data?.length === 0 ? "0 rows (RLS?)" : "no data") }
+        );
         setMedios(FALLBACK);
         setSource("fallback");
       } else {
@@ -128,7 +133,8 @@ export function useMediosCobro(): MediosCobroState {
         setMedios(rows);
         setSource("db");
       }
-    } catch {
+    } catch (e) {
+      console.warn("[useMediosCobro] usando FALLBACK por excepción:", e);
       setMedios(FALLBACK);
       setSource("fallback");
     } finally {
@@ -152,6 +158,11 @@ export function useMediosCobro(): MediosCobroState {
     clearCache();
     fetchMedios(true);
   }, [fetchMedios]);
+
+  // Invalidación cross-tab: cualquier cambio remoto en medios_cobro del
+  // mismo tenant invalida el cache local + re-fetch. Antes solo Configuración
+  // tenía useRealtimeTable; los otros módulos veían stale hasta logout/TTL.
+  useRealtimeTable({ table: "medios_cobro", onChange: () => refresh() });
 
   const mediosDisponibles = useCallback((localId: number | null) => pickDisponibles(medios, localId), [medios]);
   const todosLosMedios = useCallback(() => medios, [medios]);

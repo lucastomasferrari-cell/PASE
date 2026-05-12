@@ -14,7 +14,7 @@ interface ModalVincularRemitoProps {
 // fiscal de la factura — la diferencia queda registrada.
 export function ModalVincularRemito({ remito, onClose, facturas, onVincular }: ModalVincularRemitoProps) {
   if (!remito) return null;
-  const candidatas = facturas.filter(f => f.prov_id === remito.prov_id && f.estado === "pendiente");
+  const candidatas = facturas.filter(f => String(f.prov_id) === String(remito.prov_id) && f.estado === "pendiente");
   return (
     <div className="overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>

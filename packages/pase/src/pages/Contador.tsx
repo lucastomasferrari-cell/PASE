@@ -91,11 +91,11 @@ export default function Contador({ user, locales, localActivo }: ContadorProps) 
         <div className="panel">
           <div className="panel-hd">
             <span className="panel-title">Libro IVA Ventas — {mes} ({ventas.length} reg.)</span>
-            <button className="btn btn-acc btn-sm" onClick={()=>exportCSV([["Fecha","Local","Forma Cobro","Total","Neto Est","IVA 21 Est"],...ventas.map(v => [v.fecha, locales.find(l => l.id === v.local_id)?.nombre || "", v.medio, v.monto, (v.monto / 1.21).toFixed(2), (v.monto / 1.21 * 0.21).toFixed(2)])],`libro_ventas_${mes}.csv`)}>⬇ Exportar CSV</button>
+            <button className="btn btn-acc btn-sm" onClick={()=>exportCSV([["Fecha","Local","Forma Cobro","Total","Neto Est","IVA 21 Est"],...ventas.map(v => [v.fecha, locales.find(l => String(l.id) === String(v.local_id))?.nombre || "", v.medio, v.monto, (v.monto / 1.21).toFixed(2), (v.monto / 1.21 * 0.21).toFixed(2)])],`libro_ventas_${mes}.csv`)}>⬇ Exportar CSV</button>
           </div>
           {ventas.length===0?<div className="empty">Sin ventas</div>:(
             <table><thead><tr><th>Fecha</th><th>Local</th><th>Forma de Cobro</th><th>Total</th><th>Neto Est.</th><th>IVA Est.</th></tr></thead>
-            <tbody>{ventas.map(v => <tr key={v.id}><td className="mono">{fmt_d(v.fecha)}</td><td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l => l.id === v.local_id)?.nombre}</td><td>{v.medio}</td><td><span className="num kpi-success">{fmt_$(v.monto)}</span></td><td style={{color:"var(--muted2)"}}>{fmt_$(v.monto/1.21)}</td><td style={{color:"var(--warn)"}}>{fmt_$(v.monto/1.21*0.21)}</td></tr>)}</tbody>
+            <tbody>{ventas.map(v => <tr key={v.id}><td className="mono">{fmt_d(v.fecha)}</td><td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l => String(l.id) === String(v.local_id))?.nombre}</td><td>{v.medio}</td><td><span className="num kpi-success">{fmt_$(v.monto)}</span></td><td style={{color:"var(--muted2)"}}>{fmt_$(v.monto/1.21)}</td><td style={{color:"var(--warn)"}}>{fmt_$(v.monto/1.21*0.21)}</td></tr>)}</tbody>
           </table>)}
         </div>
       )}

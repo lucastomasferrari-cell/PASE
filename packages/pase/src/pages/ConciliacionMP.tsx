@@ -848,7 +848,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                   <tbody>{lista.map(m=>(
                     <tr key={m.id} style={m.ignorado?{opacity:0.55}:undefined}>
                       <td className="mono" style={{fontSize:11}}>{fmt_d(String(m.fecha||"").slice(0,10))}</td>
-                      <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>l.id===m.local_id)?.nombre||"—"}</td>
+                      <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find(l=>String(l.id)===String(m.local_id))?.nombre||"—"}</td>
                       <td><span className="badge b-muted" style={{fontSize:9}}>{TIPO_LABELS[m.tipo]||m.tipo}</span></td>
                       <td style={{fontSize:11,maxWidth:240,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.descripcion||"—"}</td>
                       <td style={{textAlign:"right"}}><span className="num kpi-danger">{fmt_mp(Number(m.monto)||0)}</span></td>

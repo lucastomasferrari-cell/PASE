@@ -225,7 +225,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
               <tr key={g.key}>
                 <td className="mono">{fmt_d(g.fecha)}</td>
                 <td><span className={`badge ${g.turno==="Noche"?"b-info":"b-warn"}`}>{g.turno}</span></td>
-                <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find((l: Local)=>l.id===g.local_id)?.nombre||"—"}</td>
+                <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find((l: Local)=>String(l.id)===String(g.local_id))?.nombre||"—"}</td>
                 <td style={{fontSize:11,color:"var(--muted2)"}}>{g.items.length} formas de cobro</td>
                 <td><span className="num kpi-success">{fmt_$(g.total)}</span></td>
                 <td><button className="btn btn-ghost btn-sm" onClick={()=>setDetalleModal(g)}>Ver detalle →</button></td>

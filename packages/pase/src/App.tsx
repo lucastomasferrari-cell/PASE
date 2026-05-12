@@ -46,7 +46,10 @@ const FullPageLoader = () => (
 // montada, solo cargamos la página en el área principal.
 const PageLoader = () => <div className="loading">Cargando...</div>;
 
-const TENANT_OVERRIDE_KEY = "pase_tenant_override";
+// Solo superadmin lee/escribe esta key. El nombre largo es deliberado: avisa
+// a futuros lectores que no es un setting de usuario común. Cualquier sesión
+// que NO sea superadmin la limpia de sessionStorage al loguear (ver applyLogin).
+const TENANT_OVERRIDE_KEY = "pase_tenant_override__superadmin_only";
 
 export default function App() {
   const [user, setUser] = useState<Usuario | null>(null);
@@ -202,6 +205,11 @@ export default function App() {
     //   tenant_override, lo usamos. Si no, queda en null y la pantalla
     //   "Tenants" lo deja elegir.
     // - resto → cargar el tenant directo de su tenant_id.
+    // Defensive: si el user actual NO es superadmin, garantizar que no quede
+    // residuo de override de otra sesión previa en la misma pestaña.
+    if (enriched.rol !== "superadmin") {
+      try { sessionStorage.removeItem(TENANT_OVERRIDE_KEY); } catch { /* idem */ }
+    }
     const overrideUuid = enriched.rol === "superadmin" ? sessionStorage.getItem(TENANT_OVERRIDE_KEY) : null;
     const tenantUuidToLoad = overrideUuid || enriched.tenant_id;
     if (tenantUuidToLoad) {

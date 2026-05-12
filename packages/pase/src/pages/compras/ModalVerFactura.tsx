@@ -39,8 +39,8 @@ export function ModalVerFactura({ factura, onClose, proveedores, locales }: Moda
         <div className="modal-hd"><div className="modal-title">Factura {factura.nro}</div><button className="close-btn" onClick={onClose}>✕</button></div>
         <div className="modal-body">
           <div className="form2">
-            <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase" }}>Proveedor</span><div style={{ marginTop: 4 }}>{proveedores.find(p => p.id === factura.prov_id)?.nombre}</div></div>
-            <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase" }}>Local</span><div style={{ marginTop: 4 }}>{locales.find(l => l.id === factura.local_id)?.nombre}</div></div>
+            <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase" }}>Proveedor</span><div style={{ marginTop: 4 }}>{proveedores.find(p => String(p.id) === String(factura.prov_id))?.nombre}</div></div>
+            <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase" }}>Local</span><div style={{ marginTop: 4 }}>{locales.find(l => String(l.id) === String(factura.local_id))?.nombre}</div></div>
           </div>
           <div className="form3" style={{ marginTop: 12 }}>
             <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase" }}>Fecha</span><div style={{ marginTop: 4 }}>{fmt_d(factura.fecha)}</div></div>
