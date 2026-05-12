@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
 import { localesVisibles, applyLocalScope, cuentasOperables, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
+import { usePuestosRRHH } from "../lib/usePuestosRRHH";
 import { toISO, today } from "../lib/utils";
 import {
   calcularSACProporcional,
@@ -426,11 +427,20 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   };
 
   // ─── EMPLEADOS ACTIONS ─────────────────────────────────────────────────────
-  // Lista de puestos para autocompletar el form de empleado. Se deriva de
-  // los empleados existentes (antes salía de rrhh_valores_doble que se
-  // eliminó). Si Lucas crea un empleado con puesto nuevo, aparecerá en el
-  // dropdown desde la siguiente carga.
-  const puestos = [...new Set(allEmps.map(e => e.puesto).filter(Boolean))].sort();
+  // Lista de puestos para el dropdown del form. Catálogo persistente desde
+  // 2026-05-12 (tabla rrhh_puestos, migration 202605122200) — antes salía
+  // de los empleados existentes, lo cual hacía que Camilo viera puestos
+  // distintos en cada local según qué se había tipeado. Ahora todos ven la
+  // misma lista, gestionable desde Configuración → Puestos RRHH.
+  //
+  // Si un empleado existente tiene un puesto legacy fuera del catálogo
+  // (string libre), lo agregamos a la lista para que aparezca en el dropdown
+  // al editarlo (no perdemos información).
+  const { puestosActivos } = usePuestosRRHH();
+  const puestosCatalogo = puestosActivos.map(p => p.nombre);
+  const puestosLegacy = [...new Set(allEmps.map(e => e.puesto).filter(Boolean))]
+    .filter(p => !puestosCatalogo.includes(p));
+  const puestos = [...puestosCatalogo, ...puestosLegacy].sort();
   const empsFilt = allEmps.filter(e => {
     if (!empMostrarInactivos && e.activo === false) return false;
     if (empFiltLocal && e.local_id !== parseInt(String(empFiltLocal))) return false;

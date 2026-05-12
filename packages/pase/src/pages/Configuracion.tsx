@@ -43,6 +43,9 @@ const TIPOS = [
   { id: "cat_compra", label: "Categorías de Compra" },
   { id: "cat_ingreso", label: "Categorías de Ingreso" },
   { id: "medio_cobro", label: "Medios de Cobro" },
+  // Tab "puesto_rrhh": maneja tabla rrhh_puestos (no config_categorias).
+  // Igual que medio_cobro, tiene su propia sección.
+  { id: "puesto_rrhh", label: "Puestos RRHH" },
 ];
 
 // Sub-tipos que viven bajo el tab unificado "Categorías de Gastos".
@@ -71,6 +74,8 @@ export default function Configuracion({ user, locales, localActivo }: Configurac
   // El tab "medio_cobro" usa la tabla medios_cobro (refactor C), no
   // config_categorias — tiene su propio panel con CRUD multi-campo.
   const esMediosCobroTab = tab === "medio_cobro";
+  // Tab "puesto_rrhh" usa la tabla rrhh_puestos (migration 202605122200).
+  const esPuestosRRHHTab = tab === "puesto_rrhh";
   // Tab unificado de Gastos: agrupa los 5 sub-tipos. Cada categoría tiene
   // un tipo (Fijo/Variable/Publicidad/Comisión/Impuesto) editable inline.
   const esCategoriasGastosTab = tab === "categorias_gastos";
@@ -84,7 +89,7 @@ export default function Configuracion({ user, locales, localActivo }: Configurac
   const { refresh: refreshCategorias } = useCategorias();
 
   const load = async () => {
-    if (esMediosCobroTab) return; // ese tab maneja su propia data
+    if (esMediosCobroTab || esPuestosRRHHTab) return; // esos tabs manejan su propia data
     setLoading(true);
     const q = db.from("config_categorias").select("*").eq("activo", true).order("orden");
     const { data } = esCategoriasGastosTab
@@ -105,7 +110,7 @@ export default function Configuracion({ user, locales, localActivo }: Configurac
   useRealtimeTable({
     table: 'config_categorias',
     onChange: () => { load(); refreshCategorias(); },
-    enabled: !esMediosCobroTab,
+    enabled: !esMediosCobroTab && !esPuestosRRHHTab,
   });
 
   const agregar = async () => {
@@ -161,6 +166,8 @@ export default function Configuracion({ user, locales, localActivo }: Configurac
       </div>
       {esMediosCobroTab ? (
         <MediosCobroSection user={user} locales={locales || []} localActivo={localActivo} />
+      ) : esPuestosRRHHTab ? (
+        <PuestosRRHHSection />
       ) : (
         <div className="panel">
           <div className="panel-hd">
@@ -578,5 +585,166 @@ function MediosCobroSection({ user, locales, localActivo }: MediosCobroSectionPr
         );
       })()}
     </>
+  );
+}
+
+// ─── PuestosRRHHSection ────────────────────────────────────────────────────
+// CRUD del catálogo rrhh_puestos. Patrón paralelo a MediosCobroSection pero
+// más simple: rrhh_puestos no tiene local_id (puestos son globales por
+// tenant), no tiene cuenta_destino, etc. Solo nombre + activo + orden.
+
+interface PuestoRRHHRow {
+  id: number;
+  nombre: string;
+  activo: boolean;
+  orden: number;
+}
+
+function PuestosRRHHSection() {
+  const [items, setItems] = useState<PuestoRRHHRow[]>([]);
+  const [nuevo, setNuevo] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [mostrarInactivos, setMostrarInactivos] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await db.from("rrhh_puestos")
+      .select("id, nombre, activo, orden")
+      .order("orden", { ascending: true })
+      .order("nombre", { ascending: true });
+    setItems((data as PuestoRRHHRow[]) || []);
+    setLoading(false);
+  };
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { load(); }, []);
+
+  useRealtimeTable({ table: "rrhh_puestos", onChange: () => load() });
+
+  const agregar = async () => {
+    if (!nuevo.trim() || saving) return;
+    setSaving(true);
+    const nombre = nuevo.trim().toUpperCase();
+    const maxOrden = items.length > 0 ? Math.max(...items.map(i => i.orden)) + 10 : 10;
+    const { error } = await db.from("rrhh_puestos")
+      .insert([{ nombre, orden: maxOrden, activo: true }]);
+    setSaving(false);
+    if (error) {
+      if (error.message.includes("duplicate")) alert(`"${nombre}" ya existe en el catálogo`);
+      else alert("Error agregando puesto: " + error.message);
+      return;
+    }
+    setNuevo("");
+    load();
+  };
+
+  const toggleActivo = async (item: PuestoRRHHRow) => {
+    // Reactivar es siempre OK. Desactivar: warn si hay empleados con ese puesto.
+    if (item.activo) {
+      // eslint-disable-next-line pase-local/require-apply-local-scope -- count cross-local intencional: warning previo a desactivar puesto compartido del tenant.
+      const { count } = await db.from("rrhh_empleados")
+        .select("*", { count: "exact", head: true })
+        .eq("puesto", item.nombre);
+      if (count && count > 0) {
+        if (!confirm(`"${item.nombre}" tiene ${count} empleado${count === 1 ? "" : "s"} asignado${count === 1 ? "" : "s"}. ¿Igual lo desactivás? Los empleados existentes mantienen su puesto, pero ya no aparecerá en el dropdown de Nuevo Empleado.`)) return;
+      }
+    }
+    const { error } = await db.from("rrhh_puestos")
+      .update({ activo: !item.activo })
+      .eq("id", item.id);
+    if (error) { alert("Error: " + error.message); return; }
+    load();
+  };
+
+  const renombrar = async (item: PuestoRRHHRow, nuevoNombre: string) => {
+    const nombre = nuevoNombre.trim().toUpperCase();
+    if (!nombre || nombre === item.nombre) return;
+    const { error } = await db.from("rrhh_puestos")
+      .update({ nombre })
+      .eq("id", item.id);
+    if (error) {
+      if (error.message.includes("duplicate")) alert(`"${nombre}" ya existe en el catálogo`);
+      else alert("Error renombrando: " + error.message);
+      return;
+    }
+    // Nota: los rrhh_empleados.puesto que tienen el nombre viejo NO se
+    // actualizan automáticamente (es texto libre por retro-compat). Avisamos.
+    alert(
+      `Renombrado a "${nombre}".\n\n` +
+      `Atención: los empleados que ya tenían el puesto "${item.nombre}" siguen ` +
+      `con el nombre viejo en su legajo (es texto libre). Editalos manualmente ` +
+      `si querés que muestren el nombre nuevo.`
+    );
+    load();
+  };
+
+  const visibles = items.filter(i => mostrarInactivos || i.activo);
+
+  return (
+    <div className="panel">
+      <div className="panel-hd" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span className="panel-title">Puestos RRHH</span>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--muted2)", cursor: "pointer" }}>
+          <input type="checkbox" checked={mostrarInactivos} onChange={e => setMostrarInactivos(e.target.checked)} />
+          Mostrar inactivos
+        </label>
+      </div>
+      <div style={{ padding: "12px 16px" }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          <input
+            className="search"
+            style={{ flex: 1 }}
+            value={nuevo}
+            onChange={e => setNuevo(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && agregar()}
+            placeholder="Nuevo puesto..."
+          />
+          <button className="btn btn-acc" onClick={agregar} disabled={saving || !nuevo.trim()}>+ Agregar</button>
+        </div>
+        {loading ? <div className="loading">Cargando...</div> : (
+          <table>
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th style={{ width: 100 }}>Estado</th>
+                <th style={{ width: 180 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibles.length === 0 ? (
+                <tr><td colSpan={3} className="empty">Sin puestos cargados. Agregá el primero arriba.</td></tr>
+              ) : visibles.map(item => (
+                <tr key={item.id} style={{ opacity: item.activo ? 1 : 0.5 }}>
+                  <td>
+                    <input
+                      defaultValue={item.nombre}
+                      onBlur={e => { if (e.target.value.trim().toUpperCase() !== item.nombre) renombrar(item, e.target.value); }}
+                      style={{ background: "transparent", border: "1px solid transparent", padding: "4px 6px", fontSize: 13, width: "100%" }}
+                      onFocus={e => { e.target.style.border = "1px solid var(--bd2)"; e.target.style.background = "var(--s2)"; }}
+                      onBlurCapture={e => { e.target.style.border = "1px solid transparent"; e.target.style.background = "transparent"; }}
+                    />
+                  </td>
+                  <td>
+                    <span className={`badge ${item.activo ? "b-success" : "b-muted"}`}>
+                      {item.activo ? "Activo" : "Inactivo"}
+                    </span>
+                  </td>
+                  <td style={{ textAlign: "right" }}>
+                    <button className={`btn btn-sm ${item.activo ? "btn-danger" : "btn-success"}`} onClick={() => toggleActivo(item)}>
+                      {item.activo ? "Desactivar" : "Reactivar"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 12, lineHeight: 1.5 }}>
+          Los puestos son comunes a todo el tenant — los mismos aparecen en el dropdown de cualquier local.
+          Al desactivar un puesto, los empleados que ya lo tenían lo conservan; solo deja de mostrarse en el form de Nuevo Empleado.
+        </div>
+      </div>
+    </div>
   );
 }
