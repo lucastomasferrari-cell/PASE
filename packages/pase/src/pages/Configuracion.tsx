@@ -304,18 +304,86 @@ function MediosCobroSection({ user, locales, localActivo }: MediosCobroSectionPr
     return locales.find(l => l.id === id)?.nombre || `Local #${id}`;
   };
 
+  // Determina si la acción debe crear/usar un override por local en vez
+  // de tocar la fila global. Override mode = (fila global) + (modo
+  // filtrado por local activo, NO admin todos-los-locales).
+  const enModoOverride = !mostrarTodos && localActivo != null;
+  const esFilaGlobal = (m: MedioCobro) => m.local_id == null;
+  const buscarOverride = (nombre: string) =>
+    todosLosMedios().find(x => x.nombre === nombre && x.local_id === localActivo);
+
   const abrirNuevo = () => setEditing({ nombre: "", local_id: null, cuenta_destino: null, activo: true, orden: (items.length + 1) });
-  const abrirEditar = (m: MedioCobro) => setEditing({ ...m });
+
+  // abrirEditar: si el clic viene sobre fila global Y estamos en modo
+  // filtrado, en vez de editar el global, abrimos el modal para el
+  // override del local activo. Si el override existe → editar ese. Si no
+  // existe → abrir form con los datos copiados del global SIN id (al
+  // guardar se va a INSERT, no UPDATE — crea el override).
+  const abrirEditar = (m: MedioCobro) => {
+    if (esFilaGlobal(m) && enModoOverride) {
+      const override = buscarOverride(m.nombre);
+      if (override) {
+        setEditing({ ...override });
+      } else {
+        // Override nuevo: clonamos campos del global pero sin id ni local_id=null.
+        // El usuario puede ajustar antes de guardar.
+        setEditing({
+          nombre: m.nombre,
+          local_id: localActivo,
+          cuenta_destino: m.cuenta_destino,
+          activo: m.activo,
+          orden: m.orden,
+          // sin id → guardar() interpreta como INSERT.
+        });
+      }
+      return;
+    }
+    setEditing({ ...m });
+  };
 
   const toggleActivo = async (m: MedioCobro) => {
     setSaving(true);
-    const { error } = await db.from("medios_cobro").update({ activo: !m.activo, updated_at: new Date().toISOString() }).eq("id", m.id);
-    if (error) {
-      alert("No se pudo actualizar: " + error.message);
-    } else {
-      refresh();
+    try {
+      // Caso override: clic sobre fila global en modo filtrado.
+      // En vez de tocar el global (afectaría a los 5 locales), creamos /
+      // actualizamos un override solo para el local activo.
+      if (esFilaGlobal(m) && enModoOverride) {
+        const override = buscarOverride(m.nombre);
+        if (override) {
+          // El override ya existe — toggle su activo.
+          const { error } = await db.from("medios_cobro")
+            .update({ activo: !override.activo, updated_at: new Date().toISOString() })
+            .eq("id", override.id);
+          if (error) { alert("No se pudo actualizar: " + error.message); return; }
+        } else {
+          // Crear override nuevo con activo opuesto al global. Copiamos
+          // cuenta_destino y orden para que el override sea consistente.
+          const { error } = await db.from("medios_cobro").insert([{
+            nombre: m.nombre,
+            local_id: localActivo,
+            cuenta_destino: m.cuenta_destino,
+            activo: !m.activo,
+            orden: m.orden,
+            updated_at: new Date().toISOString(),
+          }]);
+          if (error) { alert("No se pudo crear override: " + error.message); return; }
+        }
+        refresh();
+        return;
+      }
+      // Default: UPDATE directo sobre la fila clickeada (override local
+      // existente o admin tocando el global).
+      const { error } = await db.from("medios_cobro")
+        .update({ activo: !m.activo, updated_at: new Date().toISOString() })
+        .eq("id", m.id);
+      if (error) {
+        alert("No se pudo actualizar: " + error.message);
+      } else {
+        refresh();
+      }
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const guardar = async () => {
@@ -418,13 +486,29 @@ function MediosCobroSection({ user, locales, localActivo }: MediosCobroSectionPr
           )}
         </div>
       </div>
-      {editing && (
+      {editing && (() => {
+        // ¿Estamos creando un override nuevo? (sin id + local_id == localActivo
+        // + estamos en modo filtrado por local). Útil para mostrar banner.
+        const esOverrideNuevo = !editing.id && enModoOverride && editing.local_id === localActivo;
+        // ¿Estamos editando un override existente (override-row local-specific
+        // y el toggle está en modo filtrado)? También vale el banner.
+        const esOverrideExistente = !!editing.id && editing.local_id != null && editing.local_id === localActivo && enModoOverride;
+        return (
         <div className="modal-overlay" onClick={() => !saving && setEditing(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-hd">
-              <span className="panel-title">{editing.id ? "Editar medio" : "Nuevo medio"}</span>
+              <span className="panel-title">{editing.id ? "Editar medio" : (esOverrideNuevo ? `Override en ${nombreLocalActivo}` : "Nuevo medio")}</span>
             </div>
             <div className="modal-bd">
+              {(esOverrideNuevo || esOverrideExistente) && (
+                <div className="alert alert-warn" style={{ marginBottom: 12, fontSize: 11, lineHeight: 1.5 }}>
+                  {esOverrideNuevo ? (
+                    <>Vas a crear un <strong>override solo para {nombreLocalActivo}</strong> del medio Global &quot;{editing.nombre}&quot;. Los otros locales no se afectan. Si querés modificar el medio Global directamente, cancelá, prendé el toggle &quot;Mostrar todos los locales&quot; y editá la fila Global.</>
+                  ) : (
+                    <>Estás editando el <strong>override de {nombreLocalActivo}</strong>. Los cambios afectan solo a este local.</>
+                  )}
+                </div>
+              )}
               <div className="field">
                 <label>Nombre</label>
                 <input className="search" value={editing.nombre || ""} onChange={e => setEditing({ ...editing, nombre: e.target.value })} placeholder="EFECTIVO SALON, RAPPI ONLINE, etc"/>
@@ -463,7 +547,8 @@ function MediosCobroSection({ user, locales, localActivo }: MediosCobroSectionPr
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </>
   );
 }

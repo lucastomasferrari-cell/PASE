@@ -69,29 +69,43 @@ function clearCache() {
 // Filtra medios visibles en localActivo: globales (local_id NULL) +
 // específicos del local. Si existe colisión por nombre (un global y un
 // local-specific con el mismo nombre), el local-specific gana — el dueño
-// override-eó el global para ese local. Ordena por orden ascendente.
+// override-eó el global para ese local.
+//
+// IMPORTANTE — orden de operaciones: PRIMERO dedup (preferir override),
+// DESPUÉS filtrar por activo del ganador. Si invertimos el orden, un
+// override desactivado (caso típico: "Desactivar global en Belgrano"
+// crea override con activo=false) no filtraría al global porque solo
+// pasaría al filter el global (que sigue activo=true) y "se colaría"
+// como ganador del dedup. Resultado: Belgrano seguiría viendo el medio.
 export function pickDisponibles(medios: MedioCobro[], localId: number | null): MedioCobro[] {
-  const visibles = medios.filter(m => m.activo && (m.local_id === null || m.local_id === localId));
-  // Dedup por nombre, prefiriendo el que tiene local_id no nulo.
+  // Paso 1: limitar al scope (sin importar activo).
+  const enScope = medios.filter(m => m.local_id === null || m.local_id === localId);
+  // Paso 2: dedup por nombre, prefiriendo el override (local_id no nulo).
   const byNombre = new Map<string, MedioCobro>();
-  for (const m of visibles) {
+  for (const m of enScope) {
     const existing = byNombre.get(m.nombre);
     if (!existing) { byNombre.set(m.nombre, m); continue; }
-    // Prefer local-specific sobre global
     if (existing.local_id === null && m.local_id !== null) byNombre.set(m.nombre, m);
   }
-  return [...byNombre.values()].sort((a, b) => (a.orden || 0) - (b.orden || 0));
+  // Paso 3: aplicar el filtro activo SOBRE el ganador del dedup.
+  return [...byNombre.values()]
+    .filter(m => m.activo)
+    .sort((a, b) => (a.orden || 0) - (b.orden || 0));
 }
 
 // Busca cuenta_destino del medio matcheado por nombre + localId.
 // Misma regla de prioridad que pickDisponibles: local-specific > global.
-// Devuelve null si no hay match o si el medio no impacta caja.
+// Devuelve null si no hay match, si el medio no impacta caja, o si el
+// override del local lo dejó inactivo (en cuyo caso el global no debe
+// "colarse" — el operador desactivó ese medio en este local a propósito).
 export function pickCuentaDestino(medios: MedioCobro[], nombre: string, localId: number | null): string | null {
-  const candidatos = medios.filter(m => m.activo && m.nombre === nombre && (m.local_id === null || m.local_id === localId));
-  if (candidatos.length === 0) return null;
-  // Prefiere el local-specific
-  const ganador = candidatos.find(m => m.local_id !== null) || candidatos[0];
-  return ganador?.cuenta_destino ?? null;
+  // Mismo patrón: scope → dedup → filtrar activo del ganador.
+  const enScope = medios.filter(m => m.nombre === nombre && (m.local_id === null || m.local_id === localId));
+  if (enScope.length === 0) return null;
+  // Preferir local-specific (override) sobre global.
+  const ganador = enScope.find(m => m.local_id !== null) || enScope[0];
+  if (!ganador?.activo) return null;
+  return ganador.cuenta_destino ?? null;
 }
 
 export function useMediosCobro(): MediosCobroState {
