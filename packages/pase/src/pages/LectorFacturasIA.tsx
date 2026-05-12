@@ -269,6 +269,7 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
     // y total del form detectado por IA + confirmado por usuario.
     const totalForm = parseMonto(form.total);
     if (form.fecha && form.prov_id && totalForm > 0) {
+      // eslint-disable-next-line pase-local/require-apply-local-scope -- dup check cross-local intencional: detecta misma factura cargada por error en otra sucursal del mismo proveedor. RLS limita el set al tenant del caller.
       const { data: posibles } = await db.from("facturas")
         .select("nro, fecha, total, estado, tipo")
         .eq("prov_id", parseInt(form.prov_id))
@@ -310,7 +311,9 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
 
     const confGlobal=resultado?.confianza_global??100;
     const estado=confGlobal<70?"revision":"pendiente";
-    // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F12: idéntico al flow de Compras.tsx — debe ir por RPC crear_factura_completa.
+    // INSERT con local_id explícito del form (validado arriba).
+    // C3: disable porque no es lectura; C4: deuda F12 (debe ir por RPC crear_factura_completa, idéntico al flow Compras.tsx).
+    // eslint-disable-next-line pase-local/no-direct-financiera-write, pase-local/require-apply-local-scope
     const {error:insErr}=await db.from("facturas").insert([{...form,id,prov_id:parseInt(form.prov_id),local_id:parseInt(String(form.local_id)),neto:parseMonto(form.neto),iva21:parseMonto(form.iva21),iva105:parseMonto(form.iva105),iibb:parseMonto(form.iibb),total:parseMonto(form.total),estado,pagos:[],imagen_url,fecha:form.fecha||null,venc:form.venc||null}]);
     if(insErr){
       // Rollback del archivo si el insert falló, así no queda huérfano

@@ -1,3 +1,10 @@
+// El legajo abre con empleado_id de la URL (click desde el listado RRHH ya
+// scoped por applyLocalScope). Todas las queries acá usan `.eq("id", emp.id)`
+// o `.eq("empleado_id", emp.id)` — RLS server-side filtra por local del
+// caller, así que un empleado_id de otra sucursal devuelve null. Las pocas
+// queries directas sobre tablas con `local_id` quedan con disable de C3
+// porque la defense-in-depth se hace en la página padre RRHH, no acá.
+/* eslint-disable pase-local/require-apply-local-scope */
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { cuentasOperables } from "../lib/auth";

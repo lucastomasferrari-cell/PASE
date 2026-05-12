@@ -59,6 +59,114 @@ const noDirectFinancieraWrite = {
   },
 }
 
+// Regla C3 (CLAUDE.md "Convenciones"): defense-in-depth multi-local.
+// Toda query sobre tabla con `local_id` debe pasar por `applyLocalScope`
+// (definido en `src/lib/auth.ts`) ANTES de ejecutarla. RLS server-side
+// también lo cubre, pero el patrón debe estar para que el bug histórico
+// #27 (leak entre sucursales si RLS falla) no se pueda re-introducir.
+//
+// Heurística (file-level): si un archivo llama `db.from("<tabla con
+// local_id>")` y NO menciona `applyLocalScope` en ningún lado, falla.
+// Si el archivo lo usa al menos una vez (para cualquier query), pasa —
+// el caso "uso applyLocalScope para una query pero olvido para otra del
+// mismo archivo" queda como falso negativo aceptable: hoy nadie tiene
+// 2 queries de tablas distintas con local_id en el mismo file sin
+// aplicarlo a ambas. Si aparece, agregar análisis más fino.
+//
+// La regla aplica solo a archivos del cliente — los scripts y tests
+// están excluidos via override (igual que C4).
+const requireApplyLocalScope = {
+  meta: {
+    type: 'problem',
+    docs: {
+      description: 'Toda query sobre tabla con local_id debe pasar por applyLocalScope (defense-in-depth multi-local).',
+    },
+    messages: {
+      missing: 'db.from("{{tabla}}") está en una tabla con local_id pero el archivo no llama applyLocalScope en ningún lado. Importá `applyLocalScope` de `src/lib/auth.ts` y wrappeá la query (CLAUDE.md → C3). Si es lectura cross-local intencional, agregá // eslint-disable-next-line pase-local/require-apply-local-scope con motivo.',
+    },
+    schema: [],
+  },
+  create(context) {
+    // Tablas con `local_id` (TS strict). No incluye tablas globales
+    // (locales, tenants, usuarios, config_categorias, etc).
+    const CON_LOCAL_ID = /^(ventas|gastos|facturas|factura_items|remitos|movimientos|saldos_caja|conceptos_caja|mp_movimientos|mp_credenciales|mp_justificaciones|conciliaciones_mp|rrhh_empleados|rrhh_liquidaciones|rrhh_adelantos|rrhh_pagos|caja_movimientos_categorias)$/
+    const findings = []
+    let fileHasDefense = false
+    return {
+      Identifier(node) {
+        if (node.name === 'applyLocalScope') fileHasDefense = true
+      },
+      // Filtro manual sobre local_id: `q.eq("local_id", X)` /
+      // `q.in("local_id", X)` también es defense-in-depth aceptable.
+      // Pattern: CallExpression con callee MemberExpression cuyo
+      // property es 'eq' o 'in' y el primer argumento es literal "local_id".
+      CallExpression(node) {
+        if (node.callee?.type === 'MemberExpression') {
+          const m = node.callee.property?.name
+          if (m === 'eq' || m === 'in') {
+            const a0 = node.arguments?.[0]
+            if (a0?.type === 'Literal' && a0.value === 'local_id') {
+              fileHasDefense = true
+            }
+          }
+        }
+        // db.from("<tabla>")
+        if (node.callee?.type !== 'MemberExpression') return
+        if (node.callee.property?.name !== 'from') return
+        // Solo aplica a `db.from(...)` directo. `db.storage.from(...)`
+        // accede a Storage (buckets), no a tablas — el "facturas" en
+        // `db.storage.from("facturas")` es un bucket, no la tabla.
+        const recv = node.callee.object
+        if (recv?.type !== 'Identifier' || recv.name !== 'db') return
+        const arg = node.arguments?.[0]
+        if (arg?.type !== 'Literal' || typeof arg.value !== 'string') return
+        if (!CON_LOCAL_ID.test(arg.value)) return
+        findings.push({ node, tabla: arg.value })
+      },
+      'Program:exit'() {
+        if (fileHasDefense) return
+        for (const f of findings) {
+          context.report({ node: f.node, messageId: 'missing', data: { tabla: f.tabla } })
+        }
+      },
+    }
+  },
+}
+
+// Regla C8 (CLAUDE.md "Convenciones"): toda página nueva en App.tsx se
+// importa con `lazy(() => import(...))` + Suspense. Importarla eager
+// (import Page from "./pages/Page") arruina el code-splitting de F5 y
+// la página entra en el initial chunk, inflando el bundle inicial.
+//
+// La regla solo aplica al archivo `src/App.tsx`. Cualquier
+// `ImportDeclaration` con `source` que matchee `./pages/X` queda
+// flageada (excepto Login, que es entry-point y queda eager por diseño).
+const noEagerPageImportApp = {
+  meta: {
+    type: 'problem',
+    docs: {
+      description: 'Páginas importadas en App.tsx deben usar lazy() — code-splitting (C8).',
+    },
+    messages: {
+      eager: 'Import eager de página "{{ruta}}" en App.tsx. Cambialo a `const Page = lazy(() => import("{{ruta}}"));` y envolvé el render con <Suspense> (ver Dashboard como ejemplo). CLAUDE.md → C8.',
+    },
+    schema: [],
+  },
+  create(context) {
+    if (!context.filename.replace(/\\/g, '/').endsWith('/src/App.tsx')) return {}
+    return {
+      ImportDeclaration(node) {
+        const src = node.source.value
+        if (typeof src !== 'string') return
+        if (!/^\.\/pages\//.test(src)) return
+        // Login queda eager: entry point sin sesión, no queremos latencia.
+        if (src === './pages/Login') return
+        context.report({ node, messageId: 'eager', data: { ruta: src } })
+      },
+    }
+  },
+}
+
 export default defineConfig([
   globalIgnores(['dist']),
   {
@@ -67,6 +175,8 @@ export default defineConfig([
       'pase-local': {
         rules: {
           'no-direct-financiera-write': noDirectFinancieraWrite,
+          'require-apply-local-scope': requireApplyLocalScope,
+          'no-eager-page-import-app': noEagerPageImportApp,
         },
       },
     },
@@ -95,6 +205,8 @@ export default defineConfig([
         },
       ],
       'pase-local/no-direct-financiera-write': 'error',
+      'pase-local/require-apply-local-scope': 'error',
+      'pase-local/no-eager-page-import-app': 'error',
     },
   },
   // Tests, scripts one-off, audits: el bypass de C4 es esperado (setup de
@@ -108,6 +220,7 @@ export default defineConfig([
     ],
     rules: {
       'pase-local/no-direct-financiera-write': 'off',
+      'pase-local/require-apply-local-scope': 'off',
     },
   },
 ])

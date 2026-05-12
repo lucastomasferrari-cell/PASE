@@ -134,6 +134,7 @@ export default function Configuracion({ user, locales, localActivo }: Configurac
   const eliminar = async (item: ConfigCategoriaItem) => {
     const tipoGasto = item.tipo.startsWith("gasto_") ? item.tipo.replace("gasto_", "") : null;
     if (tipoGasto) {
+      // eslint-disable-next-line pase-local/require-apply-local-scope -- count cross-local intencional: warning previo a borrar una categoría compartida (config_categorias es global por tenant). Solo dueño/admin llega acá por chequeo de permiso arriba.
       const { count } = await db.from("gastos").select("*", { count: "exact", head: true }).eq("categoria", item.nombre);
       if (count && count > 0) {
         if (!confirm(`"${item.nombre}" tiene ${count} movimientos registrados. ¿Igual eliminás?`)) return;
