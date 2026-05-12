@@ -4,6 +4,7 @@ import { applyLocalScope, localesVisibles, tienePermiso } from "../lib/auth";
 import { useMediosCobro } from "../lib/useMediosCobro";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import { useDebouncedValue } from "../lib/useDebouncedValue";
+import { useToast } from "../hooks/useToast";
 import ImportarMaxirest from "./ImportarMaxirest";
 import type { Usuario, Local, Venta, CierreVentas } from "../types";
 
@@ -87,6 +88,11 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
   // cacheado de la 1ra (no duplica ventas). Se renueva al cerrar el modal.
   const [idempKey, setIdempKey] = useState<string>(() => crypto.randomUUID());
   const [guardando, setGuardando] = useState(false);
+  // Toast de confirmación al guardar. Necesario para usuarios sin permiso
+  // 'ventas_historico' (típicamente cajero) que no ven la tabla del histórico
+  // — sin feedback visual, parece que la venta "no se cargó" (incidente
+  // reportado 2026-05-12).
+  const { toast, showToast } = useToast();
 
   const guardar = async () => {
     if (!form.local_id || guardando) return;
@@ -114,6 +120,8 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
         alert("Error al guardar venta: " + error.message);
         return;
       }
+      const totalGuardado = lineasValidas.reduce((s, l) => s + l.monto, 0);
+      showToast(`Venta cargada · ${fmt_$(totalGuardado)} (${lineasValidas.length} ${lineasValidas.length === 1 ? "medio" : "medios"})`);
       setLineas([{ medio: medioDefault, monto: "" }]);
       setIdempKey(crypto.randomUUID());
       setModalNuevo(false);
@@ -189,8 +197,20 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
     setDetalleModal(null);load();
   };
 
+  // Estilos del toast: posicionado top-right, con color según tipo. El
+  // background y color se eligen para que se vea bien en ambos modos.
+  const toastBg = toast?.type === "error" ? "var(--danger)" : toast?.type === "warn" ? "var(--warn)" : "var(--success)";
+
   return (
     <div>
+      {toast && (
+        <div style={{
+          position: "fixed", top: 16, right: 16, zIndex: 200,
+          padding: "10px 20px", background: toastBg, color: "#fff",
+          borderRadius: "var(--r)", fontSize: 12, fontFamily: "'DM Mono',monospace",
+          fontWeight: 600, boxShadow: "0 4px 12px rgba(0,0,0,.5)",
+        }}>{toast.message}</div>
+      )}
       {/* SECCIÓN SUPERIOR: carga manual + importador Maxirest */}
       <div className="ph-row">
         <div><div className="ph-title">Ventas</div></div>
