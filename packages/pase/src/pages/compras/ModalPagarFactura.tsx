@@ -34,7 +34,7 @@ export function ModalPagarFactura({
   // y con saldo > 0. saldo = abs(total) - sum(pagos[]).
   const ncsDisponibles = facturas
     .filter(x => (x.tipo || "factura") === "nota_credito")
-    .filter(x => x.prov_id === f.prov_id)
+    .filter(x => String(x.prov_id) === String(f.prov_id))
     .filter(x => x.estado !== "anulada" && x.estado !== "pagada")
     .map(x => {
       const aplicado = (x.pagos || []).reduce((s: number, p: PagoFactura) => s + Number(p.monto || 0), 0);

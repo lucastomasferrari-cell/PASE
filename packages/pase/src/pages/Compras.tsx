@@ -7,7 +7,7 @@ import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId, parseMonto, estadoFactura } from "../lib/utils";
 import type { Usuario, Local } from "../types";
-import type { Proveedor, Factura } from "../types/finanzas";
+import type { Proveedor, Factura, PagoFactura } from "../types/finanzas";
 import type { Remito, FormFactura, FormRemito, FormPagoRemito, ItemFactura } from "./compras/types";
 import { estadoDot } from "./compras/helpers";
 import { ModalPagarFactura } from "./compras/ModalPagarFactura";
@@ -249,7 +249,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       // gasto_comision | gasto_impuesto). Si la cat no está mapeada (libre
       // o legacy), bucket queda null y EERR la trata como CMV.
       const bucket = form.cat ? (categoriaToBucket[form.cat] ?? null) : null;
-      const nueva = { ...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(form.local_id), total, estado: isNC ? "pagada" : "pendiente", pagos: [], tipo: form.tipo, fecha: form.fecha || null, venc: form.venc || null, bucket };
+      const nueva = { ...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(form.local_id), total, estado: "pendiente", pagos: [], tipo: form.tipo, fecha: form.fecha || null, venc: form.venc || null, bucket };
       // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F12: factura + factura_items deben fusionarse en RPC crear_factura_completa (atómica). El trigger trg_saldo_proveedor cubre proveedor.saldo OK, pero si falla el INSERT de items queda factura sin detalle.
       const { error: factErr } = await db.from("facturas").insert([nueva]);
       if (factErr) throw new Error("Error guardando factura: " + factErr.message);
@@ -582,7 +582,15 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                   </td>
                   <td><span className="badge b-muted">{f.cat || "—"}</span></td>
                   <td style={{ textAlign: "right" }}><span className="num" style={isNC ? { color: "var(--info)" } : undefined}>{fmt_$(f.total)}</span></td>
-                  <td>{isNC ? <span className="badge b-info">NC disponible</span> : estadoDot(estadoFactura(f))}</td>
+                  <td>{isNC
+                    ? (() => {
+                        if (f.estado === "anulada") return <span className="badge b-muted">NC anulada</span>;
+                        const aplicado = (f.pagos || []).reduce((s: number, p: PagoFactura) => s + Number(p.monto || 0), 0);
+                        const saldoNc = Math.max(0, Math.abs(Number(f.total || 0)) - aplicado);
+                        if (f.estado === "pagada" || saldoNc <= 0) return <span className="badge b-muted">NC consumida</span>;
+                        return <span className="badge b-info">NC disponible</span>;
+                      })()
+                    : estadoDot(estadoFactura(f))}</td>
                   <td>
                     <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
                       <button className="btn btn-ghost btn-sm" onClick={() => setVerModal(f)}>Ver</button>
