@@ -1,3 +1,4 @@
+import { formatCurrency, formatDelta } from "../../lib/format";
 import styles from "./LocalCard.module.css";
 
 export type LocalCardProps = {
@@ -18,17 +19,10 @@ export type LocalCardProps = {
   venceSemana: { amount: number; warn: boolean };
 };
 
-function fmtMoney(n: number): string {
-  // $ pegado al número (decisión 2026-05-13). NO usar Intl.NumberFormat
-  // con currency: 'ARS' porque mete espacios entre símbolo y dígitos.
-  return `$${n.toLocaleString("es-AR")}`;
-}
-
-function fmtMoneySigned(n: number): string {
-  // Signo Unicode U+2212 (no guión común) pegado al $ pegado al número.
-  const sign = n >= 0 ? "+" : "−";
-  return `${sign}$${Math.abs(n).toLocaleString("es-AR")}`;
-}
+// Helpers centralizados en lib/format.ts. fmtMoney = formatCurrency,
+// fmtMoneySigned = formatDelta con unit '$'. fmtInt local.
+const fmtMoney = formatCurrency;
+const fmtMoneySigned = (n: number) => formatDelta(n, "$");
 
 function fmtInt(n: number): string {
   return n.toLocaleString("es-AR");

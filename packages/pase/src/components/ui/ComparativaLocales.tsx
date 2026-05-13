@@ -1,15 +1,11 @@
 import type { LocalCardProps } from "./LocalCard";
+import { formatCurrency, formatDelta } from "../../lib/format";
 import styles from "./ComparativaLocales.module.css";
 
-// ─── Helpers de formato (mismos que Finanzas.tsx) ──────────────────
-function fmtMoney(n: number): string {
-  return `$${n.toLocaleString("es-AR")}`;
-}
-
-function fmtMoneySigned(n: number): string {
-  const sign = n >= 0 ? "+" : "−";
-  return `${sign}$${Math.abs(n).toLocaleString("es-AR")}`;
-}
+// Alias para legibilidad — fmtMoney/fmtMoneySigned son los helpers
+// centralizados en lib/format.ts.
+const fmtMoney = formatCurrency;
+const fmtMoneySigned = (n: number) => formatDelta(n, "$");
 
 function fmtInt(n: number): string {
   return n.toLocaleString("es-AR");

@@ -1,19 +1,11 @@
 import { useState } from "react";
 import { useNegocioConsolidado, useObjetivos, type LocalCtx } from "../hooks/useNegocio";
+import { formatCurrency, formatCurrencyCompact } from "../lib/format";
 import styles from "./Negocio.module.css";
 
-// ─── Helpers de formato ──────────────────────────────────────────────
-function fmtMoney(n: number): string {
-  // $ pegado al número (decisión 2026-05-13).
-  return `$${n.toLocaleString("es-AR")}`;
-}
-
-function fmtCompact(n: number): string {
-  const abs = Math.abs(n);
-  if (abs >= 1_000_000) return `$${(abs / 1_000_000).toFixed(2).replace(/\.?0+$/, "")}M`;
-  if (abs >= 1_000)     return `$${(abs / 1_000).toFixed(0)}k`;
-  return `$${abs}`;
-}
+// Alias para legibilidad — helpers centralizados en lib/format.ts.
+const fmtMoney = formatCurrency;
+const fmtCompact = formatCurrencyCompact;
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);

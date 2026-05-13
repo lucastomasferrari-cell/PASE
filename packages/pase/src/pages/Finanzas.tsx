@@ -1,26 +1,16 @@
 import { useMemo, useState } from "react";
 import { ComparativaLocales, LocalCard, type LocalCardProps } from "../components/ui";
 import { useFinanzasConsolidado, useLocalFinanzas, useVencimientos } from "../hooks/useFinanzas";
+import { formatCurrency, formatCurrencyCompact } from "../lib/format";
 import styles from "./Finanzas.module.css";
 
-// ─── Helpers de formato ──────────────────────────────────────────────
-function fmtMoney(n: number): string {
-  // $ pegado al número. NO Intl.NumberFormat con currency — mete espacios.
-  return `$${n.toLocaleString("es-AR")}`;
-}
-
-function fmtCompact(n: number): string {
-  const abs = Math.abs(n);
-  if (abs >= 1_000_000) return `$${(abs / 1_000_000).toFixed(2).replace(/\.?0+$/, "")}M`;
-  if (abs >= 1_000)     return `$${(abs / 1_000).toFixed(0)}k`;
-  return `$${abs}`;
-}
-
-function fmtCompactSigned(n: number): string {
-  // U+2212 (signo menos Unicode, no guión común).
+// Alias para legibilidad en este archivo.
+const fmtMoney = formatCurrency;
+const fmtCompact = formatCurrencyCompact;
+const fmtCompactSigned = (n: number) => {
   const sign = n >= 0 ? "+" : "−";
-  return `${sign}${fmtCompact(n)}`;
-}
+  return `${sign}${formatCurrencyCompact(Math.abs(n))}`;
+};
 
 function localKey(name: string): string {
   return name.toLowerCase().replace(/\s+/g, "-");
