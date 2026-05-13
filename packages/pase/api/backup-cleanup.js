@@ -1,14 +1,14 @@
 // api/backup-cleanup.js — TASK 0.17 ETAPA 2.
 //
-// Cron semanal (domingos 05:00 UTC = 02:00 ART). Recorre el bucket
-// tenant-backups, parsea la fecha del path y borra los archivos con
-// más de 365 días.
+// Cron semanal — domingos 08:00 UTC (= 05:00 ART), corre justo después
+// de backup-tenants en el mismo workflow GH Actions. Recorre el bucket
+// tenant-backups, parsea la fecha del path y borra archivos >365 días.
 //
-// Política de retención actualizada 2026-05-11 (Lucas): el backup
-// corre diario y se mantiene 1 año (365 snapshots por tenant). Storage
-// estimado por tenant: ~7-10 GB comprimidos. Da granularidad de restore
-// día a día durante el último año — mejor que la semanal-365 originalmente
-// pedida (1 año pero solo 52 puntos de recuperación).
+// Política de retención actualizada 2026-05-12 (Lucas): backup semanal
+// con retención 1 año = 52 snapshots por tenant. Storage estimado por
+// tenant: ~250-500 MB comprimidos (52 × ~5-10 MB).
+//
+// Disparado por `.github/workflows/mp-cron-weekly.yml`.
 //
 // Path esperado: <tenant_id>/<YYYY-MM-DD>.json.gz. Archivos cuyo path
 // no parsee (estructura inesperada, backups manuales) los IGNORA — no

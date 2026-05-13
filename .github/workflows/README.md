@@ -9,8 +9,8 @@ Reemplaza Vercel Cron Jobs (eliminados de `vercel.json`) y cron-job.org
 |---|---|---|---|---|
 | `mp-cron-generate.yml` | `0,30 * * * *` | cada 30 min | `/api/mp-generate` | ~25 min/mes |
 | `mp-cron-process.yml`  | `2,32 * * * *` | cada 30 min, offset +2min | `/api/mp-process` | ~25 min/mes |
-| `mp-cron-daily.yml`    | `0 9 * * *`    | 06:00 ART          | `/api/mp-sync` + `/api/mp-update-pending-releases` + `/api/backup-tenants` | ~5 min/mes |
-| `mp-cron-weekly.yml`   | `0 8 * * 0`    | dom 05:00 ART      | `/api/backup-cleanup` | <1 min/mes |
+| `mp-cron-daily.yml`    | `0 9 * * *`    | 06:00 ART          | `/api/mp-sync` + `/api/mp-update-pending-releases` | ~5 min/mes |
+| `mp-cron-weekly.yml`   | `0 8 * * 0`    | dom 05:00 ART      | `/api/backup-tenants` + `/api/backup-cleanup` | ~2 min/mes |
 
 **Total**: ~55 min/mes. Bien debajo del cap de 2000 min/mes del free tier
 GitHub Hobby (repo privado).

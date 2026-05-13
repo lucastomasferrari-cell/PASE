@@ -2,10 +2,20 @@
 
 **TASK 0.17 — Sistema de backup/restore por tenant.**
 Capa 2 sobre los backups nativos de Supabase. Granularidad por tenant,
-retención 30 días, UI superadmin para listar / descargar / restaurar.
+UI superadmin para listar / descargar / restaurar.
 
-Estado: **DISEÑO** — esperando OK de Lucas + decisiones (sección 8) antes
-de implementar. NO se escribió código todavía.
+Estado: **IMPLEMENTADO** (commits etapa 1-4, mayo 2026).
+
+**Cadencia final (decidida 2026-05-12):**
+- **Backup: semanal**, domingos 08:00 UTC (05:00 ART). Disparado por
+  GH Actions workflow `mp-cron-weekly.yml`.
+- **Retención: 1 año** = 52 snapshots por tenant.
+- **Cleanup: semanal**, mismo workflow inmediatamente después del backup,
+  borra archivos >365 días.
+
+El plan original del doc abajo era diario + 30 días con Vercel Cron — eso
+quedó superado. Sección 2 (endpoint backup), 3 (cleanup) y 8.2 (horario)
+referencian el plan original a título histórico.
 
 ---
 

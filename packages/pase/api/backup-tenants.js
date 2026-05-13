@@ -1,8 +1,12 @@
 // api/backup-tenants.js — TASK 0.17 ETAPA 1.
 //
-// Cron diario (07:00 UTC = 04:00 ART) que exporta cada tenant activo a un
-// archivo JSON gzipped en el bucket 'tenant-backups'. Path final:
+// Cron semanal — domingos 08:00 UTC (= 05:00 ART). Exporta cada tenant
+// activo a un archivo JSON gzipped en el bucket 'tenant-backups'. Path:
 // <tenant_id>/<YYYY-MM-DD>.json.gz (idempotente con upsert).
+//
+// Cadencia decidida 2026-05-12: semanal con retención 1 año = 52
+// snapshots por tenant. Disparado por GitHub Actions workflow
+// `.github/workflows/mp-cron-weekly.yml`.
 //
 // Usa SUPABASE_SERVICE_KEY (bypassa RLS) porque tiene que leer todas las
 // tablas de TODOS los tenants en una sola pasada y escribir al bucket.

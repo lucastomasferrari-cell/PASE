@@ -5,12 +5,12 @@ name: MP cron - daily
 #   2. mp-update-pending-releases → refresca release_status pending de
 #      pay-* (GET /v1/payments/{id} directo, evita shard inconsistency
 #      de payments/search).
-#   3. backup-tenants    → exporta cada tenant a JSON.gz en bucket
-#      tenant-backups (idempotente por path con fecha).
 #
-# Secuencial (no paralelo) porque mp-sync y mp-update-pending-releases
-# tocan la misma tabla mp_movimientos y queremos orden determinístico.
-# backup-tenants es independiente pero cuesta poco encadenarlo.
+# Secuencial (no paralelo) porque tocan la misma tabla mp_movimientos
+# y queremos orden determinístico.
+#
+# backup-tenants se movió a mp-cron-weekly.yml (decisión 2026-05-12:
+# backup semanal con retención 1 año = 52 snapshots por tenant).
 
 on:
   schedule:
@@ -37,9 +37,3 @@ jobs:
           curl -sf -X POST \
             -H "Authorization: Bearer ${{ secrets.MP_CRON_BEARER }}" \
             'https://pase-yndx.vercel.app/api/mp-update-pending-releases'
-
-      - name: backup-tenants (export JSON gzipped)
-        run: |
-          curl -sf -X POST \
-            -H "Authorization: Bearer ${{ secrets.MP_CRON_BEARER }}" \
-            'https://pase-yndx.vercel.app/api/backup-tenants'
