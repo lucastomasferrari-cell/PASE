@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasOperables, localesVisibles, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
@@ -6,6 +6,7 @@ import { useCategorias } from "../lib/useCategorias";
 import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId, parseMonto, estadoFactura } from "../lib/utils";
+import { RightSubNav, type SubNavSection } from "../components/ui";
 import type { Usuario, Local } from "../types";
 import type { Proveedor, Factura } from "../types/finanzas";
 import { aplicacionesPorNc, saldoNcRestante } from "../lib/saldoProveedor";
@@ -18,6 +19,13 @@ import { ModalCargarFactura } from "./compras/ModalCargarFactura";
 import { ModalCargarRemito } from "./compras/ModalCargarRemito";
 import { ModalVincularRemito } from "./compras/ModalVincularRemito";
 import { ModalPagarRemitoDirecto } from "./compras/ModalPagarRemitoDirecto";
+
+// Sub-sección 'Proveedores' del módulo Compras (2026-05-13): la pantalla
+// suelta de Proveedores se integra acá. Lazy para no inflar el bundle de
+// Compras cuando se entra a otra sub-sección.
+const Proveedores = lazy(() => import("./Proveedores"));
+
+type SubSection = "facturas" | "proveedores" | "remitos" | "notas";
 
 interface ComprasProps {
   user: Usuario;
@@ -50,6 +58,26 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const [provFiltro, setProvFiltro] = useState("");
   // Si el user solo tiene permiso de remitos, default al pill remitos.
   const [pillEstado, setPillEstado] = useState<string>(puedeFacturas ? "todas" : "remitos");
+
+  // Sub-section del módulo madre Compras (2026-05-13). Derivada del
+  // pillEstado para preservar la lógica de filtros existente sin duplicar
+  // state. Cuando se cambia desde el RightSubNav, se actualiza pillEstado
+  // automáticamente al primer filtro de la sub-sección.
+  // 'proveedores' es una sub-sección especial: cuando pillEstado === "proveedores",
+  // no se renderiza la tabla de facturas/remitos, se monta el componente
+  // Proveedores embebido. pillEstado en ese caso es solo un flag.
+  const subSection: SubSection =
+    pillEstado === "remitos"     ? "remitos" :
+    pillEstado === "nc"          ? "notas" :
+    pillEstado === "proveedores" ? "proveedores" :
+    "facturas";
+  const setSubSection = (sec: SubSection) => {
+    if (sec === "facturas")         setPillEstado("todas");
+    else if (sec === "remitos")     setPillEstado("remitos");
+    else if (sec === "notas")       setPillEstado("nc");
+    else if (sec === "proveedores") setPillEstado("proveedores");
+  };
+  const isProveedores = subSection === "proveedores";
   // Estados para los flows de remito (modales y form).
   const [remModal, setRemModal] = useState(false);
   const [vincModal, setVincModal] = useState<Remito | null>(null);
@@ -432,22 +460,125 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     return true;
   });
 
+  // ─── Conteos para el RightSubNav ─────────────────────────────────────
+  // Sub-secciones: contadores siempre visibles, calculados sobre el array
+  // completo no filtrado.
+  const countFacturas = facturas.filter(f => f.estado !== "anulada" && (f.tipo || "factura") === "factura").length;
+  const countRemitosTotal = remitos.filter(r => r.estado !== "anulado").length;
+  const countNotas = facturas.filter(f => (f.tipo || "factura") === "nota_credito" && f.estado !== "anulada").length;
+  const countProveedores = proveedores.filter(p => p.estado !== "Inactivo").length;
+
+  // Estado contextual: contadores según sub-sección activa.
+  let estadoSection: SubNavSection | null = null;
+  if (subSection === "facturas") {
+    const facsActivas = facturas.filter(f => f.estado !== "anulada" && (f.tipo || "factura") === "factura");
+    const cTodas    = facsActivas.length;
+    const cPend     = facsActivas.filter(f => estadoFactura(f) === "pendiente").length;
+    const cVenc     = facsActivas.filter(f => estadoFactura(f) === "vencida").length;
+    const cPag      = facsActivas.filter(f => f.estado === "pagada").length;
+    estadoSection = {
+      header: "Estado",
+      activeId: pillEstado,
+      onSelect: (id) => setPillEstado(id),
+      items: [
+        { id: "todas",     label: "Todas",      count: cTodas },
+        { id: "pendiente", label: "Pendientes", count: cPend },
+        { id: "vencida",   label: "Vencidas",   count: cVenc },
+        { id: "pagada",    label: "Pagadas",    count: cPag },
+      ],
+    };
+  } else if (subSection === "remitos") {
+    const remActivos = remitos.filter(r => r.estado !== "anulado");
+    const cTodos    = remActivos.length;
+    const cSinApl   = remActivos.filter(r => r.estado === "sin_factura").length;
+    const cAplic    = remActivos.filter(r => r.estado === "facturado" || r.estado === "pagado" || r.estado === "vinculado").length;
+    estadoSection = {
+      header: "Estado",
+      activeId: "todos",  // sin filtro adicional por ahora — la tabla muestra todos
+      onSelect: () => { /* placeholder: la tabla ya muestra todos */ },
+      items: [
+        { id: "todos",       label: "Todos",       count: cTodos },
+        { id: "sin_aplicar", label: "Sin aplicar", count: cSinApl },
+        { id: "aplicados",   label: "Aplicados",   count: cAplic },
+      ],
+    };
+  } else if (subSection === "notas") {
+    const ncs = facturas.filter(f => (f.tipo || "factura") === "nota_credito" && f.estado !== "anulada");
+    const cTodas       = ncs.length;
+    const cDisponibles = ncs.filter(f => f.estado !== "pagada" && saldoNcRestante(f, ncAplicMap) > 0).length;
+    const cAplicadas   = ncs.filter(f => f.estado === "pagada" || saldoNcRestante(f, ncAplicMap) <= 0).length;
+    estadoSection = {
+      header: "Estado",
+      activeId: "todas",
+      onSelect: () => { /* filtro interno de NC pendiente de implementar */ },
+      items: [
+        { id: "todas",       label: "Todas",       count: cTodas },
+        { id: "disponibles", label: "Disponibles", count: cDisponibles },
+        { id: "aplicadas",   label: "Aplicadas",   count: cAplicadas },
+      ],
+    };
+  } else if (subSection === "proveedores") {
+    const cActivos    = proveedores.filter(p => p.estado !== "Inactivo").length;
+    const cInactivos  = proveedores.filter(p => p.estado === "Inactivo").length;
+    estadoSection = {
+      header: "Estado",
+      activeId: "activos",
+      onSelect: () => { /* la pantalla embebida usa su propio filtro */ },
+      items: [
+        { id: "activos",   label: "Activos",   count: cActivos },
+        { id: "inactivos", label: "Inactivos", count: cInactivos },
+      ],
+    };
+  }
+
+  const subNavSections: SubNavSection[] = [
+    {
+      header: "Sección",
+      activeId: subSection,
+      onSelect: (id) => setSubSection(id as SubSection),
+      items: [
+        ...(puedeFacturas ? [{ id: "facturas",    label: "Facturas",     count: countFacturas }] : []),
+        ...(puedeFacturas ? [{ id: "proveedores", label: "Proveedores",  count: countProveedores }] : []),
+        ...(puedeRemitos  ? [{ id: "remitos",     label: "Remitos",      count: countRemitosTotal }] : []),
+        ...(puedeFacturas ? [{ id: "notas",       label: "Notas crédito",count: countNotas }] : []),
+      ],
+    },
+    ...(estadoSection ? [estadoSection] : []),
+  ];
+
   return (
     <div>
       <div className="ph-row">
         <div>
-          <div className="ph-title">Compras</div>
+          <div className="ph-title">
+            {subSection === "facturas"    && "Compras · facturas"}
+            {subSection === "proveedores" && "Compras · proveedores"}
+            {subSection === "remitos"     && "Compras · remitos"}
+            {subSection === "notas"       && "Compras · notas de crédito"}
+          </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          {puedeFacturas && <button className="btn btn-sec" onClick={() => setLectorModal(true)}>Lector IA</button>}
-          {puedeRemitos && (
-            <button className="btn btn-sec" onClick={() => { setRemForm({ ...emptyRemForm, local_id: localActivo ? String(localActivo) : "" }); setRemModal(true); }}>+ Cargar Remito</button>
+          {subSection === "facturas" && (<>
+            {puedeFacturas && <button className="btn btn-sec" onClick={() => setLectorModal(true)}>Lector IA</button>}
+            {puedeRemitos && (
+              <button className="btn btn-sec" onClick={() => { setRemForm({ ...emptyRemForm, local_id: localActivo ? String(localActivo) : "" }); setRemModal(true); }}>+ Cargar remito</button>
+            )}
+            {puedeFacturas && (
+              <button className="btn btn-acc" onClick={() => { setForm({ ...emptyForm, local_id: localActivo ? String(localActivo) : "" }); setItems([]); setModal(true); }}>+ Cargar factura</button>
+            )}
+          </>)}
+          {subSection === "remitos" && puedeRemitos && (
+            <button className="btn btn-acc" onClick={() => { setRemForm({ ...emptyRemForm, local_id: localActivo ? String(localActivo) : "" }); setRemModal(true); }}>+ Cargar remito</button>
           )}
-          {puedeFacturas && (
-            <button className="btn btn-acc" onClick={() => { setForm({ ...emptyForm, local_id: localActivo ? String(localActivo) : "" }); setItems([]); setModal(true); }}>+ Cargar Factura</button>
+          {subSection === "notas" && puedeFacturas && (
+            <button className="btn btn-acc" onClick={() => { setForm({ ...emptyForm, local_id: localActivo ? String(localActivo) : "", tipo: "nota_credito" }); setItems([]); setModal(true); }}>+ Cargar nota</button>
           )}
         </div>
       </div>
+
+      {/* Layout módulo madre: contenido a la izquierda + RightSubNav derecha */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 168px", gap: 20, alignItems: "start" }}>
+        <div style={{ minWidth: 0 }}>
 
       {/* Filtros */}
       <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center", flexWrap: "wrap" }}>
@@ -494,22 +625,21 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
         );
       })()}
 
-      {/* Pills — facturas + (opcional) remitos.
-          Si user solo tiene permiso de remitos, NO mostramos los pills de
-          facturas (state default ya queda en "remitos"). */}
-      <div className="pills">
-        {puedeFacturas && (
-          ([["todas", "Todas"], ["pendiente", "Pendientes"], ["vencida", "Vencidas"], ["pagada", "Pagadas"], ["nc", "Notas de Crédito"]] as [string, string][]).map(([id, l]) => (
-            <div key={id} className={`pill ${pillEstado === id ? "active" : ""}`} onClick={() => setPillEstado(id)}>{l}</div>
-          ))
-        )}
-        {puedeRemitos && (
-          <div className={`pill ${pillEstado === "remitos" ? "active" : ""}`} onClick={() => setPillEstado("remitos")}>Remitos</div>
-        )}
-      </div>
+      {/* Las pills viejas (todas/pendiente/vencida/pagada/nc/remitos) se
+          reemplazaron por el RightSubNav del módulo madre (2026-05-13).
+          El sub-nav controla pillEstado vía setSubSection() + estadoSection. */}
 
-      {/* Tabla — switch entre facturas y remitos según pillEstado. */}
-      {pillEstado === "remitos" ? (
+      {/* Tabla — switch entre facturas, remitos y proveedores embebido. */}
+      {isProveedores ? (
+        <Suspense fallback={<div className="loading">Cargando proveedores…</div>}>
+          {/* Embed de la pantalla Proveedores. Renderiza su propio header
+              "Proveedores" + filtros + tabla. El header del módulo madre
+              ya mostró "Compras · proveedores" arriba, así que esto queda
+              algo redundante visualmente — refactor: extraer body de
+              Proveedores a un sub-componente sin header. Por ahora aceptado. */}
+          <Proveedores user={user} locales={locales} localActivo={localActivo} />
+        </Suspense>
+      ) : pillEstado === "remitos" ? (
         <div className="panel">
           {loading ? <div className="loading">Cargando...</div> : rFilt.length === 0 ? <div className="empty">No hay remitos con esos filtros</div> : (
             <table>
@@ -628,6 +758,10 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
         )}
       </div>
       )}
+        </div>
+        {/* RightSubNav del módulo madre — controla subSection + estado contextual */}
+        <RightSubNav sections={subNavSections} />
+      </div>
 
       {/* MODAL LECTOR IA */}
       <ModalLectorIA

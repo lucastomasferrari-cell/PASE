@@ -1,0 +1,111 @@
+/* Sub-nav lateral derecho. Vive dentro del main de cada módulo madre
+ * (Compras, Caja). Reutilizable para futuras integraciones. */
+
+.aside {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-top: 2px;
+  padding-left: 16px;
+  border-left: 0.5px solid var(--pase-border);
+  width: 168px;
+  flex-shrink: 0;
+}
+
+.sectionHeader {
+  font-size: 9.5px;
+  font-weight: 500;
+  color: var(--pase-celeste-300);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0 8px 6px;
+  font-family: var(--pase-font);
+}
+
+.sectionHeader:not(:first-of-type) {
+  padding-top: 14px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  color: var(--pase-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: var(--pase-font);
+  letter-spacing: -0.005em;
+  width: 100%;
+  text-align: left;
+  transition: background 0.12s, color 0.12s;
+}
+
+.item:hover {
+  background: var(--pase-bg-soft);
+  color: var(--pase-text);
+}
+
+.itemActive {
+  background: var(--pase-celeste-100);
+  color: var(--pase-text);
+  font-weight: 500;
+}
+
+.itemLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.itemIcon {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+.itemCount {
+  font-size: 10px;
+  color: var(--pase-text-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.itemActive .itemCount {
+  color: var(--pase-text);
+  font-weight: 500;
+}
+
+/* Layout responsivo: en mobile el sub-nav se colapsa a dropdown arriba */
+@media (max-width: 900px) {
+  .aside {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding-left: 0;
+    border-left: none;
+    border-bottom: 0.5px solid var(--pase-border);
+    padding-bottom: 10px;
+    margin-bottom: 14px;
+  }
+  .sectionHeader {
+    width: 100%;
+    padding-top: 0;
+  }
+  .sectionHeader:not(:first-of-type) {
+    padding-top: 8px;
+  }
+  .item {
+    width: auto;
+    flex: 0 0 auto;
+  }
+  .itemCount {
+    margin-left: 4px;
+  }
+}
