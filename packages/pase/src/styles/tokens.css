@@ -1,0 +1,51 @@
+/* PASE — Design tokens v1.0
+ * Sistema de diseño aprobado 2026-05-13. Doc fuente: /DESIGN_SYSTEM.md
+ *
+ * Reglas críticas:
+ * - --pase-celeste (#75AADB) es el ÚNICO celeste de marca. Sin otros azules/celestes en el producto.
+ * - --pase-gold (#F5C518) solo en 2 lugares: punto del logo `pase.` y dot "en vivo" del KPI ancla.
+ * - Roles de usuario NO se distinguen por color (decisión 2026-05-13). Solo por texto.
+ * - Texto siempre --pase-text o --pase-text-muted. Nunca negro puro ni gris genérico.
+ */
+
+:root {
+  /* === COLOR === */
+
+  /* Marca — único celeste */
+  --pase-celeste: #75AADB;        /* celeste bandera argentina, IRAM 7677-2002 */
+
+  /* Derivados del celeste — para sparklines, hovers, fondos suaves */
+  --pase-celeste-100: #EAF3FB;    /* fondo hover/active, separadores */
+  --pase-celeste-200: #D7E8F5;    /* sparkline bajo */
+  --pase-celeste-300: #9DC3E2;    /* sparkline medio */
+
+  /* Texto */
+  --pase-text:       #1A3A5E;     /* primario, headers, números */
+  --pase-text-muted: #6E8CAB;     /* labels, sub-textos, placeholders */
+
+  /* Bordes */
+  --pase-border:        #EAF3FB;  /* finos de cards y separadores */
+  --pase-border-strong: #DCE8F4;  /* inputs, frames principales */
+
+  /* Fondos */
+  --pase-bg:      #FFFFFF;        /* fondo principal */
+  --pase-bg-soft: #F4F9FD;        /* titlebar, secciones */
+  --pase-bg-out:  #F2F5F8;        /* íconos "salida"/grises */
+
+  /* Acento dorado — uso restringido (solo logo dot + indicador "en vivo") */
+  --pase-gold: #F5C518;
+
+  /* === TIPOGRAFÍA === */
+
+  --pase-font: "Inter", system-ui, -apple-system, sans-serif;
+
+  /* === RADIOS === */
+
+  --pase-radius-card: 14px;       /* cards y frame principal */
+  --pase-radius-md:   8px;        /* botones, items de nav, íconos de tx */
+  --pase-radius-pill: 999px;      /* tabs de chart, badges */
+
+  /* === BORDES === */
+
+  --pase-border-thin: 0.5px;      /* todos los bordes son finos */
+}
