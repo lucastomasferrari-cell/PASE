@@ -312,7 +312,7 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
     const confGlobal=resultado?.confianza_global??100;
     const estado=confGlobal<70?"revision":"pendiente";
     // RPC atómica (deuda C4-F12 cerrada).
-    const nueva = {...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(String(form.local_id)), neto: parseMonto(form.neto), iva21: parseMonto(form.iva21), iva105: parseMonto(form.iva105), iibb: parseMonto(form.iibb), total: parseMonto(form.total), estado, pagos: [], imagen_url, fecha: form.fecha || null, venc: form.venc || null};
+    const nueva = {...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(String(form.local_id)), neto: parseMonto(form.neto), iva21: parseMonto(form.iva21), iva105: parseMonto(form.iva105), iibb: parseMonto(form.iibb), total: parseMonto(form.total), estado, pagos: [], imagen_url, fecha: form.fecha || null, venc: form.venc || null, tipo: "factura"};
     const {error:insErr} = await db.rpc("crear_factura_completa", {
       p_factura: nueva,
       p_items: [],
