@@ -72,7 +72,7 @@ Modal Legajo accesible desde Empleados (botón "Legajo" por fila)
 - Se acumula: aguinaldo_acumulado += sueldo/12 con cada pago mensual
 
 ## Conciliación MercadoPago
-- Sync automático vía cron-job.org cada 30 min.
+- Sync automático vía **GitHub Actions** cada 30 min (workflows en `.github/workflows/mp-cron-*.yml`). cron-job.org ya no se usa (migración may-2026).
 - Job 1 (mp-generate): genera CSV en MP.
 - Job 2 (mp-process): descarga y procesa CSV.
 - Saldo inicial fijado: $1.843.593 el 11/04/2026.
@@ -125,7 +125,7 @@ Modal Legajo accesible desde Empleados (botón "Legajo" por fila)
 
 El sistema tiene dos capas que conversan entre sí:
 
-1. **usuario_permisos (frontend gate)**: habilita botones y pages según módulos asignados al usuario. Los strings de módulo ("slugs") están normalizados: `proveedores`, `insumos`, `recetas`, `configuracion`, `rrhh`, `usuarios`, `compras` (facturas), `gastos`, `caja`, `ventas`, `cashflow`, `eerr`, `dashboard`, `lector_ia`, `mp` (conciliación), `cierre`, `contador`, `costos`, `blindaje`, `remitos`, `maxirest`. Ver lista completa en `src/lib/auth.ts::MODULOS` y `tienePermiso()`.
+1. **usuario_permisos (frontend gate)**: habilita botones y pages según módulos asignados al usuario. Los strings de módulo ("slugs") están normalizados: `proveedores`, `insumos`, `recetas`, `configuracion`, `rrhh`, `usuarios`, `compras` (facturas), `gastos`, `caja`, `ventas`, `eerr`, `dashboard`, `lector_ia`, `mp` (conciliación), `cierre`, `contador`, `costos`, `blindaje`, `remitos`, `maxirest`. Ver lista completa en `src/lib/auth.ts::MODULOS` y `tienePermiso()`. (Slug `cashflow` eliminado 2026-05-11 — el módulo se sacó del producto).
 
 2. **RLS Postgres (backend gate)**: controla acceso SQL directo vía función `auth_tiene_permiso(slug)` que cruza `auth.uid()` con `usuario_permisos`. Dueño y admin pasan siempre por `CASE WHEN auth_es_dueno_o_admin() THEN true`.
 
@@ -186,15 +186,11 @@ Sueldos se deriva de `rrhh_liquidaciones`, no desde `config_categorias`.
 
 **Fuente de verdad para listas de categorías en el frontend**: hook `useCategorias()` (`src/lib/useCategorias.ts`). Fetch único a `config_categorias` con cache en `sessionStorage` (1h TTL). Fallback silencioso a `constants.ts` si la DB falla.
 
-## Panel "Por cobrar" en Cashflow
+## Política de movimientos automáticos al cargar venta
 
-En `src/pages/Cashflow.tsx`, panel informativo que deriva en runtime:
+Política Opción C (validada 2026-04-24): sólo efectivo dispara movimiento automático al cargar la venta. El resto se refleja en Caja/Tesorería cuando el usuario registra manualmente un movimiento de ingreso con la categoría de liquidación correspondiente (ver las 11 filas `cat_ingreso` en `config_categorias`).
 
-- Para cada medio de cobro no-efectivo del mes (Rappi Online, Peya Online, MP Delivery, Bigbox, Fanbag, Nave, tarjetas, QR, Link, transferencias): suma `ventas.monto` del mes.
-- Resta los movimientos con `cat = "Liquidación X"` del mismo mes y misma plataforma.
-- Muestra: vendido · cobrado · pendiente.
-
-Política Opción C (validada 2026-04-24): sólo efectivo dispara movimiento automático al cargar la venta. El resto se refleja en Cashflow cuando el usuario registra manualmente un movimiento de ingreso con la categoría de liquidación correspondiente (ver las 11 filas `cat_ingreso` en `config_categorias`).
+(El módulo Cashflow que originalmente mostraba el panel "Por cobrar" — vendido · cobrado · pendiente por plataforma — se eliminó del producto 2026-05-11. La política sigue igual; los listados de Caja/Tesorería son ahora las pantallas operativas).
 
 ## Caja Efectivo (track operativo único)
 
@@ -202,9 +198,9 @@ Política Opción C (validada 2026-04-24): sólo efectivo dispara movimiento aut
 
 Cuando una venta con medio EFECTIVO SALON / EFECTIVO DELIVERY / PEYA EFECTIVO / EVENTO dispara movimiento automático, va a **Caja Chica** (no a Caja Efectivo). Para mover plata entre cuentas se usa la RPC `transferencia_cuentas`.
 
-## EERR vs Cashflow — diferencia conceptual
+## EERR (devengado) vs base percibida — diferencia conceptual
 
-El sistema tiene dos miradas distintas sobre el dinero:
+El sistema tiene dos miradas distintas sobre el dinero. La distinción contable sigue vigente aunque el módulo Cashflow se eliminó (las pantallas que muestran la mirada percibida hoy son Caja y Tesorería).
 
 **EERR (Estado de Resultados) — base devengada.** Cuenta el resultado del negocio independientemente de cuándo entra o sale la plata. Lee de: `ventas`, `facturas`, `gastos`, `rrhh_liquidaciones` (todo por fecha del hecho económico, no del pago).
 
@@ -212,14 +208,14 @@ El sistema tiene dos miradas distintas sobre el dinero:
 - CMV = facturas de proveedores del período, por fecha de factura.
 - Gastos, Sueldos = por fecha de gasto o liquidación.
 
-**Cashflow — base percibida.** Cuenta cómo se mueve la plata entre cuentas. Lee de: `movimientos` (anulado=false) + `saldos_caja`.
+**Base percibida (Caja / Tesorería) — cómo se mueve la plata entre cuentas.** Lee de: `movimientos` (anulado=false) + `saldos_caja`.
 
 - Ingresos cobrados = movimientos positivos (ventas cobradas, liquidaciones de plataformas, aportes de socios, devoluciones, etc.).
 - Egresos pagados = movimientos negativos.
 
-Los "Ingresos" de Cashflow **NO van al EERR**. La venta se cuenta en EERR cuando se carga en Ventas (fecha de venta, no de cobro). Cuando Rappi/MercadoPago/PedidosYa/Bigbox/etc liquidan días después, ese movimiento entra al Cashflow como realización de cobro, pero no es una venta nueva — sumarla al EERR sería contar dos veces.
+Los "Ingresos" de la mirada percibida **NO van al EERR**. La venta se cuenta en EERR cuando se carga en Ventas (fecha de venta, no de cobro). Cuando Rappi/MercadoPago/PedidosYa/Bigbox/etc liquidan días después, ese movimiento es realización de cobro, no venta nueva — sumarla al EERR sería contar dos veces.
 
-**Categorías de ingreso exclusivas de Cashflow (grupo "INGRESOS"):**
+**Categorías de ingreso exclusivas de la mirada percibida (grupo "INGRESOS"):**
 
 - Liquidación Rappi, MercadoPago, PedidosYa, Evento, Bigbox, Fanbag, Nave.
 - Ingreso Socio, Devolución Proveedor, Otro Ingreso, Transferencia Varios.
@@ -227,9 +223,9 @@ Los "Ingresos" de Cashflow **NO van al EERR**. La venta se cuenta en EERR cuando
 **Cuándo mirar cada uno:**
 
 - EERR para rentabilidad mensual del negocio (¿gané o perdí este mes en términos contables?).
-- Cashflow para liquidez y plan de caja (¿con qué plata cuento hoy y qué compromisos tengo pendientes?).
+- Caja/Tesorería para liquidez y plan de caja (¿con qué plata cuento hoy y qué compromisos tengo pendientes?).
 
-**Consecuencia**: EERR y Cashflow no tienen que coincidir día a día. Se reconcilian a largo plazo. Si un mes no cuadran, no es necesariamente un bug — es el delay natural de cobros diferidos (tarjeta 48-72h, Rappi/Peya 7-14 días, eventos al cierre, etc.).
+**Consecuencia**: EERR y la mirada percibida no tienen que coincidir día a día. Se reconcilian a largo plazo. Si un mes no cuadran, no es necesariamente un bug — es el delay natural de cobros diferidos (tarjeta 48-72h, Rappi/Peya 7-14 días, eventos al cierre, etc.).
 
 ## Comandos útiles
 - Claude Code: claude --dangerously-skip-permissions

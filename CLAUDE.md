@@ -94,18 +94,19 @@ Todo flujo que toca múltiples tablas (movimientos + saldos_caja + facturas/remi
 
 Las 13 RPCs principales (`pagar_factura`, `pagar_remito`, `anular_factura`, `pagar_sueldo`, `registrar_adelanto`, `pagar_vacaciones`, `pagar_aguinaldo`, `liquidacion_final_empleado`, `crear_movimiento_caja`, `anular_movimiento`, `crear_gasto`, `transferencia_cuentas`, etc.) — listado completo en `packages/pase/CONTEXTO.md` sección "Pagos atómicos (RPC)". Errores por código upper-snake (`FACTURA_YA_PAGADA`, `SALDO_INSUFICIENTE`, etc.) traducidos por `src/lib/errors.ts::translateRpcError`.
 
-### EERR vs Cashflow — distinción conceptual
+### EERR — base devengada (vs base percibida)
 - **EERR** = base devengada. Lee `ventas`, `facturas`, `gastos`, `rrhh_liquidaciones` por fecha del hecho económico.
-- **Cashflow** = base percibida. Lee `movimientos` (anulado=false) + `saldos_caja`.
-- No tienen que coincidir día a día. Las "Liquidación Rappi/MP/Peya/Bigbox/etc." son ingresos exclusivos de Cashflow — sumarlas al EERR sería contar dos veces (la venta ya se contó cuando se cargó).
-- Sólo efectivo dispara movimiento automático al cargar venta. Resto se refleja en Cashflow cuando el usuario carga el ingreso de liquidación con la categoría correspondiente.
+- **Base percibida** (movimientos + saldos_caja): los listados de Caja/Tesorería leen `movimientos` con `anulado=false`. No tienen que coincidir día a día con el EERR.
+- Las "Liquidación Rappi/MP/Peya/Bigbox/etc." son ingresos percibidos exclusivos de Caja — sumarlas al EERR sería contar dos veces (la venta ya se contó cuando se cargó).
+- Sólo efectivo dispara movimiento automático al cargar venta. Las liquidaciones de cobranza no-efectivo se reflejan en Caja cuando el usuario carga el ingreso con la categoría correspondiente.
+- (Módulo Cashflow eliminado del producto 2026-05-11 — la distinción contable sigue válida, pero ya no hay pantalla dedicada).
 
 ### Catálogos dinámicos
 - **Categorías**: tabla `config_categorias` con `grupo` (CMV / Gastos Fijos / Variables / Publicidad / Comisiones / Impuestos / INGRESOS). Hook `useCategorias()` cachea en sessionStorage 1h, fallback a `constants.ts`.
 - **Medios de cobro**: tabla `medios_cobro` reemplazó `MEDIOS_COBRO` hardcoded. Filas globales (`local_id IS NULL`) + override por local. Hook `useMediosCobro()`. Si Maxirest importa con un medio que no existe en el catálogo del local activo, **rechaza el batch entero** — no importa parcial para no desbalancear caja.
 
 ### Conciliación MP
-- Sync vía cron-job.org cada 30 min: `mp-generate` (genera CSV en MP) → `mp-process` (descarga + procesa).
+- Sync vía **GitHub Actions** cada 30 min: `mp-generate` (genera CSV en MP) → `mp-process` (descarga + procesa). Workflows en `.github/workflows/mp-cron-*.yml`; setup documentado en `.github/workflows/README.md`. cron-job.org ya no se usa (migración may-2026).
 - Token MP encriptado en DB; lectura via RPC `set_mp_token` / endpoint con auth.
 - Saldo inicial fijado: $1.843.593 el 11/04/2026.
 - Prefijos en `mp_movimientos.id`: `rr-*` = release_report (autoritativo), sin prefijo = payments API.

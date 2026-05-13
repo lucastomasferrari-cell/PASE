@@ -20,7 +20,8 @@
 // Mitigación M8: si MP responde 401 en el primer GET, aborta el batch para
 // esa cred, log warning y registra en auditoria con tag.
 //
-// Cron: cron-job.org diario 04:00 ART (07:00 UTC).
+// Cron: GitHub Actions diario 06:00 ART (09:00 UTC), workflow
+// `.github/workflows/mp-cron-daily.yml`.
 // URL: https://pase-yndx.vercel.app/api/mp-update-pending-releases
 //
 // Backfill mode: ?backfill=N (días back). En vez de filtrar pending, procesa
