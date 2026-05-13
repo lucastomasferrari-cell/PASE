@@ -34,6 +34,7 @@ const RRHHPage = lazy(() => import("./pages/RRHH"));
 const Configuracion = lazy(() => import("./pages/Configuracion"));
 const Tenants = lazy(() => import("./pages/Tenants"));
 const DesignSystem = lazy(() => import("./pages/DesignSystem"));
+const Finanzas = lazy(() => import("./pages/Finanzas"));
 
 // Loader full-page (mismo look-and-feel que authLoading) para los
 // early-returns lazy.
@@ -295,6 +296,7 @@ function AppMain() {
     if (section !== "dashboard" && guardedNav(section)) return <Dashboard {...props}/>;
     switch(section) {
       case "dashboard": return <Dashboard {...props}/>;
+      case "finanzas":  return <Finanzas/>;
       case "ventas":    return <Ventas {...props}/>;
       case "compras":   return <Compras {...props}/>;
       // Defensive: si algún user tiene section="remitos" persistido en

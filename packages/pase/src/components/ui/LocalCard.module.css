@@ -1,0 +1,273 @@
+.card {
+  position: relative;
+  background: var(--pase-bg);
+  border: var(--pase-border-thin) solid var(--pase-border);
+  border-radius: var(--pase-radius-card);
+  padding: 16px 18px;
+  font-family: var(--pase-font);
+  color: var(--pase-text);
+  overflow: hidden;
+}
+
+/* Franja superior diferenciadora: 2px de alto, separada 18px de cada lado */
+.stripe {
+  position: absolute;
+  top: 0;
+  left: 18px;
+  right: 18px;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+}
+
+.stripeLeading {
+  background: var(--pase-celeste);
+}
+
+.stripeBehind {
+  background: var(--pase-celeste-300);
+}
+
+/* ── Header ── */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding-top: 4px;
+}
+
+.name {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--pase-text);
+  letter-spacing: -0.02em;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.meta {
+  font-size: 10.5px;
+  color: var(--pase-text-muted);
+  margin-top: 2px;
+  letter-spacing: -0.005em;
+}
+
+.badge {
+  font-size: 9px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: var(--pase-radius-pill);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.badgeDefault {
+  background: var(--pase-celeste-100);
+  color: var(--pase-text);
+}
+
+.badgeWarn {
+  background: rgba(245, 197, 24, 0.18);
+  color: #8B6F0A;
+}
+
+.facturacionWrap {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.facturacionMonto {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--pase-text);
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.facturacionLabel {
+  font-size: 10.5px;
+  color: var(--pase-text-muted);
+  margin-top: 2px;
+  letter-spacing: -0.005em;
+}
+
+/* ── Flow pill ── */
+.flow {
+  background: var(--pase-bg-soft);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.flowItem {
+  flex: 1;
+  min-width: 0;
+}
+
+.flowLabel {
+  font-size: 10px;
+  color: var(--pase-text-muted);
+  letter-spacing: -0.005em;
+  margin-bottom: 2px;
+}
+
+.flowValue {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pase-text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.flowSep {
+  color: var(--pase-celeste-300);
+  font-size: 13px;
+  font-weight: 500;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* ── KPIs internos ── */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kpiLabel {
+  font-size: 10px;
+  color: var(--pase-text-muted);
+  letter-spacing: -0.005em;
+}
+
+.kpiValue {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--pase-text);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpiDelta {
+  font-size: 10px;
+  margin-top: 1px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  letter-spacing: -0.005em;
+}
+
+.kpiDeltaUp {
+  color: var(--pase-text);
+}
+
+.kpiDeltaWarn {
+  color: #8B6F0A;
+}
+
+.dotWarn {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--pase-gold);
+  flex-shrink: 0;
+}
+
+/* ── Spark row ── */
+.sparkRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.sparkLabel {
+  font-size: 10px;
+  color: var(--pase-text-muted);
+  letter-spacing: -0.005em;
+  flex-shrink: 0;
+}
+
+.sparkBars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 28px;
+  flex: 1;
+  min-width: 0;
+}
+
+.sparkBar {
+  flex: 1;
+  min-width: 0;
+  background: var(--pase-celeste-200);
+  border-radius: 1px;
+  min-height: 2px;
+}
+
+.sparkBarMid {
+  background: var(--pase-celeste-300);
+}
+
+.sparkBarHi {
+  background: var(--pase-celeste);
+}
+
+.sparkLastAmount {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--pase-text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  flex-shrink: 0;
+}
+
+/* ── Footer ── */
+.footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  border-top: var(--pase-border-thin) solid var(--pase-border);
+  padding-top: 14px;
+}
+
+.footerItem {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.footerLabel {
+  font-size: 10px;
+  color: var(--pase-text-muted);
+  letter-spacing: -0.005em;
+}
+
+.footerValue {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--pase-text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.footerValueWarn {
+  color: #8B6F0A;
+}

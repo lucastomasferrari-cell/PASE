@@ -26,6 +26,12 @@ export function Sidebar({ user, section, onNav, onLogout, locales, localActivo, 
   const localesDisp = (user.rol==="dueno" || user.rol==="admin" || esSuperAdmin) ? locales : locales.filter((l: { id: number })=>(user._locales||user.locales||[]).includes(l.id));
   const nav = [
     {id:"dashboard",label:"Dashboard",sec:"Principal",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="5" height="5" rx="1"/><rect x="8" y="1" width="5" height="5" rx="1"/><rect x="1" y="8" width="5" height="5" rx="1"/><rect x="8" y="8" width="5" height="5" rx="1"/></svg>`},
+    // Sección "Dirección" — vista ejecutiva multi-local (creada 2026-05-13).
+    // Por ahora solo Finanzas; los items "Negocio / Objetivos / Reportes /
+    // Locales" del brief original aún no existen como pantallas. Cuando
+    // se creen, agregarlos con sec:"Dirección" para que caigan en la
+    // misma sección.
+    {id:"finanzas",label:"Finanzas",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h9a1 1 0 0 1 1 1V11a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h7.5"/><circle cx="9.5" cy="8" r="0.9"/></svg>`},
     {id:"ventas",label:"Ventas",sec:"Operaciones",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="1,11 4,6 7,8 10,4 13,6"/></svg>`},
     {id:"compras",label:"Compras",sec:"Operaciones",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="1" width="10" height="12" rx="1"/><line x1="5" y1="5" x2="9" y2="5"/><line x1="5" y1="8" x2="7" y2="8"/></svg>`},
     // Item "Remitos" eliminado el 2026-05-07: facturas y remitos viven juntos

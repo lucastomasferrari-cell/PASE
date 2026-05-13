@@ -1,0 +1,350 @@
+.page {
+  font-family: var(--pase-font);
+  color: var(--pase-text);
+}
+
+/* ─── Section header ────────────────────────────────────────────────── */
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 28px 0 12px;
+}
+
+.sectionHeader:first-of-type {
+  margin-top: 8px;
+}
+
+.sectionTitle {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--pase-text-muted);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.sectionDivider {
+  flex: 1;
+  height: 1px;
+  background: var(--pase-border);
+  transform: scaleY(0.5);
+  transform-origin: center;
+}
+
+/* ─── Zona 1: consolidado ───────────────────────────────────────────── */
+.zone1 {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr 1fr;
+  gap: 10px;
+}
+
+/* Anchor con footer custom de 3 mini-items */
+.anchor {
+  position: relative;
+  background: var(--pase-celeste);
+  border-radius: var(--pase-radius-card);
+  padding: 16px 18px;
+  min-height: 130px;
+  color: #fff;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.anchorBgCircle {
+  position: absolute;
+  bottom: -50px;
+  right: -50px;
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  pointer-events: none;
+}
+
+.anchorDot {
+  position: absolute;
+  top: 17px;
+  right: 18px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pase-gold);
+  box-shadow: 0 0 0 4px rgba(245, 197, 24, 0.28);
+}
+
+.anchorLabel {
+  position: relative;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.78);
+  letter-spacing: -0.01em;
+}
+
+.anchorValue {
+  position: relative;
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.anchorFooter {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.anchorFooterItem {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.anchorFooterLabel {
+  font-size: 9.5px;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: -0.005em;
+}
+
+.anchorFooterValue {
+  font-size: 12px;
+  font-weight: 500;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* KPI con sublabel warn (dorado oscuro) y sparkline */
+.kpiCard {
+  background: var(--pase-bg);
+  border: var(--pase-border-thin) solid var(--pase-border);
+  border-radius: var(--pase-radius-card);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.kpiLabel {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--pase-text-muted);
+  letter-spacing: -0.01em;
+}
+
+.kpiValue {
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--pase-text);
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpiSub {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--pase-text);
+  margin-top: 5px;
+  letter-spacing: -0.005em;
+}
+
+.kpiSubWarn {
+  color: #8B6F0A;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kpiDotWarn {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--pase-gold);
+  flex-shrink: 0;
+}
+
+.kpiSparkWrap {
+  margin-top: 12px;
+}
+
+.sparkBars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 26px;
+  width: 100%;
+}
+
+.sparkBar {
+  flex: 1;
+  min-width: 0;
+  background: var(--pase-celeste-200);
+  border-radius: 1px;
+  min-height: 1px;
+}
+
+.sparkBarMid {
+  background: var(--pase-celeste-300);
+}
+
+.sparkBarHi {
+  background: var(--pase-celeste);
+}
+
+/* ─── Zona 2: por local ─────────────────────────────────────────────── */
+.zone2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+/* ─── Zona 3: vencimientos ──────────────────────────────────────────── */
+.vencList {
+  display: flex;
+  flex-direction: column;
+}
+
+.vencRow {
+  display: grid;
+  grid-template-columns: 44px 1fr auto auto;
+  gap: 11px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: var(--pase-border-thin) solid var(--pase-border);
+}
+
+.vencRow:last-child {
+  border-bottom: none;
+}
+
+.dateBox {
+  width: 44px;
+  border-radius: 8px;
+  padding: 4px 0;
+  text-align: center;
+  background: var(--pase-celeste-100);
+  color: var(--pase-text);
+}
+
+.dateBoxInminente {
+  background: var(--pase-celeste);
+  color: #fff;
+}
+
+.dateDay {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.dateMes {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 1px;
+  opacity: 0.78;
+}
+
+.vencInfo {
+  min-width: 0;
+}
+
+.vencName {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pase-text);
+  letter-spacing: -0.01em;
+}
+
+.vencDesc {
+  font-size: 10.5px;
+  color: var(--pase-text-muted);
+  margin-top: 2px;
+  letter-spacing: -0.005em;
+}
+
+.localPill {
+  font-size: 10.5px;
+  padding: 3px 8px;
+  border-radius: var(--pase-radius-pill);
+  white-space: nowrap;
+  letter-spacing: -0.005em;
+}
+
+.localPillPrimary {
+  background: var(--pase-celeste-100);
+  color: var(--pase-text);
+  font-weight: 500;
+}
+
+.localPillMuted {
+  background: var(--pase-bg-soft);
+  color: var(--pase-text-muted);
+}
+
+.vencMontoWrap {
+  text-align: right;
+}
+
+.vencMonto {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pase-text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.vencMeta {
+  font-size: 9.5px;
+  color: var(--pase-text-muted);
+  margin-top: 2px;
+  letter-spacing: -0.005em;
+}
+
+/* ─── Responsive ───────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .zone1 {
+    grid-template-columns: 1fr 1fr;
+  }
+  .anchor {
+    grid-column: 1 / -1;
+  }
+  .zone2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 540px) {
+  .zone1 {
+    grid-template-columns: 1fr;
+  }
+  .anchor {
+    grid-column: auto;
+  }
+  .anchorFooter {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .vencRow {
+    grid-template-columns: 44px 1fr;
+    grid-template-rows: auto auto;
+    row-gap: 4px;
+  }
+  .localPill {
+    grid-column: 2;
+  }
+  .vencMontoWrap {
+    grid-column: 1 / -1;
+    text-align: left;
+    padding-left: 55px;
+  }
+}
