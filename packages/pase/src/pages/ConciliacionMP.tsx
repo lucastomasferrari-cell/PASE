@@ -702,15 +702,15 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
             right:24,
             zIndex:1000,
             padding:"12px 16px",
-            borderRadius:"var(--r)",
-            background:toast.kind==="ok"?"rgba(34,197,94,0.15)":"rgba(239,68,68,0.15)",
-            border:"1px solid "+(toast.kind==="ok"?"rgba(34,197,94,0.4)":"rgba(239,68,68,0.4)"),
-            color:toast.kind==="ok"?"var(--success)":"var(--danger)",
+            borderRadius:14,
+            background:"var(--pase-bg)",
+            border:"0.5px solid var(--pase-celeste-300)",
+            color:"var(--pase-text)",
             fontSize:12,
             fontWeight:500,
             maxWidth:420,
             cursor:"pointer",
-            boxShadow:"0 4px 16px rgba(0,0,0,0.4)",
+            letterSpacing:"-0.005em",
           }}
         >
           {toast.msg}
@@ -954,10 +954,10 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
             la RPC corre. Antes solo cambiaba el label del botón y se confundía
             con un estado normal — Lucas terminaba clickeando 10 veces. */}
         {conciliando && (
-          <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.55)",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:"inherit",pointerEvents:"all"}}>
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12,padding:"24px 32px",background:"var(--bg2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)",boxShadow:"0 8px 32px rgba(0,0,0,0.4)"}}>
-              <div style={{width:36,height:36,border:"3px solid var(--bd2)",borderTopColor:"var(--acc)",borderRadius:"50%",animation:"mp-spin 0.7s linear infinite"}}/>
-              <div style={{fontSize:13,fontWeight:500,color:"var(--text)"}}>Procesando...</div>
+          <div style={{position:"absolute",inset:0,background:"rgba(255,255,255,0.7)",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:"inherit",pointerEvents:"all",backdropFilter:"blur(2px)"}}>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12,padding:"24px 32px",background:"var(--pase-bg)",borderRadius:14,border:"0.5px solid var(--pase-celeste-300)"}}>
+              <div style={{width:32,height:32,border:"2.5px solid var(--pase-celeste-200)",borderTopColor:"var(--pase-celeste)",borderRadius:"50%",animation:"mp-spin 0.7s linear infinite"}}/>
+              <div style={{fontSize:13,fontWeight:500,color:"var(--pase-text)"}}>Procesando…</div>
               <style>{`@keyframes mp-spin { to { transform: rotate(360deg); } }`}</style>
             </div>
           </div>

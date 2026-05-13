@@ -370,11 +370,11 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
 
   return (
     <div>
-      {toast && <div style={{position:"fixed",top:16,right:16,zIndex:300,padding:"10px 20px",background:"var(--success)",color:"#000",borderRadius:"var(--r)",fontSize:12,fontFamily:"'DM Mono',monospace",fontWeight:500,boxShadow:"0 4px 12px rgba(0,0,0,.5)"}}>{toast}</div>}
+      {toast && <div style={{position:"fixed",top:16,right:16,zIndex:300,padding:"10px 16px",background:"var(--pase-bg)",color:"var(--pase-text)",border:"0.5px solid var(--pase-celeste-300)",borderRadius:14,fontSize:12,fontFamily:"var(--pase-font)",fontWeight:500,letterSpacing:"-0.005em"}}>{toast}</div>}
 
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:12,flexWrap:"wrap"}}>
         <div>
-          <div style={{fontFamily:"'Inter',sans-serif",fontSize:17,fontWeight:500,lineHeight:1,color:"#fff"}}>{emp.apellido}, {emp.nombre}</div>
+          <div style={{fontFamily:"var(--pase-font)",fontSize:18,fontWeight:500,lineHeight:1.1,color:"var(--pase-text)",letterSpacing:"-0.02em"}}>{emp.apellido}, {emp.nombre}</div>
           <div style={{fontSize:11,color:"var(--muted2)",marginTop:4}}>{emp.puesto} · {localNombre} · {emp.activo ? "Activo" : "Inactivo"}</div>
         </div>
         <div style={{textAlign:"right"}}>

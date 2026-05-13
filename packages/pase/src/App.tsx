@@ -378,7 +378,7 @@ function AppMain() {
             tenant={tenant} tenantOverride={tenantOverride} onClearOverride={clearTenantOverride}/>
         </div>
         <main className="main" style={{position:"relative",zIndex:1}}>
-          {toast && <div style={{position:"fixed",top:16,right:16,zIndex:200,padding:"10px 20px",background:"var(--danger)",color:"#fff",borderRadius:"var(--r)",fontSize:12,fontFamily:"'DM Mono',monospace",fontWeight:500,boxShadow:"0 4px 12px rgba(0,0,0,.5)"}}>{toast}</div>}
+          {toast && <div style={{position:"fixed",top:16,right:16,zIndex:200,padding:"10px 16px",background:"var(--pase-bg)",color:"var(--pase-text)",border:"0.5px solid var(--pase-celeste-300)",borderRadius:14,fontSize:12,fontFamily:"var(--pase-font)",fontWeight:500,letterSpacing:"-0.005em"}}>{toast}</div>}
           {/* TODO(lint-cleanup): renderSection() llama guardedNav() → showToast()
               que escribe toastTimer.current durante render. La regla refs pide
               mover la guard navigation a useEffect que reaccione a cambios de

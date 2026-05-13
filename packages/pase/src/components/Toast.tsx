@@ -1,22 +1,21 @@
-﻿import type { Toast, ToastType } from "../hooks/useToast";
+import type { Toast } from "../hooks/useToast";
 
-const COLORS: Record<ToastType, string> = {
-  success: "var(--success)",
-  error: "var(--danger)",
-  warn: "var(--warn)",
-  info: "var(--info)",
-};
-
+// Calm design v1.0: el toast es un mensaje sutil arriba a la derecha sin
+// colores de alerta ni shadow profunda. La tipología (success/error/warn/info)
+// no se distingue visualmente — el texto del mensaje comunica la naturaleza.
 export function ToastComponent({ toast }: { toast: Toast | null }) {
   if (!toast) return null;
   return (
     <div style={{
       position: "fixed", top: 16, right: 16, zIndex: 300,
-      padding: "10px 20px", borderRadius: "var(--r)",
-      background: COLORS[toast.type], color: "#000",
-      fontSize: 12, fontWeight:500,
-      boxShadow: "0 4px 12px rgba(0,0,0,.5)",
-      fontFamily: "'Inter', sans-serif",
+      padding: "10px 16px",
+      borderRadius: 14,
+      background: "var(--pase-bg)",
+      color: "var(--pase-text)",
+      border: "0.5px solid var(--pase-celeste-300)",
+      fontSize: 12, fontWeight: 500,
+      fontFamily: "var(--pase-font)",
+      letterSpacing: "-0.005em",
     }}>
       {toast.message}
     </div>
