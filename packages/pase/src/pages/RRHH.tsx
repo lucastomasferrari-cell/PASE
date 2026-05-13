@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
 import { localesVisibles, applyLocalScope, cuentasOperables, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
@@ -620,7 +620,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
 
   return (
     <div>
-      {toast && <div style={{position:"fixed",top:16,right:16,zIndex:300,padding:"10px 20px",background:"var(--success)",color:"#000",borderRadius:"var(--r)",fontSize:12,fontFamily:"'DM Mono',monospace",fontWeight:600,boxShadow:"0 4px 12px rgba(0,0,0,.5)"}}>{toast}</div>}
+      {toast && <div style={{position:"fixed",top:16,right:16,zIndex:300,padding:"10px 20px",background:"var(--success)",color:"#000",borderRadius:"var(--r)",fontSize:12,fontFamily:"'DM Mono',monospace",fontWeight:500,boxShadow:"0 4px 12px rgba(0,0,0,.5)"}}>{toast}</div>}
 
       <div className="ph-row">
         <div><div className="ph-title">RRHH</div></div>

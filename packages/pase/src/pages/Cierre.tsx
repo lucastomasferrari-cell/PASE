@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
 import { toISO, today, fmt_$ } from "../lib/utils";
@@ -156,7 +156,7 @@ export default function Cierre({ user, localActivo }: CierreProps) {
                   ? fila.b >= 0 ? "var(--success)" : "var(--danger)"
                   : "var(--txt)";
                 return (
-                  <tr key={fila.label} style={fila.big ? { background: "var(--s2)", fontWeight: 600 } : {}}>
+                  <tr key={fila.label} style={fila.big ? { background: "var(--s2)", fontWeight:500 } : {}}>
                     <td style={{ fontSize: fila.big ? 13 : 11, color: fila.big ? "var(--txt)" : "var(--muted2)" }}>
                       {fila.label}
                     </td>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope, localesVisibles, tienePermiso } from "../lib/auth";
 import { useMediosCobro } from "../lib/useMediosCobro";
@@ -208,7 +208,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
           position: "fixed", top: 16, right: 16, zIndex: 200,
           padding: "10px 20px", background: toastBg, color: "#fff",
           borderRadius: "var(--r)", fontSize: 12, fontFamily: "'DM Mono',monospace",
-          fontWeight: 600, boxShadow: "0 4px 12px rgba(0,0,0,.5)",
+          fontWeight:500, boxShadow: "0 4px 12px rgba(0,0,0,.5)",
         }}>{toast.message}</div>
       )}
       {/* SECCIÓN SUPERIOR: carga manual + importador Maxirest */}

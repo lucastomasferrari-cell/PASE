@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 
 // Combobox / searchable select reusable. Reemplaza <select> cuando la
 // lista de opciones es larga (proveedores, categorías, tipos editables,
@@ -211,7 +211,7 @@ export function Combobox({
                     textTransform: "uppercase",
                     color: "var(--muted)",
                     background: "var(--s2)",
-                    fontWeight: 600,
+                    fontWeight:500,
                   }}>{group}</div>
                 )}
                 {items.map(opt => {

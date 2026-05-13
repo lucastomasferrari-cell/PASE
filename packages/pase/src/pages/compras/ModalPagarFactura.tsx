@@ -1,4 +1,4 @@
-import { fmt_d, fmt_$ } from "../../lib/utils";
+﻿import { fmt_d, fmt_$ } from "../../lib/utils";
 import { CurrencyInput } from "../../components/CurrencyInput";
 import { aplicacionesPorNc, saldoNcRestante } from "../../lib/saldoProveedor";
 import type { Factura, PagoFactura } from "../../types/finanzas";
@@ -63,7 +63,7 @@ export function ModalPagarFactura({
 
           {ncsDisponibles.length > 0 && (
             <div style={{ marginBottom: 12, padding: 12, background: "var(--s2)", border: "1px solid var(--bd2)", borderRadius: "var(--r)" }}>
-              <div style={{ fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "var(--info)", marginBottom: 8, fontWeight: 600 }}>
+              <div style={{ fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "var(--info)", marginBottom: 8, fontWeight:500 }}>
                 Notas de crédito disponibles ({ncsDisponibles.length})
               </div>
               {ncsDisponibles.map(({ nc, saldoNc }) => {

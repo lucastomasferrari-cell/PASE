@@ -1,4 +1,4 @@
-// El legajo abre con empleado_id de la URL (click desde el listado RRHH ya
+﻿// El legajo abre con empleado_id de la URL (click desde el listado RRHH ya
 // scoped por applyLocalScope). Todas las queries acá usan `.eq("id", emp.id)`
 // o `.eq("empleado_id", emp.id)` — RLS server-side filtra por local del
 // caller, así que un empleado_id de otra sucursal devuelve null. Las pocas
@@ -370,7 +370,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
 
   return (
     <div>
-      {toast && <div style={{position:"fixed",top:16,right:16,zIndex:300,padding:"10px 20px",background:"var(--success)",color:"#000",borderRadius:"var(--r)",fontSize:12,fontFamily:"'DM Mono',monospace",fontWeight:600,boxShadow:"0 4px 12px rgba(0,0,0,.5)"}}>{toast}</div>}
+      {toast && <div style={{position:"fixed",top:16,right:16,zIndex:300,padding:"10px 20px",background:"var(--success)",color:"#000",borderRadius:"var(--r)",fontSize:12,fontFamily:"'DM Mono',monospace",fontWeight:500,boxShadow:"0 4px 12px rgba(0,0,0,.5)"}}>{toast}</div>}
 
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:12,flexWrap:"wrap"}}>
         <div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasOperables, localesVisibles, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
@@ -470,7 +470,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
           padding: "10px 20px",
           background: toast.type === "error" ? "var(--danger)" : "var(--success)",
           color: "#fff", borderRadius: "var(--r)", fontSize: 12,
-          fontFamily: "'DM Mono',monospace", fontWeight: 600,
+          fontFamily: "'DM Mono',monospace", fontWeight:500,
           boxShadow: "0 4px 12px rgba(0,0,0,.5)",
         }}>{toast.message}</div>
       )}

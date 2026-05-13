@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { ROLES, getPermisos } from "../lib/auth";
 import type { Usuario, Local, Tenant } from "../types";
 
@@ -61,7 +61,7 @@ export function Sidebar({ user, section, onNav, onLogout, locales, localActivo, 
           <div style={{fontSize:9,color:"#444",letterSpacing:"1.2px",textTransform:"uppercase",marginTop:3}}>aliado gastronómico</div>
           {/* Multi-tenant badges (TASK 0.15) */}
           {esSuperAdmin && !tenantOverride && (
-            <div style={{marginTop:8,padding:"4px 8px",background:"rgba(220,38,38,0.15)",border:"1px solid rgba(220,38,38,0.4)",borderRadius:4,fontSize:9,color:"#DC2626",letterSpacing:"1px",textTransform:"uppercase",fontWeight:600,textAlign:"center"}}>
+            <div style={{marginTop:8,padding:"4px 8px",background:"rgba(220,38,38,0.15)",border:"1px solid rgba(220,38,38,0.4)",borderRadius:4,fontSize:9,color:"#DC2626",letterSpacing:"1px",textTransform:"uppercase",fontWeight:500,textAlign:"center"}}>
               ⚡ Modo Superadmin
             </div>
           )}
@@ -111,7 +111,7 @@ export const css = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#1c1c1c;--s1:#161616;--s2:#212121;--s3:#2a2a2a;--bd:#252525;--bd2:#303030;--acc:#a8893a;--txt:#e0e0e0;--muted:#555;--muted2:#888;--danger:#c4614a;--success:#6b9e7a;--warn:#c49a3c;--info:#5a8fa8;--r:8px}
-body{background:radial-gradient(ellipse at 20% 50%, #1e1a16 0%, #161616 50%, #0f1419 100%);color:var(--txt);font-family:'Inter',sans-serif;font-size:13.5px;line-height:1.5;min-height:100vh}
+body{background:radial-gradient(ellipse at 20% 50%, #1e1a16 0%, #161616 50%, #0f1419 100%);color:var(--txt);font-family:var(--pase-font);font-size:13.5px;line-height:1.5;min-height:100vh}
 .app{display:flex;min-height:100vh}
 .sb{width:240px;background:var(--s1);border-right:1px solid var(--bd);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:20}
 .sb-logo{padding:14px 20px 16px;border-bottom:1px solid var(--bd)}
@@ -280,7 +280,7 @@ td{padding:9px 12px;font-size:12.5px}
   color: #fff;
   font-size: 20px;
   line-height: 1;
-  font-weight: 700;
+  font-weight:500;
   box-shadow: 0 2px 12px rgba(0,0,0,0.5);
 }
 .hamburger:active { transform: scale(0.96); }

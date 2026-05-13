@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasOperables as cuentasOperablesFn } from "../lib/auth";
 import { CUENTAS } from "../lib/constants";
@@ -355,7 +355,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
       const procRes=await fetch("/api/mp-process",{method:"POST",headers:procHeaders,body:JSON.stringify({ts})});
       const d=await procRes.json().catch(()=>({ok:false,error:"respuesta no-JSON del servidor"}));
 
-      console.groupCollapsed("%c[MP] /api/mp-process response","color:#3ECFCF;font-weight:600");
+      console.groupCollapsed("%c[MP] /api/mp-process response","color:#3ECFCF;font-weight:500");
       console.log("ok:",d.ok,"error:",d.error||null);
       if(d.cleanup_dedup_deleted)console.log("[MP] dedup cleanup:",d.cleanup_dedup_deleted);
       for(const x of (d.resultados||[])){
@@ -968,7 +968,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
             <div style={{fontSize:10,color:"var(--muted2)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Movimiento a justificar</div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
-                <div style={{fontWeight:600,fontSize:13}}>{TIPO_LABELS[conciliarModal.tipo]||conciliarModal.tipo}</div>
+                <div style={{fontWeight:500,fontSize:13}}>{TIPO_LABELS[conciliarModal.tipo]||conciliarModal.tipo}</div>
                 <div style={{fontSize:11,color:"var(--muted2)"}}>{conciliarModal.descripcion||"—"} · {fmt_d((conciliarModal.fecha||"").split("T")[0])}</div>
               </div>
               <div className="num kpi-danger" style={{fontSize:14}}>{fmt_$(conciliarModal.monto)}</div>
@@ -1065,7 +1065,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                 </div>
                 {vinculoSel==="__NUEVO__"&&(
                   <div style={{marginTop:12,padding:14,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)"}}>
-                    <div style={{fontSize:11,fontWeight:600,marginBottom:10,color:"var(--muted2)",letterSpacing:1}}>NUEVO GASTO · {fmt_$(mpMonto)}</div>
+                    <div style={{fontSize:11,fontWeight:500,marginBottom:10,color:"var(--muted2)",letterSpacing:1}}>NUEVO GASTO · {fmt_$(mpMonto)}</div>
                     <div className="field"><label>Categoría *</label>
                       <Combobox
                         value={nuevoGastoForm.categoria}
@@ -1154,7 +1154,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                   const facsElegibles=lista; // ya filtra por proveedor + no conciliadas
                   return (
                     <div style={{marginTop:12,padding:14,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)"}}>
-                      <div style={{fontSize:11,fontWeight:600,marginBottom:10,color:"var(--muted2)",letterSpacing:1}}>VARIAS FACTURAS · MP {fmt_$(montoMp)}</div>
+                      <div style={{fontSize:11,fontWeight:500,marginBottom:10,color:"var(--muted2)",letterSpacing:1}}>VARIAS FACTURAS · MP {fmt_$(montoMp)}</div>
                       {lineasMulti.map((linea,i)=>{
                         const facIds=lineasMulti.filter((_,j)=>j!==i).map(l=>l.factura_id);
                         const facsDisp=facsElegibles.filter(f=>!facIds.includes(f.id));
@@ -1199,7 +1199,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                 })()}
                 {vinculoSel==="__NUEVO__"&&(
                   <div style={{marginTop:12,padding:14,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)"}}>
-                    <div style={{fontSize:11,fontWeight:600,marginBottom:10,color:"var(--muted2)",letterSpacing:1}}>NUEVA FACTURA · total {fmt_$(Math.abs(conciliarModal.monto||0))}</div>
+                    <div style={{fontSize:11,fontWeight:500,marginBottom:10,color:"var(--muted2)",letterSpacing:1}}>NUEVA FACTURA · total {fmt_$(Math.abs(conciliarModal.monto||0))}</div>
                     <div className="field"><label>Proveedor *</label>
                       <Combobox
                         value={nuevaFacturaForm.prov_id}
@@ -1266,7 +1266,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                 )}
                 {vinculoSel==="__NUEVO__"&&(
                   <div style={{marginTop:12,padding:14,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)"}}>
-                    <div style={{fontSize:11,fontWeight:600,marginBottom:10,color:"var(--muted2)",letterSpacing:1}}>NUEVO REMITO · monto {fmt_$(Math.abs(conciliarModal.monto||0))}</div>
+                    <div style={{fontSize:11,fontWeight:500,marginBottom:10,color:"var(--muted2)",letterSpacing:1}}>NUEVO REMITO · monto {fmt_$(Math.abs(conciliarModal.monto||0))}</div>
                     <div className="field"><label>Proveedor *</label>
                       <Combobox
                         value={nuevoRemitoForm.prov_id}
@@ -1363,7 +1363,7 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
             </div>
           )}
           <div style={{padding:16,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)"}}>
-            <div style={{fontSize:11,fontWeight:600,marginBottom:12}}>Agregar / actualizar cuenta</div>
+            <div style={{fontSize:11,fontWeight:500,marginBottom:12}}>Agregar / actualizar cuenta</div>
             <div className="field"><label>Local</label>
               <select value={configForm.local_id} onChange={e=>setConfigForm({...configForm,local_id:e.target.value})}>
                 <option value="">Seleccioná el local...</option>

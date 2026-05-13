@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { fmt_d, fmt_$, genId, parseMonto } from "../lib/utils";
 import { useCategorias } from "../lib/useCategorias";
@@ -471,7 +471,7 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
                     </div>
                   ))}
                   <div style={{display:"flex",justifyContent:"space-between",borderTop:"1px solid var(--bd)",paddingTop:8}}>
-                    <span style={{fontWeight:600}}>TOTAL</span>
+                    <span style={{fontWeight:500}}>TOTAL</span>
                     <input type="number" step="0.01" value={form.total} onChange={e=>setForm({...form,total:e.target.value})}
                       style={{width:120,background:"var(--bg)",border:conf.total!==undefined&&conf.total<80?campoBorder("total"):"1px solid var(--acc)",color:"var(--acc)",padding:"4px 8px",fontFamily:"'Inter',sans-serif",fontWeight:500,fontSize:14,borderRadius:"var(--r)",textAlign:"right"}}/>
                   </div>

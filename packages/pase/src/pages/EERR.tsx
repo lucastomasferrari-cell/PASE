@@ -1,4 +1,4 @@
-/* eslint-disable react-hooks/static-components --
+﻿/* eslint-disable react-hooks/static-components --
  * ERow y ESection son componentes inner (definidos dentro de EERR) que
  * capturan `pct` por closure. `pct` depende de `totalVentas` (state-derivado),
  * por lo que mover los componentes afuera requiere pasarlo como prop —
@@ -411,7 +411,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
               {porMedio.length===0?<div className="empty">Sin ventas este mes</div>:(
                 <div>
                   {porMedio.map(x=><div key={x.m} className="eerr-row"><span style={{fontSize:11}}>{x.m}</span><div><span className="num kpi-success">{fmt_$(x.t)}</span><span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(x.t)}</span></div></div>)}
-                  <div className="eerr-row" style={{background:"var(--s2)"}}><span style={{fontWeight:600}}>TOTAL VENTAS</span><span style={{fontFamily:"'Inter',sans-serif",fontSize:15,fontWeight:500,color:"var(--success)"}}>{fmt_$(totalVentas)}</span></div>
+                  <div className="eerr-row" style={{background:"var(--s2)"}}><span style={{fontWeight:500}}>TOTAL VENTAS</span><span style={{fontFamily:"'Inter',sans-serif",fontSize:15,fontWeight:500,color:"var(--success)"}}>{fmt_$(totalVentas)}</span></div>
                 </div>
               )}
             </div>
@@ -463,7 +463,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
                           : f.tipo === "ingreso" ? "var(--success)" : "var(--danger)";
                         const showValue = (n: number) => sign === -1 && f.tipo === "costo" ? `-${fmt_$(Math.abs(n))}` : fmt_$(n);
                         return (
-                          <tr key={f.label} style={f.big ? {background:"var(--s2)",fontWeight:600} : {}}>
+                          <tr key={f.label} style={f.big ? {background:"var(--s2)",fontWeight:500} : {}}>
                             <td style={{padding:f.big?"10px 12px":"6px 12px",fontSize:f.big?13:11,color:f.big?"var(--txt)":"var(--muted2)"}}>{f.label}</td>
                             <td style={{padding:f.big?"10px 8px":"6px 8px",textAlign:"right"}}>
                               <span className="num" style={{color:colorMain,fontSize:f.big?14:12}}>{showValue(valPrincipal)}</span>
