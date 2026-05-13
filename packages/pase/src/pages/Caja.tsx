@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasVisibles as cuentasVisiblesFn, cuentasOperables as cuentasOperablesFn, cuentasVisiblesParaListados, localesVisibles, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
@@ -7,8 +7,16 @@ import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
+import { RightSubNav, type SubNavSection } from "../components/ui";
 import type { Usuario, Local } from "../types/auth";
 import type { Movimiento } from "../types/finanzas";
+
+// Sub-sección 'Conciliación MP' del módulo Caja (2026-05-13): la pantalla
+// suelta de Conciliación MP se integra como sub-sección. Lazy para no
+// inflar el bundle de Caja cuando se entra a Movimientos.
+const ConciliacionMP = lazy(() => import("./ConciliacionMP"));
+
+type SubSectionCaja = "movimientos" | "conciliacion";
 
 // Tamaño de página de Tesorería. 80 cubre ~1 semana en un local con
 // volumen alto, ~1 mes en uno de volumen bajo. Botón "Cargar más" trae
@@ -66,6 +74,11 @@ interface AuditDetalle {
 
 // ─── TESORERÍA ────────────────────────────────────────────────────────────────
 export default function Caja({ user, locales = [], localActivo }: CajaProps) {
+  // Sub-section del módulo madre Caja (2026-05-13). Switch entre la vista
+  // Movimientos (default, todo el contenido actual) y Conciliación MP
+  // (pantalla embebida). Sidebar ya no tiene 'mp' como top-level.
+  const [subSection, setSubSection] = useState<SubSectionCaja>("movimientos");
+
   const {
     CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES,
     GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, COMISIONES_CATS,
@@ -415,15 +428,45 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
 
   const cc = (c: string) => c==="Caja Chica"?"var(--acc)":c==="Caja Mayor"?"var(--acc2)":c==="MercadoPago"?"var(--acc3)":"var(--info)";
 
+  // Sub-nav del módulo madre Caja. 2 items, ambos siempre visibles.
+  const subNavSections: SubNavSection[] = [
+    {
+      header: "Sección",
+      activeId: subSection,
+      onSelect: (id) => setSubSection(id as SubSectionCaja),
+      items: [
+        { id: "movimientos",  label: "Movimientos" },
+        { id: "conciliacion", label: "Conciliación MP" },
+      ],
+    },
+  ];
+
   return (
     <div>
       <div className="ph-row">
-        <div><div className="ph-title">Tesorería</div></div>
-        <div style={{display:"flex",gap:8}}>
-          <button className="btn btn-sec" onClick={()=>setTransfModal(true)} disabled={cuentasOperablesList.length<2}>↔ Transferir</button>
-          <button className="btn btn-acc" onClick={abrirNuevoMovimiento}>+ Movimiento</button>
+        <div>
+          <div className="ph-title">
+            {subSection === "movimientos"  && "Caja · movimientos"}
+            {subSection === "conciliacion" && "Caja · conciliación MP"}
+          </div>
         </div>
+        {subSection === "movimientos" && (
+          <div style={{display:"flex",gap:8}}>
+            <button className="btn btn-sec" onClick={()=>setTransfModal(true)} disabled={cuentasOperablesList.length<2}>↔ Transferir</button>
+            <button className="btn btn-acc" onClick={abrirNuevoMovimiento}>+ Movimiento</button>
+          </div>
+        )}
       </div>
+
+      {/* Layout módulo madre: contenido a la izquierda + RightSubNav derecha */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 168px", gap: 20, alignItems: "start" }}>
+        <div style={{ minWidth: 0 }}>
+          {subSection === "conciliacion" ? (
+            <Suspense fallback={<div className="loading">Cargando conciliación MP…</div>}>
+              <ConciliacionMP user={user as Usuario} locales={locales} localActivo={localActivo} />
+            </Suspense>
+          ) : (
+            <>
       {cuentasVisibles.length === 0 ? (
         <div className="empty" style={{padding:24,marginBottom:16}}>No tenés cuentas asignadas. Pedile a un administrador que te habilite.</div>
       ) : (
@@ -539,7 +582,12 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
           </div>
         )}
       </div>
-
+            </>
+          )}
+        </div>
+        {/* RightSubNav del módulo madre — controla subSection (movimientos vs conciliación) */}
+        <RightSubNav sections={subNavSections} />
+      </div>
 
       {editMov && (
         <div className="overlay" onClick={() => setEditMov(null)}>
