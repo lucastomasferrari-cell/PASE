@@ -19,12 +19,15 @@ export type LocalCardProps = {
 };
 
 function fmtMoney(n: number): string {
-  return `$ ${n.toLocaleString("es-AR")}`;
+  // $ pegado al número (decisión 2026-05-13). NO usar Intl.NumberFormat
+  // con currency: 'ARS' porque mete espacios entre símbolo y dígitos.
+  return `$${n.toLocaleString("es-AR")}`;
 }
 
 function fmtMoneySigned(n: number): string {
+  // Signo Unicode U+2212 (no guión común) pegado al $ pegado al número.
   const sign = n >= 0 ? "+" : "−";
-  return `${sign} $ ${Math.abs(n).toLocaleString("es-AR")}`;
+  return `${sign}$${Math.abs(n).toLocaleString("es-AR")}`;
 }
 
 function fmtInt(n: number): string {
@@ -80,12 +83,12 @@ export function LocalCard(props: LocalCardProps) {
           <div className={styles.flowLabel}>Entró</div>
           <div className={styles.flowValue}>{fmtMoney(flow.entro)}</div>
         </div>
-        <span className={styles.flowSep} aria-hidden>→</span>
+        <span className={styles.flowSep} aria-hidden>{"→"}</span>
         <div className={styles.flowItem}>
           <div className={styles.flowLabel}>Salió</div>
           <div className={styles.flowValue}>{fmtMoney(flow.salio)}</div>
         </div>
-        <span className={styles.flowSep} aria-hidden>=</span>
+        <span className={styles.flowSep} aria-hidden>{"="}</span>
         <div className={styles.flowItem}>
           <div className={styles.flowLabel}>Resultado</div>
           <div className={styles.flowValue}>{fmtMoneySigned(flow.resultado)}</div>
@@ -144,10 +147,14 @@ export function LocalCard(props: LocalCardProps) {
         </div>
         <div className={styles.footerItem}>
           <span className={styles.footerLabel}>Vence esta semana</span>
-          <span className={`${styles.footerValue} ${venceSemana.warn ? styles.footerValueWarn : ""}`}>
-            {venceSemana.warn && <span className={styles.dotWarn} aria-hidden />}
-            {venceSemana.amount > 0 ? fmtMoney(venceSemana.amount) : "—"}
-          </span>
+          {venceSemana.amount > 0 ? (
+            <span className={`${styles.footerValue} ${venceSemana.warn ? styles.footerValueWarn : ""}`}>
+              {venceSemana.warn && <span className={styles.dotWarn} aria-hidden />}
+              {fmtMoney(venceSemana.amount)}
+            </span>
+          ) : (
+            <span className={styles.footerEmpty}>Sin vencimientos</span>
+          )}
         </div>
       </div>
     </div>

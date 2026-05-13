@@ -3,7 +3,8 @@ import { useFinanzasConsolidado, useLocalFinanzas, useVencimientos } from "../ho
 import styles from "./Finanzas.module.css";
 
 function fmtMoney(n: number): string {
-  return `$ ${n.toLocaleString("es-AR")}`;
+  // $ pegado al número. NO Intl.NumberFormat con currency — mete espacios.
+  return `$${n.toLocaleString("es-AR")}`;
 }
 
 function fmtCompact(n: number): string {
@@ -14,6 +15,7 @@ function fmtCompact(n: number): string {
 }
 
 function fmtCompactSigned(n: number): string {
+  // U+2212 (signo menos Unicode, no guión común).
   const sign = n >= 0 ? "+" : "−";
   return `${sign}${fmtCompact(n)}`;
 }

@@ -55,12 +55,11 @@
 }
 
 .badge {
-  font-size: 9px;
+  font-size: 10.5px;
   font-weight: 500;
-  padding: 2px 7px;
+  padding: 2px 8px;
   border-radius: var(--pase-radius-pill);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: -0.005em;
   white-space: nowrap;
 }
 
@@ -128,10 +127,14 @@
 
 .flowSep {
   color: var(--pase-celeste-300);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   flex-shrink: 0;
   user-select: none;
+  /* Fallback fonts garantizan que → y = se rendericen aunque Inter
+     no tenga el glyph para U+2192 en su subset latin */
+  font-family: var(--pase-font), "Segoe UI Symbol", "Apple Symbols", system-ui, sans-serif;
+  line-height: 1;
 }
 
 /* ── KPIs internos ── */
@@ -270,4 +273,11 @@
 
 .footerValueWarn {
   color: #8B6F0A;
+}
+
+.footerEmpty {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pase-text-muted);
+  letter-spacing: -0.005em;
 }

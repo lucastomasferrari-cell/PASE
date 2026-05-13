@@ -70,10 +70,10 @@ export function useNegocioConsolidado(_ctx: LocalCtx = "consolidado"): NegocioKp
     ritmo: "Vamos por encima del ritmo",
     deltaMesAnterior: 8.2,
 
-    margenBruto:     { value: "31.4%",  delta: "+ 1.8 pts vs. abril", spark: [22, 26, 28, 30, 32, 33, 35], tone: "up" },
-    costoMercaderia: { value: "34.8%",  delta: "Objetivo 32%",        spark: [38, 36, 35, 36, 35, 34, 35], tone: "muted" },
-    rentabilidadNeta: { value: 4_620_000, delta: "+ 12.1% vs. abril",  spark: [28, 32, 36, 40, 44, 50, 56], tone: "up" },
-    ticketPromedio:   { value: 8_380,     delta: "+ 3.4%",             spark: [62, 64, 66, 68, 70, 72, 75], tone: "up" },
+    margenBruto:     { value: "31.4%",  delta: "+1.8 pts vs. abril", spark: [22, 26, 28, 30, 32, 33, 35], tone: "up" },
+    costoMercaderia: { value: "34.8%",  delta: "Objetivo 32%",       spark: [38, 36, 35, 36, 35, 34, 35], tone: "muted" },
+    rentabilidadNeta: { value: 4_620_000, delta: "+12.1% vs. abril",  spark: [28, 32, 36, 40, 44, 50, 56], tone: "up" },
+    ticketPromedio:   { value: 8_380,     delta: "+3.4%",             spark: [62, 64, 66, 68, 70, 72, 75], tone: "up" },
 
     proyeccion: {
       facturacion:   { value: 42_100_000, sub: "Objetivo: $40M · +5.3%" },

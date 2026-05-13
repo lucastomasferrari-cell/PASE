@@ -4,7 +4,8 @@ import styles from "./Negocio.module.css";
 
 // ─── Helpers de formato ──────────────────────────────────────────────
 function fmtMoney(n: number): string {
-  return `$ ${n.toLocaleString("es-AR")}`;
+  // $ pegado al número (decisión 2026-05-13).
+  return `$${n.toLocaleString("es-AR")}`;
 }
 
 function fmtCompact(n: number): string {
@@ -124,7 +125,7 @@ export default function Negocio({ user }: NegocioProps) {
             <div className={styles.progressLegend}>
               <span>{kpis.ritmo.toLowerCase()}</span>
               <span className={styles.progressDelta}>
-                <span className={styles.progressDeltaStrong}>+ {kpis.deltaMesAnterior.toFixed(1).replace(".", ",")}%</span> vs. mes anterior
+                <span className={styles.progressDeltaStrong}>+{kpis.deltaMesAnterior.toFixed(1).replace(".", ",")}%</span> vs. mes anterior
               </span>
             </div>
           </div>

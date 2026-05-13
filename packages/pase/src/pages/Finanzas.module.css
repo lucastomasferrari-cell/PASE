@@ -66,8 +66,8 @@
 
 .anchorDot {
   position: absolute;
-  top: 17px;
-  right: 18px;
+  top: 16px;
+  right: 16px;
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -164,8 +164,8 @@
 }
 
 .kpiDotWarn {
-  width: 4px;
-  height: 4px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--pase-gold);
   flex-shrink: 0;
