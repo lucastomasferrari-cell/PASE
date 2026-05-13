@@ -1,0 +1,542 @@
+.page {
+  font-family: var(--pase-font);
+  color: var(--pase-text);
+}
+
+/* ─── Topbar custom (override del .ph-row básico) ───────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.titleWrap {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--pase-text);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.titleSub {
+  font-size: 12px;
+  color: var(--pase-text-muted);
+  font-weight: 400;
+  letter-spacing: -0.005em;
+}
+
+.topbarRight {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Switch pill — Consolidado / locales */
+.switch {
+  display: inline-flex;
+  background: var(--pase-bg-soft);
+  border-radius: var(--pase-radius-pill);
+  padding: 3px;
+  gap: 0;
+}
+
+.switchItem {
+  padding: 4px 11px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--pase-text-muted);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: var(--pase-radius-pill);
+  font-family: var(--pase-font);
+  letter-spacing: -0.005em;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.switchItem:hover {
+  color: var(--pase-text);
+}
+
+.switchItemActive {
+  background: var(--pase-bg);
+  color: var(--pase-text);
+  box-shadow: 0 0 0 0.5px var(--pase-border-strong);
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--pase-celeste);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: -0.005em;
+}
+
+/* ─── Bento principal: anchor + 4 KPIs ──────────────────────────────── */
+.bento {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr;
+  grid-template-rows: auto auto;
+  gap: 10px;
+}
+
+.bento > .anchor {
+  grid-row: span 2;
+}
+
+/* Anchor card */
+.anchor {
+  position: relative;
+  background: var(--pase-celeste);
+  border-radius: var(--pase-radius-card);
+  padding: 18px 20px;
+  min-height: 200px;
+  color: #fff;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.anchorBgCircle {
+  position: absolute;
+  bottom: -60px;
+  right: -50px;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  pointer-events: none;
+}
+
+.anchorTopDecoration {
+  position: absolute;
+  top: -30px;
+  right: -30px;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+}
+
+.anchorHeader {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.anchorLabel {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.78);
+  letter-spacing: -0.01em;
+}
+
+.anchorValue {
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.anchorSub {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 8px;
+  letter-spacing: -0.005em;
+}
+
+.anchorPill {
+  background: rgba(255, 255, 255, 0.22);
+  padding: 4px 11px;
+  border-radius: var(--pase-radius-pill);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+  letter-spacing: -0.005em;
+}
+
+/* Progress bar */
+.progressWrap {
+  position: relative;
+  margin-top: 16px;
+}
+
+.progressHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.82);
+  letter-spacing: -0.005em;
+  font-variant-numeric: tabular-nums;
+}
+
+.progressBar {
+  position: relative;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: var(--pase-radius-pill);
+  overflow: visible;
+}
+
+.progressFill {
+  height: 100%;
+  background: #fff;
+  border-radius: var(--pase-radius-pill);
+  transition: width 0.4s ease;
+}
+
+.progressMark {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 14px;
+  background: var(--pase-gold);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.progressLegend {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: -0.005em;
+}
+
+.progressDelta {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.progressDeltaStrong {
+  color: #fff;
+  font-weight: 500;
+}
+
+/* KPI cards (2x2 dentro del bento) */
+.kpiCard {
+  background: var(--pase-bg);
+  border: var(--pase-border-thin) solid var(--pase-border);
+  border-radius: var(--pase-radius-card);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.kpiLabel {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--pase-text-muted);
+  letter-spacing: -0.01em;
+}
+
+.kpiValue {
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--pase-text);
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpiDelta {
+  font-size: 11px;
+  color: var(--pase-text);
+  margin-top: 5px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+
+.kpiDeltaMuted {
+  color: var(--pase-text-muted);
+  font-weight: 400;
+}
+
+.kpiSparkWrap {
+  margin-top: 12px;
+}
+
+.sparkBars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 26px;
+  width: 100%;
+}
+
+.sparkBar {
+  flex: 1;
+  min-width: 0;
+  background: var(--pase-celeste-200);
+  border-radius: 1px;
+  min-height: 1px;
+}
+
+.sparkBarMid { background: var(--pase-celeste-300); }
+.sparkBarHi  { background: var(--pase-celeste); }
+
+/* ─── Proyección cierre de mes ──────────────────────────────────────── */
+.proyeccion {
+  margin-top: 14px;
+  background: linear-gradient(180deg, var(--pase-bg) 0%, var(--pase-bg-soft) 100%);
+  border: var(--pase-border-thin) solid var(--pase-border);
+  border-radius: var(--pase-radius-card);
+  padding: 16px 18px;
+}
+
+.proyeccionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.proyeccionTitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pase-text);
+  letter-spacing: -0.02em;
+}
+
+.proyeccionSub {
+  font-size: 11px;
+  color: var(--pase-text-muted);
+  letter-spacing: -0.005em;
+}
+
+.proyeccionGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 18px;
+}
+
+.proyeccionCol {
+  display: flex;
+  flex-direction: column;
+}
+
+.proyeccionTrim {
+  display: block;
+  width: 28px;
+  height: 2px;
+  background: var(--pase-gold);
+  border-radius: 1px;
+  margin-bottom: 6px;
+}
+
+.proyeccionColLabel {
+  font-size: 10.5px;
+  color: var(--pase-text-muted);
+  letter-spacing: -0.005em;
+}
+
+.proyeccionColValue {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--pase-text);
+  letter-spacing: -0.025em;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.proyeccionColSub {
+  font-size: 10.5px;
+  color: var(--pase-text-muted);
+  margin-top: 4px;
+  letter-spacing: -0.005em;
+}
+
+.proyeccionColSubStrong {
+  color: var(--pase-text);
+  font-weight: 500;
+}
+
+/* ─── Row inferior: performance + objetivos ─────────────────────────── */
+.rowInferior {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.rowCard {
+  background: var(--pase-bg);
+  border: var(--pase-border-thin) solid var(--pase-border);
+  border-radius: var(--pase-radius-card);
+  padding: 16px 18px;
+}
+
+.rowCardHeader {
+  margin-bottom: 14px;
+}
+
+.rowCardTitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pase-text);
+  letter-spacing: -0.02em;
+}
+
+.rowCardSub {
+  font-size: 11px;
+  color: var(--pase-text-muted);
+  letter-spacing: -0.005em;
+  margin-top: 2px;
+}
+
+/* Performance por local */
+.perfRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr 100px;
+  gap: 12px;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.perfName {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pase-text);
+  letter-spacing: -0.01em;
+}
+
+.perfBarTrack {
+  background: var(--pase-celeste-100);
+  height: 8px;
+  border-radius: var(--pase-radius-pill);
+  overflow: hidden;
+}
+
+.perfBarFill {
+  height: 100%;
+  background: var(--pase-celeste);
+  border-radius: var(--pase-radius-pill);
+  transition: width 0.4s ease;
+}
+
+.perfAmount {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pase-text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  text-align: right;
+}
+
+.perfFooter {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: var(--pase-border-thin) solid var(--pase-border);
+  font-size: 11px;
+  color: var(--pase-text-muted);
+  letter-spacing: -0.005em;
+}
+
+.perfFooterStrong {
+  color: var(--pase-text);
+  font-weight: 500;
+}
+
+/* Objetivos */
+.objRow {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 11px;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.objDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.objDotOk    { background: var(--pase-celeste); }
+.objDotWarn  { background: var(--pase-gold); }
+.objDotLejos { background: var(--pase-celeste-300); }
+
+.objInfo {
+  min-width: 0;
+}
+
+.objName {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pase-text);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.objSub {
+  font-size: 10.5px;
+  color: var(--pase-text-muted);
+  line-height: 1.2;
+  margin-top: 2px;
+  letter-spacing: -0.005em;
+}
+
+.objVal {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pase-text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.objValTarget {
+  color: var(--pase-text-muted);
+  font-weight: 400;
+}
+
+/* ─── Responsive ───────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .bento {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto;
+  }
+  .bento > .anchor {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+  .proyeccionGrid { grid-template-columns: 1fr; gap: 14px; }
+  .rowInferior { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 540px) {
+  .bento { grid-template-columns: 1fr; }
+  .switch { display: none; }
+  .perfRow { grid-template-columns: 1fr 80px; grid-template-rows: auto auto; gap: 4px 12px; }
+  .perfBarTrack { grid-column: 1 / -1; }
+}
