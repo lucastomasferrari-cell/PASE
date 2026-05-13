@@ -1,6 +1,7 @@
 ﻿import { useState } from "react";
 import { ROLES, getPermisos } from "../lib/auth";
 import type { Usuario, Local, Tenant } from "../types";
+import { ThemeToggle } from "./ui/ThemeToggle";
 
 interface SidebarProps {
   user: Usuario;
@@ -93,6 +94,7 @@ export function Sidebar({ user, section, onNav, onLogout, locales, localActivo, 
             ))}</div>);
           })}
         </nav>
+        <ThemeToggle />
         <div className="sb-user">
           <div className="sb-uname">{user.nombre}</div>
           {/* Decisión 2026-05-13: roles sin color. La distinción es solo textual. */}
@@ -142,7 +144,23 @@ export const css = `
   --r:        var(--pase-radius-md);
 }
 
-body{background:var(--pase-bg);color:var(--pase-text);font-family:var(--pase-font);font-size:13px;line-height:1.5;min-height:100vh;-webkit-font-smoothing:antialiased}
+body{background:var(--pase-bg);color:var(--pase-text);font-family:var(--pase-font);font-size:13px;line-height:1.5;min-height:100vh;-webkit-font-smoothing:antialiased;transition:background-color 0.2s ease,color 0.2s ease}
+
+/* Detalle decorativo: línea de 4px en gradiente celeste→dorado en el borde
+   superior derecho del frame, solo visible en dark mode. Inspirado en el
+   piping de la camiseta suplente Argentina 2006. */
+[data-theme="dark"] body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 280px;
+  height: 4px;
+  background: linear-gradient(90deg, var(--pase-celeste), var(--pase-gold));
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 100;
+}
 
 .app{display:flex;min-height:100vh}
 

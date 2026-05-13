@@ -75,7 +75,7 @@ export function ModalVerFactura({ factura, onClose, proveedores, locales }: Moda
                 const isPdf = /\.pdf$/i.test(factura.imagen_url!);
                 return isPdf ? (
                   <div>
-                    <iframe src={imgUrl} style={{ width: "100%", height: 500, border: "1px solid var(--bd)", borderRadius: "var(--r)", background: "#fff" }} />
+                    <iframe src={imgUrl} style={{ width: "100%", height: 500, border: "0.5px solid var(--pase-border)", borderRadius: "var(--r)", background: "var(--pase-bg-soft)" }} />
                     <div style={{ marginTop: 6, fontSize: 11 }}>
                       <a href={imgUrl} target="_blank" rel="noreferrer" style={{ color: "var(--acc)" }}>Abrir en nueva pestaña →</a>
                     </div>
@@ -83,7 +83,7 @@ export function ModalVerFactura({ factura, onClose, proveedores, locales }: Moda
                 ) : (
                   <div>
                     <a href={imgUrl} target="_blank" rel="noreferrer">
-                      <img src={imgUrl} alt="Comprobante" style={{ width: "100%", maxHeight: 500, objectFit: "contain", borderRadius: "var(--r)", border: "1px solid var(--bd)", background: "#fff" }} />
+                      <img src={imgUrl} alt="Comprobante" style={{ width: "100%", maxHeight: 500, objectFit: "contain", borderRadius: "var(--r)", border: "0.5px solid var(--pase-border)", background: "var(--pase-bg-soft)" }} />
                     </a>
                   </div>
                 );

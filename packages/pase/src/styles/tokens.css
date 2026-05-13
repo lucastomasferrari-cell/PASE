@@ -49,3 +49,39 @@
 
   --pase-border-thin: 0.5px;      /* todos los bordes son finos */
 }
+
+/* ═════════════════════════════════════════════════════════════════════
+ * DARK MODE — inspirado en la camiseta suplente de Argentina,
+ * Mundial Alemania 2006 (azul navy con detalles celestes).
+ *
+ * Activación: <html data-theme="dark">. El bootstrap inline en
+ * index.html lee localStorage 'pase-theme' antes de React.
+ *
+ * Los tokens --pase-celeste (#75AADB) y --pase-gold (#F5C518) se
+ * mantienen idénticos en ambos modos — son los anclas de marca.
+ * Lo que cambia: la base (bg / text / border) y los derivados claros
+ * del celeste (100/200/300) que en dark pasan a ser tonos navy para
+ * usarse como hovers / sparklines bajos.
+ * ════════════════════════════════════════════════════════════════════ */
+
+[data-theme="dark"] {
+  /* Base */
+  --pase-bg:      #131F44;        /* fondo principal — navy más oscuro */
+  --pase-bg-soft: #1E2D5C;        /* titlebar, secciones — un toque más claro */
+  --pase-bg-out:  #2A3A6A;        /* íconos "salida"/grises */
+
+  /* Texto invertido */
+  --pase-text:       #F5F8FB;     /* primario blanco-azulado */
+  --pase-text-muted: #9DB5D4;     /* sub-textos en celeste apagado */
+
+  /* Bordes */
+  --pase-border:        #2A3A6A;
+  --pase-border-strong: #3A4A7A;
+
+  /* Derivados del celeste, ahora en clave navy (hovers/sparklines) */
+  --pase-celeste-100: #2A3D6E;    /* fondo hover/active */
+  --pase-celeste-200: #3A5288;    /* sparkline bajo */
+  --pase-celeste-300: #5074B5;    /* sparkline medio */
+
+  /* --pase-celeste y --pase-gold se mantienen — son anclas de marca */
+}

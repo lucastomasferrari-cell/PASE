@@ -13,6 +13,19 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="description" content="PASE — back-office gastronómico" />
     <title>PASE</title>
+    <script>
+      // Bootstrap del tema antes de React. Sin esto hay flash de light al
+      // cargar si el usuario eligió dark. La key es la misma que usa el
+      // ThemeToggle del Sidebar para escribir cuando el usuario alterna.
+      (function () {
+        try {
+          var t = localStorage.getItem('pase-theme');
+          if (t === 'dark' || t === 'light') {
+            document.documentElement.setAttribute('data-theme', t);
+          }
+        } catch (e) { /* localStorage bloqueado (incognito strict, etc.) */ }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
