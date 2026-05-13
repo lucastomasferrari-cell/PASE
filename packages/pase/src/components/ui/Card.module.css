@@ -1,0 +1,8 @@
+.card {
+  background: var(--pase-bg);
+  border: var(--pase-border-thin) solid var(--pase-border);
+  border-radius: var(--pase-radius-card);
+  padding: 14px 16px;
+  font-family: var(--pase-font);
+  color: var(--pase-text);
+}

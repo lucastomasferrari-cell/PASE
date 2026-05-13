@@ -1,0 +1,84 @@
+.anchor {
+  position: relative;
+  background: var(--pase-celeste);
+  border-radius: var(--pase-radius-card);
+  padding: 16px 18px;
+  min-height: 188px;
+  font-family: var(--pase-font);
+  color: #fff;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.bgCircle {
+  position: absolute;
+  bottom: -50px;
+  right: -50px;
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  pointer-events: none;
+}
+
+.dot {
+  position: absolute;
+  top: 17px;
+  right: 18px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pase-gold);
+  box-shadow: 0 0 0 4px rgba(245, 197, 24, 0.28);
+}
+
+.label {
+  position: relative;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.78);
+  letter-spacing: -0.01em;
+}
+
+.value {
+  position: relative;
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  margin-top: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.delta {
+  position: relative;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 5px;
+}
+
+.footer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+
+.meta {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: -0.01em;
+}
+
+.pill {
+  background: rgba(255, 255, 255, 0.22);
+  padding: 3px 9px;
+  border-radius: var(--pase-radius-pill);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: #fff;
+}

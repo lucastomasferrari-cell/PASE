@@ -1,0 +1,23 @@
+.sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 26px;
+  width: 100%;
+}
+
+.bar {
+  flex: 1;
+  min-width: 0;
+  background: var(--pase-celeste-200);
+  border-radius: 1px;
+  min-height: 1px;
+}
+
+.mid {
+  background: var(--pase-celeste-300);
+}
+
+.hi {
+  background: var(--pase-celeste);
+}

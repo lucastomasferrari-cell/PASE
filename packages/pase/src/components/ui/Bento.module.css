@@ -1,0 +1,19 @@
+.bento {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  grid-template-rows: auto auto;
+  gap: 10px;
+}
+
+.bento > :first-child {
+  grid-row: span 2;
+}
+
+@media (max-width: 640px) {
+  .bento {
+    grid-template-columns: 1fr;
+  }
+  .bento > :first-child {
+    grid-row: auto;
+  }
+}

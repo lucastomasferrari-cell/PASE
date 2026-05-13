@@ -1,0 +1,232 @@
+.page {
+  font-family: var(--pase-font);
+  background: var(--pase-bg);
+  color: var(--pase-text);
+  min-height: 100vh;
+  padding: 32px 28px;
+  box-sizing: border-box;
+}
+
+.titlebar {
+  background: var(--pase-bg-soft);
+  border: var(--pase-border-thin) solid var(--pase-border);
+  border-radius: var(--pase-radius-card);
+  padding: 14px 16px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dots {
+  display: flex;
+  gap: 5px;
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--pase-celeste-200);
+}
+
+.url {
+  flex: 1;
+  text-align: center;
+  font-size: 11px;
+  color: var(--pase-text-muted);
+  letter-spacing: -0.01em;
+}
+
+.h1 {
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  margin: 0 0 4px;
+}
+
+.logo {
+  font-size: 26px;
+  font-weight: 500;
+  color: var(--pase-text);
+  letter-spacing: -0.035em;
+  line-height: 1;
+  margin: 0 0 24px;
+}
+
+.logoDot {
+  color: var(--pase-gold);
+}
+
+.subtitle {
+  color: var(--pase-text-muted);
+  font-size: 12px;
+  margin-bottom: 28px;
+}
+
+.section {
+  margin: 36px 0 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pase-text);
+  letter-spacing: -0.02em;
+}
+
+.sectionMeta {
+  font-size: 11px;
+  color: var(--pase-text-muted);
+  margin-bottom: 14px;
+  font-weight: 400;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.swatchGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.swatch {
+  border: var(--pase-border-thin) solid var(--pase-border);
+  border-radius: var(--pase-radius-card);
+  padding: 10px 12px;
+  font-size: 11px;
+}
+
+.swatchBox {
+  width: 100%;
+  height: 56px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  border: var(--pase-border-thin) solid var(--pase-border);
+}
+
+.swatchName {
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.swatchHex {
+  color: var(--pase-text-muted);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 10.5px;
+  margin-top: 2px;
+}
+
+.txList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.txRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: var(--pase-border-thin) solid var(--pase-border);
+}
+
+.txRow:last-child {
+  border-bottom: none;
+}
+
+.txLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.txIconIn {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--pase-radius-md);
+  background: var(--pase-celeste-100);
+  color: var(--pase-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.txIconOut {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--pase-radius-md);
+  background: var(--pase-bg-out);
+  color: var(--pase-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.txLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pase-text);
+}
+
+.txSub {
+  font-size: 10.5px;
+  color: var(--pase-text-muted);
+}
+
+.txAmount {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pase-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.verTodo {
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--pase-text-muted);
+  margin-top: 14px;
+  cursor: pointer;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.tab {
+  padding: 3px 8px;
+  border-radius: var(--pase-radius-pill);
+  font-size: 11px;
+  color: var(--pase-text-muted);
+  cursor: pointer;
+}
+
+.tabActive {
+  background: var(--pase-celeste-100);
+  color: var(--pase-text);
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--pase-celeste);
+  color: #fff;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  margin-right: 10px;
+}

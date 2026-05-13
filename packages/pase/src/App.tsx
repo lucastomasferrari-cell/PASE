@@ -33,6 +33,7 @@ const Blindaje = lazy(() => import("./pages/Blindaje"));
 const RRHHPage = lazy(() => import("./pages/RRHH"));
 const Configuracion = lazy(() => import("./pages/Configuracion"));
 const Tenants = lazy(() => import("./pages/Tenants"));
+const DesignSystem = lazy(() => import("./pages/DesignSystem"));
 
 // Loader full-page (mismo look-and-feel que authLoading) para los
 // early-returns lazy.
@@ -51,7 +52,24 @@ const PageLoader = () => <div className="loading">Cargando...</div>;
 // que NO sea superadmin la limpia de sessionStorage al loguear (ver applyLogin).
 const TENANT_OVERRIDE_KEY = "pase_tenant_override__superadmin_only";
 
+// Hash-route de dev para preview del sistema de diseño v1.0.
+// Acceso: #/design-system. Bypasea auth y layout para verlo aislado.
+// No es público — no hay link en la nav; queda accesible solo si alguien
+// escribe la URL. Se decide ANTES de instanciar AppMain para no inicializar
+// state / hooks ni montar Auth/Layout cuando no hace falta (y para no
+// violar las reglas de hooks con un early return condicional).
 export default function App() {
+  if (typeof window !== "undefined" && window.location.hash === "#/design-system") {
+    return (
+      <Suspense fallback={<div style={{ padding: 40, fontFamily: "var(--pase-font)" }}>Cargando…</div>}>
+        <DesignSystem />
+      </Suspense>
+    );
+  }
+  return <AppMain />;
+}
+
+function AppMain() {
   const [user, setUser] = useState<Usuario | null>(null);
   const [section, setSection] = useState("dashboard");
   const [locales, setLocales] = useState<Local[]>([]);
