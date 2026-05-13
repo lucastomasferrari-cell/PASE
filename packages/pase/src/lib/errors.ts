@@ -74,8 +74,11 @@ const MAP: Record<string, string> = {
   AUTH_SIN_TENANT: "Sesión sin tenant — volvé a entrar",
   TENANT_ES_DEL_CALLER: "No podés borrar el tenant en el que estás autenticado",
 
-  // Restore tenant (TASK 0.17 etapa 4)
-  NO_AUTORIZADO: "Solo superadmin puede ejecutar esta operación",
+  // Genérico: cualquier RPC que tire NO_AUTORIZADO sin sufijo. Las RPCs
+  // de gastos/movimientos/etc tiran "NO_AUTORIZADO: requiere permiso XXX"
+  // — el sufijo después del ":" se agrega al final del mensaje (ver
+  // translateRpcError abajo).
+  NO_AUTORIZADO: "No tenés permiso para esta operación. Pedí acceso al dueño.",
   TENANT_NOT_FOUND: "El tenant no existe",
   BACKUP_INVALID: "El archivo de backup tiene un formato inválido",
   CROSS_TENANT_RESTORE_BLOCKED: "El backup pertenece a otro tenant. Restore bloqueado por seguridad",
@@ -105,7 +108,13 @@ export function translateRpcError(err: unknown): string {
   const colonIdx = stripped.indexOf(":");
   if (colonIdx > 0) {
     const code = stripped.slice(0, colonIdx).trim();
-    if (MAP[code]) return MAP[code];
+    const suffix = stripped.slice(colonIdx + 1).trim();
+    if (MAP[code]) {
+      // El sufijo del RAISE (ej: "requiere permiso compras_anular",
+      // "cross-tenant") da contexto útil para diagnosticar. Lo anexamos
+      // entre paréntesis al mensaje traducido.
+      return suffix ? `${MAP[code]} (${suffix})` : MAP[code];
+    }
   }
   return raw;
 }
