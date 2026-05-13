@@ -26,13 +26,13 @@ export const ROLES: Record<string, { label: string; color: string; permisos?: st
   // permisos de UI (todos los módulos del MODULOS array).
   superadmin:{ label:"Super Admin",color:"#DC2626" },
   dueno:     { label:"Dueño",      color:"#9333EA" },
-  admin:     { label:"Admin",      color:"#3B82F6", permisos:["dashboard","negocio","finanzas","objetivos","movimientos","ajustes","ventas","compras","remitos","gastos","caja","proveedores","rrhh","blindaje"] },
-  encargado: { label:"Encargado",  color:"#6B7280", permisos:["dashboard"] },
+  admin:     { label:"Admin",      color:"#3B82F6", permisos:["negocio","finanzas","objetivos","ajustes","ventas","compras","remitos","gastos","caja","proveedores","rrhh","blindaje","eerr","configuracion"] },
+  encargado: { label:"Encargado",  color:"#6B7280", permisos:["caja","ventas"] },
   // Rol "compras" incluye compras_anular por retro-compatibilidad (antes
   // anulaba sin chequeo). Si querés un "compras lite" sin poder anular,
   // creá usuario sin rol fijo y asignale solo los slugs base via Usuarios.
   compras:   { label:"Compras",    color:"#8B5CF6", permisos:["compras","remitos","proveedores","compras_anular"] },
-  cajero:    { label:"Cajero",     color:"#10B981", permisos:["caja","dashboard","caja_anular"] },
+  cajero:    { label:"Cajero",     color:"#10B981", permisos:["caja","caja_anular"] },
 };
 
 // Permisos avanzados que NO son módulos navegables — son flags que controlan
@@ -57,33 +57,41 @@ export const PERMISOS_EXTRAS = [
     descripcion:"Permite anular movimientos en Tesorería. Sin esto, solo puede ver/editar; anular bloqueado." },
 ];
 
+// MODULOS = lista maestra de slugs asignables como permisos. Incluye TODO
+// lo que históricamente existió como módulo, incluso pantallas que hoy
+// no aparecen en el sidebar consolidado de 10 items pero siguen siendo
+// accesibles vía section state (deep-link, modales internos, etc.).
+// Usuarios.tsx renderiza los checkboxes de permisos a partir de este array.
+//
+// Si una pantalla se elimina por completo del producto, sacarla también
+// de acá. Si solo se la oculta del sidebar (caso 2026-05: Conciliación MP
+// dentro de Caja, Proveedores dentro de Compras), mantener el slug acá.
 export const MODULOS = [
-  { slug:"dashboard", label:"Inicio", icon:"▦" },
+  // Sidebar consolidado actual (Operación / Dirección / Módulos / Sistema)
+  { slug:"caja", label:"Caja", icon:"💰" },
+  { slug:"compras", label:"Compras", icon:"📄" },
+  { slug:"ventas", label:"Ventas", icon:"↑" },
   { slug:"negocio", label:"Negocio", icon:"📊" },
   { slug:"finanzas", label:"Finanzas", icon:"💼" },
   { slug:"objetivos", label:"Objetivos", icon:"◎" },
-  { slug:"movimientos", label:"Movimientos", icon:"↔" },
+  { slug:"eerr", label:"Reportes", icon:"📊" },
+  { slug:"rrhh", label:"Equipo", icon:"💼" },
+  { slug:"configuracion", label:"Locales", icon:"⚙" },
   { slug:"ajustes", label:"Ajustes", icon:"⚙" },
-  { slug:"ventas", label:"Ventas", icon:"↑" },
-  { slug:"compras", label:"Facturas", icon:"📄" },
+  // Pantallas/sub-secciones accesibles internamente (no en sidebar top-level)
   { slug:"remitos", label:"Remitos", icon:"🚚" },
   { slug:"gastos", label:"Gastos", icon:"💸" },
   { slug:"proveedores", label:"Proveedores", icon:"🏭" },
   { slug:"mp", label:"Conciliación MP", icon:"💳" },
-  { slug:"caja", label:"Tesorería", icon:"💰" },
-  // Cashflow eliminado del producto (Lucas, 2026-05-11).
-  // Cierre Comparativo fusionado en EERR (Lucas, 2026-05-08). Para reactivar
-  // descomentar acá + en Layout.tsx + restaurar case "cierre" en App.tsx.
-  // { slug:"cierre", label:"Cierre Comparativo", icon:"📊" },
-  { slug:"eerr", label:"Estado de Result.", icon:"📊" },
   { slug:"contador", label:"Contador / IVA", icon:"🧾" },
-  { slug:"rrhh", label:"RRHH", icon:"💼" },
   { slug:"blindaje", label:"Blindaje", icon:"🛡" },
   { slug:"usuarios", label:"Usuarios", icon:"👥" },
-  { slug:"configuracion", label:"Conceptos", icon:"⚙" },
   // Módulo solo para superadmin (TASK 0.15). Filtrado por getPermisos/tienePermiso
   // — no aparece en dropdowns de otros usuarios aunque esté en el array.
   { slug:"tenants", label:"Tenants", icon:"🏢" },
+  // Cashflow eliminado del producto (Lucas, 2026-05-11).
+  // Cierre Comparativo fusionado en EERR (Lucas, 2026-05-08).
+  // Dashboard ("Inicio") y Movimientos eliminados del producto (2026-05-13).
 ];
 
 // ─── FUNCIONES PURAS ─────────────────────────────────────────────────────────

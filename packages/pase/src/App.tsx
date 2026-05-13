@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { db } from "./lib/supabase";
-import { getPermisos, tienePermiso, AuthProvider, necesitaElegirLocal } from "./lib/auth";
+import { tienePermiso, AuthProvider, necesitaElegirLocal } from "./lib/auth";
+import { getDefaultRoute, DEPRECATED_SLUGS } from "./lib/sidebar-nav";
 import type { Usuario, UsuarioRow, Local, Tenant } from "./types";
 import { Sidebar, css } from "./components/Layout";
 import Login from "./pages/Login";
@@ -17,7 +18,6 @@ import Login from "./pages/Login";
 // para reactivar si hace falta).
 const ForcePasswordChange = lazy(() => import("./pages/ForcePasswordChange"));
 const SeleccionarLocalModal = lazy(() => import("./components/SeleccionarLocalModal"));
-const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Ventas = lazy(() => import("./pages/Ventas"));
 const Compras = lazy(() => import("./pages/Compras"));
 const Caja = lazy(() => import("./pages/Caja"));
@@ -36,7 +36,6 @@ const Tenants = lazy(() => import("./pages/Tenants"));
 const DesignSystem = lazy(() => import("./pages/DesignSystem"));
 const Finanzas = lazy(() => import("./pages/Finanzas"));
 const Negocio = lazy(() => import("./pages/Negocio"));
-const Movimientos = lazy(() => import("./pages/Movimientos"));
 const Objetivos = lazy(() => import("./pages/Objetivos"));
 const Ajustes = lazy(() => import("./pages/Ajustes"));
 
@@ -76,7 +75,10 @@ export default function App() {
 
 function AppMain() {
   const [user, setUser] = useState<Usuario | null>(null);
-  const [section, setSection] = useState("dashboard");
+  // 'dashboard' como section inicial era el legacy. Como esa pantalla ya
+  // no existe, el useEffect de redirección detecta el slug deprecated y lo
+  // cambia a getDefaultRoute(user) cuando el user está hidratado.
+  const [section, setSection] = useState("caja");
   const [locales, setLocales] = useState<Local[]>([]);
   const [localActivo, setLocalActivo] = useState<number | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -164,7 +166,9 @@ function AppMain() {
     const { data: { subscription } } = db.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_OUT") {
         setUser(null);
-        setSection("dashboard");
+        // Sin user no se renderiza renderSection — section value irrelevante,
+        // pero lo dejamos consistente con el initial state (caja).
+        setSection("caja");
         setLocalActivo(null);
         setShowLocalModal(false);
         setTenant(null);
@@ -220,8 +224,10 @@ function AppMain() {
     };
     setUser(enriched);
     sessionStorage.setItem("pase_user", JSON.stringify(enriched));
-    const perms = getPermisos(enriched);
-    if(!perms.includes("dashboard") && perms.length && perms[0]) setSection(perms[0]);
+    // Section default = primer item del sidebar al que tiene permiso.
+    // Centralizado en sidebar-nav.ts para que el orden del menú y el
+    // default route nunca se desincronicen.
+    setSection(getDefaultRoute(enriched));
 
     // Multi-tenant (TASK 0.15): cargar tenant del usuario.
     // - superadmin → tenant_id NULL en su fila. Si hay sessionStorage
@@ -277,33 +283,41 @@ function AppMain() {
     // SIGNED_OUT en onAuthStateChange limpia el resto del state
   };
 
-  const [toast, setToast] = useState("");
+  // El toast era usado por guardedNav() ('Sin acceso'). Hoy la redirección
+  // de slugs deprecated o sin permiso se hace en useEffect transparente
+  // (sin mensaje al user). El state queda por si alguna pantalla quiere
+  // mostrar toast en el futuro vía contexto.
+  const [toast] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showToast = (msg: string) => {
-    setToast(msg);
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(""), 3000);
-  };
+  void toastTimer;
 
   const props: { user: Usuario; locales: Local[]; localActivo: number | null } = { user: user!, locales, localActivo };
 
-  const guardedNav = (slug: string) => {
-    if (!tienePermiso(user, slug)) {
-      setSection("dashboard");
-      showToast("Sin acceso");
-      return true;
+  // Redirige transparentemente a la sección por defecto cuando se llega a un
+  // slug deprecated (dashboard/movimientos/cashflow/cierre desde sessionStorage
+  // stale) o cuando el user no tiene permiso para la section actual.
+  // useEffect — no se puede llamar setState dentro de render.
+  useEffect(() => {
+    if (!user) return;
+    const isDeprecated = DEPRECATED_SLUGS.has(section);
+    const noPermiso = !tienePermiso(user, section);
+    if (isDeprecated || noPermiso) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSection(getDefaultRoute(user));
     }
-    return false;
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section, user?.id]);
 
   const renderSection = () => {
-    if (section !== "dashboard" && guardedNav(section)) return <Dashboard {...props}/>;
+    // Mientras se redirige (1 render) o no hay user, devolver loader.
+    if (!user) return <PageLoader/>;
+    if (DEPRECATED_SLUGS.has(section) || !tienePermiso(user, section)) {
+      return <PageLoader/>;
+    }
     switch(section) {
-      case "dashboard": return <Dashboard {...props}/>;
       case "negocio":   return <Negocio user={user || undefined}/>;
       case "finanzas":  return <Finanzas/>;
       case "objetivos": return <Objetivos/>;
-      case "movimientos": return <Movimientos/>;
       case "ajustes":   return <Ajustes/>;
       case "ventas":    return <Ventas {...props}/>;
       case "compras":   return <Compras {...props}/>;
@@ -318,21 +332,13 @@ function AppMain() {
       case "maxirest":  return <ImportarMaxirest {...props}/>;
       case "lector_ia": return <LectorFacturasIA {...props}/>;
       case "mp":        return <ConciliacionMP {...props}/>;
-      // Cashflow eliminado del producto (Lucas, 2026-05-11). Si una sesión
-      // muy vieja tiene "cashflow" en localStorage, fallback a Dashboard.
-      case "cashflow": return <Dashboard {...props}/>;
-      // Cierre Comparativo fusionado en EERR (Lucas, 2026-05-08). Sesiones
-      // viejas con localStorage "cierre" caen a EERR (que ahora soporta
-      // comparativa de meses). El componente Cierre.tsx queda como código
-      // muerto disponible para reactivar.
-      case "cierre": return <EERR {...props}/>;
-      case "blindaje": return <Blindaje {...props}/>;
+      case "blindaje":  return <Blindaje {...props}/>;
       case "proveedores": return <Proveedores {...props}/>;
       case "usuarios":  return <Usuarios {...props}/>;
       case "rrhh":      return <RRHHPage {...props}/>;
       case "configuracion": return <Configuracion user={user} locales={locales} localActivo={localActivo}/>;
-      case "tenants":   return user?.rol === "superadmin" ? <Tenants user={user as Usuario} /> : <Dashboard {...props}/>;
-      default: return null;
+      case "tenants":   return user?.rol === "superadmin" ? <Tenants user={user as Usuario} /> : <PageLoader/>;
+      default: return <PageLoader/>;
     }
   };
 
@@ -389,11 +395,6 @@ function AppMain() {
         </div>
         <main className="main" style={{position:"relative",zIndex:1}}>
           {toast && <div style={{position:"fixed",top:16,right:16,zIndex:200,padding:"10px 16px",background:"var(--pase-bg)",color:"var(--pase-text)",border:"0.5px solid var(--pase-celeste-300)",borderRadius:14,fontSize:12,fontFamily:"var(--pase-font)",fontWeight:500,letterSpacing:"-0.005em"}}>{toast}</div>}
-          {/* TODO(lint-cleanup): renderSection() llama guardedNav() → showToast()
-              que escribe toastTimer.current durante render. La regla refs pide
-              mover la guard navigation a useEffect que reaccione a cambios de
-              `section`. Refactor arquitectural — PR dedicado. */}
-          {/* eslint-disable-next-line react-hooks/refs */}
           <Suspense fallback={<PageLoader/>}>{renderSection()}</Suspense>
         </main>
       </div>

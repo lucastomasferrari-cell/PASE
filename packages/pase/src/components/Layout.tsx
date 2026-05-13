@@ -25,39 +25,42 @@ export function Sidebar({ user, section, onNav, onLogout, locales, localActivo, 
   const esSuperAdmin = user.rol === "superadmin";
   const localesDisp = (user.rol==="dueno" || user.rol==="admin" || esSuperAdmin) ? locales : locales.filter((l: { id: number })=>(user._locales||user.locales||[]).includes(l.id));
   // ───────────────────────────────────────────────────────────────────
-  // Sidebar reorganizado en 2 secciones (2026-05-13, brief de Lucas):
-  //   • OPERACIÓN — día a día táctico (caja, ventas, compras, etc.)
-  //   • DIRECCIÓN — vista ejecutiva multi-local (negocio, finanzas, etc.)
+  // Sidebar consolidado a 10 items en 4 secciones (sprint mayo 2026):
+  //   • OPERACIÓN (3) — día a día: caja, compras, ventas
+  //   • DIRECCIÓN (4) — vista ejecutiva: negocio, finanzas, objetivos, reportes
+  //   • MÓDULOS   (2) — administración: equipo, locales
+  //   • SISTEMA   (1) — ajustes generales
   //
-  // Los primeros items de cada sección son los del brief; los siguientes
-  // son las pantallas legacy redistribuidas para no romper acceso. Cuando
-  // se decida qué hacer con cada legacy (mover dentro de placeholder, etc.),
-  // se ajustan acá.
+  // Eliminados del sidebar (siguen accesibles via section state):
+  //   - Dashboard ("Inicio") y Movimientos: pantallas eliminadas del producto.
+  //   - Proveedores: ahora sub-sección dentro de Compras.
+  //   - Conciliación MP: ahora sub-sección dentro de Caja.
+  //   - Usuarios: ahora sub-sección dentro de Ajustes (cuando se rehaga).
+  //   - Gastos, Blindaje, Contador, Tenants: ocultos por ahora, se
+  //     re-integran cuando la pantalla agregadora correspondiente lo demande.
+  //
+  // Orden y slugs son la fuente de verdad de getDefaultRoute(). Tocar acá
+  // implica también ajustar src/lib/sidebar-nav.ts (mismos slugs/labels/secs).
   // ───────────────────────────────────────────────────────────────────
   const nav = [
-    // === OPERACIÓN ===
-    {id:"dashboard",label:"Inicio",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="5" height="5" rx="1"/><rect x="8" y="1" width="5" height="5" rx="1"/><rect x="1" y="8" width="5" height="5" rx="1"/><rect x="8" y="8" width="5" height="5" rx="1"/></svg>`},
+    // === OPERACIÓN (3) ===
     {id:"caja",label:"Caja",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="5" width="12" height="8" rx="1"/><path d="M4 5V4a3 3 0 0 1 6 0v1"/></svg>`},
-    {id:"movimientos",label:"Movimientos",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><polyline points="1,10 5,5 8,8 13,2"/><polyline points="9,2 13,2 13,6"/></svg>`},
-    {id:"ventas",label:"Ventas",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="1,11 4,6 7,8 10,4 13,6"/></svg>`},
-    {id:"compras",label:"Compras",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="1" width="10" height="12" rx="1"/><line x1="5" y1="5" x2="9" y2="5"/><line x1="5" y1="8" x2="7" y2="8"/></svg>`},
-    {id:"gastos",label:"Gastos",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5"/><line x1="7" y1="4" x2="7" y2="7"/><line x1="7" y1="7" x2="9" y2="9"/></svg>`},
-    {id:"proveedores",label:"Proveedores",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="5" r="2.5"/><path d="M2 13c0-3 2-4.5 5-4.5s5 1.5 5 4.5"/></svg>`},
-    {id:"mp",label:"Conciliación MP",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="12" height="8" rx="1"/><line x1="1" y1="7" x2="13" y2="7"/></svg>`},
-    {id:"rrhh",label:"RRHH",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="5" r="2.5"/><path d="M1 13c0-2.5 2-4 4-4s4 1.5 4 4"/><circle cx="10" cy="5" r="2"/><path d="M13 13c0-2 -1-3.5-3-3.5"/></svg>`},
+    {id:"compras",label:"Compras",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1"/><circle cx="11" cy="12" r="1"/><path d="M1 2h2l1.5 7.5h7L13 4H4"/></svg>`},
+    {id:"ventas",label:"Ventas",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="5.5"/><path d="M7 4v6M9 5.5c0-1-1-1.5-2-1.5s-2 .5-2 1.5 1 1.3 2 1.5 2 .5 2 1.5-1 1.5-2 1.5-2-.5-2-1.5"/></svg>`},
 
-    // === DIRECCIÓN ===
+    // === DIRECCIÓN (4) ===
     {id:"negocio",label:"Negocio",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 1.5 A5.5 5.5 0 1 1 1.5 7 L7 7 Z"/><path d="M7 1.5 A5.5 5.5 0 0 1 12.5 7 L7 7 Z"/></svg>`},
     {id:"finanzas",label:"Finanzas",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h9a1 1 0 0 1 1 1V11a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h7.5"/><circle cx="9.5" cy="8" r="0.9"/></svg>`},
     {id:"objetivos",label:"Objetivos",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5.5"/><circle cx="7" cy="7" r="3"/><circle cx="7" cy="7" r="0.5" fill="currentColor"/></svg>`},
-    {id:"eerr",label:"Reportes",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="2" y1="11" x2="2" y2="5"/><line x1="6" y1="11" x2="6" y2="3"/><line x1="10" y1="11" x2="10" y2="7"/></svg>`},
-    {id:"configuracion",label:"Locales",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6 L7 2 L12 6 V12 H2 Z"/><path d="M6 12 V8 H8 V12"/></svg>`},
-    {id:"ajustes",label:"Ajustes",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="2.5"/><path d="M7 1v1M7 12v1M1 7h1M12 7h1M2.9 2.9l.7.7M10.4 10.4l.7.7M2.9 11.1l.7-.7M10.4 3.6l.7-.7"/></svg>`},
-    {id:"contador",label:"Contador / IVA",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="1" width="10" height="12" rx="1"/><line x1="5" y1="5" x2="9" y2="5"/><line x1="5" y1="8" x2="9" y2="8"/></svg>`},
-    {id:"blindaje",label:"Blindaje",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 1L2 3v4c0 3 2.5 5.5 5 6 2.5-.5 5-3 5-6V3L7 1z"/><polyline points="4.5,7 6.5,9 9.5,5.5"/></svg>`},
-    {id:"usuarios",label:"Usuarios",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="5" r="2.5"/><path d="M2 13c0-3 2-4.5 5-4.5s5 1.5 5 4.5"/></svg>`},
-    // Solo superadmin (TASK 0.15). Filtrado por perms.includes('tenants') más abajo.
-    {id:"tenants",label:"Tenants",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="5" height="10" rx="1"/><rect x="8" y="1" width="5" height="12" rx="1"/><line x1="3" y1="6" x2="4" y2="6"/><line x1="3" y1="9" x2="4" y2="9"/><line x1="10" y1="4" x2="11" y2="4"/><line x1="10" y1="7" x2="11" y2="7"/><line x1="10" y1="10" x2="11" y2="10"/></svg>`},
+    {id:"eerr",label:"Reportes",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,11 5,7 8,9 13,3"/><polyline points="10,3 13,3 13,6"/></svg>`},
+
+    // === MÓDULOS (2) ===
+    // "Equipo" apunta al slug `rrhh` (RRHHPage = lista del equipo).
+    {id:"rrhh",label:"Equipo",sec:"Módulos",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="5" r="2.5"/><path d="M1 13c0-2.5 2-4 4-4s4 1.5 4 4"/><circle cx="10" cy="5" r="2"/><path d="M13 13c0-2 -1-3.5-3-3.5"/></svg>`},
+    {id:"configuracion",label:"Locales",sec:"Módulos",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6 L7 2 L12 6 V12 H2 Z"/><path d="M6 12 V8 H8 V12"/></svg>`},
+
+    // === SISTEMA (1) ===
+    {id:"ajustes",label:"Ajustes",sec:"Sistema",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="2.5"/><path d="M7 1v1M7 12v1M1 7h1M12 7h1M2.9 2.9l.7.7M10.4 10.4l.7.7M2.9 11.1l.7-.7M10.4 3.6l.7-.7"/></svg>`},
   ];
   const secs = [...new Set(nav.map(n=>n.sec))];
   return (
@@ -192,7 +195,7 @@ body{background:var(--pase-bg);color:var(--pase-text);font-family:var(--pase-fon
 .sb-nav{flex:1;padding:8px 0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--pase-border-strong) transparent}
 .sb-nav::-webkit-scrollbar{width:4px}
 .sb-nav::-webkit-scrollbar-thumb{background:var(--pase-border-strong);border-radius:2px}
-.sb-section{padding:14px 12px 6px;font-size:10px;letter-spacing:0.04em;text-transform:uppercase;color:var(--pase-celeste-300);font-weight:500}
+.sb-section{padding:14px 12px 6px;font-size:10px;letter-spacing:0.05em;text-transform:uppercase;color:var(--pase-celeste-300);font-weight:500}
 .nav-item{display:flex;align-items:center;gap:9px;padding:7px 12px;cursor:pointer;font-size:12px;color:var(--pase-text-muted);border-radius:8px;margin:1px 8px;transition:background 0.12s, color 0.12s}
 .nav-item:hover{background:var(--pase-bg-soft);color:var(--pase-text)}
 .nav-item.active{background:var(--pase-celeste-100);color:var(--pase-text);font-weight:500}
