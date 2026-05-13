@@ -15,6 +15,30 @@ import type { Movimiento } from "../types/finanzas";
 // otros 80 cuando hace falta.
 const TESORERIA_PAGE_SIZE = 80;
 
+// Extrae la fecha de creación real desde el id del movimiento. Los ids
+// tienen formato MOV-<unix>-<rand>: 10 dígitos = segundos, 13 dígitos = ms
+// (formato viejo). Si el id no matchea, devuelve null y la UI muestra "—".
+function fechaCargaFromId(id: string): Date | null {
+  const m = /^MOV-(\d+)-/.exec(id);
+  if (!m || !m[1]) return null;
+  const n = Number(m[1]);
+  if (!Number.isFinite(n)) return null;
+  const ms = m[1].length === 13 ? n : n * 1000;
+  const d = new Date(ms);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// Formatea Date como "DD/MM HH:mm" en hora ART. Compact para la columna.
+function fmtFechaCarga(d: Date | null): string {
+  if (!d) return "—";
+  return d.toLocaleString("es-AR", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    day: "2-digit", month: "2-digit",
+    hour: "2-digit", minute: "2-digit",
+    hour12: false,
+  }).replace(",", "");
+}
+
 interface CajaProps {
   user: Usuario | null;
   locales?: Local[];
@@ -105,6 +129,14 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   const [idempKeyEditMov, setIdempKeyEditMov] = useState<string>(() => crypto.randomUUID());
   const [filtCuenta, setFiltCuenta] = useState("Todas");
   const [mostrarAnulados, setMostrarAnulados] = useState(false);
+  // Orden de los movimientos:
+  //  - "fecha": fecha del hecho económico (default, igual que histórico). El
+  //    user puede haber cargado hoy un mov con fecha de la semana pasada.
+  //  - "carga": orden de creación real, derivado del id del mov (formato
+  //    MOV-<unix>-<rand>). Ordenar por id DESC equivale a fecha de carga DESC
+  //    porque el timestamp del id se compara correctamente lexicográficamente.
+  //    Sirve para detectar cargas tardías que descuadran un saldo de hoy.
+  const [ordenPor, setOrdenPor] = useState<"fecha" | "carga">("fecha");
   const [loading, setLoading] = useState(true);
   // F4 (sunny-creek): filtros de fecha + paginación cursor. Default 90d
   // (consistente con Compras/Gastos/ConciliacionMP). hasMore=true mientras
@@ -178,10 +210,16 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   const queryMovimientos = (offset: number, limit: number) => {
     let q = db.from("movimientos").select("*")
       .gte("fecha", debDesde)
-      .lte("fecha", debHasta)
-      .order("fecha", { ascending: false })
-      .order("id", { ascending: false })
-      .range(offset, offset + limit - 1);
+      .lte("fecha", debHasta);
+    if (ordenPor === "carga") {
+      // Orden por id (timestamp de creación). DESC trae los cargados más
+      // recientemente primero — útil cuando alguien cargó hoy un mov con
+      // fecha vieja y descuadra el saldo.
+      q = q.order("id", { ascending: false });
+    } else {
+      q = q.order("fecha", { ascending: false }).order("id", { ascending: false });
+    }
+    q = q.range(offset, offset + limit - 1);
     q = applyLocalScope(q, user, localActivo);
     if (visParaListado !== null) {
       if (visParaListado.length === 0) {
@@ -235,9 +273,10 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     setLoadingMore(false);
   };
 
-  // Patrón fetch-on-dep-change. Re-fetch al cambiar local o rango de fechas.
+  // Patrón fetch-on-dep-change. Re-fetch al cambiar local, rango de fechas
+  // u orden seleccionado.
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
-  useEffect(()=>{load();},[localActivo, debDesde, debHasta]);
+  useEffect(()=>{load();},[localActivo, debDesde, debHasta, ordenPor]);
 
   // Sprint Realtime: cualquier cambio remoto en movimientos o saldos_caja
   // del mismo tenant dispara reload. Refresca la card de saldos + lista
@@ -415,13 +454,38 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
             <select className="search" style={{width:160}} value={filtCuenta} onChange={e=>setFiltCuenta(e.target.value)}>
               <option>Todas</option>{cuentasParaListado.map(c=><option key={c}>{c}</option>)}
             </select>
+            <select
+              className="search"
+              style={{width:180}}
+              value={ordenPor}
+              onChange={e=>setOrdenPor(e.target.value as "fecha" | "carga")}
+              title="Cómo ordenar la lista de movimientos"
+            >
+              <option value="fecha">Orden: Fecha del mov.</option>
+              <option value="carga">Orden: Fecha de carga</option>
+            </select>
           </div>
         </div>
         {loading?<div className="loading">Cargando...</div>:mFilt.length===0?<div className="empty">Sin movimientos</div>:(
-          <table><thead><tr><th>Fecha</th><th>Cuenta</th><th>Tipo</th><th>Categoría</th><th>Detalle</th><th>Importe</th><th>Estado</th><th></th></tr></thead>
-          <tbody>{mFilt.map(m=>(
+          <table><thead><tr>
+            <th>Fecha</th>
+            {ordenPor === "carga" && <th title="Cuándo se cargó realmente al sistema (puede diferir de la fecha del movimiento)">Cargado</th>}
+            <th>Cuenta</th><th>Tipo</th><th>Categoría</th><th>Detalle</th><th>Importe</th><th>Estado</th><th></th>
+          </tr></thead>
+          <tbody>{mFilt.map(m=>{
+            const fCarga = fechaCargaFromId(m.id);
+            const fMovISO = m.fecha?.slice(0,10) || "";
+            const fCargaISO = fCarga ? fCarga.toISOString().slice(0,10) : "";
+            // Si la fecha de carga difiere de la fecha del mov, lo destacamos
+            // sutilmente para alertar al user (cargada con fecha vieja).
+            const fechasDifieren = fCargaISO && fMovISO && fCargaISO !== fMovISO;
+            return (
             <tr key={m.id} style={{opacity: m.anulado ? 0.5 : 1, textDecoration: m.anulado ? "line-through" : "none"}}>
-              <td className="mono">{fmt_d(m.fecha)}</td>
+              <td className="mono" title={fechasDifieren ? `Fecha del mov.: ${fmt_d(m.fecha)}\nCargado: ${fmtFechaCarga(fCarga)}` : undefined}>
+                {fmt_d(m.fecha)}
+                {fechasDifieren && <span style={{marginLeft:4,color:"var(--warn)",fontSize:9}} title="Cargado con fecha distinta a la de creación">⚠</span>}
+              </td>
+              {ordenPor === "carga" && <td className="mono" style={{fontSize:11,color:"var(--muted2)"}}>{fmtFechaCarga(fCarga)}</td>}
               <td><span className="badge" style={{background:"transparent",color:cc(m.cuenta),border:`1px solid ${cc(m.cuenta)}44`}}>{m.cuenta}</span></td>
               <td style={{fontSize:11,color:"var(--muted2)"}}>{m.tipo}</td>
               <td>{m.cat?<span className="badge b-muted">{m.cat}</span>:"—"}</td>
@@ -458,7 +522,8 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
                 </div>
               </td>
             </tr>
-          ))}</tbody></table>
+            );
+          })}</tbody></table>
         )}
         {/* Contador + paginación. Total exacto del rango lo trae el conteo
             del último query (proxy con movimientos.length + hasMore=true ⇒
