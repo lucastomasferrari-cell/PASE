@@ -2,31 +2,31 @@ import { test, expect } from "@playwright/test";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createDuenoClient } from "./helpers/supabaseClient";
 
-// Test mutante: simula el flow del Lector IA llamando directo a la RPC
-// `crear_factura_completa` con el shape EXACTO que arma el frontend del
-// Lector IA (LectorFacturasIA.tsx::315), incluyendo el caso clave del
-// bug del 2026-05-13: el payload NO incluye `tipo`.
+// Tests mutantes del Lector IA: cubren los DOS paths que el frontend del
+// Lector IA puede tomar en LectorFacturasIA.tsx:313:
 //
-// El bug original: el frontend del Lector IA arma el payload sin `tipo`,
-// y la RPC tenía un fallback `COALESCE(tipo, 'factura')` que NUNCA se
-// aplicaba al INSERT (jsonb_populate_record usaba el JSON original).
-// Resultado: INSERT fallaba con "null value in column tipo violates not
-// null constraint".
+//   const estado = confGlobal < 70 ? "revision" : "pendiente";
 //
-// Fix doble (commit 4f064ee):
-//   1. Frontend: agregar `tipo: "factura"` explícito al payload.
-//   2. Migration 202605131500: corregir RPC para que el fallback se aplique
-//      al populate_record (defense-in-depth).
+// → Path A (confianza >= 70%): estado='pendiente' — caso normal.
+// → Path B (confianza < 70%): estado='revision' — factura marcada para
+//   revisión humana. Bug del 2026-05-13: la migration 202605121600 agregó
+//   un CHECK constraint que solo aceptaba 4 estados, omitiendo 'revision'.
+//   El empleado de Lucas no podía guardar facturas IA con baja confianza.
+//   Fix: migration 202605131800 extendió el constraint a 5 estados.
 //
-// Este test ejercita la capa 2 (backend defensivo): llama la RPC SIN tipo
-// y verifica que la factura se crea con tipo='factura' por default.
+// Bonus: el test A también cubre el caso del payload SIN `tipo` (bug
+// previo del 2026-05-13, fix 4f064ee + migration 202605131500). La RPC
+// `crear_factura_completa` debe aplicar el fallback 'factura'.
+//
+// Regla del repo: 1 caller → 1 test. El Lector IA es 1 caller con 2 paths,
+// así que llevamos 2 tests aquí.
 
 const SENTINEL = 234567.89;
+const SENTINEL_REVISION = 345678.91;
 const LOCAL = "Local Prueba 2";
 const PROVEEDOR = "Proveedor Prueba";
-const NRO = `E2E-LECTOR-IA-${Date.now()}`;
 
-test.describe("Lector IA — RPC crear_factura_completa sin tipo (cobertura bug 2026-05-13)", () => {
+test.describe("Lector IA — RPC crear_factura_completa (cobertura bugs 2026-05-13)", () => {
   let db: SupabaseClient;
   let localId: number;
   let provId: number;
@@ -90,16 +90,17 @@ test.describe("Lector IA — RPC crear_factura_completa sin tipo (cobertura bug 
     try { await db.auth.signOut(); } catch { /* idempotente */ }
   });
 
-  test("crear_factura_completa SIN tipo: el fallback del backend default a 'factura'", async () => {
-    // Shape EXACTO que arma LectorFacturasIA.tsx::315 (post-fix mantiene
-    // tipo explícito, pero este test simula el caso adverso: payload
-    // SIN tipo — para verificar que la RPC defensiva lo maneja).
+  test("Path A (confianza >= 70 → estado='pendiente') SIN tipo: el backend aplica fallback 'factura'", async () => {
+    // Shape EXACTO que arma LectorFacturasIA.tsx::315 cuando confGlobal >= 70.
+    // Test mutante: simula el caso adverso de payload SIN `tipo` para verificar
+    // que la RPC defensiva lo maneja (capa 2, defense-in-depth).
     const id = `LECTOR-IA-${Date.now()}`;
+    const nro = `E2E-LECTOR-IA-PEND-${Date.now()}`;
     const payload = {
       id,
       prov_id: provId,
       local_id: localId,
-      nro: NRO,
+      nro,
       fecha: new Date().toISOString().slice(0, 10),
       venc: null,
       neto: SENTINEL,
@@ -148,5 +149,64 @@ test.describe("Lector IA — RPC crear_factura_completa sin tipo (cobertura bug 
       .maybeSingle();
     expect(provFinalErr).toBeNull();
     expect(provFinal?.saldo).toBe(saldoProvInicial + SENTINEL);
+  });
+
+  test("Path B (confianza < 70 → estado='revision'): el constraint acepta 'revision'", async () => {
+    // Shape EXACTO que arma LectorFacturasIA.tsx::315 cuando confGlobal < 70:
+    // estado='revision'. Bug del 2026-05-13: la migration 202605121600
+    // agregó CHECK que solo aceptaba 4 estados y omitió 'revision'.
+    // Empleado de Lucas no podía guardar facturas IA con baja confianza.
+    // Fix: migration 202605131800 extiende el constraint a 5 estados.
+    const id = `LECTOR-IA-REV-${Date.now()}`;
+    const nro = `E2E-LECTOR-IA-REV-${Date.now()}`;
+    const payload = {
+      id,
+      prov_id: provId,
+      local_id: localId,
+      nro,
+      fecha: new Date().toISOString().slice(0, 10),
+      venc: null,
+      neto: SENTINEL_REVISION,
+      iva21: 0,
+      iva105: 0,
+      iibb: 0,
+      total: SENTINEL_REVISION,
+      cat: "",
+      estado: "revision", // ← el path adverso del Lector IA
+      pagos: [],
+      imagen_url: null,
+      tipo: "factura",
+    };
+
+    const { error } = await db.rpc("crear_factura_completa", {
+      p_factura: payload,
+      p_items: [],
+      p_idempotency_key: crypto.randomUUID(),
+    });
+
+    // ── Assert 1: la RPC NO falló por facturas_estado_check ────────────
+    expect(error).toBeNull();
+
+    // ── Assert 2: la factura persistió con estado='revision' ──────────
+    const { data: facturas, error: facturasErr } = await db
+      .from("facturas")
+      .select("id, estado, total, tipo")
+      .eq("id", id);
+    expect(facturasErr).toBeNull();
+    expect(facturas?.length).toBe(1);
+    const f = facturas![0]!;
+    expect(f.estado).toBe("revision");
+    expect(f.tipo).toBe("factura");
+    expect(f.total).toBe(SENTINEL_REVISION);
+    facturaId = f.id as string;
+
+    // ── Assert 3: el saldo del proveedor subió por SENTINEL_REVISION ──
+    const { data: provFinal, error: provFinalErr } = await db
+      .from("proveedores")
+      .select("saldo")
+      .eq("id", provId)
+      .maybeSingle();
+    expect(provFinalErr).toBeNull();
+    expect(provFinal?.saldo).toBe(saldoProvInicial + SENTINEL_REVISION);
   });
 });
