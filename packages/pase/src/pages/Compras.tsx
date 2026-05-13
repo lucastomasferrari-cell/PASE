@@ -518,6 +518,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                 {!localActivo && <th>Local</th>}
                 <th>Fecha</th>
                 <th>Categoría</th>
+                <th>Descripción</th>
                 <th style={{ textAlign: "right" }}>Monto</th>
                 <th>Estado</th>
                 <th></th>
@@ -536,6 +537,11 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                     )}
                     <td className="mono">{fmt_d(r.fecha)}</td>
                     <td><span className="badge b-muted">{r.cat || "—"}</span></td>
+                    <td style={{ fontSize: 11, color: "var(--muted2)", maxWidth: 240 }} title={r.detalle || ""}>
+                      {r.detalle
+                        ? (r.detalle.length > 60 ? r.detalle.slice(0, 60) + "…" : r.detalle)
+                        : <span style={{ color: "var(--muted)" }}>—</span>}
+                    </td>
                     <td style={{ textAlign: "right" }}><span className="num kpi-warn">{fmt_$(r.monto)}</span></td>
                     <td>
                       {r.estado === "sin_factura" && <span className="badge b-warn">Sin Factura</span>}
