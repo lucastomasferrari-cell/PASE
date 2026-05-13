@@ -6,3 +6,4 @@ export { Bento } from "./Bento";
 export { ThemeToggle } from "./ThemeToggle";
 export { LocalCard } from "./LocalCard";
 export type { LocalCardProps } from "./LocalCard";
+export { ComparativaLocales } from "./ComparativaLocales";

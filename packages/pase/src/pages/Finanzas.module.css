@@ -3,6 +3,93 @@
   color: var(--pase-text);
 }
 
+/* ─── Topbar custom: título + switch ────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.titleWrap {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--pase-text);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.titleSub {
+  font-size: 12px;
+  color: var(--pase-text-muted);
+  font-weight: 400;
+  letter-spacing: -0.005em;
+}
+
+.switch {
+  display: inline-flex;
+  background: var(--pase-bg-soft);
+  border-radius: var(--pase-radius-pill);
+  padding: 3px;
+  gap: 0;
+}
+
+.switchItem {
+  padding: 4px 11px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--pase-text-muted);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: var(--pase-radius-pill);
+  font-family: var(--pase-font);
+  letter-spacing: -0.005em;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.switchItem:hover {
+  color: var(--pase-text);
+}
+
+.switchItemActive {
+  background: var(--pase-bg);
+  color: var(--pase-text);
+  box-shadow: 0 0 0 0.5px var(--pase-border-strong);
+}
+
+.backToCompare {
+  background: transparent;
+  border: none;
+  color: var(--pase-text-muted);
+  font-family: var(--pase-font);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 0;
+  margin-bottom: 12px;
+  letter-spacing: -0.005em;
+  transition: color 0.15s;
+}
+
+.backToCompare:hover {
+  color: var(--pase-text);
+}
+
+/* Wrapper del Detalle del local en vista por local — full width */
+.localDetailWrap {
+  /* Una LocalCard que ocupa el ancho completo */
+}
+
 /* ─── Section header ────────────────────────────────────────────────── */
 .sectionHeader {
   display: flex;
