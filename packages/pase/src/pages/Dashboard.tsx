@@ -6,6 +6,7 @@ import { toISO, today, fmt_$, estadoFactura } from "../lib/utils";
 import { computeSaldoMP, type MovParaSaldo } from "../lib/saldoMP";
 import { calcularSaldosPorProveedor } from "../lib/saldoProveedor";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { Bento, CardAnchor, KpiTile, Card } from "../components/ui";
 import type { Usuario } from "../types/auth";
 import type { Factura, Proveedor, Venta, SaldoCaja } from "../types/finanzas";
 
@@ -14,7 +15,6 @@ interface DashboardProps {
   localActivo: number | null;
 }
 
-// Subset de mp_credenciales que el Dashboard lee para computar saldo MP.
 interface MpCredCompacta {
   local_id: number;
   tenant_id: string;
@@ -22,19 +22,11 @@ interface MpCredCompacta {
   saldo_inicial_at: string | null;
 }
 
-// Fila del array chartData (gráfico ventas últimos 7 días).
 interface ChartPoint { dia: string; ventas: number }
-
-// Subset de blindaje_documentos que el Dashboard lee.
 interface BlindajeDoc { vencimiento: string | null; local_id: number | null }
-
-// Proveedor + saldo computado en runtime (suma facturas pendientes por prov).
 interface ProveedorConSaldo extends Proveedor { saldo: number }
-
-// Subset de remitos que el Dashboard lee (solo para contar pendientes).
 interface RemitoMin { estado: string; local_id: number | null }
 
-// ─── DASHBOARD ────────────────────────────────────────────────────────────────
 export default function Dashboard({ user, localActivo }: DashboardProps) {
   const [stats, setStats] = useState<{saldos: Record<string, number>, deuda: number, vencidas: number, ventasHoy: number, remPend: number, blindajeVencidos: number, blindajePorVencer: number, saldoMpTotal: number, credsSinCorte: number}>({saldos:{},deuda:0,vencidas:0,ventasHoy:0,remPend:0,blindajeVencidos:0,blindajePorVencer:0,saldoMpTotal:0,credsSinCorte:0});
   const [provDeuda, setProvDeuda] = useState<ProveedorConSaldo[]>([]);
@@ -49,11 +41,6 @@ export default function Dashboard({ user, localActivo }: DashboardProps) {
       d.setDate(d.getDate()-6+i);
       return d.toISOString().slice(0,10);
     });
-    // Saldos cajas tradicionales — EXCLUIR la fila legacy MercadoPago (la
-    // mantiene mp-process con saldoAprobado acumulado de rr-/set-, doble
-    // conteo + histórico desde el corte original = $108M inflado).
-    // El saldo MP correcto se calcula abajo via computeSaldoMP (mismo modelo
-    // que ConciliacionMP refactor — saldo_inicial + delta pay-* posteriores).
     let sq = db.from("saldos_caja").select("*").neq("cuenta", "MercadoPago");
     sq = applyLocalScope(sq, user, lid);
     const visCuentas = cuentasVisibles(user);
@@ -71,9 +58,6 @@ export default function Dashboard({ user, localActivo }: DashboardProps) {
     let vtq = db.from("ventas").select("*").eq("fecha",hoy);
     vtq = applyLocalScope(vtq, user, lid);
 
-    // Saldo MP — saldo_inicial + SUM(monto pay-* WHERE fecha > corte). Mismo
-    // modelo que ConciliacionMP card. Si user no ve cuenta "MercadoPago"
-    // (cuentas_visibles), se omite sin pegarle innecesario a la DB.
     const includeMp = visCuentas === null || visCuentas.includes("MercadoPago");
     let credsQ = db.from("mp_credenciales")
       .select("local_id, tenant_id, saldo_inicial, saldo_inicial_at")
@@ -86,9 +70,6 @@ export default function Dashboard({ user, localActivo }: DashboardProps) {
       .limit(20000);
     saldoMovsQ = applyLocalScope(saldoMovsQ, user, lid);
 
-    // T-19 auditoría: cargamos nc_aplicaciones (sin scope local — la tabla
-    // puente no tiene local_id, su RLS filtra por tenant) para que el helper
-    // calcule el saldo restante real de NCs parcialmente aplicadas.
     const naq = db.from("nc_aplicaciones").select("nc_id,monto");
 
     const [{data:saldos},{data:facturas},{data:remitos},{data:ventas},{data:provs},{data:blindaje},{data:ventasSemana},credsMpRes,saldoMovsRes,{data:ncApls}] = await Promise.all([
@@ -96,8 +77,6 @@ export default function Dashboard({ user, localActivo }: DashboardProps) {
       fq,
       rq,
       vtq,
-      // Antes filtraba por saldo>0 persistido pero la columna estaba
-      // sobreestimada; el filtro real ahora se hace runtime con el helper.
       db.from("proveedores").select("*").eq("estado","Activo"),
       bq,
       vsq,
@@ -124,10 +103,6 @@ export default function Dashboard({ user, localActivo }: DashboardProps) {
       if (dias < 0) blindajeVencidos++;
       else if (dias <= 30) blindajePorVencer++;
     });
-    // Calcular saldo MP por cred: saldo_inicial + delta de pay-* posteriores
-    // al corte. Las creds sin corte fijado NO suman (aportan $0) pero las
-    // contamos para footnote. Una cred ignora movs de otros local_id (lo hace
-    // computeSaldoMP internamente).
     let saldoMpTotal = 0;
     let credsSinCorte = 0;
     for (const cred of credsMp) {
@@ -148,11 +123,6 @@ export default function Dashboard({ user, localActivo }: DashboardProps) {
     const remitosArr = (remitos as RemitoMin[]) || [];
     const provsArr = (provs as Proveedor[]) || [];
 
-    // Cálculo unificado del saldo por proveedor (mismo helper que Proveedores.tsx).
-    // Antes había 2 paths: con localId recomputaba SOLO facturas (sin remitos
-    // ni pagos parciales), sin localId leía la columna persistida (sobreestimada).
-    // Resultado: los 3 lugares (Dashboard con loc / sin loc / pantalla
-    // Proveedores) mostraban montos distintos. Ahora todos cuadran.
     const facturasParaCalc = ((facturas as Factura[]) || []).filter(f => matchLocal(f.local_id));
     const remitosParaCalc = remitosArr.filter(r => matchLocal(r.local_id));
     const saldoPorProv = calcularSaldosPorProveedor(
@@ -185,76 +155,150 @@ export default function Dashboard({ user, localActivo }: DashboardProps) {
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(()=>{ load(localActivo); },[localActivo]);
   if(loading) return <div className="loading">Cargando...</div>;
-  // Liquidez Total = cajas tradicionales (Caja Chica/Mayor/Efectivo/Banco) +
-  // saldo MP correcto (computeSaldoMP). La fila legacy saldos_caja MercadoPago
-  // queda excluida en la query (.neq("cuenta","MercadoPago")).
   const totalLiquidez = Object.values(stats.saldos).reduce((a: number,b: number)=>a+b,0) + stats.saldoMpTotal;
   const liquidezSub = stats.credsSinCorte > 0
-    ? `Todas las cuentas · ${stats.credsSinCorte} ${stats.credsSinCorte===1?'local sin':'locales sin'} saldo MP fijado`
-    : "Todas las cuentas";
+    ? `${stats.credsSinCorte} ${stats.credsSinCorte===1?'local sin':'locales sin'} saldo MP fijado`
+    : "Todas las cuentas activas";
+
+  // Sparkline de ventas semana (escala 0-100 para Sparkline component)
+  const maxVentaSem = Math.max(1, ...chartData.map(d => d.ventas));
+  const ventasSpark = chartData.map(d => Math.round((d.ventas / maxVentaSem) * 100));
+  const ventasSemTotal = chartData.reduce((s, d) => s + d.ventas, 0);
+
+  // Sparkline ficticio para los KPIs sin histórico (deuda/vencidas/remitos),
+  // valor único repetido — visualmente neutral. TODO: capturar series reales
+  // cuando agreguemos la tabla rrhh_kpi_snapshots o similar.
+  const flatSpark = [40, 40, 40, 40, 40, 40, 40];
+
+  const sinAlertas =
+    stats.vencidas === 0 &&
+    stats.remPend === 0 &&
+    stats.blindajeVencidos === 0 &&
+    stats.blindajePorVencer === 0;
+
   return (
     <div>
       <div style={{marginBottom:20}}>
         <div className="ph-title">Dashboard</div>
+        <div className="ph-sub">Resumen ejecutivo del estado financiero al día.</div>
       </div>
-      <div className="grid4">
-        <div className="kpi"><div className="kpi-label">Liquidez Total</div><div className="kpi-value kpi-acc">{fmt_$(totalLiquidez)}</div><div className="kpi-sub">{liquidezSub}</div></div>
-        <div className="kpi"><div className="kpi-label">Ventas Hoy</div><div className="kpi-value kpi-success">{fmt_$(stats.ventasHoy)}</div></div>
-        <div className="kpi"><div className="kpi-label">Deuda Proveedores</div><div className="kpi-value kpi-warn">{fmt_$(stats.deuda)}</div></div>
-        <div className="kpi"><div className="kpi-label">Facturas Vencidas</div><div className="kpi-value kpi-danger">{stats.vencidas}</div></div>
-      </div>
-      <div className="panel" style={{marginBottom:16}}>
-        <div className="panel-hd"><span className="panel-title">Ventas — últimos 7 días</span></div>
-        <div style={{padding:"12px 4px"}}>
-          <ResponsiveContainer width="100%" height={140}>
-            <LineChart data={chartData} margin={{top:4,right:16,left:0,bottom:0}}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--bd2)" vertical={false}/>
-              <XAxis dataKey="dia" tick={{fontSize:10,fill:"var(--muted)"}} axisLine={false} tickLine={false}/>
-              <YAxis tick={{fontSize:10,fill:"var(--muted)"}} axisLine={false} tickLine={false} tickFormatter={v=>v===0?"":`$${(v/1000).toFixed(0)}k`}/>
+
+      {/* Bento: ancla con Liquidez Total + 4 KPIs chicos ──────────── */}
+      <Bento>
+        <CardAnchor
+          label="Liquidez total"
+          value={fmt_$(totalLiquidez)}
+          delta={`+ ${fmt_$(stats.ventasHoy)} hoy`}
+          meta={liquidezSub}
+          pillText="en vivo"
+        />
+        <KpiTile
+          label="Ventas hoy"
+          value={fmt_$(stats.ventasHoy)}
+          delta={`Semana: ${fmt_$(ventasSemTotal)}`}
+          sparkline={ventasSpark}
+        />
+        <KpiTile
+          label="Deuda proveedores"
+          value={fmt_$(stats.deuda)}
+          delta={provDeuda.length > 0 ? `${provDeuda.length} proveedor${provDeuda.length === 1 ? "" : "es"}` : "Sin deuda"}
+          deltaTone="muted"
+          sparkline={flatSpark}
+        />
+        <KpiTile
+          label="Facturas vencidas"
+          value={String(stats.vencidas)}
+          delta={stats.vencidas > 0 ? "Requieren atención" : "Al día"}
+          deltaTone="muted"
+          sparkline={flatSpark}
+        />
+        <KpiTile
+          label="Remitos pendientes"
+          value={String(stats.remPend)}
+          delta={stats.remPend > 0 ? "Sin factura asociada" : "Sin remitos pendientes"}
+          deltaTone="muted"
+          sparkline={flatSpark}
+        />
+      </Bento>
+
+      {/* Row inferior: chart + saldos + alertas ──────────────────────── */}
+      <div style={{display:"grid",gridTemplateColumns:"1.5fr 1fr",gap:10,marginTop:14}}>
+        <Card>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div style={{fontSize:13,fontWeight:500,color:"var(--pase-text)",letterSpacing:"-0.02em"}}>Ventas — últimos 7 días</div>
+            <div style={{fontSize:11,color:"var(--pase-text-muted)",fontVariantNumeric:"tabular-nums"}}>{fmt_$(ventasSemTotal)} acum.</div>
+          </div>
+          <ResponsiveContainer width="100%" height={160}>
+            <LineChart data={chartData} margin={{top:4,right:8,left:0,bottom:0}}>
+              <CartesianGrid strokeDasharray="2 4" stroke="var(--pase-border)" vertical={false}/>
+              <XAxis dataKey="dia" tick={{fontSize:10,fill:"var(--pase-text-muted)"}} axisLine={false} tickLine={false}/>
+              <YAxis tick={{fontSize:10,fill:"var(--pase-text-muted)"}} axisLine={false} tickLine={false} tickFormatter={v=>v===0?"":`$${(v/1000).toFixed(0)}k`}/>
               <Tooltip
-                contentStyle={{background:"var(--s1)",border:"1px solid var(--bd2)",borderRadius:6,fontSize:11}}
-                labelStyle={{color:"var(--muted2)"}}
+                contentStyle={{background:"var(--pase-bg)",border:"0.5px solid var(--pase-border-strong)",borderRadius:8,fontSize:11,color:"var(--pase-text)"}}
+                labelStyle={{color:"var(--pase-text-muted)"}}
                 formatter={v => [`$${Number(v).toLocaleString("es-AR")}`, "Ventas"] as [string, string]}
               />
-              <Line type="monotone" dataKey="ventas" stroke="var(--acc)" strokeWidth={2} dot={false} activeDot={{r:4,fill:"var(--acc)"}}/>
+              <Line type="monotone" dataKey="ventas" stroke="var(--pase-celeste)" strokeWidth={2} dot={false} activeDot={{r:4,fill:"var(--pase-celeste)"}}/>
             </LineChart>
           </ResponsiveContainer>
-        </div>
+        </Card>
+
+        <Card>
+          <div style={{fontSize:13,fontWeight:500,color:"var(--pase-text)",letterSpacing:"-0.02em",marginBottom:12}}>Alertas</div>
+          {sinAlertas ? (
+            <div style={{padding:"24px 8px",textAlign:"center",color:"var(--pase-text-muted)",fontSize:12}}>
+              Todo al día.
+            </div>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {stats.vencidas>0 && <div className="alert">{stats.vencidas} factura{stats.vencidas===1?"":"s"} vencida{stats.vencidas===1?"":"s"}</div>}
+              {stats.remPend>0 && <div className="alert">{stats.remPend} remito{stats.remPend===1?"":"s"} sin factura</div>}
+              {stats.blindajeVencidos>0 && <div className="alert">{stats.blindajeVencidos} documento{stats.blindajeVencidos===1?"":"s"} vencido{stats.blindajeVencidos===1?"":"s"} en Blindaje</div>}
+              {stats.blindajePorVencer>0 && <div className="alert">{stats.blindajePorVencer} documento{stats.blindajePorVencer===1?"":"s"} por vencer en ≤30 días</div>}
+            </div>
+          )}
+        </Card>
       </div>
-      <div className="grid2">
-        <div className="panel">
-          <div className="panel-hd"><span className="panel-title">Saldos en Tiempo Real</span></div>
-          <div style={{padding:"12px 16px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+
+      {/* Saldos por cuenta ───────────────────────────────────────────── */}
+      <div style={{marginTop:14}}>
+        <Card>
+          <div style={{fontSize:13,fontWeight:500,color:"var(--pase-text)",letterSpacing:"-0.02em",marginBottom:14}}>Saldos en tiempo real</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))",gap:10}}>
             {CUENTAS.filter(k=>k!=="MercadoPago").map(k=>(
-              <div key={k} className={`caja-card caja-${k==="Caja Chica"?"chica":k==="Caja Mayor"?"mayor":"banco"}`}>
-                <div className="caja-name">{k}</div>
-                <div className="caja-saldo" style={{color:(stats.saldos[k]||0)<0?"var(--danger)":"var(--txt)"}}>{fmt_$(stats.saldos[k]||0)}</div>
+              <div key={k} style={{background:"var(--pase-bg-soft)",border:"0.5px solid var(--pase-border)",borderRadius:10,padding:"12px 14px"}}>
+                <div style={{fontSize:11,color:"var(--pase-text-muted)",marginBottom:6,letterSpacing:"-0.01em"}}>{k}</div>
+                <div style={{fontSize:18,fontWeight:500,color:"var(--pase-text)",letterSpacing:"-0.025em",fontVariantNumeric:"tabular-nums"}}>{fmt_$(stats.saldos[k]||0)}</div>
               </div>
             ))}
+            {stats.saldoMpTotal !== 0 && (
+              <div style={{background:"var(--pase-bg-soft)",border:"0.5px solid var(--pase-border)",borderRadius:10,padding:"12px 14px"}}>
+                <div style={{fontSize:11,color:"var(--pase-text-muted)",marginBottom:6,letterSpacing:"-0.01em"}}>MercadoPago</div>
+                <div style={{fontSize:18,fontWeight:500,color:"var(--pase-text)",letterSpacing:"-0.025em",fontVariantNumeric:"tabular-nums"}}>{fmt_$(stats.saldoMpTotal)}</div>
+              </div>
+            )}
           </div>
-        </div>
-        <div className="panel">
-          <div className="panel-hd"><span className="panel-title" style={{color:"var(--warn)"}}>⚡ Alertas</span></div>
-          <div style={{padding:"8px 16px"}}>
-            {stats.vencidas>0 && <div className="alert alert-danger">⚠ {stats.vencidas} factura(s) vencida(s)</div>}
-            {stats.remPend>0 && <div className="alert alert-warn">🚚 {stats.remPend} remito(s) sin factura</div>}
-            {stats.blindajeVencidos>0 && <div className="alert alert-danger">🛡 {stats.blindajeVencidos} documento(s) vencido(s) — Blindaje</div>}
-            {stats.blindajePorVencer>0 && <div className="alert alert-warn">🛡 {stats.blindajePorVencer} documento(s) por vencer en ≤30d — Blindaje</div>}
-            {stats.vencidas===0&&stats.remPend===0&&stats.blindajeVencidos===0&&stats.blindajePorVencer===0 && <div className="alert alert-success">✓ Todo al día</div>}
-          </div>
-        </div>
+        </Card>
       </div>
-      {provDeuda.length>0 && (
-        <div className="panel">
-          <div className="panel-hd"><span className="panel-title">Deuda por Proveedor</span></div>
-          <table><thead><tr><th>Proveedor</th><th>Categoría</th><th>Saldo</th></tr></thead>
-          <tbody>{provDeuda.map(p => (
-            <tr key={p.id} className="prov-row">
-              <td style={{fontWeight:500}}>{p.nombre}</td>
-              <td><span className="badge b-muted">{p.cat}</span></td>
-              <td><span className="num kpi-warn">{fmt_$(p.saldo)}</span></td>
-            </tr>
-          ))}</tbody></table>
+
+      {/* Deuda por proveedor ─────────────────────────────────────────── */}
+      {provDeuda.length > 0 && (
+        <div style={{marginTop:14}}>
+          <Card>
+            <div style={{fontSize:13,fontWeight:500,color:"var(--pase-text)",letterSpacing:"-0.02em",marginBottom:12}}>Deuda por proveedor</div>
+            <table>
+              <thead><tr><th>Proveedor</th><th>Categoría</th><th style={{textAlign:"right"}}>Saldo</th></tr></thead>
+              <tbody>
+                {provDeuda.map(p => (
+                  <tr key={p.id}>
+                    <td style={{fontWeight:500}}>{p.nombre}</td>
+                    <td><span className="badge b-muted">{p.cat}</span></td>
+                    <td style={{textAlign:"right",fontVariantNumeric:"tabular-nums"}}>{fmt_$(p.saldo)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
         </div>
       )}
     </div>
