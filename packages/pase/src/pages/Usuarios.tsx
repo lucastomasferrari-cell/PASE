@@ -130,7 +130,16 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
       } else if (modal !== null) {
         userId = modal.id;
         targetTenantId = modal.tenant_id ?? user.tenant_id;
-        await db.from("usuarios").update({ nombre:form.nombre, activo:form.activo, locales:form.locales_ids }).eq("id", userId);
+        // Si está editando su propio user, NO tocar locales ni activo —
+        // solo permitir cambios de nombre y password. Esto previene que el
+        // user logueado se deje sin acceso por error.
+        const isEditingSelf = modal.id === user.id;
+        const updatePayload: Record<string, unknown> = { nombre: form.nombre };
+        if (!isEditingSelf) {
+          updatePayload.activo = form.activo;
+          updatePayload.locales = form.locales_ids;
+        }
+        await db.from("usuarios").update(updatePayload).eq("id", userId);
         if (form.password) {
           // Actualizar hash SHA-256 en tabla usuarios (usado por login fallback)
           const hash = await sha256(form.password);
@@ -162,46 +171,53 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
 
       if (!userId) { setErr("No se pudo obtener el ID del usuario"); setSaving(false); return; }
 
-      // Save permisos (delete + re-insert)
-      // Dueno tiene todos implícitos, no necesita rows. Otros roles sí.
-      const userRol = modal === "new" || modal === null ? "encargado" : (modal.rol || "encargado");
-      await db.from("usuario_permisos").delete().eq("usuario_id", userId);
-      if (userRol !== "dueno" && form.modulos.length) {
-        const { error: permErr } = await db.from("usuario_permisos").insert(
-          form.modulos.map(slug => ({ usuario_id: userId as number, modulo_slug: slug, tenant_id: targetTenantId }))
-        );
-        if (permErr) console.error("Error guardando permisos:", permErr.message);
-      }
+      // SI ES EL PROPIO USER LOGUEADO: skip TODO lo que sea permisos/locales/cuentas.
+      // El UI ya tiene los inputs disabled pero el backend reafirma la regla
+      // por defense-in-depth (si alguien manipula el DOM o el form state).
+      const editingSelf = modal !== "new" && modal !== null && modal.id === user.id;
 
-      // Save locales en usuario_locales (delete + re-insert)
-      await db.from("usuario_locales").delete().eq("usuario_id", userId);
-      if (form.locales_ids.length > 0) {
-        const rows = form.locales_ids.map(lid => ({
-          usuario_id: userId as number,
-          local_id: Number(lid),
-          tenant_id: targetTenantId,
-        }));
-        const { error: locErr } = await db.from("usuario_locales").insert(rows);
-        if (locErr) {
-          console.error("Error guardando locales:", locErr.message);
-          setErr("Error guardando locales: " + locErr.message);
-          setSaving(false);
-          return;
+      if (!editingSelf) {
+        // Save permisos (delete + re-insert)
+        // Dueno tiene todos implícitos, no necesita rows. Otros roles sí.
+        const userRol = modal === "new" || modal === null ? "encargado" : (modal.rol || "encargado");
+        await db.from("usuario_permisos").delete().eq("usuario_id", userId);
+        if (userRol !== "dueno" && form.modulos.length) {
+          const { error: permErr } = await db.from("usuario_permisos").insert(
+            form.modulos.map(slug => ({ usuario_id: userId as number, modulo_slug: slug, tenant_id: targetTenantId }))
+          );
+          if (permErr) console.error("Error guardando permisos:", permErr.message);
         }
+
+        // Save locales en usuario_locales (delete + re-insert)
+        await db.from("usuario_locales").delete().eq("usuario_id", userId);
+        if (form.locales_ids.length > 0) {
+          const rows = form.locales_ids.map(lid => ({
+            usuario_id: userId as number,
+            local_id: Number(lid),
+            tenant_id: targetTenantId,
+          }));
+          const { error: locErr } = await db.from("usuario_locales").insert(rows);
+          if (locErr) {
+            console.error("Error guardando locales:", locErr.message);
+            setErr("Error guardando locales: " + locErr.message);
+            setSaving(false);
+            return;
+          }
+        }
+
+        // Actualizar también campo viejo usuarios.locales para backward compat
+        await db.from("usuarios").update({ locales: form.locales_ids }).eq("id", userId);
+
+        // Cuentas: null = todas; array = personalizado. cuentas_visibles
+        // controla saldos visibles; cuentas_operables controla los dropdowns
+        // de pago (Compras, Remitos, RRHH, Caja, Gastos).
+        const visiblesPayload = form.cuentas_all ? null : form.cuentas_visibles;
+        const operablesPayload = form.cuentas_all ? null : form.cuentas_operables;
+        await db.from("usuarios").update({
+          cuentas_visibles: visiblesPayload,
+          cuentas_operables: operablesPayload,
+        }).eq("id", userId);
       }
-
-      // Actualizar también campo viejo usuarios.locales para backward compat
-      await db.from("usuarios").update({ locales: form.locales_ids }).eq("id", userId);
-
-      // Cuentas: null = todas; array = personalizado. cuentas_visibles
-      // controla saldos visibles; cuentas_operables controla los dropdowns
-      // de pago (Compras, Remitos, RRHH, Caja, Gastos).
-      const visiblesPayload = form.cuentas_all ? null : form.cuentas_visibles;
-      const operablesPayload = form.cuentas_all ? null : form.cuentas_operables;
-      await db.from("usuarios").update({
-        cuentas_visibles: visiblesPayload,
-        cuentas_operables: operablesPayload,
-      }).eq("id", userId);
 
       setModal(null); load();
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
@@ -210,6 +226,12 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
   };
 
   const toggleActivo = async (u: Usuario) => {
+    // No permitir auto-desactivarse (queda sin acceso y solo otro admin/dueño
+    // puede revertirlo).
+    if (u.id === user.id) {
+      alert("No podés cambiar tu propio estado. Pedile a otro dueño o admin que lo haga.");
+      return;
+    }
     await db.from("usuarios").update({ activo: u.activo === false }).eq("id", u.id);
     load();
   };
@@ -289,8 +311,10 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                 </div>
               </div>
 
-              <div className="field"><label>Estado</label>
-                <select value={form.activo ? "1" : "0"} onChange={e => setForm({ ...form, activo:e.target.value === "1" })}>
+              <div className="field"><label>Estado{modal !== "new" && modal !== null && modal.id === user.id && <span style={{ color: "var(--pase-text-muted)", textTransform: "none", letterSpacing: 0, marginLeft: 6, fontSize: 10 }}>(bloqueado: edición propia)</span>}</label>
+                <select value={form.activo ? "1" : "0"}
+                  disabled={modal !== "new" && modal !== null && modal.id === user.id}
+                  onChange={e => setForm({ ...form, activo:e.target.value === "1" })}>
                   <option value="1">Activo</option><option value="0">Inactivo</option>
                 </select></div>
 
@@ -298,21 +322,36 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
               {(() => {
                 const modalRol = modal === "new" || modal === null ? "encargado" : (modal.rol || "encargado");
                 const isDueno = modalRol === "dueno";
+                // isSelf: el user logueado está editando su propia row. Bloqueamos
+                // edición de permisos/módulos/permisos-avanzados para evitar
+                // que se deje sin acceso por error (bug reportado 2026-05-13:
+                // Lucas se editó a sí mismo, el form arrancó con módulos vacíos
+                // — su rol los recibía implícitos del ROLES dict — y al guardar
+                // se persistió un usuario_permisos vacío que sobreescribió los
+                // implícitos del rol).
+                const isSelf = modal !== "new" && modal !== null && modal.id === user.id;
+                const lockPermisos = isDueno || isSelf;
                 return (<>
+                  {isSelf && (
+                    <div className="alert" style={{ marginTop: 12, marginBottom: 4, fontSize: 11.5, lineHeight: 1.5 }}>
+                      Estás editando tu propio usuario. Por seguridad, no podés modificar tus módulos, permisos avanzados, cuentas, locales ni el estado activo. Pedile a otro dueño o admin que los ajuste si hace falta. Sí podés cambiar nombre o contraseña.
+                    </div>
+                  )}
                   <div style={{ marginTop:16, marginBottom:16 }}>
                     <label style={{ display:"block", fontSize:9, letterSpacing:"1.5px", textTransform:"uppercase", color:"var(--muted)", marginBottom:8 }}>
-                      Módulos habilitados
+                      Módulos habilitados {isSelf && <span style={{ color: "var(--pase-text-muted)", textTransform: "none", letterSpacing: 0, marginLeft: 6 }}>(bloqueado: edición propia)</span>}
                     </label>
                     <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:4 }}>
                       {MODULOS.map(m => {
                         const checked = isDueno || form.modulos.includes(m.slug);
                         return (
                           <label key={m.slug} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11,
-                            color: isDueno ? "var(--muted)" : checked ? "var(--txt)" : "var(--muted2)",
-                            cursor: isDueno ? "default" : "pointer", padding:"4px 6px",
-                            background: checked ? "var(--s3)" : "transparent", borderRadius:"var(--r)" }}>
-                            <input type="checkbox" checked={checked} disabled={isDueno}
-                              onChange={() => !isDueno && toggleModulo(m.slug)} style={{ accentColor:"var(--acc)" }} />
+                            color: lockPermisos ? "var(--muted)" : checked ? "var(--txt)" : "var(--muted2)",
+                            cursor: lockPermisos ? "default" : "pointer", padding:"4px 6px",
+                            background: checked ? "var(--s3)" : "transparent", borderRadius:"var(--r)",
+                            opacity: lockPermisos ? 0.6 : 1 }}>
+                            <input type="checkbox" checked={checked} disabled={lockPermisos}
+                              onChange={() => !lockPermisos && toggleModulo(m.slug)} style={{ accentColor:"var(--acc)" }} />
                             <span>{m.icon}</span> {m.label}
                           </label>
                         );
@@ -324,18 +363,19 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                       ya habilitadas. No aparecen como módulos en sidebar. */}
                   <div style={{ marginTop:16, marginBottom:16 }}>
                     <label style={{ display:"block", fontSize:9, letterSpacing:"1.5px", textTransform:"uppercase", color:"var(--muted)", marginBottom:8 }}>
-                      Permisos avanzados
+                      Permisos avanzados {isSelf && <span style={{ color: "var(--pase-text-muted)", textTransform: "none", letterSpacing: 0, marginLeft: 6 }}>(bloqueado: edición propia)</span>}
                     </label>
                     <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
                       {PERMISOS_EXTRAS.map(p => {
                         const checked = isDueno || form.modulos.includes(p.slug);
                         return (
                           <label key={p.slug} style={{ display:"flex", alignItems:"flex-start", gap:8, fontSize:11,
-                            color: isDueno ? "var(--muted)" : checked ? "var(--txt)" : "var(--muted2)",
-                            cursor: isDueno ? "default" : "pointer", padding:"6px 8px",
-                            background: checked ? "var(--s3)" : "transparent", borderRadius:"var(--r)" }}>
-                            <input type="checkbox" checked={checked} disabled={isDueno}
-                              onChange={() => !isDueno && toggleModulo(p.slug)} style={{ accentColor:"var(--acc)", marginTop:2 }} />
+                            color: lockPermisos ? "var(--muted)" : checked ? "var(--txt)" : "var(--muted2)",
+                            cursor: lockPermisos ? "default" : "pointer", padding:"6px 8px",
+                            background: checked ? "var(--s3)" : "transparent", borderRadius:"var(--r)",
+                            opacity: lockPermisos ? 0.6 : 1 }}>
+                            <input type="checkbox" checked={checked} disabled={lockPermisos}
+                              onChange={() => !lockPermisos && toggleModulo(p.slug)} style={{ accentColor:"var(--acc)", marginTop:2 }} />
                             <div>
                               <div style={{ fontWeight:500 }}>{p.label}</div>
                               <div style={{ fontSize:10, color:"var(--muted)", marginTop:2 }}>{p.descripcion}</div>
@@ -351,17 +391,17 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                   {!isDueno && (
                     <div style={{ marginTop:16 }}>
                       <label style={{ display:"block", fontSize:9, letterSpacing:"1.5px", textTransform:"uppercase", color:"var(--muted)", marginBottom:8 }}>
-                        Cuentas de Tesorería
+                        Cuentas de Tesorería {isSelf && <span style={{ color: "var(--pase-text-muted)", textTransform: "none", letterSpacing: 0, marginLeft: 6 }}>(bloqueado: edición propia)</span>}
                       </label>
                       <div style={{ display:"flex", gap:16, marginBottom:8 }}>
-                        <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, cursor:"pointer" }}>
-                          <input type="radio" name="cuentas_scope" checked={form.cuentas_all}
-                            onChange={() => setForm(f => ({ ...f, cuentas_all: true }))} style={{ accentColor:"var(--acc)" }} />
+                        <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, cursor: isSelf ? "default" : "pointer", opacity: isSelf ? 0.6 : 1 }}>
+                          <input type="radio" name="cuentas_scope" checked={form.cuentas_all} disabled={isSelf}
+                            onChange={() => !isSelf && setForm(f => ({ ...f, cuentas_all: true }))} style={{ accentColor:"var(--acc)" }} />
                           Todas las cuentas
                         </label>
-                        <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, cursor:"pointer" }}>
-                          <input type="radio" name="cuentas_scope" checked={!form.cuentas_all}
-                            onChange={() => setForm(f => ({ ...f, cuentas_all: false }))} style={{ accentColor:"var(--acc)" }} />
+                        <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, cursor: isSelf ? "default" : "pointer", opacity: isSelf ? 0.6 : 1 }}>
+                          <input type="radio" name="cuentas_scope" checked={!form.cuentas_all} disabled={isSelf}
+                            onChange={() => !isSelf && setForm(f => ({ ...f, cuentas_all: false }))} style={{ accentColor:"var(--acc)" }} />
                           Personalizado
                         </label>
                       </div>
@@ -375,10 +415,12 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                               const checked = form.cuentas_visibles.includes(c);
                               return (
                                 <label key={`vs-${c}`} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11,
-                                  color: checked ? "var(--txt)" : "var(--muted2)", cursor:"pointer",
+                                  color: checked ? "var(--txt)" : "var(--muted2)", cursor: isSelf ? "default" : "pointer",
                                   padding:"6px 10px", background: checked ? "var(--s3)" : "var(--s2)",
-                                  borderRadius:"var(--r)", border:`1px solid ${checked ? "var(--acc)" : "var(--bd)"}` }}>
-                                  <input type="checkbox" checked={checked} onChange={() => toggleCuenta(c)} style={{ accentColor:"var(--acc)" }} />
+                                  borderRadius:"var(--r)", border:`1px solid ${checked ? "var(--acc)" : "var(--bd)"}`,
+                                  opacity: isSelf ? 0.6 : 1 }}>
+                                  <input type="checkbox" checked={checked} disabled={isSelf}
+                                    onChange={() => !isSelf && toggleCuenta(c)} style={{ accentColor:"var(--acc)" }} />
                                   {c}
                                 </label>
                               );
@@ -392,16 +434,18 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                               const checked = form.cuentas_operables.includes(c);
                               return (
                                 <label key={`op-${c}`} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11,
-                                  color: checked ? "var(--txt)" : "var(--muted2)", cursor:"pointer",
+                                  color: checked ? "var(--txt)" : "var(--muted2)", cursor: isSelf ? "default" : "pointer",
                                   padding:"6px 10px", background: checked ? "var(--s3)" : "var(--s2)",
-                                  borderRadius:"var(--r)", border:`1px solid ${checked ? "var(--acc)" : "var(--bd)"}` }}>
-                                  <input type="checkbox" checked={checked} onChange={() => toggleCuentaOperable(c)} style={{ accentColor:"var(--acc)" }} />
+                                  borderRadius:"var(--r)", border:`1px solid ${checked ? "var(--acc)" : "var(--bd)"}`,
+                                  opacity: isSelf ? 0.6 : 1 }}>
+                                  <input type="checkbox" checked={checked} disabled={isSelf}
+                                    onChange={() => !isSelf && toggleCuentaOperable(c)} style={{ accentColor:"var(--acc)" }} />
                                   {c}
                                 </label>
                               );
                             })}
                           </div>
-                          {form.cuentas_visibles.length === 0 && form.cuentas_operables.length === 0 && (
+                          {form.cuentas_visibles.length === 0 && form.cuentas_operables.length === 0 && !isSelf && (
                             <div className="alert alert-warn" style={{ marginTop:8 }}>Sin cuentas marcadas (ni saldo ni operar), el usuario no podrá usar Tesorería</div>
                           )}
                         </>
@@ -413,7 +457,7 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                   {!isDueno && (
                     <div style={{ marginTop:16 }}>
                       <label style={{ display:"block", fontSize:9, letterSpacing:"1.5px", textTransform:"uppercase", color:"var(--muted)", marginBottom:8 }}>
-                        Locales asignados
+                        Locales asignados {isSelf && <span style={{ color: "var(--pase-text-muted)", textTransform: "none", letterSpacing: 0, marginLeft: 6 }}>(bloqueado: edición propia)</span>}
                       </label>
                       {locales.length === 0 ? <div className="empty" style={{padding:16}}>No hay locales cargados en el sistema</div> : (
                         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
@@ -421,17 +465,19 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                             const checked = form.locales_ids.includes(Number(l.id));
                             return (
                               <label key={l.id} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11,
-                                color: checked ? "var(--txt)" : "var(--muted2)", cursor:"pointer",
+                                color: checked ? "var(--txt)" : "var(--muted2)", cursor: isSelf ? "default" : "pointer",
                                 padding:"6px 10px", background: checked ? "var(--s3)" : "var(--s2)",
-                                borderRadius:"var(--r)", border:`1px solid ${checked ? "var(--acc)" : "var(--bd)"}` }}>
-                                <input type="checkbox" checked={checked} onChange={() => toggleLocal(Number(l.id))} style={{ accentColor:"var(--acc)" }} />
+                                borderRadius:"var(--r)", border:`1px solid ${checked ? "var(--acc)" : "var(--bd)"}`,
+                                opacity: isSelf ? 0.6 : 1 }}>
+                                <input type="checkbox" checked={checked} disabled={isSelf}
+                                  onChange={() => !isSelf && toggleLocal(Number(l.id))} style={{ accentColor:"var(--acc)" }} />
                                 {l.nombre}
                               </label>
                             );
                           })}
                         </div>
                       )}
-                      {form.locales_ids.length === 0 && (
+                      {form.locales_ids.length === 0 && !isSelf && (
                         <div className="alert alert-warn" style={{ marginTop:8 }}>Sin locales asignados no podrá cargar novedades en RRHH</div>
                       )}
                     </div>
