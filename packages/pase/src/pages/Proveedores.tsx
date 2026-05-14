@@ -2,10 +2,11 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope, tienePermiso } from "../lib/auth";
 import { useCategorias } from "../lib/useCategorias";
-import { toISO, today, fmt_d, fmt_$, estadoFactura } from "../lib/utils";
+import { toISO, today, fmt_$ } from "../lib/utils";
 import { calcularSaldosPorProveedor } from "../lib/saldoProveedor";
 import type { Usuario, Local } from "../types/auth";
-import type { Proveedor, Factura, PagoFactura } from "../types/finanzas";
+import type { Proveedor, Factura } from "../types/finanzas";
+import { EstadoCuentaDrawer } from "./compras/EstadoCuentaDrawer";
 
 interface ProveedoresProps {
   user: Usuario;
@@ -145,81 +146,20 @@ export default function Proveedores({ user, localActivo }: ProveedoresProps) {
         <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setEditModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={guardarEdit}>Guardar</button></div>
       </div></div>)}
 
-      {/* Modal Estado de Cuenta */}
-      {ctaModal&&(<div className="overlay" onClick={()=>setCtaModal(null)}><div className="modal" style={{width:700}} onClick={e=>e.stopPropagation()}>
-        <div className="modal-hd"><div className="modal-title">{ctaModal.nombre} — Estado de Cuenta</div><button className="close-btn" onClick={()=>setCtaModal(null)}>✕</button></div>
-        <div className="modal-body">
-          {ctaLoading?<div className="loading">Cargando...</div>:(()=>{
-            const pendientes=ctaFacts.filter(f=>estadoFactura(f)==="pendiente"&&(f.tipo||"factura")==="factura");
-            const vencidas=ctaFacts.filter(f=>estadoFactura(f)==="vencida"&&(f.tipo||"factura")==="factura");
-            const ncs=ctaFacts.filter(f=>(f.tipo||"factura")==="nota_credito");
-            const aPagar=pendientes.reduce((s,f)=>s+(f.total||0),0)+vencidas.reduce((s,f)=>s+(f.total||0),0);
-            const totalVencido=vencidas.reduce((s,f)=>s+(f.total||0),0);
-            const totalNC=ncs.reduce((s,f)=>s+Math.abs(f.total||0),0);
-            const deudaNeta=aPagar-totalNC;
-            const pagos=ctaFacts.flatMap(f => (f.pagos || []).map((p: PagoFactura) => ({...p, nro: f.nro})));
-
-            const [yr,mo]=ctaMes.split("-").map(Number) as [number, number];
-            const desde=ctaMes+"-01";
-            const hasta=ctaMes+"-"+String(new Date(yr,mo,0).getDate()).padStart(2,"0");
-            const facturasDelMes=ctaFacts.filter(f=>(f.tipo||"factura")==="factura"&&f.fecha>=desde&&f.fecha<=hasta);
-            const totalFacturadoMes=facturasDelMes.reduce((s,f)=>s+Number(f.total||0),0);
-            const totalPagadoMes=ctaFacts.reduce((s, f) => {
-              const pagosDelMes=(f.pagos || []).filter((p: PagoFactura) => p.fecha >= desde && p.fecha <= hasta);
-              return s + pagosDelMes.reduce((sp, p) => sp + Number(p.monto || 0), 0);
-            }, 0);
-
-            return(<>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
-                <span style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>Resumen del mes</span>
-                <input type="month" className="search" style={{width:140}} value={ctaMes} onChange={e=>setCtaMes(e.target.value)}/>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-                <div className="kpi"><div className="kpi-label">Total Comprado</div><div className="kpi-value kpi-warn">{fmt_$(totalFacturadoMes)}</div></div>
-                <div className="kpi"><div className="kpi-label">Pagado en {ctaMes}</div><div className="kpi-value kpi-success">{fmt_$(totalPagadoMes)}</div></div>
-              </div>
-              <div className="grid4" style={{marginBottom:16}}>
-                <div className="kpi"><div className="kpi-label">Deuda Bruta</div><div className="kpi-value kpi-warn">{fmt_$(aPagar)}</div></div>
-                <div className="kpi"><div className="kpi-label">Vencido</div><div className="kpi-value kpi-danger">{fmt_$(totalVencido)}</div></div>
-                <div className="kpi"><div className="kpi-label">NC Disponibles</div><div className="kpi-value kpi-info">{fmt_$(totalNC)}</div></div>
-                <div className="kpi"><div className="kpi-label">Deuda Neta</div><div className={`kpi-value ${deudaNeta>0?"kpi-danger":"kpi-success"}`}>{fmt_$(deudaNeta)}</div></div>
-              </div>
-              {(pendientes.length>0||vencidas.length>0)&&(<div className="panel" style={{marginBottom:12}}>
-                <div className="panel-hd"><span className="panel-title">Facturas Impagas</span></div>
-                <table><thead><tr><th>Nº Factura</th><th>Fecha</th><th>Vencimiento</th><th style={{textAlign:"right"}}>Total</th><th>Estado</th></tr></thead>
-                <tbody>{[...vencidas,...pendientes].map(f=>{
-                  const efectivo=estadoFactura(f);
-                  const esV=efectivo==="vencida";
-                  return <tr key={f.id}><td className="mono">{f.nro}</td><td className="mono">{fmt_d(f.fecha)}</td><td className="mono" style={{color:esV?"var(--danger)":"var(--muted2)"}}>{fmt_d(f.venc)}</td><td style={{textAlign:"right"}}><span className="num kpi-warn">{fmt_$(f.total)}</span></td><td><span className={`badge ${esV?"b-danger":"b-warn"}`}>{esV?"Vencida":"Pendiente"}</span></td></tr>;
-                })}</tbody></table>
-              </div>)}
-              {/* Bug #32: las NC del proveedor también se listan acá. El estado
-                  "Disponible" es estimado: hoy el sistema no tiene flow de
-                  aplicación de NC contra factura puntual (el RPC pagar_factura
-                  no consume NC). Las NC restan del saldo global del proveedor
-                  pero no se marcan individualmente como aplicadas. Si en el
-                  futuro se agrega esa feature, el badge se va a poder
-                  diferenciar entre Disponible/Aplicada. */}
-              {ncs.length>0&&(<div className="panel" style={{marginBottom:12}}>
-                <div className="panel-hd"><span className="panel-title">Notas de Crédito ({ncs.length})</span></div>
-                <table><thead><tr><th>Nº NC</th><th>Fecha</th><th style={{textAlign:"right"}}>Monto</th><th>Estado</th></tr></thead>
-                <tbody>{ncs.sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||"")).map(f=>(
-                  <tr key={f.id}><td className="mono">{f.nro}</td><td className="mono">{fmt_d(f.fecha)}</td><td style={{textAlign:"right"}}><span className="num kpi-info">{fmt_$(Math.abs(f.total||0))}</span></td><td><span className="badge b-info">Disponible</span></td></tr>
-                ))}</tbody></table>
-              </div>)}
-              {pagos.length>0&&(<div className="panel">
-                <div className="panel-hd"><span className="panel-title">Historial de Pagos</span></div>
-                <table><thead><tr><th>Fecha</th><th>Factura</th><th>Cuenta</th><th style={{textAlign:"right"}}>Monto</th></tr></thead>
-                <tbody>{pagos.sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||"")).map((p,i)=>(
-                  <tr key={i}><td className="mono">{fmt_d(p.fecha)}</td><td className="mono">{p.nro}</td><td style={{fontSize:11,color:"var(--muted2)"}}>{p.cuenta}</td><td style={{textAlign:"right"}}><span className="num kpi-success">{fmt_$(p.monto)}</span></td></tr>
-                ))}</tbody></table>
-              </div>)}
-              {pendientes.length===0&&vencidas.length===0&&pagos.length===0&&ncs.length===0&&<div className="empty">Sin movimientos registrados</div>}
-            </>);
-          })()}
-        </div>
-        <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setCtaModal(null)}>Cerrar</button></div>
-      </div></div>)}
+      {/* Drawer Estado de Cuenta (sprint mayo 2026 v2 Commit 4).
+          Reemplaza el modal anterior con números 28-30px desbalanceados.
+          Layout: panel lateral 480px desde la derecha. */}
+      {ctaModal && (
+        <EstadoCuentaDrawer
+          proveedor={ctaModal}
+          facturas={ctaFacts}
+          loading={ctaLoading}
+          mes={ctaMes}
+          onMesChange={setCtaMes}
+          onClose={() => setCtaModal(null)}
+          onEditar={() => setEditModal(ctaModal)}
+        />
+      )}
     </div>
   );
 }
