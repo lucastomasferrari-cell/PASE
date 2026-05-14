@@ -9,6 +9,8 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { cuentasOperables } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
+import { useToast } from "../hooks/useToast";
+import { ToastComponent } from "../components/Toast";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import {
   diasVacacionesPorAnio,
@@ -95,7 +97,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
   const [liqFinalOverrides, setLiqFinalOverrides] = useState<Record<string, string>>({});
   const [liqFinalLoading, setLiqFinalLoading] = useState(false);
 
-  const [toast, setToast] = useState("");
+  const { toast, showToast } = useToast();
 
   // Defensive (Bug Caja-1): si cualquiera de los state values de cuenta queda
   // con un valor que no está en cuentasUsables (regression future, scope
@@ -114,7 +116,6 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liqFinalCuenta, vacLineas, aguLineas, cuentasKey]);
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
   const esDueno = user?.rol === "dueno" || user?.rol === "admin";
 
   // ─── LOAD ──────────────────────────────────────────────────────────────────
@@ -370,7 +371,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
 
   return (
     <div>
-      {toast && <div style={{position:"fixed",top:16,right:16,zIndex:300,padding:"10px 16px",background:"var(--pase-bg)",color:"var(--pase-text)",border:"0.5px solid var(--pase-celeste-300)",borderRadius:14,fontSize:12,fontFamily:"var(--pase-font)",fontWeight:500,letterSpacing:"-0.005em"}}>{toast}</div>}
+      <ToastComponent toast={toast} />
 
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:12,flexWrap:"wrap"}}>
         <div>

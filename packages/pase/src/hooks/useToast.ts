@@ -10,14 +10,16 @@ export interface Toast {
 export function useToast(duration = 3000) {
   const [toast, setToast] = useState<Toast | null>(null);
 
+  const dismiss = useCallback(() => setToast(null), []);
+
   const showToast = useCallback((message: string, type: ToastType = "success") => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), duration);
+    setTimeout(() => setToast(t => t && t.message === message ? null : t), duration);
   }, [duration]);
 
   const showError = useCallback((message: string) => showToast(message, "error"), [showToast]);
   const showWarn = useCallback((message: string) => showToast(message, "warn"), [showToast]);
   const showInfo = useCallback((message: string) => showToast(message, "info"), [showToast]);
 
-  return { toast, showToast, showError, showWarn, showInfo };
+  return { toast, showToast, showError, showWarn, showInfo, dismiss };
 }

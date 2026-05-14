@@ -7,6 +7,8 @@ import { useCategorias } from "../lib/useCategorias";
 import { toISO, today, fmt_d, fmt_$, fmt_dt_ar } from "../lib/utils";
 import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { Combobox } from "../components/Combobox";
+import { useToast } from "../hooks/useToast";
+import { ToastComponent } from "../components/Toast";
 import type { Usuario, Local } from "../types";
 import type { Proveedor } from "../types/finanzas";
 
@@ -18,11 +20,6 @@ interface ConciliacionMPProps {
    * embeber el componente como sub-sección dentro de Caja (el módulo madre
    * ya muestra 'Caja · conciliación MP'). Sprint mayo 2026 v2 bug fix. */
   embedded?: boolean;
-}
-
-interface ToastState {
-  kind: "ok" | "err";
-  msg: string;
 }
 
 // Row consumida del table mp_movimientos. Cubre los campos que la página
@@ -211,7 +208,9 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
   const [loading,setLoading]=useState(true);
   const [sincronizando,setSincronizando]=useState(false);
   const [conciliando,setConciliando]=useState(false);
-  const [toast,setToast]=useState<ToastState | null>(null);
+  // Duración 5000ms (defaults a 3000) — los mensajes de conciliación pueden
+  // ser largos (error de RPC con detalle). El toast es dismissible con click.
+  const { toast, showToast, showError, dismiss } = useToast(5000);
   const [tab,setTab]=useState("egresos");
   // Filtro "solo sin justificar" del tab Egresos. Lo activa también el card
   // del header al click ("X egresos sin justificar" → tab Egresos + filtro).
@@ -363,11 +362,6 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(()=>{load();},[debDesde,debHasta,localActivo]);
 
-  const showToast=(kind: "ok"|"err", msg: string)=>{
-    setToast({kind,msg});
-    setTimeout(()=>setToast(t=>t&&t.msg===msg?null:t),5000);
-  };
-
   const [syncCountdown,setSyncCountdown]=useState(0);
 
   // Devuelve los headers de auth para los endpoints /api/mp-*. El backend
@@ -391,7 +385,7 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
       const auth = await authHeader();
       console.log("[sincronizar] headers a /api/mp-generate:", auth);
       if(!auth.Authorization){
-        showToast("err","⚠ Sesión expirada. Recargá la página y volvé a entrar.");
+        showError("⚠ Sesión expirada. Recargá la página y volvé a entrar.");
         setSincronizando(false);
         setSyncCountdown(0);
         return;
@@ -405,7 +399,7 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
       console.log("[MP] mp-generate:",genData);
 
       if(!genData.ok){
-        showToast("err","⚠ Error generando reporte: "+(genData.error||"desconocido"));
+        showError("⚠ Error generando reporte: "+(genData.error||"desconocido"));
         setSincronizando(false);
         setSyncCountdown(0);
         return;
@@ -446,17 +440,17 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
         const saldoTotal=(d.resultados||[]).reduce((s: number,x: MpProcessResultado)=>s+(Number(x.saldo_disponible)||0),0);
         const csvNoEncontrado=(d.resultados||[]).some((x: MpProcessResultado)=>x.release_error&&x.release_error.includes("CSV no encontrado"));
         if(csvNoEncontrado){
-          showToast("err","⚠ MercadoPago no generó el reporte a tiempo. Intentá sincronizar de nuevo en unos minutos.");
+          showError("⚠ MercadoPago no generó el reporte a tiempo. Intentá sincronizar de nuevo en unos minutos.");
         }else{
           // eslint-disable-next-line react-hooks/immutability -- closure captura fmt_mp declarado más abajo; en runtime OK porque sincronizar() solo se invoca post-render.
-          showToast("ok","Sincronización completada · "+totalMovs+" movimientos · "+fmt_mp(saldoTotal)+" saldo");
+          showToast("Sincronización completada · "+totalMovs+" movimientos · "+fmt_mp(saldoTotal)+" saldo");
         }
       }else{
-        showToast("err","⚠ Error procesando: "+(d.error||"desconocido"));
+        showError("⚠ Error procesando: "+(d.error||"desconocido"));
       }
     }catch(e: unknown){
       console.error("ConciliacionMP sincronizar error:",e);
-      showToast("err","⚠ Error al conectar con MP: "+(e instanceof Error ? e.message : String(e)));
+      showError("⚠ Error al conectar con MP: "+(e instanceof Error ? e.message : String(e)));
     }finally{
       setSincronizando(false);
       setSyncCountdown(0);
@@ -489,7 +483,7 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
     });
     if(error){
       console.error("set_mp_token error:",error);
-      showToast("err","⚠ Error guardando credencial: "+(error.message||""));
+      showError("⚠ Error guardando credencial: "+(error.message||""));
       return;
     }
     setConfigModal(false);setConfigForm({local_id:"",access_token:""});load();
@@ -505,7 +499,7 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
       const auth = await authHeader();
       console.log("[resetearLocal] headers a /api/mp-sync:", auth);
       if(!auth.Authorization){
-        showToast("err","⚠ Sesión expirada. Recargá la página y volvé a entrar.");
+        showError("⚠ Sesión expirada. Recargá la página y volvé a entrar.");
         setSincronizando(false);
         return;
       }
@@ -657,7 +651,7 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
       .filter(l=>l.factura_id && parseFloat(l.monto)>0)
       .map(l=>({factura_id:l.factura_id, monto_aplicado:parseFloat(l.monto)}));
     if(lineasValidas.length===0){
-      showToast("err","Tenés que elegir al menos una factura con monto > 0");
+      showError("Tenés que elegir al menos una factura con monto > 0");
       return;
     }
     setConciliando(true);
@@ -667,8 +661,8 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
       p_idempotency_key:idempKey,
     });
     setConciliando(false);
-    if(error){showToast("err","No se pudo conciliar: "+error.message);return;}
-    showToast("ok",`Conciliado contra ${lineasValidas.length} factura${lineasValidas.length===1?"":"s"}`);
+    if(error){showError("No se pudo conciliar: "+error.message);return;}
+    showToast(`Conciliado contra ${lineasValidas.length} factura${lineasValidas.length===1?"":"s"}`);
     cerrarConciliar(); load();
   };
 
@@ -682,8 +676,8 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
       p_motivo:motivoIgnorar.trim()||null,
     });
     setConciliando(false);
-    if(error){showToast("err","No se pudo ignorar: "+error.message);return;}
-    showToast("ok","Egreso ignorado");
+    if(error){showError("No se pudo ignorar: "+error.message);return;}
+    showToast("Egreso ignorado");
     cerrarConciliar(); load();
   };
 
@@ -692,8 +686,8 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
     setConciliando(true);
     const {error}=await db.rpc("fn_designorar_mp",{p_mp_mov_id:mp_mov_id});
     setConciliando(false);
-    if(error){showToast("err","No se pudo des-ignorar: "+error.message);return;}
-    showToast("ok","Egreso vuelto a pendiente");
+    if(error){showError("No se pudo des-ignorar: "+error.message);return;}
+    showToast("Egreso vuelto a pendiente");
     load();
   };
 
@@ -706,11 +700,12 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
         : { p_mp_mov_id:conciliarModal.id, p_tipo:tipo, p_justif_id:justifId }
     );
     setConciliando(false);
-    if(error){showToast("err","No se pudo conciliar: "+error.message);return;}
+    if(error){showError("No se pudo conciliar: "+error.message);return;}
     // fn_conciliar_mp_con_gasto_existente puede devolver {warning} si los
     // montos difieren — la conciliación se aplica igual.
     const warning=(data as {warning?:string|null}|null)?.warning||null;
-    showToast(warning?"err":"ok",warning?("Vinculado con discrepancia: "+warning):("Egreso justificado contra "+tipo));
+    if (warning) showError("Vinculado con discrepancia: "+warning);
+    else showToast("Egreso justificado contra "+tipo);
     cerrarConciliar(); load();
   };
 
@@ -725,8 +720,8 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
       p_gasto_data:{categoria:nuevoGastoForm.categoria, detalle:nuevoGastoForm.detalle, tipo:tipoDerivado},
     });
     setConciliando(false);
-    if(error){showToast("err","No se pudo crear el gasto: "+error.message);return;}
-    showToast("ok","Gasto creado y conciliado");
+    if(error){showError("No se pudo crear el gasto: "+error.message);return;}
+    showToast("Gasto creado y conciliado");
     cerrarConciliar(); load();
   };
 
@@ -745,8 +740,8 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
       },
     });
     setConciliando(false);
-    if(error){showToast("err","No se pudo crear la factura: "+error.message);return;}
-    showToast("ok","Factura creada y conciliada");
+    if(error){showError("No se pudo crear la factura: "+error.message);return;}
+    showToast("Factura creada y conciliada");
     cerrarConciliar(); load();
   };
 
@@ -764,8 +759,8 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
       },
     });
     setConciliando(false);
-    if(error){showToast("err","No se pudo crear el remito: "+error.message);return;}
-    showToast("ok","Remito creado y conciliado");
+    if(error){showError("No se pudo crear el remito: "+error.message);return;}
+    showToast("Remito creado y conciliado");
     cerrarConciliar(); load();
   };
 
@@ -778,36 +773,14 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
       p_detalle:movInternoForm.detalle||null,
     });
     setConciliando(false);
-    if(error){showToast("err","No se pudo registrar la transferencia: "+error.message);return;}
-    showToast("ok","Transferencia registrada");
+    if(error){showError("No se pudo registrar la transferencia: "+error.message);return;}
+    showToast("Transferencia registrada");
     cerrarConciliar(); load();
   };
 
   return (
     <div>
-      {toast&&(
-        <div
-          onClick={()=>setToast(null)}
-          style={{
-            position:"fixed",
-            bottom:24,
-            right:24,
-            zIndex:1000,
-            padding:"12px 16px",
-            borderRadius:14,
-            background:"var(--pase-bg)",
-            border:"0.5px solid var(--pase-celeste-300)",
-            color:"var(--pase-text)",
-            fontSize:12,
-            fontWeight:500,
-            maxWidth:420,
-            cursor:"pointer",
-            letterSpacing:"-0.005em",
-          }}
-        >
-          {toast.msg}
-        </div>
-      )}
+      <ToastComponent toast={toast} onDismiss={dismiss} />
       {/* En modo embedded el título y los botones de acción ('Cuentas MP'
           + 'Sincronizar') los dibuja el módulo madre Caja. Acá solo queda
           una toolbar fina con los filtros de fecha (Desde / Hasta + preset). */}

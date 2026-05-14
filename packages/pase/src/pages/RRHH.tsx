@@ -3,6 +3,8 @@ import { db } from "../lib/supabase";
 import { localesVisibles, applyLocalScope, cuentasOperables, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { usePuestosRRHH } from "../lib/usePuestosRRHH";
+import { useToast } from "../hooks/useToast";
+import { ToastComponent } from "../components/Toast";
 import { toISO, today } from "../lib/utils";
 import {
   calcularSACProporcional,
@@ -48,8 +50,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const cuentasUsables = opCuentas === null ? CUENTAS_PAGO : CUENTAS_PAGO.filter(c => opCuentas.includes(c));
   const [tab, setTab] = useState("dashboard");
   const [legajoId, setLegajoId] = useState<string | null>(null);
-  const [toast, setToast] = useState("");
-  const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(""), 3000); };
+  const { toast, showToast } = useToast();
 
   const visLocs = localesVisibles(user);
   const locsDisp = visLocs === null ? locales : locales.filter((l: Local) => visLocs.includes(l.id));
@@ -620,7 +621,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
 
   return (
     <div>
-      {toast && <div style={{position:"fixed",top:16,right:16,zIndex:300,padding:"10px 16px",background:"var(--pase-bg)",color:"var(--pase-text)",border:"0.5px solid var(--pase-celeste-300)",borderRadius:14,fontSize:12,fontFamily:"var(--pase-font)",fontWeight:500,letterSpacing:"-0.005em"}}>{toast}</div>}
+      <ToastComponent toast={toast} />
 
       <div className="ph-row">
         <div><div className="ph-title">Equipo</div></div>

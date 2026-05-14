@@ -5,6 +5,7 @@ import { useMediosCobro } from "../lib/useMediosCobro";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { useToast } from "../hooks/useToast";
+import { ToastComponent } from "../components/Toast";
 import ImportarMaxirest from "./ImportarMaxirest";
 import { Modal } from "../components/ui";
 import type { Usuario, Local, Venta, CierreVentas } from "../types";
@@ -213,20 +214,9 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
     setDetalleModal(null);load();
   };
 
-  // Calm design v1.0: el toast no se distingue cromáticamente por tipo,
-  // la naturaleza del mensaje la comunica el texto. Borde celeste sutil.
-
   return (
     <div>
-      {toast && (
-        <div style={{
-          position: "fixed", top: 16, right: 16, zIndex: 200,
-          padding: "10px 16px", background: "var(--pase-bg)", color: "var(--pase-text)",
-          border: "0.5px solid var(--pase-celeste-300)",
-          borderRadius: 14, fontSize: 12, fontFamily: "var(--pase-font)",
-          fontWeight: 500, letterSpacing: "-0.005em",
-        }}>{toast.message}</div>
-      )}
+      <ToastComponent toast={toast} />
       {/* SECCIÓN SUPERIOR: carga manual + importador Maxirest */}
       <div className="ph-row">
         <div><div className="ph-title">Ventas</div></div>

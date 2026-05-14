@@ -7,6 +7,7 @@ import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { useToast } from "../hooks/useToast";
+import { ToastComponent } from "../components/Toast";
 import { Combobox } from "../components/Combobox";
 import type { Usuario, Local } from "../types";
 import type { Gasto } from "../types/finanzas";
@@ -463,19 +464,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
         </div>
       )}
 
-      {/* TOAST */}
-      {toast && (
-        <div style={{
-          position: "fixed", top: 16, right: 16, zIndex: 200,
-          padding: "10px 16px",
-          background: "var(--pase-bg)",
-          color: "var(--pase-text)",
-          border: "0.5px solid var(--pase-celeste-300)",
-          borderRadius: 14, fontSize: 12,
-          fontFamily: "var(--pase-font)", fontWeight: 500,
-          letterSpacing: "-0.005em",
-        }}>{toast.message}</div>
-      )}
+      <ToastComponent toast={toast} />
 
       {/* Modal cargar gasto manual */}
       {modal && (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { db } from "./lib/supabase";
 import { AuthProvider, necesitaElegirLocal } from "./lib/auth";
@@ -211,10 +211,6 @@ function AppMain() {
     await db.auth.signOut();
   };
 
-  const [toast] = useState("");
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  void toastTimer;
-
   const props: { user: Usuario; locales: Local[]; localActivo: number | null } = { user: user!, locales, localActivo };
 
   if (authLoading) return <><style>{css}</style><div className="login-wrap"><div className="login-bg"/><div className="login-card" style={{textAlign:"center",padding:40}}>Cargando...</div></div></>;
@@ -261,7 +257,6 @@ function AppMain() {
             tenant={tenant} tenantOverride={tenantOverride} onClearOverride={clearTenantOverride}/>
         </div>
         <main className="main" style={{position:"relative",zIndex:1}}>
-          {toast && <div style={{position:"fixed",top:16,right:16,zIndex:200,padding:"10px 16px",background:"var(--pase-bg)",color:"var(--pase-text)",border:"0.5px solid var(--pase-celeste-300)",borderRadius:14,fontSize:12,fontFamily:"var(--pase-font)",fontWeight:500,letterSpacing:"-0.005em"}}>{toast}</div>}
           <Suspense fallback={<PageLoader/>}>
             <Routes>
               {/* Root → primer item permitido */}
