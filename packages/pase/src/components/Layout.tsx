@@ -80,7 +80,7 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
         {localesDisp.length > 1 && (
           <div className="sb-local">
             <select value={localActivo||""} onChange={e=>setLocalActivo(e.target.value?parseInt(e.target.value):null)}>
-              {user.rol==="dueno" && <option value="">Todos los locales</option>}
+              {user.rol==="dueno" && <option value="">Todas las sucursales</option>}
               {localesDisp.map((l: { id: number; nombre: string })=><option key={l.id} value={l.id}>{l.nombre}</option>)}
             </select>
           </div>

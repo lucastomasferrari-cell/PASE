@@ -116,7 +116,7 @@ export default function Finanzas() {
       {isConsolidado && (
         <>
           {/* Zona 1: Consolidado · KPIs globales */}
-          <SectionHeader label="Consolidado · todos los locales" />
+          <SectionHeader label="Consolidado · todas las sucursales" />
           <div className={styles.zone1}>
             <div className={styles.anchor}>
               <div className={styles.anchorBgCircle} aria-hidden />

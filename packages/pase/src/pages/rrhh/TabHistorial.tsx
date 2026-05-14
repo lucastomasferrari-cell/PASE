@@ -30,7 +30,7 @@ export function TabHistorial({
         </select>
         <input type="number" className="search" style={{width:70}} value={histAnio} onChange={e => setHistAnio(parseInt(e.target.value))} />
         <select className="search" style={{width:160}} value={String(histLocal || "")} onChange={e => setHistLocal(e.target.value)}>
-          {!esEnc && <option value="">Todos los locales</option>}
+          {!esEnc && <option value="">Todas las sucursales</option>}
           {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
         </select>
       </div>

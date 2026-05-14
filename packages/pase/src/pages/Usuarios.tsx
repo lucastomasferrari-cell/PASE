@@ -457,9 +457,9 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                   {!isDueno && (
                     <div style={{ marginTop:16 }}>
                       <label style={{ display:"block", fontSize:9, letterSpacing:"1.5px", textTransform:"uppercase", color:"var(--muted)", marginBottom:8 }}>
-                        Locales asignados {isSelf && <span style={{ color: "var(--pase-text-muted)", textTransform: "none", letterSpacing: 0, marginLeft: 6 }}>(bloqueado: edición propia)</span>}
+                        Sucursales asignadas {isSelf && <span style={{ color: "var(--pase-text-muted)", textTransform: "none", letterSpacing: 0, marginLeft: 6 }}>(bloqueado: edición propia)</span>}
                       </label>
-                      {locales.length === 0 ? <div className="empty" style={{padding:16}}>No hay locales cargados en el sistema</div> : (
+                      {locales.length === 0 ? <div className="empty" style={{padding:16}}>No hay sucursales cargadas en el sistema</div> : (
                         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                           {locales.map(l => {
                             const checked = form.locales_ids.includes(Number(l.id));
@@ -478,7 +478,7 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                         </div>
                       )}
                       {form.locales_ids.length === 0 && !isSelf && (
-                        <div className="alert alert-warn" style={{ marginTop:8 }}>Sin locales asignados no podrá cargar novedades en RRHH</div>
+                        <div className="alert alert-warn" style={{ marginTop:8 }}>Sin sucursales asignadas no podrá cargar novedades en Equipo</div>
                       )}
                     </div>
                   )}

@@ -459,7 +459,7 @@ function MediosCobroSection({ user, locales, localActivo }: MediosCobroSectionPr
                 qué subset está viendo. */}
             {mostrarTodos && puedeVerTodos ? (
               <span className="badge b-warn" style={{ fontSize: 9, letterSpacing: 0.5 }}>
-                Vista admin · todos los locales
+                Vista admin · todas las sucursales
               </span>
             ) : (
               <span style={{ fontSize: 10, color: "var(--muted2)" }}>
@@ -471,7 +471,7 @@ function MediosCobroSection({ user, locales, localActivo }: MediosCobroSectionPr
             {puedeVerTodos && (
               <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, cursor: "pointer", userSelect: "none", color: "var(--muted2)" }}>
                 <input type="checkbox" checked={mostrarTodos} onChange={e => toggleMostrarTodos(e.target.checked)} style={{ cursor: "pointer" }} />
-                Mostrar todos los locales
+                Mostrar todas las sucursales
               </label>
             )}
             <button className="btn btn-acc btn-sm" onClick={abrirNuevo}>+ Nuevo medio</button>
@@ -538,7 +538,7 @@ function MediosCobroSection({ user, locales, localActivo }: MediosCobroSectionPr
               {(esOverrideNuevo || esOverrideExistente) && (
                 <div className="alert alert-warn" style={{ marginBottom: 12, fontSize: 11, lineHeight: 1.5 }}>
                   {esOverrideNuevo ? (
-                    <>Vas a crear un <strong>override solo para {nombreLocalActivo}</strong> del medio Global &quot;{editing.nombre}&quot;. Los otros locales no se afectan. Si querés modificar el medio Global directamente, cancelá, prendé el toggle &quot;Mostrar todos los locales&quot; y editá la fila Global.</>
+                    <>Vas a crear un <strong>override solo para {nombreLocalActivo}</strong> del medio Global &quot;{editing.nombre}&quot;. Las otras sucursales no se afectan. Si querés modificar el medio Global directamente, cancelá, prendé el toggle &quot;Mostrar todas las sucursales&quot; y editá la fila Global.</>
                   ) : (
                     <>Estás editando el <strong>override de {nombreLocalActivo}</strong>. Los cambios afectan solo a este local.</>
                   )}
@@ -551,7 +551,7 @@ function MediosCobroSection({ user, locales, localActivo }: MediosCobroSectionPr
               <div className="field">
                 <label>Local</label>
                 <select className="search" value={editing.local_id == null ? "" : String(editing.local_id)} onChange={e => setEditing({ ...editing, local_id: e.target.value === "" ? null : Number(e.target.value) })}>
-                  <option value="">Global (todos los locales)</option>
+                  <option value="">Global (todas las sucursales)</option>
                   {localesVisibles.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
                 </select>
               </div>

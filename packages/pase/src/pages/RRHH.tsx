@@ -623,7 +623,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       {toast && <div style={{position:"fixed",top:16,right:16,zIndex:300,padding:"10px 16px",background:"var(--pase-bg)",color:"var(--pase-text)",border:"0.5px solid var(--pase-celeste-300)",borderRadius:14,fontSize:12,fontFamily:"var(--pase-font)",fontWeight:500,letterSpacing:"-0.005em"}}>{toast}</div>}
 
       <div className="ph-row">
-        <div><div className="ph-title">RRHH</div></div>
+        <div><div className="ph-title">Equipo</div></div>
       </div>
 
       <div className="tabs">

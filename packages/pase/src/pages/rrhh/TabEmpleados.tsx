@@ -39,7 +39,7 @@ export function TabEmpleados({
     <>
       <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
         <select className="search" style={{width:160}} value={empFiltLocal} onChange={e => setEmpFiltLocal(e.target.value)}>
-          {!esEnc && <option value="">Todos los locales</option>}
+          {!esEnc && <option value="">Todas las sucursales</option>}
           {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
         </select>
         <input className="search" placeholder="Buscar..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} style={{width:160}} />

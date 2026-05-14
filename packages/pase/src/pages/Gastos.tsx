@@ -540,7 +540,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
             <div className="modal-hd"><div className="modal-title">Pagar — {pagarModal.nombre}</div><button className="close-btn" onClick={() => setPagarModal(null)}>✕</button></div>
             <div className="modal-body">
               <div className="alert alert-info" style={{ marginBottom: 14 }}>
-                {pagarModal.categoria} · {pagarModal.tipo} · {pagarModal.local_id ? locales.find((l: Local) => l.id === pagarModal.local_id)?.nombre : "Todos los locales"}
+                {pagarModal.categoria} · {pagarModal.tipo} · {pagarModal.local_id ? locales.find((l: Local) => l.id === pagarModal.local_id)?.nombre : "Todas las sucursales"}
               </div>
               <div className="form2">
                 <div className="field"><label>Monto $ *</label><input type="number" value={pagoPlantForm.monto} onChange={e => setPagoPlantForm({ ...pagoPlantForm, monto: e.target.value })} placeholder="0" /></div>
