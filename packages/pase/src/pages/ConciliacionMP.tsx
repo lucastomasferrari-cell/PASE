@@ -13,6 +13,10 @@ interface ConciliacionMPProps {
   user: Usuario;
   locales: Local[];
   localActivo: number | null;
+  /** Cuando true, omite el ph-row con título 'Conciliación MP'. Usado al
+   * embeber el componente como sub-sección dentro de Caja (el módulo madre
+   * ya muestra 'Caja · conciliación MP'). Sprint mayo 2026 v2 bug fix. */
+  embedded?: boolean;
 }
 
 interface ToastState {
@@ -130,7 +134,7 @@ interface MpResetResultado {
   error?: string;
 }
 
-function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
+function ConciliacionMP({ user, locales, localActivo, embedded = false }: ConciliacionMPProps) {
   const { COMISIONES_CATS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, RETIROS_SOCIOS, categoriaToTipo } = useCategorias();
   const [credenciales,setCredenciales]=useState<MpCredencial[]>([]);
   const [movimientos,setMovimientos]=useState<MpMovimiento[]>([]);
@@ -716,9 +720,12 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
           {toast.msg}
         </div>
       )}
-      <div className="ph-row">
-        <div><div className="ph-title">Conciliación MP</div></div>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+      {/* En modo embedded (dentro de Caja > sub-nav Conciliación MP) el
+          título 'Caja · conciliación MP' lo dibuja el módulo madre. Acá
+          solo renderizamos los botones de acción + los filtros de fecha
+          en una toolbar reducida. */}
+      {embedded ? (
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:14,justifyContent:"flex-end"}}>
           <div style={{display:"flex",gap:4,alignItems:"center",fontSize:10,color:"var(--muted2)"}}>
             <span>Desde</span>
             <input type="date" className="search" style={{width:140}} value={desde} onChange={e=>setDesde(e.target.value)}/>
@@ -731,7 +738,24 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
             {sincronizando?"🔄 Sincronizando...":"↻ Sincronizar ahora"}
           </button>
         </div>
-      </div>
+      ) : (
+        <div className="ph-row">
+          <div><div className="ph-title">Conciliación MP</div></div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+            <div style={{display:"flex",gap:4,alignItems:"center",fontSize:10,color:"var(--muted2)"}}>
+              <span>Desde</span>
+              <input type="date" className="search" style={{width:140}} value={desde} onChange={e=>setDesde(e.target.value)}/>
+              <span>Hasta</span>
+              <input type="date" className="search" style={{width:140}} value={hasta} onChange={e=>setHasta(e.target.value)}/>
+            </div>
+            <button className="btn btn-ghost btn-sm" style={{fontSize:10}} onClick={()=>{const d=new Date();d.setDate(d.getDate()-30);setDesde(toISO(d));setHasta(toISO(today));}}>Últ. 30d</button>
+            <button className="btn btn-ghost" onClick={()=>setConfigModal(true)}>⚙ Cuentas MP</button>
+            <button className="btn btn-acc" onClick={sincronizar} disabled={sincronizando}>
+              {sincronizando?"🔄 Sincronizando...":"↻ Sincronizar ahora"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {sincronizando&&(
         <div className="alert" style={{background:"var(--bg2)",border:"1px solid var(--acc3)",color:"var(--acc3)",textAlign:"center",padding:"14px 20px",marginBottom:12,borderRadius:8,fontSize:14}}>

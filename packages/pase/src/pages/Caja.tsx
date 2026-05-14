@@ -467,7 +467,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         <div style={{ minWidth: 0 }}>
           {subSection === "conciliacion" ? (
             <Suspense fallback={<div className="loading">Cargando conciliación MP…</div>}>
-              <ConciliacionMP user={user as Usuario} locales={locales} localActivo={localActivo} />
+              <ConciliacionMP user={user as Usuario} locales={locales} localActivo={localActivo} embedded />
             </Suspense>
           ) : (
             <>
