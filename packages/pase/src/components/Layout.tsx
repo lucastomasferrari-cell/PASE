@@ -162,7 +162,23 @@ export const css = `
   --r:        var(--pase-radius-md);
 }
 
-body{background:var(--pase-bg);color:var(--pase-text);font-family:var(--pase-font);font-size:13px;line-height:1.5;min-height:100vh;-webkit-font-smoothing:antialiased;transition:background-color 0.2s ease,color 0.2s ease}
+/* Pattern de "papel cuaderno" MUY sutil sobre el body (2026-05-14). Líneas
+   horizontales celeste de marca al 6% opacity, cada 32px. Funciona igual
+   en light y dark mode (rgba absoluto, no depende de tokens). Aporta
+   calidez sin que el fondo se sienta "plástico". Sin pattern dentro de
+   .panel (donde sí está blanco/sólido para no competir con datos). */
+body{
+  background:var(--pase-bg);
+  background-image:linear-gradient(180deg,transparent 0,transparent 31px,rgba(117,170,219,0.07) 31px,rgba(117,170,219,0.07) 32px);
+  background-size:100% 32px;
+  color:var(--pase-text);
+  font-family:var(--pase-font);
+  font-size:13px;
+  line-height:1.5;
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+  transition:background-color 0.2s ease,color 0.2s ease;
+}
 
 /* Detalle decorativo: línea de 4px en gradiente celeste→dorado en el borde
    superior derecho del frame, solo visible en dark mode. Inspirado en el
@@ -247,12 +263,16 @@ body{background:var(--pase-bg);color:var(--pase-text);font-family:var(--pase-fon
 .panel-title{font-size:12px;font-weight:500;color:var(--pase-text);letter-spacing:-0.01em}
 
 /* ─── TABLAS ───────────────────────────────────────────────────────── */
+/* Padding compactado 2026-05-14: 9/10px → 7px vertical, 14px → 12px
+   horizontal. La sensación general es ~30% más densa sin caer en
+   "apretado". Anula el efecto "filas gigantes" que Lucas reportó en las
+   fotos (especialmente Gastos y Usuarios). */
 table{width:100%;border-collapse:collapse}
-thead th{padding:9px 14px;text-align:left;font-size:10.5px;font-weight:500;color:var(--pase-text-muted);border-bottom:0.5px solid var(--pase-border);background:var(--pase-bg-soft);letter-spacing:-0.01em}
+thead th{padding:7px 12px;text-align:left;font-size:10.5px;font-weight:500;color:var(--pase-text-muted);border-bottom:0.5px solid var(--pase-border);background:var(--pase-bg-soft);letter-spacing:-0.01em}
 tbody tr{border-bottom:0.5px solid var(--pase-border);transition:background 0.1s}
 tbody tr:last-child{border-bottom:none}
 tbody tr:hover{background:var(--pase-bg-soft)}
-td{padding:10px 14px;font-size:12px;color:var(--pase-text)}
+td{padding:7px 12px;font-size:12px;color:var(--pase-text)}
 
 /* ─── BADGES ───────────────────────────────────────────────────────── */
 .badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:10.5px;font-weight:500;background:var(--pase-celeste-100);color:var(--pase-text)}
