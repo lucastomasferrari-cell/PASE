@@ -252,17 +252,11 @@ export default function Ajustes() {
     }
   };
 
-  // Toggle Fijo/Variable de una categoría de gasto (sprint v2: pill inline
-  // editable). Actualiza tipo en config_categorias.
-  // NOTA: si la categoría tenía tipo distinto (publicidad, comision, etc.),
-  // este toggle no aplica — solo afecta gasto_fijo ↔ gasto_variable. Para
-  // otros sub-tipos se mantiene el tipo original.
-  const toggleTipoCategoria = async (cat: CategoriaRow) => {
-    const nuevoTipo = cat.tipo === "gasto_fijo" ? "gasto_variable"
-                   : cat.tipo === "gasto_variable" ? "gasto_fijo"
-                   : null;
-    if (!nuevoTipo) return; // solo aplica al binomio fijo/variable
-    // Optimistic update
+  // Cambiar el sub-tipo de una categoría de gasto. Soporta los 6 tipos
+  // (fijo / variable / publicidad / comision / impuesto / retiro_socio).
+  // Optimistic update con rollback si la RPC falla.
+  const cambiarTipoCategoria = async (cat: CategoriaRow, nuevoTipo: string) => {
+    if (nuevoTipo === cat.tipo) return;
     setCategorias(prev => prev.map(c =>
       (c.tipo === cat.tipo && c.nombre === cat.nombre) ? { ...c, tipo: nuevoTipo } : c
     ));
@@ -271,9 +265,35 @@ export default function Ajustes() {
       .eq("nombre", cat.nombre)
       .eq("tipo", cat.tipo);
     if (error) {
-      // Rollback
       alert("No se pudo cambiar el tipo: " + error.message);
       load();
+    }
+  };
+
+  // Label visible por sub-tipo (sentence case, sin prefijo 'gasto_').
+  const labelPorTipo = (t: string): string => {
+    switch (t) {
+      case "gasto_fijo":       return "Fijo";
+      case "gasto_variable":   return "Variable";
+      case "gasto_publicidad": return "Publicidad";
+      case "gasto_comision":   return "Comisión";
+      case "gasto_impuesto":   return "Impuesto";
+      case "retiro_socio":     return "Retiro socio";
+      default:                 return t;
+    }
+  };
+
+  const pillClassPorTipo = (t: string): string => {
+    // noUncheckedIndexedAccess hace que styles.X tipe como string|undefined.
+    // Fallback "" garantiza string puro.
+    switch (t) {
+      case "gasto_fijo":       return styles.pillFijo ?? "";
+      case "gasto_variable":   return styles.pillVariable ?? "";
+      case "gasto_publicidad": return styles.pillPublicidad ?? "";
+      case "gasto_comision":   return styles.pillComision ?? "";
+      case "gasto_impuesto":   return styles.pillImpuesto ?? "";
+      case "retiro_socio":     return styles.pillRetiro ?? "";
+      default:                 return styles.pillFijo ?? "";
     }
   };
 
@@ -418,20 +438,24 @@ export default function Ajustes() {
                 {open && (
                   <div className={styles.itemList}>
                     {g.id === "gastos" && itemsGastos.map(c => {
-                      const isFijo = c.tipo === "gasto_fijo" || TIPOS_GASTO_FIJO.includes(c.tipo);
-                      const togglable = c.tipo === "gasto_fijo" || c.tipo === "gasto_variable";
                       return (
                         <div key={`${c.tipo}-${c.nombre}`} className={styles.item}>
                           <span className={styles.itemNombre}>{highlight(sentenceCase(c.nombre), search)}</span>
-                          <button
-                            type="button"
-                            className={`${styles.pillTipo} ${isFijo ? styles.pillFijo : styles.pillVariable}`}
-                            onClick={() => togglable && toggleTipoCategoria(c)}
-                            disabled={!togglable}
-                            title={togglable ? "Click para cambiar entre Fijo y Variable" : `Tipo: ${c.tipo}`}
+                          {/* Pill multi-tipo: <select> nativo estilizado como
+                              pill. Soporta los 6 sub-tipos de gastos. */}
+                          <select
+                            className={`${styles.pillTipo} ${pillClassPorTipo(c.tipo)}`}
+                            value={c.tipo}
+                            onChange={e => cambiarTipoCategoria(c, e.target.value)}
+                            title="Cambiar sub-tipo"
                           >
-                            {isFijo ? "Fijo" : "Variable"}
-                          </button>
+                            <option value="gasto_fijo">{labelPorTipo("gasto_fijo")}</option>
+                            <option value="gasto_variable">{labelPorTipo("gasto_variable")}</option>
+                            <option value="gasto_publicidad">{labelPorTipo("gasto_publicidad")}</option>
+                            <option value="gasto_comision">{labelPorTipo("gasto_comision")}</option>
+                            <option value="gasto_impuesto">{labelPorTipo("gasto_impuesto")}</option>
+                            <option value="retiro_socio">{labelPorTipo("retiro_socio")}</option>
+                          </select>
                           <button className={styles.itemAccion} title="Editar nombre" onClick={() => abrirEditCategoria(c)}>✏</button>
                           <button className={`${styles.itemAccion} ${styles.itemAccionDanger}`} title="Eliminar (soft delete)" onClick={() => eliminarCategoria(c)}>×</button>
                         </div>

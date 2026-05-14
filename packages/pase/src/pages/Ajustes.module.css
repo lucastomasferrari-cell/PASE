@@ -181,9 +181,11 @@
   color: var(--pase-text);
 }
 
-/* Pill tipo Fijo/Variable */
+/* Pill tipo Fijo/Variable/Publicidad/etc. Implementado como <select>
+ * nativo estilizado: cero código de dropdown custom + keyboard/mobile
+ * support gratis. El color cambia según el tipo seleccionado vía clases. */
 .pillTipo {
-  padding: 3px 8px;
+  padding: 3px 22px 3px 8px;
   border-radius: var(--pase-radius-pill);
   font-size: 9.5px;
   font-weight: 500;
@@ -192,17 +194,30 @@
   cursor: pointer;
   font-family: var(--pase-font);
   transition: background 0.12s, color 0.12s;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  /* Chevron SVG inline como background */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='2,3 4,5 6,3'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 8px 8px;
+  outline: none;
+  text-align: left;
 }
 
-.pillFijo {
-  background: var(--pase-celeste-100);
-  color: #2A6FA8;
+.pillTipo:focus {
+  box-shadow: 0 0 0 2px var(--pase-celeste-100);
 }
 
-.pillVariable {
-  background: rgba(245, 197, 24, 0.18);
-  color: #8B6F0A;
-}
+/* Color por tipo. */
+.pillFijo       { background-color: var(--pase-celeste-100);            color: #2A6FA8; }
+.pillVariable   { background-color: rgba(245, 197, 24, 0.18);           color: #8B6F0A; }
+.pillPublicidad { background-color: rgba(155, 95, 175, 0.18);           color: #6B3F84; }
+.pillComision   { background-color: rgba(80, 116, 181, 0.18);           color: #3A4F88; }
+.pillImpuesto   { background-color: rgba(193, 94, 94, 0.18);            color: #843333; }
+.pillRetiro     { background-color: rgba(108, 122, 137, 0.18);          color: #4A5560; }
+.pillTipo option { background: var(--pase-bg); color: var(--pase-text); font-weight: 500; }
 
 /* Link agregar */
 .linkAgregar {
