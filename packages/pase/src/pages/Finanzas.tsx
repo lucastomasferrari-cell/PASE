@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ComparativaLocales, LocalCard, type LocalCardProps } from "../components/ui";
 import { useFinanzasConsolidado, useLocalFinanzas, useVencimientos } from "../hooks/useFinanzas";
 import { formatCurrency, formatCurrencyCompact } from "../lib/format";
@@ -49,7 +50,18 @@ function SparkBars({ values }: { values: number[] }) {
 type LocalCtx = "consolidado" | string;
 
 export default function Finanzas() {
-  const [ctx, setCtx] = useState<LocalCtx>("consolidado");
+  // Switch local controlado por URL (?local=consolidado|belgrano|villa-crespo).
+  // Sprint mayo 2026 v2 Commit 7. Permite compartir links a vistas
+  // específicas y que F5 preserve el local seleccionado.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const ctx: LocalCtx = searchParams.get("local") || "consolidado";
+  const setCtx = (next: LocalCtx) => {
+    const params = new URLSearchParams(searchParams);
+    if (next === "consolidado") params.delete("local");
+    else params.set("local", next);
+    setSearchParams(params, { replace: true });
+  };
+
   const consolidado = useFinanzasConsolidado();
   const locales = useLocalFinanzas();
   const vencimientos = useVencimientos();

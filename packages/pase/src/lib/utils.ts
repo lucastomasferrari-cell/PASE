@@ -46,11 +46,14 @@ export const estadoFactura = (
   return f.estado;
 };
 export const fmt_d = (d: string | null | undefined) => d ? new Date(d+"T12:00:00").toLocaleDateString("es-AR") : "—";
-// Siempre muestra 2 decimales (ej: $ 239.889,56 o $ 1.000,00). Antes
-// usaba maximumFractionDigits:0 que truncaba y escondía los centavos
-// relevantes de IVA (bug #28). Montos enteros quedan como "$ 1.000,00"
-// que es legible en es-AR.
-export const fmt_$ = (n: number | null | undefined) => new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0);
+// Siempre muestra 2 decimales (ej: $239.889,56 o $1.000,00). El símbolo
+// $ va PEGADO al número, sin espacio (decisión 2026-05-13 — design system
+// v1.0). Intl.NumberFormat con style:'currency' mete un espacio entre
+// símbolo y dígitos que no se puede desactivar; se quita con replace.
+export const fmt_$ = (n: number | null | undefined) =>
+  new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    .format(n || 0)
+    .replace(/^(\$|-\$|−\$)\s/, "$1");
 export const genId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
 
 // Timezone helpers — Argentina es UTC-3 todo el año (no tiene DST).
