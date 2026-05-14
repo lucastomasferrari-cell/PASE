@@ -3,6 +3,7 @@ import { db } from "../lib/supabase";
 import { fmt_d } from "../lib/utils";
 import OnboardingTenant from "./OnboardingTenant";
 import BackupsAdmin from "./BackupsAdmin";
+import { InfoTooltip } from "../components/ui";
 import type { Tenant, Usuario } from "../types";
 
 interface TenantsProps {
@@ -86,9 +87,11 @@ export default function Tenants({ user }: TenantsProps) {
   return (
     <div>
       <div className="ph-row">
-        <div>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
           <div className="ph-title">Tenants</div>
-          <div className="ph-sub">Gestión de empresas-clientes (solo superadmin)</div>
+          <InfoTooltip>
+            Gestión de empresas-clientes del sistema. Acceso restringido a usuarios con rol <strong>superadmin</strong>.
+          </InfoTooltip>
         </div>
         {tab === "tenants" && (
           <button className="btn btn-acc" onClick={() => setWizardOpen(true)}>+ Nuevo tenant</button>

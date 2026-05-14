@@ -10,3 +10,4 @@ export { ComparativaLocales } from "./ComparativaLocales";
 export { RightSubNav } from "./RightSubNav";
 export type { SubNavItem, SubNavSection } from "./RightSubNav";
 export { Modal } from "./Modal";
+export { InfoTooltip } from "./InfoTooltip";
