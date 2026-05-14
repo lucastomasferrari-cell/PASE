@@ -54,11 +54,16 @@ export function TabNovedades({
           <div style={{overflowX:"auto"}}>
           <table>
             <thead><tr>
-              <th style={{minWidth:120,fontSize:8}}>Empleado</th><th style={{width:50,fontSize:8}}>Inasist.</th><th style={{width:90,fontSize:8}}>Present.</th>
-              <th style={{width:50,fontSize:8}}>HS Ex.</th><th style={{width:50,fontSize:8}}>Dobles</th>
-              <th style={{width:50,fontSize:8}}>Ferid.</th><th style={{width:65,fontSize:8}}>Adel.$</th>
-              <th style={{width:90,fontSize:8}}>Obs.</th>
-              <th style={{textAlign:"right",width:80,fontSize:8}}>Preview</th><th style={{width:80,fontSize:8}}>Acción</th>
+              <th style={{minWidth:120,fontSize:8}}>Empleado</th>
+              <th style={{width:50,fontSize:8}} title="Días de inasistencia en el mes (0–30)">Inasist.</th>
+              <th style={{width:90,fontSize:8}} title='"Tiene": mantiene el bonus de presentismo (+5% del subtotal). "No tiene": pierde el bonus.'>Present.</th>
+              <th style={{width:50,fontSize:8}} title="Horas extras trabajadas en el mes">HS Ex.</th>
+              <th style={{width:50,fontSize:8}} title="Turnos dobles cubiertos en el mes">Dobles</th>
+              <th style={{width:50,fontSize:8}} title="Feriados trabajados en el mes">Ferid.</th>
+              <th style={{width:65,fontSize:8}} title="Adelantos del mes (suma de los registrados via Caja)">Adel.$</th>
+              <th style={{width:90,fontSize:8}} title="Observaciones libres para el legajo del mes">Obs.</th>
+              <th style={{textAlign:"right",width:80,fontSize:8}} title="Total estimado a pagar al confirmar (sueldo + extras − descuentos − adelantos)">Preview</th>
+              <th style={{width:80,fontSize:8}}>Acción</th>
             </tr></thead>
             <tbody>{novEmps.map(emp => {
               const nov = novMap[emp.id] || {};
@@ -68,14 +73,14 @@ export function TabNovedades({
               return (
                 <tr key={emp.id}>
                   <td style={{fontWeight:500,fontSize:10}}>{emp.apellido}, {emp.nombre}</td>
-                  <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.inasistencias ?? 0} onChange={e => updateNov(emp.id, "inasistencias", parseFloat(e.target.value) || 0)} /></td>
+                  <td><input type="number" min="0" max="31" style={{...inp,width:40}} disabled={locked} value={nov.inasistencias ?? 0} onChange={e => updateNov(emp.id, "inasistencias", Math.max(0, Math.min(31, parseFloat(e.target.value) || 0)))} /></td>
                   <td><select style={{...inp,width:82,textAlign:"left"}} disabled={locked} value={nov.presentismo || "MANTIENE"} onChange={e => updateNov(emp.id, "presentismo", e.target.value)}>
                     {PRESENTISMO_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select></td>
-                  <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.horas_extras ?? 0} onChange={e => updateNov(emp.id, "horas_extras", parseFloat(e.target.value) || 0)} /></td>
-                  <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.dobles ?? 0} onChange={e => updateNov(emp.id, "dobles", parseFloat(e.target.value) || 0)} /></td>
-                  <td><input type="number" style={{...inp,width:40}} disabled={locked} value={nov.feriados ?? 0} onChange={e => updateNov(emp.id, "feriados", parseFloat(e.target.value) || 0)} /></td>
-                  <td><input type="number" style={{...inp,width:55}} disabled={locked} value={nov.adelantos ?? 0} onChange={e => updateNov(emp.id, "adelantos", parseFloat(e.target.value) || 0)} /></td>
+                  <td><input type="number" min="0" max="200" style={{...inp,width:40}} disabled={locked} value={nov.horas_extras ?? 0} onChange={e => updateNov(emp.id, "horas_extras", Math.max(0, parseFloat(e.target.value) || 0))} /></td>
+                  <td><input type="number" min="0" max="31" style={{...inp,width:40}} disabled={locked} value={nov.dobles ?? 0} onChange={e => updateNov(emp.id, "dobles", Math.max(0, parseFloat(e.target.value) || 0))} /></td>
+                  <td><input type="number" min="0" max="31" style={{...inp,width:40}} disabled={locked} value={nov.feriados ?? 0} onChange={e => updateNov(emp.id, "feriados", Math.max(0, parseFloat(e.target.value) || 0))} /></td>
+                  <td><input type="number" min="0" style={{...inp,width:55}} disabled={locked} value={nov.adelantos ?? 0} onChange={e => updateNov(emp.id, "adelantos", Math.max(0, parseFloat(e.target.value) || 0))} /></td>
                   <td><input style={{...inp,width:80,textAlign:"left"}} disabled={locked} value={nov.observaciones || ""} onChange={e => updateNov(emp.id, "observaciones", e.target.value)} /></td>
                   <td style={{textAlign:"right"}}><span className="num" style={{color: preview < 0 ? "var(--danger)" : "var(--success)",fontSize:11}}>{fmt_$(preview)}</span></td>
                   <td>

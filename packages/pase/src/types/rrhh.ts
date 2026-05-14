@@ -21,7 +21,7 @@ export interface Novedad {
   mes: number;
   anio: number;
   inasistencias: number;
-  presentismo: "MANTIENE" | "PIERDE" | "PIERDE_LLEGADAS" | "INICIO_PARCIAL";
+  presentismo: "MANTIENE" | "PIERDE";
   horas_extras: number;
   dobles: number;
   feriados: number;
