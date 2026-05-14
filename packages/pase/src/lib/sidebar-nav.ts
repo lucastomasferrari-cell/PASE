@@ -1,82 +1,88 @@
 // ─────────────────────────────────────────────────────────────────────
-// Sidebar — definición centralizada (2026-05-13).
+// Sidebar — definición centralizada (sprint mayo 2026 v2).
 //
-// Cambio del sprint mayo 2026: sidebar consolidado a 10 items en
-// 4 secciones. Eliminó "Inicio" (Dashboard) y "Movimientos" (placeholder).
+// 10 items en 5 secciones (post Commit 3 del sprint v2):
+//   • Operación   — Caja, Compras, Ventas
+//   • Dirección   — Negocio, Finanzas, Objetivos, Reportes
+//   • Módulos     — Equipo, Sucursales
+//   • Herramientas— Contador / IVA, Blindaje
+//   • Sistema     — Ajustes
 //
-// Esta es la fuente de verdad para:
-//   - Layout.tsx (renderiza el sidebar con SVGs inline; ese array tiene
-//     que MANTENERSE alineado con SIDEBAR_ITEMS — mismos slugs/labels/secs).
-//   - getDefaultRoute(user): devuelve el slug del primer item al que el
-//     user tiene permiso, recorriendo de arriba hacia abajo.
-//   - Decidir post-login y root path redirect.
-//
-// Cuando se conecte un sistema de permisos por slug:requiresPermission,
-// reemplazar el simple `tienePermiso` por la lectura de permission flags.
+// Cada item tiene:
+//   - path: URL real (post Commit 1 v2 — React Router)
+//   - slug: usado por tienePermiso() (mantiene compat con sistema de permisos
+//     actual basado en slugs).
+//   - label: visible en sidebar.
+//   - sec: sección a la que pertenece.
 // ─────────────────────────────────────────────────────────────────────
 
 import type { Usuario } from "../types/auth";
 import { tienePermiso } from "./auth";
 
-export type SidebarSection = "Operación" | "Dirección" | "Módulos" | "Sistema";
+export type SidebarSection = "Operación" | "Dirección" | "Módulos" | "Herramientas" | "Sistema";
 
 export interface SidebarItem {
-  /** Slug interno (matchea con section state de App.tsx y con el slug en auth.ts) */
+  /** URL canónica del módulo */
+  path: string;
+  /** Slug interno (compat con auth.ts MODULOS y tienePermiso) */
   slug: string;
-  /** Label visible en el sidebar */
+  /** Texto visible */
   label: string;
-  /** Sección a la que pertenece */
+  /** Sección */
   sec: SidebarSection;
 }
 
-/**
- * Orden canónico de items del sidebar. Cualquier cambio de orden o de
- * mapeo slug↔sección impacta directamente en getDefaultRoute, así que
- * tocar acá con cuidado.
- */
 export const SIDEBAR_ITEMS: SidebarItem[] = [
-  // === Operación (3) ===
-  { slug: "caja",          label: "Caja",      sec: "Operación" },
-  { slug: "compras",       label: "Compras",   sec: "Operación" },
-  { slug: "ventas",        label: "Ventas",    sec: "Operación" },
+  // === Operación ===
+  { path: "/caja",                       slug: "caja",          label: "Caja",            sec: "Operación" },
+  { path: "/compras",                    slug: "compras",       label: "Compras",         sec: "Operación" },
+  { path: "/ventas",                     slug: "ventas",        label: "Ventas",          sec: "Operación" },
 
-  // === Dirección (4) ===
-  { slug: "negocio",       label: "Negocio",   sec: "Dirección" },
-  { slug: "finanzas",      label: "Finanzas",  sec: "Dirección" },
-  { slug: "objetivos",     label: "Objetivos", sec: "Dirección" },
-  { slug: "eerr",          label: "Reportes",  sec: "Dirección" },
+  // === Dirección ===
+  { path: "/negocio",                    slug: "negocio",       label: "Negocio",         sec: "Dirección" },
+  { path: "/finanzas",                   slug: "finanzas",      label: "Finanzas",        sec: "Dirección" },
+  { path: "/objetivos",                  slug: "objetivos",     label: "Objetivos",       sec: "Dirección" },
+  { path: "/reportes",                   slug: "eerr",          label: "Reportes",        sec: "Dirección" },
 
-  // === Módulos (2) ===
-  // 'Equipo' apunta al slug `rrhh` (la lista del equipo en RRHHPage).
-  // El label visible es 'Equipo' por brief 2026-05-13.
-  { slug: "rrhh",          label: "Equipo",    sec: "Módulos" },
-  { slug: "configuracion", label: "Locales",   sec: "Módulos" },
+  // === Módulos ===
+  { path: "/equipo",                     slug: "rrhh",          label: "Equipo",          sec: "Módulos" },
+  { path: "/sucursales",                 slug: "configuracion", label: "Sucursales",      sec: "Módulos" },
 
-  // === Sistema (1) ===
-  { slug: "ajustes",       label: "Ajustes",   sec: "Sistema" },
+  // === Herramientas ===
+  { path: "/herramientas/contador-iva",  slug: "contador",      label: "Contador / IVA",  sec: "Herramientas" },
+  { path: "/herramientas/blindaje",      slug: "blindaje",      label: "Blindaje",        sec: "Herramientas" },
+
+  // === Sistema ===
+  { path: "/ajustes",                    slug: "ajustes",       label: "Ajustes",         sec: "Sistema" },
 ];
 
-export const SIDEBAR_SECTIONS: SidebarSection[] = ["Operación", "Dirección", "Módulos", "Sistema"];
+export const SIDEBAR_SECTIONS: SidebarSection[] = ["Operación", "Dirección", "Módulos", "Herramientas", "Sistema"];
 
 /**
- * Devuelve el slug del primer item del sidebar al que el user tiene
- * permiso, recorriendo SIDEBAR_ITEMS de arriba hacia abajo.
+ * Devuelve el PATH del primer item del sidebar al que el user tiene
+ * permiso. Usado en redirect del root path `/` y post-login.
  *
- * Si el user no tiene permiso a NINGÚN item (caso edge), devuelve
- * `'ajustes'` como fallback porque es la sección Sistema y dueño/admin
- * siempre la ve.
+ * Fallback a "/ajustes" si no tiene permiso a ningún item.
  */
 export function getDefaultRoute(user: Usuario | null | undefined): string {
-  if (!user) return "ajustes";
+  if (!user) return "/ajustes";
   const first = SIDEBAR_ITEMS.find(item => tienePermiso(user, item.slug));
-  return first?.slug ?? "ajustes";
+  return first?.path ?? "/ajustes";
 }
 
-/** Slugs eliminados del producto. Al detectarlos en sessionStorage o en el state,
- * redirigir transparentemente a getDefaultRoute(). */
-export const DEPRECATED_SLUGS = new Set([
-  "dashboard",   // pantalla "Inicio" eliminada 2026-05-13
-  "movimientos", // placeholder eliminado 2026-05-13
-  "cashflow",    // eliminado 2026-05-11
-  "cierre",      // fusionado en EERR 2026-05-08
-]);
+/**
+ * Mapa de URL legacy → URL nueva. Usado por <Navigate> redirects.
+ */
+export const LEGACY_REDIRECTS: Record<string, string> = {
+  "/inicio":          "@default",  // sentinel: resolver a getDefaultRoute()
+  "/dashboard":       "@default",
+  "/movimientos":     "/caja/movimientos",
+  "/rrhh":            "/equipo",
+  "/locales":         "/sucursales",
+  "/proveedores":     "/compras/proveedores",
+  "/conciliacion-mp": "/caja/conciliacion",
+  "/conciliacion":    "/caja/conciliacion",
+  "/blindaje":        "/herramientas/blindaje",
+  "/contador-iva":    "/herramientas/contador-iva",
+  "/contador":        "/herramientas/contador-iva",
+};

@@ -1,21 +1,14 @@
-﻿import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { db } from "./lib/supabase";
-import { tienePermiso, AuthProvider, necesitaElegirLocal } from "./lib/auth";
-import { getDefaultRoute, DEPRECATED_SLUGS } from "./lib/sidebar-nav";
+import { AuthProvider, necesitaElegirLocal } from "./lib/auth";
+import { getDefaultRoute, LEGACY_REDIRECTS } from "./lib/sidebar-nav";
 import type { Usuario, UsuarioRow, Local, Tenant } from "./types";
 import { Sidebar, css } from "./components/Layout";
 import Login from "./pages/Login";
 
 // F5 (plan sunny-creek): code-splitting por página. Login queda eager porque
-// es entry point para users sin sesión (no querés latencia extra ahí). El
-// resto se lazy-loadea — el switch de renderSection() solo monta una página
-// a la vez, así que el costo se distribuye sobre las navegaciones que el
-// usuario realmente hace. Los dos early-returns (ForcePasswordChange,
-// SeleccionarLocalModal) son flujos raros (primer login con password temp,
-// encargado con >1 local) — lazy ahí libera ~5-10kB que casi nadie carga.
-// Cierre queda fuera del lazy: su case del switch redirige a EERR
-// (fusionado 2026-05-08; el archivo Cierre.tsx queda como código muerto
-// para reactivar si hace falta).
+// es entry point para users sin sesión.
 const ForcePasswordChange = lazy(() => import("./pages/ForcePasswordChange"));
 const SeleccionarLocalModal = lazy(() => import("./components/SeleccionarLocalModal"));
 const Ventas = lazy(() => import("./pages/Ventas"));
@@ -25,10 +18,8 @@ const EERR = lazy(() => import("./pages/EERR"));
 const Contador = lazy(() => import("./pages/Contador"));
 const ImportarMaxirest = lazy(() => import("./pages/ImportarMaxirest"));
 const Gastos = lazy(() => import("./pages/Gastos"));
-const Proveedores = lazy(() => import("./pages/Proveedores"));
 const Usuarios = lazy(() => import("./pages/Usuarios"));
 const LectorFacturasIA = lazy(() => import("./pages/LectorFacturasIA"));
-const ConciliacionMP = lazy(() => import("./pages/ConciliacionMP"));
 const Blindaje = lazy(() => import("./pages/Blindaje"));
 const RRHHPage = lazy(() => import("./pages/RRHH"));
 const Configuracion = lazy(() => import("./pages/Configuracion"));
@@ -47,21 +38,16 @@ const FullPageLoader = () => (
     <div className="login-card" style={{textAlign:"center",padding:40}}>Cargando...</div>
   </div>
 );
-// Loader inline para el switch de renderSection() — la sidebar ya está
-// montada, solo cargamos la página en el área principal.
+// Loader inline para las rutas — la sidebar ya está montada, solo
+// cargamos la página en el área principal.
 const PageLoader = () => <div className="loading">Cargando...</div>;
 
-// Solo superadmin lee/escribe esta key. El nombre largo es deliberado: avisa
-// a futuros lectores que no es un setting de usuario común. Cualquier sesión
-// que NO sea superadmin la limpia de sessionStorage al loguear (ver applyLogin).
+// Solo superadmin lee/escribe esta key.
 const TENANT_OVERRIDE_KEY = "pase_tenant_override__superadmin_only";
 
-// Hash-route de dev para preview del sistema de diseño v1.0.
-// Acceso: #/design-system. Bypasea auth y layout para verlo aislado.
-// No es público — no hay link en la nav; queda accesible solo si alguien
-// escribe la URL. Se decide ANTES de instanciar AppMain para no inicializar
-// state / hooks ni montar Auth/Layout cuando no hace falta (y para no
-// violar las reglas de hooks con un early return condicional).
+// ────────────────────────────────────────────────────────────────────
+// Hash-route de dev: preview del sistema de diseño aislado.
+// ────────────────────────────────────────────────────────────────────
 export default function App() {
   if (typeof window !== "undefined" && window.location.hash === "#/design-system") {
     return (
@@ -73,25 +59,25 @@ export default function App() {
   return <AppMain />;
 }
 
+// ────────────────────────────────────────────────────────────────────
+// Redirect al primer item permitido para este user. Sustituye los slugs
+// 'dashboard' / 'inicio' / '@default' en LEGACY_REDIRECTS.
+// ────────────────────────────────────────────────────────────────────
+function DefaultRedirect({ user }: { user: Usuario | null }) {
+  return <Navigate to={getDefaultRoute(user)} replace />;
+}
+
 function AppMain() {
   const [user, setUser] = useState<Usuario | null>(null);
-  // 'dashboard' como section inicial era el legacy. Como esa pantalla ya
-  // no existe, el useEffect de redirección detecta el slug deprecated y lo
-  // cambia a getDefaultRoute(user) cuando el user está hidratado.
-  const [section, setSection] = useState("caja");
   const [locales, setLocales] = useState<Local[]>([]);
   const [localActivo, setLocalActivo] = useState<number | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  // Multi-tenant (TASK 0.15): tenant del usuario logueado.
-  // Para superadmin, queda null por default; con tenant_override se setea.
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [tenantOverride, setTenantOverride] = useState<string | null>(null);
   // Bug #27: bloquea navegación mientras encargado con >1 local no elige uno.
   const [showLocalModal, setShowLocalModal] = useState(false);
 
-  // Persistir localActivo en sessionStorage para que al refrescar la página
-  // el encargado no tenga que re-elegir el local mientras siga siendo válido.
-  // necesitaElegirLocal() verifica que el stored siga estando en sus locales.
+  // Persistir localActivo en sessionStorage.
   useEffect(() => {
     if (localActivo != null) {
       sessionStorage.setItem("pase_local_activo", String(localActivo));
@@ -100,30 +86,18 @@ function AppMain() {
     }
   }, [localActivo]);
 
-  // Helper para (re)cargar locales del usuario actual. Extraído para
-  // poder llamarlo desde varios sitios: useEffect inicial, y handlers
-  // de TOKEN_REFRESHED / USER_UPDATED en onAuthStateChange.
   const refetchLocales = async () => {
     const { data } = await db.from("locales").select("*").order("id");
     setLocales(data || []);
   };
 
-  // Refetch cuando user cambia (post-login, post-logout). Si no hay user,
-  // skip — la query iría como rol anon y RLS la bloquea, dejando locales=[]
-  // permanentemente para el resto de la sesión (race condition con
-  // sesiones fresh tipo incógnito).
   useEffect(()=>{
     if (!user) return;
-    // refetchLocales internamente llama setLocales después del fetch async,
-    // pero el rule lo flaggea porque la setState está dentro del scope del
-    // effect. Es el patrón de fetch-on-dep-change estándar — agregar
-    // refetchLocales a deps generaría re-fetch infinito (la fn se recrea
-    // cada render).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refetchLocales();
   },[user]);
 
-  // Restaurar sesión al cargar — única fuente de verdad: Supabase Auth
+  // Restaurar sesión al cargar.
   useEffect(()=>{
     const restore = async () => {
       try {
@@ -131,11 +105,6 @@ function AppMain() {
         if (session?.user) {
           const { data: perfil } = await db.from("usuarios").select("*").eq("auth_id", session.user.id).single();
           if (perfil && perfil.activo !== false) {
-            // TODO(lint-cleanup): applyLogin se declara abajo (l.157). El
-            // closure se crea en render pero se invoca POST render (effect),
-            // así que en runtime applyLogin ya existe. La regla immutability
-            // pide reordenar la declaración — refactor estructural en flow
-            // crítico de auth, mejor revisarlo en PR dedicado.
             // eslint-disable-next-line react-hooks/immutability
             await applyLogin(perfil);
           } else {
@@ -147,28 +116,9 @@ function AppMain() {
     };
     restore();
 
-    // TASK 0.16: manejar todos los eventos de Supabase Auth para que la
-    // sesión se mantenga en sync sin necesidad de hard refresh manual.
-    // Evento → comportamiento:
-    //   SIGNED_OUT       → limpiar todo el state.
-    //   SIGNED_IN        → aplicar login (skip si ya hay user).
-    //   INITIAL_SESSION  → el client hidrató una sesión persistida; idem
-    //                      SIGNED_IN si trae user. Cubre el caso de
-    //                      reabrir pestaña con sesión válida.
-    //   TOKEN_REFRESHED  → JWT renovado. ANTES era no-op, lo cual causaba
-    //                      el bug de "0 locales tras 1h": las queries
-    //                      subsecuentes podían fallar si el listener no
-    //                      reaccionaba. Ahora re-fetcheamos locales para
-    //                      forzar uso del nuevo JWT y resetear cualquier
-    //                      state desincronizado.
-    //   USER_UPDATED     → el perfil cambió (ej: cambio de password,
-    //                      cambio de email). Re-leer la fila enriched.
     const { data: { subscription } } = db.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_OUT") {
         setUser(null);
-        // Sin user no se renderiza renderSection — section value irrelevante,
-        // pero lo dejamos consistente con el initial state (caja).
-        setSection("caja");
         setLocalActivo(null);
         setShowLocalModal(false);
         setTenant(null);
@@ -180,7 +130,6 @@ function AppMain() {
         return;
       }
       if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
-        // Skip si ya hay user (login manual o restore() ya ejecutó applyLogin)
         setUser(curr => {
           if (curr) return curr;
           db.from("usuarios").select("*").eq("auth_id", session.user.id).single().then(({ data: perfil }) => {
@@ -191,15 +140,10 @@ function AppMain() {
         return;
       }
       if (event === "TOKEN_REFRESHED" && session?.user) {
-        // JWT renovado: re-fetch locales para usar el nuevo token y
-        // recuperar de cualquier query stale que haya quedado vacía.
-        // No re-aplicamos login (sería caro y user/perms no cambiaron).
         refetchLocales();
         return;
       }
       if (event === "USER_UPDATED" && session?.user) {
-        // El perfil cambió (ej: ForcePasswordChange completó).
-        // Re-fetcheamos la fila para que el state refleje password_temporal=false.
         const { data: perfil } = await db.from("usuarios")
           .select("*").eq("auth_id", session.user.id).single();
         if (perfil) {
@@ -212,7 +156,6 @@ function AppMain() {
   },[]);
 
   const applyLogin = async (u: UsuarioRow) => {
-    // Load DB-driven permisos and locales
     const [{ data: permsData }, { data: locsData }] = await Promise.all([
       db.from("usuario_permisos").select("modulo_slug").eq("usuario_id", u.id),
       db.from("usuario_locales").select("local_id").eq("usuario_id", u.id),
@@ -224,18 +167,9 @@ function AppMain() {
     };
     setUser(enriched);
     sessionStorage.setItem("pase_user", JSON.stringify(enriched));
-    // Section default = primer item del sidebar al que tiene permiso.
-    // Centralizado en sidebar-nav.ts para que el orden del menú y el
-    // default route nunca se desincronicen.
-    setSection(getDefaultRoute(enriched));
+    // El routing ahora se maneja con React Router — la URL actual queda
+    // si era válida; LegacyRedirects o el catch-all redirigen si no.
 
-    // Multi-tenant (TASK 0.15): cargar tenant del usuario.
-    // - superadmin → tenant_id NULL en su fila. Si hay sessionStorage
-    //   tenant_override, lo usamos. Si no, queda en null y la pantalla
-    //   "Tenants" lo deja elegir.
-    // - resto → cargar el tenant directo de su tenant_id.
-    // Defensive: si el user actual NO es superadmin, garantizar que no quede
-    // residuo de override de otra sesión previa en la misma pestaña.
     if (enriched.rol !== "superadmin") {
       try { sessionStorage.removeItem(TENANT_OVERRIDE_KEY); } catch { /* idem */ }
     }
@@ -252,9 +186,6 @@ function AppMain() {
       setTenantOverride(null);
     }
 
-    // Decisión de localActivo: ver necesitaElegirLocal() en auth.ts.
-    // Bug #27: encargado con >1 local NUNCA puede quedar con localActivo=null
-    // porque le expone data cruzada de todos sus locales.
     const storedRaw = sessionStorage.getItem("pase_local_activo");
     const stored = storedRaw ? parseInt(storedRaw) : null;
     const decision = necesitaElegirLocal(enriched, stored);
@@ -280,67 +211,13 @@ function AppMain() {
 
   const logout = async () => {
     await db.auth.signOut();
-    // SIGNED_OUT en onAuthStateChange limpia el resto del state
   };
 
-  // El toast era usado por guardedNav() ('Sin acceso'). Hoy la redirección
-  // de slugs deprecated o sin permiso se hace en useEffect transparente
-  // (sin mensaje al user). El state queda por si alguna pantalla quiere
-  // mostrar toast en el futuro vía contexto.
   const [toast] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   void toastTimer;
 
   const props: { user: Usuario; locales: Local[]; localActivo: number | null } = { user: user!, locales, localActivo };
-
-  // Redirige transparentemente a la sección por defecto cuando se llega a un
-  // slug deprecated (dashboard/movimientos/cashflow/cierre desde sessionStorage
-  // stale) o cuando el user no tiene permiso para la section actual.
-  // useEffect — no se puede llamar setState dentro de render.
-  useEffect(() => {
-    if (!user) return;
-    const isDeprecated = DEPRECATED_SLUGS.has(section);
-    const noPermiso = !tienePermiso(user, section);
-    if (isDeprecated || noPermiso) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSection(getDefaultRoute(user));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [section, user?.id]);
-
-  const renderSection = () => {
-    // Mientras se redirige (1 render) o no hay user, devolver loader.
-    if (!user) return <PageLoader/>;
-    if (DEPRECATED_SLUGS.has(section) || !tienePermiso(user, section)) {
-      return <PageLoader/>;
-    }
-    switch(section) {
-      case "negocio":   return <Negocio user={user || undefined}/>;
-      case "finanzas":  return <Finanzas/>;
-      case "objetivos": return <Objetivos/>;
-      case "ajustes":   return <Ajustes/>;
-      case "ventas":    return <Ventas {...props}/>;
-      case "compras":   return <Compras {...props}/>;
-      // Defensive: si algún user tiene section="remitos" persistido en
-      // sessionStorage (de antes de la unificación 2026-05-07), redirigir
-      // a Compras donde ahora viven los remitos.
-      case "remitos":   return <Compras {...props}/>;
-      case "caja":      return <Caja {...props}/>;
-      case "eerr":      return <EERR {...props}/>;
-      case "gastos":    return <Gastos {...props}/>;
-      case "contador":  return <Contador {...props}/>;
-      case "maxirest":  return <ImportarMaxirest {...props}/>;
-      case "lector_ia": return <LectorFacturasIA {...props}/>;
-      case "mp":        return <ConciliacionMP {...props}/>;
-      case "blindaje":  return <Blindaje {...props}/>;
-      case "proveedores": return <Proveedores {...props}/>;
-      case "usuarios":  return <Usuarios {...props}/>;
-      case "rrhh":      return <RRHHPage {...props}/>;
-      case "configuracion": return <Configuracion user={user} locales={locales} localActivo={localActivo}/>;
-      case "tenants":   return user?.rol === "superadmin" ? <Tenants user={user as Usuario} /> : <PageLoader/>;
-      default: return <PageLoader/>;
-    }
-  };
 
   if (authLoading) return <><style>{css}</style><div className="login-wrap"><div className="login-bg"/><div className="login-card" style={{textAlign:"center",padding:40}}>Cargando...</div></div></>;
 
@@ -362,7 +239,7 @@ function AppMain() {
     <AuthProvider value={user}>
       <style>{css}</style>
       <div className="app">
-        {/* Fondo decorativo para glassmorphism */}
+        {/* Fondo decorativo */}
         <div style={{
           position: "fixed", inset: 0, zIndex: 0, overflow: "hidden", pointerEvents: "none"
         }}>
@@ -378,26 +255,80 @@ function AppMain() {
             background: "radial-gradient(circle, rgba(90,143,168,0.08) 0%, transparent 70%)",
             filter: "blur(40px)"
           }}/>
-          <div style={{
-            position: "absolute", top: "40%", right: "20%",
-            width: 400, height: 400, borderRadius: "50%",
-            background: "radial-gradient(circle, rgba(196,97,74,0.07) 0%, transparent 70%)",
-            filter: "blur(40px)"
-          }}/>
         </div>
-        {/* zIndex:2 (mayor al main de zIndex:1) para que en mobile el sidebar
-            quede por encima del contenido del main cuando se despliega. */}
         <div style={{position:"relative",zIndex:2}}>
-          <Sidebar user={user} section={section} onNav={setSection}
+          <Sidebar user={user}
             onLogout={logout}
             locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo}
             tenant={tenant} tenantOverride={tenantOverride} onClearOverride={clearTenantOverride}/>
         </div>
         <main className="main" style={{position:"relative",zIndex:1}}>
           {toast && <div style={{position:"fixed",top:16,right:16,zIndex:200,padding:"10px 16px",background:"var(--pase-bg)",color:"var(--pase-text)",border:"0.5px solid var(--pase-celeste-300)",borderRadius:14,fontSize:12,fontFamily:"var(--pase-font)",fontWeight:500,letterSpacing:"-0.005em"}}>{toast}</div>}
-          <Suspense fallback={<PageLoader/>}>{renderSection()}</Suspense>
+          <Suspense fallback={<PageLoader/>}>
+            <Routes>
+              {/* Root → primer item permitido */}
+              <Route path="/" element={<DefaultRedirect user={user} />} />
+
+              {/* Operación */}
+              <Route path="/caja/*" element={<Caja {...props}/>} />
+              <Route path="/compras/*" element={<Compras {...props}/>} />
+              <Route path="/ventas" element={<Ventas {...props}/>} />
+
+              {/* Dirección */}
+              <Route path="/negocio" element={<Negocio user={user || undefined}/>} />
+              <Route path="/finanzas" element={<Finanzas/>} />
+              <Route path="/objetivos" element={<Objetivos/>} />
+              <Route path="/reportes" element={<EERR {...props}/>} />
+
+              {/* Módulos */}
+              <Route path="/equipo" element={<RRHHPage {...props}/>} />
+              <Route path="/sucursales" element={<Configuracion user={user} locales={locales} localActivo={localActivo}/>} />
+
+              {/* Herramientas */}
+              <Route path="/herramientas/contador-iva" element={<Contador {...props}/>} />
+              <Route path="/herramientas/blindaje" element={<Blindaje {...props}/>} />
+
+              {/* Sistema */}
+              <Route path="/ajustes" element={<Ajustes/>} />
+
+              {/* Accesibles internamente (no en sidebar top-level) */}
+              <Route path="/gastos" element={<Gastos {...props}/>} />
+              <Route path="/usuarios" element={<Usuarios {...props}/>} />
+              <Route path="/lector-ia" element={<LectorFacturasIA {...props}/>} />
+              <Route path="/maxirest" element={<ImportarMaxirest {...props}/>} />
+              <Route path="/tenants" element={user.rol === "superadmin" ? <Tenants user={user as Usuario} /> : <DefaultRedirect user={user} />} />
+
+              {/* Redirects de URLs viejas */}
+              {Object.entries(LEGACY_REDIRECTS).map(([from, to]) => (
+                <Route
+                  key={from}
+                  path={from}
+                  element={
+                    to === "@default"
+                      ? <DefaultRedirect user={user} />
+                      : <Navigate to={to} replace />
+                  }
+                />
+              ))}
+
+              {/* Catch-all → primer permitido */}
+              <Route path="*" element={<NotFoundRedirect user={user} />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
     </AuthProvider>
   );
+}
+
+function NotFoundRedirect({ user }: { user: Usuario | null }) {
+  const location = useLocation();
+  // Si la URL incluye uno de los path prefixes válidos (ej. /compras/notas-credito),
+  // dejamos que la ruta interna del componente la maneje. El catch-all solo se
+  // dispara para paths completamente desconocidos.
+  // Para evitar loop, sólo log y redirect a default.
+  if (typeof console !== "undefined") {
+    console.warn("[router] path no encontrado:", location.pathname);
+  }
+  return <DefaultRedirect user={user} />;
 }

@@ -1,12 +1,11 @@
 ﻿import { useState } from "react";
+import { NavLink } from "react-router-dom";
 import { ROLES, getPermisos } from "../lib/auth";
 import type { Usuario, Local, Tenant } from "../types";
 import { ThemeToggle } from "./ui/ThemeToggle";
 
 interface SidebarProps {
   user: Usuario;
-  section: string;
-  onNav: (section: string) => void;
   onLogout: () => Promise<void> | void;
   locales: Local[];
   localActivo: number | null;
@@ -18,7 +17,7 @@ interface SidebarProps {
   onClearOverride: () => void;
 }
 
-export function Sidebar({ user, section, onNav, onLogout, locales, localActivo, setLocalActivo, tenant, tenantOverride, onClearOverride }: SidebarProps) {
+export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, tenant, tenantOverride, onClearOverride }: SidebarProps) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
   const perms = getPermisos(user);
@@ -26,41 +25,34 @@ export function Sidebar({ user, section, onNav, onLogout, locales, localActivo, 
   const localesDisp = (user.rol==="dueno" || user.rol==="admin" || esSuperAdmin) ? locales : locales.filter((l: { id: number })=>(user._locales||user.locales||[]).includes(l.id));
   // ───────────────────────────────────────────────────────────────────
   // Sidebar consolidado a 10 items en 4 secciones (sprint mayo 2026):
-  //   • OPERACIÓN (3) — día a día: caja, compras, ventas
-  //   • DIRECCIÓN (4) — vista ejecutiva: negocio, finanzas, objetivos, reportes
-  //   • MÓDULOS   (2) — administración: equipo, locales
-  //   • SISTEMA   (1) — ajustes generales
+  //   • OPERACIÓN (3) — caja, compras, ventas
+  //   • DIRECCIÓN (4) — negocio, finanzas, objetivos, reportes
+  //   • MÓDULOS   (2) — equipo, sucursales
+  //   • SISTEMA   (1) — ajustes
   //
-  // Eliminados del sidebar (siguen accesibles via section state):
-  //   - Dashboard ("Inicio") y Movimientos: pantallas eliminadas del producto.
-  //   - Proveedores: ahora sub-sección dentro de Compras.
-  //   - Conciliación MP: ahora sub-sección dentro de Caja.
-  //   - Usuarios: ahora sub-sección dentro de Ajustes (cuando se rehaga).
-  //   - Gastos, Blindaje, Contador, Tenants: ocultos por ahora, se
-  //     re-integran cuando la pantalla agregadora correspondiente lo demande.
-  //
-  // Orden y slugs son la fuente de verdad de getDefaultRoute(). Tocar acá
-  // implica también ajustar src/lib/sidebar-nav.ts (mismos slugs/labels/secs).
+  // Items con `path` (URL real, post Commit 1 sprint v2 — React Router).
+  // El `slug` se mantiene para compat con tienePermiso() y el array de
+  // permisos por rol. Tocar acá implica ajustar src/lib/sidebar-nav.ts
+  // (misma source-of-truth).
   // ───────────────────────────────────────────────────────────────────
   const nav = [
     // === OPERACIÓN (3) ===
-    {id:"caja",label:"Caja",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="5" width="12" height="8" rx="1"/><path d="M4 5V4a3 3 0 0 1 6 0v1"/></svg>`},
-    {id:"compras",label:"Compras",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1"/><circle cx="11" cy="12" r="1"/><path d="M1 2h2l1.5 7.5h7L13 4H4"/></svg>`},
-    {id:"ventas",label:"Ventas",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="5.5"/><path d="M7 4v6M9 5.5c0-1-1-1.5-2-1.5s-2 .5-2 1.5 1 1.3 2 1.5 2 .5 2 1.5-1 1.5-2 1.5-2-.5-2-1.5"/></svg>`},
+    {slug:"caja",path:"/caja",label:"Caja",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="5" width="12" height="8" rx="1"/><path d="M4 5V4a3 3 0 0 1 6 0v1"/></svg>`},
+    {slug:"compras",path:"/compras",label:"Compras",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1"/><circle cx="11" cy="12" r="1"/><path d="M1 2h2l1.5 7.5h7L13 4H4"/></svg>`},
+    {slug:"ventas",path:"/ventas",label:"Ventas",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="5.5"/><path d="M7 4v6M9 5.5c0-1-1-1.5-2-1.5s-2 .5-2 1.5 1 1.3 2 1.5 2 .5 2 1.5-1 1.5-2 1.5-2-.5-2-1.5"/></svg>`},
 
     // === DIRECCIÓN (4) ===
-    {id:"negocio",label:"Negocio",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 1.5 A5.5 5.5 0 1 1 1.5 7 L7 7 Z"/><path d="M7 1.5 A5.5 5.5 0 0 1 12.5 7 L7 7 Z"/></svg>`},
-    {id:"finanzas",label:"Finanzas",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h9a1 1 0 0 1 1 1V11a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h7.5"/><circle cx="9.5" cy="8" r="0.9"/></svg>`},
-    {id:"objetivos",label:"Objetivos",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5.5"/><circle cx="7" cy="7" r="3"/><circle cx="7" cy="7" r="0.5" fill="currentColor"/></svg>`},
-    {id:"eerr",label:"Reportes",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,11 5,7 8,9 13,3"/><polyline points="10,3 13,3 13,6"/></svg>`},
+    {slug:"negocio",path:"/negocio",label:"Negocio",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 1.5 A5.5 5.5 0 1 1 1.5 7 L7 7 Z"/><path d="M7 1.5 A5.5 5.5 0 0 1 12.5 7 L7 7 Z"/></svg>`},
+    {slug:"finanzas",path:"/finanzas",label:"Finanzas",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h9a1 1 0 0 1 1 1V11a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h7.5"/><circle cx="9.5" cy="8" r="0.9"/></svg>`},
+    {slug:"objetivos",path:"/objetivos",label:"Objetivos",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5.5"/><circle cx="7" cy="7" r="3"/><circle cx="7" cy="7" r="0.5" fill="currentColor"/></svg>`},
+    {slug:"eerr",path:"/reportes",label:"Reportes",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,11 5,7 8,9 13,3"/><polyline points="10,3 13,3 13,6"/></svg>`},
 
     // === MÓDULOS (2) ===
-    // "Equipo" apunta al slug `rrhh` (RRHHPage = lista del equipo).
-    {id:"rrhh",label:"Equipo",sec:"Módulos",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="5" r="2.5"/><path d="M1 13c0-2.5 2-4 4-4s4 1.5 4 4"/><circle cx="10" cy="5" r="2"/><path d="M13 13c0-2 -1-3.5-3-3.5"/></svg>`},
-    {id:"configuracion",label:"Locales",sec:"Módulos",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6 L7 2 L12 6 V12 H2 Z"/><path d="M6 12 V8 H8 V12"/></svg>`},
+    {slug:"rrhh",path:"/equipo",label:"Equipo",sec:"Módulos",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="5" r="2.5"/><path d="M1 13c0-2.5 2-4 4-4s4 1.5 4 4"/><circle cx="10" cy="5" r="2"/><path d="M13 13c0-2 -1-3.5-3-3.5"/></svg>`},
+    {slug:"configuracion",path:"/sucursales",label:"Sucursales",sec:"Módulos",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6 L7 2 L12 6 V12 H2 Z"/><path d="M6 12 V8 H8 V12"/></svg>`},
 
     // === SISTEMA (1) ===
-    {id:"ajustes",label:"Ajustes",sec:"Sistema",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="2.5"/><path d="M7 1v1M7 12v1M1 7h1M12 7h1M2.9 2.9l.7.7M10.4 10.4l.7.7M2.9 11.1l.7-.7M10.4 3.6l.7-.7"/></svg>`},
+    {slug:"ajustes",path:"/ajustes",label:"Ajustes",sec:"Sistema",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="2.5"/><path d="M7 1v1M7 12v1M1 7h1M12 7h1M2.9 2.9l.7.7M10.4 10.4l.7.7M2.9 11.1l.7-.7M10.4 3.6l.7-.7"/></svg>`},
   ];
   const secs = [...new Set(nav.map(n=>n.sec))];
   return (
@@ -95,13 +87,18 @@ export function Sidebar({ user, section, onNav, onLogout, locales, localActivo, 
         )}
         <nav className="sb-nav">
           {secs.map(s=>{
-            const items = nav.filter(n=>n.sec===s&&perms.includes(n.id));
+            const items = nav.filter(n=>n.sec===s&&perms.includes(n.slug));
             if(!items.length) return null;
             return (<div key={s}><div className="sb-section">{s}</div>{items.map(n=>(
-              <div key={n.id} className={`nav-item ${section===n.id?"active":""}`} onClick={() => { onNav(n.id); close(); }}>
+              <NavLink
+                key={n.slug}
+                to={n.path}
+                onClick={close}
+                className={({isActive}) => `nav-item${isActive ? " active" : ""}`}
+              >
                 <span style={{width:14,height:14,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html: n.icon}}/>
                 {n.label}
-              </div>
+              </NavLink>
             ))}</div>);
           })}
         </nav>

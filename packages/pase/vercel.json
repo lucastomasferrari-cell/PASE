@@ -1,5 +1,8 @@
 {
   "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
   "functions": {
     "api/mp-sync.js": {
       "maxDuration": 300
