@@ -63,7 +63,10 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
         <div className="sb-logo">
           <div className="brand">pase<span className="brand-dot">.</span></div>
           <div className="brand-sub">aliado gastronómico</div>
-          {/* Multi-tenant badges (TASK 0.15) — colores neutralizados por el design system v1.0 */}
+          {/* Multi-tenant badges (TASK 0.15). El nombre del tenant en
+              régimen normal (no-superadmin) NO se muestra acá — es
+              redundante con el dropdown de sucursales del propio sidebar.
+              Sprint v2 cosmético: header minimalista. */}
           {esSuperAdmin && !tenantOverride && (
             <div className="badge-sb badge-sb-super">Modo superadmin</div>
           )}
@@ -72,9 +75,6 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
               <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tenant.nombre}</span>
               <button onClick={onClearOverride} className="badge-sb-close" title="Volver a vista superadmin">✕</button>
             </div>
-          )}
-          {!esSuperAdmin && tenant && (
-            <div className="brand-tenant">{tenant.nombre}</div>
           )}
         </div>
         {localesDisp.length > 1 && (
@@ -102,9 +102,14 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
             ))}</div>);
           })}
         </nav>
-        <ThemeToggle />
         <div className="sb-user">
-          <div className="sb-uname">{user.nombre}</div>
+          {/* Fila 'Nombre | Toggle tema' — el toggle vivía flotando entre
+              el nav y el bloque del usuario; sprint v2 cosmético lo trae
+              al row del nombre para agrupar visualmente la zona inferior. */}
+          <div className="sb-user-row">
+            <div className="sb-uname">{user.nombre}</div>
+            <ThemeToggle />
+          </div>
           {/* Decisión 2026-05-13: roles sin color. La distinción es solo textual. */}
           <div className="sb-urole">{ROLES[user.rol]?.label}</div>
           <button className="sb-logout" onClick={onLogout}>Cerrar sesión →</button>
@@ -174,8 +179,8 @@ body{background:var(--pase-bg);color:var(--pase-text);font-family:var(--pase-fon
 
 /* ─── SIDEBAR ──────────────────────────────────────────────────────── */
 .sb{width:200px;background:var(--pase-bg);border-right:0.5px solid var(--pase-border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:20}
-.sb-logo{padding:22px 16px 16px;border-bottom:0.5px solid var(--pase-border);text-align:center}
-.brand{font-size:26px;font-weight:500;color:var(--pase-text);letter-spacing:-0.035em;line-height:1}
+.sb-logo{padding:22px 16px 24px;border-bottom:0.5px solid var(--pase-border);text-align:center}
+.brand{font-size:32px;font-weight:500;color:var(--pase-text);letter-spacing:-0.035em;line-height:1}
 .brand-dot{color:var(--pase-gold)}
 .brand-sub{font-size:9px;color:var(--pase-text-muted);letter-spacing:0.04em;margin-top:6px}
 .brand-tenant{margin-top:10px;font-size:10px;color:var(--pase-text-muted);letter-spacing:0.02em}
@@ -199,7 +204,8 @@ body{background:var(--pase-bg);color:var(--pase-text);font-family:var(--pase-fon
 .nav-item.active{background:var(--pase-celeste-100);color:var(--pase-text);font-weight:500}
 
 .sb-user{padding:14px 16px;border-top:0.5px solid var(--pase-border)}
-.sb-uname{font-size:12px;font-weight:500;margin-bottom:1px;color:var(--pase-text)}
+.sb-user-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sb-uname{font-size:12px;font-weight:500;color:var(--pase-text)}
 .sb-urole{font-size:10px;color:var(--pase-text-muted)}
 .sb-logout{display:block;width:100%;margin-top:8px;padding:6px;background:transparent;border:0.5px solid var(--pase-border-strong);color:var(--pase-text-muted);cursor:pointer;font-size:10px;font-family:var(--pase-font);border-radius:8px;transition:all 0.15s}
 .sb-logout:hover{border-color:var(--pase-celeste-300);color:var(--pase-text)}
