@@ -180,12 +180,29 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
         // Save permisos (delete + re-insert)
         // Dueno tiene todos implícitos, no necesita rows. Otros roles sí.
         const userRol = modal === "new" || modal === null ? "encargado" : (modal.rol || "encargado");
-        await db.from("usuario_permisos").delete().eq("usuario_id", userId);
+        const { error: delPermErr } = await db.from("usuario_permisos").delete().eq("usuario_id", userId);
+        if (delPermErr) {
+          console.error("Error borrando permisos previos:", delPermErr.message);
+          setErr("Error borrando permisos previos: " + delPermErr.message);
+          setSaving(false);
+          return;
+        }
         if (userRol !== "dueno" && form.modulos.length) {
           const { error: permErr } = await db.from("usuario_permisos").insert(
             form.modulos.map(slug => ({ usuario_id: userId as number, modulo_slug: slug, tenant_id: targetTenantId }))
           );
-          if (permErr) console.error("Error guardando permisos:", permErr.message);
+          // Bug crítico fixeado 2026-05-14: antes este error se logueaba y se
+          // tragaba silenciosamente. Resultado: si RLS bloquea el INSERT (caso
+          // user no-dueño antes del fix de migration 202605141500), el DELETE
+          // previo ya borró todo y el user editado quedaba con 0 permisos.
+          // Ahora paramos el flow y reportamos. Por defense-in-depth dejamos
+          // este check aunque la RLS ya está alineada.
+          if (permErr) {
+            console.error("Error guardando permisos:", permErr.message);
+            setErr("Error guardando permisos: " + permErr.message + " (Los permisos quedaron en blanco. Re-editar y reintentar.)");
+            setSaving(false);
+            return;
+          }
         }
 
         // Save locales en usuario_locales (delete + re-insert)
