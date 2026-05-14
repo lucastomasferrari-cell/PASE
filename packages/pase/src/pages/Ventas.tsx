@@ -104,6 +104,21 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
 
     setGuardando(true);
     try {
+      // Bloqueo de duplicados (2026-05-13): no permitir 2 cierres del mismo
+      // (local, fecha, turno). Mismo fix que ImportarMaxirest — antes ahí
+      // había un confirm() que dejaba pasar duplicados. Ver bug Caja Chica
+      // Rene 12/05 noche cargado 2 veces.
+      const { data: dup } = await db.from('ventas').select('id')
+        .eq('local_id', lid).eq('fecha', form.fecha).eq('turno', form.turno).limit(1);
+      if (dup && dup.length > 0) {
+        alert(
+          `Ya existe un cierre del ${fmt_d(form.fecha)} turno ${form.turno} para este local.\n\n` +
+          `Si querés reemplazarlo, primero eliminalo desde la grilla de Ventas y volvé a cargar.`,
+        );
+        setGuardando(false);
+        return;
+      }
+
       // RPC atómica: si cualquier paso falla (insert venta, movimiento o
       // update saldos_caja), rollback completo — no quedan estados parciales.
       // Reemplazó los 3 inserts secuenciales del flow viejo (F1 del plan

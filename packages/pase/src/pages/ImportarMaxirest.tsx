@@ -69,13 +69,26 @@ export default function ImportarMaxirest({ localActivo, onImported }: ImportarMa
       // El schema histórico usa "Mediodía" / "Noche" (con tilde y mayúscula).
       const turnoDB = parsed.turno === 'noche' ? 'Noche' : 'Mediodía';
 
-      // Idempotency: si ya hay un cierre del mismo (fecha, turno, local), confirmar.
+      // Bloqueo de duplicados (2026-05-13): permitir cargar 2 cierres del
+      // mismo (local, fecha, turno) generaba ventas duplicadas + movs
+      // duplicados en caja chica. Caso real: Rene Cantina 12/05 noche
+      // se importó 2 veces con 42min de diferencia → $315.900 extra en
+      // caja chica. Antes el sistema mostraba un confirm() que permitía
+      // "Importar igual" y eso era exactamente lo que causaba el bug.
+      //
+      // Ahora bloquea con alert sin opción de continuar. Si el cierre
+      // previo está mal, primero hay que eliminarlo desde Ventas (eso
+      // borra las ventas y revierte los saldos via RPC eliminar_cierre).
       const { data: dup } = await db.from('ventas').select('id')
         .eq('fecha', fechaIso).eq('turno', turnoDB).eq('local_id', lid).limit(1);
       if (dup && dup.length > 0) {
-        if (!confirm(`Ya existe un cierre del ${fmt_d(fechaIso)} turno ${turnoDB} para este local. ¿Importar igual?`)) {
-          setLoading(false); return;
-        }
+        alert(
+          `Ya existe un cierre del ${fmt_d(fechaIso)} turno ${turnoDB} para este local.\n\n` +
+          `Si el cierre anterior está mal y querés reemplazarlo, primero eliminalo desde Ventas y volvé a importar.\n\n` +
+          `(Antes el sistema te dejaba importar igual con un "confirmar"; eso generó duplicados de plata. Ahora está bloqueado.)`,
+        );
+        setLoading(false);
+        return;
       }
 
       const ventas = medios.map(m => ({
