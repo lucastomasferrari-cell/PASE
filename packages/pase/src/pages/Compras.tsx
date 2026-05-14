@@ -28,6 +28,56 @@ const Proveedores = lazy(() => import("./Proveedores"));
 
 type SubSection = "facturas" | "proveedores" | "remitos" | "notas";
 
+// Iconos para botones de acción de las tablas. Compactos para que la columna
+// 'Acciones' no se corte cuando el sub-nav lateral le come ancho a la tabla.
+// Reemplazan los antiguos botones con texto (Ver / Pagar / Anular / Vincular).
+const iconStroke = { fill: "none", stroke: "currentColor", strokeWidth: 1.5, strokeLinecap: "round", strokeLinejoin: "round" } as const;
+const IconEye = (
+  <svg width="13" height="13" viewBox="0 0 16 16" {...iconStroke}><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2.2"/></svg>
+);
+const IconPay = (
+  <svg width="13" height="13" viewBox="0 0 16 16" {...iconStroke}><rect x="1.5" y="4" width="13" height="9" rx="1.5"/><line x1="1.5" y1="7" x2="14.5" y2="7"/></svg>
+);
+const IconX = (
+  <svg width="13" height="13" viewBox="0 0 16 16" {...iconStroke}><line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/></svg>
+);
+const IconLink = (
+  <svg width="13" height="13" viewBox="0 0 16 16" {...iconStroke}><path d="M7 5a3 3 0 0 0 0 6h2"/><path d="M9 11a3 3 0 0 0 0-6H7"/></svg>
+);
+
+// Wrapper común para botones icon-only: 26x26, radius 6, hover bg-soft.
+function IconBtn(props: { title: string; onClick: () => void; tone?: "default" | "success" | "danger"; disabled?: boolean; children: React.ReactNode }) {
+  const tone = props.tone || "default";
+  const color =
+    tone === "success" ? "var(--pase-celeste)" :
+    tone === "danger"  ? "var(--pase-text-muted)" :
+    "var(--pase-text-muted)";
+  return (
+    <button
+      type="button"
+      title={props.title}
+      aria-label={props.title}
+      onClick={props.onClick}
+      disabled={props.disabled}
+      style={{
+        width: 26, height: 26, padding: 0,
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        background: "transparent",
+        border: "0.5px solid var(--pase-border-strong)",
+        borderRadius: 6,
+        color,
+        cursor: props.disabled ? "default" : "pointer",
+        opacity: props.disabled ? 0.4 : 1,
+        transition: "background 0.12s, color 0.12s, border-color 0.12s",
+      }}
+      onMouseEnter={e => { if (!props.disabled) e.currentTarget.style.background = "var(--pase-bg-soft)"; }}
+      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+    >
+      {props.children}
+    </button>
+  );
+}
+
 interface ComprasProps {
   user: Usuario;
   locales: Local[];
@@ -126,6 +176,14 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       notas:       "/compras/notas-credito",
     };
     navigate(pathMap[sec]);
+  };
+
+  // Helper genérico para escribir ?estado= en la URL desde los sub-filtros
+  // de Remitos, Notas crédito y Proveedores (bug 2 fix, sprint v2 Commit 4).
+  const setUrlEstado = (estado: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("estado", estado);
+    setSearchParams(next, { replace: true });
   };
 
   const isProveedores = subSection === "proveedores";
@@ -237,6 +295,21 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   // facturas.pagos de las NCs siempre está vacía — bug T-19).
   const ncAplicMap = aplicacionesPorNc(ncAplicaciones);
 
+  // Sub-filtros URL-driven para Remitos / Notas / Proveedores (bug 2 fix).
+  // Se declaran ANTES de fFilt/rFilt porque ambos los referencian al filtrar.
+  const remitoEstadoFiltro = (subSection === "remitos" ? (urlEstado || "todos") : "todos");
+  const notaEstadoFiltro   = (subSection === "notas"   ? (urlEstado || "todas") : "todas");
+  const proveedorEstadoFiltro = (subSection === "proveedores" ? (urlEstado || "activos") : "activos");
+  // Filtro de NCs por estado (disponibles | aplicadas | todas). Aplica solo
+  // cuando estamos en sub-sección Notas crédito.
+  const filtrarNotaPorEstado = (f: Factura): boolean => {
+    if (subSection !== "notas") return true;
+    const consumida = f.estado === "pagada" || saldoNcRestante(f, ncAplicMap) <= 0;
+    if (notaEstadoFiltro === "disponibles") return !consumida;
+    if (notaEstadoFiltro === "aplicadas") return consumida;
+    return true; // 'todas'
+  };
+
   const fFilt = facturas.filter(f => {
     if (f.estado === "anulada") return false;
     const isNC = (f.tipo || "factura") === "nota_credito";
@@ -250,6 +323,8 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     // había perdido.
     if (pillEstado === "nc") {
       if (!isNC) return false;
+      // Sub-filtro URL-driven dentro de Notas crédito (bug 2).
+      if (!filtrarNotaPorEstado(f)) return false;
     } else if (pillEstado === "todas") {
       // pasa todo (factura o NC)
     } else {
@@ -508,8 +583,15 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     }
     if (desde && r.fecha < desde) return false;
     if (hasta && r.fecha > hasta) return false;
+    // Filtro por estado del sub-nav cuando estamos en sub-sección Remitos.
+    if (subSection === "remitos") {
+      if (r.estado === "anulado") return false;
+      if (remitoEstadoFiltro === "sin_aplicar" && r.estado !== "sin_factura") return false;
+      if (remitoEstadoFiltro === "aplicados" && !(r.estado === "facturado" || r.estado === "pagado" || r.estado === "vinculado")) return false;
+    }
     return true;
   });
+
 
   // ─── Conteos para el RightSubNav ─────────────────────────────────────
   // Sub-secciones: contadores siempre visibles, calculados sobre el array
@@ -545,8 +627,8 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     const cAplic    = remActivos.filter(r => r.estado === "facturado" || r.estado === "pagado" || r.estado === "vinculado").length;
     estadoSection = {
       header: "Estado",
-      activeId: "todos",  // sin filtro adicional por ahora — la tabla muestra todos
-      onSelect: () => { /* placeholder: la tabla ya muestra todos */ },
+      activeId: remitoEstadoFiltro,
+      onSelect: setUrlEstado,
       items: [
         { id: "todos",       label: "Todos",       count: cTodos },
         { id: "sin_aplicar", label: "Sin aplicar", count: cSinApl },
@@ -560,8 +642,8 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     const cAplicadas   = ncs.filter(f => f.estado === "pagada" || saldoNcRestante(f, ncAplicMap) <= 0).length;
     estadoSection = {
       header: "Estado",
-      activeId: "todas",
-      onSelect: () => { /* filtro interno de NC pendiente de implementar */ },
+      activeId: notaEstadoFiltro,
+      onSelect: setUrlEstado,
       items: [
         { id: "todas",       label: "Todas",       count: cTodas },
         { id: "disponibles", label: "Disponibles", count: cDisponibles },
@@ -573,8 +655,8 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     const cInactivos  = proveedores.filter(p => p.estado === "Inactivo").length;
     estadoSection = {
       header: "Estado",
-      activeId: "activos",
-      onSelect: () => { /* la pantalla embebida usa su propio filtro */ },
+      activeId: proveedorEstadoFiltro,
+      onSelect: setUrlEstado,
       items: [
         { id: "activos",   label: "Activos",   count: cActivos },
         { id: "inactivos", label: "Inactivos", count: cInactivos },
@@ -691,7 +773,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
               ya mostró "Compras · proveedores" arriba, así que esto queda
               algo redundante visualmente — refactor: extraer body de
               Proveedores a un sub-componente sin header. Por ahora aceptado. */}
-          <Proveedores user={user} locales={locales} localActivo={localActivo} embedded />
+          <Proveedores user={user} locales={locales} localActivo={localActivo} embedded embeddedFilter={proveedorEstadoFiltro as "activos" | "inactivos"} />
         </Suspense>
       ) : pillEstado === "remitos" ? (
         <div className="panel">
@@ -736,10 +818,16 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                     <td>
                       {!isAnulado && (
                         <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "flex-end" }}>
-                          {r.estado === "sin_factura" && <button className="btn btn-ghost btn-sm" onClick={() => setVincModal(r)}>Vincular FC</button>}
+                          {r.estado === "sin_factura" && (
+                            <IconBtn title="Vincular factura" onClick={() => setVincModal(r)}>{IconLink}</IconBtn>
+                          )}
                           {r.factura_id && <span className="mono" style={{ fontSize: 10, color: "var(--info)" }}>→ {facturas.find(f => f.id === r.factura_id)?.nro || r.factura_id}</span>}
-                          {r.estado === "sin_factura" && <button className="btn btn-success btn-sm" onClick={() => { setPagarRemModal(r); setRemPagoForm({ cuenta: "", monto: r.monto, fecha: toISO(today) }); setIdempKeyPagarRem(crypto.randomUUID()); }}>Pagar</button>}
-                          {r.estado !== "pagado" && tienePermiso(user, "compras_anular") && <button className="btn btn-danger btn-sm" onClick={() => anularRemito(r)}>Anular</button>}
+                          {r.estado === "sin_factura" && (
+                            <IconBtn title="Registrar pago" tone="success" onClick={() => { setPagarRemModal(r); setRemPagoForm({ cuenta: "", monto: r.monto, fecha: toISO(today) }); setIdempKeyPagarRem(crypto.randomUUID()); }}>{IconPay}</IconBtn>
+                          )}
+                          {r.estado !== "pagado" && tienePermiso(user, "compras_anular") && (
+                            <IconBtn title="Anular" tone="danger" onClick={() => anularRemito(r)}>{IconX}</IconBtn>
+                          )}
                         </div>
                       )}
                     </td>
@@ -803,9 +891,13 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                     : estadoDot(estadoFactura(f))}</td>
                   <td>
                     <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setVerModal(f)}>Ver</button>
-                      {!isNC && f.estado !== "pagada" && <button className="btn btn-success btn-sm" onClick={() => { setPagarModal(f); setPagoForm({ cuenta: "", monto: Number(f.total) || 0, fecha: toISO(today) }); setIdempKeyPagarFac(crypto.randomUUID()); }}>Pagar</button>}
-                      {tienePermiso(user, "compras_anular") && <button className="btn btn-danger btn-sm" onClick={() => anular(f)}>Anular</button>}
+                      <IconBtn title="Ver detalle" onClick={() => setVerModal(f)}>{IconEye}</IconBtn>
+                      {!isNC && f.estado !== "pagada" && (
+                        <IconBtn title="Registrar pago" tone="success" onClick={() => { setPagarModal(f); setPagoForm({ cuenta: "", monto: Number(f.total) || 0, fecha: toISO(today) }); setIdempKeyPagarFac(crypto.randomUUID()); }}>{IconPay}</IconBtn>
+                      )}
+                      {tienePermiso(user, "compras_anular") && (
+                        <IconBtn title="Anular" tone="danger" onClick={() => anular(f)}>{IconX}</IconBtn>
+                      )}
                     </div>
                   </td>
                 </tr>

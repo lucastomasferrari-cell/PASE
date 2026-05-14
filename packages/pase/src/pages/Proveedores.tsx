@@ -16,10 +16,12 @@ interface ProveedoresProps {
    * como sub-sección dentro de Compras (el módulo madre ya tiene su header
    * y sus botones contextuales). Sprint mayo 2026 v2 Commit 4. */
   embedded?: boolean;
+  /** Filtro controlado desde el sub-nav del módulo madre (sprint v2 bug 2 fix). */
+  embeddedFilter?: "activos" | "inactivos";
 }
 
 // ─── PROVEEDORES ──────────────────────────────────────────────────────────────
-export default function Proveedores({ user, localActivo, embedded = false }: ProveedoresProps) {
+export default function Proveedores({ user, localActivo, embedded = false, embeddedFilter }: ProveedoresProps) {
   const { CATEGORIAS_COMPRA } = useCategorias();
   const [proveedores,setProveedores]=useState<Proveedor[]>([]);
   const [modal,setModal]=useState(false);
@@ -61,7 +63,14 @@ export default function Proveedores({ user, localActivo, embedded = false }: Pro
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(()=>{load();},[localActivo]);
   const pFilt=proveedores
-    .filter(p=>verInactivos||p.estado!=="Inactivo")
+    // Filtro de estado: en modo embedded, el sub-nav del módulo madre Compras
+    // controla activos/inactivos vía prop. En modo suelto, usa el toggle interno
+    // 'Ver inactivos'.
+    .filter(p => {
+      if (embedded && embeddedFilter === "inactivos") return p.estado === "Inactivo";
+      if (embedded && embeddedFilter === "activos") return p.estado !== "Inactivo";
+      return verInactivos || p.estado !== "Inactivo";
+    })
     .filter(p=>!search||p.nombre.toLowerCase().includes(search.toLowerCase())||(p.cuit||"").includes(search));
   const guardar=async()=>{
     if(!form.nombre)return;
@@ -112,14 +121,11 @@ export default function Proveedores({ user, localActivo, embedded = false }: Pro
       )}
       {embedded && (
         /* Toolbar reducida cuando estamos embebidos: el header lo dibuja el
-           módulo madre (Compras). Mostramos solo búsqueda + toggle inactivos. */
+           módulo madre (Compras). El toggle 'Ver inactivos' se reemplazó
+           por el sub-nav Activos/Inactivos del módulo madre. */
         <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:14,flexWrap:"wrap"}}>
-          {tienePermiso(user, "ver_anulados") && (
-            <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"var(--muted2)",cursor:"pointer"}}>
-              <input type="checkbox" checked={verInactivos} onChange={e=>setVerInactivos(e.target.checked)} style={{accentColor:"var(--acc)"}}/>
-              Ver inactivos
-            </label>
-          )}
+          {/* En modo embedded el checkbox 'Ver inactivos' no se renderiza —
+              el sub-nav Activos/Inactivos del módulo madre lo reemplaza. */}
           <input className="search" placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)} style={{width:240}}/>
           <button className="btn btn-acc" style={{marginLeft:"auto"}} onClick={()=>setModal(true)}>+ Nuevo proveedor</button>
         </div>
