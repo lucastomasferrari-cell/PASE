@@ -162,15 +162,8 @@ export const css = `
   --r:        var(--pase-radius-md);
 }
 
-/* Pattern de "papel cuaderno" sobre el body (2026-05-14, iterado).
-   Líneas horizontales celeste de marca al 12% opacity, cada 24px. Mejorada
-   visibilidad para mobile (donde el 7% original no se veía). En desktop
-   con brillo alto también queda sutil. rgba absoluto → funciona idéntico
-   en light y dark mode. Sin pattern dentro de .panel (datos sólidos). */
 body{
   background:var(--pase-bg);
-  background-image:linear-gradient(180deg,transparent 0,transparent 23px,rgba(117,170,219,0.12) 23px,rgba(117,170,219,0.12) 24px);
-  background-size:100% 24px;
   color:var(--pase-text);
   font-family:var(--pase-font);
   font-size:13px;
@@ -238,7 +231,19 @@ body{
 .sb-logout:hover{border-color:var(--pase-celeste-300);color:var(--pase-text)}
 
 /* ─── MAIN ─────────────────────────────────────────────────────────── */
-.main{margin-left:200px;flex:1;padding:24px 32px;min-height:100vh;background:var(--pase-bg)}
+/* Pattern de "papel cuaderno" aplicado al .main (área de contenido, no al
+   body porque el .main tiene su propio background que lo tapaba). Líneas
+   horizontales celeste de marca al 12% opacity cada 24px. Los .panel
+   adentro siguen sólidos (datos no compiten con pattern). */
+.main{
+  margin-left:200px;
+  flex:1;
+  padding:24px 32px;
+  min-height:100vh;
+  background:var(--pase-bg);
+  background-image:linear-gradient(180deg,transparent 0,transparent 23px,rgba(117,170,219,0.12) 23px,rgba(117,170,219,0.12) 24px);
+  background-size:100% 24px;
+}
 .ph-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;gap:12px;flex-wrap:wrap}
 .ph-title{font-family:var(--pase-font);font-size:18px;font-weight:500;line-height:1.1;color:var(--pase-text);letter-spacing:-0.02em}
 .ph-sub{font-size:11px !important;color:var(--pase-text-muted);margin-top:4px;font-weight:400 !important}
