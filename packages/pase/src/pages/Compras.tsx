@@ -772,7 +772,10 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                     <div style={{ fontSize: 12, fontWeight: 500, color: "var(--txt)" }}>{prov?.nombre || "—"}</div>
                     <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 1, display: "flex", alignItems: "center", gap: 6 }}>
                       <span>{f.nro}</span>
-                      {isNC && <span className="badge b-info" style={{ fontSize: 8, letterSpacing: 0.5 }}>NC</span>}
+                      {/* Pill 'NC' solo aparece cuando estamos en la vista 'Facturas'
+                          (donde NCs y facturas se mezclan). En la sub-sección
+                          'Notas crédito' es redundante — se removió 2026-05-13. */}
+                      {isNC && subSection !== "notas" && <span className="badge b-info" style={{ fontSize: 8, letterSpacing: 0.5 }}>NC</span>}
                     </div>
                   </td>
                   {!localActivo && (
