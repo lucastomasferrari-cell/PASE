@@ -1,0 +1,105 @@
+/* Modal/Dialog genérico — overlay + panel centrado con fade-in y scale-up.
+ * Sigue el patrón visual del drawer Estado de Cuenta y del DesignSystem
+ * de PASE (paleta celeste, bordes 0.5px, radius 14, sin sombras profundas).
+ */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 58, 94, 0.18);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  animation: fadeIn 0.18s ease forwards;
+}
+
+@keyframes fadeIn {
+  to { opacity: 1; }
+}
+
+.dialog {
+  background: var(--pase-bg);
+  border-radius: var(--pase-radius-card);
+  border: 0.5px solid var(--pase-border);
+  padding: 22px 24px;
+  width: 100%;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  font-family: var(--pase-font);
+  color: var(--pase-text);
+  transform: scale(0.96);
+  opacity: 0;
+  animation: scaleIn 0.2s ease 0.05s forwards;
+  box-shadow: 0 12px 40px rgba(26, 58, 94, 0.12);
+}
+
+@keyframes scaleIn {
+  to { transform: scale(1); opacity: 1; }
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.title {
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--pase-text);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.subtitle {
+  font-size: 11px;
+  color: var(--pase-text-muted);
+  margin-top: 4px;
+  letter-spacing: -0.005em;
+}
+
+.closeBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: var(--pase-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.closeBtn:hover {
+  background: var(--pase-bg-soft);
+  color: var(--pase-text);
+}
+
+.body {
+  /* Sin estilos por default — el caller decide el contenido. */
+}
+
+.footer {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 0.5px solid var(--pase-border);
+  display: flex;
+  gap: 8px;
+}
+
+.footer > * { flex: 1; }
+
+@media (max-width: 540px) {
+  .overlay { padding: 12px; }
+  .dialog { padding: 18px 16px; }
+}

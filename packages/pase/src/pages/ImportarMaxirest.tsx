@@ -9,6 +9,10 @@ interface ImportarMaxirestProps {
   locales?: unknown;
   localActivo?: number | null;
   onImported?: () => void;
+  /** Cuando true, omite el ph-row con título 'Importar Maxirest'. Usado
+   * cuando el componente se renderiza dentro de un <Modal/> que ya
+   * dibuja su propio header. Sprint mayo 2026 v2 bug fix. */
+  embedded?: boolean;
 }
 
 interface MedioMapeado {
@@ -23,7 +27,7 @@ type Bloqueo =
   | { tipo: 'sin_local' }
   | { tipo: 'medio_no_configurado'; nombre: string };
 
-export default function ImportarMaxirest({ localActivo, onImported }: ImportarMaxirestProps) {
+export default function ImportarMaxirest({ localActivo, onImported, embedded = false }: ImportarMaxirestProps) {
   const [texto, setTexto] = useState('');
   const [parsed, setParsed] = useState<ParsedCierre | null>(null);
   const [errores, setErrores] = useState<ParseError[]>([]);
@@ -208,7 +212,9 @@ export default function ImportarMaxirest({ localActivo, onImported }: ImportarMa
 
   return (
     <div>
-      <div className="ph-row"><div><div className="ph-title">Importar Maxirest</div></div></div>
+      {!embedded && (
+        <div className="ph-row"><div><div className="ph-title">Importar Maxirest</div></div></div>
+      )}
 
       {errores.length > 0 && <PanelErrores errores={errores} />}
 

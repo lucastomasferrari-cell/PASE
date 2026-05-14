@@ -9,3 +9,4 @@ export type { LocalCardProps } from "./LocalCard";
 export { ComparativaLocales } from "./ComparativaLocales";
 export { RightSubNav } from "./RightSubNav";
 export type { SubNavItem, SubNavSection } from "./RightSubNav";
+export { Modal } from "./Modal";

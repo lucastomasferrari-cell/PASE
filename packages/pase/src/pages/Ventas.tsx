@@ -6,6 +6,7 @@ import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { useToast } from "../hooks/useToast";
 import ImportarMaxirest from "./ImportarMaxirest";
+import { Modal } from "../components/ui";
 import type { Usuario, Local, Venta, CierreVentas } from "../types";
 
 interface VentasProps {
@@ -230,12 +231,29 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
       <div className="ph-row">
         <div><div className="ph-title">Ventas</div></div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-          <button className="btn btn-ghost" onClick={()=>setShowMaxirest(!showMaxirest)}>{showMaxirest?"Cerrar importador":"Importar desde Maxirest"}</button>
+          <button className="btn btn-ghost" onClick={()=>setShowMaxirest(true)}>Importar cierre Maxirest</button>
           <button className="btn btn-acc" onClick={()=>setModalNuevo(true)}>+ Cargar venta</button>
         </div>
       </div>
 
-      {showMaxirest&&<div style={{marginBottom:16}}><ImportarMaxirest locales={locales} localActivo={localActivo} onImported={load}/></div>}
+      {/* Importador Maxirest como modal pop-up centrado (sprint v2 bug fix).
+          Antes era un bloque inline arriba del historial que lo empujaba
+          hacia abajo. */}
+      <Modal
+        isOpen={showMaxirest}
+        onClose={() => setShowMaxirest(false)}
+        title="Importar cierre Maxirest"
+        subtitle="Pegá el texto del mail de cierre y procesalo."
+        maxWidth={720}
+        preventCloseOnOverlay
+      >
+        <ImportarMaxirest
+          locales={locales}
+          localActivo={localActivo}
+          onImported={() => { load(); setShowMaxirest(false); }}
+          embedded
+        />
+      </Modal>
 
       {/* SECCIÓN INFERIOR: filtros + historial.
           Visible solo para usuarios con permiso 'ventas_historico'. Sin el
