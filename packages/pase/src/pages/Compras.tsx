@@ -7,7 +7,7 @@ import { useCategorias } from "../lib/useCategorias";
 import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId, parseMonto, estadoFactura } from "../lib/utils";
-import { RightSubNav, type SubNavSection } from "../components/ui";
+import { RightSubNav, type SubNavSection, PageHeader } from "../components/ui";
 import type { Usuario, Local } from "../types";
 import type { Proveedor, Factura } from "../types/finanzas";
 import { aplicacionesPorNc, saldoNcRestante } from "../lib/saldoProveedor";
@@ -681,48 +681,51 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
 
   return (
     <div>
-      <div className="ph-row">
-        <div>
-          <div className="ph-title">
-            {subSection === "facturas"    && "Compras · facturas"}
-            {subSection === "proveedores" && "Compras · proveedores"}
-            {subSection === "remitos"     && "Compras · remitos"}
-            {subSection === "notas"       && "Compras · notas de crédito"}
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          {subSection === "facturas" && (<>
-            {puedeFacturas && <button className="btn btn-sec" onClick={() => setLectorModal(true)}>Lector IA</button>}
-            {puedeRemitos && (
+      <PageHeader
+        title="Compras"
+        subtitle={
+          subSection === "facturas"    ? "facturas" :
+          subSection === "proveedores" ? "proveedores" :
+          subSection === "remitos"     ? "remitos" :
+          subSection === "notas"       ? "notas de crédito" : undefined
+        }
+        info={
+          subSection === "facturas"    ? <>Facturas de proveedores. Podés cargarlas a mano o usar el <strong>Lector IA</strong> (sacá foto y Claude la lee). Cada factura paga descuenta de la cuenta de caja elegida.</> :
+          subSection === "proveedores" ? <>Catálogo de proveedores. El saldo se actualiza solo al cargar/pagar facturas. Mantené los CUITs al día para el listado del contador.</> :
+          subSection === "remitos"     ? <>Remitos pendientes de facturación. Cada remito se asocia a una factura cuando llega.</> :
+          subSection === "notas"       ? <>Notas de crédito de proveedores. Se aplican contra facturas pendientes para reducir el saldo.</> :
+          undefined
+        }
+        actions={
+          <>
+            {subSection === "facturas" && puedeFacturas && <button className="btn btn-sec" onClick={() => setLectorModal(true)}>Lector IA</button>}
+            {subSection === "facturas" && puedeRemitos && (
               <button className="btn btn-sec" onClick={() => { setRemForm({ ...emptyRemForm, local_id: localActivo ? String(localActivo) : "" }); setRemModal(true); }}>+ Cargar remito</button>
             )}
-            {puedeFacturas && (
+            {subSection === "facturas" && puedeFacturas && (
               <button className="btn btn-acc" onClick={() => { setForm({ ...emptyForm, local_id: localActivo ? String(localActivo) : "" }); setItems([]); setModal(true); }}>+ Cargar factura</button>
             )}
-          </>)}
-          {subSection === "remitos" && puedeRemitos && (
-            <button className="btn btn-acc" onClick={() => { setRemForm({ ...emptyRemForm, local_id: localActivo ? String(localActivo) : "" }); setRemModal(true); }}>+ Cargar remito</button>
-          )}
-          {subSection === "notas" && puedeFacturas && (
-            <button className="btn btn-acc" onClick={() => { setForm({ ...emptyForm, local_id: localActivo ? String(localActivo) : "", tipo: "nota_credito" }); setItems([]); setModal(true); }}>+ Cargar nota</button>
-          )}
-          {subSection === "proveedores" && (
-            /* Botón disparado vía query param ?action=nuevo — el embed
-               Proveedores lo lee con useSearchParams y abre su modal interno.
-               Esto evita compartir state cross-componente. */
-            <button
-              className="btn btn-acc"
-              onClick={() => {
-                const next = new URLSearchParams(searchParams);
-                next.set("action", "nuevo");
-                setSearchParams(next, { replace: true });
-              }}
-            >
-              + Nuevo proveedor
-            </button>
-          )}
-        </div>
-      </div>
+            {subSection === "remitos" && puedeRemitos && (
+              <button className="btn btn-acc" onClick={() => { setRemForm({ ...emptyRemForm, local_id: localActivo ? String(localActivo) : "" }); setRemModal(true); }}>+ Cargar remito</button>
+            )}
+            {subSection === "notas" && puedeFacturas && (
+              <button className="btn btn-acc" onClick={() => { setForm({ ...emptyForm, local_id: localActivo ? String(localActivo) : "", tipo: "nota_credito" }); setItems([]); setModal(true); }}>+ Cargar nota</button>
+            )}
+            {subSection === "proveedores" && (
+              <button
+                className="btn btn-acc"
+                onClick={() => {
+                  const next = new URLSearchParams(searchParams);
+                  next.set("action", "nuevo");
+                  setSearchParams(next, { replace: true });
+                }}
+              >
+                + Nuevo proveedor
+              </button>
+            )}
+          </>
+        }
+      />
 
       {/* Layout módulo madre: contenido a la izquierda + RightSubNav derecha.
           Clase global .module-with-aside (Layout.tsx) maneja el grid + media

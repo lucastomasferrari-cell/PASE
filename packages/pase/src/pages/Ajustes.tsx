@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { db } from "../lib/supabase";
-import { Modal } from "../components/ui";
+import { Modal, InfoTooltip } from "../components/ui";
 import styles from "./Ajustes.module.css";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -382,9 +382,13 @@ export default function Ajustes() {
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <div className={styles.titleWrap}>
+        <div className={styles.titleWrap} style={{display:"flex",alignItems:"center",gap:6}}>
           <span className={styles.title}>Ajustes</span>
-          <span className={styles.subtitle}>Configuraciones del negocio · Neko</span>
+          <InfoTooltip maxWidth={300}>
+            Configuraciones globales del tenant: catálogos de categorías (gastos, compras,
+            ingresos), medios de cobro, puestos RRHH. Lo que defines acá se propaga a todas
+            las pantallas del producto.
+          </InfoTooltip>
         </div>
         <div className={styles.actions}>
           <button className="btn btn-acc" onClick={openNuevoModal}>

@@ -7,7 +7,7 @@ import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import ImportarMaxirest from "./ImportarMaxirest";
-import { Modal } from "../components/ui";
+import { Modal, PageHeader } from "../components/ui";
 import type { Usuario, Local, Venta, CierreVentas } from "../types";
 
 interface VentasProps {
@@ -217,14 +217,20 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
   return (
     <div>
       <ToastComponent toast={toast} />
-      {/* SECCIÓN SUPERIOR: carga manual + importador Maxirest */}
-      <div className="ph-row">
-        <div><div className="ph-title">Ventas</div></div>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-          <button className="btn btn-ghost" onClick={()=>setShowMaxirest(true)}>Importar cierre Maxirest</button>
-          <button className="btn btn-acc" onClick={()=>setModalNuevo(true)}>+ Cargar venta</button>
-        </div>
-      </div>
+      <PageHeader
+        title="Ventas"
+        info={<>
+          Cierres de venta diarios o por turno (almuerzo, cena). Las ventas en efectivo generan
+          automáticamente un movimiento en Caja. Las cobranzas de MP, tarjetas, etc. se registran
+          cuando llega la liquidación (en el módulo Caja).
+        </>}
+        actions={
+          <>
+            <button className="btn btn-ghost" onClick={()=>setShowMaxirest(true)}>Importar cierre Maxirest</button>
+            <button className="btn btn-acc" onClick={()=>setModalNuevo(true)}>+ Cargar venta</button>
+          </>
+        }
+      />
 
       {/* Importador Maxirest como modal pop-up centrado (sprint v2 bug fix).
           Antes era un bloque inline arriba del historial que lo empujaba

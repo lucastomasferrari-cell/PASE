@@ -9,7 +9,7 @@ import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import { Combobox } from "../components/Combobox";
-import { PageHeader } from "../components/ui";
+import { PageHeader, TipoPill } from "../components/ui";
 import type { Usuario, Local } from "../types";
 import type { Gasto } from "../types/finanzas";
 
@@ -400,7 +400,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                 <tr key={g.id} style={anulado ? { opacity: 0.5, textDecoration: "line-through" } : undefined}>
                   <td className="mono">{fmt_d(g.fecha)}</td>
                   <td>
-                    <span className="badge b-muted">{g.tipo}</span>
+                    <TipoPill tipo={g.tipo} />
                     {anulado && <span className="badge b-danger" style={{ marginLeft: 4, fontSize: 9 }}>ANULADO</span>}
                     {g.editado && !anulado && <span className="badge b-warn" style={{ marginLeft: 4, fontSize: 9 }} title={g.editado_motivo || ""}>EDITADO</span>}
                   </td>
@@ -568,7 +568,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                   <tbody>{plantillas.map(p => (
                     <tr key={p.id}>
                       <td style={{ fontSize: 12 }}>{p.nombre}</td>
-                      <td><span className="badge b-muted">{p.tipo}</span></td>
+                      <td><TipoPill tipo={p.tipo} /></td>
                       <td style={{ fontSize: 11, color: "var(--muted2)" }}>{p.categoria}</td>
                       <td style={{ fontSize: 11, color: "var(--muted2)" }}>{locales.find((l: Local) => l.id === p.local_id)?.nombre || "Todos"}</td>
                       <td><button className="btn btn-danger btn-sm" onClick={() => eliminarPlantilla(p.id)}>X</button></td>

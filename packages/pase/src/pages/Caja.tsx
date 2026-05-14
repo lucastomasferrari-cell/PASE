@@ -8,7 +8,7 @@ import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
-import { RightSubNav, type SubNavSection } from "../components/ui";
+import { RightSubNav, type SubNavSection, PageHeader } from "../components/ui";
 import { CajaCardsRow } from "./caja/CajaCardsRow";
 import type { Usuario, Local } from "../types/auth";
 import type { Movimiento } from "../types/finanzas";
@@ -455,30 +455,25 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
 
   return (
     <div>
-      <div className="ph-row">
-        <div>
-          <div className="ph-title">
-            {subSection === "movimientos"  && "Caja · movimientos"}
-            {subSection === "conciliacion" && "Caja · conciliación MP"}
-          </div>
-        </div>
-        {subSection === "movimientos" && (
-          <div style={{display:"flex",gap:8}}>
+      <PageHeader
+        title="Caja"
+        subtitle={subSection === "movimientos" ? "movimientos" : "conciliación MP"}
+        info={subSection === "movimientos"
+          ? <>Cuentas y movimientos del local: efectivo, MercadoPago, banco. Los movimientos se generan automáticamente al cargar ventas en efectivo, gastos, facturas pagadas y otros flujos.</>
+          : <>Reconcilía los movimientos de MercadoPago contra tus facturas, gastos y movimientos de caja. Sincronización automática cada 30 min vía GitHub Actions.</>
+        }
+        actions={subSection === "movimientos" ? (
+          <>
             <button className="btn btn-sec" onClick={()=>setTransfModal(true)} disabled={cuentasOperablesList.length<2}>↔ Transferir</button>
             <button className="btn btn-acc" onClick={abrirNuevoMovimiento}>+ Movimiento</button>
-          </div>
-        )}
-        {subSection === "conciliacion" && (
-          /* Acciones del header para Conciliación MP. Se disparan vía query
-             param ?action=sync|cuentas que el embed lee con useSearchParams
-             (mismo patrón que /compras/proveedores?action=nuevo). Evita
-             compartir state cross-componente entre Caja y ConciliacionMP. */
-          <div style={{display:"flex",gap:8}}>
+          </>
+        ) : (
+          <>
             <button className="btn btn-sec" onClick={() => triggerMPAction("cuentas")}>⚙ Cuentas MP</button>
             <button className="btn btn-acc" onClick={() => triggerMPAction("sync")}>↻ Sincronizar ahora</button>
-          </div>
+          </>
         )}
-      </div>
+      />
 
       {/* Layout módulo madre: contenido a la izquierda + RightSubNav derecha.
           Clase global .module-with-aside (Layout.tsx) maneja el grid + media
