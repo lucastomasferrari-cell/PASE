@@ -12,10 +12,14 @@ interface ProveedoresProps {
   user: Usuario;
   locales?: Local[];
   localActivo: number | null;
+  /** Cuando true, omite el ph-row con título + botones. Usado al embeberlo
+   * como sub-sección dentro de Compras (el módulo madre ya tiene su header
+   * y sus botones contextuales). Sprint mayo 2026 v2 Commit 4. */
+  embedded?: boolean;
 }
 
 // ─── PROVEEDORES ──────────────────────────────────────────────────────────────
-export default function Proveedores({ user, localActivo }: ProveedoresProps) {
+export default function Proveedores({ user, localActivo, embedded = false }: ProveedoresProps) {
   const { CATEGORIAS_COMPRA } = useCategorias();
   const [proveedores,setProveedores]=useState<Proveedor[]>([]);
   const [modal,setModal]=useState(false);
@@ -91,19 +95,35 @@ export default function Proveedores({ user, localActivo }: ProveedoresProps) {
   };
   return (
     <div>
-      <div className="ph-row">
-        <div><div className="ph-title">Proveedores</div></div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+      {!embedded && (
+        <div className="ph-row">
+          <div><div className="ph-title">Proveedores</div></div>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            {tienePermiso(user, "ver_anulados") && (
+              <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"var(--muted2)",cursor:"pointer"}}>
+                <input type="checkbox" checked={verInactivos} onChange={e=>setVerInactivos(e.target.checked)} style={{accentColor:"var(--acc)"}}/>
+                Ver inactivos
+              </label>
+            )}
+            <input className="search" placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)}/>
+            <button className="btn btn-acc" onClick={()=>setModal(true)}>+ Nuevo</button>
+          </div>
+        </div>
+      )}
+      {embedded && (
+        /* Toolbar reducida cuando estamos embebidos: el header lo dibuja el
+           módulo madre (Compras). Mostramos solo búsqueda + toggle inactivos. */
+        <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:14,flexWrap:"wrap"}}>
           {tienePermiso(user, "ver_anulados") && (
             <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"var(--muted2)",cursor:"pointer"}}>
               <input type="checkbox" checked={verInactivos} onChange={e=>setVerInactivos(e.target.checked)} style={{accentColor:"var(--acc)"}}/>
               Ver inactivos
             </label>
           )}
-          <input className="search" placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)}/>
-          <button className="btn btn-acc" onClick={()=>setModal(true)}>+ Nuevo</button>
+          <input className="search" placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)} style={{width:240}}/>
+          <button className="btn btn-acc" style={{marginLeft:"auto"}} onClick={()=>setModal(true)}>+ Nuevo proveedor</button>
         </div>
-      </div>
+      )}
       <div className="panel">
         {loading?<div className="loading">Cargando...</div>:(
           <table><thead><tr><th>Proveedor</th><th>CUIT</th><th>Categoría EERR</th><th>Saldo</th><th>Estado</th><th></th></tr></thead>

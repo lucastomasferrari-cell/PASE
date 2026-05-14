@@ -1,4 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasOperables, localesVisibles, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
@@ -56,27 +57,77 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const [desde, setDesde] = useState(() => { const d = new Date(today); d.setDate(d.getDate() - 90); return toISO(d); });
   const [hasta, setHasta] = useState(toISO(today));
   const [provFiltro, setProvFiltro] = useState("");
-  // Si el user solo tiene permiso de remitos, default al pill remitos.
-  const [pillEstado, setPillEstado] = useState<string>(puedeFacturas ? "todas" : "remitos");
+  // ──────────────────────────────────────────────────────────────────
+  // Sub-section + filtro de estado controlados por URL (sprint v2 Commit 4).
+  //   /compras                    → sub=facturas (default)
+  //   /compras/facturas?estado=X  → sub=facturas, filtro estado
+  //   /compras/proveedores        → sub=proveedores
+  //   /compras/remitos            → sub=remitos
+  //   /compras/notas-credito      → sub=notas
+  //
+  // pillEstado se deriva de ?estado= en la URL. setPillEstado actualiza
+  // searchParams (no state). Cambiar sub-sección navega a la URL nueva.
+  // ──────────────────────────────────────────────────────────────────
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  // Sub-section del módulo madre Compras (2026-05-13). Derivada del
-  // pillEstado para preservar la lógica de filtros existente sin duplicar
-  // state. Cuando se cambia desde el RightSubNav, se actualiza pillEstado
-  // automáticamente al primer filtro de la sub-sección.
-  // 'proveedores' es una sub-sección especial: cuando pillEstado === "proveedores",
-  // no se renderiza la tabla de facturas/remitos, se monta el componente
-  // Proveedores embebido. pillEstado en ese caso es solo un flag.
+  const pathTail = location.pathname.replace(/^\/compras\/?/, "");
   const subSection: SubSection =
-    pillEstado === "remitos"     ? "remitos" :
-    pillEstado === "nc"          ? "notas" :
-    pillEstado === "proveedores" ? "proveedores" :
+    pathTail.startsWith("proveedores")   ? "proveedores" :
+    pathTail.startsWith("remitos")       ? "remitos" :
+    pathTail.startsWith("notas-credito") ? "notas" :
+    pathTail.startsWith("notas")         ? "notas" :
     "facturas";
-  const setSubSection = (sec: SubSection) => {
-    if (sec === "facturas")         setPillEstado("todas");
-    else if (sec === "remitos")     setPillEstado("remitos");
-    else if (sec === "notas")       setPillEstado("nc");
-    else if (sec === "proveedores") setPillEstado("proveedores");
+
+  // Mapeo URL → pillEstado (compat con la lógica de filtros interna).
+  const urlEstado = searchParams.get("estado");
+  const defaultEstadoForSub = (sec: SubSection): string => {
+    if (sec === "facturas") return puedeFacturas ? "todas" : "remitos";
+    if (sec === "remitos")  return "remitos";
+    if (sec === "notas")    return "nc";
+    return "proveedores"; // sub === proveedores
   };
+  const pillEstado: string = (() => {
+    if (subSection === "proveedores") return "proveedores";
+    if (subSection === "remitos")     return "remitos";  // tabla siempre completa por ahora
+    if (subSection === "notas") {
+      // urlEstado: todas|disponibles|aplicadas. La lógica interna usa "nc"
+      // como flag de sub-sección y filtra runtime por estado de cada NC.
+      return "nc";
+    }
+    // facturas: urlEstado → pillEstado.
+    if (urlEstado === "pendientes") return "pendiente";
+    if (urlEstado === "vencidas")   return "vencida";
+    if (urlEstado === "pagadas")    return "pagada";
+    if (urlEstado === "todas")      return "todas";
+    return defaultEstadoForSub("facturas");
+  })();
+
+  const setPillEstado = (estado: string) => {
+    // Mapeo pillEstado → URL estado (inverso). Solo aplica para facturas.
+    if (subSection !== "facturas") return;
+    let urlValue: string | null = null;
+    if (estado === "pendiente") urlValue = "pendientes";
+    else if (estado === "vencida")   urlValue = "vencidas";
+    else if (estado === "pagada")    urlValue = "pagadas";
+    else if (estado === "todas")     urlValue = "todas";
+    const next = new URLSearchParams(searchParams);
+    if (urlValue) next.set("estado", urlValue);
+    else next.delete("estado");
+    setSearchParams(next, { replace: true });
+  };
+
+  const setSubSection = (sec: SubSection) => {
+    const pathMap: Record<SubSection, string> = {
+      facturas:    "/compras/facturas",
+      proveedores: "/compras/proveedores",
+      remitos:     "/compras/remitos",
+      notas:       "/compras/notas-credito",
+    };
+    navigate(pathMap[sec]);
+  };
+
   const isProveedores = subSection === "proveedores";
   // Estados para los flows de remito (modales y form).
   const [remModal, setRemModal] = useState(false);
@@ -640,7 +691,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
               ya mostró "Compras · proveedores" arriba, así que esto queda
               algo redundante visualmente — refactor: extraer body de
               Proveedores a un sub-componente sin header. Por ahora aceptado. */}
-          <Proveedores user={user} locales={locales} localActivo={localActivo} />
+          <Proveedores user={user} locales={locales} localActivo={localActivo} embedded />
         </Suspense>
       ) : pillEstado === "remitos" ? (
         <div className="panel">
