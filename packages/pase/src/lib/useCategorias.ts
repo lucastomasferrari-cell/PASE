@@ -237,8 +237,9 @@ export function useCategorias(): CategoriasState {
 
   // Invalidación cross-tab: si alguien edita categorías en otra pestaña o
   // máquina, cada consumer del hook se entera y refetcha. Antes esto solo
-  // funcionaba si la página tenía useRealtimeTable a mano (Configuracion.tsx);
-  // los demás módulos quedaban con cache stale hasta logout o TTL 1h.
+  // funcionaba si la página tenía useRealtimeTable a mano (la vieja
+  // Configuracion.tsx, ya eliminada); los demás módulos quedaban con cache
+  // stale hasta logout o TTL 1h.
   useRealtimeTable({ table: "config_categorias", onChange: () => refresh() });
 
   return state;

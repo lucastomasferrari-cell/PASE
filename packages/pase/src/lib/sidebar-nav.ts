@@ -1,16 +1,16 @@
 // ─────────────────────────────────────────────────────────────────────
 // Sidebar — definición centralizada (sprint mayo 2026 v2).
 //
-// 13 items en 4 secciones:
+// 12 items en 4 secciones:
 //   • Operación   — Caja, Compras, Ventas
 //   • Dirección   — Negocio, Finanzas, Objetivos, Reportes
 //   • Herramientas— Equipo, Contador / IVA, Blindaje
-//   • Sistema     — Ajustes, Catálogos, Usuarios, Tenants
+//   • Sistema     — Ajustes, Usuarios, Tenants
 //
 // La sección "Módulos" se eliminó (2026-05-14): Equipo se movió a
-// Herramientas y "Sucursales" se renombró a "Catálogos" (su contenido
-// real — categorías, medios de cobro, puestos — nunca fue sobre sucursales)
-// y se movió a Sistema.
+// Herramientas. La página "Configuración" (antes "Catálogos" / "Sucursales"
+// / "Locales") se eliminó del producto — el contenido ya estaba duplicado
+// en Ajustes, que ganó como interfaz definitiva.
 //
 // `tenants` es exclusivo de superadmin — `getPermisos()` lo filtra para
 // dueño/admin/encargado, por lo que sólo aparece en el sidebar cuando
@@ -60,7 +60,6 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
 
   // === Sistema ===
   { path: "/ajustes",                    slug: "ajustes",       label: "Ajustes",         sec: "Sistema" },
-  { path: "/catalogos",                  slug: "configuracion", label: "Catálogos",       sec: "Sistema" },
   { path: "/usuarios",                   slug: "usuarios",      label: "Usuarios",        sec: "Sistema" },
   { path: "/tenants",                    slug: "tenants",       label: "Tenants",         sec: "Sistema" },
 ];
@@ -87,8 +86,9 @@ export const LEGACY_REDIRECTS: Record<string, string> = {
   "/dashboard":       "@default",
   "/movimientos":     "/caja/movimientos",
   "/rrhh":            "/equipo",
-  "/locales":         "/catalogos",
-  "/sucursales":      "/catalogos",
+  "/locales":         "/ajustes",
+  "/sucursales":      "/ajustes",
+  "/catalogos":       "/ajustes",
   "/proveedores":     "/compras/proveedores",
   "/conciliacion-mp": "/caja/conciliacion",
   "/conciliacion":    "/caja/conciliacion",

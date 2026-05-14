@@ -26,7 +26,7 @@ export const ROLES: Record<string, { label: string; color: string; permisos?: st
   // permisos de UI (todos los módulos del MODULOS array).
   superadmin:{ label:"Super Admin",color:"#DC2626" },
   dueno:     { label:"Dueño",      color:"#9333EA" },
-  admin:     { label:"Admin",      color:"#3B82F6", permisos:["negocio","finanzas","objetivos","ajustes","ventas","compras","remitos","gastos","caja","proveedores","rrhh","blindaje","eerr","configuracion"] },
+  admin:     { label:"Admin",      color:"#3B82F6", permisos:["negocio","finanzas","objetivos","ajustes","ventas","compras","remitos","gastos","caja","proveedores","rrhh","blindaje","eerr"] },
   encargado: { label:"Encargado",  color:"#6B7280", permisos:["caja","ventas"] },
   // Rol "compras" incluye compras_anular por retro-compatibilidad (antes
   // anulaba sin chequeo). Si querés un "compras lite" sin poder anular,
@@ -76,7 +76,6 @@ export const MODULOS = [
   { slug:"objetivos", label:"Objetivos", icon:"◎" },
   { slug:"eerr", label:"Reportes", icon:"📊" },
   { slug:"rrhh", label:"Equipo", icon:"💼" },
-  { slug:"configuracion", label:"Locales", icon:"⚙" },
   { slug:"ajustes", label:"Ajustes", icon:"⚙" },
   // Pantallas/sub-secciones accesibles internamente (no en sidebar top-level)
   { slug:"remitos", label:"Remitos", icon:"🚚" },

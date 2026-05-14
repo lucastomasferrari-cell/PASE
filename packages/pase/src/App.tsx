@@ -22,7 +22,6 @@ const Usuarios = lazy(() => import("./pages/Usuarios"));
 const LectorFacturasIA = lazy(() => import("./pages/LectorFacturasIA"));
 const Blindaje = lazy(() => import("./pages/herramientas/Blindaje"));
 const RRHHPage = lazy(() => import("./pages/RRHH"));
-const Configuracion = lazy(() => import("./pages/Configuracion"));
 const Tenants = lazy(() => import("./pages/Tenants"));
 const DesignSystem = lazy(() => import("./pages/DesignSystem"));
 const Finanzas = lazy(() => import("./pages/Finanzas"));
@@ -287,7 +286,6 @@ function AppMain() {
 
               {/* Sistema */}
               <Route path="/ajustes" element={<Ajustes/>} />
-              <Route path="/catalogos" element={<Configuracion user={user} locales={locales} localActivo={localActivo}/>} />
 
               {/* Accesibles internamente (no en sidebar top-level) */}
               <Route path="/gastos" element={<Gastos {...props}/>} />
