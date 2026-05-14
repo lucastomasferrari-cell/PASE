@@ -162,15 +162,15 @@ export const css = `
   --r:        var(--pase-radius-md);
 }
 
-/* Pattern de "papel cuaderno" MUY sutil sobre el body (2026-05-14). Líneas
-   horizontales celeste de marca al 6% opacity, cada 32px. Funciona igual
-   en light y dark mode (rgba absoluto, no depende de tokens). Aporta
-   calidez sin que el fondo se sienta "plástico". Sin pattern dentro de
-   .panel (donde sí está blanco/sólido para no competir con datos). */
+/* Pattern de "papel cuaderno" sobre el body (2026-05-14, iterado).
+   Líneas horizontales celeste de marca al 12% opacity, cada 24px. Mejorada
+   visibilidad para mobile (donde el 7% original no se veía). En desktop
+   con brillo alto también queda sutil. rgba absoluto → funciona idéntico
+   en light y dark mode. Sin pattern dentro de .panel (datos sólidos). */
 body{
   background:var(--pase-bg);
-  background-image:linear-gradient(180deg,transparent 0,transparent 31px,rgba(117,170,219,0.07) 31px,rgba(117,170,219,0.07) 32px);
-  background-size:100% 32px;
+  background-image:linear-gradient(180deg,transparent 0,transparent 23px,rgba(117,170,219,0.12) 23px,rgba(117,170,219,0.12) 24px);
+  background-size:100% 24px;
   color:var(--pase-text);
   font-family:var(--pase-font);
   font-size:13px;
