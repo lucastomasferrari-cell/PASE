@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { db } from "../lib/supabase";
-import { applyLocalScope } from "../lib/auth";
-import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
-import type { Usuario, Local } from "../types/auth";
-import type { Factura, Venta } from "../types/finanzas";
+import { db } from "../../lib/supabase";
+import { applyLocalScope } from "../../lib/auth";
+import { toISO, today, fmt_d, fmt_$ } from "../../lib/utils";
+import type { Usuario, Local } from "../../types/auth";
+import type { Factura, Venta } from "../../types/finanzas";
 
 interface ContadorProps {
   user: Usuario;

@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { db } from "../lib/supabase";
-import { applyLocalScope } from "../lib/auth";
-import { toISO, today, fmt_d } from "../lib/utils";
-import type { Usuario, Local } from "../types";
+import { db } from "../../lib/supabase";
+import { applyLocalScope } from "../../lib/auth";
+import { toISO, today, fmt_d } from "../../lib/utils";
+import type { Usuario, Local } from "../../types";
 
 interface BlindajeTipo {
   id: number;
