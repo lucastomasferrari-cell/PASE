@@ -31,11 +31,12 @@ interface InfoTooltipProps {
   position?: "top" | "right" | "bottom" | "left";
   /** Ancho máximo del tooltip en px. Default: 280. */
   maxWidth?: number;
-  /** Tamaño del icono sol en px. Default: 14 (matchea íconos del sidebar). */
+  /** Tamaño del icono sol en px. Default: 16 (necesita esta resolución mínima
+   * para que se vean los detalles de la cara — ojos + boca). */
   size?: number;
 }
 
-export function InfoTooltip({ children, position = "right", maxWidth = 280, size = 14 }: InfoTooltipProps) {
+export function InfoTooltip({ children, position = "right", maxWidth = 280, size = 16 }: InfoTooltipProps) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLSpanElement | null>(null);
 
@@ -125,25 +126,44 @@ export function InfoTooltip({ children, position = "right", maxWidth = 280, size
   );
 }
 
-// ─── SunIcon: Sol de Mayo simplificado ─────────────────────────────────────
-// 8 rayos rectos + cara central. SVG estático, color dorado de marca.
+// ─── SunIcon: Sol de Mayo CON CARA ─────────────────────────────────────────
+// Versión más fiel al Sol de Mayo histórico (rediseñado 2026-05-14 contra
+// referencias de Lucas): 16 rayos alternados (8 grandes rectos + 8 cortos
+// inclinados a 22.5°), cara central con ojos + boca, todo en dorado de marca.
+// A 14-16px renderizado los detalles se ven sutiles pero se perciben.
 
 function SunIcon({ size = 14 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 14 14" fill="none" aria-hidden="true">
-      {/* Rayos */}
-      <g stroke="var(--pase-gold, #F5C518)" strokeWidth="1.1" strokeLinecap="round">
-        <line x1="7" y1="0.8" x2="7" y2="2.6" />
-        <line x1="7" y1="11.4" x2="7" y2="13.2" />
-        <line x1="0.8" y1="7" x2="2.6" y2="7" />
-        <line x1="11.4" y1="7" x2="13.2" y2="7" />
-        <line x1="2.5" y1="2.5" x2="3.7" y2="3.7" />
-        <line x1="10.3" y1="10.3" x2="11.5" y2="11.5" />
-        <line x1="2.5" y1="11.5" x2="3.7" y2="10.3" />
-        <line x1="10.3" y1="3.7" x2="11.5" y2="2.5" />
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      {/* 8 rayos largos (norte, sur, este, oeste, NE, SE, SW, NW) */}
+      <g stroke="var(--pase-gold, #F5C518)" strokeWidth="0.9" strokeLinecap="round">
+        <line x1="8" y1="0.5" x2="8" y2="2.4" />
+        <line x1="8" y1="13.6" x2="8" y2="15.5" />
+        <line x1="0.5" y1="8" x2="2.4" y2="8" />
+        <line x1="13.6" y1="8" x2="15.5" y2="8" />
+        <line x1="2.6" y1="2.6" x2="4" y2="4" />
+        <line x1="12" y1="12" x2="13.4" y2="13.4" />
+        <line x1="2.6" y1="13.4" x2="4" y2="12" />
+        <line x1="12" y1="4" x2="13.4" y2="2.6" />
       </g>
-      {/* Centro del sol */}
-      <circle cx="7" cy="7" r="2.6" fill="var(--pase-gold, #F5C518)" />
+      {/* 8 rayos cortos (intercalados a 22.5°), más finos */}
+      <g stroke="var(--pase-gold, #F5C518)" strokeWidth="0.65" strokeLinecap="round">
+        <line x1="4.7" y1="1" x2="5.3" y2="2.3" />
+        <line x1="11.3" y1="1" x2="10.7" y2="2.3" />
+        <line x1="1" y1="4.7" x2="2.3" y2="5.3" />
+        <line x1="1" y1="11.3" x2="2.3" y2="10.7" />
+        <line x1="13.7" y1="5.3" x2="15" y2="4.7" />
+        <line x1="13.7" y1="10.7" x2="15" y2="11.3" />
+        <line x1="5.3" y1="13.7" x2="4.7" y2="15" />
+        <line x1="10.7" y1="13.7" x2="11.3" y2="15" />
+      </g>
+      {/* Cara central (círculo dorado) */}
+      <circle cx="8" cy="8" r="3.1" fill="var(--pase-gold, #F5C518)" />
+      {/* Ojos (puntitos color texto, sutiles) */}
+      <circle cx="6.85" cy="7.4" r="0.32" fill="var(--pase-text, #1A3A5E)" />
+      <circle cx="9.15" cy="7.4" r="0.32" fill="var(--pase-text, #1A3A5E)" />
+      {/* Boca (pequeña sonrisa) */}
+      <path d="M 6.8 8.7 Q 8 9.4 9.2 8.7" stroke="var(--pase-text, #1A3A5E)" strokeWidth="0.32" strokeLinecap="round" fill="none" />
     </svg>
   );
 }
