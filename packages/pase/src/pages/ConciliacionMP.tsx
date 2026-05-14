@@ -9,6 +9,7 @@ import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { Combobox } from "../components/Combobox";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
+import { InfoTooltip } from "../components/ui";
 import type { Usuario, Local } from "../types";
 import type { Proveedor } from "../types/finanzas";
 
@@ -801,7 +802,14 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
         </div>
       ) : (
         <div className="ph-row">
-          <div><div className="ph-title">Conciliación MP</div></div>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <div className="ph-title">Conciliación MP</div>
+            <InfoTooltip maxWidth={320}>
+              Reconcilía los movimientos de Mercado Pago contra tus facturas, gastos y movimientos de caja.
+              Los <strong>egresos sin justificar</strong> esperan ser vinculados a un comprobante (factura, gasto, transferencia).
+              Sincronización automática cada 30 min vía GitHub Actions.
+            </InfoTooltip>
+          </div>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
             <PeriodoPill periodo={periodo} setPeriodo={setPeriodo} />
             {periodo==="custom" && (

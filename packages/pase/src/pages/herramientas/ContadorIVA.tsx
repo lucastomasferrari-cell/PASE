@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { db } from "../../lib/supabase";
 import { applyLocalScope } from "../../lib/auth";
 import { toISO, today, fmt_d, fmt_$ } from "../../lib/utils";
+import { InfoTooltip } from "../../components/ui";
 import type { Usuario, Local } from "../../types/auth";
 import type { Factura, Venta } from "../../types/finanzas";
 
@@ -46,7 +47,13 @@ export default function Contador({ user, locales, localActivo }: ContadorProps) 
   return (
     <div>
       <div className="ph-row">
-        <div><div className="ph-title">Contador / IVA</div></div>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <div className="ph-title">Contador / IVA</div>
+          <InfoTooltip maxWidth={300}>
+            Listado de facturas del mes con cálculo de IVA discriminado (21% y 10.5%) y percepciones (IIBB, IVA).
+            Útil para exportar al contador o cargar en libros. Se filtra por mes y local.
+          </InfoTooltip>
+        </div>
         <input type="month" className="search" style={{width:160}} value={mes} onChange={e=>setMes(e.target.value)}/>
       </div>
       <div className="tabs">

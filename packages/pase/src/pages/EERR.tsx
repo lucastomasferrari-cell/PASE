@@ -17,6 +17,7 @@ import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
 import { useCategorias } from "../lib/useCategorias";
 import { useMediosCobro } from "../lib/useMediosCobro";
+import { InfoTooltip } from "../components/ui";
 import { toISO, today, fmt_$ } from "../lib/utils";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, Legend, CartesianGrid } from "recharts";
 import type { Usuario } from "../types/auth";
@@ -346,7 +347,14 @@ export default function EERR({ user, localActivo }: EERRProps) {
   return (
     <div>
       <div className="ph-row">
-        <div><div className="ph-title">Estado de Resultados</div></div>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <div className="ph-title">Estado de Resultados</div>
+          <InfoTooltip maxWidth={320}>
+            Mide la rentabilidad del negocio sobre <strong>base devengada</strong> — registra ventas, compras y gastos
+            cuando ocurre el hecho económico, no cuando entra/sale la plata. Distinto de Caja (base percibida).
+            Las liquidaciones de medios de pago (MP, Rappi, etc.) no aparecen acá porque la venta ya se contó.
+          </InfoTooltip>
+        </div>
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           <input type="month" className="search" style={{width:160}} value={mes} onChange={e=>setMes(e.target.value)}/>
           {mesesComp.map((m, idx) => (

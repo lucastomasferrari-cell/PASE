@@ -184,8 +184,14 @@ body{background:var(--pase-bg);color:var(--pase-text);font-family:var(--pase-fon
 
 /* ─── SIDEBAR ──────────────────────────────────────────────────────── */
 .sb{width:200px;background:var(--pase-bg);border-right:0.5px solid var(--pase-border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:20}
-.sb-logo{padding:22px 16px 24px;border-bottom:0.5px solid var(--pase-border);text-align:center}
+/* Detalle decorativo "argentino" (2026-05-14): banner de 5px arriba del
+   header del sidebar con stripes celeste-blanco-celeste (estética de la
+   bandera). El --pase-bg adapta automáticamente a dark mode. */
+.sb-logo{padding:28px 16px 24px;border-bottom:0.5px solid var(--pase-border);text-align:center;position:relative}
+.sb-logo::before{content:'';position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(180deg,var(--pase-celeste) 0,var(--pase-celeste) 2px,var(--pase-bg) 2px,var(--pase-bg) 3px,var(--pase-celeste) 3px,var(--pase-celeste) 5px);opacity:0.85}
 .brand{font-size:32px;font-weight:500;color:var(--pase-text);letter-spacing:-0.035em;line-height:1}
+/* El punto del logo: dorado --pase-gold. Junto con el sol del InfoTooltip,
+   son los 2 únicos usos de dorado en el producto (anclas de marca). */
 .brand-dot{color:var(--pase-gold)}
 .brand-sub{font-size:9px;color:var(--pase-text-muted);letter-spacing:0.04em;margin-top:6px}
 .brand-tenant{margin-top:10px;font-size:10px;color:var(--pase-text-muted);letter-spacing:0.02em}
