@@ -79,6 +79,12 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const [novLocalTouched, setNovLocalTouched] = useState(false);
   const [novEmps, setNovEmps] = useState<Empleado[]>([]);
   const [novMap, setNovMap] = useState<Record<string, NovedadEditable>>({});
+  // Adelantos pendientes (descontado=false) del mes seleccionado, agrupados
+  // por empleado_id. Reemplaza el viejo input editable "Adel.$" en la novedad
+  // (que era un número libre sin link a la tabla real rrhh_adelantos —
+  // bug "adelanto fantasma" detectado 2026-05-14). Ahora el cálculo de la
+  // liquidación se hace contra el monto real persistido en rrhh_adelantos.
+  const [novAdelantosPorEmp, setNovAdelantosPorEmp] = useState<Record<string, number>>({});
   const [novLoading, setNovLoading] = useState(false);
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
@@ -154,6 +160,27 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       const { data } = await db.from("rrhh_novedades").select("*").eq("mes", novMes).eq("anio", novAnio).in("empleado_id", empIds);
       novs = (data as Novedad[]) || [];
     }
+    // Cargar adelantos pendientes (descontado=false) del mes seleccionado.
+    // Filtro por fecha dentro del mes — esto incluye adelantos registrados en
+    // ese mes pero todavía no descontados de ningún pago. Es la fuente de
+    // verdad para el monto a descontar al confirmar la novedad.
+    const inicioMes = `${novAnio}-${String(novMes).padStart(2, "0")}-01`;
+    const finMes = new Date(novAnio, novMes, 0).toISOString().slice(0, 10);
+    const adelMap: Record<string, number> = {};
+    empleados.forEach(e => { adelMap[e.id] = 0; });
+    if (empIds.length) {
+      const { data: adels } = await db.from("rrhh_adelantos")
+        .select("empleado_id, monto")
+        .in("empleado_id", empIds)
+        .eq("descontado", false)
+        .gte("fecha", inicioMes)
+        .lte("fecha", finMes);
+      (adels || []).forEach((a: { empleado_id?: string; monto?: number }) => {
+        if (a.empleado_id) {
+          adelMap[a.empleado_id] = (adelMap[a.empleado_id] || 0) + Number(a.monto || 0);
+        }
+      });
+    }
     const map: Record<string, NovedadEditable> = {};
     empleados.forEach(e => {
       const existing = novs.find(n => n.empleado_id === e.id);
@@ -165,7 +192,19 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     });
     setNovEmps(empleados);
     setNovMap(map);
+    setNovAdelantosPorEmp(adelMap);
     setNovLoading(false);
+  };
+
+  // Cambia al tab Pagos pre-cargando los filtros con los mismos valores que
+  // el usuario tenía en Novedades. UX: confirmás la novedad → un click te
+  // lleva a pagar con el contexto ya seteado.
+  const irAPagosDesdeNovedades = () => {
+    setPagoMes(novMes);
+    setPagoAnio(novAnio);
+    setPagoLocal(novLocal);
+    setPagoLocalTouched(true);
+    setTab("pagos");
   };
 
   const loadPagos = async () => {
@@ -501,6 +540,10 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const confirmarUno = async (emp: Empleado) => {
     const nov = novMap[emp.id];
     if (!nov) return;
+    // Snapshot del monto real de adelantos pendientes al momento de confirmar
+    // (leído desde rrhh_adelantos via loadNovedades). Reemplaza el campo
+    // legacy nov.adelantos (input libre, "fantasma" sin link a la tabla real).
+    const adelantosDelMes = novAdelantosPorEmp[emp.id] ?? 0;
     const { data: saved } = await db.from("rrhh_novedades").upsert({
       ...(nov.id ? { id: nov.id } : {}),
       empleado_id: emp.id, mes: novMes, anio: novAnio,
@@ -509,7 +552,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       horas_extras: nov.horas_extras || 0,
       dobles: nov.dobles || 0,
       feriados: nov.feriados || 0,
-      adelantos: nov.adelantos || 0,
+      adelantos: adelantosDelMes,
       fecha_inicio_mes: nov.fecha_inicio_mes || null,
       observaciones: nov.observaciones || "",
       estado: "confirmado",
@@ -519,7 +562,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
 
     if (saved) {
       const vd = calcularValorDoble(emp);
-      const calc = calcLiquidacion(emp, nov, vd);
+      const calc = calcLiquidacion(emp, nov, vd, adelantosDelMes);
       // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F14: el upsert de liquidación al confirmar novedad debe ir por RPC confirmar_novedad atómica. Hoy si el upsert falla, la novedad queda confirmada pero sin liquidación calculada.
       await db.from("rrhh_liquidaciones").upsert({
         novedad_id: saved.id, ...calc, estado: "pendiente",
@@ -671,10 +714,12 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
           novLoading={novLoading}
           novEmps={novEmps}
           novMap={novMap}
+          novAdelantosPorEmp={novAdelantosPorEmp}
           updateNov={updateNov}
           confirmarUno={confirmarUno}
           confirmarTodas={confirmarTodas}
           editarNov={editarNov}
+          irAPagos={irAPagosDesdeNovedades}
           esDueno={esDueno}
         />
       )}

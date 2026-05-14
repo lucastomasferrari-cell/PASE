@@ -22,7 +22,21 @@ export type LiquidacionCalculada = ReturnType<typeof calcularTotalLiquidacion> &
   transferencia: number;
 };
 
-export function calcLiquidacion(emp: Empleado, nov: NovedadEditable, valorDoble: number): LiquidacionCalculada {
+/**
+ * Calcula la liquidación de una novedad.
+ *
+ * `adelantosOverride`: si está presente, sustituye `nov.adelantos`. Permite
+ * que el TabNovedades use el monto real de adelantos pendientes (leídos
+ * de rrhh_adelantos donde descontado=false en el mes) en lugar del campo
+ * legacy nov.adelantos (que era un input libre sin link a la tabla real
+ * de adelantos — bug detectado en auditoría 2026-05-14).
+ *
+ * Al confirmar la novedad, RRHH.tsx persiste nov.adelantos = adelantos
+ * pendientes del mes en ese momento (snapshot), para que la liquidación
+ * generada sea consistente con la fórmula.
+ */
+export function calcLiquidacion(emp: Empleado, nov: NovedadEditable, valorDoble: number, adelantosOverride?: number): LiquidacionCalculada {
+  const adelantosFinal = adelantosOverride !== undefined ? adelantosOverride : (nov.adelantos || 0);
   const result = calcularTotalLiquidacion({
     sueldo_mensual: emp.sueldo_mensual,
     modo_pago: "MENSUAL",
@@ -33,7 +47,7 @@ export function calcLiquidacion(emp: Empleado, nov: NovedadEditable, valorDoble:
     feriados: nov.feriados || 0,
     vacaciones_dias: nov.vacaciones_dias || 0,
     presentismo_mantiene: nov.presentismo === "MANTIENE",
-    adelantos: nov.adelantos || 0,
+    adelantos: adelantosFinal,
     pagos_dobles_realizados: 0,
   });
   return {
