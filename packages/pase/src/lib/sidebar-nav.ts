@@ -1,8 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────
 // Sidebar — definición centralizada (sprint mayo 2026 v2).
 //
-// 12 items en 4 secciones:
-//   • Operación   — Caja, Compras, Ventas
+// 13 items en 4 secciones:
+//   • Operación   — Caja, Compras, Ventas, Gastos
 //   • Dirección   — Negocio, Finanzas, Objetivos, Reportes
 //   • Herramientas— Equipo, Contador / IVA, Blindaje
 //   • Sistema     — Ajustes, Usuarios, Tenants
@@ -46,6 +46,7 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   { path: "/caja",                       slug: "caja",          label: "Caja",            sec: "Operación" },
   { path: "/compras",                    slug: "compras",       label: "Compras",         sec: "Operación" },
   { path: "/ventas",                     slug: "ventas",        label: "Ventas",          sec: "Operación" },
+  { path: "/gastos",                     slug: "gastos",        label: "Gastos",          sec: "Operación" },
 
   // === Dirección ===
   { path: "/negocio",                    slug: "negocio",       label: "Negocio",         sec: "Dirección" },
