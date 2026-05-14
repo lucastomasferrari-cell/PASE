@@ -706,6 +706,21 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
           {subSection === "notas" && puedeFacturas && (
             <button className="btn btn-acc" onClick={() => { setForm({ ...emptyForm, local_id: localActivo ? String(localActivo) : "", tipo: "nota_credito" }); setItems([]); setModal(true); }}>+ Cargar nota</button>
           )}
+          {subSection === "proveedores" && (
+            /* Botón disparado vía query param ?action=nuevo — el embed
+               Proveedores lo lee con useSearchParams y abre su modal interno.
+               Esto evita compartir state cross-componente. */
+            <button
+              className="btn btn-acc"
+              onClick={() => {
+                const next = new URLSearchParams(searchParams);
+                next.set("action", "nuevo");
+                setSearchParams(next, { replace: true });
+              }}
+            >
+              + Nuevo proveedor
+            </button>
+          )}
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { applyLocalScope, tienePermiso } from "../lib/auth";
 import { useCategorias } from "../lib/useCategorias";
@@ -23,8 +24,24 @@ interface ProveedoresProps {
 // ─── PROVEEDORES ──────────────────────────────────────────────────────────────
 export default function Proveedores({ user, localActivo, embedded = false, embeddedFilter }: ProveedoresProps) {
   const { CATEGORIAS_COMPRA } = useCategorias();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [proveedores,setProveedores]=useState<Proveedor[]>([]);
   const [modal,setModal]=useState(false);
+
+  // En modo embedded, el padre Compras dispara "Nuevo proveedor" vía
+  // query param ?action=nuevo. Lo leemos al render y abrimos el modal.
+  // Después limpiamos el param para que un refresh no lo re-dispare.
+  useEffect(() => {
+    if (!embedded) return;
+    if (searchParams.get("action") === "nuevo") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setModal(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("action");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, embedded]);
   const [editModal,setEditModal]=useState<Proveedor | null>(null);
   const [ctaModal,setCtaModal]=useState<Proveedor | null>(null);
   const [ctaFacts,setCtaFacts]=useState<Factura[]>([]);
@@ -120,14 +137,12 @@ export default function Proveedores({ user, localActivo, embedded = false, embed
         </div>
       )}
       {embedded && (
-        /* Toolbar reducida cuando estamos embebidos: el header lo dibuja el
-           módulo madre (Compras). El toggle 'Ver inactivos' se reemplazó
-           por el sub-nav Activos/Inactivos del módulo madre. */
+        /* Toolbar fina embedded: solo búsqueda. El botón '+ Nuevo proveedor'
+           se movió al header del módulo madre Compras (regla 2026-05-13:
+           botones de acción viven en el header, toolbar solo lleva inputs
+           y filtros). El toggle 'Ver inactivos' lo reemplazó el sub-nav. */
         <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:14,flexWrap:"wrap"}}>
-          {/* En modo embedded el checkbox 'Ver inactivos' no se renderiza —
-              el sub-nav Activos/Inactivos del módulo madre lo reemplaza. */}
-          <input className="search" placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)} style={{width:240}}/>
-          <button className="btn btn-acc" style={{marginLeft:"auto"}} onClick={()=>setModal(true)}>+ Nuevo proveedor</button>
+          <input className="search" placeholder="Buscar proveedor o CUIT…" value={search} onChange={e=>setSearch(e.target.value)} style={{width:280}}/>
         </div>
       )}
       <div className="panel">

@@ -1,4 +1,5 @@
 ﻿import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasOperables as cuentasOperablesFn } from "../lib/auth";
 import { CUENTAS } from "../lib/constants";
@@ -136,6 +137,9 @@ interface MpResetResultado {
 
 function ConciliacionMP({ user, locales, localActivo, embedded = false }: ConciliacionMPProps) {
   const { COMISIONES_CATS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, RETIROS_SOCIOS, categoriaToTipo } = useCategorias();
+  // Acciones disparadas desde el header del módulo madre Caja vía ?action=
+  // (sprint v2 cosmético: unificar botones en header).
+  const [searchParams, setSearchParamsMP] = useSearchParams();
   const [credenciales,setCredenciales]=useState<MpCredencial[]>([]);
   const [movimientos,setMovimientos]=useState<MpMovimiento[]>([]);
   const [facturas,setFacturas]=useState<FacturaSlim[]>([]);
@@ -331,7 +335,6 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
       const genData=await genRes.json().catch(()=>({ok:false}));
       // TODO(lint-cleanup): Date.now() está dentro de un async event handler
       // (sincronizar()), no durante render — falso positivo del linter.
-      // eslint-disable-next-line react-hooks/purity
       const ts=genData.timestamp||Date.now();
       console.log("[MP] mp-generate:",genData);
 
@@ -379,6 +382,7 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
         if(csvNoEncontrado){
           showToast("err","⚠ MercadoPago no generó el reporte a tiempo. Intentá sincronizar de nuevo en unos minutos.");
         }else{
+          // eslint-disable-next-line react-hooks/immutability -- closure captura fmt_mp declarado más abajo; en runtime OK porque sincronizar() solo se invoca post-render.
           showToast("ok","Sincronización completada · "+totalMovs+" movimientos · "+fmt_mp(saldoTotal)+" saldo");
         }
       }else{
@@ -392,6 +396,24 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
       setSyncCountdown(0);
     }
   };
+
+  // En modo embedded, el padre Caja dispara acciones vía ?action=sync|cuentas.
+  // Lo leemos, ejecutamos la acción y limpiamos el param.
+  useEffect(() => {
+    if (!embedded) return;
+    const action = searchParams.get("action");
+    if (!action) return;
+    if (action === "sync") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (!sincronizando) sincronizar();
+    } else if (action === "cuentas") {
+      setConfigModal(true);
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete("action");
+    setSearchParamsMP(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, embedded]);
 
   const guardarCredencial=async()=>{
     if(!configForm.local_id||!configForm.access_token)return;
@@ -720,12 +742,11 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
           {toast.msg}
         </div>
       )}
-      {/* En modo embedded (dentro de Caja > sub-nav Conciliación MP) el
-          título 'Caja · conciliación MP' lo dibuja el módulo madre. Acá
-          solo renderizamos los botones de acción + los filtros de fecha
-          en una toolbar reducida. */}
+      {/* En modo embedded el título y los botones de acción ('Cuentas MP'
+          + 'Sincronizar') los dibuja el módulo madre Caja. Acá solo queda
+          una toolbar fina con los filtros de fecha (Desde / Hasta + preset). */}
       {embedded ? (
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:14,justifyContent:"flex-end"}}>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:14}}>
           <div style={{display:"flex",gap:4,alignItems:"center",fontSize:10,color:"var(--muted2)"}}>
             <span>Desde</span>
             <input type="date" className="search" style={{width:140}} value={desde} onChange={e=>setDesde(e.target.value)}/>
@@ -733,10 +754,9 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
             <input type="date" className="search" style={{width:140}} value={hasta} onChange={e=>setHasta(e.target.value)}/>
           </div>
           <button className="btn btn-ghost btn-sm" style={{fontSize:10}} onClick={()=>{const d=new Date();d.setDate(d.getDate()-30);setDesde(toISO(d));setHasta(toISO(today));}}>Últ. 30d</button>
-          <button className="btn btn-ghost" onClick={()=>setConfigModal(true)}>⚙ Cuentas MP</button>
-          <button className="btn btn-acc" onClick={sincronizar} disabled={sincronizando}>
-            {sincronizando?"🔄 Sincronizando...":"↻ Sincronizar ahora"}
-          </button>
+          {sincronizando && (
+            <span style={{fontSize:11,color:"var(--pase-text-muted)",marginLeft:"auto"}}>Sincronizando…</span>
+          )}
         </div>
       ) : (
         <div className="ph-row">

@@ -1,4 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from "react";
+import { useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasVisibles as cuentasVisiblesFn, cuentasOperables as cuentasOperablesFn, cuentasVisiblesParaListados, localesVisibles, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
@@ -79,6 +80,16 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   // Movimientos (default, todo el contenido actual) y Conciliación MP
   // (pantalla embebida). Sidebar ya no tiene 'mp' como top-level.
   const [subSection, setSubSection] = useState<SubSectionCaja>("movimientos");
+
+  // searchParams para acoplar acciones del header del módulo madre con el
+  // embed ConciliacionMP vía ?action=sync|cuentas (mismo patrón que
+  // /compras/proveedores?action=nuevo).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const triggerMPAction = (action: "sync" | "cuentas") => {
+    const next = new URLSearchParams(searchParams);
+    next.set("action", action);
+    setSearchParams(next, { replace: true });
+  };
 
   const {
     CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES,
@@ -455,6 +466,16 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
           <div style={{display:"flex",gap:8}}>
             <button className="btn btn-sec" onClick={()=>setTransfModal(true)} disabled={cuentasOperablesList.length<2}>↔ Transferir</button>
             <button className="btn btn-acc" onClick={abrirNuevoMovimiento}>+ Movimiento</button>
+          </div>
+        )}
+        {subSection === "conciliacion" && (
+          /* Acciones del header para Conciliación MP. Se disparan vía query
+             param ?action=sync|cuentas que el embed lee con useSearchParams
+             (mismo patrón que /compras/proveedores?action=nuevo). Evita
+             compartir state cross-componente entre Caja y ConciliacionMP. */
+          <div style={{display:"flex",gap:8}}>
+            <button className="btn btn-sec" onClick={() => triggerMPAction("cuentas")}>⚙ Cuentas MP</button>
+            <button className="btn btn-acc" onClick={() => triggerMPAction("sync")}>↻ Sincronizar ahora</button>
           </div>
         )}
       </div>
