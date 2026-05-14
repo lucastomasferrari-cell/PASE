@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ComparativaLocales, LocalCard, type LocalCardProps } from "../components/ui";
 import { useFinanzasConsolidado, useLocalFinanzas, useVencimientos } from "../hooks/useFinanzas";
+import { InfoTooltip } from "../components/ui";
 import { formatCurrency, formatCurrencyCompact } from "../lib/format";
 import styles from "./Finanzas.module.css";
 
@@ -94,6 +95,11 @@ export default function Finanzas() {
         <div className={styles.titleWrap}>
           <span className={styles.title}>Finanzas</span>
           <span className={styles.titleSub}>· Mayo 2026</span>
+          <InfoTooltip maxWidth={320}>
+            Vista de plata real (base percibida): efectivo en caja, vencimientos próximos, margen bruto.
+            <br/><strong>⚠️ Datos MOCK</strong>: por ahora muestra valores de ejemplo. La conexión a la DB
+            real está en backlog.
+          </InfoTooltip>
         </div>
         <div className={styles.switch} role="tablist" aria-label="Contexto de local">
           {switchOptions.map(opt => (

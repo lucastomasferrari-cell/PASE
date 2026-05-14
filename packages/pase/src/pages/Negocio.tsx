@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNegocioConsolidado, useObjetivos, type LocalCtx } from "../hooks/useNegocio";
+import { InfoTooltip } from "../components/ui";
 import { formatCurrency, formatCurrencyCompact } from "../lib/format";
 import styles from "./Negocio.module.css";
 
@@ -63,6 +64,10 @@ export default function Negocio({ user }: NegocioProps) {
         <div className={styles.titleWrap}>
           <span className={styles.title}>Negocio</span>
           <span className={styles.titleSub}>· Mayo 2026</span>
+          <InfoTooltip maxWidth={300}>
+            Dashboard del dueño con KPIs consolidados (ventas, gastos, margen) y avance contra objetivos
+            del mes. Cambiá entre vista consolidada (todos los locales) y por local con el selector de la derecha.
+          </InfoTooltip>
         </div>
         <div className={styles.topbarRight}>
           <div className={styles.switch} role="tablist" aria-label="Contexto de local">
