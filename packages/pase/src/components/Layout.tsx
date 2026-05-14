@@ -340,6 +340,28 @@ td{padding:10px 14px;font-size:12px;color:var(--pase-text)}
 .pill:hover{color:var(--pase-text);border-color:var(--pase-celeste-300)}
 .pill.active{background:var(--pase-celeste-100);color:var(--pase-text);border-color:var(--pase-celeste-100)}
 
+/* ─── Layout módulo madre con sub-nav lateral derecho ───────────────
+   Wrapper de Compras y Caja (cualquier módulo con RightSubNav). El sub-nav
+   ocupa 168px a la derecha en desktop. En mobile (<900px) el sub-nav pasa
+   arriba (order:-1) y el grid colapsa a 1 columna — sino las tablas del
+   contenido principal quedan apretadas al lado del aside.
+*/
+.module-with-aside {
+  display: grid;
+  grid-template-columns: 1fr 168px;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .module-with-aside {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .module-with-aside > aside {
+    order: -1;
+  }
+}
+
 /* build: 2026-05-13-ds-v1 */
 
 /* ─── MOBILE/TABLET ≤1024px ────────────────────────────────────────── */

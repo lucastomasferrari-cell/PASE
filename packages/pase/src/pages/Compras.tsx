@@ -576,8 +576,11 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
         </div>
       </div>
 
-      {/* Layout módulo madre: contenido a la izquierda + RightSubNav derecha */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 168px", gap: 20, alignItems: "start" }}>
+      {/* Layout módulo madre: contenido a la izquierda + RightSubNav derecha.
+          Clase global .module-with-aside (Layout.tsx) maneja el grid + media
+          query mobile <900px que mueve el sub-nav arriba para que las tablas
+          del contenido principal no queden apretadas. */}
+      <div className="module-with-aside">
         <div style={{ minWidth: 0 }}>
 
       {/* Filtros */}
