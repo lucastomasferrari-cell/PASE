@@ -24,16 +24,19 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
   const esSuperAdmin = user.rol === "superadmin";
   const localesDisp = (user.rol==="dueno" || user.rol==="admin" || esSuperAdmin) ? locales : locales.filter((l: { id: number })=>(user._locales||user.locales||[]).includes(l.id));
   // ───────────────────────────────────────────────────────────────────
-  // Sidebar consolidado a 10 items en 4 secciones (sprint mayo 2026):
-  //   • OPERACIÓN (3) — caja, compras, ventas
-  //   • DIRECCIÓN (4) — negocio, finanzas, objetivos, reportes
-  //   • MÓDULOS   (2) — equipo, sucursales
-  //   • SISTEMA   (1) — ajustes
+  // Sidebar consolidado a 13 items en 4 secciones (sprint mayo 2026):
+  //   • OPERACIÓN    (3) — caja, compras, ventas
+  //   • DIRECCIÓN    (4) — negocio, finanzas, objetivos, reportes
+  //   • HERRAMIENTAS (3) — equipo, contador/iva, blindaje
+  //   • SISTEMA      (4) — ajustes, catálogos, usuarios, tenants
   //
-  // Items con `path` (URL real, post Commit 1 sprint v2 — React Router).
-  // El `slug` se mantiene para compat con tienePermiso() y el array de
-  // permisos por rol. Tocar acá implica ajustar src/lib/sidebar-nav.ts
-  // (misma source-of-truth).
+  // 'tenants' aparece solo si user.rol === "superadmin" (filtrado por
+  // getPermisos en lib/auth.ts). 'catálogos' (slug "configuracion") era
+  // antes "Sucursales" — el contenido siempre fue catálogos de categorías
+  // y medios de cobro, nada de sucursales. Items con `path` (URL real,
+  // post Commit 1 sprint v2 — React Router). El `slug` se mantiene para
+  // compat con tienePermiso() y el array de permisos por rol. Tocar acá
+  // implica ajustar src/lib/sidebar-nav.ts (misma source-of-truth).
   // ───────────────────────────────────────────────────────────────────
   const nav = [
     // === OPERACIÓN (3) ===
@@ -47,12 +50,16 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
     {slug:"objetivos",path:"/objetivos",label:"Objetivos",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5.5"/><circle cx="7" cy="7" r="3"/><circle cx="7" cy="7" r="0.5" fill="currentColor"/></svg>`},
     {slug:"eerr",path:"/reportes",label:"Reportes",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,11 5,7 8,9 13,3"/><polyline points="10,3 13,3 13,6"/></svg>`},
 
-    // === MÓDULOS (2) ===
-    {slug:"rrhh",path:"/equipo",label:"Equipo",sec:"Módulos",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="5" r="2.5"/><path d="M1 13c0-2.5 2-4 4-4s4 1.5 4 4"/><circle cx="10" cy="5" r="2"/><path d="M13 13c0-2 -1-3.5-3-3.5"/></svg>`},
-    {slug:"configuracion",path:"/sucursales",label:"Sucursales",sec:"Módulos",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6 L7 2 L12 6 V12 H2 Z"/><path d="M6 12 V8 H8 V12"/></svg>`},
+    // === HERRAMIENTAS (3) ===
+    {slug:"rrhh",path:"/equipo",label:"Equipo",sec:"Herramientas",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="5" r="2.5"/><path d="M1 13c0-2.5 2-4 4-4s4 1.5 4 4"/><circle cx="10" cy="5" r="2"/><path d="M13 13c0-2 -1-3.5-3-3.5"/></svg>`},
+    {slug:"contador",path:"/herramientas/contador-iva",label:"Contador / IVA",sec:"Herramientas",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 1.5h8v11l-2-1-2 1-2-1-2 1z"/><path d="M5 5h4M5 7.5h4M5 10h2.5"/></svg>`},
+    {slug:"blindaje",path:"/herramientas/blindaje",label:"Blindaje",sec:"Herramientas",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 1l4.5 1.5v4c0 3.5-2.5 5.5-4.5 6-2-.5-4.5-2.5-4.5-6V2.5z"/></svg>`},
 
-    // === SISTEMA (1) ===
+    // === SISTEMA (4) ===
     {slug:"ajustes",path:"/ajustes",label:"Ajustes",sec:"Sistema",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="2.5"/><path d="M7 1v1M7 12v1M1 7h1M12 7h1M2.9 2.9l.7.7M10.4 10.4l.7.7M2.9 11.1l.7-.7M10.4 3.6l.7-.7"/></svg>`},
+    {slug:"configuracion",path:"/catalogos",label:"Catálogos",sec:"Sistema",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="10" height="3" rx="0.5"/><rect x="2" y="6" width="10" height="3" rx="0.5"/><rect x="2" y="10" width="10" height="2.5" rx="0.5"/></svg>`},
+    {slug:"usuarios",path:"/usuarios",label:"Usuarios",sec:"Sistema",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="4.5" r="2.5"/><path d="M2.5 12.5c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5"/></svg>`},
+    {slug:"tenants",path:"/tenants",label:"Tenants",sec:"Sistema",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="1.5" width="9" height="11" rx="0.5"/><path d="M5 4h1M8 4h1M5 6.5h1M8 6.5h1M5 9h1M8 9h1M6.5 12.5v-2h1v2"/></svg>`},
   ];
   const secs = [...new Set(nav.map(n=>n.sec))];
   return (

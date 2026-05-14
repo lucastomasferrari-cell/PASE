@@ -1,12 +1,21 @@
 // ─────────────────────────────────────────────────────────────────────
 // Sidebar — definición centralizada (sprint mayo 2026 v2).
 //
-// 10 items en 5 secciones (post Commit 3 del sprint v2):
+// 13 items en 4 secciones:
 //   • Operación   — Caja, Compras, Ventas
 //   • Dirección   — Negocio, Finanzas, Objetivos, Reportes
-//   • Módulos     — Equipo, Sucursales
-//   • Herramientas— Contador / IVA, Blindaje
-//   • Sistema     — Ajustes
+//   • Herramientas— Equipo, Contador / IVA, Blindaje
+//   • Sistema     — Ajustes, Catálogos, Usuarios, Tenants
+//
+// La sección "Módulos" se eliminó (2026-05-14): Equipo se movió a
+// Herramientas y "Sucursales" se renombró a "Catálogos" (su contenido
+// real — categorías, medios de cobro, puestos — nunca fue sobre sucursales)
+// y se movió a Sistema.
+//
+// `tenants` es exclusivo de superadmin — `getPermisos()` lo filtra para
+// dueño/admin/encargado, por lo que sólo aparece en el sidebar cuando
+// user.rol === "superadmin". Se mantiene en el array para que la lista
+// sea completa.
 //
 // Cada item tiene:
 //   - path: URL real (post Commit 1 v2 — React Router)
@@ -19,7 +28,7 @@
 import type { Usuario } from "../types/auth";
 import { tienePermiso } from "./auth";
 
-export type SidebarSection = "Operación" | "Dirección" | "Módulos" | "Herramientas" | "Sistema";
+export type SidebarSection = "Operación" | "Dirección" | "Herramientas" | "Sistema";
 
 export interface SidebarItem {
   /** URL canónica del módulo */
@@ -44,19 +53,19 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   { path: "/objetivos",                  slug: "objetivos",     label: "Objetivos",       sec: "Dirección" },
   { path: "/reportes",                   slug: "eerr",          label: "Reportes",        sec: "Dirección" },
 
-  // === Módulos ===
-  { path: "/equipo",                     slug: "rrhh",          label: "Equipo",          sec: "Módulos" },
-  { path: "/sucursales",                 slug: "configuracion", label: "Sucursales",      sec: "Módulos" },
-
   // === Herramientas ===
+  { path: "/equipo",                     slug: "rrhh",          label: "Equipo",          sec: "Herramientas" },
   { path: "/herramientas/contador-iva",  slug: "contador",      label: "Contador / IVA",  sec: "Herramientas" },
   { path: "/herramientas/blindaje",      slug: "blindaje",      label: "Blindaje",        sec: "Herramientas" },
 
   // === Sistema ===
   { path: "/ajustes",                    slug: "ajustes",       label: "Ajustes",         sec: "Sistema" },
+  { path: "/catalogos",                  slug: "configuracion", label: "Catálogos",       sec: "Sistema" },
+  { path: "/usuarios",                   slug: "usuarios",      label: "Usuarios",        sec: "Sistema" },
+  { path: "/tenants",                    slug: "tenants",       label: "Tenants",         sec: "Sistema" },
 ];
 
-export const SIDEBAR_SECTIONS: SidebarSection[] = ["Operación", "Dirección", "Módulos", "Herramientas", "Sistema"];
+export const SIDEBAR_SECTIONS: SidebarSection[] = ["Operación", "Dirección", "Herramientas", "Sistema"];
 
 /**
  * Devuelve el PATH del primer item del sidebar al que el user tiene
@@ -78,7 +87,8 @@ export const LEGACY_REDIRECTS: Record<string, string> = {
   "/dashboard":       "@default",
   "/movimientos":     "/caja/movimientos",
   "/rrhh":            "/equipo",
-  "/locales":         "/sucursales",
+  "/locales":         "/catalogos",
+  "/sucursales":      "/catalogos",
   "/proveedores":     "/compras/proveedores",
   "/conciliacion-mp": "/caja/conciliacion",
   "/conciliacion":    "/caja/conciliacion",

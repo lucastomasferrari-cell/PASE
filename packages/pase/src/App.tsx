@@ -280,16 +280,14 @@ function AppMain() {
               <Route path="/objetivos" element={<Objetivos/>} />
               <Route path="/reportes" element={<EERR {...props}/>} />
 
-              {/* Módulos */}
-              <Route path="/equipo" element={<RRHHPage {...props}/>} />
-              <Route path="/sucursales" element={<Configuracion user={user} locales={locales} localActivo={localActivo}/>} />
-
               {/* Herramientas */}
+              <Route path="/equipo" element={<RRHHPage {...props}/>} />
               <Route path="/herramientas/contador-iva" element={<Contador {...props}/>} />
               <Route path="/herramientas/blindaje" element={<Blindaje {...props}/>} />
 
               {/* Sistema */}
               <Route path="/ajustes" element={<Ajustes/>} />
+              <Route path="/catalogos" element={<Configuracion user={user} locales={locales} localActivo={localActivo}/>} />
 
               {/* Accesibles internamente (no en sidebar top-level) */}
               <Route path="/gastos" element={<Gastos {...props}/>} />
