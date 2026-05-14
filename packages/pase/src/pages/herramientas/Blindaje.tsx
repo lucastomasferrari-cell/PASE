@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { db } from "../../lib/supabase";
 import { applyLocalScope } from "../../lib/auth";
 import { toISO, today, fmt_d } from "../../lib/utils";
+import { PageHeader } from "../../components/ui";
 import type { Usuario, Local } from "../../types";
 
 interface BlindajeTipo {
@@ -234,15 +235,16 @@ export default function Blindaje({ user, locales, localActivo }: BlindajeProps) 
 
   return (
     <div>
-      <div className="ph-row">
-        <div>
-          <div className="ph-title">PASE Blindaje</div>
-          <div style={{ fontSize: 11, color: "var(--muted2)", marginTop: 4 }}>
-            Gestor de documentos del local — {localActivo ? localNombre : "Sin local seleccionado"}
-          </div>
-        </div>
-        {esAdmin && <button className="btn btn-acc btn-sm" onClick={abrirTipoNuevo}>+ Agregar tipo</button>}
-      </div>
+      <PageHeader
+        title="Blindaje"
+        info={<>
+          Gestor de documentos del local seleccionado: habilitaciones,
+          contratos, seguros, etc. Estado actual: {localActivo
+            ? <strong>{localNombre}</strong>
+            : <em>sin local seleccionado</em>}.
+        </>}
+        actions={esAdmin && <button className="btn btn-acc btn-sm" onClick={abrirTipoNuevo}>+ Agregar tipo</button>}
+      />
 
       {!localActivo ? (
         <div className="alert alert-info">Seleccioná un local en el sidebar para gestionar sus documentos.</div>

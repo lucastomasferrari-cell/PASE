@@ -11,3 +11,4 @@ export { RightSubNav } from "./RightSubNav";
 export type { SubNavItem, SubNavSection } from "./RightSubNav";
 export { Modal } from "./Modal";
 export { InfoTooltip } from "./InfoTooltip";
+export { PageHeader } from "./PageHeader";

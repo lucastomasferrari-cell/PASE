@@ -3,6 +3,7 @@ import { db } from "../lib/supabase";
 import { ROLES, MODULOS, PERMISOS_EXTRAS } from "../lib/auth";
 import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { CUENTAS } from "../lib/constants";
+import { PageHeader } from "../components/ui";
 import type { Usuario, Local } from "../types";
 
 interface UsuariosProps {
@@ -255,19 +256,25 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
 
   const rc = (rol: string) => ROLES[rol]?.color || "#666";
 
-  // Mostrar locales para un usuario: primero _locales (nuevo), fallback a locales (viejo)
-  const getUserLocaleNames = (u: Usuario) => {
+  // Devuelve la lista de locales del usuario como array de nombres (para
+  // renderizar como pills compactos en lugar de string concatenado, que en
+  // mobile rompía cada local en 2 líneas — bug 2026-05-14).
+  const getUserLocaleNamesArray = (u: Usuario): string[] => {
     const ids = (u._locales?.length ? u._locales : (u.locales || [])).map(Number);
-    if (!ids.length) return "—";
-    return ids.map((lid: number) => locales.find((l: Local) => l.id === lid)?.nombre).filter(Boolean).join(", ") || "—";
+    if (!ids.length) return [];
+    return ids.map((lid: number) => locales.find((l: Local) => l.id === lid)?.nombre).filter(Boolean) as string[];
   };
 
   return (
     <div>
-      <div className="ph-row">
-        <div><div className="ph-title">Usuarios</div></div>
-        <button className="btn btn-acc" onClick={abrirNuevo}>+ Nuevo usuario</button>
-      </div>
+      <PageHeader
+        title="Usuarios"
+        info={<>
+          Usuarios del tenant con sus roles (Dueño, Admin, Encargado, etc.) y módulos habilitados.
+          El acceso por local se controla acá. El dueño ve todos los locales y módulos automáticamente.
+        </>}
+        actions={<button className="btn btn-acc" onClick={abrirNuevo}>+ Nuevo usuario</button>}
+      />
 
       <div className="panel">
         {loading ? <div className="loading">Cargando...</div> : (
@@ -279,7 +286,25 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
               <td className="mono" style={{ color:"var(--muted2)", fontSize:11 }}>{u.email}</td>
               <td><span className="badge" style={{ background:rc(u.rol)+"22", color:rc(u.rol) }}>{ROLES[u.rol]?.label || u.rol}</span></td>
               <td style={{ fontSize:10 }}>
-                {u.rol === "dueno" ? <span style={{ color:"var(--muted)" }}>Todos</span> : getUserLocaleNames(u)}
+                {u.rol === "dueno" ? <span style={{ color:"var(--muted)" }}>Todos</span> : (() => {
+                  const nombres = getUserLocaleNamesArray(u);
+                  if (!nombres.length) return "—";
+                  return (
+                    <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                      {nombres.map(n => (
+                        <span key={n} style={{
+                          background:"var(--pase-celeste-100, var(--s2))",
+                          color:"var(--pase-text, var(--txt))",
+                          padding:"2px 8px",
+                          borderRadius:"var(--pase-radius-pill, 999px)",
+                          fontSize:10,
+                          whiteSpace:"nowrap",
+                          fontFamily:"var(--pase-font)",
+                        }}>{n}</span>
+                      ))}
+                    </div>
+                  );
+                })()}
               </td>
               <td style={{ fontSize:10 }}>
                 {u.rol === "dueno" ? <span style={{ color:"var(--muted)" }}>Todos</span> :

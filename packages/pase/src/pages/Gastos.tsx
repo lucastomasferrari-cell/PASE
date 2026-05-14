@@ -9,6 +9,7 @@ import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import { Combobox } from "../components/Combobox";
+import { PageHeader } from "../components/ui";
 import type { Usuario, Local } from "../types";
 import type { Gasto } from "../types/finanzas";
 
@@ -307,10 +308,18 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
 
   return (
     <div>
-      <div className="ph-row">
-        <div><div className="ph-title">Gastos</div></div>
-        <button className="btn btn-acc" onClick={() => { setForm(emptyForm); setModal(true); setIdempKeyCrearGasto(crypto.randomUUID()); }}>+ Cargar Gasto</button>
-      </div>
+      <PageHeader
+        title="Gastos"
+        info={<>
+          Egresos del local: fijos (alquiler, servicios), variables, publicidad, comisiones, impuestos
+          y retiros de socios. Cada gasto crea un movimiento en caja y descuenta del saldo.
+        </>}
+        actions={
+          <button className="btn btn-acc" onClick={() => { setForm(emptyForm); setModal(true); setIdempKeyCrearGasto(crypto.randomUUID()); }}>
+            + Cargar Gasto
+          </button>
+        }
+      />
 
       {/* Filtros: búsqueda + rango fechas + dropdown de tipo (antes pills inline,
            se rompe visualmente al sumar tipos nuevos). */}

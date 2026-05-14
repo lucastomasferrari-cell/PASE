@@ -74,6 +74,66 @@ export function TabNovedades({
 
   return (
     <>
+      {/* Mobile-safe CSS para las cards de empleado. El grid de 6 columnas
+          original colapsa feo en pantallas <640px (rompía nombres y dejaba
+          letras sueltas — bug 2026-05-14 reportado por Lucas). Acá redefinimos
+          el layout responsive una sola vez por instancia del Tab. */}
+      <style>{`
+        .pase-emp-card__header {
+          display: grid;
+          grid-template-columns: 22px 1.4fr 1fr 100px 110px auto;
+          gap: 12px;
+          padding: 12px 16px;
+          cursor: pointer;
+          align-items: center;
+        }
+        .pase-emp-card__chev { font-size: 11px; color: var(--muted); }
+        .pase-emp-card__name { min-width: 0; }
+        .pase-emp-card__name > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .pase-emp-card__sueldo { font-size: 11px; }
+        .pase-emp-card__total { text-align: right; }
+        .pase-emp-card__label {
+          color: var(--muted);
+          font-size: 9px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          margin-bottom: 2px;
+        }
+        .pase-emp-card__action { display: flex; justify-content: flex-end; }
+        .pase-emp-card__body {
+          display: grid;
+          grid-template-columns: 2fr 1fr;
+          gap: 24px;
+          padding: 16px 20px;
+          border-top: 1px solid var(--bd);
+        }
+        .pase-emp-card__inputs {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px;
+          margin-bottom: 16px;
+        }
+        @media (max-width: 700px) {
+          .pase-emp-card__header {
+            grid-template-columns: 22px 1fr auto;
+            grid-template-areas:
+              "chev name action"
+              ".    sueldo badge"
+              ".    total  total";
+            gap: 8px 12px;
+          }
+          .pase-emp-card__chev { grid-area: chev; align-self: start; padding-top: 2px; }
+          .pase-emp-card__name { grid-area: name; }
+          .pase-emp-card__sueldo { grid-area: sueldo; }
+          .pase-emp-card__badge { grid-area: badge; justify-self: end; }
+          .pase-emp-card__total { grid-area: total; text-align: left; display: flex; align-items: baseline; gap: 8px; }
+          .pase-emp-card__total .pase-emp-card__label { margin-bottom: 0; }
+          .pase-emp-card__action { grid-area: action; align-self: start; }
+          .pase-emp-card__body { grid-template-columns: 1fr; gap: 16px; padding: 12px 16px; }
+          .pase-emp-card__inputs { grid-template-columns: repeat(2, 1fr); }
+        }
+      `}</style>
+
       {/* Toolbar */}
       <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
         <button className="btn btn-ghost btn-sm" onClick={goPrevMonth} title="Mes anterior" style={{padding:"4px 10px"}}>←</button>
@@ -161,53 +221,45 @@ function EmpleadoCard({ emp, nov, adelantosDelMes, expanded, onToggle, updateNov
   const confirmado = nov.estado === "confirmado";
 
   return (
-    <div className="panel" style={{padding:0, overflow:"hidden"}}>
-      {/* Header siempre visible */}
-      <div
-        onClick={onToggle}
-        style={{
-          display:"grid",
-          gridTemplateColumns:"24px 1.5fr 1fr 110px 100px 120px",
-          gap:12, padding:"12px 16px",
-          cursor:"pointer", alignItems:"center",
-          background: confirmado ? "var(--s2)" : "transparent",
-        }}>
-        <span style={{fontSize:11, color:"var(--muted)"}}>{expanded ? "▾" : "▸"}</span>
-        <div>
-          <div style={{fontWeight:500, fontSize:13}}>{emp.apellido}, {emp.nombre}</div>
+    <div className="panel pase-emp-card" style={{padding:0, overflow:"hidden"}}>
+      {/* Header siempre visible. Mobile-safe: en pantallas ≤640px se apila
+          vertical para que el nombre del empleado no se rompa en pedacitos. */}
+      <div className="pase-emp-card__header" onClick={onToggle}
+        style={{ background: confirmado ? "var(--s2)" : "transparent" }}>
+        <span className="pase-emp-card__chev">{expanded ? "▾" : "▸"}</span>
+        <div className="pase-emp-card__name">
+          <div style={{fontWeight:500, fontSize:13, lineHeight:1.25}}>{emp.apellido}, {emp.nombre}</div>
           <div style={{fontSize:10, color:"var(--muted2)", marginTop:2}}>{emp.puesto}</div>
         </div>
-        <div style={{fontSize:11}}>
-          <div style={{color:"var(--muted)", fontSize:9, textTransform:"uppercase", letterSpacing:0.5}}>Sueldo base</div>
-          <div className="num">{fmt_$(emp.sueldo_mensual)}</div>
+        <div className="pase-emp-card__sueldo">
+          <div className="pase-emp-card__label">Sueldo base</div>
+          <div className="num" style={{fontSize:12}}>{fmt_$(emp.sueldo_mensual)}</div>
         </div>
-        <div>
+        <div className="pase-emp-card__badge">
           {confirmado
             ? <span className="badge b-success" style={{fontSize:10}}>Confirmado</span>
             : <span className="badge b-warn" style={{fontSize:10}}>Borrador</span>}
         </div>
-        <div style={{textAlign:"right"}}>
-          <div style={{color:"var(--muted)", fontSize:9, textTransform:"uppercase", letterSpacing:0.5}}>Total</div>
+        <div className="pase-emp-card__total">
+          <div className="pase-emp-card__label">Total</div>
           <div className="num" style={{fontSize:14, fontWeight:500, color: total < 0 ? "var(--danger)" : "var(--success)"}}>
             {fmt_$(total)}
           </div>
         </div>
-        <div style={{display:"flex",justifyContent:"flex-end"}} onClick={e => e.stopPropagation()}>
+        <div className="pase-emp-card__action" onClick={e => e.stopPropagation()}>
           {confirmado
             ? <button className="btn btn-acc btn-sm" onClick={irAPagos}>Pagar →</button>
             : <button className="btn btn-acc btn-sm" onClick={confirmar}>Confirmar</button>}
         </div>
       </div>
 
-      {/* Body expandido */}
+      {/* Body expandido. En mobile (≤700px) las 2 columnas (inputs + desglose)
+          colapsan a 1 sola columna vertical para que no se aprieten. */}
       {expanded && (
-        <div style={{
-          display:"grid", gridTemplateColumns:"2fr 1fr", gap:24,
-          padding:"16px 20px", borderTop:"1px solid var(--bd)",
-        }}>
+        <div className="pase-emp-card__body">
           {/* Columna izq: inputs */}
           <div>
-            <div style={{display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:12, marginBottom:16}}>
+            <div className="pase-emp-card__inputs">
               <Field label="Inasistencias (días)" hint="0 a 31">
                 <input type="number" min="0" max="31" style={{...inp, width:"100%", textAlign:"left"}} disabled={confirmado}
                   value={nov.inasistencias ?? 0}
