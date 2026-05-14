@@ -103,6 +103,13 @@ export default function Ajustes() {
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [nuevoTipoGasto, setNuevoTipoGasto] = useState<TipoGasto>("fijo");
   const [saving, setSaving] = useState(false);
+  // Modal de edición — soporta los 3 tipos de tabla (categoria/medio/puesto).
+  type EditTarget =
+    | { kind: "categoria"; row: CategoriaRow }
+    | { kind: "medio"; row: MedioCobroRow }
+    | { kind: "puesto"; row: PuestoRow };
+  const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
+  const [editNombre, setEditNombre] = useState("");
 
   const load = async () => {
     setLoading(true);
@@ -270,6 +277,79 @@ export default function Ajustes() {
     }
   };
 
+  // ─── Edit / Delete handlers ───────────────────────────────────────
+  const abrirEditCategoria = (row: CategoriaRow) => {
+    setEditTarget({ kind: "categoria", row });
+    setEditNombre(row.nombre);
+  };
+  const abrirEditMedio = (row: MedioCobroRow) => {
+    setEditTarget({ kind: "medio", row });
+    setEditNombre(row.nombre);
+  };
+  const abrirEditPuesto = (row: PuestoRow) => {
+    setEditTarget({ kind: "puesto", row });
+    setEditNombre(row.nombre);
+  };
+
+  const guardarEdit = async () => {
+    if (!editTarget || !editNombre.trim() || saving) return;
+    const nuevo = editNombre.trim();
+    if (nuevo === ("nombre" in editTarget.row ? editTarget.row.nombre : "")) {
+      setEditTarget(null);
+      return;
+    }
+    setSaving(true);
+    try {
+      let err: { message: string } | null = null;
+      if (editTarget.kind === "categoria") {
+        const r = await db.from("config_categorias")
+          .update({ nombre: nuevo })
+          .eq("tipo", editTarget.row.tipo)
+          .eq("nombre", editTarget.row.nombre);
+        err = r.error;
+      } else if (editTarget.kind === "medio") {
+        const r = await db.from("medios_cobro").update({ nombre: nuevo }).eq("id", editTarget.row.id);
+        err = r.error;
+      } else if (editTarget.kind === "puesto") {
+        const r = await db.from("rrhh_puestos").update({ nombre: nuevo }).eq("id", editTarget.row.id);
+        err = r.error;
+      }
+      if (err) {
+        alert("No se pudo guardar: " + err.message);
+        return;
+      }
+      setEditTarget(null);
+      await load();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Soft delete — solo flippea activo=false. Los datos históricos que
+  // referencian el nombre del item siguen viéndose porque guardamos texto
+  // (no FK). Reversible desde Supabase Studio si se necesita.
+  const eliminarCategoria = async (row: CategoriaRow) => {
+    if (!confirm(`¿Eliminar la categoría "${row.nombre}"?\n\nNo se borra del historial, solo deja de aparecer en los dropdowns.`)) return;
+    const { error } = await db.from("config_categorias")
+      .update({ activo: false })
+      .eq("tipo", row.tipo)
+      .eq("nombre", row.nombre);
+    if (error) { alert("No se pudo eliminar: " + error.message); return; }
+    await load();
+  };
+  const eliminarMedio = async (row: MedioCobroRow) => {
+    if (!confirm(`¿Eliminar el medio de cobro "${row.nombre}"?\n\nNo se borra del historial, solo deja de aparecer en los dropdowns.`)) return;
+    const { error } = await db.from("medios_cobro").update({ activo: false }).eq("id", row.id);
+    if (error) { alert("No se pudo eliminar: " + error.message); return; }
+    await load();
+  };
+  const eliminarPuesto = async (row: PuestoRow) => {
+    if (!confirm(`¿Eliminar el puesto "${row.nombre}"?\n\nNo se borra del historial, solo deja de aparecer en los dropdowns.`)) return;
+    const { error } = await db.from("rrhh_puestos").update({ activo: false }).eq("id", row.id);
+    if (error) { alert("No se pudo eliminar: " + error.message); return; }
+    await load();
+  };
+
   const grupoItemsCount: Record<GrupoId, number> = {
     gastos: itemsGastos.length,
     compras: itemsCompras.length,
@@ -352,8 +432,8 @@ export default function Ajustes() {
                           >
                             {isFijo ? "Fijo" : "Variable"}
                           </button>
-                          <button className={styles.itemAccion} title="Editar (próximamente)" disabled>✏</button>
-                          <button className={`${styles.itemAccion} ${styles.itemAccionDanger}`} title="Eliminar (próximamente)" disabled>×</button>
+                          <button className={styles.itemAccion} title="Editar nombre" onClick={() => abrirEditCategoria(c)}>✏</button>
+                          <button className={`${styles.itemAccion} ${styles.itemAccionDanger}`} title="Eliminar (soft delete)" onClick={() => eliminarCategoria(c)}>×</button>
                         </div>
                       );
                     })}
@@ -361,32 +441,32 @@ export default function Ajustes() {
                       <div key={c.nombre} className={styles.item}>
                         <span className={styles.itemNombre}>{highlight(sentenceCase(c.nombre), search)}</span>
                         <span />
-                        <button className={styles.itemAccion} title="Editar (próximamente)" disabled>✏</button>
-                        <button className={`${styles.itemAccion} ${styles.itemAccionDanger}`} title="Eliminar (próximamente)" disabled>×</button>
+                        <button className={styles.itemAccion} title="Editar nombre" onClick={() => abrirEditCategoria(c)}>✏</button>
+                        <button className={`${styles.itemAccion} ${styles.itemAccionDanger}`} title="Eliminar (soft delete)" onClick={() => eliminarCategoria(c)}>×</button>
                       </div>
                     ))}
                     {g.id === "ingresos" && itemsIngresos.map(c => (
                       <div key={c.nombre} className={styles.item}>
                         <span className={styles.itemNombre}>{highlight(sentenceCase(c.nombre), search)}</span>
                         <span />
-                        <button className={styles.itemAccion} title="Editar (próximamente)" disabled>✏</button>
-                        <button className={`${styles.itemAccion} ${styles.itemAccionDanger}`} title="Eliminar (próximamente)" disabled>×</button>
+                        <button className={styles.itemAccion} title="Editar nombre" onClick={() => abrirEditCategoria(c)}>✏</button>
+                        <button className={`${styles.itemAccion} ${styles.itemAccionDanger}`} title="Eliminar (soft delete)" onClick={() => eliminarCategoria(c)}>×</button>
                       </div>
                     ))}
                     {g.id === "medios" && itemsMedios.map(m => (
                       <div key={m.id} className={styles.item}>
                         <span className={styles.itemNombre}>{highlight(sentenceCase(m.nombre), search)}</span>
                         <span />
-                        <button className={styles.itemAccion} title="Editar (próximamente)" disabled>✏</button>
-                        <button className={`${styles.itemAccion} ${styles.itemAccionDanger}`} title="Eliminar (próximamente)" disabled>×</button>
+                        <button className={styles.itemAccion} title="Editar nombre" onClick={() => abrirEditMedio(m)}>✏</button>
+                        <button className={`${styles.itemAccion} ${styles.itemAccionDanger}`} title="Eliminar (soft delete)" onClick={() => eliminarMedio(m)}>×</button>
                       </div>
                     ))}
                     {g.id === "puestos" && itemsPuestos.map(p => (
                       <div key={p.id} className={styles.item}>
                         <span className={styles.itemNombre}>{highlight(sentenceCase(p.nombre), search)}</span>
                         <span />
-                        <button className={styles.itemAccion} title="Editar (próximamente)" disabled>✏</button>
-                        <button className={`${styles.itemAccion} ${styles.itemAccionDanger}`} title="Eliminar (próximamente)" disabled>×</button>
+                        <button className={styles.itemAccion} title="Editar nombre" onClick={() => abrirEditPuesto(p)}>✏</button>
+                        <button className={`${styles.itemAccion} ${styles.itemAccionDanger}`} title="Eliminar (soft delete)" onClick={() => eliminarPuesto(p)}>×</button>
                       </div>
                     ))}
                     {g.id === "turnos" && (
@@ -459,6 +539,33 @@ export default function Ajustes() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Modal de edición de nombre. Soft delete vive en confirm() inline. */}
+      <Modal
+        isOpen={editTarget !== null}
+        onClose={() => setEditTarget(null)}
+        title="Editar nombre"
+        subtitle="El nombre nuevo reemplaza al anterior en los catálogos."
+        maxWidth={420}
+        footer={
+          <>
+            <button className="btn btn-sec" onClick={() => setEditTarget(null)} disabled={saving}>Cancelar</button>
+            <button className="btn btn-acc" onClick={guardarEdit} disabled={!editNombre.trim() || saving}>
+              {saving ? "Guardando…" : "Guardar"}
+            </button>
+          </>
+        }
+      >
+        <div className={styles.modalField}>
+          <label className={styles.modalLabel}>Nombre</label>
+          <input
+            className={styles.modalInput}
+            autoFocus
+            value={editNombre}
+            onChange={e => setEditNombre(e.target.value)}
+          />
+        </div>
       </Modal>
     </div>
   );
