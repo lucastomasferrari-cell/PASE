@@ -749,42 +749,174 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
         </div>
       )}
 
-      <div className="grid3">
-        {/* Header consolidado: suma de saldo_disponible y por_acreditar de
-            todas las credenciales del scope visible. Valor del último sync —
-            mp-process actualiza estos campos en mp_credenciales. */}
-        <div className="kpi">
-          <div className="kpi-label" style={{color:"var(--muted)"}}>Saldo MP</div>
-          <div className="kpi-value" style={{color:"var(--muted2)",fontFamily:"'Inter',sans-serif",fontSize:18,fontWeight:500}}>
-            {loading ? "—" : fmt_mp(saldoConsolidado)}
-          </div>
-          <div className="kpi-sub" style={{fontSize:10,color:"var(--muted2)"}}>
-            {credenciales.length===0
-              ? "Sin cuentas configuradas"
-              : credenciales.length===1
-                ? `${credenciales[0]?.locales?.nombre||"Local"} · último sync ${ultimaSync?fmt_dt_ar(ultimaSync):"—"}`
-                : `${credenciales.length} locales · último sync ${ultimaSync?fmt_dt_ar(ultimaSync):"—"}`}
+      {/* Sprint v2 Commit 5: 3 KPIs en bento asimétrico (1.4fr 1fr 1fr).
+          Anchor celeste sólido (Saldo MP) + KPI blanco (Dinero a liberar) +
+          KPI warn con bg-soft (Sin justificar). Datos idénticos a la versión
+          anterior, solo cambia el tratamiento visual. */}
+      <div className="mp-bento">
+        {/* Anchor — Saldo MP disponible */}
+        <div className="mp-anchor">
+          <div className="mp-anchor-circle" aria-hidden />
+          <div>
+            <div className="mp-anchor-label">Saldo MP disponible</div>
+            <div className="mp-anchor-value">{loading ? "—" : fmt_mp(saldoConsolidado)}</div>
+            <div className="mp-anchor-sub">
+              {credenciales.length===0
+                ? "Sin cuentas configuradas"
+                : credenciales.length===1
+                  ? `${credenciales[0]?.locales?.nombre||"Local"} · último sync ${ultimaSync?fmt_dt_ar(ultimaSync):"—"}`
+                  : `${credenciales.length} locales · último sync ${ultimaSync?fmt_dt_ar(ultimaSync):"—"}`}
+            </div>
           </div>
         </div>
-        <div className="kpi">
-          <div className="kpi-label">Dinero a liberar</div>
-          <div className={`kpi-value ${porAcreditarTotal>0?"kpi-warn":""}`} style={{fontSize:18}}>
+
+        {/* KPI blanco — Dinero a liberar */}
+        <div className="mp-kpi">
+          <div className="mp-kpi-label">Dinero a liberar</div>
+          <div className="mp-kpi-value">
             {loading ? "—" : fmt_mp(porAcreditarTotal)}
           </div>
-          <div className="kpi-sub">Pagos en proceso · se acreditan al saldo</div>
+          <div className="mp-kpi-sub">Pagos en proceso · se acreditan al saldo</div>
         </div>
+
+        {/* KPI warn — Sin justificar (bg-soft, dot dorado en sub) */}
         <button
           type="button"
-          className="kpi"
-          style={{cursor:pendientesCount>0?"pointer":"default",textAlign:"left",border:pendientesCount>0?"1px solid var(--bd2)":undefined,background:"transparent",padding:"inherit"}}
+          className="mp-kpi mp-kpi-warn"
           onClick={()=>{ if(pendientesCount>0){ setTab("egresos"); setFiltroSinJustif(true); } }}
           aria-label={pendientesCount>0?"Ir a tab Egresos con filtro sin justificar":undefined}
+          disabled={pendientesCount===0}
         >
-          <div className="kpi-label">Egresos sin justificar</div>
-          <div className={`kpi-value ${pendientesCount>0?"kpi-danger":""}`} style={{fontFamily:"'Inter',sans-serif",fontSize:18,fontWeight:500}}>{pendientesCount}</div>
-          <div className="kpi-sub">{pendientesCount===0?"Todos conciliados ✓":"Click para revisar"}</div>
+          <div className="mp-kpi-label">Sin justificar</div>
+          <div className="mp-kpi-value-warn">{pendientesCount}</div>
+          <div className="mp-kpi-sub-warn">
+            {pendientesCount>0 && <span className="mp-dot-warn" aria-hidden />}
+            {pendientesCount===0 ? "Todos conciliados" : "Requieren atención"}
+          </div>
         </button>
       </div>
+
+      <style>{`
+        .mp-bento {
+          display: grid;
+          grid-template-columns: 1.4fr 1fr 1fr;
+          gap: 10px;
+          margin-bottom: 14px;
+        }
+        @media (max-width: 700px) {
+          .mp-bento { grid-template-columns: 1fr; }
+        }
+        .mp-anchor {
+          position: relative;
+          background: var(--pase-celeste);
+          color: #fff;
+          border-radius: var(--pase-radius-card);
+          padding: 16px 18px;
+          min-height: 100px;
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        }
+        .mp-anchor-circle {
+          position: absolute;
+          bottom: -40px;
+          right: -40px;
+          width: 130px;
+          height: 130px;
+          border-radius: 50%;
+          background: rgba(255,255,255,0.12);
+          pointer-events: none;
+        }
+        .mp-anchor-label {
+          position: relative;
+          font-size: 11px;
+          font-weight: 500;
+          color: rgba(255,255,255,0.78);
+          letter-spacing: -0.005em;
+        }
+        .mp-anchor-value {
+          position: relative;
+          font-size: 26px;
+          font-weight: 500;
+          color: #fff;
+          letter-spacing: -0.03em;
+          line-height: 1.1;
+          margin-top: 6px;
+          font-variant-numeric: tabular-nums;
+        }
+        .mp-anchor-sub {
+          position: relative;
+          font-size: 10.5px;
+          color: rgba(255,255,255,0.78);
+          margin-top: 6px;
+          letter-spacing: -0.005em;
+        }
+        .mp-kpi {
+          background: var(--pase-bg);
+          border: 0.5px solid var(--pase-border);
+          border-radius: var(--pase-radius-card);
+          padding: 14px 16px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          text-align: left;
+          font-family: var(--pase-font);
+          color: var(--pase-text);
+        }
+        .mp-kpi-warn {
+          background: var(--pase-bg-soft);
+          border-color: var(--pase-border);
+          cursor: pointer;
+        }
+        .mp-kpi-warn:disabled { cursor: default; opacity: 0.85; }
+        .mp-kpi-label {
+          font-size: 11px;
+          font-weight: 500;
+          color: var(--pase-text-muted);
+          letter-spacing: -0.005em;
+        }
+        .mp-kpi-value {
+          font-size: 22px;
+          font-weight: 500;
+          color: var(--pase-text);
+          letter-spacing: -0.025em;
+          line-height: 1.1;
+          margin-top: 6px;
+          font-variant-numeric: tabular-nums;
+        }
+        .mp-kpi-value-warn {
+          font-size: 22px;
+          font-weight: 500;
+          color: #8B6F0A;
+          letter-spacing: -0.025em;
+          line-height: 1.1;
+          margin-top: 6px;
+          font-variant-numeric: tabular-nums;
+        }
+        .mp-kpi-sub {
+          font-size: 10.5px;
+          color: var(--pase-text-muted);
+          margin-top: 6px;
+          letter-spacing: -0.005em;
+        }
+        .mp-kpi-sub-warn {
+          font-size: 10.5px;
+          color: #8B6F0A;
+          margin-top: 6px;
+          letter-spacing: -0.005em;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .mp-dot-warn {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #F5C518;
+          flex-shrink: 0;
+        }
+      `}</style>
 
       <div className="tabs">
         {([
@@ -861,7 +993,29 @@ function ConciliacionMP({ user, locales, localActivo }: ConciliacionMPProps) {
                       <td>
                         {m.ignorado
                           ? <button className="btn btn-ghost btn-sm" style={{fontSize:10,padding:"4px 10px"}} onClick={()=>designorarMP(m.id)} disabled={conciliando}>Des-ignorar</button>
-                          : !m.justificativo_tipo && <button className="btn btn-acc btn-sm" style={{fontSize:10,padding:"4px 10px"}} onClick={()=>setConciliarModal(m)}>Conciliar</button>}
+                          : !m.justificativo_tipo && (
+                            /* Botón dorado destacando que requiere acción humana (sprint v2 Commit 5). */
+                            <button
+                              onClick={()=>setConciliarModal(m)}
+                              style={{
+                                background:"#F5C518",
+                                color:"#1A3A5E",
+                                fontSize:10.5,
+                                fontWeight:500,
+                                padding:"5px 10px",
+                                borderRadius:6,
+                                border:"none",
+                                cursor:"pointer",
+                                fontFamily:"var(--pase-font)",
+                                letterSpacing:"-0.005em",
+                                transition:"background 0.15s",
+                              }}
+                              onMouseEnter={e => (e.currentTarget.style.background = "#E5B610")}
+                              onMouseLeave={e => (e.currentTarget.style.background = "#F5C518")}
+                            >
+                              Justificar
+                            </button>
+                          )}
                       </td>
                     </tr>
                   ))}</tbody>

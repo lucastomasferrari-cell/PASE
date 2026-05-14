@@ -1,0 +1,149 @@
+/* Cards superiores de la vista Caja > Movimientos (sprint v2 Commit 5).
+ * Layout: 3 columnas en desktop (anchor + 2 normales).
+ * En mobile colapsa a 1 columna, anchor full width arriba.
+ */
+
+.row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 900px) {
+  .row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Card base */
+.card {
+  position: relative;
+  border-radius: var(--pase-radius-card);
+  padding: 16px 18px;
+  min-height: 100px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  font-family: var(--pase-font);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card:hover {
+  transform: translateY(-1px);
+}
+
+/* Anchor (Caja Efectivo) — celeste sólido */
+.cardAnchor {
+  background: var(--pase-celeste);
+  color: #fff;
+  overflow: hidden;
+}
+
+.cardAnchor .label {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.cardAnchor .value {
+  color: #fff;
+}
+
+.cardAnchor .sub {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.cardAnchor .chevron {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Decoración círculo bottom-right (solo anchor) */
+.bgCircle {
+  position: absolute;
+  bottom: -40px;
+  right: -40px;
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  pointer-events: none;
+}
+
+/* Normal (Caja Chica, Caja Mayor) — blanca con borde fino */
+.cardNormal {
+  background: var(--pase-bg);
+  border: 0.5px solid var(--pase-border);
+  color: var(--pase-text);
+}
+
+.cardNormal .label {
+  color: var(--pase-text-muted);
+}
+
+.cardNormal .value {
+  color: var(--pase-text);
+}
+
+.cardNormal .sub {
+  color: var(--pase-text-muted);
+}
+
+.cardNormal .chevron {
+  color: var(--pase-text-muted);
+}
+
+/* Estructura interna */
+.head {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.labelIcon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.chevron {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.value {
+  position: relative;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  margin-top: 6px;
+}
+
+.valueNegative {
+  color: #8B6F0A;
+}
+
+.cardAnchor .valueNegative {
+  color: #FFE08A;  /* dorado claro sobre el celeste */
+}
+
+.sub {
+  position: relative;
+  font-size: 10.5px;
+  margin-top: 6px;
+  letter-spacing: -0.005em;
+}

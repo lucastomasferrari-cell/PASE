@@ -8,6 +8,7 @@ import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import { RightSubNav, type SubNavSection } from "../components/ui";
+import { CajaCardsRow } from "./caja/CajaCardsRow";
 import type { Usuario, Local } from "../types/auth";
 import type { Movimiento } from "../types/finanzas";
 
@@ -472,16 +473,23 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
             <>
       {cuentasVisibles.length === 0 ? (
         <div className="empty" style={{padding:24,marginBottom:16}}>No tenés cuentas asignadas. Pedile a un administrador que te habilite.</div>
-      ) : (
-        <div className="grid4">
-          {cuentasVisibles.filter(k=>k!=="MercadoPago").map(k=>(
-            <div key={k} className={`caja-card caja-${k==="Caja Chica"?"chica":k==="Caja Mayor"?"mayor":"banco"}`}>
-              <div className="caja-name">{k}</div>
-              <div className="caja-saldo" style={{color:(saldos[k]||0)<0?"var(--danger)":"var(--txt)"}}>{fmt_$(saldos[k]||0)}</div>
-            </div>
-          ))}
-        </div>
-      )}
+      ) : (() => {
+        // Sprint v2 Commit 5: layout de 3 cards (anchor + 2 normales).
+        // Caja Efectivo es el anchor celeste; Chica y Mayor son blancas.
+        // Banco se removió de esta vista hasta que se concilie con MP.
+        const orden = ["Caja Efectivo", "Caja Chica", "Caja Mayor"];
+        const cardsVisibles = orden.filter(k => cuentasVisibles.includes(k));
+        return (
+          <CajaCardsRow
+            cards={cardsVisibles.map((cuenta, i) => ({
+              cuenta,
+              label: cuenta,
+              saldo: saldos[cuenta] || 0,
+              variant: i === 0 && cuenta === "Caja Efectivo" ? "anchor" : "normal",
+            }))}
+          />
+        );
+      })()}
       <div className="panel">
         <div className="panel-hd" style={{flexWrap:"wrap",gap:8}}>
           <span className="panel-title">Movimientos</span>
