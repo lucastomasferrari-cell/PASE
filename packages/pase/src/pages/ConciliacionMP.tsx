@@ -135,6 +135,51 @@ interface MpResetResultado {
   error?: string;
 }
 
+// Pill 'Período' del toolbar — select nativo estilizado como pill celeste con
+// presets 7d/30d/90d + 'Rango personalizado'. Patrón espejo de la pill
+// multi-tipo de Ajustes (Pendiente 2): chevron SVG inline + appearance:none.
+// Vive afuera del componente principal para evitar recrearlo en cada render.
+function PeriodoPill({
+  periodo,
+  setPeriodo,
+}: {
+  periodo: "7d" | "30d" | "90d" | "custom";
+  setPeriodo: (p: "7d" | "30d" | "90d" | "custom") => void;
+}) {
+  return (
+    <select
+      value={periodo}
+      onChange={e => setPeriodo(e.target.value as "7d" | "30d" | "90d" | "custom")}
+      title="Período"
+      style={{
+        padding: "5px 24px 5px 10px",
+        borderRadius: 999,
+        fontSize: 10.5,
+        fontWeight: 500,
+        letterSpacing: "0.01em",
+        border: "0.5px solid var(--pase-border)",
+        backgroundColor: "var(--pase-celeste-100)",
+        color: "var(--pase-text)",
+        cursor: "pointer",
+        fontFamily: "var(--pase-font)",
+        appearance: "none",
+        WebkitAppearance: "none",
+        MozAppearance: "none",
+        backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='2,3 4,5 6,3'/></svg>\")",
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "right 8px center",
+        backgroundSize: "8px 8px",
+        outline: "none",
+      }}
+    >
+      <option value="7d">Últimos 7 días</option>
+      <option value="30d">Últimos 30 días</option>
+      <option value="90d">Últimos 90 días</option>
+      <option value="custom">Rango personalizado</option>
+    </select>
+  );
+}
+
 function ConciliacionMP({ user, locales, localActivo, embedded = false }: ConciliacionMPProps) {
   const { COMISIONES_CATS, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, RETIROS_SOCIOS, categoriaToTipo } = useCategorias();
   // Acciones disparadas desde el header del módulo madre Caja vía ?action=
@@ -171,11 +216,32 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
   // Filtro "solo sin justificar" del tab Egresos. Lo activa también el card
   // del header al click ("X egresos sin justificar" → tab Egresos + filtro).
   const [filtroSinJustif,setFiltroSinJustif]=useState(false);
-  // Default: últimos 90 días. El botón "Últ. 30d" del toolbar permite
-  // restringir a 30 si el usuario quiere ventana más chica.
+  // Default: últimos 90 días. La pill 'Período' del toolbar permite
+  // alternar entre presets 7d/30d/90d y un modo 'Rango personalizado' que
+  // exhibe los date pickers. Persistencia del preset en localStorage para
+  // que el usuario reabra la pantalla con el mismo zoom temporal.
   const _hace90=new Date();_hace90.setDate(_hace90.getDate()-90);
   const [desde,setDesde]=useState(toISO(_hace90));
   const [hasta,setHasta]=useState(toISO(today));
+  const [periodo,setPeriodo]=useState<"7d"|"30d"|"90d"|"custom">(()=>{
+    try{
+      const stored=localStorage.getItem("pase-mp-periodo");
+      if(stored==="7d"||stored==="30d"||stored==="90d"||stored==="custom") return stored;
+    }catch{ /* localStorage bloqueado */ }
+    return "90d";
+  });
+  // Sync preset → desde/hasta. En modo 'custom' no toca las fechas (el user
+  // las edita manualmente con los date pickers). El setState in effect es
+  // justamente lo que se busca: el cambio de pill dispara la actualización.
+  useEffect(()=>{
+    try{ localStorage.setItem("pase-mp-periodo",periodo); }catch{ /* localStorage bloqueado */ }
+    if(periodo==="custom") return;
+    const dias=periodo==="7d"?7:periodo==="30d"?30:90;
+    const d=new Date();d.setDate(d.getDate()-dias);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDesde(toISO(d));
+    setHasta(toISO(new Date()));
+  },[periodo]);
   const [configModal,setConfigModal]=useState(false);
   const [configForm,setConfigForm]=useState({local_id:"",access_token:""});
   const [conciliarModal,setConciliarModal]=useState<MpMovimiento | null>(null); // movimiento a conciliar
@@ -747,13 +813,15 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
           una toolbar fina con los filtros de fecha (Desde / Hasta + preset). */}
       {embedded ? (
         <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:14}}>
-          <div style={{display:"flex",gap:4,alignItems:"center",fontSize:10,color:"var(--muted2)"}}>
-            <span>Desde</span>
-            <input type="date" className="search" style={{width:140}} value={desde} onChange={e=>setDesde(e.target.value)}/>
-            <span>Hasta</span>
-            <input type="date" className="search" style={{width:140}} value={hasta} onChange={e=>setHasta(e.target.value)}/>
-          </div>
-          <button className="btn btn-ghost btn-sm" style={{fontSize:10}} onClick={()=>{const d=new Date();d.setDate(d.getDate()-30);setDesde(toISO(d));setHasta(toISO(today));}}>Últ. 30d</button>
+          <PeriodoPill periodo={periodo} setPeriodo={setPeriodo} />
+          {periodo==="custom" && (
+            <div style={{display:"flex",gap:4,alignItems:"center",fontSize:10,color:"var(--muted2)"}}>
+              <span>Desde</span>
+              <input type="date" className="search" style={{width:140}} value={desde} onChange={e=>setDesde(e.target.value)}/>
+              <span>Hasta</span>
+              <input type="date" className="search" style={{width:140}} value={hasta} onChange={e=>setHasta(e.target.value)}/>
+            </div>
+          )}
           {sincronizando && (
             <span style={{fontSize:11,color:"var(--pase-text-muted)",marginLeft:"auto"}}>Sincronizando…</span>
           )}
@@ -762,13 +830,15 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
         <div className="ph-row">
           <div><div className="ph-title">Conciliación MP</div></div>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-            <div style={{display:"flex",gap:4,alignItems:"center",fontSize:10,color:"var(--muted2)"}}>
-              <span>Desde</span>
-              <input type="date" className="search" style={{width:140}} value={desde} onChange={e=>setDesde(e.target.value)}/>
-              <span>Hasta</span>
-              <input type="date" className="search" style={{width:140}} value={hasta} onChange={e=>setHasta(e.target.value)}/>
-            </div>
-            <button className="btn btn-ghost btn-sm" style={{fontSize:10}} onClick={()=>{const d=new Date();d.setDate(d.getDate()-30);setDesde(toISO(d));setHasta(toISO(today));}}>Últ. 30d</button>
+            <PeriodoPill periodo={periodo} setPeriodo={setPeriodo} />
+            {periodo==="custom" && (
+              <div style={{display:"flex",gap:4,alignItems:"center",fontSize:10,color:"var(--muted2)"}}>
+                <span>Desde</span>
+                <input type="date" className="search" style={{width:140}} value={desde} onChange={e=>setDesde(e.target.value)}/>
+                <span>Hasta</span>
+                <input type="date" className="search" style={{width:140}} value={hasta} onChange={e=>setHasta(e.target.value)}/>
+              </div>
+            )}
             <button className="btn btn-ghost" onClick={()=>setConfigModal(true)}>⚙ Cuentas MP</button>
             <button className="btn btn-acc" onClick={sincronizar} disabled={sincronizando}>
               {sincronizando?"🔄 Sincronizando...":"↻ Sincronizar ahora"}
