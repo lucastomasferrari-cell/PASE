@@ -19,7 +19,6 @@ const Contador = lazy(() => import("./pages/herramientas/ContadorIVA"));
 const ImportarMaxirest = lazy(() => import("./pages/ImportarMaxirest"));
 const Gastos = lazy(() => import("./pages/Gastos"));
 const Usuarios = lazy(() => import("./pages/Usuarios"));
-const LectorFacturasIA = lazy(() => import("./pages/LectorFacturasIA"));
 const Blindaje = lazy(() => import("./pages/herramientas/Blindaje"));
 const RRHHPage = lazy(() => import("./pages/RRHH"));
 const Tenants = lazy(() => import("./pages/Tenants"));
@@ -290,7 +289,6 @@ function AppMain() {
               {/* Accesibles internamente (no en sidebar top-level) */}
               <Route path="/gastos" element={<Gastos {...props}/>} />
               <Route path="/usuarios" element={<Usuarios {...props}/>} />
-              <Route path="/lector-ia" element={<LectorFacturasIA {...props}/>} />
               <Route path="/maxirest" element={<ImportarMaxirest {...props}/>} />
               <Route path="/tenants" element={user.rol === "superadmin" ? <Tenants user={user as Usuario} /> : <DefaultRedirect user={user} />} />
 
