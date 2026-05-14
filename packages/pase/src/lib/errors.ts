@@ -80,6 +80,7 @@ const MAP: Record<string, string> = {
   // translateRpcError abajo).
   NO_AUTORIZADO: "No tenés permiso para esta operación. Pedí acceso al dueño.",
   TENANT_NOT_FOUND: "El tenant no existe",
+  NO_PUEDE_GRANTEAR_PERMISO_USUARIOS: "Solo dueño o admin puede otorgar el permiso 'Usuarios'. Los demás permisos sí podés gestionarlos.",
   BACKUP_INVALID: "El archivo de backup tiene un formato inválido",
   CROSS_TENANT_RESTORE_BLOCKED: "El backup pertenece a otro tenant. Restore bloqueado por seguridad",
   BACKUP_VERSION_UNSUPPORTED: "Versión del backup no soportada por el restore actual",

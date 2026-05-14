@@ -348,6 +348,11 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                 // implícitos del rol).
                 const isSelf = modal !== "new" && modal !== null && modal.id === user.id;
                 const lockPermisos = isDueno || isSelf;
+                // Hardening 2026-05-14: solo dueño/admin/superadmin pueden
+                // grantear el permiso 'usuarios' (defense-in-depth con el
+                // trigger SQL _check_grant_permiso_usuarios). Otros permisos
+                // sí los puede otorgar cualquiera con permiso 'usuarios'.
+                const currentUserPuedeGrantUsuarios = user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin";
                 return (<>
                   {isSelf && (
                     <div className="alert" style={{ marginTop: 12, marginBottom: 4, fontSize: 11.5, lineHeight: 1.5 }}>
@@ -361,14 +366,20 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                     <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:4 }}>
                       {MODULOS.map(m => {
                         const checked = isDueno || form.modulos.includes(m.slug);
+                        // Bloquear self-grant del permiso 'usuarios' si el editor
+                        // no es dueño/admin/superadmin (hardening 2026-05-14).
+                        const blockedSelfGrant = m.slug === "usuarios" && !currentUserPuedeGrantUsuarios;
+                        const finalLocked = lockPermisos || blockedSelfGrant;
                         return (
-                          <label key={m.slug} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11,
-                            color: lockPermisos ? "var(--muted)" : checked ? "var(--txt)" : "var(--muted2)",
-                            cursor: lockPermisos ? "default" : "pointer", padding:"4px 6px",
+                          <label key={m.slug}
+                            title={blockedSelfGrant ? "Solo dueño o admin puede otorgar este permiso" : undefined}
+                            style={{ display:"flex", alignItems:"center", gap:6, fontSize:11,
+                            color: finalLocked ? "var(--muted)" : checked ? "var(--txt)" : "var(--muted2)",
+                            cursor: finalLocked ? "default" : "pointer", padding:"4px 6px",
                             background: checked ? "var(--s3)" : "transparent", borderRadius:"var(--r)",
-                            opacity: lockPermisos ? 0.6 : 1 }}>
-                            <input type="checkbox" checked={checked} disabled={lockPermisos}
-                              onChange={() => !lockPermisos && toggleModulo(m.slug)} style={{ accentColor:"var(--acc)" }} />
+                            opacity: finalLocked ? 0.6 : 1 }}>
+                            <input type="checkbox" checked={checked} disabled={finalLocked}
+                              onChange={() => !finalLocked && toggleModulo(m.slug)} style={{ accentColor:"var(--acc)" }} />
                             <span>{m.icon}</span> {m.label}
                           </label>
                         );
