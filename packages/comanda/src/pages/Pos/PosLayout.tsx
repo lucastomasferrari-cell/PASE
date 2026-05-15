@@ -62,7 +62,10 @@ export function PosLayout() {
     : 0;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    // F1.8: data-surface="internal" → paleta celeste PASE (tokens override
+    // en globals.css). Coherente con AdminLayout. Customer-facing (Tienda,
+    // MenuQR, KDS) NO usan data-surface.
+    <div data-surface="internal" className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="border-b border-border bg-card sticky top-0 z-10 flex-shrink-0">
         <div className="px-5 py-3 flex items-center justify-between gap-3 h-14">

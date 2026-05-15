@@ -8,6 +8,10 @@ const DEFAULT_MODE_BY_ROL: Record<RolPos, PosModo> = {
   encargado: 'salon',
   manager:   'salon',
   dueno:     'salon',
+  // F1.3 (2026-05-15): bartender preparado en schema, default a mostrador
+  // (barra de tragos). Mientras no tenga permisos seed activos, el PIN
+  // queda bloqueado al login — esto es solo el fallback de modo default.
+  bartender: 'mostrador',
 };
 
 // Componente que redirige a /pos/<modo-default> según el rol del empleado.

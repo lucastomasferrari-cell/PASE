@@ -121,7 +121,10 @@ export function AdminLayout() {
   if (!user) return <Navigate to="/login" replace />;
 
   return (
-    <div className="min-h-screen bg-background flex">
+    // F1.8: data-surface="internal" hace que toda la subtree use la paleta
+    // celeste PASE (override de tokens en globals.css). Customer-facing
+    // (Tienda, MenúQR) se quedan con el coral default.
+    <div data-surface="internal" className="min-h-screen bg-background flex">
       {/* Desktop sidebar — fijo */}
       <AdminSidebar className="hidden lg:flex w-60 flex-shrink-0 sticky top-0 h-screen" />
 

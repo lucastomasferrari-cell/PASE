@@ -182,7 +182,7 @@ export interface ComboComponente {
 
 // ─── Sprint 2: POS, Caja, Tienda ──────────────────────────────────────────
 
-export type RolPos = 'cajero' | 'encargado' | 'manager' | 'dueno';
+export type RolPos = 'cajero' | 'encargado' | 'manager' | 'dueno' | 'bartender';
 export type ModoVenta = 'salon' | 'mostrador' | 'pedidos';
 export type EstadoVenta =
   | 'abierta' | 'enviada' | 'lista' | 'entregada' | 'cobrada' | 'anulada'

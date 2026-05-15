@@ -97,6 +97,53 @@
     --input: 30 15% 20%;
     --ring: 12 78% 69%;
   }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+   * F1.8 — Paleta dual (auditoría estructural 2026-05-15)
+   *
+   * Coexisten 2 estéticas en COMANDA:
+   *   - INTERNAL (POS + Admin) → similar a PASE: celeste sobrio, denso de
+   *     info, bordes 0.5px, sin gradientes. Herramienta de trabajo.
+   *   - CUSTOMER (Tienda + Menú QR) → Coral hospitalario (default actual).
+   *     Customer-facing, foto-céntrico, mobile-first.
+   *
+   * Para activar internal en una subtree: `<div data-surface="internal">`.
+   * Sin data-surface → customer (coral) por backward compat.
+   *
+   * Adopción incremental: las pantallas internas que se toquen migran a
+   * data-surface="internal". Las que no se tocaron siguen viéndose coral.
+   * ═══════════════════════════════════════════════════════════════════════ */
+
+  [data-surface="internal"] {
+    /* PASE celeste sobrio en light mode. Mapeo: --pase-celeste → primary,
+     * --pase-celeste-100 → accent, --pase-celeste-300 → ring. */
+    --primary: 205 53% 56%;            /* #5A8FA8 — celeste PASE */
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 205 53% 48%;
+
+    --accent: 205 70% 94%;             /* celeste-100 muy claro */
+    --accent-foreground: 30 14% 11%;
+
+    --ring: 205 53% 70%;               /* celeste-300 */
+
+    /* Success/warning/info mapeados a celeste (filosofía PASE: sin alarma
+     * cromática, sin verde/rojo/violeta más allá de destructive). */
+    --success: 205 53% 56%;
+    --success-foreground: 0 0% 100%;
+    --warning: 30 14% 11%;             /* text-muted directly */
+    --warning-foreground: 0 0% 100%;
+  }
+
+  .dark [data-surface="internal"] {
+    --primary: 205 60% 65%;
+    --primary-foreground: 24 17% 9%;
+    --primary-hover: 205 60% 58%;
+    --accent: 205 30% 22%;
+    --accent-foreground: 36 41% 93%;
+    --ring: 205 60% 70%;
+    --success: 205 60% 65%;
+    --success-foreground: 24 17% 9%;
+  }
 }
 
 @layer base {
