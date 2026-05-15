@@ -231,24 +231,7 @@ body{
 .sb-logout:hover{border-color:var(--pase-celeste-300);color:var(--pase-text)}
 
 /* ─── MAIN ─────────────────────────────────────────────────────────── */
-/* Fondo del área de contenido principal.
-   Cambio 2026-05-14 (feedback Lucas): las rayas horizontales tipo cuaderno
-   escolar no quedaron lindas. Las refs de Lucas (wallpaper "hecho en
-   Argentina", textura papel) eran cremas/beiges cálidos sin pattern visible.
-   Approach actual: fondo crema MUY suave (#FAF7EE) en light mode — apenas
-   perceptible vs blanco puro, pero le da calidez tipo "papel reciclado".
-   Los .panel adentro siguen blancos puros → da contraste sutil tipo "hojas
-   de papel sobre escritorio". En dark mode se mantiene el navy. */
-.main{
-  margin-left:200px;
-  flex:1;
-  padding:24px 32px;
-  min-height:100vh;
-  background:#FAF7EE;
-}
-[data-theme="dark"] .main{
-  background:var(--pase-bg);
-}
+.main{margin-left:200px;flex:1;padding:24px 32px;min-height:100vh;background:var(--pase-bg)}
 .ph-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;gap:12px;flex-wrap:wrap}
 .ph-title{font-family:var(--pase-font);font-size:18px;font-weight:500;line-height:1.1;color:var(--pase-text);letter-spacing:-0.02em}
 .ph-sub{font-size:11px !important;color:var(--pase-text-muted);margin-top:4px;font-weight:400 !important}
