@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatARS } from '@/lib/format';
@@ -8,6 +8,7 @@ import {
   type KpisPeriodo, type TopProducto, type VentasPorCanal, type TiemposReporte,
 } from '@/services/reportesService';
 import { useReportesCtx } from './ReportesLayout';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 
 function fmtSeg(s: number | null | undefined): string {
   if (s == null) return '—';
@@ -24,25 +25,33 @@ export function Dashboard() {
   const [tiempos, setTiempos] = useState<TiemposReporte | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const reload = useCallback(async () => {
     if (!ctx.localId) return;
-    let cancelled = false;
     setLoading(true);
-    Promise.all([
+    const [k, tp, vc, ti] = await Promise.all([
       getKpisPeriodo(ctx.localId, ctx.desde, ctx.hasta),
       getTopProductos(ctx.localId, ctx.desde, ctx.hasta, 1),
       getVentasPorCanal(ctx.localId, ctx.desde, ctx.hasta),
       getTiempos(ctx.localId, ctx.desde, ctx.hasta),
-    ]).then(([k, tp, vc, ti]) => {
-      if (cancelled) return;
-      setKpis(k.data);
-      setTopProds(tp.data);
-      setVentasCanal(vc.data);
-      setTiempos(ti.data);
-      setLoading(false);
-    });
-    return () => { cancelled = true; };
+    ]);
+    setKpis(k.data);
+    setTopProds(tp.data);
+    setVentasCanal(vc.data);
+    setTiempos(ti.data);
+    setLoading(false);
   }, [ctx.localId, ctx.desde, ctx.hasta]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  // Realtime: ventas cobradas en este local refrescan KPIs/Top/Canales/Tiempos.
+  // Debounce alto (3s) para evitar reload por cada inserción durante un rush.
+  useRealtimeTable({
+    table: 'ventas_pos',
+    onChange: () => reload(),
+    scopeByLocal: true,
+    debounceMs: 3000,
+    enabled: !!ctx.localId,
+  });
 
   // Registrar export en el ref del layout.
   useEffect(() => {

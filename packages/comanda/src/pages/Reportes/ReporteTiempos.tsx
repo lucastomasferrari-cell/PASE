@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getTiempos, downloadCSV, type TiemposReporte } from '@/services/reportesService';
 import { useReportesCtx } from './ReportesLayout';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 
 function fmtSeg(s: number | null | undefined): string {
   if (s == null) return '—';
@@ -16,17 +17,23 @@ export function ReporteTiempos() {
   const [data, setData] = useState<TiemposReporte | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const reload = useCallback(async () => {
     if (!ctx.localId) return;
-    let cancelled = false;
     setLoading(true);
-    getTiempos(ctx.localId, ctx.desde, ctx.hasta).then(({ data }) => {
-      if (cancelled) return;
-      setData(data);
-      setLoading(false);
-    });
-    return () => { cancelled = true; };
+    const { data } = await getTiempos(ctx.localId, ctx.desde, ctx.hasta);
+    setData(data);
+    setLoading(false);
   }, [ctx.localId, ctx.desde, ctx.hasta]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  useRealtimeTable({
+    table: 'ventas_pos',
+    onChange: () => reload(),
+    scopeByLocal: true,
+    debounceMs: 3000,
+    enabled: !!ctx.localId,
+  });
 
   useEffect(() => {
     ctx.exportRef.current = () => {

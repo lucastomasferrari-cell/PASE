@@ -1,25 +1,31 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatARS } from '@/lib/format';
 import { getTopProductos, downloadCSV, type TopProducto } from '@/services/reportesService';
 import { useReportesCtx } from './ReportesLayout';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 
 export function ReporteProductos() {
   const ctx = useReportesCtx();
   const [data, setData] = useState<TopProducto[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const reload = useCallback(async () => {
     if (!ctx.localId) return;
-    let cancelled = false;
     setLoading(true);
-    getTopProductos(ctx.localId, ctx.desde, ctx.hasta, 50).then(({ data }) => {
-      if (cancelled) return;
-      setData(data);
-      setLoading(false);
-    });
-    return () => { cancelled = true; };
+    const { data } = await getTopProductos(ctx.localId, ctx.desde, ctx.hasta, 50);
+    setData(data);
+    setLoading(false);
   }, [ctx.localId, ctx.desde, ctx.hasta]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  useRealtimeTable({
+    table: 'ventas_pos_items',
+    onChange: () => reload(),
+    debounceMs: 3000,
+    enabled: !!ctx.localId,
+  });
 
   useEffect(() => {
     ctx.exportRef.current = () => {
