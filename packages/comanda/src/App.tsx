@@ -63,6 +63,7 @@ const EmpleadosTrabajando = lazy(() => import('./pages/Empleados/EmpleadosTrabaj
 const ReporteVentas = lazy(() => import('./pages/Reportes/ReporteVentas').then(m => ({ default: m.ReporteVentas })));
 const SettingsRecibos = lazy(() => import('./pages/Configuracion/SettingsRecibos').then(m => ({ default: m.SettingsRecibos })));
 const ReportePerformanceEmpleados = lazy(() => import('./pages/Reportes/ReportePerformanceEmpleados').then(m => ({ default: m.ReportePerformanceEmpleados })));
+const TrackingDelivery = lazy(() => import('./pages/Online/TrackingDelivery').then(m => ({ default: m.TrackingDelivery })));
 
 // Admin — Clientes (F1.2)
 const ClientesLista = lazy(() => import('./pages/Clientes/ClientesLista').then(m => ({ default: m.ClientesLista })));
@@ -227,7 +228,7 @@ export default function App() {
                   <Route path="/online/menu-qr" element={<SettingsMenuQr />} />
                   <Route path="/online/kds" element={<SettingsKds />} />
                   <Route path="/online/tienda" element={<StubRoute />} />
-                  <Route path="/online/tracking" element={<StubRoute />} />
+                  <Route path="/online/tracking" element={<TrackingDelivery />} />
 
                   {/* ── Hardware ──────────────────────────────────────── */}
                   <Route path="/hardware" element={<Navigate to="/hardware/estaciones" replace />} />
