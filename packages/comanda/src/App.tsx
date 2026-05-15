@@ -56,6 +56,7 @@ const ReporteCanales = lazy(() => import('./pages/Reportes/ReporteCanales').then
 const ReporteProductos = lazy(() => import('./pages/Reportes/ReporteProductos').then(m => ({ default: m.ReporteProductos })));
 const ReporteTiempos = lazy(() => import('./pages/Reportes/ReporteTiempos').then(m => ({ default: m.ReporteTiempos })));
 const ReporteMenuEngineering = lazy(() => import('./pages/Reportes/ReporteMenuEngineering').then(m => ({ default: m.ReporteMenuEngineering })));
+const PropinasReparto = lazy(() => import('./pages/Empleados/PropinasReparto').then(m => ({ default: m.PropinasReparto })));
 
 // Admin — Clientes (F1.2)
 const ClientesLista = lazy(() => import('./pages/Clientes/ClientesLista').then(m => ({ default: m.ClientesLista })));
@@ -203,6 +204,7 @@ export default function App() {
                   <Route path="/empleados/permisos" element={<SettingsPermisos />} />
                   <Route path="/empleados/horarios" element={<StubRoute />} />
                   <Route path="/empleados/performance" element={<StubRoute />} />
+                  <Route path="/empleados/propinas" element={<PropinasReparto />} />
 
                   {/* ── Pagos y caja ──────────────────────────────────── */}
                   <Route path="/pagos" element={<Navigate to="/pagos/metodos" replace />} />
