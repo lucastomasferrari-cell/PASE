@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatARS, formatFechaAR, formatHoraAR } from '@/lib/format';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 
 const ACCIONES: { value: AccionOverride | 'todos'; label: string }[] = [
   { value: 'todos', label: 'Todas las acciones' },
@@ -75,6 +76,9 @@ export function SettingsAuditoria() {
   }, [localId, filtroAccion, desdeStr, hastaStr, montoMin, montoMax]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // Realtime: cuando otro manager hace un override, aparece sin F5.
+  useRealtimeTable({ table: 'ventas_pos_overrides', onChange: () => reload(), scopeByLocal: true });
 
   function exportar() {
     downloadCSV('auditoria.csv',

@@ -12,6 +12,7 @@ import { Badge } from '@/components/Badge';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 
 export function SettingsPermisos() {
   const { user } = useAuth();
@@ -28,6 +29,9 @@ export function SettingsPermisos() {
   }, [user?.tenant_id]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // Realtime: si el dueño cambia permisos a un usuario desde otro device.
+  useRealtimeTable({ table: 'usuario_permisos', onChange: () => reload() });
 
   return (
     <div>

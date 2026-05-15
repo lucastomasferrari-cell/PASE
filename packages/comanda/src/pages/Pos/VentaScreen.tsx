@@ -29,6 +29,7 @@ import { SplitCheckDialog } from '@/components/dialogs/SplitCheckDialog';
 import { ManagerOverrideDialog } from '@/components/dialogs/ManagerOverrideDialog';
 import { anularVenta } from '@/services/overridesService';
 import { db } from '@/lib/supabase';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { EstadoVentaBadge } from '@/components/EstadoBadge';
 import { cn } from '@/lib/utils';
 
@@ -83,6 +84,21 @@ export function VentaScreen() {
   }, [ventaId, user?.tenant_id]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // Realtime: si la cocina marca listo o el manager anula desde otro device,
+  // se refleja sin F5. Filtro por venta_id puntual + items de esta venta.
+  useRealtimeTable({
+    table: 'ventas_pos',
+    onChange: () => reload(),
+    extraFilter: Number.isFinite(ventaId) && ventaId > 0 ? `id=eq.${ventaId}` : undefined,
+    enabled: Number.isFinite(ventaId) && ventaId > 0,
+  });
+  useRealtimeTable({
+    table: 'ventas_pos_items',
+    onChange: () => reload(),
+    extraFilter: Number.isFinite(ventaId) && ventaId > 0 ? `venta_id=eq.${ventaId}` : undefined,
+    enabled: Number.isFinite(ventaId) && ventaId > 0,
+  });
 
   // Cache: qué items tienen modifiers asignados.
   // Sprint 7 HIGH #3: cleanup con `cancelled` flag para evitar setState

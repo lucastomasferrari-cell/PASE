@@ -18,6 +18,7 @@ import { UrgencyTimer } from '@/components/UrgencyTimer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ManagerOverrideDialog } from '@/components/dialogs/ManagerOverrideDialog';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { cn } from '@/lib/utils';
 
 // Vista detallada de pedido — patrón Toast Storefront Orders.
@@ -51,6 +52,21 @@ export function PedidoDetalle() {
   }, [id]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // Realtime: si la cocina marca un item listo (KDS) o el cajero edita
+  // el pedido desde otro device, se refleja sin F5. Filtro por venta_id.
+  useRealtimeTable({
+    table: 'ventas_pos',
+    onChange: () => reload(),
+    extraFilter: Number.isFinite(id) && id > 0 ? `id=eq.${id}` : undefined,
+    enabled: Number.isFinite(id) && id > 0,
+  });
+  useRealtimeTable({
+    table: 'ventas_pos_items',
+    onChange: () => reload(),
+    extraFilter: Number.isFinite(id) && id > 0 ? `venta_id=eq.${id}` : undefined,
+    enabled: Number.isFinite(id) && id > 0,
+  });
 
   if (loading) {
     return <div className="container py-8 text-center text-muted-foreground">Cargando…</div>;

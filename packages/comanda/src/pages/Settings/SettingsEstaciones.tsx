@@ -7,6 +7,7 @@ import { db } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ESTACIONES, type EstacionKds } from '@/services/kdsTokensService';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 
 interface GrupoConEstacion {
   id: number;
@@ -33,6 +34,8 @@ export function SettingsEstaciones() {
   }, [localId, user?.tenant_id]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  useRealtimeTable({ table: 'item_grupos', onChange: () => reload() });
 
   async function asignar(grupoId: number, estacion: EstacionKds) {
     const { error } = await db.from('item_grupos').update({ estacion_default: estacion }).eq('id', grupoId);

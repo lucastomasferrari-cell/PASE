@@ -12,6 +12,7 @@ import {
   listMesasConToken, generarTokenMesa, setModoToken, type MesaConToken,
 } from '@/services/menuQrTokensService';
 import type { MenuQrModo } from '@/services/menuQrService';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 
 const MODOS: { value: MenuQrModo; label: string; descr: string }[] = [
   { value: 'readonly', label: 'Solo lectura', descr: 'El cliente ve la carta pero no pide.' },
@@ -35,6 +36,8 @@ export function SettingsMenuQr() {
   }, [localId]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  useRealtimeTable({ table: 'menu_qr_tokens', onChange: () => reload(), scopeByLocal: true });
 
   async function handleGenerar(mesaId: number, modo: MenuQrModo) {
     if (!localId || !user?.tenant_id) return;

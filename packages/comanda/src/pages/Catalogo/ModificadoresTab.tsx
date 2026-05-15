@@ -24,6 +24,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 
 interface Props { user: Usuario }
 
@@ -45,6 +46,9 @@ export function ModificadoresTab({ user }: Props) {
   }, [user.tenant_id]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  useRealtimeTable({ table: 'modifier_groups', onChange: () => reload() });
+  useRealtimeTable({ table: 'modifiers', onChange: () => reload() });
 
   return (
     <div>

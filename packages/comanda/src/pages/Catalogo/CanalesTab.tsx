@@ -20,6 +20,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { DEFAULT_PICKER_COLOR } from '@/lib/utils';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 
 interface Props { user: Usuario }
 
@@ -40,6 +41,8 @@ export function CanalesTab({ user }: Props) {
   }, [user.tenant_id]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  useRealtimeTable({ table: 'canales', onChange: () => reload() });
 
   return (
     <div>

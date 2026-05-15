@@ -11,6 +11,7 @@ import {
   ESTACIONES, listTokensLocal, generarOReemplazarToken,
   type EstacionKds, type KdsToken,
 } from '@/services/kdsTokensService';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 
 function masked(token: string): string {
   if (token.length < 8) return token;
@@ -42,6 +43,8 @@ export function SettingsKds() {
   }, [localId, user?.tenant_id]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  useRealtimeTable({ table: 'kds_tokens', onChange: () => reload(), scopeByLocal: true });
 
   async function handleGenerar(estacion: EstacionKds, esRegenerar: boolean) {
     if (!localId || !user?.tenant_id) return;

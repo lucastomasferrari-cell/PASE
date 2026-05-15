@@ -9,6 +9,7 @@ import { formatARS, formatFechaAR, formatHoraAR } from '@/lib/format';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/Badge';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { cn } from '@/lib/utils';
 
 export function CajaHistorico() {
@@ -29,6 +30,10 @@ export function CajaHistorico() {
   }, [localId]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // Realtime: cuando otro cajero cierra un turno, aparece en el histórico
+  // sin F5.
+  useRealtimeTable({ table: 'turnos_caja', onChange: () => reload(), scopeByLocal: true });
 
   return (
     <div className="container py-6 max-w-5xl">
