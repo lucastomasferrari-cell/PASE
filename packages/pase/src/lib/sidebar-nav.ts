@@ -58,6 +58,9 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   { path: "/equipo",                     slug: "rrhh",          label: "Equipo",          sec: "Herramientas" },
   { path: "/herramientas/contador-iva",  slug: "contador",      label: "Contador / IVA",  sec: "Herramientas" },
   { path: "/herramientas/blindaje",      slug: "blindaje",      label: "Blindaje",        sec: "Herramientas" },
+  // Observatorio temporal (2026-05-14) — webhooks MP test. Eliminar cuando
+  // se decida el experimento (sí/no a webhooks como reemplazo del cron).
+  { path: "/herramientas/webhooks-mp",   slug: "webhooks_mp_test", label: "Webhooks MP",  sec: "Herramientas" },
 
   // === Sistema ===
   { path: "/ajustes",                    slug: "ajustes",       label: "Ajustes",         sec: "Sistema" },
