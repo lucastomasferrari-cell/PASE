@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DoorOpen, ArrowDownToLine, ArrowUpFromLine, Lock, AlertTriangle, History } from 'lucide-react';
+import { DoorOpen, ArrowDownToLine, ArrowUpFromLine, Lock, AlertTriangle, History, ArrowLeft, Banknote } from 'lucide-react';
 import { MovimientoCajaDialog, type TipoMovimiento } from '../../components/dialogs/MovimientoCajaDialog';
 import { useAuth } from '../../lib/auth';
 import { useLocalActivo } from '../../lib/localActivo';
@@ -80,10 +80,24 @@ export function CajaEstado() {
     );
   }
 
+  // Cash Management: la pantalla de Caja muestra solo plata FÍSICA (efectivo).
+  // Los cobros no-efectivo (tarjeta, MP, transferencia) van al banco / MP, no
+  // a la caja del local. Se muestran aparte como info.
+  // `totalesPorMetodo` ya incluye la apertura (tipo='apertura') con signo +,
+  // por eso NO sumamos turno.monto_inicial otra vez.
+  const efectivoEnCaja = Number(totales.find((t) => t.metodo === 'efectivo')?.total ?? 0);
+  const totalNoEfectivo = totales
+    .filter((t) => t.metodo !== 'efectivo')
+    .reduce((s, t) => s + Number(t.total), 0);
+
   return (
     <div className="container py-8">
       {/* Header */}
       <header className="flex items-center gap-3 mb-6 flex-wrap">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/pos/salon')} className="-ml-2">
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          POS
+        </Button>
         <h1 className="text-3xl font-bold tracking-tight">Caja</h1>
         <Badge variant="green">Turno #{turno.numero} abierto</Badge>
         <span className="text-sm text-muted-foreground">
@@ -112,19 +126,39 @@ export function CajaEstado() {
         </div>
       </header>
 
-
-
-      {/* Cards de totales */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-8">
-        <TotalCard title="Monto inicial" valor={formatARS(turno.monto_inicial)} subtitle="al abrir" />
-        {totales.map((t) => (
-          <TotalCard
-            key={t.metodo}
-            title={t.metodo}
-            valor={formatARS(t.total)}
-            subtitle={`${t.cantidad} mov.`}
-          />
-        ))}
+      {/* Card única — Efectivo en caja (el resto de métodos no son plata física). */}
+      <section className="mb-8">
+        <Card className="bg-primary/5 border-primary/30">
+          <CardContent className="p-6 flex items-center gap-5">
+            <div className="inline-flex items-center justify-center h-14 w-14 rounded-xl bg-primary/15 flex-shrink-0">
+              <Banknote className="h-7 w-7 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">
+                Efectivo en caja
+              </div>
+              <div className="text-4xl font-bold tabular-nums mt-1">
+                {formatARS(efectivoEnCaja)}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Apertura {formatARS(turno.monto_inicial)} + ventas efectivo − retiros + depósitos
+              </div>
+            </div>
+            {totalNoEfectivo > 0 && (
+              <div className="text-right border-l border-border pl-5 hidden sm:block">
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                  Cobros no-efectivo
+                </div>
+                <div className="text-lg font-semibold tabular-nums">
+                  {formatARS(totalNoEfectivo)}
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  (van a banco / MP, no a caja)
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </section>
 
       {/* Movimientos */}
@@ -172,18 +206,6 @@ export function CajaEstado() {
         />
       )}
     </div>
-  );
-}
-
-function TotalCard({ title, valor, subtitle }: { title: string; valor: string; subtitle: string }) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">{title}</div>
-        <div className="text-2xl font-bold tabular-nums mt-1">{valor}</div>
-        <div className="text-xs text-muted-foreground mt-1">{subtitle}</div>
-      </CardContent>
-    </Card>
   );
 }
 
