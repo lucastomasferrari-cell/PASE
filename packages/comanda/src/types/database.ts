@@ -386,6 +386,63 @@ export interface ComandaLocalSettings {
   timezone: string;
 }
 
+// ─── F1.1 CMV (auditoría estructural 2026-05-15) ───────────────────────────
+export type UnidadInsumo = 'kg' | 'g' | 'L' | 'ml' | 'un' | 'porcion';
+
+export interface Insumo {
+  id: number;
+  tenant_id: string;
+  local_id: number | null; // NULL = catálogo global del tenant
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  created_by: number | null;
+  updated_by: number | null;
+  nombre: string;
+  descripcion: string | null;
+  emoji: string | null;
+  foto_url: string | null;
+  unidad: UnidadInsumo;
+  costo_actual: number | null;
+  costo_actualizado_at: string | null;
+  costo_promedio_30d: number | null;
+  proveedor_preferido_id: number | null;
+  activo: boolean;
+  es_comprado: boolean;
+}
+
+export interface Receta {
+  id: number;
+  tenant_id: string;
+  local_id: number | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  created_by: number | null;
+  updated_by: number | null;
+  item_id: number;
+  nombre: string;
+  rendimiento: number;
+  notas: string | null;
+  activa: boolean;
+}
+
+export interface RecetaInsumo {
+  id: number;
+  tenant_id: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  created_by: number | null;
+  updated_by: number | null;
+  receta_id: number;
+  insumo_id: number;
+  cantidad: number;
+  merma_pct: number;
+  notas: string | null;
+  orden: number;
+}
+
 export interface EmpleadoPos {
   id: string;
   local_id: number | null;
