@@ -13,6 +13,7 @@ import { formatARS, formatHoraAR, relativoCorto } from '../../lib/format';
 import { Badge } from '../../components/Badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 
 export function CajaEstado() {
   const { user } = useAuth();
@@ -39,6 +40,11 @@ export function CajaEstado() {
   }, [localId]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // F0.3 Realtime — la caja es operación multi-usuario crítica. Cualquier
+  // movimiento de otro cajero debería reflejarse instantáneo.
+  useRealtimeTable({ table: 'turnos_caja', onChange: () => reload(), scopeByLocal: true });
+  useRealtimeTable({ table: 'movimientos_caja', onChange: () => reload(), scopeByLocal: true });
 
   if (loading) {
     return (

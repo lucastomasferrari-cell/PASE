@@ -14,6 +14,7 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import { ComandasActivasPanel } from '@/components/ComandasActivasPanel';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { cn } from '@/lib/utils';
 
 export function SalonView() {
@@ -38,6 +39,12 @@ export function SalonView() {
   }, [localId]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // F0.3 Realtime: cuando otra computadora cambia mesas o ventas_pos del
+  // mismo local, refrescamos automático. Fallback a polling si Realtime
+  // se desconecta (manejado por el hook).
+  useRealtimeTable({ table: 'mesas', onChange: () => reload(), scopeByLocal: true });
+  useRealtimeTable({ table: 'ventas_pos', onChange: () => reload(), scopeByLocal: true, extraFilter: 'modo=eq.salon' });
 
   const zonas = useMemo(() => {
     const set = new Set<string>();

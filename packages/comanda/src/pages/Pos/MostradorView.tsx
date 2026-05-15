@@ -12,6 +12,7 @@ import { Badge } from '../../components/Badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ComandasActivasPanel } from '@/components/ComandasActivasPanel';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 
 export function MostradorView() {
   const { user } = useAuth();
@@ -38,6 +39,10 @@ export function MostradorView() {
   }, [localId]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // F0.3 Realtime — refresca cuando otro cajero abre/cierra tabs en el mismo
+  // local. Filtra modo=mostrador para no recargar ventas de Salón/Pedidos.
+  useRealtimeTable({ table: 'ventas_pos', onChange: () => reload(), scopeByLocal: true, extraFilter: 'modo=eq.mostrador' });
 
   async function nuevaOrden() {
     if (!empleado || localId === null) return;
