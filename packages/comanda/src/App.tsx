@@ -210,7 +210,7 @@ export default function App() {
                   <Route path="/pagos" element={<Navigate to="/pagos/metodos" replace />} />
                   <Route path="/pagos/metodos" element={<SettingsMetodosCobro />} />
                   <Route path="/pagos/caja-chica" element={<StubRoute />} />
-                  <Route path="/pagos/historico-turnos" element={<StubRoute />} />
+                  <Route path="/pagos/historico-turnos" element={<Navigate to="/caja/historico" replace />} />
                   <Route path="/pagos/conciliacion-mp" element={<StubRoute />} />
                   <Route path="/pagos/settlements" element={<StubRoute />} />
 
