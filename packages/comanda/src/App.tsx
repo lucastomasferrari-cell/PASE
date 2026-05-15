@@ -59,6 +59,7 @@ const ReporteMenuEngineering = lazy(() => import('./pages/Reportes/ReporteMenuEn
 const PropinasReparto = lazy(() => import('./pages/Empleados/PropinasReparto').then(m => ({ default: m.PropinasReparto })));
 const FidelidadLista = lazy(() => import('./pages/Marketing/FidelidadLista').then(m => ({ default: m.FidelidadLista })));
 const CajaChica = lazy(() => import('./pages/Caja/CajaChica').then(m => ({ default: m.CajaChica })));
+const EmpleadosTrabajando = lazy(() => import('./pages/Empleados/EmpleadosTrabajando').then(m => ({ default: m.EmpleadosTrabajando })));
 
 // Admin — Clientes (F1.2)
 const ClientesLista = lazy(() => import('./pages/Clientes/ClientesLista').then(m => ({ default: m.ClientesLista })));
@@ -204,7 +205,7 @@ export default function App() {
                   <Route path="/empleados" element={<Navigate to="/empleados/lista" replace />} />
                   <Route path="/empleados/lista" element={<EmpleadosListaRoute />} />
                   <Route path="/empleados/permisos" element={<SettingsPermisos />} />
-                  <Route path="/empleados/horarios" element={<StubRoute />} />
+                  <Route path="/empleados/horarios" element={<EmpleadosTrabajando />} />
                   <Route path="/empleados/performance" element={<StubRoute />} />
                   <Route path="/empleados/propinas" element={<PropinasReparto />} />
 

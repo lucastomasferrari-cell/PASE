@@ -90,7 +90,7 @@ export const ADMIN_NAVIGATION: NavCategory[] = [
       { slug: 'lista',       label: 'Lista',             href: '/empleados/lista' },
       { slug: 'permisos',    label: 'Permisos',          href: '/empleados/permisos' },
       { slug: 'propinas',    label: 'Reparto propinas',  href: '/empleados/propinas' },
-      { slug: 'horarios',    label: 'Horarios y turnos', href: '/empleados/horarios',    badge: 'soon' },
+      { slug: 'horarios',    label: 'Trabajando ahora',  href: '/empleados/horarios' },
       { slug: 'performance', label: 'Performance',       href: '/empleados/performance', badge: 'soon' },
     ],
   },
