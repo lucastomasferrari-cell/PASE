@@ -61,6 +61,7 @@ const FidelidadLista = lazy(() => import('./pages/Marketing/FidelidadLista').the
 const CajaChica = lazy(() => import('./pages/Caja/CajaChica').then(m => ({ default: m.CajaChica })));
 const EmpleadosTrabajando = lazy(() => import('./pages/Empleados/EmpleadosTrabajando').then(m => ({ default: m.EmpleadosTrabajando })));
 const ReporteVentas = lazy(() => import('./pages/Reportes/ReporteVentas').then(m => ({ default: m.ReporteVentas })));
+const SettingsRecibos = lazy(() => import('./pages/Configuracion/SettingsRecibos').then(m => ({ default: m.SettingsRecibos })));
 
 // Admin — Clientes (F1.2)
 const ClientesLista = lazy(() => import('./pages/Clientes/ClientesLista').then(m => ({ default: m.ClientesLista })));
@@ -260,8 +261,8 @@ export default function App() {
                   <Route path="/configuracion" element={<Navigate to="/configuracion/local" replace />} />
                   <Route path="/configuracion/local" element={<SettingsLocal />} />
                   <Route path="/configuracion/branding" element={<StubRoute />} />
-                  <Route path="/configuracion/notificaciones" element={<StubRoute />} />
-                  <Route path="/configuracion/recibos" element={<StubRoute />} />
+                  <Route path="/configuracion/notificaciones" element={<SettingsRecibos />} />
+                  <Route path="/configuracion/recibos" element={<SettingsRecibos />} />
                   <Route path="/configuracion/idioma" element={<StubRoute />} />
                   <Route path="/configuracion/backup" element={<StubRoute />} />
 
