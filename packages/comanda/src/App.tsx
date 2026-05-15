@@ -65,6 +65,7 @@ const SettingsRecibos = lazy(() => import('./pages/Configuracion/SettingsRecibos
 const ReportePerformanceEmpleados = lazy(() => import('./pages/Reportes/ReportePerformanceEmpleados').then(m => ({ default: m.ReportePerformanceEmpleados })));
 const TrackingDelivery = lazy(() => import('./pages/Online/TrackingDelivery').then(m => ({ default: m.TrackingDelivery })));
 const ConciliacionMpView = lazy(() => import('./pages/Caja/ConciliacionMpView').then(m => ({ default: m.ConciliacionMpView })));
+const SettingsBranding = lazy(() => import('./pages/Configuracion/SettingsBranding').then(m => ({ default: m.SettingsBranding })));
 
 // Admin — Clientes (F1.2)
 const ClientesLista = lazy(() => import('./pages/Clientes/ClientesLista').then(m => ({ default: m.ClientesLista })));
@@ -264,7 +265,7 @@ export default function App() {
                   {/* ── Configuración ─────────────────────────────────── */}
                   <Route path="/configuracion" element={<Navigate to="/configuracion/local" replace />} />
                   <Route path="/configuracion/local" element={<SettingsLocal />} />
-                  <Route path="/configuracion/branding" element={<StubRoute />} />
+                  <Route path="/configuracion/branding" element={<SettingsBranding />} />
                   <Route path="/configuracion/notificaciones" element={<SettingsRecibos />} />
                   <Route path="/configuracion/recibos" element={<SettingsRecibos />} />
                   <Route path="/configuracion/idioma" element={<StubRoute />} />
