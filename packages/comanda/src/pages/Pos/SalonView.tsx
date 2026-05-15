@@ -29,6 +29,14 @@ export function SalonView() {
   const [error, setError] = useState<string | null>(null);
   const [abrirDialog, setAbrirDialog] = useState<MesaConVenta | null>(null);
 
+  // Tick cada 30s para refrescar relativoCorto + alertas de tiempo sin reconsultar
+  // DB. El hook realtime cubre cambios de estado; este solo re-renderiza.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   const reload = useCallback(async () => {
     if (localId === null) return;
     setLoading(true);
@@ -56,6 +64,29 @@ export function SalonView() {
     if (zona === null) return mesas;
     return mesas.filter((m) => m.zona === zona);
   }, [mesas, zona]);
+
+  // Resumen del salón filtrado (lo que ve el cajero/encargado ahora)
+  const resumen = useMemo(() => {
+    let ocupadas = 0;
+    let libres = 0;
+    let totalAbierto = 0;
+    let minutosTotal = 0;
+    const now = Date.now();
+    for (const m of mesasFiltradas) {
+      if (m.estado === 'libre') libres++;
+      if (m.venta_abierta_id !== null) {
+        ocupadas++;
+        totalAbierto += Number(m.venta_total ?? 0);
+        if (m.venta_abierta_at) {
+          minutosTotal += Math.floor((now - new Date(m.venta_abierta_at).getTime()) / 60000);
+        }
+      }
+    }
+    return {
+      ocupadas, libres, totalAbierto,
+      tiempoPromedio: ocupadas > 0 ? Math.floor(minutosTotal / ocupadas) : 0,
+    };
+  }, [mesasFiltradas]);
 
   if (!empleado) {
     return <div className="p-8 text-center text-muted-foreground">Sesión POS requerida.</div>;
@@ -85,6 +116,36 @@ export function SalonView() {
               ))}
             </nav>
           </header>
+
+          {/* Resumen at-a-glance del salón (zona filtrada) */}
+          {!loading && mesas.length > 0 && (
+            <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <SummaryCard
+                label="Ocupadas"
+                value={`${resumen.ocupadas}`}
+                hint={`${resumen.libres} libres`}
+                tone="warning"
+              />
+              <SummaryCard
+                label="Facturando"
+                value={formatARS(resumen.totalAbierto)}
+                hint={resumen.ocupadas > 0 ? `${formatARS(Math.round(resumen.totalAbierto / resumen.ocupadas))} promedio` : ''}
+                tone="primary"
+              />
+              <SummaryCard
+                label="Tiempo prom."
+                value={resumen.tiempoPromedio > 0 ? `${resumen.tiempoPromedio}'` : '—'}
+                hint={resumen.tiempoPromedio > 60 ? 'Largo' : 'OK'}
+                tone={resumen.tiempoPromedio > 90 ? 'destructive' : resumen.tiempoPromedio > 60 ? 'warning' : 'success'}
+              />
+              <SummaryCard
+                label="Ocupación"
+                value={mesasFiltradas.length > 0 ? `${Math.round((resumen.ocupadas / mesasFiltradas.length) * 100)}%` : '0%'}
+                hint={`${mesasFiltradas.length} mesas`}
+                tone="primary"
+              />
+            </div>
+          )}
 
           {error && (
             <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
@@ -140,6 +201,24 @@ function ZoneButton({ active, onClick, children }: { active: boolean; onClick: (
     >
       {children}
     </button>
+  );
+}
+
+function SummaryCard({ label, value, hint, tone }: {
+  label: string; value: string; hint?: string; tone: 'primary' | 'success' | 'warning' | 'destructive';
+}) {
+  const toneClass = {
+    primary: 'border-primary/20 bg-primary/5 text-primary',
+    success: 'border-success/30 bg-success/5 text-success',
+    warning: 'border-warning/30 bg-warning/5 text-warning',
+    destructive: 'border-destructive/30 bg-destructive/5 text-destructive',
+  }[tone];
+  return (
+    <div className={cn('rounded-md border p-2.5', toneClass)}>
+      <div className="text-[10px] uppercase tracking-wide font-medium opacity-80">{label}</div>
+      <div className="text-xl font-bold tabular-nums leading-tight mt-0.5">{value}</div>
+      {hint && <div className="text-[10px] opacity-60 mt-0.5">{hint}</div>}
+    </div>
   );
 }
 

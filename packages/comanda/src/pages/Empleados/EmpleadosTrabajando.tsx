@@ -41,6 +41,7 @@ export function EmpleadosTrabajando() {
     if (!user?.tenant_id) return;
     setLoading(true);
     // Turnos abiertos del tenant (todos los locales accesibles)
+    // eslint-disable-next-line pase-local/require-apply-local-scope -- dashboard multi-local intencional: dueño/admin ven todos los locales
     const { data: ts } = await db.from('turnos_caja')
       .select(`
         id, local_id, numero, abierto_at, cajero_id, monto_inicial,
@@ -74,6 +75,7 @@ export function EmpleadosTrabajando() {
     // Stats por turno: cantidad de ventas cobradas + total efectivo (apertura + ventas efectivo - retiros + depositos)
     const turnoIds = mapped.map((t) => t.id);
     if (turnoIds.length > 0) {
+      // eslint-disable-next-line pase-local/require-apply-local-scope -- IN(turnoIds) ya filtra implícito por locales accesibles del dashboard multi-local
       const { data: movs } = await db.from('movimientos_caja')
         .select('turno_caja_id, tipo, monto, metodo')
         .in('turno_caja_id', turnoIds);

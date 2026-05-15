@@ -1,12 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { toast } from 'sonner';
+import { X, Plus, Check } from 'lucide-react';
 import { db } from '@/lib/supabase';
-import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Stepper } from '@/components/Stepper';
 import type { ItemConGrupo } from '@/services/itemsService';
 import type {
   ModifierGroup, Modifier, VentaPosItemModificador,
@@ -18,28 +18,30 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   item: ItemConGrupo;
-  onConfirm: (modificadores: VentaPosItemModificador[], notas: string | null) => Promise<void> | void;
+  onConfirm: (modificadores: VentaPosItemModificador[], notas: string | null, cantidad: number) => Promise<void> | void;
 }
 
 interface GroupConOpciones extends ModifierGroup {
   opciones: Modifier[];
 }
 
-// Carga modifier_groups asignados al item + sus opciones, presenta selección
-// según tipo y reglas (required, min/max), valida y devuelve array final.
+// Sprint UX deep — Panel lateral desde la derecha (no full-screen modal) para
+// mantener el catálogo visible mientras el cajero personaliza. Incluye stepper
+// de cantidad para "3 hamburguesas con queso extra" en una sola operación, y
+// total live (item × cantidad + extras) abajo siempre visible.
 export function ModifiersDialog({ open, onOpenChange, item, onConfirm }: Props) {
   const [groups, setGroups] = useState<GroupConOpciones[]>([]);
   const [loading, setLoading] = useState(true);
-  const [seleccion, setSeleccion] = useState<Record<number, Set<number>>>({});  // groupId → set de modifierId
+  const [seleccion, setSeleccion] = useState<Record<number, Set<number>>>({});
   const [notas, setNotas] = useState('');
+  const [cantidad, setCantidad] = useState(1);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setSeleccion({}); setNotas(''); setSaving(false);
+    setSeleccion({}); setNotas(''); setCantidad(1); setSaving(false);
     setLoading(true);
     (async () => {
-      // Asignaciones item ↔ modifier_groups
       const { data: asigs } = await db
         .from('item_modifier_groups')
         .select('modifier_group_id')
@@ -75,7 +77,6 @@ export function ModifiersDialog({ open, onOpenChange, item, onConfirm }: Props) 
       if (cur.has(modifierId)) {
         cur.delete(modifierId);
       } else {
-        // Si tipo opcion (única), reemplazar
         if (group.tipo === 'opcion') {
           cur.clear();
         } else if (group.max_seleccion !== null && cur.size >= group.max_seleccion) {
@@ -115,6 +116,16 @@ export function ModifiersDialog({ open, onOpenChange, item, onConfirm }: Props) 
     return s;
   }, [groups, seleccion]);
 
+  const totalLive = (Number(item.precio_madre) + totalExtras) * cantidad;
+  const requisitosFaltantes = useMemo(() => {
+    return groups.filter((g) => {
+      const count = seleccion[g.id]?.size ?? 0;
+      if (g.requerido && count === 0) return true;
+      if (g.min_seleccion > 0 && count < g.min_seleccion) return true;
+      return false;
+    }).length;
+  }, [groups, seleccion]);
+
   async function confirmar() {
     const v = validar();
     if (!v.ok) { toast.error(v.error ?? 'Validación falló'); return; }
@@ -134,7 +145,7 @@ export function ModifiersDialog({ open, onOpenChange, item, onConfirm }: Props) 
     }
     setSaving(true);
     try {
-      await onConfirm(result, notas.trim() || null);
+      await onConfirm(result, notas.trim() || null, cantidad);
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error agregando item');
@@ -143,10 +154,9 @@ export function ModifiersDialog({ open, onOpenChange, item, onConfirm }: Props) 
     }
   }
 
-  // Si no tiene modifiers asignados, llamamos onConfirm directo y cerramos
   useEffect(() => {
     if (open && !loading && groups.length === 0) {
-      void onConfirm([], null);
+      void onConfirm([], null, 1);
       onOpenChange(false);
     }
   }, [open, loading, groups.length, onConfirm, onOpenChange]);
@@ -154,91 +164,163 @@ export function ModifiersDialog({ open, onOpenChange, item, onConfirm }: Props) 
   if (groups.length === 0 && !loading) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{item.nombre}</DialogTitle>
-          <DialogDescription>
-            Personalizá el ítem antes de agregarlo
-          </DialogDescription>
-        </DialogHeader>
+    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay
+          className="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+        />
+        <DialogPrimitive.Content
+          className={cn(
+            'fixed right-0 top-0 z-50 h-full w-full sm:w-[440px] bg-background border-l shadow-xl',
+            'flex flex-col',
+            'data-[state=open]:animate-in data-[state=closed]:animate-out',
+            'data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right',
+            'duration-200',
+          )}
+        >
+          {/* HEADER */}
+          <div className="px-4 py-3 border-b flex items-start gap-3">
+            <div className="text-2xl shrink-0">{item.emoji ?? '🍽️'}</div>
+            <div className="flex-1 min-w-0">
+              <DialogPrimitive.Title className="text-base font-semibold leading-tight">
+                {item.nombre}
+              </DialogPrimitive.Title>
+              <DialogPrimitive.Description className="text-xs text-muted-foreground mt-0.5">
+                {formatARS(item.precio_madre)} base · Personalizá antes de agregar
+              </DialogPrimitive.Description>
+            </div>
+            <DialogPrimitive.Close
+              className="text-muted-foreground hover:text-foreground p-1 -m-1 rounded"
+              aria-label="Cerrar"
+            >
+              <X className="h-5 w-5" />
+            </DialogPrimitive.Close>
+          </div>
 
-        {loading ? (
-          <div className="py-8 text-center text-muted-foreground">Cargando opciones…</div>
-        ) : (
-          <div className="space-y-4">
-            {groups.map((g) => (
-              <div key={g.id} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">
-                    {g.nombre}
-                    {g.requerido && <span className="text-destructive ml-1">*</span>}
-                  </Label>
-                  <span className="text-xs text-muted-foreground">
-                    {g.tipo === 'opcion' ? 'Elegí 1' :
-                     g.tipo === 'extra' ? `Hasta ${g.max_seleccion ?? '∞'}` :
-                     g.tipo === 'sin_con' ? 'Sin/Con' : 'Aclaración'}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {g.opciones.map((op) => {
-                    const selected = seleccion[g.id]?.has(op.id) ?? false;
-                    return (
-                      <button
-                        key={op.id}
-                        type="button"
-                        onClick={() => toggle(g.id, op.id, g)}
-                        className={cn(
-                          'p-2 rounded-md border text-sm text-left transition-colors',
-                          selected
-                            ? 'border-primary bg-primary/10 text-primary'
-                            : 'border-input hover:bg-accent',
-                        )}
-                      >
-                        <div className="flex justify-between items-center gap-2">
-                          <span className="truncate">{op.nombre}</span>
-                          {Number(op.precio_extra) > 0 && (
-                            <span className="text-xs text-success tabular-nums shrink-0">
-                              +{formatARS(op.precio_extra)}
+          {/* BODY scrolleable */}
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+            {loading ? (
+              <div className="py-8 text-center text-muted-foreground text-sm">Cargando opciones…</div>
+            ) : (
+              <>
+                {groups.map((g) => {
+                  const count = seleccion[g.id]?.size ?? 0;
+                  const requerido = g.requerido && count === 0;
+                  return (
+                    <div key={g.id} className={cn(
+                      'space-y-2 rounded-md p-2.5 -mx-1 border transition-colors',
+                      requerido ? 'border-destructive/40 bg-destructive/5' : 'border-transparent',
+                    )}>
+                      <div className="flex items-center justify-between gap-2">
+                        <Label className="text-sm font-medium flex items-center gap-1.5">
+                          {g.nombre}
+                          {g.requerido && (
+                            <span className={cn(
+                              'text-[10px] px-1.5 py-0.5 rounded uppercase font-bold',
+                              count > 0 ? 'bg-success/15 text-success' : 'bg-destructive/15 text-destructive',
+                            )}>
+                              {count > 0 ? <Check className="h-3 w-3 inline" /> : 'Obligatorio'}
                             </span>
                           )}
-                        </div>
-                      </button>
-                    );
-                  })}
+                        </Label>
+                        <span className="text-[11px] text-muted-foreground tabular-nums">
+                          {g.tipo === 'opcion' ? `${count}/1` :
+                           g.tipo === 'sin_con' ? 'Sin/Con' :
+                           g.max_seleccion !== null ? `${count}/${g.max_seleccion}` :
+                           `${count} elegidas`}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {g.opciones.map((op) => {
+                          const selected = seleccion[g.id]?.has(op.id) ?? false;
+                          return (
+                            <button
+                              key={op.id}
+                              type="button"
+                              onClick={() => toggle(g.id, op.id, g)}
+                              className={cn(
+                                'p-2.5 rounded-md border text-sm text-left transition-all touch-target-lg',
+                                'active:scale-[0.97]',
+                                selected
+                                  ? 'border-primary bg-primary/10 text-primary font-medium'
+                                  : 'border-input hover:bg-accent',
+                              )}
+                            >
+                              <div className="flex justify-between items-center gap-2">
+                                <span className="truncate flex items-center gap-1">
+                                  {selected && <Check className="h-3.5 w-3.5 shrink-0" />}
+                                  {op.nombre}
+                                </span>
+                                {Number(op.precio_extra) > 0 && (
+                                  <span className="text-xs text-success tabular-nums shrink-0">
+                                    +{formatARS(op.precio_extra)}
+                                  </span>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <div className="space-y-1.5 pt-2">
+                  <Label htmlFor="notas-mod" className="text-sm">Aclaraciones (opcional)</Label>
+                  <Textarea
+                    id="notas-mod"
+                    value={notas}
+                    onChange={(e) => setNotas(e.target.value)}
+                    rows={2}
+                    placeholder="Sin sal / cocción jugosa / etc."
+                    className="text-sm"
+                  />
                 </div>
-              </div>
-            ))}
-
-            <div className="space-y-2">
-              <Label htmlFor="notas-mod">Aclaraciones (opcional)</Label>
-              <Textarea
-                id="notas-mod"
-                value={notas}
-                onChange={(e) => setNotas(e.target.value)}
-                rows={2}
-                placeholder="Sin sal / vegetariano / etc."
-              />
-            </div>
-
-            {totalExtras > 0 && (
-              <div className="rounded-md bg-muted p-2 text-sm flex justify-between">
-                <span>Extras</span>
-                <strong className="tabular-nums">+{formatARS(totalExtras)}</strong>
-              </div>
+              </>
             )}
           </div>
-        )}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Cancelar
-          </Button>
-          <Button onClick={confirmar} disabled={saving || loading}>
-            {saving ? 'Agregando…' : 'Agregar'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          {/* FOOTER fijo con cantidad + total + CTA */}
+          <div className="border-t bg-card px-4 py-3 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Cantidad</span>
+                <Stepper value={cantidad} onChange={setCantidad} min={1} max={99} size="lg" />
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Total</div>
+                <div className="text-xl font-bold tabular-nums leading-none">{formatARS(totalLive)}</div>
+                {totalExtras > 0 && (
+                  <div className="text-[10px] text-success tabular-nums mt-0.5">
+                    +{formatARS(totalExtras)} extras × {cantidad}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {requisitosFaltantes > 0 && (
+              <div className="text-[11px] text-destructive bg-destructive/10 rounded px-2 py-1">
+                ⚠ Falta completar {requisitosFaltantes} {requisitosFaltantes === 1 ? 'grupo' : 'grupos'} obligatorios
+              </div>
+            )}
+
+            <div className="grid grid-cols-[auto_1fr] gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={confirmar}
+                disabled={saving || loading || requisitosFaltantes > 0}
+                size="lg"
+                className="font-semibold"
+              >
+                <Plus className="h-4 w-4 mr-1.5" />
+                {saving ? 'Agregando…' : `Agregar${cantidad > 1 ? ` ${cantidad}` : ''}`}
+              </Button>
+            </div>
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }

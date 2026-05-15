@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
-  ArrowLeft, Send, Wallet, MoreHorizontal, Package,
+  ArrowLeft, Send, Wallet, MoreHorizontal, Package, Trash2,
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
@@ -66,6 +66,25 @@ export function VentaScreen() {
 
   // Cache de qué items tienen modifier_groups asignados (para decidir si abre dialog)
   const [itemsConModifiers, setItemsConModifiers] = useState<Set<number>>(new Set());
+
+  // UX deep: feedback visual al agregar — guardamos el último item id agregado
+  // y lo limpiamos a los 1.2s. Sirve para flashear el ProductTile y resaltar la
+  // fila recién agregada en el check.
+  const [lastAddedItemId, setLastAddedItemId] = useState<number | null>(null);
+  const [lastAddedRowId, setLastAddedRowId] = useState<number | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (lastAddedItemId == null) return;
+    const t = setTimeout(() => setLastAddedItemId(null), 1200);
+    return () => clearTimeout(t);
+  }, [lastAddedItemId]);
+
+  useEffect(() => {
+    if (lastAddedRowId == null) return;
+    const t = setTimeout(() => setLastAddedRowId(null), 2000);
+    return () => clearTimeout(t);
+  }, [lastAddedRowId]);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -174,17 +193,50 @@ export function VentaScreen() {
 
   const editable = venta.estado !== 'cobrada' && venta.estado !== 'anulada';
 
-  async function addItem(it: ItemConGrupo, modificadores: { nombre: string; precio_extra: number; modifier_id?: number }[] = [], notas: string | null = null) {
+  async function addItem(it: ItemConGrupo, modificadores: { nombre: string; precio_extra: number; modifier_id?: number }[] = [], notas: string | null = null, cantidad: number = 1) {
     if (!editable || !empleado) return;
-    const { error } = await agregarItem({
-      ventaId, itemId: it.id, cantidad: 1, curso: cursoActivo,
+    const { id, error } = await agregarItem({
+      ventaId, itemId: it.id, cantidad, curso: cursoActivo,
       modificadores: modificadores.length > 0 ? modificadores : null,
       notas,
       cargadoPor: empleado.id,
     });
     if (error) { toast.error(error); return; }
-    toast.success(`${it.nombre} agregado al curso ${cursoActivo}`);
+    toast.success(`${cantidad > 1 ? `${cantidad}× ` : ''}${it.nombre} agregado al curso ${cursoActivo}`);
+    setLastAddedItemId(it.id);
+    if (id != null) setLastAddedRowId(id);
     reload();
+    // UX: limpiamos search para que el cajero siga tipeando el próximo item.
+    // Re-focus para mantener flow teclado-only.
+    setSearch('');
+    searchRef.current?.focus();
+  }
+
+  async function removeItem(itemRow: VentaPosItem) {
+    if (!editable) return;
+    if (itemRow.estado !== 'hold') {
+      toast.error('Solo se pueden quitar items en hold (no enviados a cocina)');
+      return;
+    }
+    // Quitar = cantidad 0 vía RPC modificar (gestiona la baja en BD).
+    const { error } = await modificarItem(itemRow.id, { cantidad: 0 });
+    if (error) { toast.error(error); return; }
+    toast.success('Item quitado');
+    reload();
+  }
+
+  function onSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Escape') {
+      setSearch('');
+      return;
+    }
+    if (e.key === 'Enter') {
+      const primero = catalogoFiltrado[0];
+      if (primero) {
+        e.preventDefault();
+        void clickItem(primero);
+      }
+    }
   }
 
   async function clickItem(it: ItemConGrupo) {
@@ -239,7 +291,14 @@ export function VentaScreen() {
         )}
 
         <div className="mb-3">
-          <SearchInput value={search} onChange={setSearch} placeholder="Buscar producto…" />
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Buscar producto… (Enter agrega el primero)"
+            autoFocus
+            inputRef={searchRef}
+            onKeyDown={onSearchKeyDown}
+          />
         </div>
         <div className="flex gap-1 mb-3 flex-wrap">
           <GrupoTab active={grupoSel === null} onClick={() => setGrupoSel(null)}>Todos</GrupoTab>
@@ -257,9 +316,15 @@ export function VentaScreen() {
               item={it}
               grupo={grupos.find((g) => g.id === it.grupo_id) ?? null}
               disabled={!editable}
+              flashed={lastAddedItemId === it.id}
               onClick={() => clickItem(it)}
             />
           ))}
+          {catalogoFiltrado.length === 0 && search.trim() && (
+            <div className="col-span-full text-center text-muted-foreground text-sm py-8">
+              Sin resultados para "{search}"
+            </div>
+          )}
         </div>
       </div>
 
@@ -319,7 +384,9 @@ export function VentaScreen() {
                         item={it}
                         catalogo={catalogo}
                         onQty={(n) => changeQty(it, n)}
+                        onRemove={() => removeItem(it)}
                         editable={editable}
+                        flashed={lastAddedRowId === it.id}
                       />
                     ))}
                   </div>
@@ -395,8 +462,8 @@ export function VentaScreen() {
           open={true}
           onOpenChange={(o) => { if (!o) setPendingModifiers(null); }}
           item={pendingModifiers}
-          onConfirm={async (mods, notas) => {
-            await addItem(pendingModifiers, mods, notas);
+          onConfirm={async (mods, notas, cantidad) => {
+            await addItem(pendingModifiers, mods, notas, cantidad);
             setPendingModifiers(null);
           }}
         />
@@ -495,14 +562,15 @@ function GrupoTab({ active, onClick, children }: { active: boolean; onClick: () 
   );
 }
 
-function CheckRow({ item, catalogo, onQty, editable }:
-  { item: VentaPosItem; catalogo: ItemConGrupo[]; onQty: (n: number) => void; editable: boolean }) {
+function CheckRow({ item, catalogo, onQty, onRemove, editable, flashed }:
+  { item: VentaPosItem; catalogo: ItemConGrupo[]; onQty: (n: number) => void; onRemove: () => void; editable: boolean; flashed?: boolean }) {
   const it = catalogo.find((c) => c.id === item.item_id);
   return (
     <div
       className={cn(
-        'p-2 border-b border-border flex gap-2 items-start',
+        'p-2 border-b border-border flex gap-2 items-start transition-colors duration-700',
         item.estado === 'anulado' && 'opacity-40',
+        flashed && 'bg-amber-100/70 dark:bg-amber-900/30 ring-2 ring-amber-400',
       )}
     >
       <div className="text-base">{it?.emoji ?? '📦'}</div>
@@ -520,7 +588,18 @@ function CheckRow({ item, catalogo, onQty, editable }:
       </div>
       <div className="flex flex-col items-end gap-1">
         {editable && item.estado === 'hold' ? (
-          <Stepper value={Number(item.cantidad)} onChange={onQty} min={0} max={99} />
+          <div className="flex items-center gap-1">
+            <Stepper value={Number(item.cantidad)} onChange={onQty} min={1} max={99} />
+            <button
+              type="button"
+              onClick={onRemove}
+              aria-label="Quitar item"
+              title="Quitar (solo items en hold)"
+              className="h-9 w-9 inline-flex items-center justify-center rounded-md text-destructive hover:bg-destructive/10 transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
         ) : (
           <span className="text-xs">x{item.cantidad}</span>
         )}
@@ -556,10 +635,11 @@ const RAMP_CLASSES: Record<string, string> = {
   gray:   'bg-muted text-foreground hover:bg-accent',
 };
 
-function ProductTile({ item, grupo, disabled, onClick }: {
+function ProductTile({ item, grupo, disabled, flashed, onClick }: {
   item: ItemConGrupo;
   grupo: ItemGrupo | null;
   disabled: boolean;
+  flashed?: boolean;
   onClick: () => void;
 }) {
   const ramp = grupo?.color_ramp ?? 'gray';
@@ -570,12 +650,20 @@ function ProductTile({ item, grupo, disabled, onClick }: {
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'aspect-[4/3] rounded-lg p-3 flex flex-col items-center justify-center gap-1',
-        'transition-transform active:scale-[0.98] touch-target-lg',
+        'aspect-[4/3] rounded-lg p-3 flex flex-col items-center justify-center gap-1 relative',
+        'transition-all duration-300 active:scale-[0.98] touch-target-lg',
         'disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100',
         cls,
+        flashed && 'ring-4 ring-success scale-[1.02]',
       )}
     >
+      {flashed && (
+        <div className="absolute inset-0 rounded-lg bg-success/20 flex items-center justify-center pointer-events-none">
+          <div className="bg-success text-success-foreground rounded-full h-10 w-10 flex items-center justify-center text-2xl shadow-lg">
+            ✓
+          </div>
+        </div>
+      )}
       {item.foto_url ? (
         <img src={item.foto_url} alt="" className="w-12 h-12 object-cover rounded" />
       ) : item.emoji ? (
