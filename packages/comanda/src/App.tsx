@@ -60,6 +60,7 @@ const PropinasReparto = lazy(() => import('./pages/Empleados/PropinasReparto').t
 const FidelidadLista = lazy(() => import('./pages/Marketing/FidelidadLista').then(m => ({ default: m.FidelidadLista })));
 const CajaChica = lazy(() => import('./pages/Caja/CajaChica').then(m => ({ default: m.CajaChica })));
 const EmpleadosTrabajando = lazy(() => import('./pages/Empleados/EmpleadosTrabajando').then(m => ({ default: m.EmpleadosTrabajando })));
+const ReporteVentas = lazy(() => import('./pages/Reportes/ReporteVentas').then(m => ({ default: m.ReporteVentas })));
 
 // Admin — Clientes (F1.2)
 const ClientesLista = lazy(() => import('./pages/Clientes/ClientesLista').then(m => ({ default: m.ClientesLista })));
@@ -177,9 +178,10 @@ export default function App() {
                     <Route path="productos" element={<ReporteProductos />} />
                     <Route path="tiempos" element={<ReporteTiempos />} />
                     <Route path="menu-engineering" element={<ReporteMenuEngineering />} />
+                    <Route path="ventas" element={<ReporteVentas />} />
                   </Route>
                   <Route path="/reportes/auditoria" element={<SettingsAuditoria />} />
-                  <Route path="/reportes/ventas" element={<StubRoute />} />
+                  {/* /reportes/ventas ahora vive bajo el layout — ver Route 'ventas' arriba */}
                   <Route path="/reportes/empleados" element={<StubRoute />} />
 
                   {/* ── Menú (catálogo) ───────────────────────────────── */}
