@@ -27,7 +27,7 @@ export function TiendaCheckout() {
   const [email, setEmail] = useState('');
   const [notasRepartidor, setNotasRepartidor] = useState('');
   const [notas, setNotas] = useState('');
-  const [metodoPago, setMetodoPago] = useState<'pagar_al_recibir' | 'mp_qr'>('pagar_al_recibir');
+  const [metodoPago, setMetodoPago] = useState<'pagar_al_recibir' | 'mp_qr' | 'mp_checkout'>('pagar_al_recibir');
   const [enviando, setEnviando] = useState(false);
 
   const subtotal = calcularSubtotal(carrito.items);
@@ -84,6 +84,51 @@ export function TiendaCheckout() {
       return;
     }
     sessionStorage.setItem(`comanda-tel-${ventaId}`, telefono.trim());
+
+    // Si el cliente eligió "Pagar online con MercadoPago", crear preference
+    // y redirigir a init_point. La venta queda en estado original; el webhook
+    // /api/tienda-mp?action=webhook la marca como cobrada cuando MP confirma.
+    if (metodoPago === 'mp_checkout') {
+      try {
+        const itemsForMp = carrito.items.map((it) => {
+          const extras = it.modificadores.reduce((s, m) => s + Number(m.precio_extra || 0), 0);
+          return {
+            title: it.nombre || `Item #${it.item_id}`,
+            qty: it.cantidad,
+            unit_price: Number(it.precio) + extras,
+          };
+        });
+        if (costoEnvio > 0) {
+          itemsForMp.push({ title: 'Envío', qty: 1, unit_price: costoEnvio });
+        }
+        const r = await fetch('/api/tienda-mp?action=preference', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            venta_id: ventaId,
+            items: itemsForMp,
+            total,
+            back_url_success: `${window.location.origin}/tienda/${local.slug}/confirmacion/${ventaId}`,
+          }),
+        });
+        if (!r.ok) {
+          const errBody = await r.json().catch(() => ({ error: 'Error de red' }));
+          throw new Error(errBody.error || `HTTP ${r.status}`);
+        }
+        const { init_point } = await r.json();
+        carritoStore.clear();
+        // Redirige fuera de la SPA al checkout de MP. Al volver, la
+        // confirmación verá el pago si el webhook ya pasó.
+        window.location.href = init_point;
+        return;
+      } catch (err) {
+        toast.error('No se pudo iniciar el pago online', {
+          description: err instanceof Error ? err.message : 'Error desconocido',
+        });
+        return;
+      }
+    }
+
     carritoStore.clear();
     navigate(`/tienda/${local.slug}/confirmacion/${ventaId}`);
   }
@@ -157,6 +202,13 @@ export function TiendaCheckout() {
       <Section titulo="Forma de pago">
         <div className="space-y-2">
           <PaymentCard
+            active={metodoPago === 'mp_checkout'}
+            onClick={() => setMetodoPago('mp_checkout')}
+            titulo="Pagar online con MercadoPago"
+            descripcion="Tarjeta de crédito, débito, dinero en cuenta MP. El pago queda confirmado al instante."
+            emoji="💳"
+          />
+          <PaymentCard
             active={metodoPago === 'pagar_al_recibir'}
             onClick={() => setMetodoPago('pagar_al_recibir')}
             titulo="Pagar al recibir"
@@ -208,7 +260,12 @@ export function TiendaCheckout() {
             disabled={enviando}
             className="w-full h-12 text-base font-medium"
           >
-            {enviando ? 'Enviando…' : `Confirmar pedido · ${formatARS(total)}`}
+            {enviando
+              ? 'Enviando…'
+              : metodoPago === 'mp_checkout'
+                ? `Pagar online · ${formatARS(total)}`
+                : `Confirmar pedido · ${formatARS(total)}`
+            }
           </Button>
         </div>
       </div>
