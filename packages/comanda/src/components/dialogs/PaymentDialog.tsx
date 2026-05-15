@@ -32,6 +32,11 @@ interface Props {
 
 const PROPINA_PCTS = [0, 0.10, 0.15, 0.20];
 
+// Billetes típicos AR 2026. "Exacto" siempre primero; el resto solo aparecen
+// si son > que el monto a cobrar (no tiene sentido mostrar $1000 si vas a
+// cobrar $4500).
+const BILLETES_AR = [1000, 2000, 5000, 10000, 20000];
+
 // Multi-pago + propina + vuelto. Suma parcial vs total con indicador visual.
 // Cada pago tiene idempotencyKey estable; si la red falla, retry no duplica.
 export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado }: Props) {
@@ -66,6 +71,16 @@ export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado
   const metodoActual = metodos.find((m) => m.slug === metodoNuevo);
   const pideVuelto = metodoActual?.pide_vuelto ?? false;
   const vueltoCalc = pideVuelto && montoEntregado >= montoNuevo ? montoEntregado - montoNuevo : 0;
+
+  // Cuando el cajero cambia a un método que pide vuelto y aún no tocó "Cliente
+  // entrega", asumimos "Exacto" (caso 80%) y dejamos que toque billete si
+  // quiere cambiar. Evita un input vacío que confunde + deja "Exacto"
+  // highlighteado por default.
+  useEffect(() => {
+    if (pideVuelto && montoEntregado === 0 && montoNuevo > 0) {
+      setMontoEntregado(montoNuevo);
+    }
+  }, [pideVuelto, montoNuevo, montoEntregado]);
 
   function agregarPagoLocal() {
     if (montoNuevo <= 0) { toast.error('Monto inválido'); return; }
@@ -245,9 +260,46 @@ export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado
                 </div>
               )}
             </div>
+
+            {/* Atajos billete para efectivo — gran win velocidad cajero */}
+            {pideVuelto && montoNuevo > 0 && (
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Cliente paga con</Label>
+                <div className="flex gap-1.5 flex-wrap">
+                  <Button
+                    type="button"
+                    variant={montoEntregado === montoNuevo ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setMontoEntregado(montoNuevo)}
+                    className="rounded-full"
+                  >
+                    Exacto
+                  </Button>
+                  {BILLETES_AR.filter((b) => b > montoNuevo).slice(0, 4).map((b) => (
+                    <Button
+                      key={b}
+                      type="button"
+                      variant={montoEntregado === b ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setMontoEntregado(b)}
+                      className="rounded-full tabular-nums"
+                    >
+                      {formatARS(b)}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {pideVuelto && vueltoCalc > 0 && (
-              <div className="p-2 rounded-md bg-warning/10 text-warning text-sm">
-                Vuelto: <strong className="tabular-nums">{formatARS(vueltoCalc)}</strong>
+              <div className="p-2 rounded-md bg-warning/10 text-warning-foreground text-sm flex items-center justify-between">
+                <span>Vuelto</span>
+                <strong className="tabular-nums text-base">{formatARS(vueltoCalc)}</strong>
+              </div>
+            )}
+            {pideVuelto && montoEntregado > 0 && montoEntregado < montoNuevo && (
+              <div className="p-2 rounded-md bg-destructive/10 text-destructive text-xs">
+                ⚠ Falta {formatARS(montoNuevo - montoEntregado)} para cubrir el monto
               </div>
             )}
             {/* Solo aparece si querés split (otro pago aparte del actual). */}
