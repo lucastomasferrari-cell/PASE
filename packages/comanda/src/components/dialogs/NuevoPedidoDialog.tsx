@@ -143,6 +143,7 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
     const dirCompleta = isDelivery
       ? [direccion.trim(), aclaracion.trim()].filter(Boolean).join(' — ')
       : null;
+    const esProgramado = programado && programadaPara;
     const { ventaId, error } = await abrirVenta({
       localId,
       modo: 'pedidos',
@@ -152,8 +153,11 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
       clienteDireccion: dirCompleta,
       tipoEntrega,
       origen: 'pos',
-      programadaPara: programado && programadaPara ? new Date(programadaPara).toISOString() : null,
+      programadaPara: esProgramado ? new Date(programadaPara).toISOString() : null,
       clienteId: clienteIdFinal,
+      // Si tiene programada_para, va a la tab "Programados". Sino, "abierta"
+      // = visible normal en Pedidos para cargar items.
+      estado: esProgramado ? 'programada' : 'abierta',
     });
     setSaving(false);
     if (error || !ventaId) {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatARS } from '@/lib/format';
@@ -9,6 +10,7 @@ import {
 } from '@/services/reportesService';
 import { useReportesCtx } from './ReportesLayout';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
+import { cn } from '@/lib/utils';
 
 function fmtSeg(s: number | null | undefined): string {
   if (s == null) return '—';
@@ -20,6 +22,8 @@ function fmtSeg(s: number | null | undefined): string {
 export function Dashboard() {
   const ctx = useReportesCtx();
   const [kpis, setKpis] = useState<KpisPeriodo | null>(null);
+  // Comparativo: KPIs del período anterior de igual duración (filosofía #7).
+  const [kpisAnterior, setKpisAnterior] = useState<KpisPeriodo | null>(null);
   const [topProds, setTopProds] = useState<TopProducto[]>([]);
   const [ventasCanal, setVentasCanal] = useState<VentasPorCanal[]>([]);
   const [tiempos, setTiempos] = useState<TiemposReporte | null>(null);
@@ -28,13 +32,22 @@ export function Dashboard() {
   const reload = useCallback(async () => {
     if (!ctx.localId) return;
     setLoading(true);
-    const [k, tp, vc, ti] = await Promise.all([
+    // Período anterior = mismo tamaño que el actual, justo antes.
+    const desdeMs = new Date(ctx.desde).getTime();
+    const hastaMs = new Date(ctx.hasta).getTime();
+    const dur = hastaMs - desdeMs;
+    const desdeAnt = new Date(desdeMs - dur).toISOString();
+    const hastaAnt = ctx.desde;
+
+    const [k, kAnt, tp, vc, ti] = await Promise.all([
       getKpisPeriodo(ctx.localId, ctx.desde, ctx.hasta),
+      getKpisPeriodo(ctx.localId, desdeAnt, hastaAnt),
       getTopProductos(ctx.localId, ctx.desde, ctx.hasta, 1),
       getVentasPorCanal(ctx.localId, ctx.desde, ctx.hasta),
       getTiempos(ctx.localId, ctx.desde, ctx.hasta),
     ]);
     setKpis(k.data);
+    setKpisAnterior(kAnt.data);
     setTopProds(tp.data);
     setVentasCanal(vc.data);
     setTiempos(ti.data);
@@ -94,21 +107,29 @@ export function Dashboard() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card className="p-4">
-          <div className="text-xs text-muted-foreground">Ventas totales</div>
-          <div className="text-2xl font-semibold tabular-nums">{formatARS(kpis.total_ventas)}</div>
-          <div className="text-[10px] text-muted-foreground">{kpis.cantidad_ventas} {kpis.cantidad_ventas === 1 ? 'venta' : 'ventas'}</div>
-        </Card>
-        <Card className="p-4">
-          <div className="text-xs text-muted-foreground">Ticket promedio</div>
-          <div className="text-2xl font-semibold tabular-nums">{formatARS(kpis.ticket_promedio)}</div>
-          <div className="text-[10px] text-muted-foreground">por venta</div>
-        </Card>
-        <Card className="p-4">
-          <div className="text-xs text-muted-foreground">Productos vendidos</div>
-          <div className="text-2xl font-semibold tabular-nums">{Number(kpis.cantidad_productos)}</div>
-          <div className="text-[10px] text-muted-foreground">unidades</div>
-        </Card>
+        <KpiCard
+          label="Ventas totales"
+          valor={formatARS(kpis.total_ventas)}
+          sub={`${kpis.cantidad_ventas} ${kpis.cantidad_ventas === 1 ? 'venta' : 'ventas'}`}
+          actual={kpis.total_ventas}
+          anterior={kpisAnterior?.total_ventas}
+          esMonto
+        />
+        <KpiCard
+          label="Ticket promedio"
+          valor={formatARS(kpis.ticket_promedio)}
+          sub="por venta"
+          actual={kpis.ticket_promedio}
+          anterior={kpisAnterior?.ticket_promedio}
+          esMonto
+        />
+        <KpiCard
+          label="Productos vendidos"
+          valor={String(Number(kpis.cantidad_productos))}
+          sub="unidades"
+          actual={kpis.cantidad_productos}
+          anterior={kpisAnterior?.cantidad_productos}
+        />
         <Card className="p-4">
           <div className="text-xs text-muted-foreground">Tiempo cocina</div>
           <div className="text-2xl font-semibold tabular-nums">{fmtSeg(tiempos?.tiempo_promedio_cocina_seg)}</div>
@@ -140,6 +161,52 @@ export function Dashboard() {
 
       <BarrasVentasPorCanal canales={ventasCanal} />
     </div>
+  );
+}
+
+interface KpiCardProps {
+  label: string;
+  valor: string;
+  sub: string;
+  actual: number;
+  anterior?: number;
+  esMonto?: boolean;
+}
+
+function KpiCard({ label, valor, sub, actual, anterior }: KpiCardProps) {
+  // Sin período anterior con datos: card simple sin chip.
+  if (anterior == null || anterior === 0) {
+    return (
+      <Card className="p-4">
+        <div className="text-xs text-muted-foreground">{label}</div>
+        <div className="text-2xl font-semibold tabular-nums">{valor}</div>
+        <div className="text-[10px] text-muted-foreground">{sub}</div>
+      </Card>
+    );
+  }
+  const pct = ((actual - anterior) / anterior) * 100;
+  const subio = pct > 1;
+  const bajo = pct < -1;
+  const igual = !subio && !bajo;
+  return (
+    <Card className="p-4">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-2xl font-semibold tabular-nums">{valor}</div>
+      <div className="flex items-center gap-1 mt-1">
+        <div
+          className={cn(
+            'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium',
+            subio && 'bg-success/15 text-success',
+            bajo && 'bg-destructive/15 text-destructive',
+            igual && 'bg-muted text-muted-foreground',
+          )}
+        >
+          {subio ? <TrendingUp className="h-2.5 w-2.5" /> : bajo ? <TrendingDown className="h-2.5 w-2.5" /> : <Minus className="h-2.5 w-2.5" />}
+          {pct > 0 ? '+' : ''}{pct.toFixed(1)}%
+        </div>
+        <span className="text-[10px] text-muted-foreground">vs anterior</span>
+      </div>
+    </Card>
   );
 }
 
