@@ -57,6 +57,7 @@ const ReporteProductos = lazy(() => import('./pages/Reportes/ReporteProductos').
 const ReporteTiempos = lazy(() => import('./pages/Reportes/ReporteTiempos').then(m => ({ default: m.ReporteTiempos })));
 const ReporteMenuEngineering = lazy(() => import('./pages/Reportes/ReporteMenuEngineering').then(m => ({ default: m.ReporteMenuEngineering })));
 const PropinasReparto = lazy(() => import('./pages/Empleados/PropinasReparto').then(m => ({ default: m.PropinasReparto })));
+const FidelidadLista = lazy(() => import('./pages/Marketing/FidelidadLista').then(m => ({ default: m.FidelidadLista })));
 
 // Admin — Clientes (F1.2)
 const ClientesLista = lazy(() => import('./pages/Clientes/ClientesLista').then(m => ({ default: m.ClientesLista })));
@@ -233,7 +234,7 @@ export default function App() {
                   <Route path="/marketing" element={<Navigate to="/marketing/promociones" replace />} />
                   <Route path="/marketing/promociones" element={<StubRoute />} />
                   <Route path="/marketing/cupones" element={<StubRoute />} />
-                  <Route path="/marketing/fidelidad" element={<StubRoute />} />
+                  <Route path="/marketing/fidelidad" element={<FidelidadLista />} />
                   <Route path="/marketing/campanas" element={<StubRoute />} />
 
                   {/* ── Clientes — F1.2 lista funcional, resto stub ───── */}
