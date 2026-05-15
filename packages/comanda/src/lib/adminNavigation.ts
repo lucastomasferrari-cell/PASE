@@ -44,7 +44,7 @@ export const ADMIN_NAVIGATION: NavCategory[] = [
       { slug: 'ventas',            label: 'Ventas detalle',     href: '/reportes/ventas' },
       { slug: 'productos',         label: 'Productos',          href: '/reportes/productos' },
       { slug: 'canales',           label: 'Canales',            href: '/reportes/canales' },
-      { slug: 'empleados',         label: 'Empleados',          href: '/reportes/empleados',        badge: 'soon' },
+      { slug: 'empleados',         label: 'Performance empleados', href: '/reportes/empleados' },
       { slug: 'tiempos',           label: 'Tiempos',            href: '/reportes/tiempos' },
       { slug: 'auditoria',         label: 'Auditoría',          href: '/reportes/auditoria' },
     ],

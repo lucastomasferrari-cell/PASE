@@ -128,6 +128,28 @@ export async function getMenuEngineering(localId: number, desde: string, hasta: 
   return { data: (data ?? []) as MenuEngineeringItem[], error: null };
 }
 
+// ─── Performance de empleados ──────────────────────────────────────────────
+export interface PerformanceEmpleado {
+  empleado_id: string;
+  empleado_nombre: string;
+  rol_pos: string | null;
+  cantidad_ventas: number;
+  total_facturado: number;
+  ticket_promedio: number;
+  total_propinas: number;
+  total_descuentos: number;
+  total_anuladas: number;
+  cantidad_anuladas: number;
+}
+
+export async function getPerformanceEmpleados(localId: number, desde: string, hasta: string): Promise<{ data: PerformanceEmpleado[]; error: string | null }> {
+  const { data, error } = await db.rpc('fn_reporte_performance_empleados_comanda', {
+    p_local_id: localId, p_desde: desde, p_hasta: hasta,
+  });
+  if (error) return { data: [], error: translateError(error) };
+  return { data: (data ?? []) as PerformanceEmpleado[], error: null };
+}
+
 // CSV puro en cliente. Sin librería: Blob + URL.createObjectURL.
 export function downloadCSV(filename: string, headers: string[], rows: (string | number | null | undefined)[][]): void {
   const escape = (v: string | number | null | undefined): string => {
