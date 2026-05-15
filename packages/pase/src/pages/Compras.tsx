@@ -738,9 +738,15 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center", flexWrap: "wrap" }}>
         <input className="search" placeholder="Buscar proveedor o Nº..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: 200 }} />
         <div style={{ width: 1, height: 22, background: "var(--bd)" }} />
-        <input type="date" className="search" value={desde} onChange={e => setDesde(e.target.value)} style={{ width: 145 }} />
+        <label style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"var(--muted2)"}}>
+          Desde
+          <input type="date" className="search" value={desde} onChange={e => setDesde(e.target.value)} style={{ width: 140 }} />
+        </label>
         <span style={{ fontSize: 12, color: "var(--muted2)" }}>→</span>
-        <input type="date" className="search" value={hasta} onChange={e => setHasta(e.target.value)} style={{ width: 145 }} />
+        <label style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"var(--muted2)"}}>
+          Hasta
+          <input type="date" className="search" value={hasta} onChange={e => setHasta(e.target.value)} style={{ width: 140 }} />
+        </label>
         <div style={{ width: 1, height: 22, background: "var(--bd)" }} />
         <select className="search" value={provFiltro} onChange={e => setProvFiltro(e.target.value)} style={{ width: 200 }}>
           <option value="">Todos los proveedores</option>

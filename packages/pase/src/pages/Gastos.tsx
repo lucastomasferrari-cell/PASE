@@ -321,13 +321,18 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
         }
       />
 
-      {/* Filtros: búsqueda + rango fechas + dropdown de tipo (antes pills inline,
-           se rompe visualmente al sumar tipos nuevos). */}
+      {/* Filtros: búsqueda + rango fechas (con labels Desde/Hasta) + dropdown de tipo. */}
       <div style={{display:"flex",gap:8,marginBottom:16,alignItems:"center",flexWrap:"wrap"}}>
         <input className="search" placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)} style={{width:140}}/>
-        <input type="date" className="search" value={desde} onChange={e=>setDesde(e.target.value)} style={{width:120}}/>
+        <label style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"var(--muted2)"}}>
+          Desde
+          <input type="date" className="search" value={desde} onChange={e=>setDesde(e.target.value)} style={{width:130}}/>
+        </label>
         <span style={{fontSize:11,color:"var(--muted)"}}>→</span>
-        <input type="date" className="search" value={hasta} onChange={e=>setHasta(e.target.value)} style={{width:120}}/>
+        <label style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"var(--muted2)"}}>
+          Hasta
+          <input type="date" className="search" value={hasta} onChange={e=>setHasta(e.target.value)} style={{width:130}}/>
+        </label>
         <div style={{width:1,height:14,background:"var(--bd)",margin:"0 4px"}}/>
         <div style={{width:200}}>
           <Combobox

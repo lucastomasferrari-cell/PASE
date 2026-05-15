@@ -260,11 +260,18 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
       <div className="panel">
         <div className="panel-hd" style={{flexWrap:"wrap",gap:8,justifyContent:"flex-end"}}>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-            <input type="date" className="search" style={{width:155}} value={filtDesde}
-              onChange={e=>setFiltDesde(e.target.value)}/>
+            <span style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:0.5,marginRight:2}}>Período</span>
+            <label style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"var(--muted2)"}}>
+              Desde
+              <input type="date" className="search" style={{width:140}} value={filtDesde}
+                onChange={e=>setFiltDesde(e.target.value)}/>
+            </label>
             <span style={{color:"var(--muted2)",fontSize:12}}>→</span>
-            <input type="date" className="search" style={{width:155}} value={filtHasta}
-              onChange={e=>setFiltHasta(e.target.value)}/>
+            <label style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"var(--muted2)"}}>
+              Hasta
+              <input type="date" className="search" style={{width:140}} value={filtHasta}
+                onChange={e=>setFiltHasta(e.target.value)}/>
+            </label>
           </div>
         </div>
         {loading?<div className="loading">Cargando...</div>:grupos.length===0?<div className="empty">No hay ventas en este período</div>:(
@@ -273,7 +280,15 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
             <tbody>{grupos.map(g=>(
               <tr key={g.key}>
                 <td className="mono">{fmt_d(g.fecha)}</td>
-                <td><span className={`badge ${g.turno==="Noche"?"b-info":"b-warn"}`}>{g.turno}</span></td>
+                <td>
+                  {/* Turno con color contextual: Mediodía → beige/durazno
+                      (estética solar), Noche → lila/violeta pastel (estética
+                      nocturna). Reemplaza b-info/b-warn que eran gris uniformes. */}
+                  <span className="badge" style={{
+                    background: g.turno === "Noche" ? "#E5E0F0" : "#FBEDD9",
+                    color:      g.turno === "Noche" ? "#4E3D7A" : "#7A5018",
+                  }}>{g.turno}</span>
+                </td>
                 <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find((l: Local)=>String(l.id)===String(g.local_id))?.nombre||"—"}</td>
                 <td style={{fontSize:11,color:"var(--muted2)"}}>{g.items.length} formas de cobro</td>
                 <td><span className="num kpi-success">{fmt_$(g.total)}</span></td>
