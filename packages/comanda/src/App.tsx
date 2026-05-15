@@ -59,6 +59,10 @@ const ReporteTiempos = lazy(() => import('./pages/Reportes/ReporteTiempos').then
 // Admin — Clientes (F1.2)
 const ClientesLista = lazy(() => import('./pages/Clientes/ClientesLista').then(m => ({ default: m.ClientesLista })));
 
+// Admin — CMV: Insumos + Recetas (F1.1b)
+const InsumosLista = lazy(() => import('./pages/Catalogo/InsumosLista').then(m => ({ default: m.InsumosLista })));
+const RecetasLista = lazy(() => import('./pages/Catalogo/RecetasLista').then(m => ({ default: m.RecetasLista })));
+
 // Admin — Settings
 const SettingsLocal = lazy(() => import('./pages/Settings/SettingsLocal').then(m => ({ default: m.SettingsLocal })));
 const SettingsMesas = lazy(() => import('./pages/Settings/SettingsMesas').then(m => ({ default: m.SettingsMesas })));
@@ -174,6 +178,9 @@ export default function App() {
                   <Route path="/menu/modificadores" element={<ModificadoresRoute />} />
                   <Route path="/menu/combos" element={<StubRoute />} />
                   <Route path="/menu/disponibilidad" element={<StubRoute />} />
+                  {/* F1.1b CMV — insumos + recetas */}
+                  <Route path="/menu/insumos" element={<InsumosLista />} />
+                  <Route path="/menu/recetas" element={<RecetasLista />} />
 
                   {/* ── Salón ─────────────────────────────────────────── */}
                   <Route path="/salon" element={<Navigate to="/salon/mesas" replace />} />
