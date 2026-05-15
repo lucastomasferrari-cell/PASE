@@ -44,9 +44,9 @@ export function CajaCerrar() {
       if (t) {
         const tot = await totalesPorMetodo(t.id);
         setTotales(tot.data);
+        // totalesPorMetodo ya incluye la apertura — NO sumar monto_inicial otra vez.
         const efectivo = tot.data.find((x) => x.metodo === 'efectivo');
-        const calculado = (efectivo?.total ?? 0) + Number(t.monto_inicial);
-        setMontoEfectivoDeclarado(calculado);
+        setMontoEfectivoDeclarado(Number(efectivo?.total ?? 0));
       }
       setLoading(false);
     })();
@@ -56,8 +56,12 @@ export function CajaCerrar() {
   if (!turno) return <Centered>No hay turno abierto.</Centered>;
   if (!empleado) return <Centered>Sesión POS requerida.</Centered>;
 
-  const efectivoEntrante = totales.find((t) => t.metodo === 'efectivo')?.total ?? 0;
-  const calculadoEfectivo = Number(turno.monto_inicial) + efectivoEntrante;
+  // `totalesPorMetodo` YA incluye la apertura (tipo='apertura', signo +)
+  // sumada al monto efectivo. NO sumar turno.monto_inicial otra vez (bug
+  // detectado 2026-05-15 — daba doble inicial al cerrar).
+  const calculadoEfectivo = Number(totales.find((t) => t.metodo === 'efectivo')?.total ?? 0);
+  // Movimientos del turno NETOS (sin la apertura) — solo para display.
+  const movimientosEfectivoNetos = calculadoEfectivo - Number(turno.monto_inicial);
   // En modo denominaciones, el total declarado viene del breakdown.
   const declarado = modo === 'denominaciones' ? breakdown.total : montoEfectivoDeclarado;
   const diferencia = declarado - calculadoEfectivo;
@@ -98,10 +102,16 @@ export function CajaCerrar() {
         </CardHeader>
         <CardContent>
           <div className="text-sm">
-            <Row label="Monto inicial (efectivo)" valor={formatARS(turno.monto_inicial)} />
-            {totales.map((t) => (
-              <Row key={t.metodo} label={`${t.metodo} (${t.cantidad} mov.)`} valor={formatARS(t.total)} />
-            ))}
+            <Row label="Apertura (efectivo)" valor={formatARS(turno.monto_inicial)} />
+            <Row
+              label={`Movimientos efectivo netos del turno`}
+              valor={(movimientosEfectivoNetos >= 0 ? '+ ' : '− ') + formatARS(Math.abs(movimientosEfectivoNetos))}
+            />
+            {totales
+              .filter((t) => t.metodo !== 'efectivo')
+              .map((t) => (
+                <Row key={t.metodo} label={`${t.metodo} (${t.cantidad} mov., no en caja)`} valor={formatARS(t.total)} />
+              ))}
             <Row
               label="Esperado en efectivo al cierre"
               valor={formatARS(calculadoEfectivo)}
