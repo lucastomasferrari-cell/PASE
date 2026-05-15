@@ -63,9 +63,10 @@ export const ADMIN_NAVIGATION: NavCategory[] = [
       { slug: 'canales',        label: 'Canales',         href: '/menu/canales' },
       { slug: 'lista-precios',  label: 'Lista de precios', href: '/menu/lista-precios' },
       { slug: 'disponibilidad', label: 'Disponibilidad',  href: '/menu/disponibilidad' },
-      // F1.1b CMV: insumos + recetas como entradas reales (no stubs).
-      { slug: 'insumos',        label: 'Insumos',         href: '/menu/insumos' },
-      { slug: 'recetas',        label: 'Recetas',         href: '/menu/recetas' },
+      // F1.1b CMV: insumos + recetas + materias primas (proveedor-específicas).
+      { slug: 'insumos',         label: 'Insumos',         href: '/menu/insumos' },
+      { slug: 'materias-primas', label: 'Materias primas', href: '/menu/materias-primas' },
+      { slug: 'recetas',         label: 'Recetas',         href: '/menu/recetas' },
     ],
   },
   {

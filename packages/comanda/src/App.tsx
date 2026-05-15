@@ -67,6 +67,7 @@ const TrackingDelivery = lazy(() => import('./pages/Online/TrackingDelivery').th
 const ConciliacionMpView = lazy(() => import('./pages/Caja/ConciliacionMpView').then(m => ({ default: m.ConciliacionMpView })));
 const SettingsBranding = lazy(() => import('./pages/Configuracion/SettingsBranding').then(m => ({ default: m.SettingsBranding })));
 const IntegracionWhatsapp = lazy(() => import('./pages/Integraciones/IntegracionWhatsapp').then(m => ({ default: m.IntegracionWhatsapp })));
+const MateriasPrimasLista = lazy(() => import('./pages/Catalogo/MateriasPrimasLista').then(m => ({ default: m.MateriasPrimasLista })));
 
 // Admin — Clientes (F1.2)
 const ClientesLista = lazy(() => import('./pages/Clientes/ClientesLista').then(m => ({ default: m.ClientesLista })));
@@ -200,9 +201,10 @@ export default function App() {
                   <Route path="/menu/modificadores" element={<ModificadoresRoute />} />
                   <Route path="/menu/combos" element={<StubRoute />} />
                   <Route path="/menu/disponibilidad" element={<DisponibilidadLista />} />
-                  {/* F1.1b CMV — insumos + recetas */}
+                  {/* F1.1b CMV — insumos + recetas + materias primas */}
                   <Route path="/menu/insumos" element={<InsumosLista />} />
                   <Route path="/menu/recetas" element={<RecetasLista />} />
+                  <Route path="/menu/materias-primas" element={<MateriasPrimasLista />} />
 
                   {/* ── Salón ─────────────────────────────────────────── */}
                   <Route path="/salon" element={<Navigate to="/salon/mesas" replace />} />
