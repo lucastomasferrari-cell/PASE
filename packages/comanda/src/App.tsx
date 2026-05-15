@@ -64,6 +64,7 @@ const ReporteVentas = lazy(() => import('./pages/Reportes/ReporteVentas').then(m
 const SettingsRecibos = lazy(() => import('./pages/Configuracion/SettingsRecibos').then(m => ({ default: m.SettingsRecibos })));
 const ReportePerformanceEmpleados = lazy(() => import('./pages/Reportes/ReportePerformanceEmpleados').then(m => ({ default: m.ReportePerformanceEmpleados })));
 const TrackingDelivery = lazy(() => import('./pages/Online/TrackingDelivery').then(m => ({ default: m.TrackingDelivery })));
+const ConciliacionMpView = lazy(() => import('./pages/Caja/ConciliacionMpView').then(m => ({ default: m.ConciliacionMpView })));
 
 // Admin — Clientes (F1.2)
 const ClientesLista = lazy(() => import('./pages/Clientes/ClientesLista').then(m => ({ default: m.ClientesLista })));
@@ -220,7 +221,7 @@ export default function App() {
                   <Route path="/pagos/metodos" element={<SettingsMetodosCobro />} />
                   <Route path="/pagos/caja-chica" element={<CajaChica />} />
                   <Route path="/pagos/historico-turnos" element={<Navigate to="/caja/historico" replace />} />
-                  <Route path="/pagos/conciliacion-mp" element={<StubRoute />} />
+                  <Route path="/pagos/conciliacion-mp" element={<ConciliacionMpView />} />
                   <Route path="/pagos/settlements" element={<StubRoute />} />
 
                   {/* ── Online ────────────────────────────────────────── */}
