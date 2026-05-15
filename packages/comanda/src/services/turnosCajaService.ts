@@ -119,14 +119,26 @@ export async function totalesPorMetodo(turnoId: number): Promise<{ data: Totales
 
 // ─── Sprint 4: histórico de turnos ────────────────────────────────────────
 
-export async function listHistoricoTurnos(localId: number, limit = 50): Promise<{ data: TurnoCaja[]; error: string | null }> {
+export interface TurnoConCajero extends TurnoCaja {
+  cajero_nombre: string | null;
+}
+
+export async function listHistoricoTurnos(localId: number, limit = 50): Promise<{ data: TurnoConCajero[]; error: string | null }> {
   const { data, error } = await db
     .from('turnos_caja')
-    .select('*')
+    .select('*, cajero:rrhh_empleados!turnos_caja_cajero_id_fkey(nombre, apellido)')
     .eq('local_id', localId)
     .eq('estado', 'cerrado')
     .order('numero', { ascending: false })
     .limit(limit);
   if (error) return { data: [], error: translateError(error) };
-  return { data: (data ?? []) as TurnoCaja[], error: null };
+  const mapped: TurnoConCajero[] = (data ?? []).map((r) => {
+    const t = r as TurnoCaja & { cajero?: { nombre: string | null; apellido: string | null } | null };
+    const cajero = t.cajero;
+    return {
+      ...t,
+      cajero_nombre: cajero ? [cajero.apellido, cajero.nombre].filter(Boolean).join(' ') : null,
+    };
+  });
+  return { data: mapped, error: null };
 }

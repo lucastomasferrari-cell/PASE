@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, History } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
-import { listHistoricoTurnos } from '@/services/turnosCajaService';
-import type { TurnoCaja } from '@/types/database';
+import { listHistoricoTurnos, type TurnoConCajero } from '@/services/turnosCajaService';
 import { formatARS, formatFechaAR, formatHoraAR } from '@/lib/format';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,7 +15,7 @@ export function CajaHistorico() {
   const { user } = useAuth();
   const [localId] = useLocalActivo(user);
   const navigate = useNavigate();
-  const [turnos, setTurnos] = useState<TurnoCaja[]>([]);
+  const [turnos, setTurnos] = useState<TurnoConCajero[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -96,7 +95,7 @@ export function CajaHistorico() {
                 ) : '—'}
               </div>
               <div className="text-xs text-muted-foreground truncate" title={t.cajero_id}>
-                {t.cajero_id.slice(0, 8)}…
+                {t.cajero_nombre ?? `${t.cajero_id.slice(0, 8)}…`}
               </div>
               <div className="text-right">
                 <DiferenciaBadge diferencia={Number(t.diferencia ?? 0)} />
