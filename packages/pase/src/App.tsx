@@ -20,7 +20,8 @@ const ImportarMaxirest = lazy(() => import("./pages/ImportarMaxirest"));
 const Gastos = lazy(() => import("./pages/Gastos"));
 const Usuarios = lazy(() => import("./pages/Usuarios"));
 const Blindaje = lazy(() => import("./pages/herramientas/Blindaje"));
-const WebhooksMpTest = lazy(() => import("./pages/herramientas/WebhooksMpTest"));
+const PruebaConciliacion1 = lazy(() => import("./pages/herramientas/PruebaConciliacion1"));
+const PruebaConciliacion2 = lazy(() => import("./pages/herramientas/PruebaConciliacion2"));
 const RRHHPage = lazy(() => import("./pages/RRHH"));
 const Tenants = lazy(() => import("./pages/Tenants"));
 const DesignSystem = lazy(() => import("./pages/DesignSystem"));
@@ -278,7 +279,8 @@ function AppMain() {
               <Route path="/equipo" element={<RRHHPage {...props}/>} />
               <Route path="/herramientas/contador-iva" element={<Contador {...props}/>} />
               <Route path="/herramientas/blindaje" element={<Blindaje {...props}/>} />
-              <Route path="/herramientas/webhooks-mp" element={<WebhooksMpTest {...props}/>} />
+              <Route path="/herramientas/prueba-conciliacion-1" element={<PruebaConciliacion1 {...props}/>} />
+              <Route path="/herramientas/prueba-conciliacion-2" element={<PruebaConciliacion2 {...props}/>} />
 
               {/* Sistema */}
               <Route path="/ajustes" element={<Ajustes/>} />

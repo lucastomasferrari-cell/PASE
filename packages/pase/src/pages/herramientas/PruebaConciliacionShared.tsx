@@ -3,16 +3,19 @@ import { db } from "../../lib/supabase";
 import { PageHeader } from "../../components/ui";
 import type { Usuario, Local } from "../../types";
 
-// Página observatorio (Lucas, 2026-05-14): probar si los webhooks de MP
-// traen pagos que el cron actual (release_report + payments/search 30min)
-// pierde — específicamente Point Smart, donde el 1/5 faltaron ~$553k.
+// Componente compartido de las 2 pruebas de conciliación por webhooks
+// (Lucas, sprint 2026-05-14):
 //
-// La página NO toca producción. Solo lee mp_webhooks_test (tabla nueva).
-// Si el experimento concluye que webhooks no sirven, borrar tabla + endpoint
-// + esta página + entry del sidebar.
+//   source=1 → "Prueba Conciliación 1" — app principal de PASE (cubre TODO).
+//   source=2 → "Prueba Conciliación 2" — app de Point (solo Point Smart).
+//
+// Las 2 páginas son wrappers de 1 línea que pasan el source como prop.
+// La lógica es idéntica; cambia el filtro de la query, el título y la
+// descripción del header.
 
 interface WebhookRow {
   id: string;
+  source: number | null;
   tenant_id: string | null;
   local_id: number | null;
   mp_credencial_id: number | null;
@@ -50,10 +53,28 @@ interface Props {
   user: Usuario | null;
   locales: Local[];
   localActivo: number | null;
+  source: 1 | 2;
 }
 
 const POLL_MS = 5000;
-const WEBHOOK_URL = "https://pase-yndx.vercel.app/api/mp-webhook";
+const WEBHOOK_URL_BASE = "https://pase-yndx.vercel.app/api/mp-webhook";
+
+const CONFIG = {
+  1: {
+    title: "Prueba Conciliación 1",
+    subtitle: "App principal de PASE — cubre TODOS los métodos (Point + QR + link + online + Rappi/Masdeli/...)",
+    url: `${WEBHOOK_URL_BASE}?source=1`,
+    secretEnvName: "MP_WEBHOOK_SECRET_1",
+    eventsToMark: "Pagos (payment)",
+  },
+  2: {
+    title: "Prueba Conciliación 2",
+    subtitle: "App tipo Point — cubre solo Point Smart presencial",
+    url: `${WEBHOOK_URL_BASE}?source=2`,
+    secretEnvName: "MP_WEBHOOK_SECRET_2",
+    eventsToMark: "Pagos + Integraciones Point",
+  },
+} as const;
 
 const fmtDate = (iso: string | null): string => {
   if (!iso) return "—";
@@ -99,7 +120,8 @@ const sigBadge = (valid: boolean | null): { label: string; color: string } => {
   return { label: "no validada", color: "var(--pase-text-muted)" };
 };
 
-export default function WebhooksMpTest({ user }: Props) {
+export default function PruebaConciliacionShared({ user, source }: Props) {
+  const cfg = CONFIG[source];
   const [rows, setRows] = useState<WebhookRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -111,7 +133,12 @@ export default function WebhooksMpTest({ user }: Props) {
   const esAdmin = user?.rol === "dueno" || user?.rol === "admin" || user?.rol === "superadmin";
 
   const load = async () => {
-    let q = db.from("mp_webhooks_test").select("*").order("received_at", { ascending: false }).limit(200);
+    let q = db
+      .from("mp_webhooks_test")
+      .select("*")
+      .eq("source", source)
+      .order("received_at", { ascending: false })
+      .limit(200);
     if (filterMatch !== "all") q = q.eq("match_status", filterMatch);
     const { data } = await q;
     setRows((data as WebhookRow[]) || []);
@@ -119,7 +146,7 @@ export default function WebhooksMpTest({ user }: Props) {
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
-  useEffect(() => { load(); }, [filterMatch]);
+  useEffect(() => { load(); }, [filterMatch, source]);
 
   useEffect(() => {
     if (!autoRefresh) {
@@ -133,7 +160,7 @@ export default function WebhooksMpTest({ user }: Props) {
       pollRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoRefresh, filterMatch]);
+  }, [autoRefresh, filterMatch, source]);
 
   const stats = useMemo(() => {
     let total = 0, nuevos = 0, yaEstaban = 0, sigInvalida = 0;
@@ -148,7 +175,7 @@ export default function WebhooksMpTest({ user }: Props) {
 
   const copyUrl = async () => {
     try {
-      await navigator.clipboard.writeText(WEBHOOK_URL);
+      await navigator.clipboard.writeText(cfg.url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch { /* clipboard puede fallar en HTTP — ignorar */ }
@@ -161,14 +188,15 @@ export default function WebhooksMpTest({ user }: Props) {
   return (
     <div>
       <PageHeader
-        title="Webhooks MP (prueba)"
+        title={cfg.title}
         info={
           <>
-            Observatorio temporal: cada notificación que MP nos manda al endpoint <code>/api/mp-webhook</code> se guarda
-            acá + se cruza contra <code>mp_movimientos</code>. Sirve para ver si webhooks captura pagos que el cron
-            actual (release_report + payments/search) pierde — especialmente Point Smart.
+            {cfg.subtitle}
             <br/><br/>
-            <b>Scope:</b> solo Neko Villa Crespo. Otros locales se ignoran.
+            Observatorio temporal: cada notificación que MP nos manda al endpoint <code>/api/mp-webhook?source={source}</code> se guarda
+            acá + se cruza contra <code>mp_movimientos</code>. <b>Scope:</b> solo Neko Villa Crespo.
+            <br/><br/>
+            NO toca producción. NO modifica el cron. Si esta prueba no aporta, se borra sin impacto.
           </>
         }
         actions={
@@ -193,7 +221,7 @@ export default function WebhooksMpTest({ user }: Props) {
         </div>
         <div style={{ padding: "12px 16px", fontSize: 12, lineHeight: 1.7 }}>
           <div style={{ marginBottom: 8, color: "var(--pase-text-muted)" }}>
-            URL del webhook (copiar y pegar en el panel de MP):
+            URL del webhook (copiar y pegar en el panel de MP — <b>importante:</b> incluye el <code>?source={source}</code>):
           </div>
           <div style={{
             display: "flex", gap: 8, alignItems: "center", marginBottom: 14,
@@ -201,22 +229,22 @@ export default function WebhooksMpTest({ user }: Props) {
             border: "0.5px solid var(--pase-border)", borderRadius: 8,
             fontFamily: "var(--pase-font)", fontSize: 11.5,
           }}>
-            <code style={{ flex: 1, overflow: "auto", whiteSpace: "nowrap" }}>{WEBHOOK_URL}</code>
+            <code style={{ flex: 1, overflow: "auto", whiteSpace: "nowrap" }}>{cfg.url}</code>
             <button className="btn btn-sec btn-sm" onClick={copyUrl}>
               {copied ? "✓ Copiado" : "Copiar"}
             </button>
           </div>
           <ol style={{ marginLeft: 20, color: "var(--pase-text)" }}>
-            <li>Entrar a <a href="https://www.mercadopago.com.ar/developers/panel" target="_blank" rel="noreferrer" style={{ color: "var(--pase-celeste)" }}>panel de MP developer</a> → tu aplicación → <b>Webhooks</b>.</li>
-            <li>Configurar URL de producción con la URL de arriba.</li>
-            <li>Marcar el evento <b>Pagos</b> (payment).</li>
+            <li>Entrar a <a href="https://www.mercadopago.com.ar/developers/panel" target="_blank" rel="noreferrer" style={{ color: "var(--pase-celeste)" }}>panel de MP developer</a> → la aplicación correspondiente → <b>Webhooks → Modo productivo</b>.</li>
+            <li>Configurar URL de producción con la URL de arriba (con <code>?source={source}</code>).</li>
+            <li>Marcar evento(s): <b>{cfg.eventsToMark}</b>.</li>
             <li>Guardar → MP genera una <b>"Clave secreta"</b>. Copiar.</li>
-            <li>Setear esa clave como variable de entorno <code>MP_WEBHOOK_SECRET</code> en Vercel (Settings → Environment Variables → Production).</li>
+            <li>Setear esa clave como variable de entorno <code>{cfg.secretEnvName}</code> en Vercel (Settings → Environment Variables → Production → Sensitive).</li>
             <li>Redeploy en Vercel para que tome la nueva env var.</li>
             <li>Hacer una venta de prueba en Villa Crespo → debería aparecer abajo en segundos.</li>
           </ol>
           <div style={{ marginTop: 12, padding: "8px 12px", background: "#FEF3C7", borderRadius: 6, fontSize: 11.5, color: "#92400E" }}>
-            <b>Nota:</b> mientras <code>MP_WEBHOOK_SECRET</code> NO esté seteada, los webhooks llegan pero no se valida la firma (modo testing). Apenas confirmes que llegan, completá el secret y rechazamos cualquier request no firmado.
+            <b>Nota:</b> mientras <code>{cfg.secretEnvName}</code> NO esté seteada, los webhooks llegan pero no se valida la firma. Apenas confirmes que llegan, completá el secret.
           </div>
         </div>
       </div>
@@ -279,9 +307,9 @@ export default function WebhooksMpTest({ user }: Props) {
           <div className="loading">Cargando...</div>
         ) : rows.length === 0 ? (
           <div className="empty">
-            Aún no llegó ningún webhook.
+            Aún no llegó ningún webhook para esta prueba.
             <br/><br/>
-            Si ya configuraste el panel de MP, hacé una venta de prueba en Villa Crespo y refrescá esta página.
+            Si ya configuraste el panel de MP con la URL <code>?source={source}</code>, hacé una venta de prueba en Villa Crespo y refrescá.
           </div>
         ) : (
           <table>
@@ -357,6 +385,7 @@ export default function WebhooksMpTest({ user }: Props) {
               <button className="close-btn" onClick={() => setSelected(null)}>✕</button>
             </div>
             <div className="modal-body">
+              <DetailRow label="Source" value={`Prueba ${selected.source ?? 0}`} />
               <DetailRow label="Recibido" value={fmtDate(selected.received_at)} />
               <DetailRow label="Topic" value={selected.mp_topic || "—"} />
               <DetailRow label="Action" value={selected.mp_action || "—"} />

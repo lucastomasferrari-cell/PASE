@@ -12,26 +12,30 @@
 //     /v1/payments/{id} para enriquecerlo + se cruza contra mp_movimientos.
 //   • SIEMPRE devuelve 200 (MP reintenta si no, generaríamos ruido).
 //
+// 2 pruebas en paralelo (sprint 2026-05-14):
+//   • source=1 → Prueba Conciliación 1: app principal de PASE (cubre TODO
+//     lo que el cron cubre — Point + QR + link + online + Rappi/etc).
+//   • source=2 → Prueba Conciliación 2: app "prueba webhook" tipo Point
+//     (solo Point Smart presencial).
+//
+// El source se distingue por query param de la URL configurada en cada app
+// MP: https://.../api/mp-webhook?source=1 vs ?source=2. MP preserva query
+// params al hacer el POST. Default 0 = legacy/smoke test.
+//
 // Configuración requerida en Vercel env vars:
 //   • SUPABASE_URL                — ya existe
 //   • SUPABASE_SERVICE_KEY        — ya existe
-//   • MP_WEBHOOK_SECRET           — NUEVA. Lucas la setea después de crear
-//     el webhook en el panel MP. Si está vacía/ausente, NO se valida la firma
-//     (modo "abierto" para testing inicial). Recomendado completarla apenas
-//     se confirme que los webhooks llegan.
-//
-// Configuración en MP developer panel:
-//   1. Ir a https://www.mercadopago.com.ar/developers/panel
-//   2. Aplicación de Lucas → Webhooks → Configurar URL
-//   3. URL: https://pase-yndx.vercel.app/api/mp-webhook
-//   4. Eventos: Pagos (payment)
-//   5. Copiar la "Clave secreta" generada → setear MP_WEBHOOK_SECRET en Vercel.
+//   • MP_WEBHOOK_SECRET_1         — clave secreta de la app PRINCIPAL.
+//   • MP_WEBHOOK_SECRET_2         — clave secreta de la app de Point.
+//   Si alguna está ausente, el webhook llega pero queda sin validar firma
+//   (modo "abierto" para testing inicial).
 //
 // Validación de firma HMAC (formato MP):
 //   • Header: x-signature: ts=<timestamp>,v1=<hmac_hex>
 //   • Header: x-request-id: <uuid>
 //   • Manifest: id:<data.id>;request-id:<x-request-id>;ts:<ts>;
-//   • HMAC SHA-256 del manifest con la clave secreta → comparar con v1.
+//   • HMAC SHA-256 del manifest con la clave secreta correspondiente al
+//     source de la URL.
 
 import crypto from 'node:crypto';
 
@@ -54,10 +58,20 @@ export default async function handler(req, res) {
     const { createClient } = await import('@supabase/supabase-js');
     const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
+    // ─── 0. Identificar source desde query param (1 o 2) ──────────────────
+    // MP preserva query params al hacer el POST. Cada app de MP tiene su URL
+    // configurada con un source distinto (?source=1 para app principal,
+    // ?source=2 para app de Point). Default 0 si no viene (smoke test, etc).
+    const sourceRaw = req.query?.source ?? '';
+    const source = sourceRaw === '1' ? 1 : sourceRaw === '2' ? 2 : 0;
+
     // ─── 1. Validar firma HMAC (si está configurado el secret) ────────────
+    // Cada source usa su propio secret (cada app de MP genera la suya).
     const signatureHeader = req.headers['x-signature'] || '';
     const requestIdHeader = req.headers['x-request-id'] || '';
-    const secret = process.env.MP_WEBHOOK_SECRET || '';
+    const secret = source === 1 ? (process.env.MP_WEBHOOK_SECRET_1 || '')
+                 : source === 2 ? (process.env.MP_WEBHOOK_SECRET_2 || '')
+                 : (process.env.MP_WEBHOOK_SECRET || ''); // legacy fallback
 
     let signatureValid = null;
     let signatureError = null;
@@ -104,6 +118,7 @@ export default async function handler(req, res) {
     const { data: inserted, error: insErr } = await db
       .from('mp_webhooks_test')
       .insert({
+        source,
         tenant_id: local?.tenant_id || null,
         local_id: local?.id || null,
         mp_credencial_id: credencial?.id || null,
@@ -150,6 +165,7 @@ export default async function handler(req, res) {
     const elapsed = Date.now() - startedAt;
     console.log('[mp-webhook] ok', JSON.stringify({
       webhook_id: webhookRowId,
+      source,
       topic: mpTopic,
       action: mpAction,
       resource_id: mpResourceId,

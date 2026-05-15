@@ -84,11 +84,12 @@ export const MODULOS = [
   { slug:"mp", label:"Conciliación MP", icon:"💳" },
   { slug:"contador", label:"Contador / IVA", icon:"🧾" },
   { slug:"blindaje", label:"Blindaje", icon:"🛡" },
-  // Observatorio temporal (Lucas, 2026-05-14): webhooks MP test page.
-  // Solo dueno/admin/superadmin lo ven; ningún rol más bajo lo tiene por
-  // default. Si el experimento concluye, eliminar esta línea + la página
-  // + endpoint + tabla mp_webhooks_test.
-  { slug:"webhooks_mp_test", label:"Webhooks MP (prueba)", icon:"📡" },
+  // Observatorios temporales (Lucas, 2026-05-14): 2 pruebas paralelas de
+  // conciliación por webhooks. Solo dueno/admin/superadmin lo ven; ningún
+  // rol más bajo los tiene por default. Si el experimento concluye, eliminar
+  // estas líneas + páginas + endpoint + tabla mp_webhooks_test.
+  { slug:"prueba_conciliacion_1", label:"Prueba Conciliación 1", icon:"📡" },
+  { slug:"prueba_conciliacion_2", label:"Prueba Conciliación 2", icon:"📡" },
   { slug:"usuarios", label:"Usuarios", icon:"👥" },
   // Módulo solo para superadmin (TASK 0.15). Filtrado por getPermisos/tienePermiso
   // — no aparece en dropdowns de otros usuarios aunque esté en el array.
