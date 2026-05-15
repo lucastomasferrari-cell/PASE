@@ -63,6 +63,9 @@ const ClientesLista = lazy(() => import('./pages/Clientes/ClientesLista').then(m
 const InsumosLista = lazy(() => import('./pages/Catalogo/InsumosLista').then(m => ({ default: m.InsumosLista })));
 const RecetasLista = lazy(() => import('./pages/Catalogo/RecetasLista').then(m => ({ default: m.RecetasLista })));
 
+// Admin — 86 list (disponibilidad)
+const DisponibilidadLista = lazy(() => import('./pages/Catalogo/DisponibilidadLista').then(m => ({ default: m.DisponibilidadLista })));
+
 // Admin — Settings
 const SettingsLocal = lazy(() => import('./pages/Settings/SettingsLocal').then(m => ({ default: m.SettingsLocal })));
 const SettingsMesas = lazy(() => import('./pages/Settings/SettingsMesas').then(m => ({ default: m.SettingsMesas })));
@@ -177,7 +180,7 @@ export default function App() {
                   <Route path="/menu/lista-precios" element={<ListaPreciosRoute />} />
                   <Route path="/menu/modificadores" element={<ModificadoresRoute />} />
                   <Route path="/menu/combos" element={<StubRoute />} />
-                  <Route path="/menu/disponibilidad" element={<StubRoute />} />
+                  <Route path="/menu/disponibilidad" element={<DisponibilidadLista />} />
                   {/* F1.1b CMV — insumos + recetas */}
                   <Route path="/menu/insumos" element={<InsumosLista />} />
                   <Route path="/menu/recetas" element={<RecetasLista />} />

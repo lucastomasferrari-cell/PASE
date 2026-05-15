@@ -61,7 +61,7 @@ export const ADMIN_NAVIGATION: NavCategory[] = [
       { slug: 'combos',         label: 'Combos',          href: '/menu/combos',         badge: 'soon' },
       { slug: 'canales',        label: 'Canales',         href: '/menu/canales' },
       { slug: 'lista-precios',  label: 'Lista de precios', href: '/menu/lista-precios' },
-      { slug: 'disponibilidad', label: 'Disponibilidad',  href: '/menu/disponibilidad', badge: 'soon' },
+      { slug: 'disponibilidad', label: 'Disponibilidad',  href: '/menu/disponibilidad' },
       // F1.1b CMV: insumos + recetas como entradas reales (no stubs).
       { slug: 'insumos',        label: 'Insumos',         href: '/menu/insumos' },
       { slug: 'recetas',        label: 'Recetas',         href: '/menu/recetas' },
