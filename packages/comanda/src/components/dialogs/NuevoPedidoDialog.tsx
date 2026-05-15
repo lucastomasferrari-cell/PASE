@@ -117,16 +117,15 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
     setSaving(true);
 
     // Auto-save: si el teléfono no matchea con un cliente del CRM, crearlo.
-    // Si la creación falla (ej. duplicado por race con otro cajero), seguimos
-    // igual con la venta — el cliente queda guardado en los campos de
-    // ventas_pos por si después se quiere migrar manualmente.
+    // Captura el id del nuevo cliente para vincularlo a la venta (activa
+    // trigger de contadores total_pedidos/total_gastado).
+    let clienteIdFinal = clienteIdExistente;
     if (!clienteIdExistente && user?.tenant_id) {
-      // Split nombre completo en nombre + apellido (primer espacio).
       const partes = nombre.trim().split(/\s+/);
       const nombrePrim = partes[0] ?? nombre.trim();
       const apellido = partes.length > 1 ? partes.slice(1).join(' ') : null;
       try {
-        await createCliente(user.tenant_id, {
+        const { data: nuevo } = await createCliente(user.tenant_id, {
           telefono: telefono.trim(),
           nombre: nombrePrim,
           apellido,
@@ -135,6 +134,7 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
           vip: false,
           acepta_marketing: false,
         });
+        if (nuevo?.id) clienteIdFinal = nuevo.id;
       } catch (e) {
         console.warn('[NuevoPedido] auto-save cliente CRM falló (no bloquea):', e);
       }
@@ -153,6 +153,7 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
       tipoEntrega,
       origen: 'pos',
       programadaPara: programado && programadaPara ? new Date(programadaPara).toISOString() : null,
+      clienteId: clienteIdFinal,
     });
     setSaving(false);
     if (error || !ventaId) {

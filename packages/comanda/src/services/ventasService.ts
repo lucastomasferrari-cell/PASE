@@ -21,6 +21,8 @@ export interface AbrirVentaArgs {
   estado?: EstadoVenta;
   /** ISO timestamp. Si se setea, el pedido es para horario futuro. */
   programadaPara?: string | null;
+  /** ID del cliente del CRM (clientes.id). Activa trigger de contadores al cobrar. */
+  clienteId?: number | null;
 }
 
 export async function abrirVenta(args: AbrirVentaArgs): Promise<{ ventaId: number | null; error: string | null }> {
@@ -39,6 +41,7 @@ export async function abrirVenta(args: AbrirVentaArgs): Promise<{ ventaId: numbe
     p_tipo_entrega: args.tipoEntrega ?? null,
     p_estado: args.estado ?? 'abierta',
     p_programada_para: args.programadaPara ?? null,
+    p_cliente_id: args.clienteId ?? null,
   });
   if (error) return { ventaId: null, error: translateError(error) };
   return { ventaId: data as number, error: null };
