@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ManagerOverrideDialog } from '@/components/dialogs/ManagerOverrideDialog';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
+import { useAuthPos } from '@/lib/authPos';
 import { cn } from '@/lib/utils';
 
 // Vista detallada de pedido — patrón Toast Storefront Orders.
@@ -30,6 +31,7 @@ export function PedidoDetalle() {
   const { ventaId } = useParams<{ ventaId: string }>();
   const navigate = useNavigate();
   const id = Number(ventaId);
+  const { empleado } = useAuthPos();
   const [data, setData] = useState<PedidoDetalleData | null>(null);
   const [loading, setLoading] = useState(true);
   const [accionLoading, setAccionLoading] = useState(false);
@@ -78,6 +80,24 @@ export function PedidoDetalle() {
         <Button variant="outline" className="mt-4" onClick={() => navigate('/pos/pedidos')}>
           ← Volver a pedidos
         </Button>
+      </div>
+    );
+  }
+
+  // Cross-local guard
+  if (empleado && data.venta.local_id !== empleado.local_id) {
+    return (
+      <div className="container max-w-md py-12">
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-6 text-center">
+          <div className="text-3xl mb-2">⚠️</div>
+          <h2 className="text-lg font-semibold mb-2">Pedido de otro local</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Este pedido pertenece a otro local. Cambiá el local activo en el sidebar de PASE.
+          </p>
+          <Button variant="outline" onClick={() => navigate('/pos/pedidos')}>
+            ← Volver a pedidos
+          </Button>
+        </div>
       </div>
     );
   }

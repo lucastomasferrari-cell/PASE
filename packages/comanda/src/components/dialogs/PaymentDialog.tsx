@@ -90,12 +90,27 @@ export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado
   }
 
   async function confirmar() {
-    if (!cubrió) { toast.error('Faltan pagos para cubrir el total'); return; }
+    // 1-click UX: si el cajero NO presionó "+ Agregar pago" pero el form
+    // tiene un monto que cubre todo, auto-agregar el pago antes de procesar.
+    // Caso de uso 99%: 1 método + total exacto → tocar "Cobrar" y listo.
+    let pagosAEnviar = pagos;
+    if (pagos.length === 0 && montoNuevo > 0 && Math.abs(montoNuevo - totalConPropina) < 0.01) {
+      pagosAEnviar = [{
+        id: crypto.randomUUID?.() ?? `local-${Date.now()}-${Math.random()}`,
+        idempotencyKey: newIdempotencyKey(),
+        metodo: metodoNuevo,
+        monto: montoNuevo,
+        vuelto: pideVuelto ? vueltoCalc : null,
+        confirmado: false,
+      }];
+    } else if (!cubrió) {
+      toast.error('Faltan pagos para cubrir el total');
+      return;
+    }
     setConfirmando(true);
     let propinaRestante = propina;
-    for (const p of pagos) {
+    for (const p of pagosAEnviar) {
       if (p.confirmado) continue;
-      // Distribuir propina en los pagos: el primero se lleva todo lo que falte
       const propinaIncl = Math.min(propinaRestante, p.monto);
       propinaRestante -= propinaIncl;
       const { error } = await agregarPago({
@@ -112,7 +127,6 @@ export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado
         setConfirmando(false);
         return;
       }
-      // Marcar confirmado en local (next render no lo reenvía)
       p.confirmado = true;
     }
     toast.success('Venta cobrada');
@@ -236,15 +250,16 @@ export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado
                 Vuelto: <strong className="tabular-nums">{formatARS(vueltoCalc)}</strong>
               </div>
             )}
+            {/* Solo aparece si querés split (otro pago aparte del actual). */}
             <Button
               type="button"
               variant="outline"
               onClick={agregarPagoLocal}
-              disabled={montoNuevo <= 0 || confirmando}
+              disabled={montoNuevo <= 0 || montoNuevo >= restante - 0.01 || confirmando}
               className="w-full"
             >
               <Plus className="h-4 w-4 mr-2" />
-              Agregar pago
+              Otro pago (split)
             </Button>
           </div>
         )}
@@ -256,10 +271,10 @@ export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado
           <Button
             variant="success"
             onClick={confirmar}
-            disabled={!cubrió || confirmando || pagos.length === 0}
+            disabled={confirmando || (pagos.length === 0 && (montoNuevo <= 0 || Math.abs(montoNuevo - totalConPropina) > 0.01)) || (pagos.length > 0 && !cubrió)}
           >
             <CheckCircle2 className="h-4 w-4 mr-2" />
-            {confirmando ? 'Procesando…' : 'Confirmar y cobrar'}
+            {confirmando ? 'Procesando…' : `Cobrar ${formatARS(totalConPropina)}`}
           </Button>
         </DialogFooter>
       </DialogContent>

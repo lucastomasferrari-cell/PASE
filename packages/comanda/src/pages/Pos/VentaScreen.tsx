@@ -146,6 +146,32 @@ export function VentaScreen() {
   if (!venta) return <div className="py-12 text-center text-destructive">Venta no encontrada</div>;
   if (!empleado) return <div className="py-12 text-center text-muted-foreground">Sesión POS requerida</div>;
 
+  // Cross-local guard: si la venta es de otro local, NO permitir operar (anular,
+  // cobrar, descuento, transferir mesa). El dueño/superadmin ven todas las
+  // ventas del tenant por RLS pero las RPCs validan local con
+  // fn_assert_empleado_en_local. Bloqueamos antes para evitar errores opacos.
+  if (venta.local_id !== empleado.local_id) {
+    return (
+      <div className="container max-w-md py-12">
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-6 text-center">
+          <div className="text-3xl mb-2">⚠️</div>
+          <h2 className="text-lg font-semibold mb-2">Venta de otro local</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Esta venta pertenece a un local distinto al que tenés activo. Cambiá el local
+            en el sidebar de PASE para poder operarla.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate('/pos/salon')}
+            className="text-sm text-primary underline"
+          >
+            Volver al POS
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const editable = venta.estado !== 'cobrada' && venta.estado !== 'anulada';
 
   async function addItem(it: ItemConGrupo, modificadores: { nombre: string; precio_extra: number; modifier_id?: number }[] = [], notas: string | null = null) {
