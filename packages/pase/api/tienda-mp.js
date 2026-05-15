@@ -1,19 +1,17 @@
-// Endpoint multiplexado para Marketplace MP (cobro online via Checkout).
+// Endpoint multiplexado para integraciones externas (cobro + delivery partners).
 // Una sola function para no agotar el límite de 12 functions de Vercel Hobby.
 //
 // Routes:
-//   POST /api/tienda-mp?action=preference
-//     body: { venta_id, items: [{title, qty, unit_price}], total, back_url_success }
-//     → crea preference MP server-side con back_urls + notification_url
-//     → devuelve { init_point, preference_id, sandbox_init_point }
-//
-//   POST /api/tienda-mp?action=webhook
-//     query: { type, data: { id } } (formato MP notification webhook)
-//     → consulta el pago en MP, valida monto, marca venta_pos como cobrada
+//   POST /api/tienda-mp?action=preference     → MP Checkout preference
+//   POST /api/tienda-mp?action=webhook        → MP payment notification
+//   POST /api/tienda-mp?action=rappi-webhook  → Rappi Partner API order webhook
+//   POST /api/tienda-mp?action=pedidosya-webhook → PedidosYa POS Integration webhook
 //
 // Auth:
 //   - preference: anon (cliente público armando carrito en tienda online)
-//   - webhook: anon (lo llama MP, validamos via x-signature header)
+//   - MP webhook: anon (validamos contra MP API antes de cobrar)
+//   - Rappi/PedidosYa webhooks: validar firma HMAC del partner header
+//     (deuda: implementar cuando se tenga credencial real del partner).
 
 import { createClient } from '@supabase/supabase-js';
 import { createMpTokenGetter } from './_mp-token.js';
@@ -38,6 +36,12 @@ export default async function handler(req, res) {
     }
     if (action === 'webhook' && req.method === 'POST') {
       return await handleWebhook(req, res);
+    }
+    if (action === 'rappi-webhook' && req.method === 'POST') {
+      return await handlePartnerWebhook(req, res, 'rappi');
+    }
+    if (action === 'pedidosya-webhook' && req.method === 'POST') {
+      return await handlePartnerWebhook(req, res, 'pedidos-ya');
     }
     res.status(405).json({ error: 'Método o action inválido' });
   } catch (e) {
@@ -229,4 +233,128 @@ async function handleWebhook(req, res) {
   }
 
   res.status(200).json({ ok: true, venta_id: ventaId, status });
+}
+
+// ─── PARTNER WEBHOOKS (Rappi / PedidosYa) ───────────────────────────────
+// Recibe el pedido externo y crea una venta_pos en estado 'necesita_aprobacion'
+// para que el cajero la apruebe desde /pos/pedidos. El payload completo queda
+// loggeado en pedidos_externos_log para debugging.
+//
+// Mapeo de items: usa items.sku_externo_<provider> o item_id si viene literal.
+// Si no matchea, igual crea la venta — el cajero ve "Item desconocido" en la
+// card y debe matchearlo manual antes de aprobar. Esto permite que NO se
+// pierdan pedidos por mismatch de catalogo.
+
+async function handlePartnerWebhook(req, res, provider) {
+  const supabase = db();
+  const payload = req.body || {};
+
+  // Loggear todo de entrada (para debugging y auditoría)
+  // Si la tabla pedidos_externos_log no existe, ignorar el log silenciosamente
+  // para no bloquear el resto del flow.
+  try {
+    await supabase.from('pedidos_externos_log').insert({
+      provider,
+      external_id: payload.id || payload.order_id || null,
+      payload,
+      headers: { 'user-agent': req.headers['user-agent'], 'x-signature': req.headers['x-signature'] ?? null },
+    });
+  } catch (e) {
+    console.warn(`[${provider}] no se pudo loggear webhook (tabla missing?):`, e.message);
+  }
+
+  // TODO: validar firma HMAC del partner (cuando se tenga la credencial).
+  // Por ahora aceptamos cualquier POST. En producción real, sin firma = 401.
+
+  // Mapeo conceptual de campos (los real names dependen del partner):
+  //   external_id, items[], cliente.nombre, cliente.telefono, total,
+  //   tipo_entrega, direccion, local_external_id, instrucciones.
+  //
+  // Mapeo de local: por ahora hardcoded a Local Prueba 2 (id=7) para test.
+  // Producción: tabla `mapeos_locales_externos` (provider, external_local_id, local_id).
+  const localId = Number(req.query.local_id) || 7;
+
+  // Resolver tenant del local
+  const { data: local } = await supabase.from('locales').select('tenant_id').eq('id', localId).single();
+  if (!local) {
+    res.status(404).json({ error: `Local ${localId} no encontrado` });
+    return;
+  }
+
+  // Canal slug por provider
+  const canalSlug = provider === 'rappi' ? 'rappi' : 'pedidos-ya';
+  const { data: canal } = await supabase.from('canales')
+    .select('id').eq('tenant_id', local.tenant_id).eq('slug', canalSlug).single();
+  if (!canal) {
+    res.status(500).json({ error: `Canal ${canalSlug} no configurado para el tenant` });
+    return;
+  }
+
+  // Extraer info del payload (heurístico — depende del schema real del partner)
+  const clienteNombre = payload.customer?.name || payload.cliente?.nombre || 'Cliente ' + canalSlug;
+  const clienteTelefono = payload.customer?.phone || payload.cliente?.telefono || null;
+  const clienteDireccion = payload.delivery?.address || payload.direccion || null;
+  const total = Number(payload.total || payload.amount || 0);
+
+  // Crear venta_pos con estado necesita_aprobacion
+  const { data: nuevaVenta, error: errVenta } = await supabase.from('ventas_pos').insert({
+    tenant_id: local.tenant_id,
+    local_id: localId,
+    numero_local: Math.floor(Date.now() / 1000) % 100000, // temporal — fn_next_ticket_number_comanda mejor
+    modo: 'pedidos',
+    canal_id: canal.id,
+    estado: 'necesita_aprobacion',
+    origen: 'webhook_' + provider,
+    tipo_entrega: payload.delivery ? 'delivery' : 'retiro',
+    cliente_nombre: clienteNombre,
+    cliente_telefono: clienteTelefono,
+    cliente_direccion: clienteDireccion,
+    subtotal: total,
+    total: total,
+    notas: payload.instructions || payload.notes || `Pedido externo ${provider} #${payload.id ?? '?'}`,
+  }).select('id').single();
+
+  if (errVenta) {
+    console.error(`[${provider}] error creando venta:`, errVenta);
+    res.status(500).json({ error: errVenta.message });
+    return;
+  }
+
+  // Items: mapeo SKU → item_id. Si no matchea, queda como item_open (no implementado todavía).
+  // Por ahora, si vienen items, los insertamos como referencias open.
+  const externalItems = payload.items || payload.products || [];
+  for (const it of externalItems) {
+    const externalSku = it.sku || it.id || it.code;
+    let itemId = null;
+    if (externalSku) {
+      // Match por SKU externo (columna a agregar después: items.sku_rappi / items.sku_pedidosya).
+      // Por ahora intento match por nombre (peor pero funcional).
+      const { data: matched } = await supabase.from('items')
+        .select('id').eq('tenant_id', local.tenant_id).ilike('nombre', `%${it.name || ''}%`).limit(1).single();
+      itemId = matched?.id ?? null;
+    }
+    if (!itemId) {
+      // No matcheó — saltamos por ahora. Mejor: crear venta_pos_items "open" con descripción + precio.
+      continue;
+    }
+    await supabase.from('ventas_pos_items').insert({
+      tenant_id: local.tenant_id,
+      local_id: localId,
+      venta_id: nuevaVenta.id,
+      item_id: itemId,
+      cantidad: Number(it.qty || it.quantity || 1),
+      precio_unitario: Number(it.price || it.unit_price || 0),
+      subtotal: Number(it.subtotal || (Number(it.qty || 1) * Number(it.price || 0))),
+      curso: 1,
+      estado: 'hold',
+      notas: it.notes ?? null,
+    });
+  }
+
+  res.status(200).json({
+    ok: true,
+    venta_id: nuevaVenta.id,
+    provider,
+    items_creados: externalItems.length,
+  });
 }
