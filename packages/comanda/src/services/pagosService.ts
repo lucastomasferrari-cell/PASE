@@ -37,6 +37,7 @@ export async function cobrar(
 }
 
 export async function listPagosVenta(ventaId: number): Promise<{ data: VentaPosPago[]; error: string | null }> {
+  // eslint-disable-next-line pase-local/require-apply-local-scope -- filtra por venta_id (FK a ventas_pos) que ya implica local específico; RLS server-side cubre tenant scope.
   const { data, error } = await db
     .from('ventas_pos_pagos')
     .select('*')
