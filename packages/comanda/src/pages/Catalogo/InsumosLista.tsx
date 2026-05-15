@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { formatARS } from '@/lib/format';
 import { InsumoEditorDialog } from '@/components/dialogs/InsumoEditorDialog';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
 
 // F1.1b — Lista de insumos del tenant (paleta internal heredada de AdminLayout).
 // Base para construir recetas con cantidad + merma %.
@@ -22,21 +23,19 @@ export function InsumosLista() {
   const [insumos, setInsumos] = useState<Insumo[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Insumo | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
-    const r = await listInsumos({ search: search.trim() || undefined });
+    const r = await listInsumos({ search: debouncedSearch.trim() || undefined });
     if (r.error) toast.error(r.error);
     else setInsumos(r.data);
     setLoading(false);
-  }, [search]);
+  }, [debouncedSearch]);
 
-  useEffect(() => {
-    const t = setTimeout(() => { reload(); }, 300);
-    return () => clearTimeout(t);
-  }, [reload]);
+  useEffect(() => { reload(); }, [reload]);
 
   const handleNuevo = () => {
     setEditing(null);

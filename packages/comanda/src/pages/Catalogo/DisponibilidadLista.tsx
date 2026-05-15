@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { AgotarDialog } from './AgotarDialog';
 import { cn } from '@/lib/utils';
 
@@ -39,19 +40,18 @@ export function DisponibilidadLista() {
   const [search, setSearch] = useState('');
   const [agotarDialog, setAgotarDialog] = useState<ItemConGrupo | null>(null);
 
+  const debouncedSearch = useDebouncedValue(search, 300);
+
   const reload = useCallback(async () => {
     if (!tenantId) return;
     setLoading(true);
-    const r = await listItems({ tenantId, search: search.trim() || undefined });
+    const r = await listItems({ tenantId, search: debouncedSearch.trim() || undefined });
     if (r.error) toast.error(r.error);
     else setItems(r.data);
     setLoading(false);
-  }, [tenantId, search]);
+  }, [tenantId, debouncedSearch]);
 
-  useEffect(() => {
-    const t = setTimeout(() => { reload(); }, 300);
-    return () => clearTimeout(t);
-  }, [reload]);
+  useEffect(() => { reload(); }, [reload]);
 
   // Realtime: cualquier cambio de items se refleja al toque.
   useRealtimeTable({ table: 'items', onChange: () => reload() });

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { formatARS } from '@/lib/format';
 import { ClienteEditorDialog } from '@/components/dialogs/ClienteEditorDialog';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { cn } from '@/lib/utils';
 
 // F1.2 — Lista de clientes (CRM básico).
@@ -30,23 +31,20 @@ export function ClientesLista() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [onlyVip, setOnlyVip] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
-    const r = await listClientes({ search: search.trim() || undefined, onlyVip });
+    const r = await listClientes({ search: debouncedSearch.trim() || undefined, onlyVip });
     if (r.error) toast.error(r.error);
     else setClientes(r.data);
     setLoading(false);
-  }, [search, onlyVip]);
+  }, [debouncedSearch, onlyVip]);
 
-  useEffect(() => {
-    // Debounce simple 300ms para search.
-    const t = setTimeout(() => { reload(); }, 300);
-    return () => clearTimeout(t);
-  }, [reload]);
+  useEffect(() => { reload(); }, [reload]);
 
   const handleNuevo = () => {
     setEditingCliente(null);
