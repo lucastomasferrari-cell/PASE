@@ -356,7 +356,12 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const updateItem = (i: number, field: keyof ItemFactura, val: string | number) => {
     const current = items[i];
     if (!current) return;
-    const updated: ItemFactura = { ...current, [field]: val };
+    // materia_prima_id: 0 → null (modo "sin vincular" desde select vacío)
+    let newVal: ItemFactura[keyof ItemFactura] = val;
+    if (field === "materia_prima_id") {
+      newVal = (typeof val === "number" && val > 0) ? val : null;
+    }
+    const updated: ItemFactura = { ...current, [field]: newVal };
     if (field === "cantidad" || field === "precio_unitario") {
       const q = parseMonto(field === "cantidad" ? val : updated.cantidad);
       const p = parseMonto(field === "precio_unitario" ? val : updated.precio_unitario);
@@ -418,8 +423,18 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       // o legacy), bucket queda null y EERR la trata como CMV.
       const bucket = form.cat ? (categoriaToBucket[form.cat] ?? null) : null;
       const nueva = { ...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(form.local_id), total, estado: "pendiente", pagos: [], tipo: form.tipo, fecha: form.fecha || null, venc: form.venc || null, bucket };
+      // Mapeo explícito a columnas de factura_items. materia_prima_id es opcional;
+      // si el cajero lo vinculó, dispara trigger SQL que actualiza el precio_actual
+      // de esa MP y recalcula el costo del insumo unificado (CMV refactor 15-may).
       const itemsToInsert = items.length > 0
-        ? items.filter(it => it.producto).map(it => ({ ...it, cantidad: parseMonto(it.cantidad), precio_unitario: parseMonto(it.precio_unitario), subtotal: it.subtotal }))
+        ? items.filter(it => it.producto).map(it => ({
+            producto: it.producto,
+            cantidad: parseMonto(it.cantidad),
+            unidad: it.unidad,
+            precio_unitario: parseMonto(it.precio_unitario),
+            subtotal: it.subtotal,
+            materia_prima_id: it.materia_prima_id ?? null,
+          }))
         : [];
       // RPC atómica (deuda C4-F12 cerrada): INSERT factura + INSERT items en
       // una sola TX con idempotency key. Antes podía quedar factura sin items

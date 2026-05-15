@@ -32,10 +32,10 @@ test.describe("CMV — insumos + recetas + snapshot mutante", () => {
   let itemId: number;
   let insumoIdA: number | null = null;
   let insumoIdB: number | null = null;
-  let insumoIdDup: number | null = null;
+  const insumoIdDup: number | null = null;
   let recetaId: number | null = null;
-  let recetaInsumosIds: number[] = [];
-  let snapshotIds: number[] = [];
+  const recetaInsumosIds: number[] = [];
+  const snapshotIds: number[] = [];
 
   test.beforeEach(async () => {
     db = await createDuenoClient();

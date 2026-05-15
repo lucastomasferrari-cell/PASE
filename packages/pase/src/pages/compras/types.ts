@@ -59,10 +59,13 @@ export interface FormPagoRemito {
 }
 
 // Item del detalle de insumos (form item editable).
+// materia_prima_id: opcional. Si se setea, dispara trigger SQL que actualiza
+// el costo del insumo unificado vinculado (refactor CMV 2026-05-15).
 export interface ItemFactura {
   producto: string;
   cantidad: string;
   unidad: string;
   precio_unitario: string;
   subtotal: number;
+  materia_prima_id?: number | null;
 }

@@ -1,10 +1,20 @@
+import { useEffect, useState } from "react";
 import { CurrencyInput } from "../../components/CurrencyInput";
 import { Combobox } from "../../components/Combobox";
 import { fmt_$ } from "../../lib/utils";
 import { UNIDADES } from "../../lib/constants";
+import { db } from "../../lib/supabase";
 import type { Local } from "../../types";
 import type { Proveedor } from "../../types/finanzas";
 import type { FormFactura, ItemFactura } from "./types";
+
+// Catálogo de materias primas para vincular items de factura (CMV refactor).
+interface MateriaPrimaOpcion {
+  id: number;
+  nombre: string;
+  insumo_nombre: string | null;
+  proveedor_id: number | null;
+}
 
 // Bundle de categorías EERR para el Combobox. Lo paso como un solo
 // prop para no inflar la lista de props con 7 arrays sueltos.
@@ -44,8 +54,43 @@ export function ModalCargarFactura({
   abierto, onClose, form, setForm, proveedores, localesDisp, categorias,
   onProvChange, calcTotal, items, addItem, updateItem, removeItem, guardar, saving,
 }: ModalCargarFacturaProps) {
+  const [materiasPrimas, setMateriasPrimas] = useState<MateriaPrimaOpcion[]>([]);
+
+  // Cargar catálogo de materias primas al abrir. Filtra por proveedor del form
+  // si está seteado (sugerencia: si elegís Pescadería X, sólo te ofrece MPs
+  // de ese proveedor + las genéricas sin proveedor).
+  useEffect(() => {
+    if (!abierto) return;
+    void db.from('materias_primas')
+      .select('id, nombre, proveedor_id, insumo:insumos(nombre)')
+      .is('deleted_at', null)
+      .eq('activa', true)
+      .order('nombre')
+      .limit(500)
+      .then(({ data }) => {
+        const mapped: MateriaPrimaOpcion[] = (data ?? []).map((r) => {
+          const row = r as { id: number; nombre: string; proveedor_id: number | null;
+            insumo?: { nombre: string | null } | { nombre: string | null }[] | null };
+          const insumo = Array.isArray(row.insumo) ? row.insumo[0] : row.insumo;
+          return {
+            id: row.id,
+            nombre: row.nombre,
+            insumo_nombre: insumo?.nombre ?? null,
+            proveedor_id: row.proveedor_id,
+          };
+        });
+        setMateriasPrimas(mapped);
+      });
+  }, [abierto]);
+
   if (!abierto) return null;
   const { compra, fijos, variables, publicidad, comisiones, impuestos, bucketMap } = categorias;
+
+  // Filtrar MPs según el proveedor del form (incluye también las "genéricas" sin proveedor).
+  const provIdNum = form.prov_id ? Number(form.prov_id) : null;
+  const materiasFiltradas = provIdNum
+    ? materiasPrimas.filter((mp) => mp.proveedor_id === provIdNum || mp.proveedor_id === null)
+    : materiasPrimas;
   return (
     <div className="overlay" onClick={onClose}>
       <div className="modal" style={{ width: 680 }} onClick={e => e.stopPropagation()}>
@@ -115,7 +160,7 @@ export function ModalCargarFactura({
             </div>
             {items.length > 0 && (
               <table className="items-table">
-                <thead><tr><th>Producto</th><th>Cantidad</th><th>Unidad</th><th>Precio unit.</th><th>Subtotal</th><th></th></tr></thead>
+                <thead><tr><th>Producto</th><th>Cantidad</th><th>Unidad</th><th>Precio unit.</th><th>Subtotal</th><th>→ Materia prima (CMV)</th><th></th></tr></thead>
                 <tbody>{items.map((it, i) => (
                   <tr key={i}>
                     <td><input style={{ width: "100%", background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.producto} onChange={e => updateItem(i, "producto", e.target.value)} placeholder="Ej: Salmón" /></td>
@@ -123,10 +168,32 @@ export function ModalCargarFactura({
                     <td><select style={{ background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.unidad} onChange={e => updateItem(i, "unidad", e.target.value)}>{UNIDADES.map(u => <option key={u}>{u}</option>)}</select></td>
                     <td><input type="number" step="0.01" style={{ width: 90, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.precio_unitario} onChange={e => updateItem(i, "precio_unitario", e.target.value)} /></td>
                     <td style={{ color: "var(--acc)", fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 500 }}>{fmt_$(it.subtotal)}</td>
+                    <td>
+                      <select
+                        style={{ width: "100%", background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontSize: 11, borderRadius: "var(--r)" }}
+                        value={it.materia_prima_id ?? ""}
+                        onChange={e => updateItem(i, "materia_prima_id" as keyof ItemFactura, e.target.value ? Number(e.target.value) : 0)}
+                        title="Vincular a una materia prima del catálogo para que actualice el costo del insumo automáticamente"
+                      >
+                        <option value="">— sin vincular —</option>
+                        {materiasFiltradas.map((mp) => (
+                          <option key={mp.id} value={mp.id}>
+                            {mp.nombre}{mp.insumo_nombre ? ` → ${mp.insumo_nombre}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
                     <td><button className="btn btn-danger btn-sm" onClick={() => removeItem(i)}>✕</button></td>
                   </tr>
                 ))}</tbody>
               </table>
+            )}
+            {items.length > 0 && (
+              <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 6, padding: "6px 8px", background: "var(--bg)", borderRadius: 4 }}>
+                💡 Vinculá cada item a una materia prima para que su precio se propague al costo
+                del insumo unificado (alimenta el CMV de las recetas). Si la materia prima no existe,
+                creala en COMANDA → Menú → Materias primas.
+              </div>
             )}
           </div>
         </div>
