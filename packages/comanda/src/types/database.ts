@@ -310,6 +310,7 @@ export interface VentaPosItem {
   cargado_por: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;
 }
 
 export interface VentaPosPago {

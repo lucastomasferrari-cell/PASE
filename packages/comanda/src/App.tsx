@@ -17,7 +17,8 @@ import { CajaHistorico } from './pages/Caja/CajaHistorico';
 import { PosLayout } from './pages/Pos/PosLayout';
 import { SalonView } from './pages/Pos/SalonView';
 import { MostradorView } from './pages/Pos/MostradorView';
-import { PedidosPlaceholder } from './pages/Pos/PedidosPlaceholder';
+import { PedidosHub } from './pages/Pos/PedidosHub';
+import { PedidoDetalle } from './pages/Pos/PedidoDetalle';
 import { VentaScreen } from './pages/Pos/VentaScreen';
 import { DefaultModeRedirect } from './components/DefaultModeRedirect';
 
@@ -233,7 +234,8 @@ export default function App() {
                   <Route path="/pos" element={<DefaultModeRedirect />} />
                   <Route path="/pos/salon" element={<SalonView />} />
                   <Route path="/pos/mostrador" element={<MostradorView />} />
-                  <Route path="/pos/pedidos" element={<PedidosPlaceholder />} />
+                  <Route path="/pos/pedidos" element={<PedidosHub />} />
+                  <Route path="/pos/pedidos/:ventaId" element={<PedidoDetalle />} />
                   <Route path="/pos/venta/:ventaId" element={<VentaScreen />} />
                   <Route path="/caja" element={<CajaEstado />} />
                   <Route path="/caja/abrir" element={<CajaAbrir />} />

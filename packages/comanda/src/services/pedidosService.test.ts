@@ -11,8 +11,9 @@ vi.mock('../lib/supabase', () => ({
 
 import {
   aprobarPedidoService, marcarListoService, marcarEntregadoService,
-  getCountersPedidos,
+  getCountersPedidos, cancelarPedidoService, calcularEstadoPago,
 } from './pedidosService';
+import type { VentaPosPago } from '../types/database';
 
 beforeEach(() => { mockRpc.mockReset(); mockFrom.mockReset(); });
 
@@ -31,6 +32,52 @@ describe('flow de pedidos', () => {
     mockRpc.mockResolvedValue({ data: null, error: null });
     await marcarEntregadoService(8);
     expect(mockRpc).toHaveBeenCalledWith('fn_marcar_entregado_comanda', { p_venta_id: 8 });
+  });
+});
+
+describe('cancelarPedidoService', () => {
+  it('llama fn_anular_venta_comanda con managerId + motivo', async () => {
+    mockRpc.mockResolvedValue({ data: null, error: null });
+    await cancelarPedidoService(42, 'mgr-uuid-1', 'Cliente cancelo por demora');
+    expect(mockRpc).toHaveBeenCalledWith('fn_anular_venta_comanda', {
+      p_venta_id: 42,
+      p_manager_id: 'mgr-uuid-1',
+      p_motivo: 'Cliente cancelo por demora',
+    });
+  });
+  it('devuelve error si la RPC falla', async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: 'VENTA_YA_ANULADA' } });
+    const r = await cancelarPedidoService(42, 'mgr', 'motivo');
+    expect(r.error).toBe('VENTA_YA_ANULADA');
+  });
+});
+
+describe('calcularEstadoPago', () => {
+  // Helper para fabricar pagos confirmados (solo monto importa para esta función).
+  const pago = (monto: number): VentaPosPago => ({
+    id: 1, tenant_id: 't', local_id: 1, venta_id: 1,
+    metodo: 'efectivo', monto, idempotency_key: 'k', vuelto: 0,
+    propina_incluida: 0, cobrado_por: null, estado: 'confirmado',
+    confirmado_at: null, reembolsado_at: null, created_at: '',
+  });
+
+  it('pagos confirmados que cubren el total → pagado', () => {
+    expect(calcularEstadoPago(1500, [pago(1500)])).toBe('pagado');
+  });
+  it('suma de varios pagos confirmados ≥ total → pagado', () => {
+    expect(calcularEstadoPago(1500, [pago(500), pago(1000)])).toBe('pagado');
+  });
+  it('suma de pagos < total → pendiente', () => {
+    expect(calcularEstadoPago(1500, [pago(1000)])).toBe('pendiente');
+  });
+  it('sin pagos → pendiente', () => {
+    expect(calcularEstadoPago(1500, [])).toBe('pendiente');
+  });
+  it('exact match (suma == total) → pagado', () => {
+    expect(calcularEstadoPago(2350.75, [pago(1000), pago(1350.75)])).toBe('pagado');
+  });
+  it('total 0 con pagos vacíos → pagado (caso borde: pedido sin items)', () => {
+    expect(calcularEstadoPago(0, [])).toBe('pagado');
   });
 });
 
