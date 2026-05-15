@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Truck, ShoppingBag, Phone, MapPin, Search, User, Plus } from 'lucide-react';
+import { Truck, ShoppingBag, Phone, MapPin, Search, User, Plus, Clock } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/select';
 import { abrirVenta } from '@/services/ventasService';
 import { listCanales } from '@/services/canalesService';
-import { listClientes } from '@/services/clientesService';
+import { listClientes, createCliente } from '@/services/clientesService';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
@@ -44,13 +44,20 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
   const [notas, setNotas] = useState('');
   const [matches, setMatches] = useState<Cliente[]>([]);
   const [saving, setSaving] = useState(false);
+  // ID del cliente existente seleccionado del CRM. Si NULL al guardar y hay
+  // telefono+nombre, se crea uno nuevo automáticamente.
+  const [clienteIdExistente, setClienteIdExistente] = useState<number | null>(null);
+  // Programar para horario futuro (ej. "para las 21:00"). Default: ya (inmediato).
+  const [programado, setProgramado] = useState(false);
+  const [programadaPara, setProgramadaPara] = useState('');
 
   // Reset on open
   useEffect(() => {
     if (open) {
       setTipoEntrega('delivery');
       setTelefono(''); setNombre(''); setDireccion(''); setAclaracion(''); setNotas('');
-      setMatches([]); setSaving(false);
+      setMatches([]); setSaving(false); setClienteIdExistente(null);
+      setProgramado(false); setProgramadaPara('');
     }
   }, [open]);
 
@@ -83,8 +90,12 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
     setNombre([c.nombre, c.apellido].filter(Boolean).join(' '));
     setDireccion(c.direccion ?? '');
     setAclaracion(c.direccion_aclaracion ?? '');
+    setClienteIdExistente(c.id);
     setMatches([]);
   }
+
+  // Si el cajero edita el teléfono después de elegir un cliente, perdemos el match
+  useEffect(() => { setClienteIdExistente(null); }, [telefono]);
 
   const isDelivery = tipoEntrega === 'delivery';
   const canSubmit = useMemo(() => {
@@ -104,6 +115,31 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
       return;
     }
     setSaving(true);
+
+    // Auto-save: si el teléfono no matchea con un cliente del CRM, crearlo.
+    // Si la creación falla (ej. duplicado por race con otro cajero), seguimos
+    // igual con la venta — el cliente queda guardado en los campos de
+    // ventas_pos por si después se quiere migrar manualmente.
+    if (!clienteIdExistente && user?.tenant_id) {
+      // Split nombre completo en nombre + apellido (primer espacio).
+      const partes = nombre.trim().split(/\s+/);
+      const nombrePrim = partes[0] ?? nombre.trim();
+      const apellido = partes.length > 1 ? partes.slice(1).join(' ') : null;
+      try {
+        await createCliente(user.tenant_id, {
+          telefono: telefono.trim(),
+          nombre: nombrePrim,
+          apellido,
+          direccion: isDelivery ? direccion.trim() : null,
+          direccion_aclaracion: isDelivery && aclaracion.trim() ? aclaracion.trim() : null,
+          vip: false,
+          acepta_marketing: false,
+        });
+      } catch (e) {
+        console.warn('[NuevoPedido] auto-save cliente CRM falló (no bloquea):', e);
+      }
+    }
+
     const dirCompleta = isDelivery
       ? [direccion.trim(), aclaracion.trim()].filter(Boolean).join(' — ')
       : null;
@@ -116,6 +152,7 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
       clienteDireccion: dirCompleta,
       tipoEntrega,
       origen: 'pos',
+      programadaPara: programado && programadaPara ? new Date(programadaPara).toISOString() : null,
     });
     setSaving(false);
     if (error || !ventaId) {
@@ -266,6 +303,32 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
             </div>
           </>
         )}
+
+        {/* Programar para horario futuro */}
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setProgramado((p) => !p)}
+            className={cn(
+              'w-full h-11 rounded-md border flex items-center justify-center gap-2 text-sm font-medium transition-colors',
+              programado
+                ? 'border-primary bg-primary/5 text-primary'
+                : 'border-border bg-background hover:bg-accent text-muted-foreground',
+            )}
+          >
+            <Clock className="h-4 w-4" />
+            {programado ? 'Programado para…' : 'Para ahora (apurarlo a cocina)'}
+          </button>
+          {programado && (
+            <Input
+              type="datetime-local"
+              value={programadaPara}
+              onChange={(e) => setProgramadaPara(e.target.value)}
+              min={new Date(Date.now() - 60_000).toISOString().slice(0, 16)}
+              className="h-11"
+            />
+          )}
+        </div>
 
         {/* Notas */}
         <div className="space-y-2">
