@@ -232,6 +232,12 @@ export interface TurnoCaja {
   diferencia: number | null;
   notas: string | null;
   estado: EstadoTurno;
+  /** Cash Management: breakdown por denominación al cierre. NULL si fue modo rápido. */
+  efectivo_breakdown: {
+    billetes: Record<string, number>;
+    monedas: Record<string, number>;
+    total: number;
+  } | null;
 }
 
 export interface MovimientoCaja {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
+import { Lock, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Calculator, Hash } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
 import { useLocalActivo } from '../../lib/localActivo';
@@ -10,6 +10,7 @@ import {
 import type { TurnoCaja } from '../../types/database';
 import { formatARS, formatHoraAR } from '../../lib/format';
 import { MoneyInput } from '../../components/MoneyInput';
+import { DenominacionesInput, emptyBreakdown, type EfectivoBreakdown } from '../../components/DenominacionesInput';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -29,6 +30,11 @@ export function CajaCerrar() {
   const [notas, setNotas] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Cash Management: modo rápido (input único) vs modo denominaciones.
+  // Default rápido. Si el dueño quiere forzar denominaciones, hacerlo
+  // setting de comanda_local_settings (deuda).
+  const [modo, setModo] = useState<'rapido' | 'denominaciones'>('rapido');
+  const [breakdown, setBreakdown] = useState<EfectivoBreakdown>(() => emptyBreakdown());
 
   useEffect(() => {
     if (localId === null) return;
@@ -52,7 +58,9 @@ export function CajaCerrar() {
 
   const efectivoEntrante = totales.find((t) => t.metodo === 'efectivo')?.total ?? 0;
   const calculadoEfectivo = Number(turno.monto_inicial) + efectivoEntrante;
-  const diferencia = montoEfectivoDeclarado - calculadoEfectivo;
+  // En modo denominaciones, el total declarado viene del breakdown.
+  const declarado = modo === 'denominaciones' ? breakdown.total : montoEfectivoDeclarado;
+  const diferencia = declarado - calculadoEfectivo;
   const difState = difStateFor(diferencia);
 
   async function onSubmit(e: React.FormEvent) {
@@ -60,8 +68,9 @@ export function CajaCerrar() {
     if (!empleado || !turno) return;
     setSaving(true);
     setError(null);
+    const breakdownArg = modo === 'denominaciones' ? breakdown : null;
     const { error: err } = await cerrarTurno(
-      turno.id, empleado.id, montoEfectivoDeclarado, notas.trim() || null,
+      turno.id, empleado.id, declarado, notas.trim() || null, breakdownArg,
     );
     setSaving(false);
     if (err) { setError(err); return; }
@@ -104,9 +113,40 @@ export function CajaCerrar() {
 
       {/* Form */}
       <form onSubmit={onSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <Label>Efectivo en caja al cierre (lo que contás físicamente)</Label>
-          <MoneyInput value={montoEfectivoDeclarado} onChange={setMontoEfectivoDeclarado} autoFocus />
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <Label>Efectivo en caja al cierre (lo que contás físicamente)</Label>
+            <div className="inline-flex rounded-md border border-border overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setModo('rapido')}
+                className={cn(
+                  'px-3 h-8 text-xs font-medium inline-flex items-center gap-1.5',
+                  modo === 'rapido' ? 'bg-primary text-primary-foreground' : 'bg-background',
+                )}
+              >
+                <Hash className="h-3.5 w-3.5" />
+                Rápido
+              </button>
+              <button
+                type="button"
+                onClick={() => setModo('denominaciones')}
+                className={cn(
+                  'px-3 h-8 text-xs font-medium inline-flex items-center gap-1.5 border-l border-border',
+                  modo === 'denominaciones' ? 'bg-primary text-primary-foreground' : 'bg-background',
+                )}
+              >
+                <Calculator className="h-3.5 w-3.5" />
+                Por denominaciones
+              </button>
+            </div>
+          </div>
+
+          {modo === 'rapido' ? (
+            <MoneyInput value={montoEfectivoDeclarado} onChange={setMontoEfectivoDeclarado} autoFocus />
+          ) : (
+            <DenominacionesInput value={breakdown} onChange={setBreakdown} disabled={saving} />
+          )}
         </div>
 
         {/* Diferencia con semáforo */}

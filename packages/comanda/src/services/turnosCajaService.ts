@@ -36,12 +36,16 @@ export async function cerrarTurno(
   cerradoPor: string,
   montoFinalDeclarado: number,
   notas: string | null,
+  efectivoBreakdown?: { billetes: Record<string, number>; monedas: Record<string, number>; total: number } | null,
+  idempotencyKey?: string,
 ): Promise<{ data: { calculado: number; diferencia: number } | null; error: string | null }> {
   const { data, error } = await db.rpc('fn_cerrar_turno_caja_comanda', {
     p_turno_id: turnoId,
     p_cerrado_por: cerradoPor,
     p_monto_final_declarado: montoFinalDeclarado,
     p_notas: notas,
+    p_idempotency_key: idempotencyKey ?? null,
+    p_efectivo_breakdown: efectivoBreakdown ?? null,
   });
   if (error) return { data: null, error: translateError(error) };
   const arr = data as Array<{ monto_calculado: number; diferencia: number }> | null;
