@@ -1,4 +1,4 @@
-import { Phone, MapPin, Home, CheckCircle2, ChefHat, MessageSquareWarning } from 'lucide-react';
+import { Phone, MapPin, Home, CheckCircle2, ChefHat, MessageSquareWarning, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -105,6 +105,18 @@ export function PedidoCard({ pedido, canales, variant = 'default', onClick, onAc
         {pedido.tipo_entrega === 'retiro' && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Home className="h-3 w-3" /> Retiro en local
+          </div>
+        )}
+
+        {/* PROGRAMADO PARA hora futura — banner destacado */}
+        {pedido.programada_para && (
+          <div className="flex items-center gap-1.5 rounded-md bg-primary/10 border border-primary/30 px-2.5 py-1.5 text-xs">
+            <Clock className="h-3.5 w-3.5 text-primary" />
+            <span className="text-primary font-medium">
+              Para {new Date(pedido.programada_para).toLocaleString('es-AR', {
+                weekday: 'short', hour: '2-digit', minute: '2-digit',
+              })}
+            </span>
           </div>
         )}
 
