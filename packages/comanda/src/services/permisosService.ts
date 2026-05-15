@@ -1,4 +1,5 @@
 import { db } from '../lib/supabase';
+import { translateError } from '../lib/errors';
 
 // Listado canónico de slugs de permisos COMANDA documentados en migrations.
 // Mantener sincronizado con los slugs en RLS policies.
@@ -39,7 +40,7 @@ export async function getPermisosUsuario(usuarioId: number): Promise<{ data: str
     .from('usuario_permisos')
     .select('modulo_slug')
     .eq('usuario_id', usuarioId);
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []).map((r) => (r as { modulo_slug: string }).modulo_slug), error: null };
 }
 

@@ -1,5 +1,6 @@
 import { db } from '../lib/supabase';
 import type { Item, ItemEstado } from '../types/database';
+import { translateError } from '../lib/errors';
 
 export type ItemConGrupo = Item & {
   grupo: { id: number; nombre: string; emoji: string | null; color: string | null } | null;
@@ -38,7 +39,7 @@ export async function listItems(filter: ItemsListFilter): Promise<{ data: ItemCo
   }
 
   const { data, error } = await q;
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as unknown as ItemConGrupo[], error: null };
 }
 
@@ -50,7 +51,7 @@ export type ItemDraft = Pick<
 
 export async function createItem(draft: ItemDraft): Promise<{ id: number | null; error: string | null }> {
   const { data, error } = await db.from('items').insert(draft).select('id').single();
-  if (error) return { id: null, error: error.message };
+  if (error) return { id: null, error: translateError(error) };
   return { id: data.id as number, error: null };
 }
 

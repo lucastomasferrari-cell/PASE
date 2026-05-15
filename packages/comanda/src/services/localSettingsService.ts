@@ -1,5 +1,6 @@
 import { db } from '../lib/supabase';
 import type { ComandaLocalSettings, PosModo } from '../types/database';
+import { translateError } from '../lib/errors';
 
 const MP_QR_BUCKET = 'mp-qrs';
 
@@ -10,7 +11,7 @@ export async function getLocalSettings(localId: number): Promise<{ data: Comanda
     .eq('local_id', localId)
     .is('deleted_at', null)
     .limit(1);
-  if (error) return { data: null, error: error.message };
+  if (error) return { data: null, error: translateError(error) };
   return { data: (data?.[0] as ComandaLocalSettings | undefined) ?? null, error: null };
 }
 
@@ -36,7 +37,7 @@ export async function validarSlugUnico(slug: string, excluyeLocalId: number): Pr
     .select('id, local_id')
     .eq('slug', slug)
     .is('deleted_at', null);
-  if (error) return { disponible: false, error: error.message };
+  if (error) return { disponible: false, error: translateError(error) };
   const conflict = (data ?? []).find((r) => (r as { local_id: number }).local_id !== excluyeLocalId);
   return { disponible: !conflict, error: null };
 }

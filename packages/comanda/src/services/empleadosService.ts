@@ -1,5 +1,6 @@
 import { db } from '../lib/supabase';
 import type { EmpleadoPos, RolPos } from '../types/database';
+import { translateError } from '../lib/errors';
 
 // Lista TODOS los empleados activos del local (con o sin PIN), para Settings.
 export async function listEmpleadosLocal(localId: number): Promise<{ data: EmpleadoPos[]; error: string | null }> {
@@ -10,7 +11,7 @@ export async function listEmpleadosLocal(localId: number): Promise<{ data: Emple
     .eq('activo', true)
     .order('apellido', { ascending: true })
     .order('nombre', { ascending: true });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as EmpleadoPos[], error: null };
 }
 
@@ -24,7 +25,7 @@ export async function listEmpleadosPosActivos(localId: number): Promise<{ data: 
     .eq('pos_activo', true)
     .not('pin_actualizado_at', 'is', null)
     .order('apellido', { ascending: true });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as EmpleadoPos[], error: null };
 }
 
@@ -54,7 +55,7 @@ export async function verificarPin(localId: number, pin: string): Promise<{ empl
     p_local_id: localId,
     p_pin: pin,
   });
-  if (error) return { empleadoId: null, error: error.message };
+  if (error) return { empleadoId: null, error: translateError(error) };
   return { empleadoId: (data as string | null) ?? null, error: null };
 }
 
@@ -66,6 +67,6 @@ export async function getEmpleado(empleadoId: string): Promise<{ data: EmpleadoP
     .eq('id', empleadoId)
     .limit(1)
     .single();
-  if (error) return { data: null, error: error.message };
+  if (error) return { data: null, error: translateError(error) };
   return { data: data as EmpleadoPos, error: null };
 }

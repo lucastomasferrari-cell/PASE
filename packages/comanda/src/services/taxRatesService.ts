@@ -1,11 +1,12 @@
 import { db } from '../lib/supabase';
 import type { TaxRate } from '../types/database';
+import { translateError } from '../lib/errors';
 
 export async function listTaxRates(tenantId: string | null): Promise<{ data: TaxRate[]; error: string | null }> {
   let q = db.from('tax_rates').select('*').is('deleted_at', null).order('id', { ascending: true });
   if (tenantId) q = q.eq('tenant_id', tenantId);
   const { data, error } = await q;
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: data ?? [], error: null };
 }
 
@@ -20,7 +21,7 @@ export async function createTaxRate(draft: TaxRateDraft): Promise<{ id: number |
     await db.from('tax_rates').update({ es_default: false }).eq('tenant_id', draft.tenant_id).eq('es_default', true);
   }
   const { data, error } = await db.from('tax_rates').insert(draft).select('id').single();
-  if (error) return { id: null, error: error.message };
+  if (error) return { id: null, error: translateError(error) };
   return { id: data.id as number, error: null };
 }
 

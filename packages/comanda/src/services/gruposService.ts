@@ -1,5 +1,6 @@
 import { db } from '../lib/supabase';
 import type { ItemGrupo } from '../types/database';
+import { translateError } from '../lib/errors';
 
 export async function listGrupos(tenantId: string | null): Promise<{ data: ItemGrupo[]; error: string | null }> {
   let q = db
@@ -10,7 +11,7 @@ export async function listGrupos(tenantId: string | null): Promise<{ data: ItemG
     .order('id', { ascending: true });
   if (tenantId) q = q.eq('tenant_id', tenantId);
   const { data, error } = await q;
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: data ?? [], error: null };
 }
 
@@ -24,7 +25,7 @@ export type GrupoDraft = Pick<
 
 export async function createGrupo(draft: GrupoDraft): Promise<{ id: number | null; error: string | null }> {
   const { data, error } = await db.from('item_grupos').insert(draft).select('id').single();
-  if (error) return { id: null, error: error.message };
+  if (error) return { id: null, error: translateError(error) };
   return { id: data.id as number, error: null };
 }
 

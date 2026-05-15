@@ -1,4 +1,5 @@
 import { db } from '../lib/supabase';
+import { translateError } from '../lib/errors';
 
 // Reportes operativos — RPCs SECURITY DEFINER que validan
 // auth_tiene_permiso('comanda.reportes.ver') o auth_es_superadmin().
@@ -73,7 +74,7 @@ export async function getVentasPorCanal(localId: number, desde: string, hasta: s
   const { data, error } = await db.rpc('fn_reporte_ventas_por_canal_comanda', {
     p_local_id: localId, p_desde: desde, p_hasta: hasta,
   });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as VentasPorCanal[], error: null };
 }
 
@@ -81,7 +82,7 @@ export async function getTopProductos(localId: number, desde: string, hasta: str
   const { data, error } = await db.rpc('fn_reporte_top_productos_comanda', {
     p_local_id: localId, p_desde: desde, p_hasta: hasta, p_limit: limit,
   });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as TopProducto[], error: null };
 }
 
@@ -89,7 +90,7 @@ export async function getTiempos(localId: number, desde: string, hasta: string):
   const { data, error } = await db.rpc('fn_reporte_tiempos_comanda', {
     p_local_id: localId, p_desde: desde, p_hasta: hasta,
   });
-  if (error) return { data: null, error: error.message };
+  if (error) return { data: null, error: translateError(error) };
   const arr = data as TiemposReporte[] | null;
   return { data: arr?.[0] ?? null, error: null };
 }
@@ -98,7 +99,7 @@ export async function getKpisPeriodo(localId: number, desde: string, hasta: stri
   const { data, error } = await db.rpc('fn_reporte_kpis_periodo_comanda', {
     p_local_id: localId, p_desde: desde, p_hasta: hasta,
   });
-  if (error) return { data: null, error: error.message };
+  if (error) return { data: null, error: translateError(error) };
   const arr = data as KpisPeriodo[] | null;
   return { data: arr?.[0] ?? null, error: null };
 }

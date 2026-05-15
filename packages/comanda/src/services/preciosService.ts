@@ -1,11 +1,12 @@
 import { db } from '../lib/supabase';
 import type { ItemPrecioCanal } from '../types/database';
+import { translateError } from '../lib/errors';
 
 export async function listPreciosPorTenant(tenantId: string | null): Promise<{ data: ItemPrecioCanal[]; error: string | null }> {
   let q = db.from('item_precios_canal').select('*').is('deleted_at', null);
   if (tenantId) q = q.eq('tenant_id', tenantId);
   const { data, error } = await q;
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: data ?? [], error: null };
 }
 
@@ -77,7 +78,7 @@ export async function aumentoMasivo(args: AumentoMasivoArgs): Promise<{ data: Au
     p_porcentaje: args.porcentaje,
     p_redondeo_a: args.redondeoA,
   });
-  if (error) return { data: null, error: error.message };
+  if (error) return { data: null, error: translateError(error) };
   // RPC retorna SETOF (items_afectados, precios_recalculados). Tomamos primer row.
   const arr = data as Array<{ items_afectados: number; precios_recalculados: number }> | null;
   const row = arr?.[0];
@@ -126,7 +127,7 @@ export async function recalcularAtadosDeItem(itemId: number): Promise<{ error: s
       .from('item_precios_canal')
       .update({ precio: u.precio, edicion_manual: false })
       .eq('id', u.id);
-    if (error) return { error: error.message };
+    if (error) return { error: translateError(error) };
   }
 
   return { error: null };

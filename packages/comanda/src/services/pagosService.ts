@@ -1,5 +1,6 @@
 import { db } from '../lib/supabase';
 import type { VentaPosPago } from '../types/database';
+import { translateError } from '../lib/errors';
 
 export interface PagoInput {
   metodo: string;
@@ -32,7 +33,7 @@ export async function cobrar(
     p_cobrado_por: cobradoPor,
     p_idempotency_key: idempotencyKey ?? null,
   });
-  if (error) return { totalCobrado: 0, error: error.message };
+  if (error) return { totalCobrado: 0, error: translateError(error) };
   return { totalCobrado: Number(data ?? 0), error: null };
 }
 
@@ -44,7 +45,7 @@ export async function listPagosVenta(ventaId: number): Promise<{ data: VentaPosP
     .eq('venta_id', ventaId)
     .is('deleted_at', null)
     .order('id', { ascending: true });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as VentaPosPago[], error: null };
 }
 
@@ -58,7 +59,7 @@ export async function refundVenta(
     p_motivo: motivo,
     p_idempotency_key: idempotencyKey ?? null,
   });
-  if (error) return { totalReembolsado: 0, error: error.message };
+  if (error) return { totalReembolsado: 0, error: translateError(error) };
   return { totalReembolsado: Number(data ?? 0), error: null };
 }
 
@@ -86,6 +87,6 @@ export async function agregarPago(args: AgregarPagoArgs): Promise<{ pagoId: numb
     p_vuelto: args.vuelto ?? null,
     p_propina_incluida: args.propinaIncluida ?? 0,
   });
-  if (error) return { pagoId: null, error: error.message };
+  if (error) return { pagoId: null, error: translateError(error) };
   return { pagoId: data as number, error: null };
 }

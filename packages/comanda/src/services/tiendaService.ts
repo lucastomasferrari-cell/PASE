@@ -1,6 +1,7 @@
 import { db } from '../lib/supabase';
 import { dbAnon } from '../lib/supabaseAnon';
 import type { TipoEntrega, VentaPos } from '../types/database';
+import { translateError } from '../lib/errors';
 
 // Vista pública del catálogo de tienda online. Lectura anon (RLS no aplica a vistas).
 
@@ -44,7 +45,7 @@ export async function getLocalPorSlug(slug: string): Promise<{ data: LocalPublic
     .select('*')
     .eq('slug', slug)
     .limit(1);
-  if (error) return { data: null, error: error.message };
+  if (error) return { data: null, error: translateError(error) };
   return { data: (data?.[0] as LocalPublico | undefined) ?? null, error: null };
 }
 
@@ -55,7 +56,7 @@ export async function getCatalogoPorSlug(slug: string): Promise<{ data: Catalogo
     .eq('local_slug', slug)
     .order('grupo_id', { ascending: true, nullsFirst: false })
     .order('nombre', { ascending: true });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as CatalogoPublicoItem[], error: null };
 }
 
@@ -74,7 +75,7 @@ export async function getPedidoPublico(ventaId: number, telefono: string): Promi
   const { data, error } = await dbAnon.rpc('fn_get_pedido_publico_comanda', {
     p_venta_id: ventaId, p_telefono: telefono,
   });
-  if (error) return { data: null, error: error.message };
+  if (error) return { data: null, error: translateError(error) };
   const arr = data as PedidoPublicoEstado[] | null;
   return { data: arr?.[0] ?? null, error: null };
 }
@@ -108,7 +109,7 @@ export async function crearPedidoPublico(args: CrearPedidoArgs): Promise<{ venta
     p_metodo_pago_preferido: args.metodoPagoPreferido,
     p_notas: args.notas ?? null,
   });
-  if (error) return { ventaId: null, numero: null, error: error.message };
+  if (error) return { ventaId: null, numero: null, error: translateError(error) };
   const arr = data as Array<{ venta_id: number; numero_local: number }> | null;
   const row = arr?.[0];
   if (!row) return { ventaId: null, numero: null, error: 'Sin resultado' };
@@ -143,7 +144,7 @@ export async function getPopulares(
     p_dias: dias,
     p_limit: limit,
   });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   const rows = (data ?? []) as Array<{
     item_id: number;
     nombre: string;
@@ -192,6 +193,6 @@ export async function listPedidosPorAprobar(localId: number): Promise<{ data: Ve
     .eq('estado', 'necesita_aprobacion')
     .is('deleted_at', null)
     .order('created_at', { ascending: false });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as VentaPos[], error: null };
 }

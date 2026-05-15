@@ -1,5 +1,6 @@
 import { db } from '../lib/supabase';
 import type { Canal } from '../types/database';
+import { translateError } from '../lib/errors';
 
 export async function listCanales(tenantId: string | null, soloActivos = false): Promise<{ data: Canal[]; error: string | null }> {
   let q = db
@@ -11,7 +12,7 @@ export async function listCanales(tenantId: string | null, soloActivos = false):
   if (tenantId) q = q.eq('tenant_id', tenantId);
   if (soloActivos) q = q.eq('activo', true);
   const { data, error } = await q;
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: data ?? [], error: null };
 }
 
@@ -23,7 +24,7 @@ export type CanalDraft = Pick<
 
 export async function createCanal(draft: CanalDraft): Promise<{ id: number | null; error: string | null }> {
   const { data, error } = await db.from('canales').insert(draft).select('id').single();
-  if (error) return { id: null, error: error.message };
+  if (error) return { id: null, error: translateError(error) };
   return { id: data.id as number, error: null };
 }
 

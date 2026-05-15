@@ -1,5 +1,6 @@
 import { db } from '../lib/supabase';
 import type { Receta, RecetaInsumo, Insumo, Item } from '../types/database';
+import { translateError } from '../lib/errors';
 
 // Service de recetas + receta_insumos (F1.1b — UI editor recetas).
 //
@@ -38,7 +39,7 @@ export async function listItemsConReceta(
     .eq('tenant_id', tenantId)
     .is('deleted_at', null)
     .order('nombre', { ascending: true });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   type Row = Omit<Item, 'tenant_id' | 'local_id' | 'created_at' | 'updated_at' | 'deleted_at' | 'created_by' | 'updated_by' | 'descripcion' | 'foto_url' | 'codigo' | 'grupo_id' | 'orden' | 'costo_actualizado_at' | 'receta_version_id_vigente' | 'tax_rate_id' | 'estacion' | 'agotado_motivo' | 'agotado_por' | 'agotado_at' | 'agotado_hasta' | 'es_combo' | 'visible_pos' | 'visible_qr' | 'visible_tienda' | 'es_open_item'> & {
     receta_id_vigente: number | null;
     receta: Receta | null;
@@ -62,7 +63,7 @@ export async function getRecetaConInsumos(
     .eq('id', recetaId)
     .is('deleted_at', null)
     .maybeSingle();
-  if (error) return { data: null, error: error.message };
+  if (error) return { data: null, error: translateError(error) };
   if (!data) return { data: null, error: null };
   const r = data as unknown as RecetaConInsumos;
   // Filtrar receta_insumos soft-deleted client-side.
@@ -139,7 +140,7 @@ export async function upsertReceta(
         notas: input.notas ?? null,
       })
       .eq('id', recetaId);
-    if (error) return { data: null, error: error.message };
+    if (error) return { data: null, error: translateError(error) };
 
     // Soft-delete los receta_insumos viejos.
     await db
@@ -162,7 +163,7 @@ export async function upsertReceta(
       })
       .select('id')
       .single();
-    if (error) return { data: null, error: error.message };
+    if (error) return { data: null, error: translateError(error) };
     recetaId = (created as { id: number }).id;
 
     // Apuntar items.receta_id_vigente a esta receta.

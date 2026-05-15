@@ -1,5 +1,6 @@
 import { db } from '../lib/supabase';
 import type { ComandaLocalSettings, MetodoCobro, PosModo } from '../types/database';
+import { translateError } from '../lib/errors';
 
 // ─── Métodos de cobro ────────────────────────────────────────────────────
 
@@ -13,7 +14,7 @@ export async function listMetodosCobro(localId: number | null): Promise<{ data: 
   }
   q = q.order('orden', { ascending: true }).order('id', { ascending: true });
   const { data, error } = await q;
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as MetodoCobro[], error: null };
 }
 
@@ -32,7 +33,7 @@ export async function getLocalSettings(localId: number): Promise<{ data: Comanda
     .eq('local_id', localId)
     .is('deleted_at', null)
     .limit(1);
-  if (error) return { data: null, error: error.message };
+  if (error) return { data: null, error: translateError(error) };
   return { data: (data?.[0] as ComandaLocalSettings | undefined) ?? null, error: null };
 }
 
@@ -56,7 +57,7 @@ export async function listLocalesAccesibles(): Promise<{ data: LocalSimple[]; er
     .from('locales')
     .select('id, nombre')
     .order('id', { ascending: true });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as LocalSimple[], error: null };
 }
 

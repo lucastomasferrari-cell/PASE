@@ -1,5 +1,6 @@
 import { db } from '../lib/supabase';
 import type { ComboComponente } from '../types/database';
+import { translateError } from '../lib/errors';
 
 export async function listComboComponentes(comboId: number): Promise<{ data: ComboComponente[]; error: string | null }> {
   const { data, error } = await db
@@ -9,7 +10,7 @@ export async function listComboComponentes(comboId: number): Promise<{ data: Com
     .is('deleted_at', null)
     .order('slot_orden', { ascending: true })
     .order('id', { ascending: true });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: data ?? [], error: null };
 }
 
@@ -20,7 +21,7 @@ export type ComboComponenteDraft = Pick<
 
 export async function addComponente(draft: ComboComponenteDraft): Promise<{ id: number | null; error: string | null }> {
   const { data, error } = await db.from('combo_componentes').insert(draft).select('id').single();
-  if (error) return { id: null, error: error.message };
+  if (error) return { id: null, error: translateError(error) };
   return { id: data.id as number, error: null };
 }
 

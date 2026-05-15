@@ -1,5 +1,6 @@
 import { db } from '../lib/supabase';
 import type { TurnoCaja, MovimientoCaja } from '../types/database';
+import { translateError } from '../lib/errors';
 
 export async function getTurnoAbierto(localId: number): Promise<{ data: TurnoCaja | null; error: string | null }> {
   const { data, error } = await db
@@ -8,7 +9,7 @@ export async function getTurnoAbierto(localId: number): Promise<{ data: TurnoCaj
     .eq('local_id', localId)
     .eq('estado', 'abierto')
     .limit(1);
-  if (error) return { data: null, error: error.message };
+  if (error) return { data: null, error: translateError(error) };
   return { data: (data?.[0] as TurnoCaja | undefined) ?? null, error: null };
 }
 
@@ -26,7 +27,7 @@ export async function abrirTurno(
     p_notas: notas,
     p_idempotency_key: idempotencyKey ?? null,
   });
-  if (error) return { turnoId: null, error: error.message };
+  if (error) return { turnoId: null, error: translateError(error) };
   return { turnoId: data as number, error: null };
 }
 
@@ -42,7 +43,7 @@ export async function cerrarTurno(
     p_monto_final_declarado: montoFinalDeclarado,
     p_notas: notas,
   });
-  if (error) return { data: null, error: error.message };
+  if (error) return { data: null, error: translateError(error) };
   const arr = data as Array<{ monto_calculado: number; diferencia: number }> | null;
   const row = arr?.[0];
   if (!row) return { data: { calculado: 0, diferencia: 0 }, error: null };
@@ -55,7 +56,7 @@ export async function listMovimientos(turnoId: number): Promise<{ data: Movimien
     .select('*')
     .eq('turno_caja_id', turnoId)
     .order('created_at', { ascending: false });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as MovimientoCaja[], error: null };
 }
 
@@ -79,7 +80,7 @@ export async function registrarMovimiento(
     p_idempotency_key: idempotencyKey ?? null,
     p_manager_id: managerId ?? null,
   });
-  if (error) return { id: null, error: error.message };
+  if (error) return { id: null, error: translateError(error) };
   return { id: data as number, error: null };
 }
 
@@ -95,7 +96,7 @@ export async function totalesPorMetodo(turnoId: number): Promise<{ data: Totales
     .from('movimientos_caja')
     .select('metodo, monto, tipo')
     .eq('turno_caja_id', turnoId);
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   const map = new Map<string, { total: number; cantidad: number }>();
   for (const row of data ?? []) {
     const r = row as { metodo: string; monto: number; tipo: string };
@@ -122,6 +123,6 @@ export async function listHistoricoTurnos(localId: number, limit = 50): Promise<
     .eq('estado', 'cerrado')
     .order('numero', { ascending: false })
     .limit(limit);
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as TurnoCaja[], error: null };
 }

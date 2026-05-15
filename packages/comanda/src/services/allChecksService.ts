@@ -1,5 +1,6 @@
 import { db } from '../lib/supabase';
 import type { VentaPos, ModoVenta, EstadoVenta } from '../types/database';
+import { translateError } from '../lib/errors';
 
 export type PeriodoFiltro = 'hoy' | 'ayer' | 'semana' | 'mes' | 'trimestre' | 'custom';
 
@@ -72,7 +73,7 @@ export async function buscarChecks(filter: AllChecksFilter): Promise<{ data: Ven
   q = q.limit(500);
 
   const { data, error } = await q;
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as VentaPos[], error: null };
 }
 

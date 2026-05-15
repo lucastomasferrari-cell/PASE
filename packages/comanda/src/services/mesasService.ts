@@ -1,5 +1,6 @@
 import { db } from '../lib/supabase';
 import type { Mesa, EstadoMesa, FormaMesa } from '../types/database';
+import { translateError } from '../lib/errors';
 
 export async function listMesas(localId: number): Promise<{ data: Mesa[]; error: string | null }> {
   const { data, error } = await db
@@ -9,7 +10,7 @@ export async function listMesas(localId: number): Promise<{ data: Mesa[]; error:
     .is('deleted_at', null)
     .order('zona', { ascending: true, nullsFirst: false })
     .order('id', { ascending: true });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as Mesa[], error: null };
 }
 
@@ -64,7 +65,7 @@ export interface MesaDraft {
 
 export async function createMesa(draft: MesaDraft): Promise<{ id: number | null; error: string | null }> {
   const { data, error } = await db.from('mesas').insert(draft).select('id').single();
-  if (error) return { id: null, error: error.message };
+  if (error) return { id: null, error: translateError(error) };
   return { id: data.id as number, error: null };
 }
 
@@ -131,7 +132,7 @@ export async function partirCuentaService(
     p_manager_id: managerId,
     p_motivo: motivo,
   });
-  if (error) return { ventaNuevaId: null, error: error.message };
+  if (error) return { ventaNuevaId: null, error: translateError(error) };
   return { ventaNuevaId: data as number, error: null };
 }
 
@@ -144,6 +145,6 @@ export async function listMesasLibres(localId: number): Promise<{ data: Array<{ 
     .eq('estado', 'libre')
     .is('deleted_at', null)
     .order('numero', { ascending: true });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as Array<{ id: number; numero: string; zona: string | null }>, error: null };
 }

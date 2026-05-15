@@ -1,4 +1,5 @@
 import { db } from '../lib/supabase';
+import { translateError } from '../lib/errors';
 import type {
   VentaPos, VentaPosItem, VentaPosItemModificador, ModoVenta, EstadoVenta,
   TipoEntrega, OrigenVenta,
@@ -36,7 +37,7 @@ export async function abrirVenta(args: AbrirVentaArgs): Promise<{ ventaId: numbe
     p_tipo_entrega: args.tipoEntrega ?? null,
     p_estado: args.estado ?? 'abierta',
   });
-  if (error) return { ventaId: null, error: error.message };
+  if (error) return { ventaId: null, error: translateError(error) };
   return { ventaId: data as number, error: null };
 }
 
@@ -48,7 +49,7 @@ export async function getVenta(ventaId: number): Promise<{ data: VentaPos | null
     .is('deleted_at', null)
     .limit(1)
     .single();
-  if (error) return { data: null, error: error.message };
+  if (error) return { data: null, error: translateError(error) };
   return { data: data as VentaPos, error: null };
 }
 
@@ -60,7 +61,7 @@ export async function listVentasItems(ventaId: number): Promise<{ data: VentaPos
     .is('deleted_at', null)
     .order('curso', { ascending: true, nullsFirst: false })
     .order('id', { ascending: true });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as VentaPosItem[], error: null };
 }
 
@@ -78,7 +79,7 @@ export async function listVentas(f: ListVentasFilter): Promise<{ data: VentaPos[
   if (f.origenes && f.origenes.length) q = q.in('origen', f.origenes);
   q = q.order('abierta_at', { ascending: false }).limit(200);
   const { data, error } = await q;
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as VentaPos[], error: null };
 }
 
@@ -102,7 +103,7 @@ export async function agregarItem(args: AgregarItemArgs): Promise<{ id: number |
     p_notas: args.notas ?? null,
     p_cargado_por: args.cargadoPor ?? null,
   });
-  if (error) return { id: null, error: error.message };
+  if (error) return { id: null, error: translateError(error) };
   return { id: data as number, error: null };
 }
 
@@ -136,7 +137,7 @@ export async function mandarCurso(ventaId: number, curso: number): Promise<{ cou
   const { data, error } = await db.rpc('fn_mandar_curso_comanda', {
     p_venta_id: ventaId, p_curso: curso,
   });
-  if (error) return { count: 0, error: error.message };
+  if (error) return { count: 0, error: translateError(error) };
   return { count: Number(data ?? 0), error: null };
 }
 

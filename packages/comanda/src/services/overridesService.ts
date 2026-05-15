@@ -1,5 +1,6 @@
 import { db } from '../lib/supabase';
 import type { VentaPosOverride } from '../types/database';
+import { translateError } from '../lib/errors';
 
 // Auditoría visible. La INSERT pasa exclusivamente por las RPCs (security definer)
 // que usan ManagerOverrideDialog en UI.
@@ -10,7 +11,7 @@ export async function listOverridesVenta(ventaId: number): Promise<{ data: Venta
     .select('*')
     .eq('venta_id', ventaId)
     .order('created_at', { ascending: false });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as VentaPosOverride[], error: null };
 }
 
@@ -23,7 +24,7 @@ export async function listOverridesLocal(localId: number, days = 90): Promise<{ 
     .gte('created_at', since)
     .order('created_at', { ascending: false })
     .limit(500);
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as VentaPosOverride[], error: null };
 }
 
@@ -39,7 +40,7 @@ export async function verificarPinManager(
   const { data, error } = await db.rpc('fn_verificar_pin_pos', {
     p_local_id: localId, p_pin: pin,
   });
-  if (error) return { empleadoId: null, error: error.message };
+  if (error) return { empleadoId: null, error: translateError(error) };
   const id = data as string | null;
   if (!id) return { empleadoId: null, error: 'PIN incorrecto' };
   // Chequear rol manager+

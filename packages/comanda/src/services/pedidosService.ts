@@ -1,5 +1,6 @@
 import { db } from '../lib/supabase';
 import type { VentaPos, EstadoVenta, VentaPosItem, VentaPosPago, Canal } from '../types/database';
+import { translateError } from '../lib/errors';
 
 // Mapeo lógico de "tab" a estado de venta para el feed Pedidos.
 // Nota: 'activos' = enviada (en preparación). 'listos' = lista (esperando retiro/entrega).
@@ -35,7 +36,7 @@ export async function listPedidosPorTab(
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(100);
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   // Filtrar items soft-deleted client-side (Supabase no permite filter en relación embedded sin RLS).
   const cleaned = (data ?? []).map((row) => {
     const r = row as PedidoConItems;
@@ -96,7 +97,7 @@ export async function getPedidoDetalle(
     .eq('id', ventaId)
     .is('deleted_at', null)
     .maybeSingle();
-  if (error) return { data: null, error: error.message };
+  if (error) return { data: null, error: translateError(error) };
   if (!data) return { data: null, error: 'PEDIDO_NO_ENCONTRADO' };
   type ItemRaw = VentaPosItem & { item: { nombre: string; emoji: string | null } | null };
   const r = data as unknown as VentaPos & { items: ItemRaw[]; pagos: VentaPosPago[]; canal: Canal | null };

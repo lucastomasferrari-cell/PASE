@@ -1,5 +1,6 @@
 import { db } from '../lib/supabase';
 import type { MetodoCobro } from '../types/database';
+import { translateError } from '../lib/errors';
 
 export async function listMetodos(tenantId: string): Promise<{ data: MetodoCobro[]; error: string | null }> {
   const { data, error } = await db
@@ -9,7 +10,7 @@ export async function listMetodos(tenantId: string): Promise<{ data: MetodoCobro
     .is('deleted_at', null)
     .order('orden', { ascending: true })
     .order('id', { ascending: true });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as MetodoCobro[], error: null };
 }
 
@@ -20,7 +21,7 @@ export type MetodoDraft = Pick<
 
 export async function createMetodo(draft: MetodoDraft): Promise<{ id: number | null; error: string | null }> {
   const { data, error } = await db.from('metodos_cobro').insert(draft).select('id').single();
-  if (error) return { id: null, error: error.message };
+  if (error) return { id: null, error: translateError(error) };
   return { id: data.id as number, error: null };
 }
 

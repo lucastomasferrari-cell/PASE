@@ -1,5 +1,6 @@
 import { db } from '../lib/supabase';
 import type { VentaPosOverride, AccionOverride } from '../types/database';
+import { translateError } from '../lib/errors';
 
 export interface AuditoriaFilter {
   localId: number;
@@ -23,7 +24,7 @@ export async function listOverrides(f: AuditoriaFilter): Promise<{ data: VentaPo
   if (f.hasta) q = q.lte('created_at', f.hasta.toISOString());
   q = q.order('created_at', { ascending: false }).limit(f.limit ?? 200);
   const { data, error } = await q;
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as VentaPosOverride[], error: null };
 }
 
@@ -33,6 +34,6 @@ export async function getOverride(id: number): Promise<{ data: VentaPosOverride 
     .select('*')
     .eq('id', id)
     .limit(1);
-  if (error) return { data: null, error: error.message };
+  if (error) return { data: null, error: translateError(error) };
   return { data: (data?.[0] as VentaPosOverride | undefined) ?? null, error: null };
 }

@@ -1,4 +1,5 @@
 import { dbAnon } from '../lib/supabaseAnon';
+import { translateError } from '../lib/errors';
 
 // Menú QR — accedido desde celular del cliente sin login. Token define
 // local + mesa + modo. Las RPCs son SECURITY DEFINER + token validation.
@@ -37,14 +38,14 @@ export interface MenuQrPedidoItem {
 
 export async function getLocalPorToken(token: string): Promise<{ data: MenuQrLocal | null; error: string | null }> {
   const { data, error } = await dbAnon.rpc('fn_menu_qr_get_local_comanda', { p_token: token });
-  if (error) return { data: null, error: error.message };
+  if (error) return { data: null, error: translateError(error) };
   const arr = data as MenuQrLocal[] | null;
   return { data: arr?.[0] ?? null, error: null };
 }
 
 export async function getCatalogoPorToken(token: string): Promise<{ data: MenuQrItem[]; error: string | null }> {
   const { data, error } = await dbAnon.rpc('fn_menu_qr_get_catalogo_comanda', { p_token: token });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as MenuQrItem[], error: null };
 }
 
@@ -60,7 +61,7 @@ export async function crearPedidoMenuQr(args: {
     p_idempotency_key: args.idempotencyKey,
     p_notas: args.notas ?? null,
   });
-  if (error) return { ventaId: null, numero: null, error: error.message };
+  if (error) return { ventaId: null, numero: null, error: translateError(error) };
   const arr = data as Array<{ venta_id: number; numero_local: number }> | null;
   const row = arr?.[0];
   if (!row) return { ventaId: null, numero: null, error: 'Sin resultado' };

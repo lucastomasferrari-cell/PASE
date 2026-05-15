@@ -1,4 +1,5 @@
 import { db } from '../lib/supabase';
+import { translateError } from '../lib/errors';
 
 export type EstacionKds = 'cocina_caliente' | 'cocina_fria' | 'barra' | 'postres';
 
@@ -34,7 +35,7 @@ export async function listTokensLocal(localId: number, tenantId: string): Promis
     .eq('local_id', localId)
     .is('deleted_at', null)
     .order('estacion');
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   void tenantId;
   return { data: (data ?? []) as KdsToken[], error: null };
 }

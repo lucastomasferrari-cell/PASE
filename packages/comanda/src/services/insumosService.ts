@@ -1,5 +1,6 @@
 import { db } from '../lib/supabase';
 import type { Insumo, UnidadInsumo } from '../types/database';
+import { translateError } from '../lib/errors';
 
 // Service de insumos (F1.1b — UI editor recetas).
 // Insumos viven por tenant + opcionalmente por local (local_id NULL = global).
@@ -34,14 +35,14 @@ export async function listInsumos(
   }
 
   const { data, error } = await q;
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as Insumo[], error: null };
 }
 
 export async function getInsumo(id: number): Promise<{ data: Insumo | null; error: string | null }> {
   const { data, error } = await db
     .from('insumos').select('*').eq('id', id).is('deleted_at', null).maybeSingle();
-  if (error) return { data: null, error: error.message };
+  if (error) return { data: null, error: translateError(error) };
   return { data: data as Insumo | null, error: null };
 }
 
@@ -68,7 +69,7 @@ export async function createInsumo(
   }
   const { data, error } = await db
     .from('insumos').insert(payload).select('*').single();
-  if (error) return { data: null, error: error.message };
+  if (error) return { data: null, error: translateError(error) };
   return { data: data as Insumo, error: null };
 }
 
@@ -83,7 +84,7 @@ export async function updateInsumo(
   }
   const { data, error } = await db
     .from('insumos').update(payload).eq('id', id).select('*').single();
-  if (error) return { data: null, error: error.message };
+  if (error) return { data: null, error: translateError(error) };
   return { data: data as Insumo, error: null };
 }
 

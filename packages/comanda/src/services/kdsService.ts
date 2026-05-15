@@ -1,4 +1,5 @@
 import { dbAnon } from '../lib/supabaseAnon';
+import { translateError } from '../lib/errors';
 
 // KDS — accedido desde tablets sin login. La autorización es vía token de
 // estación. Las RPCs son SECURITY DEFINER y validan el token internamente.
@@ -26,7 +27,7 @@ export interface KdsTicket {
 
 export async function getTickets(token: string): Promise<{ data: KdsTicket[]; error: string | null }> {
   const { data, error } = await dbAnon.rpc('fn_kds_get_tickets_comanda', { p_token: token });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as KdsTicket[], error: null };
 }
 

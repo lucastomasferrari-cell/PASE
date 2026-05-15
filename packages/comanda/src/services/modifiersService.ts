@@ -1,5 +1,6 @@
 import { db } from '../lib/supabase';
 import type { ModifierGroup, Modifier, ItemModifierGroup } from '../types/database';
+import { translateError } from '../lib/errors';
 
 // ─── ModifierGroups ────────────────────────────────────────────────────────
 
@@ -7,7 +8,7 @@ export async function listModifierGroups(tenantId: string | null): Promise<{ dat
   let q = db.from('modifier_groups').select('*').is('deleted_at', null).order('id', { ascending: true });
   if (tenantId) q = q.eq('tenant_id', tenantId);
   const { data, error } = await q;
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: data ?? [], error: null };
 }
 
@@ -18,7 +19,7 @@ export type ModifierGroupDraft = Pick<
 
 export async function createModifierGroup(draft: ModifierGroupDraft): Promise<{ id: number | null; error: string | null }> {
   const { data, error } = await db.from('modifier_groups').insert(draft).select('id').single();
-  if (error) return { id: null, error: error.message };
+  if (error) return { id: null, error: translateError(error) };
   return { id: data.id as number, error: null };
 }
 
@@ -42,7 +43,7 @@ export async function listModifiers(groupId: number): Promise<{ data: Modifier[]
     .is('deleted_at', null)
     .order('orden', { ascending: true })
     .order('id', { ascending: true });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: data ?? [], error: null };
 }
 
@@ -53,7 +54,7 @@ export type ModifierDraft = Pick<Modifier, 'nombre' | 'precio_extra' | 'orden' |
 
 export async function createModifier(draft: ModifierDraft): Promise<{ id: number | null; error: string | null }> {
   const { data, error } = await db.from('modifiers').insert(draft).select('id').single();
-  if (error) return { id: null, error: error.message };
+  if (error) return { id: null, error: translateError(error) };
   return { id: data.id as number, error: null };
 }
 
@@ -75,7 +76,7 @@ export async function listAsignacionesPorItem(itemId: number): Promise<{ data: I
     .select('*')
     .eq('item_id', itemId)
     .order('orden', { ascending: true });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: [], error: translateError(error) };
   return { data: data ?? [], error: null };
 }
 
