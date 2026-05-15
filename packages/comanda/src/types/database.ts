@@ -246,6 +246,8 @@ export interface MovimientoCaja {
   metodo: string;
   motivo: string | null;
   venta_id: number | null;
+  ip_origen: string | null;
+  idempotency_key: string | null;
 }
 
 export interface VentaPos {
@@ -279,6 +281,7 @@ export interface VentaPos {
   cobrada_at: string | null;
   anulada_at: string | null;
   notas: string | null;
+  cobro_idempotency_key: string | null;
 }
 
 export interface VentaPosItemModificador {
@@ -346,6 +349,7 @@ export interface VentaPosOverride {
   ip_origen: string | null;
   created_at: string;
   metadata: Record<string, unknown> | null;
+  idempotency_key: string | null;
 }
 
 export interface MetodoCobro {
@@ -377,6 +381,9 @@ export interface ComandaLocalSettings {
   acepta_delivery: boolean;
   autolock_minutos: number;
   features_pos_modos: PosModo[];
+  // Sprint 8 (timezone configurable). Default 'America/Argentina/Buenos_Aires'.
+  // Configurable por local cuando entren clientes en otras zonas.
+  timezone: string;
 }
 
 export interface EmpleadoPos {
