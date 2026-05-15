@@ -386,6 +386,31 @@ export interface ComandaLocalSettings {
   timezone: string;
 }
 
+// ─── F1.2 CRM (auditoría estructural 2026-05-15) ───────────────────────────
+export interface Cliente {
+  id: number;
+  tenant_id: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  created_by: number | null;
+  updated_by: number | null;
+  telefono: string;
+  email: string | null;
+  nombre: string | null;
+  apellido: string | null;
+  direccion: string | null;
+  direccion_aclaracion: string | null;
+  zona: string | null;
+  notas: string | null;
+  vip: boolean;
+  acepta_marketing: boolean;
+  total_pedidos: number;
+  total_gastado: number;
+  ultimo_pedido_at: string | null;
+  primer_pedido_at: string | null;
+}
+
 // ─── F1.1 CMV (auditoría estructural 2026-05-15) ───────────────────────────
 export type UnidadInsumo = 'kg' | 'g' | 'L' | 'ml' | 'un' | 'porcion';
 

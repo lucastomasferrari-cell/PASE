@@ -18,7 +18,9 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    exclude: ['node_modules/**'],
+    // F1.4: tests Playwright (*_mutante.spec.ts) viven en /tests y se
+    // corren con `pnpm test:e2e:mutante`. Vitest los ignora.
+    exclude: ['node_modules/**', 'tests/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'json-summary'],

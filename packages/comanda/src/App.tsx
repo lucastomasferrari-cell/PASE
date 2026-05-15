@@ -56,6 +56,9 @@ const ReporteCanales = lazy(() => import('./pages/Reportes/ReporteCanales').then
 const ReporteProductos = lazy(() => import('./pages/Reportes/ReporteProductos').then(m => ({ default: m.ReporteProductos })));
 const ReporteTiempos = lazy(() => import('./pages/Reportes/ReporteTiempos').then(m => ({ default: m.ReporteTiempos })));
 
+// Admin — Clientes (F1.2)
+const ClientesLista = lazy(() => import('./pages/Clientes/ClientesLista').then(m => ({ default: m.ClientesLista })));
+
 // Admin — Settings
 const SettingsLocal = lazy(() => import('./pages/Settings/SettingsLocal').then(m => ({ default: m.SettingsLocal })));
 const SettingsMesas = lazy(() => import('./pages/Settings/SettingsMesas').then(m => ({ default: m.SettingsMesas })));
@@ -215,9 +218,9 @@ export default function App() {
                   <Route path="/marketing/fidelidad" element={<StubRoute />} />
                   <Route path="/marketing/campanas" element={<StubRoute />} />
 
-                  {/* ── Clientes (todos stubs) ────────────────────────── */}
+                  {/* ── Clientes — F1.2 lista funcional, resto stub ───── */}
                   <Route path="/clientes" element={<Navigate to="/clientes/lista" replace />} />
-                  <Route path="/clientes/lista" element={<StubRoute />} />
+                  <Route path="/clientes/lista" element={<ClientesLista />} />
                   <Route path="/clientes/historial" element={<StubRoute />} />
                   <Route path="/clientes/resenas" element={<StubRoute />} />
 
