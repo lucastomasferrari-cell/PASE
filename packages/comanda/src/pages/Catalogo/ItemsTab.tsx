@@ -17,6 +17,7 @@ import {
 import { formatARS } from '@/lib/utils';
 import { ItemForm } from './ItemForm';
 import { AgotarDialog } from './AgotarDialog';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 
 interface Props {
   user: Usuario;
@@ -55,6 +56,10 @@ export function ItemsTab({ user }: Props) {
   useEffect(() => {
     reload();
   }, [reload]);
+
+  // Realtime: cuando alguien crea/edita/marca agotado un item desde otro lado,
+  // se refleja sin F5.
+  useRealtimeTable({ table: 'items', onChange: () => reload() });
 
   const hasFilters = search !== '' || grupoFilter !== 'todos' || estadoFilter !== 'todos';
 

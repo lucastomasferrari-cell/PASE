@@ -10,6 +10,7 @@ import { tienePermiso } from '../../lib/auth';
 import { formatARS, parseARS, relativoCorto } from '../../lib/format';
 import { SearchInput } from '../../components/SearchInput';
 import { AumentoMasivoDialog } from './AumentoMasivoDialog';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -51,6 +52,12 @@ export function ListaPreciosTab({ user }: Props) {
   }, [user.tenant_id]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // Realtime: cambios de precio (de otra computadora del mismo tenant) se
+  // reflejan en vivo. La pantalla ya tiene Realtime parcial via DEBOUNCE
+  // bursts; este hook se complementa con cobertura completa.
+  useRealtimeTable({ table: 'item_precios_canal', onChange: () => reload() });
+  useRealtimeTable({ table: 'items', onChange: () => reload() });
 
   const itemsFiltrados = useMemo(() => {
     const grupoIdNum = grupoFilter === 'todos' ? null : Number(grupoFilter);

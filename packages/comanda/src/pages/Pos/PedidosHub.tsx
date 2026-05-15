@@ -13,6 +13,7 @@ import {
 import { listCanales } from '@/services/canalesService';
 import type { Canal } from '@/types/database';
 import { PedidoCard } from '@/components/PedidoCard';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -76,7 +77,11 @@ export function PedidosHub() {
 
   useEffect(() => { reload(); }, [reload]);
 
-  // Polling cada 30s (Realtime queda como deuda hasta aplicar Publication en prod).
+  // Realtime: cuando MP/tienda envía pedido nuevo, aparece sin F5. Filtro por
+  // modo=pedidos para no recargar con ventas de Salón/Mostrador.
+  useRealtimeTable({ table: 'ventas_pos', onChange: () => reload(), scopeByLocal: true, extraFilter: 'modo=eq.pedidos' });
+
+  // Polling 30s como respaldo (si Realtime se cae, este sigue refrescando).
   useEffect(() => {
     const id = setInterval(reload, POLL_MS);
     return () => clearInterval(id);
