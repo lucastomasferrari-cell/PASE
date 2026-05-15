@@ -146,17 +146,24 @@ function ZoneButton({ active, onClick, children }: { active: boolean; onClick: (
 function MesaTile({ mesa, onClick }: { mesa: MesaConVenta; onClick: () => void }) {
   const colors = mesaColors(mesa.estado);
   const radius = mesa.forma === 'redondo' ? 'rounded-full' : mesa.forma === 'rectangular' ? 'rounded-lg' : 'rounded-2xl';
+  // Alerta visual: mesa ocupada hace > 90min con cuenta sin cobrar = pulse rojo.
+  const minutosAbierta = mesa.venta_abierta_at
+    ? Math.floor((Date.now() - new Date(mesa.venta_abierta_at).getTime()) / 60000)
+    : 0;
+  const urgente = mesa.estado === 'ocupada' && minutosAbierta > 90;
+  const atencion = mesa.estado === 'ocupada' && minutosAbierta > 60 && !urgente;
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        'p-3 border-2 min-h-[120px] flex flex-col justify-center items-center text-center',
+        'p-3 border-2 min-h-[120px] flex flex-col justify-center items-center text-center relative',
         'transition-all hover:scale-105 hover:shadow-sm',
         radius,
         colors.bg,
         colors.fg,
-        colors.border,
+        urgente ? 'border-destructive ring-2 ring-destructive/40 animate-pulse' :
+        atencion ? 'border-warning' : colors.border,
       )}
     >
       <div className="text-2xl font-bold">{mesa.numero}</div>
@@ -167,8 +174,12 @@ function MesaTile({ mesa, onClick }: { mesa: MesaConVenta; onClick: () => void }
             {formatARS(mesa.venta_total)}
           </div>
           {mesa.venta_abierta_at && (
-            <div className="text-[10px] opacity-70">
-              {relativoCorto(mesa.venta_abierta_at)}
+            <div className={cn(
+              'text-[10px]',
+              urgente ? 'text-destructive font-bold' :
+              atencion ? 'text-warning font-semibold' : 'opacity-70',
+            )}>
+              {urgente ? '⚠ ' : atencion ? '⏱ ' : ''}{relativoCorto(mesa.venta_abierta_at)}
             </div>
           )}
         </>

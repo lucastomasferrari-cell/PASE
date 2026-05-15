@@ -68,6 +68,7 @@ const ConciliacionMpView = lazy(() => import('./pages/Caja/ConciliacionMpView').
 const SettingsBranding = lazy(() => import('./pages/Configuracion/SettingsBranding').then(m => ({ default: m.SettingsBranding })));
 const IntegracionWhatsapp = lazy(() => import('./pages/Integraciones/IntegracionWhatsapp').then(m => ({ default: m.IntegracionWhatsapp })));
 const MateriasPrimasLista = lazy(() => import('./pages/Catalogo/MateriasPrimasLista').then(m => ({ default: m.MateriasPrimasLista })));
+const LogWebhooksExternos = lazy(() => import('./pages/Integraciones/LogWebhooksExternos').then(m => ({ default: m.LogWebhooksExternos })));
 
 // Admin — Clientes (F1.2)
 const ClientesLista = lazy(() => import('./pages/Clientes/ClientesLista').then(m => ({ default: m.ClientesLista })));
@@ -259,8 +260,9 @@ export default function App() {
                   {/* ── Integraciones (todos stubs) ───────────────────── */}
                   <Route path="/integraciones" element={<Navigate to="/integraciones/mercadopago" replace />} />
                   <Route path="/integraciones/mercadopago" element={<StubRoute />} />
-                  <Route path="/integraciones/rappi" element={<StubRoute />} />
-                  <Route path="/integraciones/pedidosya" element={<StubRoute />} />
+                  <Route path="/integraciones/rappi" element={<LogWebhooksExternos />} />
+                  <Route path="/integraciones/pedidosya" element={<LogWebhooksExternos />} />
+                  <Route path="/integraciones/webhooks" element={<LogWebhooksExternos />} />
                   <Route path="/integraciones/whatsapp" element={<IntegracionWhatsapp />} />
                   <Route path="/integraciones/contabilidad" element={<StubRoute />} />
                   <Route path="/integraciones/api" element={<StubRoute />} />
