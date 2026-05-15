@@ -104,6 +104,30 @@ export async function getKpisPeriodo(localId: number, desde: string, hasta: stri
   return { data: arr?.[0] ?? null, error: null };
 }
 
+// ─── Menu Engineering (cuadrante Star/Plowhorse/Puzzle/Dog) ────────────────
+export type MenuEngineeringCuadrante = 'star' | 'plowhorse' | 'puzzle' | 'dog' | 'sin_receta' | 'sin_clasificar';
+
+export interface MenuEngineeringItem {
+  item_id: number;
+  nombre: string;
+  emoji: string | null;
+  cantidad_vendida: number;
+  total_facturado: number;
+  precio_promedio: number;
+  costo_porcion: number | null;
+  margen_unitario: number | null;
+  margen_pct: number | null;
+  cuadrante: MenuEngineeringCuadrante;
+}
+
+export async function getMenuEngineering(localId: number, desde: string, hasta: string): Promise<{ data: MenuEngineeringItem[]; error: string | null }> {
+  const { data, error } = await db.rpc('fn_reporte_menu_engineering_comanda', {
+    p_local_id: localId, p_desde: desde, p_hasta: hasta,
+  });
+  if (error) return { data: [], error: translateError(error) };
+  return { data: (data ?? []) as MenuEngineeringItem[], error: null };
+}
+
 // CSV puro en cliente. Sin librería: Blob + URL.createObjectURL.
 export function downloadCSV(filename: string, headers: string[], rows: (string | number | null | undefined)[][]): void {
   const escape = (v: string | number | null | undefined): string => {

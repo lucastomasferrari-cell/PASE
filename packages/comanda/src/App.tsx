@@ -55,6 +55,7 @@ const ReportesDashboard = lazy(() => import('./pages/Reportes/Dashboard').then(m
 const ReporteCanales = lazy(() => import('./pages/Reportes/ReporteCanales').then(m => ({ default: m.ReporteCanales })));
 const ReporteProductos = lazy(() => import('./pages/Reportes/ReporteProductos').then(m => ({ default: m.ReporteProductos })));
 const ReporteTiempos = lazy(() => import('./pages/Reportes/ReporteTiempos').then(m => ({ default: m.ReporteTiempos })));
+const ReporteMenuEngineering = lazy(() => import('./pages/Reportes/ReporteMenuEngineering').then(m => ({ default: m.ReporteMenuEngineering })));
 
 // Admin — Clientes (F1.2)
 const ClientesLista = lazy(() => import('./pages/Clientes/ClientesLista').then(m => ({ default: m.ClientesLista })));
@@ -167,6 +168,7 @@ export default function App() {
                     <Route path="canales" element={<ReporteCanales />} />
                     <Route path="productos" element={<ReporteProductos />} />
                     <Route path="tiempos" element={<ReporteTiempos />} />
+                    <Route path="menu-engineering" element={<ReporteMenuEngineering />} />
                   </Route>
                   <Route path="/reportes/auditoria" element={<SettingsAuditoria />} />
                   <Route path="/reportes/ventas" element={<StubRoute />} />
