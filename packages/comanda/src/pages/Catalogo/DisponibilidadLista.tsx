@@ -154,7 +154,14 @@ export function DisponibilidadLista() {
                     <div className="flex items-start gap-2">
                       {it.emoji && <span className={cn('text-base flex-shrink-0', 'opacity-60')}>{it.emoji}</span>}
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate">{it.nombre}</div>
+                        <div className="text-sm font-medium truncate flex items-center gap-1.5">
+                          {it.nombre}
+                          {it.agotado_motivo?.startsWith('Auto-86:') && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0 rounded text-[9px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 uppercase tracking-wide">
+                              Auto
+                            </span>
+                          )}
+                        </div>
                         {it.agotado_motivo && (
                           <p className="text-xs text-muted-foreground italic mt-0.5">
                             "{it.agotado_motivo}"
