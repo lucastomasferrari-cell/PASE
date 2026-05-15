@@ -1,1 +1,3 @@
 .vercel
+# Generado en build por scripts/build-comanda-into-pase.mjs (no commit).
+public/comanda-app/

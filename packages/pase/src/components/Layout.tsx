@@ -120,6 +120,25 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
           </div>
           {/* Decisión 2026-05-13: roles sin color. La distinción es solo textual. */}
           <div className="sb-urole">{ROLES[user.rol]?.label}</div>
+          {/* Acceso COMANDA (POS) embebido — solo dueño/superadmin mientras
+              COMANDA esté en WIP. Sale en nueva pestaña para no perder el
+              contexto de PASE. Optimizado para celular. */}
+          {(user.rol === "dueno" || user.rol === "superadmin") && (
+            <a
+              href="/comanda-app/"
+              target="_blank"
+              rel="noopener"
+              className="sb-comanda"
+            >
+              <span style={{display:"inline-flex",alignItems:"center",gap:6}}>
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="1.5" y="1.5" width="11" height="11" rx="1.5"/>
+                  <path d="M4 5h6M4 7h6M4 9h4"/>
+                </svg>
+                Abrir COMANDA
+              </span>
+            </a>
+          )}
           <button className="sb-logout" onClick={onLogout}>Cerrar sesión →</button>
         </div>
       </div>
@@ -232,6 +251,8 @@ body{
 .sb-urole{font-size:10px;color:var(--pase-text-muted)}
 .sb-logout{display:block;width:100%;margin-top:8px;padding:6px;background:transparent;border:0.5px solid var(--pase-border-strong);color:var(--pase-text-muted);cursor:pointer;font-size:10px;font-family:var(--pase-font);border-radius:8px;transition:all 0.15s}
 .sb-logout:hover{border-color:var(--pase-celeste-300);color:var(--pase-text)}
+.sb-comanda{display:block;width:100%;margin-top:8px;padding:7px 8px;background:var(--pase-celeste-100);border:0.5px solid var(--pase-celeste-300);color:var(--pase-text);font-size:11px;font-weight:500;font-family:var(--pase-font);border-radius:8px;transition:all 0.15s;text-align:center;text-decoration:none}
+.sb-comanda:hover{background:var(--pase-celeste-200);border-color:var(--pase-celeste-400)}
 
 /* ─── MAIN ─────────────────────────────────────────────────────────── */
 .main{margin-left:200px;flex:1;padding:24px 32px;min-height:100vh;background:var(--pase-bg)}

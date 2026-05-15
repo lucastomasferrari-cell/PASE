@@ -125,9 +125,13 @@ const REDIRECTS: Array<[string, string]> = [
 ];
 
 export default function App() {
+  // `import.meta.env.BASE_URL` refleja el `base` de vite.config. En dev queda
+  // "/". Cuando se buildea embebido en PASE queda "/comanda-app/". react-router
+  // espera basename SIN trailing slash, por eso el slice.
+  const basename = import.meta.env.BASE_URL.replace(/\/$/, '');
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <BrowserRouter basename={basename}>
         <AuthPosProvider>
           <Toaster
             position="top-center"
