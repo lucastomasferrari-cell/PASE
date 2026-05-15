@@ -66,6 +66,7 @@ const ReportePerformanceEmpleados = lazy(() => import('./pages/Reportes/ReporteP
 const TrackingDelivery = lazy(() => import('./pages/Online/TrackingDelivery').then(m => ({ default: m.TrackingDelivery })));
 const ConciliacionMpView = lazy(() => import('./pages/Caja/ConciliacionMpView').then(m => ({ default: m.ConciliacionMpView })));
 const SettingsBranding = lazy(() => import('./pages/Configuracion/SettingsBranding').then(m => ({ default: m.SettingsBranding })));
+const IntegracionWhatsapp = lazy(() => import('./pages/Integraciones/IntegracionWhatsapp').then(m => ({ default: m.IntegracionWhatsapp })));
 
 // Admin — Clientes (F1.2)
 const ClientesLista = lazy(() => import('./pages/Clientes/ClientesLista').then(m => ({ default: m.ClientesLista })));
@@ -258,7 +259,7 @@ export default function App() {
                   <Route path="/integraciones/mercadopago" element={<StubRoute />} />
                   <Route path="/integraciones/rappi" element={<StubRoute />} />
                   <Route path="/integraciones/pedidosya" element={<StubRoute />} />
-                  <Route path="/integraciones/whatsapp" element={<StubRoute />} />
+                  <Route path="/integraciones/whatsapp" element={<IntegracionWhatsapp />} />
                   <Route path="/integraciones/contabilidad" element={<StubRoute />} />
                   <Route path="/integraciones/api" element={<StubRoute />} />
 
