@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Inbox, Clock, Pencil, Check, X } from 'lucide-react';
+import { Inbox, Clock, Pencil, Check, X, Plus } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import {
@@ -13,6 +13,7 @@ import {
 import { listCanales } from '@/services/canalesService';
 import type { Canal } from '@/types/database';
 import { PedidoCard } from '@/components/PedidoCard';
+import { NuevoPedidoDialog } from '@/components/dialogs/NuevoPedidoDialog';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -45,6 +46,7 @@ export function PedidosHub() {
     necesita_aprobacion: 0, programados: 0, activos: 0, listos: 0, completados: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [nuevoPedidoOpen, setNuevoPedidoOpen] = useState(false);
 
   // Quote times (configurables manager+)
   const [quoteRetiro, setQuoteRetiro] = useState<number | null>(null);
@@ -123,8 +125,12 @@ export function PedidosHub() {
           </p>
         </div>
 
-        {/* TOOLBAR: quote times editables inline (manager+) */}
+        {/* TOOLBAR: nuevo pedido + quote times editables inline (manager+) */}
         <div className="flex items-center gap-2 flex-wrap">
+          <Button onClick={() => setNuevoPedidoOpen(true)} size="lg" className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            Nuevo pedido
+          </Button>
           <QuoteTimeWidget
             label="Retiro"
             valor={quoteRetiro}
@@ -147,6 +153,12 @@ export function PedidosHub() {
           />
         </div>
       </header>
+
+      <NuevoPedidoDialog
+        open={nuevoPedidoOpen}
+        onOpenChange={setNuevoPedidoOpen}
+        onCreated={(ventaId) => navigate(`/pos/venta/${ventaId}`)}
+      />
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as PedidoTab)}>
         <TabsList className="bg-transparent border-b border-border w-full justify-start rounded-none h-auto p-0 mb-6 overflow-x-auto">
