@@ -440,6 +440,8 @@ export interface Insumo {
   proveedor_preferido_id: number | null;
   activo: boolean;
   es_comprado: boolean;
+  /** Auto-86 CMV: cuando es FALSE, los items con receta que usan este insumo se marcan agotados auto. */
+  stock_disponible: boolean;
 }
 
 export interface Receta {

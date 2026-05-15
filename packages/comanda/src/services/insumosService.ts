@@ -2,6 +2,20 @@ import { db } from '../lib/supabase';
 import type { Insumo, UnidadInsumo } from '../types/database';
 import { translateError } from '../lib/errors';
 
+// Auto-86 CMV: setea stock_disponible del insumo. Trigger SQL marca items
+// con recetas dependientes como agotado automáticamente.
+export async function toggleStockInsumo(
+  insumoId: number,
+  disponible: boolean,
+): Promise<{ error: string | null }> {
+  const { error } = await db.rpc('fn_toggle_stock_insumo', {
+    p_insumo_id: insumoId,
+    p_disponible: disponible,
+  });
+  if (error) return { error: translateError(error) };
+  return { error: null };
+}
+
 // Service de insumos (F1.1b — UI editor recetas).
 // Insumos viven por tenant + opcionalmente por local (local_id NULL = global).
 // RLS y UNIQUE parcial ya creados en migration F1.1.

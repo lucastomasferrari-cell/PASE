@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Plus, Search } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { listInsumos, softDeleteInsumo } from '@/services/insumosService';
+import { listInsumos, softDeleteInsumo, toggleStockInsumo } from '@/services/insumosService';
 import type { Insumo } from '@/types/database';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -109,6 +109,7 @@ export function InsumosLista() {
                   <th className="text-left text-xs font-medium uppercase tracking-wider px-4 py-2.5 text-muted-foreground">Nombre</th>
                   <th className="text-left text-xs font-medium uppercase tracking-wider px-4 py-2.5 text-muted-foreground">Unidad</th>
                   <th className="text-right text-xs font-medium uppercase tracking-wider px-4 py-2.5 text-muted-foreground">Costo / unidad</th>
+                  <th className="text-center text-xs font-medium uppercase tracking-wider px-4 py-2.5 text-muted-foreground" title="Auto-86: items con receta que usen este insumo se marcan agotados">Stock</th>
                   <th className="text-left text-xs font-medium uppercase tracking-wider px-4 py-2.5 text-muted-foreground">Actualizado</th>
                   <th className="px-4 py-2.5"></th>
                 </tr>
@@ -134,6 +135,27 @@ export function InsumosLista() {
                       {i.costo_actual != null ? formatARS(Number(i.costo_actual)) : (
                         <span className="italic text-muted-foreground">sin cargar</span>
                       )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const nuevo = !(i.stock_disponible ?? true);
+                          const accion = nuevo ? 'Reactivar' : 'Marcar SIN STOCK';
+                          if (!nuevo && !confirm(`¿${accion} "${i.nombre}"? Los items con receta que lo usan se marcarán agotados.`)) return;
+                          const { error } = await toggleStockInsumo(i.id, nuevo);
+                          if (error) toast.error(error);
+                          else { toast.success(nuevo ? 'Insumo disponible' : 'Items con receta marcados agotados'); reload(); }
+                        }}
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                          (i.stock_disponible ?? true)
+                            ? 'bg-success/10 text-success hover:bg-success/20'
+                            : 'bg-destructive/10 text-destructive hover:bg-destructive/20'
+                        }`}
+                      >
+                        {(i.stock_disponible ?? true) ? 'OK' : 'Sin stock'}
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-sm text-muted-foreground">
                       {i.costo_actualizado_at
