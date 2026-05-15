@@ -1,5 +1,6 @@
 {
   "outputDirectory": "dist",
+  "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
   "rewrites": [
     { "source": "/comanda-app/(.*)", "destination": "/comanda-app/index.html" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
