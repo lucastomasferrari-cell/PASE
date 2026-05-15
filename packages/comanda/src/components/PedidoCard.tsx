@@ -32,15 +32,14 @@ interface Props {
 }
 
 // Resumen de items para la card: max 3 nombres + "y N más".
-function resumenItems(items: VentaPosItem[]): { lineas: { qty: number; nombre: string }[]; resto: number } {
-  // Solo no anulados. cantidad acumulada por nombre (item_id no podemos resolver client-side sin join).
+// listPedidosPorTab hace JOIN a items para resolver nombre + emoji.
+function resumenItems(items: (VentaPosItem & { item?: { nombre: string | null; emoji: string | null } | null })[]): { lineas: { qty: number; nombre: string; emoji: string | null }[]; resto: number } {
   const activos = items.filter((it) => it.estado !== 'anulado');
   const top = activos.slice(0, 3);
-  // Para nombre, usamos "Item #ID" como fallback porque el join a items completos sería extra costo.
-  // En el detalle (PedidoDetalle) sí se resuelven nombres.
   const lineas = top.map((it) => ({
     qty: Number(it.cantidad),
-    nombre: `Item #${it.item_id}`,
+    nombre: it.item?.nombre ?? `Item #${it.item_id}`,
+    emoji: it.item?.emoji ?? null,
   }));
   return { lineas, resto: Math.max(0, activos.length - 3) };
 }
@@ -125,7 +124,8 @@ export function PedidoCard({ pedido, canales, variant = 'default', onClick, onAc
           <ul className="text-xs space-y-0.5 pt-1 border-t border-border/50">
             {lineas.map((l, i) => (
               <li key={i} className="text-muted-foreground">
-                <span className="font-medium text-foreground">{l.qty}×</span> {l.nombre}
+                <span className="font-medium text-foreground">{l.qty}×</span>
+                {l.emoji && <span className="ml-1">{l.emoji}</span>} {l.nombre}
               </li>
             ))}
             {resto > 0 && (

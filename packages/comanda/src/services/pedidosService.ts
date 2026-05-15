@@ -29,7 +29,7 @@ export async function listPedidosPorTab(
   const estados = TAB_TO_ESTADOS[tab];
   const { data, error } = await db
     .from('ventas_pos')
-    .select('*, items:ventas_pos_items(*)')
+    .select('*, items:ventas_pos_items(*, item:items(nombre, emoji))')
     .eq('local_id', localId)
     .eq('modo', 'pedidos')
     .in('estado', estados)
