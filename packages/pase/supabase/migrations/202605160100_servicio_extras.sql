@@ -82,10 +82,12 @@ BEGIN
     RETURN NEW;  -- no hay curso siguiente con items hold
   END IF;
 
-  -- Disparar el curso siguiente (pasar de 'hold' a 'enviada')
+  -- Disparar el curso siguiente (pasar de 'hold' a 'enviado').
+  -- IMPORTANTE: estado item es MASCULINO ('enviado'), columna enviado_at
+  -- también masculino (≠ ventas_pos.enviada_at que es femenino).
   UPDATE ventas_pos_items
-     SET estado = 'enviada',
-         enviada_at = NOW(),
+     SET estado = 'enviado',
+         enviado_at = NOW(),
          updated_at = NOW()
    WHERE venta_id = v_venta_id
      AND COALESCE(curso, 1) = v_siguiente_curso
