@@ -38,7 +38,11 @@ const TABS: Array<{ key: PedidoTab; label: string }> = [
   { key: 'completados',         label: 'Completados' },
 ];
 
-const POLL_MS = 30_000;
+// Sprint optim egress 2026-05-16 (sesión 2): subido de 30s a 120s.
+// Realtime cubre nuevos pedidos al instante (es la fuente). Este polling
+// es solo BACKUP por si Realtime se desconecta. 120s reduce 4x el egress
+// de la pantalla más usada del POS (PedidosHub queda abierta 24/7).
+const POLL_MS = 120_000;
 
 export function PedidosHub() {
   const { user } = useAuth();
@@ -78,7 +82,14 @@ export function PedidosHub() {
   // Roles válidos: dueño/admin/superadmin.
   const puedeEditarQuotes = !!user && ['dueno', 'admin', 'superadmin'].includes(user.rol);
 
-  const reload = useCallback(async () => {
+  // Sprint optim egress 2026-05-16 (sesión 2): separar reload pesado del liviano.
+  // - reloadFull: 4 queries (pedidos + canales + counters + quote times) —
+  //   solo al MOUNT y al CAMBIAR DE TAB. canales y quoteTimes rara vez
+  //   cambian, no vale traerlas cada poll.
+  // - reloadLight: 2 queries (pedidos + counters) — disparado por polling
+  //   y Realtime. Reduce ~50% queries × cada poll.
+
+  const reloadFull = useCallback(async () => {
     if (localId === null) return;
     setLoading(true);
     const [pRes, cRes, ctsRes, qtRes] = await Promise.all([
@@ -90,8 +101,6 @@ export function PedidosHub() {
     setPedidos(pRes.data);
     setCanales(cRes.data);
 
-    // Detecta pedidos nuevos por aprobar: ping audio + browser notification.
-    // El primer reload setea baseline (no notifica), reloads siguientes comparan.
     const aprobacionPrev = prevAprobacionCountRef.current;
     const aprobacionNuevo = ctsRes.necesita_aprobacion;
     if (aprobacionPrev !== null && aprobacionNuevo > aprobacionPrev) {
@@ -111,17 +120,41 @@ export function PedidosHub() {
     setLoading(false);
   }, [localId, tab, user?.tenant_id, notify]);
 
-  useEffect(() => { reload(); }, [reload]);
+  // Liviano: solo lo que cambia. NO trae canales ni quote times.
+  const reloadLight = useCallback(async () => {
+    if (localId === null) return;
+    const [pRes, ctsRes] = await Promise.all([
+      listPedidosPorTab(localId, tab),
+      getCountersPedidos(localId),
+    ]);
+    setPedidos(pRes.data);
 
-  // Realtime: cuando MP/tienda envía pedido nuevo, aparece sin F5. Filtro por
-  // modo=pedidos para no recargar con ventas de Salón/Mostrador.
-  useRealtimeTable({ table: 'ventas_pos', onChange: () => reload(), scopeByLocal: true, extraFilter: 'modo=eq.pedidos' });
+    const aprobacionPrev = prevAprobacionCountRef.current;
+    const aprobacionNuevo = ctsRes.necesita_aprobacion;
+    if (aprobacionPrev !== null && aprobacionNuevo > aprobacionPrev) {
+      const delta = aprobacionNuevo - aprobacionPrev;
+      notify(
+        `🛵 ${delta} pedido${delta > 1 ? 's' : ''} nuevo${delta > 1 ? 's' : ''} por aprobar`,
+        'Tocá para revisar y aceptar.',
+      );
+    }
+    prevAprobacionCountRef.current = aprobacionNuevo;
+    setCounters(ctsRes);
+  }, [localId, tab, notify]);
 
-  // Polling 30s como respaldo (si Realtime se cae, este sigue refrescando).
+  // Mantiene compatibilidad: cuando algo llama reload() del scope viejo
+  const reload = reloadLight;
+
+  useEffect(() => { reloadFull(); }, [reloadFull]);
+
+  // Realtime: pedidos nuevos disparan reloadLight (no full)
+  useRealtimeTable({ table: 'ventas_pos', onChange: () => reloadLight(), scopeByLocal: true, extraFilter: 'modo=eq.pedidos' });
+
+  // Polling backup cada 120s
   useEffect(() => {
-    const id = setInterval(reload, POLL_MS);
+    const id = setInterval(reloadLight, POLL_MS);
     return () => clearInterval(id);
-  }, [reload]);
+  }, [reloadLight]);
 
   useEffect(() => {
     if (editingQuote && editInputRef.current) {

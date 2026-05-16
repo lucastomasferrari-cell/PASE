@@ -92,7 +92,14 @@ export function VentaScreen() {
     return () => clearTimeout(t);
   }, [lastAddedRowId]);
 
-  const reload = useCallback(async () => {
+  // Sprint optim egress 2026-05-16 (sesión 2): separar reload full vs light.
+  // - reloadFull: trae venta + items + catálogo (200 items × 30cols) + grupos.
+  //   Solo al MOUNT — ~150-250KB de data.
+  // - reloadVenta: solo la venta + sus items. Trigger desde Realtime cuando
+  //   cocina marca listo o manager edita. Mucho más liviano (~10-20KB).
+  //   Esto reduce 90% el egress de VentaScreen abierta todo el turno.
+
+  const reloadFull = useCallback(async () => {
     setLoading(true);
     try {
       const [vRes, iRes, cRes, gRes] = await Promise.all([
@@ -107,29 +114,45 @@ export function VentaScreen() {
       setCatalogo(cRes.data);
       setGrupos(gRes.data);
     } catch (err) {
-      // Fix auditoría 2026-05-16: si las promesas fallan (network down, etc),
-      // sin try/finally setLoading(false) nunca corre y la UI queda en
-      // "Cargando..." para siempre. Toast + loading off para que el user
-      // pueda hacer "Volver" y reintentar.
       toast.error('Error cargando datos: ' + (err instanceof Error ? err.message : 'desconocido'));
     } finally {
       setLoading(false);
     }
   }, [ventaId, user?.tenant_id]);
 
-  useEffect(() => { reload(); }, [reload]);
+  // Light: solo refresca la venta y sus items. NO recarga el catálogo
+  // (que cambia muy poco) ni los grupos. Usado por Realtime + acciones
+  // internas que solo afectan la venta actual (agregar item, cobrar, etc).
+  const reloadVenta = useCallback(async () => {
+    try {
+      const [vRes, iRes] = await Promise.all([
+        getVenta(ventaId),
+        listVentasItems(ventaId),
+      ]);
+      if (vRes.error) toast.error(vRes.error);
+      setVenta(vRes.data);
+      setItems(iRes.data);
+    } catch (err) {
+      toast.error('Error cargando venta: ' + (err instanceof Error ? err.message : 'desconocido'));
+    }
+  }, [ventaId]);
 
-  // Realtime: si la cocina marca listo o el manager anula desde otro device,
-  // se refleja sin F5. Filtro por venta_id puntual + items de esta venta.
+  // Alias para mantener compat con código existente que llama reload()
+  const reload = reloadVenta;
+
+  useEffect(() => { reloadFull(); }, [reloadFull]);
+
+  // Realtime: cocina marca listo o manager anula → solo refresca la venta
+  // (no el catálogo que ya tenemos)
   useRealtimeTable({
     table: 'ventas_pos',
-    onChange: () => reload(),
+    onChange: () => reloadVenta(),
     extraFilter: Number.isFinite(ventaId) && ventaId > 0 ? `id=eq.${ventaId}` : undefined,
     enabled: Number.isFinite(ventaId) && ventaId > 0,
   });
   useRealtimeTable({
     table: 'ventas_pos_items',
-    onChange: () => reload(),
+    onChange: () => reloadVenta(),
     extraFilter: Number.isFinite(ventaId) && ventaId > 0 ? `venta_id=eq.${ventaId}` : undefined,
     enabled: Number.isFinite(ventaId) && ventaId > 0,
   });

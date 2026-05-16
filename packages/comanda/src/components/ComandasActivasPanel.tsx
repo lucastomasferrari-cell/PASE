@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import { listVentas } from '@/services/ventasService';
 import { useVisiblePolling } from '@/lib/useVisiblePolling';
+import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import type { VentaPos, ModoVenta } from '@/types/database';
 import { formatARS, relativoCorto } from '@/lib/format';
 import { Badge } from '@/components/Badge';
@@ -36,9 +37,14 @@ export function ComandasActivasPanel({ className, modos }: Props) {
     setLoading(false);
   }, [localId, modos]);
 
-  // Sprint 7 PERF: useVisiblePolling pausa cuando la pestaña esta oculta.
+  // Sprint optim egress 2026-05-16 (sesión 2):
+  // - Polling subido de 15s a 90s (Realtime cubre cambios al instante)
+  // - Agregado Realtime sobre ventas_pos (antes solo polling — ineficiente
+  //   cuando el panel está en 2-3 pantallas simultáneas)
+  // - useVisiblePolling pausa cuando la pestaña está oculta (mejor de los mundos)
   useEffect(() => { reload(); }, [reload]);
-  useVisiblePolling(reload, 15_000);
+  useVisiblePolling(reload, 90_000);
+  useRealtimeTable({ table: 'ventas_pos', onChange: reload, scopeByLocal: true });
 
   return (
     <aside className={cn('bg-card flex flex-col', className)}>
