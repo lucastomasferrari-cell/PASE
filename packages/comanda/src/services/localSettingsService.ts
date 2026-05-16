@@ -87,3 +87,41 @@ export async function setFeaturesPosModos(
     .eq('id', id);
   return { error: error?.message ?? null };
 }
+
+// ─── Marketplace: campos viven en `locales`, no en comanda_local_settings ────
+
+export interface MarketplaceLocal {
+  id: number;
+  nombre: string;
+  visible_marketplace: boolean;
+  marketplace_descripcion: string | null;
+  marketplace_tags: string[] | null;
+  marketplace_foto_url: string | null;
+}
+
+export async function getMarketplaceLocal(localId: number): Promise<{ data: MarketplaceLocal | null; error: string | null }> {
+  // eslint-disable-next-line pase-local/require-apply-local-scope -- query directa por PK del local activo, sin riesgo cross-local
+  const { data, error } = await db
+    .from('locales')
+    .select('id, nombre, visible_marketplace, marketplace_descripcion, marketplace_tags, marketplace_foto_url')
+    .eq('id', localId)
+    .single();
+  if (error) return { data: null, error: translateError(error) };
+  return { data: data as MarketplaceLocal, error: null };
+}
+
+export interface MarketplacePatch {
+  visible_marketplace?: boolean;
+  marketplace_descripcion?: string | null;
+  marketplace_tags?: string[] | null;
+  marketplace_foto_url?: string | null;
+}
+
+export async function updateMarketplaceLocal(
+  localId: number,
+  patch: MarketplacePatch,
+): Promise<{ error: string | null }> {
+  // eslint-disable-next-line pase-local/require-apply-local-scope -- update directo por PK del local activo
+  const { error } = await db.from('locales').update(patch).eq('id', localId);
+  return { error: error?.message ?? null };
+}

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Upload, Trash2, ImageIcon } from 'lucide-react';
+import { Upload, Trash2, ImageIcon, Store, ExternalLink, X, Plus } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import {
   getLocalSettings, updateLocalSettings, validarSlugUnico, subirMpQr, eliminarMpQr,
-  type LocalSettingsPatch,
+  getMarketplaceLocal, updateMarketplaceLocal,
+  type LocalSettingsPatch, type MarketplaceLocal, type MarketplacePatch,
 } from '@/services/localSettingsService';
 import { listLocalesAccesibles, type LocalSimple } from '@/services/configService';
 import type { ComandaLocalSettings, PosModo } from '@/types/database';
@@ -14,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MoneyInput } from '@/components/MoneyInput';
 
@@ -34,11 +36,21 @@ export function SettingsLocal() {
 
   useEffect(() => { listLocalesAccesibles().then((r) => setLocales(r.data)); }, []);
 
+  // Marketplace state (tabla `locales`)
+  const [mp, setMp] = useState<MarketplaceLocal | null>(null);
+  const [mpPatch, setMpPatch] = useState<MarketplacePatch>({});
+  const [savingMp, setSavingMp] = useState(false);
+  const [tagDraft, setTagDraft] = useState('');
+
   useEffect(() => {
     if (localId === null) return;
     getLocalSettings(localId).then((r) => {
       setSettings(r.data);
       setPatch({});
+    });
+    getMarketplaceLocal(localId).then((r) => {
+      setMp(r.data);
+      setMpPatch({});
     });
   }, [localId]);
 
@@ -119,6 +131,51 @@ export function SettingsLocal() {
     await updateLocalSettings(settings.id, { mp_qr_url: null });
     toast.success('QR eliminado');
     await refrescar();
+  }
+
+  // ── Marketplace helpers ────────────────────────────────────────────────
+  const mpMerged: MarketplaceLocal | null = mp ? { ...mp, ...mpPatch } as MarketplaceLocal : null;
+
+  function setMpField<K extends keyof MarketplacePatch>(key: K, value: MarketplacePatch[K]) {
+    setMpPatch((p) => ({ ...p, [key]: value }));
+  }
+
+  function agregarTag() {
+    const t = tagDraft.trim();
+    if (!t) return;
+    const actuales = mpMerged?.marketplace_tags ?? [];
+    if (actuales.includes(t)) { setTagDraft(''); return; }
+    setMpField('marketplace_tags', [...actuales, t]);
+    setTagDraft('');
+  }
+
+  function quitarTag(tag: string) {
+    const actuales = mpMerged?.marketplace_tags ?? [];
+    setMpField('marketplace_tags', actuales.filter((t) => t !== tag));
+  }
+
+  async function guardarMp() {
+    if (!mp || localId === null) return;
+    if (Object.keys(mpPatch).length === 0) { toast.info('Sin cambios marketplace'); return; }
+    setSavingMp(true);
+    const { error } = await updateMarketplaceLocal(localId, mpPatch);
+    setSavingMp(false);
+    if (error) {
+      // Detectar el error típico de la migration sin aplicar
+      if (error.includes('column') && error.includes('visible_marketplace')) {
+        toast.error('Migration 202605151970 pendiente', {
+          description: 'Aplicá la migration desde Supabase SQL Editor antes de usar esto.',
+        });
+      } else {
+        toast.error(error);
+      }
+      return;
+    }
+    toast.success('Marketplace actualizado');
+    // refrescar
+    const { data } = await getMarketplaceLocal(localId);
+    setMp(data);
+    setMpPatch({});
   }
 
   function toggleModo(modo: PosModo) {
@@ -255,6 +312,107 @@ export function SettingsLocal() {
               onChange={(v) => setField('acepta_delivery', v)}
             />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* MARKETPLACE — sprint 8 (campos viven en tabla `locales`) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Store className="h-5 w-5" />
+            Marketplace público
+          </CardTitle>
+          <p className="text-xs text-muted-foreground mt-1">
+            Si activás "Visible", este local aparece en{' '}
+            <a href="/marketplace" target="_blank" rel="noopener" className="text-primary hover:underline inline-flex items-center gap-0.5">
+              /marketplace <ExternalLink className="h-3 w-3" />
+            </a>{' '}
+            para que clientes nuevos te descubran y entren a tu tienda online sin intermediarios.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!mpMerged ? (
+            <div className="text-sm text-muted-foreground">Cargando…</div>
+          ) : (
+            <>
+              <ToggleField
+                label="Visible en marketplace"
+                checked={mpMerged.visible_marketplace ?? false}
+                onChange={(v) => setMpField('visible_marketplace', v)}
+              />
+
+              <Field label="Descripción corta (1-2 frases)">
+                <Textarea
+                  value={mpMerged.marketplace_descripcion ?? ''}
+                  onChange={(e) => setMpField('marketplace_descripcion', e.target.value || null)}
+                  rows={2}
+                  placeholder="Ej: Sushi premium con delivery en CABA · Más de 20 variedades de rolls."
+                  maxLength={200}
+                />
+                <p className="text-[10px] text-muted-foreground text-right">
+                  {(mpMerged.marketplace_descripcion ?? '').length}/200
+                </p>
+              </Field>
+
+              <Field label="Tags (tipo de cocina / características)">
+                <div className="flex gap-1.5 flex-wrap mb-2">
+                  {(mpMerged.marketplace_tags ?? []).map((t) => (
+                    <span key={t} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 text-primary text-xs">
+                      {t}
+                      <button
+                        type="button"
+                        onClick={() => quitarTag(t)}
+                        className="hover:bg-primary/20 rounded-full p-0.5"
+                        aria-label={`Quitar ${t}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    value={tagDraft}
+                    onChange={(e) => setTagDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); agregarTag(); }
+                    }}
+                    placeholder="Ej: Sushi, Vegano, Delivery, Apto celíaco…"
+                    className="h-10"
+                  />
+                  <Button type="button" variant="outline" onClick={agregarTag} disabled={!tagDraft.trim()}>
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Enter para agregar. Los clientes pueden filtrar por estos tags.
+                </p>
+              </Field>
+
+              <Field label="URL de foto de portada (16:10)">
+                <Input
+                  value={mpMerged.marketplace_foto_url ?? ''}
+                  onChange={(e) => setMpField('marketplace_foto_url', e.target.value || null)}
+                  placeholder="https://images.unsplash.com/photo-..."
+                  className="h-11"
+                />
+                {mpMerged.marketplace_foto_url && (
+                  <img
+                    src={mpMerged.marketplace_foto_url}
+                    alt="Preview"
+                    className="mt-2 rounded-md border border-border max-h-40 object-cover"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                )}
+              </Field>
+
+              <div className="flex justify-end">
+                <Button onClick={guardarMp} disabled={savingMp || Object.keys(mpPatch).length === 0}>
+                  {savingMp ? 'Guardando…' : 'Guardar marketplace'}
+                </Button>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
