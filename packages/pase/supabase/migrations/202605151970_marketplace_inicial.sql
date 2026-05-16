@@ -18,7 +18,7 @@ ALTER TABLE locales ADD COLUMN IF NOT EXISTS marketplace_tags TEXT[] NULL;
 ALTER TABLE locales ADD COLUMN IF NOT EXISTS marketplace_foto_url TEXT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_locales_marketplace
-  ON locales(visible_marketplace) WHERE visible_marketplace = TRUE AND deleted_at IS NULL;
+  ON locales(visible_marketplace) WHERE visible_marketplace = TRUE;
 
 -- RPC pública para listar locales del marketplace. NO requiere auth porque
 -- solo devuelve campos curados (nada sensible) y filtra por
@@ -48,7 +48,6 @@ AS $$
     l.online_modo
   FROM locales l
   WHERE l.visible_marketplace = TRUE
-    AND l.deleted_at IS NULL
     AND l.slug IS NOT NULL
   ORDER BY l.nombre ASC;
 $$;

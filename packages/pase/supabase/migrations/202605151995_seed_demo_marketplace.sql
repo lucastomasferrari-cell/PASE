@@ -13,8 +13,7 @@ SET
   marketplace_descripcion = 'Sushi premium con delivery en CABA. Rolls clásicos y de autor, sashimi fresco, sake y postres japoneses. Pedí online y recibí en 35 min.',
   marketplace_tags = ARRAY['Sushi', 'Japonesa', 'Delivery', 'Apto celíaco', 'Premium'],
   marketplace_foto_url = 'https://loremflickr.com/1200/750/sushi,restaurant?lock=1001'
-WHERE id = 7
-  AND deleted_at IS NULL;
+WHERE id = 7;
 
 -- 2. Fotos para items existentes (solo si NULL — no pisa fotos del user)
 -- Loremflickr URL: https://loremflickr.com/{w}/{h}/{tag1,tag2}?lock={id}
