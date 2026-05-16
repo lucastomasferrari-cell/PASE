@@ -1151,7 +1151,7 @@ function ProductTile({ item, grupo, disabled, flashed, onClick, onLongPress }: {
         </div>
       )}
       {item.foto_url ? (
-        <img src={item.foto_url} alt="" className="w-12 h-12 object-cover rounded" />
+        <img src={item.foto_url} alt="" loading="lazy" className="w-12 h-12 object-cover rounded" />
       ) : item.emoji ? (
         <div className="text-3xl">{item.emoji}</div>
       ) : (
