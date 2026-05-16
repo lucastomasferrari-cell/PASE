@@ -43,6 +43,7 @@ const HandheldView = lazy(() => import('./pages/Pos/HandheldView').then(m => ({ 
 
 // Rutas públicas (sin auth, sin PIN) — sprint 4 sesión B + sprint 5 Roc-N-Ramen
 const TiendaLayout = lazy(() => import('./pages/Tienda/TiendaLayout').then(m => ({ default: m.TiendaLayout })));
+const MarketplaceHome = lazy(() => import('./pages/Marketplace/MarketplaceHome').then(m => ({ default: m.MarketplaceHome })));
 const TiendaHome = lazy(() => import('./pages/Tienda/TiendaHome').then(m => ({ default: m.TiendaHome })));
 const TiendaCheckout = lazy(() => import('./pages/Tienda/TiendaCheckout').then(m => ({ default: m.TiendaCheckout })));
 const TiendaConfirmacion = lazy(() => import('./pages/Tienda/TiendaConfirmacion').then(m => ({ default: m.TiendaConfirmacion })));
@@ -165,6 +166,7 @@ export default function App() {
                 <Route path="/login" element={<RedirectIfAuth><LoginPage /></RedirectIfAuth>} />
 
                 {/* Rutas PÚBLICAS (sin auth, sin PIN) */}
+                <Route path="/marketplace" element={<MarketplaceHome />} />
                 <Route path="/tienda/:localSlug" element={<TiendaLayout />}>
                   <Route index element={<TiendaHome />} />
                   <Route path="checkout" element={<TiendaCheckout />} />
