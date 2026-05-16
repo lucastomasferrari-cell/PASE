@@ -105,12 +105,13 @@ export function ItemForm({ user, grupos, item, onClose, onSaved }: Props) {
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-xl max-h-[90vh] p-0 gap-0 flex flex-col">
+        <form onSubmit={onSubmit} className="flex flex-col min-h-0 flex-1">
+        <DialogHeader className="px-6 pt-6 shrink-0">
           <DialogTitle>{isEdit ? 'Editar item' : 'Nuevo item'}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={onSubmit} className="space-y-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 min-h-0">
           <div className="space-y-2">
             <Label>Emoji</Label>
             <EmojiPicker value={emoji} onChange={setEmoji} />
@@ -234,15 +235,16 @@ export function ItemForm({ user, grupos, item, onClose, onSaved }: Props) {
           {error && (
             <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
           )}
+        </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={saving}>
-              {saving ? 'Guardando…' : isEdit ? 'Guardar' : 'Crear'}
-            </Button>
-          </DialogFooter>
+        <DialogFooter className="px-6 py-4 border-t shrink-0 gap-2">
+          <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={saving}>
+            {saving ? 'Guardando…' : isEdit ? 'Guardar' : 'Crear'}
+          </Button>
+        </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

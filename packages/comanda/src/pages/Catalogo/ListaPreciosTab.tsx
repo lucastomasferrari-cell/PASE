@@ -83,7 +83,23 @@ export function ListaPreciosTab({ user }: Props) {
   }
 
   return (
-    <div>
+    <div className="container py-6">
+      <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Lista de precios</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {itemsFiltrados.length} {itemsFiltrados.length === 1 ? 'item' : 'items'} × {canales.length} {canales.length === 1 ? 'canal' : 'canales'}
+            {lastChange && <> · última modificación {relativoCorto(lastChange)}</>}
+          </p>
+        </div>
+        {puedeAumento && (
+          <Button onClick={() => setShowAumento(true)}>
+            <TrendingUp className="h-4 w-4 mr-1.5" />
+            Aumento masivo
+          </Button>
+        )}
+      </header>
+
       <div className="flex gap-3 items-center flex-wrap mb-4">
         <div className="flex-1 min-w-[240px]">
           <SearchInput value={search} onChange={setSearch} placeholder="Buscar item…" />
@@ -99,16 +115,6 @@ export function ListaPreciosTab({ user }: Props) {
             ))}
           </SelectContent>
         </Select>
-        <div className="flex-1 text-xs text-muted-foreground text-right">
-          {itemsFiltrados.length} items
-          {lastChange && <> · última modificación {relativoCorto(lastChange)}</>}
-        </div>
-        {puedeAumento && (
-          <Button size="lg" onClick={() => setShowAumento(true)}>
-            <TrendingUp className="h-5 w-5" />
-            Aumento masivo
-          </Button>
-        )}
       </div>
 
       {error && (

@@ -56,16 +56,21 @@ export function GruposTab({ user }: Props) {
   useRealtimeTable({ table: 'item_grupos', onChange: () => reload() });
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <p className="text-sm text-muted-foreground">{grupos.length} grupos</p>
+    <div className="container py-6">
+      <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Grupos del menú</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {grupos.length} {grupos.length === 1 ? 'grupo' : 'grupos'} · agrupan los items del catálogo por categoría (Rolls, Bebidas, etc.)
+          </p>
+        </div>
         {puedeEditar && (
-          <Button size="lg" onClick={() => setEditing('new')}>
-            <Plus className="h-5 w-5" />
+          <Button onClick={() => setEditing('new')}>
+            <Plus className="h-4 w-4 mr-1.5" />
             Nuevo grupo
           </Button>
         )}
-      </div>
+      </header>
 
       {error && (
         <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>

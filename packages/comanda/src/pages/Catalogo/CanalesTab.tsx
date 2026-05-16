@@ -45,16 +45,21 @@ export function CanalesTab({ user }: Props) {
   useRealtimeTable({ table: 'canales', onChange: () => reload() });
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <p className="text-sm text-muted-foreground">{canales.length} canales</p>
+    <div className="container py-6">
+      <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Canales de venta</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {canales.length} {canales.length === 1 ? 'canal' : 'canales'} · cada canal define dónde se vende y con qué ajuste de precio (Salón, Rappi, Tienda, etc.)
+          </p>
+        </div>
         {puedeEditar && (
-          <Button size="lg" onClick={() => setEditing('new')}>
-            <Plus className="h-5 w-5" />
+          <Button onClick={() => setEditing('new')}>
+            <Plus className="h-4 w-4 mr-1.5" />
             Nuevo canal
           </Button>
         )}
-      </div>
+      </header>
 
       {error && (
         <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>

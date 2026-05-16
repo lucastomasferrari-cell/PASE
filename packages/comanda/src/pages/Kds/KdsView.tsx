@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Volume2, VolumeX, Undo2 } from 'lucide-react';
+import { Volume2, VolumeX, Undo2, CheckCheck } from 'lucide-react';
+import { toast, Toaster } from 'sonner';
 import { getTickets, marcarListo, recall, type KdsTicket } from '@/services/kdsService';
 import { ESTACIONES, type EstacionKds } from '@/services/kdsTokensService';
 import { useVisiblePolling } from '@/lib/useVisiblePolling';
@@ -87,7 +88,7 @@ export function KdsView() {
   async function handleListo(itemId: number) {
     const { error: err } = await marcarListo(token, itemId);
     if (err) {
-      alert('No se pudo marcar listo: ' + err);
+      toast.error('No se pudo marcar listo: ' + err);
       return;
     }
     fetchTickets();
@@ -96,14 +97,30 @@ export function KdsView() {
   async function handleRecall(itemId: number) {
     const { error: err } = await recall(token, itemId);
     if (err) {
-      alert(err.includes('VENTANA') ? 'Pasaron más de 60 segundos, no se puede deshacer.' : err);
+      toast.error(err.includes('VENTANA') ? 'Pasaron más de 60 segundos, no se puede deshacer.' : err);
       return;
+    }
+    fetchTickets();
+  }
+
+  // "Listo todo" para una venta: marca todos los items pendientes en paralelo.
+  // Útil cuando una mesa pide 4 cosas y salen todas juntas — evita 4 taps.
+  async function handleListoTodo(items: KdsTicket[]) {
+    const pendientes = items.filter((i) => i.estado !== 'listo');
+    if (pendientes.length === 0) return;
+    const results = await Promise.all(pendientes.map((i) => marcarListo(token, i.item_id)));
+    const errores = results.filter((r) => r.error);
+    if (errores.length > 0) {
+      toast.error(`${errores.length} de ${pendientes.length} items no se pudieron marcar`);
+    } else {
+      toast.success(`${pendientes.length} items marcados listos`);
     }
     fetchTickets();
   }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
+      <Toaster position="top-center" theme="dark" richColors closeButton />
       <header className="h-14 px-4 flex items-center justify-between bg-black border-b border-zinc-800 sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <span className="text-2xl">{info.emoji}</span>
@@ -138,17 +155,31 @@ export function KdsView() {
             const todoListo = v.items.every(i => i.estado === 'listo');
             const colorHeader = todoListo ? 'bg-emerald-700' : urgenciaColor(segMax);
             return (
-              <article key={v.venta_id} className="rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900">
-                <header className={`px-3 py-2 ${colorHeader} text-white flex items-center justify-between`}>
-                  <div>
-                    <div className="text-base font-semibold">
+              <article key={v.venta_id} className={`rounded-lg overflow-hidden border bg-zinc-900 transition-opacity ${todoListo ? 'border-emerald-700 opacity-60' : 'border-zinc-800'}`}>
+                <header className={`px-3 py-2 ${colorHeader} text-white flex items-center justify-between gap-2`}>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-base font-semibold truncate">
                       #{v.venta_numero}
                       {v.mesa_numero && <span className="ml-2">· Mesa {v.mesa_numero}</span>}
                       {!v.mesa_numero && v.cliente_nombre && <span className="ml-2 text-sm">· {v.cliente_nombre}</span>}
                     </div>
-                    {v.mozo_nombre && <div className="text-[10px] opacity-90">{v.mozo_nombre}</div>}
+                    {v.mozo_nombre && <div className="text-[10px] opacity-90 truncate">{v.mozo_nombre}</div>}
                   </div>
-                  <div className="text-2xl font-mono tabular-nums">{formatearTimer(segMax)}</div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="text-2xl font-mono tabular-nums">{formatearTimer(segMax)}</div>
+                    {!todoListo && v.items.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleListoTodo(v.items)}
+                        className="bg-white/15 hover:bg-white/25 rounded px-2 h-8 flex items-center gap-1 text-xs font-semibold"
+                        aria-label="Marcar todo listo"
+                        title="Marcar todos los items de esta venta como listos"
+                      >
+                        <CheckCheck className="h-3.5 w-3.5" />
+                        Todo
+                      </button>
+                    )}
+                  </div>
                 </header>
                 <div className="p-3 space-y-2">
                   {v.items.map(it => (

@@ -171,14 +171,15 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 shrink-0">
           <DialogTitle>Nuevo pedido</DialogTitle>
           <DialogDescription>
             Cargá los datos del cliente y elegí cómo lo recibe. Después cargás los items.
           </DialogDescription>
         </DialogHeader>
 
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 min-h-0">
         {/* Tipo entrega */}
         <div className="space-y-2">
           <Label>Tipo de entrega</Label>
@@ -349,7 +350,9 @@ export function NuevoPedidoDialog({ open, onOpenChange, onCreated }: Props) {
           />
         </div>
 
-        <DialogFooter className="gap-2">
+        </div>
+
+        <DialogFooter className="gap-2 px-6 py-4 border-t shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancelar
           </Button>

@@ -51,18 +51,21 @@ export function ModificadoresTab({ user }: Props) {
   useRealtimeTable({ table: 'modifiers', onChange: () => reload() });
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <p className="text-sm text-muted-foreground">
-          Grupos de modificadores reusables. Cada grupo se asigna a varios items.
-        </p>
+    <div className="container py-6">
+      <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Modificadores</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {groups.length} {groups.length === 1 ? 'grupo' : 'grupos'} · opciones reusables (cocción, extras, sin sal) que se asignan a varios items.
+          </p>
+        </div>
         {puedeEditar && (
-          <Button size="lg" onClick={() => setEditing('new')}>
-            <Plus className="h-5 w-5" />
+          <Button onClick={() => setEditing('new')}>
+            <Plus className="h-4 w-4 mr-1.5" />
             Nuevo grupo
           </Button>
         )}
-      </div>
+      </header>
 
       {error && (
         <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
