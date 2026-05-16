@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Layout } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
 import { useLocalActivo } from '../../lib/localActivo';
+import { usePermiso } from '../../lib/usePermiso';
 import { listMesasConVentas, type MesaConVenta } from '../../services/mesasService';
 import { abrirVenta } from '../../services/ventasService';
 import { listCanales } from '../../services/canalesService';
@@ -14,6 +16,7 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import { ComandasActivasPanel } from '@/components/ComandasActivasPanel';
+import { SalonLayoutEditor } from './SalonLayoutEditor';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { cn } from '@/lib/utils';
 
@@ -28,6 +31,8 @@ export function SalonView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [abrirDialog, setAbrirDialog] = useState<MesaConVenta | null>(null);
+  const [editandoLayout, setEditandoLayout] = useState(false);
+  const puedeEditarLayout = usePermiso('comanda.config.editar');
 
   // Tick cada 30s para refrescar relativoCorto + alertas de tiempo sin reconsultar
   // DB. El hook realtime cubre cambios de estado; este solo re-renderiza.
@@ -115,6 +120,17 @@ export function SalonView() {
                 </ZoneButton>
               ))}
             </nav>
+            {puedeEditarLayout && mesas.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditandoLayout(true)}
+                className="ml-auto gap-1.5"
+              >
+                <Layout className="h-3.5 w-3.5" />
+                Editar layout
+              </Button>
+            )}
           </header>
 
           {/* Resumen at-a-glance del salón (zona filtrada) */}
@@ -153,6 +169,13 @@ export function SalonView() {
 
           {loading ? (
             <div className="py-8 text-center text-muted-foreground">Cargando mesas…</div>
+          ) : mesasFiltradas.some((m) => m.pos_x !== null && m.pos_y !== null) ? (
+            // Render absoluto: las mesas que tienen pos_x/pos_y van con
+            // coordenadas, las que no tienen quedan abajo en grid auto.
+            <PlanoCustom mesas={mesasFiltradas} onClick={(m) => {
+              if (m.estado === 'libre') setAbrirDialog(m);
+              else if (m.venta_abierta_id) navigate(`/pos/venta/${m.venta_abierta_id}`);
+            }} />
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
               {mesasFiltradas.map((m) => (
@@ -182,6 +205,57 @@ export function SalonView() {
           }}
           onError={setError}
         />
+      )}
+
+      {editandoLayout && (
+        <SalonLayoutEditor
+          mesas={mesasFiltradas}
+          onClose={() => setEditandoLayout(false)}
+          onSaved={reload}
+        />
+      )}
+    </div>
+  );
+}
+
+// Plano custom: mesas posicionadas con pos_x/pos_y absolute. Las que NO
+// tienen posición se renderizan en grid auto debajo. El user puede mezclar:
+// algunas mesas en el plano, otras todavía sin posicionar.
+function PlanoCustom({ mesas, onClick }: { mesas: MesaConVenta[]; onClick: (m: MesaConVenta) => void }) {
+  const posicionadas = mesas.filter((m) => m.pos_x !== null && m.pos_y !== null);
+  const sinPosicion = mesas.filter((m) => m.pos_x === null || m.pos_y === null);
+  return (
+    <div>
+      <div className="relative bg-muted/20 border border-dashed border-border rounded-lg overflow-auto"
+        style={{ minHeight: 400 }}>
+        <div className="relative" style={{ width: 1600, height: 1200 }}>
+          {posicionadas.map((m) => (
+            <div
+              key={m.id}
+              style={{
+                position: 'absolute',
+                left: m.pos_x ?? 0,
+                top: m.pos_y ?? 0,
+                width: 96,
+                height: 80,
+              }}
+            >
+              <MesaTile mesa={m} onClick={() => onClick(m)} />
+            </div>
+          ))}
+        </div>
+      </div>
+      {sinPosicion.length > 0 && (
+        <div className="mt-4">
+          <div className="text-xs text-muted-foreground mb-2">
+            Sin posición ({sinPosicion.length}) — entrá a "Editar layout" para acomodar:
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
+            {sinPosicion.map((m) => (
+              <MesaTile key={m.id} mesa={m} onClick={() => onClick(m)} />
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

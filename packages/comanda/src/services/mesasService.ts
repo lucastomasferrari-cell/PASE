@@ -79,6 +79,11 @@ export async function setMesaEstado(id: number, estado: EstadoMesa): Promise<{ e
   return { error: error?.message ?? null };
 }
 
+export async function updateMesaPosicion(id: number, x: number, y: number): Promise<{ error: string | null }> {
+  const { error } = await db.from('mesas').update({ pos_x: Math.round(x), pos_y: Math.round(y) }).eq('id', id);
+  return { error: error?.message ?? null };
+}
+
 export async function softDeleteMesa(id: number): Promise<{ error: string | null }> {
   // Validar no tiene ventas históricas
   const { count } = await db.from('ventas_pos')
