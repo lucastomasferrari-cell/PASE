@@ -6,7 +6,11 @@ import { getTickets, marcarListo, recall, type KdsTicket } from '@/services/kdsS
 import { ESTACIONES, type EstacionKds } from '@/services/kdsTokensService';
 import { useVisiblePolling } from '@/lib/useVisiblePolling';
 
-const POLL_MS = 10000;
+// Sprint optimización egress 2026-05-16: bajado de 10s a 30s.
+// Cocineros no necesitan refresh cada 10s — los tickets nuevos van por
+// Realtime ya (no por polling). El polling es solo backup si Realtime
+// se desconecta. 30s reduce ~3x el egress de queries kds_tickets.
+const POLL_MS = 30000;
 
 const ESTACION_INFO: Record<string, { label: string; emoji: string }> = {
   cocina_caliente: { label: 'Cocina caliente', emoji: '🔥' },

@@ -7,7 +7,7 @@ import type { Item } from '@/types/database';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatARS } from '@/lib/format';
-import { useRealtimeTable } from '@/lib/useRealtimeTable';
+// useRealtimeTable sacado sprint optim egress 2026-05-16
 import { ComboEditorDialog } from '@/components/dialogs/ComboEditorDialog';
 
 // Lista de combos. Un "combo" es un item del catálogo con es_combo=true.
@@ -43,8 +43,8 @@ export function CombosLista() {
 
   useEffect(() => { reload(); }, [reload]);
 
-  useRealtimeTable({ table: 'items', onChange: () => reload() });
-  useRealtimeTable({ table: 'combo_componentes', onChange: () => reload() });
+  // Realtime SACADO sprint optimización egress 2026-05-16. Combos se
+  // configuran 1 vez al armar el menú. F5 manual cubre el caso edge.
 
   return (
     <div className="container py-6">

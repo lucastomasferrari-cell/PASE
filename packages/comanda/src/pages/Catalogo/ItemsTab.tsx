@@ -17,7 +17,7 @@ import {
 import { formatARS } from '@/lib/utils';
 import { ItemForm } from './ItemForm';
 import { AgotarDialog } from './AgotarDialog';
-import { useRealtimeTable } from '@/lib/useRealtimeTable';
+// useRealtimeTable sacado sprint optim egress 2026-05-16
 
 interface Props {
   user: Usuario;
@@ -57,9 +57,10 @@ export function ItemsTab({ user }: Props) {
     reload();
   }, [reload]);
 
-  // Realtime: cuando alguien crea/edita/marca agotado un item desde otro lado,
-  // se refleja sin F5.
-  useRealtimeTable({ table: 'items', onChange: () => reload() });
+  // Realtime SACADO sprint optimización egress 2026-05-16. Tabla master,
+  // se edita poco, no necesita refresh inter-tab. El propio save del form
+  // dispara reload() — alcanza para single-user workflow.
+  // Si 2 admins editan items en paralelo, F5 manual cubre el caso edge.
 
   const hasFilters = search !== '' || grupoFilter !== 'todos' || estadoFilter !== 'todos';
 

@@ -24,7 +24,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { useRealtimeTable } from '@/lib/useRealtimeTable';
+// useRealtimeTable sacado sprint optim egress 2026-05-16
 
 interface Props { user: Usuario }
 
@@ -47,8 +47,8 @@ export function ModificadoresTab({ user }: Props) {
 
   useEffect(() => { reload(); }, [reload]);
 
-  useRealtimeTable({ table: 'modifier_groups', onChange: () => reload() });
-  useRealtimeTable({ table: 'modifiers', onChange: () => reload() });
+  // Realtime SACADO sprint optimización egress 2026-05-16. Modificadores
+  // se setean al definir el menú y rara vez cambian después. F5 manual cubre.
 
   return (
     <div className="container py-6">

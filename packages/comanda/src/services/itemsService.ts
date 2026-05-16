@@ -15,21 +15,27 @@ export interface ItemsListFilter {
 }
 
 export async function listItems(filter: ItemsListFilter): Promise<{ data: ItemConGrupo[]; error: string | null }> {
+  // Sprint optimización egress 2026-05-16:
+  // - Limit bajado de 500 a 200 (cubre 99% restaurants, más rápido)
+  // - Sacadas columnas de auditoría no usadas en UI (created_by, updated_by,
+  //   agotado_por, costo_actualizado_at, receta_version_id_vigente)
+  // - Agregada tiempo_prep_min (la usa VentaScreen)
   let q = db
     .from('items')
     .select(`
       id, tenant_id, local_id, created_at, updated_at, deleted_at,
-      created_by, updated_by, nombre, descripcion, emoji, foto_url, codigo,
-      grupo_id, orden, precio_madre, costo_actual, costo_actualizado_at,
-      receta_version_id_vigente, tax_rate_id, estacion, estado,
-      agotado_motivo, agotado_por, agotado_at, agotado_hasta, es_combo,
+      nombre, descripcion, emoji, foto_url, codigo,
+      grupo_id, orden, precio_madre, costo_actual,
+      tax_rate_id, estacion, estado,
+      agotado_motivo, agotado_at, agotado_hasta, es_combo,
+      tiempo_prep_min,
       visible_pos, visible_qr, visible_tienda, es_open_item,
       grupo:item_grupos(id, nombre, emoji, color)
     `)
     .is('deleted_at', null)
     .order('orden', { ascending: true })
     .order('id', { ascending: true })
-    .limit(500);
+    .limit(200);
 
   if (filter.tenantId) q = q.eq('tenant_id', filter.tenantId);
   if (filter.grupoId) q = q.eq('grupo_id', filter.grupoId);

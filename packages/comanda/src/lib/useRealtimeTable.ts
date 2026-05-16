@@ -57,9 +57,13 @@ interface UseRealtimeTableOptions {
   extraFilter?: string;
   /** Eventos a escuchar. Default todos. */
   events?: readonly ('INSERT' | 'UPDATE' | 'DELETE')[];
-  /** Debounce en ms para callback. Default 200. */
+  /** Debounce en ms para callback. Default 1500 (sprint optim egress 2026-05-16,
+   * antes 200 — pero reload() siempre fetcha N queries Supabase, debounce alto
+   * agrupa bursts de cambios = menos egress). */
   debounceMs?: number;
-  /** Polling fallback en ms si Realtime falla. Default 30000. */
+  /** Polling fallback en ms si Realtime falla. Default 60000 (sprint optim
+   * egress 2026-05-16, antes 30000 — el fallback es solo si Realtime se cae,
+   * caso raro. 60s es suficiente). */
   fallbackPollMs?: number;
   /** Activar/desactivar el hook (útil para condicionarlo). Default true. */
   enabled?: boolean;
@@ -100,8 +104,8 @@ export function useRealtimeTable({
   scopeByLocal = false,
   extraFilter,
   events = EVENTS_DEFAULT,
-  debounceMs = 200,
-  fallbackPollMs = 30000,
+  debounceMs = 1500,
+  fallbackPollMs = 60000,
   enabled = true,
 }: UseRealtimeTableOptions): void {
   const { user } = useAuth();

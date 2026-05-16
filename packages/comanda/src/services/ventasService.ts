@@ -76,17 +76,45 @@ export interface ListVentasFilter {
   modos?: ModoVenta[];
   estados?: EstadoVenta[];
   origenes?: OrigenVenta[];
+  // Sprint optimización egress 2026-05-16: por default solo últimos 30 días.
+  // Mostrador/Pedidos/Salón solo necesitan ventas activas (que son recientes
+  // por definición). Pasar false explícito si necesitás histórico (auditoría).
+  desdeUltimosDias?: number | null;
 }
 
 export async function listVentas(f: ListVentasFilter): Promise<{ data: VentaPos[]; error: string | null }> {
-  let q = db.from('ventas_pos').select('*').eq('local_id', f.localId).is('deleted_at', null);
+  // SELECT específico (no *) — reduce egress ~50%. Columnas auditoría
+  // (created_by, updated_by, anulada_motivo) se piden a demanda en
+  // pantallas específicas (PedidoDetalle, anularVenta, etc).
+  let q = db
+    .from('ventas_pos')
+    .select(`
+      id, tenant_id, local_id, numero_local, modo, canal_id, mesa_id,
+      mozo_id, cajero_id, cliente_nombre, cliente_telefono, cliente_direccion,
+      cliente_lat, cliente_lon, cliente_id, covers, programada_para,
+      origen, tipo_entrega, estado, subtotal, descuento_total, propina, total,
+      abierta_at, enviada_at, cobrada_at, anulada_at, notas,
+      coursing_auto, tab_nombre
+    `)
+    .eq('local_id', f.localId)
+    .is('deleted_at', null);
+
   if (f.modos && f.modos.length) q = q.in('modo', f.modos);
   if (f.estados && f.estados.length) q = q.in('estado', f.estados);
   if (f.origenes && f.origenes.length) q = q.in('origen', f.origenes);
+
+  // Filtro fecha default: últimos 30 días salvo que se pase null explícito
+  const dias = f.desdeUltimosDias === undefined ? 30 : f.desdeUltimosDias;
+  if (dias !== null && dias > 0) {
+    const desde = new Date();
+    desde.setDate(desde.getDate() - dias);
+    q = q.gte('abierta_at', desde.toISOString());
+  }
+
   q = q.order('abierta_at', { ascending: false }).limit(200);
   const { data, error } = await q;
   if (error) return { data: [], error: translateError(error) };
-  return { data: (data ?? []) as VentaPos[], error: null };
+  return { data: (data ?? []) as unknown as VentaPos[], error: null };
 }
 
 export interface AgregarItemArgs {

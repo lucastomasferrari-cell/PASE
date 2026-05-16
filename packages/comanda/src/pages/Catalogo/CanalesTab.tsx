@@ -20,7 +20,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { DEFAULT_PICKER_COLOR } from '@/lib/utils';
-import { useRealtimeTable } from '@/lib/useRealtimeTable';
+// useRealtimeTable sacado sprint optim egress 2026-05-16
 
 interface Props { user: Usuario }
 
@@ -42,7 +42,8 @@ export function CanalesTab({ user }: Props) {
 
   useEffect(() => { reload(); }, [reload]);
 
-  useRealtimeTable({ table: 'canales', onChange: () => reload() });
+  // Realtime SACADO sprint optimización egress 2026-05-16. Canales son
+  // config rara vez modificada (1-3 cambios al mes). No vale subscription.
 
   return (
     <div className="container py-6">

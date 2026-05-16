@@ -7,7 +7,7 @@ import { db } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ESTACIONES, type EstacionKds } from '@/services/kdsTokensService';
-import { useRealtimeTable } from '@/lib/useRealtimeTable';
+// useRealtimeTable sacado sprint optim egress 2026-05-16
 
 interface GrupoConEstacion {
   id: number;
@@ -35,7 +35,8 @@ export function SettingsEstaciones() {
 
   useEffect(() => { reload(); }, [reload]);
 
-  useRealtimeTable({ table: 'item_grupos', onChange: () => reload() });
+  // Realtime SACADO sprint optimización egress 2026-05-16. Estaciones se
+  // configuran 1 vez por local.
 
   async function asignar(grupoId: number, estacion: EstacionKds) {
     const { error } = await db.from('item_grupos').update({ estacion_default: estacion }).eq('id', grupoId);

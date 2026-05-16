@@ -5,7 +5,7 @@ import type { ItemGrupo, TaxRate, Estacion } from '../../types/database';
 import { listGrupos, createGrupo, updateGrupo, softDeleteGrupo, countItemsPorGrupo } from '../../services/gruposService';
 import { listTaxRates } from '../../services/taxRatesService';
 import { tienePermiso } from '../../lib/auth';
-import { useRealtimeTable } from '../../lib/useRealtimeTable';
+// useRealtimeTable sacado sprint optim egress 2026-05-16
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { EmojiPicker } from '../../components/EmojiPicker';
 import { validarNombre } from '../../lib/validate';
@@ -52,8 +52,8 @@ export function GruposTab({ user }: Props) {
 
   useEffect(() => { reload(); }, [reload]);
 
-  // Sprint Realtime: cambios remotos en item_grupos del mismo tenant.
-  useRealtimeTable({ table: 'item_grupos', onChange: () => reload() });
+  // Realtime SACADO sprint optimización egress 2026-05-16. Grupos rara vez
+  // cambian, no vale el costo de subscription abierta. F5 si hace falta.
 
   return (
     <div className="container py-6">
