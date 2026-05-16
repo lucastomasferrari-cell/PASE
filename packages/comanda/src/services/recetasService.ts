@@ -191,10 +191,16 @@ export async function upsertReceta(
 
 // Calcula el costo total estimado de UNA porción de la receta.
 // formula: sum(insumo.costo_actual × ri.cantidad × (1 + merma_pct/100)) / rendimiento
-// Devuelve null si algún insumo no tiene costo_actual setteado (caso típico
-// en setup inicial — los costos se llenan con Fase 1.2 PASE).
+//
+// Casos del retorno:
+//   - null: no calculable (receta sin insumos, o algún insumo sin costo, o
+//     rendimiento <= 0). El caller debe mostrar "no calculable" — NO usar 0
+//     como fallback porque sería "falsa precisión" (vendés a $5000 con costo
+//     0 → margen 100% mostrado, pero el costo real es desconocido).
+//   - number: costo válido por porción.
 export function calcularCostoPorPorcion(receta: RecetaConInsumos): number | null {
-  if (!receta.insumos || receta.insumos.length === 0) return 0;
+  if (!receta.insumos || receta.insumos.length === 0) return null;
+  if (!receta.rendimiento || Number(receta.rendimiento) <= 0) return null;
   let total = 0;
   for (const ri of receta.insumos) {
     const costo = ri.insumo?.costo_actual;

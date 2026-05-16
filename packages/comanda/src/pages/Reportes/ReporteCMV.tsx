@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { TrendingUp, AlertTriangle, Calculator, Download } from 'lucide-react';
+import { TrendingUp, TrendingDown, AlertTriangle, Calculator, Download, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { db } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
@@ -35,6 +35,17 @@ interface CmvRow {
   sin_receta_count: number;
 }
 
+interface AlertaCostoRow {
+  insumo_id: number;
+  insumo_nombre: string;
+  insumo_emoji: string | null;
+  costo_actual: number;
+  costo_anterior: number | null;
+  variacion_pct: number | null;
+  ultima_variacion_at: string | null;
+  alerta: boolean;
+}
+
 export function ReporteCMV() {
   const { user } = useAuth();
   const [localId] = useLocalActivo(user);
@@ -45,6 +56,8 @@ export function ReporteCMV() {
   });
   const [hasta, setHasta] = useState(() => new Date().toISOString().slice(0, 10));
   const [rows, setRows] = useState<CmvRow[]>([]);
+  const [rowsAnterior, setRowsAnterior] = useState<CmvRow[]>([]);
+  const [alertasCosto, setAlertasCosto] = useState<AlertaCostoRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cmvTarget, setCmvTarget] = useState<number>(30); // % target
@@ -53,16 +66,31 @@ export function ReporteCMV() {
     if (localId === null) return;
     setLoading(true);
     setError(null);
-    const { data, error: err } = await db.rpc('fn_reporte_cmv', {
-      p_local_id: localId,
-      p_fecha_desde: desde,
-      p_fecha_hasta: hasta,
-    });
-    if (err) {
-      setError(err.message);
+
+    // Calcular rango del período anterior (mismos días, antes del desde)
+    const dDesde = new Date(desde);
+    const dHasta = new Date(hasta);
+    const diasRango = Math.max(1, Math.round((dHasta.getTime() - dDesde.getTime()) / 86400000));
+    const dHastaAnt = new Date(dDesde);
+    dHastaAnt.setDate(dHastaAnt.getDate() - 1);
+    const dDesdeAnt = new Date(dHastaAnt);
+    dDesdeAnt.setDate(dDesdeAnt.getDate() - diasRango);
+
+    const [actualRes, anteriorRes, alertasRes] = await Promise.all([
+      db.rpc('fn_reporte_cmv', { p_local_id: localId, p_fecha_desde: desde, p_fecha_hasta: hasta }),
+      db.rpc('fn_reporte_cmv', { p_local_id: localId, p_fecha_desde: dDesdeAnt.toISOString().slice(0, 10), p_fecha_hasta: dHastaAnt.toISOString().slice(0, 10) }),
+      db.rpc('fn_insumos_con_alertas_costo', { p_dias: Math.max(diasRango, 7), p_umbral_pct: 15 }),
+    ]);
+
+    if (actualRes.error) {
+      setError(actualRes.error.message);
       setRows([]);
+      setRowsAnterior([]);
+      setAlertasCosto([]);
     } else {
-      setRows((data ?? []) as CmvRow[]);
+      setRows((actualRes.data ?? []) as CmvRow[]);
+      setRowsAnterior((anteriorRes.data ?? []) as CmvRow[]);
+      setAlertasCosto((alertasRes.data ?? []) as AlertaCostoRow[]);
     }
     setLoading(false);
   }, [localId, desde, hasta]);
@@ -70,19 +98,47 @@ export function ReporteCMV() {
   useEffect(() => { cargar(); }, [cargar]);
 
   const totales = useMemo(() => {
-    let ingreso = 0, costo = 0, sinReceta = 0;
+    let ingreso = 0, costo = 0, sinReceta = 0, margenNeg = 0;
     for (const r of rows) {
       ingreso += Number(r.ingreso_total);
       costo += Number(r.costo_total);
       if (r.sin_receta_count > 0) sinReceta++;
+      if (Number(r.margen_total) < 0 && Number(r.costo_total) > 0) margenNeg++;
     }
     return {
       ingreso, costo,
       margen: ingreso - costo,
       cmvPct: ingreso > 0 ? (costo / ingreso) * 100 : 0,
       sinReceta,
+      margenNeg,
     };
   }, [rows]);
+
+  // Totales del período anterior (para comparativa)
+  const totalesAnt = useMemo(() => {
+    let ingreso = 0, costo = 0;
+    for (const r of rowsAnterior) {
+      ingreso += Number(r.ingreso_total);
+      costo += Number(r.costo_total);
+    }
+    return {
+      ingreso, costo,
+      margen: ingreso - costo,
+      cmvPct: ingreso > 0 ? (costo / ingreso) * 100 : 0,
+    };
+  }, [rowsAnterior]);
+
+  // Helpers para deltas %
+  function delta(actual: number, anterior: number): { pct: number; positivo: boolean } | null {
+    if (anterior === 0) return null;
+    const pct = ((actual - anterior) / Math.abs(anterior)) * 100;
+    return { pct, positivo: pct >= 0 };
+  }
+
+  // Items con margen negativo (vendés a pérdida) — destacar arriba
+  const itemsMargenNeg = useMemo(() =>
+    rows.filter((r) => Number(r.margen_total) < 0 && Number(r.costo_total) > 0),
+    [rows]);
 
   function exportarCSV() {
     const headers = ['Item', 'Cantidad', 'Ingreso', 'Costo', 'Costo unitario', 'Margen', 'CMV %', 'Sin receta'];
@@ -178,19 +234,96 @@ export function ReporteCMV() {
         </div>
       )}
 
-      {/* Resumen KPIs */}
+      {/* Resumen KPIs con delta vs período anterior */}
       {!loading && rows.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <KpiCard label="Ingreso" value={formatARS(totales.ingreso)} tone="primary" />
-          <KpiCard label="Costo merc." value={formatARS(totales.costo)} tone="primary" />
-          <KpiCard label="Margen bruto" value={formatARS(totales.margen)} tone="success" />
+          <KpiCard
+            label="Ingreso"
+            value={formatARS(totales.ingreso)}
+            tone="primary"
+            delta={delta(totales.ingreso, totalesAnt.ingreso)}
+          />
+          <KpiCard
+            label="Costo merc."
+            value={formatARS(totales.costo)}
+            tone="primary"
+            delta={delta(totales.costo, totalesAnt.costo)}
+            invertDeltaTone  // costo subiendo = malo
+          />
+          <KpiCard
+            label="Margen bruto"
+            value={formatARS(totales.margen)}
+            tone="success"
+            delta={delta(totales.margen, totalesAnt.margen)}
+          />
           <KpiCard
             label={`CMV % (target ${cmvTarget}%)`}
             value={`${totales.cmvPct.toFixed(1)}%`}
             tone={cmvTone}
             hint={cmvTone === 'success' ? 'Bajo target ✓' : cmvTone === 'warning' ? 'Cerca del límite' : 'Sobre target'}
+            delta={delta(totales.cmvPct, totalesAnt.cmvPct)}
+            invertDeltaTone  // CMV % subiendo = malo
           />
         </div>
+      )}
+
+      {/* Margen negativo: items que vendés a pérdida */}
+      {!loading && itemsMargenNeg.length > 0 && (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="p-4">
+            <h3 className="text-sm font-semibold flex items-center gap-2 text-destructive mb-2">
+              <TrendingDown className="h-4 w-4" />
+              {itemsMargenNeg.length} {itemsMargenNeg.length === 1 ? 'item se vende a pérdida' : 'items se venden a pérdida'}
+            </h3>
+            <p className="text-xs text-muted-foreground mb-3">
+              El costo (basado en receta + insumos) supera el precio de venta. Revisá la receta o ajustá precio.
+            </p>
+            <div className="space-y-1">
+              {itemsMargenNeg.slice(0, 5).map((r) => (
+                <div key={r.item_id} className="flex items-center justify-between text-xs bg-background rounded p-2">
+                  <span>{r.item_emoji ?? '📦'} {r.item_nombre}</span>
+                  <span className="text-destructive font-medium tabular-nums">
+                    {formatARS(r.margen_total)} ({(r.cmv_pct * 100).toFixed(0)}% CMV)
+                  </span>
+                </div>
+              ))}
+              {itemsMargenNeg.length > 5 && (
+                <div className="text-[10px] text-muted-foreground text-center">
+                  +{itemsMargenNeg.length - 5} más abajo en la tabla
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Alertas de costo de insumo (variación >= 15% en N días) */}
+      {!loading && alertasCosto.filter((a) => a.alerta).length > 0 && (
+        <Card className="border-warning/40 bg-warning/5">
+          <CardContent className="p-4">
+            <h3 className="text-sm font-semibold flex items-center gap-2 text-warning mb-2">
+              <AlertTriangle className="h-4 w-4" />
+              Insumos con variación de costo significativa (≥15%)
+            </h3>
+            <p className="text-xs text-muted-foreground mb-3">
+              Estos insumos cambiaron de precio. Si los usás en recetas, revisá si tenés que ajustar el precio del item.
+            </p>
+            <div className="space-y-1">
+              {alertasCosto.filter((a) => a.alerta).slice(0, 10).map((a) => {
+                const subio = Number(a.variacion_pct ?? 0) > 0;
+                return (
+                  <div key={a.insumo_id} className="flex items-center justify-between text-xs bg-background rounded p-2">
+                    <span>{a.insumo_emoji ?? '🥬'} {a.insumo_nombre}</span>
+                    <span className={cn('flex items-center gap-1 font-medium tabular-nums', subio ? 'text-destructive' : 'text-success')}>
+                      {subio ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                      {Number(a.variacion_pct ?? 0).toFixed(1)}% · {formatARS(Number(a.costo_anterior ?? 0))} → {formatARS(Number(a.costo_actual))}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Tabla */}
@@ -279,8 +412,16 @@ export function ReporteCMV() {
   );
 }
 
-function KpiCard({ label, value, hint, tone }: {
-  label: string; value: string; hint?: string; tone: 'primary' | 'success' | 'warning' | 'destructive';
+function KpiCard({ label, value, hint, tone, delta, invertDeltaTone }: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone: 'primary' | 'success' | 'warning' | 'destructive';
+  // Delta vs período anterior: pct + signo. Mostrar ▲X% / ▼X%.
+  delta?: { pct: number; positivo: boolean } | null;
+  // Por default: positivo (subió) = verde. Para "costo" y "CMV%" lo invertimos
+  // porque subir es malo.
+  invertDeltaTone?: boolean;
 }) {
   const toneClass = {
     primary: 'border-primary/20 bg-primary/5 text-primary',
@@ -288,10 +429,19 @@ function KpiCard({ label, value, hint, tone }: {
     warning: 'border-warning/30 bg-warning/5 text-warning',
     destructive: 'border-destructive/30 bg-destructive/5 text-destructive',
   }[tone];
+  const deltaColor = delta
+    ? (delta.positivo !== !!invertDeltaTone ? 'text-success' : 'text-destructive')
+    : '';
   return (
     <div className={cn('rounded-md border p-3', toneClass)}>
       <div className="text-[10px] uppercase tracking-wide font-medium opacity-80">{label}</div>
       <div className="text-xl font-bold tabular-nums leading-tight mt-1">{value}</div>
+      {delta && Number.isFinite(delta.pct) && (
+        <div className={cn('text-[10px] font-medium mt-0.5 flex items-center gap-0.5', deltaColor)}
+          title="vs período anterior de igual duración">
+          {delta.positivo ? '▲' : '▼'}{Math.abs(delta.pct).toFixed(1)}% vs ant.
+        </div>
+      )}
       {hint && <div className="text-[10px] opacity-70 mt-1">{hint}</div>}
     </div>
   );

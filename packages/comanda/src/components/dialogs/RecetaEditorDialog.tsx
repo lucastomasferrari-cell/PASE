@@ -99,8 +99,39 @@ export function RecetaEditorDialog({ open, onOpenChange, item, tenantId, onSaved
     if (!nombre.trim()) { toast.error('El nombre de la receta es obligatorio'); return; }
     if (rendimiento <= 0) { toast.error('El rendimiento debe ser > 0'); return; }
     const lineasFilled = lineas.filter(l => l.insumo_id != null && l.cantidad > 0);
+
+    // Validación bloqueante: receta sin insumos (antes era confirm) → bloquea
+    // hard. Permitir era trampa: el reporte CMV dice "sin receta" pero la
+    // receta existe vacía y nadie se entera por qué el costo es $0.
     if (lineasFilled.length === 0) {
-      if (!confirm('Vas a guardar una receta sin insumos. ¿Continuar?')) return;
+      toast.error('Una receta necesita al menos 1 insumo. Si querés un placeholder, agregá uno con cantidad 0.001.');
+      return;
+    }
+
+    // Validación bloqueante: insumos sin costo cargado
+    const insumosSinCosto: string[] = [];
+    for (const l of lineasFilled) {
+      const insumo = insumosDisponibles.find(i => i.id === l.insumo_id);
+      if (!insumo) continue;
+      if (insumo.costo_actual == null || Number(insumo.costo_actual) <= 0) {
+        insumosSinCosto.push(insumo.nombre);
+      }
+    }
+    if (insumosSinCosto.length > 0) {
+      const ok = confirm(
+        `Estos insumos NO tienen costo cargado:\n\n  • ${insumosSinCosto.join('\n  • ')}\n\n` +
+        `Si guardás, el CMV de esta receta va a ser parcial (no contará estos insumos).\n\n` +
+        `Recomendado: cargá costo de los insumos en Catálogo → Insumos antes de continuar.\n\n` +
+        `¿Guardar igual?`
+      );
+      if (!ok) return;
+    }
+
+    // Validación bloqueante: merma >= 100% (denominator 0 en cálculo)
+    const mermaInvalida = lineasFilled.find(l => l.merma_pct >= 100);
+    if (mermaInvalida) {
+      toast.error('Merma debe ser < 100% (sino el costo es infinito)');
+      return;
     }
     setSaving(true);
     const insumos: RecetaInsumoInput[] = lineasFilled.map((l, idx) => ({

@@ -79,8 +79,20 @@ export function MateriaPrimaEditorDialog({ open, onOpenChange, tenantId, editing
 
   async function guardar() {
     if (!canSubmit || !insumoId) {
-      toast.error('Completá los datos requeridos');
+      toast.error('Completá los datos requeridos (nombre + insumo + factor > 0 + merma < 100)');
       return;
+    }
+    // Validación bloqueante: precio = 0 al crear nueva MP es trampa — el
+    // trigger recalc costo_insumo va a usar 0 → costo del insumo cae a 0.
+    // Permitirlo solo cuando se está EDITANDO (legítimo "precio aún no se sabe").
+    if (!editing && precio <= 0) {
+      const ok = confirm(
+        'No cargaste precio (precio = 0).\n\n' +
+        'El costo de esta materia prima va a quedar en NULL y NO va a sumar al ' +
+        'costo del insumo unificado hasta que cargues uno (manual o vía factura).\n\n' +
+        '¿Crear igual?'
+      );
+      if (!ok) return;
     }
     setSaving(true);
     const input = {
