@@ -1,6 +1,7 @@
 import { db } from '../lib/supabase';
 import type { ComandaLocalSettings, PosModo } from '../types/database';
 import { translateError } from '../lib/errors';
+import { compressImage } from '../lib/compressImage';
 
 const MP_QR_BUCKET = 'mp-qrs';
 const MARKETPLACE_BUCKET = 'marketplace-fotos';
@@ -62,6 +63,8 @@ export async function validarSlugUnico(slug: string, excluyeLocalId: number): Pr
 }
 
 // Subir QR de MP a Supabase Storage. Path: <tenant_id>/<local_id>.<ext>
+// QR es típicamente PNG con transparencia — compressImage detecta alpha
+// y NO toca PNG con alpha. Para PNG sin alpha o JPG, baja a ~80KB.
 export async function subirMpQr(
   tenantId: string,
   localId: number,
@@ -71,10 +74,13 @@ export async function subirMpQr(
   if (!['png', 'jpg', 'jpeg', 'webp'].includes(ext)) {
     return { url: null, error: 'Formato debe ser PNG/JPG/WEBP' };
   }
-  const path = `${tenantId}/${localId}.${ext}`;
-  const { error: upErr } = await db.storage.from(MP_QR_BUCKET).upload(path, file, {
+  // Compresión client-side (sprint optim egress 2026-05-16)
+  const compressed = await compressImage(file, { maxWidth: 600, quality: 0.85 });
+  const finalExt = compressed.type === 'image/jpeg' ? 'jpg' : ext;
+  const path = `${tenantId}/${localId}.${finalExt}`;
+  const { error: upErr } = await db.storage.from(MP_QR_BUCKET).upload(path, compressed, {
     upsert: true,
-    contentType: file.type,
+    contentType: compressed.type,
   });
   if (upErr) return { url: null, error: upErr.message };
 
@@ -154,8 +160,9 @@ export async function updateMarketplaceLocal(
 }
 
 // Sprint 16/05: upload foto portada marketplace al bucket "marketplace-fotos"
-// (público, asume bucket creado manualmente en Supabase Storage con policy
-// public read). Path: <tenant_id>/<local_id>.<ext>. Override siempre.
+// (público). Compresión client-side antes de subir (sprint optim egress
+// 2026-05-16) → reduce foto del celular típica 800KB-3MB a ~150-250KB.
+// Egress baja 5-10x cada vez que un cliente ve el marketplace.
 export async function subirMarketplaceFoto(
   tenantId: string,
   localId: number,
@@ -165,13 +172,16 @@ export async function subirMarketplaceFoto(
   if (!['png', 'jpg', 'jpeg', 'webp'].includes(ext)) {
     return { url: null, error: 'Formato debe ser PNG/JPG/WEBP' };
   }
-  if (file.size > 3 * 1024 * 1024) {
-    return { url: null, error: 'Imagen muy grande (máx 3MB)' };
+  if (file.size > 10 * 1024 * 1024) {
+    return { url: null, error: 'Imagen muy grande (máx 10MB sin comprimir)' };
   }
-  const path = `${tenantId}/${localId}-${Date.now()}.${ext}`;  // timestamp evita cache CDN
-  const { error: upErr } = await db.storage.from(MARKETPLACE_BUCKET).upload(path, file, {
+  // Compresión client-side: max 1200px ancho, JPEG 80% quality
+  const compressed = await compressImage(file, { maxWidth: 1200, quality: 0.8 });
+  const finalExt = compressed.type === 'image/jpeg' ? 'jpg' : ext;
+  const path = `${tenantId}/${localId}-${Date.now()}.${finalExt}`;  // timestamp evita cache CDN
+  const { error: upErr } = await db.storage.from(MARKETPLACE_BUCKET).upload(path, compressed, {
     upsert: true,
-    contentType: file.type,
+    contentType: compressed.type,
   });
   if (upErr) {
     if (upErr.message.includes('Bucket not found')) {
