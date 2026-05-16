@@ -41,6 +41,7 @@ export const ADMIN_NAVIGATION: NavCategory[] = [
     subItems: [
       { slug: 'dashboard',         label: 'Dashboard',          href: '/reportes/dashboard' },
       { slug: 'menu-engineering',  label: 'Menu Engineering',   href: '/reportes/menu-engineering' },
+      { slug: 'cmv',               label: 'CMV (Costo merc.)',  href: '/reportes/cmv' },
       { slug: 'ventas',            label: 'Ventas detalle',     href: '/reportes/ventas' },
       { slug: 'productos',         label: 'Productos',          href: '/reportes/productos' },
       { slug: 'canales',           label: 'Canales',            href: '/reportes/canales' },

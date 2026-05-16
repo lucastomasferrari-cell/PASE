@@ -58,6 +58,7 @@ const ReporteCanales = lazy(() => import('./pages/Reportes/ReporteCanales').then
 const ReporteProductos = lazy(() => import('./pages/Reportes/ReporteProductos').then(m => ({ default: m.ReporteProductos })));
 const ReporteTiempos = lazy(() => import('./pages/Reportes/ReporteTiempos').then(m => ({ default: m.ReporteTiempos })));
 const ReporteMenuEngineering = lazy(() => import('./pages/Reportes/ReporteMenuEngineering').then(m => ({ default: m.ReporteMenuEngineering })));
+const ReporteCMV = lazy(() => import('./pages/Reportes/ReporteCMV').then(m => ({ default: m.ReporteCMV })));
 const PropinasReparto = lazy(() => import('./pages/Empleados/PropinasReparto').then(m => ({ default: m.PropinasReparto })));
 const FidelidadLista = lazy(() => import('./pages/Marketing/FidelidadLista').then(m => ({ default: m.FidelidadLista })));
 const CajaChica = lazy(() => import('./pages/Caja/CajaChica').then(m => ({ default: m.CajaChica })));
@@ -191,6 +192,7 @@ export default function App() {
                     <Route path="productos" element={<ReporteProductos />} />
                     <Route path="tiempos" element={<ReporteTiempos />} />
                     <Route path="menu-engineering" element={<ReporteMenuEngineering />} />
+                    <Route path="cmv" element={<ReporteCMV />} />
                     <Route path="ventas" element={<ReporteVentas />} />
                     <Route path="empleados" element={<ReportePerformanceEmpleados />} />
                   </Route>
