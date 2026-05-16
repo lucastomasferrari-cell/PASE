@@ -69,6 +69,7 @@ const ConciliacionMpView = lazy(() => import('./pages/Caja/ConciliacionMpView').
 const SettingsBranding = lazy(() => import('./pages/Configuracion/SettingsBranding').then(m => ({ default: m.SettingsBranding })));
 const IntegracionWhatsapp = lazy(() => import('./pages/Integraciones/IntegracionWhatsapp').then(m => ({ default: m.IntegracionWhatsapp })));
 const MateriasPrimasLista = lazy(() => import('./pages/Catalogo/MateriasPrimasLista').then(m => ({ default: m.MateriasPrimasLista })));
+const CombosLista = lazy(() => import('./pages/Catalogo/CombosLista').then(m => ({ default: m.CombosLista })));
 const LogWebhooksExternos = lazy(() => import('./pages/Integraciones/LogWebhooksExternos').then(m => ({ default: m.LogWebhooksExternos })));
 const ConectarPartners = lazy(() => import('./pages/Integraciones/ConectarPartners').then(m => ({ default: m.ConectarPartners })));
 
@@ -208,6 +209,7 @@ export default function App() {
                   <Route path="/menu/insumos" element={<InsumosLista />} />
                   <Route path="/menu/recetas" element={<RecetasLista />} />
                   <Route path="/menu/materias-primas" element={<MateriasPrimasLista />} />
+                  <Route path="/menu/combos" element={<CombosLista />} />
 
                   {/* ── Salón ─────────────────────────────────────────── */}
                   <Route path="/salon" element={<Navigate to="/salon/mesas" replace />} />
