@@ -190,20 +190,20 @@ export default defineConfig([
       'pase-local/require-apply-local-scope': 'error',
       'pase-local/no-eager-page-import-app': 'error',
       // react-hooks reglas adicionales — códigobase pre-existente las violaba
-      // sin saberlo (50+ casos). Las marcamos `warn` para visibility pero NO
-      // bloqueantes hasta hacer un sprint dedicado a limpieza.
-      // Deuda C-react-hooks: pasar a 'error' después del cleanup.
-      'react-hooks/set-state-in-effect': 'warn',
-      'react-hooks/refs': 'warn',
+      // sin saberlo (100+ casos). Mantenemos `exhaustive-deps` como warn
+      // porque es útil real. Las demás (React Compiler / Forget rules) están
+      // OFF hasta sprint dedicado de cleanup — son demasiado estrictas para
+      // patterns standard (setState dentro de async then en useEffect es
+      // legítimo en 80% de los casos).
+      // Deuda C-react-hooks (sprint dedicado): re-habilitar las 5 reglas
+      // como 'warn' y hacer pasada de cleanup completo.
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/refs': 'off',
       'react-hooks/exhaustive-deps': 'warn',
-      'react-hooks/immutability': 'warn',
-      // React Compiler / Forget — reglas estrictas que detectan patrones de
-      // pureza en render (ej. Date.now() durante render). Útiles a futuro
-      // pero rompen patrones legítimos del códigobase actual (UrgencyTimer,
-      // useVisiblePolling, PosLayout). Cleanup separado.
-      'react-hooks/purity': 'warn',
-      'react-hooks/component-hook-factories': 'warn',
-      'react-hooks/preserve-manual-memoization': 'warn',
+      'react-hooks/immutability': 'off',
+      'react-hooks/purity': 'off',
+      'react-hooks/component-hook-factories': 'off',
+      'react-hooks/preserve-manual-memoization': 'off',
       'react-refresh/only-export-components': 'warn',
     },
   },

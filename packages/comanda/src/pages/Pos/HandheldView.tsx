@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ArrowLeft, Send, Plus, Minus, Search } from 'lucide-react';
+import { ArrowLeft, Send, Search } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useAuthPos } from '@/lib/authPos';
 import { useLocalActivo } from '@/lib/localActivo';
@@ -396,16 +396,5 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
   );
 }
 
-// Re-exporte Stepper-like helpers — los uso menos aquí porque touch debe
-// ser simple tap, pero los dejo para evolución futura.
-export const _HandheldStepper = ({ value, onMinus, onPlus }: { value: number; onMinus: () => void; onPlus: () => void }) => (
-  <div className="inline-flex items-center gap-1">
-    <button type="button" onClick={onMinus} className="h-8 w-8 rounded bg-muted active:bg-accent flex items-center justify-center">
-      <Minus className="h-3.5 w-3.5" />
-    </button>
-    <span className="w-8 text-center tabular-nums">{value}</span>
-    <button type="button" onClick={onPlus} className="h-8 w-8 rounded bg-muted active:bg-accent flex items-center justify-center">
-      <Plus className="h-3.5 w-3.5" />
-    </button>
-  </div>
-);
+// Stepper helper eliminado — agregar de nuevo si se necesita (touch grande
+// por defecto, no requiere +/-).

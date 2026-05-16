@@ -75,6 +75,56 @@ export function KdsView() {
     return () => clearInterval(t);
   }, []);
 
+  // Auto-hide tracking: ref + effect. Deben ir ANTES de los early returns
+  // (regla react-hooks/rules-of-hooks). ventasTodas se computa derivada
+  // segura (array vacío si tickets aún null).
+  const listoDesdeRef = useRef<Map<number, number>>(new Map());
+  const ventasTodasTemp = useMemo(
+    () => (tickets ? agruparPorVenta(tickets) : []),
+    [tickets],
+  );
+  useEffect(() => {
+    const now = Date.now();
+    const activas = new Set(ventasTodasTemp.map((v) => v.venta_id));
+    for (const key of Array.from(listoDesdeRef.current.keys())) {
+      if (!activas.has(key)) listoDesdeRef.current.delete(key);
+    }
+    for (const v of ventasTodasTemp) {
+      const todoListo = v.items.every((i) => i.estado === 'listo');
+      if (todoListo && !listoDesdeRef.current.has(v.venta_id)) {
+        listoDesdeRef.current.set(v.venta_id, now);
+      } else if (!todoListo && listoDesdeRef.current.has(v.venta_id)) {
+        listoDesdeRef.current.delete(v.venta_id);
+      }
+    }
+  }, [ventasTodasTemp]);
+
+  // Tick 30s para re-render y que ventas que cumplen min se oculten.
+  const [tickCounter, setTickCounter] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTickCounter((t) => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Memo de visibles/ocultas — depende de tickCounter para refresh
+  const { ventasVisibles, ventasOcultas } = useMemo(() => {
+    const visibles: typeof ventasTodasTemp = [];
+    const ocultas: typeof ventasTodasTemp = [];
+    const ahora = Date.now();
+    for (const v of ventasTodasTemp) {
+      const listoDesde = listoDesdeRef.current.get(v.venta_id);
+      const minListo = listoDesde ? (ahora - listoDesde) / 60_000 : 0;
+      if (listoDesde && minListo >= AUTO_HIDE_MIN) {
+        ocultas.push(v);
+      } else {
+        visibles.push(v);
+      }
+    }
+    return { ventasVisibles: visibles, ventasOcultas: ocultas };
+    // tickCounter incluido para re-render cada 30s
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ventasTodasTemp, AUTO_HIDE_MIN, tickCounter]);
+
   if (!estacionValida || !info || !estacionTipo) {
     return <KdsErrorScreen mensaje="Estación no reconocida en la URL." />;
   }
@@ -88,59 +138,7 @@ export function KdsView() {
     return <div className="min-h-screen bg-zinc-950 text-zinc-400 flex items-center justify-center text-sm">Cargando…</div>;
   }
 
-  // Agrupar items por venta para emitir 1 card por venta con sus items.
-  const ventasTodas = agruparPorVenta(tickets);
-
-  // Tracking de cuándo cada venta pasó a estar 100% lista. Se actualiza
-  // dentro del effect de abajo. Si todoListo y tiempo > AUTO_HIDE_MIN, la
-  // ocultamos del feed principal (cocina puede mostrarlas con el toggle).
-  // NOTA: el ref se inicializa una sola vez por mount del componente; al
-  // refetch viene la nueva data, pero el ref persiste. Vamos a podar
-  // entradas viejas en el effect.
-  const listoDesdeRef = useRef<Map<number, number>>(new Map());
-  useEffect(() => {
-    const now = Date.now();
-    const activas = new Set(ventasTodas.map((v) => v.venta_id));
-    // Podar entradas que ya no aparecen
-    for (const key of Array.from(listoDesdeRef.current.keys())) {
-      if (!activas.has(key)) listoDesdeRef.current.delete(key);
-    }
-    // Registrar/actualizar el momento "primera vez 100% lista"
-    for (const v of ventasTodas) {
-      const todoListo = v.items.every((i) => i.estado === 'listo');
-      if (todoListo && !listoDesdeRef.current.has(v.venta_id)) {
-        listoDesdeRef.current.set(v.venta_id, now);
-      } else if (!todoListo && listoDesdeRef.current.has(v.venta_id)) {
-        // Si un item volvió de listo (recall), reseteamos el contador
-        listoDesdeRef.current.delete(v.venta_id);
-      }
-    }
-  }, [ventasTodas]);
-
-  const ahora = Date.now();
-  const { ventasVisibles, ventasOcultas } = useMemo(() => {
-    const visibles: typeof ventasTodas = [];
-    const ocultas: typeof ventasTodas = [];
-    for (const v of ventasTodas) {
-      const listoDesde = listoDesdeRef.current.get(v.venta_id);
-      const minListo = listoDesde ? (ahora - listoDesde) / 60_000 : 0;
-      if (listoDesde && minListo >= AUTO_HIDE_MIN) {
-        ocultas.push(v);
-      } else {
-        visibles.push(v);
-      }
-    }
-    return { ventasVisibles: visibles, ventasOcultas: ocultas };
-  }, [ventasTodas, ahora, AUTO_HIDE_MIN]);
-
-  // Re-render cada 30s para que las ventas que cumplen 5min se oculten sin
-  // esperar al próximo poll. Cheap: solo cambia el `ahora`.
-  const [, forceTick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => forceTick((t) => t + 1), 30_000);
-    return () => clearInterval(id);
-  }, []);
-
+  const ventasTodas = ventasTodasTemp;
   const ventas = mostrarOcultas ? ventasTodas : ventasVisibles;
 
   async function handleListo(itemId: number) {
