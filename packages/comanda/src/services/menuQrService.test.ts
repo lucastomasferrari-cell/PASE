@@ -43,6 +43,6 @@ describe('menuQrService', () => {
     mockRpc.mockResolvedValue({ data: null, error: { message: 'TOKEN_INVALIDO' } });
     const r = await getCatalogoPorToken('bad');
     expect(r.data).toEqual([]);
-    expect(r.error).toBe('TOKEN_INVALIDO');
+    expect(r.error).toMatch(/token.*inv[áa]lido/i);
   });
 });

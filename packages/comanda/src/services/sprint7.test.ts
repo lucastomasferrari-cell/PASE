@@ -133,7 +133,8 @@ describe('sprint 7 — error pathways de RPC reportadas correctamente', () => {
       ventaId: 1, metodo: 'efectivo', monto: 30, idempotencyKey: 'k',
     });
     expect(res.pagoId).toBeNull();
-    expect(res.error).toContain('SOBREPAGO');
+    // translateError convierte SOBREPAGO al mensaje en español
+    expect(res.error).toMatch(/supera|sobrepago/i);
   });
 
   it('registrarMovimiento mapea error RETIRO_REQUIERE_MANAGER (HIGH #2)', async () => {
@@ -143,7 +144,7 @@ describe('sprint 7 — error pathways de RPC reportadas correctamente', () => {
     });
     const res = await registrarMovimiento(1, 'emp', 'retiro', 10000, 'efectivo', 'compra');
     expect(res.id).toBeNull();
-    expect(res.error).toContain('RETIRO_REQUIERE_MANAGER');
+    expect(res.error).toMatch(/autorizaci[óo]n.*manager|retiros.*manager/i);
   });
 
   it('cobrar mapea error LOCAL_NO_AUTORIZADO (BLOCKER #2 IDOR)', async () => {
@@ -152,6 +153,6 @@ describe('sprint 7 — error pathways de RPC reportadas correctamente', () => {
       error: { message: 'LOCAL_NO_AUTORIZADO: local 99 no pertenece al tenant' },
     });
     const res = await cobrar(1, [{ metodo: 'efectivo', monto: 100, idempotency_key: 'k' }], 0, null);
-    expect(res.error).toContain('LOCAL_NO_AUTORIZADO');
+    expect(res.error).toMatch(/autorizado|no.*autorizaci[óo]n/i);
   });
 });

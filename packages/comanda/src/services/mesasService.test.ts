@@ -99,7 +99,8 @@ describe('partirCuentaService', () => {
     });
     const res = await partirCuentaService(10, [], 'mgr', 'x');
     expect(res.ventaNuevaId).toBeNull();
-    expect(res.error).toContain('ITEMS_REQUERIDOS');
+    // translateError mapea ITEMS_REQUERIDOS al mensaje en español
+    expect(res.error).toMatch(/seleccionar.*item|item.*requerido/i);
   });
 
   it('mapea error VENTA_NO_EDITABLE', async () => {
@@ -108,7 +109,7 @@ describe('partirCuentaService', () => {
       error: { message: 'VENTA_NO_EDITABLE: estado cobrada' },
     });
     const res = await partirCuentaService(10, [1], 'mgr', 'x');
-    expect(res.error).toContain('VENTA_NO_EDITABLE');
+    expect(res.error).toMatch(/venta.*editar|no se puede editar/i);
   });
 });
 

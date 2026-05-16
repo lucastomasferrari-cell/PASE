@@ -43,7 +43,8 @@ describe('cobrar', () => {
     mockRpc.mockResolvedValue({ data: null, error: { message: 'SUMA_PAGOS_NO_COINCIDE' } });
     const res = await cobrar(1, [{ metodo: 'efectivo', monto: 100, idempotency_key: 'k' }], 0, null);
     expect(res.totalCobrado).toBe(0);
-    expect(res.error).toBe('SUMA_PAGOS_NO_COINCIDE');
+    // translateError convierte el código a mensaje en español
+    expect(res.error).toMatch(/suma de los pagos no coincide/i);
   });
 });
 

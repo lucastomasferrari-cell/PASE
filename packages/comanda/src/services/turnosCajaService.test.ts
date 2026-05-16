@@ -37,7 +37,7 @@ describe('abrirTurno', () => {
     mockRpc.mockResolvedValue({ data: null, error: { message: 'TURNO_YA_ABIERTO' } });
     const res = await abrirTurno(1, 'emp', 0, null);
     expect(res.turnoId).toBeNull();
-    expect(res.error).toBe('TURNO_YA_ABIERTO');
+    expect(res.error).toMatch(/turno.*abierto/i);
   });
 });
 

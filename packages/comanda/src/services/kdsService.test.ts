@@ -33,7 +33,8 @@ describe('kdsService', () => {
   it('propaga el error de la RPC', async () => {
     mockRpc.mockResolvedValue({ data: null, error: { message: 'TOKEN_INVALIDO' } });
     const r = await getTickets('bad');
-    expect(r.error).toBe('TOKEN_INVALIDO');
+    // translateError convierte TOKEN_INVALIDO al mensaje en español
+    expect(r.error).toMatch(/token.*inv[áa]lido/i);
     expect(r.data).toEqual([]);
   });
 });
