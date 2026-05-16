@@ -9,7 +9,7 @@ import { useAuthPos } from '../../lib/authPos';
 import { listItems, type ItemConGrupo } from '../../services/itemsService';
 import { listGrupos } from '../../services/gruposService';
 import {
-  getVenta, listVentasItems, agregarItem, modificarItem, mandarCurso,
+  getVenta, listVentasItems, agregarItem, modificarItem, mandarCurso, updateVentaMeta,
 } from '../../services/ventasService';
 import type { VentaPos, VentaPosItem, ItemGrupo } from '../../types/database';
 import { Badge } from '../../components/Badge';
@@ -125,6 +125,10 @@ export function VentaScreen() {
     enabled: Number.isFinite(ventaId) && ventaId > 0,
   });
 
+  // Notas globales de la venta (editable inline)
+  const [editandoNotas, setEditandoNotas] = useState(false);
+  const [notasDraft, setNotasDraft] = useState('');
+
   // Item seleccionado para agotar (abre AgotarDialog)
   const [agotarItem, setAgotarItem] = useState<ItemConGrupo | null>(null);
 
@@ -174,6 +178,23 @@ export function VentaScreen() {
     }
     return new Map([...map.entries()].sort((a, b) => a[0] - b[0]));
   }, [items]);
+
+  // Tiempo estimado de la mesa: del catálogo, sumar tiempo_prep_min de cada
+  // item en hold/enviada. Por curso tomamos el MAX (cocina trabaja paralelo
+  // dentro de un curso) y sumamos cursos (cursos son seriales). Debe ir
+  // ANTES de cualquier early return por regla react-hooks/rules-of-hooks.
+  const tiempoEstimadoMin = useMemo(() => {
+    if (items.length === 0) return 0;
+    const porCurso = new Map<number, number>();
+    for (const it of items) {
+      if (it.estado === 'anulado' || it.estado === 'listo' || it.estado === 'entregado') continue;
+      const cat = catalogo.find((c) => c.id === it.item_id);
+      const prep = cat?.tiempo_prep_min ?? 0;
+      const c = it.curso ?? 1;
+      porCurso.set(c, Math.max(porCurso.get(c) ?? 0, prep));
+    }
+    return Array.from(porCurso.values()).reduce((s, v) => s + v, 0);
+  }, [items, catalogo]);
 
   // Hold count por curso (para badge "EN HOLD")
   function holdCount(curso: number): number {
@@ -326,6 +347,26 @@ export function VentaScreen() {
     reload();
   }
 
+  // Guarda notas globales venta. Se llama desde el inline editor del header.
+  async function guardarNotasVenta() {
+    const trimmed = notasDraft.trim();
+    const { error } = await updateVentaMeta(ventaId, { notas: trimmed || null });
+    if (error) { toast.error(error); return; }
+    toast.success('Notas guardadas');
+    setEditandoNotas(false);
+    reload();
+  }
+
+  // Toggle coursing automático (curso N+1 dispara solo cuando todos los del N están listos)
+  async function toggleCoursingAuto() {
+    if (!venta) return;
+    const nuevo = !venta.coursing_auto;
+    const { error } = await updateVentaMeta(ventaId, { coursing_auto: nuevo });
+    if (error) { toast.error(error); return; }
+    toast.success(`Coursing automático ${nuevo ? 'activado' : 'desactivado'}`);
+    reload();
+  }
+
   const cursosExistentes = Array.from(itemsPorCurso.keys());
   const maxCurso = Math.max(3, ...cursosExistentes);
 
@@ -400,7 +441,7 @@ export function VentaScreen() {
 
       {/* CHECK DER — column con header fijo, items scrolleables, footer pinned */}
       <aside className="bg-muted/40 border-l border-border flex flex-col min-h-0 overflow-hidden">
-        <div className="p-3 border-b border-border bg-card">
+        <div className="p-3 border-b border-border bg-card space-y-2">
           <div className="flex items-center gap-2">
             <Button type="button" variant="ghost" size="sm" onClick={() => navigate(-1)}>
               <ArrowLeft className="h-4 w-4 mr-1" />
@@ -408,11 +449,69 @@ export function VentaScreen() {
             </Button>
             <strong className="text-base">#{venta.numero_local}</strong>
             <EstadoVentaBadge estado={venta.estado} />
+            {venta.tab_nombre && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/15 text-primary font-bold uppercase" title="Open Tab">
+                Tab · {venta.tab_nombre}
+              </span>
+            )}
           </div>
-          <div className="text-xs text-muted-foreground mt-1">
+          <div className="text-xs text-muted-foreground">
             {venta.modo === 'salon' && venta.mesa_id && 'Mesa · '}
-            {venta.cliente_nombre ?? 'Sin cliente'} · abierta {relativoCorto(venta.abierta_at)}
+            {venta.cliente_nombre ?? venta.tab_nombre ?? 'Sin cliente'} · abierta {relativoCorto(venta.abierta_at)}
+            {tiempoEstimadoMin > 0 && (
+              <span title="Suma de tiempos de prep de los items en hold/cocina">
+                {' · ⏱ ~'}{tiempoEstimadoMin}min
+              </span>
+            )}
           </div>
+
+          {/* Notas globales venta — inline edit */}
+          {editandoNotas ? (
+            <div className="flex gap-1 items-start">
+              <textarea
+                value={notasDraft}
+                onChange={(e) => setNotasDraft(e.target.value)}
+                rows={2}
+                placeholder="Ej: cumpleaños — traer torta al final"
+                className="flex-1 text-xs rounded-md border border-input bg-background p-1.5 resize-none"
+                autoFocus
+              />
+              <div className="flex flex-col gap-1">
+                <Button size="sm" variant="success" className="h-7 px-2 text-[10px]" onClick={guardarNotasVenta}>OK</Button>
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px]" onClick={() => setEditandoNotas(false)}>×</Button>
+              </div>
+            </div>
+          ) : venta.notas ? (
+            <button
+              type="button"
+              onClick={() => { setNotasDraft(venta.notas ?? ''); setEditandoNotas(true); }}
+              className="block w-full text-left text-xs italic px-2 py-1.5 rounded bg-warning/10 text-warning-foreground border border-warning/30 hover:bg-warning/15"
+              title="Click para editar"
+            >
+              📝 {venta.notas}
+            </button>
+          ) : editable ? (
+            <button
+              type="button"
+              onClick={() => { setNotasDraft(''); setEditandoNotas(true); }}
+              className="text-[10px] text-muted-foreground hover:text-foreground hover:underline"
+            >
+              + Agregar nota a la mesa
+            </button>
+          ) : null}
+
+          {/* Coursing automático toggle */}
+          {editable && (
+            <label className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer">
+              <input
+                type="checkbox"
+                checked={venta.coursing_auto ?? false}
+                onChange={toggleCoursingAuto}
+                className="h-3.5 w-3.5"
+              />
+              <span>Coursing automático <span className="opacity-60">(curso N+1 sale solo cuando termina N)</span></span>
+            </label>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto p-2 space-y-3">

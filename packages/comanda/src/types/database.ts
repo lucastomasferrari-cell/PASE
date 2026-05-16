@@ -74,6 +74,7 @@ export interface Item {
   agotado_at: string | null;
   agotado_hasta: string | null;
   es_combo: boolean;
+  tiempo_prep_min?: number | null;  // Sprint 16/05: minutos prep estimados
   visible_pos: boolean;
   visible_qr: boolean;
   visible_tienda: boolean;
@@ -288,6 +289,9 @@ export interface VentaPos {
   anulada_at: string | null;
   notas: string | null;
   cobro_idempotency_key: string | null;
+  // Sprint 16/05
+  coursing_auto?: boolean;
+  tab_nombre?: string | null;
 }
 
 export interface VentaPosItemModificador {

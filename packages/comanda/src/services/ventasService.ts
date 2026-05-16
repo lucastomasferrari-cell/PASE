@@ -161,6 +161,28 @@ export async function aplicarDescuento(
   return { error: error?.message ?? null };
 }
 
+// Sprint 16/05: actualizar campos no-financieros de la venta (notas globales,
+// coursing_auto, tab_nombre). NO toca subtotal/total/estado — para eso van
+// las RPCs específicas.
+//
+// applyLocalScope no aplica acá porque updateamos por PK (.eq('id', N)).
+// RLS server-side garantiza que solo se actualice si la venta es del tenant
+// + local accesible del usuario.
+export interface VentaMetaPatch {
+  notas?: string | null;
+  coursing_auto?: boolean;
+  tab_nombre?: string | null;
+}
+
+export async function updateVentaMeta(
+  ventaId: number,
+  patch: VentaMetaPatch,
+): Promise<{ error: string | null }> {
+  // eslint-disable-next-line pase-local/no-direct-financiera-write -- campos no-financieros (notas, flags UI), no afectan total/subtotal/pagos
+  const { error } = await db.from('ventas_pos').update(patch).eq('id', ventaId);
+  return { error: error?.message ?? null };
+}
+
 export async function anularVenta(
   ventaId: number, managerId: string, motivo: string,
   idempotencyKey?: string,

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Coffee, Search, ArrowDownUp } from 'lucide-react';
+import { Plus, Coffee, Search, ArrowDownUp, BookmarkPlus } from 'lucide-react';
+import { toast } from 'sonner';
 import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
 import { useLocalActivo } from '../../lib/localActivo';
-import { listVentas, abrirVenta } from '../../services/ventasService';
+import { listVentas, abrirVenta, updateVentaMeta } from '../../services/ventasService';
 import { listCanales } from '../../services/canalesService';
 import type { VentaPos } from '../../types/database';
 import { formatARS, relativoCorto } from '../../lib/format';
@@ -16,8 +17,13 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { ComandasActivasPanel } from '@/components/ComandasActivasPanel';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { cn } from '@/lib/utils';
 
 export function MostradorView() {
   const { user } = useAuth();
@@ -29,6 +35,10 @@ export function MostradorView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creando, setCreando] = useState(false);
+
+  // Open Tab (modo barra: cliente abre cuenta, va consumiendo, paga al final)
+  const [abrirTabOpen, setAbrirTabOpen] = useState(false);
+  const [tabNombre, setTabNombre] = useState('');
 
   // Filtros / sort
   const [search, setSearch] = useState('');
@@ -98,6 +108,28 @@ export function MostradorView() {
     navigate(`/pos/venta/${ventaId}`);
   }
 
+  async function abrirTab() {
+    if (!empleado || localId === null) return;
+    const nombre = tabNombre.trim();
+    if (nombre.length < 2) { toast.error('Nombre muy corto'); return; }
+    setCreando(true);
+    const { data: canales } = await listCanales(null, true);
+    const canal = canales.find((c) => c.slug === 'mostrador');
+    if (!canal) { setError('No hay canal "mostrador"'); setCreando(false); return; }
+    const { ventaId, error: err } = await abrirVenta({
+      localId, modo: 'mostrador', canalId: canal.id, cajeroId: empleado.id,
+      clienteNombre: nombre,  // muestra en el listado
+    });
+    if (err || !ventaId) { setError(err ?? 'Error'); setCreando(false); return; }
+    // Setear el flag tab_nombre — distingue una tab de una orden mostrador normal
+    const { error: metaErr } = await updateVentaMeta(ventaId, { tab_nombre: nombre });
+    setCreando(false);
+    if (metaErr) { toast.error('Tab abierta pero sin label: ' + metaErr); }
+    setAbrirTabOpen(false);
+    setTabNombre('');
+    navigate(`/pos/venta/${ventaId}`);
+  }
+
   return (
     <div className="flex h-full">
       {/* Panel izq: comandas activas modo mostrador */}
@@ -112,16 +144,26 @@ export function MostradorView() {
           <header className="flex items-center gap-3 mb-5">
             <h1 className="text-2xl font-bold tracking-tight">Mostrador</h1>
             <span className="text-sm text-muted-foreground">{ventas.length} órdenes activas</span>
-            <Button
-              onClick={nuevaOrden}
-              disabled={creando}
-              variant="success"
-              size="lg"
-              className="ml-auto"
-            >
-              <Plus className="h-5 w-5 mr-2" />
-              {creando ? 'Creando…' : 'Nueva orden'}
-            </Button>
+            <div className="ml-auto flex gap-2">
+              <Button
+                onClick={() => setAbrirTabOpen(true)}
+                disabled={creando}
+                variant="outline"
+                size="lg"
+              >
+                <BookmarkPlus className="h-4 w-4 mr-2" />
+                Abrir tab
+              </Button>
+              <Button
+                onClick={nuevaOrden}
+                disabled={creando}
+                variant="success"
+                size="lg"
+              >
+                <Plus className="h-5 w-5 mr-2" />
+                {creando ? 'Creando…' : 'Nueva orden'}
+              </Button>
+            </div>
           </header>
 
           {error && (
@@ -206,16 +248,24 @@ export function MostradorView() {
               {ventasFiltradas.map((v) => (
                 <Card
                   key={v.id}
-                  className="cursor-pointer transition-colors hover:bg-accent"
+                  className={cn(
+                    'cursor-pointer transition-colors hover:bg-accent',
+                    v.tab_nombre && 'border-primary/60 bg-primary/5',
+                  )}
                   onClick={() => navigate(`/pos/venta/${v.id}`)}
                 >
                   <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <strong className="text-base">#{v.numero_local}</strong>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {v.tab_nombre && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary text-primary-foreground font-bold uppercase shrink-0">Tab</span>
+                        )}
+                        <strong className="text-base">#{v.numero_local}</strong>
+                      </div>
                       <Badge variant={estadoColor(v.estado)}>{v.estado}</Badge>
                     </div>
                     <div className="mt-2 text-sm text-muted-foreground truncate">
-                      {v.cliente_nombre ?? 'Sin nombre'}
+                      {v.tab_nombre ?? v.cliente_nombre ?? 'Sin nombre'}
                     </div>
                     <div className="mt-3 text-xl font-bold tabular-nums">
                       {formatARS(v.total)}
@@ -230,6 +280,45 @@ export function MostradorView() {
           )}
         </div>
       </div>
+
+      {/* Dialog Open Tab */}
+      <Dialog open={abrirTabOpen} onOpenChange={setAbrirTabOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BookmarkPlus className="h-5 w-5 text-primary" />
+              Abrir tab
+            </DialogTitle>
+            <DialogDescription>
+              Para barra: cliente "abre cuenta", consume, paga al final.
+              La tab aparece destacada en la lista de mostrador.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="tab-nombre">Nombre o identificación</Label>
+            <input
+              id="tab-nombre"
+              type="text"
+              value={tabNombre}
+              onChange={(e) => setTabNombre(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') abrirTab(); }}
+              placeholder="Ej: Juan barba / Cumple Mesa 3 / Cliente Coca"
+              className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+              autoFocus
+              maxLength={50}
+            />
+            <p className="text-xs text-muted-foreground">
+              Lo vas a ver en el listado para identificarla rápido.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAbrirTabOpen(false)}>Cancelar</Button>
+            <Button onClick={abrirTab} disabled={creando || tabNombre.trim().length < 2}>
+              {creando ? 'Abriendo…' : 'Abrir tab'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

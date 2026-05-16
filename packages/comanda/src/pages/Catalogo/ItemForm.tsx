@@ -51,6 +51,7 @@ export function ItemForm({ user, grupos, item, onClose, onSaved }: Props) {
   const [visibleQr, setVisibleQr] = useState(item?.visible_qr ?? true);
   const [visibleTienda, setVisibleTienda] = useState(item?.visible_tienda ?? true);
   const [esCombo, setEsCombo] = useState(item?.es_combo ?? false);
+  const [tiempoPrepMin, setTiempoPrepMin] = useState<number | ''>(item?.tiempo_prep_min ?? '');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -84,6 +85,7 @@ export function ItemForm({ user, grupos, item, onClose, onSaved }: Props) {
       visible_qr: visibleQr,
       visible_tienda: visibleTienda,
       es_combo: esCombo,
+      tiempo_prep_min: typeof tiempoPrepMin === 'number' && tiempoPrepMin > 0 ? tiempoPrepMin : null,
       tenant_id: user.tenant_id,
       local_id: null,
     };
@@ -196,23 +198,44 @@ export function ItemForm({ user, grupos, item, onClose, onSaved }: Props) {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Estación cocina</Label>
-            <Select
-              value={estacion === '' ? '_none' : estacion}
-              onValueChange={(v) => setEstacion(v === '_none' ? '' : (v as Estacion))}
-            >
-              <SelectTrigger className="h-11">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ESTACIONES.map((est) => (
-                  <SelectItem key={est.value} value={est.value}>
-                    {est.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Estación cocina</Label>
+              <Select
+                value={estacion === '' ? '_none' : estacion}
+                onValueChange={(v) => setEstacion(v === '_none' ? '' : (v as Estacion))}
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ESTACIONES.map((est) => (
+                    <SelectItem key={est.value} value={est.value}>
+                      {est.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="prep">Tiempo prep (min)</Label>
+              <input
+                id="prep"
+                type="number"
+                min={0}
+                max={180}
+                value={tiempoPrepMin}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setTiempoPrepMin(v === '' ? '' : Number(v));
+                }}
+                placeholder="opcional"
+                className="w-full h-11 px-3 rounded-md border border-input bg-background text-sm tabular-nums"
+              />
+              <p className="text-xs text-muted-foreground">
+                Mozo le dice al cliente "tarda ~Xmin". Suma al tiempo estimado de la mesa.
+              </p>
+            </div>
           </div>
 
           <div className="space-y-3">
