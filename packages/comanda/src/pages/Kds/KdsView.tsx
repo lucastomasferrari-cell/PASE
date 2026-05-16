@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Volume2, VolumeX, Undo2, CheckCheck } from 'lucide-react';
+import { Volume2, VolumeX, Undo2, CheckCheck, EyeOff, Eye } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import { getTickets, marcarListo, recall, type KdsTicket } from '@/services/kdsService';
 import { ESTACIONES, type EstacionKds } from '@/services/kdsTokensService';
@@ -35,6 +35,12 @@ export function KdsView() {
   const [error, setError] = useState<string | null>(null);
   const [reloj, setReloj] = useState<string>(() => new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }));
   const [sonido, setSonido] = useState(false);
+  // Auto-hide: cards 100% listas hace más de N minutos se ocultan del feed
+  // principal. La cocina puede mostrarlas con el toggle "Ver entregadas".
+  // Recall sigue funcionando los primeros 60s (cubierto por estado='listo'
+  // + segundos_desde_enviado < 60).
+  const AUTO_HIDE_MIN = 5;
+  const [mostrarOcultas, setMostrarOcultas] = useState(false);
   const conocidosRef = useRef<Set<number>>(new Set());
 
   const estacionValida = estacion && estacion in ESTACION_INFO;
@@ -83,7 +89,59 @@ export function KdsView() {
   }
 
   // Agrupar items por venta para emitir 1 card por venta con sus items.
-  const ventas = agruparPorVenta(tickets);
+  const ventasTodas = agruparPorVenta(tickets);
+
+  // Tracking de cuándo cada venta pasó a estar 100% lista. Se actualiza
+  // dentro del effect de abajo. Si todoListo y tiempo > AUTO_HIDE_MIN, la
+  // ocultamos del feed principal (cocina puede mostrarlas con el toggle).
+  // NOTA: el ref se inicializa una sola vez por mount del componente; al
+  // refetch viene la nueva data, pero el ref persiste. Vamos a podar
+  // entradas viejas en el effect.
+  const listoDesdeRef = useRef<Map<number, number>>(new Map());
+  useEffect(() => {
+    const now = Date.now();
+    const activas = new Set(ventasTodas.map((v) => v.venta_id));
+    // Podar entradas que ya no aparecen
+    for (const key of Array.from(listoDesdeRef.current.keys())) {
+      if (!activas.has(key)) listoDesdeRef.current.delete(key);
+    }
+    // Registrar/actualizar el momento "primera vez 100% lista"
+    for (const v of ventasTodas) {
+      const todoListo = v.items.every((i) => i.estado === 'listo');
+      if (todoListo && !listoDesdeRef.current.has(v.venta_id)) {
+        listoDesdeRef.current.set(v.venta_id, now);
+      } else if (!todoListo && listoDesdeRef.current.has(v.venta_id)) {
+        // Si un item volvió de listo (recall), reseteamos el contador
+        listoDesdeRef.current.delete(v.venta_id);
+      }
+    }
+  }, [ventasTodas]);
+
+  const ahora = Date.now();
+  const { ventasVisibles, ventasOcultas } = useMemo(() => {
+    const visibles: typeof ventasTodas = [];
+    const ocultas: typeof ventasTodas = [];
+    for (const v of ventasTodas) {
+      const listoDesde = listoDesdeRef.current.get(v.venta_id);
+      const minListo = listoDesde ? (ahora - listoDesde) / 60_000 : 0;
+      if (listoDesde && minListo >= AUTO_HIDE_MIN) {
+        ocultas.push(v);
+      } else {
+        visibles.push(v);
+      }
+    }
+    return { ventasVisibles: visibles, ventasOcultas: ocultas };
+  }, [ventasTodas, ahora, AUTO_HIDE_MIN]);
+
+  // Re-render cada 30s para que las ventas que cumplen 5min se oculten sin
+  // esperar al próximo poll. Cheap: solo cambia el `ahora`.
+  const [, forceTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => forceTick((t) => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const ventas = mostrarOcultas ? ventasTodas : ventasVisibles;
 
   async function handleListo(itemId: number) {
     const { error: err } = await marcarListo(token, itemId);
@@ -131,6 +189,18 @@ export function KdsView() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-2xl font-mono tabular-nums">{reloj}</span>
+          {ventasOcultas.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setMostrarOcultas((v) => !v)}
+              className="h-10 px-3 rounded-md bg-zinc-800 hover:bg-zinc-700 flex items-center gap-1.5 text-xs"
+              aria-label={mostrarOcultas ? 'Ocultar entregadas' : 'Mostrar entregadas'}
+              title={`${ventasOcultas.length} venta(s) lista(s) hace >${AUTO_HIDE_MIN} min`}
+            >
+              {mostrarOcultas ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              <span className="tabular-nums">{ventasOcultas.length}</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setSonido(s => !s)}

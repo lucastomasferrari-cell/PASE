@@ -1,10 +1,14 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Inbox, Clock, Pencil, Check, X, Plus, Bell, BellOff, BellRing } from 'lucide-react';
+import { Inbox, Clock, Pencil, Check, X, Plus, Bell, BellOff, BellRing, Search, ArrowDownUp } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import { useNotifier } from '@/lib/useNotifier';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import {
   listPedidosPorTab, getCountersPedidos,
   aprobarPedidoService, marcarListoService, marcarEntregadoService,
@@ -61,6 +65,15 @@ export function PedidosHub() {
   const { notify, muted, setMuted, permState, askPermission } = useNotifier();
   const prevAprobacionCountRef = useRef<number | null>(null);
 
+  // Filtros / sort dentro del tab activo
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const [canalFiltro, setCanalFiltro] = useState<string>('todos');
+  const [sortBy, setSortBy] = useState<'recientes' | 'antiguos' | 'monto_desc' | 'monto_asc'>('recientes');
+
+  // Reset filtros al cambiar de tab (cada tab tiene su propio estado mental)
+  useEffect(() => { setSearch(''); setCanalFiltro('todos'); }, [tab]);
+
   // Quote times son config del local — manager+ desde sesión Supabase (NO desde rol_pos POS).
   // Roles válidos: dueño/admin/superadmin.
   const puedeEditarQuotes = !!user && ['dueno', 'admin', 'superadmin'].includes(user.rol);
@@ -116,6 +129,41 @@ export function PedidosHub() {
       editInputRef.current.select();
     }
   }, [editingQuote]);
+
+  // Derived: pedidos filtrados + ordenados según search/canal/sort
+  const pedidosFiltrados = useMemo(() => {
+    let list = pedidos;
+    const q = debouncedSearch.trim().toLowerCase();
+    if (q) {
+      list = list.filter((p) => {
+        const haystack = [
+          String(p.numero_local ?? ''),
+          p.cliente_nombre ?? '',
+          p.cliente_telefono ?? '',
+          p.cliente_direccion ?? '',
+        ].join(' ').toLowerCase();
+        return haystack.includes(q);
+      });
+    }
+    if (canalFiltro !== 'todos') {
+      list = list.filter((p) => String(p.canal_id ?? '') === canalFiltro);
+    }
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      switch (sortBy) {
+        case 'recientes':
+          return new Date(b.abierta_at).getTime() - new Date(a.abierta_at).getTime();
+        case 'antiguos':
+          return new Date(a.abierta_at).getTime() - new Date(b.abierta_at).getTime();
+        case 'monto_desc':
+          return Number(b.total) - Number(a.total);
+        case 'monto_asc':
+          return Number(a.total) - Number(b.total);
+        default: return 0;
+      }
+    });
+    return sorted;
+  }, [pedidos, debouncedSearch, canalFiltro, sortBy]);
 
   async function guardarQuote(tipo: 'retiro' | 'delivery', nuevo: number) {
     if (localId === null) return;
@@ -216,13 +264,70 @@ export function PedidosHub() {
 
         {TABS.map((t) => (
           <TabsContent key={t.key} value={t.key} className="mt-0">
+            {/* Barra filtros/sort — solo aparece si hay >3 pedidos para no saturar */}
+            {!loading && pedidos.length > 3 && (
+              <div className="mb-3 flex items-center gap-2 flex-wrap">
+                <div className="relative flex-1 min-w-[200px] max-w-xs">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Buscar #, nombre, teléfono, dirección…"
+                    className="pl-9 h-9"
+                  />
+                </div>
+                <Select value={canalFiltro} onValueChange={setCanalFiltro}>
+                  <SelectTrigger className="h-9 w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos los canales</SelectItem>
+                    {canales.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.emoji ?? ''} {c.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+                  <SelectTrigger className="h-9 w-[170px]">
+                    <ArrowDownUp className="h-3.5 w-3.5 mr-1" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="recientes">Más recientes</SelectItem>
+                    <SelectItem value="antiguos">Más antiguos</SelectItem>
+                    <SelectItem value="monto_desc">Mayor monto</SelectItem>
+                    <SelectItem value="monto_asc">Menor monto</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="ml-auto text-xs text-muted-foreground">
+                  {pedidosFiltrados.length === pedidos.length
+                    ? `${pedidos.length} pedidos`
+                    : `${pedidosFiltrados.length} de ${pedidos.length}`}
+                </div>
+              </div>
+            )}
+
             {loading ? (
               <div className="py-8 text-center text-muted-foreground">Cargando…</div>
             ) : pedidos.length === 0 ? (
               <EmptyState tab={t.key} />
+            ) : pedidosFiltrados.length === 0 ? (
+              <div className="py-12 text-center text-sm text-muted-foreground">
+                No hay pedidos que matcheen los filtros.
+                <button
+                  type="button"
+                  onClick={() => { setSearch(''); setCanalFiltro('todos'); }}
+                  className="ml-2 text-primary hover:underline"
+                >
+                  Limpiar filtros
+                </button>
+              </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {pedidos.map((p) => (
+                {pedidosFiltrados.map((p) => (
                   <PedidoCard
                     key={p.id}
                     pedido={p}
