@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Inbox, Clock, Pencil, Check, X, Plus } from 'lucide-react';
+import { Inbox, Clock, Pencil, Check, X, Plus, Bell, BellOff, BellRing } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
+import { useNotifier } from '@/lib/useNotifier';
 import {
   listPedidosPorTab, getCountersPedidos,
   aprobarPedidoService, marcarListoService, marcarEntregadoService,
@@ -54,6 +55,12 @@ export function PedidosHub() {
   const [editingQuote, setEditingQuote] = useState<'retiro' | 'delivery' | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
 
+  // Notificador de pedidos nuevos — beep + browser notification.
+  // Comparamos counter anterior vs nuevo: si subió necesita_aprobacion,
+  // alguien externo nos mandó un pedido nuevo.
+  const { notify, muted, setMuted, permState, askPermission } = useNotifier();
+  const prevAprobacionCountRef = useRef<number | null>(null);
+
   // Quote times son config del local — manager+ desde sesión Supabase (NO desde rol_pos POS).
   // Roles válidos: dueño/admin/superadmin.
   const puedeEditarQuotes = !!user && ['dueno', 'admin', 'superadmin'].includes(user.rol);
@@ -69,13 +76,27 @@ export function PedidosHub() {
     ]);
     setPedidos(pRes.data);
     setCanales(cRes.data);
+
+    // Detecta pedidos nuevos por aprobar: ping audio + browser notification.
+    // El primer reload setea baseline (no notifica), reloads siguientes comparan.
+    const aprobacionPrev = prevAprobacionCountRef.current;
+    const aprobacionNuevo = ctsRes.necesita_aprobacion;
+    if (aprobacionPrev !== null && aprobacionNuevo > aprobacionPrev) {
+      const delta = aprobacionNuevo - aprobacionPrev;
+      notify(
+        `🛵 ${delta} pedido${delta > 1 ? 's' : ''} nuevo${delta > 1 ? 's' : ''} por aprobar`,
+        'Tocá para revisar y aceptar.',
+      );
+    }
+    prevAprobacionCountRef.current = aprobacionNuevo;
+
     setCounters(ctsRes);
     if (qtRes) {
       setQuoteRetiro(qtRes.retiro);
       setQuoteDelivery(qtRes.delivery);
     }
     setLoading(false);
-  }, [localId, tab, user?.tenant_id]);
+  }, [localId, tab, user?.tenant_id, notify]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -131,6 +152,12 @@ export function PedidosHub() {
             <Plus className="h-4 w-4" />
             Nuevo pedido
           </Button>
+          <NotifierToggle
+            muted={muted}
+            setMuted={setMuted}
+            permState={permState}
+            askPermission={askPermission}
+          />
           <QuoteTimeWidget
             label="Retiro"
             valor={quoteRetiro}
@@ -299,6 +326,51 @@ function QuoteTimeWidget({
       <span className="text-muted-foreground">{label}:</span>
       <span className="font-medium tabular-nums">~{valor ?? '—'} min</span>
       {puedeEditar && <Pencil className="h-3 w-3 text-muted-foreground opacity-60" />}
+    </button>
+  );
+}
+
+// ─── Notifier Toggle ─────────────────────────────────────────────────────────
+function NotifierToggle({ muted, setMuted, permState, askPermission }: {
+  muted: boolean;
+  setMuted: (m: boolean) => void;
+  permState: 'default' | 'granted' | 'denied' | 'unsupported';
+  askPermission: () => Promise<'default' | 'granted' | 'denied' | 'unsupported'>;
+}) {
+  const Icon = muted ? BellOff : permState === 'granted' ? BellRing : Bell;
+  const label = muted
+    ? 'Alertas en silencio'
+    : permState === 'granted'
+      ? 'Alertas activas (ping + notificación)'
+      : permState === 'denied'
+        ? 'Alertas (solo ping, notif bloqueada)'
+        : 'Alertas (solo ping)';
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        if (muted) {
+          setMuted(false);
+          // Si nunca pidió permiso, aprovechamos para pedirlo en el click.
+          if (permState === 'default') await askPermission();
+        } else {
+          setMuted(true);
+        }
+      }}
+      className={cn(
+        'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs',
+        'border transition-colors',
+        muted
+          ? 'bg-muted/40 border-border/60 text-muted-foreground hover:bg-muted'
+          : 'bg-success/10 border-success/30 text-success hover:bg-success/20',
+      )}
+      title={label}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      <span>{muted ? 'Mute' : 'Alertas'}</span>
+      {!muted && permState === 'default' && (
+        <span className="text-[10px] opacity-70">(activar)</span>
+      )}
     </button>
   );
 }
