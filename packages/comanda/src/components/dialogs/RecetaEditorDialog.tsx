@@ -127,8 +127,8 @@ export function RecetaEditorDialog({ open, onOpenChange, item, tenantId, onSaved
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 shrink-0">
           <DialogTitle>
             {item.emoji && <span className="mr-2">{item.emoji}</span>}
             Receta de {item.nombre}
@@ -143,10 +143,11 @@ export function RecetaEditorDialog({ open, onOpenChange, item, tenantId, onSaved
           </DialogDescription>
         </DialogHeader>
 
+        <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
         {loading ? (
           <div className="py-8 text-center text-muted-foreground">Cargando…</div>
         ) : (
-          <div className="space-y-4 py-2">
+          <div className="space-y-4">
             {/* Cabeza receta */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="sm:col-span-2">
@@ -246,8 +247,9 @@ export function RecetaEditorDialog({ open, onOpenChange, item, tenantId, onSaved
             </div>
           </div>
         )}
+        </div>
 
-        <DialogFooter>
+        <DialogFooter className="px-6 py-4 border-t shrink-0 gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
           <Button onClick={handleSave} disabled={saving || loading || !nombre.trim()}>
             {saving ? 'Guardando…' : 'Guardar receta'}

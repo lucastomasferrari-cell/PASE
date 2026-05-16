@@ -76,15 +76,15 @@ export function DiscountDialog({ open, onOpenChange, ventaId, subtotal, total, o
   return (
     <>
       <Dialog open={open && !showOverride} onOpenChange={onOpenChange}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 shrink-0">
             <DialogTitle>Aplicar descuento</DialogTitle>
             <DialogDescription>
               Total actual: <strong className="tabular-nums">{formatARS(total)}</strong>
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 min-h-0">
             <div className="grid grid-cols-2 gap-2">
               <Button
                 type="button"
@@ -151,7 +151,7 @@ export function DiscountDialog({ open, onOpenChange, ventaId, subtotal, total, o
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="px-6 py-4 border-t shrink-0 gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
               Cancelar
             </Button>

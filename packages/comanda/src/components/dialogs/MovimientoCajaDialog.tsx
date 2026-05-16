@@ -90,8 +90,8 @@ export function MovimientoCajaDialog({ open, onOpenChange, tipo, onConfirmado }:
   return (
     <>
       <Dialog open={open && !showOverride} onOpenChange={onOpenChange}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 shrink-0">
             <div className="flex items-center gap-3 mb-1">
               <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10">
                 <IconPorTipo tipo={tipo} />
@@ -103,6 +103,7 @@ export function MovimientoCajaDialog({ open, onOpenChange, tipo, onConfirmado }:
             </div>
           </DialogHeader>
 
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3 min-h-0">
           <div className="space-y-2">
             <Label>Monto</Label>
             <MoneyInput value={monto} onChange={setMonto} autoFocus />
@@ -141,8 +142,9 @@ export function MovimientoCajaDialog({ open, onOpenChange, tipo, onConfirmado }:
               </span>
             </div>
           )}
+          </div>
 
-          <DialogFooter>
+          <DialogFooter className="px-6 py-4 border-t shrink-0 gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
               Cancelar
             </Button>

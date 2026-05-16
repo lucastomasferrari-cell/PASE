@@ -85,19 +85,20 @@ export function SplitCheckDialog({ open, onOpenChange, ventaId, tenantId, onPart
   return (
     <>
       <Dialog open={open && !showOverride} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 shrink-0">
             <DialogTitle>Partir cuenta</DialogTitle>
             <DialogDescription>
               Marcá los items que se mueven a una venta nueva. Los demás se quedan en esta.
             </DialogDescription>
           </DialogHeader>
 
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3 min-h-0">
           {loading ? (
             <div className="py-8 text-center text-muted-foreground">Cargando…</div>
           ) : (
             <>
-              <div className="border border-border rounded-md divide-y divide-border max-h-[40vh] overflow-y-auto">
+              <div className="border border-border rounded-md divide-y divide-border">
                 {items.map((it) => {
                   const sel = seleccion.has(it.id);
                   return (
@@ -141,8 +142,9 @@ export function SplitCheckDialog({ open, onOpenChange, ventaId, tenantId, onPart
               </div>
             </>
           )}
+          </div>
 
-          <DialogFooter>
+          <DialogFooter className="px-6 py-4 border-t shrink-0 gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
             <Button onClick={abrirOverride} disabled={loading || seleccion.size === 0}>
               Continuar

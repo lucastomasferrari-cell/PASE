@@ -91,8 +91,8 @@ export function InsumoEditorDialog({ open, onOpenChange, insumo, tenantId, onSav
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
+      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 shrink-0">
           <DialogTitle>{insumo ? 'Editar insumo' : 'Nuevo insumo'}</DialogTitle>
           <DialogDescription>
             {insumo
@@ -101,7 +101,7 @@ export function InsumoEditorDialog({ open, onOpenChange, insumo, tenantId, onSav
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2">
+        <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="sm:col-span-1">
             <Label htmlFor="nombre">Nombre *</Label>
             <Input id="nombre" value={form.nombre} onChange={(e) => setField('nombre', e.target.value)} placeholder="Tomate cherry" />
@@ -148,7 +148,7 @@ export function InsumoEditorDialog({ open, onOpenChange, insumo, tenantId, onSav
           </label>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="px-6 py-4 border-t shrink-0 gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
           <Button onClick={handleSave} disabled={saving || !form.nombre.trim()}>
             {saving ? 'Guardando…' : insumo ? 'Guardar' : 'Crear'}

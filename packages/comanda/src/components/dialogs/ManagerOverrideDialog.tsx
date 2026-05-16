@@ -112,8 +112,8 @@ export function ManagerOverrideDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
+      <DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 shrink-0">
           <div className="flex items-center gap-3 mb-2">
             <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-warning/10">
               <ShieldAlert className="h-5 w-5 text-warning" />
@@ -125,6 +125,7 @@ export function ManagerOverrideDialog({
           </div>
         </DialogHeader>
 
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3 min-h-0">
         <div className="rounded-md bg-muted p-3 text-sm">{descripcion}</div>
 
         <div className="space-y-2">
@@ -162,8 +163,9 @@ export function ManagerOverrideDialog({
         {error && (
           <div className="text-center text-sm text-destructive font-medium">{error}</div>
         )}
+        </div>
 
-        <DialogFooter>
+        <DialogFooter className="px-6 py-4 border-t shrink-0 gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={verificando}>
             Cancelar
           </Button>
