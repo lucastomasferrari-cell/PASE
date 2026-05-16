@@ -64,19 +64,22 @@ export function ItemsTab({ user }: Props) {
   const hasFilters = search !== '' || grupoFilter !== 'todos' || estadoFilter !== 'todos';
 
   return (
-    <div>
-      {/* Header con CTA */}
-      <div className="flex items-center justify-between mb-6">
-        <p className="text-sm text-muted-foreground">
-          {items.length} items
-        </p>
+    <div className="container py-6">
+      {/* Header con título + CTA */}
+      <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Items del menú</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {items.length} {items.length === 1 ? 'item' : 'items'} en el catálogo · POS, QR y tienda
+          </p>
+        </div>
         {puedeEditar && (
-          <Button size="lg" onClick={() => setEditingItem('new')}>
-            <Plus className="h-5 w-5" />
+          <Button onClick={() => setEditingItem('new')}>
+            <Plus className="h-4 w-4 mr-1.5" />
             Nuevo item
           </Button>
         )}
-      </div>
+      </header>
 
       {error && (
         <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">

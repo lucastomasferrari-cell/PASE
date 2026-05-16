@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet } from 'react-router-dom';
-import { ArrowLeft, Wallet, Search, BarChart3 } from 'lucide-react';
+import { ArrowLeft, Wallet, Search } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import { usePermiso } from '@/lib/usePermiso';
@@ -20,7 +20,6 @@ export function PosLayout() {
   const [localId] = useLocalActivo(user);
   const [turno, setTurno] = useState<TurnoCaja | null>(null);
   const puedeAdmin = usePermiso('comanda.config.editar');
-  const puedeReportes = usePermiso('comanda.reportes.ver');
   const [allChecksOpen, setAllChecksOpen] = useState(false);
 
   useEffect(() => {
@@ -127,15 +126,6 @@ export function PosLayout() {
             </Button>
 
             <UserAvatarMenu />
-
-            {puedeReportes && (
-              <Button variant="ghost" size="sm" asChild>
-                <Link to="/reportes" className="flex items-center gap-1.5">
-                  <BarChart3 className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Reportes</span>
-                </Link>
-              </Button>
-            )}
 
             {puedeAdmin && (
               <Button variant="ghost" size="sm" asChild>

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ChevronRight, type LucideIcon } from 'lucide-react';
 import { usePermiso } from '@/lib/usePermiso';
@@ -18,7 +19,8 @@ interface Props {
 // Item de categoría del sidebar admin. Maneja:
 // - Verificación de permiso (si falta, no renderiza nada).
 // - Estado activo según pathname.
-// - Sub-items expandidos cuando la categoría está activa.
+// - Sub-items expandidos: por default cuando la categoría está activa,
+//   pero el user puede colapsar/expandir manualmente con el chevron.
 // - Filtrado de sub-items según permiso individual.
 //
 // onItemClick: callback opcional para cerrar el drawer mobile al elegir
@@ -29,31 +31,57 @@ export function AdminCategoryItem({
   const tienePermisoCategoria = usePermiso(requiredPermission ?? '');
   const { pathname } = useLocation();
 
+  // Override manual del expandido. null = sigue al prop "expanded" (categoría
+  // activa). true/false = el user clickeó el chevron para forzar estado.
+  // Cuando cambia la categoría activa (expanded prop cambia), reseteamos el
+  // override para que el comportamiento default vuelva a funcionar.
+  const [manualOverride, setManualOverride] = useState<boolean | null>(null);
+  useEffect(() => { setManualOverride(null); }, [expanded]);
+
+  const isOpen = manualOverride ?? expanded;
+
   // Si la categoría no tiene permiso, no renderizamos.
-  // Si requiredPermission es undefined, asumimos que es público.
   if (requiredPermission && !tienePermisoCategoria) return null;
+
+  function toggleChevron(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setManualOverride(!isOpen);
+  }
 
   return (
     <div className="space-y-0.5">
-      <Link
-        to={href}
-        onClick={onItemClick}
-        className={cn(
-          'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
-          expanded
-            ? 'bg-primary/10 text-primary font-medium'
-            : 'text-foreground/70 hover:bg-accent hover:text-foreground',
+      <div className={cn(
+        'flex items-stretch rounded-md transition-colors',
+        expanded
+          ? 'bg-primary/10 text-primary font-medium'
+          : 'text-foreground/70 hover:bg-accent hover:text-foreground',
+      )}>
+        <Link
+          to={href}
+          onClick={onItemClick}
+          className="flex items-center gap-3 px-3 py-2 text-sm flex-1 min-w-0 rounded-l-md"
+          aria-current={expanded ? 'page' : undefined}
+        >
+          <Icon className="h-4 w-4 flex-shrink-0" />
+          <span className="flex-1 truncate">{label}</span>
+        </Link>
+        {subItems.length > 0 && (
+          <button
+            type="button"
+            onClick={toggleChevron}
+            aria-label={isOpen ? `Colapsar ${label}` : `Expandir ${label}`}
+            aria-expanded={isOpen}
+            className="px-2 hover:bg-foreground/5 rounded-r-md flex items-center"
+          >
+            <ChevronRight className={cn(
+              'h-3.5 w-3.5 flex-shrink-0 transition-transform',
+              isOpen && 'rotate-90',
+            )} />
+          </button>
         )}
-        aria-current={expanded ? 'page' : undefined}
-      >
-        <Icon className="h-4 w-4 flex-shrink-0" />
-        <span className="flex-1 truncate">{label}</span>
-        <ChevronRight className={cn(
-          'h-3.5 w-3.5 flex-shrink-0 transition-transform',
-          expanded && 'rotate-90',
-        )} />
-      </Link>
-      {expanded && (
+      </div>
+      {isOpen && (
         <ul className="space-y-0.5 pl-9">
           {subItems.map((s) => (
             <SubItem key={s.slug} item={s} pathname={pathname} onClick={onItemClick} />

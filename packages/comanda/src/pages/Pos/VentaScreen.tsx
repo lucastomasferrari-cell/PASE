@@ -266,9 +266,14 @@ export function VentaScreen() {
   const maxCurso = Math.max(3, ...cursosExistentes);
 
   return (
-    <div className="grid grid-cols-[1fr_380px] min-h-[calc(100vh-60px)]">
+    // En tablet la vista debe entrar SIN scroll de página: el catálogo (izq)
+    // y el check (der) cada uno scrollean dentro de su columna, y el botón
+    // "Cobrar y enviar" queda siempre fijo abajo a la derecha — visible aún
+    // con el check vacío. dvh evita problemas con la URL bar de mobile/tablet.
+    // 3.5rem = header 56px del PosLayout.
+    <div className="grid grid-cols-1 md:grid-cols-[1fr_380px] h-[calc(100dvh-3.5rem)] overflow-hidden">
       {/* CATÁLOGO IZQ */}
-      <div className="p-4 overflow-y-auto border-r border-border bg-card">
+      <div className="p-4 overflow-y-auto border-r border-border bg-card min-h-0">
         {/* Selector de curso */}
         {editable && (
           <div className="mb-3 flex items-center gap-2 flex-wrap">
@@ -328,8 +333,8 @@ export function VentaScreen() {
         </div>
       </div>
 
-      {/* CHECK DER */}
-      <aside className="bg-muted/40 border-l border-border flex flex-col">
+      {/* CHECK DER — column con header fijo, items scrolleables, footer pinned */}
+      <aside className="bg-muted/40 border-l border-border flex flex-col min-h-0 overflow-hidden">
         <div className="p-3 border-b border-border bg-card">
           <div className="flex items-center gap-2">
             <Button type="button" variant="ghost" size="sm" onClick={() => navigate(-1)}>
