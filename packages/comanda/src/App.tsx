@@ -39,6 +39,7 @@ const MostradorView = lazy(() => import('./pages/Pos/MostradorView').then(m => (
 const PedidosHub = lazy(() => import('./pages/Pos/PedidosHub').then(m => ({ default: m.PedidosHub })));
 const PedidoDetalle = lazy(() => import('./pages/Pos/PedidoDetalle').then(m => ({ default: m.PedidoDetalle })));
 const VentaScreen = lazy(() => import('./pages/Pos/VentaScreen').then(m => ({ default: m.VentaScreen })));
+const HandheldView = lazy(() => import('./pages/Pos/HandheldView').then(m => ({ default: m.HandheldView })));
 
 // Rutas públicas (sin auth, sin PIN) — sprint 4 sesión B + sprint 5 Roc-N-Ramen
 const TiendaLayout = lazy(() => import('./pages/Tienda/TiendaLayout').then(m => ({ default: m.TiendaLayout })));
@@ -302,6 +303,8 @@ export default function App() {
                       <Route path="/caja/cerrar" element={<CajaCerrar />} />
                       <Route path="/caja/historico" element={<CajaHistorico />} />
                     </Route>
+                    {/* Handheld mozo: layout propio full-screen mobile-first, NO usa PosLayout */}
+                    <Route path="/pos/handheld" element={<HandheldView />} />
                   </Route>
                 </Route>
 

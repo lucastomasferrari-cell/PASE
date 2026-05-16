@@ -1,4 +1,4 @@
-import { UtensilsCrossed, Coffee, Package } from 'lucide-react';
+import { UtensilsCrossed, Coffee, Package, Smartphone } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useFeaturesPosModos } from '@/lib/useFeaturesPosModos';
@@ -45,6 +45,24 @@ export function PosSidebar() {
           </Link>
         );
       })}
+
+      {/* Separador + acceso a vista mozo handheld (full-screen mobile-first) */}
+      <div className="mt-auto w-full">
+        <Link
+          to="/pos/handheld"
+          className={cn(
+            'w-[60px] mx-auto flex flex-col items-center gap-1 py-3 rounded-lg transition-colors touch-target-lg',
+            pathname === '/pos/handheld'
+              ? 'bg-primary/10 text-primary'
+              : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+          )}
+          aria-label="Modo mozo handheld"
+          title="Vista optimizada celu/tablet chica para mozos en mesa"
+        >
+          <Smartphone className="h-5 w-5" />
+          <span className="text-[10px] font-medium">Mozo</span>
+        </Link>
+      </div>
     </aside>
   );
 }
