@@ -107,13 +107,15 @@ export function PosLayout() {
           {/* Derecha: acciones */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <Button
-              variant="ghost"
-              size="icon"
+              variant="outline"
+              size="sm"
               onClick={() => setAllChecksOpen(true)}
               title="Buscar cuentas (atajo: /)"
+              className="gap-1.5"
             >
               <Search className="h-4 w-4" />
-              <span className="sr-only">Buscar cuentas</span>
+              <span className="hidden sm:inline">Buscar venta</span>
+              <kbd className="hidden lg:inline-block ml-1 px-1.5 py-0.5 text-[10px] bg-muted rounded border border-border font-mono">/</kbd>
             </Button>
 
             <ThemeToggle />

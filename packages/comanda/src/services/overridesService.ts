@@ -123,6 +123,54 @@ export async function cortesiaItem(
   return { error: error?.message ?? null };
 }
 
+// Sprint 16/05: listar historial de overrides de una venta para mostrar
+// en VentaScreen (auditoría visible desde UI, no solo desde DB).
+export interface VentaOverrideHistoria {
+  id: number;
+  created_at: string;
+  accion: string;
+  motivo: string;
+  manager_id: string;
+  cajero_id: string;
+  venta_item_id: number | null;
+  valor_anterior: number | null;
+  valor_nuevo: number | null;
+  monto_afectado: number | null;
+  metadata: Record<string, unknown> | null;
+  // Nombres hidratados
+  manager_nombre?: string | null;
+  cajero_nombre?: string | null;
+}
+
+export async function listVentaOverrides(ventaId: number): Promise<{ data: VentaOverrideHistoria[]; error: string | null }> {
+  // eslint-disable-next-line pase-local/require-apply-local-scope -- query por venta_id puntual, RLS filtra por tenant
+  const { data, error } = await db
+    .from('ventas_pos_overrides')
+    .select(`
+      id, created_at, accion, motivo, manager_id, cajero_id, venta_item_id,
+      valor_anterior, valor_nuevo, monto_afectado, metadata,
+      manager:rrhh_empleados!ventas_pos_overrides_manager_id_fkey(nombre, apellido),
+      cajero:rrhh_empleados!ventas_pos_overrides_cajero_id_fkey(nombre, apellido)
+    `)
+    .eq('venta_id', ventaId)
+    .order('created_at', { ascending: false });
+  if (error) return { data: [], error: error.message };
+  type Row = VentaOverrideHistoria & {
+    manager?: { nombre: string | null; apellido: string | null } | { nombre: string | null; apellido: string | null }[] | null;
+    cajero?: { nombre: string | null; apellido: string | null } | { nombre: string | null; apellido: string | null }[] | null;
+  };
+  const mapped = ((data ?? []) as unknown as Row[]).map((r) => {
+    const mgr = Array.isArray(r.manager) ? r.manager[0] : r.manager;
+    const caj = Array.isArray(r.cajero) ? r.cajero[0] : r.cajero;
+    return {
+      ...r,
+      manager_nombre: mgr ? [mgr.nombre, mgr.apellido].filter(Boolean).join(' ') : null,
+      cajero_nombre: caj ? [caj.nombre, caj.apellido].filter(Boolean).join(' ') : null,
+    };
+  });
+  return { data: mapped, error: null };
+}
+
 // IP del cliente para audit. Fallback NULL si falla (no bloquea el flow).
 export async function getIpCliente(): Promise<string | null> {
   try {

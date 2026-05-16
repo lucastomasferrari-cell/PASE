@@ -27,7 +27,7 @@ import { TransferMesaDialog } from '@/components/dialogs/TransferMesaDialog';
 import { MergeMesasDialog } from '@/components/dialogs/MergeMesasDialog';
 import { SplitCheckDialog } from '@/components/dialogs/SplitCheckDialog';
 import { ManagerOverrideDialog } from '@/components/dialogs/ManagerOverrideDialog';
-import { anularVenta, anularItem, modificarPrecioItem, cortesiaItem } from '@/services/overridesService';
+import { anularVenta, anularItem, modificarPrecioItem, cortesiaItem, listVentaOverrides, type VentaOverrideHistoria } from '@/services/overridesService';
 import { marcarDisponible } from '@/services/itemsService';
 import { AgotarDialog } from '@/pages/Catalogo/AgotarDialog';
 import { MoneyInput } from '@/components/MoneyInput';
@@ -94,18 +94,27 @@ export function VentaScreen() {
 
   const reload = useCallback(async () => {
     setLoading(true);
-    const [vRes, iRes, cRes, gRes] = await Promise.all([
-      getVenta(ventaId),
-      listVentasItems(ventaId),
-      listItems({ tenantId: user?.tenant_id ?? null }),
-      listGrupos(user?.tenant_id ?? null),
-    ]);
-    if (vRes.error) toast.error(vRes.error);
-    setVenta(vRes.data);
-    setItems(iRes.data);
-    setCatalogo(cRes.data);
-    setGrupos(gRes.data);
-    setLoading(false);
+    try {
+      const [vRes, iRes, cRes, gRes] = await Promise.all([
+        getVenta(ventaId),
+        listVentasItems(ventaId),
+        listItems({ tenantId: user?.tenant_id ?? null }),
+        listGrupos(user?.tenant_id ?? null),
+      ]);
+      if (vRes.error) toast.error(vRes.error);
+      setVenta(vRes.data);
+      setItems(iRes.data);
+      setCatalogo(cRes.data);
+      setGrupos(gRes.data);
+    } catch (err) {
+      // Fix auditoría 2026-05-16: si las promesas fallan (network down, etc),
+      // sin try/finally setLoading(false) nunca corre y la UI queda en
+      // "Cargando..." para siempre. Toast + loading off para que el user
+      // pueda hacer "Volver" y reintentar.
+      toast.error('Error cargando datos: ' + (err instanceof Error ? err.message : 'desconocido'));
+    } finally {
+      setLoading(false);
+    }
   }, [ventaId, user?.tenant_id]);
 
   useEffect(() => { reload(); }, [reload]);
@@ -128,6 +137,16 @@ export function VentaScreen() {
   // Notas globales de la venta (editable inline)
   const [editandoNotas, setEditandoNotas] = useState(false);
   const [notasDraft, setNotasDraft] = useState('');
+
+  // Historial overrides (auditoría visible desde UI)
+  const [historialOpen, setHistorialOpen] = useState(false);
+  const [historial, setHistorial] = useState<VentaOverrideHistoria[]>([]);
+
+  // Cargar historial cuando se abre
+  useEffect(() => {
+    if (!historialOpen || !Number.isFinite(ventaId)) return;
+    listVentaOverrides(ventaId).then((r) => setHistorial(r.data));
+  }, [historialOpen, ventaId]);
 
   // Item seleccionado para agotar (abre AgotarDialog)
   const [agotarItem, setAgotarItem] = useState<ItemConGrupo | null>(null);
@@ -285,7 +304,10 @@ export function VentaScreen() {
       toast.error('Solo se pueden quitar items en hold (no enviados a cocina)');
       return;
     }
-    // Quitar = cantidad 0 vía RPC modificar (gestiona la baja en BD).
+    // Confirmación destructiva (UX fix auditoría): tap accidental sin confirm
+    // perdía datos sin reversa rápida. Ahora pide confirm explícito.
+    const nombre = catalogo.find((c) => c.id === itemRow.item_id)?.nombre ?? `Item #${itemRow.item_id}`;
+    if (!confirm(`¿Quitar "${nombre}" × ${itemRow.cantidad} de la venta?`)) return;
     const { error } = await modificarItem(itemRow.id, { cantidad: 0 });
     if (error) { toast.error(error); return; }
     toast.success('Item quitado');
@@ -621,6 +643,9 @@ export function VentaScreen() {
                 <DropdownMenuItem onClick={() => setShowSplit(true)}>
                   Partir cuenta
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setHistorialOpen(true)}>
+                  Ver historial de cambios
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
                   onClick={() => setShowAnular(true)}
@@ -810,6 +835,57 @@ export function VentaScreen() {
         }}
       />
 
+      {/* Historial de cambios de la venta (overrides aplicados) */}
+      <Dialog open={historialOpen} onOpenChange={setHistorialOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 shrink-0">
+            <DialogTitle>Historial de cambios — Venta #{venta.numero_local}</DialogTitle>
+            <DialogDescription>
+              Todos los overrides aplicados (descuentos, cortesías, cambios de precio, anulaciones, transferencias).
+              Cada uno con manager que autorizó + cajero + motivo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
+            {historial.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground italic">
+                Sin cambios — esta venta no tuvo overrides aplicados.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {historial.map((h) => (
+                  <div key={h.id} className="rounded-md border border-border p-3 bg-card">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="text-sm font-semibold uppercase">
+                        {accionLabel(h.accion)}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground tabular-nums">
+                        {new Date(h.created_at).toLocaleString('es-AR')}
+                      </span>
+                    </div>
+                    <div className="text-sm">{h.motivo}</div>
+                    <div className="text-[11px] text-muted-foreground mt-1 flex flex-wrap gap-x-3">
+                      {h.manager_nombre && <span>👤 Manager: <strong>{h.manager_nombre}</strong></span>}
+                      {h.cajero_nombre && h.cajero_nombre !== h.manager_nombre && <span>Cajero: {h.cajero_nombre}</span>}
+                      {h.venta_item_id && <span>Item #{h.venta_item_id}</span>}
+                      {h.valor_anterior !== null && h.valor_nuevo !== null && (
+                        <span>
+                          {formatARS(Number(h.valor_anterior))} → <strong>{formatARS(Number(h.valor_nuevo))}</strong>
+                        </span>
+                      )}
+                      {h.monto_afectado !== null && (
+                        <span className={cn('font-medium', Number(h.monto_afectado) < 0 ? 'text-destructive' : 'text-success')}>
+                          {Number(h.monto_afectado) >= 0 ? '+' : ''}{formatARS(Number(h.monto_afectado))}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <ManagerOverrideDialog
         open={showAnular}
         onOpenChange={setShowAnular}
@@ -828,6 +904,22 @@ export function VentaScreen() {
       />
     </div>
   );
+}
+
+// Mapeo human-readable de accion del override
+function accionLabel(accion: string): string {
+  switch (accion) {
+    case 'void': return '❌ Anular item / venta';
+    case 'comp': return '🎁 Cortesía';
+    case 'discount': return '💰 Descuento / cambio precio';
+    case 'refund': return '↩ Reembolso';
+    case 'reopen': return '🔓 Reabrir venta';
+    case 'transfer_table': return '🔀 Transferir mesa';
+    case 'cambio_mozo': return '👤 Cambio de mozo';
+    case 'merge_mesas': return '🔗 Unir mesas';
+    case 'split_check': return '✂ Partir cuenta';
+    default: return accion;
+  }
 }
 
 function GrupoTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {

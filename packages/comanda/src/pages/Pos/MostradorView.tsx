@@ -245,12 +245,19 @@ export function MostradorView() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-              {ventasFiltradas.map((v) => (
+              {ventasFiltradas.map((v) => {
+                // Alertas de tiempo (mismo patrón que Salón): >60min atención, >90min urgente
+                const minAbierta = Math.floor((Date.now() - new Date(v.abierta_at).getTime()) / 60000);
+                const urgente = minAbierta > 90;
+                const atencion = minAbierta > 60 && !urgente;
+                return (
                 <Card
                   key={v.id}
                   className={cn(
                     'cursor-pointer transition-colors hover:bg-accent',
                     v.tab_nombre && 'border-primary/60 bg-primary/5',
+                    urgente && 'border-destructive ring-2 ring-destructive/40 animate-pulse',
+                    atencion && 'border-warning',
                   )}
                   onClick={() => navigate(`/pos/venta/${v.id}`)}
                 >
@@ -270,12 +277,17 @@ export function MostradorView() {
                     <div className="mt-3 text-xl font-bold tabular-nums">
                       {formatARS(v.total)}
                     </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      {relativoCorto(v.abierta_at)}
+                    <div className={cn(
+                      'text-xs mt-1',
+                      urgente ? 'text-destructive font-bold' :
+                      atencion ? 'text-warning font-semibold' : 'text-muted-foreground',
+                    )}>
+                      {urgente ? '⚠ ' : atencion ? '⏱ ' : ''}{relativoCorto(v.abierta_at)}
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
