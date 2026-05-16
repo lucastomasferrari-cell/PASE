@@ -11,6 +11,7 @@ import { SeccionProductos } from './components/SeccionProductos';
 import { CarritoSheet } from './components/CarritoSheet';
 import type { ProductCardItem } from './components/ProductCard';
 import { tiendaCarritoBadge } from './tiendaCarritoBadge';
+import { DireccionAutocomplete } from '@/components/DireccionAutocomplete';
 
 const POPULARES_DIAS = 30;
 const POPULARES_LIMIT = 8;
@@ -211,8 +212,13 @@ export function TiendaHome() {
     carritoStore.set({ ...carrito, tipoEntrega: t });
   }
 
-  function setDireccion(d: string) {
-    carritoStore.set({ ...carrito, direccion: d });
+  function setDireccion(d: string, coords: { lat: number; lon: number } | null) {
+    carritoStore.set({
+      ...carrito,
+      direccion: d,
+      direccion_lat: coords?.lat ?? null,
+      direccion_lon: coords?.lon ?? null,
+    });
   }
 
   if (!aceptaPedidos) {
@@ -316,13 +322,14 @@ export function TiendaHome() {
               <label htmlFor="dir" className="block text-xs text-foreground/60 mb-1.5 uppercase tracking-wide">
                 Dirección de entrega
               </label>
-              <input
-                id="dir"
+              <DireccionAutocomplete
                 value={carrito.direccion}
-                onChange={(e) => setDireccion(e.target.value)}
-                placeholder="Calle 123, depto, entre calles..."
-                className="w-full h-11 px-3 rounded-md border border-gray-200 bg-white text-sm focus:outline-none focus:border-gray-400"
+                onChange={setDireccion}
+                placeholder="Empezá a escribir: Av. Corrientes 1234..."
               />
+              <p className="text-[10px] text-foreground/50 mt-1">
+                Si tu dirección no aparece en las sugerencias, igual podés escribirla a mano.
+              </p>
             </div>
           )}
 

@@ -27,6 +27,10 @@ export interface CarritoState {
   items: CarritoItem[];
   tipoEntrega: 'retiro' | 'delivery';
   direccion: string;
+  // Sprint 2026-05-16: coords de geocoding (GeoRef o Google). NULL hasta que
+  // el cliente elija una sugerencia del autocomplete.
+  direccion_lat?: number | null;
+  direccion_lon?: number | null;
 }
 
 const KEY = 'comanda-tienda-carrito';

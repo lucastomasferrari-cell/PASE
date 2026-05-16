@@ -206,6 +206,46 @@ export function PedidoDetalle() {
                     <MapPin className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-muted-foreground" />
                     <span>{venta.cliente_direccion ?? 'Sin dirección'}</span>
                   </div>
+                  {/* Mapa + acciones — solo si tenemos lat/lon */}
+                  {venta.cliente_lat != null && venta.cliente_lon != null && (
+                    <div className="space-y-1.5 mt-1">
+                      {/* Mini-mapa estático con OpenStreetMap (sin API key) */}
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${venta.cliente_lat},${venta.cliente_lon}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block relative rounded-md overflow-hidden border border-border hover:opacity-90"
+                        title="Abrir en Google Maps"
+                      >
+                        <img
+                          src={`https://staticmap.openstreetmap.de/staticmap.php?center=${venta.cliente_lat},${venta.cliente_lon}&zoom=16&size=400x180&markers=${venta.cliente_lat},${venta.cliente_lon},red-pushpin`}
+                          alt="Ubicación cliente"
+                          className="w-full h-32 object-cover"
+                          loading="lazy"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      </a>
+                      <div className="flex gap-1.5 text-[10px]">
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${venta.cliente_lat},${venta.cliente_lon}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          Abrir en Google Maps
+                        </a>
+                        <span className="text-muted-foreground">·</span>
+                        <a
+                          href={`https://waze.com/ul?ll=${venta.cliente_lat},${venta.cliente_lon}&navigate=yes`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          Waze
+                        </a>
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : venta.tipo_entrega === 'retiro' ? (
                 <div className="flex items-center gap-1.5 text-sm">

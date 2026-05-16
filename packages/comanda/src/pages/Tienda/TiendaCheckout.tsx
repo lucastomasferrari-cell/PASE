@@ -3,6 +3,7 @@ import { useNavigate, useOutletContext, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { crearPedidoPublico } from '@/services/tiendaService';
+import { setPedidoGeo, precisarConGoogle } from '@/services/direccionesService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -84,6 +85,22 @@ export function TiendaCheckout() {
       return;
     }
     sessionStorage.setItem(`comanda-tel-${ventaId}`, telefono.trim());
+
+    // Geocoding: si tenemos lat/lon del autocomplete (GeoRef), guardarlas.
+    // Si hay API key de Google, intentar precisar (mejor lat/lon del número
+    // específico, no del centroide de la calle). Best-effort, no bloquea.
+    if (carrito.tipoEntrega === 'delivery' && carrito.direccion.trim()) {
+      let lat = carrito.direccion_lat ?? null;
+      let lon = carrito.direccion_lon ?? null;
+      // Mejorar con Google si está disponible
+      try {
+        const preciso = await precisarConGoogle(carrito.direccion);
+        if (preciso) { lat = preciso.lat; lon = preciso.lon; }
+      } catch { /* silent */ }
+      if (lat != null && lon != null) {
+        void setPedidoGeo(ventaId, lat, lon);  // fire and forget
+      }
+    }
 
     // Si el cliente eligió "Pagar online con MercadoPago", crear preference
     // y redirigir a init_point. La venta queda en estado original; el webhook
