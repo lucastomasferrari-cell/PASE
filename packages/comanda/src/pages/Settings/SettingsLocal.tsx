@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import {
   getLocalSettings, updateLocalSettings, validarSlugUnico, subirMpQr, eliminarMpQr,
-  getMarketplaceLocal, updateMarketplaceLocal,
+  getMarketplaceLocal, updateMarketplaceLocal, subirMarketplaceFoto,
   type LocalSettingsPatch, type MarketplaceLocal, type MarketplacePatch,
 } from '@/services/localSettingsService';
 import { listLocalesAccesibles, type LocalSimple } from '@/services/configService';
@@ -315,6 +315,40 @@ export function SettingsLocal() {
         </CardContent>
       </Card>
 
+      {/* HORARIOS DE ATENCIÓN — sprint 16/05 (marketplace abierto/cerrado) */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Horarios de atención</CardTitle>
+          <p className="text-xs text-muted-foreground mt-1">
+            Formato: <code className="px-1 py-0.5 rounded bg-muted text-[10px]">HH:MM-HH:MM</code>.
+            Para varios turnos separá con coma: <code className="px-1 py-0.5 rounded bg-muted text-[10px]">12:00-15:00,20:00-23:30</code>.
+            Vacío = cerrado ese día.
+            El marketplace muestra badge "Abierto ahora" según estos horarios (TZ Argentina).
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {[
+            { key: 'horario_lun' as const, label: 'Lunes' },
+            { key: 'horario_mar' as const, label: 'Martes' },
+            { key: 'horario_mie' as const, label: 'Miércoles' },
+            { key: 'horario_jue' as const, label: 'Jueves' },
+            { key: 'horario_vie' as const, label: 'Viernes' },
+            { key: 'horario_sab' as const, label: 'Sábado' },
+            { key: 'horario_dom' as const, label: 'Domingo' },
+          ].map((d) => (
+            <div key={d.key} className="grid grid-cols-[120px_1fr] items-center gap-2">
+              <Label className="text-sm">{d.label}</Label>
+              <Input
+                value={merged[d.key] ?? ''}
+                onChange={(e) => setField(d.key, e.target.value || null)}
+                placeholder="Ej: 12:00-15:00,20:00-23:30 (vacío = cerrado)"
+                className="h-9 text-sm font-mono"
+              />
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
       {/* MARKETPLACE — sprint 8 (campos viven en tabla `locales`) */}
       <Card>
         <CardHeader>
@@ -389,21 +423,55 @@ export function SettingsLocal() {
                 </p>
               </Field>
 
-              <Field label="URL de foto de portada (16:10)">
-                <Input
-                  value={mpMerged.marketplace_foto_url ?? ''}
-                  onChange={(e) => setMpField('marketplace_foto_url', e.target.value || null)}
-                  placeholder="https://images.unsplash.com/photo-..."
-                  className="h-11"
-                />
+              <Field label="Foto de portada (16:10)">
                 {mpMerged.marketplace_foto_url && (
                   <img
                     src={mpMerged.marketplace_foto_url}
-                    alt="Preview"
-                    className="mt-2 rounded-md border border-border max-h-40 object-cover"
+                    alt="Preview portada"
+                    className="mb-2 rounded-md border border-border max-h-40 w-full object-cover"
                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                   />
                 )}
+                <div className="flex gap-2 items-center">
+                  <label className="inline-flex items-center gap-1 px-3 h-9 rounded-md border border-input bg-background text-sm hover:bg-accent cursor-pointer">
+                    <Upload className="h-3.5 w-3.5" />
+                    {mpMerged.marketplace_foto_url ? 'Cambiar foto' : 'Subir foto'}
+                    <input
+                      type="file"
+                      accept=".png,.jpg,.jpeg,.webp"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file || !user?.tenant_id || localId === null) return;
+                        const { url, error } = await subirMarketplaceFoto(user.tenant_id, localId, file);
+                        if (error || !url) { toast.error(error ?? 'Error subiendo'); return; }
+                        setMpField('marketplace_foto_url', url);
+                        toast.success('Foto subida — recordá Guardar');
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                  {mpMerged.marketplace_foto_url && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setMpField('marketplace_foto_url', null)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      Quitar
+                    </Button>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  PNG/JPG/WEBP, máx 3MB. También podés pegar una URL externa:
+                </p>
+                <Input
+                  value={mpMerged.marketplace_foto_url ?? ''}
+                  onChange={(e) => setMpField('marketplace_foto_url', e.target.value || null)}
+                  placeholder="https://images.unsplash.com/photo-... (opcional)"
+                  className="h-9 text-xs"
+                />
               </Field>
 
               <div className="flex justify-end">

@@ -377,7 +377,17 @@ export interface MetodoCobro {
   orden: number;
 }
 
-export interface ComandaLocalSettings {
+export interface HorariosLocal {
+  horario_lun?: string | null;
+  horario_mar?: string | null;
+  horario_mie?: string | null;
+  horario_jue?: string | null;
+  horario_vie?: string | null;
+  horario_sab?: string | null;
+  horario_dom?: string | null;
+}
+
+export interface ComandaLocalSettings extends HorariosLocal {
   id: number;
   tenant_id: string;
   local_id: number;

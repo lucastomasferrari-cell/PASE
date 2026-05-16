@@ -14,6 +14,11 @@ export interface LocalMarketplace {
   marketplace_tags: string[] | null;
   marketplace_foto_url: string | null;
   online_modo: string | null;
+  // Sprint 2026-05-16: horarios + tiempos
+  tiempo_retiro_min?: number | null;
+  tiempo_delivery_min?: number | null;
+  abierto_ahora?: boolean | null;
+  horario_hoy?: string | null;
 }
 
 export async function listMarketplaceLocales(): Promise<{ data: LocalMarketplace[]; error: string | null }> {

@@ -1,9 +1,11 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, MapPin, ExternalLink, Store } from 'lucide-react';
+import { toast } from 'sonner';
+import { Search, MapPin, ExternalLink, Store, Clock, Share2 } from 'lucide-react';
 import { listMarketplaceLocales, type LocalMarketplace } from '@/services/marketplaceService';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { cn } from '@/lib/utils';
 
@@ -15,13 +17,38 @@ import { cn } from '@/lib/utils';
 // filtros por radio. Por ahora: search por nombre + chips de tags +
 // grid de cards.
 
+type SortBy = 'abiertos' | 'nombre' | 'rapido';
+const PAGE_SIZE = 24;
+
 export function MarketplaceHome() {
   const [locales, setLocales] = useState<LocalMarketplace[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [tagFiltro, setTagFiltro] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<SortBy>('abiertos');
+  const [pagina, setPagina] = useState(1);
   const debouncedSearch = useDebouncedValue(search, 300);
+
+  // SEO/OG tags básicos sin React Helmet — manipulación directa del head
+  useEffect(() => {
+    document.title = 'Marketplace · Pedí online a restaurantes';
+    const setMeta = (name: string, content: string, isProperty = false) => {
+      const attr = isProperty ? 'property' : 'name';
+      let el = document.querySelector(`meta[${attr}="${name}"]`) as HTMLMetaElement | null;
+      if (!el) {
+        el = document.createElement('meta');
+        el.setAttribute(attr, name);
+        document.head.appendChild(el);
+      }
+      el.content = content;
+    };
+    setMeta('description', 'Encontrá restaurantes que aceptan pedidos online. Sushi, pizza, japonesa y más — sin intermediarios.');
+    setMeta('og:title', 'Marketplace de restaurantes', true);
+    setMeta('og:description', 'Pedí online directo al restaurante, sin intermediarios.', true);
+    setMeta('og:type', 'website', true);
+    if (typeof window !== 'undefined') setMeta('og:url', window.location.href, true);
+  }, []);
 
   useEffect(() => {
     listMarketplaceLocales().then(({ data, error: err }) => {
@@ -30,6 +57,9 @@ export function MarketplaceHome() {
       setLoading(false);
     });
   }, []);
+
+  // Reset paginación al cambiar filtros
+  useEffect(() => { setPagina(1); }, [debouncedSearch, tagFiltro, sortBy]);
 
   // Tags únicos para chips de filtro
   const tags = useMemo(() => {
@@ -42,7 +72,7 @@ export function MarketplaceHome() {
 
   const localesFiltrados = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
-    return locales.filter((l) => {
+    const filtered = locales.filter((l) => {
       if (q && !l.nombre.toLowerCase().includes(q) && !(l.marketplace_descripcion ?? '').toLowerCase().includes(q)) {
         return false;
       }
@@ -51,7 +81,27 @@ export function MarketplaceHome() {
       }
       return true;
     });
-  }, [locales, debouncedSearch, tagFiltro]);
+    // Sort
+    const sorted = [...filtered];
+    sorted.sort((a, b) => {
+      switch (sortBy) {
+        case 'abiertos':
+          // abierto primero, luego alfabético
+          if (a.abierto_ahora !== b.abierto_ahora) return b.abierto_ahora ? 1 : -1;
+          return a.nombre.localeCompare(b.nombre);
+        case 'nombre':
+          return a.nombre.localeCompare(b.nombre);
+        case 'rapido':
+          // por tiempo delivery ascendente (los rápidos primero)
+          return (a.tiempo_delivery_min ?? 999) - (b.tiempo_delivery_min ?? 999);
+        default: return 0;
+      }
+    });
+    return sorted;
+  }, [locales, debouncedSearch, tagFiltro, sortBy]);
+
+  const totalPaginas = Math.max(1, Math.ceil(localesFiltrados.length / PAGE_SIZE));
+  const localesPagina = localesFiltrados.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE);
 
   return (
     <div className="min-h-screen bg-background">
@@ -81,48 +131,65 @@ export function MarketplaceHome() {
       </div>
 
       <div className="container max-w-5xl py-6 px-4">
-        {/* Tags de filtro */}
-        {tags.length > 0 && (
-          <div className="mb-6 flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setTagFiltro(null)}
-              className={cn(
-                'px-3 h-8 rounded-full text-sm transition-colors',
-                tagFiltro === null
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-accent',
-              )}
-            >
-              Todos
-            </button>
-            {tags.map((t) => (
+        {/* Toolbar: tags + sort */}
+        <div className="mb-6 flex items-center gap-3 flex-wrap">
+          {tags.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap overflow-x-auto -mx-1 px-1 max-w-full">
               <button
-                key={t}
                 type="button"
-                onClick={() => setTagFiltro(t)}
+                onClick={() => setTagFiltro(null)}
                 className={cn(
-                  'px-3 h-8 rounded-full text-sm transition-colors',
-                  tagFiltro === t
+                  'px-3 h-8 rounded-full text-sm transition-colors shrink-0',
+                  tagFiltro === null
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-muted text-muted-foreground hover:bg-accent',
                 )}
               >
-                {t}
+                Todos
               </button>
+              {tags.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTagFiltro(t)}
+                  className={cn(
+                    'px-3 h-8 rounded-full text-sm transition-colors shrink-0',
+                    tagFiltro === t
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:bg-accent',
+                  )}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          )}
+          {!loading && locales.length > 0 && (
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortBy)}>
+              <SelectTrigger className="w-[170px] h-9 ml-auto">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="abiertos">Abiertos primero</SelectItem>
+                <SelectItem value="nombre">Por nombre A-Z</SelectItem>
+                <SelectItem value="rapido">Más rápidos</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        {/* Lista — skeleton mientras carga, mensaje claro si vacío */}
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <SkeletonCard key={i} />
             ))}
           </div>
-        )}
-
-        {/* Lista */}
-        {loading ? (
-          <div className="py-16 text-center text-muted-foreground">Cargando restaurantes…</div>
         ) : error ? (
           <div className="py-16 text-center text-destructive text-sm">
             Error: {error}
             <div className="text-xs text-muted-foreground mt-2">
-              Si dice "function fn_marketplace_listar does not exist", la migration
-              202605151970 todavía no se aplicó.
+              Si dice "function fn_marketplace_listar does not exist", aplicá la migration 202605160400.
             </div>
           </div>
         ) : localesFiltrados.length === 0 ? (
@@ -138,11 +205,36 @@ export function MarketplaceHome() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {localesFiltrados.map((local) => (
-              <RestauranteCard key={local.id} local={local} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {localesPagina.map((local) => (
+                <RestauranteCard key={local.id} local={local} />
+              ))}
+            </div>
+            {totalPaginas > 1 && (
+              <div className="mt-6 flex items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPagina((p) => Math.max(1, p - 1))}
+                  disabled={pagina === 1}
+                  className="px-3 h-8 rounded-md border border-border text-sm disabled:opacity-40"
+                >
+                  ← Anterior
+                </button>
+                <span className="text-sm text-muted-foreground tabular-nums">
+                  Página {pagina} de {totalPaginas}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
+                  disabled={pagina === totalPaginas}
+                  className="px-3 h-8 rounded-md border border-border text-sm disabled:opacity-40"
+                >
+                  Siguiente →
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -150,16 +242,62 @@ export function MarketplaceHome() {
 }
 
 function RestauranteCard({ local }: { local: LocalMarketplace }) {
+  async function compartir(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const url = `${window.location.origin}/comanda-app/tienda/${local.slug}`;
+    const titulo = `${local.nombre} — pedí online`;
+    if (navigator.share) {
+      try { await navigator.share({ title: titulo, url }); } catch { /* user canceled */ }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copiado al portapapeles');
+    } catch {
+      toast.error('No se pudo copiar');
+    }
+  }
+
+  const cerrado = local.abierto_ahora === false;
+  const tiempo = local.online_modo === 'delivery'
+    ? local.tiempo_delivery_min
+    : local.tiempo_retiro_min;
+
   return (
     <Link to={`/tienda/${local.slug}`} className="block group">
-      <Card className="overflow-hidden transition-all group-hover:shadow-lg group-hover:-translate-y-1">
-        {/* Foto / placeholder */}
+      <Card className={cn(
+        'overflow-hidden transition-all group-hover:shadow-lg group-hover:-translate-y-1',
+        cerrado && 'opacity-60',
+      )}>
+        {/* Foto / placeholder + badge abierto/cerrado */}
         <div className="aspect-[16/10] bg-gradient-to-br from-primary/20 to-accent flex items-center justify-center relative">
           {local.marketplace_foto_url ? (
-            <img src={local.marketplace_foto_url} alt={local.nombre} className="w-full h-full object-cover" />
+            <img src={local.marketplace_foto_url} alt={local.nombre} className="w-full h-full object-cover" loading="lazy" />
           ) : (
             <Store className="h-12 w-12 text-primary/40" />
           )}
+          {/* Badge abierto/cerrado en la esquina */}
+          {local.abierto_ahora !== null && local.abierto_ahora !== undefined && (
+            <div className={cn(
+              'absolute top-2 left-2 text-[10px] font-bold px-2 py-1 rounded-full uppercase shadow',
+              local.abierto_ahora
+                ? 'bg-success text-success-foreground'
+                : 'bg-destructive text-destructive-foreground',
+            )}>
+              {local.abierto_ahora ? '● Abierto' : '○ Cerrado'}
+            </div>
+          )}
+          {/* Botón share en la esquina opuesta */}
+          <button
+            type="button"
+            onClick={compartir}
+            className="absolute top-2 right-2 h-8 w-8 rounded-full bg-background/90 backdrop-blur-sm hover:bg-background flex items-center justify-center shadow"
+            aria-label="Compartir"
+            title="Compartir / copiar link"
+          >
+            <Share2 className="h-3.5 w-3.5" />
+          </button>
         </div>
 
         <CardContent className="p-4 space-y-2">
@@ -198,9 +336,35 @@ function RestauranteCard({ local }: { local: LocalMarketplace }) {
                 {local.online_modo === 'delivery' ? 'Envío' : local.online_modo === 'retiro' ? 'Retiro' : 'Pedidos'}
               </span>
             )}
+            {tiempo && (
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                ~{tiempo} min
+              </span>
+            )}
+            {local.horario_hoy && cerrado && (
+              <span className="ml-auto text-[10px] italic">Hoy: {local.horario_hoy}</span>
+            )}
           </div>
         </CardContent>
       </Card>
     </Link>
+  );
+}
+
+function SkeletonCard() {
+  return (
+    <Card className="overflow-hidden">
+      <div className="aspect-[16/10] bg-muted animate-pulse" />
+      <CardContent className="p-4 space-y-2">
+        <div className="h-4 bg-muted animate-pulse rounded w-3/4" />
+        <div className="h-3 bg-muted animate-pulse rounded w-full" />
+        <div className="h-3 bg-muted animate-pulse rounded w-5/6" />
+        <div className="flex gap-1 pt-1">
+          <div className="h-4 bg-muted animate-pulse rounded w-12" />
+          <div className="h-4 bg-muted animate-pulse rounded w-16" />
+        </div>
+      </CardContent>
+    </Card>
   );
 }

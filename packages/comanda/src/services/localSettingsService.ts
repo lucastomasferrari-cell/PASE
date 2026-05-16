@@ -3,6 +3,7 @@ import type { ComandaLocalSettings, PosModo } from '../types/database';
 import { translateError } from '../lib/errors';
 
 const MP_QR_BUCKET = 'mp-qrs';
+const MARKETPLACE_BUCKET = 'marketplace-fotos';
 
 export async function getLocalSettings(localId: number): Promise<{ data: ComandaLocalSettings | null; error: string | null }> {
   const { data, error } = await db
@@ -15,12 +16,30 @@ export async function getLocalSettings(localId: number): Promise<{ data: Comanda
   return { data: (data?.[0] as ComandaLocalSettings | undefined) ?? null, error: null };
 }
 
-export type LocalSettingsPatch = Partial<Pick<
-  ComandaLocalSettings,
-  | 'slug' | 'direccion' | 'telefono' | 'instagram' | 'web' | 'mp_qr_url'
-  | 'costo_envio_default' | 'tiempo_retiro_min' | 'tiempo_delivery_min'
-  | 'tienda_activa' | 'acepta_delivery' | 'autolock_minutos' | 'features_pos_modos'
->>;
+// Patch para comanda_local_settings. Los campos de horario_xxx son strings
+// "HH:MM-HH:MM[,HH:MM-HH:MM]" — el marketplace los usa para badge "Abierto ahora".
+export interface LocalSettingsPatch {
+  slug?: string;
+  direccion?: string | null;
+  telefono?: string | null;
+  instagram?: string | null;
+  web?: string | null;
+  mp_qr_url?: string | null;
+  costo_envio_default?: number;
+  tiempo_retiro_min?: number;
+  tiempo_delivery_min?: number;
+  tienda_activa?: boolean;
+  acepta_delivery?: boolean;
+  autolock_minutos?: number;
+  features_pos_modos?: PosModo[];
+  horario_lun?: string | null;
+  horario_mar?: string | null;
+  horario_mie?: string | null;
+  horario_jue?: string | null;
+  horario_vie?: string | null;
+  horario_sab?: string | null;
+  horario_dom?: string | null;
+}
 
 export async function updateLocalSettings(
   id: number,
@@ -124,4 +143,34 @@ export async function updateMarketplaceLocal(
   // eslint-disable-next-line pase-local/require-apply-local-scope -- update directo por PK del local activo
   const { error } = await db.from('locales').update(patch).eq('id', localId);
   return { error: error?.message ?? null };
+}
+
+// Sprint 16/05: upload foto portada marketplace al bucket "marketplace-fotos"
+// (público, asume bucket creado manualmente en Supabase Storage con policy
+// public read). Path: <tenant_id>/<local_id>.<ext>. Override siempre.
+export async function subirMarketplaceFoto(
+  tenantId: string,
+  localId: number,
+  file: File,
+): Promise<{ url: string | null; error: string | null }> {
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+  if (!['png', 'jpg', 'jpeg', 'webp'].includes(ext)) {
+    return { url: null, error: 'Formato debe ser PNG/JPG/WEBP' };
+  }
+  if (file.size > 3 * 1024 * 1024) {
+    return { url: null, error: 'Imagen muy grande (máx 3MB)' };
+  }
+  const path = `${tenantId}/${localId}-${Date.now()}.${ext}`;  // timestamp evita cache CDN
+  const { error: upErr } = await db.storage.from(MARKETPLACE_BUCKET).upload(path, file, {
+    upsert: true,
+    contentType: file.type,
+  });
+  if (upErr) {
+    if (upErr.message.includes('Bucket not found')) {
+      return { url: null, error: 'Bucket marketplace-fotos no existe. Creálo en Supabase Storage (público).' };
+    }
+    return { url: null, error: upErr.message };
+  }
+  const { data: pub } = db.storage.from(MARKETPLACE_BUCKET).getPublicUrl(path);
+  return { url: pub.publicUrl, error: null };
 }
