@@ -89,6 +89,40 @@ export async function anularVenta(
   return { error: error?.message ?? null };
 }
 
+// Sprint 16/05: modificar precio puntual de un item con manager override
+export async function modificarPrecioItem(
+  itemId: number,
+  nuevoPrecio: number,
+  managerId: string,
+  motivo: string,
+  idempotencyKey?: string,
+): Promise<{ error: string | null }> {
+  const { error } = await db.rpc('fn_modificar_precio_item_comanda', {
+    p_item_id: itemId,
+    p_nuevo_precio: nuevoPrecio,
+    p_manager_id: managerId,
+    p_motivo: motivo,
+    p_idempotency_key: idempotencyKey ?? null,
+  });
+  return { error: error?.message ?? null };
+}
+
+// Marca item como cortesía (precio_unitario=0 + es_cortesia=true).
+export async function cortesiaItem(
+  itemId: number,
+  managerId: string,
+  motivo: string,
+  idempotencyKey?: string,
+): Promise<{ error: string | null }> {
+  const { error } = await db.rpc('fn_cortesia_item_comanda', {
+    p_item_id: itemId,
+    p_manager_id: managerId,
+    p_motivo: motivo,
+    p_idempotency_key: idempotencyKey ?? null,
+  });
+  return { error: error?.message ?? null };
+}
+
 // IP del cliente para audit. Fallback NULL si falla (no bloquea el flow).
 export async function getIpCliente(): Promise<string | null> {
   try {

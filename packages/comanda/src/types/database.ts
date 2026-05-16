@@ -317,6 +317,9 @@ export interface VentaPosItem {
   anulado_motivo: string | null;
   notas: string | null;
   cargado_por: string | null;
+  // Sprint 16/05: precio puntual + cortesía
+  es_cortesia?: boolean;
+  precio_unitario_original?: number | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

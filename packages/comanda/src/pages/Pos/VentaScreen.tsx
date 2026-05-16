@@ -27,7 +27,13 @@ import { TransferMesaDialog } from '@/components/dialogs/TransferMesaDialog';
 import { MergeMesasDialog } from '@/components/dialogs/MergeMesasDialog';
 import { SplitCheckDialog } from '@/components/dialogs/SplitCheckDialog';
 import { ManagerOverrideDialog } from '@/components/dialogs/ManagerOverrideDialog';
-import { anularVenta } from '@/services/overridesService';
+import { anularVenta, anularItem, modificarPrecioItem, cortesiaItem } from '@/services/overridesService';
+import { marcarDisponible } from '@/services/itemsService';
+import { AgotarDialog } from '@/pages/Catalogo/AgotarDialog';
+import { MoneyInput } from '@/components/MoneyInput';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import { db } from '@/lib/supabase';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { EstadoVentaBadge } from '@/components/EstadoBadge';
@@ -119,6 +125,17 @@ export function VentaScreen() {
     enabled: Number.isFinite(ventaId) && ventaId > 0,
   });
 
+  // Item seleccionado para agotar (abre AgotarDialog)
+  const [agotarItem, setAgotarItem] = useState<ItemConGrupo | null>(null);
+
+  // Acciones manager-override sobre item del check
+  const [anularItemTarget, setAnularItemTarget] = useState<VentaPosItem | null>(null);
+  const [cortesiaItemTarget, setCortesiaItemTarget] = useState<VentaPosItem | null>(null);
+  const [precioItemTarget, setPrecioItemTarget] = useState<VentaPosItem | null>(null);
+  const [precioNuevo, setPrecioNuevo] = useState<number>(0);
+  const [precioMotivo, setPrecioMotivo] = useState('');
+  const [showPrecioMgr, setShowPrecioMgr] = useState(false);
+
   // Cache: qué items tienen modifiers asignados.
   // Sprint 7 HIGH #3: cleanup con `cancelled` flag para evitar setState
   // post-unmount cuando la query resuelve después de navegar fuera.
@@ -137,7 +154,9 @@ export function VentaScreen() {
 
   const catalogoFiltrado = useMemo(() => {
     return catalogo.filter((it) => {
-      if (it.estado !== 'disponible') return false;
+      // Mostrar disponibles + agotados (agotados aparecen tachados, long-press
+      // los reactiva). Inactivos NO se muestran (es estado de admin).
+      if (it.estado !== 'disponible' && it.estado !== 'agotado') return false;
       if (!it.visible_pos) return false;
       if (grupoSel !== null && it.grupo_id !== grupoSel) return false;
       if (search.trim() && !it.nombre.toLowerCase().includes(search.toLowerCase())) return false;
@@ -212,6 +231,33 @@ export function VentaScreen() {
     searchRef.current?.focus();
   }
 
+  // Repetir item: agrega una nueva línea con el mismo item_id + mismos
+  // modificadores + notas. NO suma cantidad a la línea existente porque
+  // los modificadores podrían querer cambiar y la cantidad puede afectar
+  // splits/refunds. Si el cliente pide "otro igual" es más limpio: nueva
+  // línea. Usa el curso activo (no necesariamente el del item original).
+  async function repetirItem(itemRow: VentaPosItem) {
+    if (!editable || !empleado) return;
+    const cat = catalogo.find((c) => c.id === itemRow.item_id);
+    if (!cat) { toast.error('Item no encontrado en catálogo'); return; }
+    const mods = itemRow.modificadores?.map((m) => ({
+      nombre: m.nombre,
+      precio_extra: Number(m.precio_extra),
+      modifier_id: m.modifier_id,
+    })) ?? [];
+    const { id, error } = await agregarItem({
+      ventaId, itemId: itemRow.item_id, cantidad: 1, curso: cursoActivo,
+      modificadores: mods.length > 0 ? mods : null,
+      notas: itemRow.notas ?? null,
+      cargadoPor: empleado.id,
+    });
+    if (error) { toast.error(error); return; }
+    toast.success(`+1 ${cat.nombre} (curso ${cursoActivo})`);
+    setLastAddedItemId(itemRow.item_id);
+    if (id != null) setLastAddedRowId(id);
+    reload();
+  }
+
   async function removeItem(itemRow: VentaPosItem) {
     if (!editable) return;
     if (itemRow.estado !== 'hold') {
@@ -245,6 +291,24 @@ export function VentaScreen() {
       setPendingModifiers(it);
     } else {
       await addItem(it);
+    }
+  }
+
+  // Long-press en ProductTile: si item está disponible → abre AgotarDialog
+  // (mark "86"). Si ya está agotado → reactivar al toque (sin dialog porque
+  // marcarDisponible no requiere motivo).
+  async function longPressItem(it: ItemConGrupo) {
+    if (it.estado === 'agotado') {
+      const ok = confirm(`¿Reponer "${it.nombre}" al catálogo?`);
+      if (!ok) return;
+      const { error } = await marcarDisponible(it.id);
+      if (error) { toast.error(error); return; }
+      toast.success(`${it.nombre} disponible de nuevo`);
+      // El catálogo se refresca por Realtime de tabla items, pero pedimos
+      // reload inmediato para que el cajero vea el cambio sin lag.
+      reload();
+    } else {
+      setAgotarItem(it);
     }
   }
 
@@ -323,6 +387,7 @@ export function VentaScreen() {
               disabled={!editable}
               flashed={lastAddedItemId === it.id}
               onClick={() => clickItem(it)}
+              onLongPress={() => longPressItem(it)}
             />
           ))}
           {catalogoFiltrado.length === 0 && search.trim() && (
@@ -390,6 +455,14 @@ export function VentaScreen() {
                         catalogo={catalogo}
                         onQty={(n) => changeQty(it, n)}
                         onRemove={() => removeItem(it)}
+                        onRepetir={() => repetirItem(it)}
+                        onAnular={() => setAnularItemTarget(it)}
+                        onCambiarPrecio={() => {
+                          setPrecioItemTarget(it);
+                          setPrecioNuevo(Number(it.precio_unitario));
+                          setPrecioMotivo('');
+                        }}
+                        onCortesia={() => setCortesiaItemTarget(it)}
                         editable={editable}
                         flashed={lastAddedRowId === it.id}
                       />
@@ -532,6 +605,112 @@ export function VentaScreen() {
         />
       )}
 
+      {agotarItem && (
+        <AgotarDialog
+          item={agotarItem}
+          onClose={() => setAgotarItem(null)}
+          onDone={() => { setAgotarItem(null); reload(); toast.success(`${agotarItem.nombre} marcado agotado`); }}
+        />
+      )}
+
+      {/* Anular item (incluso enviado a cocina) con manager override */}
+      <ManagerOverrideDialog
+        open={anularItemTarget !== null}
+        onOpenChange={(o) => { if (!o) setAnularItemTarget(null); }}
+        accion="Anular item"
+        descripcion={anularItemTarget ? `Anular "${catalogo.find((c) => c.id === anularItemTarget.item_id)?.nombre ?? 'item'}" × ${anularItemTarget.cantidad} (${formatARS(anularItemTarget.subtotal)}). Si ya se mandó a cocina, avisá al cocinero.` : ''}
+        onAuthorized={async ({ managerId, motivo }) => {
+          if (!anularItemTarget) return;
+          const idKey = `anular-item-${anularItemTarget.id}-${Math.floor(Date.now() / 5000)}`;
+          const { error } = await anularItem(anularItemTarget.id, managerId, motivo, idKey);
+          if (error) throw new Error(error);
+          toast.success('Item anulado');
+          setAnularItemTarget(null);
+          reload();
+        }}
+      />
+
+      {/* Cortesía (regalar item) con manager override */}
+      <ManagerOverrideDialog
+        open={cortesiaItemTarget !== null}
+        onOpenChange={(o) => { if (!o) setCortesiaItemTarget(null); }}
+        accion="🎁 Marcar como cortesía"
+        descripcion={cortesiaItemTarget ? `Regalar "${catalogo.find((c) => c.id === cortesiaItemTarget.item_id)?.nombre ?? 'item'}" × ${cortesiaItemTarget.cantidad} (${formatARS(cortesiaItemTarget.subtotal)}). Queda en la venta con precio $0 y flag "cortesía" para auditoría.` : ''}
+        onAuthorized={async ({ managerId, motivo }) => {
+          if (!cortesiaItemTarget) return;
+          const idKey = `cortesia-item-${cortesiaItemTarget.id}-${Math.floor(Date.now() / 5000)}`;
+          const { error } = await cortesiaItem(cortesiaItemTarget.id, managerId, motivo, idKey);
+          if (error) throw new Error(error);
+          toast.success('Item marcado cortesía');
+          setCortesiaItemTarget(null);
+          reload();
+        }}
+      />
+
+      {/* Cambiar precio puntual — dialog para input + abre ManagerOverride después */}
+      <Dialog open={precioItemTarget !== null} onOpenChange={(o) => { if (!o) setPrecioItemTarget(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cambiar precio del item</DialogTitle>
+            <DialogDescription>
+              {precioItemTarget && (
+                <>
+                  {catalogo.find((c) => c.id === precioItemTarget.item_id)?.nombre ?? 'Item'} —
+                  precio actual <strong>{formatARS(precioItemTarget.precio_unitario)}</strong>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground">Nuevo precio unitario</label>
+              <MoneyInput value={precioNuevo} onChange={setPrecioNuevo} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Motivo (mín 5 caracteres)</label>
+              <input
+                type="text"
+                value={precioMotivo}
+                onChange={(e) => setPrecioMotivo(e.target.value)}
+                placeholder="Promo / error de carga / cliente reclamó…"
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPrecioItemTarget(null)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                if (precioMotivo.trim().length < 5) { toast.error('Motivo: mínimo 5 caracteres'); return; }
+                if (precioNuevo < 0) { toast.error('Precio inválido'); return; }
+                setShowPrecioMgr(true);
+              }}
+              disabled={precioNuevo < 0 || precioMotivo.trim().length < 5}
+            >
+              Continuar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ManagerOverrideDialog
+        open={showPrecioMgr}
+        onOpenChange={(o) => { if (!o) setShowPrecioMgr(false); }}
+        accion="Cambiar precio item"
+        descripcion={precioItemTarget ? `Cambiar precio de "${catalogo.find((c) => c.id === precioItemTarget.item_id)?.nombre ?? 'item'}" de ${formatARS(precioItemTarget.precio_unitario)} a ${formatARS(precioNuevo)}.` : ''}
+        onAuthorized={async ({ managerId }) => {
+          if (!precioItemTarget) return;
+          const idKey = `precio-item-${precioItemTarget.id}-${Math.floor(Date.now() / 5000)}`;
+          const { error } = await modificarPrecioItem(precioItemTarget.id, precioNuevo, managerId, precioMotivo.trim(), idKey);
+          if (error) throw new Error(error);
+          toast.success('Precio actualizado');
+          setShowPrecioMgr(false);
+          setPrecioItemTarget(null);
+          setPrecioMotivo('');
+          reload();
+        }}
+      />
+
       <ManagerOverrideDialog
         open={showAnular}
         onOpenChange={setShowAnular}
@@ -567,8 +746,19 @@ function GrupoTab({ active, onClick, children }: { active: boolean; onClick: () 
   );
 }
 
-function CheckRow({ item, catalogo, onQty, onRemove, editable, flashed }:
-  { item: VentaPosItem; catalogo: ItemConGrupo[]; onQty: (n: number) => void; onRemove: () => void; editable: boolean; flashed?: boolean }) {
+function CheckRow({ item, catalogo, onQty, onRemove, onRepetir, onAnular, onCambiarPrecio, onCortesia, editable, flashed }:
+  {
+    item: VentaPosItem;
+    catalogo: ItemConGrupo[];
+    onQty: (n: number) => void;
+    onRemove: () => void;
+    onRepetir: () => void;
+    onAnular: () => void;
+    onCambiarPrecio: () => void;
+    onCortesia: () => void;
+    editable: boolean;
+    flashed?: boolean;
+  }) {
   const it = catalogo.find((c) => c.id === item.item_id);
   return (
     <div
@@ -580,7 +770,15 @@ function CheckRow({ item, catalogo, onQty, onRemove, editable, flashed }:
     >
       <div className="text-base">{it?.emoji ?? '📦'}</div>
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium truncate">{it?.nombre ?? `Item #${item.item_id}`}</div>
+        <div className="text-sm font-medium truncate flex items-center gap-1.5">
+          {it?.nombre ?? `Item #${item.item_id}`}
+          {item.es_cortesia && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-success/15 text-success font-bold uppercase">Cortesía</span>
+          )}
+          {item.precio_unitario_original != null && Number(item.precio_unitario_original) !== Number(item.precio_unitario) && !item.es_cortesia && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-warning/15 text-warning font-bold uppercase" title={`Precio original ${formatARS(item.precio_unitario_original)}`}>Precio mod.</span>
+          )}
+        </div>
         {item.modificadores && item.modificadores.length > 0 && (
           <div className="text-xs text-muted-foreground">
             {item.modificadores.map((m) => m.nombre).join(' · ')}
@@ -588,6 +786,9 @@ function CheckRow({ item, catalogo, onQty, onRemove, editable, flashed }:
         )}
         {item.notas && <div className="text-xs text-warning italic">{item.notas}</div>}
         <div className="text-xs text-muted-foreground mt-0.5">
+          {item.precio_unitario_original != null && Number(item.precio_unitario_original) !== Number(item.precio_unitario) && (
+            <span className="line-through mr-1.5 opacity-60">{formatARS(item.precio_unitario_original)}</span>
+          )}
           {formatARS(item.precio_unitario)} c/u · {item.estado}
         </div>
       </div>
@@ -609,6 +810,47 @@ function CheckRow({ item, catalogo, onQty, onRemove, editable, flashed }:
           <span className="text-xs">x{item.cantidad}</span>
         )}
         <strong className="text-sm tabular-nums">{formatARS(item.subtotal)}</strong>
+        {/* Repetir item: agrega +1 con los mismos modificadores al curso activo */}
+        {editable && item.estado !== 'anulado' && (
+          <div className="flex items-center gap-1 mt-0.5">
+            <button
+              type="button"
+              onClick={onRepetir}
+              aria-label={`Repetir ${it?.nombre ?? 'item'}`}
+              title="Agregar uno más igual (mismos modificadores) al curso activo"
+              className="text-[10px] text-primary hover:underline"
+            >
+              + Repetir
+            </button>
+            {/* Acciones manager (anular/precio/cortesía) — solo si el item ya
+                no está en hold (en hold se puede simplemente eliminar) */}
+            {item.estado !== 'hold' && !item.es_cortesia && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="text-[10px] text-muted-foreground hover:text-foreground px-1 rounded hover:bg-accent"
+                    aria-label="Más acciones del item"
+                    title="Más acciones (manager override)"
+                  >
+                    ⋯
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuItem onClick={onCambiarPrecio}>
+                    Cambiar precio…
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={onCortesia}>
+                    🎁 Cortesía (gratis)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={onAnular} className="text-destructive">
+                    Anular item
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -640,28 +882,76 @@ const RAMP_CLASSES: Record<string, string> = {
   gray:   'bg-muted text-foreground hover:bg-accent',
 };
 
-function ProductTile({ item, grupo, disabled, flashed, onClick }: {
+function ProductTile({ item, grupo, disabled, flashed, onClick, onLongPress }: {
   item: ItemConGrupo;
   grupo: ItemGrupo | null;
   disabled: boolean;
   flashed?: boolean;
   onClick: () => void;
+  onLongPress?: () => void;
 }) {
   const ramp = grupo?.color_ramp ?? 'gray';
   const cls = RAMP_CLASSES[ramp] ?? RAMP_CLASSES.gray;
+  const agotado = item.estado === 'agotado';
+  // Long-press detector: pointerDown arranca timer 500ms, si llega al timeout
+  // dispara onLongPress y cancela el click normal. pointerUp/leave/move
+  // antes del timeout = click normal.
+  const longPressRef = useRef<{ timer: number | null; fired: boolean }>({ timer: null, fired: false });
+
+  function handlePointerDown() {
+    if (!onLongPress) return;
+    longPressRef.current.fired = false;
+    longPressRef.current.timer = window.setTimeout(() => {
+      longPressRef.current.fired = true;
+      onLongPress();
+    }, 500);
+  }
+  function clearLongPress() {
+    if (longPressRef.current.timer) {
+      clearTimeout(longPressRef.current.timer);
+      longPressRef.current.timer = null;
+    }
+  }
+  function handleClick(e: React.MouseEvent) {
+    // Si el long-press disparó, cancelar el click normal
+    if (longPressRef.current.fired) {
+      e.preventDefault();
+      longPressRef.current.fired = false;
+      return;
+    }
+    onClick();
+  }
+
   return (
     <button
       type="button"
-      onClick={onClick}
-      disabled={disabled}
+      onClick={handleClick}
+      onPointerDown={handlePointerDown}
+      onPointerUp={clearLongPress}
+      onPointerLeave={clearLongPress}
+      onPointerCancel={clearLongPress}
+      onContextMenu={(e) => {
+        // Bloquear menú contextual nativo (mobile long-press abre uno)
+        if (onLongPress) e.preventDefault();
+      }}
+      disabled={disabled || (agotado && !onLongPress)}
       className={cn(
         'aspect-[4/3] rounded-lg p-3 flex flex-col items-center justify-center gap-1 relative',
         'transition-all duration-300 active:scale-[0.98] touch-target-lg',
         'disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100',
         cls,
         flashed && 'ring-4 ring-success scale-[1.02]',
+        agotado && 'opacity-50',
       )}
+      title={agotado ? 'AGOTADO — mantené presionado para reponer' : 'Tocá para agregar · mantené presionado para marcar agotado'}
     >
+      {agotado && (
+        <div className="absolute inset-0 rounded-lg bg-destructive/10 flex items-center justify-center pointer-events-none">
+          <div className="bg-destructive text-destructive-foreground px-2 py-0.5 rounded text-[10px] font-bold uppercase rotate-[-12deg] shadow">
+            Agotado
+          </div>
+        </div>
+      )}
       {flashed && (
         <div className="absolute inset-0 rounded-lg bg-success/20 flex items-center justify-center pointer-events-none">
           <div className="bg-success text-success-foreground rounded-full h-10 w-10 flex items-center justify-center text-2xl shadow-lg">
