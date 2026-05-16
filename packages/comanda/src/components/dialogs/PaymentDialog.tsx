@@ -30,7 +30,10 @@ interface Props {
   onCobrado: () => void;
 }
 
-const PROPINA_PCTS = [0, 0.10, 0.15, 0.20];
+// Propina deshabilitada por pedido de Lucas (2026-05-15). El handling
+// interno queda en 0 para no romper el resto de la lógica. Cuando se
+// vuelva a activar, restaurar la sección UI + el array de porcentajes.
+const PROPINA_FIJA = 0;
 
 // Billetes típicos AR 2026. "Exacto" siempre primero; el resto solo aparecen
 // si son > que el monto a cobrar (no tiene sentido mostrar $1000 si vas a
@@ -41,7 +44,9 @@ const BILLETES_AR = [1000, 2000, 5000, 10000, 20000];
 // Cada pago tiene idempotencyKey estable; si la red falla, retry no duplica.
 export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado }: Props) {
   const [metodos, setMetodos] = useState<MetodoCobro[]>([]);
-  const [propina, setPropina] = useState<number>(0);
+  // Propina oculta por ahora — mantenemos la variable para no romper la
+  // lógica de cobro pero siempre vale 0.
+  const propina = PROPINA_FIJA;
   const [pagos, setPagos] = useState<PagoEnCurso[]>([]);
   const [montoNuevo, setMontoNuevo] = useState<number>(0);
   const [metodoNuevo, setMetodoNuevo] = useState<string>('efectivo');
@@ -50,7 +55,7 @@ export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado
 
   useEffect(() => {
     if (!open) return;
-    setPagos([]); setPropina(0); setMontoNuevo(0); setMontoEntregado(0); setConfirmando(false);
+    setPagos([]); setMontoNuevo(0); setMontoEntregado(0); setConfirmando(false);
     listMetodosCobroActivos(venta.local_id).then((r) => {
       setMetodos(r.data);
       if (r.data.length > 0 && r.data[0]) setMetodoNuevo(r.data[0].slug);
@@ -158,32 +163,6 @@ export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado
             Subtotal: <strong>{formatARS(subtotalSinPropina)}</strong>
           </DialogDescription>
         </DialogHeader>
-
-        {/* Propina */}
-        <div className="space-y-2">
-          <Label>Propina</Label>
-          <div className="flex gap-2 items-center flex-wrap">
-            {PROPINA_PCTS.map((p) => {
-              const monto = Math.round(subtotalSinPropina * p);
-              const sel = Math.abs(propina - monto) < 0.01;
-              return (
-                <Button
-                  key={p}
-                  type="button"
-                  variant={sel ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setPropina(monto)}
-                  className="rounded-full"
-                >
-                  {p === 0 ? 'Sin' : `${p * 100}%`}
-                </Button>
-              );
-            })}
-            <div className="flex-1 min-w-[120px]">
-              <MoneyInput value={propina} onChange={setPropina} />
-            </div>
-          </div>
-        </div>
 
         {/* Total + estado de cobro */}
         <div className={cn(
