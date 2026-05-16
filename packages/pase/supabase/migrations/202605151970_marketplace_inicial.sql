@@ -24,6 +24,10 @@ CREATE INDEX IF NOT EXISTS idx_locales_marketplace
 -- solo devuelve campos curados (nada sensible) y filtra por
 -- visible_marketplace=TRUE. La firma evita filtrar por tenant — es feed
 -- global cross-tenant intencional.
+--
+-- IMPORTANTE: slug y tienda_activa viven en comanda_local_settings
+-- (separada de locales para que COMANDA no toque schema de PASE), por eso
+-- el JOIN. online_modo se deriva de acepta_delivery (no es columna real).
 CREATE OR REPLACE FUNCTION fn_marketplace_listar()
 RETURNS TABLE (
   id INTEGER,
@@ -41,14 +45,17 @@ AS $$
   SELECT
     l.id,
     l.nombre,
-    l.slug,
+    cls.slug,
     l.marketplace_descripcion,
     l.marketplace_tags,
     l.marketplace_foto_url,
-    l.online_modo
+    CASE WHEN cls.acepta_delivery THEN 'delivery' ELSE 'retiro' END AS online_modo
   FROM locales l
+  JOIN comanda_local_settings cls
+    ON cls.local_id = l.id AND cls.deleted_at IS NULL
   WHERE l.visible_marketplace = TRUE
-    AND l.slug IS NOT NULL
+    AND cls.slug IS NOT NULL
+    AND cls.tienda_activa = TRUE
   ORDER BY l.nombre ASC;
 $$;
 
