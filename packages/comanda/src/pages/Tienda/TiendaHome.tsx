@@ -326,6 +326,8 @@ export function TiendaHome() {
                 value={carrito.direccion}
                 onChange={setDireccion}
                 placeholder="Empezá a escribir: Av. Corrientes 1234..."
+                provincia={local.provincia ?? null}
+                localidad={local.localidad ?? null}
               />
               <p className="text-[10px] text-foreground/50 mt-1">
                 Si tu dirección no aparece en las sugerencias, igual podés escribirla a mano.

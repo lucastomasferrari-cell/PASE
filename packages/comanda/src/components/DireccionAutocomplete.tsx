@@ -9,6 +9,10 @@ interface Props {
   onChange: (texto: string, coords: { lat: number; lon: number } | null) => void;
   placeholder?: string;
   className?: string;
+  // Filtros para que GeoRef no devuelva direcciones de toda Argentina.
+  // Cuando viene del checkout, son la provincia/localidad del local.
+  provincia?: string | null;
+  localidad?: string | null;
 }
 
 // Autocomplete de direcciones argentinas via GeoRef (gob.ar) — gratis sin API key.
@@ -19,7 +23,7 @@ interface Props {
 // con un check verde. Si el cliente la edita manualmente después, se
 // invalida (no estamos seguros de las coords).
 
-export function DireccionAutocomplete({ value, onChange, placeholder, className }: Props) {
+export function DireccionAutocomplete({ value, onChange, placeholder, className, provincia, localidad }: Props) {
   const [input, setInput] = useState(value);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -43,14 +47,14 @@ export function DireccionAutocomplete({ value, onChange, placeholder, className 
 
     let cancelled = false;
     setLoading(true);
-    buscarDirecciones(debouncedInput).then((data) => {
+    buscarDirecciones(debouncedInput, { provincia, localidad }).then((data) => {
       if (cancelled) return;
       setSugerencias(data);
       setLoading(false);
       if (data.length > 0) setOpen(true);
     });
     return () => { cancelled = true; };
-  }, [debouncedInput, validada, value]);
+  }, [debouncedInput, validada, value, provincia, localidad]);
 
   // Cerrar dropdown si click afuera
   useEffect(() => {

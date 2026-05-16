@@ -18,6 +18,8 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MoneyInput } from '@/components/MoneyInput';
+import { PROVINCIAS_AR, buscarLocalidades } from '@/services/direccionesService';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
 
 const MODOS: { value: PosModo; label: string }[] = [
   { value: 'salon', label: 'Salón' },
@@ -41,6 +43,9 @@ export function SettingsLocal() {
   const [mpPatch, setMpPatch] = useState<MarketplacePatch>({});
   const [savingMp, setSavingMp] = useState(false);
   const [tagDraft, setTagDraft] = useState('');
+  const [localidadQuery, setLocalidadQuery] = useState('');
+  const [localidadOpts, setLocalidadOpts] = useState<string[]>([]);
+  const debouncedLocQuery = useDebouncedValue(localidadQuery, 300);
 
   useEffect(() => {
     if (localId === null) return;
@@ -53,6 +58,14 @@ export function SettingsLocal() {
       setMpPatch({});
     });
   }, [localId]);
+
+  // Carga localidades cuando cambia provincia o query — DEBE ir antes
+  // del early return (regla react-hooks/rules-of-hooks).
+  useEffect(() => {
+    const prov = mp?.provincia ?? mpPatch.provincia;
+    if (!prov) { setLocalidadOpts([]); return; }
+    void buscarLocalidades(prov, debouncedLocQuery).then((opts) => setLocalidadOpts(opts));
+  }, [mp?.provincia, mpPatch.provincia, debouncedLocQuery]);
 
   if (!settings) return <div className="py-12 text-center text-muted-foreground">Cargando…</div>;
 
@@ -369,6 +382,63 @@ export function SettingsLocal() {
             <div className="text-sm text-muted-foreground">Cargando…</div>
           ) : (
             <>
+              {/* Ubicación geo del local — para filtrar autocomplete del cliente
+                  y para futuro cálculo de distancia/radio delivery */}
+              <div className="rounded-md border border-primary/20 bg-primary/5 p-3 space-y-3">
+                <div className="text-xs font-semibold text-primary uppercase tracking-wide">
+                  📍 Ubicación del local (importante)
+                </div>
+                <p className="text-xs text-muted-foreground -mt-1">
+                  Sin esto, cuando un cliente busca "Belgrano 1234" le aparecen direcciones de
+                  todas las provincias. Configurá tu provincia/localidad para que solo vea las
+                  cercanas.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Provincia">
+                    <Select
+                      value={mpMerged.provincia ?? '_none'}
+                      onValueChange={(v) => {
+                        setMpField('provincia', v === '_none' ? null : v);
+                        setMpField('localidad', null); // reset localidad al cambiar provincia
+                      }}
+                    >
+                      <SelectTrigger className="h-10">
+                        <SelectValue placeholder="Elegir provincia…" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        <SelectItem value="_none">— Sin configurar —</SelectItem>
+                        {PROVINCIAS_AR.map((p) => (
+                          <SelectItem key={p} value={p}>{p}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="Localidad (opcional)">
+                    {!mpMerged.provincia ? (
+                      <div className="h-10 px-3 flex items-center text-xs text-muted-foreground italic border border-dashed border-border rounded-md">
+                        Elegí provincia primero
+                      </div>
+                    ) : (
+                      <>
+                        <Input
+                          value={localidadQuery || mpMerged.localidad || ''}
+                          onChange={(e) => {
+                            setLocalidadQuery(e.target.value);
+                            setMpField('localidad', e.target.value || null);
+                          }}
+                          placeholder="Ej: Belgrano"
+                          className="h-10"
+                          list={`localidades-${localId}`}
+                        />
+                        <datalist id={`localidades-${localId}`}>
+                          {localidadOpts.map((l) => <option key={l} value={l} />)}
+                        </datalist>
+                      </>
+                    )}
+                  </Field>
+                </div>
+              </div>
+
               <ToggleField
                 label="Visible en marketplace"
                 checked={mpMerged.visible_marketplace ?? false}

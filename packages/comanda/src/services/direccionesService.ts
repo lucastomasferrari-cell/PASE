@@ -29,17 +29,27 @@ export interface DireccionSugerida {
   id: string;
 }
 
+export interface FiltroGeoRef {
+  // Nombre exacto de provincia (ej "Ciudad Autónoma de Buenos Aires").
+  // Si está, GeoRef filtra y NO devuelve direcciones de otras provincias.
+  provincia?: string | null;
+  // Localidad/departamento — prioriza pero no es exclusivo.
+  localidad?: string | null;
+}
+
 // Llama GeoRef API para autocompletar direcciones.
-// Acepta query libre tipo "Av. Corrientes 1234, CABA"
+// Acepta query libre tipo "Av. Corrientes 1234" + filtros opcionales.
 // Doc: https://georef.gob.ar/api/direcciones
-export async function buscarDirecciones(query: string): Promise<DireccionSugerida[]> {
+export async function buscarDirecciones(query: string, filtros: FiltroGeoRef = {}): Promise<DireccionSugerida[]> {
   const q = query.trim();
   if (q.length < 4) return [];
   try {
     const url = new URL('https://apis.datos.gob.ar/georef/api/direcciones');
     url.searchParams.set('direccion', q);
-    url.searchParams.set('max', '8');
+    url.searchParams.set('max', '10');
     url.searchParams.set('campos', 'estandar');
+    if (filtros.provincia) url.searchParams.set('provincia', filtros.provincia);
+    if (filtros.localidad) url.searchParams.set('localidad_censal', filtros.localidad);
     const res = await fetch(url.toString());
     if (!res.ok) return [];
     const data = await res.json() as {
@@ -62,6 +72,56 @@ export async function buscarDirecciones(query: string): Promise<DireccionSugerid
       lon: d.ubicacion?.lon ?? null,
       id: `gr-${idx}-${d.nomenclatura ?? ''}`,
     }));
+  } catch {
+    return [];
+  }
+}
+
+// Listar todas las provincias AR (24, fijo) — para select en SettingsLocal.
+// No requiere request a GeoRef porque las 24 nunca cambian.
+export const PROVINCIAS_AR = [
+  'Buenos Aires',
+  'Ciudad Autónoma de Buenos Aires',
+  'Catamarca',
+  'Chaco',
+  'Chubut',
+  'Córdoba',
+  'Corrientes',
+  'Entre Ríos',
+  'Formosa',
+  'Jujuy',
+  'La Pampa',
+  'La Rioja',
+  'Mendoza',
+  'Misiones',
+  'Neuquén',
+  'Río Negro',
+  'Salta',
+  'San Juan',
+  'San Luis',
+  'Santa Cruz',
+  'Santa Fe',
+  'Santiago del Estero',
+  'Tierra del Fuego, Antártida e Islas del Atlántico Sur',
+  'Tucumán',
+];
+
+// Buscar localidades dentro de una provincia (para el select cascada en
+// SettingsLocal). Doc: https://georef.gob.ar/api/localidades-censales
+export async function buscarLocalidades(provincia: string, query: string = ''): Promise<string[]> {
+  if (!provincia) return [];
+  try {
+    const url = new URL('https://apis.datos.gob.ar/georef/api/localidades-censales');
+    url.searchParams.set('provincia', provincia);
+    if (query.trim()) url.searchParams.set('nombre', query.trim());
+    url.searchParams.set('max', '20');
+    url.searchParams.set('campos', 'nombre');
+    const res = await fetch(url.toString());
+    if (!res.ok) return [];
+    const data = await res.json() as {
+      localidades_censales?: Array<{ nombre: string }>;
+    };
+    return (data.localidades_censales ?? []).map((l) => l.nombre);
   } catch {
     return [];
   }

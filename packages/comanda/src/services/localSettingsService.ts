@@ -116,13 +116,17 @@ export interface MarketplaceLocal {
   marketplace_descripcion: string | null;
   marketplace_tags: string[] | null;
   marketplace_foto_url: string | null;
+  provincia?: string | null;
+  localidad?: string | null;
+  lat?: number | null;
+  lon?: number | null;
 }
 
 export async function getMarketplaceLocal(localId: number): Promise<{ data: MarketplaceLocal | null; error: string | null }> {
   // eslint-disable-next-line pase-local/require-apply-local-scope -- query directa por PK del local activo, sin riesgo cross-local
   const { data, error } = await db
     .from('locales')
-    .select('id, nombre, visible_marketplace, marketplace_descripcion, marketplace_tags, marketplace_foto_url')
+    .select('id, nombre, visible_marketplace, marketplace_descripcion, marketplace_tags, marketplace_foto_url, provincia, localidad, lat, lon')
     .eq('id', localId)
     .single();
   if (error) return { data: null, error: translateError(error) };
@@ -134,6 +138,10 @@ export interface MarketplacePatch {
   marketplace_descripcion?: string | null;
   marketplace_tags?: string[] | null;
   marketplace_foto_url?: string | null;
+  provincia?: string | null;
+  localidad?: string | null;
+  lat?: number | null;
+  lon?: number | null;
 }
 
 export async function updateMarketplaceLocal(

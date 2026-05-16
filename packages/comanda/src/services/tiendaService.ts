@@ -35,6 +35,11 @@ export interface LocalPublico {
   tienda_activa: boolean;
   acepta_delivery: boolean;
   features_pos_modos: string[] | null;
+  // Sprint 2026-05-16: filtros geo para autocomplete
+  provincia?: string | null;
+  localidad?: string | null;
+  lat?: number | null;
+  lon?: number | null;
 }
 
 export async function getLocalPorSlug(slug: string): Promise<{ data: LocalPublico | null; error: string | null }> {
