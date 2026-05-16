@@ -91,6 +91,55 @@ export function ModalCargarFactura({
   const materiasFiltradas = provIdNum
     ? materiasPrimas.filter((mp) => mp.proveedor_id === provIdNum || mp.proveedor_id === null)
     : materiasPrimas;
+
+  // Auto-match por nombre de producto: si hay match único, lo sugiere.
+  // Score básico: includes case-insensitive normalizado. Si hay >1 match
+  // exacto/parcial, no auto-sugiere para no equivocarse — el user elige.
+  function sugerirMP(producto: string): number | null {
+    const q = producto.trim().toLowerCase();
+    if (q.length < 3) return null;
+    const candidatos = materiasFiltradas.filter((mp) => {
+      const nombre = mp.nombre.toLowerCase();
+      const insumo = (mp.insumo_nombre ?? '').toLowerCase();
+      return nombre.includes(q) || q.includes(nombre) || insumo.includes(q);
+    });
+    if (candidatos.length === 1 && candidatos[0]) return candidatos[0].id;
+    return null;
+  }
+
+  // Wrapper de updateItem: cuando se cambia el campo "producto", intentar
+  // auto-vincular MP. Solo si materia_prima_id está NULL/0 (no pisa selección manual).
+  function updateItemConAutoLink(i: number, field: keyof ItemFactura, val: string | number) {
+    updateItem(i, field, val);
+    if (field === 'producto' && typeof val === 'string') {
+      const itemActual = items[i];
+      if (itemActual && !itemActual.materia_prima_id) {
+        const sugerencia = sugerirMP(val);
+        if (sugerencia !== null) {
+          // Pequeño delay para dejar terminar el updateItem anterior
+          setTimeout(() => updateItem(i, 'materia_prima_id' as keyof ItemFactura, sugerencia), 50);
+        }
+      }
+    }
+  }
+
+  // Contar items sin MP vinculada (para warning visual y al guardar)
+  const itemsSinMP = items.filter((it) => it.producto.trim().length > 0 && !it.materia_prima_id).length;
+  const tieneItems = items.some((it) => it.producto.trim().length > 0);
+  const esCMVCategoria = form.cat && bucketMap[form.cat] === 'cat_compra';
+
+  // Wrapper guardar: si es categoría CMV y hay items sin MP vinculada, pide confirmación.
+  function guardarConConfirmacion() {
+    if (esCMVCategoria && itemsSinMP > 0) {
+      const ok = confirm(
+        `Hay ${itemsSinMP} ítem${itemsSinMP === 1 ? '' : 's'} sin vincular a materia prima.\n\n` +
+        `Su costo NO se va a actualizar y NO va a aparecer correctamente en el reporte CMV.\n\n` +
+        `¿Guardar igual? Cancelá para vincular antes.`
+      );
+      if (!ok) return;
+    }
+    guardar();
+  }
   return (
     <div className="overlay" onClick={onClose}>
       <div className="modal" style={{ width: 680 }} onClick={e => e.stopPropagation()}>
@@ -161,21 +210,31 @@ export function ModalCargarFactura({
             {items.length > 0 && (
               <table className="items-table">
                 <thead><tr><th>Producto</th><th>Cantidad</th><th>Unidad</th><th>Precio unit.</th><th>Subtotal</th><th>→ Materia prima (CMV)</th><th></th></tr></thead>
-                <tbody>{items.map((it, i) => (
-                  <tr key={i}>
-                    <td><input style={{ width: "100%", background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.producto} onChange={e => updateItem(i, "producto", e.target.value)} placeholder="Ej: Salmón" /></td>
+                <tbody>{items.map((it, i) => {
+                  // Highlight visual: si producto tiene contenido pero MP no vinculada Y la categoría es CMV
+                  const necesitaVincular = esCMVCategoria && it.producto.trim().length > 0 && !it.materia_prima_id;
+                  return (
+                  <tr key={i} style={necesitaVincular ? { background: 'rgba(255, 200, 0, 0.08)' } : undefined}>
+                    <td><input style={{ width: "100%", background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.producto} onChange={e => updateItemConAutoLink(i, "producto", e.target.value)} placeholder="Ej: Salmón" /></td>
                     <td><input type="number" step="0.01" style={{ width: 70, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.cantidad} onChange={e => updateItem(i, "cantidad", e.target.value)} /></td>
                     <td><select style={{ background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.unidad} onChange={e => updateItem(i, "unidad", e.target.value)}>{UNIDADES.map(u => <option key={u}>{u}</option>)}</select></td>
                     <td><input type="number" step="0.01" style={{ width: 90, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.precio_unitario} onChange={e => updateItem(i, "precio_unitario", e.target.value)} /></td>
                     <td style={{ color: "var(--acc)", fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 500 }}>{fmt_$(it.subtotal)}</td>
                     <td>
                       <select
-                        style={{ width: "100%", background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontSize: 11, borderRadius: "var(--r)" }}
+                        style={{
+                          width: "100%",
+                          background: necesitaVincular ? "rgba(217, 119, 6, 0.12)" : "var(--bg)",
+                          border: necesitaVincular ? "1px solid #d97706" : "1px solid var(--bd)",
+                          color: "var(--txt)", padding: "4px 6px", fontSize: 11, borderRadius: "var(--r)",
+                        }}
                         value={it.materia_prima_id ?? ""}
                         onChange={e => updateItem(i, "materia_prima_id" as keyof ItemFactura, e.target.value ? Number(e.target.value) : 0)}
-                        title="Vincular a una materia prima del catálogo para que actualice el costo del insumo automáticamente"
+                        title={necesitaVincular
+                          ? "⚠ Sin vincular — el costo del insumo NO se actualizará"
+                          : "Vincular a una materia prima del catálogo"}
                       >
-                        <option value="">— sin vincular —</option>
+                        <option value="">{necesitaVincular ? "⚠ Sin vincular" : "— sin vincular —"}</option>
                         {materiasFiltradas.map((mp) => (
                           <option key={mp.id} value={mp.id}>
                             {mp.nombre}{mp.insumo_nombre ? ` → ${mp.insumo_nombre}` : ""}
@@ -185,19 +244,30 @@ export function ModalCargarFactura({
                     </td>
                     <td><button className="btn btn-danger btn-sm" onClick={() => removeItem(i)}>✕</button></td>
                   </tr>
-                ))}</tbody>
+                  );
+                })}</tbody>
               </table>
             )}
-            {items.length > 0 && (
+            {tieneItems && esCMVCategoria && itemsSinMP > 0 && (
+              <div style={{ fontSize: 11, color: '#92400e', marginTop: 6, padding: "8px 10px", background: 'rgba(255, 200, 0, 0.12)', border: '1px solid rgba(217, 119, 6, 0.4)', borderRadius: 4 }}>
+                <strong>⚠ Atención:</strong> {itemsSinMP} {itemsSinMP === 1 ? 'ítem' : 'ítems'} sin vincular a materia prima.
+                El costo del insumo NO se actualizará y NO va a aparecer en el reporte CMV.
+                Vinculalos arriba o creá las MP faltantes en COMANDA → Menú → Materias primas.
+              </div>
+            )}
+            {tieneItems && esCMVCategoria && itemsSinMP === 0 && (
+              <div style={{ fontSize: 10, color: '#15803d', marginTop: 6, padding: "6px 8px", background: 'rgba(34, 197, 94, 0.08)', borderRadius: 4 }}>
+                ✓ Todos los ítems vinculados — el costo de los insumos se actualizará automáticamente.
+              </div>
+            )}
+            {items.length > 0 && !esCMVCategoria && (
               <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 6, padding: "6px 8px", background: "var(--bg)", borderRadius: 4 }}>
-                💡 Vinculá cada item a una materia prima para que su precio se propague al costo
-                del insumo unificado (alimenta el CMV de las recetas). Si la materia prima no existe,
-                creala en COMANDA → Menú → Materias primas.
+                💡 Si esto fuera una compra de mercadería (CMV), elegí una categoría CMV arriba para vincular ítems a materias primas.
               </div>
             )}
           </div>
         </div>
-        <div className="modal-ft"><button className="btn btn-sec" onClick={onClose}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={saving}>{saving ? "Guardando..." : "Guardar"}</button></div>
+        <div className="modal-ft"><button className="btn btn-sec" onClick={onClose}>Cancelar</button><button className="btn btn-acc" onClick={guardarConConfirmacion} disabled={saving}>{saving ? "Guardando..." : "Guardar"}</button></div>
       </div>
     </div>
   );
