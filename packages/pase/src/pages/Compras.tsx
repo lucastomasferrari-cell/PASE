@@ -8,6 +8,7 @@ import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId, parseMonto, estadoFactura } from "../lib/utils";
 import { RightSubNav, type SubNavSection, PageHeader, EmptyState, BoxIcon, ReceiptIcon } from "../components/ui";
+import { exportCSV } from "../lib/exportCSV";
 import type { Usuario, Local } from "../types";
 import type { Proveedor, Factura } from "../types/finanzas";
 import { aplicacionesPorNc, saldoNcRestante } from "../lib/saldoProveedor";
@@ -713,6 +714,42 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
         }
         actions={
           <>
+            {(subSection === "facturas" || subSection === "remitos") && (
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => {
+                  if (subSection === "facturas") {
+                    const headers = ["Fecha", "Nº Factura", "Proveedor", "Local", "Categoría", "Total", "Vencimiento", "Estado"];
+                    const rows = fFilt.map(f => [
+                      f.fecha?.slice(0, 10) || "",
+                      f.nro || "",
+                      proveedores.find(p => p.id === f.prov_id)?.nombre || "",
+                      locales.find(l => l.id === f.local_id)?.nombre || "",
+                      f.cat || "",
+                      Number(f.total ?? 0),
+                      f.venc?.slice(0, 10) || "",
+                      estadoFactura(f),
+                    ]);
+                    exportCSV(`facturas_${desde}_${hasta}.csv`, headers, rows);
+                  } else {
+                    const headers = ["Fecha", "Nº Remito", "Proveedor", "Local", "Categoría", "Monto", "Detalle", "Estado"];
+                    const rows = rFilt.map(r => [
+                      r.fecha?.slice(0, 10) || "",
+                      r.nro || "",
+                      proveedores.find(p => p.id === r.prov_id)?.nombre || "(sin proveedor)",
+                      locales.find(l => l.id === r.local_id)?.nombre || "",
+                      r.cat || "",
+                      Number(r.monto ?? 0),
+                      r.detalle || "",
+                      r.estado,
+                    ]);
+                    exportCSV(`remitos_${desde}_${hasta}.csv`, headers, rows);
+                  }
+                }}
+                disabled={subSection === "facturas" ? fFilt.length === 0 : rFilt.length === 0}
+                title={`Exportar ${subSection} a CSV`}
+              >⬇ Exportar</button>
+            )}
             {subSection === "facturas" && puedeFacturas && <button className="btn btn-sec" onClick={() => setLectorModal(true)}>Lector IA</button>}
             {subSection === "facturas" && puedeRemitos && (
               <button className="btn btn-sec" onClick={() => { setRemForm({ ...emptyRemForm, local_id: localActivo ? String(localActivo) : "" }); setRemModal(true); }}>+ Cargar remito</button>

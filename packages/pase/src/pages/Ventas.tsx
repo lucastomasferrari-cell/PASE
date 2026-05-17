@@ -8,6 +8,7 @@ import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import ImportarMaxirest from "./ImportarMaxirest";
 import { Modal, PageHeader, EmptyState, LocalLockedChip, LocalSelectorObligatorio } from "../components/ui";
+import { exportCSV } from "../lib/exportCSV";
 import type { Usuario, Local, Venta, CierreVentas } from "../types";
 
 interface VentasProps {
@@ -234,6 +235,23 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
         </>}
         actions={
           <>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                const headers = ["Fecha", "Local", "Turno", "Medio", "Monto", "Origen"];
+                const rows = ventas.map(v => [
+                  v.fecha?.slice(0, 10) || "",
+                  locales.find(l => l.id === v.local_id)?.nombre || "",
+                  v.turno || "",
+                  v.medio || "",
+                  Number(v.monto ?? 0),
+                  (v as { origen?: string }).origen || "manual",
+                ]);
+                exportCSV(`ventas_${debDesde}_${debHasta}.csv`, headers, rows);
+              }}
+              disabled={ventas.length === 0}
+              title="Exportar ventas visibles a CSV"
+            >⬇ Exportar</button>
             <button className="btn btn-ghost" onClick={()=>setShowMaxirest(true)}>Importar cierre Maxirest</button>
             <button className="btn btn-acc" onClick={()=>setModalNuevo(true)}>+ Cargar venta</button>
           </>

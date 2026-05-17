@@ -9,6 +9,7 @@ import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import { RightSubNav, type SubNavSection, PageHeader, EmptyState, LocalLockedChip } from "../components/ui";
+import { exportCSV } from "../lib/exportCSV";
 import { CajaCardsRow } from "./caja/CajaCardsRow";
 import type { Usuario, Local } from "../types/auth";
 import type { Movimiento } from "../types/finanzas";
@@ -464,6 +465,25 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         }
         actions={subSection === "movimientos" ? (
           <>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                const filename = `movimientos_caja_${filtDesde}_${filtHasta}.csv`;
+                const headers = ["Fecha", "Cuenta", "Tipo", "Categoría", "Detalle", "Importe", "Estado"];
+                const rows = mFilt.map(m => [
+                  m.fecha?.slice(0, 10) || "",
+                  m.cuenta,
+                  m.tipo || "",
+                  m.cat || "",
+                  m.detalle || "",
+                  Number(m.importe ?? 0),
+                  m.anulado ? "Anulado" : "OK",
+                ]);
+                exportCSV(filename, headers, rows);
+              }}
+              disabled={mFilt.length === 0}
+              title="Exportar movimientos visibles a CSV (abre en Excel)"
+            >⬇ Exportar</button>
             <button className="btn btn-sec" onClick={()=>setTransfModal(true)} disabled={cuentasOperablesList.length<2}>↔ Transferir</button>
             <button className="btn btn-acc" onClick={abrirNuevoMovimiento}>+ Movimiento</button>
           </>

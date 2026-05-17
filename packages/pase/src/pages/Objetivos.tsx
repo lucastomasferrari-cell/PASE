@@ -260,213 +260,310 @@ interface FilaProps {
   onSave: (patch: Partial<Omit<ObjetivoFila, "local_id" | "local_nombre" | "id">>) => void;
 }
 
+// Indicador individual — card con 2 estados: vacío (CTA "+ Definir") y
+// cargado (valor formateado + Editar/Borrar). Click → modo edición inline
+// con input + Guardar/Cancelar (sin autosave, decisión Lucas 2026-05-17).
+type IndicadorKey =
+  | "facturacion_objetivo"
+  | "costos_fijos_mes"
+  | "margen_contribucion_pct"
+  | "costo_mercaderia_pct"
+  | "costo_mp_pct"
+  | "margen_bruto_pct";
+
+interface IndicadorMeta {
+  key: IndicadorKey;
+  title: string;
+  info: string;
+  format: "currency" | "percent";
+  placeholder?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+}
+
+const INDICADORES: Record<"facturacion" | "bep" | "eficiencia", IndicadorMeta[]> = {
+  facturacion: [
+    {
+      key: "facturacion_objetivo",
+      title: "Facturación objetivo del mes",
+      info: "Cuánto querés facturar este mes en esta sucursal. Se compara contra lo facturado a la fecha en el widget 'Objetivo del mes' del dashboard.",
+      format: "currency",
+      placeholder: "12000000",
+    },
+  ],
+  bep: [
+    {
+      key: "costos_fijos_mes",
+      title: "Costos fijos del mes",
+      info: "Suma esperada de gastos fijos: alquiler + servicios + cuotas + suscripciones. (El labor cost se calcula automático sumando los sueldos pagados el mes anterior.)",
+      format: "currency",
+      placeholder: "alquiler+servicios+...",
+    },
+    {
+      key: "margen_contribucion_pct",
+      title: "Margen contribución %",
+      info: "% que te queda de cada peso vendido después de restar el costo variable (CMV + comisiones + delivery). Si no lo cargás, el sistema usa 50% como default.",
+      format: "percent",
+      placeholder: "55",
+      min: 0, max: 100, step: 0.5,
+    },
+  ],
+  eficiencia: [
+    {
+      key: "costo_mercaderia_pct",
+      title: "CMV objetivo %",
+      info: "Costo de mercadería sobre venta. Cuánto del precio se va en insumos. Típico en gastronomía AR: 28-35%.",
+      format: "percent",
+      placeholder: "32",
+      min: 0, max: 100, step: 0.5,
+    },
+    {
+      key: "costo_mp_pct",
+      title: "Costo MP objetivo %",
+      info: "Comisiones de MercadoPago sobre venta total. Depende del plan MP. Típico: 2-5%.",
+      format: "percent",
+      placeholder: "3.5",
+      min: 0, max: 20, step: 0.1,
+    },
+    {
+      key: "margen_bruto_pct",
+      title: "Margen bruto objetivo %",
+      info: "Lo que te queda después de descontar el CMV. (venta − costo mercadería) ÷ venta × 100. Típico: 65-72%.",
+      format: "percent",
+      placeholder: "60",
+      min: 0, max: 100, step: 0.5,
+    },
+  ],
+};
+
 function FilaObjetivo({ fila, saving, onSave }: FilaProps) {
-  // Grupo 1: facturación
-  // (Ticket promedio removido a la espera de integración COMANDA — Maxirest
-  // solo trae totales agregados, no líneas, por lo que calcular ticket promedio
-  // sería ruidoso. Se reactiva cuando COMANDA pushee data real.)
-  const [facturacion, setFacturacion] = useState(String(fila.facturacion_objetivo ?? ""));
-  // Grupo 2: BEP
-  const [fijos, setFijos] = useState(String(fila.costos_fijos_mes ?? ""));
-  const [margenC, setMargenC] = useState(String(fila.margen_contribucion_pct ?? ""));
-  // Grupo 3: eficiencia (cierre)
-  const [cmv, setCmv] = useState(String(fila.costo_mercaderia_pct ?? ""));
-  const [costoMp, setCostoMp] = useState(String(fila.costo_mp_pct ?? ""));
-  const [margenB, setMargenB] = useState(String(fila.margen_bruto_pct ?? ""));
-  // Notas
   const [notas, setNotas] = useState(fila.notas ?? "");
+  const [notasEditando, setNotasEditando] = useState(false);
 
-  useEffect(() => {
-    setFacturacion(String(fila.facturacion_objetivo ?? ""));
-    setFijos(String(fila.costos_fijos_mes ?? ""));
-    setMargenC(String(fila.margen_contribucion_pct ?? ""));
-    setCmv(String(fila.costo_mercaderia_pct ?? ""));
-    setCostoMp(String(fila.costo_mp_pct ?? ""));
-    setMargenB(String(fila.margen_bruto_pct ?? ""));
-    setNotas(fila.notas ?? "");
-  }, [
-    fila.local_id,
-    fila.facturacion_objetivo,
-    fila.costos_fijos_mes, fila.margen_contribucion_pct,
-    fila.costo_mercaderia_pct, fila.costo_mp_pct, fila.margen_bruto_pct,
-    fila.notas,
-  ]);
+  useEffect(() => { setNotas(fila.notas ?? ""); }, [fila.local_id, fila.notas]);
 
-  const facturacionNum = parseFloat(facturacion.replace(/[^0-9.-]/g, ""));
-  const fijosNum = parseFloat(fijos.replace(/[^0-9.-]/g, ""));
-  const margenCNum = parseFloat(margenC.replace(/[^0-9.-]/g, ""));
-  const bep = (!isNaN(fijosNum) && !isNaN(margenCNum) && margenCNum > 0)
-    ? fijosNum / (margenCNum / 100)
+  // BEP derivado para mostrar al lado de los inputs de fijos/margen
+  const bep = (fila.costos_fijos_mes != null && fila.margen_contribucion_pct != null && fila.margen_contribucion_pct > 0)
+    ? fila.costos_fijos_mes / (fila.margen_contribucion_pct / 100)
     : null;
 
-  type Field =
-    | "fact"
-    | "fijos" | "margenC"
-    | "cmv" | "mp" | "margenB"
-    | "notas";
+  // Contador: cuántos indicadores tiene cargados de 6
+  const totalIndicadores = 6;
+  const cargados = [
+    fila.facturacion_objetivo, fila.costos_fijos_mes, fila.margen_contribucion_pct,
+    fila.costo_mercaderia_pct, fila.costo_mp_pct, fila.margen_bruto_pct,
+  ].filter(v => v != null).length;
 
-  function handleBlur(field: Field) {
-    const patch: Parameters<typeof onSave>[0] = {};
-    if (field === "fact") patch.facturacion_objetivo = isNaN(facturacionNum) ? null : facturacionNum;
-    if (field === "fijos") patch.costos_fijos_mes = isNaN(fijosNum) ? null : fijosNum;
-    if (field === "margenC") patch.margen_contribucion_pct = isNaN(margenCNum) ? null : margenCNum;
-    if (field === "cmv") {
-      const n = parseFloat(cmv.replace(/[^0-9.-]/g, ""));
-      patch.costo_mercaderia_pct = isNaN(n) ? null : n;
-    }
-    if (field === "mp") {
-      const n = parseFloat(costoMp.replace(/[^0-9.-]/g, ""));
-      patch.costo_mp_pct = isNaN(n) ? null : n;
-    }
-    if (field === "margenB") {
-      const n = parseFloat(margenB.replace(/[^0-9.-]/g, ""));
-      patch.margen_bruto_pct = isNaN(n) ? null : n;
-    }
-    if (field === "notas") patch.notas = notas.trim() || null;
-    onSave(patch);
+  function getValor(key: IndicadorKey): number | null {
+    return fila[key] ?? null;
+  }
+
+  function saveIndicador(key: IndicadorKey, value: number | null) {
+    onSave({ [key]: value });
+  }
+
+  function saveNotas() {
+    onSave({ notas: notas.trim() || null });
+    setNotasEditando(false);
   }
 
   return (
     <div className="panel" style={{ padding: 18 }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 16, gap: 8, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 4, gap: 8, flexWrap: "wrap" }}>
         <h3 style={{ margin: 0, fontSize: "var(--pase-fs-lg)", fontWeight: 500, color: "var(--pase-text)" }}>
           {fila.local_nombre}
         </h3>
-        {saving && <span style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)" }}>guardando…</span>}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)" }}>
+            {cargados} de {totalIndicadores} indicadores cargados
+          </span>
+          {saving && <span style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-celeste)" }}>guardando…</span>}
+        </div>
       </div>
+
+      <p style={{ margin: "0 0 16px", fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)" }}>
+        Cargá los indicadores que te interesen — ninguno es obligatorio. Los que no cargás simplemente no aparecen en los widgets del dashboard.
+      </p>
 
       {/* ─── Grupo 1: Facturación ─── */}
       <GroupTitle>Facturación</GroupTitle>
-      <div className="field" style={{ marginBottom: 0 }}>
-        <FieldLabel
-          text="Facturación objetivo (mes)"
-          info="Cuánto querés facturar este mes en esta sucursal. Se compara contra lo facturado a la fecha en el widget 'Objetivo del mes' del dashboard."
-        />
-        <input
-          type="number"
-          inputMode="decimal"
-          value={facturacion}
-          onChange={e => setFacturacion(e.target.value)}
-          onBlur={() => handleBlur("fact")}
-        />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8, marginBottom: 18 }}>
+        {INDICADORES.facturacion.map(meta => (
+          <IndicadorCard
+            key={meta.key}
+            meta={meta}
+            valor={getValor(meta.key)}
+            onSave={(v) => saveIndicador(meta.key, v)}
+          />
+        ))}
       </div>
 
       {/* ─── Grupo 2: BEP ─── */}
-      <GroupTitle style={{ marginTop: 18 }}>Punto de equilibrio</GroupTitle>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
-        <div className="field" style={{ marginBottom: 0 }}>
-          <FieldLabel
-            text="Costos fijos (mes)"
-            info="Suma esperada de gastos fijos del mes: alquiler + sueldos fijos + servicios + cuotas + suscripciones."
+      <GroupTitle>Punto de equilibrio</GroupTitle>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 8, marginBottom: bep !== null ? 10 : 18 }}>
+        {INDICADORES.bep.map(meta => (
+          <IndicadorCard
+            key={meta.key}
+            meta={meta}
+            valor={getValor(meta.key)}
+            onSave={(v) => saveIndicador(meta.key, v)}
           />
-          <input
-            type="number"
-            inputMode="decimal"
-            value={fijos}
-            onChange={e => setFijos(e.target.value)}
-            onBlur={() => handleBlur("fijos")}
-          />
-        </div>
-        <div className="field" style={{ marginBottom: 0 }}>
-          <FieldLabel
-            text="Margen contribución %"
-            info="% que te queda de cada peso vendido después de restar el costo variable (CMV + comisiones + delivery). Si no lo cargás, el sistema usa 50% como valor por defecto."
-          />
-          <input
-            type="number"
-            inputMode="decimal"
-            value={margenC}
-            onChange={e => setMargenC(e.target.value)}
-            onBlur={() => handleBlur("margenC")}
-            min={0}
-            max={100}
-            step={0.5}
-          />
-        </div>
+        ))}
       </div>
       {bep !== null && (
-        <div style={{ marginTop: 10, padding: 10, background: "var(--pase-celeste-100)", borderRadius: 8, fontSize: "var(--pase-fs-sm)" }}>
-          <strong>BEP del mes:</strong>{" "}
-          <strong style={{ color: "var(--pase-celeste)", fontVariantNumeric: "tabular-nums" }}>
-            {formatCurrency(bep)}
-          </strong>
+        <div style={{ marginBottom: 18, padding: "10px 12px", background: "var(--pase-celeste-100)", borderRadius: 8, fontSize: "var(--pase-fs-sm)", borderLeft: "3px solid var(--pase-celeste)" }}>
+          <strong>BEP del mes calculado:</strong>{" "}
+          <strong style={{ color: "var(--pase-celeste)", fontVariantNumeric: "tabular-nums" }}>{formatCurrency(bep)}</strong>
           <span style={{ color: "var(--pase-text-muted)", marginLeft: 6 }}>
-            ({fijos || "0"} ÷ {margenC || "0"}%)
+            ({formatCurrency(fila.costos_fijos_mes ?? 0)} ÷ {fila.margen_contribucion_pct ?? 0}%)
           </span>
         </div>
       )}
 
-      {/* ─── Grupo 3: Eficiencia (cierre) ─── */}
-      <GroupTitle
-        style={{ marginTop: 18 }}
-        info="Estos % se calculan al cerrar el mes (en Reportes). A mitad de mes los números mienten porque las facturas vencidas y los desfasajes de pago distorsionan el costo real."
-      >
+      {/* ─── Grupo 3: Eficiencia ─── */}
+      <GroupTitle info="Estos % se calculan al cerrar el mes (en Reportes). A mitad de mes los números mienten porque las facturas vencidas y los desfasajes de pago distorsionan el costo real.">
         Eficiencia · cierre de mes
       </GroupTitle>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-        <div className="field" style={{ marginBottom: 0 }}>
-          <FieldLabel
-            text="CMV objetivo %"
-            info="Costo de mercadería sobre venta. Cuánto del precio de venta se va en insumos (carne, verdura, bebidas, etc.). Típico en gastronomía AR: 28-35%."
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 8, marginBottom: 18 }}>
+        {INDICADORES.eficiencia.map(meta => (
+          <IndicadorCard
+            key={meta.key}
+            meta={meta}
+            valor={getValor(meta.key)}
+            onSave={(v) => saveIndicador(meta.key, v)}
           />
-          <input
-            type="number"
-            inputMode="decimal"
-            value={cmv}
-            onChange={e => setCmv(e.target.value)}
-            onBlur={() => handleBlur("cmv")}
-            min={0}
-            max={100}
-            step={0.5}
-          />
-        </div>
-        <div className="field" style={{ marginBottom: 0 }}>
-          <FieldLabel
-            text="Costo MP objetivo %"
-            info="Comisiones de MercadoPago sobre venta total. Depende del plan MP que tengas (Punto Pro, QR, Link, etc.). Típico: 2-5%."
-          />
-          <input
-            type="number"
-            inputMode="decimal"
-            value={costoMp}
-            onChange={e => setCostoMp(e.target.value)}
-            onBlur={() => handleBlur("mp")}
-            min={0}
-            max={20}
-            step={0.1}
-          />
-        </div>
-        <div className="field" style={{ marginBottom: 0 }}>
-          <FieldLabel
-            text="Margen bruto objetivo %"
-            info="Lo que te queda después de descontar el CMV. Margen bruto = (venta − costo mercadería) ÷ venta × 100. Típico en gastronomía: 65-72%."
-          />
-          <input
-            type="number"
-            inputMode="decimal"
-            value={margenB}
-            onChange={e => setMargenB(e.target.value)}
-            onBlur={() => handleBlur("margenB")}
-            min={0}
-            max={100}
-            step={0.5}
-          />
-        </div>
+        ))}
       </div>
 
-      <div className="field" style={{ marginTop: 18, marginBottom: 0 }}>
-        <FieldLabel
-          text="Notas del mes (opcional)"
-          info="Contexto del mes que sirva para entender los números después. Ej: 'campaña navidad', 'mes con cierre 5 días por refacción', 'inflación alta'."
-        />
-        <input
-          type="text"
-          value={notas}
-          onChange={e => setNotas(e.target.value)}
-          onBlur={() => handleBlur("notas")}
-          maxLength={200}
-        />
+      {/* ─── Notas ─── */}
+      <GroupTitle>Notas del mes</GroupTitle>
+      {notasEditando ? (
+        <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+          <input
+            type="text"
+            value={notas}
+            onChange={e => setNotas(e.target.value)}
+            placeholder="ej. campaña navidad, mes con refacción 5 días..."
+            maxLength={200}
+            autoFocus
+            style={{ flex: 1, height: "var(--pase-h-md)", padding: "0 11px", border: "0.5px solid var(--pase-border-strong)", borderRadius: 8, background: "var(--pase-bg)", color: "var(--pase-text)", fontFamily: "var(--pase-font)", fontSize: "var(--pase-fs-base)" }}
+          />
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setNotas(fila.notas ?? ""); setNotasEditando(false); }}>Cancelar</button>
+          <button type="button" className="btn btn-acc btn-sm" onClick={saveNotas}>Guardar</button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setNotasEditando(true)}
+          style={{
+            width: "100%", textAlign: "left", padding: "10px 12px",
+            border: "0.5px dashed var(--pase-border-strong)", borderRadius: 8,
+            background: "transparent", cursor: "pointer", color: notas ? "var(--pase-text)" : "var(--pase-text-muted)",
+            fontSize: "var(--pase-fs-sm)", fontFamily: "var(--pase-font)",
+            fontStyle: notas ? "normal" : "italic",
+          }}
+        >
+          {notas || "+ Agregar nota del mes (opcional)"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── IndicadorCard ─────────────────────────────────────────────────────
+interface IndicadorCardProps {
+  meta: IndicadorMeta;
+  valor: number | null;
+  onSave: (v: number | null) => void;
+}
+
+function IndicadorCard({ meta, valor, onSave }: IndicadorCardProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(valor != null ? String(valor) : "");
+
+  useEffect(() => { setDraft(valor != null ? String(valor) : ""); }, [valor]);
+
+  function commit() {
+    const n = parseFloat(draft.replace(/[^0-9.-]/g, ""));
+    onSave(isNaN(n) ? null : n);
+    setEditing(false);
+  }
+
+  function cancel() {
+    setDraft(valor != null ? String(valor) : "");
+    setEditing(false);
+  }
+
+  function clear() {
+    onSave(null);
+    setDraft("");
+    setEditing(false);
+  }
+
+  const cargado = valor != null;
+  const formatted = !cargado ? null
+    : meta.format === "currency" ? formatCurrency(valor)
+    : `${valor}%`;
+
+  return (
+    <div style={{
+      border: `0.5px solid ${cargado ? "var(--pase-celeste-300)" : "var(--pase-border)"}`,
+      background: cargado ? "var(--pase-celeste-100)" : "var(--pase-bg)",
+      borderRadius: 10,
+      padding: "10px 12px",
+      transition: "all 0.15s",
+    }}>
+      {/* Header — título + tooltip */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+        <span style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-text-muted)", fontWeight: 500 }}>
+          {meta.title}
+        </span>
+        <InfoTooltip maxWidth={260} size={14}>{meta.info}</InfoTooltip>
       </div>
+
+      {editing ? (
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input
+            type="number"
+            inputMode="decimal"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            placeholder={meta.placeholder}
+            min={meta.min}
+            max={meta.max}
+            step={meta.step}
+            autoFocus
+            onKeyDown={e => { if (e.key === "Enter") commit(); else if (e.key === "Escape") cancel(); }}
+            style={{ flex: 1, height: "var(--pase-h-sm)", padding: "0 10px", border: "0.5px solid var(--pase-border-strong)", borderRadius: 6, background: "var(--pase-bg)", color: "var(--pase-text)", fontFamily: "var(--pase-font)", fontSize: "var(--pase-fs-base)" }}
+          />
+          <button type="button" className="btn btn-ghost btn-sm" onClick={cancel} title="Cancelar (Esc)">✕</button>
+          <button type="button" className="btn btn-acc btn-sm" onClick={commit} title="Guardar (Enter)">✓</button>
+        </div>
+      ) : cargado ? (
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+          <strong style={{ fontSize: "var(--pase-fs-lg)", color: "var(--pase-text)", fontVariantNumeric: "tabular-nums", letterSpacing: "var(--pase-ls-tight)" }}>
+            {formatted}
+          </strong>
+          <div style={{ display: "flex", gap: 4 }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(true)} style={{ fontSize: 10 }}>Editar</button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={clear} style={{ fontSize: 10 }} title="Borrar objetivo">✕</button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          style={{
+            width: "100%", padding: "6px 0", background: "transparent",
+            border: "none", cursor: "pointer", textAlign: "left",
+            color: "var(--pase-celeste)", fontSize: "var(--pase-fs-sm)",
+            fontFamily: "var(--pase-font)", fontWeight: 500,
+          }}
+        >
+          + Definir objetivo
+        </button>
+      )}
     </div>
   );
 }
@@ -496,11 +593,3 @@ function GroupTitle({ children, style, info }: { children: React.ReactNode; styl
   );
 }
 
-function FieldLabel({ text, info }: { text: string; info: React.ReactNode }) {
-  return (
-    <label style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-      {text}
-      <InfoTooltip maxWidth={280} size={14}>{info}</InfoTooltip>
-    </label>
-  );
-}

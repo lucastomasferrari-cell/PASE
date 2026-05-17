@@ -10,6 +10,7 @@ import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import { Combobox } from "../components/Combobox";
 import { PageHeader, TipoPill, EmptyState, LocalLockedChip, LocalSelectorObligatorio } from "../components/ui";
+import { exportCSV } from "../lib/exportCSV";
 import type { Usuario, Local } from "../types";
 import type { Gasto } from "../types/finanzas";
 
@@ -315,9 +316,30 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
           y retiros de socios. Cada gasto crea un movimiento en caja y descuenta del saldo.
         </>}
         actions={
-          <button className="btn btn-acc" onClick={() => { setForm(emptyForm); setModal(true); setIdempKeyCrearGasto(crypto.randomUUID()); }}>
-            + Cargar Gasto
-          </button>
+          <>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                const headers = ["Fecha", "Local", "Categoría", "Tipo", "Cuenta", "Detalle", "Monto", "Estado"];
+                const rows = gastos.map(g => [
+                  g.fecha?.slice(0, 10) || "",
+                  locales.find((l: Local) => l.id === g.local_id)?.nombre || "",
+                  g.categoria || "",
+                  g.tipo || "",
+                  (g as { cuenta?: string }).cuenta || "",
+                  g.detalle || "",
+                  Number(g.monto ?? 0),
+                  (g as { estado?: string; anulado_at?: string | null }).anulado_at ? "Anulado" : "OK",
+                ]);
+                exportCSV(`gastos_${debDesde}_${debHasta}.csv`, headers, rows);
+              }}
+              disabled={gastos.length === 0}
+              title="Exportar gastos visibles a CSV"
+            >⬇ Exportar</button>
+            <button className="btn btn-acc" onClick={() => { setForm(emptyForm); setModal(true); setIdempKeyCrearGasto(crypto.randomUUID()); }}>
+              + Cargar Gasto
+            </button>
+          </>
         }
       />
 
