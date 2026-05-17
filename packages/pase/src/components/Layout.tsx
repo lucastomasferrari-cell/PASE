@@ -87,8 +87,13 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
         </div>
         {localesDisp.length > 1 && (
           <div className="sb-local">
-            <select value={localActivo||""} onChange={e=>setLocalActivo(e.target.value?parseInt(e.target.value):null)}>
-              {user.rol==="dueno" && <option value="">Todas las sucursales</option>}
+            {/* Decisión Lucas 2026-05-17: eliminada la opción "Todas las
+                sucursales" del sidebar. El modo consolidado generaba bugs
+                de lógica (objetivos de 1 local cruzados con ventas de N).
+                Las comparativas viven dentro de pantallas específicas
+                (ej: card "Ranking sucursales" en /negocio). El sidebar
+                siempre tiene UNA sucursal activa. */}
+            <select value={localActivo??""} onChange={e=>setLocalActivo(parseInt(e.target.value))}>
               {localesDisp.map((l: { id: number; nombre: string })=><option key={l.id} value={l.id}>{l.nombre}</option>)}
             </select>
           </div>

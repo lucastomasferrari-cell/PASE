@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { db } from "../lib/supabase";
 import { PageHeader } from "../components/ui";
-import { LocalContextPicker } from "../components/ui/LocalContextPicker";
 import { formatCurrency, formatCurrencyCompact } from "../lib/format";
 import { VentasSemanaWidget } from "../dashboards/widgets/VentasSemanaWidget";
 import { ComparativaSucursalesWidget } from "../dashboards/widgets/ComparativaSucursalesWidget";
@@ -35,19 +34,11 @@ interface LocalRef { id: number; nombre: string }
 interface Props {
   user?: { id: number; nombre: string; rol: string; tenant_id?: string | null };
   locales?: LocalRef[];
+  /** Sucursal activa del sidebar — fuente única de verdad (2026-05-17). */
+  localActivo?: number | null;
 }
 
-export default function Finanzas({ user, locales = [] }: Props) {
-  const [ctxLocal, setCtxLocal] = useState<"consolidado" | string>("consolidado");
-
-  const switchOptions = useMemo(() => {
-    const base = [{ id: "consolidado", label: "Consolidado" }];
-    for (const l of locales) base.push({ id: String(l.id), label: l.nombre });
-    return base;
-  }, [locales]);
-
-  const localActivo = ctxLocal === "consolidado" ? null : Number(ctxLocal);
-
+export default function Finanzas({ user, locales = [], localActivo = null }: Props) {
   const ctx: WidgetContext = useMemo(() => ({
     usuario: {
       id: user?.id ?? 0,
@@ -59,20 +50,13 @@ export default function Finanzas({ user, locales = [] }: Props) {
     localActivo,
   }), [user, locales, localActivo]);
 
+  const nombreActivo = locales.find(l => l.id === localActivo)?.nombre;
+
   return (
     <div style={{ padding: "0 20px" }}>
       <PageHeader
         title="Análisis"
-        subtitle="tendencia + comparativas en tiempo real"
-        actions={
-          locales.length > 1 ? (
-            <LocalContextPicker
-              options={switchOptions}
-              value={String(ctxLocal)}
-              onChange={(id) => setCtxLocal(id)}
-            />
-          ) : null
-        }
+        subtitle={nombreActivo ? `tendencia + comparativas · ${nombreActivo}` : "tendencia + comparativas en tiempo real"}
       />
 
       <div className="fin-grid">

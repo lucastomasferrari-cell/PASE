@@ -93,7 +93,24 @@ function AppMain() {
 
   const refetchLocales = async () => {
     const { data } = await db.from("locales").select("*").order("id");
-    setLocales(data || []);
+    const nuevos = data || [];
+    setLocales(nuevos);
+    // Decisión Lucas 2026-05-17: ya no existe modo "Todas las sucursales".
+    // El sidebar siempre tiene UNA activa. Si localActivo es null acá, lo
+    // default-eamos al primer local visible para el user. Sin esto algunas
+    // pantallas se renderizarían en modo consolidado que ya no es válido.
+    if (localActivo == null && nuevos.length > 0 && user) {
+      const visibles = (user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin")
+        ? nuevos
+        : nuevos.filter(l => (user._locales || user.locales || []).includes(l.id));
+      if (visibles.length > 0) {
+        // Intentar restaurar el último seleccionado en sessionStorage.
+        const stored = sessionStorage.getItem("pase_local_activo");
+        const storedId = stored ? parseInt(stored) : NaN;
+        const pre = !isNaN(storedId) && visibles.some(l => l.id === storedId) ? storedId : visibles[0]!.id;
+        setLocalActivo(pre);
+      }
+    }
   };
 
   useEffect(()=>{
@@ -303,8 +320,8 @@ function AppMain() {
               <Route path="/ventas" element={<Ventas {...props}/>} />
 
               {/* Dirección */}
-              <Route path="/negocio" element={<Negocio user={user || undefined} locales={locales}/>} />
-              <Route path="/finanzas" element={<Finanzas user={user || undefined} locales={locales}/>} />
+              <Route path="/negocio" element={<Negocio user={user || undefined} locales={locales} localActivo={localActivo}/>} />
+              <Route path="/finanzas" element={<Finanzas user={user || undefined} locales={locales} localActivo={localActivo}/>} />
               <Route path="/objetivos" element={
                 user?.tenant_id ? <Objetivos locales={locales} tenantId={user.tenant_id} localActivo={localActivo}/> : <Navigate to="/" replace/>
               } />

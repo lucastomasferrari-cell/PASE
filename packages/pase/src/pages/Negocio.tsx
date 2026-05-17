@@ -1,6 +1,5 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { PageHeader } from "../components/ui";
-import { LocalContextPicker } from "../components/ui/LocalContextPicker";
 import { PuntoEquilibrioWidget } from "../dashboards/widgets/PuntoEquilibrioWidget";
 import { ObjetivosMesWidget } from "../dashboards/widgets/ObjetivosMesWidget";
 import { VentasSemanaWidget } from "../dashboards/widgets/VentasSemanaWidget";
@@ -31,19 +30,14 @@ interface LocalRef { id: number; nombre: string }
 interface Props {
   user?: { id: number; nombre: string; rol: string; tenant_id?: string | null };
   locales?: LocalRef[];
+  /** Sucursal activa del sidebar — fuente única de verdad (2026-05-17).
+   * Modo "Todas las sucursales" fue eliminado. */
+  localActivo?: number | null;
 }
 
-export default function Negocio({ user, locales = [] }: Props) {
-  const [ctxLocal, setCtxLocal] = useState<"consolidado" | string>("consolidado");
-
-  const switchOptions = useMemo(() => {
-    const base = [{ id: "consolidado", label: "Consolidado" }];
-    for (const l of locales) base.push({ id: String(l.id), label: l.nombre });
-    return base;
-  }, [locales]);
-
+export default function Negocio({ user, locales = [], localActivo = null }: Props) {
   // Construyo el ctx que esperan los widgets reutilizando los componentes
-  // del dashboard. localActivo viene del picker propio de esta pantalla.
+  // del dashboard. localActivo viene directo del sidebar (App.tsx).
   const ctx: WidgetContext = useMemo(() => ({
     usuario: {
       id: user?.id ?? 0,
@@ -52,23 +46,16 @@ export default function Negocio({ user, locales = [] }: Props) {
       tenant_id: user?.tenant_id ?? null,
     },
     locales,
-    localActivo: ctxLocal === "consolidado" ? null : Number(ctxLocal),
-  }), [user, locales, ctxLocal]);
+    localActivo,
+  }), [user, locales, localActivo]);
+
+  const nombreActivo = locales.find(l => l.id === localActivo)?.nombre;
 
   return (
     <div style={{ padding: "0 20px" }}>
       <PageHeader
         title="Negocio"
-        subtitle="vista ejecutiva en tiempo real"
-        actions={
-          locales.length > 1 ? (
-            <LocalContextPicker
-              options={switchOptions}
-              value={String(ctxLocal)}
-              onChange={(id) => setCtxLocal(id)}
-            />
-          ) : null
-        }
+        subtitle={nombreActivo ? `vista ejecutiva · ${nombreActivo}` : "vista ejecutiva en tiempo real"}
       />
 
       {/* Aclaración educativa — explicar que NO es el EERR */}
