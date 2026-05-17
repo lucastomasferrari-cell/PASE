@@ -7,6 +7,10 @@ import type { WidgetContext } from "../types";
 
 interface BepData {
   costos_fijos_mes: number;
+  /** Sueldos liquidados/pagados el mes anterior — referencia confiable de labor cost. */
+  labor_cost_mes_anterior: number;
+  /** Suma efectiva: costos_fijos_mes + labor_cost_mes_anterior. */
+  total_fijos: number;
   margen_pct: number;
   facturacion_actual: number;
   bep: number;
@@ -14,14 +18,19 @@ interface BepData {
   diasDelMes: number;
 }
 
-// Punto de Equilibrio del mes: cuánto hay que facturar para cubrir costos fijos
+// Punto de Equilibrio del mes: cuánto hay que facturar para cubrir TODO
+// el costo fijo del mes (fijos cargados + labor cost real del mes anterior)
 // dado el margen de contribución esperado. Compara con facturación a la fecha.
 //
-// Decisión Lucas 2026-05-17: a mitad de mes los EERR mienten (gastos fijos
-// caen los primeros 15 días). El BEP es métrica honesta para cualquier momento
-// del mes — no se distorsiona por la concentración temporal de pagos.
+// Decisión Lucas 2026-05-17: el cálculo de BEP usa
+//   BEP = (costos_fijos_cargados + labor_cost_mes_anterior) / margen %
+// porque los sueldos son un fijo concreto que se conoce con precisión del
+// mes anterior — no hace falta esperar a fin de mes. Sumarlos al campo
+// libre "costos fijos" (que típicamente solo tiene alquiler + servicios)
+// da un BEP más realista.
 //
-// Fórmula: BEP = costos_fijos / margen_contribucion_pct
+// A mitad de mes los EERR mienten (fijos caen los primeros 15 días). El BEP
+// es métrica honesta para cualquier momento del mes.
 export function PuntoEquilibrioWidget({ ctx }: { ctx: WidgetContext }) {
   const [data, setData] = useState<BepData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,7 +84,39 @@ export function PuntoEquilibrioWidget({ ctx }: { ctx: WidgetContext }) {
         return;
       }
 
-      // 2. Facturación a la fecha — SOLO de los locales que tienen BEP cargado
+      // 2. Labor cost del MES ANTERIOR (sueldos liquidados+pagados). Es la
+      //    referencia más confiable del costo de personal del mes en curso
+      //    porque los sueldos varían poco mes a mes. Decisión Lucas 2026-05-17.
+      const primerDiaMesAnt = new Date(year, month - 1, 1).toISOString().slice(0, 10);
+      const ultimoDiaMesAnt = new Date(year, month, 0).toISOString().slice(0, 10);
+      let qLabor = db
+        .from("rrhh_liquidaciones")
+        .select("total_liquidacion, rrhh_novedades!inner(rrhh_empleados!inner(local_id))")
+        .eq("estado", "pagado")
+        .eq("anulado", false)
+        .gte("calculado_at", primerDiaMesAnt + "T00:00:00")
+        .lte("calculado_at", ultimoDiaMesAnt + "T23:59:59");
+      const { data: laborRows, error: laborErr } = await qLabor;
+      if (cancelled) return;
+      let labor_cost_mes_anterior = 0;
+      if (!laborErr && laborRows) {
+        for (const row of laborRows) {
+          const r = row as unknown as {
+            total_liquidacion: number;
+            rrhh_novedades: { rrhh_empleados: { local_id: number } } | null;
+          };
+          const localId = r.rrhh_novedades?.rrhh_empleados?.local_id;
+          // Filtramos por mismo scope que el BEP: si hay localActivo, ese.
+          // Si no, los locales que tienen BEP cargado.
+          if (ctx.localActivo !== null && localId !== ctx.localActivo) continue;
+          if (ctx.localActivo === null && localId != null && !localesConBep.includes(localId)) continue;
+          labor_cost_mes_anterior += Number(r.total_liquidacion ?? 0);
+        }
+      }
+
+      const total_fijos = costos_fijos_mes + labor_cost_mes_anterior;
+
+      // 3. Facturación a la fecha — SOLO de los locales que tienen BEP cargado
       //    (cuando estamos en modo consolidado).
       let qVen = db
         .from("ventas")
@@ -94,10 +135,12 @@ export function PuntoEquilibrioWidget({ ctx }: { ctx: WidgetContext }) {
         0,
       );
 
-      const bep = costos_fijos_mes / (margen_pct / 100);
+      const bep = total_fijos / (margen_pct / 100);
 
       setData({
         costos_fijos_mes,
+        labor_cost_mes_anterior,
+        total_fijos,
         margen_pct,
         facturacion_actual,
         bep,
@@ -164,6 +207,14 @@ export function PuntoEquilibrioWidget({ ctx }: { ctx: WidgetContext }) {
           transition: "width 0.3s ease",
           borderRadius: 4,
         }} />
+      </div>
+
+      {/* Desglose del cálculo — para que se entienda de dónde sale el BEP. */}
+      <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", marginTop: 8, lineHeight: 1.5 }}>
+        Fijos cargados: <span style={{ color: "var(--pase-text)", fontVariantNumeric: "tabular-nums" }}>{formatCurrency(data.costos_fijos_mes)}</span>
+        {data.labor_cost_mes_anterior > 0 && (
+          <> · Labor cost (mes ant.): <span style={{ color: "var(--pase-text)", fontVariantNumeric: "tabular-nums" }}>{formatCurrency(data.labor_cost_mes_anterior)}</span></>
+        )}
       </div>
 
       {enZonaGanancia ? (

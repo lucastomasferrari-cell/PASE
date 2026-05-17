@@ -23,25 +23,28 @@ export function FacturasVencidasWidget({ ctx }: { ctx: WidgetContext }) {
     async function reload() {
       setLoading(true);
       const nowIso = new Date().toISOString().slice(0, 10);
+      // Schema real: columna se llama `venc` (no `vencimiento`) y el estado
+      // de pago es `estado` IN ('pendiente','pagada','anulada') — no hay
+      // boolean `pagada`. Fix 2026-05-17.
       let q = db
         .from("facturas")
-        .select("id, total, vencimiento, proveedores(razon_social)")
-        .eq("pagada", false)
-        .lt("vencimiento", nowIso)
-        .order("vencimiento", { ascending: true })
+        .select("id, total, venc, proveedores(razon_social)")
+        .eq("estado", "pendiente")
+        .lt("venc", nowIso)
+        .order("venc", { ascending: true })
         .limit(10);
       if (ctx.localActivo !== null) q = q.eq("local_id", ctx.localActivo);
       const { data, error } = await q;
       if (cancelled || error) { setLoading(false); return; }
       const today = Date.now();
       const mapped: FacturaVencida[] = (data ?? []).map(row => {
-        const r = row as unknown as { id: number; total: number; vencimiento: string; proveedores: { razon_social: string } | null };
-        const venc = new Date(r.vencimiento).getTime();
+        const r = row as unknown as { id: number; total: number; venc: string; proveedores: { razon_social: string } | null };
+        const venc = new Date(r.venc).getTime();
         return {
           id: r.id,
           proveedor_nombre: r.proveedores?.razon_social ?? null,
           total: Number(r.total ?? 0),
-          vencimiento: r.vencimiento,
+          vencimiento: r.venc,
           diasVencida: Math.floor((today - venc) / (1000 * 60 * 60 * 24)),
         };
       });

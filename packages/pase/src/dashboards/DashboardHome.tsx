@@ -99,12 +99,9 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
       <PageHeader
         title={`Hola, ${usuario.nombre}`}
         subtitle={greetingByHour()}
-        actions={
-          puedeConfigurar ? (
-            <Link to="/ajustes/dashboards" className="btn btn-sec btn-sm">
-              ⚙ Configurar dashboards
-            </Link>
-          ) : undefined
+        info={puedeConfigurar
+          ? <>Si querés cambiar qué widgets ve cada usuario, andá a <strong>Herramientas → Configurar dashboards</strong>.</>
+          : undefined
         }
       />
 
