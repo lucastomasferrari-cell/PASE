@@ -29,6 +29,7 @@ const Negocio = lazy(() => import("./pages/Negocio"));
 const Objetivos = lazy(() => import("./pages/Objetivos"));
 const Ajustes = lazy(() => import("./pages/Ajustes"));
 const Importar = lazy(() => import("./pages/Importar"));
+const LectorExtractoMP = lazy(() => import("./pages/LectorExtractoMP"));
 const DashboardHome = lazy(() => import("./dashboards/DashboardHome").then(m => ({ default: m.DashboardHome })));
 const SettingsDashboards = lazy(() => import("./dashboards/SettingsDashboards"));
 
@@ -318,6 +319,12 @@ function AppMain() {
                 path="/herramientas/importar"
                 element={
                   user ? <Importar {...props}/> : <Navigate to="/inicio" replace />
+                }
+              />
+              <Route
+                path="/herramientas/lector-mp"
+                element={
+                  user ? <LectorExtractoMP {...props}/> : <Navigate to="/inicio" replace />
                 }
               />
 

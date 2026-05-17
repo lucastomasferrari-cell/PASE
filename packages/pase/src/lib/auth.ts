@@ -125,6 +125,13 @@ export function tienePermiso(user: MaybeUser, slug: string): boolean {
   if (slug === "importar") {
     return user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin";
   }
+  // 'lector_mp' (lector IA del extracto mensual de MercadoPago) — quien
+  // tenga acceso al módulo 'mp' (Conciliación MP) puede usarlo. Si no, queda
+  // restringido a dueño/admin/superadmin que ven todo.
+  if (slug === "lector_mp") {
+    if (user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin") return true;
+    return getPermisos(user).includes("mp");
+  }
   if (user.rol === "superadmin" || user.rol === "dueno") return true;
   return getPermisos(user).includes(slug);
 }
