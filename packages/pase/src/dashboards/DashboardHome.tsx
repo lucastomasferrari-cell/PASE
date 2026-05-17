@@ -2,19 +2,26 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../components/ui";
 import { getDashboardConfig } from "./service";
-import { findWidget, widgetsParaRol } from "./widgets/registry";
+import { findWidget, widgetsParaPermisos } from "./widgets/registry";
 import { DEFAULT_WIDGETS_POR_ROL, type RolPase, type WidgetContext } from "./types";
 import type { WidgetDefinition } from "./types";
 
 /**
- * DashboardHome — pantalla de inicio personalizada por usuario/rol.
+ * DashboardHome — pantalla de inicio personalizada por usuario.
  *
  * Flujo:
  *   1. Carga la config del usuario desde DB (widgets_activos en orden).
- *   2. Si no tiene config → usa DEFAULT_WIDGETS_POR_ROL[rol] como fallback.
- *   3. Renderiza cada widget con su tamaño (sm/md/lg/full).
+ *   2. Si no tiene config → usa DEFAULT_WIDGETS_POR_ROL[rol] como fallback inicial.
+ *   3. Filtra los widgets por **permisos efectivos** del usuario (no por rol).
+ *   4. Renderiza cada widget con su tamaño (sm/md/lg/full).
  *
- * Solo dueño/admin ven el botón "Configurar dashboard" → va a Settings.
+ * Solo dueño/admin/superadmin ven el botón "Configurar dashboards" → Settings.
+ *
+ * Por qué permisos y no rol (decisión 2026-05-17): la matriz de permisos
+ * reemplazó la diferenciación por rol nominal. Casi todos los usuarios tienen
+ * rol "encargado" en la tabla, pero pueden tener permisos muy distintos
+ * (algunos solo caja, otros compras+caja, etc.). Filtrar por rol dejaba a
+ * la mayoría sin widgets disponibles.
  */
 
 interface Props {
@@ -24,6 +31,7 @@ interface Props {
     rol: RolPase;
     tenant_id: string | null;
   };
+  permisos: string[];
   locales: Array<{ id: number; nombre: string }>;
   localActivo: number | null;
 }
@@ -37,7 +45,7 @@ const SIZE_TO_SPAN: Record<string, number> = {
   full: 12,
 };
 
-export function DashboardHome({ usuario, locales, localActivo }: Props) {
+export function DashboardHome({ usuario, permisos, locales, localActivo }: Props) {
   const [widgetIds, setWidgetIds] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -60,10 +68,14 @@ export function DashboardHome({ usuario, locales, localActivo }: Props) {
 
   const widgets: WidgetDefinition[] = useMemo(() => {
     if (!widgetIds) return [];
+    // Filtramos los widgets activos del usuario por permisos efectivos.
+    // Si un widget activo ya no aplica (cambió permisos), simplemente no
+    // se renderiza — sin romper.
+    const visibles = new Set(widgetsParaPermisos(permisos).map(w => w.id));
     return widgetIds
       .map(findWidget)
-      .filter((w): w is WidgetDefinition => Boolean(w) && w!.rolesPermitidos.includes(usuario.rol));
-  }, [widgetIds, usuario.rol]);
+      .filter((w): w is WidgetDefinition => Boolean(w) && visibles.has(w!.id));
+  }, [widgetIds, permisos]);
 
   const ctx: WidgetContext = useMemo(() => ({
     usuario, locales, localActivo,
@@ -80,7 +92,7 @@ export function DashboardHome({ usuario, locales, localActivo }: Props) {
     );
   }
 
-  const availableCount = widgetsParaRol(usuario.rol).length;
+  const availableCount = widgetsParaPermisos(permisos).length;
 
   return (
     <div style={{ padding: "0 20px" }}>
@@ -103,7 +115,7 @@ export function DashboardHome({ usuario, locales, localActivo }: Props) {
           </p>
           {availableCount > 0 && puedeConfigurar && (
             <p style={{ color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-sm)", marginTop: 8 }}>
-              Hay {availableCount} widget(s) disponibles para tu rol.{" "}
+              Hay {availableCount} widget(s) disponibles para tus permisos.{" "}
               <Link to="/ajustes/dashboards" style={{ color: "var(--pase-celeste)" }}>
                 Configurar →
               </Link>

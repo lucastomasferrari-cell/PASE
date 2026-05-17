@@ -40,8 +40,17 @@ export interface WidgetDefinition {
   title: string;
   /** Descripción corta para la UI de Settings ("Saldo de caja efectivo + cuentas") */
   description: string;
-  /** Roles que pueden tener este widget en su dashboard */
-  rolesPermitidos: RolPase[];
+  /**
+   * Slugs de permiso requeridos (any-of) para ver el widget. Si vacío `[]`,
+   * el widget es cross-rol (lo puede ver cualquier usuario autenticado, p.ej.
+   * "Tareas y mensajes"). El filtrado real se hace contra `getPermisos(user)`
+   * — un dueño/admin/superadmin ve TODOS los widgets sin importar este array.
+   *
+   * Reemplaza al deprecated `rolesPermitidos`: en 2026-05 todos los usuarios
+   * tienen rol nominal "encargado" en la tabla y la diferenciación es por
+   * matriz de permisos. Filtrar por rol dejaba a casi todos sin ver nada.
+   */
+  permisosRequeridos: string[];
   /** Tamaño visual */
   size: WidgetSize;
   /** Componente React que renderiza el widget. Recibe el contexto. */
@@ -61,35 +70,39 @@ export interface DashboardConfig {
 }
 
 // Defaults por rol — usados cuando el usuario no tiene config en DB todavía.
+// Como ahora los permisos vienen de la matriz (no del rol), estos defaults
+// son una sugerencia inicial. El dueño puede customizar widget por widget.
 export const DEFAULT_WIDGETS_POR_ROL: Record<RolPase, string[]> = {
-  superadmin: ["alertas_sistema", "tareas_pineadas"],
+  superadmin: ["tareas_pineadas", "ventas_semana", "objetivos_mes"],
   dueno: [
-    "alertas_prioritarias",
     "tareas_pineadas",
+    "ventas_semana",
+    "objetivos_mes",
+    "punto_equilibrio",
+    "comparativa_sucursales",
+    "facturas_por_vencer",
     "facturas_vencidas",
-    "logbook_resumen",
   ],
   admin: [
-    "alertas_prioritarias",
     "tareas_pineadas",
+    "ventas_semana",
+    "objetivos_mes",
+    "punto_equilibrio",
     "facturas_vencidas",
-    "logbook_resumen",
   ],
   encargado: [
-    "ventas_hoy",
-    "mesas_activas",
     "tareas_pineadas",
-    "logbook_resumen",
+    "ventas_hoy",
+    "saldo_caja",
   ],
   compras: [
+    "tareas_pineadas",
     "facturas_vencidas",
     "facturas_por_vencer",
-    "top_proveedores_mes",
-    "tareas_pineadas",
   ],
   cajero: [
+    "tareas_pineadas",
     "saldo_caja",
     "ventas_hoy",
-    "tareas_pineadas",
   ],
 };

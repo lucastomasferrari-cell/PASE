@@ -1,0 +1,125 @@
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { db } from "../../lib/supabase";
+import { formatCurrency } from "../../lib/format";
+import { EmptyState } from "../../components/ui";
+import type { WidgetContext } from "../types";
+
+interface FacturaProx {
+  id: number;
+  proveedor_nombre: string | null;
+  total: number;
+  vencimiento: string;
+  diasRestantes: number;
+}
+
+// Facturas no pagadas con vencimiento dentro de los próximos 7 días.
+// Avisa al área de Compras qué se viene encima — ventana corta de planificación.
+export function FacturasPorVencerWidget({ ctx }: { ctx: WidgetContext }) {
+  const [facturas, setFacturas] = useState<FacturaProx[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function reload() {
+      setLoading(true);
+      const today = new Date();
+      const todayIso = today.toISOString().slice(0, 10);
+      const in7 = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      let q = db
+        .from("facturas")
+        .select("id, total, vencimiento, proveedores(razon_social)")
+        .eq("pagada", false)
+        .gte("vencimiento", todayIso)
+        .lte("vencimiento", in7)
+        .order("vencimiento", { ascending: true })
+        .limit(15);
+      if (ctx.localActivo !== null) q = q.eq("local_id", ctx.localActivo);
+      const { data, error } = await q;
+      if (cancelled || error) { setLoading(false); return; }
+      const nowMs = today.getTime();
+      const mapped: FacturaProx[] = (data ?? []).map(row => {
+        const r = row as unknown as { id: number; total: number; vencimiento: string; proveedores: { razon_social: string } | null };
+        const venc = new Date(r.vencimiento).getTime();
+        return {
+          id: r.id,
+          proveedor_nombre: r.proveedores?.razon_social ?? null,
+          total: Number(r.total ?? 0),
+          vencimiento: r.vencimiento,
+          diasRestantes: Math.max(0, Math.ceil((venc - nowMs) / (1000 * 60 * 60 * 24))),
+        };
+      });
+      setFacturas(mapped);
+      setLoading(false);
+    }
+    void reload();
+    return () => { cancelled = true; };
+  }, [ctx.localActivo]);
+
+  if (loading) {
+    return <div style={{ padding: "16px 0", textAlign: "center", color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-sm)" }}>Cargando…</div>;
+  }
+
+  if (facturas.length === 0) {
+    return (
+      <EmptyState
+        icon="📅"
+        title="Nada vence en los próximos 7 días"
+        description="Tranquilo, sin pagos urgentes a la vista."
+        size="compact"
+      />
+    );
+  }
+
+  const total = facturas.reduce((s, f) => s + f.total, 0);
+
+  return (
+    <div>
+      <div style={{
+        display: "flex",
+        alignItems: "baseline",
+        justifyContent: "space-between",
+        paddingBottom: 8,
+        borderBottom: "0.5px solid var(--pase-border)",
+        marginBottom: 8,
+      }}>
+        <span style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-text-muted)" }}>
+          {facturas.length} {facturas.length === 1 ? "factura" : "facturas"} en 7 días
+        </span>
+        <strong style={{ fontSize: "var(--pase-fs-lg)", fontVariantNumeric: "tabular-nums", color: "var(--pase-text)" }}>
+          {formatCurrency(total)}
+        </strong>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 224, overflowY: "auto" }}>
+        {facturas.map(f => (
+          <Link
+            key={f.id}
+            to={`/compras/facturas?id=${f.id}`}
+            style={{
+              display: "block",
+              padding: 8,
+              borderRadius: 6,
+              textDecoration: "none",
+              color: "var(--pase-text)",
+              fontSize: "var(--pase-fs-base)",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--pase-bg-soft)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+          >
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+              <span style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {f.proveedor_nombre ?? "(sin proveedor)"}
+              </span>
+              <strong style={{ fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
+                {formatCurrency(f.total)}
+              </strong>
+            </div>
+            <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)" }}>
+              {f.diasRestantes === 0 ? "Vence hoy" : f.diasRestantes === 1 ? "Vence mañana" : `En ${f.diasRestantes} días`}
+            </div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}

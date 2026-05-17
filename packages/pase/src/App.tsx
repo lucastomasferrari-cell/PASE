@@ -1,7 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { db } from "./lib/supabase";
-import { AuthProvider, necesitaElegirLocal } from "./lib/auth";
+import { AuthProvider, necesitaElegirLocal, getPermisos } from "./lib/auth";
 import { getDefaultRoute, LEGACY_REDIRECTS } from "./lib/sidebar-nav";
 import type { Usuario, UsuarioRow, Local, Tenant } from "./types";
 import { Sidebar, css } from "./components/Layout";
@@ -283,6 +283,7 @@ function AppMain() {
                         rol: (user.rol as "dueno" | "admin" | "encargado" | "compras" | "cajero" | "superadmin"),
                         tenant_id: user.tenant_id ?? null,
                       }}
+                      permisos={getPermisos(user)}
                       locales={locales}
                       localActivo={localActivo}
                     />

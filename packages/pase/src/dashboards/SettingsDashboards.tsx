@@ -2,20 +2,25 @@ import { useEffect, useState } from "react";
 import { db } from "../lib/supabase";
 import { PageHeader } from "../components/ui";
 import { getDashboardConfig, saveDashboardConfig } from "./service";
-import { WIDGETS, widgetsParaRol } from "./widgets/registry";
+import { WIDGETS, widgetsParaPermisos } from "./widgets/registry";
 import { DEFAULT_WIDGETS_POR_ROL, type RolPase } from "./types";
+import { ROLES } from "../lib/auth";
 
 interface UsuarioLite {
   id: number;
   nombre: string;
   rol: RolPase;
+  /** Permisos efectivos (matriz). Para dueño/admin/superadmin = todos los slugs. */
+  permisos: string[];
 }
 
 /**
  * Settings → Dashboards
  *
  * UI para que el dueño/admin configure qué widgets ve cada usuario en su
- * dashboard. Solo lista los widgets que aplican al rol del usuario.
+ * dashboard. Solo lista los widgets que aplican a los **permisos** del
+ * usuario (no a su rol nominal). Decisión 2026-05-17: la matriz de permisos
+ * reemplazó al rol como source-of-truth.
  *
  * Para Sesión 1: checkboxes simples (activar/desactivar). El orden es por
  * orden de activación. Drag-drop visual queda para Sesión 2.
@@ -31,13 +36,36 @@ export default function SettingsDashboards({ tenantId }: { tenantId: string }) {
     let cancelled = false;
     async function load() {
       setLoading(true);
-      const { data, error } = await db
-        .from("usuarios")
-        .select("id, nombre, rol, activo")
-        .eq("activo", true)
-        .order("nombre");
-      if (cancelled || error) { setLoading(false); return; }
-      const list = (data ?? []) as UsuarioLite[];
+      const [{ data: usrData, error: usrErr }, { data: permData }] = await Promise.all([
+        db
+          .from("usuarios")
+          .select("id, nombre, rol, activo")
+          .eq("activo", true)
+          .order("nombre"),
+        db
+          .from("usuario_permisos")
+          .select("usuario_id, modulo_slug"),
+      ]);
+      if (cancelled) return;
+      if (usrErr) { setLoading(false); return; }
+      const permsByUser = new Map<number, string[]>();
+      for (const r of permData ?? []) {
+        const row = r as { usuario_id: number; modulo_slug: string };
+        const arr = permsByUser.get(row.usuario_id) ?? [];
+        arr.push(row.modulo_slug);
+        permsByUser.set(row.usuario_id, arr);
+      }
+      const list: UsuarioLite[] = (usrData ?? []).map(u => {
+        const row = u as { id: number; nombre: string; rol: RolPase };
+        const rolPerms = ROLES[row.rol]?.permisos ?? [];
+        const matrizPerms = permsByUser.get(row.id) ?? [];
+        // Permisos efectivos: dueño/admin/superadmin ven todo; resto = unión rol + matriz.
+        const esTotal = row.rol === "dueno" || row.rol === "admin" || row.rol === "superadmin";
+        const permisos = esTotal
+          ? WIDGETS.flatMap(w => w.permisosRequeridos)
+          : Array.from(new Set([...rolPerms, ...matrizPerms]));
+        return { id: row.id, nombre: row.nombre, rol: row.rol, permisos };
+      });
       setUsuarios(list);
       if (list.length > 0 && !usuarioSel) setUsuarioSel(list[0]!);
       setLoading(false);
@@ -95,7 +123,7 @@ export default function SettingsDashboards({ tenantId }: { tenantId: string }) {
     return <div style={{ padding: "0 20px" }}>Cargando…</div>;
   }
 
-  const widgetsDisponibles = usuarioSel ? widgetsParaRol(usuarioSel.rol) : [];
+  const widgetsDisponibles = usuarioSel ? widgetsParaPermisos(usuarioSel.permisos) : [];
   const widgetsNoAplican = WIDGETS.length - widgetsDisponibles.length;
 
   return (
@@ -144,7 +172,7 @@ export default function SettingsDashboards({ tenantId }: { tenantId: string }) {
                   fontSize: "var(--pase-fs-xs)",
                   color: active ? "rgba(255,255,255,0.8)" : "var(--pase-text-muted)",
                 }}>
-                  {u.rol}
+                  {u.permisos.length === 0 ? "sin permisos" : `${u.permisos.length} permiso${u.permisos.length === 1 ? "" : "s"}`}
                 </div>
               </button>
             );
@@ -186,66 +214,73 @@ export default function SettingsDashboards({ tenantId }: { tenantId: string }) {
                   onClick={resetearDefault}
                   disabled={saving}
                 >
-                  Resetear al default del rol
+                  Resetear al default
                 </button>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {widgetsDisponibles.map(w => {
-                  const active = widgetsActivos.includes(w.id);
-                  return (
-                    <label
-                      key={w.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: 12,
-                        padding: 12,
-                        borderRadius: 8,
-                        border: `0.5px solid ${active ? "var(--pase-celeste)" : "var(--pase-border)"}`,
-                        background: active ? "var(--pase-celeste-100)" : "transparent",
-                        cursor: "pointer",
-                        transition: "all 0.12s",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={active}
-                        onChange={() => toggleWidget(w.id)}
+              {widgetsDisponibles.length === 0 ? (
+                <div style={{ padding: 32, textAlign: "center", color: "var(--pase-text-muted)", border: "0.5px dashed var(--pase-border)", borderRadius: 8, fontSize: "var(--pase-fs-sm)" }}>
+                  Este usuario no tiene permisos que habiliten widgets.<br />
+                  Asignale al menos un permiso desde Usuarios.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {widgetsDisponibles.map(w => {
+                    const active = widgetsActivos.includes(w.id);
+                    return (
+                      <label
+                        key={w.id}
                         style={{
-                          marginTop: 2,
-                          width: 16,
-                          height: 16,
-                          accentColor: "var(--pase-celeste)",
-                          flexShrink: 0,
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 12,
+                          padding: 12,
+                          borderRadius: 8,
+                          border: `0.5px solid ${active ? "var(--pase-celeste)" : "var(--pase-border)"}`,
+                          background: active ? "var(--pase-celeste-100)" : "transparent",
+                          cursor: "pointer",
+                          transition: "all 0.12s",
                         }}
-                      />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 500, color: "var(--pase-text)", fontSize: "var(--pase-fs-base)" }}>
-                          {w.title}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={active}
+                          onChange={() => toggleWidget(w.id)}
+                          style={{
+                            marginTop: 2,
+                            width: 16,
+                            height: 16,
+                            accentColor: "var(--pase-celeste)",
+                            flexShrink: 0,
+                          }}
+                        />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 500, color: "var(--pase-text)", fontSize: "var(--pase-fs-base)" }}>
+                            {w.title}
+                          </div>
+                          <div style={{
+                            color: "var(--pase-text-muted)",
+                            marginTop: 2,
+                            fontSize: "var(--pase-fs-sm)",
+                          }}>
+                            {w.description}
+                          </div>
                         </div>
-                        <div style={{
+                        <span style={{
                           color: "var(--pase-text-muted)",
-                          marginTop: 2,
-                          fontSize: "var(--pase-fs-sm)",
+                          textTransform: "uppercase",
+                          fontWeight: 500,
+                          flexShrink: 0,
+                          fontSize: "var(--pase-fs-xs)",
+                          letterSpacing: "var(--pase-ls-overline)",
                         }}>
-                          {w.description}
-                        </div>
-                      </div>
-                      <span style={{
-                        color: "var(--pase-text-muted)",
-                        textTransform: "uppercase",
-                        fontWeight: 500,
-                        flexShrink: 0,
-                        fontSize: "var(--pase-fs-xs)",
-                        letterSpacing: "var(--pase-ls-overline)",
-                      }}>
-                        {w.size}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
+                          {w.size}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
 
               {widgetsNoAplican > 0 && (
                 <p style={{
@@ -254,8 +289,7 @@ export default function SettingsDashboards({ tenantId }: { tenantId: string }) {
                   marginTop: 16,
                   fontSize: "var(--pase-fs-sm)",
                 }}>
-                  {widgetsNoAplican} widget(s) extra existen pero no aplican al rol{" "}
-                  <strong>{usuarioSel.rol}</strong>.
+                  {widgetsNoAplican} widget(s) extra existen pero requieren permisos que este usuario no tiene.
                 </p>
               )}
             </>
