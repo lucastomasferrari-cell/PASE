@@ -8,7 +8,7 @@ interface Saldo {
   saldo: number;
 }
 
-// Saldos de caja del local activo (o consolidado si es dueño/admin sin local activo).
+// Saldos de caja del local activo (o consolidado si dueño/admin sin local).
 export function SaldoCajaWidget({ ctx }: { ctx: WidgetContext }) {
   const [saldos, setSaldos] = useState<Saldo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,7 +21,6 @@ export function SaldoCajaWidget({ ctx }: { ctx: WidgetContext }) {
       if (ctx.localActivo !== null) q = q.eq("local_id", ctx.localActivo);
       const { data, error } = await q;
       if (cancelled || error) { setLoading(false); return; }
-      // Agrupar por cuenta si consolidado (sumar de varios locales)
       const map = new Map<string, number>();
       for (const r of data ?? []) {
         const cuenta = (r as { cuenta: string }).cuenta;
@@ -36,27 +35,33 @@ export function SaldoCajaWidget({ ctx }: { ctx: WidgetContext }) {
   }, [ctx.localActivo]);
 
   if (loading) {
-    return <div className="py-4 text-center text-xs text-pase-text-muted">Cargando…</div>;
+    return <div style={{ padding: "16px 0", textAlign: "center", color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-sm)" }}>Cargando…</div>;
   }
 
   if (saldos.length === 0) {
     return (
-      <div className="py-6 text-center text-xs text-pase-text-muted italic">
+      <div style={{ padding: "20px 0", textAlign: "center", color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-sm)", fontStyle: "italic" }}>
         Sin saldos en caja todavía.
       </div>
     );
   }
 
   return (
-    <div className="space-y-1.5">
-      {saldos.map(s => (
+    <div>
+      {saldos.map((s, idx) => (
         <div
           key={s.cuenta}
-          className="flex items-baseline justify-between py-1.5 border-b border-pase-border last:border-b-0"
-          style={{ fontSize: "var(--pase-fs-base)" }}
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            justifyContent: "space-between",
+            padding: "8px 0",
+            borderBottom: idx < saldos.length - 1 ? "0.5px solid var(--pase-border)" : "none",
+            fontSize: "var(--pase-fs-base)",
+          }}
         >
           <span style={{ color: "var(--pase-text-muted)" }}>{s.cuenta}</span>
-          <strong className="tabular-nums">{formatCurrency(s.saldo)}</strong>
+          <strong style={{ fontVariantNumeric: "tabular-nums" }}>{formatCurrency(s.saldo)}</strong>
         </div>
       ))}
     </div>

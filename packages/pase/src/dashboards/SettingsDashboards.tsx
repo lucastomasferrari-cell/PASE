@@ -15,11 +15,10 @@ interface UsuarioLite {
  * Settings → Dashboards
  *
  * UI para que el dueño/admin configure qué widgets ve cada usuario en su
- * dashboard personal. Solo lista los widgets que aplican al rol del usuario.
+ * dashboard. Solo lista los widgets que aplican al rol del usuario.
  *
- * Para Sesión 1 hago checkboxes simples (activar/desactivar). El orden es
- * el del array `widgets_activos` — por ahora se ordena por orden de
- * activación. Drag-drop visual queda para Sesión 2.
+ * Para Sesión 1: checkboxes simples (activar/desactivar). El orden es por
+ * orden de activación. Drag-drop visual queda para Sesión 2.
  */
 export default function SettingsDashboards({ tenantId }: { tenantId: string }) {
   const [usuarios, setUsuarios] = useState<UsuarioLite[]>([]);
@@ -70,7 +69,6 @@ export default function SettingsDashboards({ tenantId }: { tenantId: string }) {
       ? widgetsActivos.filter(id => id !== widgetId)
       : [...widgetsActivos, widgetId];
     setWidgetsActivos(next);
-    // Persistir inmediato (no esperar botón "Guardar")
     setSaving(true);
     await saveDashboardConfig(usuarioSel.id, tenantId, {
       widgets_activos: next,
@@ -94,68 +92,90 @@ export default function SettingsDashboards({ tenantId }: { tenantId: string }) {
   }
 
   if (loading) {
-    return <div className="container py-6">Cargando…</div>;
+    return <div style={{ padding: "0 20px" }}>Cargando…</div>;
   }
 
   const widgetsDisponibles = usuarioSel ? widgetsParaRol(usuarioSel.rol) : [];
   const widgetsNoAplican = WIDGETS.length - widgetsDisponibles.length;
 
   return (
-    <div className="container py-6">
-      <PageHeader
-        title="Dashboards"
-        subtitle="personalizar por usuario"
-      />
+    <div style={{ padding: "0 20px" }}>
+      <PageHeader title="Dashboards" subtitle="personalizar por usuario" />
 
-      <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-6">
+      <div className="settings-dash-layout">
         {/* Lista de usuarios */}
-        <aside className="space-y-1">
-          <div
-            className="uppercase font-medium text-pase-text-muted mb-2 px-2"
-            style={{ fontSize: "var(--pase-fs-sm)", letterSpacing: "var(--pase-ls-overline)" }}
-          >
+        <aside style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{
+            textTransform: "uppercase",
+            fontWeight: 500,
+            color: "var(--pase-text-muted)",
+            marginBottom: 8,
+            padding: "0 8px",
+            fontSize: "var(--pase-fs-sm)",
+            letterSpacing: "var(--pase-ls-overline)",
+          }}>
             Usuarios
           </div>
-          {usuarios.map(u => (
-            <button
-              key={u.id}
-              type="button"
-              onClick={() => setUsuarioSel(u)}
-              className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
-                usuarioSel?.id === u.id
-                  ? "bg-pase-celeste text-white"
-                  : "hover:bg-pase-bg-soft text-pase-text"
-              }`}
-              style={{ fontSize: "var(--pase-fs-base)" }}
-            >
-              <div className="font-medium">{u.nombre}</div>
-              <div
-                className={usuarioSel?.id === u.id ? "text-white/80" : "text-pase-text-muted"}
-                style={{ fontSize: "var(--pase-fs-xs)" }}
+          {usuarios.map(u => {
+            const active = usuarioSel?.id === u.id;
+            return (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => setUsuarioSel(u)}
+                style={{
+                  width: "100%",
+                  textAlign: "left",
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "none",
+                  cursor: "pointer",
+                  background: active ? "var(--pase-celeste)" : "transparent",
+                  color: active ? "#fff" : "var(--pase-text)",
+                  fontSize: "var(--pase-fs-base)",
+                  fontFamily: "var(--pase-font)",
+                  transition: "background 0.12s",
+                }}
+                onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--pase-bg-soft)"; }}
+                onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
               >
-                {u.rol}
-              </div>
-            </button>
-          ))}
+                <div style={{ fontWeight: 500 }}>{u.nombre}</div>
+                <div style={{
+                  fontSize: "var(--pase-fs-xs)",
+                  color: active ? "rgba(255,255,255,0.8)" : "var(--pase-text-muted)",
+                }}>
+                  {u.rol}
+                </div>
+              </button>
+            );
+          })}
         </aside>
 
         {/* Config del usuario seleccionado */}
         <main>
           {!usuarioSel ? (
-            <div className="text-center py-12 text-pase-text-muted">
+            <div style={{ padding: 48, textAlign: "center", color: "var(--pase-text-muted)" }}>
               Seleccioná un usuario.
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 16,
+                flexWrap: "wrap",
+                gap: 8,
+              }}>
                 <div>
-                  <h2 className="font-medium" style={{ fontSize: "var(--pase-fs-lg)" }}>
+                  <h2 style={{ margin: 0, fontWeight: 500, fontSize: "var(--pase-fs-lg)" }}>
                     Widgets de {usuarioSel.nombre}
                   </h2>
-                  <p
-                    className="text-pase-text-muted mt-0.5"
-                    style={{ fontSize: "var(--pase-fs-sm)" }}
-                  >
+                  <p style={{
+                    color: "var(--pase-text-muted)",
+                    margin: "2px 0 0",
+                    fontSize: "var(--pase-fs-sm)",
+                  }}>
                     Marcá los widgets que querés que vea en su dashboard.
                     {saving && " · guardando…"}
                   </p>
@@ -170,45 +190,56 @@ export default function SettingsDashboards({ tenantId }: { tenantId: string }) {
                 </button>
               </div>
 
-              <div className="space-y-2">
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {widgetsDisponibles.map(w => {
                   const active = widgetsActivos.includes(w.id);
                   return (
                     <label
                       key={w.id}
-                      className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                        active
-                          ? "border-pase-celeste bg-pase-celeste-100"
-                          : "border-pase-border hover:bg-pase-bg-soft"
-                      }`}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 12,
+                        padding: 12,
+                        borderRadius: 8,
+                        border: `0.5px solid ${active ? "var(--pase-celeste)" : "var(--pase-border)"}`,
+                        background: active ? "var(--pase-celeste-100)" : "transparent",
+                        cursor: "pointer",
+                        transition: "all 0.12s",
+                      }}
                     >
                       <input
                         type="checkbox"
                         checked={active}
                         onChange={() => toggleWidget(w.id)}
-                        className="mt-0.5 w-4 h-4 accent-pase-celeste flex-shrink-0"
+                        style={{
+                          marginTop: 2,
+                          width: 16,
+                          height: 16,
+                          accentColor: "var(--pase-celeste)",
+                          flexShrink: 0,
+                        }}
                       />
-                      <div className="flex-1 min-w-0">
-                        <div
-                          className="font-medium text-pase-text"
-                          style={{ fontSize: "var(--pase-fs-base)" }}
-                        >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 500, color: "var(--pase-text)", fontSize: "var(--pase-fs-base)" }}>
                           {w.title}
                         </div>
-                        <div
-                          className="text-pase-text-muted mt-0.5"
-                          style={{ fontSize: "var(--pase-fs-sm)" }}
-                        >
+                        <div style={{
+                          color: "var(--pase-text-muted)",
+                          marginTop: 2,
+                          fontSize: "var(--pase-fs-sm)",
+                        }}>
                           {w.description}
                         </div>
                       </div>
-                      <span
-                        className="text-pase-text-muted uppercase font-medium flex-shrink-0"
-                        style={{
-                          fontSize: "var(--pase-fs-xs)",
-                          letterSpacing: "var(--pase-ls-overline)",
-                        }}
-                      >
+                      <span style={{
+                        color: "var(--pase-text-muted)",
+                        textTransform: "uppercase",
+                        fontWeight: 500,
+                        flexShrink: 0,
+                        fontSize: "var(--pase-fs-xs)",
+                        letterSpacing: "var(--pase-ls-overline)",
+                      }}>
                         {w.size}
                       </span>
                     </label>
@@ -217,10 +248,12 @@ export default function SettingsDashboards({ tenantId }: { tenantId: string }) {
               </div>
 
               {widgetsNoAplican > 0 && (
-                <p
-                  className="text-pase-text-muted italic mt-4"
-                  style={{ fontSize: "var(--pase-fs-sm)" }}
-                >
+                <p style={{
+                  color: "var(--pase-text-muted)",
+                  fontStyle: "italic",
+                  marginTop: 16,
+                  fontSize: "var(--pase-fs-sm)",
+                }}>
                   {widgetsNoAplican} widget(s) extra existen pero no aplican al rol{" "}
                   <strong>{usuarioSel.rol}</strong>.
                 </p>
@@ -229,6 +262,19 @@ export default function SettingsDashboards({ tenantId }: { tenantId: string }) {
           )}
         </main>
       </div>
+
+      <style>{`
+        .settings-dash-layout {
+          display: grid;
+          grid-template-columns: 240px 1fr;
+          gap: 24px;
+        }
+        @media (max-width: 700px) {
+          .settings-dash-layout {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
     </div>
   );
 }

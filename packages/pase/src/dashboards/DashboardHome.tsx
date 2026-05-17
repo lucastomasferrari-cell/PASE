@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { PageHeader } from "../components/ui";
 import { getDashboardConfig } from "./service";
 import { findWidget, widgetsParaRol } from "./widgets/registry";
@@ -11,9 +12,9 @@ import type { WidgetDefinition } from "./types";
  * Flujo:
  *   1. Carga la config del usuario desde DB (widgets_activos en orden).
  *   2. Si no tiene config → usa DEFAULT_WIDGETS_POR_ROL[rol] como fallback.
- *   3. Renderiza cada widget con su tamaño (sm/md/lg/full) en grid responsive.
+ *   3. Renderiza cada widget con su tamaño (sm/md/lg/full).
  *
- * Modificación de widgets: solo desde Settings → Dashboards (dueño/admin).
+ * Solo dueño/admin ven el botón "Configurar dashboard" → va a Settings.
  */
 
 interface Props {
@@ -27,11 +28,13 @@ interface Props {
   localActivo: number | null;
 }
 
-const SIZE_TO_COL_CLASS: Record<string, string> = {
-  sm: "col-span-1",
-  md: "col-span-1 md:col-span-2",
-  lg: "col-span-1 md:col-span-2 lg:col-span-3",
-  full: "col-span-1 md:col-span-2 lg:col-span-3 xl:col-span-4",
+// Map tamaño widget → ancho en grid de 12 columnas (estilo Bootstrap).
+// sm = 4/12 (3 por fila), md = 6/12 (2 por fila), lg = 8/12, full = 12/12.
+const SIZE_TO_SPAN: Record<string, number> = {
+  sm: 4,
+  md: 6,
+  lg: 8,
+  full: 12,
 };
 
 export function DashboardHome({ usuario, locales, localActivo }: Props) {
@@ -47,7 +50,6 @@ export function DashboardHome({ usuario, locales, localActivo }: Props) {
       if (r.data && r.data.widgets_activos.length > 0 && !r.data.es_default) {
         setWidgetIds(r.data.widgets_activos);
       } else {
-        // Fallback al default por rol
         setWidgetIds(DEFAULT_WIDGETS_POR_ROL[usuario.rol] ?? []);
       }
       setLoading(false);
@@ -67,11 +69,13 @@ export function DashboardHome({ usuario, locales, localActivo }: Props) {
     usuario, locales, localActivo,
   }), [usuario, locales, localActivo]);
 
+  const puedeConfigurar = usuario.rol === "dueno" || usuario.rol === "admin" || usuario.rol === "superadmin";
+
   if (loading) {
     return (
-      <div className="container py-6">
+      <div style={{ padding: "0 20px" }}>
         <PageHeader title={`Hola, ${usuario.nombre}`} />
-        <div className="py-12 text-center text-pase-text-muted text-sm">Cargando dashboard…</div>
+        <div className="loading">Cargando dashboard…</div>
       </div>
     );
   }
@@ -79,48 +83,86 @@ export function DashboardHome({ usuario, locales, localActivo }: Props) {
   const availableCount = widgetsParaRol(usuario.rol).length;
 
   return (
-    <div className="container py-6">
+    <div style={{ padding: "0 20px" }}>
       <PageHeader
         title={`Hola, ${usuario.nombre}`}
         subtitle={greetingByHour()}
+        actions={
+          puedeConfigurar ? (
+            <Link to="/ajustes/dashboards" className="btn btn-sec btn-sm">
+              ⚙ Configurar dashboards
+            </Link>
+          ) : undefined
+        }
       />
 
       {widgets.length === 0 ? (
-        <div className="rounded-xl border border-pase-border bg-pase-bg-soft p-8 text-center">
-          <p className="text-pase-text-muted" style={{ fontSize: "var(--pase-fs-base)" }}>
+        <div className="panel" style={{ padding: 32, textAlign: "center" }}>
+          <p style={{ color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-base)", margin: 0 }}>
             Tu dashboard está vacío.
           </p>
-          {availableCount > 0 && (
-            <p className="text-pase-text-muted mt-2" style={{ fontSize: "var(--pase-fs-sm)" }}>
-              Hay {availableCount} widget(s) disponibles para tu rol.
-              {" "}El dueño puede activarlos desde Settings → Dashboards.
+          {availableCount > 0 && puedeConfigurar && (
+            <p style={{ color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-sm)", marginTop: 8 }}>
+              Hay {availableCount} widget(s) disponibles para tu rol.{" "}
+              <Link to="/ajustes/dashboards" style={{ color: "var(--pase-celeste)" }}>
+                Configurar →
+              </Link>
+            </p>
+          )}
+          {availableCount > 0 && !puedeConfigurar && (
+            <p style={{ color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-sm)", marginTop: 8 }}>
+              Pedile al dueño que active widgets desde Ajustes → Dashboards.
             </p>
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {widgets.map((w) => (
-            <section
-              key={w.id}
-              className={`${SIZE_TO_COL_CLASS[w.size] ?? SIZE_TO_COL_CLASS.md} rounded-xl border border-pase-border bg-pase-bg p-4 min-w-0`}
-              aria-label={w.title}
-            >
-              <header className="mb-3">
-                <h3
-                  className="font-medium text-pase-text"
-                  style={{
+        <div className="dashboard-grid">
+          {widgets.map((w) => {
+            const span = SIZE_TO_SPAN[w.size] ?? 6;
+            return (
+              <section
+                key={w.id}
+                style={{
+                  gridColumn: `span ${span}`,
+                  background: "var(--pase-bg)",
+                  border: "0.5px solid var(--pase-border)",
+                  borderRadius: "var(--pase-radius-card)",
+                  padding: 16,
+                  minWidth: 0,
+                }}
+                aria-label={w.title}
+                className="dashboard-widget"
+              >
+                <header style={{ marginBottom: 12 }}>
+                  <h3 style={{
+                    margin: 0,
                     fontSize: "var(--pase-fs-base)",
+                    fontWeight: 500,
+                    color: "var(--pase-text)",
                     letterSpacing: "var(--pase-ls-snug)",
-                  }}
-                >
-                  {w.title}
-                </h3>
-              </header>
-              <div>{w.render(ctx)}</div>
-            </section>
-          ))}
+                  }}>
+                    {w.title}
+                  </h3>
+                </header>
+                <div>{w.render(ctx)}</div>
+              </section>
+            );
+          })}
         </div>
       )}
+
+      <style>{`
+        .dashboard-grid {
+          display: grid;
+          grid-template-columns: repeat(12, 1fr);
+          gap: 16px;
+        }
+        @media (max-width: 900px) {
+          .dashboard-widget {
+            grid-column: span 12 !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

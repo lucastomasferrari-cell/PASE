@@ -13,7 +13,6 @@ interface FacturaVencida {
 }
 
 // Widget: facturas vencidas (no pagadas con vencimiento < hoy).
-// Crítico para compras y dueño/admin.
 export function FacturasVencidasWidget({ ctx }: { ctx: WidgetContext }) {
   const [facturas, setFacturas] = useState<FacturaVencida[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,12 +52,12 @@ export function FacturasVencidasWidget({ ctx }: { ctx: WidgetContext }) {
   }, [ctx.localActivo]);
 
   if (loading) {
-    return <div className="py-4 text-center text-xs text-pase-text-muted">Cargando…</div>;
+    return <div style={{ padding: "16px 0", textAlign: "center", color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-sm)" }}>Cargando…</div>;
   }
 
   if (facturas.length === 0) {
     return (
-      <div className="py-6 text-center text-xs text-pase-text-muted italic">
+      <div style={{ padding: "20px 0", textAlign: "center", color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-sm)", fontStyle: "italic" }}>
         Sin facturas vencidas. Buen trabajo.
       </div>
     );
@@ -67,28 +66,43 @@ export function FacturasVencidasWidget({ ctx }: { ctx: WidgetContext }) {
   const total = facturas.reduce((s, f) => s + f.total, 0);
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-baseline justify-between pb-2 border-b border-pase-border">
+    <div>
+      <div style={{
+        display: "flex",
+        alignItems: "baseline",
+        justifyContent: "space-between",
+        paddingBottom: 8,
+        borderBottom: "0.5px solid var(--pase-border)",
+        marginBottom: 8,
+      }}>
         <span style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-text-muted)" }}>
           {facturas.length} {facturas.length === 1 ? "factura vencida" : "facturas vencidas"}
         </span>
-        <strong style={{ fontSize: "var(--pase-fs-lg)" }} className="text-red-700 tabular-nums">
+        <strong style={{ fontSize: "var(--pase-fs-lg)", color: "#B91C1C", fontVariantNumeric: "tabular-nums" }}>
           {formatCurrency(total)}
         </strong>
       </div>
-      <div className="space-y-1.5 max-h-56 overflow-y-auto">
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 224, overflowY: "auto" }}>
         {facturas.map(f => (
           <Link
             key={f.id}
             to={`/compras/facturas?id=${f.id}`}
-            className="block p-2 rounded hover:bg-pase-bg-soft transition-colors"
-            style={{ fontSize: "var(--pase-fs-base)" }}
+            style={{
+              display: "block",
+              padding: 8,
+              borderRadius: 6,
+              textDecoration: "none",
+              color: "var(--pase-text)",
+              fontSize: "var(--pase-fs-base)",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--pase-bg-soft)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
           >
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="font-medium truncate">
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+              <span style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {f.proveedor_nombre ?? "(sin proveedor)"}
               </span>
-              <strong className="tabular-nums text-red-700 flex-shrink-0">
+              <strong style={{ fontVariantNumeric: "tabular-nums", color: "#B91C1C", flexShrink: 0 }}>
                 {formatCurrency(f.total)}
               </strong>
             </div>
@@ -100,8 +114,16 @@ export function FacturasVencidasWidget({ ctx }: { ctx: WidgetContext }) {
       </div>
       <Link
         to="/compras/facturas?filtro=vencidas"
-        className="block text-center pt-2 border-t border-pase-border text-pase-celeste hover:underline"
-        style={{ fontSize: "var(--pase-fs-sm)" }}
+        style={{
+          display: "block",
+          textAlign: "center",
+          paddingTop: 8,
+          marginTop: 8,
+          borderTop: "0.5px solid var(--pase-border)",
+          color: "var(--pase-celeste)",
+          fontSize: "var(--pase-fs-sm)",
+          textDecoration: "none",
+        }}
       >
         Ver todas →
       </Link>

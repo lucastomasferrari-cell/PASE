@@ -42,6 +42,11 @@ export interface SidebarItem {
 }
 
 export const SIDEBAR_ITEMS: SidebarItem[] = [
+  // === Inicio ===
+  // Dashboard personalizado por rol — todos los usuarios lo ven, slug
+  // siempre permitido. Vive antes de Operación para que sea el primer item.
+  { path: "/inicio",                     slug: "inicio",        label: "Inicio",          sec: "Operación" },
+
   // === Operación ===
   { path: "/caja",                       slug: "caja",          label: "Caja",            sec: "Operación" },
   { path: "/compras",                    slug: "compras",       label: "Compras",         sec: "Operación" },
@@ -65,6 +70,7 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
 
   // === Sistema ===
   { path: "/ajustes",                    slug: "ajustes",       label: "Ajustes",         sec: "Sistema" },
+  { path: "/ajustes/dashboards",         slug: "ajustes_dashboards", label: "Dashboards",  sec: "Sistema" },
   { path: "/usuarios",                   slug: "usuarios",      label: "Usuarios",        sec: "Sistema" },
   { path: "/tenants",                    slug: "tenants",       label: "Tenants",         sec: "Sistema" },
 ];
