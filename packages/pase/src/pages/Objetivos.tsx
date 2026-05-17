@@ -10,7 +10,9 @@ interface ObjetivoFila {
   id: number | null;  // null si todavía no existe la fila en DB
   // Facturación y volumen (se miden en cualquier momento)
   facturacion_objetivo: number | null;
-  ticket_promedio_objetivo: number | null;
+  // ticket_promedio_objetivo: oculto hasta integración COMANDA. La columna
+  // existe en DB pero no se carga ni se muestra — Maxirest solo trae totales
+  // diarios, no líneas, así que calcular ticket promedio acá sería engañoso.
   // Punto de equilibrio
   costos_fijos_mes: number | null;
   margen_contribucion_pct: number | null;
@@ -57,7 +59,7 @@ export default function Objetivos({ locales, tenantId }: Props) {
     setError(null);
     const { data, error } = await db
       .from("objetivos_mes")
-      .select("id, local_id, facturacion_objetivo, ticket_promedio_objetivo, costos_fijos_mes, margen_contribucion_pct, costo_mercaderia_pct, costo_mp_pct, margen_bruto_pct, notas")
+      .select("id, local_id, facturacion_objetivo, costos_fijos_mes, margen_contribucion_pct, costo_mercaderia_pct, costo_mp_pct, margen_bruto_pct, notas")
       .eq("mes", mesIso);
     if (error) {
       setError(error.message);
@@ -67,7 +69,6 @@ export default function Objetivos({ locales, tenantId }: Props) {
     const porLocal = new Map<number, {
       id: number;
       facturacion_objetivo: number | null;
-      ticket_promedio_objetivo: number | null;
       costos_fijos_mes: number | null;
       margen_contribucion_pct: number | null;
       costo_mercaderia_pct: number | null;
@@ -78,7 +79,7 @@ export default function Objetivos({ locales, tenantId }: Props) {
     for (const r of data ?? []) {
       const row = r as {
         id: number; local_id: number;
-        facturacion_objetivo: number | null; ticket_promedio_objetivo: number | null;
+        facturacion_objetivo: number | null;
         costos_fijos_mes: number | null; margen_contribucion_pct: number | null;
         costo_mercaderia_pct: number | null; costo_mp_pct: number | null; margen_bruto_pct: number | null;
         notas: string | null;
@@ -92,7 +93,6 @@ export default function Objetivos({ locales, tenantId }: Props) {
         local_nombre: l.nombre,
         id: stored?.id ?? null,
         facturacion_objetivo: stored?.facturacion_objetivo ?? null,
-        ticket_promedio_objetivo: stored?.ticket_promedio_objetivo ?? null,
         costos_fijos_mes: stored?.costos_fijos_mes ?? null,
         margen_contribucion_pct: stored?.margen_contribucion_pct ?? null,
         costo_mercaderia_pct: stored?.costo_mercaderia_pct ?? null,
@@ -124,7 +124,8 @@ export default function Objetivos({ locales, tenantId }: Props) {
         local_id: localId,
         mes: mesIso,
         facturacion_objetivo: next.facturacion_objetivo,
-        ticket_promedio_objetivo: next.ticket_promedio_objetivo,
+        // ticket_promedio_objetivo intencionalmente NO se setea — esperando
+        // integración con COMANDA para tener ticket real.
         costos_fijos_mes: next.costos_fijos_mes,
         margen_contribucion_pct: next.margen_contribucion_pct,
         costo_mercaderia_pct: next.costo_mercaderia_pct,
@@ -174,7 +175,7 @@ export default function Objetivos({ locales, tenantId }: Props) {
       <div className="alert" style={{ marginBottom: 16 }}>
         <strong style={{ display: "block", marginBottom: 4 }}>¿Cómo se usan estos objetivos?</strong>
         <div style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-text-muted)", lineHeight: 1.5 }}>
-          <strong>Grupo 1 — Facturación y volumen (mid-month, en /negocio):</strong> facturación objetivo + ticket promedio.<br />
+          <strong>Grupo 1 — Facturación (mid-month, en /negocio):</strong> facturación objetivo del mes vs facturado a la fecha.<br />
           <strong>Grupo 2 — Punto de equilibrio (mid-month, en /negocio):</strong> costos fijos + margen contribución. BEP = fijos ÷ margen %.<br />
           <strong>Grupo 3 — Eficiencia (fin de mes, en /reportes):</strong> CMV %, costo MP %, margen bruto %. Sirven para comparar contra el EERR cerrado al final del mes (mid-month mienten porque las facturas vencidas distorsionan el costo).
         </div>
@@ -205,9 +206,11 @@ interface FilaProps {
 }
 
 function FilaObjetivo({ fila, saving, onSave }: FilaProps) {
-  // Grupo 1: facturación + ticket promedio
+  // Grupo 1: facturación
+  // (Ticket promedio removido a la espera de integración COMANDA — Maxirest
+  // solo trae totales agregados, no líneas, por lo que calcular ticket promedio
+  // sería ruidoso. Se reactiva cuando COMANDA pushee data real.)
   const [facturacion, setFacturacion] = useState(String(fila.facturacion_objetivo ?? ""));
-  const [ticketProm, setTicketProm] = useState(String(fila.ticket_promedio_objetivo ?? ""));
   // Grupo 2: BEP
   const [fijos, setFijos] = useState(String(fila.costos_fijos_mes ?? ""));
   const [margenC, setMargenC] = useState(String(fila.margen_contribucion_pct ?? ""));
@@ -220,7 +223,6 @@ function FilaObjetivo({ fila, saving, onSave }: FilaProps) {
 
   useEffect(() => {
     setFacturacion(String(fila.facturacion_objetivo ?? ""));
-    setTicketProm(String(fila.ticket_promedio_objetivo ?? ""));
     setFijos(String(fila.costos_fijos_mes ?? ""));
     setMargenC(String(fila.margen_contribucion_pct ?? ""));
     setCmv(String(fila.costo_mercaderia_pct ?? ""));
@@ -229,7 +231,7 @@ function FilaObjetivo({ fila, saving, onSave }: FilaProps) {
     setNotas(fila.notas ?? "");
   }, [
     fila.local_id,
-    fila.facturacion_objetivo, fila.ticket_promedio_objetivo,
+    fila.facturacion_objetivo,
     fila.costos_fijos_mes, fila.margen_contribucion_pct,
     fila.costo_mercaderia_pct, fila.costo_mp_pct, fila.margen_bruto_pct,
     fila.notas,
@@ -242,14 +244,8 @@ function FilaObjetivo({ fila, saving, onSave }: FilaProps) {
     ? fijosNum / (margenCNum / 100)
     : null;
 
-  // Ventas estimadas si tenemos facturación y ticket promedio.
-  const ticketPromNum = parseFloat(ticketProm.replace(/[^0-9.-]/g, ""));
-  const ventasEstimadas = (!isNaN(facturacionNum) && !isNaN(ticketPromNum) && ticketPromNum > 0)
-    ? Math.round(facturacionNum / ticketPromNum)
-    : null;
-
   type Field =
-    | "fact" | "tprom"
+    | "fact"
     | "fijos" | "margenC"
     | "cmv" | "mp" | "margenB"
     | "notas";
@@ -257,7 +253,6 @@ function FilaObjetivo({ fila, saving, onSave }: FilaProps) {
   function handleBlur(field: Field) {
     const patch: Parameters<typeof onSave>[0] = {};
     if (field === "fact") patch.facturacion_objetivo = isNaN(facturacionNum) ? null : facturacionNum;
-    if (field === "tprom") patch.ticket_promedio_objetivo = isNaN(ticketPromNum) ? null : ticketPromNum;
     if (field === "fijos") patch.costos_fijos_mes = isNaN(fijosNum) ? null : fijosNum;
     if (field === "margenC") patch.margen_contribucion_pct = isNaN(margenCNum) ? null : margenCNum;
     if (field === "cmv") {
@@ -285,37 +280,19 @@ function FilaObjetivo({ fila, saving, onSave }: FilaProps) {
         {saving && <span style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)" }}>guardando…</span>}
       </div>
 
-      {/* ─── Grupo 1: Facturación + volumen ─── */}
-      <GroupTitle>Facturación y volumen</GroupTitle>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
-        <div className="field" style={{ marginBottom: 0 }}>
-          <label>Facturación objetivo (mes)</label>
-          <input
-            type="number"
-            inputMode="decimal"
-            value={facturacion}
-            onChange={e => setFacturacion(e.target.value)}
-            onBlur={() => handleBlur("fact")}
-            placeholder="ej. 12000000"
-          />
-        </div>
-        <div className="field" style={{ marginBottom: 0 }}>
-          <label>Ticket promedio objetivo</label>
-          <input
-            type="number"
-            inputMode="decimal"
-            value={ticketProm}
-            onChange={e => setTicketProm(e.target.value)}
-            onBlur={() => handleBlur("tprom")}
-            placeholder="ej. 8500"
-          />
-        </div>
+      {/* ─── Grupo 1: Facturación ─── */}
+      <GroupTitle>Facturación</GroupTitle>
+      <div className="field" style={{ marginBottom: 0 }}>
+        <label>Facturación objetivo (mes)</label>
+        <input
+          type="number"
+          inputMode="decimal"
+          value={facturacion}
+          onChange={e => setFacturacion(e.target.value)}
+          onBlur={() => handleBlur("fact")}
+          placeholder="ej. 12000000"
+        />
       </div>
-      {ventasEstimadas !== null && (
-        <div style={{ marginTop: 8, fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)" }}>
-          ≈ <strong style={{ color: "var(--pase-text)" }}>{ventasEstimadas.toLocaleString("es-AR")}</strong> ventas necesarias para llegar al objetivo.
-        </div>
-      )}
 
       {/* ─── Grupo 2: BEP ─── */}
       <GroupTitle style={{ marginTop: 18 }}>Punto de equilibrio</GroupTitle>
