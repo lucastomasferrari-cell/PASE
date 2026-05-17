@@ -8,7 +8,7 @@ import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
-import { RightSubNav, type SubNavSection, PageHeader } from "../components/ui";
+import { RightSubNav, type SubNavSection, PageHeader, EmptyState } from "../components/ui";
 import { CajaCardsRow } from "./caja/CajaCardsRow";
 import type { Usuario, Local } from "../types/auth";
 import type { Movimiento } from "../types/finanzas";
@@ -488,7 +488,13 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
           ) : (
             <>
       {cuentasVisibles.length === 0 ? (
-        <div className="empty" style={{padding:24,marginBottom:16}}>No tenés cuentas asignadas. Pedile a un administrador que te habilite.</div>
+        <div className="panel" style={{marginBottom:16}}>
+          <EmptyState
+            icon="🔐"
+            title="Sin cuentas asignadas"
+            description="Pedile a un administrador que te habilite acceso a las cuentas de caja."
+          />
+        </div>
       ) : (() => {
         // Sprint v2 Commit 5: layout de 3 cards (anchor + 2 normales).
         // Caja Efectivo es el anchor celeste; Chica y Mayor son blancas.
@@ -536,11 +542,17 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
             </select>
           </div>
         </div>
-        {loading?<div className="loading">Cargando...</div>:mFilt.length===0?<div className="empty">Sin movimientos</div>:(
+        {loading?<div className="loading">Cargando...</div>:mFilt.length===0?(
+          <EmptyState
+            icon="📋"
+            title="Sin movimientos"
+            description="No hay movimientos en el rango de fechas seleccionado. Probá ampliar el rango o cargar un movimiento manual."
+          />
+        ):(
           <table><thead><tr>
-            <th>Fecha</th>
-            {ordenPor === "carga" && <th title="Cuándo se cargó realmente al sistema (puede diferir de la fecha del movimiento)">Cargado</th>}
-            <th>Cuenta</th><th>Tipo</th><th>Categoría</th><th>Detalle</th><th>Importe</th><th>Estado</th><th></th>
+            <th className="col-fecha">Fecha</th>
+            {ordenPor === "carga" && <th className="col-fecha" title="Cuándo se cargó realmente al sistema (puede diferir de la fecha del movimiento)">Cargado</th>}
+            <th>Cuenta</th><th>Tipo</th><th>Categoría</th><th>Detalle</th><th className="num-right">Importe</th><th>Estado</th><th></th>
           </tr></thead>
           <tbody>{mFilt.map(m=>{
             const fCarga = fechaCargaFromId(m.id);
@@ -569,7 +581,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
                 )}
                 {m.detalle}
               </td>
-              <td><span className="num" style={{color:m.importe<0?"var(--danger)":"var(--success)"}}>{fmt_$(m.importe)}</span></td>
+              <td className="num-right"><span style={{color:m.importe<0?"var(--danger)":"var(--success)"}}>{fmt_$(m.importe)}</span></td>
               <td>
                 {m.anulado && (
                   <span className="badge b-danger" style={{fontSize:8}} title={m.anulado_motivo ?? undefined}>Anulado</span>

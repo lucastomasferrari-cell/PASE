@@ -9,7 +9,7 @@ import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import { Combobox } from "../components/Combobox";
-import { PageHeader, TipoPill } from "../components/ui";
+import { PageHeader, TipoPill, EmptyState } from "../components/ui";
 import type { Usuario, Local } from "../types";
 import type { Gasto } from "../types/finanzas";
 
@@ -396,9 +396,15 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
           </div>
         </div>
         <div className="panel">
-          {loading ? <div className="loading">Cargando...</div> : histFiltrado.length === 0 ? <div className="empty">Sin movimientos en el período</div> : (
+          {loading ? <div className="loading">Cargando...</div> : histFiltrado.length === 0 ? (
+            <EmptyState
+              icon="📭"
+              title="Sin movimientos en el período"
+              description="No hay gastos cargados en el rango de fechas. Probá ampliar el rango o cargar un gasto."
+            />
+          ) : (
             <table>
-              <thead><tr><th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Detalle</th><th>Local</th><th>Cuenta</th><th style={{ textAlign: "right" }}>Monto</th>{puedeEditarAnular && <th></th>}</tr></thead>
+              <thead><tr><th className="col-fecha">Fecha</th><th>Tipo</th><th>Categoría</th><th>Detalle</th><th>Local</th><th>Cuenta</th><th className="num-right">Monto</th>{puedeEditarAnular && <th></th>}</tr></thead>
               <tbody>{histFiltrado.map(g => {
                 const anulado = g.estado === "anulado";
                 return (
@@ -413,7 +419,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                   <td style={{ fontSize: 11, color: "var(--muted2)" }}>{g.detalle || "—"}</td>
                   <td style={{ fontSize: 11, color: "var(--muted2)" }}>{locales.find((l: Local) => String(l.id) === String(g.local_id))?.nombre || "Todos"}</td>
                   <td style={{ fontSize: 11, color: "var(--muted2)" }}>{g.cuenta || "—"}</td>
-                  <td style={{ textAlign: "right" }}><span className="num">{fmt_$(g.monto)}</span></td>
+                  <td className="num-right">{fmt_$(g.monto)}</td>
                   {puedeEditarAnular && (
                     <td>
                       <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>

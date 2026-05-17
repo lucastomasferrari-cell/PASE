@@ -7,7 +7,7 @@ import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import ImportarMaxirest from "./ImportarMaxirest";
-import { Modal, PageHeader } from "../components/ui";
+import { Modal, PageHeader, EmptyState } from "../components/ui";
 import type { Usuario, Local, Venta, CierreVentas } from "../types";
 
 interface VentasProps {
@@ -274,9 +274,15 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
             </label>
           </div>
         </div>
-        {loading?<div className="loading">Cargando...</div>:grupos.length===0?<div className="empty">No hay ventas en este período</div>:(
+        {loading?<div className="loading">Cargando...</div>:grupos.length===0?(
+          <EmptyState
+            icon="📊"
+            title="Sin ventas en el período"
+            description="No hay ventas cargadas en el rango de fechas. Probá ampliar el rango o cargar una venta."
+          />
+        ):(
           <table>
-            <thead><tr><th>Fecha</th><th>Turno</th><th>Local</th><th>Registros</th><th>Total</th><th></th></tr></thead>
+            <thead><tr><th className="col-fecha">Fecha</th><th>Turno</th><th>Local</th><th>Registros</th><th className="num-right">Total</th><th></th></tr></thead>
             <tbody>{grupos.map(g=>(
               <tr key={g.key}>
                 <td className="mono">{fmt_d(g.fecha)}</td>
@@ -291,7 +297,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
                 </td>
                 <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find((l: Local)=>String(l.id)===String(g.local_id))?.nombre||"—"}</td>
                 <td style={{fontSize:11,color:"var(--muted2)"}}>{g.items.length} formas de cobro</td>
-                <td><span className="num kpi-success">{fmt_$(g.total)}</span></td>
+                <td className="num-right kpi-success">{fmt_$(g.total)}</td>
                 <td><button className="btn btn-ghost btn-sm" onClick={()=>setDetalleModal(g)}>Ver detalle →</button></td>
               </tr>
             ))}</tbody>
