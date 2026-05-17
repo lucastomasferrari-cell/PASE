@@ -19,6 +19,7 @@ import { useCategorias } from "../lib/useCategorias";
 import { useMediosCobro } from "../lib/useMediosCobro";
 import { InfoTooltip } from "../components/ui";
 import { toISO, today, fmt_$ } from "../lib/utils";
+import { exportCSV } from "../lib/exportCSV";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, Legend, CartesianGrid } from "recharts";
 import type { Usuario } from "../types/auth";
 import type { Venta, Factura, Gasto } from "../types/finanzas";
@@ -348,11 +349,13 @@ export default function EERR({ user, localActivo }: EERRProps) {
     <div>
       <div className="ph-row">
         <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <div className="ph-title">Estado de Resultados</div>
-          <InfoTooltip maxWidth={320}>
-            Mide la rentabilidad del negocio sobre <strong>base devengada</strong> — registra ventas, compras y gastos
-            cuando ocurre el hecho económico, no cuando entra/sale la plata. Distinto de Caja (base percibida).
-            Las liquidaciones de medios de pago (MP, Rappi, etc.) no aparecen acá porque la venta ya se contó.
+          <div className="ph-title">Reportes <span style={{color:"var(--pase-text-muted)",fontWeight:400}}>· Estado de Resultados</span></div>
+          <InfoTooltip maxWidth={340}>
+            <strong>Reportes</strong> agrupa los distintos análisis del negocio.
+            Hoy mostramos el <strong>Estado de Resultados</strong> (EERR) — mide la rentabilidad sobre base devengada:
+            registra ventas, compras y gastos cuando ocurre el hecho económico, no cuando entra/sale la plata. Distinto de Caja (base percibida).
+            <br /><br />
+            <em>Próximamente:</em> Libro IVA, comparativo entre sucursales, evolución histórica.
           </InfoTooltip>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
@@ -369,6 +372,30 @@ export default function EERR({ user, localActivo }: EERRProps) {
               + Comparar {mesesComp.length === 0 ? "mes" : "otro mes"}
             </button>
           )}
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => {
+              // Export del Resumen P&L del mes activo en CSV (Excel-friendly).
+              const rows: (string | number)[][] = [
+                ["Ventas Brutas", totalVentas, "100,00%"],
+                ["(-) CMV", -totalCMV, pct(totalCMV)],
+                ["(=) Utilidad Bruta", utilBruta, pct(utilBruta)],
+                ["(-) Gastos Fijos y Variables", -totalGastos, pct(totalGastos)],
+                ["(-) Sueldos", -sueldos, pct(sueldos)],
+                ["(-) Publicidad y MKT", -totalPublicidad, pct(totalPublicidad)],
+                ["(-) Comisiones", -totalComisiones, pct(totalComisiones)],
+                ["(-) Impuestos", -totalImpuestos, pct(totalImpuestos)],
+                ["(=) Utilidad Neta", utilNeta, pct(utilNeta)],
+              ];
+              if (totalRetiros !== 0) rows.push(["Retiros de Socios (info)", -totalRetiros, pct(totalRetiros)]);
+              exportCSV(`reporte_${mes}.csv`, ["Concepto", "Monto", "% sobre ventas"], rows);
+            }}
+            style={{fontSize:11}}
+            title="Descargar P&L del mes en CSV (abre en Excel)"
+          >
+            ⬇ Exportar
+          </button>
         </div>
       </div>
       {loading?<div className="loading">Cargando...</div>:(

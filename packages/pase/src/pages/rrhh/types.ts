@@ -23,6 +23,10 @@ export interface EmpForm {
   alias_mp: string;
   fecha_inicio: string;
   activo: boolean;
+  /** Días de vacaciones ya consumidos ANTES del alta en PASE (default 0). */
+  dias_vacaciones_ya_tomados_al_alta: string;
+  /** TRUE = en nómina formal (AFIP), FALSE = "en blanco" (default FALSE). */
+  registrado: boolean;
 }
 
 // State de empModal: null cuando cerrado, "new" cuando agregando nuevo,

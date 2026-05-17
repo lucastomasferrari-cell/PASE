@@ -69,7 +69,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   // BUG 2: por defecto solo mostramos empleados activos. Toggle para incluir inactivos.
   const [empMostrarInactivos, setEmpMostrarInactivos] = useState(false);
   const [empModal, setEmpModal] = useState<EmpModalState>(null);
-  const empEmpty: EmpForm = { local_id:"", apellido:"", nombre:"", cuil:"", puesto:"", sueldo_mensual:"", alias_mp:"", fecha_inicio:"", activo:true };
+  const empEmpty: EmpForm = { local_id:"", apellido:"", nombre:"", cuil:"", puesto:"", sueldo_mensual:"", alias_mp:"", fecha_inicio:"", activo:true, dias_vacaciones_ya_tomados_al_alta:"0", registrado:false };
   const [empForm, setEmpForm] = useState<EmpForm>(empEmpty);
 
   // Novedades
@@ -490,7 +490,14 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
 
   const guardarEmp = async () => {
     if (!empForm.apellido || !empForm.nombre || !empForm.local_id || !empForm.puesto || !empForm.sueldo_mensual || !empForm.fecha_inicio) return;
-    const payload = { ...empForm, local_id: parseInt(empForm.local_id), sueldo_mensual: parseFloat(empForm.sueldo_mensual) || 0 };
+    const payload = {
+      ...empForm,
+      local_id: parseInt(empForm.local_id),
+      sueldo_mensual: parseFloat(empForm.sueldo_mensual) || 0,
+      // Nuevos 2 campos (migration 202605172000):
+      dias_vacaciones_ya_tomados_al_alta: parseInt(empForm.dias_vacaciones_ya_tomados_al_alta || "0") || 0,
+      registrado: empForm.registrado,
+    };
     // Estrechar empModal: si tiene .id (no es "new" ni null), es Empleado.
     const existing = empModal && empModal !== "new" ? empModal : null;
     if (existing) {
@@ -523,7 +530,14 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     setEmpModal("new");
   };
   const abrirEmpEditar = (e: Empleado) => {
-    setEmpForm({ local_id: e.local_id ? String(e.local_id) : "", apellido:e.apellido, nombre:e.nombre, cuil:e.cuil||"", puesto:e.puesto, sueldo_mensual:String(e.sueldo_mensual), alias_mp:e.alias_mp||"", fecha_inicio:e.fecha_inicio||"", activo:e.activo });
+    setEmpForm({
+      local_id: e.local_id ? String(e.local_id) : "",
+      apellido:e.apellido, nombre:e.nombre, cuil:e.cuil||"",
+      puesto:e.puesto, sueldo_mensual:String(e.sueldo_mensual),
+      alias_mp:e.alias_mp||"", fecha_inicio:e.fecha_inicio||"", activo:e.activo,
+      dias_vacaciones_ya_tomados_al_alta: String((e as { dias_vacaciones_ya_tomados_al_alta?: number }).dias_vacaciones_ya_tomados_al_alta ?? 0),
+      registrado: Boolean((e as { registrado?: boolean }).registrado),
+    });
     setEmpModal(e);
   };
 
