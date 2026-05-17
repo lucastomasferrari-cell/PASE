@@ -16,13 +16,13 @@ export function VentasHoyWidget({ ctx }: { ctx: WidgetContext }) {
       const today = new Date().toISOString().slice(0, 10);
       let q = db
         .from("ventas")
-        .select("total", { count: "exact" })
+        .select("monto", { count: "exact" })
         .eq("fecha", today)
-        .eq("anulada", false);
+        .neq("estado", "anulada");
       if (ctx.localActivo !== null) q = q.eq("local_id", ctx.localActivo);
       const { data: rows, count, error } = await q;
       if (cancelled || error) { setLoading(false); return; }
-      const total = (rows ?? []).reduce((s, r) => s + Number((r as { total: number }).total ?? 0), 0);
+      const total = (rows ?? []).reduce((s, r) => s + Number((r as { monto: number }).monto ?? 0), 0);
       setData({ total, count: count ?? 0 });
       setLoading(false);
     }

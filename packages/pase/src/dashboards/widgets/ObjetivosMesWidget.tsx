@@ -49,14 +49,14 @@ export function ObjetivosMesWidget({ ctx }: { ctx: WidgetContext }) {
       // 2. Facturado a la fecha (ventas del mes activo).
       let qVen = db
         .from("ventas")
-        .select("total")
+        .select("monto")
         .gte("fecha", primerDiaMes)
         .lte("fecha", hastaIso)
-        .eq("anulada", false);
+        .neq("estado", "anulada");
       if (ctx.localActivo !== null) qVen = qVen.eq("local_id", ctx.localActivo);
       const { data: venRows, error: venErr } = await qVen;
       if (cancelled || venErr) { setLoading(false); return; }
-      const facturacion_actual = (venRows ?? []).reduce((s, r) => s + Number((r as { total: number }).total ?? 0), 0);
+      const facturacion_actual = (venRows ?? []).reduce((s, r) => s + Number((r as { monto: number }).monto ?? 0), 0);
 
       setData({
         facturacion_objetivo,

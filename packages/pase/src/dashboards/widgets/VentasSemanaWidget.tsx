@@ -37,18 +37,18 @@ export function VentasSemanaWidget({ ctx }: { ctx: WidgetContext }) {
       const hasta = today.toISOString().slice(0, 10);
       let q = db
         .from("ventas")
-        .select("fecha, total")
+        .select("fecha, monto")
         .gte("fecha", desde)
         .lte("fecha", hasta)
-        .eq("anulada", false);
+        .neq("estado", "anulada");
       if (ctx.localActivo !== null) q = q.eq("local_id", ctx.localActivo);
       const { data, error } = await q;
       if (cancelled || error) { setLoading(false); return; }
 
       const totalPorFecha = new Map<string, number>();
       for (const r of data ?? []) {
-        const row = r as { fecha: string; total: number };
-        totalPorFecha.set(row.fecha, (totalPorFecha.get(row.fecha) ?? 0) + Number(row.total ?? 0));
+        const row = r as { fecha: string; monto: number };
+        totalPorFecha.set(row.fecha, (totalPorFecha.get(row.fecha) ?? 0) + Number(row.monto ?? 0));
       }
 
       const dias: DiaVenta[] = [];

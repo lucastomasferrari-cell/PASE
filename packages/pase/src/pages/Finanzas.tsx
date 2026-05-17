@@ -169,18 +169,18 @@ function VentasMensualesChart({ localActivo }: { localActivo: number | null }) {
       const hastaIso = today.toISOString().slice(0, 10);
       let q = db
         .from("ventas")
-        .select("fecha, total")
+        .select("fecha, monto")
         .gte("fecha", desdeIso)
         .lte("fecha", hastaIso)
-        .eq("anulada", false);
+        .neq("estado", "anulada");
       if (localActivo !== null) q = q.eq("local_id", localActivo);
       const { data: rows, error } = await q;
       if (cancelled || error) { setLoading(false); return; }
       const porMes = new Map<string, number>();
       for (const r of rows ?? []) {
-        const row = r as { fecha: string; total: number };
+        const row = r as { fecha: string; monto: number };
         const mesKey = row.fecha.slice(0, 7); // YYYY-MM
-        porMes.set(mesKey, (porMes.get(mesKey) ?? 0) + Number(row.total ?? 0));
+        porMes.set(mesKey, (porMes.get(mesKey) ?? 0) + Number(row.monto ?? 0));
       }
       const meses: MesData[] = [];
       for (let i = 5; i >= 0; i--) {
@@ -250,19 +250,19 @@ function DiasMasVendidos({ localActivo }: { localActivo: number | null }) {
       const hasta = today.toISOString().slice(0, 10);
       let q = db
         .from("ventas")
-        .select("fecha, total")
+        .select("fecha, monto")
         .gte("fecha", desde)
         .lte("fecha", hasta)
-        .eq("anulada", false);
+        .neq("estado", "anulada");
       if (localActivo !== null) q = q.eq("local_id", localActivo);
       const { data: rows, error } = await q;
       if (cancelled || error) { setLoading(false); return; }
       const porDow = Array(7).fill(0);
       for (const r of rows ?? []) {
-        const row = r as { fecha: string; total: number };
+        const row = r as { fecha: string; monto: number };
         // Parse fecha (YYYY-MM-DD) preservando local day-of-week. usar T12:00 para evitar TZ shifts.
         const dow = new Date(`${row.fecha}T12:00:00`).getDay();
-        porDow[dow] += Number(row.total ?? 0);
+        porDow[dow] += Number(row.monto ?? 0);
       }
       const arr: DiaSemana[] = porDow.map((total, idx) => ({ dia: DOW_LABELS[idx] ?? "?", total }));
       // Ordenar de mayor a menor

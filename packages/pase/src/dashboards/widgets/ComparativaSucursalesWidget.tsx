@@ -33,10 +33,10 @@ export function ComparativaSucursalesWidget({ ctx }: { ctx: WidgetContext }) {
       // Traer ventas + nombres de locales en paralelo (ambos limitados por RLS).
       const [ventasRes, localesRes] = await Promise.all([
         db.from("ventas")
-          .select("local_id, total")
+          .select("local_id, monto")
           .gte("fecha", desde)
           .lte("fecha", hasta)
-          .eq("anulada", false),
+          .neq("estado", "anulada"),
         db.from("locales").select("id, nombre").order("nombre"),
       ]);
 
@@ -46,8 +46,8 @@ export function ComparativaSucursalesWidget({ ctx }: { ctx: WidgetContext }) {
       const locales = (localesRes.data ?? []) as Array<{ id: number; nombre: string }>;
       const totalPorLocal = new Map<number, number>();
       for (const r of ventasRes.data ?? []) {
-        const row = r as { local_id: number; total: number };
-        totalPorLocal.set(row.local_id, (totalPorLocal.get(row.local_id) ?? 0) + Number(row.total ?? 0));
+        const row = r as { local_id: number; monto: number };
+        totalPorLocal.set(row.local_id, (totalPorLocal.get(row.local_id) ?? 0) + Number(row.monto ?? 0));
       }
       const mapped: LocalRow[] = locales.map(l => ({
         id: l.id,
