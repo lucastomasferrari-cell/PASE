@@ -142,14 +142,17 @@ function PantallaMesas({ localId, onMesaElegida, onSalir, empleadoId, tenantId }
         {loading ? (
           <div className="py-12 text-center text-muted-foreground">Cargando…</div>
         ) : (
-          <div className="grid grid-cols-3 gap-2">
+          // Grid responsive: mesas con tamaño fijo (auto-fill) en lugar
+          // de 3 columnas absolutas. En celu (360-420px) caben 3-4 por fila,
+          // en tablet 6-8, en desktop 10+. Cada mesa ~96-108px.
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2">
             {mesas.map((m) => (
               <button
                 key={m.id}
                 type="button"
                 onClick={() => abrirOSeleccionar(m)}
                 className={cn(
-                  'aspect-square rounded-xl border-2 flex flex-col items-center justify-center p-2 transition-all active:scale-95',
+                  'aspect-square rounded-xl border flex flex-col items-center justify-center p-2 transition-all active:scale-95',
                   m.estado === 'libre'
                     ? 'border-success/30 bg-success/5 text-success'
                     : m.venta_abierta_id
@@ -157,14 +160,14 @@ function PantallaMesas({ localId, onMesaElegida, onSalir, empleadoId, tenantId }
                       : 'border-border bg-muted',
                 )}
               >
-                <div className="text-2xl font-bold">{m.numero}</div>
-                {m.zona && <div className="text-[9px] opacity-70 truncate">{m.zona}</div>}
+                <div className="text-xl font-bold leading-none">{m.numero}</div>
+                {m.zona && <div className="text-[9px] opacity-70 truncate mt-0.5">{m.zona}</div>}
                 {m.venta_abierta_id && (
                   <>
-                    <div className="text-xs font-semibold tabular-nums mt-1">
+                    <div className="text-[11px] font-semibold tabular-nums mt-1 leading-none">
                       {formatARS(m.venta_total)}
                     </div>
-                    <div className="text-[9px] opacity-70">
+                    <div className="text-[9px] opacity-70 mt-0.5">
                       {relativoCorto(m.venta_abierta_at ?? '')}
                     </div>
                   </>
@@ -329,7 +332,8 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
         </div>
       </div>
 
-      {/* Catálogo — 3 cols en celu, scrollable */}
+      {/* Catálogo — auto-fill responsivo, tiles ~104-120px en lugar de
+          fijos de 500px en tablet/desktop. */}
       <div className="flex-1 overflow-y-auto p-2 pb-32">
         {loading ? (
           <div className="py-12 text-center text-muted-foreground">Cargando…</div>
@@ -338,7 +342,7 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
             Sin productos.
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-2">
             {catalogoFiltrado.map((it) => {
               const cantEnHold = itemsHold.filter((i) => i.item_id === it.id).reduce((s, i) => s + Number(i.cantidad), 0);
               const flashed = lastAddedItemId === it.id;
@@ -348,7 +352,7 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
                   type="button"
                   onClick={() => addItem(it)}
                   className={cn(
-                    'relative aspect-square rounded-xl border-2 flex flex-col items-center justify-center p-2 transition-all active:scale-95',
+                    'relative aspect-square rounded-xl border flex flex-col items-center justify-center p-2 transition-all active:scale-95',
                     flashed ? 'border-success bg-success/10 scale-[1.02]' : 'border-border bg-card',
                   )}
                 >

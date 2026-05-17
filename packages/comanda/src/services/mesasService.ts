@@ -15,11 +15,13 @@ export async function listMesas(localId: number): Promise<{ data: Mesa[]; error:
   return { data: (data ?? []) as Mesa[], error: null };
 }
 
-// Mesa con info adicional para el grid (venta abierta + total + tiempo)
+// Mesa con info adicional para el grid (venta abierta + total + tiempo + covers)
 export interface MesaConVenta extends Mesa {
   venta_abierta_id: number | null;
   venta_total: number;
   venta_abierta_at: string | null;
+  /** Cubiertos (personas) registrados al abrir la venta. NULL si no hay venta abierta. */
+  venta_covers: number | null;
 }
 
 export async function listMesasConVentas(localId: number): Promise<{ data: MesaConVenta[]; error: string | null }> {
@@ -29,7 +31,7 @@ export async function listMesasConVentas(localId: number): Promise<{ data: MesaC
     const [mesasRes, ventasRes] = await Promise.all([
       db.from('mesas').select('*').eq('local_id', localId).is('deleted_at', null)
         .order('zona', { ascending: true, nullsFirst: false }).order('id', { ascending: true }),
-      db.from('ventas_pos').select('id, mesa_id, total, abierta_at, estado')
+      db.from('ventas_pos').select('id, mesa_id, total, abierta_at, estado, covers')
         .eq('local_id', localId).in('estado', ['abierta', 'enviada', 'lista', 'entregada'])
         .is('deleted_at', null),
     ]);
@@ -41,13 +43,14 @@ export async function listMesasConVentas(localId: number): Promise<{ data: MesaC
       }
       return { data: [], error: (err?.message ?? 'Error desconocido') };
     }
-    const ventasByMesa = new Map<number, { id: number; total: number; abierta_at: string }>();
+    const ventasByMesa = new Map<number, { id: number; total: number; abierta_at: string; covers: number | null }>();
     for (const v of ventasRes.data ?? []) {
       if (v.mesa_id !== null && v.mesa_id !== undefined) {
         ventasByMesa.set(v.mesa_id as number, {
           id: v.id as number,
           total: Number(v.total ?? 0),
           abierta_at: v.abierta_at as string,
+          covers: (v as { covers: number | null }).covers ?? null,
         });
       }
     }
@@ -58,6 +61,7 @@ export async function listMesasConVentas(localId: number): Promise<{ data: MesaC
         venta_abierta_id: v?.id ?? null,
         venta_total: v?.total ?? 0,
         venta_abierta_at: v?.abierta_at ?? null,
+        venta_covers: v?.covers ?? null,
       };
     });
     // Cache para uso offline. NOTA: las mesas offline pueden estar stale

@@ -74,21 +74,21 @@ export function SalonView() {
   const resumen = useMemo(() => {
     let ocupadas = 0;
     let libres = 0;
-    let totalAbierto = 0;
+    let cubiertos = 0;
     let minutosTotal = 0;
     const now = Date.now();
     for (const m of mesasFiltradas) {
       if (m.estado === 'libre') libres++;
       if (m.venta_abierta_id !== null) {
         ocupadas++;
-        totalAbierto += Number(m.venta_total ?? 0);
+        cubiertos += Number(m.venta_covers ?? 0);
         if (m.venta_abierta_at) {
           minutosTotal += Math.floor((now - new Date(m.venta_abierta_at).getTime()) / 60000);
         }
       }
     }
     return {
-      ocupadas, libres, totalAbierto,
+      ocupadas, libres, cubiertos,
       tiempoPromedio: ocupadas > 0 ? Math.floor(minutosTotal / ocupadas) : 0,
     };
   }, [mesasFiltradas]);
@@ -140,7 +140,6 @@ export function SalonView() {
               <LeyendaChip bucket="reciente" />
               <LeyendaChip bucket="normal" />
               <LeyendaChip bucket="atencion" />
-              <LeyendaChip bucket="overstay" />
               <LeyendaChip bucket="urgente" />
             </div>
           )}
@@ -155,9 +154,9 @@ export function SalonView() {
                 tone="warning"
               />
               <SummaryCard
-                label="Facturando"
-                value={formatARS(resumen.totalAbierto)}
-                hint={resumen.ocupadas > 0 ? `${formatARS(Math.round(resumen.totalAbierto / resumen.ocupadas))} promedio` : ''}
+                label="Cubiertos"
+                value={`${resumen.cubiertos}`}
+                hint={resumen.ocupadas > 0 ? `${(resumen.cubiertos / resumen.ocupadas).toFixed(1)} por mesa` : 'sin mesas abiertas'}
                 tone="primary"
               />
               <SummaryCard
@@ -313,29 +312,26 @@ function SummaryCard({ label, value, hint, tone }: {
 // el encargado escanea el salón y al toque ve dónde hay mesas largas.
 //
 //   libre          → verde suave (disponible)
-//   ocupada 0-20m  → verde fuerte (recién sentados)
-//   ocupada 20-45m → ámbar suave (servicio normal)
-//   ocupada 45-75m → naranja (chequear cuenta o pedir más)
-//   ocupada 75-105m→ rojo (overstay — pedir cuenta)
-//   ocupada >105m  → rojo pulsante (urgente, ya pasó hace rato)
+//   ocupada 0-20m  → verde (recién sentados, todo bien)
+//   ocupada 20-40m → amarillo clarito (en curso normal)
+//   ocupada 40-60m → amarillo más oscuro (chequear cuenta o pedir más)
+//   ocupada >60m   → rojo pulsante (mucho tiempo, atender)
 //   hold           → rojo (estado especial, no por tiempo)
 type MesaBucket =
   | 'libre'
   | 'reciente'      // <20min ocupada
-  | 'normal'        // 20-45m
-  | 'atencion'      // 45-75m
-  | 'overstay'      // 75-105m
-  | 'urgente'       // >105m
+  | 'normal'        // 20-40m
+  | 'atencion'      // 40-60m
+  | 'urgente'       // >60m
   | 'hold'
   | 'otro';
 
 const MESA_BUCKET_STYLES: Record<MesaBucket, { bg: string; fg: string; border: string; icon: string; label: string }> = {
   libre:    { bg: 'bg-success/10',     fg: 'text-success',     border: 'border-success/30',     icon: '',  label: 'Libre' },
-  reciente: { bg: 'bg-success/15',     fg: 'text-success',     border: 'border-success/50',     icon: '🟢', label: 'Recién (0-20m)' },
-  normal:   { bg: 'bg-amber-50 dark:bg-amber-900/15', fg: 'text-amber-700 dark:text-amber-200', border: 'border-amber-300/60 dark:border-amber-700/60', icon: '', label: 'En curso (20-45m)' },
-  atencion: { bg: 'bg-warning/15',     fg: 'text-warning',     border: 'border-warning/60',     icon: '⏱', label: 'Atención (45-75m)' },
-  overstay: { bg: 'bg-orange-100 dark:bg-orange-900/30', fg: 'text-orange-700 dark:text-orange-200', border: 'border-orange-400 dark:border-orange-700', icon: '⚠', label: 'Overstay (75-105m)' },
-  urgente:  { bg: 'bg-destructive/15', fg: 'text-destructive', border: 'border-destructive ring-2 ring-destructive/40 animate-pulse', icon: '🚨', label: 'Urgente (>105m)' },
+  reciente: { bg: 'bg-success/15',     fg: 'text-success',     border: 'border-success/50',     icon: '🟢', label: 'Recién (1-20m)' },
+  normal:   { bg: 'bg-yellow-50 dark:bg-yellow-900/15', fg: 'text-yellow-700 dark:text-yellow-200', border: 'border-yellow-300 dark:border-yellow-700/60', icon: '', label: 'En curso (20-40m)' },
+  atencion: { bg: 'bg-amber-100 dark:bg-amber-900/30', fg: 'text-amber-800 dark:text-amber-200', border: 'border-amber-400 dark:border-amber-700', icon: '⏱', label: 'Atención (40-60m)' },
+  urgente:  { bg: 'bg-destructive/15', fg: 'text-destructive', border: 'border-destructive ring-2 ring-destructive/40 animate-pulse', icon: '🚨', label: 'Urgente (>60m)' },
   hold:     { bg: 'bg-destructive/10', fg: 'text-destructive', border: 'border-destructive/30', icon: '', label: 'En hold' },
   otro:     { bg: 'bg-muted',          fg: 'text-muted-foreground', border: 'border-border',   icon: '', label: '—' },
 };
@@ -347,10 +343,9 @@ function clasificarMesa(mesa: MesaConVenta): MesaBucket {
     const min = mesa.venta_abierta_at
       ? Math.floor((Date.now() - new Date(mesa.venta_abierta_at).getTime()) / 60000)
       : 0;
-    if (min < 20)  return 'reciente';
-    if (min < 45)  return 'normal';
-    if (min < 75)  return 'atencion';
-    if (min < 105) return 'overstay';
+    if (min < 20) return 'reciente';
+    if (min < 40) return 'normal';
+    if (min < 60) return 'atencion';
     return 'urgente';
   }
   return 'otro';
@@ -395,7 +390,7 @@ function MesaTile({ mesa, onClick }: { mesa: MesaConVenta; onClick: () => void }
             <div className={cn(
               'text-[10px] tabular-nums',
               bucket === 'urgente' && 'font-bold',
-              bucket === 'overstay' && 'font-semibold',
+              bucket === 'atencion' && 'font-semibold',
             )}>
               {styles.icon && <span className="mr-0.5">{styles.icon}</span>}
               {relativoCorto(mesa.venta_abierta_at)}
