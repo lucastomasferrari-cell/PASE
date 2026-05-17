@@ -7,17 +7,33 @@ export interface Movimiento {
   importe: number;
   detalle: string | null;
   local_id: number | null;
-  fact_id: string | null;
-  // gasto_id_ref se rellena cuando el movimiento fue creado por la RPC
-  // crear_gasto (carga desde el módulo Gastos): hace doble-insert atómico
-  // en gastos + movimientos y deja el FK en movimientos. Tesorería lo usa
-  // para mostrar un badge "vía Gastos" y aclarar que NO es un duplicado.
-  gasto_id_ref?: string | null;
+  // ─── Referencias de ORIGEN ───
+  // Cada movimiento puede ser manual O generado por una RPC atómica desde
+  // otro módulo. En ese caso se rellena el FK correspondiente y Caja
+  // muestra un badge "vía X" para aclarar que NO es duplicado.
+  fact_id?: string | null;              // vía Factura (pago de compra)
+  remito_id_ref?: string | null;        // vía Remito (pago directo)
+  liquidacion_id?: string | null;       // vía Sueldo (RRHH liquidación mensual)
+  adelanto_id_ref?: string | null;      // vía Adelanto (RRHH adelanto sueldo)
+  pago_especial_id_ref?: string | null; // vía Pago especial (RRHH aguinaldo/vacaciones)
+  gasto_id_ref?: string | null;         // vía Gasto (módulo Gastos)
   anulado: boolean;
   anulado_motivo: string | null;
   editado: boolean;
   editado_motivo: string | null;
   editado_at: string | null;
+}
+
+// Helper: devuelve el badge "vía X" según qué referencia esté poblada.
+// null si es un movimiento manual (sin origen externo).
+export function origenMovimiento(m: Movimiento): { label: string; tooltip: string } | null {
+  if (m.fact_id) return { label: "vía Factura", tooltip: "Originado al pagar una factura desde Compras." };
+  if (m.remito_id_ref) return { label: "vía Remito", tooltip: "Originado al pagar un remito desde Compras." };
+  if (m.liquidacion_id) return { label: "vía Sueldo", tooltip: "Originado al liquidar sueldo en Equipo." };
+  if (m.adelanto_id_ref) return { label: "vía Adelanto", tooltip: "Originado al dar un adelanto de sueldo." };
+  if (m.pago_especial_id_ref) return { label: "vía Pago RRHH", tooltip: "Originado en aguinaldo / vacaciones / liquidación final." };
+  if (m.gasto_id_ref) return { label: "vía Gasto", tooltip: "Originado al cargar un gasto en el módulo Gastos." };
+  return null;
 }
 
 export interface SaldoCaja {
