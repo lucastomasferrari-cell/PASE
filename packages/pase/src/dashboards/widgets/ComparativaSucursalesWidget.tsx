@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { db } from "../../lib/supabase";
 import { formatCurrency } from "../../lib/format";
-import { EmptyState } from "../../components/ui";
+import { EmptyState, ShopIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
 
 interface LocalRow {
@@ -68,7 +68,7 @@ export function ComparativaSucursalesWidget({ ctx }: { ctx: WidgetContext }) {
   if (rows.length < 2) {
     return (
       <EmptyState
-        icon="🏪"
+        icon={<ShopIcon size={32} tone="muted" />}
         title="Necesitás 2+ sucursales"
         description="El ranking aparece cuando tenés más de un local cargado."
         size="compact"

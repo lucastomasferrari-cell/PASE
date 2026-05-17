@@ -7,7 +7,7 @@ import { useCategorias } from "../lib/useCategorias";
 import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId, parseMonto, estadoFactura } from "../lib/utils";
-import { RightSubNav, type SubNavSection, PageHeader, EmptyState } from "../components/ui";
+import { RightSubNav, type SubNavSection, PageHeader, EmptyState, BoxIcon, ReceiptIcon } from "../components/ui";
 import type { Usuario, Local } from "../types";
 import type { Proveedor, Factura } from "../types/finanzas";
 import { aplicacionesPorNc, saldoNcRestante } from "../lib/saldoProveedor";
@@ -818,7 +818,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
         <div className="panel">
           {loading ? <div className="loading">Cargando...</div> : rFilt.length === 0 ? (
             <EmptyState
-              icon="📦"
+              icon={<BoxIcon size={36} tone="muted" />}
               title="Sin remitos con esos filtros"
               description="Probá cambiar el rango de fechas o limpiar el filtro de proveedor."
             />
@@ -886,7 +886,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       <div className="panel">
         {loading ? <div className="loading">Cargando...</div> : fFilt.length === 0 ? (
           <EmptyState
-            icon="🧾"
+            icon={<ReceiptIcon size={36} tone="muted" />}
             title="Sin facturas con esos filtros"
             description="Probá cambiar el rango de fechas, el filtro de proveedor o el estado."
           />

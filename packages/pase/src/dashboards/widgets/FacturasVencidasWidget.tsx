@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { db } from "../../lib/supabase";
 import { formatCurrency } from "../../lib/format";
-import { EmptyState } from "../../components/ui";
+import { EmptyState, CheckIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
 
 interface FacturaVencida {
@@ -59,7 +59,7 @@ export function FacturasVencidasWidget({ ctx }: { ctx: WidgetContext }) {
   if (facturas.length === 0) {
     return (
       <EmptyState
-        icon="✅"
+        icon={<CheckIcon size={32} tone="gold" />}
         title="Sin facturas vencidas"
         description="Todas las facturas están al día. Buen trabajo."
         size="compact"

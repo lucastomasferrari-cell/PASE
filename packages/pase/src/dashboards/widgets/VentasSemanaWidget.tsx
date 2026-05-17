@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { db } from "../../lib/supabase";
 import { formatCurrency, formatCurrencyCompact } from "../../lib/format";
-import { EmptyState } from "../../components/ui";
+import { EmptyState, TrendUpIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
 
 interface DiaVenta {
@@ -80,7 +80,7 @@ export function VentasSemanaWidget({ ctx }: { ctx: WidgetContext }) {
   if (!datos || datos.totalSemana === 0) {
     return (
       <EmptyState
-        icon="📈"
+        icon={<TrendUpIcon size={32} tone="muted" />}
         title="Sin ventas en la semana"
         description="Cuando se carguen ventas vas a ver la tendencia acá."
         size="compact"

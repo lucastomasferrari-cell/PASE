@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { db } from "../../lib/supabase";
 import { formatCurrency } from "../../lib/format";
-import { EmptyState } from "../../components/ui";
+import { EmptyState, TargetIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
 
 interface ObjetivoMes {
@@ -77,7 +77,7 @@ export function ObjetivosMesWidget({ ctx }: { ctx: WidgetContext }) {
   if (!data || data.facturacion_objetivo === null) {
     return (
       <EmptyState
-        icon="◎"
+        icon={<TargetIcon size={32} tone="muted" />}
         title="Sin objetivo cargado"
         description="Definí el objetivo de facturación del mes en Objetivos."
         size="compact"
@@ -135,8 +135,13 @@ export function ObjetivosMesWidget({ ctx }: { ctx: WidgetContext }) {
           opacity: 0.5,
         }} />
       </div>
-      <div style={{ fontSize: "var(--pase-fs-xs)", color: enRitmo ? "var(--pase-celeste)" : "#D97706", marginTop: 8 }}>
-        {enRitmo ? "✓ En ritmo" : "⚠ Atrasado vs ritmo del mes"}
+      <div style={{ fontSize: "var(--pase-fs-xs)", color: enRitmo ? "var(--pase-gold, #B8860B)" : "#D97706", marginTop: 8, display: "flex", alignItems: "center", gap: 4 }}>
+        {enRitmo ? (
+          <>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            En ritmo
+          </>
+        ) : "⚠ Atrasado vs ritmo del mes"}
       </div>
     </div>
   );

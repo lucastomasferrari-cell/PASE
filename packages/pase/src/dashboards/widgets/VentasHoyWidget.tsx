@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { db } from "../../lib/supabase";
 import { formatCurrency } from "../../lib/format";
-import { EmptyState } from "../../components/ui";
+import { EmptyState, TrendUpIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
 
 // Ventas registradas hoy (tabla `ventas`). Cantidad + total.
@@ -37,7 +37,7 @@ export function VentasHoyWidget({ ctx }: { ctx: WidgetContext }) {
   if (!data || data.count === 0) {
     return (
       <EmptyState
-        icon="📊"
+        icon={<TrendUpIcon size={32} tone="muted" />}
         title="Sin ventas hoy todavía"
         description="Cuando se registren ventas las vas a ver acá."
         size="compact"

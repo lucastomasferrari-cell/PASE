@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { db } from "../../lib/supabase";
 import { formatCurrency } from "../../lib/format";
-import { EmptyState } from "../../components/ui";
+import { EmptyState, ScaleIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
 
 interface BepData {
@@ -107,7 +107,7 @@ export function PuntoEquilibrioWidget({ ctx }: { ctx: WidgetContext }) {
   if (!data) {
     return (
       <EmptyState
-        icon="⚖"
+        icon={<ScaleIcon size={32} tone="muted" />}
         title="Sin datos para calcular BEP"
         description="Cargá costos fijos y margen esperado del mes en Objetivos."
         size="compact"
@@ -157,8 +157,9 @@ export function PuntoEquilibrioWidget({ ctx }: { ctx: WidgetContext }) {
       </div>
 
       {enZonaGanancia ? (
-        <div style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-celeste)", marginTop: 10, fontWeight: 500 }}>
-          ✓ Cubriste los fijos. Cada peso vendido suma a la ganancia.
+        <div style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-gold, #B8860B)", marginTop: 10, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Cubriste los fijos. Cada peso vendido suma a la ganancia.
         </div>
       ) : (
         <div style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-text-muted)", marginTop: 10, lineHeight: 1.5 }}>

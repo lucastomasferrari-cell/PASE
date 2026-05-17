@@ -23,3 +23,16 @@ export {
   LocalSelectorOpcional,
   LocalContextoChip,
 } from "./LocalContextoUI";
+export {
+  PinIcon,
+  TrendUpIcon,
+  TargetIcon,
+  ScaleIcon,
+  ShopIcon,
+  CalendarIcon,
+  CheckIcon,
+  ReceiptIcon,
+  WalletIcon,
+  BoxIcon,
+  BellIcon,
+} from "./Icons";

@@ -7,7 +7,7 @@ import {
   listarUsuariosTenant,
   type PinnedNote,
 } from "../service";
-import { EmptyState } from "../../components/ui";
+import { EmptyState, PinIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
 
 const PRIORIDAD_BG: Record<PinnedNote["prioridad"], string> = {
@@ -81,7 +81,7 @@ export function TareasPineadasWidget({ ctx }: { ctx: WidgetContext }) {
     <div>
       {notas.length === 0 ? (
         <EmptyState
-          icon="📌"
+          icon={<PinIcon size={32} tone="muted" />}
           title="Sin tareas ni mensajes"
           description={puedeCrear ? "Usá el botón de abajo para dejarle un mensaje a alguien." : "Cuando el dueño te deje un mensaje, lo vas a ver acá."}
           size="compact"

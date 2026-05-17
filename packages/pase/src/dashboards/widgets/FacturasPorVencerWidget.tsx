@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { db } from "../../lib/supabase";
 import { formatCurrency } from "../../lib/format";
-import { EmptyState } from "../../components/ui";
+import { EmptyState, CalendarIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
 
 interface FacturaProx {
@@ -63,7 +63,7 @@ export function FacturasPorVencerWidget({ ctx }: { ctx: WidgetContext }) {
   if (facturas.length === 0) {
     return (
       <EmptyState
-        icon="📅"
+        icon={<CalendarIcon size={32} tone="muted" />}
         title="Nada vence en los próximos 7 días"
         description="Tranquilo, sin pagos urgentes a la vista."
         size="compact"

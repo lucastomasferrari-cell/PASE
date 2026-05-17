@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { db } from "../../lib/supabase";
 import { formatCurrency } from "../../lib/format";
-import { EmptyState } from "../../components/ui";
+import { EmptyState, WalletIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
 
 interface Saldo {
@@ -42,7 +42,7 @@ export function SaldoCajaWidget({ ctx }: { ctx: WidgetContext }) {
   if (saldos.length === 0) {
     return (
       <EmptyState
-        icon="💰"
+        icon={<WalletIcon size={32} tone="muted" />}
         title="Sin saldos en caja"
         description="Cuando se carguen movimientos vas a ver los saldos acá."
         size="compact"
