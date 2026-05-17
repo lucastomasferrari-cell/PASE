@@ -5,6 +5,7 @@ import { getDashboardConfig } from "./service";
 import { findWidget, widgetsParaPermisos } from "./widgets/registry";
 import { DEFAULT_WIDGETS_POR_ROL, type RolPase, type WidgetContext } from "./types";
 import type { WidgetDefinition } from "./types";
+import { lanzarTour } from "../lib/onboardingTours";
 
 /**
  * DashboardHome — pantalla de inicio personalizada por usuario.
@@ -64,6 +65,18 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
     }
     void load();
     return () => { cancelled = true; };
+  }, [usuario.id, usuario.rol]);
+
+  // Tour de bienvenida — se dispara automático la primera vez que un usuario
+  // entra. Si ya lo vio (flag localStorage), no hace nada. Reproducible
+  // manualmente desde Ajustes → "Ver tour de bienvenida". Delay corto para
+  // que el sidebar termine de hidratarse (los data-tour selectors necesitan
+  // estar en el DOM).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      lanzarTour(usuario.rol, usuario.id);
+    }, 500);
+    return () => clearTimeout(t);
   }, [usuario.id, usuario.rol]);
 
   const widgets: WidgetDefinition[] = useMemo(() => {

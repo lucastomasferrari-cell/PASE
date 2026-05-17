@@ -341,7 +341,7 @@ function AppMain() {
               <Route path="/herramientas/conciliacion-bancaria" element={<ConciliacionBancaria />} />
 
               {/* Sistema */}
-              <Route path="/ajustes" element={<Ajustes/>} />
+              <Route path="/ajustes" element={<Ajustes user={user || undefined}/>} />
 
               {/* Accesibles internamente (no en sidebar top-level) */}
               <Route path="/gastos" element={<Gastos {...props}/>} />

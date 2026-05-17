@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { db } from "../lib/supabase";
 import { Modal, InfoTooltip } from "../components/ui";
+import { lanzarTour, resetTour } from "../lib/onboardingTours";
+import type { Usuario } from "../types";
 import styles from "./Ajustes.module.css";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -92,7 +94,11 @@ const GRUPOS_DEF: GrupoSpec[] = [
   { id: "turnos",   label: "Turnos y horarios",       iconChar: "◷" },
 ];
 
-export default function Ajustes() {
+interface AjustesProps {
+  user?: Usuario;
+}
+
+export default function Ajustes({ user }: AjustesProps = {}) {
   const [loading, setLoading] = useState(true);
   const [categorias, setCategorias] = useState<CategoriaRow[]>([]);
   const [medios, setMedios] = useState<MedioCobroRow[]>([]);
@@ -391,6 +397,18 @@ export default function Ajustes() {
           </InfoTooltip>
         </div>
         <div className={styles.actions}>
+          {user && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                resetTour(user.id);
+                lanzarTour(user.rol as "dueno" | "admin" | "encargado" | "cajero" | "superadmin", user.id, { force: true });
+              }}
+              title="Reproducir el tour de bienvenida"
+            >
+              ☼ Ver tour de bienvenida
+            </button>
+          )}
           <button className="btn btn-acc" onClick={openNuevoModal}>
             <span style={{ width: 14, height: 14, display: "inline-flex" }}>{IconPlus}</span>
             <span style={{ marginLeft: 4 }}>{nuevoBtnLabel}</span>

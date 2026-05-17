@@ -87,7 +87,7 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
           )}
         </div>
         {localesDisp.length > 1 && (
-          <div className="sb-local">
+          <div className="sb-local" data-tour="sidebar-local">
             {/* Decisión Lucas 2026-05-17: eliminada la opción "Todas las
                 sucursales" del sidebar. El modo consolidado generaba bugs
                 de lógica (objetivos de 1 local cruzados con ventas de N).
@@ -99,7 +99,7 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
             </select>
           </div>
         )}
-        <nav className="sb-nav">
+        <nav className="sb-nav" data-tour="sidebar-nav">
           {secs.map(s=>{
             // tienePermiso (no perms.includes) para respetar los short-circuits
             // de slugs especiales: 'inicio' (todos), 'ajustes_dashboards' (dueño/admin),
