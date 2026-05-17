@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { db } from "../lib/supabase";
-import { PageHeader, EmptyState, LocalLockedChip, LocalSelectorObligatorio } from "../components/ui";
+import { PageHeader, EmptyState, LocalLockedChip, LocalSelectorObligatorio, ShopIcon, CalendarIcon } from "../components/ui";
 import { toISO, today, fmt_d } from "../lib/utils";
 import type { Usuario, Local } from "../types";
 
@@ -151,12 +151,12 @@ export default function Reservas({ user, locales, localActivo }: Props) {
       )}
 
       {!localTrabajo ? (
-        <EmptyState icon="🏪" title="Seleccioná una sucursal" description="Elegí del selector de arriba para ver las reservas." />
+        <EmptyState icon={<ShopIcon size={32} tone="muted" />} title="Seleccioná una sucursal" description="Elegí del selector de arriba para ver las reservas." />
       ) : loading ? (
         <div className="loading">Cargando reservas…</div>
       ) : reservas.length === 0 ? (
         <EmptyState
-          icon="📅"
+          icon={<CalendarIcon size={32} tone="muted" />}
           title={`Sin reservas para ${fmt_d(fecha)}`}
           description="Cargá la primera con el botón + Nueva reserva."
           cta={<button className="btn btn-acc" onClick={() => setModal("new")}>+ Nueva reserva</button>}

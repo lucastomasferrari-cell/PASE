@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { db } from "../lib/supabase";
-import { PageHeader, EmptyState, LocalLockedChip, LocalSelectorObligatorio } from "../components/ui";
+import { PageHeader, EmptyState, LocalLockedChip, LocalSelectorObligatorio, DocumentIcon, FolderIcon, AlertIcon, CheckIcon } from "../components/ui";
 import { formatCurrency } from "../lib/format";
 import { exportCSV } from "../lib/exportCSV";
 import type { Usuario, Local } from "../types";
@@ -295,12 +295,13 @@ Si el archivo no parece un extracto de MercadoPago, devolvé:
       {!archivo && !resultado && (
         <div className="panel" style={{ padding: 32 }}>
           <EmptyState
-            icon="📄"
+            icon={<DocumentIcon size={40} tone="muted" />}
             title="Subí el extracto mensual de MercadoPago"
             description="Aceptamos PDF o imagen del extracto. Bajalo del panel MP en: Reportes → Movimientos → Extracto."
             cta={
-              <label className="btn btn-acc" style={{ cursor: "pointer" }}>
-                📂 Elegir archivo
+              <label className="btn btn-acc" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <FolderIcon size={16} tone="muted" />
+                Elegir archivo
                 <input
                   type="file"
                   accept=".pdf,image/*"
@@ -319,7 +320,9 @@ Si el archivo no parece un extracto de MercadoPago, devolvé:
 
       {archivo && !resultado && !error && (
         <div className="panel" style={{ padding: 24, textAlign: "center" }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>📄</div>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+            <DocumentIcon size={36} tone="celeste" />
+          </div>
           <div style={{ fontSize: "var(--pase-fs-md)", fontWeight: 500, marginBottom: 4 }}>{archivo.name}</div>
           <div style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-text-muted)", marginBottom: 16 }}>
             {(archivo.size / 1024).toFixed(0)} KB · {archivo.type || "tipo desconocido"}
@@ -379,7 +382,9 @@ Si el archivo no parece un extracto de MercadoPago, devolvé:
 
           {resultado.advertencias.length > 0 && (
             <div className="alert" style={{ marginBottom: 14, fontSize: "var(--pase-fs-sm)" }}>
-              <strong>⚠ Advertencias de la IA:</strong>
+              <strong style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <AlertIcon size={14} tone="muted" /> Advertencias de la IA:
+              </strong>
               <ul style={{ margin: "4px 0 0", paddingLeft: 20 }}>
                 {resultado.advertencias.map((a, i) => <li key={i}>{a}</li>)}
               </ul>
@@ -445,9 +450,11 @@ Si el archivo no parece un extracto de MercadoPago, devolvé:
                     </td>
                     <td style={{ fontSize: "var(--pase-fs-xs)" }}>
                       {m.yaExiste ? (
-                        <span style={{ color: "var(--pase-text-muted)" }}>✓ Ya estaba</span>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--pase-text-muted)" }}>
+                          <CheckIcon size={11} tone="muted" /> Ya estaba
+                        </span>
                       ) : (
-                        <span style={{ color: "var(--pase-celeste)", fontWeight: 500 }}>★ Nuevo</span>
+                        <span style={{ color: "var(--pase-celeste)", fontWeight: 500 }}>Nuevo</span>
                       )}
                     </td>
                   </tr>
@@ -464,9 +471,11 @@ Si el archivo no parece un extracto de MercadoPago, devolvé:
           background: importResult.ok ? "var(--pase-celeste-100)" : "var(--pase-bg-out)",
           borderLeft: `3px solid ${importResult.ok ? "var(--pase-celeste)" : "#D97706"}`,
         }}>
-          <strong style={{ fontSize: "var(--pase-fs-md)" }}>
-            {importResult.ok ? "✓ " : "⚠ "}
-            {importResult.ok ? `Importados ${importResult.insertadas} movimientos nuevos.` : "Error en la importación"}
+          <strong style={{ fontSize: "var(--pase-fs-md)", display: "inline-flex", alignItems: "center", gap: 8 }}>
+            {importResult.ok
+              ? <><CheckIcon size={16} tone="gold" /> Importados {importResult.insertadas} movimientos nuevos.</>
+              : <><AlertIcon size={16} tone="muted" /> Error en la importación</>
+            }
           </strong>
           {importResult.error && (
             <div style={{ marginTop: 8, fontSize: "var(--pase-fs-sm)", color: "var(--pase-text-muted)" }}>{importResult.error}</div>

@@ -35,4 +35,8 @@ export {
   WalletIcon,
   BoxIcon,
   BellIcon,
+  UploadIcon,
+  FolderIcon,
+  DocumentIcon,
+  AlertIcon,
 } from "./Icons";

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { db } from "../lib/supabase";
-import { PageHeader, EmptyState, InfoTooltip } from "../components/ui";
+import { PageHeader, EmptyState, InfoTooltip, ShopIcon } from "../components/ui";
 import { formatCurrency } from "../lib/format";
 import type { Local } from "../types";
 
@@ -166,7 +166,7 @@ export default function Objetivos({ locales, tenantId, localActivo }: Props) {
       <div style={{ padding: "0 20px" }}>
         <PageHeader title="Objetivos" subtitle="metas mes a mes por sucursal" />
         <EmptyState
-          icon="🏪"
+          icon={<ShopIcon size={32} tone="muted" />}
           title="Sin sucursales"
           description="Creá al menos un local desde Ajustes para poder cargar objetivos."
         />
@@ -238,7 +238,7 @@ export default function Objetivos({ locales, tenantId, localActivo }: Props) {
         <div className="loading">Cargando objetivos…</div>
       ) : !filaTrabajando ? (
         <EmptyState
-          icon="🏪"
+          icon={<ShopIcon size={32} tone="muted" />}
           title="Seleccioná una sucursal"
           description="Elegí del selector de arriba a qué sucursal cargarle objetivos."
         />

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { db } from "../lib/supabase";
-import { PageHeader, EmptyState, InfoTooltip, LocalLockedChip, LocalSelectorObligatorio } from "../components/ui";
+import { PageHeader, EmptyState, InfoTooltip, LocalLockedChip, LocalSelectorObligatorio, FolderIcon, CheckIcon, AlertIcon } from "../components/ui";
 import { parseCSV, downloadCSVTemplate } from "../lib/parseCSV";
 import type { Local, Usuario } from "../types";
 
@@ -100,7 +100,8 @@ function FileUploader({ onParsed }: { onParsed: (rows: Array<Record<string, stri
       background: "var(--pase-celeste-100)", color: "var(--pase-text)",
       fontSize: "var(--pase-fs-base)", fontWeight: 500,
     }}>
-      📂 Subir CSV
+      <FolderIcon size={16} tone="celeste" />
+      Subir CSV
       <input
         type="file"
         accept=".csv,text/csv"
@@ -127,8 +128,11 @@ function Resumen({ resultado, onReset }: { resultado: Resultado; onReset: () => 
       border: `0.5px solid ${resultado.ok ? "var(--pase-celeste-300)" : "var(--pase-border-strong)"}`,
       marginTop: 12,
     }}>
-      <strong style={{ fontSize: "var(--pase-fs-md)", color: "var(--pase-text)" }}>
-        {resultado.ok ? "✓ " : "⚠ "}
+      <strong style={{ fontSize: "var(--pase-fs-md)", color: "var(--pase-text)", display: "inline-flex", alignItems: "center", gap: 8 }}>
+        {resultado.ok
+          ? <CheckIcon size={16} tone="gold" />
+          : <AlertIcon size={16} tone="muted" />
+        }
         {resultado.importadas} registro{resultado.importadas === 1 ? "" : "s"} importado{resultado.importadas === 1 ? "" : "s"}
       </strong>
       {resultado.errores.length > 0 && (
@@ -569,7 +573,7 @@ function PreviewTable({ rows, headers, validar, onCancel, onConfirm, confirming,
   if (rows.length === 0) {
     return (
       <EmptyState
-        icon="⚠"
+        icon={<AlertIcon size={32} tone="muted" />}
         title="CSV vacío"
         description="El archivo no tiene filas de datos (solo el header). Revisá el archivo y volvé a subir."
         cta={<button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>Volver</button>}
@@ -609,9 +613,13 @@ function PreviewTable({ rows, headers, validar, onCancel, onConfirm, confirming,
                   {headers.map(h => <td key={h}>{r[h] || ""}</td>)}
                   <td style={{ fontSize: "var(--pase-fs-xs)" }}>
                     {err ? (
-                      <span style={{ color: "#D97706" }}>⚠ {err}</span>
+                      <span style={{ color: "#D97706", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        <AlertIcon size={12} tone="muted" /> {err}
+                      </span>
                     ) : (
-                      <span style={{ color: "var(--pase-celeste)" }}>✓ OK</span>
+                      <span style={{ color: "var(--pase-celeste)", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        <CheckIcon size={12} tone="celeste" /> OK
+                      </span>
                     )}
                   </td>
                 </tr>
