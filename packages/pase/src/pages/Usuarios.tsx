@@ -292,45 +292,91 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
       <div className="panel">
         {loading ? <div className="loading">Cargando...</div> : (
           <div style={{overflowX:"auto"}}>
-          <table><thead><tr><th>Nombre</th><th>Email</th><th>Locales</th><th>Módulos</th><th>Activo</th><th></th></tr></thead>
-          <tbody>{usuarios.map(u => (
-            <tr key={u.id} style={{ opacity: u.activo === false ? 0.4 : 1 }}>
-              <td style={{ fontWeight: 500 }}>{u.nombre}</td>
-              <td className="mono" style={{ color:"var(--muted2)", fontSize:11 }}>{u.email}</td>
-              <td style={{ fontSize:10 }}>
-                {u.rol === "dueno" ? <span style={{ color:"var(--muted)" }}>Todos</span> : (() => {
-                  const nombres = getUserLocaleNamesArray(u);
-                  if (!nombres.length) return "—";
-                  return (
-                    <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-                      {nombres.map(n => (
-                        <span key={n} style={{
-                          background:"var(--pase-celeste-100, var(--s2))",
-                          color:"var(--pase-text, var(--txt))",
-                          padding:"2px 8px",
-                          borderRadius:"var(--pase-radius-pill, 999px)",
-                          fontSize:10,
-                          whiteSpace:"nowrap",
-                          fontFamily:"var(--pase-font)",
-                        }}>{n}</span>
-                      ))}
+          <table>
+            <thead><tr>
+              <th>Nombre</th>
+              <th>Sucursales</th>
+              <th>Acceso</th>
+              <th style={{ width: 90 }}>Estado</th>
+              <th style={{ width: 60 }}></th>
+            </tr></thead>
+            <tbody>{usuarios.map(u => {
+              const esDueno = u.rol === "dueno" || u.rol === "admin" || u.rol === "superadmin";
+              const nombres = esDueno ? null : getUserLocaleNamesArray(u);
+              const cantPermisos = (u._permisos || []).length;
+              return (
+                <tr key={u.id} style={{ opacity: u.activo === false ? 0.5 : 1 }}>
+                  <td style={{ padding: "12px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{
+                        width: 30, height: 30, borderRadius: "50%",
+                        background: "var(--pase-celeste-100)",
+                        border: "0.5px solid var(--pase-celeste-300)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        color: "var(--pase-celeste)", fontSize: "var(--pase-fs-sm)", fontWeight: 500,
+                        flexShrink: 0,
+                      }}>
+                        {(u.nombre || "?")[0]!.toUpperCase()}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 500, color: "var(--pase-text)", fontSize: "var(--pase-fs-base)" }}>
+                          {u.nombre}
+                        </div>
+                        <div style={{ color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-xs)", letterSpacing: 0 }}>
+                          {u.email}
+                        </div>
+                      </div>
                     </div>
-                  );
-                })()}
-              </td>
-              <td style={{ fontSize:10 }}>
-                {u.rol === "dueno" ? <span style={{ color:"var(--muted)" }}>Todos</span> :
-                 (u._permisos || []).length ? <span>{u._permisos!.length} módulos</span> : "—"}
-              </td>
-              <td>
-                <span className={`badge ${u.activo !== false ? "b-success" : "b-muted"}`}
-                  style={{ cursor:"pointer" }} onClick={() => toggleActivo(u)}>
-                  {u.activo !== false ? "Activo" : "Inactivo"}
-                </span>
-              </td>
-              <td><button className="btn btn-ghost btn-sm" onClick={() => abrirEditar(u)}>Editar</button></td>
-            </tr>
-          ))}</tbody></table>
+                  </td>
+                  <td style={{ color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-sm)" }}>
+                    {esDueno
+                      ? <span style={{ color: "var(--pase-text-muted)" }}>Todas</span>
+                      : !nombres || nombres.length === 0
+                        ? <span style={{ color: "var(--pase-text-muted)", fontStyle: "italic" }}>—</span>
+                        : <span>{nombres.join(", ")}</span>
+                    }
+                  </td>
+                  <td style={{ fontSize: "var(--pase-fs-sm)" }}>
+                    {esDueno ? (
+                      <span style={{ color: "var(--pase-celeste)", fontWeight: 500 }}>Dueño/Admin</span>
+                    ) : cantPermisos === 0 ? (
+                      <span style={{ color: "var(--pase-text-muted)", fontStyle: "italic" }}>Sin permisos</span>
+                    ) : (
+                      <span style={{ color: "var(--pase-text-muted)" }}>{cantPermisos} módulos</span>
+                    )}
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      onClick={() => toggleActivo(u)}
+                      title={`Click para ${u.activo !== false ? "desactivar" : "activar"}`}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                        background: "transparent", border: "none", cursor: "pointer",
+                        padding: "4px 0",
+                        color: u.activo !== false ? "var(--pase-celeste)" : "var(--pase-text-muted)",
+                        fontFamily: "var(--pase-font)",
+                        fontSize: "var(--pase-fs-sm)",
+                        fontWeight: 500,
+                      }}
+                    >
+                      <span style={{
+                        width: 7, height: 7, borderRadius: "50%",
+                        background: u.activo !== false ? "var(--pase-celeste)" : "var(--pase-text-muted)",
+                        flexShrink: 0,
+                      }} />
+                      {u.activo !== false ? "Activo" : "Inactivo"}
+                    </button>
+                  </td>
+                  <td>
+                    <button className="btn btn-ghost btn-sm" onClick={() => abrirEditar(u)} style={{ fontSize: "var(--pase-fs-sm)" }}>
+                      Editar
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}</tbody>
+          </table>
           </div>
         )}
       </div>

@@ -410,10 +410,15 @@ export default function Ajustes({ user }: AjustesProps = {}) {
               ☼ Ver tour de bienvenida
             </button>
           )}
-          <button className="btn btn-acc" onClick={openNuevoModal}>
-            <span style={{ width: 14, height: 14, display: "inline-flex" }}>{IconPlus}</span>
-            <span style={{ marginLeft: 4 }}>{nuevoBtnLabel}</span>
-          </button>
+          {/* Botón "+ Nuevo" solo aparece cuando hay un grupo expandido —
+              decisión Lucas 2026-05-17: si no hay contexto claro, el botón
+              confunde porque parece que crea algo genérico. */}
+          {unicoExpandido && (
+            <button className="btn btn-acc" onClick={openNuevoModal}>
+              <span style={{ width: 14, height: 14, display: "inline-flex" }}>{IconPlus}</span>
+              <span style={{ marginLeft: 4 }}>{nuevoBtnLabel}</span>
+            </button>
+          )}
         </div>
       </div>
 
