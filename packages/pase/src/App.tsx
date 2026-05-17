@@ -20,8 +20,6 @@ const ImportarMaxirest = lazy(() => import("./pages/ImportarMaxirest"));
 const Gastos = lazy(() => import("./pages/Gastos"));
 const Usuarios = lazy(() => import("./pages/Usuarios"));
 const Blindaje = lazy(() => import("./pages/herramientas/Blindaje"));
-const PruebaConciliacion1 = lazy(() => import("./pages/herramientas/PruebaConciliacion1"));
-const PruebaConciliacion2 = lazy(() => import("./pages/herramientas/PruebaConciliacion2"));
 const ConciliacionBancaria = lazy(() => import("./pages/ConciliacionBancaria").then(m => ({ default: m.ConciliacionBancaria })));
 const RRHHPage = lazy(() => import("./pages/RRHH"));
 const Tenants = lazy(() => import("./pages/Tenants"));
@@ -316,8 +314,6 @@ function AppMain() {
               <Route path="/equipo" element={<RRHHPage {...props}/>} />
               <Route path="/herramientas/contador-iva" element={<Contador {...props}/>} />
               <Route path="/herramientas/blindaje" element={<Blindaje {...props}/>} />
-              <Route path="/herramientas/prueba-conciliacion-1" element={<PruebaConciliacion1 {...props}/>} />
-              <Route path="/herramientas/prueba-conciliacion-2" element={<PruebaConciliacion2 {...props}/>} />
               <Route path="/herramientas/conciliacion-bancaria" element={<ConciliacionBancaria />} />
 
               {/* Sistema */}

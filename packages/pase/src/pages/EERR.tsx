@@ -250,8 +250,8 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const porCatRet=RETIROS_SOCIOS.map(c=>({c,t:tGastoCat(c, "retiro_socio")})).filter(x=>x.t>0);
 
   const ERow=({label,valor,color,big}: {label: string, valor: number, color: string, big?: boolean})=>(
-    <div className="eerr-row" style={big?{background:"var(--s2)",padding:"12px 16px"}:{}}>
-      <span style={{fontSize:big?13:11,fontWeight:big?600:400,color:big?"var(--txt)":"var(--muted2)"}}>{label}</span>
+    <div className="eerr-row" style={big?{background:"var(--pase-celeste-100)",padding:"12px 16px",borderLeft:"3px solid var(--pase-celeste)"}:{}}>
+      <span style={{fontSize:big?13:11,fontWeight:big?600:400,color:big?"var(--pase-text)":"var(--muted2)"}}>{label}</span>
       <div>
         <span style={{fontFamily:"'Inter',sans-serif",fontSize:big?17:13,fontWeight:500,color}}>{fmt_$(valor)}</span>
         {!big&&<span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(Math.abs(valor))}</span>}

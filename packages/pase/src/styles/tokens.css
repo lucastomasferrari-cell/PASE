@@ -122,23 +122,50 @@
  * ════════════════════════════════════════════════════════════════════ */
 
 [data-theme="dark"] {
-  /* Base */
-  --pase-bg:      #131F44;        /* fondo principal — navy más oscuro */
-  --pase-bg-soft: #1E2D5C;        /* titlebar, secciones — un toque más claro */
-  --pase-bg-out:  #2A3A6A;        /* íconos "salida"/grises */
+  /* Base — paleta unificada con COMANDA POS (2026-05-17): tono más neutro,
+   * menos navy puro, mejor contraste para data densa. Mantenemos el ancla
+   * celeste/dorado de marca pero la base es "graphite-blue" más oscuro. */
+  --pase-bg:      #0E1726;        /* fondo principal — graphite-blue muy oscuro */
+  --pase-bg-soft: #1A2540;        /* cards/panels — claro distinguible del bg */
+  --pase-bg-out:  #2A3550;        /* secciones secundarias / chips */
 
   /* Texto invertido */
-  --pase-text:       #F5F8FB;     /* primario blanco-azulado */
-  --pase-text-muted: #9DB5D4;     /* sub-textos en celeste apagado */
+  --pase-text:       #F0F4F8;     /* primario casi blanco con tinte frío */
+  --pase-text-muted: #93A8C2;     /* sub-textos */
 
-  /* Bordes */
-  --pase-border:        #2A3A6A;
-  --pase-border-strong: #3A4A7A;
+  /* Bordes — un poco más visibles que antes para separar cards del bg */
+  --pase-border:        #2A3550;
+  --pase-border-strong: #3F4D6E;
 
-  /* Derivados del celeste, ahora en clave navy (hovers/sparklines) */
-  --pase-celeste-100: #2A3D6E;    /* fondo hover/active */
-  --pase-celeste-200: #3A5288;    /* sparkline bajo */
-  --pase-celeste-300: #5074B5;    /* sparkline medio */
+  /* Derivados del celeste, ahora en clave dark (hovers/sparklines/highlights) */
+  --pase-celeste-100: #1E3155;    /* fondo hover/active — más contraste que antes */
+  --pase-celeste-200: #2E4878;    /* sparkline bajo */
+  --pase-celeste-300: #4A6FA8;    /* sparkline medio */
 
   /* --pase-celeste y --pase-gold se mantienen — son anclas de marca */
+}
+
+/* Dark mode: cards/panels usan --pase-bg-soft para contrastar contra el bg.
+ * En light mode quedan blancos (--pase-bg = #FFFFFF) y se distinguen por
+ * border; en dark el border solo no alcanza — los igualábamos al fondo. */
+[data-theme="dark"] .kpi,
+[data-theme="dark"] .panel,
+[data-theme="dark"] .caja-card,
+[data-theme="dark"] .modal,
+[data-theme="dark"] .login-card {
+  background: var(--pase-bg-soft);
+}
+[data-theme="dark"] .panel-hd,
+[data-theme="dark"] .modal-hd,
+[data-theme="dark"] .modal-ft {
+  background: var(--pase-bg-soft);
+}
+[data-theme="dark"] .alert {
+  background: var(--pase-bg-out);
+}
+[data-theme="dark"] thead th {
+  background: var(--pase-bg-out);
+}
+[data-theme="dark"] tbody tr:hover {
+  background: var(--pase-bg-out);
 }

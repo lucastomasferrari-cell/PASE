@@ -63,10 +63,6 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   { path: "/equipo",                     slug: "rrhh",          label: "Equipo",          sec: "Herramientas" },
   { path: "/herramientas/contador-iva",  slug: "contador",      label: "Contador / IVA",  sec: "Herramientas" },
   { path: "/herramientas/blindaje",      slug: "blindaje",      label: "Blindaje",        sec: "Herramientas" },
-  // Observatorios temporales (2026-05-14) — 2 pruebas paralelas de conciliación.
-  // Eliminar cuando se decida el experimento.
-  { path: "/herramientas/prueba-conciliacion-1", slug: "prueba_conciliacion_1", label: "Prueba Conciliación 1", sec: "Herramientas" },
-  { path: "/herramientas/prueba-conciliacion-2", slug: "prueba_conciliacion_2", label: "Prueba Conciliación 2", sec: "Herramientas" },
 
   // === Sistema ===
   { path: "/ajustes",                    slug: "ajustes",       label: "Ajustes",         sec: "Sistema" },
