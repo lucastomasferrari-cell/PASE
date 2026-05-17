@@ -271,8 +271,8 @@ function AppMain() {
               <Route path="/ventas" element={<Ventas {...props}/>} />
 
               {/* Dirección */}
-              <Route path="/negocio" element={<Negocio user={user || undefined}/>} />
-              <Route path="/finanzas" element={<Finanzas/>} />
+              <Route path="/negocio" element={<Negocio user={user || undefined} locales={locales}/>} />
+              <Route path="/finanzas" element={<Finanzas locales={locales}/>} />
               <Route path="/objetivos" element={<Objetivos/>} />
               <Route path="/reportes" element={<EERR {...props}/>} />
 

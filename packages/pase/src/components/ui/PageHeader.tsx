@@ -53,33 +53,36 @@ export function PageHeader({ title, subtitle, info, actions }: PageHeaderProps) 
       </div>
       <style>{`
         .pase-page-header {
-          margin-bottom: 16px;
+          margin-bottom: 20px;
+          padding-bottom: 14px;
+          border-bottom: 0.5px solid var(--pase-border);
         }
         .pase-page-header__title-row {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          gap: 12px;
+          gap: 16px;
           flex-wrap: wrap;
         }
         .pase-page-header__title-wrap {
           display: flex;
           align-items: center;
-          gap: 6px;
+          gap: 8px;
           min-width: 0;
         }
         .pase-page-header__title {
           margin: 0;
-          font-size: 20px;
+          font-size: 22px;
           font-weight: 500;
           color: var(--pase-text);
-          letter-spacing: -0.02em;
-          line-height: 1.2;
+          letter-spacing: -0.025em;
+          line-height: 1.15;
           font-family: var(--pase-font);
         }
         .pase-page-header__subtitle {
           color: var(--pase-text-muted);
           font-weight: 400;
+          margin-left: 2px;
         }
         .pase-page-header__actions {
           display: flex;
@@ -88,9 +91,14 @@ export function PageHeader({ title, subtitle, info, actions }: PageHeaderProps) 
           align-items: center;
         }
         @media (max-width: 640px) {
+          .pase-page-header {
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+          }
           .pase-page-header__title-row {
             flex-direction: column;
             align-items: stretch;
+            gap: 10px;
           }
           .pase-page-header__title-wrap {
             justify-content: flex-start;

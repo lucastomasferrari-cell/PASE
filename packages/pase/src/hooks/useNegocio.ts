@@ -1,7 +1,8 @@
 // Hooks de datos para la pantalla Negocio.
 //
 // Vista ejecutiva del dueño/gerente: foco en plata, rentabilidad y objetivos.
-// Por ahora retornan data MOCK realista. Segunda iteración:
+// Por ahora retornan data MOCK realista (números). LOS NOMBRES DE LOCALES
+// son reales — vienen del prop `locales` del tenant. Segunda iteración:
 //   - useNegocioConsolidado: agrega ventas + costos + margen cross-local.
 //   - useNegocioLocal(localId): mismo agregado filtrado por local.
 //   - useObjetivos: lectura de la tabla objetivos_mes (a crear) — facturación,
@@ -9,6 +10,8 @@
 //     por dueño mes a mes.
 
 export type LocalCtx = "consolidado" | string;
+
+export interface LocalRef { id: number; nombre: string }
 
 export interface NegocioKpis {
   facturacionMes: number;
@@ -56,12 +59,57 @@ export interface ObjetivoMes {
   valorObjetivo: string;
 }
 
-/** Datos consolidados del tenant para el mes actual. Mock. */
-export function useNegocioConsolidado(_ctx: LocalCtx = "consolidado"): NegocioKpis {
-  // Nota: cuando _ctx !== "consolidado" filtraremos por local. Por ahora
-  // los hooks devuelven el mismo mock independiente del contexto.
+/** Datos consolidados del tenant para el mes actual. Mock numérico, NOMBRES
+ * REALES desde el prop `locales`. Cuando se conecte al backend real,
+ * `performanceLocales` saldrá de una query agrupada por local_id. */
+export function useNegocioConsolidado(
+  _ctx: LocalCtx = "consolidado",
+  locales: LocalRef[] = [],
+): NegocioKpis {
+  // Performance por local: usa los locales reales del tenant. Repartimos
+  // la facturación mock entre ellos en proporción decreciente (primer
+  // local lidera). Cuando lleguen los números reales de DB, esto se
+  // reemplaza con la query agregada.
+  const facturacionTotal = 28_450_000;
+  const sortedLocales = [...locales]; // copia para no mutar
+  // Pesos arbitrarios para distribuir mock (decreciente). Total = 100.
+  const pesos = sortedLocales.length === 0
+    ? []
+    : sortedLocales.length === 1
+      ? [100]
+      : sortedLocales.length === 2
+        ? [57, 43]
+        : sortedLocales.length === 3
+          ? [42, 33, 25]
+          : sortedLocales.length === 4
+            ? [35, 28, 22, 15]
+            : Array.from({ length: sortedLocales.length }, (_, i) =>
+                Math.max(5, Math.round(100 / sortedLocales.length * (sortedLocales.length - i) / sortedLocales.length * 2)),
+              );
+    // Normalizar pesos para que sumen ~100
+  const totalPesos = pesos.reduce((s, p) => s + p, 0) || 1;
+  const maxPeso = Math.max(...pesos, 1);
+
+  const performanceLocales = sortedLocales.map((l, i) => {
+    const peso = pesos[i] ?? 1;
+    const facturacion = Math.round((facturacionTotal * peso) / totalPesos);
+    const pctBar = Math.round((peso / maxPeso) * 100);
+    return { nombre: l.nombre, facturacion, pctBar };
+  });
+
+  // Footer: si hay >= 2 locales, comparamos los 2 primeros; si no, mensaje genérico.
+  const performanceFooter = sortedLocales.length >= 2
+    ? {
+        texto: `${sortedLocales[0]!.nombre} lidera con __1__ de diferencia. ${sortedLocales[1]!.nombre} viene mejorando: __2__ vs. abril.`,
+        valoresDestacados: ["+32.8%", "+14%"],
+      }
+    : {
+        texto: `Único local activo este mes. Compará contra el ritmo del mes anterior.`,
+        valoresDestacados: [],
+      };
+
   return {
-    facturacionMes: 28_450_000,
+    facturacionMes: facturacionTotal,
     proyectadoFinMes: 42_100_000,
     diaActual: 13,
     diasDelMes: 31,
@@ -81,14 +129,8 @@ export function useNegocioConsolidado(_ctx: LocalCtx = "consolidado"): NegocioKp
       rentabilidad:  { value: 13_200_000, sub: "Margen final 31.4%" },
     },
 
-    performanceLocales: [
-      { nombre: "Belgrano",     facturacion: 16_230_000, pctBar: 92 },
-      { nombre: "Villa Crespo", facturacion: 12_220_000, pctBar: 69 },
-    ],
-    performanceFooter: {
-      texto: "Belgrano lidera con __1__ de diferencia. Villa Crespo viene mejorando: __2__ vs. abril.",
-      valoresDestacados: ["+32.8%", "+14%"],
-    },
+    performanceLocales,
+    performanceFooter,
   };
 }
 

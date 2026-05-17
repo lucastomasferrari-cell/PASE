@@ -50,8 +50,14 @@ function SparkBars({ values }: { values: number[] }) {
 // ─── Pantalla ───────────────────────────────────────────────────────
 type LocalCtx = "consolidado" | string;
 
-export default function Finanzas() {
-  // Switch local controlado por URL (?local=consolidado|belgrano|villa-crespo).
+interface FinanzasProps {
+  /** Locales del tenant — pasados desde App.tsx. Generan el switch dinámico
+   * + las cards por local + los vencimientos con nombre real. */
+  locales?: Array<{ id: number; nombre: string }>;
+}
+
+export default function Finanzas({ locales: tenantLocales = [] }: FinanzasProps) {
+  // Switch local controlado por URL (?local=<id>|consolidado).
   // Sprint mayo 2026 v2 Commit 7. Permite compartir links a vistas
   // específicas y que F5 preserve el local seleccionado.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -64,8 +70,10 @@ export default function Finanzas() {
   };
 
   const consolidado = useFinanzasConsolidado();
-  const locales = useLocalFinanzas();
-  const vencimientos = useVencimientos();
+  // Pasamos los locales reales del tenant a los hooks de mock — devuelven
+  // 1 card/registro por local real con números mock distribuidos.
+  const locales = useLocalFinanzas(tenantLocales);
+  const vencimientos = useVencimientos(tenantLocales);
 
   const isConsolidado = ctx === "consolidado";
 
@@ -80,7 +88,12 @@ export default function Finanzas() {
     if (isConsolidado) return vencimientos;
     const localName = localSel?.name;
     if (!localName) return [];
-    return vencimientos.filter(v => v.local.nombre === localName || v.local.nombre === "Ambos");
+    // "Ambos" / "Todos los locales" = vencimiento aplica a todos.
+    return vencimientos.filter(v =>
+      v.local.nombre === localName ||
+      v.local.nombre === "Ambos" ||
+      v.local.nombre === "Todos los locales",
+    );
   }, [isConsolidado, vencimientos, localSel]);
 
   const switchOptions: Array<{ id: LocalCtx; label: string }> = [

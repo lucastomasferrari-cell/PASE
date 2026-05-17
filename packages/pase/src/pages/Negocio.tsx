@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNegocioConsolidado, useObjetivos, type LocalCtx } from "../hooks/useNegocio";
+import { useMemo, useState } from "react";
+import { useNegocioConsolidado, useObjetivos, type LocalCtx, type LocalRef } from "../hooks/useNegocio";
 import { InfoTooltip } from "../components/ui";
 import { formatCurrency, formatCurrencyCompact } from "../lib/format";
 import styles from "./Negocio.module.css";
@@ -36,19 +36,25 @@ function SparkBars({ values }: { values: number[] }) {
 }
 
 // ─── Pantalla ───────────────────────────────────────────────────────
-const SWITCH_OPTIONS: Array<{ id: LocalCtx; label: string }> = [
-  { id: "consolidado",  label: "Consolidado" },
-  { id: "belgrano",     label: "Belgrano" },
-  { id: "villa-crespo", label: "Villa Crespo" },
-];
-
 interface NegocioProps {
   user?: { nombre?: string };
+  /** Locales del tenant — pasados desde App.tsx. Generan el switch dinámico
+   * + el ranking por local en Performance. */
+  locales?: LocalRef[];
 }
 
-export default function Negocio({ user }: NegocioProps) {
+export default function Negocio({ user, locales = [] }: NegocioProps) {
   const [ctx, setCtx] = useState<LocalCtx>("consolidado");
-  const kpis = useNegocioConsolidado(ctx);
+  const switchOptions = useMemo<Array<{ id: LocalCtx; label: string }>>(() => {
+    const base: Array<{ id: LocalCtx; label: string }> = [
+      { id: "consolidado", label: "Consolidado" },
+    ];
+    for (const l of locales) {
+      base.push({ id: String(l.id), label: l.nombre });
+    }
+    return base;
+  }, [locales]);
+  const kpis = useNegocioConsolidado(ctx, locales);
   const objetivos = useObjetivos(ctx);
 
   const userName = user?.nombre || "Lucas Ferrari";
@@ -71,7 +77,7 @@ export default function Negocio({ user }: NegocioProps) {
         </div>
         <div className={styles.topbarRight}>
           <div className={styles.switch} role="tablist" aria-label="Contexto de local">
-            {SWITCH_OPTIONS.map((opt) => (
+            {switchOptions.map((opt) => (
               <button
                 key={opt.id}
                 type="button"

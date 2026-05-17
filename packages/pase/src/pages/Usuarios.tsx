@@ -279,12 +279,11 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
       <div className="panel">
         {loading ? <div className="loading">Cargando...</div> : (
           <div style={{overflowX:"auto"}}>
-          <table><thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Locales</th><th>Módulos</th><th>Activo</th><th></th></tr></thead>
+          <table><thead><tr><th>Nombre</th><th>Email</th><th>Locales</th><th>Módulos</th><th>Activo</th><th></th></tr></thead>
           <tbody>{usuarios.map(u => (
             <tr key={u.id} style={{ opacity: u.activo === false ? 0.4 : 1 }}>
               <td style={{ fontWeight: 500 }}>{u.nombre}</td>
               <td className="mono" style={{ color:"var(--muted2)", fontSize:11 }}>{u.email}</td>
-              <td><span className="badge" style={{ background:rc(u.rol)+"22", color:rc(u.rol) }}>{ROLES[u.rol]?.label || u.rol}</span></td>
               <td style={{ fontSize:10 }}>
                 {u.rol === "dueno" ? <span style={{ color:"var(--muted)" }}>Todos</span> : (() => {
                   const nombres = getUserLocaleNamesArray(u);

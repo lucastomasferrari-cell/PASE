@@ -14,6 +14,8 @@
 
 import type { LocalCardProps } from "../components/ui/LocalCard";
 
+export interface LocalRef { id: number; nombre: string }
+
 export interface FinanzasConsolidado {
   efectivoTotal: number;
   flow: { entro: number; salio: number; resultado: number };
@@ -58,56 +60,80 @@ export function useFinanzasConsolidado(): FinanzasConsolidado {
   };
 }
 
-/** Lista de locales con sus datos financieros del mes. Mock con 2. */
-export function useLocalFinanzas(): LocalCardProps[] {
-  return [
-    {
-      name: "Belgrano",
-      badge: { text: "líder", variant: "default" },
-      variant: "leading",
-      metaInfo: "42 días operados · 12 personas",
-      facturacionMes: 14_800_000,
-      flow: { entro: 17_220_000, salio: 14_720_000, resultado: 2_500_000 },
+/** Lista de locales con sus datos financieros del mes.
+ * MOCK numérico, NOMBRES REALES desde el prop `locales` del tenant.
+ * El primer local del array es el "líder" mock, los demás se distribuyen
+ * proporcionalmente. Cuando se conecte al backend real, esto va a ser una
+ * query agrupada por local_id sumando ventas + saldos + vencimientos. */
+export function useLocalFinanzas(locales: LocalRef[] = []): LocalCardProps[] {
+  if (locales.length === 0) return [];
+
+  // Templates mock: el "líder" (variant=leading) y el resto (variant=behind).
+  // Distribuyo magnitudes decreciente — el primer local lidera.
+  const baseFacturacion = 14_800_000;
+  const baseStep = 0.78; // cada local siguiente factura ~78% del anterior
+
+  return locales.map((local, i) => {
+    const factor = Math.pow(baseStep, i);
+    const facturacion = Math.round(baseFacturacion * factor);
+    const entro = Math.round(facturacion * 1.16);
+    const salio = Math.round(entro * 0.85);
+    const isLeader = i === 0;
+    return {
+      name: local.nombre,
+      badge: isLeader
+        ? { text: "líder", variant: "default" }
+        : i === locales.length - 1 && locales.length > 1
+          ? { text: "debajo del ritmo", variant: "warn" }
+          : { text: "en ritmo", variant: "default" },
+      variant: isLeader ? "leading" : "behind",
+      metaInfo: `42 días operados · ${12 - i} personas`,
+      facturacionMes: facturacion,
+      flow: { entro, salio, resultado: entro - salio },
       kpis: {
-        margen:     { value: "44.2%", delta: "+2.1 pts", tone: "up" },
-        ticketProm: { value: 4_820, delta: "+4.8% vs. abril", tone: "up" },
-        tickets:    { value: 1_842, delta: "+6.2% vs. abril", tone: "up" },
+        margen: {
+          value: `${(44.2 - i * 1.8).toFixed(1)}%`,
+          delta: isLeader ? "+2.1 pts" : "−1.4 pts",
+          tone: isLeader ? "up" : "warn",
+        },
+        ticketProm: {
+          value: Math.round(4_820 * factor),
+          delta: "+1.1% vs. abril",
+          tone: "up",
+        },
+        tickets: {
+          value: Math.round(1_842 * factor),
+          delta: isLeader ? "+6.2% vs. abril" : "−3.8% vs. abril",
+          tone: isLeader ? "up" : "warn",
+        },
       },
-      spark7d: [38, 42, 50, 46, 58, 64, 72],
-      spark7dLastAmount: 612_400,
-      efectivoCaja: 780_000,
-      venceSemana: { amount: 0, warn: false },
-    },
-    {
-      name: "Villa Crespo",
-      badge: { text: "debajo del ritmo", variant: "warn" },
-      variant: "behind",
-      metaInfo: "42 días operados · 9 personas",
-      facturacionMes: 11_200_000,
-      flow: { entro: 13_410_000, salio: 12_870_000, resultado: 540_000 },
-      kpis: {
-        margen:     { value: "38.1%", delta: "−1.4 pts", tone: "warn" },
-        ticketProm: { value: 4_230, delta: "+1.1% vs. abril", tone: "up" },
-        tickets:    { value: 1_452, delta: "−3.8% vs. abril", tone: "warn" },
-      },
-      spark7d: [44, 38, 42, 36, 46, 40, 48],
-      spark7dLastAmount: 408_900,
-      efectivoCaja: 460_000,
-      venceSemana: { amount: 1_120_000, warn: true },
-    },
-  ];
+      spark7d: [38, 42, 50, 46, 58, 64, 72].map((v) => Math.round(v * factor)),
+      spark7dLastAmount: Math.round(612_400 * factor),
+      efectivoCaja: Math.round(780_000 * factor),
+      venceSemana: isLeader
+        ? { amount: 0, warn: false }
+        : { amount: Math.round(1_120_000 * factor), warn: true },
+    };
+  });
 }
 
-/** Próximos vencimientos (facturas / servicios recurrentes). Mock. */
-export function useVencimientos(): Vencimiento[] {
+/** Próximos vencimientos (facturas / servicios recurrentes). MOCK
+ * numérico, nombres de locales reales rotando. */
+export function useVencimientos(locales: LocalRef[] = []): Vencimiento[] {
+  // Si no hay locales pasados, devolvemos mock con "—" como placeholder.
+  const nombres = locales.length > 0 ? locales.map((l) => l.nombre) : ["—"];
+  const ambosLabel = locales.length >= 2 ? "Todos los locales" : nombres[0]!;
+  // Rotador para asignar locales a cada vencimiento sin hardcodear.
+  const pick = (i: number) => nombres[i % nombres.length]!;
+
   return [
     {
       id: "v1",
       dia: 16, mes: "MAY",
       inminente: true,
       nombre: "Provid SA",
-      descripcion: "Insumos cocina · Belgrano",
-      local: { nombre: "Belgrano", tone: "primary" },
+      descripcion: `Insumos cocina · ${pick(0)}`,
+      local: { nombre: pick(0), tone: "primary" },
       monto: 412_300,
       diasRestantes: 3,
     },
@@ -116,8 +142,8 @@ export function useVencimientos(): Vencimiento[] {
       dia: 18, mes: "MAY",
       inminente: true,
       nombre: "Edesur",
-      descripcion: "Servicio eléctrico · Ambos locales",
-      local: { nombre: "Ambos", tone: "muted" },
+      descripcion: `Servicio eléctrico · ${ambosLabel}`,
+      local: { nombre: ambosLabel, tone: "muted" },
       monto: 286_500,
       diasRestantes: 5,
     },
@@ -126,8 +152,8 @@ export function useVencimientos(): Vencimiento[] {
       dia: 20, mes: "MAY",
       inminente: true,
       nombre: "Don Carmelo",
-      descripcion: "Frutas y verduras · Villa Crespo",
-      local: { nombre: "Villa Crespo", tone: "muted" },
+      descripcion: `Frutas y verduras · ${pick(1)}`,
+      local: { nombre: pick(1), tone: "muted" },
       monto: 184_700,
       diasRestantes: 7,
     },
@@ -136,8 +162,8 @@ export function useVencimientos(): Vencimiento[] {
       dia: 25, mes: "MAY",
       inminente: false,
       nombre: "AFIP — IVA",
-      descripcion: "Posición mensual · Ambos locales",
-      local: { nombre: "Ambos", tone: "muted" },
+      descripcion: `Posición mensual · ${ambosLabel}`,
+      local: { nombre: ambosLabel, tone: "muted" },
       monto: 1_240_000,
       diasRestantes: 12,
     },
@@ -146,8 +172,8 @@ export function useVencimientos(): Vencimiento[] {
       dia: 28, mes: "MAY",
       inminente: false,
       nombre: "Aguas Argentinas",
-      descripcion: "Servicio · Belgrano",
-      local: { nombre: "Belgrano", tone: "primary" },
+      descripcion: `Servicio · ${pick(0)}`,
+      local: { nombre: pick(0), tone: "primary" },
       monto: 68_900,
       diasRestantes: 15,
     },
@@ -155,9 +181,9 @@ export function useVencimientos(): Vencimiento[] {
       id: "v6",
       dia: 31, mes: "MAY",
       inminente: false,
-      nombre: "Alquiler Belgrano",
+      nombre: `Alquiler ${pick(0)}`,
       descripcion: "Mensualidad",
-      local: { nombre: "Belgrano", tone: "primary" },
+      local: { nombre: pick(0), tone: "primary" },
       monto: 1_850_000,
       diasRestantes: 18,
     },

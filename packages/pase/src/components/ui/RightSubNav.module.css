@@ -1,14 +1,15 @@
 /* Sub-nav lateral derecho. Vive dentro del main de cada módulo madre
- * (Compras, Caja). Reutilizable para futuras integraciones. */
+ * (Compras, Caja). Cada item es una mini-card celeste estilo "Caja Efectivo"
+ * para coherencia visual con las cards principales del módulo. */
 
 .aside {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 8px;
   padding-top: 2px;
   padding-left: 16px;
   border-left: 0.5px solid var(--pase-border);
-  width: 168px;
+  width: 200px;
   flex-shrink: 0;
 }
 
@@ -18,7 +19,7 @@
   color: var(--pase-celeste-300);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 0 8px 6px;
+  padding: 0 4px 8px;
   font-family: var(--pase-font);
 }
 
@@ -26,72 +27,113 @@
   padding-top: 14px;
 }
 
+/* ── Item base: card sutil con borde + hover refinado ─────────────── */
 .item {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 7px 10px;
-  border-radius: 7px;
-  font-size: 12px;
-  color: var(--pase-text-muted);
-  background: transparent;
-  border: none;
+  padding: 12px 14px;
+  border-radius: var(--pase-radius-card, 14px);
+  font-size: 13px;
+  color: var(--pase-text);
+  background: #fff;
+  border: 0.5px solid var(--pase-border);
   cursor: pointer;
   font-family: var(--pase-font);
   letter-spacing: -0.005em;
   width: 100%;
   text-align: left;
-  transition: background 0.12s, color 0.12s;
+  overflow: hidden;
+  transition: transform 0.18s ease, box-shadow 0.18s ease,
+              background 0.18s ease, border-color 0.18s ease;
 }
 
 .item:hover {
-  background: var(--pase-bg-soft);
-  color: var(--pase-text);
+  border-color: var(--pase-celeste-300);
+  box-shadow: 0 2px 8px rgba(90, 143, 168, 0.08);
+  transform: translateY(-1px);
 }
 
+/* ── Item activo: idéntico estilo a card "Caja Efectivo" ────────────
+ * Background celeste sólido + texto blanco + círculo decorativo
+ * semitransparente en la esquina inferior derecha. */
 .itemActive {
-  background: var(--pase-celeste-100);
-  color: var(--pase-text);
+  background: var(--pase-celeste);
+  border-color: var(--pase-celeste);
+  color: #fff;
   font-weight: 500;
+  box-shadow: 0 4px 12px rgba(90, 143, 168, 0.20);
+}
+
+.itemActive:hover {
+  background: var(--pase-celeste);
+  border-color: var(--pase-celeste);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(90, 143, 168, 0.28);
+}
+
+/* Círculo decorativo solo en el item activo, igual a Caja Efectivo */
+.itemActive::after {
+  content: "";
+  position: absolute;
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  bottom: -32px;
+  right: -32px;
+  pointer-events: none;
 }
 
 .itemLabel {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   flex: 1;
   min-width: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .itemIcon {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.itemActive .itemIcon {
+  opacity: 1;
 }
 
 .itemCount {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--pase-text-muted);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
+  font-weight: 500;
+  position: relative;
+  z-index: 1;
 }
 
 .itemActive .itemCount {
-  color: var(--pase-text);
-  font-weight: 500;
+  color: #fff;
+  opacity: 0.9;
 }
 
-/* Layout responsivo: en mobile el sub-nav se colapsa a dropdown arriba */
+/* Layout responsivo: en mobile el sub-nav se colapsa a row arriba */
 @media (max-width: 900px) {
   .aside {
     width: 100%;
     flex-direction: row;
     flex-wrap: wrap;
+    gap: 6px;
     padding-left: 0;
     border-left: none;
     border-bottom: 0.5px solid var(--pase-border);
-    padding-bottom: 10px;
+    padding-bottom: 12px;
     margin-bottom: 14px;
   }
   .sectionHeader {
@@ -104,8 +146,12 @@
   .item {
     width: auto;
     flex: 0 0 auto;
+    padding: 8px 12px;
   }
-  .itemCount {
-    margin-left: 4px;
+  .itemActive::after {
+    width: 60px;
+    height: 60px;
+    bottom: -24px;
+    right: -24px;
   }
 }
