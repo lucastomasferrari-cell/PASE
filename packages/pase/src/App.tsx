@@ -30,6 +30,7 @@ const Objetivos = lazy(() => import("./pages/Objetivos"));
 const Ajustes = lazy(() => import("./pages/Ajustes"));
 const Importar = lazy(() => import("./pages/Importar"));
 const LectorExtractoMP = lazy(() => import("./pages/LectorExtractoMP"));
+const Reservas = lazy(() => import("./pages/Reservas"));
 const DashboardHome = lazy(() => import("./dashboards/DashboardHome").then(m => ({ default: m.DashboardHome })));
 const SettingsDashboards = lazy(() => import("./dashboards/SettingsDashboards"));
 
@@ -325,6 +326,12 @@ function AppMain() {
                 path="/herramientas/lector-mp"
                 element={
                   user ? <LectorExtractoMP {...props}/> : <Navigate to="/inicio" replace />
+                }
+              />
+              <Route
+                path="/reservas"
+                element={
+                  user ? <Reservas {...props}/> : <Navigate to="/inicio" replace />
                 }
               />
 

@@ -71,6 +71,7 @@ export const MODULOS = [
   { slug:"caja", label:"Caja", icon:"💰" },
   { slug:"compras", label:"Compras", icon:"📄" },
   { slug:"ventas", label:"Ventas", icon:"↑" },
+  { slug:"reservas", label:"Reservas", icon:"📅" },
   { slug:"negocio", label:"Negocio", icon:"📊" },
   { slug:"finanzas", label:"Finanzas", icon:"💼" },
   { slug:"objetivos", label:"Objetivos", icon:"◎" },
