@@ -446,8 +446,25 @@ input[type="month"].search:hover::-webkit-calendar-picker-indicator{
 }
 
 /* ─── ESTADOS ──────────────────────────────────────────────────────── */
-.empty{padding:48px;text-align:center;color:var(--pase-text-muted);font-size:12px}
-.loading{padding:48px;text-align:center;color:var(--pase-text-muted);font-size:11px}
+/* Polish v2 2026-05-17: empty/loading legacy refinados para que las pantallas
+   que todavía no migraron a <EmptyState> se vean dignas (no migrar 8+ pantallas
+   archivo por archivo cuando una mejora global cubre el 80%). */
+.empty{
+  padding:40px 24px;
+  text-align:center;
+  color:var(--pase-text-muted);
+  font-size:var(--pase-fs-sm);
+  line-height:1.55;
+  font-style:italic;
+  letter-spacing:var(--pase-ls-snug);
+}
+.loading{
+  padding:40px 24px;
+  text-align:center;
+  color:var(--pase-text-muted);
+  font-size:var(--pase-fs-sm);
+  letter-spacing:var(--pase-ls-snug);
+}
 
 /* ─── LOGIN ────────────────────────────────────────────────────────── */
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--pase-bg);position:relative}
