@@ -34,17 +34,80 @@ const Reservas = lazy(() => import("./pages/Reservas"));
 const DashboardHome = lazy(() => import("./dashboards/DashboardHome").then(m => ({ default: m.DashboardHome })));
 const SettingsDashboards = lazy(() => import("./dashboards/SettingsDashboards"));
 
-// Loader full-page (mismo look-and-feel que authLoading) para los
-// early-returns lazy.
+// Loader full-page con el logo "pase." centrado + barra de progreso
+// animada en celeste. Reemplazó al "Cargando..." crudo (2026-05-17).
 const FullPageLoader = () => (
-  <div className="login-wrap">
-    <div className="login-bg"/>
-    <div className="login-card" style={{textAlign:"center",padding:40}}>Cargando...</div>
+  <div className="pase-loader-fullpage">
+    <div className="pase-loader-brand">
+      pase<span style={{color:"var(--pase-gold)"}}>.</span>
+    </div>
+    <div className="pase-loader-sub">aliado gastronómico</div>
+    <div className="pase-loader-bar"><div className="pase-loader-bar-fill"/></div>
+    <style>{`
+      .pase-loader-fullpage {
+        position: fixed; inset: 0;
+        background: var(--pase-bg, #0E1726);
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 8px;
+        z-index: 9999;
+        font-family: "Inter", system-ui, sans-serif;
+      }
+      .pase-loader-brand {
+        font-size: 38px; font-weight: 500;
+        color: var(--pase-text, #F0F4F8);
+        letter-spacing: -0.035em;
+        line-height: 1;
+      }
+      .pase-loader-sub {
+        font-size: 11px;
+        color: var(--pase-text-muted, #93A8C2);
+        letter-spacing: 0.04em;
+        margin-bottom: 24px;
+      }
+      .pase-loader-bar {
+        width: 180px; height: 2px;
+        background: rgba(117, 170, 219, 0.15);
+        border-radius: 999px; overflow: hidden;
+        position: relative;
+      }
+      .pase-loader-bar-fill {
+        position: absolute; top: 0; left: -40%;
+        width: 40%; height: 100%;
+        background: var(--pase-celeste, #75AADB);
+        border-radius: 999px;
+        animation: pase-loader-slide 1.2s ease-in-out infinite;
+      }
+      @keyframes pase-loader-slide {
+        0% { left: -40%; }
+        100% { left: 100%; }
+      }
+    `}</style>
   </div>
 );
-// Loader inline para las rutas — la sidebar ya está montada, solo
-// cargamos la página en el área principal.
-const PageLoader = () => <div className="loading">Cargando...</div>;
+// Loader inline para cambio de ruta — sidebar ya está montada, solo
+// se carga el área principal. Usa el mismo brand pero más compacto.
+const PageLoader = () => (
+  <div style={{
+    padding: "60px 24px", display: "flex", flexDirection: "column",
+    alignItems: "center", justifyContent: "center", gap: 6,
+  }}>
+    <div style={{
+      fontSize: 24, fontWeight: 500,
+      color: "var(--pase-text)", letterSpacing: "-0.035em", lineHeight: 1,
+    }}>pase<span style={{color:"var(--pase-gold)"}}>.</span></div>
+    <div style={{
+      width: 120, height: 2, background: "rgba(117, 170, 219, 0.15)",
+      borderRadius: 999, overflow: "hidden", position: "relative", marginTop: 8,
+    }}>
+      <div style={{
+        position: "absolute", top: 0, left: "-40%", width: "40%", height: "100%",
+        background: "var(--pase-celeste)", borderRadius: 999,
+        animation: "pase-loader-slide 1.2s ease-in-out infinite",
+      }}/>
+    </div>
+  </div>
+);
 
 // Solo superadmin lee/escribe esta key.
 const TENANT_OVERRIDE_KEY = "pase_tenant_override__superadmin_only";
@@ -240,7 +303,7 @@ function AppMain() {
 
   const props: { user: Usuario; locales: Local[]; localActivo: number | null } = { user: user!, locales, localActivo };
 
-  if (authLoading) return <><style>{css}</style><div className="login-wrap"><div className="login-bg"/><div className="login-card" style={{textAlign:"center",padding:40}}>Cargando...</div></div></>;
+  if (authLoading) return <><style>{css}</style><FullPageLoader/></>;
 
   if(!user) return <><style>{css}</style><Login onLogin={login}/></>;
 
