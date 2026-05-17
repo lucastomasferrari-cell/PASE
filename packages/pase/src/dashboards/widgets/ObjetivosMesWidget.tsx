@@ -32,7 +32,7 @@ export function ObjetivosMesWidget({ ctx }: { ctx: WidgetContext }) {
       const hastaIso = today.toISOString().slice(0, 10);
 
       // 1. Objetivo (de tabla objetivos_mes). Si hay local activo → ese local;
-      //    si no, consolido todos los objetivos del mes.
+      //    si no, sumamos los objetivos de TODOS los locales con objetivo cargado.
       let qObj = db
         .from("objetivos_mes")
         .select("facturacion_objetivo, local_id")
@@ -41,19 +41,34 @@ export function ObjetivosMesWidget({ ctx }: { ctx: WidgetContext }) {
       const { data: objRows, error: objErr } = await qObj;
       if (cancelled) return;
       let facturacion_objetivo: number | null = null;
+      // Capturamos los locales que SÍ tienen objetivo cargado este mes —
+      // las ventas se filtran a esos mismos locales para que la comparación
+      // sea apples-to-apples. Bug fix Lucas 2026-05-17: antes se cruzaba el
+      // objetivo de Villa Crespo ($80M) con ventas consolidadas de todos los
+      // locales ($197M) y daba 247% engañoso.
+      const localesConObjetivo: number[] = [];
       if (!objErr && objRows && objRows.length > 0) {
-        const suma = objRows.reduce((s, r) => s + Number((r as { facturacion_objetivo: number | null }).facturacion_objetivo ?? 0), 0);
+        const suma = objRows.reduce((s, r) => {
+          const row = r as { facturacion_objetivo: number | null; local_id: number | null };
+          if (row.local_id != null) localesConObjetivo.push(row.local_id);
+          return s + Number(row.facturacion_objetivo ?? 0);
+        }, 0);
         if (suma > 0) facturacion_objetivo = suma;
       }
 
-      // 2. Facturado a la fecha (ventas del mes activo).
-      // Sin filtro estado (Maxirest no lo setea — sería NULL y NEQ excluye).
+      // 2. Facturado a la fecha — SOLO de los locales con objetivo cargado
+      //    (cuando estamos en modo consolidado). Si hay local activo, ya
+      //    filtramos por ese.
       let qVen = db
         .from("ventas")
         .select("monto")
         .gte("fecha", primerDiaMes)
         .lte("fecha", hastaIso);
-      if (ctx.localActivo !== null) qVen = qVen.eq("local_id", ctx.localActivo);
+      if (ctx.localActivo !== null) {
+        qVen = qVen.eq("local_id", ctx.localActivo);
+      } else if (localesConObjetivo.length > 0) {
+        qVen = qVen.in("local_id", localesConObjetivo);
+      }
       const { data: venRows, error: venErr } = await qVen;
       if (cancelled || venErr) { setLoading(false); return; }
       const facturacion_actual = (venRows ?? []).reduce((s, r) => s + Number((r as { monto: number }).monto ?? 0), 0);

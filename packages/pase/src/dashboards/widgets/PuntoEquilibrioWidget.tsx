@@ -51,10 +51,16 @@ export function PuntoEquilibrioWidget({ ctx }: { ctx: WidgetContext }) {
         setLoading(false);
         return;
       }
-      const costos_fijos_mes = objRows.reduce(
-        (s, r) => s + Number((r as { costos_fijos_mes: number | null }).costos_fijos_mes ?? 0),
-        0,
-      );
+      // Capturamos los locales con BEP cargado — las ventas se filtran a esos
+      // mismos locales para comparar apples-to-apples (bug fix Lucas 2026-05-17).
+      const localesConBep: number[] = [];
+      const costos_fijos_mes = objRows.reduce((s, r) => {
+        const row = r as { costos_fijos_mes: number | null; margen_contribucion_pct: number | null; local_id: number | null };
+        if (row.local_id != null && Number(row.costos_fijos_mes ?? 0) > 0) {
+          localesConBep.push(row.local_id);
+        }
+        return s + Number(row.costos_fijos_mes ?? 0);
+      }, 0);
       // Margen: promedio de los locales (asume similar entre sucursales).
       const margenes = objRows
         .map(r => Number((r as { margen_contribucion_pct: number | null }).margen_contribucion_pct ?? 0))
@@ -69,14 +75,18 @@ export function PuntoEquilibrioWidget({ ctx }: { ctx: WidgetContext }) {
         return;
       }
 
-      // 2. Facturación a la fecha
-      // Sin filtro estado (Maxirest no lo setea — sería NULL y NEQ excluye).
+      // 2. Facturación a la fecha — SOLO de los locales que tienen BEP cargado
+      //    (cuando estamos en modo consolidado).
       let qVen = db
         .from("ventas")
         .select("monto")
         .gte("fecha", primerDiaMes)
         .lte("fecha", hastaIso);
-      if (ctx.localActivo !== null) qVen = qVen.eq("local_id", ctx.localActivo);
+      if (ctx.localActivo !== null) {
+        qVen = qVen.eq("local_id", ctx.localActivo);
+      } else if (localesConBep.length > 0) {
+        qVen = qVen.in("local_id", localesConBep);
+      }
       const { data: venRows, error: venErr } = await qVen;
       if (cancelled || venErr) { setLoading(false); return; }
       const facturacion_actual = (venRows ?? []).reduce(
