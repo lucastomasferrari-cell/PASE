@@ -1,5 +1,6 @@
 import { fmt_$ } from "../../lib/utils";
 import { calcularVacaciones } from "../../lib/calculos/rrhh";
+import { LocalLockedChip, LocalSelectorObligatorio } from "../../components/ui";
 import type { Local } from "../../types";
 import type { Empleado } from "../../types/rrhh";
 import type { EmpForm, EmpModalState } from "./types";
@@ -14,6 +15,8 @@ interface TabEmpleadosProps {
   esEnc: boolean;
   locsDisp: Local[];
   locales: Local[];
+  /** localActivo del sidebar — si !== null, sucursal viene LOCKED en el modal. */
+  localActivo: number | null;
   empsFilt: Empleado[];
   vacTomadas: Record<string, number>;
   puestos: string[];
@@ -31,7 +34,7 @@ interface TabEmpleadosProps {
 export function TabEmpleados({
   empFiltLocal, setEmpFiltLocal, empSearch, setEmpSearch,
   empMostrarInactivos, setEmpMostrarInactivos,
-  esEnc, locsDisp, locales, empsFilt, vacTomadas, puestos,
+  esEnc, locsDisp, locales, localActivo, empsFilt, vacTomadas, puestos,
   empModal, setEmpModal, empForm, setEmpForm,
   abrirEmpNuevo, abrirEmpEditar, guardarEmp, setLegajoId, puedeVerInactivos,
 }: TabEmpleadosProps) {
@@ -97,7 +100,21 @@ export function TabEmpleados({
                 <div className="field"><label>Nombre *</label><input value={empForm.nombre} onChange={e => setEmpForm({...empForm, nombre:e.target.value})} /></div>
               </div>
               <div className="form2">
-                <div className="field"><label>Local *</label><select value={empForm.local_id} onChange={e => setEmpForm({...empForm, local_id:e.target.value})}><option value="">Seleccionar...</option>{locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
+                <div className="field"><label>Local *</label>
+                  {localActivo !== null ? (
+                    <div style={{ paddingTop: 4 }}>
+                      <LocalLockedChip nombre={locales.find(l => l.id === localActivo)?.nombre ?? "—"} />
+                    </div>
+                  ) : locsDisp.length === 1 ? (
+                    <input type="text" value={locsDisp[0]!.nombre} disabled readOnly />
+                  ) : (
+                    <LocalSelectorObligatorio
+                      value={empForm.local_id ? Number(empForm.local_id) : null}
+                      onChange={id => setEmpForm({ ...empForm, local_id: id !== null ? String(id) : "" })}
+                      locales={locsDisp}
+                    />
+                  )}
+                </div>
                 <div className="field"><label>CUIL</label><input value={empForm.cuil} onChange={e => setEmpForm({...empForm, cuil:e.target.value})} placeholder="XX-XXXXXXXX-X" /></div>
               </div>
               <div className="field"><label>Puesto *</label><select value={empForm.puesto} onChange={e => setEmpForm({...empForm, puesto:e.target.value})}><option value="">Seleccionar...</option>{puestos.map(p => <option key={p} value={p}>{p}</option>)}<option value="__otro">-- Otro --</option></select>

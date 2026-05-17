@@ -687,6 +687,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
           esEnc={esEnc}
           locsDisp={locsDisp}
           locales={locales}
+          localActivo={localActivo}
           empsFilt={empsFilt}
           vacTomadas={vacTomadas}
           puestos={puestos}
