@@ -275,20 +275,70 @@ body{
 .kpi-warn{color:var(--pase-text-muted)}
 .kpi-success{color:var(--pase-celeste)}
 
-.panel{background:var(--pase-bg);border:0.5px solid var(--pase-border);border-radius:14px;margin-bottom:10px;overflow:hidden}
-.panel-hd{padding:12px 16px;border-bottom:0.5px solid var(--pase-border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--pase-bg)}
+.panel{background:var(--pase-bg);border:0.5px solid var(--pase-border);border-radius:var(--pase-radius-card);margin-bottom:16px;overflow:hidden;transition:border-color 0.15s ease}
+.panel-hd{padding:14px 18px;border-bottom:0.5px solid var(--pase-border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--pase-bg)}
 .panel-title{font-size:var(--pase-fs-base);font-weight:500;color:var(--pase-text);letter-spacing:var(--pase-ls-snug)}
 
-/* ─── TABLAS ───────────────────────────────────────────────────────── */
-/* Escala unificada 2026-05-16: headers sm (11px), celdas base (13px).
-   Padding 8px vertical, 12px horizontal. Resultado: ~30% más densa que
-   defaults pero con jerarquía visual clara y consistente. */
-table{width:100%;border-collapse:collapse}
-thead th{padding:8px 12px;text-align:left;font-size:var(--pase-fs-sm);font-weight:500;color:var(--pase-text-muted);border-bottom:0.5px solid var(--pase-border);background:var(--pase-bg-soft);letter-spacing:var(--pase-ls-snug);text-transform:none}
-tbody tr{border-bottom:0.5px solid var(--pase-border);transition:background 0.1s}
+/* ─── TABLAS ─────────────────────────────────────────────────────────
+ * Polish v2 2026-05-17:
+ * - thead sticky (queda visible al scrollear tablas largas)
+ * - Hover sutil con transition + cursor en filas clickeables
+ * - .num / .num-right helpers para alinear columnas de plata a la derecha
+ * - .col-fecha / .col-id helpers para columnas chicas (tabular-nums)
+ * - Padding 8/12 — densidad consistente
+ * - Bordes finos var(--pase-border)
+ */
+table{width:100%;border-collapse:collapse;font-family:var(--pase-font)}
+thead th{
+  padding:10px 12px;
+  text-align:left;
+  font-size:var(--pase-fs-sm);
+  font-weight:500;
+  color:var(--pase-text-muted);
+  border-bottom:0.5px solid var(--pase-border);
+  background:var(--pase-bg-soft);
+  letter-spacing:var(--pase-ls-snug);
+  text-transform:none;
+  position:sticky;
+  top:0;
+  z-index:1;
+  white-space:nowrap;
+}
+thead th.num-right,thead th.col-monto{text-align:right}
+thead th.col-fecha,thead th.col-id{text-align:left;white-space:nowrap}
+tbody tr{
+  border-bottom:0.5px solid var(--pase-border);
+  transition:background 0.12s ease;
+}
 tbody tr:last-child{border-bottom:none}
 tbody tr:hover{background:var(--pase-bg-soft)}
-td{padding:9px 12px;font-size:var(--pase-fs-base);color:var(--pase-text)}
+tbody tr.clickable{cursor:pointer}
+tbody tr.clickable:hover{background:var(--pase-celeste-100)}
+td{padding:9px 12px;font-size:var(--pase-fs-base);color:var(--pase-text);vertical-align:middle}
+td.num,td.num-right,td.col-monto{font-variant-numeric:tabular-nums;text-align:right;font-weight:500}
+td.col-fecha,td.col-id{font-variant-numeric:tabular-nums;color:var(--pase-text-muted)}
+td.col-truncate{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ─── FOCUS RING UNIFICADO (a11y) ───────────────────────────────────── */
+/* Cualquier elemento interactivo con :focus-visible recibe el mismo ring
+   celeste. Reemplaza los outlines nativos del browser inconsistentes. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible{
+  outline:2px solid var(--pase-celeste);
+  outline-offset:2px;
+}
+
+/* Hover lift sutil aplicable a cualquier elemento interactivo */
+.lift{transition:transform 0.15s ease,box-shadow 0.15s ease}
+.lift:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(15,30,45,0.06)}
+
+/* Animación fade-in para entradas de listas/cards. Usar .anim-in className */
+@keyframes pase-fade-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.anim-in{animation:pase-fade-in 0.2s ease-out}
 
 /* ─── BADGES ───────────────────────────────────────────────────────── */
 .badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:var(--pase-fs-xs);font-weight:500;background:var(--pase-celeste-100);color:var(--pase-text);letter-spacing:var(--pase-ls-snug)}

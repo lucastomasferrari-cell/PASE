@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getPinnedNotesPara, completarTarea, type PinnedNote } from "../service";
+import { EmptyState } from "../../components/ui";
 import type { WidgetContext } from "../types";
 
 const PRIORIDAD_BG: Record<PinnedNote["prioridad"], string> = {
@@ -41,9 +42,12 @@ export function TareasPineadasWidget({ ctx }: { ctx: WidgetContext }) {
 
   if (notas.length === 0) {
     return (
-      <div style={{ padding: "20px 0", textAlign: "center", color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-sm)", fontStyle: "italic" }}>
-        Sin tareas pineadas. El dueño puede agregar mensajes desde Ajustes → Dashboards.
-      </div>
+      <EmptyState
+        icon="📌"
+        title="Sin tareas pineadas"
+        description="El dueño puede agregar mensajes para vos desde Ajustes → Dashboards."
+        size="compact"
+      />
     );
   }
 

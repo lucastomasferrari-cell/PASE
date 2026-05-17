@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { db } from "../../lib/supabase";
 import { formatCurrency } from "../../lib/format";
+import { EmptyState } from "../../components/ui";
 import type { WidgetContext } from "../types";
 
 // Ventas registradas hoy (tabla `ventas`). Cantidad + total.
@@ -35,9 +36,12 @@ export function VentasHoyWidget({ ctx }: { ctx: WidgetContext }) {
 
   if (!data || data.count === 0) {
     return (
-      <div style={{ padding: "20px 0", textAlign: "center", color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-sm)", fontStyle: "italic" }}>
-        Sin ventas registradas hoy todavía.
-      </div>
+      <EmptyState
+        icon="📊"
+        title="Sin ventas hoy todavía"
+        description="Cuando se registren ventas las vas a ver acá."
+        size="compact"
+      />
     );
   }
 
@@ -53,7 +57,7 @@ export function VentasHoyWidget({ ctx }: { ctx: WidgetContext }) {
       }}>
         {formatCurrency(data.total)}
       </div>
-      <div style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-text-muted)", marginTop: 4 }}>
+      <div style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-text-muted)", marginTop: 6 }}>
         {data.count} {data.count === 1 ? "venta" : "ventas"} hoy
       </div>
     </div>

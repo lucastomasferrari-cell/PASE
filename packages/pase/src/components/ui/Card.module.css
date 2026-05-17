@@ -1,8 +1,100 @@
+/* Card — contenedor base del sistema de diseño PASE.
+ * Variantes (default / soft / anchor) + padding (none / md / lg).
+ * Si onClick → cursor + hover sutil con elevación leve. */
+
 .card {
-  background: var(--pase-bg);
-  border: var(--pase-border-thin) solid var(--pase-border);
   border-radius: var(--pase-radius-card);
-  padding: 14px 16px;
   font-family: var(--pase-font);
   color: var(--pase-text);
+  display: block;
+  text-align: left;
+  width: 100%;
+  border: var(--pase-border-thin) solid var(--pase-border);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ─── Variantes ──────────────────────────────────────────────────────── */
+.variant_default {
+  background: var(--pase-bg);
+}
+.variant_soft {
+  background: var(--pase-bg-soft);
+}
+.variant_anchor {
+  background: var(--pase-celeste);
+  color: #fff;
+  border-color: var(--pase-celeste);
+  box-shadow: 0 2px 6px rgba(90, 143, 168, 0.15);
+}
+
+/* Círculo decorativo solo en anchor — patrón canónico Caja Efectivo */
+.variant_anchor::after {
+  content: "";
+  position: absolute;
+  bottom: -40px;
+  right: -40px;
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  pointer-events: none;
+}
+
+/* ─── Padding ─────────────────────────────────────────────────────────── */
+.padding_none { padding: 0; }
+.padding_md   { padding: 14px 16px; }
+.padding_lg   { padding: 18px 20px; }
+
+/* ─── Interactivo ─────────────────────────────────────────────────────── */
+.clickable {
+  cursor: pointer;
+  border-width: var(--pase-border-thin);
+  background: var(--pase-bg);
+  font: inherit;
+  color: inherit;
+}
+.clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15, 30, 45, 0.06);
+  border-color: var(--pase-celeste-300);
+}
+.clickable.variant_anchor:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(90, 143, 168, 0.25);
+  border-color: var(--pase-celeste);
+}
+.clickable:focus-visible {
+  outline: 2px solid var(--pase-celeste);
+  outline-offset: 2px;
+}
+
+/* ─── Header opcional (label + action) ────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  position: relative;
+  z-index: 1;
+}
+
+.label {
+  font-size: var(--pase-fs-sm);
+  font-weight: 500;
+  letter-spacing: var(--pase-ls-snug);
+  color: var(--pase-text-muted);
+  flex: 1;
+  min-width: 0;
+}
+
+.variant_anchor .label {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.action {
+  flex-shrink: 0;
+  font-size: var(--pase-fs-sm);
 }
