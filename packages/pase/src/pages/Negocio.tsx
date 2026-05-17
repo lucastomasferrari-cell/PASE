@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNegocioConsolidado, useObjetivos, type LocalCtx, type LocalRef } from "../hooks/useNegocio";
 import { InfoTooltip } from "../components/ui";
+import { LocalContextPicker } from "../components/ui/LocalContextPicker";
 import { formatCurrency, formatCurrencyCompact } from "../lib/format";
 import styles from "./Negocio.module.css";
 
@@ -76,20 +77,11 @@ export default function Negocio({ user, locales = [] }: NegocioProps) {
           </InfoTooltip>
         </div>
         <div className={styles.topbarRight}>
-          <div className={styles.switch} role="tablist" aria-label="Contexto de local">
-            {switchOptions.map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                className={`${styles.switchItem} ${ctx === opt.id ? styles.switchItemActive : ""}`}
-                onClick={() => setCtx(opt.id)}
-                role="tab"
-                aria-selected={ctx === opt.id}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+          <LocalContextPicker
+            options={switchOptions.map(o => ({ id: String(o.id), label: o.label }))}
+            value={String(ctx)}
+            onChange={(id) => setCtx(id)}
+          />
           <span className={styles.avatar} title={userName}>{userInitials}</span>
         </div>
       </div>

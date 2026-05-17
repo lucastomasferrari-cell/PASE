@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { ComparativaLocales, LocalCard, type LocalCardProps } from "../components/ui";
 import { useFinanzasConsolidado, useLocalFinanzas, useVencimientos } from "../hooks/useFinanzas";
 import { InfoTooltip } from "../components/ui";
+import { LocalContextPicker } from "../components/ui/LocalContextPicker";
 import { formatCurrency, formatCurrencyCompact } from "../lib/format";
 import styles from "./Finanzas.module.css";
 
@@ -114,20 +115,11 @@ export default function Finanzas({ locales: tenantLocales = [] }: FinanzasProps)
             real está en backlog.
           </InfoTooltip>
         </div>
-        <div className={styles.switch} role="tablist" aria-label="Contexto de local">
-          {switchOptions.map(opt => (
-            <button
-              key={opt.id}
-              type="button"
-              className={`${styles.switchItem} ${ctx === opt.id ? styles.switchItemActive : ""}`}
-              onClick={() => setCtx(opt.id)}
-              role="tab"
-              aria-selected={ctx === opt.id}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+        <LocalContextPicker
+          options={switchOptions}
+          value={ctx}
+          onChange={(id) => setCtx(id)}
+        />
       </div>
 
       {/* Botón "Ver comparativa" solo en vista por local ──────────── */}

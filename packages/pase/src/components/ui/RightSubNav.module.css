@@ -1,15 +1,21 @@
-/* Sub-nav lateral derecho. Vive dentro del main de cada módulo madre
- * (Compras, Caja). Cada item es una mini-card celeste estilo "Caja Efectivo"
- * para coherencia visual con las cards principales del módulo. */
+/* Sub-nav lateral derecho — discreto, navegacional.
+ * Vive dentro del main de cada módulo madre (Compras, Caja).
+ *
+ * Diseño:
+ *   - Items inactivos: sin borde ni fondo, hover sutil. Tipo lista.
+ *   - Item activo: pill celeste sólido, color blanco. Coherente con el resto
+ *     del design system pero SIN cards completas (esas son para KPIs, no para nav).
+ *   - Ancho 156px para no comer espacio a la tabla principal.
+ */
 
 .aside {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 1px;
   padding-top: 2px;
-  padding-left: 16px;
+  padding-left: 18px;
   border-left: 0.5px solid var(--pase-border);
-  width: 200px;
+  width: 156px;
   flex-shrink: 0;
 }
 
@@ -19,87 +25,63 @@
   color: var(--pase-celeste-300);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 0 4px 8px;
+  padding: 0 10px 6px;
   font-family: var(--pase-font);
 }
 
 .sectionHeader:not(:first-of-type) {
-  padding-top: 14px;
+  padding-top: 16px;
 }
 
-/* ── Item base: card sutil con borde + hover refinado ─────────────── */
+/* ── Item: navegacional, sin card ──────────────────────────────────── */
 .item {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 12px 14px;
-  border-radius: var(--pase-radius-card, 14px);
-  font-size: 13px;
-  color: var(--pase-text);
-  background: #fff;
-  border: 0.5px solid var(--pase-border);
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--pase-text-muted);
+  background: transparent;
+  border: none;
   cursor: pointer;
   font-family: var(--pase-font);
   letter-spacing: -0.005em;
   width: 100%;
   text-align: left;
-  overflow: hidden;
-  transition: transform 0.18s ease, box-shadow 0.18s ease,
-              background 0.18s ease, border-color 0.18s ease;
+  transition: background 0.12s, color 0.12s;
 }
 
 .item:hover {
-  border-color: var(--pase-celeste-300);
-  box-shadow: 0 2px 8px rgba(90, 143, 168, 0.08);
-  transform: translateY(-1px);
+  background: var(--pase-celeste-100, rgba(90, 143, 168, 0.08));
+  color: var(--pase-text);
 }
 
-/* ── Item activo: idéntico estilo a card "Caja Efectivo" ────────────
- * Background celeste sólido + texto blanco + círculo decorativo
- * semitransparente en la esquina inferior derecha. */
+/* ── Item activo: pill celeste sólida, sin sombras ni adornos ──────── */
 .itemActive {
   background: var(--pase-celeste);
-  border-color: var(--pase-celeste);
   color: #fff;
   font-weight: 500;
-  box-shadow: 0 4px 12px rgba(90, 143, 168, 0.20);
 }
 
 .itemActive:hover {
   background: var(--pase-celeste);
-  border-color: var(--pase-celeste);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(90, 143, 168, 0.28);
-}
-
-/* Círculo decorativo solo en el item activo, igual a Caja Efectivo */
-.itemActive::after {
-  content: "";
-  position: absolute;
-  width: 90px;
-  height: 90px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
-  bottom: -32px;
-  right: -32px;
-  pointer-events: none;
+  color: #fff;
 }
 
 .itemLabel {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   flex: 1;
   min-width: 0;
-  position: relative;
-  z-index: 1;
 }
 
 .itemIcon {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   flex-shrink: 0;
   opacity: 0.85;
 }
@@ -109,13 +91,11 @@
 }
 
 .itemCount {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--pase-text-muted);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
   font-weight: 500;
-  position: relative;
-  z-index: 1;
 }
 
 .itemActive .itemCount {
@@ -123,17 +103,17 @@
   opacity: 0.9;
 }
 
-/* Layout responsivo: en mobile el sub-nav se colapsa a row arriba */
+/* Layout responsivo: en mobile el sub-nav colapsa a row arriba */
 @media (max-width: 900px) {
   .aside {
     width: 100%;
     flex-direction: row;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 4px;
     padding-left: 0;
     border-left: none;
     border-bottom: 0.5px solid var(--pase-border);
-    padding-bottom: 12px;
+    padding-bottom: 10px;
     margin-bottom: 14px;
   }
   .sectionHeader {
@@ -146,12 +126,5 @@
   .item {
     width: auto;
     flex: 0 0 auto;
-    padding: 8px 12px;
-  }
-  .itemActive::after {
-    width: 60px;
-    height: 60px;
-    bottom: -24px;
-    right: -24px;
   }
 }
