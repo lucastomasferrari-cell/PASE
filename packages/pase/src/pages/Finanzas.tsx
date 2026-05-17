@@ -171,8 +171,7 @@ function VentasMensualesChart({ localActivo }: { localActivo: number | null }) {
         .from("ventas")
         .select("fecha, monto")
         .gte("fecha", desdeIso)
-        .lte("fecha", hastaIso)
-        .neq("estado", "anulada");
+        .lte("fecha", hastaIso);
       if (localActivo !== null) q = q.eq("local_id", localActivo);
       const { data: rows, error } = await q;
       if (cancelled || error) { setLoading(false); return; }

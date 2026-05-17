@@ -31,12 +31,12 @@ export function ComparativaSucursalesWidget({ ctx }: { ctx: WidgetContext }) {
       const hasta = today.toISOString().slice(0, 10);
 
       // Traer ventas + nombres de locales en paralelo (ambos limitados por RLS).
+      // Sin filtro estado (Maxirest no lo setea — sería NULL y NEQ excluye).
       const [ventasRes, localesRes] = await Promise.all([
         db.from("ventas")
           .select("local_id, monto")
           .gte("fecha", desde)
-          .lte("fecha", hasta)
-          .neq("estado", "anulada"),
+          .lte("fecha", hasta),
         db.from("locales").select("id, nombre").order("nombre"),
       ]);
 

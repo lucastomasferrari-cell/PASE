@@ -35,12 +35,12 @@ export function VentasSemanaWidget({ ctx }: { ctx: WidgetContext }) {
       // Rango: 14 días atrás → hoy. Particionamos en 2 semanas.
       const desde = new Date(today.getTime() - 13 * ms).toISOString().slice(0, 10);
       const hasta = today.toISOString().slice(0, 10);
+      // Sin filtro de estado (Maxirest no lo setea — ver VentasHoyWidget).
       let q = db
         .from("ventas")
         .select("fecha, monto")
         .gte("fecha", desde)
-        .lte("fecha", hasta)
-        .neq("estado", "anulada");
+        .lte("fecha", hasta);
       if (ctx.localActivo !== null) q = q.eq("local_id", ctx.localActivo);
       const { data, error } = await q;
       if (cancelled || error) { setLoading(false); return; }

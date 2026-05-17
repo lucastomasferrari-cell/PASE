@@ -70,12 +70,12 @@ export function PuntoEquilibrioWidget({ ctx }: { ctx: WidgetContext }) {
       }
 
       // 2. Facturación a la fecha
+      // Sin filtro estado (Maxirest no lo setea — sería NULL y NEQ excluye).
       let qVen = db
         .from("ventas")
         .select("monto")
         .gte("fecha", primerDiaMes)
-        .lte("fecha", hastaIso)
-        .neq("estado", "anulada");
+        .lte("fecha", hastaIso);
       if (ctx.localActivo !== null) qVen = qVen.eq("local_id", ctx.localActivo);
       const { data: venRows, error: venErr } = await qVen;
       if (cancelled || venErr) { setLoading(false); return; }

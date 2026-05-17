@@ -373,13 +373,36 @@ export default function EERR({ user, localActivo }: EERRProps) {
       </div>
       {loading?<div className="loading">Cargando...</div>:(
         <>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12,marginBottom:20}}>
-            <div className="kpi"><div className="kpi-label">Ventas</div><div className="kpi-value kpi-success">{fmt_$(totalVentas)}</div></div>
-            <div className="kpi"><div className="kpi-label">CMV</div><div className="kpi-value kpi-warn">{fmt_$(totalCMV)}</div><div className="kpi-sub">{pct(totalCMV)}</div></div>
-            <div className="kpi"><div className="kpi-label">Labor Cost</div><div className="kpi-value kpi-danger">{fmt_$(sueldos)}</div><div className="kpi-sub">{pct(sueldos)}</div></div>
-            <div className="kpi"><div className="kpi-label">% Rentabilidad</div><div className={`kpi-value ${utilNeta>=0?"kpi-success":"kpi-danger"}`}>{totalVentas>0?((utilNeta/totalVentas)*100).toFixed(1):"0"}%</div></div>
-            <div className="kpi"><div className="kpi-label">Ganancia del mes</div><div className={`kpi-value ${utilNeta>=0?"kpi-success":"kpi-danger"}`}>{fmt_$(utilNeta)}</div></div>
+          <div className="eerr-kpis-row">
+            <div className="kpi"><div className="kpi-label">Ventas</div><div className="kpi-value-compact kpi-success">{fmt_$(totalVentas)}</div></div>
+            <div className="kpi"><div className="kpi-label">CMV</div><div className="kpi-value-compact kpi-warn">{fmt_$(totalCMV)}</div><div className="kpi-sub">{pct(totalCMV)}</div></div>
+            <div className="kpi"><div className="kpi-label">Labor Cost</div><div className="kpi-value-compact kpi-danger">{fmt_$(sueldos)}</div><div className="kpi-sub">{pct(sueldos)}</div></div>
+            <div className="kpi"><div className="kpi-label">% Rentabilidad</div><div className={`kpi-value-compact ${utilNeta>=0?"kpi-success":"kpi-danger"}`}>{totalVentas>0?((utilNeta/totalVentas)*100).toFixed(1):"0"}%</div></div>
+            <div className="kpi"><div className="kpi-label">Ganancia del mes</div><div className={`kpi-value-compact ${utilNeta>=0?"kpi-success":"kpi-danger"}`}>{fmt_$(utilNeta)}</div></div>
           </div>
+          <style>{`
+            /* KPIs compactados 2026-05-17 (Lucas: muy grandes + scroll horizontal).
+               Grid auto-fit en vez de 5 columnas fijas → wrap a 3+2 en pantallas
+               medianas en vez de scrollear. Valor 18px en vez de 28px. */
+            .eerr-kpis-row {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+              gap: 10px;
+              margin-bottom: 20px;
+            }
+            .kpi-value-compact {
+              font-size: 18px;
+              font-weight: 500;
+              line-height: 1.1;
+              color: var(--pase-text);
+              letter-spacing: var(--pase-ls-tight);
+              font-variant-numeric: tabular-nums;
+            }
+            @media (max-width: 640px) {
+              .eerr-kpis-row { grid-template-columns: repeat(2, 1fr); }
+              .kpi-value-compact { font-size: 16px; }
+            }
+          `}</style>
 
           {/* Gráfico de evolución — solo cuando hay >=1 mes comparado. Muestra
               tendencia de Ventas, CMV, Sueldos y Util. Neta a lo largo de
@@ -427,7 +450,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
               <div className="panel-hd"><span className="panel-title">Resumen P&L{mesesComp.length > 0 ? ` — comparativo` : ""}</span></div>
               {mesesComp.length === 0 ? (
                 <div style={{padding:"4px 0 12px"}}>
-                  <ERow label="Ventas Brutas" valor={totalVentas} color="var(--success)" big={false}/>
+                  <ERow label="Ventas Brutas" valor={totalVentas} color="var(--pase-text)" big={false}/>
                   <ERow label="(-) CMV" valor={-totalCMV} color="var(--danger)" big={false}/>
                   <ERow label="(=) Utilidad Bruta" valor={utilBruta} color={utilBruta>=0?"var(--success)":"var(--danger)"} big={true}/>
                   <ERow label="(-) Gastos Fijos y Variables" valor={-totalGastos} color="var(--danger)" big={false}/>

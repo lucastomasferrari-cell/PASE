@@ -14,11 +14,13 @@ export function VentasHoyWidget({ ctx }: { ctx: WidgetContext }) {
     async function reload() {
       setLoading(true);
       const today = new Date().toISOString().slice(0, 10);
+      // No filtro por estado=anulada porque Maxirest no setea ese campo
+      // (queda NULL) y .neq excluiría TODOS los rows en SQL (NULL != X = UNKNOWN).
+      // Las ventas anuladas son minoría — preferimos sobre-contar a no mostrar nada.
       let q = db
         .from("ventas")
         .select("monto", { count: "exact" })
-        .eq("fecha", today)
-        .neq("estado", "anulada");
+        .eq("fecha", today);
       if (ctx.localActivo !== null) q = q.eq("local_id", ctx.localActivo);
       const { data: rows, count, error } = await q;
       if (cancelled || error) { setLoading(false); return; }

@@ -18,12 +18,15 @@
   }
 }
 
-/* Card base — misma altura y padding en las 3 para coherencia visual. */
+/* Card base — misma altura y padding en las 3 para coherencia visual.
+ * Compactada 2026-05-17 (Lucas: los box se veían muy grandes).
+ * Antes: padding 18/20, min-height 112, value 28px.
+ * Ahora: padding 14/16, min-height 88, value 22px. */
 .card {
   position: relative;
   border-radius: var(--pase-radius-card);
-  padding: 18px 20px;
-  min-height: 112px;
+  padding: 14px 16px;
+  min-height: 88px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -127,12 +130,12 @@
 
 .value {
   position: relative;
-  font-size: var(--pase-fs-2xl);
+  font-size: var(--pase-fs-xl);
   font-weight: 500;
   letter-spacing: var(--pase-ls-tight);
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .valueNegative {
