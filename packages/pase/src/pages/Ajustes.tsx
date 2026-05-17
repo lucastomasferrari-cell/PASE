@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { db } from "../lib/supabase";
 import { Modal, InfoTooltip } from "../components/ui";
 import { lanzarTour, resetTour } from "../lib/onboardingTours";
+import { getPermisos } from "../lib/auth";
 import type { Usuario } from "../types";
 import styles from "./Ajustes.module.css";
 
@@ -402,7 +403,7 @@ export default function Ajustes({ user }: AjustesProps = {}) {
               className="btn btn-ghost btn-sm"
               onClick={() => {
                 resetTour(user.id);
-                lanzarTour(user.rol as "dueno" | "admin" | "encargado" | "cajero" | "superadmin", user.id, { force: true });
+                lanzarTour(getPermisos(user), user.id, { force: true });
               }}
               title="Reproducir el tour de bienvenida"
             >

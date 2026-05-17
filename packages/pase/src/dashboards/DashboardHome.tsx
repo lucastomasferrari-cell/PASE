@@ -68,16 +68,16 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
   }, [usuario.id, usuario.rol]);
 
   // Tour de bienvenida — se dispara automático la primera vez que un usuario
-  // entra. Si ya lo vio (flag localStorage), no hace nada. Reproducible
-  // manualmente desde Ajustes → "Ver tour de bienvenida". Delay corto para
-  // que el sidebar termine de hidratarse (los data-tour selectors necesitan
-  // estar en el DOM).
+  // entra. Refactor 2026-05-17: los tours son por PERMISO (no por rol), así
+  // que pasamos `permisos` y el motor decide cuáles mostrar. Si el user ya
+  // vio bienvenida y todos sus permisos, no hace nada. Si tiene permisos
+  // nuevos desde la última vez, le muestra solo esos.
   useEffect(() => {
     const t = setTimeout(() => {
-      lanzarTour(usuario.rol, usuario.id);
+      lanzarTour(permisos, usuario.id);
     }, 500);
     return () => clearTimeout(t);
-  }, [usuario.id, usuario.rol]);
+  }, [usuario.id, permisos]);
 
   const widgets: WidgetDefinition[] = useMemo(() => {
     if (!widgetIds) return [];

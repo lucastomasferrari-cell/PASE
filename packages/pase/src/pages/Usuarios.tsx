@@ -324,14 +324,37 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
 
       {modal && (
         <div className="overlay" onClick={() => setModal(null)}>
-          <div className="modal" style={{ width:700 }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ width:780 }} onClick={e => e.stopPropagation()}>
             <div className="modal-hd">
-              <div className="modal-title">{modal === "new" ? "Nuevo Usuario" : "Editar Usuario"}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{
+                  width: 38, height: 38, borderRadius: "50%",
+                  background: "var(--pase-celeste-100)",
+                  border: "0.5px solid var(--pase-celeste-300)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "var(--pase-fs-md)", fontWeight: 500,
+                  color: "var(--pase-celeste)", flexShrink: 0,
+                }}>
+                  {form.nombre ? form.nombre[0]!.toUpperCase() : "+"}
+                </div>
+                <div>
+                  <div className="modal-title" style={{ marginBottom: 0 }}>
+                    {modal === "new" ? "Nuevo usuario" : form.nombre || "Editar usuario"}
+                  </div>
+                  {modal !== "new" && form.email && (
+                    <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", marginTop: 2 }}>
+                      {form.email}
+                    </div>
+                  )}
+                </div>
+              </div>
               <button className="close-btn" onClick={() => setModal(null)}>✕</button>
             </div>
             <div className="modal-body">
               {err && <div className="alert alert-danger">{err}</div>}
 
+              {/* ─── Datos básicos ────────────────────────────────────── */}
+              <SectionTitle>Datos básicos</SectionTitle>
               <div className="form2">
                 <div className="field"><label>Nombre completo</label>
                   <input value={form.nombre} onChange={e => setForm({ ...form, nombre:e.target.value })} /></div>
@@ -340,24 +363,27 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                     disabled={modal !== "new"} placeholder="nombre (se agrega @pase.local)" /></div>
               </div>
 
-              <div className="field"><label>{modal === "new" ? "Contraseña *" : "Nueva contraseña (dejar vacío para no cambiar)"}</label>
-                <div style={{ position:"relative" }}>
-                  <input type={showPw ? "text" : "password"} autoComplete="new-password"
-                    value={form.password} onChange={e => setForm({ ...form, password:e.target.value })}
-                    placeholder={modal === "new" ? "Obligatorio" : "Opcional"} />
-                  <button type="button" onClick={() => setShowPw(!showPw)}
-                    style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:"var(--muted2)", cursor:"pointer", fontSize:14 }}>
-                    {showPw ? "🙈" : "👁"}
-                  </button>
+              <div className="form2">
+                <div className="field"><label>{modal === "new" ? "Contraseña *" : "Nueva contraseña (opcional)"}</label>
+                  <div style={{ position:"relative" }}>
+                    <input type={showPw ? "text" : "password"} autoComplete="new-password"
+                      value={form.password} onChange={e => setForm({ ...form, password:e.target.value })}
+                      placeholder={modal === "new" ? "Obligatorio" : "Dejar vacío para no cambiar"}
+                      style={{ paddingRight: 36 }}
+                    />
+                    <button type="button" onClick={() => setShowPw(!showPw)}
+                      style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:"var(--pase-text-muted)", cursor:"pointer", fontSize:14 }}>
+                      {showPw ? "🙈" : "👁"}
+                    </button>
+                  </div>
                 </div>
+                <div className="field"><label>Estado{modal !== "new" && modal !== null && modal.id === user.id && <span style={{ color: "var(--pase-text-muted)", marginLeft: 6, fontSize: "var(--pase-fs-xs)" }}>(bloqueado: edición propia)</span>}</label>
+                  <select value={form.activo ? "1" : "0"}
+                    disabled={modal !== "new" && modal !== null && modal.id === user.id}
+                    onChange={e => setForm({ ...form, activo:e.target.value === "1" })}>
+                    <option value="1">Activo</option><option value="0">Inactivo</option>
+                  </select></div>
               </div>
-
-              <div className="field"><label>Estado{modal !== "new" && modal !== null && modal.id === user.id && <span style={{ color: "var(--pase-text-muted)", textTransform: "none", letterSpacing: 0, marginLeft: 6, fontSize: 10 }}>(bloqueado: edición propia)</span>}</label>
-                <select value={form.activo ? "1" : "0"}
-                  disabled={modal !== "new" && modal !== null && modal.id === user.id}
-                  onChange={e => setForm({ ...form, activo:e.target.value === "1" })}>
-                  <option value="1">Activo</option><option value="0">Inactivo</option>
-                </select></div>
 
               {/* Módulos */}
               {(() => {
@@ -379,158 +405,114 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                 const currentUserPuedeGrantUsuarios = user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin";
                 return (<>
                   {isSelf && (
-                    <div className="alert" style={{ marginTop: 12, marginBottom: 4, fontSize: 11.5, lineHeight: 1.5 }}>
-                      Estás editando tu propio usuario. Por seguridad, no podés modificar tus módulos, permisos avanzados, cuentas, locales ni el estado activo. Pedile a otro dueño o admin que los ajuste si hace falta. Sí podés cambiar nombre o contraseña.
+                    <div className="alert" style={{ marginTop: 12, marginBottom: 16, fontSize: "var(--pase-fs-sm)", lineHeight: 1.5 }}>
+                      Estás editando tu propio usuario. Por seguridad no podés modificar tus módulos, permisos, cuentas, locales ni el estado. Pedile a otro dueño/admin que los ajuste. Sí podés cambiar nombre o contraseña.
                     </div>
                   )}
-                  <div style={{ marginTop:16, marginBottom:16 }}>
-                    <label style={{ display:"block", fontSize:9, letterSpacing:"1.5px", textTransform:"uppercase", color:"var(--muted)", marginBottom:8 }}>
-                      Módulos habilitados {isSelf && <span style={{ color: "var(--pase-text-muted)", textTransform: "none", letterSpacing: 0, marginLeft: 6 }}>(bloqueado: edición propia)</span>}
-                    </label>
-                    <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:4 }}>
-                      {MODULOS.map(m => {
-                        const checked = isDueno || form.modulos.includes(m.slug);
-                        // Bloquear self-grant del permiso 'usuarios' si el editor
-                        // no es dueño/admin/superadmin (hardening 2026-05-14).
-                        const blockedSelfGrant = m.slug === "usuarios" && !currentUserPuedeGrantUsuarios;
-                        const finalLocked = lockPermisos || blockedSelfGrant;
-                        return (
-                          <label key={m.slug}
-                            title={blockedSelfGrant ? "Solo dueño o admin puede otorgar este permiso" : undefined}
-                            style={{ display:"flex", alignItems:"center", gap:6, fontSize:11,
-                            color: finalLocked ? "var(--muted)" : checked ? "var(--txt)" : "var(--muted2)",
-                            cursor: finalLocked ? "default" : "pointer", padding:"4px 6px",
-                            background: checked ? "var(--s3)" : "transparent", borderRadius:"var(--r)",
-                            opacity: finalLocked ? 0.6 : 1 }}>
-                            <input type="checkbox" checked={checked} disabled={finalLocked}
-                              onChange={() => !finalLocked && toggleModulo(m.slug)} style={{ accentColor:"var(--acc)" }} />
-                            <span>{m.icon}</span> {m.label}
-                          </label>
-                        );
-                      })}
-                    </div>
+
+                  {/* ─── Módulos ───────────────────────────────────────── */}
+                  <SectionTitle locked={isSelf}>Módulos habilitados</SectionTitle>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(180px, 1fr))", gap:8, marginBottom: 20 }}>
+                    {MODULOS.map(m => {
+                      const checked = isDueno || form.modulos.includes(m.slug);
+                      const blockedSelfGrant = m.slug === "usuarios" && !currentUserPuedeGrantUsuarios;
+                      const finalLocked = lockPermisos || blockedSelfGrant;
+                      return (
+                        <PermisoCheck
+                          key={m.slug}
+                          checked={checked}
+                          disabled={finalLocked}
+                          onChange={() => !finalLocked && toggleModulo(m.slug)}
+                          label={`${m.icon} ${m.label}`}
+                          title={blockedSelfGrant ? "Solo dueño/admin puede otorgar este permiso" : undefined}
+                        />
+                      );
+                    })}
                   </div>
 
-                  {/* Permisos avanzados — flags granulares dentro de pantallas
-                      ya habilitadas. No aparecen como módulos en sidebar. */}
-                  <div style={{ marginTop:16, marginBottom:16 }}>
-                    <label style={{ display:"block", fontSize:9, letterSpacing:"1.5px", textTransform:"uppercase", color:"var(--muted)", marginBottom:8 }}>
-                      Permisos avanzados {isSelf && <span style={{ color: "var(--pase-text-muted)", textTransform: "none", letterSpacing: 0, marginLeft: 6 }}>(bloqueado: edición propia)</span>}
-                    </label>
-                    <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-                      {PERMISOS_EXTRAS.map(p => {
-                        const checked = isDueno || form.modulos.includes(p.slug);
-                        return (
-                          <label key={p.slug} style={{ display:"flex", alignItems:"flex-start", gap:8, fontSize:11,
-                            color: lockPermisos ? "var(--muted)" : checked ? "var(--txt)" : "var(--muted2)",
-                            cursor: lockPermisos ? "default" : "pointer", padding:"6px 8px",
-                            background: checked ? "var(--s3)" : "transparent", borderRadius:"var(--r)",
-                            opacity: lockPermisos ? 0.6 : 1 }}>
-                            <input type="checkbox" checked={checked} disabled={lockPermisos}
-                              onChange={() => !lockPermisos && toggleModulo(p.slug)} style={{ accentColor:"var(--acc)", marginTop:2 }} />
-                            <div>
-                              <div style={{ fontWeight:500 }}>{p.label}</div>
-                              <div style={{ fontSize:10, color:"var(--muted)", marginTop:2 }}>{p.descripcion}</div>
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
+                  {/* ─── Permisos avanzados ────────────────────────────── */}
+                  <SectionTitle locked={isSelf}>Permisos avanzados</SectionTitle>
+                  <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom: 20 }}>
+                    {PERMISOS_EXTRAS.map(p => {
+                      const checked = isDueno || form.modulos.includes(p.slug);
+                      return (
+                        <PermisoCheck
+                          key={p.slug}
+                          checked={checked}
+                          disabled={lockPermisos}
+                          onChange={() => !lockPermisos && toggleModulo(p.slug)}
+                          label={p.label}
+                          description={p.descripcion}
+                        />
+                      );
+                    })}
                   </div>
 
-                  {/* Cuentas de Tesorería — visible para no-dueno.
-                      Dos listas independientes: ver saldo vs operar. */}
+                  {/* ─── Cuentas de Tesorería ──────────────────────────── */}
                   {!isDueno && (
-                    <div style={{ marginTop:16 }}>
-                      <label style={{ display:"block", fontSize:9, letterSpacing:"1.5px", textTransform:"uppercase", color:"var(--muted)", marginBottom:8 }}>
-                        Cuentas de Tesorería {isSelf && <span style={{ color: "var(--pase-text-muted)", textTransform: "none", letterSpacing: 0, marginLeft: 6 }}>(bloqueado: edición propia)</span>}
-                      </label>
-                      <div style={{ display:"flex", gap:16, marginBottom:8 }}>
-                        <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, cursor: isSelf ? "default" : "pointer", opacity: isSelf ? 0.6 : 1 }}>
-                          <input type="radio" name="cuentas_scope" checked={form.cuentas_all} disabled={isSelf}
-                            onChange={() => !isSelf && setForm(f => ({ ...f, cuentas_all: true }))} style={{ accentColor:"var(--acc)" }} />
-                          Todas las cuentas
+                    <>
+                      <SectionTitle locked={isSelf}>Cuentas de Tesorería</SectionTitle>
+                      <div style={{ display:"flex", gap:8, marginBottom: 12 }}>
+                        <label style={{ flex: 1, display:"flex", alignItems:"center", gap:8, padding:"10px 12px", border: `0.5px solid ${form.cuentas_all ? "var(--pase-celeste)" : "var(--pase-border)"}`, borderRadius: 8, cursor: isSelf ? "default" : "pointer", background: form.cuentas_all ? "var(--pase-celeste-100)" : "transparent", opacity: isSelf ? 0.6 : 1 }}>
+                          <input type="radio" name="cuentas_scope" checked={form.cuentas_all} disabled={isSelf} onChange={() => !isSelf && setForm(f => ({ ...f, cuentas_all: true }))} style={{ accentColor:"var(--pase-celeste)" }} />
+                          <div>
+                            <div style={{ fontSize: "var(--pase-fs-base)", fontWeight: 500, color: "var(--pase-text)" }}>Todas las cuentas</div>
+                            <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)" }}>Acceso total a Tesorería</div>
+                          </div>
                         </label>
-                        <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, cursor: isSelf ? "default" : "pointer", opacity: isSelf ? 0.6 : 1 }}>
-                          <input type="radio" name="cuentas_scope" checked={!form.cuentas_all} disabled={isSelf}
-                            onChange={() => !isSelf && setForm(f => ({ ...f, cuentas_all: false }))} style={{ accentColor:"var(--acc)" }} />
-                          Personalizado
+                        <label style={{ flex: 1, display:"flex", alignItems:"center", gap:8, padding:"10px 12px", border: `0.5px solid ${!form.cuentas_all ? "var(--pase-celeste)" : "var(--pase-border)"}`, borderRadius: 8, cursor: isSelf ? "default" : "pointer", background: !form.cuentas_all ? "var(--pase-celeste-100)" : "transparent", opacity: isSelf ? 0.6 : 1 }}>
+                          <input type="radio" name="cuentas_scope" checked={!form.cuentas_all} disabled={isSelf} onChange={() => !isSelf && setForm(f => ({ ...f, cuentas_all: false }))} style={{ accentColor:"var(--pase-celeste)" }} />
+                          <div>
+                            <div style={{ fontSize: "var(--pase-fs-base)", fontWeight: 500, color: "var(--pase-text)" }}>Personalizado</div>
+                            <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)" }}>Elegí cuentas exactas</div>
+                          </div>
                         </label>
                       </div>
                       {!form.cuentas_all && (
                         <>
-                          <div style={{ fontSize:10, color:"var(--muted2)", marginBottom:6, marginTop:8 }}>
-                            <strong style={{ color:"var(--txt)" }}>Cuentas para ver saldo</strong> — el usuario verá las cards con el saldo consolidado de estas cuentas.
+                          <SubTitle>
+                            Cuentas para ver saldo
+                            <Hint> · el usuario verá las cards de saldo consolidado de estas cuentas</Hint>
+                          </SubTitle>
+                          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom: 14 }}>
+                            {CUENTAS.map(c => (
+                              <PermisoChip key={`vs-${c}`} checked={form.cuentas_visibles.includes(c)} disabled={isSelf} onChange={() => !isSelf && toggleCuenta(c)} label={c} />
+                            ))}
                           </div>
-                          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                            {CUENTAS.map(c => {
-                              const checked = form.cuentas_visibles.includes(c);
-                              return (
-                                <label key={`vs-${c}`} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11,
-                                  color: checked ? "var(--txt)" : "var(--muted2)", cursor: isSelf ? "default" : "pointer",
-                                  padding:"6px 10px", background: checked ? "var(--s3)" : "var(--s2)",
-                                  borderRadius:"var(--r)", border:`1px solid ${checked ? "var(--acc)" : "var(--bd)"}`,
-                                  opacity: isSelf ? 0.6 : 1 }}>
-                                  <input type="checkbox" checked={checked} disabled={isSelf}
-                                    onChange={() => !isSelf && toggleCuenta(c)} style={{ accentColor:"var(--acc)" }} />
-                                  {c}
-                                </label>
-                              );
-                            })}
-                          </div>
-                          <div style={{ fontSize:10, color:"var(--muted2)", marginTop:14, marginBottom:6 }}>
-                            <strong style={{ color:"var(--txt)" }}>Cuentas para operar</strong> — el usuario podrá cargar pagos, gastos, transferencias y adelantos contra estas cuentas. Puede operar sin ver el saldo consolidado.
-                          </div>
-                          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                            {CUENTAS.map(c => {
-                              const checked = form.cuentas_operables.includes(c);
-                              return (
-                                <label key={`op-${c}`} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11,
-                                  color: checked ? "var(--txt)" : "var(--muted2)", cursor: isSelf ? "default" : "pointer",
-                                  padding:"6px 10px", background: checked ? "var(--s3)" : "var(--s2)",
-                                  borderRadius:"var(--r)", border:`1px solid ${checked ? "var(--acc)" : "var(--bd)"}`,
-                                  opacity: isSelf ? 0.6 : 1 }}>
-                                  <input type="checkbox" checked={checked} disabled={isSelf}
-                                    onChange={() => !isSelf && toggleCuentaOperable(c)} style={{ accentColor:"var(--acc)" }} />
-                                  {c}
-                                </label>
-                              );
-                            })}
+                          <SubTitle>
+                            Cuentas para operar
+                            <Hint> · cargar pagos/gastos/transferencias/adelantos contra estas cuentas</Hint>
+                          </SubTitle>
+                          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom: 4 }}>
+                            {CUENTAS.map(c => (
+                              <PermisoChip key={`op-${c}`} checked={form.cuentas_operables.includes(c)} disabled={isSelf} onChange={() => !isSelf && toggleCuentaOperable(c)} label={c} />
+                            ))}
                           </div>
                           {form.cuentas_visibles.length === 0 && form.cuentas_operables.length === 0 && !isSelf && (
-                            <div className="alert alert-warn" style={{ marginTop:8 }}>Sin cuentas marcadas (ni saldo ni operar), el usuario no podrá usar Tesorería</div>
+                            <div className="alert alert-warn" style={{ marginTop:10 }}>Sin cuentas marcadas, el usuario no podrá usar Tesorería</div>
                           )}
                         </>
                       )}
-                    </div>
+                    </>
                   )}
 
-                  {/* Locales — visible para admin y encargado */}
+                  {/* ─── Sucursales ────────────────────────────────────── */}
                   {!isDueno && (
-                    <div style={{ marginTop:16 }}>
-                      <label style={{ display:"block", fontSize:9, letterSpacing:"1.5px", textTransform:"uppercase", color:"var(--muted)", marginBottom:8 }}>
-                        Sucursales asignadas {isSelf && <span style={{ color: "var(--pase-text-muted)", textTransform: "none", letterSpacing: 0, marginLeft: 6 }}>(bloqueado: edición propia)</span>}
-                      </label>
-                      {locales.length === 0 ? <div className="empty" style={{padding:16}}>No hay sucursales cargadas en el sistema</div> : (
+                    <div style={{ marginTop: 20 }}>
+                      <SectionTitle locked={isSelf}>Sucursales asignadas</SectionTitle>
+                      {locales.length === 0 ? (
+                        <div style={{ padding: 16, textAlign: "center", color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-sm)", border: "0.5px dashed var(--pase-border)", borderRadius: 8 }}>
+                          No hay sucursales cargadas todavía
+                        </div>
+                      ) : (
                         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                          {locales.map(l => {
-                            const checked = form.locales_ids.includes(Number(l.id));
-                            return (
-                              <label key={l.id} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11,
-                                color: checked ? "var(--txt)" : "var(--muted2)", cursor: isSelf ? "default" : "pointer",
-                                padding:"6px 10px", background: checked ? "var(--s3)" : "var(--s2)",
-                                borderRadius:"var(--r)", border:`1px solid ${checked ? "var(--acc)" : "var(--bd)"}`,
-                                opacity: isSelf ? 0.6 : 1 }}>
-                                <input type="checkbox" checked={checked} disabled={isSelf}
-                                  onChange={() => !isSelf && toggleLocal(Number(l.id))} style={{ accentColor:"var(--acc)" }} />
-                                {l.nombre}
-                              </label>
-                            );
-                          })}
+                          {locales.map(l => (
+                            <PermisoChip key={l.id} checked={form.locales_ids.includes(Number(l.id))} disabled={isSelf} onChange={() => !isSelf && toggleLocal(Number(l.id))} label={l.nombre} />
+                          ))}
                         </div>
                       )}
-                      {form.locales_ids.length === 0 && !isSelf && (
-                        <div className="alert alert-warn" style={{ marginTop:8 }}>Sin sucursales asignadas no podrá cargar novedades en Equipo</div>
+                      {form.locales_ids.length === 0 && !isSelf && locales.length > 0 && (
+                        <div className="alert alert-warn" style={{ marginTop:10 }}>Sin sucursales asignadas no podrá cargar novedades en Equipo</div>
                       )}
                     </div>
                   )}
@@ -545,5 +527,109 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Componentes auxiliares del modal Editar Usuario ────────────────────
+// Diseñados 2026-05-17 para reemplazar los checkboxes nativos + vars legacy
+// (--s2/--s3/--acc) por un look unificado con tokens PASE.
+
+function SectionTitle({ children, locked }: { children: React.ReactNode; locked?: boolean }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "baseline", justifyContent: "space-between",
+      fontSize: "var(--pase-fs-xs)", fontWeight: 500,
+      color: "var(--pase-text-muted)",
+      textTransform: "uppercase", letterSpacing: "var(--pase-ls-overline)",
+      marginBottom: 10, marginTop: 18,
+      paddingBottom: 6, borderBottom: "0.5px solid var(--pase-border)",
+    }}>
+      <span>{children}</span>
+      {locked && <span style={{ textTransform: "none", letterSpacing: 0, fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", fontWeight: 400 }}>🔒 edición propia</span>}
+    </div>
+  );
+}
+
+function SubTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-text)", fontWeight: 500, marginTop: 12, marginBottom: 6 }}>
+      {children}
+    </div>
+  );
+}
+
+function Hint({ children }: { children: React.ReactNode }) {
+  return <span style={{ fontWeight: 400, color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-xs)" }}>{children}</span>;
+}
+
+// Card-style checkbox para módulos y permisos.
+interface PermisoCheckProps {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: () => void;
+  label: React.ReactNode;
+  description?: string;
+  title?: string;
+}
+
+function PermisoCheck({ checked, disabled, onChange, label, description, title }: PermisoCheckProps) {
+  return (
+    <label
+      title={title}
+      style={{
+        display: "flex", alignItems: description ? "flex-start" : "center", gap: 10,
+        padding: "9px 11px", borderRadius: 8,
+        border: `0.5px solid ${checked ? "var(--pase-celeste-300)" : "var(--pase-border)"}`,
+        background: checked ? "var(--pase-celeste-100)" : "transparent",
+        cursor: disabled ? "default" : "pointer",
+        opacity: disabled ? 0.55 : 1,
+        transition: "all 0.12s",
+        fontSize: "var(--pase-fs-base)",
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={onChange}
+        style={{ accentColor: "var(--pase-celeste)", marginTop: description ? 2 : 0, width: 15, height: 15, flexShrink: 0 }}
+      />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ color: "var(--pase-text)", fontWeight: 500 }}>{label}</div>
+        {description && (
+          <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", marginTop: 3, lineHeight: 1.45 }}>{description}</div>
+        )}
+      </div>
+    </label>
+  );
+}
+
+// Chip estilo pill para cuentas y sucursales.
+interface PermisoChipProps {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: () => void;
+  label: React.ReactNode;
+}
+
+function PermisoChip({ checked, disabled, onChange, label }: PermisoChipProps) {
+  return (
+    <label
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 7,
+        padding: "7px 12px", borderRadius: 999,
+        border: `0.5px solid ${checked ? "var(--pase-celeste-300)" : "var(--pase-border-strong)"}`,
+        background: checked ? "var(--pase-celeste-100)" : "var(--pase-bg)",
+        cursor: disabled ? "default" : "pointer",
+        opacity: disabled ? 0.55 : 1,
+        transition: "all 0.12s",
+        fontSize: "var(--pase-fs-sm)",
+        color: checked ? "var(--pase-text)" : "var(--pase-text-muted)",
+        fontWeight: 500,
+      }}
+    >
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} style={{ accentColor: "var(--pase-celeste)", width: 14, height: 14 }} />
+      {label}
+    </label>
   );
 }
