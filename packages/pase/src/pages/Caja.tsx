@@ -594,9 +594,17 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
               <td style={{fontSize:11,maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                 {m.gasto_id_ref && (
                   <span
-                    className="badge b-muted"
-                    style={{fontSize:8,marginRight:6}}
-                    title="Originado en el módulo Gastos. NO es duplicado: la RPC crear_gasto inserta en gastos (vista granular) y movimientos (ledger contable) atómicamente."
+                    style={{
+                      fontSize: 9, marginRight: 6,
+                      padding: "1px 6px",
+                      borderRadius: 4,
+                      color: "var(--pase-text-muted)",
+                      background: "var(--pase-bg-out)",
+                      border: "0.5px solid var(--pase-border)",
+                      letterSpacing: "var(--pase-ls-snug)",
+                      fontWeight: 400,
+                    }}
+                    title="Originado en el módulo Gastos. NO es duplicado — el movimiento de caja se genera automático cuando cargás un gasto."
                   >vía Gastos</span>
                 )}
                 {m.detalle}

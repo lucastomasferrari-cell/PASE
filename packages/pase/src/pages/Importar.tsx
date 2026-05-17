@@ -447,12 +447,12 @@ function TabConceptos({ user }: { user: Usuario }) {
 
 function TabSaldos({ user, locales, localActivo }: { user: Usuario; locales: Local[]; localActivo: number | null }) {
   const [localImport, setLocalImport] = useState<number | null>(localActivo);
+  // MercadoPago y Banco sacados temporalmente (Lucas 2026-05-17) hasta que
+  // conciliación esté operativa.
   const [saldos, setSaldos] = useState<Record<string, string>>({
     "Caja Efectivo": "",
     "Caja Chica": "",
     "Caja Mayor": "",
-    "MercadoPago": "",
-    "Banco": "",
   });
   const [importing, setImporting] = useState(false);
   const [resultado, setResultado] = useState<Resultado | null>(null);
@@ -496,7 +496,7 @@ function TabSaldos({ user, locales, localActivo }: { user: Usuario; locales: Loc
 
   function reset() {
     setResultado(null);
-    setSaldos({ "Caja Efectivo": "", "Caja Chica": "", "Caja Mayor": "", "MercadoPago": "", "Banco": "" });
+    setSaldos({ "Caja Efectivo": "", "Caja Chica": "", "Caja Mayor": "" });
   }
 
   return (

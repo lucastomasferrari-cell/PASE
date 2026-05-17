@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { db } from "../../lib/supabase";
 import { formatCurrency } from "../../lib/format";
 import { EmptyState, WalletIcon } from "../../components/ui";
+import { CUENTAS_OCULTAS_TEMPORAL } from "../../lib/constants";
 import type { WidgetContext } from "../types";
 
 interface Saldo {
@@ -25,6 +26,8 @@ export function SaldoCajaWidget({ ctx }: { ctx: WidgetContext }) {
       const map = new Map<string, number>();
       for (const r of data ?? []) {
         const cuenta = (r as { cuenta: string }).cuenta;
+        // Lucas 2026-05-17: ocultar MP/Banco hasta que conciliación esté real.
+        if (CUENTAS_OCULTAS_TEMPORAL.includes(cuenta)) continue;
         const saldo = Number((r as { saldo: number | string }).saldo ?? 0);
         map.set(cuenta, (map.get(cuenta) ?? 0) + saldo);
       }

@@ -25,7 +25,14 @@ export const MEDIO_A_CUENTA: Record<string, string | null> = {
   "Point Nave":        null,
   "NAVE":              null,
 };
-export const CUENTAS = ["Caja Chica","Caja Mayor","Caja Efectivo","MercadoPago","Banco"];
+// MercadoPago y Banco temporalmente sacados (Lucas 2026-05-17): los saldos
+// no son reales todavía (sin conciliación automática). Cuando se cierre el
+// flujo de conciliación los volvemos a agregar.
+export const CUENTAS = ["Caja Chica","Caja Mayor","Caja Efectivo"];
+// Cuentas legacy que pueden tener data histórica en saldos_caja/movimientos.
+// El widget SaldoCajaWidget y similares las ocultan visualmente pero los rows
+// históricos siguen existiendo en DB (no se borran).
+export const CUENTAS_OCULTAS_TEMPORAL = ["MercadoPago", "Banco"];
 export const UNIDADES = ["kg","g","litro","ml","unidad","caja","bolsa","docena"];
 export const GASTOS_FIJOS = ["ALQUILER","EDESUR","METROGAS","AYSA","INTERNET","MAXIREST","WOKI","SEGURO","FUMIGACION","ABL","EXPENSAS","AQA","CONTADOR","OTROS FIJOS"];
 export const GASTOS_VARIABLES = ["COMPRAS MERCADO LIBRE","ENVIOS","LIBRERIA","BAZAR","FARMACIA","MANTENIMIENTO","EQUIPAMIENTO","DEVOLUCIONES CLIENTES","PERSONAL","AJUSTE","GASTOS VARIOS"];
