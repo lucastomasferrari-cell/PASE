@@ -19,6 +19,8 @@ import { OfflineBanner } from '@/components/OfflineBanner';
 import { formatARS, relativoCorto } from '@/lib/format';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { useOnlineStatus } from '@/lib/useOnlineStatus';
+import { db } from '@/lib/supabase';
+import { ModifiersDialog } from '@/components/dialogs/ModifiersDialog';
 import { cn } from '@/lib/utils';
 
 // Handheld view — vista mobile-first para mozo tomando pedido en la mesa
@@ -33,11 +35,28 @@ import { cn } from '@/lib/utils';
 
 type Pantalla = { tipo: 'mesas' } | { tipo: 'venta'; ventaId: number; mesa: MesaConVenta };
 
+// Breakpoint: por encima de esto consideramos desktop/tablet grande y NO
+// dejamos usar Modo Mozo (se ve raro y desperdicia espacio).
+const MOBILE_BREAKPOINT = 900;
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < MOBILE_BREAKPOINT : true,
+  );
+  useEffect(() => {
+    function check() { setIsMobile(window.innerWidth < MOBILE_BREAKPOINT); }
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+  return isMobile;
+}
+
 export function HandheldView() {
   const { user } = useAuth();
   const { empleado } = useAuthPos();
   const [localId] = useLocalActivo(user);
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   const [pantalla, setPantalla] = useState<Pantalla>({ tipo: 'mesas' });
 
@@ -46,6 +65,36 @@ export function HandheldView() {
   }
   if (localId === null) {
     return <div className="p-8 text-center text-muted-foreground">Seleccioná un local.</div>;
+  }
+
+  // Bloqueo en desktop/tablet grande: el modo mozo está diseñado mobile-first
+  // (~360-768px). En pantallas grandes se ve desperdiciado y la UX no escala.
+  if (!isMobile) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <div className="max-w-md text-center space-y-4">
+          <div className="text-6xl">📱</div>
+          <h1 className="text-xl font-semibold">Modo Mozo es solo para celular</h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Esta vista está optimizada para que el mozo tome pedidos en la mesa con el celular.
+            En tablet o computadora, usá el <strong>POS normal</strong> que aprovecha el espacio
+            para mostrar el catálogo + check + acciones en paralelo.
+          </p>
+          <div className="flex flex-col gap-2 mt-6">
+            <Button onClick={() => navigate('/pos/salon')} size="lg" className="w-full">
+              Ir al POS · Salón
+            </Button>
+            <Button onClick={() => navigate('/pos/mostrador')} variant="outline" size="lg" className="w-full">
+              Ir al POS · Mostrador
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground mt-4">
+            Si te conectaste desde un celu pero ves esta pantalla, achicá la ventana del navegador
+            a menos de {MOBILE_BREAKPOINT}px de ancho.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -200,6 +249,8 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [lastAddedItemId, setLastAddedItemId] = useState<number | null>(null);
+  const [pendingModifiers, setPendingModifiers] = useState<ItemConGrupo | null>(null);
+  const [itemsConModifiers, setItemsConModifiers] = useState<Set<number>>(new Set());
   const online = useOnlineStatus();
 
   const reload = useCallback(async () => {
@@ -221,6 +272,21 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
     onChange: () => reload(),
     extraFilter: `venta_id=eq.${ventaId}`,
   });
+
+  // Cache de qué items tienen modifier_groups asignados — para saber si
+  // tap producto abre el dialog de modificadores o agrega directo.
+  useEffect(() => {
+    if (catalogo.length === 0) return;
+    let cancelled = false;
+    const ids = catalogo.map((c) => c.id);
+    db.from('item_modifier_groups').select('item_id').in('item_id', ids).then(({ data }) => {
+      if (cancelled) return;
+      const set = new Set<number>();
+      for (const r of data ?? []) set.add((r as { item_id: number }).item_id);
+      setItemsConModifiers(set);
+    });
+    return () => { cancelled = true; };
+  }, [catalogo]);
 
   useEffect(() => {
     if (lastAddedItemId == null) return;
@@ -244,7 +310,12 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
     .filter((i) => i.estado !== 'anulado')
     .reduce((s, i) => s + Number(i.subtotal), 0);
 
-  async function addItem(it: ItemConGrupo) {
+  async function addItem(
+    it: ItemConGrupo,
+    modificadores: { nombre: string; precio_extra: number; modifier_id?: number }[] = [],
+    notas: string | null = null,
+    cantidad: number = 1,
+  ) {
     if (!online) {
       toast.error('Sin conexión — no se puede agregar items hasta que vuelva internet');
       return;
@@ -252,13 +323,24 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
     const { error } = await agregarItem({
       ventaId,
       itemId: it.id,
-      cantidad: 1,
+      cantidad,
       curso: 1,
+      modificadores: modificadores.length > 0 ? modificadores : null,
+      notas,
       cargadoPor: empleadoId,
     });
     if (error) { toast.error(error); return; }
     setLastAddedItemId(it.id);
     reload();
+  }
+
+  function clickItem(it: ItemConGrupo) {
+    if (itemsConModifiers.has(it.id)) {
+      // Abre el dialog de modificadores; al confirmar, addItem con la selección.
+      setPendingModifiers(it);
+    } else {
+      void addItem(it);
+    }
   }
 
   async function handleMandar() {
@@ -350,7 +432,7 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
                 <button
                   key={it.id}
                   type="button"
-                  onClick={() => addItem(it)}
+                  onClick={() => clickItem(it)}
                   className={cn(
                     'relative aspect-square rounded-xl border flex flex-col items-center justify-center p-2 transition-all active:scale-95',
                     flashed ? 'border-success bg-success/10 scale-[1.02]' : 'border-border bg-card',
@@ -413,6 +495,21 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
           </div>
         )}
       </div>
+
+      {/* Dialog de modificadores: se abre cuando el item tiene modifier_groups
+          asignados (ej. tamaño, ingredientes extra). El cajero elige opciones
+          + cantidad + notas y confirma. */}
+      {pendingModifiers && (
+        <ModifiersDialog
+          open={true}
+          onOpenChange={(o) => { if (!o) setPendingModifiers(null); }}
+          item={pendingModifiers}
+          onConfirm={async (mods, notas, cantidad) => {
+            await addItem(pendingModifiers, mods, notas, cantidad);
+            setPendingModifiers(null);
+          }}
+        />
+      )}
     </div>
   );
 }
