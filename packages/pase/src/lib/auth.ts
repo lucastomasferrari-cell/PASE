@@ -120,6 +120,11 @@ export function tienePermiso(user: MaybeUser, slug: string): boolean {
   if (slug === "ajustes_dashboards") {
     return user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin";
   }
+  // 'importar' (migración masiva CSV de proveedores/empleados/conceptos) solo
+  // dueño/admin/superadmin. Encargados no migran data.
+  if (slug === "importar") {
+    return user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin";
+  }
   if (user.rol === "superadmin" || user.rol === "dueno") return true;
   return getPermisos(user).includes(slug);
 }

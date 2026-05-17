@@ -28,6 +28,7 @@ const Finanzas = lazy(() => import("./pages/Finanzas"));
 const Negocio = lazy(() => import("./pages/Negocio"));
 const Objetivos = lazy(() => import("./pages/Objetivos"));
 const Ajustes = lazy(() => import("./pages/Ajustes"));
+const Importar = lazy(() => import("./pages/Importar"));
 const DashboardHome = lazy(() => import("./dashboards/DashboardHome").then(m => ({ default: m.DashboardHome })));
 const SettingsDashboards = lazy(() => import("./dashboards/SettingsDashboards"));
 
@@ -311,6 +312,12 @@ function AppMain() {
                 path="/ajustes/dashboards"
                 element={
                   user?.tenant_id ? <SettingsDashboards tenantId={user.tenant_id} /> : <Navigate to="/inicio" replace />
+                }
+              />
+              <Route
+                path="/herramientas/importar"
+                element={
+                  user ? <Importar {...props}/> : <Navigate to="/inicio" replace />
                 }
               />
 
