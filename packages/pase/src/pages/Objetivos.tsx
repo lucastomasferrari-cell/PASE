@@ -211,8 +211,9 @@ export default function Objetivos({ locales, tenantId, localActivo }: Props) {
                 value={localTrabajando ?? ""}
                 onChange={e => setLocalInterno(e.target.value ? Number(e.target.value) : null)}
                 className="search"
-                style={{ width: 200 }}
+                style={{ width: 220, borderColor: localTrabajando === null ? "#D97706" : undefined }}
               >
+                <option value="">— Seleccionar sucursal —</option>
                 {locales.map(l => (
                   <option key={l.id} value={l.id}>{l.nombre}</option>
                 ))}

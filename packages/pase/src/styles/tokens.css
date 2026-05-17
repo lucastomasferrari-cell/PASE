@@ -163,6 +163,23 @@
 [data-theme="dark"] .alert {
   background: var(--pase-bg-out);
 }
+
+/* Badges con mejor contraste en dark — el .b-danger/.b-muted en dark usaba
+ * colores que se mimetizaban con el bg-out de las cards. Acá los hacemos
+ * notar con bg-out más fuerte + texto en --pase-text (no muted) + un dot
+ * visible. Aplica a Anulado/Inactivo en tablas y badges de estado. */
+[data-theme="dark"] .badge.b-danger,
+[data-theme="dark"] .badge.b-warn,
+[data-theme="dark"] .badge.b-muted,
+[data-theme="dark"] .badge.b-anulada {
+  background: rgba(220, 38, 38, 0.18);  /* coral sutil */
+  color: #FCA5A5;
+  border: 0.5px solid rgba(220, 38, 38, 0.35);
+}
+[data-theme="dark"] .badge.b-anulada {
+  text-decoration: line-through;
+  opacity: 0.85;
+}
 [data-theme="dark"] thead th {
   background: var(--pase-bg-out);
 }

@@ -1,6 +1,6 @@
 ﻿import { useState } from "react";
 import { NavLink } from "react-router-dom";
-import { ROLES, getPermisos } from "../lib/auth";
+import { ROLES, tienePermiso } from "../lib/auth";
 import type { Usuario, Local, Tenant } from "../types";
 import { ThemeToggle } from "./ui/ThemeToggle";
 
@@ -20,7 +20,6 @@ interface SidebarProps {
 export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, tenant, tenantOverride, onClearOverride }: SidebarProps) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
-  const perms = getPermisos(user);
   const esSuperAdmin = user.rol === "superadmin";
   const localesDisp = (user.rol==="dueno" || user.rol==="admin" || esSuperAdmin) ? locales : locales.filter((l: { id: number })=>(user._locales||user.locales||[]).includes(l.id));
   // ───────────────────────────────────────────────────────────────────
@@ -96,7 +95,10 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
         )}
         <nav className="sb-nav">
           {secs.map(s=>{
-            const items = nav.filter(n=>n.sec===s&&perms.includes(n.slug));
+            // tienePermiso (no perms.includes) para respetar los short-circuits
+            // de slugs especiales: 'inicio' (todos), 'ajustes_dashboards' (dueño/admin),
+            // 'tenants' (superadmin). Estos no viven en MODULOS pero sí en `nav`.
+            const items = nav.filter(n=>n.sec===s && tienePermiso(user, n.slug));
             if(!items.length) return null;
             return (<div key={s}><div className="sb-section">{s}</div>{items.map(n=>(
               <NavLink

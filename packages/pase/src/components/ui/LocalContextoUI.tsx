@@ -73,7 +73,7 @@ export function LocalSelectorObligatorio({ value, onChange, locales, width = 200
       className="search"
       style={{ width, borderColor: value === null ? "#D97706" : undefined }}
     >
-      <option value="">— Elegí una sucursal —</option>
+      <option value="">— Seleccionar sucursal —</option>
       {locales.map(l => (
         <option key={l.id} value={l.id}>{l.nombre}</option>
       ))}

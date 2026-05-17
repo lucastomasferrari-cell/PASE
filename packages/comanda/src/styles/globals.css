@@ -6,92 +6,147 @@
 
 @layer base {
   :root {
-    /* ===== LIGHT MODE ===== */
+    /* ===== LIGHT MODE — UNIFICADO CON PASE (2026-05-17) =====
+     * Migración Lucas: estética cálida Coral reemplazada por celeste/navy
+     * PASE. Los tokens HSL acá replican los CSS vars de pase/tokens.css.
+     * El Coral original sigue disponible vía [data-surface="customer"]
+     * abajo para la tienda pública/marketplace si se quisiera diferenciarlas
+     * más adelante. */
 
-    /* Surfaces — papel cálido, no blanco puro */
-    --background: 36 41% 98%;          /* #FDFBF7 */
-    --foreground: 30 14% 11%;          /* #1F1B17 */
+    /* Surfaces — blanco neutro como PASE */
+    --background: 0 0% 100%;           /* #FFFFFF (--pase-bg) */
+    --foreground: 211 56% 24%;         /* #1A3A5E (--pase-text) */
 
     --card: 0 0% 100%;
-    --card-foreground: 30 14% 11%;
+    --card-foreground: 211 56% 24%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 30 14% 11%;
+    --popover-foreground: 211 56% 24%;
 
-    /* Brand — Coral terracota argentino */
-    --primary: 12 74% 63%;             /* #E8735A */
+    /* Brand — Celeste PASE (#75AADB IRAM bandera) */
+    --primary: 207 58% 66%;            /* --pase-celeste */
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 12 74% 55%;       /* #D85F48 */
+    --primary-hover: 207 58% 58%;
 
-    /* Secundario — neutral cálido */
-    --secondary: 36 23% 94%;           /* #F2EEE6 */
-    --secondary-foreground: 30 14% 11%;
+    /* Secundario — bg-soft celeste muy claro */
+    --secondary: 205 67% 97%;          /* #F4F9FD (--pase-bg-soft) */
+    --secondary-foreground: 211 56% 24%;
 
     /* Muted */
-    --muted: 36 23% 94%;
-    --muted-foreground: 28 8% 38%;     /* #6B6259 */
+    --muted: 205 67% 97%;
+    --muted-foreground: 211 23% 55%;   /* #6E8CAB (--pase-text-muted) */
 
-    /* Accent */
-    --accent: 36 23% 90%;              /* #EDE8E0 */
-    --accent-foreground: 30 14% 11%;
+    /* Accent — celeste-100 hover */
+    --accent: 205 70% 95%;             /* #EAF3FB (--pase-celeste-100) */
+    --accent-foreground: 211 56% 24%;
 
-    /* Destructive */
+    /* Destructive — coral firme (única zona warm-tone permitida) */
     --destructive: 0 74% 50%;          /* #DC2626 */
     --destructive-foreground: 0 0% 100%;
 
-    /* Semánticos gastronómicos */
-    --success: 157 85% 33%;            /* #0D9B6A */
+    /* Semánticos — filosofía PASE: success en celeste (sin verde),
+     * warning en muted (sin amarillo), excepto los gastronómicos
+     * de mesas/cocina donde sí necesitamos color para timing. */
+    --success: 207 58% 66%;            /* celeste */
     --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;             /* #F59E0B */
-    --warning-foreground: 30 14% 11%;
+    --warning: 38 92% 50%;             /* #F59E0B se mantiene para mesas/cocina */
+    --warning-foreground: 211 56% 24%;
     --kitchen-hot: 0 84% 60%;
     --table-occupied: 38 92% 50%;
-    --table-ready: 157 85% 33%;
+    --table-ready: 207 58% 66%;        /* celeste en vez de verde */
 
     /* Borders e inputs */
-    --border: 36 23% 90%;
-    --border-strong: 36 15% 75%;
-    --input: 36 23% 90%;
-    --ring: 12 74% 63%;
+    --border: 205 67% 95%;             /* #EAF3FB (--pase-border) */
+    --border-strong: 207 38% 91%;      /* #DCE8F4 (--pase-border-strong) */
+    --input: 205 67% 95%;
+    --ring: 207 58% 66%;
 
     --radius: 0.625rem;
   }
 
   .dark {
-    /* ===== DARK MODE — pensado para turnos de noche ===== */
-    --background: 24 17% 9%;           /* #1A1612 */
-    --foreground: 36 41% 93%;          /* #F5F0E8 */
+    /* ===== DARK MODE — UNIFICADO CON PASE (graphite-blue) ===== */
+    --background: 217 47% 10%;         /* #0E1726 (--pase-bg dark) */
+    --foreground: 210 25% 96%;         /* #F0F4F8 (--pase-text dark) */
 
-    --card: 28 17% 12%;                /* #252019 */
-    --card-foreground: 36 41% 93%;
+    --card: 221 42% 18%;               /* #1A2540 (--pase-bg-soft dark) */
+    --card-foreground: 210 25% 96%;
 
-    --popover: 30 17% 16%;             /* #2F2921 */
-    --popover-foreground: 36 41% 93%;
+    --popover: 221 42% 18%;
+    --popover-foreground: 210 25% 96%;
 
-    --primary: 12 78% 69%;             /* #F08A6F */
-    --primary-foreground: 24 17% 9%;
-    --primary-hover: 12 78% 62%;
+    --primary: 207 58% 66%;            /* celeste se mantiene — ancla de marca */
+    --primary-foreground: 217 47% 10%;
+    --primary-hover: 207 58% 58%;
 
-    --secondary: 30 17% 16%;
-    --secondary-foreground: 36 41% 93%;
+    --secondary: 221 42% 18%;
+    --secondary-foreground: 210 25% 96%;
 
-    --muted: 30 17% 16%;
-    --muted-foreground: 30 12% 60%;    /* #A89C8D */
+    --muted: 222 32% 24%;              /* #2A3550 (--pase-bg-out dark) */
+    --muted-foreground: 213 28% 67%;   /* #93A8C2 (--pase-text-muted dark) */
 
-    --accent: 30 15% 20%;
-    --accent-foreground: 36 41% 93%;
+    --accent: 220 49% 23%;             /* #1E3155 (--pase-celeste-100 dark) */
+    --accent-foreground: 210 25% 96%;
 
-    --destructive: 0 84% 60%;          /* #EF4444 */
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 158 64% 40%;            /* #10B981 */
-    --success-foreground: 0 0% 100%;
-    --warning: 45 96% 56%;             /* #FBBF24 */
-    --warning-foreground: 24 17% 9%;
+    --success: 207 58% 66%;            /* celeste */
+    --success-foreground: 217 47% 10%;
+    --warning: 38 92% 50%;             /* warning amarillo se mantiene para mesas */
+    --warning-foreground: 217 47% 10%;
     --kitchen-hot: 0 84% 65%;
-    --table-occupied: 45 96% 56%;
-    --table-ready: 158 64% 40%;
+    --table-occupied: 38 92% 50%;
+    --table-ready: 207 58% 66%;
 
+    --border: 222 32% 24%;
+    --border-strong: 224 28% 34%;      /* #3F4D6E */
+    --input: 222 32% 24%;
+    --ring: 207 58% 66%;
+  }
+
+  /* Override opcional para superficies customer-facing (tienda pública /
+   * marketplace) que quieran mantener calidez Coral original. Activar con:
+   *   <div data-surface="customer">...</div>
+   * Decisión 2026-05-17: por default todo PASE-style. Si en algún momento
+   * se quiere diferenciar la tienda pública, se aplica este atributo. */
+  [data-surface="customer"] {
+    --background: 36 41% 98%;          /* #FDFBF7 papel cálido */
+    --foreground: 30 14% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 30 14% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 30 14% 11%;
+    --primary: 12 74% 63%;             /* Coral terracota original */
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 12 74% 55%;
+    --secondary: 36 23% 94%;
+    --secondary-foreground: 30 14% 11%;
+    --muted: 36 23% 94%;
+    --muted-foreground: 28 8% 38%;
+    --accent: 36 23% 90%;
+    --accent-foreground: 30 14% 11%;
+    --border: 36 23% 90%;
+    --border-strong: 36 15% 75%;
+    --input: 36 23% 90%;
+    --ring: 12 74% 63%;
+  }
+  .dark [data-surface="customer"] {
+    --background: 24 17% 9%;
+    --foreground: 36 41% 93%;
+    --card: 28 17% 12%;
+    --card-foreground: 36 41% 93%;
+    --popover: 30 17% 16%;
+    --popover-foreground: 36 41% 93%;
+    --primary: 12 78% 69%;
+    --primary-foreground: 24 17% 9%;
+    --primary-hover: 12 78% 62%;
+    --secondary: 30 17% 16%;
+    --secondary-foreground: 36 41% 93%;
+    --muted: 30 17% 16%;
+    --muted-foreground: 30 12% 60%;
+    --accent: 30 15% 20%;
+    --accent-foreground: 36 41% 93%;
     --border: 30 15% 20%;
     --border-strong: 30 12% 35%;
     --input: 30 15% 20%;
