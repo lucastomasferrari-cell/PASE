@@ -11,54 +11,61 @@ interface LocalRow {
 }
 
 // Ranking de sucursales por ventas de los últimos 7 días.
-// Solo aparece cuando el dueño/admin tiene >1 local visible. Si solo tiene
-// uno, no aporta valor (no hay con qué comparar).
+//
+// Estrategia robusta (2026-05-17): NO dependemos de ctx.locales para la query
+// de ventas — dejamos que RLS limite a las sucursales del tenant. Después
+// resolvemos los nombres consultando `locales` directamente. Esto evita
+// problemas si ctx.locales viene vacío en el primer render del DashboardHome.
+//
+// Si el dueño/admin tiene 0 o 1 sucursales visibles, no se puede armar ranking.
 export function ComparativaSucursalesWidget({ ctx }: { ctx: WidgetContext }) {
-  const [locales, setLocales] = useState<LocalRow[]>([]);
+  const [rows, setRows] = useState<LocalRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     async function reload() {
       setLoading(true);
-      if (ctx.locales.length < 2) {
-        setLocales([]);
-        setLoading(false);
-        return;
-      }
       const today = new Date();
       const desde = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       const hasta = today.toISOString().slice(0, 10);
-      const { data, error } = await db
-        .from("ventas")
-        .select("local_id, total")
-        .gte("fecha", desde)
-        .lte("fecha", hasta)
-        .eq("anulada", false)
-        .in("local_id", ctx.locales.map(l => l.id));
-      if (cancelled || error) { setLoading(false); return; }
+
+      // Traer ventas + nombres de locales en paralelo (ambos limitados por RLS).
+      const [ventasRes, localesRes] = await Promise.all([
+        db.from("ventas")
+          .select("local_id, total")
+          .gte("fecha", desde)
+          .lte("fecha", hasta)
+          .eq("anulada", false),
+        db.from("locales").select("id, nombre").order("nombre"),
+      ]);
+
+      if (cancelled) return;
+      if (ventasRes.error || localesRes.error) { setLoading(false); return; }
+
+      const locales = (localesRes.data ?? []) as Array<{ id: number; nombre: string }>;
       const totalPorLocal = new Map<number, number>();
-      for (const r of data ?? []) {
+      for (const r of ventasRes.data ?? []) {
         const row = r as { local_id: number; total: number };
         totalPorLocal.set(row.local_id, (totalPorLocal.get(row.local_id) ?? 0) + Number(row.total ?? 0));
       }
-      const rows: LocalRow[] = ctx.locales.map(l => ({
+      const mapped: LocalRow[] = locales.map(l => ({
         id: l.id,
         nombre: l.nombre,
         totalSemana: totalPorLocal.get(l.id) ?? 0,
       })).sort((a, b) => b.totalSemana - a.totalSemana);
-      setLocales(rows);
+      setRows(mapped);
       setLoading(false);
     }
     void reload();
     return () => { cancelled = true; };
-  }, [ctx.localActivo, ctx.locales]);
+  }, [ctx.localActivo]);
 
   if (loading) {
     return <div style={{ padding: "16px 0", textAlign: "center", color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-sm)" }}>Cargando…</div>;
   }
 
-  if (locales.length < 2) {
+  if (rows.length < 2) {
     return (
       <EmptyState
         icon="🏪"
@@ -69,7 +76,7 @@ export function ComparativaSucursalesWidget({ ctx }: { ctx: WidgetContext }) {
     );
   }
 
-  const max = Math.max(1, ...locales.map(l => l.totalSemana));
+  const max = Math.max(1, ...rows.map(l => l.totalSemana));
 
   return (
     <div>
@@ -77,7 +84,7 @@ export function ComparativaSucursalesWidget({ ctx }: { ctx: WidgetContext }) {
         Ranking · últimos 7 días
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {locales.map((l, idx) => {
+        {rows.map((l, idx) => {
           const pct = Math.max(2, Math.round((l.totalSemana / max) * 100));
           return (
             <div key={l.id}>

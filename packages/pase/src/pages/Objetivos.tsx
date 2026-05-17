@@ -26,6 +26,10 @@ interface ObjetivoFila {
 interface Props {
   locales: Local[];
   tenantId: string;
+  /** Sucursal seleccionada en el sidebar. Si !== null filtramos a SOLO esa sucursal.
+   * Si === null, mostramos un selector interno para elegir cuál editar (mejor que
+   * scrollear por todas). */
+  localActivo: number | null;
 }
 
 /**
@@ -41,7 +45,7 @@ interface Props {
  * esperado** — insumos del Punto de Equilibrio, métrica honesta en cualquier
  * momento del mes.
  */
-export default function Objetivos({ locales, tenantId }: Props) {
+export default function Objetivos({ locales, tenantId, localActivo }: Props) {
   const [mes, setMes] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -50,6 +54,22 @@ export default function Objetivos({ locales, tenantId }: Props) {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Sucursal "interna" cuando el sidebar dice "Todas las sucursales".
+  // Si localActivo del sidebar !== null, este state queda forzado a ese valor.
+  // Si el sidebar es null, el dueño elige acá cuál editar (default: el primero).
+  const [localInterno, setLocalInterno] = useState<number | null>(localActivo);
+
+  useEffect(() => {
+    // Si el sidebar cambia la sucursal activa, sincronizamos. Si vuelve a null,
+    // dejamos lo último elegido internamente (o caemos a la primera sucursal).
+    if (localActivo !== null) setLocalInterno(localActivo);
+    else if (localInterno === null && locales.length > 0) setLocalInterno(locales[0]!.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localActivo, locales]);
+
+  // Sucursal efectiva sobre la que se está trabajando.
+  const localTrabajando = localActivo ?? localInterno;
+  const bloqueadoPorSidebar = localActivo !== null;
 
   // Primer día del mes en formato ISO (clave única en la tabla).
   const mesIso = useMemo(() => `${mes}-01`, [mes]);
@@ -152,19 +172,50 @@ export default function Objetivos({ locales, tenantId }: Props) {
     );
   }
 
+  // Sucursal mostrada actualmente
+  const filaTrabajando = filas.find(f => f.local_id === localTrabajando);
+
   return (
     <div style={{ padding: "0 20px" }}>
       <PageHeader
         title="Objetivos"
         subtitle="metas mes a mes por sucursal"
         actions={
-          <input
-            type="month"
-            value={mes}
-            onChange={e => setMes(e.target.value)}
-            className="search"
-            style={{ width: 160 }}
-          />
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {/* Selector de sucursal interna SOLO cuando el sidebar dice "Todas".
+                Si el sidebar tiene una sucursal específica, mostramos un chip
+                bloqueado para que sea obvio que viene del sidebar. */}
+            {bloqueadoPorSidebar ? (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "0 12px", height: "var(--pase-h-sm)",
+                background: "var(--pase-celeste-100)", borderRadius: 8,
+                fontSize: "var(--pase-fs-sm)", color: "var(--pase-text)",
+                border: "0.5px solid var(--pase-celeste-300)",
+              }}>
+                <span style={{ fontSize: 10, opacity: 0.7 }}>🔒</span>
+                {filaTrabajando?.local_nombre ?? "—"}
+              </div>
+            ) : (
+              <select
+                value={localTrabajando ?? ""}
+                onChange={e => setLocalInterno(e.target.value ? Number(e.target.value) : null)}
+                className="search"
+                style={{ width: 200 }}
+              >
+                {locales.map(l => (
+                  <option key={l.id} value={l.id}>{l.nombre}</option>
+                ))}
+              </select>
+            )}
+            <input
+              type="month"
+              value={mes}
+              onChange={e => setMes(e.target.value)}
+              className="search"
+              style={{ width: 160 }}
+            />
+          </div>
         }
       />
 
@@ -178,22 +229,25 @@ export default function Objetivos({ locales, tenantId }: Props) {
           <strong>Grupo 1 — Facturación (mid-month, en /negocio):</strong> facturación objetivo del mes vs facturado a la fecha.<br />
           <strong>Grupo 2 — Punto de equilibrio (mid-month, en /negocio):</strong> costos fijos + margen contribución. BEP = fijos ÷ margen %.<br />
           <strong>Grupo 3 — Eficiencia (fin de mes, en /reportes):</strong> CMV %, costo MP %, margen bruto %. Sirven para comparar contra el EERR cerrado al final del mes (mid-month mienten porque las facturas vencidas distorsionan el costo).
+          {bloqueadoPorSidebar && <><br /><strong>Sucursal bloqueada por el sidebar.</strong> Para cargar objetivos de otra sucursal cambiá el selector del sidebar a "Todas las sucursales".</>}
         </div>
       </div>
 
       {loading ? (
         <div className="loading">Cargando objetivos…</div>
+      ) : !filaTrabajando ? (
+        <EmptyState
+          icon="🏪"
+          title="Seleccioná una sucursal"
+          description="Elegí del selector de arriba a qué sucursal cargarle objetivos."
+        />
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {filas.map(f => (
-            <FilaObjetivo
-              key={f.local_id}
-              fila={f}
-              saving={savingId === f.local_id}
-              onSave={(patch) => guardarFila(f.local_id, patch)}
-            />
-          ))}
-        </div>
+        <FilaObjetivo
+          key={filaTrabajando.local_id}
+          fila={filaTrabajando}
+          saving={savingId === filaTrabajando.local_id}
+          onSave={(patch) => guardarFila(filaTrabajando.local_id, patch)}
+        />
       )}
     </div>
   );
