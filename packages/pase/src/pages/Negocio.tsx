@@ -1,255 +1,145 @@
-import { useMemo, useState } from "react";
-import { useNegocioConsolidado, useObjetivos, type LocalCtx, type LocalRef } from "../hooks/useNegocio";
-import { InfoTooltip } from "../components/ui";
+import { useState, useMemo } from "react";
+import { PageHeader } from "../components/ui";
 import { LocalContextPicker } from "../components/ui/LocalContextPicker";
-import { formatCurrency, formatCurrencyCompact } from "../lib/format";
-import styles from "./Negocio.module.css";
+import { PuntoEquilibrioWidget } from "../dashboards/widgets/PuntoEquilibrioWidget";
+import { ObjetivosMesWidget } from "../dashboards/widgets/ObjetivosMesWidget";
+import { VentasSemanaWidget } from "../dashboards/widgets/VentasSemanaWidget";
+import { ComparativaSucursalesWidget } from "../dashboards/widgets/ComparativaSucursalesWidget";
+import { FacturasPorVencerWidget } from "../dashboards/widgets/FacturasPorVencerWidget";
+import type { WidgetContext, RolPase } from "../dashboards/types";
 
-// Alias para legibilidad — helpers centralizados en lib/format.ts.
-const fmtMoney = formatCurrency;
-const fmtCompact = formatCurrencyCompact;
+/**
+ * Negocio — vista ejecutiva del dueño/gerente.
+ *
+ * Reescrita 2026-05-17. Antes mostraba KPIs devengados (margen, CMV, rentabilidad)
+ * a mitad de mes — números engañosos porque los gastos fijos caen los primeros
+ * 15 días y distorsionan cualquier comparativa intra-mes.
+ *
+ * Nueva orientación: métricas HONESTAS en cualquier momento del mes:
+ *   1. Punto de equilibrio (BEP) — cuánto falta facturar para cubrir fijos.
+ *   2. Objetivo del mes — facturación vs meta cargada.
+ *   3. Ventas última semana — tendencia + variación vs semana previa.
+ *   4. Ranking sucursales — comparativa entre locales.
+ *   5. Facturas por vencer en 7 días — qué se viene encima.
+ *
+ * El EERR mensual devengado sigue viviendo en /reportes, pero solo tiene
+ * sentido mirarlo a fin de mes (no a mid-month).
+ */
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
-  return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
+interface LocalRef { id: number; nombre: string }
+
+interface Props {
+  user?: { id: number; nombre: string; rol: string; tenant_id?: string | null };
+  locales?: LocalRef[];
 }
 
-// ─── Inline section bits ────────────────────────────────────────────
-function SparkBars({ values }: { values: number[] }) {
-  if (!values.length) return null;
-  const max = Math.max(1, ...values);
-  const last = values.length - 1;
-  const penultimate = last - 1;
+export default function Negocio({ user, locales = [] }: Props) {
+  const [ctxLocal, setCtxLocal] = useState<"consolidado" | string>("consolidado");
+
+  const switchOptions = useMemo(() => {
+    const base = [{ id: "consolidado", label: "Consolidado" }];
+    for (const l of locales) base.push({ id: String(l.id), label: l.nombre });
+    return base;
+  }, [locales]);
+
+  // Construyo el ctx que esperan los widgets reutilizando los componentes
+  // del dashboard. localActivo viene del picker propio de esta pantalla.
+  const ctx: WidgetContext = useMemo(() => ({
+    usuario: {
+      id: user?.id ?? 0,
+      nombre: user?.nombre ?? "",
+      rol: (user?.rol ?? "dueno") as RolPase,
+      tenant_id: user?.tenant_id ?? null,
+    },
+    locales,
+    localActivo: ctxLocal === "consolidado" ? null : Number(ctxLocal),
+  }), [user, locales, ctxLocal]);
+
   return (
-    <div className={styles.sparkBars} aria-hidden>
-      {values.map((v, i) => {
-        const pct = Math.max(8, Math.round((v / max) * 100));
-        const cls =
-          i === last ? `${styles.sparkBar} ${styles.sparkBarHi}` :
-          i === penultimate ? `${styles.sparkBar} ${styles.sparkBarMid}` :
-          styles.sparkBar;
-        return <div key={i} className={cls} style={{ height: `${pct}%` }} />;
-      })}
+    <div style={{ padding: "0 20px" }}>
+      <PageHeader
+        title="Negocio"
+        subtitle="vista ejecutiva en tiempo real"
+        actions={
+          locales.length > 1 ? (
+            <LocalContextPicker
+              options={switchOptions}
+              value={String(ctxLocal)}
+              onChange={(id) => setCtxLocal(id)}
+            />
+          ) : null
+        }
+      />
+
+      {/* Aclaración educativa — explicar que NO es el EERR */}
+      <div className="alert" style={{ marginBottom: 16 }}>
+        <strong>¿Por qué no veo "ingresos vs egresos" acá?</strong>
+        <div style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-text-muted)", marginTop: 4, lineHeight: 1.5 }}>
+          A mitad de mes esos números mienten — los fijos (alquileres, sueldos, servicios) se pagan los primeros 15 días.
+          Acá mostramos métricas <strong>honestas en cualquier momento</strong>: punto de equilibrio, ventas y objetivos.
+          El EERR mensual completo (devengado) está en <strong>Reportes</strong>, donde sí tiene sentido mirarlo a fin de mes.
+        </div>
+      </div>
+
+      <div className="neg-grid">
+        <Card title="Punto de equilibrio" wide>
+          <PuntoEquilibrioWidget ctx={ctx} />
+        </Card>
+        <Card title="Objetivo de facturación">
+          <ObjetivosMesWidget ctx={ctx} />
+        </Card>
+        <Card title="Ventas — últimos 7 días" wide>
+          <VentasSemanaWidget ctx={ctx} />
+        </Card>
+        {locales.length >= 2 && (
+          <Card title="Ranking de sucursales" wide>
+            <ComparativaSucursalesWidget ctx={ctx} />
+          </Card>
+        )}
+        <Card title="Vencimientos próximos (7 días)">
+          <FacturasPorVencerWidget ctx={ctx} />
+        </Card>
+      </div>
+
+      <style>{`
+        .neg-grid {
+          display: grid;
+          grid-template-columns: repeat(12, 1fr);
+          gap: 16px;
+        }
+        .neg-card {
+          background: var(--pase-bg);
+          border: 0.5px solid var(--pase-border);
+          border-radius: var(--pase-radius-card);
+          padding: 18px;
+          min-width: 0;
+        }
+        .neg-card-title {
+          margin: 0 0 14px;
+          font-size: var(--pase-fs-base);
+          font-weight: 500;
+          color: var(--pase-text);
+          letter-spacing: var(--pase-ls-snug);
+        }
+        .neg-grid > .neg-card { grid-column: span 6; }
+        .neg-grid > .neg-card.wide { grid-column: span 6; }
+        @media (min-width: 1100px) {
+          .neg-grid > .neg-card { grid-column: span 4; }
+          .neg-grid > .neg-card.wide { grid-column: span 6; }
+        }
+        @media (max-width: 700px) {
+          .neg-grid > .neg-card { grid-column: span 12; }
+        }
+      `}</style>
     </div>
   );
 }
 
-// ─── Pantalla ───────────────────────────────────────────────────────
-interface NegocioProps {
-  user?: { nombre?: string };
-  /** Locales del tenant — pasados desde App.tsx. Generan el switch dinámico
-   * + el ranking por local en Performance. */
-  locales?: LocalRef[];
-}
-
-export default function Negocio({ user, locales = [] }: NegocioProps) {
-  const [ctx, setCtx] = useState<LocalCtx>("consolidado");
-  const switchOptions = useMemo<Array<{ id: LocalCtx; label: string }>>(() => {
-    const base: Array<{ id: LocalCtx; label: string }> = [
-      { id: "consolidado", label: "Consolidado" },
-    ];
-    for (const l of locales) {
-      base.push({ id: String(l.id), label: l.nombre });
-    }
-    return base;
-  }, [locales]);
-  const kpis = useNegocioConsolidado(ctx, locales);
-  const objetivos = useObjetivos(ctx);
-
-  const userName = user?.nombre || "Lucas Ferrari";
-  const userInitials = initials(userName);
-
-  const progressPct = Math.min(kpis.pctObjetivo, 100);
-  const markPct = (kpis.diaActual / kpis.diasDelMes) * 100;
-
+function Card({ title, children, wide }: { title: string; children: React.ReactNode; wide?: boolean }) {
   return (
-    <div className={styles.page}>
-      {/* Topbar */}
-      <div className={styles.topbar}>
-        <div className={styles.titleWrap}>
-          <span className={styles.title}>Negocio</span>
-          <span className={styles.titleSub}>· Mayo 2026</span>
-          <InfoTooltip maxWidth={300}>
-            Dashboard del dueño con KPIs consolidados (ventas, gastos, margen) y avance contra objetivos
-            del mes. Cambiá entre vista consolidada (todos los locales) y por local con el selector de la derecha.
-          </InfoTooltip>
-        </div>
-        <div className={styles.topbarRight}>
-          <LocalContextPicker
-            options={switchOptions.map(o => ({ id: String(o.id), label: o.label }))}
-            value={String(ctx)}
-            onChange={(id) => setCtx(id)}
-          />
-          <span className={styles.avatar} title={userName}>{userInitials}</span>
-        </div>
-      </div>
-
-      {/* Bento: anchor + 4 KPIs */}
-      <div className={styles.bento}>
-        {/* Anchor */}
-        <div className={styles.anchor}>
-          <div className={styles.anchorBgCircle} aria-hidden />
-          <div className={styles.anchorTopDecoration} aria-hidden />
-
-          <div className={styles.anchorHeader}>
-            <div>
-              <div className={styles.anchorLabel}>Facturación del mes</div>
-              <div className={styles.anchorValue}>{fmtMoney(kpis.facturacionMes)}</div>
-              <div className={styles.anchorSub}>
-                Proyectado a fin de mes: {fmtMoney(kpis.proyectadoFinMes)}
-              </div>
-            </div>
-            <span className={styles.anchorPill}>día {kpis.diaActual} / {kpis.diasDelMes}</span>
-          </div>
-
-          <div className={styles.progressWrap}>
-            <div className={styles.progressHeader}>
-              <span>{kpis.pctObjetivo}% del objetivo</span>
-              <span>{fmtCompact(kpis.facturacionMes)} / {fmtCompact(kpis.objetivoFacturacion)}</span>
-            </div>
-            <div className={styles.progressBar} aria-label={`${kpis.pctObjetivo}% completado del objetivo`}>
-              <div className={styles.progressFill} style={{ width: `${progressPct}%` }} />
-              <div
-                className={styles.progressMark}
-                style={{ left: `${markPct}%` }}
-                title={`Día ${kpis.diaActual} de ${kpis.diasDelMes}`}
-              />
-            </div>
-            <div className={styles.progressLegend}>
-              <span>{kpis.ritmo.toLowerCase()}</span>
-              <span className={styles.progressDelta}>
-                <span className={styles.progressDeltaStrong}>+{kpis.deltaMesAnterior.toFixed(1).replace(".", ",")}%</span> vs. mes anterior
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* 4 KPIs */}
-        <div className={styles.kpiCard}>
-          <div className={styles.kpiLabel}>Margen bruto</div>
-          <div className={styles.kpiValue}>{kpis.margenBruto.value}</div>
-          <div className={`${styles.kpiDelta} ${kpis.margenBruto.tone === "muted" ? styles.kpiDeltaMuted : ""}`}>
-            {kpis.margenBruto.delta}
-          </div>
-          <div className={styles.kpiSparkWrap}><SparkBars values={kpis.margenBruto.spark} /></div>
-        </div>
-
-        <div className={styles.kpiCard}>
-          <div className={styles.kpiLabel}>Costo de mercadería</div>
-          <div className={styles.kpiValue}>{kpis.costoMercaderia.value}</div>
-          <div className={`${styles.kpiDelta} ${styles.kpiDeltaMuted}`}>
-            {kpis.costoMercaderia.delta}
-          </div>
-          <div className={styles.kpiSparkWrap}><SparkBars values={kpis.costoMercaderia.spark} /></div>
-        </div>
-
-        <div className={styles.kpiCard}>
-          <div className={styles.kpiLabel}>Rentabilidad neta</div>
-          <div className={styles.kpiValue}>{fmtMoney(kpis.rentabilidadNeta.value)}</div>
-          <div className={styles.kpiDelta}>{kpis.rentabilidadNeta.delta}</div>
-          <div className={styles.kpiSparkWrap}><SparkBars values={kpis.rentabilidadNeta.spark} /></div>
-        </div>
-
-        <div className={styles.kpiCard}>
-          <div className={styles.kpiLabel}>Ticket promedio</div>
-          <div className={styles.kpiValue}>{fmtMoney(kpis.ticketPromedio.value)}</div>
-          <div className={styles.kpiDelta}>{kpis.ticketPromedio.delta}</div>
-          <div className={styles.kpiSparkWrap}><SparkBars values={kpis.ticketPromedio.spark} /></div>
-        </div>
-      </div>
-
-      {/* Proyección cierre de mes */}
-      <div className={styles.proyeccion}>
-        <div className={styles.proyeccionHeader}>
-          <span className={styles.proyeccionTitle}>Proyección cierre de mes</span>
-          <span className={styles.proyeccionSub}>Basado en ritmo actual de los últimos {kpis.diaActual} días</span>
-        </div>
-        <div className={styles.proyeccionGrid}>
-          <div className={styles.proyeccionCol}>
-            <span className={styles.proyeccionColLabel}>Facturación proyectada</span>
-            <span className={styles.proyeccionColValue}>{fmtMoney(kpis.proyeccion.facturacion.value)}</span>
-            <span className={styles.proyeccionColSub}>{kpis.proyeccion.facturacion.sub}</span>
-          </div>
-          <div className={styles.proyeccionCol}>
-            <span className={styles.proyeccionColLabel}>Costos proyectados</span>
-            <span className={styles.proyeccionColValue}>{fmtMoney(kpis.proyeccion.costos.value)}</span>
-            <span className={styles.proyeccionColSub}>{kpis.proyeccion.costos.sub}</span>
-          </div>
-          <div className={styles.proyeccionCol}>
-            <span className={styles.proyeccionTrim} aria-hidden />
-            <span className={styles.proyeccionColLabel}>Rentabilidad estimada</span>
-            <span className={styles.proyeccionColValue}>{fmtMoney(kpis.proyeccion.rentabilidad.value)}</span>
-            <span className={styles.proyeccionColSub}>
-              <span className={styles.proyeccionColSubStrong}>{kpis.proyeccion.rentabilidad.sub}</span>
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Row inferior */}
-      <div className={styles.rowInferior}>
-        {/* Performance por local */}
-        <div className={styles.rowCard}>
-          <div className={styles.rowCardHeader}>
-            <div className={styles.rowCardTitle}>Performance por local</div>
-            <div className={styles.rowCardSub}>Mayo 2026 · ranking</div>
-          </div>
-          {kpis.performanceLocales.map((l) => (
-            <div key={l.nombre} className={styles.perfRow}>
-              <span className={styles.perfName}>{l.nombre}</span>
-              <div className={styles.perfBarTrack}>
-                <div className={styles.perfBarFill} style={{ width: `${l.pctBar}%` }} />
-              </div>
-              <span className={styles.perfAmount}>{fmtMoney(l.facturacion)}</span>
-            </div>
-          ))}
-          <div className={styles.perfFooter}>
-            {(() => {
-              const parts = kpis.performanceFooter.texto.split(/(__\d__)/g);
-              return parts.map((p, i) => {
-                const m = p.match(/^__(\d+)__$/);
-                if (m) {
-                  const idx = parseInt(m[1]!, 10) - 1;
-                  return (
-                    <span key={i} className={styles.perfFooterStrong}>
-                      {kpis.performanceFooter.valoresDestacados[idx]}
-                    </span>
-                  );
-                }
-                return <span key={i}>{p}</span>;
-              });
-            })()}
-          </div>
-        </div>
-
-        {/* Objetivos */}
-        <div className={styles.rowCard}>
-          <div className={styles.rowCardHeader}>
-            <div className={styles.rowCardTitle}>Objetivos del mes</div>
-            <div className={styles.rowCardSub}>{objetivos.length} metas activas</div>
-          </div>
-          {objetivos.map((o) => {
-            const dotCls =
-              o.tone === "ok"    ? styles.objDotOk :
-              o.tone === "warn"  ? styles.objDotWarn :
-              styles.objDotLejos;
-            return (
-              <div key={o.id} className={styles.objRow}>
-                <span className={`${styles.objDot} ${dotCls}`} aria-hidden />
-                <div className={styles.objInfo}>
-                  <div className={styles.objName}>{o.nombre}</div>
-                  <div className={styles.objSub}>{o.detalle}</div>
-                </div>
-                <div className={styles.objVal}>
-                  {o.valorActual} <span className={styles.objValTarget}>/ {o.valorObjetivo}</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
+    <section className={`neg-card${wide ? " wide" : ""}`}>
+      <h3 className="neg-card-title">{title}</h3>
+      <div>{children}</div>
+    </section>
   );
 }

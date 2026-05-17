@@ -1,319 +1,307 @@
-import { useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
-import { ComparativaLocales, LocalCard, type LocalCardProps } from "../components/ui";
-import { useFinanzasConsolidado, useLocalFinanzas, useVencimientos } from "../hooks/useFinanzas";
-import { InfoTooltip } from "../components/ui";
+import { useEffect, useMemo, useState } from "react";
+import { db } from "../lib/supabase";
+import { PageHeader } from "../components/ui";
 import { LocalContextPicker } from "../components/ui/LocalContextPicker";
 import { formatCurrency, formatCurrencyCompact } from "../lib/format";
-import styles from "./Finanzas.module.css";
+import { VentasSemanaWidget } from "../dashboards/widgets/VentasSemanaWidget";
+import { ComparativaSucursalesWidget } from "../dashboards/widgets/ComparativaSucursalesWidget";
+import { SaldoCajaWidget } from "../dashboards/widgets/SaldoCajaWidget";
+import { FacturasPorVencerWidget } from "../dashboards/widgets/FacturasPorVencerWidget";
+import type { WidgetContext, RolPase } from "../dashboards/types";
 
-// Alias para legibilidad en este archivo.
-const fmtMoney = formatCurrency;
-const fmtCompact = formatCurrencyCompact;
-const fmtCompactSigned = (n: number) => {
-  const sign = n >= 0 ? "+" : "−";
-  return `${sign}${formatCurrencyCompact(Math.abs(n))}`;
-};
+/**
+ * Finanzas — vista analítica del flujo de plata.
+ *
+ * Reescrita 2026-05-17. Antes era mock puro con margen/CMV/cashflow inventados.
+ * Ahora muestra datos reales con foco en lo que se puede mirar mid-month
+ * sin distorsión:
+ *
+ *   - Ventas mes a mes (últimos 6 meses, sparkline)
+ *   - Días de la semana que más se venden (últimos 90 días)
+ *   - Ventas última semana + variación
+ *   - Comparativa entre sucursales
+ *   - Saldos en caja en tiempo real
+ *   - Próximos vencimientos
+ *
+ * Lo que estaba mock (margen bruto, CMV) NO va más en finanzas mid-month:
+ * vive en /reportes (EERR a fin de mes).
+ *
+ * Pendiente cuando conectemos COMANDA: top productos, horas pico, ticket
+ * promedio por banda horaria.
+ */
 
-function localKey(name: string): string {
-  return name.toLowerCase().replace(/\s+/g, "-");
+interface LocalRef { id: number; nombre: string }
+
+interface Props {
+  user?: { id: number; nombre: string; rol: string; tenant_id?: string | null };
+  locales?: LocalRef[];
 }
 
-// ─── Inline section bits ────────────────────────────────────────────
-function SectionHeader({ label }: { label: string }) {
-  return (
-    <div className={styles.sectionHeader}>
-      <span className={styles.sectionTitle}>{label}</span>
-      <span className={styles.sectionDivider} aria-hidden />
-    </div>
-  );
-}
+export default function Finanzas({ user, locales = [] }: Props) {
+  const [ctxLocal, setCtxLocal] = useState<"consolidado" | string>("consolidado");
 
-function SparkBars({ values }: { values: number[] }) {
-  if (!values.length) return null;
-  const max = Math.max(1, ...values);
-  const last = values.length - 1;
-  const penultimate = last - 1;
-  return (
-    <div className={styles.sparkBars} aria-hidden>
-      {values.map((v, i) => {
-        const pct = Math.max(8, Math.round((v / max) * 100));
-        const cls =
-          i === last ? `${styles.sparkBar} ${styles.sparkBarHi}` :
-          i === penultimate ? `${styles.sparkBar} ${styles.sparkBarMid}` :
-          styles.sparkBar;
-        return <div key={i} className={cls} style={{ height: `${pct}%` }} />;
-      })}
-    </div>
-  );
-}
+  const switchOptions = useMemo(() => {
+    const base = [{ id: "consolidado", label: "Consolidado" }];
+    for (const l of locales) base.push({ id: String(l.id), label: l.nombre });
+    return base;
+  }, [locales]);
 
-// ─── Pantalla ───────────────────────────────────────────────────────
-type LocalCtx = "consolidado" | string;
+  const localActivo = ctxLocal === "consolidado" ? null : Number(ctxLocal);
 
-interface FinanzasProps {
-  /** Locales del tenant — pasados desde App.tsx. Generan el switch dinámico
-   * + las cards por local + los vencimientos con nombre real. */
-  locales?: Array<{ id: number; nombre: string }>;
-}
-
-export default function Finanzas({ locales: tenantLocales = [] }: FinanzasProps) {
-  // Switch local controlado por URL (?local=<id>|consolidado).
-  // Sprint mayo 2026 v2 Commit 7. Permite compartir links a vistas
-  // específicas y que F5 preserve el local seleccionado.
-  const [searchParams, setSearchParams] = useSearchParams();
-  const ctx: LocalCtx = searchParams.get("local") || "consolidado";
-  const setCtx = (next: LocalCtx) => {
-    const params = new URLSearchParams(searchParams);
-    if (next === "consolidado") params.delete("local");
-    else params.set("local", next);
-    setSearchParams(params, { replace: true });
-  };
-
-  const consolidado = useFinanzasConsolidado();
-  // Pasamos los locales reales del tenant a los hooks de mock — devuelven
-  // 1 card/registro por local real con números mock distribuidos.
-  const locales = useLocalFinanzas(tenantLocales);
-  const vencimientos = useVencimientos(tenantLocales);
-
-  const isConsolidado = ctx === "consolidado";
-
-  // Local seleccionado cuando NO es consolidado
-  const localSel: LocalCardProps | null = useMemo(() => {
-    if (isConsolidado) return null;
-    return locales.find(l => localKey(l.name) === ctx) ?? null;
-  }, [ctx, locales, isConsolidado]);
-
-  // Vencimientos: en consolidado mostramos todos, en local solo los del local
-  const vencimientosVisibles = useMemo(() => {
-    if (isConsolidado) return vencimientos;
-    const localName = localSel?.name;
-    if (!localName) return [];
-    // "Ambos" / "Todos los locales" = vencimiento aplica a todos.
-    return vencimientos.filter(v =>
-      v.local.nombre === localName ||
-      v.local.nombre === "Ambos" ||
-      v.local.nombre === "Todos los locales",
-    );
-  }, [isConsolidado, vencimientos, localSel]);
-
-  const switchOptions: Array<{ id: LocalCtx; label: string }> = [
-    { id: "consolidado", label: "Consolidado" },
-    ...locales.map(l => ({ id: localKey(l.name), label: l.name })),
-  ];
+  const ctx: WidgetContext = useMemo(() => ({
+    usuario: {
+      id: user?.id ?? 0,
+      nombre: user?.nombre ?? "",
+      rol: (user?.rol ?? "dueno") as RolPase,
+      tenant_id: user?.tenant_id ?? null,
+    },
+    locales,
+    localActivo,
+  }), [user, locales, localActivo]);
 
   return (
-    <div className={styles.page}>
-      {/* Topbar: título + switch ──────────────────────────────────── */}
-      <div className={styles.topbar}>
-        <div className={styles.titleWrap}>
-          <span className={styles.title}>Finanzas</span>
-          <span className={styles.titleSub}>· Mayo 2026</span>
-          <InfoTooltip maxWidth={320}>
-            Vista de plata real (base percibida): efectivo en caja, vencimientos próximos, margen bruto.
-            <br/><strong>⚠️ Datos MOCK</strong>: por ahora muestra valores de ejemplo. La conexión a la DB
-            real está en backlog.
-          </InfoTooltip>
-        </div>
-        <LocalContextPicker
-          options={switchOptions}
-          value={ctx}
-          onChange={(id) => setCtx(id)}
-        />
-      </div>
-
-      {/* Botón "Ver comparativa" solo en vista por local ──────────── */}
-      {!isConsolidado && (
-        <button
-          type="button"
-          className={styles.backToCompare}
-          onClick={() => setCtx("consolidado")}
-        >
-          ← Ver comparativa con otros locales
-        </button>
-      )}
-
-      {/* ──────────────────────────────────────────────────────────── */}
-      {/* CASO A: CONSOLIDADO                                          */}
-      {/* ──────────────────────────────────────────────────────────── */}
-      {isConsolidado && (
-        <>
-          {/* Zona 1: Consolidado · KPIs globales */}
-          <SectionHeader label="Consolidado · todas las sucursales" />
-          <div className={styles.zone1}>
-            <div className={styles.anchor}>
-              <div className={styles.anchorBgCircle} aria-hidden />
-              <div className={styles.anchorDot} aria-hidden />
-              <div>
-                <div className={styles.anchorLabel}>Efectivo total en caja</div>
-                <div className={styles.anchorValue}>{fmtMoney(consolidado.efectivoTotal)}</div>
-              </div>
-              <div className={styles.anchorFooter}>
-                <div className={styles.anchorFooterItem}>
-                  <span className={styles.anchorFooterLabel}>Entró</span>
-                  <span className={styles.anchorFooterValue}>{fmtCompact(consolidado.flow.entro)}</span>
-                </div>
-                <div className={styles.anchorFooterItem}>
-                  <span className={styles.anchorFooterLabel}>Salió</span>
-                  <span className={styles.anchorFooterValue}>{fmtCompact(consolidado.flow.salio)}</span>
-                </div>
-                <div className={styles.anchorFooterItem}>
-                  <span className={styles.anchorFooterLabel}>Resultado</span>
-                  <span className={styles.anchorFooterValue}>{fmtCompactSigned(consolidado.flow.resultado)}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className={styles.kpiCard}>
-              <div className={styles.kpiLabel}>Por pagar (30d)</div>
-              <div className={styles.kpiValue}>{fmtMoney(consolidado.porPagar30d.total)}</div>
-              <div className={`${styles.kpiSub} ${styles.kpiSubWarn}`}>
-                <span className={styles.kpiDotWarn} aria-hidden />
-                {fmtCompact(consolidado.porPagar30d.estaSemana)} esta semana
-              </div>
-              <div className={styles.kpiSparkWrap}>
-                <SparkBars values={consolidado.porPagar30d.spark} />
-              </div>
-            </div>
-
-            <div className={styles.kpiCard}>
-              <div className={styles.kpiLabel}>Cierre proyectado</div>
-              <div className={styles.kpiValue}>{fmtMoney(consolidado.cierreProyectado.total)}</div>
-              <div className={styles.kpiSub}>{consolidado.cierreProyectado.sub}</div>
-              <div className={styles.kpiSparkWrap}>
-                <SparkBars values={consolidado.cierreProyectado.spark} />
-              </div>
-            </div>
-
-            <div className={styles.kpiCard}>
-              <div className={styles.kpiLabel}>Margen bruto</div>
-              <div className={styles.kpiValue}>{consolidado.margenBruto.value}</div>
-              <div className={styles.kpiSub}>{consolidado.margenBruto.delta}</div>
-              <div className={styles.kpiSparkWrap}>
-                <SparkBars values={consolidado.margenBruto.spark} />
-              </div>
-            </div>
-          </div>
-
-          {/* Zona 2: Por local (cards lado a lado) */}
-          <SectionHeader label={`Por local · ${locales.length} sucursales activas`} />
-          <div className={styles.zone2}>
-            {locales.map((l) => (
-              <LocalCard key={l.name} {...l} />
-            ))}
-          </div>
-
-          {/* Zona NUEVA: Comparativa de locales */}
-          <SectionHeader label="Comparativa de locales · vista analítica" />
-          <ComparativaLocales
-            locales={locales}
-            periodo={`Mayo 2026 · ${locales.length} sucursales activas`}
-          />
-        </>
-      )}
-
-      {/* ──────────────────────────────────────────────────────────── */}
-      {/* CASO B: LOCAL ESPECÍFICO                                     */}
-      {/* ──────────────────────────────────────────────────────────── */}
-      {!isConsolidado && localSel && (
-        <>
-          {/* Zona 1 renombrada: Resumen del local · KPIs del local seleccionado */}
-          <SectionHeader label={`Resumen del local · ${localSel.name}`} />
-          <div className={styles.zone1}>
-            <div className={styles.anchor}>
-              <div className={styles.anchorBgCircle} aria-hidden />
-              <div className={styles.anchorDot} aria-hidden />
-              <div>
-                <div className={styles.anchorLabel}>Efectivo en caja</div>
-                <div className={styles.anchorValue}>{fmtMoney(localSel.efectivoCaja)}</div>
-              </div>
-              <div className={styles.anchorFooter}>
-                <div className={styles.anchorFooterItem}>
-                  <span className={styles.anchorFooterLabel}>Entró</span>
-                  <span className={styles.anchorFooterValue}>{fmtCompact(localSel.flow.entro)}</span>
-                </div>
-                <div className={styles.anchorFooterItem}>
-                  <span className={styles.anchorFooterLabel}>Salió</span>
-                  <span className={styles.anchorFooterValue}>{fmtCompact(localSel.flow.salio)}</span>
-                </div>
-                <div className={styles.anchorFooterItem}>
-                  <span className={styles.anchorFooterLabel}>Resultado</span>
-                  <span className={styles.anchorFooterValue}>{fmtCompactSigned(localSel.flow.resultado)}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className={styles.kpiCard}>
-              <div className={styles.kpiLabel}>Por pagar esta semana</div>
-              <div className={styles.kpiValue}>
-                {localSel.venceSemana.amount > 0 ? fmtMoney(localSel.venceSemana.amount) : "—"}
-              </div>
-              <div className={styles.kpiSub}>
-                {localSel.venceSemana.amount > 0 ? "Vencimientos próximos" : "Sin vencimientos"}
-              </div>
-            </div>
-
-            <div className={styles.kpiCard}>
-              <div className={styles.kpiLabel}>Facturación del mes</div>
-              <div className={styles.kpiValue}>{fmtMoney(localSel.facturacionMes)}</div>
-              <div className={styles.kpiSub}>{localSel.metaInfo}</div>
-            </div>
-
-            <div className={styles.kpiCard}>
-              <div className={styles.kpiLabel}>Margen bruto</div>
-              <div className={styles.kpiValue}>{localSel.kpis.margen.value}</div>
-              <div className={styles.kpiSub}>{localSel.kpis.margen.delta}</div>
-            </div>
-          </div>
-
-          {/* Zona NUEVA: Detalle del local (LocalCard full width con toda la info) */}
-          <SectionHeader label={`Detalle de ${localSel.name}`} />
-          <div className={styles.localDetailWrap}>
-            <LocalCard {...localSel} />
-          </div>
-        </>
-      )}
-
-      {/* ─── Zona común: Vencimientos ──────────────────────────────── */}
-      <SectionHeader
-        label={
-          isConsolidado
-            ? "Próximos vencimientos · cruzando locales"
-            : `Próximos vencimientos · ${localSel?.name ?? ""}`
+    <div style={{ padding: "0 20px" }}>
+      <PageHeader
+        title="Análisis"
+        subtitle="tendencia + comparativas en tiempo real"
+        actions={
+          locales.length > 1 ? (
+            <LocalContextPicker
+              options={switchOptions}
+              value={String(ctxLocal)}
+              onChange={(id) => setCtxLocal(id)}
+            />
+          ) : null
         }
       />
-      <div className={styles.kpiCard} style={{ padding: "16px 18px" }}>
-        <div className={styles.vencList}>
-          {vencimientosVisibles.length === 0 ? (
-            <div style={{ fontSize: 12, color: "var(--pase-text-muted)", padding: "12px 0" }}>
-              No hay vencimientos próximos para este local.
+
+      <div className="fin-grid">
+        <Card title="Ventas — últimos 7 días" wide>
+          <VentasSemanaWidget ctx={ctx} />
+        </Card>
+        <Card title="Saldos en caja">
+          <SaldoCajaWidget ctx={ctx} />
+        </Card>
+
+        <Card title="Ventas mes a mes" wide>
+          <VentasMensualesChart localActivo={localActivo} />
+        </Card>
+        <Card title="Días que más se vende">
+          <DiasMasVendidos localActivo={localActivo} />
+        </Card>
+
+        {locales.length >= 2 && (
+          <Card title="Ranking de sucursales" wide>
+            <ComparativaSucursalesWidget ctx={ctx} />
+          </Card>
+        )}
+        <Card title="Próximos vencimientos">
+          <FacturasPorVencerWidget ctx={ctx} />
+        </Card>
+      </div>
+
+      <div className="alert" style={{ marginTop: 16, fontSize: "var(--pase-fs-sm)" }}>
+        <strong>Pendiente para cuando COMANDA esté integrado:</strong>{" "}
+        <span style={{ color: "var(--pase-text-muted)" }}>
+          top productos vendidos, productos más rentables, horas pico de venta, ticket promedio por banda horaria.
+          Hoy esa data no llega a PASE (solo total por día desde Maxirest).
+        </span>
+      </div>
+
+      <style>{`
+        .fin-grid {
+          display: grid;
+          grid-template-columns: repeat(12, 1fr);
+          gap: 16px;
+        }
+        .fin-card {
+          background: var(--pase-bg);
+          border: 0.5px solid var(--pase-border);
+          border-radius: var(--pase-radius-card);
+          padding: 18px;
+          min-width: 0;
+        }
+        .fin-card-title {
+          margin: 0 0 14px;
+          font-size: var(--pase-fs-base);
+          font-weight: 500;
+          color: var(--pase-text);
+          letter-spacing: var(--pase-ls-snug);
+        }
+        .fin-grid > .fin-card { grid-column: span 6; }
+        .fin-grid > .fin-card.wide { grid-column: span 6; }
+        @media (min-width: 1100px) {
+          .fin-grid > .fin-card { grid-column: span 4; }
+          .fin-grid > .fin-card.wide { grid-column: span 8; }
+        }
+        @media (max-width: 700px) {
+          .fin-grid > .fin-card { grid-column: span 12; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function Card({ title, children, wide }: { title: string; children: React.ReactNode; wide?: boolean }) {
+  return (
+    <section className={`fin-card${wide ? " wide" : ""}`}>
+      <h3 className="fin-card-title">{title}</h3>
+      <div>{children}</div>
+    </section>
+  );
+}
+
+// ─── VENTAS MENSUALES (últimos 6 meses) ──────────────────────────────────
+interface MesData { mesLabel: string; total: number }
+
+function VentasMensualesChart({ localActivo }: { localActivo: number | null }) {
+  const [data, setData] = useState<MesData[] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      const today = new Date();
+      // 6 meses atrás (primer día) → hoy
+      const desde = new Date(today.getFullYear(), today.getMonth() - 5, 1);
+      const desdeIso = desde.toISOString().slice(0, 10);
+      const hastaIso = today.toISOString().slice(0, 10);
+      let q = db
+        .from("ventas")
+        .select("fecha, total")
+        .gte("fecha", desdeIso)
+        .lte("fecha", hastaIso)
+        .eq("anulada", false);
+      if (localActivo !== null) q = q.eq("local_id", localActivo);
+      const { data: rows, error } = await q;
+      if (cancelled || error) { setLoading(false); return; }
+      const porMes = new Map<string, number>();
+      for (const r of rows ?? []) {
+        const row = r as { fecha: string; total: number };
+        const mesKey = row.fecha.slice(0, 7); // YYYY-MM
+        porMes.set(mesKey, (porMes.get(mesKey) ?? 0) + Number(row.total ?? 0));
+      }
+      const meses: MesData[] = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const mesKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        meses.push({
+          mesLabel: d.toLocaleDateString("es-AR", { month: "short" }),
+          total: porMes.get(mesKey) ?? 0,
+        });
+      }
+      setData(meses);
+      setLoading(false);
+    }
+    void load();
+    return () => { cancelled = true; };
+  }, [localActivo]);
+
+  if (loading) return <div style={{ color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-sm)", textAlign: "center", padding: 16 }}>Cargando…</div>;
+  if (!data || data.every(m => m.total === 0)) {
+    return <div style={{ color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-sm)", textAlign: "center", padding: 16, fontStyle: "italic" }}>Sin ventas en los últimos 6 meses</div>;
+  }
+  const max = Math.max(1, ...data.map(m => m.total));
+  const mesActualIdx = data.length - 1;
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 120 }}>
+        {data.map((m, i) => {
+          const pct = Math.max(4, Math.round((m.total / max) * 100));
+          return (
+            <div key={m.mesLabel + i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }} title={`${m.mesLabel} — ${formatCurrencyCompact(m.total)}`}>
+              <span style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", fontVariantNumeric: "tabular-nums" }}>
+                {formatCurrencyCompact(m.total)}
+              </span>
+              <div style={{
+                width: "100%",
+                height: `${pct}%`,
+                background: i === mesActualIdx ? "var(--pase-celeste)" : "var(--pase-celeste-200)",
+                borderRadius: "4px 4px 0 0",
+              }} />
+              <span style={{ fontSize: 10, color: "var(--pase-text-muted)", textTransform: "capitalize" }}>{m.mesLabel}</span>
             </div>
-          ) : (
-            vencimientosVisibles.map((v) => (
-              <div key={v.id} className={styles.vencRow}>
-                <div className={`${styles.dateBox} ${v.inminente ? styles.dateBoxInminente : ""}`}>
-                  <div className={styles.dateDay}>{v.dia}</div>
-                  <div className={styles.dateMes}>{v.mes}</div>
-                </div>
-                <div className={styles.vencInfo}>
-                  <div className={styles.vencName}>{v.nombre}</div>
-                  <div className={styles.vencDesc}>{v.descripcion}</div>
-                </div>
-                {isConsolidado ? (
-                  <span className={`${styles.localPill} ${v.local.tone === "primary" ? styles.localPillPrimary : styles.localPillMuted}`}>
-                    {v.local.nombre}
-                  </span>
-                ) : (
-                  <span />
-                )}
-                <div className={styles.vencMontoWrap}>
-                  <div className={styles.vencMonto}>{fmtMoney(v.monto)}</div>
-                  <div className={styles.vencMeta}>en {v.diasRestantes} {v.diasRestantes === 1 ? "día" : "días"}</div>
-                </div>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", marginTop: 8, textAlign: "center" }}>
+        Mes actual va parcial · barras anteriores son meses completos
+      </div>
+    </div>
+  );
+}
+
+// ─── DÍAS MÁS VENDIDOS (últimos 90 días) ─────────────────────────────────
+interface DiaSemana { dia: string; total: number }
+
+const DOW_LABELS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+
+function DiasMasVendidos({ localActivo }: { localActivo: number | null }) {
+  const [data, setData] = useState<DiaSemana[] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      const today = new Date();
+      const desde = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const hasta = today.toISOString().slice(0, 10);
+      let q = db
+        .from("ventas")
+        .select("fecha, total")
+        .gte("fecha", desde)
+        .lte("fecha", hasta)
+        .eq("anulada", false);
+      if (localActivo !== null) q = q.eq("local_id", localActivo);
+      const { data: rows, error } = await q;
+      if (cancelled || error) { setLoading(false); return; }
+      const porDow = Array(7).fill(0);
+      for (const r of rows ?? []) {
+        const row = r as { fecha: string; total: number };
+        // Parse fecha (YYYY-MM-DD) preservando local day-of-week. usar T12:00 para evitar TZ shifts.
+        const dow = new Date(`${row.fecha}T12:00:00`).getDay();
+        porDow[dow] += Number(row.total ?? 0);
+      }
+      const arr: DiaSemana[] = porDow.map((total, idx) => ({ dia: DOW_LABELS[idx] ?? "?", total }));
+      // Ordenar de mayor a menor
+      arr.sort((a, b) => b.total - a.total);
+      setData(arr);
+      setLoading(false);
+    }
+    void load();
+    return () => { cancelled = true; };
+  }, [localActivo]);
+
+  if (loading) return <div style={{ color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-sm)", textAlign: "center", padding: 16 }}>Cargando…</div>;
+  if (!data || data.every(d => d.total === 0)) {
+    return <div style={{ color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-sm)", textAlign: "center", padding: 16, fontStyle: "italic" }}>Sin ventas en 90 días</div>;
+  }
+
+  const max = Math.max(1, ...data.map(d => d.total));
+  return (
+    <div>
+      <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", marginBottom: 10 }}>
+        Últimos 90 días
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {data.map(d => {
+          const pct = Math.max(2, Math.round((d.total / max) * 100));
+          return (
+            <div key={d.dia}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 2 }}>
+                <span style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-text)", minWidth: 36 }}>{d.dia}</span>
+                <span style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", fontVariantNumeric: "tabular-nums" }}>
+                  {formatCurrency(d.total)}
+                </span>
               </div>
-            ))
-          )}
-        </div>
+              <div style={{ width: "100%", height: 4, background: "var(--pase-bg-soft)", borderRadius: 2, overflow: "hidden" }}>
+                <div style={{ width: `${pct}%`, height: "100%", background: "var(--pase-celeste-300)" }} />
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -306,8 +306,10 @@ function AppMain() {
 
               {/* Dirección */}
               <Route path="/negocio" element={<Negocio user={user || undefined} locales={locales}/>} />
-              <Route path="/finanzas" element={<Finanzas locales={locales}/>} />
-              <Route path="/objetivos" element={<Objetivos/>} />
+              <Route path="/finanzas" element={<Finanzas user={user || undefined} locales={locales}/>} />
+              <Route path="/objetivos" element={
+                user?.tenant_id ? <Objetivos locales={locales} tenantId={user.tenant_id}/> : <Navigate to="/" replace/>
+              } />
               <Route path="/reportes" element={<EERR {...props}/>} />
 
               {/* Herramientas */}

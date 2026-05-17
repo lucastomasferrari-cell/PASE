@@ -138,3 +138,20 @@ export async function eliminarNota(notaId: number): Promise<{ error: string | nu
   const { error } = await db.from("dashboard_pinned_notes").delete().eq("id", notaId);
   return { error: error?.message ?? null };
 }
+
+// Lista de usuarios activos del tenant — para el dropdown de "destinatario"
+// del form de crear mensajes pineados. RLS restringe automáticamente al tenant
+// del caller (dueño/admin). Para encargados/cajeros que no pueden crear, esta
+// función no se llama desde la UI.
+export async function listarUsuariosTenant(): Promise<{
+  data: Array<{ id: number; nombre: string }>;
+  error: string | null;
+}> {
+  const { data, error } = await db
+    .from("usuarios")
+    .select("id, nombre")
+    .eq("activo", true)
+    .order("nombre");
+  if (error) return { data: [], error: error.message };
+  return { data: (data ?? []) as Array<{ id: number; nombre: string }>, error: null };
+}
