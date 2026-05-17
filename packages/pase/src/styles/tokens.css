@@ -52,6 +52,50 @@
 
   --pase-font: "Inter", system-ui, -apple-system, sans-serif;
 
+  /* Escala tipográfica unificada (2026-05-16) — agregada para resolver
+   * el caos de tamaños ad-hoc (8, 9, 10.5, 11, 22, etc) que descontrolaba
+   * la jerarquía visual. Reglas de uso:
+   *
+   *   --pase-fs-xs   (10px)  → microbadges, hints muy chicos, "vía X" pills
+   *   --pase-fs-sm   (11px)  → overlines, captions, labels de tabla
+   *   --pase-fs-base (13px)  → body por default (table cells, paragraphs)
+   *   --pase-fs-md   (15px)  → énfasis sutil (links importantes, summaries)
+   *   --pase-fs-lg   (18px)  → subtítulos de sección
+   *   --pase-fs-xl   (22px)  → títulos de página
+   *   --pase-fs-2xl  (28px)  → KPI saldos en cards normales
+   *   --pase-fs-3xl  (38px)  → KPI ancla (Caja Efectivo, Facturación del mes)
+   *
+   * Pesos: 400 (texto normal), 500 (énfasis y números), 600 (raro, solo
+   * para títulos muy críticos). NO usar 700/800/900. */
+  --pase-fs-xs:   10px;
+  --pase-fs-sm:   11px;
+  --pase-fs-base: 13px;
+  --pase-fs-md:   15px;
+  --pase-fs-lg:   18px;
+  --pase-fs-xl:   22px;
+  --pase-fs-2xl:  28px;
+  --pase-fs-3xl:  38px;
+
+  /* Letter spacing: -0.025em en títulos (xl+), -0.01em en md/lg, 0 en base/sm,
+   * +0.06em uppercase en overlines (sm en uppercase). */
+  --pase-ls-tight:   -0.025em;
+  --pase-ls-snug:    -0.01em;
+  --pase-ls-overline: 0.06em;
+
+  /* === ESPACIADO === — escala 4px base (Tailwind-like) */
+  --pase-space-1:  4px;
+  --pase-space-2:  8px;
+  --pase-space-3:  12px;
+  --pase-space-4:  16px;
+  --pase-space-5:  20px;
+  --pase-space-6:  24px;
+  --pase-space-8:  32px;
+
+  /* === ALTURAS DE INPUTS/BOTONES === — escala unificada */
+  --pase-h-sm: 30px;  /* inputs/selects en filtros y barras */
+  --pase-h-md: 36px;  /* botones default y inputs principales */
+  --pase-h-lg: 42px;  /* CTAs principales */
+
   /* === RADIOS === */
 
   --pase-radius-card: 14px;       /* cards y frame principal */

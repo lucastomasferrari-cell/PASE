@@ -1,13 +1,15 @@
-/* Cards superiores de la vista Caja > Movimientos (sprint v2 Commit 5).
- * Layout: 3 columnas en desktop (anchor + 2 normales).
- * En mobile colapsa a 1 columna, anchor full width arriba.
+/* Cards superiores de la vista Caja > Movimientos.
+ * Layout 3 columnas iguales (1fr 1fr 1fr) en desktop. La anchor (Caja Efectivo)
+ * tiene el mismo ancho que las otras — la diferencia visual es el color
+ * celeste sólido, NO el tamaño. Antes era 1.4fr y se veía desproporcionado.
+ * Mobile: 1 columna, anchor arriba.
  */
 
 .row {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 14px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 @media (max-width: 900px) {
@@ -16,12 +18,12 @@
   }
 }
 
-/* Card base */
+/* Card base — misma altura y padding en las 3 para coherencia visual. */
 .card {
   position: relative;
   border-radius: var(--pase-radius-card);
-  padding: 16px 18px;
-  min-height: 100px;
+  padding: 18px 20px;
+  min-height: 112px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -102,9 +104,9 @@
 }
 
 .label {
-  font-size: 11px;
+  font-size: var(--pase-fs-sm);
   font-weight: 500;
-  letter-spacing: -0.005em;
+  letter-spacing: var(--pase-ls-snug);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -125,9 +127,9 @@
 
 .value {
   position: relative;
-  font-size: 22px;
+  font-size: var(--pase-fs-2xl);
   font-weight: 500;
-  letter-spacing: -0.025em;
+  letter-spacing: var(--pase-ls-tight);
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
   margin-top: 6px;
@@ -143,7 +145,7 @@
 
 .sub {
   position: relative;
-  font-size: 10.5px;
+  font-size: var(--pase-fs-xs);
   margin-top: 6px;
-  letter-spacing: -0.005em;
+  letter-spacing: var(--pase-ls-snug);
 }
