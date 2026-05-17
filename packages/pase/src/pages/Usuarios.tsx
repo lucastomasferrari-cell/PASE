@@ -30,7 +30,11 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
   // cuentas_all === true → user ve TODAS las cuentas (saldos y operar).
   // false → personalizado: cuentas_visibles para SALDOS, cuentas_operables
   // para CARGAR PAGOS. Son listas independientes desde el editor.
-  const emptyForm = { nombre:"", email:"", password:"", activo:true, modulos:[] as string[], locales_ids:[] as number[], cuentas_all:true, cuentas_visibles:[] as string[], cuentas_operables:[] as string[] };
+  // Sin "rol" explícito en el form — usamos `esDueno` boolean. El sistema
+  // guarda rol="dueno" o rol="encargado" según ese toggle. Decisión Lucas
+  // 2026-05-17: eliminar la noción de roles intermedios (admin/cajero/compras).
+  // Cada user con permisos personalizados, o "dueño" con acceso total.
+  const emptyForm = { nombre:"", email:"", password:"", activo:true, esDueno:false, modulos:[] as string[], locales_ids:[] as number[], cuentas_all:true, cuentas_visibles:[] as string[], cuentas_operables:[] as string[] };
   const [form, setForm] = useState(emptyForm);
 
   const load = async () => {
@@ -68,20 +72,19 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
     // Fallback al campo viejo si no hay rows en usuario_locales
     const finalLocs = lids.length > 0 ? lids : (u.locales || []).map(Number);
 
+    // esDueno: true si el rol guardado es 'dueno' o 'admin' o 'superadmin'.
+    // Los 3 comparten el short-circuit "ve todo" en tienePermiso(). Para el
+    // user, "Dueño/Admin" es una sola categoría — UI unificada.
+    const esDueno = u.rol === "dueno" || u.rol === "admin" || u.rol === "superadmin";
     setForm({
       nombre: u.nombre, email: u.email, password: "",
       activo: u.activo !== false,
+      esDueno,
       modulos: u._permisos || [],
       locales_ids: finalLocs,
-      // cuentas_all reflejaba "ambas listas son NULL". Si visibles es NULL,
-      // operables también lo es por convención. Si una de las dos es array,
-      // pasamos a modo personalizado.
       cuentas_all: (u.cuentas_visibles === null || u.cuentas_visibles === undefined)
                 && (u.cuentas_operables === null || u.cuentas_operables === undefined),
       cuentas_visibles: Array.isArray(u.cuentas_visibles) ? u.cuentas_visibles : [],
-      // Fallback: si la migration aún no corrió y cuentas_operables viene
-      // undefined, mostrarmos lo mismo que cuentas_visibles para que la UI
-      // refleje el estado real (al guardar se persiste explícitamente).
       cuentas_operables: Array.isArray(u.cuentas_operables)
         ? u.cuentas_operables
         : (Array.isArray(u.cuentas_visibles) ? u.cuentas_visibles : []),
@@ -118,9 +121,13 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
       let targetTenantId: string | null = null;
 
       if (modal === "new") {
+        // Decisión Lucas 2026-05-17: el rol se deriva del toggle "esDueno".
+        // dueno = acceso total, encargado = matriz custom. Eliminados los
+        // roles intermedios (admin/compras/cajero) de la UI.
+        const rolNuevo = form.esDueno ? "dueno" : "encargado";
         const r = await fetch("/api/auth-admin", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action:"create", nombre:form.nombre, usuario:form.email, password:form.password, rol:"encargado", locales:form.locales_ids }),
+          body: JSON.stringify({ action:"create", nombre:form.nombre, usuario:form.email, password:form.password, rol:rolNuevo, locales:form.locales_ids }),
         });
         const d = await r.json();
         if (!d.ok) { setErr(d.error || "Error creando usuario"); setSaving(false); return; }
@@ -139,6 +146,11 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
         if (!isEditingSelf) {
           updatePayload.activo = form.activo;
           updatePayload.locales = form.locales_ids;
+          // Persistir el rol según el toggle. Si era superadmin, NO degradar
+          // (cross-tenant es estructural — solo Lucas/Anthropic lo usa).
+          if (modal.rol !== "superadmin") {
+            updatePayload.rol = form.esDueno ? "dueno" : "encargado";
+          }
         }
         await db.from("usuarios").update(updatePayload).eq("id", userId);
         if (form.password) {
@@ -179,8 +191,9 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
 
       if (!editingSelf) {
         // Save permisos (delete + re-insert)
-        // Dueno tiene todos implícitos, no necesita rows. Otros roles sí.
-        const userRol = modal === "new" || modal === null ? "encargado" : (modal.rol || "encargado");
+        // Dueño/admin/superadmin tienen todos implícitos, no necesitan rows.
+        // 2026-05-17: usamos form.esDueno (no el rol viejo del modal).
+        const userRol = form.esDueno ? "dueno" : "encargado";
         const { error: delPermErr } = await db.from("usuario_permisos").delete().eq("usuario_id", userId);
         if (delPermErr) {
           console.error("Error borrando permisos previos:", delPermErr.message);
@@ -270,8 +283,8 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
       <PageHeader
         title="Usuarios"
         info={<>
-          Usuarios del tenant con sus roles (Dueño, Admin, Encargado, etc.) y módulos habilitados.
-          El acceso por local se controla acá. El dueño ve todos los locales y módulos automáticamente.
+          Creá usuarios del equipo y asignales exactamente los permisos que querés que tengan. Sin roles predefinidos — vos decidís qué puede hacer cada uno (módulos, cuentas, sucursales).<br /><br />
+          La única excepción es el toggle <strong>"Dueño/Admin"</strong> que da acceso total (atajo para cuando un usuario debe ver todo).
         </>}
         actions={<button className="btn btn-acc" onClick={abrirNuevo}>+ Nuevo usuario</button>}
       />
@@ -387,8 +400,7 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
 
               {/* Módulos */}
               {(() => {
-                const modalRol = modal === "new" || modal === null ? "encargado" : (modal.rol || "encargado");
-                const isDueno = modalRol === "dueno";
+                const isDueno = form.esDueno;
                 // isSelf: el user logueado está editando su propia row. Bloqueamos
                 // edición de permisos/módulos/permisos-avanzados para evitar
                 // que se deje sin acceso por error (bug reportado 2026-05-13:
@@ -410,8 +422,44 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                     </div>
                   )}
 
+                  {/* ─── Nivel de acceso ───────────────────────────────── */}
+                  <SectionTitle locked={isSelf}>Nivel de acceso</SectionTitle>
+                  <label
+                    style={{
+                      display: "flex", alignItems: "flex-start", gap: 12,
+                      padding: "14px 16px", borderRadius: 10,
+                      border: `0.5px solid ${form.esDueno ? "var(--pase-celeste-300)" : "var(--pase-border-strong)"}`,
+                      background: form.esDueno ? "var(--pase-celeste-100)" : "var(--pase-bg)",
+                      cursor: isSelf ? "default" : "pointer",
+                      opacity: isSelf ? 0.6 : 1,
+                      marginBottom: 4,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={form.esDueno}
+                      disabled={isSelf || !currentUserPuedeGrantUsuarios}
+                      onChange={e => setForm(f => ({ ...f, esDueno: e.target.checked }))}
+                      style={{ accentColor: "var(--pase-celeste)", width: 18, height: 18, marginTop: 2, flexShrink: 0 }}
+                    />
+                    <div>
+                      <div style={{ fontSize: "var(--pase-fs-base)", fontWeight: 500, color: "var(--pase-text)" }}>
+                        Dueño / Admin <span style={{ color: "var(--pase-text-muted)", fontWeight: 400, fontSize: "var(--pase-fs-sm)" }}>· acceso total</span>
+                      </div>
+                      <div style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-text-muted)", marginTop: 4, lineHeight: 1.5 }}>
+                        Ve todos los módulos, todas las cuentas, todas las sucursales. Puede crear y editar usuarios.<br />
+                        Si NO está marcado, abajo elegís manualmente los módulos y permisos que querés que tenga.
+                        {!currentUserPuedeGrantUsuarios && (
+                          <><br /><span style={{ color: "#D97706", fontStyle: "italic" }}>Solo un dueño/admin existente puede otorgar este nivel.</span></>
+                        )}
+                      </div>
+                    </div>
+                  </label>
+
                   {/* ─── Módulos ───────────────────────────────────────── */}
-                  <SectionTitle locked={isSelf}>Módulos habilitados</SectionTitle>
+                  <SectionTitle locked={isSelf || form.esDueno}>
+                    Módulos habilitados {form.esDueno && <span style={{ textTransform: "none", letterSpacing: 0, fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", fontWeight: 400, marginLeft: 6 }}>(todos por ser dueño/admin)</span>}
+                  </SectionTitle>
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(180px, 1fr))", gap:8, marginBottom: 20 }}>
                     {MODULOS.map(m => {
                       const checked = isDueno || form.modulos.includes(m.slug);
