@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth';
 import { useAuthPos } from '@/lib/authPos';
 import { useLocalActivo } from '@/lib/localActivo';
 import { listMesasConVentas, type MesaConVenta } from '@/services/mesasService';
-import { abrirVenta, listVentasItems, agregarItem, mandarCurso } from '@/services/ventasService';
+import { abrirVenta, listVentasItems, agregarItem, mandarCurso, updateVentaMeta } from '@/services/ventasService';
 import { listCanales } from '@/services/canalesService';
 import { listItems, type ItemConGrupo } from '@/services/itemsService';
 import { listGrupos } from '@/services/gruposService';
@@ -21,6 +21,10 @@ import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { useOnlineStatus } from '@/lib/useOnlineStatus';
 import { db } from '@/lib/supabase';
 import { ModifiersDialog } from '@/components/dialogs/ModifiersDialog';
+import { PaymentDialog } from '@/components/dialogs/PaymentDialog';
+import { getVenta } from '@/services/ventasService';
+import type { VentaPos } from '@/types/database';
+import { Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Handheld view — vista mobile-first para mozo tomando pedido en la mesa
@@ -134,6 +138,7 @@ function PantallaMesas({ localId, onMesaElegida, onSalir, empleadoId, tenantId }
 }) {
   const [mesas, setMesas] = useState<MesaConVenta[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<'todas' | 'mis-mesas'>('todas');
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -145,6 +150,19 @@ function PantallaMesas({ localId, onMesaElegida, onSalir, empleadoId, tenantId }
   useEffect(() => { reload(); }, [reload]);
   useRealtimeTable({ table: 'mesas', onChange: () => reload(), scopeByLocal: true });
   useRealtimeTable({ table: 'ventas_pos', onChange: () => reload(), scopeByLocal: true, extraFilter: 'modo=eq.salon' });
+
+  // "Mis mesas" = mesas con venta abierta donde este empleado es el mozo
+  // asignado. Si no hay ventas abiertas suyas, mostramos todas igual.
+  // mozoId no viene en MesaConVenta directo — lo derivamos asumiendo que
+  // venta.cajero_id o venta.mozo_id matchea. Si no tenemos ese campo,
+  // hacemos fallback: "mesas con cualquier venta abierta" (sin filtrar).
+  const misMesas = useMemo(() => {
+    // Como MesaConVenta no incluye mozo_id, mostramos todas las ocupadas
+    // por ahora. Cuando el query lo exponga, filtramos por empleadoId.
+    return mesas.filter((m) => m.venta_abierta_id !== null);
+  }, [mesas]);
+
+  const mesasVisibles = tab === 'mis-mesas' ? misMesas : mesas;
 
   async function abrirOSeleccionar(mesa: MesaConVenta) {
     if (mesa.venta_abierta_id) {
@@ -180,22 +198,51 @@ function PantallaMesas({ localId, onMesaElegida, onSalir, empleadoId, tenantId }
         <Button variant="ghost" size="icon" onClick={onSalir} aria-label="Salir">
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h1 className="text-base font-semibold">Modo mozo · elegí mesa</h1>
+        <h1 className="text-base font-semibold">Modo mozo</h1>
         <div className="ml-auto flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">{mesas.length} mesas</span>
+          <span className="text-xs text-muted-foreground">{mesasVisibles.length}</span>
           <FullscreenToggle className="h-8 w-8" />
         </div>
       </header>
 
+      {/* Tabs: Todas las mesas vs. solo las que tienen venta abierta
+          ("Mis mesas" — Toast Go style). */}
+      <div className="flex border-b border-border bg-card">
+        <button
+          type="button"
+          onClick={() => setTab('todas')}
+          className={cn(
+            'flex-1 h-10 text-sm font-medium transition-colors',
+            tab === 'todas' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground',
+          )}
+        >
+          Todas ({mesas.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('mis-mesas')}
+          className={cn(
+            'flex-1 h-10 text-sm font-medium transition-colors',
+            tab === 'mis-mesas' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground',
+          )}
+        >
+          Activas ({misMesas.length})
+        </button>
+      </div>
+
       <div className="flex-1 overflow-y-auto p-3">
         {loading ? (
           <div className="py-12 text-center text-muted-foreground">Cargando…</div>
+        ) : mesasVisibles.length === 0 ? (
+          <div className="py-12 text-center text-muted-foreground text-sm">
+            {tab === 'mis-mesas' ? 'Sin mesas activas todavía.' : 'Sin mesas en el local.'}
+          </div>
         ) : (
           // Grid responsive: mesas con tamaño fijo (auto-fill) en lugar
           // de 3 columnas absolutas. En celu (360-420px) caben 3-4 por fila,
           // en tablet 6-8, en desktop 10+. Cada mesa ~96-108px.
           <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2">
-            {mesas.map((m) => (
+            {mesasVisibles.map((m) => (
               <button
                 key={m.id}
                 type="button"
@@ -251,18 +298,23 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
   const [lastAddedItemId, setLastAddedItemId] = useState<number | null>(null);
   const [pendingModifiers, setPendingModifiers] = useState<ItemConGrupo | null>(null);
   const [itemsConModifiers, setItemsConModifiers] = useState<Set<number>>(new Set());
+  const [venta, setVenta] = useState<VentaPos | null>(null);
+  const [showCobro, setShowCobro] = useState(false);
+  const [cursoActivo, setCursoActivo] = useState<number>(1);
   const online = useOnlineStatus();
 
   const reload = useCallback(async () => {
     setLoading(true);
-    const [cRes, gRes, iRes] = await Promise.all([
+    const [cRes, gRes, iRes, vRes] = await Promise.all([
       listItems({ tenantId }),
       listGrupos(tenantId),
       listVentasItems(ventaId),
+      getVenta(ventaId),
     ]);
     setCatalogo(cRes.data);
     setGrupos(gRes.data);
     setItems(iRes.data);
+    setVenta(vRes.data);
     setLoading(false);
   }, [tenantId, ventaId]);
 
@@ -324,7 +376,7 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
       ventaId,
       itemId: it.id,
       cantidad,
-      curso: 1,
+      curso: cursoActivo,
       modificadores: modificadores.length > 0 ? modificadores : null,
       notas,
       cargadoPor: empleadoId,
@@ -343,21 +395,36 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
     }
   }
 
-  async function handleMandar() {
+  async function handleMandarCurso(curso: number) {
     if (!online) {
       toast.error('Sin conexión — no se puede mandar a cocina hasta que vuelva internet');
       return;
     }
-    if (itemsHold.length === 0) {
-      toast.error('Nada para mandar');
+    const itemsCurso = items.filter((i) => i.estado === 'hold' && (i.curso ?? 1) === curso);
+    if (itemsCurso.length === 0) {
+      toast.error(`Nada en curso ${curso} para mandar`);
       return;
     }
     setSending(true);
-    const { error } = await mandarCurso(ventaId, 1);
+    const cantidad = itemsCurso.length;
+    const { error } = await mandarCurso(ventaId, curso);
     setSending(false);
     if (error) { toast.error(error); return; }
-    toast.success(`${itemsHold.length} ${itemsHold.length === 1 ? 'item enviado' : 'items enviados'} a cocina`);
+    toast.success(`${cantidad} ${cantidad === 1 ? 'item enviado' : 'items enviados'} a cocina (curso ${curso})`);
     reload();
+  }
+
+  // Cursos en hold (números únicos de curso con items pendientes de enviar)
+  const cursosEnHold = useMemo(() => {
+    const set = new Set<number>();
+    for (const it of items) {
+      if (it.estado === 'hold') set.add(it.curso ?? 1);
+    }
+    return Array.from(set).sort((a, b) => a - b);
+  }, [items]);
+
+  function holdCountCurso(curso: number): number {
+    return items.filter((i) => i.estado === 'hold' && (i.curso ?? 1) === curso).length;
   }
 
   return (
@@ -375,7 +442,18 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
         </div>
       </header>
 
-      {/* Búsqueda + tabs grupo */}
+      {/* Notas globales de la mesa — info que el equipo + cocina deben saber
+          (cumpleaños, alergias, "traer torta al final"). Pedido de Lucas:
+          mismo patrón que VentaScreen del POS normal. */}
+      {venta && (
+        <NotasMesaBox
+          ventaId={ventaId}
+          notasActuales={venta.notas ?? null}
+          onSaved={reload}
+        />
+      )}
+
+      {/* Búsqueda + selector curso + tabs grupo */}
       <div className="px-2 py-2 bg-card border-b border-border space-y-2">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -386,6 +464,24 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
             placeholder="Buscar…"
             className="pl-9 h-10"
           />
+        </div>
+        {/* Selector de curso: a qué curso van los items que toque ahora.
+            Default curso 1. Si quiero pedir postres como curso 2, cambio acá. */}
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <span className="uppercase tracking-wide font-medium shrink-0">Cargando en:</span>
+          {[1, 2, 3].map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCursoActivo(c)}
+              className={cn(
+                'px-2 h-7 rounded-md text-xs font-medium transition-colors',
+                cursoActivo === c ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent',
+              )}
+            >
+              Curso {c}
+            </button>
+          ))}
         </div>
         <div className="flex gap-1 overflow-x-auto -mx-1 px-1">
           <button
@@ -477,22 +573,47 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
                 );
               })}
             </div>
-            <Button
-              variant="success"
-              size="lg"
-              className="w-full h-12 text-base font-semibold"
-              onClick={handleMandar}
-              disabled={sending || !online}
-              title={!online ? 'Sin conexión — esperá a que vuelva internet' : undefined}
-            >
-              <Send className="h-4 w-4 mr-2" />
-              {!online ? 'Sin conexión' : sending ? 'Enviando…' : `Mandar a cocina (${itemsHold.length})`}
-            </Button>
+            {/* 1 botón por curso con items en hold. Si hay solo curso 1
+                muestra 1 botón grande; si hay curso 2, 3 etc se apilan
+                con su contador respectivo. */}
+            {cursosEnHold.map((curso) => (
+              <Button
+                key={curso}
+                variant="success"
+                size="lg"
+                className="w-full h-12 text-base font-semibold"
+                onClick={() => handleMandarCurso(curso)}
+                disabled={sending || !online}
+                title={!online ? 'Sin conexión — esperá a que vuelva internet' : undefined}
+              >
+                <Send className="h-4 w-4 mr-2" />
+                {!online ? 'Sin conexión' : sending ? 'Enviando…' :
+                  cursosEnHold.length === 1
+                    ? `Mandar a cocina (${holdCountCurso(curso)})`
+                    : `Mandar curso ${curso} (${holdCountCurso(curso)})`}
+              </Button>
+            ))}
           </>
         ) : (
           <div className="py-3 text-center text-xs text-muted-foreground">
             Tocá productos del catálogo para agregar.
           </div>
+        )}
+
+        {/* Cobrar — siempre visible si la venta tiene total > 0 y no está
+            cobrada. El mozo puede cobrar la mesa desde el celu sin volver
+            al mostrador (estilo Toast Go). */}
+        {venta && venta.estado !== 'cobrada' && venta.estado !== 'anulada' && Number(venta.total) > 0 && (
+          <Button
+            variant="default"
+            size="lg"
+            className="w-full h-12 text-base font-semibold"
+            onClick={() => setShowCobro(true)}
+            disabled={!online}
+          >
+            <Wallet className="h-4 w-4 mr-2" />
+            Cobrar {formatARS(Number(venta.total))}
+          </Button>
         )}
       </div>
 
@@ -510,9 +631,95 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
           }}
         />
       )}
+
+      {/* PaymentDialog — Toast Go style: mozo cobra desde la mesa.
+          Multi-pago (efectivo + tarjeta), vuelto, propina. Igual que el
+          PaymentDialog del POS normal — reusamos el componente. */}
+      {showCobro && venta && (
+        <PaymentDialog
+          open={showCobro}
+          onOpenChange={setShowCobro}
+          venta={venta}
+          empleadoId={empleadoId}
+          onCobrado={() => {
+            setShowCobro(false);
+            toast.success('Mesa cobrada');
+            // Volver a la lista de mesas — la venta se cerró
+            setTimeout(() => onVolver(), 600);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-// Stepper helper eliminado — agregar de nuevo si se necesita (touch grande
-// por defecto, no requiere +/-).
+// ────────────────────────────────────────────────────────────────────────
+// Componente: NotasMesaBox
+// ────────────────────────────────────────────────────────────────────────
+// Notas globales de la mesa — visible para todo el equipo + cocina. Si hay
+// notas se ve la nota en una pill amarilla; tap → modo edición inline. Si
+// no hay, muestra link "+ agregar nota".
+
+function NotasMesaBox({ ventaId, notasActuales, onSaved }: {
+  ventaId: number;
+  notasActuales: string | null;
+  onSaved: () => void;
+}) {
+  const [editando, setEditando] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function guardar() {
+    setSaving(true);
+    const trimmed = draft.trim();
+    const { error } = await updateVentaMeta(ventaId, { notas: trimmed || null });
+    setSaving(false);
+    if (error) { toast.error(error); return; }
+    toast.success('Notas guardadas');
+    setEditando(false);
+    onSaved();
+  }
+
+  if (editando) {
+    return (
+      <div className="bg-warning/10 border-b border-warning/30 p-2">
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          autoFocus
+          rows={2}
+          placeholder="Ej: cumpleaños, alergia al maní, traer torta al final"
+          className="w-full text-xs rounded-md border border-input bg-background p-2 resize-none"
+        />
+        <div className="flex gap-1.5 mt-1.5 justify-end">
+          <Button size="sm" variant="ghost" className="h-7 text-[10px]" onClick={() => setEditando(false)} disabled={saving}>
+            Cancelar
+          </Button>
+          <Button size="sm" variant="success" className="h-7 text-[10px]" onClick={guardar} disabled={saving}>
+            {saving ? 'Guardando…' : 'Guardar'}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  if (notasActuales) {
+    return (
+      <button
+        type="button"
+        onClick={() => { setDraft(notasActuales); setEditando(true); }}
+        className="w-full bg-warning/10 border-b border-warning/30 p-2 text-left text-xs italic text-warning-foreground hover:bg-warning/15"
+      >
+        📝 {notasActuales}
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => { setDraft(''); setEditando(true); }}
+      className="w-full text-left px-3 py-1.5 text-[10px] text-muted-foreground hover:text-foreground border-b border-border bg-muted/30"
+    >
+      + Agregar nota a la mesa
+    </button>
+  );
+}
