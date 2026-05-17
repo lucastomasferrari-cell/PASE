@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { Modal, InfoTooltip } from "../components/ui";
 import { lanzarTour, resetTour } from "../lib/onboardingTours";
@@ -100,6 +101,7 @@ interface AjustesProps {
 }
 
 export default function Ajustes({ user }: AjustesProps = {}) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [categorias, setCategorias] = useState<CategoriaRow[]>([]);
   const [medios, setMedios] = useState<MedioCobroRow[]>([]);
@@ -403,7 +405,7 @@ export default function Ajustes({ user }: AjustesProps = {}) {
               className="btn btn-ghost btn-sm"
               onClick={() => {
                 resetTour(user.id);
-                lanzarTour(getPermisos(user), user.id, { force: true });
+                lanzarTour(getPermisos(user), user.id, navigate, { force: true });
               }}
               title="Reproducir el tour de bienvenida"
             >

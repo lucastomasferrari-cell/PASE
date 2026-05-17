@@ -1,247 +1,344 @@
 /**
- * onboardingTours.ts — tours guiados por PERMISO (no por rol).
+ * onboardingTours.ts — tours guiados POR PERMISO y NAVEGABLES.
  *
  * Diseño 2026-05-17 (rediseño por feedback Lucas):
  *
- *   1. CADA módulo/permiso tiene su mini-tour específico (ej: 'caja' enseña
- *      a cargar movimientos, 'compras' a cargar facturas, etc).
+ *   1. CADA módulo/permiso tiene su mini-tour específico.
  *   2. Al entrar a /inicio por primera vez se calculan qué permisos tiene
  *      el user y se le muestran SOLO los tours de esos permisos, en orden.
  *   3. Cada permiso se marca como "tour visto" individualmente en localStorage.
  *      Si el dueño le agrega un permiso nuevo más adelante, la próxima vez
  *      que entre se le dispara solo el tour del permiso nuevo.
- *
- * Esto reemplaza el modelo viejo (3 tours por rol) que se rompe cuando los
- * permisos no se corresponden 1:1 con un rol nominal — caso típico en
- * PASE donde casi todos los users son "encargado" con matriz custom.
+ *   4. Los pasos pueden tener `route` opcional — el motor navega antes de
+ *      mostrar el step. Ahora el tour TE LLEVA a /caja, /compras, etc y te
+ *      muestra los botones reales en vez de modales libres.
  */
 
 import { driver, type DriveStep } from "driver.js";
 import "driver.js/dist/driver.css";
 
-// ─── Tour de bienvenida (siempre primero) ─────────────────────────────
-const BIENVENIDA: DriveStep[] = [
+// Step interno con metadata adicional (route opcional para navegación).
+interface PaseStep {
+  route?: string;  // Si != null, navegar acá antes de mostrar el step.
+  step: DriveStep;
+}
+
+type NavigateFn = (path: string) => void;
+
+// ─── Bienvenida ───────────────────────────────────────────────────────
+const BIENVENIDA: PaseStep[] = [
   {
-    popover: {
-      title: "¡Bienvenido a PASE!",
-      description: `Te damos un tour rápido por las funciones que tenés habilitadas.<br /><br />
-        Podés saltarlo en cualquier momento o repetirlo después desde <strong>Ajustes → Ver tour de bienvenida</strong>.`,
-      side: "over", align: "center",
+    route: "/inicio",
+    step: {
+      popover: {
+        title: "¡Bienvenido a PASE!",
+        description: `Te damos un tour por las funciones que tenés habilitadas.<br /><br />
+          Te vamos a llevar por cada pantalla y mostrarte qué hacés en cada una.<br /><br />
+          Podés saltarlo o repetirlo desde <strong>Ajustes → Ver tour de bienvenida</strong>.`,
+        side: "over", align: "center",
+      },
     },
   },
   {
-    element: "[data-tour='sidebar-local']",
-    popover: {
-      title: "Sucursal activa",
-      description: `Si tenés más de una sucursal, elegís acá sobre cuál estás trabajando. Todo lo que veas o cargues se asocia a esa sucursal.`,
-      side: "right",
+    step: {
+      element: "[data-tour='sidebar-local']",
+      popover: {
+        title: "Sucursal activa",
+        description: `Si tenés más de una sucursal, elegís acá sobre cuál estás trabajando. <strong>Todo lo que veas o cargues se asocia a esa sucursal.</strong>`,
+        side: "right",
+      },
     },
   },
   {
-    element: "[data-tour='sidebar-nav']",
-    popover: {
-      title: "Tus módulos",
-      description: `Estos son los módulos a los que tenés acceso. Vamos a recorrer cada uno brevemente.`,
-      side: "right",
+    step: {
+      element: "[data-tour='sidebar-nav']",
+      popover: {
+        title: "Tus módulos",
+        description: `Estos son los módulos a los que tenés acceso. Vamos a recorrer cada uno.`,
+        side: "right",
+      },
     },
   },
 ];
 
-// ─── Mini-tours por permiso ─────────────────────────────────────────────
-// Clave = slug del permiso (igual que en MODULOS). Si un permiso no tiene
-// tour, simplemente se skipea (no rompe).
+// ─── Mini-tours por permiso — NAVEGABLES ───────────────────────────────
 
-const TOURS_POR_PERMISO: Record<string, DriveStep[]> = {
-  inicio: [],  // ya incluido en BIENVENIDA
+const TOURS_POR_PERMISO: Record<string, PaseStep[]> = {
+  inicio: [],
 
   caja: [
     {
-      popover: {
-        title: "💰 Caja — saldos y movimientos",
-        description: `Acá ves los saldos de tus cuentas (Caja Efectivo, Caja Chica, MercadoPago, etc) y todos los movimientos.<br /><br />
-          Cargás ingresos y egresos manuales con el botón <strong>+ Movimiento</strong>, y transferís entre cuentas con <strong>↔ Transferir</strong>.<br /><br />
-          La mayoría de los movimientos se generan automático al cargar ventas, facturas o gastos.`,
-        side: "over", align: "center",
+      route: "/caja",
+      step: {
+        popover: {
+          title: "💰 Caja",
+          description: `Acá ves los saldos de tus cuentas y todos los movimientos del local.<br /><br />
+            Te llevo a esta pantalla para que veas cómo se ve.`,
+          side: "over", align: "center",
+        },
+      },
+    },
+    {
+      step: {
+        // Botón "+ Movimiento" del header
+        element: "button.btn.btn-acc",
+        popover: {
+          title: "+ Movimiento",
+          description: `Acá cargás un movimiento manual (ingreso o egreso). La mayoría se generan automático al cargar ventas/gastos/facturas — solo usás esto para ajustes manuales.`,
+          side: "bottom",
+        },
       },
     },
   ],
 
   ventas: [
     {
-      popover: {
-        title: "📈 Ventas — cierres del día",
-        description: `Cargás los cierres de venta por turno (almuerzo/cena) con el botón <strong>+ Cargar venta</strong>. También importás cierres desde Maxirest.<br /><br />
-          Las ventas en efectivo generan automáticamente un movimiento en Caja. Las de tarjeta/MP se registran cuando llega la liquidación.`,
-        side: "over", align: "center",
+      route: "/ventas",
+      step: {
+        popover: {
+          title: "📈 Ventas",
+          description: `Cargás los cierres de venta por turno (almuerzo/cena). Las ventas en efectivo generan automáticamente un movimiento en Caja.`,
+          side: "over", align: "center",
+        },
       },
     },
   ],
 
   compras: [
     {
-      popover: {
-        title: "📄 Compras — facturas y remitos",
-        description: `Cargás facturas de proveedores con <strong>+ Cargar factura</strong> (manual) o usando <strong>Lector IA</strong> (subís foto/PDF y se autocompleta).<br /><br />
-          Las compras informales sin factura las cargás como <strong>Remitos</strong>. Después podés vincularlas a la factura cuando llega.<br /><br />
-          Filtrá por Pendientes / Vencidas / Pagadas con las pills de la derecha.`,
-        side: "over", align: "center",
+      route: "/compras",
+      step: {
+        popover: {
+          title: "📄 Compras",
+          description: `Acá viven las facturas de proveedores. Te muestro cómo se cargan.`,
+          side: "over", align: "center",
+        },
+      },
+    },
+    {
+      step: {
+        // Botón "+ Cargar factura"
+        element: "button.btn.btn-acc",
+        popover: {
+          title: "+ Cargar factura",
+          description: `Cargás facturas manualmente o usá <strong>Lector IA</strong> (subís foto/PDF y se autocompleta). Compras informales sin factura → cargás como <strong>Remito</strong>.`,
+          side: "bottom",
+        },
       },
     },
   ],
 
   gastos: [
     {
-      popover: {
-        title: "💸 Gastos — fijos y variables",
-        description: `Cargás gastos del día (servicios, sueldos pagados, alquiler, etc) con <strong>+ Cargar Gasto</strong>.<br /><br />
-          Cada gasto genera automáticamente un movimiento en Caja descontando el saldo de la cuenta elegida.<br /><br />
-          Tipos: fijos / variables / publicidad / comisiones / impuestos.`,
-        side: "over", align: "center",
+      route: "/gastos",
+      step: {
+        popover: {
+          title: "💸 Gastos",
+          description: `Cargás gastos del día (servicios, alquiler, etc). Cada gasto genera automáticamente un movimiento en Caja descontando el saldo.`,
+          side: "over", align: "center",
+        },
+      },
+    },
+  ],
+
+  reservas: [
+    {
+      route: "/reservas",
+      step: {
+        popover: {
+          title: "📅 Reservas",
+          description: `Agenda diaria de reservas tomadas por teléfono o WhatsApp. Cambiás el estado inline (pendiente / confirmada / sentada / cancelada / no vino).`,
+          side: "over", align: "center",
+        },
       },
     },
   ],
 
   negocio: [
     {
-      popover: {
-        title: "🎯 Negocio — vista ejecutiva",
-        description: `Tu pantalla del día como dueño. Acá ves:<br /><br />
-          <strong>Punto de equilibrio</strong>: cuánto te falta facturar para cubrir fijos.<br />
-          <strong>Objetivo de facturación</strong>: progreso vs meta mensual.<br />
-          <strong>Ventas última semana</strong>: tendencia con sparkline.<br />
-          <strong>Ranking de sucursales</strong>: cuál vende más.<br /><br />
-          Métricas honestas en cualquier momento del mes — sin los espejismos de mid-month del EERR.`,
-        side: "over", align: "center",
+      route: "/negocio",
+      step: {
+        popover: {
+          title: "🎯 Negocio",
+          description: `Tu pantalla del día como dueño. Punto de equilibrio, objetivo del mes, ventas última semana, ranking sucursales y vencimientos.<br /><br />
+            Métricas honestas en cualquier momento del mes — sin los espejismos del EERR mid-month.`,
+          side: "over", align: "center",
+        },
       },
     },
   ],
 
   finanzas: [
     {
-      popover: {
-        title: "📊 Finanzas — análisis profundo",
-        description: `Ventas mes a mes, días que más vendés, comparativas entre sucursales y vencimientos próximos.<br /><br />
-          Acá hacés el análisis tipo "¿qué pasó esta semana?" o "¿por qué bajó el mes?".`,
-        side: "over", align: "center",
+      route: "/finanzas",
+      step: {
+        popover: {
+          title: "📊 Análisis financiero",
+          description: `Ventas mes a mes, días que más vendés, comparativas entre sucursales y vencimientos próximos.`,
+          side: "over", align: "center",
+        },
       },
     },
   ],
 
   objetivos: [
     {
-      popover: {
-        title: "🎯 Objetivos — metas del mes",
-        description: `Definí mes a mes lo que querés alcanzar: facturación, costos fijos, margen contribución, CMV, etc.<br /><br />
-          Cada objetivo es opcional. Lo que cargues alimenta los widgets del dashboard (punto de equilibrio, % de avance, etc).`,
-        side: "over", align: "center",
+      route: "/objetivos",
+      step: {
+        popover: {
+          title: "🎯 Objetivos",
+          description: `Definí mes a mes lo que querés alcanzar: facturación, costos fijos, margen, CMV, etc.<br /><br />
+            Cada indicador es opcional. Lo que cargues alimenta los widgets del dashboard.`,
+          side: "over", align: "center",
+        },
       },
     },
   ],
 
   eerr: [
     {
-      popover: {
-        title: "📊 Reportes — Estado de Resultados",
-        description: `El EERR mensual completo: ventas, CMV, gastos por categoría, rentabilidad neta. Base devengada (no caja).<br /><br />
-          Útil para análisis a fin de mes. Podés comparar contra meses anteriores y exportar a Excel.`,
-        side: "over", align: "center",
+      route: "/reportes",
+      step: {
+        popover: {
+          title: "📊 Reportes",
+          description: `El EERR mensual completo: ventas, CMV, gastos por categoría, rentabilidad neta. Base devengada.<br /><br />
+            Exportable a CSV para pasarle al contador.`,
+          side: "over", align: "center",
+        },
       },
     },
   ],
 
   rrhh: [
     {
-      popover: {
-        title: "👥 Equipo — empleados y nómina",
-        description: `Gestionás empleados (alta, sueldo, vacaciones), cargás novedades del mes y liquidás sueldos.<br /><br />
-          Los pagos de sueldo generan movimientos en Caja automático.`,
-        side: "over", align: "center",
+      route: "/equipo",
+      step: {
+        popover: {
+          title: "👥 Equipo",
+          description: `Empleados, novedades del mes y liquidación de sueldos. Los pagos generan movimientos en Caja automático.`,
+          side: "over", align: "center",
+        },
       },
     },
   ],
 
   contador: [
     {
-      popover: {
-        title: "🧾 Contador / IVA",
-        description: `Libro IVA Compras y Ventas mensual. Exportable a CSV para pasarle al contador.`,
-        side: "over", align: "center",
+      route: "/herramientas/contador-iva",
+      step: {
+        popover: {
+          title: "🧾 Contador / IVA",
+          description: `Libro IVA Compras y Ventas mensual. Exportable a CSV para tu contador.`,
+          side: "over", align: "center",
+        },
       },
     },
   ],
 
   blindaje: [
     {
-      popover: {
-        title: "🛡 Blindaje",
-        description: `Auditoría de seguridad: chequea integridad de los datos, RLS, y alertas de operaciones sospechosas.`,
-        side: "over", align: "center",
+      route: "/herramientas/blindaje",
+      step: {
+        popover: {
+          title: "🛡 Blindaje",
+          description: `Auditoría de seguridad: chequea integridad de los datos, RLS, y alertas de operaciones sospechosas.`,
+          side: "over", align: "center",
+        },
       },
     },
   ],
 
   importar: [
     {
-      popover: {
-        title: "⬇ Importar data",
-        description: `Si venís de otro sistema, subí tus proveedores, empleados y conceptos desde Excel/CSV. Hay plantillas para descargar.`,
-        side: "over", align: "center",
+      route: "/herramientas/importar",
+      step: {
+        popover: {
+          title: "⬇ Importar data",
+          description: `Si venís de otro sistema, subí tus proveedores, empleados, conceptos y saldos iniciales desde Excel/CSV. Hay plantillas para descargar.`,
+          side: "over", align: "center",
+        },
+      },
+    },
+  ],
+
+  lector_mp: [
+    {
+      route: "/herramientas/lector-mp",
+      step: {
+        popover: {
+          title: "🧠 Lector extracto MP",
+          description: `Una vez al mes bajás el extracto de MercadoPago y lo subís acá. La IA lo parsea y agrega los movimientos faltantes (lo que la API automática se perdió).`,
+          side: "over", align: "center",
+        },
       },
     },
   ],
 
   ajustes_dashboards: [
     {
-      popover: {
-        title: "⚙ Configurar dashboards",
-        description: `Elegís qué widgets ve cada empleado en su pantalla de inicio. El cajero ve saldos y ventas del día, el de compras ve facturas vencidas, vos ves todo.`,
-        side: "over", align: "center",
+      route: "/ajustes/dashboards",
+      step: {
+        popover: {
+          title: "⚙ Configurar dashboards",
+          description: `Elegís qué widgets ve cada empleado en su pantalla de inicio. El cajero ve saldos y ventas del día, vos ves todo.`,
+          side: "over", align: "center",
+        },
       },
     },
   ],
 
   ajustes: [
     {
-      popover: {
-        title: "⚙ Ajustes",
-        description: `Configuraciones globales: categorías custom, medios de cobro, puestos del equipo. Lo que definís acá se propaga a todas las pantallas.`,
-        side: "over", align: "center",
+      route: "/ajustes",
+      step: {
+        popover: {
+          title: "⚙ Ajustes",
+          description: `Configuraciones globales: categorías custom, medios de cobro, puestos del equipo. Lo que definís acá se propaga a todas las pantallas.`,
+          side: "over", align: "center",
+        },
       },
     },
   ],
 
   usuarios: [
     {
-      popover: {
-        title: "👤 Usuarios",
-        description: `Creás usuarios para tu equipo y les asignás exactamente los permisos que querés que tengan. Sin roles predefinidos — vos decidís qué puede hacer cada uno.`,
-        side: "over", align: "center",
+      route: "/usuarios",
+      step: {
+        popover: {
+          title: "👤 Usuarios",
+          description: `Creás usuarios para tu equipo y les asignás permisos exactos. Sin roles predefinidos — vos decidís qué puede hacer cada uno.`,
+          side: "over", align: "center",
+        },
       },
     },
   ],
 };
 
-// ─── Tour de cierre ─────────────────────────────────────────────────────
-const CIERRE: DriveStep[] = [
+// ─── Cierre ────────────────────────────────────────────────────────────
+const CIERRE: PaseStep[] = [
   {
-    popover: {
-      title: "¿Dudas sobre algo?",
-      description: `Cuando veas el ícono ☼ dorado al lado de un título o campo, pasá el mouse para leer la explicación contextual.<br /><br />
-        Cualquier duda más profunda, escribime.`,
-      side: "over", align: "center",
+    route: "/inicio",
+    step: {
+      popover: {
+        title: "¿Dudas sobre algo?",
+        description: `Cuando veas el ícono ☼ dorado al lado de un título o campo, pasá el mouse para leer la explicación contextual.`,
+        side: "over", align: "center",
+      },
     },
   },
   {
-    popover: {
-      title: "¡Listo! 🎉",
-      description: `Ya viste lo esencial. Para repetir este tour cuando quieras: <strong>Ajustes → Ver tour de bienvenida</strong>.<br /><br />
-        Si te asignan permisos nuevos más adelante, la próxima vez que entres te vamos a mostrar solo esos.`,
-      side: "over", align: "center",
+    step: {
+      popover: {
+        title: "¡Listo! 🎉",
+        description: `Ya viste lo esencial. Para repetir este tour: <strong>Ajustes → Ver tour de bienvenida</strong>.<br /><br />
+          Si te asignan permisos nuevos, la próxima vez que entres te mostraremos solo esos.`,
+        side: "over", align: "center",
+      },
     },
   },
 ];
 
-// ─── Storage helpers ───────────────────────────────────────────────────
+// ─── Storage helpers ──────────────────────────────────────────────────
 function getSeenPermisos(userId: number): Set<string> {
   try {
     const raw = localStorage.getItem(`pase_onboarding_seen_${userId}`);
@@ -254,60 +351,73 @@ function setSeenPermisos(userId: number, seen: Set<string>) {
   localStorage.setItem(`pase_onboarding_seen_${userId}`, JSON.stringify([...seen]));
 }
 
-// Marker especial para "vio la bienvenida + cierre" (independiente de permisos).
 const KEY_BIENVENIDA = "__bienvenida__";
 
 /**
- * Lanza el tour del usuario. Calcula qué tours mostrar según:
- *   - permisos: lista de slugs del user (de getPermisos)
- *   - opts.force: si TRUE, ignora el flag de "ya visto" (botón manual).
+ * Lanza el tour del usuario. Recibe navigate de react-router para que los
+ * steps con `route` puedan llevarte a esa pantalla automáticamente.
  *
- * Comportamiento:
- *   1. Si es primera vez → bienvenida + tours de TODOS los permisos + cierre.
- *   2. Si entró antes pero tiene permisos NUEVOS → solo bienvenida-cortita
- *      ("agregaron permisos nuevos") + tours de los permisos no vistos.
- *   3. Si todos los permisos ya fueron vistos → no hace nada (a menos
- *      que force=true, que muestra todo).
+ * - permisos: lista de slugs efectivos del user
+ * - userId: para flag de "ya visto" en localStorage
+ * - navigate: callback de react-router-dom useNavigate()
+ * - opts.force: ignora flags y muestra todo (usado por botón "Ver tour" en Ajustes)
  */
 export function lanzarTour(
   permisos: string[],
   userId: number,
+  navigate: NavigateFn,
   opts: { force?: boolean } = {},
 ): void {
   const seen = opts.force ? new Set<string>() : getSeenPermisos(userId);
   const vioBienvenida = seen.has(KEY_BIENVENIDA);
   const permisosNuevos = permisos.filter(p => !seen.has(p));
 
-  // Si ya vio todo y no es force, no hacemos nada.
   if (vioBienvenida && permisosNuevos.length === 0 && !opts.force) return;
 
-  const steps: DriveStep[] = [];
+  const allSteps: PaseStep[] = [];
 
   if (!vioBienvenida || opts.force) {
-    steps.push(...BIENVENIDA);
+    allSteps.push(...BIENVENIDA);
   } else {
-    // Bienvenida-cortita para permisos nuevos.
-    steps.push({
-      popover: {
-        title: "🆕 Permisos nuevos",
-        description: `Te asignaron permisos nuevos desde la última vez que entraste. Vamos a mostrarte rápido qué hacés en cada uno.`,
-        side: "over", align: "center",
+    allSteps.push({
+      route: "/inicio",
+      step: {
+        popover: {
+          title: "🆕 Permisos nuevos",
+          description: `Te asignaron permisos nuevos desde la última vez. Vamos a mostrarte qué hacés en cada uno.`,
+          side: "over", align: "center",
+        },
       },
     });
   }
 
-  // Tours por permiso (en orden de slugs)
-  for (const slug of permisosNuevos.length > 0 ? permisosNuevos : permisos) {
+  // Tours por permiso (en el orden que vienen los permisos)
+  const slugsAMostrar = permisosNuevos.length > 0 ? permisosNuevos : permisos;
+  for (const slug of slugsAMostrar) {
     const tour = TOURS_POR_PERMISO[slug];
-    if (tour && tour.length > 0) steps.push(...tour);
+    if (tour && tour.length > 0) allSteps.push(...tour);
   }
 
-  // Cierre solo si es la primera vez (o force).
   if (!vioBienvenida || opts.force) {
-    steps.push(...CIERRE);
+    allSteps.push(...CIERRE);
   }
 
-  if (steps.length === 0) return;
+  if (allSteps.length === 0) return;
+
+  // Convertir PaseStep[] → DriveStep[] con hooks de navegación.
+  const driveSteps: DriveStep[] = allSteps.map((s, i) => ({
+    ...s.step,
+    // onHighlightStarted dispara ANTES de que el spotlight aparezca —
+    // perfecto para navegar primero. Si la ruta actual ya es esa, no
+    // hace nada (evita reloads innecesarios).
+    onHighlightStarted: (element, step, options) => {
+      if (s.route && window.location.pathname !== s.route) {
+        navigate(s.route);
+      }
+      // Llamar hook original si la step lo definió
+      if (s.step.onHighlightStarted) s.step.onHighlightStarted(element, step, options);
+    },
+  }));
 
   const d = driver({
     showProgress: true,
@@ -316,9 +426,12 @@ export function lanzarTour(
     prevBtnText: "← Anterior",
     doneBtnText: "Listo",
     overlayOpacity: 0.65,
-    steps,
+    // Delay entre steps para esperar que la nueva ruta se renderice
+    // antes de calcular posición del element.
+    animate: true,
+    smoothScroll: true,
+    steps: driveSteps,
     onDestroyed: () => {
-      // Marcar bienvenida + todos los permisos del user como vistos.
       const updated = new Set(seen);
       updated.add(KEY_BIENVENIDA);
       for (const p of permisos) updated.add(p);

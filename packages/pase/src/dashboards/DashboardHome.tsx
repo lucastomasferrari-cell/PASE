@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { PageHeader } from "../components/ui";
 import { getDashboardConfig } from "./service";
 import { findWidget, widgetsParaPermisos } from "./widgets/registry";
@@ -47,6 +47,7 @@ const SIZE_TO_SPAN: Record<string, number> = {
 };
 
 export function DashboardHome({ usuario, permisos, locales, localActivo }: Props) {
+  const navigate = useNavigate();
   const [widgetIds, setWidgetIds] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -74,9 +75,10 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
   // nuevos desde la última vez, le muestra solo esos.
   useEffect(() => {
     const t = setTimeout(() => {
-      lanzarTour(permisos, usuario.id);
+      lanzarTour(permisos, usuario.id, navigate);
     }, 500);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuario.id, permisos]);
 
   const widgets: WidgetDefinition[] = useMemo(() => {
