@@ -282,7 +282,7 @@ export function ModalCargarFactura({
             )}
           </div>
         </div>
-        <div className="modal-ft"><button className="btn btn-sec" onClick={onClose}>Cancelar</button><button className="btn btn-acc" onClick={guardarConConfirmacion} disabled={saving}>{saving ? "Guardando..." : "Guardar"}</button></div>
+        <div className="modal-ft"><button className="btn btn-sec" onClick={onClose}>Cancelar</button><button className="btn btn-acc" onClick={guardarConConfirmacion} disabled={saving || !form.local_id}>{saving ? "Guardando..." : "Guardar"}</button></div>
       </div>
     </div>
   );

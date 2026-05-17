@@ -512,7 +512,16 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     setEmpModal(null); loadEmpleados();
   };
 
-  const abrirEmpNuevo = () => { setEmpForm({ ...empEmpty, local_id: empFiltLocal ? String(empFiltLocal) : "" }); setEmpModal("new"); };
+  const abrirEmpNuevo = () => {
+    // Pre-popular SOLO si el sidebar tiene una sucursal específica O si el
+    // user tiene 1 solo local visible. En modo "Todas las sucursales", dejamos
+    // vacío para forzar elección explícita (decisión Lucas 2026-05-17).
+    let pre = "";
+    if (localActivo != null) pre = String(localActivo);
+    else if (locsDisp.length === 1) pre = String(locsDisp[0]!.id);
+    setEmpForm({ ...empEmpty, local_id: pre });
+    setEmpModal("new");
+  };
   const abrirEmpEditar = (e: Empleado) => {
     setEmpForm({ local_id: e.local_id ? String(e.local_id) : "", apellido:e.apellido, nombre:e.nombre, cuil:e.cuil||"", puesto:e.puesto, sueldo_mensual:String(e.sueldo_mensual), alias_mp:e.alias_mp||"", fecha_inicio:e.fecha_inicio||"", activo:e.activo });
     setEmpModal(e);

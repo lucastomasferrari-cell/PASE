@@ -68,11 +68,19 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
   // Patrón fetch-on-dep-change.
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(()=>{load();},[debDesde,debHasta,localActivo]);
-  // Pre-llena form.local_id cuando hay locales disponibles y no se eligió uno.
-  // Patrón "init form state from outer prop". Refactor a useState callback
-  // requiere que el initial dependa de localesDisp que puede empezar [].
+  // Pre-llena form.local_id con la sucursal del sidebar si hay una activa.
+  // Si el sidebar está en "Todas" (localActivo=null), DEJAMOS vacío para forzar
+  // elección explícita en el form (decisión Lucas 2026-05-17). La única
+  // excepción: si el user tiene 1 solo local visible, usamos ese (no hay nada
+  // que elegir).
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
-  useEffect(()=>{if(localesDisp.length>0&&!form.local_id)setForm(f=>({...f,local_id:String(localActivo||localesDisp[0]?.id||"")}));},[locales,localActivo]);
+  useEffect(()=>{
+    if (!form.local_id) {
+      if (localActivo != null) setForm(f => ({ ...f, local_id: String(localActivo) }));
+      else if (localesDisp.length === 1) setForm(f => ({ ...f, local_id: String(localesDisp[0]!.id) }));
+      // sino: queda "" hasta que el user elija en el form.
+    }
+  }, [locales, localActivo]);
 
   // Group ventas by fecha + turno + local
   const grupos: CierreVentas[]=[];
@@ -407,7 +415,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
                 <span style={{fontWeight:500,color:"var(--success)"}}>{fmt_$(lineas.reduce((s,l)=>s+(parseFloat(l.monto)||0),0))}</span>
               </div>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModalNuevo(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar}>Guardar</button></div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModalNuevo(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={guardando || !form.local_id}>Guardar</button></div>
           </div>
         </div>
       )}

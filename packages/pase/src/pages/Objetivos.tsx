@@ -56,16 +56,18 @@ export default function Objetivos({ locales, tenantId, localActivo }: Props) {
   const [error, setError] = useState<string | null>(null);
   // Sucursal "interna" cuando el sidebar dice "Todas las sucursales".
   // Si localActivo del sidebar !== null, este state queda forzado a ese valor.
-  // Si el sidebar es null, el dueño elige acá cuál editar (default: el primero).
+  // Si el sidebar es null, el dueño DEBE elegir explícitamente cuál editar —
+  // NO pre-poblamos con la primera (decisión Lucas 2026-05-17: el modo "Todas"
+  // no debe sugerir ninguna sucursal por default, hay que forzar el click
+  // para evitar carga accidental en la equivocada).
   const [localInterno, setLocalInterno] = useState<number | null>(localActivo);
 
   useEffect(() => {
-    // Si el sidebar cambia la sucursal activa, sincronizamos. Si vuelve a null,
-    // dejamos lo último elegido internamente (o caemos a la primera sucursal).
-    if (localActivo !== null) setLocalInterno(localActivo);
-    else if (localInterno === null && locales.length > 0) setLocalInterno(locales[0]!.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localActivo, locales]);
+    // Si el sidebar tiene una sucursal específica → sincronizamos.
+    // Si el sidebar vuelve a "Todas" (null) → reseteamos a null para forzar
+    // elección explícita (no mantenemos el último elegido — sería confuso).
+    setLocalInterno(localActivo);
+  }, [localActivo]);
 
   // Sucursal efectiva sobre la que se está trabajando.
   const localTrabajando = localActivo ?? localInterno;
