@@ -7,7 +7,7 @@ import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import ImportarMaxirest from "./ImportarMaxirest";
-import { Modal, PageHeader, EmptyState } from "../components/ui";
+import { Modal, PageHeader, EmptyState, LocalLockedChip, LocalSelectorObligatorio } from "../components/ui";
 import type { Usuario, Local, Venta, CierreVentas } from "../types";
 
 interface VentasProps {
@@ -370,7 +370,21 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
             <div className="modal-hd"><div className="modal-title">Nueva Venta</div><button className="close-btn" onClick={()=>setModalNuevo(false)}>✕</button></div>
             <div className="modal-body">
               <div className="form2">
-                <div className="field"><label>Local</label><select value={form.local_id} onChange={e=>setForm({...form,local_id:e.target.value})}><option value="">Seleccioná...</option>{localesDisp.map((l: Local)=><option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
+                <div className="field"><label>Local *</label>
+                  {localActivo !== null ? (
+                    <div style={{ paddingTop: 4 }}>
+                      <LocalLockedChip nombre={locales.find((l: Local) => l.id === localActivo)?.nombre ?? "—"} />
+                    </div>
+                  ) : localesDisp.length === 1 ? (
+                    <input type="text" value={localesDisp[0]!.nombre} disabled readOnly />
+                  ) : (
+                    <LocalSelectorObligatorio
+                      value={form.local_id ? Number(form.local_id) : null}
+                      onChange={id => setForm({ ...form, local_id: id !== null ? String(id) : "" })}
+                      locales={localesDisp}
+                    />
+                  )}
+                </div>
                 <div className="field"><label>Fecha</label><input type="date" value={form.fecha} onChange={e=>setForm({...form,fecha:e.target.value})}/></div>
               </div>
               <div className="field"><label>Turno</label><select value={form.turno} onChange={e=>setForm({...form,turno:e.target.value})}><option>Mediodía</option><option>Noche</option></select></div>

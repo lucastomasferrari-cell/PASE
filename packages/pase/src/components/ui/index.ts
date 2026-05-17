@@ -17,3 +17,9 @@ export { TipoPill } from "./TipoPill";
 export { StatCard } from "./StatCard";
 export { EmptyState } from "./EmptyState";
 export { LocalContextPicker } from "./LocalContextPicker";
+export {
+  LocalLockedChip,
+  LocalSelectorObligatorio,
+  LocalSelectorOpcional,
+  LocalContextoChip,
+} from "./LocalContextoUI";

@@ -974,7 +974,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       <ModalCargarFactura
         abierto={modal} onClose={() => setModal(false)}
         form={form} setForm={setForm}
-        proveedores={proveedores} localesDisp={localesDisp}
+        proveedores={proveedores} localesDisp={localesDisp} localActivo={localActivo}
         categorias={{
           compra: CATEGORIAS_COMPRA, fijos: GASTOS_FIJOS, variables: GASTOS_VARIABLES,
           publicidad: GASTOS_PUBLICIDAD, comisiones: COMISIONES_CATS, impuestos: GASTOS_IMPUESTOS,
@@ -1005,7 +1005,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       <ModalCargarRemito
         abierto={remModal} onClose={() => setRemModal(false)}
         form={remForm} setForm={setRemForm}
-        proveedores={proveedores} localesDisp={localesDisp}
+        proveedores={proveedores} localesDisp={localesDisp} localActivo={localActivo}
         categoriasCompra={CATEGORIAS_COMPRA}
         onProvChange={onRemProvChange} guardar={guardarRemito}
       />

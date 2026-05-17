@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CurrencyInput } from "../../components/CurrencyInput";
 import { Combobox } from "../../components/Combobox";
+import { LocalLockedChip, LocalSelectorObligatorio } from "../../components/ui";
 import { fmt_$ } from "../../lib/utils";
 import { UNIDADES } from "../../lib/constants";
 import { db } from "../../lib/supabase";
@@ -35,6 +36,8 @@ interface ModalCargarFacturaProps {
   setForm: React.Dispatch<React.SetStateAction<FormFactura>>;
   proveedores: Proveedor[];
   localesDisp: Local[];
+  /** localActivo del sidebar — si !== null, sucursal viene LOCKED (chip 🔒). */
+  localActivo: number | null;
   categorias: CategoriasBundle;
   onProvChange: (prov_id: string) => void;
   calcTotal: () => number;
@@ -51,7 +54,7 @@ interface ModalCargarFacturaProps {
 // insumos opcional y total auto-calculado. Cubre el flujo cuando NO se
 // usa el Lector IA.
 export function ModalCargarFactura({
-  abierto, onClose, form, setForm, proveedores, localesDisp, categorias,
+  abierto, onClose, form, setForm, proveedores, localesDisp, localActivo, categorias,
   onProvChange, calcTotal, items, addItem, updateItem, removeItem, guardar, saving,
 }: ModalCargarFacturaProps) {
   const [materiasPrimas, setMateriasPrimas] = useState<MateriaPrimaOpcion[]>([]);
@@ -147,7 +150,19 @@ export function ModalCargarFactura({
         <div className="modal-body">
           <div className="form2">
             <div className="field"><label>Tipo de comprobante</label><select value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })}><option value="factura">Factura</option><option value="nota_credito">Nota de Crédito</option></select></div>
-            <div className="field"><label>Local *</label><select value={form.local_id} onChange={e => setForm({ ...form, local_id: e.target.value })}><option value="">Seleccioná...</option>{localesDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}</select></div>
+            <div className="field"><label>Local *</label>
+              {localActivo !== null ? (
+                <div style={{ paddingTop: 4 }}>
+                  <LocalLockedChip nombre={localesDisp.find(l => l.id === localActivo)?.nombre ?? "—"} />
+                </div>
+              ) : (
+                <LocalSelectorObligatorio
+                  value={form.local_id ? Number(form.local_id) : null}
+                  onChange={id => setForm({ ...form, local_id: id !== null ? String(id) : "" })}
+                  locales={localesDisp}
+                />
+              )}
+            </div>
           </div>
           <div className="form2">
             <div className="field"><label>Proveedor *</label><select value={form.prov_id} onChange={e => onProvChange(e.target.value)}><option value="">Seleccioná...</option>{proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></div>

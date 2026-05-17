@@ -9,7 +9,7 @@ import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import { Combobox } from "../components/Combobox";
-import { PageHeader, TipoPill, EmptyState } from "../components/ui";
+import { PageHeader, TipoPill, EmptyState, LocalLockedChip, LocalSelectorObligatorio } from "../components/ui";
 import type { Usuario, Local } from "../types";
 import type { Gasto } from "../types/finanzas";
 
@@ -509,19 +509,29 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                     {catsByTipo(tipoFiltro === "todos" ? form.tipo : tipoFiltro).map(c => <option key={c}>{c}</option>)}
                   </select>
                 </div>
+                {/* Sucursal: 3 estados (acordado Lucas 2026-05-17):
+                    1) User con 1 solo local → input fijo (sin elección).
+                    2) Sidebar tiene sucursal seleccionada → chip LOCKED.
+                    3) Sidebar "Todas" → selector OBLIGATORIO (no permite vacío).
+                    Para mantener compat con el resto del save (que usa form.local_id
+                    string), el chip y el selector escriben acá igual. */}
                 {locsDisp.length === 1 ? (
-                  // Si el usuario solo tiene 1 local autorizado, no
-                  // dropdown — mostramos el local fijo. El form usa el
-                  // mismo `local_id` por consistencia con la lógica de save.
                   <div className="field"><label>Local</label>
                     <input type="text" value={locsDisp[0]!.nombre} disabled readOnly />
                   </div>
-                ) : (
+                ) : localActivo !== null ? (
                   <div className="field"><label>Local</label>
-                    <select value={form.local_id} onChange={e => setForm({ ...form, local_id: e.target.value })}>
-                      <option value="">Todos</option>
-                      {locsDisp.map((l: Local) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-                    </select>
+                    <div style={{ paddingTop: 4 }}>
+                      <LocalLockedChip nombre={locales.find(l => l.id === localActivo)?.nombre ?? "—"} />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="field"><label>Local *</label>
+                    <LocalSelectorObligatorio
+                      value={form.local_id ? Number(form.local_id) : null}
+                      onChange={id => setForm({ ...form, local_id: id !== null ? String(id) : "" })}
+                      locales={locsDisp}
+                    />
                   </div>
                 )}
               </div>
@@ -537,7 +547,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
               <div className="field"><label>Monto $</label><input type="number" value={form.monto} onChange={e => setForm({ ...form, monto: e.target.value })} placeholder="0" /></div>
               <div className="field"><label>Detalle (opcional)</label><input value={form.detalle} onChange={e => setForm({ ...form, detalle: e.target.value })} placeholder="Descripción..." /></div>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={saving || !form.cuenta || !form.monto || !form.categoria}>{saving ? "Guardando..." : "Guardar"}</button></div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={saving || !form.cuenta || !form.monto || !form.categoria || (locsDisp.length > 1 && localActivo === null && !form.local_id)}>{saving ? "Guardando..." : "Guardar"}</button></div>
           </div>
         </div>
       )}

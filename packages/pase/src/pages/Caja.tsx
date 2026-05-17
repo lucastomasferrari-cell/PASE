@@ -8,7 +8,7 @@ import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
-import { RightSubNav, type SubNavSection, PageHeader, EmptyState } from "../components/ui";
+import { RightSubNav, type SubNavSection, PageHeader, EmptyState, LocalLockedChip } from "../components/ui";
 import { CajaCardsRow } from "./caja/CajaCardsRow";
 import type { Usuario, Local } from "../types/auth";
 import type { Movimiento } from "../types/finanzas";
@@ -711,7 +711,18 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
           <div className="modal" onClick={e=>e.stopPropagation()}>
             <div className="modal-hd"><div className="modal-title">Nuevo Movimiento</div><button className="close-btn" onClick={()=>setModal(false)}>✕</button></div>
             <div className="modal-body">
-              {necesitaSelectorLocal && (
+              {/* Local: 3 estados (acordado 2026-05-17):
+                  - lidImplicito !== null → sucursal locked por sidebar → chip 🔒.
+                  - lidImplicito null + locsDisp > 1 → selector obligatorio.
+                  - locsDisp === 1 → no se muestra (el único se usa implícito). */}
+              {lidImplicito !== null ? (
+                <div className="field">
+                  <label>Local</label>
+                  <div style={{ paddingTop: 4 }}>
+                    <LocalLockedChip nombre={locales.find((l: Local) => l.id === lidImplicito)?.nombre ?? "—"} />
+                  </div>
+                </div>
+              ) : necesitaSelectorLocal && (
                 <div className="field">
                   <label>Local *</label>
                   <select value={localFormId} onChange={e=>setLocalFormId(e.target.value)} required>
@@ -737,7 +748,14 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
           <div className="modal" onClick={e=>e.stopPropagation()}>
             <div className="modal-hd"><div className="modal-title">Transferir entre cuentas</div><button className="close-btn" onClick={()=>setTransfModal(false)}>✕</button></div>
             <div className="modal-body">
-              {necesitaSelectorLocal && (
+              {lidImplicito !== null ? (
+                <div className="field">
+                  <label>Local</label>
+                  <div style={{ paddingTop: 4 }}>
+                    <LocalLockedChip nombre={locales.find((l: Local) => l.id === lidImplicito)?.nombre ?? "—"} />
+                  </div>
+                </div>
+              ) : necesitaSelectorLocal && (
                 <div className="field">
                   <label>Local *</label>
                   <select value={localFormId} onChange={e=>setLocalFormId(e.target.value)} required>
