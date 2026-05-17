@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { db } from "../lib/supabase";
-import { PageHeader, EmptyState } from "../components/ui";
+import { PageHeader, EmptyState, InfoTooltip } from "../components/ui";
 import { formatCurrency } from "../lib/format";
 import type { Local } from "../types";
 
@@ -180,6 +180,14 @@ export default function Objetivos({ locales, tenantId, localActivo }: Props) {
       <PageHeader
         title="Objetivos"
         subtitle="metas mes a mes por sucursal"
+        info={
+          <>
+            <strong>Facturación:</strong> objetivo del mes vs facturado a la fecha (se ve en Negocio mid-month).<br />
+            <strong>Punto de equilibrio:</strong> costos fijos + margen contribución. BEP = fijos ÷ margen % (se ve en Negocio mid-month).<br />
+            <strong>Eficiencia:</strong> CMV %, costo MP %, margen bruto %. Se comparan contra el EERR cerrado a fin de mes en Reportes (mid-month estos números mienten porque las facturas vencidas distorsionan el costo).
+            {bloqueadoPorSidebar && <><br /><strong>Sucursal bloqueada por el sidebar.</strong> Para cambiar, andá al selector del sidebar.</>}
+          </>
+        }
         actions={
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {/* Selector de sucursal interna SOLO cuando el sidebar dice "Todas".
@@ -222,16 +230,6 @@ export default function Objetivos({ locales, tenantId, localActivo }: Props) {
       {error && (
         <div className="alert alert-danger" style={{ marginBottom: 12 }}>{error}</div>
       )}
-
-      <div className="alert" style={{ marginBottom: 16 }}>
-        <strong style={{ display: "block", marginBottom: 4 }}>¿Cómo se usan estos objetivos?</strong>
-        <div style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-text-muted)", lineHeight: 1.5 }}>
-          <strong>Grupo 1 — Facturación (mid-month, en /negocio):</strong> facturación objetivo del mes vs facturado a la fecha.<br />
-          <strong>Grupo 2 — Punto de equilibrio (mid-month, en /negocio):</strong> costos fijos + margen contribución. BEP = fijos ÷ margen %.<br />
-          <strong>Grupo 3 — Eficiencia (fin de mes, en /reportes):</strong> CMV %, costo MP %, margen bruto %. Sirven para comparar contra el EERR cerrado al final del mes (mid-month mienten porque las facturas vencidas distorsionan el costo).
-          {bloqueadoPorSidebar && <><br /><strong>Sucursal bloqueada por el sidebar.</strong> Para cargar objetivos de otra sucursal cambiá el selector del sidebar a "Todas las sucursales".</>}
-        </div>
-      </div>
 
       {loading ? (
         <div className="loading">Cargando objetivos…</div>
@@ -337,14 +335,16 @@ function FilaObjetivo({ fila, saving, onSave }: FilaProps) {
       {/* ─── Grupo 1: Facturación ─── */}
       <GroupTitle>Facturación</GroupTitle>
       <div className="field" style={{ marginBottom: 0 }}>
-        <label>Facturación objetivo (mes)</label>
+        <FieldLabel
+          text="Facturación objetivo (mes)"
+          info="Cuánto querés facturar este mes en esta sucursal. Se compara contra lo facturado a la fecha en el widget 'Objetivo del mes' del dashboard."
+        />
         <input
           type="number"
           inputMode="decimal"
           value={facturacion}
           onChange={e => setFacturacion(e.target.value)}
           onBlur={() => handleBlur("fact")}
-          placeholder="ej. 12000000"
         />
       </div>
 
@@ -352,25 +352,29 @@ function FilaObjetivo({ fila, saving, onSave }: FilaProps) {
       <GroupTitle style={{ marginTop: 18 }}>Punto de equilibrio</GroupTitle>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
         <div className="field" style={{ marginBottom: 0 }}>
-          <label>Costos fijos (mes)</label>
+          <FieldLabel
+            text="Costos fijos (mes)"
+            info="Suma esperada de gastos fijos del mes: alquiler + sueldos fijos + servicios + cuotas + suscripciones."
+          />
           <input
             type="number"
             inputMode="decimal"
             value={fijos}
             onChange={e => setFijos(e.target.value)}
             onBlur={() => handleBlur("fijos")}
-            placeholder="alquiler+sueldos+..."
           />
         </div>
         <div className="field" style={{ marginBottom: 0 }}>
-          <label>Margen contribución % (default 50)</label>
+          <FieldLabel
+            text="Margen contribución %"
+            info="% que te queda de cada peso vendido después de restar el costo variable (CMV + comisiones + delivery). Si no lo cargás, el sistema usa 50% como valor por defecto."
+          />
           <input
             type="number"
             inputMode="decimal"
             value={margenC}
             onChange={e => setMargenC(e.target.value)}
             onBlur={() => handleBlur("margenC")}
-            placeholder="ej. 55"
             min={0}
             max={100}
             step={0.5}
@@ -390,47 +394,56 @@ function FilaObjetivo({ fila, saving, onSave }: FilaProps) {
       )}
 
       {/* ─── Grupo 3: Eficiencia (cierre) ─── */}
-      <GroupTitle style={{ marginTop: 18 }}>
-        Eficiencia · se comparan en /reportes a fin de mes
+      <GroupTitle
+        style={{ marginTop: 18 }}
+        info="Estos % se calculan al cerrar el mes (en Reportes). A mitad de mes los números mienten porque las facturas vencidas y los desfasajes de pago distorsionan el costo real."
+      >
+        Eficiencia · cierre de mes
       </GroupTitle>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
         <div className="field" style={{ marginBottom: 0 }}>
-          <label>CMV objetivo % (mercadería)</label>
+          <FieldLabel
+            text="CMV objetivo %"
+            info="Costo de mercadería sobre venta. Cuánto del precio de venta se va en insumos (carne, verdura, bebidas, etc.). Típico en gastronomía AR: 28-35%."
+          />
           <input
             type="number"
             inputMode="decimal"
             value={cmv}
             onChange={e => setCmv(e.target.value)}
             onBlur={() => handleBlur("cmv")}
-            placeholder="ej. 32"
             min={0}
             max={100}
             step={0.5}
           />
         </div>
         <div className="field" style={{ marginBottom: 0 }}>
-          <label>Costo MP objetivo %</label>
+          <FieldLabel
+            text="Costo MP objetivo %"
+            info="Comisiones de MercadoPago sobre venta total. Depende del plan MP que tengas (Punto Pro, QR, Link, etc.). Típico: 2-5%."
+          />
           <input
             type="number"
             inputMode="decimal"
             value={costoMp}
             onChange={e => setCostoMp(e.target.value)}
             onBlur={() => handleBlur("mp")}
-            placeholder="ej. 3.5"
             min={0}
             max={20}
             step={0.1}
           />
         </div>
         <div className="field" style={{ marginBottom: 0 }}>
-          <label>Margen bruto objetivo %</label>
+          <FieldLabel
+            text="Margen bruto objetivo %"
+            info="Lo que te queda después de descontar el CMV. Margen bruto = (venta − costo mercadería) ÷ venta × 100. Típico en gastronomía: 65-72%."
+          />
           <input
             type="number"
             inputMode="decimal"
             value={margenB}
             onChange={e => setMargenB(e.target.value)}
             onBlur={() => handleBlur("margenB")}
-            placeholder="ej. 60"
             min={0}
             max={100}
             step={0.5}
@@ -439,13 +452,15 @@ function FilaObjetivo({ fila, saving, onSave }: FilaProps) {
       </div>
 
       <div className="field" style={{ marginTop: 18, marginBottom: 0 }}>
-        <label>Notas del mes (opcional)</label>
+        <FieldLabel
+          text="Notas del mes (opcional)"
+          info="Contexto del mes que sirva para entender los números después. Ej: 'campaña navidad', 'mes con cierre 5 días por refacción', 'inflación alta'."
+        />
         <input
           type="text"
           value={notas}
           onChange={e => setNotas(e.target.value)}
           onBlur={() => handleBlur("notas")}
-          placeholder="ej. campaña navidad, mes de inflación alta..."
           maxLength={200}
         />
       </div>
@@ -453,20 +468,36 @@ function FilaObjetivo({ fila, saving, onSave }: FilaProps) {
   );
 }
 
-function GroupTitle({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+function GroupTitle({ children, style, info }: { children: React.ReactNode; style?: React.CSSProperties; info?: React.ReactNode }) {
   return (
     <div style={{
-      fontSize: "var(--pase-fs-xs)",
-      fontWeight: 500,
-      color: "var(--pase-text-muted)",
-      textTransform: "uppercase",
-      letterSpacing: "var(--pase-ls-overline)",
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
       marginBottom: 8,
       paddingBottom: 4,
       borderBottom: "0.5px solid var(--pase-border)",
       ...style,
     }}>
-      {children}
+      <span style={{
+        fontSize: "var(--pase-fs-xs)",
+        fontWeight: 500,
+        color: "var(--pase-text-muted)",
+        textTransform: "uppercase",
+        letterSpacing: "var(--pase-ls-overline)",
+      }}>
+        {children}
+      </span>
+      {info && <InfoTooltip maxWidth={300}>{info}</InfoTooltip>}
     </div>
+  );
+}
+
+function FieldLabel({ text, info }: { text: string; info: React.ReactNode }) {
+  return (
+    <label style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      {text}
+      <InfoTooltip maxWidth={280} size={14}>{info}</InfoTooltip>
+    </label>
   );
 }
