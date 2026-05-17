@@ -22,7 +22,7 @@ import type { Local, Usuario } from "../types";
  * Solo accesible para dueño/admin/superadmin. Encargados no migran data.
  */
 
-type Tab = "proveedores" | "empleados" | "conceptos";
+type Tab = "proveedores" | "empleados" | "conceptos" | "saldos";
 
 interface ImportarProps {
   user: Usuario;
@@ -37,6 +37,7 @@ export default function Importar({ user, locales, localActivo }: ImportarProps) 
     { id: "proveedores", label: "Proveedores", descripcion: "Nombre, CUIT, categoría y saldo inicial" },
     { id: "empleados", label: "Empleados", descripcion: "Datos básicos + sueldo + fecha de inicio" },
     { id: "conceptos", label: "Conceptos de caja", descripcion: "Categorías custom para movimientos y gastos" },
+    { id: "saldos", label: "Saldos iniciales", descripcion: "Saldo de arranque por cuenta y sucursal" },
   ];
 
   return (
@@ -78,6 +79,7 @@ export default function Importar({ user, locales, localActivo }: ImportarProps) 
       {tab === "proveedores" && <TabProveedores user={user} />}
       {tab === "empleados" && <TabEmpleados user={user} locales={locales} localActivo={localActivo} />}
       {tab === "conceptos" && <TabConceptos user={user} />}
+      {tab === "saldos" && <TabSaldos user={user} locales={locales} localActivo={localActivo} />}
     </div>
   );
 }
@@ -430,6 +432,119 @@ function TabConceptos({ user }: { user: Usuario }) {
       )}
 
       {resultado && <Resumen resultado={resultado} onReset={() => { setResultado(null); setRows(null); }} />}
+    </div>
+  );
+}
+
+// ─── TAB SALDOS INICIALES ──────────────────────────────────────────────
+// No usa CSV — es un form simple: para cada cuenta del local elegido,
+// el dueño ingresa el saldo de arranque. Después se persiste en
+// saldos_caja. Diseñado para correr UNA sola vez al onboarding.
+
+function TabSaldos({ user, locales, localActivo }: { user: Usuario; locales: Local[]; localActivo: number | null }) {
+  const [localImport, setLocalImport] = useState<number | null>(localActivo);
+  const [saldos, setSaldos] = useState<Record<string, string>>({
+    "Caja Efectivo": "",
+    "Caja Chica": "",
+    "Caja Mayor": "",
+    "MercadoPago": "",
+    "Banco": "",
+  });
+  const [importing, setImporting] = useState(false);
+  const [resultado, setResultado] = useState<Resultado | null>(null);
+
+  async function importar() {
+    if (!localImport || !user.tenant_id) return;
+    setImporting(true);
+    const errores: string[] = [];
+    const payload: Array<{ tenant_id: string; local_id: number; cuenta: string; saldo: number }> = [];
+
+    for (const [cuenta, valStr] of Object.entries(saldos)) {
+      if (!valStr.trim()) continue;
+      const monto = parseFloat(valStr.replace(/[^0-9.-]/g, ""));
+      if (isNaN(monto)) {
+        errores.push(`${cuenta}: monto inválido (${valStr})`);
+        continue;
+      }
+      payload.push({
+        tenant_id: user.tenant_id,
+        local_id: localImport,
+        cuenta,
+        saldo: monto,
+      });
+    }
+
+    if (payload.length === 0) {
+      setResultado({ ok: false, importadas: 0, errores: errores.length > 0 ? errores : ["No cargaste ningún saldo"] });
+      setImporting(false);
+      return;
+    }
+
+    // Upsert por (local_id, cuenta) — sobreescribe si ya existe.
+    const { error } = await db.from("saldos_caja").upsert(payload, { onConflict: "local_id,cuenta" });
+    if (error) {
+      setResultado({ ok: false, importadas: 0, errores: [error.message, ...errores] });
+    } else {
+      setResultado({ ok: true, importadas: payload.length, errores });
+    }
+    setImporting(false);
+  }
+
+  function reset() {
+    setResultado(null);
+    setSaldos({ "Caja Efectivo": "", "Caja Chica": "", "Caja Mayor": "", "MercadoPago": "", "Banco": "" });
+  }
+
+  return (
+    <div>
+      <p style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-text-muted)", marginBottom: 14 }}>
+        Cargá el saldo de arranque de cada cuenta de tu sucursal al momento que <strong>empezás a usar PASE</strong>. Después los movimientos del sistema (ventas, gastos, pagos) ajustan el saldo automáticamente.
+        <br /><br />
+        Si ya cargaste saldos antes, al confirmar acá los <strong>sobreescribís</strong>.
+      </p>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+        <span style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-text-muted)" }}>Sucursal:</span>
+        {localActivo !== null ? (
+          <LocalLockedChip nombre={locales.find(l => l.id === localActivo)?.nombre ?? "—"} />
+        ) : (
+          <LocalSelectorObligatorio value={localImport} onChange={setLocalImport} locales={locales} />
+        )}
+      </div>
+
+      {!resultado && (
+        <>
+          <div className="panel" style={{ padding: 18 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
+              {Object.entries(saldos).map(([cuenta, val]) => (
+                <div key={cuenta} className="field" style={{ marginBottom: 0 }}>
+                  <label style={{ fontSize: "var(--pase-fs-sm)", fontWeight: 500 }}>{cuenta}</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={val}
+                    onChange={e => setSaldos({ ...saldos, [cuenta]: e.target.value })}
+                    placeholder="0"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
+            <button
+              className="btn btn-acc"
+              onClick={importar}
+              disabled={importing || !localImport || Object.values(saldos).every(v => !v.trim())}
+            >
+              {importing ? "Guardando…" : "Guardar saldos iniciales"}
+            </button>
+          </div>
+        </>
+      )}
+
+      {resultado && (
+        <Resumen resultado={resultado} onReset={reset} />
+      )}
     </div>
   );
 }
