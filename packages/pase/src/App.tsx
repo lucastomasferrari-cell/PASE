@@ -30,6 +30,8 @@ const Finanzas = lazy(() => import("./pages/Finanzas"));
 const Negocio = lazy(() => import("./pages/Negocio"));
 const Objetivos = lazy(() => import("./pages/Objetivos"));
 const Ajustes = lazy(() => import("./pages/Ajustes"));
+const DashboardHome = lazy(() => import("./dashboards/DashboardHome").then(m => ({ default: m.DashboardHome })));
+const SettingsDashboards = lazy(() => import("./dashboards/SettingsDashboards"));
 
 // Loader full-page (mismo look-and-feel que authLoading) para los
 // early-returns lazy.
@@ -65,6 +67,10 @@ export default function App() {
 // 'dashboard' / 'inicio' / '@default' en LEGACY_REDIRECTS.
 // ────────────────────────────────────────────────────────────────────
 function DefaultRedirect({ user }: { user: Usuario | null }) {
+  // Sesión 16-may: todos los usuarios autenticados caen en /inicio (dashboard
+  // personalizado por rol). Sin usuario → ajustes (fallback histórico).
+  // El default route por rol queda como respaldo si /inicio falla.
+  if (user) return <Navigate to="/inicio" replace />;
   return <Navigate to={getDefaultRoute(user)} replace />;
 }
 
@@ -262,8 +268,35 @@ function AppMain() {
         <main className="main" style={{position:"relative",zIndex:1}}>
           <Suspense fallback={<PageLoader/>}>
             <Routes>
-              {/* Root → primer item permitido */}
+              {/* Root → primer item permitido (con user → /inicio) */}
               <Route path="/" element={<DefaultRedirect user={user} />} />
+
+              {/* Dashboard personalizado por rol (sesión 16-may) */}
+              <Route
+                path="/inicio"
+                element={
+                  user ? (
+                    <DashboardHome
+                      usuario={{
+                        id: user.id,
+                        nombre: user.nombre,
+                        rol: (user.rol as "dueno" | "admin" | "encargado" | "compras" | "cajero" | "superadmin"),
+                        tenant_id: user.tenant_id ?? null,
+                      }}
+                      locales={locales}
+                      localActivo={localActivo}
+                    />
+                  ) : (
+                    <Navigate to="/" replace />
+                  )
+                }
+              />
+              <Route
+                path="/ajustes/dashboards"
+                element={
+                  user?.tenant_id ? <SettingsDashboards tenantId={user.tenant_id} /> : <Navigate to="/inicio" replace />
+                }
+              />
 
               {/* Operación */}
               <Route path="/caja/*" element={<Caja {...props}/>} />
