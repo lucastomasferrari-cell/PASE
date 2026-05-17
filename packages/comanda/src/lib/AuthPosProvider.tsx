@@ -70,6 +70,7 @@ export function AuthPosProvider({ children, autolockMin }: Props) {
       rol_pos: emp.rol_pos,
       local_id: localId,
       desde: new Date().toISOString(),
+      pos_favoritos: emp.pos_favoritos ?? [],
     };
     writeEmpleadoToStorage(activo);
     setEmpleado(activo);
@@ -83,12 +84,24 @@ export function AuthPosProvider({ children, autolockMin }: Props) {
 
   const resetTimer = useCallback(() => { armTimer(); }, [armTimer]);
 
+  const toggleFavorito = useCallback(async (itemId: number) => {
+    if (!empleado) return { ok: false, error: 'Sin empleado activo' };
+    const { toggleFavoritoPos } = await import('@/services/empleadosService');
+    const { favoritos, error } = await toggleFavoritoPos(empleado.id, itemId);
+    if (error) return { ok: false, error };
+    const nuevoEmpleado: EmpleadoActivoPos = { ...empleado, pos_favoritos: favoritos ?? [] };
+    writeEmpleadoToStorage(nuevoEmpleado);
+    setEmpleado(nuevoEmpleado);
+    return { ok: true };
+  }, [empleado]);
+
   const value: AuthPosContextValue = {
     empleado,
     loading,
     loginPin,
     logout,
     resetTimer,
+    toggleFavorito,
   };
 
   return <AuthPosContext.Provider value={value}>{children}</AuthPosContext.Provider>;

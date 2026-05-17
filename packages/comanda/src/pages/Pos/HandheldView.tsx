@@ -14,8 +14,11 @@ import type { VentaPosItem, ItemGrupo } from '@/types/database';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/Badge';
+import { FullscreenToggle } from '@/components/FullscreenToggle';
+import { OfflineBanner } from '@/components/OfflineBanner';
 import { formatARS, relativoCorto } from '@/lib/format';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
+import { useOnlineStatus } from '@/lib/useOnlineStatus';
 import { cn } from '@/lib/utils';
 
 // Handheld view — vista mobile-first para mozo tomando pedido en la mesa
@@ -47,6 +50,7 @@ export function HandheldView() {
 
   return (
     <div className="min-h-screen bg-background">
+      <OfflineBanner />
       {pantalla.tipo === 'mesas' ? (
         <PantallaMesas
           localId={localId}
@@ -128,7 +132,10 @@ function PantallaMesas({ localId, onMesaElegida, onSalir, empleadoId, tenantId }
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <h1 className="text-base font-semibold">Modo mozo · elegí mesa</h1>
-        <div className="ml-auto text-xs text-muted-foreground">{mesas.length} mesas</div>
+        <div className="ml-auto flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">{mesas.length} mesas</span>
+          <FullscreenToggle className="h-8 w-8" />
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto p-3">
@@ -190,6 +197,7 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [lastAddedItemId, setLastAddedItemId] = useState<number | null>(null);
+  const online = useOnlineStatus();
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -234,6 +242,10 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
     .reduce((s, i) => s + Number(i.subtotal), 0);
 
   async function addItem(it: ItemConGrupo) {
+    if (!online) {
+      toast.error('Sin conexión — no se puede agregar items hasta que vuelva internet');
+      return;
+    }
     const { error } = await agregarItem({
       ventaId,
       itemId: it.id,
@@ -247,6 +259,10 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
   }
 
   async function handleMandar() {
+    if (!online) {
+      toast.error('Sin conexión — no se puede mandar a cocina hasta que vuelva internet');
+      return;
+    }
     if (itemsHold.length === 0) {
       toast.error('Nada para mandar');
       return;
@@ -380,10 +396,11 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
               size="lg"
               className="w-full h-12 text-base font-semibold"
               onClick={handleMandar}
-              disabled={sending}
+              disabled={sending || !online}
+              title={!online ? 'Sin conexión — esperá a que vuelva internet' : undefined}
             >
               <Send className="h-4 w-4 mr-2" />
-              {sending ? 'Enviando…' : `Mandar a cocina (${itemsHold.length})`}
+              {!online ? 'Sin conexión' : sending ? 'Enviando…' : `Mandar a cocina (${itemsHold.length})`}
             </Button>
           </>
         ) : (

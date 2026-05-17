@@ -8,9 +8,13 @@ import { getTurnoAbierto } from '@/services/turnosCajaService';
 import type { TurnoCaja } from '@/types/database';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { BusyModeButton } from '@/components/BusyModeButton';
+import { FullscreenToggle } from '@/components/FullscreenToggle';
 import { PosSidebar } from '@/components/PosSidebar';
 import { UserAvatarMenu } from '@/components/UserAvatarMenu';
 import { AllChecksModal } from '@/components/AllChecksModal';
+import { MobileModoMozoBanner } from '@/components/MobileModoMozoBanner';
+import { OfflineBanner } from '@/components/OfflineBanner';
 
 // Layout principal POS: header sticky con marca + turno + acciones,
 // sidebar permanente de 72px (Salón/Mostrador/Pedidos), contenido en
@@ -65,6 +69,8 @@ export function PosLayout() {
     // en globals.css). Coherente con AdminLayout. Customer-facing (Tienda,
     // MenuQR, KDS) NO usan data-surface.
     <div data-surface="internal" className="min-h-screen bg-background flex flex-col">
+      {/* Banner offline sticky — aparece solo cuando no hay conexión a Supabase */}
+      <OfflineBanner />
       {/* Header */}
       <header className="border-b border-border bg-card sticky top-0 z-10 flex-shrink-0">
         <div className="px-5 py-3 flex items-center justify-between gap-3 h-14">
@@ -118,6 +124,10 @@ export function PosLayout() {
               <kbd className="hidden lg:inline-block ml-1 px-1.5 py-0.5 text-[10px] bg-muted rounded border border-border font-mono">/</kbd>
             </Button>
 
+            <BusyModeButton />
+
+            <FullscreenToggle />
+
             <ThemeToggle />
 
             <Button variant="outline" asChild>
@@ -142,6 +152,7 @@ export function PosLayout() {
       </header>
 
       <AllChecksModal open={allChecksOpen} onOpenChange={setAllChecksOpen} />
+      <MobileModoMozoBanner />
 
       {/* Body: sidebar + content */}
       <div className="flex-1 flex min-h-0">

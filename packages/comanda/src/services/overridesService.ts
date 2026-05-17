@@ -64,6 +64,17 @@ export async function anularItem(
   motivo: string,
   idempotencyKey?: string,
 ): Promise<{ error: string | null }> {
+  // Fase 4.4: switch a offline-first si el flag está activo.
+  const { featureFlags } = await import('../lib/featureFlags');
+  if (featureFlags.offlineFirstVentas) {
+    const { anularItemOffline } = await import('./offline/overridesOfflineService');
+    try {
+      await anularItemOffline({ itemId, managerId, motivo });
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : 'Error anulando' };
+    }
+  }
   const { error } = await db.rpc('fn_anular_item_comanda', {
     p_item_id: itemId,
     p_manager_id: managerId,
@@ -80,6 +91,16 @@ export async function anularVenta(
   motivo: string,
   idempotencyKey?: string,
 ): Promise<{ error: string | null }> {
+  const { featureFlags } = await import('../lib/featureFlags');
+  if (featureFlags.offlineFirstVentas) {
+    const { anularVentaOffline } = await import('./offline/overridesOfflineService');
+    try {
+      await anularVentaOffline({ ventaId, managerId, motivo });
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : 'Error anulando venta' };
+    }
+  }
   const { error } = await db.rpc('fn_anular_venta_comanda', {
     p_venta_id: ventaId,
     p_manager_id: managerId,
@@ -97,6 +118,16 @@ export async function modificarPrecioItem(
   motivo: string,
   idempotencyKey?: string,
 ): Promise<{ error: string | null }> {
+  const { featureFlags } = await import('../lib/featureFlags');
+  if (featureFlags.offlineFirstVentas) {
+    const { modificarPrecioItemOffline } = await import('./offline/overridesOfflineService');
+    try {
+      await modificarPrecioItemOffline({ itemId, precioNuevo: nuevoPrecio, managerId, motivo });
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : 'Error modificando precio' };
+    }
+  }
   const { error } = await db.rpc('fn_modificar_precio_item_comanda', {
     p_item_id: itemId,
     p_nuevo_precio: nuevoPrecio,
@@ -114,6 +145,16 @@ export async function cortesiaItem(
   motivo: string,
   idempotencyKey?: string,
 ): Promise<{ error: string | null }> {
+  const { featureFlags } = await import('../lib/featureFlags');
+  if (featureFlags.offlineFirstVentas) {
+    const { cortesiaItemOffline } = await import('./offline/overridesOfflineService');
+    try {
+      await cortesiaItemOffline({ itemId, managerId, motivo });
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : 'Error aplicando cortesía' };
+    }
+  }
   const { error } = await db.rpc('fn_cortesia_item_comanda', {
     p_item_id: itemId,
     p_manager_id: managerId,

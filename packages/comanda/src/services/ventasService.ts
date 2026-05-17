@@ -26,6 +26,39 @@ export interface AbrirVentaArgs {
 }
 
 export async function abrirVenta(args: AbrirVentaArgs): Promise<{ ventaId: number | null; error: string | null }> {
+  // Fase 4.3 — feature flag offline-first. Cuando está activo, escribe local
+  // primero + encola para sync. Devuelve un tempId negativo que la UI puede
+  // usar para navegar; cuando el sync confirma, el repo local actualiza el id
+  // y emite evento `comanda:reconcile-id` para que la UI navegue al real.
+  const { featureFlags } = await import('../lib/featureFlags');
+  if (featureFlags.offlineFirstVentas) {
+    const { abrirVentaOffline } = await import('./offline/ventasOfflineService');
+    // tenantId requiere viaje porque la RPC offline lo deriva del auth de la
+    // sesión. Acá lo pasamos vacío y el service local lo guarda en la fila
+    // (servirá cuando el sync resuelva el server-side).
+    // tenantId NO está en AbrirVentaArgs original — lo derivamos del modo
+    // sync (auth_tenant_id() server). Por ahora pasamos string vacío y el
+    // repo guarda el row; el server al sync usa auth_tenant_id().
+    try {
+      const r = await abrirVentaOffline({
+        tenantId: '',
+        localId: args.localId,
+        canalId: args.canalId,
+        modo: args.modo as 'salon' | 'mostrador' | 'delivery' | 'retiro',
+        mesaId: args.mesaId ?? null,
+        mozoId: args.mozoId ?? null,
+        cajeroId: args.cajeroId ?? null,
+        clienteId: args.clienteId ?? null,
+        covers: args.covers ?? 2,
+      });
+      return { ventaId: r.tempVentaId, error: null };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error abriendo venta offline';
+      return { ventaId: null, error: msg };
+    }
+  }
+
+  // Flujo legacy online-only (default mientras el flag esté off)
   const { data, error } = await db.rpc('fn_abrir_venta_comanda', {
     p_local_id: args.localId,
     p_modo: args.modo,
@@ -128,6 +161,34 @@ export interface AgregarItemArgs {
 }
 
 export async function agregarItem(args: AgregarItemArgs): Promise<{ id: number | null; error: string | null }> {
+  const { featureFlags } = await import('../lib/featureFlags');
+  if (featureFlags.offlineFirstVentas) {
+    const { agregarItemOffline } = await import('./offline/ventasOfflineService');
+    // Necesitamos precio_unitario — el server lo derivaba de items.precio_madre.
+    // Para mantener compatibilidad, lo leemos del catálogo cacheado en local.
+    const { itemsRepo } = await import('@/lib/db/repositories/itemsRepo');
+    const cat = await itemsRepo.getById(args.itemId);
+    const precio = Number(cat?.precio_madre ?? 0);
+    const { ventasRepo } = await import('@/lib/db/repositories/ventasRepo');
+    const venta = await ventasRepo.getById(args.ventaId);
+    try {
+      const r = await agregarItemOffline({
+        ventaId: args.ventaId,
+        itemId: args.itemId,
+        cantidad: args.cantidad,
+        precioUnitario: precio,
+        curso: args.curso ?? 1,
+        modificadores: args.modificadores ?? undefined,
+        notas: args.notas ?? null,
+        cargadoPor: args.cargadoPor ?? null,
+        tenantId: venta?.tenant_id ?? '',
+        localId: venta?.local_id ?? 0,
+      });
+      return { id: r.tempItemId, error: null };
+    } catch (err) {
+      return { id: null, error: err instanceof Error ? err.message : 'Error agregando' };
+    }
+  }
   const { data, error } = await db.rpc('fn_agregar_item_comanda', {
     p_venta_id: args.ventaId,
     p_item_id: args.itemId,
@@ -168,6 +229,16 @@ export async function anularItem(
 }
 
 export async function mandarCurso(ventaId: number, curso: number): Promise<{ count: number; error: string | null }> {
+  const { featureFlags } = await import('../lib/featureFlags');
+  if (featureFlags.offlineFirstVentas) {
+    const { mandarCursoOffline } = await import('./offline/ventasOfflineService');
+    try {
+      const r = await mandarCursoOffline(ventaId, curso);
+      return { count: r.count, error: null };
+    } catch (err) {
+      return { count: 0, error: err instanceof Error ? err.message : 'Error mandando curso' };
+    }
+  }
   const { data, error } = await db.rpc('fn_mandar_curso_comanda', {
     p_venta_id: ventaId, p_curso: curso,
   });
@@ -175,10 +246,39 @@ export async function mandarCurso(ventaId: number, curso: number): Promise<{ cou
   return { count: Number(data ?? 0), error: null };
 }
 
+// Sprint 2 F #1: enviar UN item específico (no el curso entero).
+export async function mandarItemIndividual(itemId: number): Promise<{ error: string | null }> {
+  const { error } = await db.rpc('fn_mandar_item_individual_comanda', {
+    p_item_id: itemId,
+  });
+  if (error) return { error: translateError(error) };
+  return { error: null };
+}
+
+// Sprint 2 F #1: toggle del flag stay (mantener en hold aunque se mande el curso).
+// Devuelve el nuevo valor.
+export async function toggleItemStay(itemId: number): Promise<{ stay: boolean | null; error: string | null }> {
+  const { data, error } = await db.rpc('fn_toggle_item_stay_comanda', {
+    p_item_id: itemId,
+  });
+  if (error) return { stay: null, error: translateError(error) };
+  return { stay: Boolean(data), error: null };
+}
+
 export async function aplicarDescuento(
   ventaId: number, monto: number, motivo: string, managerId: string | null,
   idempotencyKey?: string,
 ): Promise<{ error: string | null }> {
+  const { featureFlags } = await import('../lib/featureFlags');
+  if (featureFlags.offlineFirstVentas) {
+    const { aplicarDescuentoOffline } = await import('./offline/overridesOfflineService');
+    try {
+      await aplicarDescuentoOffline({ ventaId, monto, motivo, managerId });
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : 'Error aplicando descuento' };
+    }
+  }
   const { error } = await db.rpc('fn_aplicar_descuento_comanda', {
     p_venta_id: ventaId,
     p_monto: monto,

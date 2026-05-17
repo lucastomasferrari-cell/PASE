@@ -1,6 +1,7 @@
 import { db } from '../lib/supabase';
 import type { Item, ItemEstado } from '../types/database';
 import { translateError } from '../lib/errors';
+import { cacheGet, cacheSet, isNetworkError } from '../lib/offlineCache';
 
 // Cache sessionStorage del catálogo (sprint optim egress 2026-05-16).
 // TTL corto (60s) para no servir data muy stale, pero suficiente para que
@@ -79,11 +80,28 @@ export async function listItems(filter: ItemsListFilter): Promise<{ data: ItemCo
     q = q.ilike('nombre', `%${filter.search.trim()}%`);
   }
 
-  const { data, error } = await q;
-  if (error) return { data: [], error: translateError(error) };
-  const result = (data ?? []) as unknown as ItemConGrupo[];
-  writeCache(key, result);
-  return { data: result, error: null };
+  try {
+    const { data, error } = await q;
+    if (error) {
+      // Si es error de red, intentar fallback offline (IndexedDB).
+      if (isNetworkError(error)) {
+        const offline = await cacheGet<ItemConGrupo[]>('items', key);
+        if (offline) return { data: offline, error: null };
+      }
+      return { data: [], error: translateError(error) };
+    }
+    const result = (data ?? []) as unknown as ItemConGrupo[];
+    writeCache(key, result);
+    // Persistir también en IndexedDB para uso offline cross-sesión.
+    void cacheSet('items', key, result);
+    return { data: result, error: null };
+  } catch (err) {
+    if (isNetworkError(err)) {
+      const offline = await cacheGet<ItemConGrupo[]>('items', key);
+      if (offline) return { data: offline, error: null };
+    }
+    throw err;
+  }
 }
 
 export type ItemDraft = Pick<

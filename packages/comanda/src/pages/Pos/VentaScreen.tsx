@@ -2,14 +2,14 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
-  ArrowLeft, Send, Wallet, MoreHorizontal, Package, Trash2,
+  ArrowLeft, Send, Wallet, MoreHorizontal, Package, Trash2, Star, PauseCircle, Play, CloudUpload,
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
 import { listItems, type ItemConGrupo } from '../../services/itemsService';
 import { listGrupos } from '../../services/gruposService';
 import {
-  getVenta, listVentasItems, agregarItem, modificarItem, mandarCurso, updateVentaMeta,
+  getVenta, listVentasItems, agregarItem, modificarItem, mandarCurso, mandarItemIndividual, toggleItemStay, updateVentaMeta,
 } from '../../services/ventasService';
 import type { VentaPos, VentaPosItem, ItemGrupo } from '../../types/database';
 import { Badge } from '../../components/Badge';
@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/dialog';
 import { db } from '@/lib/supabase';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
+import { listenReconcile } from '@/lib/sync/idReconciliation';
 import { EstadoVentaBadge } from '@/components/EstadoBadge';
 import { cn } from '@/lib/utils';
 
@@ -49,14 +50,15 @@ export function VentaScreen() {
   const { ventaId: idStr } = useParams<{ ventaId: string }>();
   const ventaId = Number(idStr);
   const { user } = useAuth();
-  const { empleado } = useAuthPos();
+  const { empleado, toggleFavorito } = useAuthPos();
   const navigate = useNavigate();
 
   const [venta, setVenta] = useState<VentaPos | null>(null);
   const [items, setItems] = useState<VentaPosItem[]>([]);
   const [catalogo, setCatalogo] = useState<ItemConGrupo[]>([]);
   const [grupos, setGrupos] = useState<ItemGrupo[]>([]);
-  const [grupoSel, setGrupoSel] = useState<number | null>(null);
+  // 'favoritos' = filtra solo los Quick Items del empleado; null = todos; N = grupo_id
+  const [grupoSel, setGrupoSel] = useState<number | 'favoritos' | null>(null);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [cursoActivo, setCursoActivo] = useState<number>(1);
@@ -142,6 +144,17 @@ export function VentaScreen() {
 
   useEffect(() => { reloadFull(); }, [reloadFull]);
 
+  // Fase 4.3: si la venta abierta era tempId (negativo) y el sync confirma,
+  // navegamos al id real para que la URL no quede con un valor negativo
+  // (que ya no existe en local porque fue movido).
+  useEffect(() => {
+    return listenReconcile((ev) => {
+      if (ev.kind === 'venta' && ev.tempId === ventaId) {
+        navigate(`/pos/venta/${ev.realId}`, { replace: true });
+      }
+    });
+  }, [ventaId, navigate]);
+
   // Realtime: cocina marca listo o manager anula → solo refresca la venta
   // (no el catálogo que ya tenemos)
   useRealtimeTable({
@@ -198,17 +211,26 @@ export function VentaScreen() {
     return () => { cancelled = true; };
   }, [catalogo]);
 
+  const favoritosSet = useMemo(
+    () => new Set(empleado?.pos_favoritos ?? []),
+    [empleado?.pos_favoritos],
+  );
+
   const catalogoFiltrado = useMemo(() => {
     return catalogo.filter((it) => {
       // Mostrar disponibles + agotados (agotados aparecen tachados, long-press
       // los reactiva). Inactivos NO se muestran (es estado de admin).
       if (it.estado !== 'disponible' && it.estado !== 'agotado') return false;
       if (!it.visible_pos) return false;
-      if (grupoSel !== null && it.grupo_id !== grupoSel) return false;
+      if (grupoSel === 'favoritos') {
+        if (!favoritosSet.has(it.id)) return false;
+      } else if (grupoSel !== null && it.grupo_id !== grupoSel) {
+        return false;
+      }
       if (search.trim() && !it.nombre.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [catalogo, grupoSel, search]);
+  }, [catalogo, grupoSel, search, favoritosSet]);
 
   // Items agrupados por curso
   const itemsPorCurso = useMemo(() => {
@@ -239,8 +261,13 @@ export function VentaScreen() {
   }, [items, catalogo]);
 
   // Hold count por curso (para badge "EN HOLD")
+  // Devuelve solo los que SI se enviarían — los en stay_until_release no
+  // cuentan porque no salen con "mandar curso".
   function holdCount(curso: number): number {
-    return (itemsPorCurso.get(curso) ?? []).filter((i) => i.estado === 'hold').length;
+    return (itemsPorCurso.get(curso) ?? []).filter((i) => i.estado === 'hold' && !i.stay_until_release).length;
+  }
+  function stayCount(curso: number): number {
+    return (itemsPorCurso.get(curso) ?? []).filter((i) => i.estado === 'hold' && i.stay_until_release).length;
   }
 
   if (loading) return <div className="py-12 text-center text-muted-foreground">Cargando…</div>;
@@ -378,6 +405,15 @@ export function VentaScreen() {
     }
   }
 
+  // Toggle Quick Item del empleado actual. Persiste en DB + actualiza state.
+  // Si llega al máximo (20) la RPC retorna error y lo mostramos.
+  async function onToggleFavorito(it: ItemConGrupo) {
+    const era = favoritosSet.has(it.id);
+    const { ok, error } = await toggleFavorito(it.id);
+    if (!ok) { toast.error(error ?? 'No se pudo actualizar favorito'); return; }
+    toast.success(era ? `${it.nombre} quitado de favoritos` : `★ ${it.nombre} agregado a favoritos`);
+  }
+
   async function changeQty(itemRow: VentaPosItem, qty: number) {
     if (qty <= 0) return;
     const { error } = await modificarItem(itemRow.id, { cantidad: qty });
@@ -386,9 +422,34 @@ export function VentaScreen() {
   }
 
   async function mandarCursoHandler(curso: number) {
-    const { error } = await mandarCurso(ventaId, curso);
+    const { count, error } = await mandarCurso(ventaId, curso);
     if (error) { toast.error(error); return; }
-    toast.success(`Curso ${curso} enviado a cocina`);
+    // Sprint 2 F #1: si count=0 puede ser todos en stay → mensaje específico.
+    const itemsEnHold = (itemsPorCurso.get(curso) ?? []).filter((i) => i.estado === 'hold');
+    const enStay = itemsEnHold.filter((i) => i.stay_until_release).length;
+    if (count === 0 && enStay > 0) {
+      toast.warning(`Curso ${curso}: ${enStay} item(s) en stay no se enviaron. Liberalos individualmente.`);
+    } else {
+      toast.success(`Curso ${curso} enviado a cocina${enStay > 0 ? ` (${enStay} en stay quedaron)` : ''}`);
+    }
+    reload();
+  }
+
+  // Sprint 2 F #1: enviar UN item específico (no el curso entero)
+  async function mandarItemSolo(itemRow: VentaPosItem) {
+    const { error } = await mandarItemIndividual(itemRow.id);
+    if (error) { toast.error(error); return; }
+    const nombre = catalogo.find((c) => c.id === itemRow.item_id)?.nombre ?? 'Item';
+    toast.success(`${nombre} enviado a cocina`);
+    reload();
+  }
+
+  // Sprint 2 F #1: toggle del flag stay_until_release
+  async function toggleStay(itemRow: VentaPosItem) {
+    const { stay, error } = await toggleItemStay(itemRow.id);
+    if (error) { toast.error(error); return; }
+    const nombre = catalogo.find((c) => c.id === itemRow.item_id)?.nombre ?? 'Item';
+    toast.success(stay ? `⏸ ${nombre} en STAY (no sale con mandar curso)` : `${nombre} ya no en STAY`);
     reload();
   }
 
@@ -456,6 +517,11 @@ export function VentaScreen() {
           />
         </div>
         <div className="flex gap-1 mb-3 flex-wrap">
+          {favoritosSet.size > 0 && (
+            <GrupoTab active={grupoSel === 'favoritos'} onClick={() => setGrupoSel('favoritos')}>
+              ★ Favoritos ({favoritosSet.size})
+            </GrupoTab>
+          )}
           <GrupoTab active={grupoSel === null} onClick={() => setGrupoSel(null)}>Todos</GrupoTab>
           {grupos.map((g) => (
             <GrupoTab key={g.id} active={grupoSel === g.id} onClick={() => setGrupoSel(g.id)}>
@@ -472,10 +538,17 @@ export function VentaScreen() {
               grupo={grupos.find((g) => g.id === it.grupo_id) ?? null}
               disabled={!editable}
               flashed={lastAddedItemId === it.id}
+              favorito={favoritosSet.has(it.id)}
+              onToggleFavorito={() => onToggleFavorito(it)}
               onClick={() => clickItem(it)}
               onLongPress={() => longPressItem(it)}
             />
           ))}
+          {catalogoFiltrado.length === 0 && grupoSel === 'favoritos' && !search.trim() && (
+            <div className="col-span-full text-center text-muted-foreground text-sm py-8">
+              Sin favoritos aún. Tocá la ★ en cualquier producto para agregarlo a tus Quick Items.
+            </div>
+          )}
           {catalogoFiltrado.length === 0 && search.trim() && (
             <div className="col-span-full text-center text-muted-foreground text-sm py-8">
               Sin resultados para "{search}"
@@ -567,6 +640,7 @@ export function VentaScreen() {
           ) : (
             Array.from(itemsPorCurso.entries()).map(([curso, itemsCurso]) => {
               const hold = holdCount(curso);
+              const stay = stayCount(curso);
               return (
                 <div key={curso}>
                   <div className={cn(
@@ -574,11 +648,18 @@ export function VentaScreen() {
                     CURSO_COLORS[curso] ?? 'bg-muted',
                   )}>
                     <span>Curso {curso}</span>
-                    {hold > 0 ? (
-                      <Badge variant="amber">{hold} en hold</Badge>
-                    ) : (
-                      <Badge variant="green">Enviado</Badge>
-                    )}
+                    <div className="flex items-center gap-1">
+                      {hold > 0 ? (
+                        <Badge variant="amber">{hold} en hold</Badge>
+                      ) : stay === 0 ? (
+                        <Badge variant="green">Enviado</Badge>
+                      ) : null}
+                      {stay > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-200 text-purple-900 dark:bg-purple-900/40 dark:text-purple-100 font-bold uppercase inline-flex items-center gap-0.5" title="Items en STAY: no salen con mandar curso, requieren liberación individual">
+                          <PauseCircle className="h-2.5 w-2.5" /> {stay} stay
+                        </span>
+                      )}
+                    </div>
                   </div>
                   {hold > 0 && editable && (
                     <Button
@@ -607,6 +688,8 @@ export function VentaScreen() {
                           setPrecioMotivo('');
                         }}
                         onCortesia={() => setCortesiaItemTarget(it)}
+                        onMandarSolo={() => mandarItemSolo(it)}
+                        onToggleStay={() => toggleStay(it)}
                         editable={editable}
                         flashed={lastAddedRowId === it.id}
                       />
@@ -960,7 +1043,7 @@ function GrupoTab({ active, onClick, children }: { active: boolean; onClick: () 
   );
 }
 
-function CheckRow({ item, catalogo, onQty, onRemove, onRepetir, onAnular, onCambiarPrecio, onCortesia, editable, flashed }:
+function CheckRow({ item, catalogo, onQty, onRemove, onRepetir, onAnular, onCambiarPrecio, onCortesia, onMandarSolo, onToggleStay, editable, flashed }:
   {
     item: VentaPosItem;
     catalogo: ItemConGrupo[];
@@ -970,6 +1053,8 @@ function CheckRow({ item, catalogo, onQty, onRemove, onRepetir, onAnular, onCamb
     onAnular: () => void;
     onCambiarPrecio: () => void;
     onCortesia: () => void;
+    onMandarSolo: () => void;
+    onToggleStay: () => void;
     editable: boolean;
     flashed?: boolean;
   }) {
@@ -991,6 +1076,24 @@ function CheckRow({ item, catalogo, onQty, onRemove, onRepetir, onAnular, onCamb
           )}
           {item.precio_unitario_original != null && Number(item.precio_unitario_original) !== Number(item.precio_unitario) && !item.es_cortesia && (
             <span className="text-[9px] px-1.5 py-0.5 rounded bg-warning/15 text-warning font-bold uppercase" title={`Precio original ${formatARS(item.precio_unitario_original)}`}>Precio mod.</span>
+          )}
+          {/* Sprint 2 F #1: STAY badge — visible cuando el item está en hold
+              permanente. Sirve al cajero para reconocer "este NO sale con mandar curso". */}
+          {item.stay_until_release && item.estado === 'hold' && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-200 text-purple-900 dark:bg-purple-900/40 dark:text-purple-100 font-bold uppercase inline-flex items-center gap-0.5" title="STAY: no se envía con 'mandar curso'. Liberalo con ▶ para enviarlo.">
+              <PauseCircle className="h-2.5 w-2.5" /> Stay
+            </span>
+          )}
+          {/* Fase 4.3 offline-first: indicador de pending sync. Muestra
+              el icono de subida cuando el item tiene cambios locales sin
+              sincronizar (típico al agregar offline o al volver de un corte). */}
+          {(item as unknown as { _local_dirty?: boolean })._local_dirty && (
+            <span
+              className="text-[9px] px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100 font-bold uppercase inline-flex items-center gap-0.5 animate-pulse"
+              title="Pendiente de sincronizar al servidor — se va a subir cuando vuelva internet"
+            >
+              <CloudUpload className="h-2.5 w-2.5" /> Queued
+            </span>
           )}
         </div>
         {item.modificadores && item.modificadores.length > 0 && (
@@ -1026,7 +1129,7 @@ function CheckRow({ item, catalogo, onQty, onRemove, onRepetir, onAnular, onCamb
         <strong className="text-sm tabular-nums">{formatARS(item.subtotal)}</strong>
         {/* Repetir item: agrega +1 con los mismos modificadores al curso activo */}
         {editable && item.estado !== 'anulado' && (
-          <div className="flex items-center gap-1 mt-0.5">
+          <div className="flex items-center gap-1 mt-0.5 flex-wrap justify-end">
             <button
               type="button"
               onClick={onRepetir}
@@ -1036,6 +1139,35 @@ function CheckRow({ item, catalogo, onQty, onRemove, onRepetir, onAnular, onCamb
             >
               + Repetir
             </button>
+            {/* Sprint 2 F #1: Send individual + Toggle Stay (solo en hold) */}
+            {item.estado === 'hold' && (
+              <>
+                <button
+                  type="button"
+                  onClick={onMandarSolo}
+                  aria-label="Enviar solo este item"
+                  title="Enviar este item a cocina ahora (sin mandar el curso entero)"
+                  className="text-[10px] inline-flex items-center gap-0.5 text-success hover:underline"
+                >
+                  <Send className="h-2.5 w-2.5" /> Enviar solo
+                </button>
+                <button
+                  type="button"
+                  onClick={onToggleStay}
+                  aria-label={item.stay_until_release ? 'Quitar STAY' : 'Marcar STAY'}
+                  title={item.stay_until_release
+                    ? 'Quitar STAY — el item volverá a salir cuando se mande el curso'
+                    : 'STAY — el item se queda en hold aunque mandes el curso (sale solo cuando lo liberes)'}
+                  className={cn(
+                    'text-[10px] inline-flex items-center gap-0.5 hover:underline',
+                    item.stay_until_release ? 'text-purple-600 dark:text-purple-300 font-medium' : 'text-muted-foreground',
+                  )}
+                >
+                  {item.stay_until_release ? <Play className="h-2.5 w-2.5" /> : <PauseCircle className="h-2.5 w-2.5" />}
+                  {item.stay_until_release ? 'Liberar' : 'Stay'}
+                </button>
+              </>
+            )}
             {/* Acciones manager (anular/precio/cortesía) — solo si el item ya
                 no está en hold (en hold se puede simplemente eliminar) */}
             {item.estado !== 'hold' && !item.es_cortesia && (
@@ -1096,11 +1228,13 @@ const RAMP_CLASSES: Record<string, string> = {
   gray:   'bg-muted text-foreground hover:bg-accent',
 };
 
-function ProductTile({ item, grupo, disabled, flashed, onClick, onLongPress }: {
+function ProductTile({ item, grupo, disabled, flashed, favorito, onToggleFavorito, onClick, onLongPress }: {
   item: ItemConGrupo;
   grupo: ItemGrupo | null;
   disabled: boolean;
   flashed?: boolean;
+  favorito?: boolean;
+  onToggleFavorito?: () => void;
   onClick: () => void;
   onLongPress?: () => void;
 }) {
@@ -1137,6 +1271,25 @@ function ProductTile({ item, grupo, disabled, flashed, onClick, onLongPress }: {
   }
 
   return (
+    <div className="group relative">
+      {/* Estrella favorito — sibling absoluto del tile (NO nested button — HTML
+          inválido). Visible siempre si ya es favorito, hover-only si no. */}
+      {onToggleFavorito && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onToggleFavorito(); }}
+          aria-label={favorito ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+          className={cn(
+            'absolute top-1 right-1 z-10 h-6 w-6 inline-flex items-center justify-center rounded-full transition-all',
+            favorito
+              ? 'bg-amber-400 text-white shadow'
+              : 'bg-background/70 text-muted-foreground hover:bg-amber-100 hover:text-amber-600 opacity-0 group-hover:opacity-100 focus:opacity-100',
+          )}
+          title={favorito ? 'Quitar de favoritos' : 'Agregar a Quick Items'}
+        >
+          <Star className={cn('h-3.5 w-3.5', favorito && 'fill-current')} />
+        </button>
+      )}
     <button
       type="button"
       onClick={handleClick}
@@ -1150,7 +1303,7 @@ function ProductTile({ item, grupo, disabled, flashed, onClick, onLongPress }: {
       }}
       disabled={disabled || (agotado && !onLongPress)}
       className={cn(
-        'aspect-[4/3] rounded-lg p-3 flex flex-col items-center justify-center gap-1 relative',
+        'w-full aspect-[4/3] rounded-lg p-3 flex flex-col items-center justify-center gap-1 relative',
         'transition-all duration-300 active:scale-[0.98] touch-target-lg',
         'disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100',
         cls,
@@ -1160,10 +1313,23 @@ function ProductTile({ item, grupo, disabled, flashed, onClick, onLongPress }: {
       title={agotado ? 'AGOTADO — mantené presionado para reponer' : 'Tocá para agregar · mantené presionado para marcar agotado'}
     >
       {agotado && (
-        <div className="absolute inset-0 rounded-lg bg-destructive/10 flex items-center justify-center pointer-events-none">
+        <div className="absolute inset-0 rounded-lg bg-destructive/10 flex flex-col items-center justify-center pointer-events-none gap-1">
           <div className="bg-destructive text-destructive-foreground px-2 py-0.5 rounded text-[10px] font-bold uppercase rotate-[-12deg] shadow">
             Agotado
           </div>
+          {/* Snooze: si tiene fecha hasta cuando se reactiva, mostrar countdown */}
+          {item.agotado_hasta && (() => {
+            const ms = new Date(item.agotado_hasta).getTime() - Date.now();
+            if (ms <= 0) return null;
+            const min = Math.floor(ms / 60000);
+            const horas = Math.floor(min / 60);
+            const label = horas > 0 ? `vuelve en ${horas}h${min % 60}m` : `vuelve en ${min}m`;
+            return (
+              <div className="bg-background/80 px-1.5 py-0.5 rounded text-[8px] tabular-nums text-foreground/70">
+                ⏱ {label}
+              </div>
+            );
+          })()}
         </div>
       )}
       {flashed && (
@@ -1190,5 +1356,6 @@ function ProductTile({ item, grupo, disabled, flashed, onClick, onLongPress }: {
         {formatARS(item.precio_madre)}
       </div>
     </button>
+    </div>
   );
 }

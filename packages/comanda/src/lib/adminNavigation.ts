@@ -68,6 +68,8 @@ export const ADMIN_NAVIGATION: NavCategory[] = [
       { slug: 'insumos',         label: 'Insumos',         href: '/menu/insumos' },
       { slug: 'materias-primas', label: 'Materias primas', href: '/menu/materias-primas' },
       { slug: 'recetas',         label: 'Recetas',         href: '/menu/recetas' },
+      { slug: 'alertas-margen',  label: 'Alertas margen',  href: '/menu/alertas-margen' },
+      { slug: 'revision',        label: 'Items por revisar', href: '/menu/revision' },
     ],
   },
   {
@@ -106,6 +108,7 @@ export const ADMIN_NAVIGATION: NavCategory[] = [
       { slug: 'metodos',         label: 'Métodos de cobro',  href: '/pagos/metodos' },
       { slug: 'caja-chica',      label: 'Caja chica',        href: '/pagos/caja-chica',      badge: 'soon' },
       { slug: 'historico-turnos', label: 'Histórico turnos', href: '/pagos/historico-turnos', badge: 'soon' },
+      { slug: 'logbook',         label: 'Logbook',           href: '/caja/logbook' },
       { slug: 'conciliacion-mp', label: 'Conciliación MP',   href: '/pagos/conciliacion-mp', badge: 'soon' },
       { slug: 'settlements',     label: 'Settlements',       href: '/pagos/settlements',     badge: 'soon' },
     ],

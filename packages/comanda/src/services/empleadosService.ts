@@ -63,10 +63,25 @@ export async function verificarPin(localId: number, pin: string): Promise<{ empl
 export async function getEmpleado(empleadoId: string): Promise<{ data: EmpleadoPos | null; error: string | null }> {
   const { data, error } = await db
     .from('rrhh_empleados')
-    .select('id, local_id, apellido, nombre, puesto, activo, pos_activo, rol_pos, pin_actualizado_at')
+    .select('id, local_id, apellido, nombre, puesto, activo, pos_activo, rol_pos, pin_actualizado_at, pos_favoritos')
     .eq('id', empleadoId)
     .limit(1)
     .single();
   if (error) return { data: null, error: translateError(error) };
   return { data: data as EmpleadoPos, error: null };
+}
+
+// Sprint 16/05: toggle favorito Quick Items del empleado actual.
+// Devuelve el nuevo array de favoritos (item_ids) para que el caller
+// actualice su state local sin re-fetch.
+export async function toggleFavoritoPos(
+  empleadoId: string,
+  itemId: number,
+): Promise<{ favoritos: number[] | null; error: string | null }> {
+  const { data, error } = await db.rpc('fn_toggle_favorito_pos', {
+    p_empleado_id: empleadoId,
+    p_item_id: itemId,
+  });
+  if (error) return { favoritos: null, error: error.message };
+  return { favoritos: (data ?? []) as number[], error: null };
 }

@@ -133,6 +133,18 @@ export function SalonView() {
             )}
           </header>
 
+          {/* Leyenda color-status (F #9) — chips compactos arriba del plano */}
+          {!loading && mesas.length > 0 && (
+            <div className="mb-3 flex items-center gap-1.5 flex-wrap text-[10px]">
+              <span className="text-muted-foreground uppercase tracking-wide font-medium mr-1">Colores:</span>
+              <LeyendaChip bucket="reciente" />
+              <LeyendaChip bucket="normal" />
+              <LeyendaChip bucket="atencion" />
+              <LeyendaChip bucket="overstay" />
+              <LeyendaChip bucket="urgente" />
+            </div>
+          )}
+
           {/* Resumen at-a-glance del salón (zona filtrada) */}
           {!loading && mesas.length > 0 && (
             <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -296,27 +308,80 @@ function SummaryCard({ label, value, hint, tone }: {
   );
 }
 
+// Sprint 1 competitor F #9 — Color-status por tiempo en estado.
+// 5 buckets visuales para mesas ocupadas, inspirado en Toast/TouchBistro:
+// el encargado escanea el salón y al toque ve dónde hay mesas largas.
+//
+//   libre          → verde suave (disponible)
+//   ocupada 0-20m  → verde fuerte (recién sentados)
+//   ocupada 20-45m → ámbar suave (servicio normal)
+//   ocupada 45-75m → naranja (chequear cuenta o pedir más)
+//   ocupada 75-105m→ rojo (overstay — pedir cuenta)
+//   ocupada >105m  → rojo pulsante (urgente, ya pasó hace rato)
+//   hold           → rojo (estado especial, no por tiempo)
+type MesaBucket =
+  | 'libre'
+  | 'reciente'      // <20min ocupada
+  | 'normal'        // 20-45m
+  | 'atencion'      // 45-75m
+  | 'overstay'      // 75-105m
+  | 'urgente'       // >105m
+  | 'hold'
+  | 'otro';
+
+const MESA_BUCKET_STYLES: Record<MesaBucket, { bg: string; fg: string; border: string; icon: string; label: string }> = {
+  libre:    { bg: 'bg-success/10',     fg: 'text-success',     border: 'border-success/30',     icon: '',  label: 'Libre' },
+  reciente: { bg: 'bg-success/15',     fg: 'text-success',     border: 'border-success/50',     icon: '🟢', label: 'Recién (0-20m)' },
+  normal:   { bg: 'bg-amber-50 dark:bg-amber-900/15', fg: 'text-amber-700 dark:text-amber-200', border: 'border-amber-300/60 dark:border-amber-700/60', icon: '', label: 'En curso (20-45m)' },
+  atencion: { bg: 'bg-warning/15',     fg: 'text-warning',     border: 'border-warning/60',     icon: '⏱', label: 'Atención (45-75m)' },
+  overstay: { bg: 'bg-orange-100 dark:bg-orange-900/30', fg: 'text-orange-700 dark:text-orange-200', border: 'border-orange-400 dark:border-orange-700', icon: '⚠', label: 'Overstay (75-105m)' },
+  urgente:  { bg: 'bg-destructive/15', fg: 'text-destructive', border: 'border-destructive ring-2 ring-destructive/40 animate-pulse', icon: '🚨', label: 'Urgente (>105m)' },
+  hold:     { bg: 'bg-destructive/10', fg: 'text-destructive', border: 'border-destructive/30', icon: '', label: 'En hold' },
+  otro:     { bg: 'bg-muted',          fg: 'text-muted-foreground', border: 'border-border',   icon: '', label: '—' },
+};
+
+function clasificarMesa(mesa: MesaConVenta): MesaBucket {
+  if (mesa.estado === 'libre') return 'libre';
+  if (mesa.estado === 'hold') return 'hold';
+  if (mesa.estado === 'ocupada') {
+    const min = mesa.venta_abierta_at
+      ? Math.floor((Date.now() - new Date(mesa.venta_abierta_at).getTime()) / 60000)
+      : 0;
+    if (min < 20)  return 'reciente';
+    if (min < 45)  return 'normal';
+    if (min < 75)  return 'atencion';
+    if (min < 105) return 'overstay';
+    return 'urgente';
+  }
+  return 'otro';
+}
+
+function LeyendaChip({ bucket }: { bucket: MesaBucket }) {
+  const s = MESA_BUCKET_STYLES[bucket];
+  return (
+    <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded border', s.bg, s.fg, s.border.replace(/animate-pulse|ring-\d+|ring-destructive\/40/g, ''))}>
+      {s.icon && <span>{s.icon}</span>}
+      <span>{s.label}</span>
+    </span>
+  );
+}
+
 function MesaTile({ mesa, onClick }: { mesa: MesaConVenta; onClick: () => void }) {
-  const colors = mesaColors(mesa.estado);
+  const bucket = clasificarMesa(mesa);
+  const styles = MESA_BUCKET_STYLES[bucket];
   const radius = mesa.forma === 'redondo' ? 'rounded-full' : mesa.forma === 'rectangular' ? 'rounded-lg' : 'rounded-2xl';
-  // Alerta visual: mesa ocupada hace > 90min con cuenta sin cobrar = pulse rojo.
-  const minutosAbierta = mesa.venta_abierta_at
-    ? Math.floor((Date.now() - new Date(mesa.venta_abierta_at).getTime()) / 60000)
-    : 0;
-  const urgente = mesa.estado === 'ocupada' && minutosAbierta > 90;
-  const atencion = mesa.estado === 'ocupada' && minutosAbierta > 60 && !urgente;
   return (
     <button
       type="button"
       onClick={onClick}
+      title={styles.label}
       className={cn(
         'p-3 border-2 min-h-[120px] flex flex-col justify-center items-center text-center relative',
         'transition-all hover:scale-105 hover:shadow-sm',
         radius,
-        colors.bg,
-        colors.fg,
-        urgente ? 'border-destructive ring-2 ring-destructive/40 animate-pulse' :
-        atencion ? 'border-warning' : colors.border,
+        styles.bg,
+        styles.fg,
+        styles.border,
       )}
     >
       <div className="text-2xl font-bold">{mesa.numero}</div>
@@ -328,24 +393,18 @@ function MesaTile({ mesa, onClick }: { mesa: MesaConVenta; onClick: () => void }
           </div>
           {mesa.venta_abierta_at && (
             <div className={cn(
-              'text-[10px]',
-              urgente ? 'text-destructive font-bold' :
-              atencion ? 'text-warning font-semibold' : 'opacity-70',
+              'text-[10px] tabular-nums',
+              bucket === 'urgente' && 'font-bold',
+              bucket === 'overstay' && 'font-semibold',
             )}>
-              {urgente ? '⚠ ' : atencion ? '⏱ ' : ''}{relativoCorto(mesa.venta_abierta_at)}
+              {styles.icon && <span className="mr-0.5">{styles.icon}</span>}
+              {relativoCorto(mesa.venta_abierta_at)}
             </div>
           )}
         </>
       )}
     </button>
   );
-}
-
-function mesaColors(estado: string): { bg: string; fg: string; border: string } {
-  if (estado === 'libre')   return { bg: 'bg-success/10', fg: 'text-success', border: 'border-success/30' };
-  if (estado === 'ocupada') return { bg: 'bg-warning/10', fg: 'text-warning', border: 'border-warning/30' };
-  if (estado === 'hold')    return { bg: 'bg-destructive/10', fg: 'text-destructive', border: 'border-destructive/30' };
-  return { bg: 'bg-muted', fg: 'text-muted-foreground', border: 'border-border' };
 }
 
 interface AbrirDialogProps {

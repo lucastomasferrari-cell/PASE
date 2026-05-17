@@ -19,6 +19,8 @@ export interface EmpleadoActivoPos {
   rol_pos: RolPos;
   local_id: number;
   desde: string;      // ISO timestamp del login
+  // Sprint 16/05: Quick Items personales (item_ids favoritos del cajero/mozo)
+  pos_favoritos?: number[];
 }
 
 export interface AuthPosState {
@@ -30,6 +32,9 @@ export interface AuthPosActions {
   loginPin: (localId: number, pin: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
   resetTimer: () => void;
+  // Sprint 16/05: toggle Quick Item del empleado actual (item_id).
+  // Persiste en DB + actualiza state local + storage.
+  toggleFavorito: (itemId: number) => Promise<{ ok: boolean; error?: string }>;
 }
 
 export type AuthPosContextValue = AuthPosState & AuthPosActions;
@@ -38,6 +43,7 @@ const NOOP_ACTIONS: AuthPosActions = {
   loginPin: async () => ({ ok: false, error: 'Provider no montado' }),
   logout: () => {},
   resetTimer: () => {},
+  toggleFavorito: async () => ({ ok: false, error: 'Provider no montado' }),
 };
 
 export const AuthPosContext = createContext<AuthPosContextValue>({

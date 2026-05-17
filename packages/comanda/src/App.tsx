@@ -31,6 +31,7 @@ const CajaAbrir = lazy(() => import('./pages/Caja/CajaAbrir').then(m => ({ defau
 const CajaEstado = lazy(() => import('./pages/Caja/CajaEstado').then(m => ({ default: m.CajaEstado })));
 const CajaCerrar = lazy(() => import('./pages/Caja/CajaCerrar').then(m => ({ default: m.CajaCerrar })));
 const CajaHistorico = lazy(() => import('./pages/Caja/CajaHistorico').then(m => ({ default: m.CajaHistorico })));
+const Logbook = lazy(() => import('./pages/Caja/Logbook').then(m => ({ default: m.Logbook })));
 
 // POS
 const PosLayout = lazy(() => import('./pages/Pos/PosLayout').then(m => ({ default: m.PosLayout })));
@@ -81,6 +82,8 @@ const ClientesLista = lazy(() => import('./pages/Clientes/ClientesLista').then(m
 // Admin — CMV: Insumos + Recetas (F1.1b)
 const InsumosLista = lazy(() => import('./pages/Catalogo/InsumosLista').then(m => ({ default: m.InsumosLista })));
 const RecetasLista = lazy(() => import('./pages/Catalogo/RecetasLista').then(m => ({ default: m.RecetasLista })));
+const AlertasMargenLista = lazy(() => import('./pages/Catalogo/AlertasMargenLista').then(m => ({ default: m.AlertasMargenLista })));
+const ItemReviewQueue = lazy(() => import('./pages/Catalogo/ItemReviewQueue').then(m => ({ default: m.ItemReviewQueue })));
 
 // Admin — 86 list (disponibilidad)
 const DisponibilidadLista = lazy(() => import('./pages/Catalogo/DisponibilidadLista').then(m => ({ default: m.DisponibilidadLista })));
@@ -209,9 +212,11 @@ export default function App() {
                   <Route path="/menu/modificadores" element={<ModificadoresRoute />} />
                   <Route path="/menu/combos" element={<StubRoute />} />
                   <Route path="/menu/disponibilidad" element={<DisponibilidadLista />} />
-                  {/* F1.1b CMV — insumos + recetas + materias primas */}
+                  {/* F1.1b CMV — insumos + recetas + materias primas + alertas margen */}
                   <Route path="/menu/insumos" element={<InsumosLista />} />
                   <Route path="/menu/recetas" element={<RecetasLista />} />
+                  <Route path="/menu/alertas-margen" element={<AlertasMargenLista />} />
+                  <Route path="/menu/revision" element={<ItemReviewQueue />} />
                   <Route path="/menu/materias-primas" element={<MateriasPrimasLista />} />
                   <Route path="/menu/combos" element={<CombosLista />} />
 
@@ -308,6 +313,7 @@ export default function App() {
                       <Route path="/caja/abrir" element={<CajaAbrir />} />
                       <Route path="/caja/cerrar" element={<CajaCerrar />} />
                       <Route path="/caja/historico" element={<CajaHistorico />} />
+                      <Route path="/caja/logbook" element={<Logbook />} />
                     </Route>
                     {/* Handheld mozo: layout propio full-screen mobile-first, NO usa PosLayout */}
                     <Route path="/pos/handheld" element={<HandheldView />} />

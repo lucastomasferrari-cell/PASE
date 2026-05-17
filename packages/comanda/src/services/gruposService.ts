@@ -1,8 +1,10 @@
 import { db } from '../lib/supabase';
 import type { ItemGrupo } from '../types/database';
 import { translateError } from '../lib/errors';
+import { cacheGet, cacheSet, isNetworkError } from '../lib/offlineCache';
 
 export async function listGrupos(tenantId: string | null): Promise<{ data: ItemGrupo[]; error: string | null }> {
+  const cacheKey = `grupos:${tenantId ?? 'all'}`;
   let q = db
     .from('item_grupos')
     .select('*')
@@ -10,9 +12,25 @@ export async function listGrupos(tenantId: string | null): Promise<{ data: ItemG
     .order('orden', { ascending: true })
     .order('id', { ascending: true });
   if (tenantId) q = q.eq('tenant_id', tenantId);
-  const { data, error } = await q;
-  if (error) return { data: [], error: translateError(error) };
-  return { data: data ?? [], error: null };
+  try {
+    const { data, error } = await q;
+    if (error) {
+      if (isNetworkError(error)) {
+        const offline = await cacheGet<ItemGrupo[]>('grupos', cacheKey);
+        if (offline) return { data: offline, error: null };
+      }
+      return { data: [], error: translateError(error) };
+    }
+    const result = data ?? [];
+    void cacheSet('grupos', cacheKey, result);
+    return { data: result, error: null };
+  } catch (err) {
+    if (isNetworkError(err)) {
+      const offline = await cacheGet<ItemGrupo[]>('grupos', cacheKey);
+      if (offline) return { data: offline, error: null };
+    }
+    throw err;
+  }
 }
 
 export type GrupoDraft = Pick<

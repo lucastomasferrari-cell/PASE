@@ -1,6 +1,7 @@
 import { db } from '../lib/supabase';
 import type { Mesa, EstadoMesa, FormaMesa } from '../types/database';
 import { translateError } from '../lib/errors';
+import { cacheGet, cacheSet, isNetworkError } from '../lib/offlineCache';
 
 export async function listMesas(localId: number): Promise<{ data: Mesa[]; error: string | null }> {
   const { data, error } = await db
@@ -22,36 +23,55 @@ export interface MesaConVenta extends Mesa {
 }
 
 export async function listMesasConVentas(localId: number): Promise<{ data: MesaConVenta[]; error: string | null }> {
-  // 2 queries en paralelo: mesas + ventas abiertas del local
-  const [mesasRes, ventasRes] = await Promise.all([
-    db.from('mesas').select('*').eq('local_id', localId).is('deleted_at', null)
-      .order('zona', { ascending: true, nullsFirst: false }).order('id', { ascending: true }),
-    db.from('ventas_pos').select('id, mesa_id, total, abierta_at, estado')
-      .eq('local_id', localId).in('estado', ['abierta', 'enviada', 'lista', 'entregada'])
-      .is('deleted_at', null),
-  ]);
-  if (mesasRes.error) return { data: [], error: mesasRes.error.message };
-  if (ventasRes.error) return { data: [], error: ventasRes.error.message };
-  const ventasByMesa = new Map<number, { id: number; total: number; abierta_at: string }>();
-  for (const v of ventasRes.data ?? []) {
-    if (v.mesa_id !== null && v.mesa_id !== undefined) {
-      ventasByMesa.set(v.mesa_id as number, {
-        id: v.id as number,
-        total: Number(v.total ?? 0),
-        abierta_at: v.abierta_at as string,
-      });
+  const cacheKey = `mesas:${localId}`;
+  try {
+    // 2 queries en paralelo: mesas + ventas abiertas del local
+    const [mesasRes, ventasRes] = await Promise.all([
+      db.from('mesas').select('*').eq('local_id', localId).is('deleted_at', null)
+        .order('zona', { ascending: true, nullsFirst: false }).order('id', { ascending: true }),
+      db.from('ventas_pos').select('id, mesa_id, total, abierta_at, estado')
+        .eq('local_id', localId).in('estado', ['abierta', 'enviada', 'lista', 'entregada'])
+        .is('deleted_at', null),
+    ]);
+    if (mesasRes.error || ventasRes.error) {
+      const err = mesasRes.error ?? ventasRes.error;
+      if (err && isNetworkError(err)) {
+        const offline = await cacheGet<MesaConVenta[]>('mesas', cacheKey);
+        if (offline) return { data: offline, error: null };
+      }
+      return { data: [], error: (err?.message ?? 'Error desconocido') };
     }
+    const ventasByMesa = new Map<number, { id: number; total: number; abierta_at: string }>();
+    for (const v of ventasRes.data ?? []) {
+      if (v.mesa_id !== null && v.mesa_id !== undefined) {
+        ventasByMesa.set(v.mesa_id as number, {
+          id: v.id as number,
+          total: Number(v.total ?? 0),
+          abierta_at: v.abierta_at as string,
+        });
+      }
+    }
+    const data: MesaConVenta[] = (mesasRes.data ?? []).map((m) => {
+      const v = ventasByMesa.get(m.id as number);
+      return {
+        ...(m as Mesa),
+        venta_abierta_id: v?.id ?? null,
+        venta_total: v?.total ?? 0,
+        venta_abierta_at: v?.abierta_at ?? null,
+      };
+    });
+    // Cache para uso offline. NOTA: las mesas offline pueden estar stale
+    // (no sabemos qué pasó mientras estuvimos sin conexión). El banner
+    // visible avisa al usuario que NO confíe del estado actual.
+    void cacheSet('mesas', cacheKey, data);
+    return { data, error: null };
+  } catch (err) {
+    if (isNetworkError(err)) {
+      const offline = await cacheGet<MesaConVenta[]>('mesas', cacheKey);
+      if (offline) return { data: offline, error: null };
+    }
+    throw err;
   }
-  const data: MesaConVenta[] = (mesasRes.data ?? []).map((m) => {
-    const v = ventasByMesa.get(m.id as number);
-    return {
-      ...(m as Mesa),
-      venta_abierta_id: v?.id ?? null,
-      venta_total: v?.total ?? 0,
-      venta_abierta_at: v?.abierta_at ?? null,
-    };
-  });
-  return { data, error: null };
 }
 
 export interface MesaDraft {

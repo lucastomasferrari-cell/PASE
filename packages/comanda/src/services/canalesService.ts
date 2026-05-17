@@ -1,8 +1,10 @@
 import { db } from '../lib/supabase';
 import type { Canal } from '../types/database';
 import { translateError } from '../lib/errors';
+import { cacheGet, cacheSet, isNetworkError } from '../lib/offlineCache';
 
 export async function listCanales(tenantId: string | null, soloActivos = false): Promise<{ data: Canal[]; error: string | null }> {
+  const cacheKey = `canales:${tenantId ?? 'all'}:${soloActivos ? 'activos' : 'todos'}`;
   let q = db
     .from('canales')
     .select('*')
@@ -11,9 +13,25 @@ export async function listCanales(tenantId: string | null, soloActivos = false):
     .order('id', { ascending: true });
   if (tenantId) q = q.eq('tenant_id', tenantId);
   if (soloActivos) q = q.eq('activo', true);
-  const { data, error } = await q;
-  if (error) return { data: [], error: translateError(error) };
-  return { data: data ?? [], error: null };
+  try {
+    const { data, error } = await q;
+    if (error) {
+      if (isNetworkError(error)) {
+        const offline = await cacheGet<Canal[]>('canales', cacheKey);
+        if (offline) return { data: offline, error: null };
+      }
+      return { data: [], error: translateError(error) };
+    }
+    const result = data ?? [];
+    void cacheSet('canales', cacheKey, result);
+    return { data: result, error: null };
+  } catch (err) {
+    if (isNetworkError(err)) {
+      const offline = await cacheGet<Canal[]>('canales', cacheKey);
+      if (offline) return { data: offline, error: null };
+    }
+    throw err;
+  }
 }
 
 export type CanalDraft = Pick<

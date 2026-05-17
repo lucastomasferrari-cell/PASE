@@ -327,6 +327,8 @@ export interface VentaPosItem {
   // Sprint 16/05: precio puntual + cortesía
   es_cortesia?: boolean;
   precio_unitario_original?: number | null;
+  // Sprint 2 competitor F #1: stay = item se queda en hold aunque mande el curso
+  stay_until_release?: boolean;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -507,4 +509,6 @@ export interface EmpleadoPos {
   rol_pos: RolPos | null;
   pin_actualizado_at: string | null;
   // pin_pos NUNCA se expone en clientes
+  // Sprint 16/05: Quick Items personales del cajero/mozo (array de item_ids)
+  pos_favoritos?: number[];
 }
