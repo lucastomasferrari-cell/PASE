@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { scopeLocales, applyLocalScope, tienePermiso, getPermisos } from "./auth";
+import {
+  scopeLocales, applyLocalScope, tienePermiso, getPermisos,
+  cuentasVisibles, cuentasOperables, cuentasVisiblesParaListados,
+  puedeVerCuenta, puedeOperarCuenta, puedeVerMovimientosDeCuenta,
+} from "./auth";
 import type { Usuario } from "../types";
 
 describe("scopeLocales", () => {
@@ -188,5 +192,162 @@ describe("getPermisos", () => {
     const perms = getPermisos(userEncCajaVentas);
     expect(perms.sort()).toEqual(["caja", "ventas"]);
     expect(perms).not.toContain("tenants");
+  });
+});
+
+// ─── cuentas visibles / operables ────────────────────────────────────────────
+
+describe("cuentasVisibles", () => {
+  it("user null → [] (defensivo, no expone nada)", () => {
+    expect(cuentasVisibles(null)).toEqual([]);
+  });
+
+  it("dueno → null (todas)", () => {
+    expect(cuentasVisibles({ rol: "dueno" } as Usuario)).toBeNull();
+  });
+
+  it("admin → null (todas)", () => {
+    expect(cuentasVisibles({ rol: "admin" } as Usuario)).toBeNull();
+  });
+
+  it("encargado con cuentas_visibles null → null (todas)", () => {
+    expect(cuentasVisibles({ rol: "encargado", cuentas_visibles: null } as Usuario)).toBeNull();
+  });
+
+  it("encargado con cuentas_visibles undefined → null (todas, legacy)", () => {
+    expect(cuentasVisibles({ rol: "encargado" } as Usuario)).toBeNull();
+  });
+
+  it("encargado con cuentas_visibles array → ese array", () => {
+    const u = { rol: "encargado", cuentas_visibles: ["Caja Efectivo", "Caja Chica"] } as Usuario;
+    expect(cuentasVisibles(u)).toEqual(["Caja Efectivo", "Caja Chica"]);
+  });
+
+  it("encargado con cuentas_visibles [] → ninguna", () => {
+    const u = { rol: "encargado", cuentas_visibles: [] as string[] } as Usuario;
+    expect(cuentasVisibles(u)).toEqual([]);
+  });
+});
+
+describe("cuentasOperables", () => {
+  it("user null → []", () => {
+    expect(cuentasOperables(null)).toEqual([]);
+  });
+
+  it("dueno → null (todas)", () => {
+    expect(cuentasOperables({ rol: "dueno" } as Usuario)).toBeNull();
+  });
+
+  it("encargado con cuentas_operables undefined → fallback a cuentasVisibles", () => {
+    // Fallback histórico cuando la migration de cuentas_operables no corrió aún
+    const u = { rol: "encargado", cuentas_visibles: ["Caja Efectivo"] } as Usuario;
+    expect(cuentasOperables(u)).toEqual(["Caja Efectivo"]);
+  });
+
+  it("encargado con cuentas_operables null → null (todas)", () => {
+    const u = { rol: "encargado", cuentas_operables: null, cuentas_visibles: [] as string[] } as Usuario;
+    expect(cuentasOperables(u)).toBeNull();
+  });
+
+  it("encargado con cuentas_operables array → ese array (independiente de visibles)", () => {
+    // Caso típico: cajero ve solo Caja Efectivo, opera contra MP y Banco.
+    const u = {
+      rol: "encargado",
+      cuentas_visibles: ["Caja Efectivo"],
+      cuentas_operables: ["MercadoPago", "Banco"],
+    } as Usuario;
+    expect(cuentasOperables(u)).toEqual(["MercadoPago", "Banco"]);
+    expect(cuentasVisibles(u)).toEqual(["Caja Efectivo"]); // independientes
+  });
+});
+
+describe("puedeVerCuenta", () => {
+  it("dueno puede ver cualquier cuenta", () => {
+    expect(puedeVerCuenta({ rol: "dueno" } as Usuario, "Banco")).toBe(true);
+  });
+
+  it("encargado con cuentas_visibles vacío no ve ninguna", () => {
+    const u = { rol: "encargado", cuentas_visibles: [] as string[] } as Usuario;
+    expect(puedeVerCuenta(u, "Banco")).toBe(false);
+  });
+
+  it("encargado solo ve las que tiene listadas", () => {
+    const u = { rol: "encargado", cuentas_visibles: ["Caja Efectivo"] } as Usuario;
+    expect(puedeVerCuenta(u, "Caja Efectivo")).toBe(true);
+    expect(puedeVerCuenta(u, "Banco")).toBe(false);
+  });
+});
+
+describe("puedeOperarCuenta", () => {
+  it("dueno puede operar cualquier cuenta", () => {
+    expect(puedeOperarCuenta({ rol: "dueno" } as Usuario, "MercadoPago")).toBe(true);
+  });
+
+  it("encargado con cuentas_operables explícitas: puede operar solo esas", () => {
+    const u = {
+      rol: "encargado",
+      cuentas_visibles: [] as string[],
+      cuentas_operables: ["MercadoPago"],
+    } as Usuario;
+    expect(puedeOperarCuenta(u, "MercadoPago")).toBe(true);
+    expect(puedeOperarCuenta(u, "Banco")).toBe(false);
+  });
+
+  it("encargado SIN cuentas_operables hace fallback a cuentas_visibles", () => {
+    const u = { rol: "encargado", cuentas_visibles: ["Caja Chica"] } as Usuario;
+    expect(puedeOperarCuenta(u, "Caja Chica")).toBe(true);
+    expect(puedeOperarCuenta(u, "Caja Mayor")).toBe(false);
+  });
+});
+
+describe("cuentasVisiblesParaListados", () => {
+  it("dueno → null (sin restricción)", () => {
+    expect(cuentasVisiblesParaListados({ rol: "dueno" } as Usuario)).toBeNull();
+  });
+
+  it("encargado con visibles=null y operables=[] → null (cualquiera null = sin restricción)", () => {
+    const u = {
+      rol: "encargado",
+      cuentas_visibles: null,
+      cuentas_operables: [] as string[],
+    } as Usuario;
+    expect(cuentasVisiblesParaListados(u)).toBeNull();
+  });
+
+  it("encargado con ambas listas → unión sin duplicados", () => {
+    const u = {
+      rol: "encargado",
+      cuentas_visibles: ["Caja Efectivo", "Caja Chica"],
+      cuentas_operables: ["Caja Chica", "MercadoPago"],
+    } as Usuario;
+    const lista = cuentasVisiblesParaListados(u);
+    expect(lista).not.toBeNull();
+    expect(lista!.sort()).toEqual(["Caja Chica", "Caja Efectivo", "MercadoPago"]);
+  });
+
+  it("encargado con ambas []  → [] (sin ningún acceso)", () => {
+    const u = {
+      rol: "encargado",
+      cuentas_visibles: [] as string[],
+      cuentas_operables: [] as string[],
+    } as Usuario;
+    expect(cuentasVisiblesParaListados(u)).toEqual([]);
+  });
+});
+
+describe("puedeVerMovimientosDeCuenta", () => {
+  it("dueno ve movs de cualquier cuenta", () => {
+    expect(puedeVerMovimientosDeCuenta({ rol: "dueno" } as Usuario, "Banco")).toBe(true);
+  });
+
+  it("encargado: una en visibles, otra en operables → ve movs de ambas", () => {
+    const u = {
+      rol: "encargado",
+      cuentas_visibles: ["Caja Efectivo"],
+      cuentas_operables: ["MercadoPago"],
+    } as Usuario;
+    expect(puedeVerMovimientosDeCuenta(u, "Caja Efectivo")).toBe(true);
+    expect(puedeVerMovimientosDeCuenta(u, "MercadoPago")).toBe(true);
+    expect(puedeVerMovimientosDeCuenta(u, "Banco")).toBe(false);
   });
 });
