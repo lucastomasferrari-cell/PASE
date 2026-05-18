@@ -18,5 +18,35 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["business", "productivity"]
+  "categories": ["business", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Caja",
+      "short_name": "Caja",
+      "description": "Saldos y movimientos del día",
+      "url": "/caja",
+      "icons": [{ "src": "/icon-pwa.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Cargar venta",
+      "short_name": "Ventas",
+      "description": "Cierre de turno",
+      "url": "/ventas",
+      "icons": [{ "src": "/icon-pwa.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Cargar factura",
+      "short_name": "Compras",
+      "description": "Facturas y remitos",
+      "url": "/compras",
+      "icons": [{ "src": "/icon-pwa.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Inicio",
+      "short_name": "Inicio",
+      "description": "Dashboard del día",
+      "url": "/inicio",
+      "icons": [{ "src": "/icon-pwa.svg", "sizes": "any" }]
+    }
+  ]
 }
