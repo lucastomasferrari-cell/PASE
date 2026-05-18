@@ -3,6 +3,7 @@ import { db } from "../lib/supabase";
 import { PageHeader, EmptyState, LocalLockedChip, LocalSelectorObligatorio, DocumentIcon, FolderIcon, AlertIcon, CheckIcon } from "../components/ui";
 import { formatCurrency } from "../lib/format";
 import { exportCSV } from "../lib/exportCSV";
+import { parseExtractoMP, esExtractoMpCsv } from "../lib/mpExtractoParser";
 import type { Usuario, Local } from "../types";
 
 /**
@@ -77,6 +78,28 @@ export default function LectorExtractoMP({ user, locales, localActivo }: Props) 
     setLoading(true); setError(null); setResultado(null); setImportResult(null);
 
     try {
+      // Fast path: si es CSV de account_statement de MP, parseamos local
+      // sin tirar API de Claude. Es gratis, 100% preciso e instantáneo.
+      // Solo caemos a Claude IA si el archivo es PDF/imagen o un CSV con
+      // formato distinto.
+      if (await esExtractoMpCsv(archivo)) {
+        const csvText = await archivo.text();
+        const parsedLocal = parseExtractoMP(csvText);
+        if (parsedLocal && parsedLocal.movimientos.length > 0) {
+          const parsedAdapt: IAResponse = {
+            movimientos: parsedLocal.movimientos,
+            total_movimientos: parsedLocal.total_movimientos,
+            rango_fechas: parsedLocal.rango_fechas,
+            confianza_global: 100,
+            advertencias: parsedLocal.advertencias,
+          };
+          await procesarConDedup(parsedAdapt);
+          return;
+        }
+        // Si el parser local falló por algún motivo (formato distinto),
+        // caemos a Claude IA igual.
+      }
+
       const base64 = await toBase64(archivo);
       const isImg = archivo.type.startsWith("image/");
       const mediaType = isImg ? archivo.type : "application/pdf";
@@ -166,67 +189,72 @@ Si el archivo no parece un extracto de MercadoPago, devolvé:
         throw new Error("La IA devolvió texto no-JSON. Ver consola.");
       }
 
-      if (!Array.isArray(parsed.movimientos) || parsed.movimientos.length === 0) {
-        const adv = parsed.advertencias?.join(" · ") || "Sin movimientos detectados";
-        throw new Error(adv);
-      }
-
-      // Dedup contra mp_movimientos existentes.
-      // Estrategia: buscamos por referencia_externa cuando existe (más confiable),
-      // o por combo (fecha + monto + local_id) cuando no.
-      const refsExternas = parsed.movimientos
-        .map(m => m.referencia_externa)
-        .filter((r): r is string => Boolean(r));
-
-      const desde = parsed.rango_fechas?.desde || parsed.movimientos[0]!.fecha;
-      const hasta = parsed.rango_fechas?.hasta || parsed.movimientos[parsed.movimientos.length - 1]!.fecha;
-
-      const existingByRef = new Map<string, string>();  // ref → id
-      const existingByCombo = new Map<string, string>();  // "fecha|monto" → id
-
-      if (refsExternas.length > 0) {
-        const { data: existing } = await db.from("mp_movimientos")
-          .select("id, referencia_id")
-          .in("referencia_id", refsExternas);
-        for (const r of existing ?? []) {
-          const row = r as { id: string; referencia_id: string };
-          existingByRef.set(row.referencia_id, row.id);
-        }
-      }
-
-      const { data: existingRange } = await db.from("mp_movimientos")
-        .select("id, fecha, monto")
-        .gte("fecha", desde)
-        .lte("fecha", hasta)
-        .eq("local_id", localImport);
-      for (const r of existingRange ?? []) {
-        const row = r as { id: string; fecha: string; monto: number };
-        const key = `${row.fecha?.slice(0, 10)}|${Number(row.monto).toFixed(2)}`;
-        existingByCombo.set(key, row.id);
-      }
-
-      const conDedup: MovimientoConDedup[] = parsed.movimientos.map(m => {
-        if (m.referencia_externa && existingByRef.has(m.referencia_externa)) {
-          return { ...m, yaExiste: true, matchId: existingByRef.get(m.referencia_externa)! };
-        }
-        const key = `${m.fecha}|${Number(m.monto).toFixed(2)}`;
-        if (existingByCombo.has(key)) {
-          return { ...m, yaExiste: true, matchId: existingByCombo.get(key)! };
-        }
-        return { ...m, yaExiste: false };
-      });
-
-      setResultado({
-        movimientos: conDedup,
-        rango: parsed.rango_fechas?.desde ? parsed.rango_fechas : null,
-        confianza: parsed.confianza_global ?? 0,
-        advertencias: parsed.advertencias || [],
-      });
+      await procesarConDedup(parsed);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
+  }
+
+  // Compartido entre fast-path CSV local y flow Claude IA: ambos producen
+  // un IAResponse, este helper hace dedup contra mp_movimientos + setea
+  // el state final. Idempotente.
+  async function procesarConDedup(parsed: IAResponse) {
+    if (!localImport) return;
+    if (!Array.isArray(parsed.movimientos) || parsed.movimientos.length === 0) {
+      const adv = parsed.advertencias?.join(" · ") || "Sin movimientos detectados";
+      throw new Error(adv);
+    }
+
+    const refsExternas = parsed.movimientos
+      .map(m => m.referencia_externa)
+      .filter((r): r is string => Boolean(r));
+
+    const desde = parsed.rango_fechas?.desde || parsed.movimientos[0]!.fecha;
+    const hasta = parsed.rango_fechas?.hasta || parsed.movimientos[parsed.movimientos.length - 1]!.fecha;
+
+    const existingByRef = new Map<string, string>();
+    const existingByCombo = new Map<string, string>();
+
+    if (refsExternas.length > 0) {
+      const { data: existing } = await db.from("mp_movimientos")
+        .select("id, referencia_id")
+        .in("referencia_id", refsExternas);
+      for (const r of existing ?? []) {
+        const row = r as { id: string; referencia_id: string };
+        existingByRef.set(row.referencia_id, row.id);
+      }
+    }
+
+    const { data: existingRange } = await db.from("mp_movimientos")
+      .select("id, fecha, monto")
+      .gte("fecha", desde)
+      .lte("fecha", hasta)
+      .eq("local_id", localImport);
+    for (const r of existingRange ?? []) {
+      const row = r as { id: string; fecha: string; monto: number };
+      const key = `${row.fecha?.slice(0, 10)}|${Number(row.monto).toFixed(2)}`;
+      existingByCombo.set(key, row.id);
+    }
+
+    const conDedup: MovimientoConDedup[] = parsed.movimientos.map(m => {
+      if (m.referencia_externa && existingByRef.has(m.referencia_externa)) {
+        return { ...m, yaExiste: true, matchId: existingByRef.get(m.referencia_externa)! };
+      }
+      const key = `${m.fecha}|${Number(m.monto).toFixed(2)}`;
+      if (existingByCombo.has(key)) {
+        return { ...m, yaExiste: true, matchId: existingByCombo.get(key)! };
+      }
+      return { ...m, yaExiste: false };
+    });
+
+    setResultado({
+      movimientos: conDedup,
+      rango: parsed.rango_fechas?.desde ? parsed.rango_fechas : null,
+      confianza: parsed.confianza_global ?? 0,
+      advertencias: parsed.advertencias || [],
+    });
   }
 
   async function importar() {
