@@ -70,7 +70,8 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
 
   // === Sistema ===
   { path: "/ajustes",                    slug: "ajustes",       label: "Ajustes",         sec: "Sistema" },
-  { path: "/ajustes/dashboards",         slug: "ajustes_dashboards", label: "Dashboards",  sec: "Sistema" },
+  // 'Dashboards' MOVIDO al hub /herramientas (2026-05-18). La ruta
+  // /ajustes/dashboards sigue existiendo para compat con tour y bookmarks.
   { path: "/usuarios",                   slug: "usuarios",      label: "Usuarios",        sec: "Sistema" },
   { path: "/tenants",                    slug: "tenants",       label: "Tenants",         sec: "Sistema" },
 ];
