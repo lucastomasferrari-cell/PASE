@@ -18,7 +18,10 @@ const SENTINEL_COVERS = 17;
 const SENTINEL_NOTAS = "test mutante — borrar si quedó";
 const SENTINEL_HORA = "20:30";
 
-test.describe("Reservas — mutante", () => {
+// Skipeado 2026-05-18: la pantalla /reservas fue ocultada del producto
+// (Lucas: "no sirve, en todo caso vive en COMANDA"). La ruta ahora redirige
+// a /inicio. Si el feature vuelve a PASE, sacar el .skip.
+test.describe.skip("Reservas — mutante", () => {
   let db: SupabaseClient;
   let localId: number;
   let reservaId: number | null = null;

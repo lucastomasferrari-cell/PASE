@@ -45,7 +45,9 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
     {slug:"compras",path:"/compras",label:"Compras",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1"/><circle cx="11" cy="12" r="1"/><path d="M1 2h2l1.5 7.5h7L13 4H4"/></svg>`},
     {slug:"ventas",path:"/ventas",label:"Ventas",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="5.5"/><path d="M7 4v6M9 5.5c0-1-1-1.5-2-1.5s-2 .5-2 1.5 1 1.3 2 1.5 2 .5 2 1.5-1 1.5-2 1.5-2-.5-2-1.5"/></svg>`},
     {slug:"gastos",path:"/gastos",label:"Gastos",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="6" r="4.5"/><path d="M7 4v4M5 6.5l2 2 2-2"/></svg>`},
-    {slug:"reservas",path:"/reservas",label:"Reservas",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="3" width="11" height="9.5" rx="1"/><path d="M1.5 6h11M4 1.5v2M10 1.5v2"/></svg>`},
+    // Reservas OCULTADO 2026-05-18 (Lucas: "no sirve, vive en COMANDA").
+    // Item comentado para reactivar fácil si se decide reintroducir.
+    // {slug:"reservas",path:"/reservas",label:"Reservas",sec:"Operación",icon:`<svg...`},
 
     // === DIRECCIÓN (4) ===
     {slug:"negocio",path:"/negocio",label:"Negocio",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 1.5 A5.5 5.5 0 1 1 1.5 7 L7 7 Z"/><path d="M7 1.5 A5.5 5.5 0 0 1 12.5 7 L7 7 Z"/></svg>`},

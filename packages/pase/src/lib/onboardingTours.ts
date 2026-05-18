@@ -141,18 +141,10 @@ const TOURS_POR_PERMISO: Record<string, PaseStep[]> = {
     },
   ],
 
-  reservas: [
-    {
-      route: "/reservas",
-      step: {
-        popover: {
-          title: "📅 Reservas",
-          description: `Agenda diaria de reservas tomadas por teléfono o WhatsApp. Cambiás el estado inline (pendiente / confirmada / sentada / cancelada / no vino).`,
-          side: "over", align: "center",
-        },
-      },
-    },
-  ],
+  // 'reservas' OCULTADO 2026-05-18 (Lucas: "vive en COMANDA si va).
+  // Step comentado, ruta sigue accesible por URL directa para no romper
+  // tours viejos (que tienen el slug marcado como visto en localStorage).
+  // reservas: [{ route: "/reservas", step: {...} }],
 
   negocio: [
     {

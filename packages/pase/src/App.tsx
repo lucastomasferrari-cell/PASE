@@ -30,7 +30,10 @@ const Objetivos = lazy(() => import("./pages/Objetivos"));
 const Ajustes = lazy(() => import("./pages/Ajustes"));
 const Importar = lazy(() => import("./pages/Importar"));
 const LectorExtractoMP = lazy(() => import("./pages/LectorExtractoMP"));
-const Reservas = lazy(() => import("./pages/Reservas"));
+// Reservas import sacado 2026-05-18 — la ruta /reservas redirige a /inicio
+// (ver más abajo). El archivo Reservas.tsx queda en el código por si se
+// reintroduce o se migra a COMANDA.
+// const Reservas = lazy(() => import("./pages/Reservas"));
 const CodigosManager = lazy(() => import("./pages/CodigosManager"));
 const HerramientasHub = lazy(() => import("./pages/HerramientasHub"));
 const DashboardHome = lazy(() => import("./dashboards/DashboardHome").then(m => ({ default: m.DashboardHome })));
@@ -416,12 +419,12 @@ function AppMain() {
                   user && tienePermiso(user, "lector_mp") ? <LectorExtractoMP {...props}/> : <Navigate to="/inicio" replace />
                 }
               />
-              <Route
-                path="/reservas"
-                element={
-                  user ? <Reservas {...props}/> : <Navigate to="/inicio" replace />
-                }
-              />
+              {/* /reservas OCULTADO 2026-05-18 (Lucas: "no sirve de nada y
+                  en todo caso vive en COMANDA"). Redirige a /inicio para
+                  bookmarks viejos. La pagina Reservas.tsx y la tabla `reservas`
+                  en DB se mantienen — si se decide reintroducir o migrar a
+                  COMANDA, descomentar la ruta original. */}
+              <Route path="/reservas" element={<Navigate to="/inicio" replace />} />
 
               {/* Operación */}
               <Route path="/caja/*" element={<Caja {...props}/>} />

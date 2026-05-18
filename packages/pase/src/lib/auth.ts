@@ -71,7 +71,11 @@ export const MODULOS = [
   { slug:"caja", label:"Caja", icon:"💰" },
   { slug:"compras", label:"Compras", icon:"📄" },
   { slug:"ventas", label:"Ventas", icon:"↑" },
-  { slug:"reservas", label:"Reservas", icon:"📅" },
+  // 'reservas' OCULTADO 2026-05-18 (Lucas: "no sirve de nada y en todo
+  // caso vive en COMANDA"). La tabla `reservas` y la página standalone
+  // siguen en el código. Si se decide moverlo a COMANDA, se mantiene
+  // RLS + se mueve la UI allá.
+  // { slug:"reservas", label:"Reservas", icon:"📅" },
   { slug:"negocio", label:"Negocio", icon:"📊" },
   { slug:"finanzas", label:"Finanzas", icon:"💼" },
   { slug:"objetivos", label:"Objetivos", icon:"◎" },
