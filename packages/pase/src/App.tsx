@@ -32,6 +32,7 @@ const Importar = lazy(() => import("./pages/Importar"));
 const LectorExtractoMP = lazy(() => import("./pages/LectorExtractoMP"));
 const Reservas = lazy(() => import("./pages/Reservas"));
 const CodigosManager = lazy(() => import("./pages/CodigosManager"));
+const HerramientasHub = lazy(() => import("./pages/HerramientasHub"));
 const DashboardHome = lazy(() => import("./dashboards/DashboardHome").then(m => ({ default: m.DashboardHome })));
 const SettingsDashboards = lazy(() => import("./dashboards/SettingsDashboards"));
 
@@ -440,6 +441,11 @@ function AppMain() {
               <Route path="/herramientas/contador-iva" element={<Contador {...props}/>} />
               <Route path="/herramientas/blindaje" element={<Blindaje {...props}/>} />
               <Route path="/herramientas/conciliacion-bancaria" element={<ConciliacionBancaria />} />
+              <Route path="/herramientas" element={
+                user && tienePermiso(user, "herramientas_hub")
+                  ? <HerramientasHub user={user} locales={locales} localActivo={localActivo}/>
+                  : <Navigate to="/inicio" replace />
+              } />
 
               {/* Sistema */}
               <Route path="/ajustes" element={<Ajustes user={user || undefined}/>} />

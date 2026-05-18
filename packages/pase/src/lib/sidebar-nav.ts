@@ -62,7 +62,11 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   // === Herramientas ===
   { path: "/equipo",                     slug: "rrhh",          label: "Equipo",          sec: "Herramientas" },
   { path: "/herramientas/contador-iva",  slug: "contador",      label: "Contador / IVA",  sec: "Herramientas" },
-  { path: "/herramientas/blindaje",      slug: "blindaje",      label: "Blindaje",        sec: "Herramientas" },
+  // Hub de herramientas avanzadas (Importar, Lector MP, Configurar dashboards,
+  // Blindaje). 2026-05-18: Lucas pidió consolidar estos 4 detrás de un solo
+  // entry para limpiar el sidebar. Las rutas standalone siguen existiendo
+  // para compat con el tour de onboarding y bookmarks.
+  { path: "/herramientas",               slug: "herramientas_hub", label: "Más herramientas", sec: "Herramientas" },
 
   // === Sistema ===
   { path: "/ajustes",                    slug: "ajustes",       label: "Ajustes",         sec: "Sistema" },
