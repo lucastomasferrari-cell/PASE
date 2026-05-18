@@ -139,7 +139,7 @@ async function fetchFacturasVencidas(): Promise<Notif[]> {
   const hoyIso = new Date().toISOString().slice(0, 10);
   // eslint-disable-next-line pase-local/require-apply-local-scope -- bandeja de entrada: muestra resumen GLOBAL del user across los locales que ve. RLS ya scopea por tenant + auth_locales_visibles.
   const { data, error } = await db.from("facturas")
-    .select("id, nro, total, venc, proveedores(razon_social)")
+    .select("id, nro, total, venc")
     .eq("estado", "pendiente")
     .lt("venc", hoyIso)
     .order("venc", { ascending: true })

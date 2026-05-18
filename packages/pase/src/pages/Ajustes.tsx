@@ -415,7 +415,7 @@ export default function Ajustes({ user }: AjustesProps = {}) {
                 const tieneHub = tienePermiso(user, "herramientas_hub");
                 if (tieneHub) {
                   if (!slugs.includes("herramientas_hub")) slugs.push("herramientas_hub");
-                  for (const englobado of ["importar", "lector_mp", "ajustes_dashboards", "blindaje", "codigos_manager"]) {
+                  for (const englobado of ["importar", "lector_mp", "ajustes_dashboards", "blindaje", "codigos_manager", "rrhh", "contador"]) {
                     const idx = slugs.indexOf(englobado);
                     if (idx >= 0) slugs.splice(idx, 1);
                   }

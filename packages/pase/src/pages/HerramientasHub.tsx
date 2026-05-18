@@ -1,7 +1,7 @@
 import { useState, lazy, Suspense } from "react";
 import type { Usuario, Local } from "../types";
 import { tienePermiso } from "../lib/auth";
-import { PageHeader, FolderIcon, DocumentIcon, AlertIcon, UploadIcon, KeyIcon } from "../components/ui";
+import { PageHeader, FolderIcon, DocumentIcon, AlertIcon, UploadIcon, KeyIcon, ReceiptIcon } from "../components/ui";
 
 /**
  * Herramientas Hub — pantalla con cards de herramientas avanzadas.
@@ -27,6 +27,8 @@ const LectorExtractoMP = lazy(() => import("./LectorExtractoMP"));
 const Blindaje = lazy(() => import("./herramientas/Blindaje"));
 const SettingsDashboards = lazy(() => import("../dashboards/SettingsDashboards"));
 const CodigosManager = lazy(() => import("./CodigosManager"));
+const RRHHPage = lazy(() => import("./RRHH"));
+const ContadorIVA = lazy(() => import("./herramientas/ContadorIVA"));
 
 interface Props {
   user: Usuario;
@@ -34,7 +36,7 @@ interface Props {
   localActivo: number | null;
 }
 
-type ToolId = "importar" | "lector_mp" | "blindaje" | "ajustes_dashboards" | "codigos_manager";
+type ToolId = "importar" | "lector_mp" | "blindaje" | "ajustes_dashboards" | "codigos_manager" | "equipo" | "contador_iva";
 
 interface ToolDef {
   id: ToolId;
@@ -47,6 +49,20 @@ interface ToolDef {
 }
 
 const TOOLS: ToolDef[] = [
+  {
+    id: "equipo",
+    label: "Equipo",
+    description: "Empleados, liquidaciones, sueldos, presentismo, adelantos, vacaciones.",
+    slug: "rrhh",
+    Icon: FolderIcon,
+  },
+  {
+    id: "contador_iva",
+    label: "Contador / IVA",
+    description: "Libro IVA compras + ventas. Reportes para el contador, exportables a CSV.",
+    slug: "contador",
+    Icon: ReceiptIcon,
+  },
   {
     id: "importar",
     label: "Importar data",
@@ -209,6 +225,12 @@ export default function HerramientasHub({ user, locales, localActivo }: Props) {
                 )}
                 {activeToolDef.id === "codigos_manager" && (
                   <CodigosManager user={user} />
+                )}
+                {activeToolDef.id === "equipo" && (
+                  <RRHHPage user={user} locales={locales} localActivo={localActivo} />
+                )}
+                {activeToolDef.id === "contador_iva" && (
+                  <ContadorIVA user={user} locales={locales} localActivo={localActivo} />
                 )}
               </Suspense>
             </div>

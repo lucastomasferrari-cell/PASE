@@ -37,7 +37,7 @@ export function FacturasVencidasWidget({ ctx }: { ctx: WidgetContext }) {
       // Query 1: vencidas (pendientes con venc < hoy)
       let qVenc = db
         .from("facturas")
-        .select("id, total, venc, proveedores(razon_social)")
+        .select("id, total, venc, proveedores(nombre)")
         .eq("estado", "pendiente")
         .lt("venc", nowIso)
         .order("venc", { ascending: true })
@@ -47,11 +47,11 @@ export function FacturasVencidasWidget({ ctx }: { ctx: WidgetContext }) {
       if (cancelled || vErr) { setLoading(false); return; }
       const today = Date.now();
       const vMapped: FacturaVencida[] = (vData ?? []).map(row => {
-        const r = row as unknown as { id: number; total: number; venc: string; proveedores: { razon_social: string } | null };
+        const r = row as unknown as { id: number; total: number; venc: string; proveedores: { nombre: string } | null };
         const venc = new Date(r.venc).getTime();
         return {
           id: r.id,
-          proveedor_nombre: r.proveedores?.razon_social ?? null,
+          proveedor_nombre: r.proveedores?.nombre ?? null,
           total: Number(r.total ?? 0),
           vencimiento: r.venc,
           diasVencida: Math.floor((today - venc) / (1000 * 60 * 60 * 24)),
@@ -63,17 +63,17 @@ export function FacturasVencidasWidget({ ctx }: { ctx: WidgetContext }) {
       if (vMapped.length === 0) {
         let qPag = db
           .from("facturas")
-          .select("id, total, fecha, proveedores(razon_social)")
+          .select("id, total, fecha, proveedores(nombre)")
           .eq("estado", "pagada")
           .order("fecha", { ascending: false })
           .limit(3);
         if (ctx.localActivo !== null) qPag = qPag.eq("local_id", ctx.localActivo);
         const { data: pData } = await qPag;
         const pMapped: FacturaUltimaPagada[] = (pData ?? []).map(row => {
-          const r = row as unknown as { id: number; total: number; fecha: string; proveedores: { razon_social: string } | null };
+          const r = row as unknown as { id: number; total: number; fecha: string; proveedores: { nombre: string } | null };
           return {
             id: r.id,
-            proveedor_nombre: r.proveedores?.razon_social ?? null,
+            proveedor_nombre: r.proveedores?.nombre ?? null,
             total: Number(r.total ?? 0),
             fecha: r.fecha,
           };

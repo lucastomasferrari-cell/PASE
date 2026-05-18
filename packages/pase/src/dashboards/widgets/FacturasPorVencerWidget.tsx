@@ -30,7 +30,7 @@ export function FacturasPorVencerWidget({ ctx }: { ctx: WidgetContext }) {
       // ('pendiente','pagada','anulada') — no hay boolean `pagada`. Fix 2026-05-17.
       let q = db
         .from("facturas")
-        .select("id, total, venc, proveedores(razon_social)")
+        .select("id, total, venc, proveedores(nombre)")
         .eq("estado", "pendiente")
         .gte("venc", todayIso)
         .lte("venc", in7)
@@ -41,11 +41,11 @@ export function FacturasPorVencerWidget({ ctx }: { ctx: WidgetContext }) {
       if (cancelled || error) { setLoading(false); return; }
       const nowMs = today.getTime();
       const mapped: FacturaProx[] = (data ?? []).map(row => {
-        const r = row as unknown as { id: number; total: number; venc: string; proveedores: { razon_social: string } | null };
+        const r = row as unknown as { id: number; total: number; venc: string; proveedores: { nombre: string } | null };
         const venc = new Date(r.venc).getTime();
         return {
           id: r.id,
-          proveedor_nombre: r.proveedores?.razon_social ?? null,
+          proveedor_nombre: r.proveedores?.nombre ?? null,
           total: Number(r.total ?? 0),
           vencimiento: r.venc,
           diasRestantes: Math.max(0, Math.ceil((venc - nowMs) / (1000 * 60 * 60 * 24))),

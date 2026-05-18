@@ -49,19 +49,24 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
     // Item comentado para reactivar fácil si se decide reintroducir.
     // {slug:"reservas",path:"/reservas",label:"Reservas",sec:"Operación",icon:`<svg...`},
 
+    // Equipo y Contador/IVA TAMBIÉN viven en el hub /herramientas ahora
+    // (Lucas 2026-05-18: "herramientas no concentré todo al final"). Se sacan
+    // del sidebar para evitar duplicación. Las rutas standalone siguen
+    // existiendo para compat con tour y bookmarks.
+
     // === DIRECCIÓN (4) ===
     {slug:"negocio",path:"/negocio",label:"Negocio",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 1.5 A5.5 5.5 0 1 1 1.5 7 L7 7 Z"/><path d="M7 1.5 A5.5 5.5 0 0 1 12.5 7 L7 7 Z"/></svg>`},
     {slug:"finanzas",path:"/finanzas",label:"Finanzas",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h9a1 1 0 0 1 1 1V11a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h7.5"/><circle cx="9.5" cy="8" r="0.9"/></svg>`},
     {slug:"objetivos",path:"/objetivos",label:"Objetivos",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5.5"/><circle cx="7" cy="7" r="3"/><circle cx="7" cy="7" r="0.5" fill="currentColor"/></svg>`},
     {slug:"eerr",path:"/reportes",label:"Reportes",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,11 5,7 8,9 13,3"/><polyline points="10,3 13,3 13,6"/></svg>`},
 
-    // === HERRAMIENTAS (3) ===
-    {slug:"rrhh",path:"/equipo",label:"Equipo",sec:"Herramientas",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="5" r="2.5"/><path d="M1 13c0-2.5 2-4 4-4s4 1.5 4 4"/><circle cx="10" cy="5" r="2"/><path d="M13 13c0-2 -1-3.5-3-3.5"/></svg>`},
-    {slug:"contador",path:"/herramientas/contador-iva",label:"Contador / IVA",sec:"Herramientas",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 1.5h8v11l-2-1-2 1-2-1-2 1z"/><path d="M5 5h4M5 7.5h4M5 10h2.5"/></svg>`},
-    {slug:"blindaje",path:"/herramientas/blindaje",label:"Blindaje",sec:"Herramientas",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 1l4.5 1.5v4c0 3.5-2.5 5.5-4.5 6-2-.5-4.5-2.5-4.5-6V2.5z"/></svg>`},
-    {slug:"ajustes_dashboards",path:"/ajustes/dashboards",label:"Configurar dashboards",sec:"Herramientas",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="1.5" width="5" height="5" rx="1"/><rect x="7.5" y="1.5" width="5" height="5" rx="1"/><rect x="1.5" y="7.5" width="5" height="5" rx="1"/><rect x="7.5" y="7.5" width="5" height="5" rx="1"/></svg>`},
-    {slug:"importar",path:"/herramientas/importar",label:"Importar data",sec:"Herramientas",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 1v8M4 5.5l3 3 3-3M2 11h10v1.5H2z"/></svg>`},
-    {slug:"lector_mp",path:"/herramientas/lector-mp",label:"Lector extracto MP",sec:"Herramientas",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="10" height="10" rx="1"/><path d="M4.5 5h5M4.5 7.5h5M4.5 10h3"/><circle cx="11" cy="3" r="1.5" fill="currentColor" stroke="none"/></svg>`},
+    // === HERRAMIENTAS (1) ===
+    // Consolidación 2026-05-18 (Lucas: "herramientas concentrá todo al final").
+    // Una sola entrada al hub /herramientas con grilla de cards adentro:
+    // Equipo, Contador/IVA, Blindaje, Importar, Lector MP, Configurar
+    // dashboards, Códigos Manager. Las rutas standalone /equipo, /herramientas/*
+    // siguen existiendo para compat con tour y bookmarks.
+    {slug:"herramientas_hub",path:"/herramientas",label:"Herramientas",sec:"Herramientas",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5l3-3 2 2-3 3-2 0z"/><path d="M9 7l3 3-1.5 1.5-3-3"/><path d="M5 9l-3 3M7 7l5 5"/></svg>`},
 
     // === SISTEMA (5) ===
     {slug:"ajustes",path:"/ajustes",label:"Ajustes",sec:"Sistema",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="2.5"/><path d="M7 1v1M7 12v1M1 7h1M12 7h1M2.9 2.9l.7.7M10.4 10.4l.7.7M2.9 11.1l.7-.7M10.4 3.6l.7-.7"/></svg>`},

@@ -91,7 +91,7 @@ export function PuntoEquilibrioWidget({ ctx }: { ctx: WidgetContext }) {
       const ultimoDiaMesAnt = new Date(year, month, 0).toISOString().slice(0, 10);
       const qLabor = db
         .from("rrhh_liquidaciones")
-        .select("total_liquidacion, rrhh_novedades!inner(rrhh_empleados!inner(local_id))")
+        .select("total_a_pagar, rrhh_novedades!inner(rrhh_empleados!inner(local_id))")
         .eq("estado", "pagado")
         .eq("anulado", false)
         .gte("calculado_at", primerDiaMesAnt + "T00:00:00")
@@ -102,7 +102,7 @@ export function PuntoEquilibrioWidget({ ctx }: { ctx: WidgetContext }) {
       if (!laborErr && laborRows) {
         for (const row of laborRows) {
           const r = row as unknown as {
-            total_liquidacion: number;
+            total_a_pagar: number;
             rrhh_novedades: { rrhh_empleados: { local_id: number } } | null;
           };
           const localId = r.rrhh_novedades?.rrhh_empleados?.local_id;
@@ -110,7 +110,7 @@ export function PuntoEquilibrioWidget({ ctx }: { ctx: WidgetContext }) {
           // Si no, los locales que tienen BEP cargado.
           if (ctx.localActivo !== null && localId !== ctx.localActivo) continue;
           if (ctx.localActivo === null && localId != null && !localesConBep.includes(localId)) continue;
-          labor_cost_mes_anterior += Number(r.total_liquidacion ?? 0);
+          labor_cost_mes_anterior += Number(r.total_a_pagar ?? 0);
         }
       }
 

@@ -144,15 +144,18 @@ export function tienePermiso(user: MaybeUser, slug: string): boolean {
     return user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin";
   }
   // 'herramientas_hub' (pantalla con cards de herramientas avanzadas). Visible
-  // si el user tiene acceso a AL MENOS UNA de las 5 herramientas que viven en
+  // si el user tiene acceso a AL MENOS UNA de las 7 herramientas que viven en
   // el hub. Si no tiene ninguna, el item no aparece en el sidebar.
   if (slug === "herramientas_hub") {
     if (user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin") return true;
+    const perms = getPermisos(user);
     return tienePermiso(user, "importar")
         || tienePermiso(user, "lector_mp")
         || tienePermiso(user, "ajustes_dashboards")
         || tienePermiso(user, "codigos_manager")
-        || getPermisos(user).includes("blindaje");
+        || perms.includes("blindaje")
+        || perms.includes("rrhh")
+        || perms.includes("contador");
   }
   if (user.rol === "superadmin" || user.rol === "dueno") return true;
   return getPermisos(user).includes(slug);
