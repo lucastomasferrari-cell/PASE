@@ -25,13 +25,16 @@ export const MEDIO_A_CUENTA: Record<string, string | null> = {
   "Point Nave":        null,
   "NAVE":              null,
 };
-// MercadoPago y Banco temporalmente sacados (Lucas 2026-05-17): los saldos
-// no son reales todavía (sin conciliación automática). Cuando se cierre el
-// flujo de conciliación los volvemos a agregar.
-export const CUENTAS = ["Caja Chica","Caja Mayor","Caja Efectivo"];
-// Cuentas legacy que pueden tener data histórica en saldos_caja/movimientos.
-// El widget SaldoCajaWidget y similares las ocultan visualmente pero los rows
-// históricos siguen existiendo en DB (no se borran).
+// 5 cuentas totales. Las 2 últimas (MercadoPago, Banco) están en
+// CUENTAS_OCULTAS_TEMPORAL: los widgets/cards de saldo NO las muestran
+// (decisión Lucas 2026-05-17: saldos no son reales sin conciliación
+// automática) — pero siguen disponibles como cuentas OPERABLES para
+// pagar facturas/gastos y registrar movimientos. Cuando se cierre la
+// conciliación, se saca CUENTAS_OCULTAS_TEMPORAL y aparecen los saldos.
+export const CUENTAS = ["Caja Chica","Caja Mayor","Caja Efectivo","MercadoPago","Banco"];
+// Cuentas con saldo no-mostrable en widgets/pantalla Caja (NO afecta
+// dropdowns de pago, ni listados de movimientos). Solo es filtro VISUAL
+// de las cards de saldo.
 export const CUENTAS_OCULTAS_TEMPORAL = ["MercadoPago", "Banco"];
 export const UNIDADES = ["kg","g","litro","ml","unidad","caja","bolsa","docena"];
 export const GASTOS_FIJOS = ["ALQUILER","EDESUR","METROGAS","AYSA","INTERNET","MAXIREST","WOKI","SEGURO","FUMIGACION","ABL","EXPENSAS","AQA","CONTADOR","OTROS FIJOS"];

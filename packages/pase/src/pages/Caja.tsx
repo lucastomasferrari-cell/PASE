@@ -6,7 +6,7 @@ import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { useDebouncedValue } from "../lib/useDebouncedValue";
-import { CUENTAS } from "../lib/constants";
+import { CUENTAS, CUENTAS_OCULTAS_TEMPORAL } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import { RightSubNav, type SubNavSection, PageHeader, EmptyState, LocalLockedChip } from "../components/ui";
 import { exportCSV } from "../lib/exportCSV";
@@ -123,18 +123,20 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   };
 
   // cuentas_visibles del usuario (null = todas) — para CARDS DE SALDO.
-  // Mantenemos el nombre legacy `cuentasVisibles` aquí para el array que
-  // consumen las cards (no romper call-sites más abajo).
+  // Filtramos CUENTAS_OCULTAS_TEMPORAL acá (no en el array maestro CUENTAS)
+  // para que las cards NO muestren MercadoPago/Banco mientras los saldos no
+  // sean reales, pero los dropdowns operables sí las ofrezcan (Lucas 2026-05-18).
   const vis = cuentasVisiblesFn(user);
-  const cuentasVisibles = vis === null ? CUENTAS : vis;
+  const cuentasVisibles = (vis === null ? CUENTAS : vis).filter(c => !CUENTAS_OCULTAS_TEMPORAL.includes(c));
   // cuentas_operables del usuario (null = todas) — para los DROPDOWNS de
   // "Nuevo Movimiento" y "Editar". Es separable de cuentas_visibles: un
-  // user puede operar contra MP sin ver su saldo.
+  // user puede operar contra MP sin ver su saldo. NO se filtra con
+  // CUENTAS_OCULTAS_TEMPORAL — hay que poder pagar facturas con Banco/MP.
   const op = cuentasOperablesFn(user);
   const cuentasOperablesList = op === null ? CUENTAS : op;
   // cuentas_visibles ∪ cuentas_operables — para LISTADO de movimientos
-  // (tabla principal) y filtro de cuenta. Coherente con "puede ver el
-  // movimiento aunque no vea el saldo consolidado".
+  // (tabla principal) y filtro de cuenta. NO se filtra: el user debe ver
+  // los movimientos contra Banco/MP que registró (aunque el saldo este oculto).
   const visParaListado = cuentasVisiblesParaListados(user);
   const cuentasParaListado = visParaListado === null ? CUENTAS : visParaListado;
 
