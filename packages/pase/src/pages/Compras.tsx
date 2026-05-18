@@ -609,12 +609,27 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     }
   };
 
+  // Pending override de remito (mismo patrón que pendingAnular para facturas).
+  const [pendingAnularRemito, setPendingAnularRemito] = useState<{ remito: Remito; motivo: string } | null>(null);
+
+  async function ejecutarAnularRemito(r: Remito, motivo: string, overrideCode?: string) {
+    const { error } = await db.rpc("anular_remito", {
+      p_remito_id: r.id,
+      p_motivo: motivo,
+      ...(overrideCode ? { p_override_code: overrideCode } : {}),
+    });
+    if (error) { alert(translateRpcError(error)); return; }
+    load();
+  }
+
   const anularRemito = async (r: Remito) => {
     if (!confirm(`¿Anular remito ${r.nro}?`)) return;
     const motivo = prompt("Motivo (opcional):") || "Anulado desde UI";
-    const { error } = await db.rpc("anular_remito", { p_remito_id: r.id, p_motivo: motivo });
-    if (error) { alert(translateRpcError(error)); return; }
-    load();
+    if (tienePermiso(user, "compras_anular")) {
+      await ejecutarAnularRemito(r, motivo);
+    } else {
+      setPendingAnularRemito({ remito: r, motivo });
+    }
   };
 
   // Filtro de remitos respeta el local activo del sidebar y el provFiltro.
@@ -1100,6 +1115,19 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
           const { factura, motivo } = pendingAnular;
           setPendingAnular(null);
           await ejecutarAnular(factura, motivo, codigo);
+        }}
+      />
+
+      {/* MODAL MANAGER OVERRIDE — para anular remito sin permiso compras_anular */}
+      <ManagerOverrideModal
+        open={pendingAnularRemito !== null}
+        descripcion={pendingAnularRemito ? `Anular remito ${pendingAnularRemito.remito.nro}` : undefined}
+        onClose={() => setPendingAnularRemito(null)}
+        onValidated={async (codigo) => {
+          if (!pendingAnularRemito) return;
+          const { remito, motivo } = pendingAnularRemito;
+          setPendingAnularRemito(null);
+          await ejecutarAnularRemito(remito, motivo, codigo);
         }}
       />
     </div>

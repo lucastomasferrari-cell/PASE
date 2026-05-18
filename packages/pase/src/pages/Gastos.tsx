@@ -10,6 +10,7 @@ import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import { Combobox } from "../components/Combobox";
 import { PageHeader, TipoPill, EmptyState, LocalLockedChip, LocalSelectorObligatorio } from "../components/ui";
+import { ManagerOverrideModal } from "../components/ManagerOverrideModal";
 import { exportCSV } from "../lib/exportCSV";
 import type { Usuario, Local } from "../types";
 import type { Gasto } from "../types/finanzas";
@@ -252,16 +253,28 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
     }
   };
 
-  const anularGasto = async (g: GastoExt) => {
-    const motivo = prompt(`¿Por qué anulás el gasto ${g.categoria} de ${fmt_$(g.monto || 0)}? (obligatorio)`);
-    if (!motivo?.trim()) return;
+  // Pending override de anular gasto. Misma pattern que en Compras.
+  const [pendingAnularGasto, setPendingAnularGasto] = useState<{ gasto: GastoExt; motivo: string } | null>(null);
+
+  async function ejecutarAnularGasto(g: GastoExt, motivo: string, overrideCode?: string) {
     const { error } = await db.rpc("anular_gasto", {
       p_gasto_id: g.id,
       p_motivo: motivo,
+      ...(overrideCode ? { p_override_code: overrideCode } : {}),
     });
     if (error) { alert(translateRpcError(error)); return; }
     showToast("Gasto anulado · movimiento revertido");
     load();
+  }
+
+  const anularGasto = async (g: GastoExt) => {
+    const motivo = prompt(`¿Por qué anulás el gasto ${g.categoria} de ${fmt_$(g.monto || 0)}? (obligatorio)`);
+    if (!motivo?.trim()) return;
+    if (tienePermiso(user, "compras_anular")) {
+      await ejecutarAnularGasto(g, motivo);
+    } else {
+      setPendingAnularGasto({ gasto: g, motivo });
+    }
   };
 
   const abrirPagarPlantilla = (p: GastoPlantilla) => {
@@ -661,6 +674,19 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
           </div>
         </div>
       )}
+
+      {/* MODAL MANAGER OVERRIDE — para anular gasto sin permiso compras_anular */}
+      <ManagerOverrideModal
+        open={pendingAnularGasto !== null}
+        descripcion={pendingAnularGasto ? `Anular gasto ${pendingAnularGasto.gasto.categoria} de ${fmt_$(pendingAnularGasto.gasto.monto || 0)}` : undefined}
+        onClose={() => setPendingAnularGasto(null)}
+        onValidated={async (codigo) => {
+          if (!pendingAnularGasto) return;
+          const { gasto, motivo } = pendingAnularGasto;
+          setPendingAnularGasto(null);
+          await ejecutarAnularGasto(gasto, motivo, codigo);
+        }}
+      />
     </div>
   );
 }
