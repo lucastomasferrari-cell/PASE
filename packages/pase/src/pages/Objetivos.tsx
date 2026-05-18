@@ -66,6 +66,7 @@ export default function Objetivos({ locales, tenantId, localActivo }: Props) {
     // Si el sidebar tiene una sucursal específica → sincronizamos.
     // Si el sidebar vuelve a "Todas" (null) → reseteamos a null para forzar
     // elección explícita (no mantenemos el último elegido — sería confuso).
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync de estado UI con prop externa del sidebar.
     setLocalInterno(localActivo);
   }, [localActivo]);
 
@@ -128,8 +129,9 @@ export default function Objetivos({ locales, tenantId, localActivo }: Props) {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- load() es async (DB → setFilas/setLoading), patron clasico de sync con backend.
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load es estable.
   }, [mesIso, locales]);
 
   async function guardarFila(localId: number, patch: Partial<Omit<ObjetivoFila, "local_id" | "local_nombre" | "id">>) {
@@ -341,6 +343,7 @@ function FilaObjetivo({ fila, saving, onSave }: FilaProps) {
   const [notas, setNotas] = useState(fila.notas ?? "");
   const [notasEditando, setNotasEditando] = useState(false);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- sync con prop externa (fila viene del parent), patron correcto.
   useEffect(() => { setNotas(fila.notas ?? ""); }, [fila.local_id, fila.notas]);
 
   // BEP derivado para mostrar al lado de los inputs de fijos/margen
@@ -482,6 +485,7 @@ function IndicadorCard({ meta, valor, onSave }: IndicadorCardProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(valor != null ? String(valor) : "");
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- sync con prop externa (valor), reset del draft cuando cambia.
   useEffect(() => { setDraft(valor != null ? String(valor) : ""); }, [valor]);
 
   function commit() {

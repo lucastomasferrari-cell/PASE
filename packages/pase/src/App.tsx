@@ -186,6 +186,7 @@ function AppMain() {
     if (!user) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refetchLocales();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetchLocales se redefine cada render pero solo queremos correr al cambiar user.
   },[user]);
 
   // Restaurar sesión al cargar.
@@ -245,6 +246,7 @@ function AppMain() {
       }
     });
     return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- subscription se setup UNA vez al mount. refetchLocales se usa dentro pero no debe re-correr el effect (sino se cancela y re-crea la sub en cada render).
   },[]);
 
   const applyLogin = async (u: UsuarioRow) => {

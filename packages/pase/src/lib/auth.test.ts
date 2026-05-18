@@ -112,7 +112,7 @@ const userAdmin = { rol: "admin" } as Usuario;
 const userSuperadmin = { rol: "superadmin" } as Usuario;
 const userEncCajaVentas = { rol: "encargado", _permisos: ["caja", "ventas"] } as Usuario;
 const userEncMp = { rol: "encargado", _permisos: ["mp"] } as Usuario;
-const userEncSinPermisos = { rol: "encargado", _permisos: [] } as Usuario;
+const userEncSinPermisos = { rol: "encargado", _permisos: [] as string[] } as Usuario;
 
 describe("tienePermiso", () => {
   it("user null → false", () => {

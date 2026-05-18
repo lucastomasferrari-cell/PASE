@@ -49,6 +49,7 @@ export function TareasPineadasWidget({ ctx }: { ctx: WidgetContext }) {
     setLoading(false);
   }
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps -- reload() es async (load → setState), patron clasico de sync con DB. La dep reload se omite intencional para no re-correr en cada render.
   useEffect(() => { void reload(); }, [ctx.usuario.id, ctx.usuario.rol]);
 
   useEffect(() => {

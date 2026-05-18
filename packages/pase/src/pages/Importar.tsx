@@ -292,6 +292,7 @@ function TabEmpleados({ user, locales, localActivo }: { user: Usuario; locales: 
       return;
     }
 
+    // eslint-disable-next-line pase-local/require-apply-local-scope -- import masivo de empleados: el payload ya incluye local_id de cada fila del CSV. La ruta es dueno/admin-only (gate en App.tsx), no aplica scoping por local.
     const { error } = await db.from("rrhh_empleados").insert(payload);
     if (error) {
       setResultado({ ok: false, importadas: 0, errores: [error.message, ...errores] });
@@ -485,6 +486,7 @@ function TabSaldos({ user, locales, localActivo }: { user: Usuario; locales: Loc
     }
 
     // Upsert por (local_id, cuenta) — sobreescribe si ya existe.
+    // eslint-disable-next-line pase-local/no-direct-financiera-write, pase-local/require-apply-local-scope -- import "saldos iniciales" para arrancar con PASE. Es el unico flujo donde se setean saldos a mano sin movimientos previos. Ruta dueno/admin-only (gate App.tsx), payload trae local_id explicito.
     const { error } = await db.from("saldos_caja").upsert(payload, { onConflict: "local_id,cuenta" });
     if (error) {
       setResultado({ ok: false, importadas: 0, errores: [error.message, ...errores] });

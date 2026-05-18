@@ -72,6 +72,7 @@ export default function SettingsDashboards({ tenantId }: { tenantId: string }) {
     }
     void load();
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load() carga inicial UNA vez al mount. usuarioSel se setea adentro pero no debe re-disparar el effect (causaria loop).
   }, []);
 
   useEffect(() => {

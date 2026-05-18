@@ -181,8 +181,8 @@ Si el archivo no parece un extracto de MercadoPago, devolvé:
       const desde = parsed.rango_fechas?.desde || parsed.movimientos[0]!.fecha;
       const hasta = parsed.rango_fechas?.hasta || parsed.movimientos[parsed.movimientos.length - 1]!.fecha;
 
-      let existingByRef = new Map<string, string>();  // ref → id
-      let existingByCombo = new Map<string, string>();  // "fecha|monto" → id
+      const existingByRef = new Map<string, string>();  // ref → id
+      const existingByCombo = new Map<string, string>();  // "fecha|monto" → id
 
       if (refsExternas.length > 0) {
         const { data: existing } = await db.from("mp_movimientos")
@@ -248,6 +248,7 @@ Si el archivo no parece un extracto de MercadoPago, devolvé:
       origen: "lector_ia_extracto",
     }));
 
+    // eslint-disable-next-line pase-local/no-direct-financiera-write -- import de extracto MP (IA). Es el flujo equivalente al cron de MP que tambien hace insert directo. No hay RPC porque es batch grande y los movs no disparan side-effects (saldos/etc) hasta conciliarse. Ruta gateada a quien tiene permiso 'mp'.
     const { error: insErr } = await db.from("mp_movimientos").insert(payload);
     if (insErr) {
       setImportResult({ ok: false, insertadas: 0, error: insErr.message });

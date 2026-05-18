@@ -81,14 +81,20 @@ export function useLocalContextoUI({
   });
 
   // Si el sidebar cambia, sincronizamos.
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps --
+     sync de estado UI con prop externa (sidebar). Pre-rellena la sucursal
+     elegida cuando cambia localActivo. setState en effect es el patron
+     correcto aca: el effect es la sincronizacion con un sistema externo
+     (el localActivo viene del parent). exhaustive-deps omite sucursalUI/
+     modo/defaultEnTodas a proposito para no re-correr al editar el form. */
   useEffect(() => {
     if (localActivo !== null) {
       setSucursalUI(localActivo);
     } else if (modo === "carga" && defaultEnTodas === "primera" && sucursalUI === null && locales.length > 0) {
       setSucursalUI(locales[0]!.id);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localActivo, locales]);
+  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   const bloqueado = localActivo !== null;
   const sucursalActiva = bloqueado ? localActivo : sucursalUI;

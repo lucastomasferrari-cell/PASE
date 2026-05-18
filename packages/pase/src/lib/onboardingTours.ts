@@ -405,7 +405,7 @@ export function lanzarTour(
   if (allSteps.length === 0) return;
 
   // Convertir PaseStep[] → DriveStep[] con hooks de navegación.
-  const driveSteps: DriveStep[] = allSteps.map((s, i) => ({
+  const driveSteps: DriveStep[] = allSteps.map((s) => ({
     ...s.step,
     // onHighlightStarted dispara ANTES de que el spotlight aparezca —
     // perfecto para navegar primero. Si la ruta actual ya es esa, no

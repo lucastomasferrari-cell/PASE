@@ -33,6 +33,7 @@ export function ComparativaSucursalesWidget({ ctx }: { ctx: WidgetContext }) {
       // Traer ventas + nombres de locales en paralelo (ambos limitados por RLS).
       // Sin filtro estado (Maxirest no lo setea — sería NULL y NEQ excluye).
       const [ventasRes, localesRes] = await Promise.all([
+        // eslint-disable-next-line pase-local/require-apply-local-scope -- widget de COMPARATIVA: necesita ver ventas de TODOS los locales del tenant para comparar. RLS sigue scopeando al tenant.
         db.from("ventas")
           .select("local_id, monto")
           .gte("fecha", desde)

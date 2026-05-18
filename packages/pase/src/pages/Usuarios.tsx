@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
-import { ROLES, MODULOS, PERMISOS_EXTRAS } from "../lib/auth";
+import { MODULOS, PERMISOS_EXTRAS } from "../lib/auth";
 import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { CUENTAS } from "../lib/constants";
 import { PageHeader } from "../components/ui";
@@ -266,8 +266,6 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
     await db.from("usuarios").update({ activo: u.activo === false }).eq("id", u.id);
     load();
   };
-
-  const rc = (rol: string) => ROLES[rol]?.color || "#666";
 
   // Devuelve la lista de locales del usuario como array de nombres (para
   // renderizar como pills compactos en lugar de string concatenado, que en

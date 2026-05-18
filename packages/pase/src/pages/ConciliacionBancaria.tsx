@@ -98,9 +98,12 @@ export function ConciliacionBancaria() {
     if (err) setError(err.message);
     else setUploads(data ?? []);
     setLoading(false);
-  }, [user?.tenant_id]);
+  }, [user]);
 
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reload() async (setLoading/setUploads/setError), patron sync con DB.
+    reload();
+  }, [reload]);
 
   async function loadLines(statementId: number) {
     const { data } = await supabase
@@ -112,6 +115,7 @@ export function ConciliacionBancaria() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loadLines async (setLines), patron sync con DB.
     if (selectedUpload) loadLines(selectedUpload.id);
     else setLines([]);
   }, [selectedUpload]);

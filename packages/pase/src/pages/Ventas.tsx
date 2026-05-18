@@ -80,7 +80,12 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
   // elección explícita en el form (decisión Lucas 2026-05-17). La única
   // excepción: si el user tiene 1 solo local visible, usamos ese (no hay nada
   // que elegir).
-  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps --
+     auto-seleccion de local cuando todavia no hay form.local_id. setState dentro
+     del effect es intencional: queremos pre-rellenar el form al montar/cambiar
+     localActivo. exhaustive-deps omite form.local_id y localesDisp a proposito
+     para que el effect solo corra al cambiar la sucursal externa, no al editar el
+     form. Decision Lucas 2026-05-17. */
   useEffect(()=>{
     if (!form.local_id) {
       if (localActivo != null) setForm(f => ({ ...f, local_id: String(localActivo) }));
@@ -88,6 +93,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
       // sino: queda "" hasta que el user elija en el form.
     }
   }, [locales, localActivo]);
+  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   // Group ventas by fecha + turno + local
   const grupos: CierreVentas[]=[];

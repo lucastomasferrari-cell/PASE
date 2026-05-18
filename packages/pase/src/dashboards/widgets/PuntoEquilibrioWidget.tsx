@@ -89,7 +89,7 @@ export function PuntoEquilibrioWidget({ ctx }: { ctx: WidgetContext }) {
       //    porque los sueldos varían poco mes a mes. Decisión Lucas 2026-05-17.
       const primerDiaMesAnt = new Date(year, month - 1, 1).toISOString().slice(0, 10);
       const ultimoDiaMesAnt = new Date(year, month, 0).toISOString().slice(0, 10);
-      let qLabor = db
+      const qLabor = db
         .from("rrhh_liquidaciones")
         .select("total_liquidacion, rrhh_novedades!inner(rrhh_empleados!inner(local_id))")
         .eq("estado", "pagado")

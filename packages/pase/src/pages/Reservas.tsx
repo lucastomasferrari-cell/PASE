@@ -70,6 +70,7 @@ export default function Reservas({ user, locales, localActivo }: Props) {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<"new" | Reserva | null>(null);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- sync de estado UI con prop externa (sidebar), patron correcto.
   useEffect(() => { setLocalTrabajo(localActivo); }, [localActivo]);
 
   async function load() {
@@ -85,7 +86,11 @@ export default function Reservas({ user, locales, localActivo }: Props) {
     setLoading(false);
   }
 
-  useEffect(() => { void load(); /* eslint-disable-next-line */ }, [fecha, localTrabajo]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- load() async (setReservas, setLoading), patron sync con DB.
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load es estable.
+  }, [fecha, localTrabajo]);
 
   async function cambiarEstado(r: Reserva, nuevo: Reserva["estado"]) {
     const updates: Partial<Reserva> = { estado: nuevo };
