@@ -1,5 +1,11 @@
-import LectorFacturasIA from "../LectorFacturasIA";
+import { lazy, Suspense } from "react";
 import type { Usuario, Local } from "../../types";
+
+// Lazy: LectorFacturasIA (~550 LOC) solo se carga cuando se abre el modal.
+// La mayoría de las veces que el user entra a Compras, NO usa lector IA
+// (carga manual con +Cargar factura). Sin esto el chunk de Compras incluye
+// 550 LOC de parsing/preview que solo aplica a un flujo opcional.
+const LectorFacturasIA = lazy(() => import("../LectorFacturasIA"));
 
 interface ModalLectorIAProps {
   abierto: boolean;
@@ -22,7 +28,9 @@ export function ModalLectorIA({ abierto, user, locales, localActivo, onClose, on
           <button className="close-btn" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
-          <LectorFacturasIA user={user} locales={locales} localActivo={localActivo} onSaved={onSaved} />
+          <Suspense fallback={<div style={{padding:24,color:"var(--muted)"}}>Cargando lector IA…</div>}>
+            <LectorFacturasIA user={user} locales={locales} localActivo={localActivo} onSaved={onSaved} />
+          </Suspense>
         </div>
       </div>
     </div>
