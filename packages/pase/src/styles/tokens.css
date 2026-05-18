@@ -36,6 +36,34 @@
      icono del componente InfoTooltip que apareció en 2026-05-14). */
   --pase-gold: #F5C518;
 
+  /* === LEGACY ALIASES (compat pre-design-system) ============================
+   * Estas vars se usan en ~20 pantallas viejas (Caja, Compras modales, EERR,
+   * RRHH, etc.) que no fueron migradas al sistema nuevo. Sin definición, el
+   * browser caía al fallback heredado y los elementos se veían "raros".
+   * Mapeamos a las vars canónicas para que sigan funcionando hasta que se
+   * migren caso por caso. NO agregar usos nuevos — usar directamente
+   * --pase-bg-soft / --pase-celeste en código nuevo.
+   * ======================================================================== */
+  --s1:      var(--pase-bg);               /* fondo principal alias */
+  --s2:      var(--pase-bg-soft);          /* fondo panel/card secundario */
+  --s3:      var(--pase-bg-out);           /* fondo terciario (chips, headers de tabla) */
+  --bg:      var(--pase-bg);               /* alias adicional fondo */
+  --bg2:     var(--pase-bg-soft);          /* alias adicional fondo secundario */
+  --acc:     var(--pase-celeste);          /* color accent principal */
+  --acc2:    var(--pase-celeste-300);      /* accent secundario (sparklines) */
+  --acc3:    var(--pase-gold);             /* accent terciario (MercadoPago en chips) */
+  --bd:      var(--pase-border);           /* borde fino */
+  --bd2:     var(--pase-border-strong);    /* borde fuerte */
+  --info:    var(--pase-celeste-300);      /* info chip / pill */
+  --muted:   var(--pase-text-muted);       /* texto secundario */
+  --muted2:  var(--pase-text-muted);       /* texto terciario (alias) */
+  --txt:     var(--pase-text);             /* alias texto primario */
+  --ok:      #2C7A55;                       /* verde positivo (alias de success) */
+  --success: #2C7A55;                       /* verde positivo (ganancia, OK) */
+  --warn:    #D97706;                       /* dorado dim (warning / vencimientos) */
+  --danger:  #B91C1C;                       /* rojo error / anulado */
+  --r:       8px;                           /* border-radius default */
+
   /* === PALETA "ARGENTINA" (añadida 2026-05-14) =====================
    * Pedido de Lucas: estética un poco más argentina, pasteles, detalles
    * sutiles. Referencias: wallpapers de bandera argentina pastel +
