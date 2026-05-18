@@ -1,7 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { db } from "./lib/supabase";
-import { AuthProvider, necesitaElegirLocal, getPermisos } from "./lib/auth";
+import { AuthProvider, necesitaElegirLocal, getPermisos, tienePermiso } from "./lib/auth";
 import { getDefaultRoute, LEGACY_REDIRECTS } from "./lib/sidebar-nav";
 import type { Usuario, UsuarioRow, Local, Tenant } from "./types";
 import { Sidebar, css } from "./components/Layout";
@@ -380,19 +380,25 @@ function AppMain() {
               <Route
                 path="/ajustes/dashboards"
                 element={
-                  user?.tenant_id ? <SettingsDashboards tenantId={user.tenant_id} /> : <Navigate to="/inicio" replace />
+                  // tienePermiso(user, "ajustes_dashboards") = solo dueño/admin/
+                  // superadmin (ver auth.ts). Sin este gate, un encargado que
+                  // entre por URL directa veía la UI y los saves fallaban
+                  // silencioso por RLS (policy permite solo dueño/admin).
+                  user?.tenant_id && tienePermiso(user, "ajustes_dashboards")
+                    ? <SettingsDashboards tenantId={user.tenant_id} />
+                    : <Navigate to="/inicio" replace />
                 }
               />
               <Route
                 path="/herramientas/importar"
                 element={
-                  user ? <Importar {...props}/> : <Navigate to="/inicio" replace />
+                  user && tienePermiso(user, "importar") ? <Importar {...props}/> : <Navigate to="/inicio" replace />
                 }
               />
               <Route
                 path="/herramientas/lector-mp"
                 element={
-                  user ? <LectorExtractoMP {...props}/> : <Navigate to="/inicio" replace />
+                  user && tienePermiso(user, "lector_mp") ? <LectorExtractoMP {...props}/> : <Navigate to="/inicio" replace />
                 }
               />
               <Route
