@@ -133,14 +133,21 @@ export function tienePermiso(user: MaybeUser, slug: string): boolean {
     if (user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin") return true;
     return getPermisos(user).includes("mp");
   }
+  // 'codigos_manager' (Manager Override TOTP — pantalla con códigos rotativos
+  // de autorización). Solo dueño/admin/superadmin — el secret TOTP es
+  // sensible y la RPC obtener_codigo_totp_actual valida el rol server-side.
+  if (slug === "codigos_manager") {
+    return user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin";
+  }
   // 'herramientas_hub' (pantalla con cards de herramientas avanzadas). Visible
-  // si el user tiene acceso a AL MENOS UNA de las 4 herramientas que viven en
+  // si el user tiene acceso a AL MENOS UNA de las 5 herramientas que viven en
   // el hub. Si no tiene ninguna, el item no aparece en el sidebar.
   if (slug === "herramientas_hub") {
     if (user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin") return true;
     return tienePermiso(user, "importar")
         || tienePermiso(user, "lector_mp")
         || tienePermiso(user, "ajustes_dashboards")
+        || tienePermiso(user, "codigos_manager")
         || getPermisos(user).includes("blindaje");
   }
   if (user.rol === "superadmin" || user.rol === "dueno") return true;

@@ -248,18 +248,18 @@ const TOURS_POR_PERMISO: Record<string, PaseStep[]> = {
     },
   ],
 
-  // Hub de Herramientas — engloba importar, lector_mp, ajustes_dashboards y
-  // blindaje (que tambien tienen entradas individuales abajo para compat).
-  // El caller (DashboardHome/Ajustes) prioriza este hub y SKIPEA los
-  // individuales si el user tiene acceso al hub, para no mostrar 5 tours
-  // de lo mismo.
+  // Hub de Herramientas — engloba importar, lector_mp, ajustes_dashboards,
+  // blindaje y codigos_manager (que tambien tienen entradas individuales abajo
+  // para compat). El caller (DashboardHome/Ajustes) prioriza este hub y
+  // SKIPEA los individuales si el user tiene acceso al hub, para no mostrar
+  // 6 tours de lo mismo.
   herramientas_hub: [
     {
       route: "/herramientas",
       step: {
         popover: {
           title: "🧰 Herramientas",
-          description: `Acá encontrás módulos avanzados detrás de cards: Importar data, Lector extracto MP, Configurar dashboards, Blindaje.<br /><br />
+          description: `Acá encontrás módulos avanzados detrás de cards: Importar data, Lector extracto MP, Configurar dashboards, Blindaje y Códigos Manager.<br /><br />
             Click en cualquier card y se abre la herramienta sin perder lo que estabas haciendo.`,
           side: "over", align: "center",
         },

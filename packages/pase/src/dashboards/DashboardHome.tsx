@@ -98,9 +98,9 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
           if (tienePermiso(u, extra) && !slugsTour.includes(extra)) slugsTour.push(extra);
         }
       }
-      // 'blindaje' también queda englobado por el hub.
+      // Las 5 herramientas del hub quedan englobadas.
       if (tieneHub) {
-        for (const englobado of ["importar", "lector_mp", "ajustes_dashboards", "blindaje"]) {
+        for (const englobado of ["importar", "lector_mp", "ajustes_dashboards", "blindaje", "codigos_manager"]) {
           const idx = slugsTour.indexOf(englobado);
           if (idx >= 0) slugsTour.splice(idx, 1);
         }

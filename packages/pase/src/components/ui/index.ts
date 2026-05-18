@@ -39,4 +39,5 @@ export {
   FolderIcon,
   DocumentIcon,
   AlertIcon,
+  KeyIcon,
 } from "./Icons";

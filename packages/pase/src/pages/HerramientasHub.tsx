@@ -1,7 +1,7 @@
 import { useState, lazy, Suspense } from "react";
 import type { Usuario, Local } from "../types";
 import { tienePermiso } from "../lib/auth";
-import { PageHeader, FolderIcon, DocumentIcon, AlertIcon, UploadIcon } from "../components/ui";
+import { PageHeader, FolderIcon, DocumentIcon, AlertIcon, UploadIcon, KeyIcon } from "../components/ui";
 
 /**
  * Herramientas Hub — pantalla con cards de herramientas avanzadas.
@@ -26,6 +26,7 @@ const Importar = lazy(() => import("./Importar"));
 const LectorExtractoMP = lazy(() => import("./LectorExtractoMP"));
 const Blindaje = lazy(() => import("./herramientas/Blindaje"));
 const SettingsDashboards = lazy(() => import("../dashboards/SettingsDashboards"));
+const CodigosManager = lazy(() => import("./CodigosManager"));
 
 interface Props {
   user: Usuario;
@@ -33,7 +34,7 @@ interface Props {
   localActivo: number | null;
 }
 
-type ToolId = "importar" | "lector_mp" | "blindaje" | "ajustes_dashboards";
+type ToolId = "importar" | "lector_mp" | "blindaje" | "ajustes_dashboards" | "codigos_manager";
 
 interface ToolDef {
   id: ToolId;
@@ -73,6 +74,13 @@ const TOOLS: ToolDef[] = [
     description: "Auditoría de seguridad: integridad de datos, RLS, alertas operativas.",
     slug: "blindaje",
     Icon: AlertIcon,
+  },
+  {
+    id: "codigos_manager",
+    label: "Códigos Manager",
+    description: "Códigos rotativos de 6 dígitos para autorizar empleados que necesitan permisos puntuales.",
+    slug: "codigos_manager",
+    Icon: KeyIcon,
   },
 ];
 
@@ -198,6 +206,9 @@ export default function HerramientasHub({ user, locales, localActivo }: Props) {
                 )}
                 {activeToolDef.id === "ajustes_dashboards" && user.tenant_id && (
                   <SettingsDashboards tenantId={user.tenant_id} />
+                )}
+                {activeToolDef.id === "codigos_manager" && (
+                  <CodigosManager user={user} />
                 )}
               </Suspense>
             </div>

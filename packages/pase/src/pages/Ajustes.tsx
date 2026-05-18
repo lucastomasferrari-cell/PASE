@@ -400,15 +400,9 @@ export default function Ajustes({ user }: AjustesProps = {}) {
           </InfoTooltip>
         </div>
         <div className={styles.actions}>
-          {user && (user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin") && (
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => navigate("/ajustes/codigos-manager")}
-              title="Códigos rotativos para autorizar acciones de empleados"
-            >
-              Códigos Manager
-            </button>
-          )}
+          {/* Botón "Códigos Manager" eliminado 2026-05-18: ahora vive como
+              card en /herramientas (hub). Si Lucas quiere acceso rápido desde
+              Ajustes, lo agregamos como link directo. */}
           {user && (
             <button
               className="btn btn-ghost btn-sm"
@@ -421,7 +415,7 @@ export default function Ajustes({ user }: AjustesProps = {}) {
                 const tieneHub = tienePermiso(user, "herramientas_hub");
                 if (tieneHub) {
                   if (!slugs.includes("herramientas_hub")) slugs.push("herramientas_hub");
-                  for (const englobado of ["importar", "lector_mp", "ajustes_dashboards", "blindaje"]) {
+                  for (const englobado of ["importar", "lector_mp", "ajustes_dashboards", "blindaje", "codigos_manager"]) {
                     const idx = slugs.indexOf(englobado);
                     if (idx >= 0) slugs.splice(idx, 1);
                   }

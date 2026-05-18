@@ -203,3 +203,15 @@ export function AlertIcon({ size = 28, tone = "muted" }: IconProps) {
     </svg>
   );
 }
+
+// ─── Key / llave / autenticación TOTP ──────────────────────────────────
+export function KeyIcon({ size = 28, tone = "muted" }: IconProps) {
+  return (
+    <svg {...base(size, tone)} aria-hidden>
+      <circle cx="7" cy="12" r="4" />
+      <path d="M11 12h11" />
+      <path d="M18 12v3" />
+      <path d="M21 12v2" />
+    </svg>
+  );
+}
