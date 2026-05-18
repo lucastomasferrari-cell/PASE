@@ -70,6 +70,13 @@ const MAP: Record<string, string> = {
   OVER_ASSIGNMENT: "El total asignado a las facturas supera el monto del movimiento",
   MOV_NO_ENCONTRADO: "El movimiento de MercadoPago no existe",
 
+  // Dashboard pinned notes (marcar_tarea_completada)
+  NOTA_INEXISTENTE: "La tarea no existe o ya fue eliminada",
+  NOTA_OTRO_TENANT: "Esa tarea pertenece a otro tenant",
+  NO_ES_TAREA: "Esta nota no es una tarea — no se puede completar",
+  NO_AUTORIZADO_PARA_TAREA: "No podés completar esta tarea — está asignada a otro usuario o rol",
+  NO_AUTH: "Sesión inválida — volvé a entrar",
+
   // Auth / tenant
   AUTH_SIN_TENANT: "Sesión sin tenant — volvé a entrar",
   TENANT_ES_DEL_CALLER: "No podés borrar el tenant en el que estás autenticado",

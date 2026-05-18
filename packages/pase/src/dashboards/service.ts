@@ -120,17 +120,18 @@ export async function crearNotaPineada(
   return { id: data.id as number, error: null };
 }
 
+// Usa RPC marcar_tarea_completada (SECURITY DEFINER) en vez de UPDATE
+// directo. Razón: la policy `pinned_modify` solo permite UPDATE a
+// dueño/admin, así que un encargado con tarea asignada veía el botón pero
+// el UPDATE fallaba silenciosamente (RLS bloquea con 0 rows, sin error).
+// La RPC valida que el caller sea el target_usuario o tenga el target_rol.
+// El parámetro usuarioId queda en la firma para compat con el call site
+// pero ya no se usa (la RPC toma el usuario del auth context).
 export async function completarTarea(
   notaId: number,
-  usuarioId: number,
+  _usuarioId: number,
 ): Promise<{ error: string | null }> {
-  const { error } = await db
-    .from("dashboard_pinned_notes")
-    .update({
-      completada_at: new Date().toISOString(),
-      completada_por: usuarioId,
-    })
-    .eq("id", notaId);
+  const { error } = await db.rpc("marcar_tarea_completada", { p_nota_id: notaId });
   return { error: error?.message ?? null };
 }
 
