@@ -81,9 +81,31 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
       // especiales (rol o derivación de otro permiso).
       const slugsTour = [...permisos];
       const u = { id: usuario.id, rol: usuario.rol, _permisos: permisos } as Parameters<typeof tienePermiso>[0];
-      for (const extra of ["importar", "lector_mp", "ajustes_dashboards"]) {
-        if (tienePermiso(u, extra) && !slugsTour.includes(extra)) slugsTour.push(extra);
+
+      // Si tiene acceso al hub de Herramientas (engloba importar, lector_mp,
+      // ajustes_dashboards y blindaje), mostramos SOLO el step del hub y
+      // skipeamos los individuales — sería redundante mostrar 5 tours
+      // del mismo lugar (hub + 4 cards adentro). Decisión Lucas 2026-05-18.
+      const tieneHub = tienePermiso(u, "herramientas_hub");
+      if (tieneHub && !slugsTour.includes("herramientas_hub")) {
+        slugsTour.push("herramientas_hub");
       }
+      // Solo agregamos los individuales si NO tiene el hub (compat con users
+      // que tienen UN permiso suelto sin acceso al hub — caso poco común
+      // porque el hub se otorga si tenés cualquiera de las 4).
+      if (!tieneHub) {
+        for (const extra of ["importar", "lector_mp", "ajustes_dashboards"]) {
+          if (tienePermiso(u, extra) && !slugsTour.includes(extra)) slugsTour.push(extra);
+        }
+      }
+      // 'blindaje' también queda englobado por el hub.
+      if (tieneHub) {
+        for (const englobado of ["importar", "lector_mp", "ajustes_dashboards", "blindaje"]) {
+          const idx = slugsTour.indexOf(englobado);
+          if (idx >= 0) slugsTour.splice(idx, 1);
+        }
+      }
+
       lanzarTour(slugsTour, usuario.id, navigate);
     }, 500);
     return () => clearTimeout(t);

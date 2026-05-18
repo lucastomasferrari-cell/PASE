@@ -415,8 +415,20 @@ export default function Ajustes({ user }: AjustesProps = {}) {
               onClick={() => {
                 resetTour(user.id);
                 const slugs = getPermisos(user);
-                for (const extra of ["importar", "lector_mp", "ajustes_dashboards"]) {
-                  if (tienePermiso(user, extra) && !slugs.includes(extra)) slugs.push(extra);
+                // Si tiene acceso al hub de Herramientas, sólo agregamos ese
+                // (engloba importar/lector_mp/ajustes_dashboards/blindaje).
+                // Sino, los individuales. Misma lógica que DashboardHome.
+                const tieneHub = tienePermiso(user, "herramientas_hub");
+                if (tieneHub) {
+                  if (!slugs.includes("herramientas_hub")) slugs.push("herramientas_hub");
+                  for (const englobado of ["importar", "lector_mp", "ajustes_dashboards", "blindaje"]) {
+                    const idx = slugs.indexOf(englobado);
+                    if (idx >= 0) slugs.splice(idx, 1);
+                  }
+                } else {
+                  for (const extra of ["importar", "lector_mp", "ajustes_dashboards"]) {
+                    if (tienePermiso(user, extra) && !slugs.includes(extra)) slugs.push(extra);
+                  }
                 }
                 lanzarTour(slugs, user.id, navigate, { force: true });
               }}
