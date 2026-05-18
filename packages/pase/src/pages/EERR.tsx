@@ -147,11 +147,13 @@ export default function EERR({ user, localActivo }: EERRProps) {
       const lastDay=new Date(yr,mo,0).getDate();
       const desde=mes+"-01", hasta=mes+"-"+String(lastDay).padStart(2,"0");
       const lid=localActivo?parseInt(String(localActivo)):null;
-      let vq = db.from("ventas").select("*").gte("fecha",desde).lte("fecha",hasta);
+      // Optimización egress 2026-05-17: proyectar solo lo que EERR realmente usa.
+      // Antes SELECT * traía JSON + campos auditoría innecesarios para reporte.
+      let vq = db.from("ventas").select("fecha, monto, medio, local_id").gte("fecha",desde).lte("fecha",hasta);
       vq = applyLocalScope(vq, user, lid);
-      let fq = db.from("facturas").select("*").gte("fecha",desde).lte("fecha",hasta).neq("estado","anulada");
+      let fq = db.from("facturas").select("id, fecha, total, neto, iva21, iva105, iibb, cat, estado, local_id, tipo").gte("fecha",desde).lte("fecha",hasta).neq("estado","anulada");
       fq = applyLocalScope(fq, user, lid);
-      let gq = db.from("gastos").select("*").gte("fecha",desde).lte("fecha",hasta);
+      let gq = db.from("gastos").select("id, fecha, monto, categoria, tipo, local_id").gte("fecha",desde).lte("fecha",hasta);
       gq = applyLocalScope(gq, user, lid);
       const [{data:v},{data:f},{data:g},{data:liqData}]=await Promise.all([
         vq,

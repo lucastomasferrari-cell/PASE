@@ -254,16 +254,27 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
 
   const load = async () => {
     setLoading(true);
-    let fq = db.from("facturas").select("*").order("fecha", { ascending: false });
+    // Optimización egress 2026-05-17: proyectar campos específicos en vez
+    // de SELECT * + limit 1000 + filtro fecha default 365 días. Las facturas
+    // muy viejas se ven con el date range picker manual del usuario.
+    const haceUnAnio = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    let fq = db.from("facturas")
+      .select("id, prov_id, local_id, nro, fecha, venc, neto, iva21, iva105, iibb, total, cat, estado, detalle, pagos, tipo, perc_iva, otros_cargos, descuentos")
+      .gte("fecha", haceUnAnio)
+      .order("fecha", { ascending: false })
+      .limit(1000);
     fq = applyLocalScope(fq, user, localActivo);
-    let rq = db.from("remitos").select("*").order("fecha", { ascending: false });
+    let rq = db.from("remitos")
+      .select("id, prov_id, local_id, nro, fecha, monto, cat, estado, detalle, factura_id")
+      .gte("fecha", haceUnAnio)
+      .order("fecha", { ascending: false })
+      .limit(1000);
     rq = applyLocalScope(rq, user, localActivo);
-    // nc_aplicaciones no tiene local_id — su RLS filtra por tenant.
     const naq = db.from("nc_aplicaciones").select("nc_id, monto");
     const [{ data: f }, { data: r }, { data: p }, { data: na }] = await Promise.all([
       fq,
       rq,
-      db.from("proveedores").select("*").eq("estado", "Activo").order("nombre"),
+      db.from("proveedores").select("id, nombre, cuit, cat, saldo, estado").eq("estado", "Activo").order("nombre"),
       naq,
     ]);
     setFacturas((f as Factura[]) || []);

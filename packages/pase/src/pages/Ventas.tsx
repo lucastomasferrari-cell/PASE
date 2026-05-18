@@ -55,11 +55,17 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
 
   const load=async()=>{
     setLoading(true);
-    let q=db.from("ventas").select("*").order("fecha",{ascending:false});
-    if(filtDesde) q=q.gte("fecha",filtDesde);
-    if(filtHasta) q=q.lte("fecha",filtHasta);
+    // Optimización egress 2026-05-17: proyectar campos en vez de SELECT *.
+    // El rango de fechas ya viene del debouncer (default 90d, modificable
+    // por el user con el date picker). Limit 1000 como sanity cap.
+    let q=db.from("ventas")
+      .select("id, fecha, local_id, turno, medio, monto, origen")
+      .gte("fecha", debDesde)
+      .lte("fecha", debHasta)
+      .order("fecha",{ascending:false})
+      .limit(1000);
     q=applyLocalScope(q,user,localActivo);
-    const {data}=await q.limit(500);
+    const {data}=await q;
     setVentas((data||[]) as Venta[]);setLoading(false);
   };
   // Debounce de los date pickers: evita un fetch por cada tecla cuando el

@@ -6,6 +6,7 @@ import { findWidget, widgetsParaPermisos } from "./widgets/registry";
 import { DEFAULT_WIDGETS_POR_ROL, type RolPase, type WidgetContext } from "./types";
 import type { WidgetDefinition } from "./types";
 import { lanzarTour } from "../lib/onboardingTours";
+import { tienePermiso } from "../lib/auth";
 
 /**
  * DashboardHome — pantalla de inicio personalizada por usuario.
@@ -75,7 +76,15 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
   // nuevos desde la última vez, le muestra solo esos.
   useEffect(() => {
     const t = setTimeout(() => {
-      lanzarTour(permisos, usuario.id, navigate);
+      // Slugs "virtuales": no están en MODULOS (no son módulos del sidebar)
+      // pero tienen tour propio. tienePermiso() los resuelve usando reglas
+      // especiales (rol o derivación de otro permiso).
+      const slugsTour = [...permisos];
+      const u = { id: usuario.id, rol: usuario.rol, _permisos: permisos } as Parameters<typeof tienePermiso>[0];
+      for (const extra of ["importar", "lector_mp", "ajustes_dashboards"]) {
+        if (tienePermiso(u, extra) && !slugsTour.includes(extra)) slugsTour.push(extra);
+      }
+      lanzarTour(slugsTour, usuario.id, navigate);
     }, 500);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps

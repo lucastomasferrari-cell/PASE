@@ -158,7 +158,10 @@ function AppMain() {
   }, [localActivo]);
 
   const refetchLocales = async () => {
-    const { data } = await db.from("locales").select("*").order("id");
+    // Optimización egress 2026-05-17: proyectar solo lo que se renderiza.
+    // Locales puede tener columnas pesadas (slug marketplace, fotos, JSON
+    // de horarios). El sidebar y picker solo necesitan id+nombre+tenant_id.
+    const { data } = await db.from("locales").select("id, nombre, tenant_id, provincia, localidad").order("id");
     const nuevos = data || [];
     setLocales(nuevos);
     // Decisión Lucas 2026-05-17: ya no existe modo "Todas las sucursales".
@@ -191,7 +194,7 @@ function AppMain() {
       try {
         const { data: { session } } = await db.auth.getSession();
         if (session?.user) {
-          const { data: perfil } = await db.from("usuarios").select("*").eq("auth_id", session.user.id).single();
+          const { data: perfil } = await db.from("usuarios").select("id, auth_id, email, nombre, rol, activo, password_temporal, locales, cuentas_visibles, cuentas_operables, tenant_id").eq("auth_id", session.user.id).single();
           if (perfil && perfil.activo !== false) {
             // eslint-disable-next-line react-hooks/immutability
             await applyLogin(perfil);
@@ -220,7 +223,7 @@ function AppMain() {
       if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
         setUser(curr => {
           if (curr) return curr;
-          db.from("usuarios").select("*").eq("auth_id", session.user.id).single().then(({ data: perfil }) => {
+          db.from("usuarios").select("id, auth_id, email, nombre, rol, activo, password_temporal, locales, cuentas_visibles, cuentas_operables, tenant_id").eq("auth_id", session.user.id).single().then(({ data: perfil }) => {
             if (perfil && perfil.activo !== false) applyLogin(perfil);
           });
           return curr;
@@ -233,7 +236,8 @@ function AppMain() {
       }
       if (event === "USER_UPDATED" && session?.user) {
         const { data: perfil } = await db.from("usuarios")
-          .select("*").eq("auth_id", session.user.id).single();
+          .select("id, auth_id, email, nombre, rol, activo, password_temporal, locales, cuentas_visibles, cuentas_operables, tenant_id")
+          .eq("auth_id", session.user.id).single();
         if (perfil) {
           setUser(curr => curr ? { ...curr, ...perfil } as Usuario : curr);
         }

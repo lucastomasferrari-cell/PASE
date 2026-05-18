@@ -234,7 +234,11 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   // offset/limit usa .range(from, to) que en supabase-js es [from, to]
   // inclusivo. PAGE_SIZE filas: range(0, PAGE-1), range(PAGE, 2*PAGE-1), etc.
   const queryMovimientos = (offset: number, limit: number) => {
-    let q = db.from("movimientos").select("*")
+    // Optimización egress 2026-05-17: proyectar campos específicos
+    // (saca payload ~40% vs SELECT *). Movimientos puede tener tenant_id,
+    // created_at, otros campos que la tabla NO necesita renderizar.
+    let q = db.from("movimientos")
+      .select("id, fecha, cuenta, tipo, cat, importe, detalle, local_id, fact_id, remito_id_ref, liquidacion_id, adelanto_id_ref, pago_especial_id_ref, gasto_id_ref, anulado, anulado_motivo, editado, editado_motivo, editado_at")
       .gte("fecha", debDesde)
       .lte("fecha", debHasta);
     if (ordenPor === "carga") {
@@ -267,7 +271,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     // ver saldo es intencional. Si el user no tiene la cuenta en visibles,
     // la card no se renderiza pero los movimientos sí aparecen via la tabla.
     // Los saldos son estado actual — NO se filtran por fecha.
-    let sq = db.from("saldos_caja").select("*");
+    let sq = db.from("saldos_caja").select("cuenta, saldo, local_id");
     sq = applyLocalScope(sq, user, localActivo);
     if (vis !== null) {
       if (vis.length === 0) {

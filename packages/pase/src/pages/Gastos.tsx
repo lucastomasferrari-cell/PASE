@@ -139,10 +139,19 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
 
   const load = async () => {
     setLoading(true);
-    let q = db.from("gastos").select("*").gte("fecha", desde).lte("fecha", hasta).order("fecha", { ascending: false });
+    // Optimización egress 2026-05-17: proyectar campos + limit 1000.
+    let q = db.from("gastos")
+      .select("id, fecha, local_id, categoria, tipo, monto, detalle, cuenta, estado, anulado_motivo, anulado_at, editado, editado_motivo, editado_at, plantilla_id")
+      .gte("fecha", desde)
+      .lte("fecha", hasta)
+      .order("fecha", { ascending: false })
+      .limit(1000);
     q = applyLocalScope(q, user, localActivo);
     const { data: g } = await q;
-    let pq = db.from("gastos_plantillas").select("*").eq("activo", true).order("nombre");
+    let pq = db.from("gastos_plantillas")
+      .select("id, nombre, categoria, tipo, local_id")
+      .eq("activo", true)
+      .order("nombre");
     pq = applyLocalScope(pq, user, localActivo);
     const { data: p } = await pq;
     setGastos(((g as GastoExt[]) || []).filter(g => g.categoria !== "SUELDOS"));

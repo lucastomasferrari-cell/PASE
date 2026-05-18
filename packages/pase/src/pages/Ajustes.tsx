@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { Modal, InfoTooltip } from "../components/ui";
 import { lanzarTour, resetTour } from "../lib/onboardingTours";
-import { getPermisos } from "../lib/auth";
+import { getPermisos, tienePermiso } from "../lib/auth";
 import type { Usuario } from "../types";
 import styles from "./Ajustes.module.css";
 
@@ -405,7 +405,11 @@ export default function Ajustes({ user }: AjustesProps = {}) {
               className="btn btn-ghost btn-sm"
               onClick={() => {
                 resetTour(user.id);
-                lanzarTour(getPermisos(user), user.id, navigate, { force: true });
+                const slugs = getPermisos(user);
+                for (const extra of ["importar", "lector_mp", "ajustes_dashboards"]) {
+                  if (tienePermiso(user, extra) && !slugs.includes(extra)) slugs.push(extra);
+                }
+                lanzarTour(slugs, user.id, navigate, { force: true });
               }}
               title="Reproducir el tour de bienvenida"
             >

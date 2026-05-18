@@ -85,7 +85,10 @@ export function useRealtimeTable({
   scopeByLocal = false,
   extraFilter,
   events = EVENTS_DEFAULT,
-  debounceMs = 200,
+  // Optimización egress 2026-05-17: subido de 200 → 500ms. Eventos de
+  // realtime suelen venir en bursts (transferencia genera 2-3 inserts seguidos,
+  // pago de factura idem). Coalesce más agresivo reduce reloads sin afectar UX.
+  debounceMs = 500,
   fallbackPollMs = 30000,
   enabled = true,
 }: UseRealtimeTableOptions): void {
@@ -111,6 +114,10 @@ export function useRealtimeTable({
     let connectionFailed = false;
 
     function fireDebounced() {
+      // Optimización egress 2026-05-17: si la tab no está visible, descartar
+      // el evento. Cuando vuelva a ser visible, handleVisibility() refresca
+      // todo de una con la última data. Evita egress invisible.
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => { onChangeRef.current(); }, debounceMs);
     }
