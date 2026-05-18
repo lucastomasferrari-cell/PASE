@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { db } from "../lib/supabase";
 import { localesVisibles, applyLocalScope, cuentasOperables, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
@@ -9,7 +9,9 @@ import { toISO, today } from "../lib/utils";
 import {
   calcularSACProporcional,
 } from "../lib/calculos/rrhh";
-import RRHHLegajo from "./RRHHLegajo";
+// Lazy: RRHHLegajo (~1100 LOC) solo se monta cuando el usuario abre un legajo
+// específico. Sin esto se cargaba eagerly aún cuando estás en el tab Dashboard.
+const RRHHLegajo = lazy(() => import("./RRHHLegajo"));
 import type { Usuario, Local } from "../types";
 import type {
   Empleado, Novedad, Liquidacion,
@@ -812,7 +814,9 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
               <button className="close-btn" onClick={() => { setLegajoId(null); loadEmpleados(); }}>✕</button>
             </div>
             <div style={{flex:1,overflowY:"auto",padding:20}}>
-              <RRHHLegajo empleadoId={legajoId} user={user} locales={locales} onClose={() => { setLegajoId(null); loadEmpleados(); }} onGoToPago={goToPagoFromLegajo} />
+              <Suspense fallback={<div style={{padding:24,color:"var(--muted)"}}>Cargando legajo…</div>}>
+                <RRHHLegajo empleadoId={legajoId} user={user} locales={locales} onClose={() => { setLegajoId(null); loadEmpleados(); }} onGoToPago={goToPagoFromLegajo} />
+              </Suspense>
             </div>
           </div>
         </div>
