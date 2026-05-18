@@ -27,7 +27,9 @@ const LectorExtractoMP = lazy(() => import("./LectorExtractoMP"));
 const Blindaje = lazy(() => import("./herramientas/Blindaje"));
 const SettingsDashboards = lazy(() => import("../dashboards/SettingsDashboards"));
 const CodigosManager = lazy(() => import("./CodigosManager"));
-const RRHHPage = lazy(() => import("./RRHH"));
+// RRHHPage sacado del hub 2026-05-18 — Equipo vive en sec Operación del
+// sidebar (Lucas: "equipo pasalo a operación"). La ruta /equipo standalone
+// sigue manejándose desde App.tsx.
 const ContadorIVA = lazy(() => import("./herramientas/ContadorIVA"));
 
 interface Props {
@@ -36,7 +38,7 @@ interface Props {
   localActivo: number | null;
 }
 
-type ToolId = "importar" | "lector_mp" | "blindaje" | "ajustes_dashboards" | "codigos_manager" | "equipo" | "contador_iva";
+type ToolId = "importar" | "lector_mp" | "blindaje" | "ajustes_dashboards" | "codigos_manager" | "contador_iva";
 
 interface ToolDef {
   id: ToolId;
@@ -49,13 +51,6 @@ interface ToolDef {
 }
 
 const TOOLS: ToolDef[] = [
-  {
-    id: "equipo",
-    label: "Equipo",
-    description: "Empleados, liquidaciones, sueldos, presentismo, adelantos, vacaciones.",
-    slug: "rrhh",
-    Icon: FolderIcon,
-  },
   {
     id: "contador_iva",
     label: "Contador / IVA",
@@ -225,9 +220,6 @@ export default function HerramientasHub({ user, locales, localActivo }: Props) {
                 )}
                 {activeToolDef.id === "codigos_manager" && (
                   <CodigosManager user={user} />
-                )}
-                {activeToolDef.id === "equipo" && (
-                  <RRHHPage user={user} locales={locales} localActivo={localActivo} />
                 )}
                 {activeToolDef.id === "contador_iva" && (
                   <ContadorIVA user={user} locales={locales} localActivo={localActivo} />

@@ -98,9 +98,10 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
           if (tienePermiso(u, extra) && !slugsTour.includes(extra)) slugsTour.push(extra);
         }
       }
-      // Las 7 herramientas del hub quedan englobadas.
+      // Las 6 herramientas del hub quedan englobadas. (rrhh ya no — vive
+      // en sec Operación del sidebar con su propio tour individual.)
       if (tieneHub) {
-        for (const englobado of ["importar", "lector_mp", "ajustes_dashboards", "blindaje", "codigos_manager", "rrhh", "contador"]) {
+        for (const englobado of ["importar", "lector_mp", "ajustes_dashboards", "blindaje", "codigos_manager", "contador"]) {
           const idx = slugsTour.indexOf(englobado);
           if (idx >= 0) slugsTour.splice(idx, 1);
         }

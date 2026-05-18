@@ -52,6 +52,8 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   { path: "/compras",                    slug: "compras",       label: "Compras",         sec: "Operación" },
   { path: "/ventas",                     slug: "ventas",        label: "Ventas",          sec: "Operación" },
   { path: "/gastos",                     slug: "gastos",        label: "Gastos",          sec: "Operación" },
+  // Equipo MOVIDO a Operación 2026-05-18 (Lucas: "equipo pasalo a operación").
+  { path: "/equipo",                     slug: "rrhh",          label: "Equipo",          sec: "Operación" },
 
   // === Dirección ===
   { path: "/negocio",                    slug: "negocio",       label: "Negocio",         sec: "Dirección" },
@@ -60,7 +62,7 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   { path: "/reportes",                   slug: "eerr",          label: "Reportes",        sec: "Dirección" },
 
   // === Herramientas ===
-  { path: "/equipo",                     slug: "rrhh",          label: "Equipo",          sec: "Herramientas" },
+  // Equipo MOVIDO a Operación 2026-05-18.
   { path: "/herramientas/contador-iva",  slug: "contador",      label: "Contador / IVA",  sec: "Herramientas" },
   // Hub de herramientas avanzadas (Importar, Lector MP, Configurar dashboards,
   // Blindaje). 2026-05-18: Lucas pidió consolidar estos 4 detrás de un solo
