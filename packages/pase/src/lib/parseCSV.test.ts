@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { parseCSV } from "./parseCSV";
 
+// BOM UTF-8 generado en runtime para evitar no-irregular-whitespace
+// lint rule (el caracter invisible literal en source — incluso dentro
+// de strings — dispara la regla con la config de este repo).
+const BOM = String.fromCharCode(0xfeff);
+
 describe("parseCSV", () => {
   it("parsea CSV simple con coma", () => {
     const csv = "nombre,edad\nJuan,30\nAna,25";
@@ -19,7 +24,7 @@ describe("parseCSV", () => {
   });
 
   it("strip BOM UTF-8 al inicio", () => {
-    const csv = "﻿nombre,edad\nJuan,30";
+    const csv = `${BOM}nombre,edad\nJuan,30`;
     const out = parseCSV(csv);
     expect(out).toHaveLength(1);
     // El BOM no debe contaminar el primer header
@@ -36,7 +41,7 @@ describe("parseCSV", () => {
   });
 
   it("escape de comillas internas: '\"\"' → '\"'", () => {
-    const csv = `nombre,frase\nJuan,"él dijo \"\"hola\"\" ayer"`;
+    const csv = `nombre,frase\nJuan,"él dijo ""hola"" ayer"`;
     expect(parseCSV(csv)).toEqual([
       { nombre: "Juan", frase: `él dijo "hola" ayer` },
     ]);
@@ -97,7 +102,7 @@ describe("parseCSV", () => {
   });
 
   it("BOM + separador `;` + comillas: combo real Excel-AR exportado", () => {
-    const csv = `﻿nombre;monto;nota\n"Prov, S.A.";1234,56;"con ""comillas"" adentro"`;
+    const csv = `${BOM}nombre;monto;nota\n"Prov, S.A.";1234,56;"con ""comillas"" adentro"`;
     expect(parseCSV(csv)).toEqual([
       { nombre: "Prov, S.A.", monto: "1234,56", nota: `con "comillas" adentro` },
     ]);
