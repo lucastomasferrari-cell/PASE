@@ -60,6 +60,8 @@ export default function LectorExtractoMP({ user, locales, localActivo }: Props) 
     rango: { desde: string; hasta: string } | null;
     confianza: number;
     advertencias: string[];
+    /** "local" = CSV parseado sin IA (gratis). "ia" = Claude Opus IA. */
+    metodo: "local" | "ia";
   } | null>(null);
   const [importando, setImportando] = useState(false);
   const [importResult, setImportResult] = useState<{ ok: boolean; insertadas: number; error?: string } | null>(null);
@@ -93,7 +95,7 @@ export default function LectorExtractoMP({ user, locales, localActivo }: Props) 
             confianza_global: 100,
             advertencias: parsedLocal.advertencias,
           };
-          await procesarConDedup(parsedAdapt);
+          await procesarConDedup(parsedAdapt, "local");
           return;
         }
         // Si el parser local falló por algún motivo (formato distinto),
@@ -189,7 +191,7 @@ Si el archivo no parece un extracto de MercadoPago, devolvé:
         throw new Error("La IA devolvió texto no-JSON. Ver consola.");
       }
 
-      await procesarConDedup(parsed);
+      await procesarConDedup(parsed, "ia");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -200,7 +202,7 @@ Si el archivo no parece un extracto de MercadoPago, devolvé:
   // Compartido entre fast-path CSV local y flow Claude IA: ambos producen
   // un IAResponse, este helper hace dedup contra mp_movimientos + setea
   // el state final. Idempotente.
-  async function procesarConDedup(parsed: IAResponse) {
+  async function procesarConDedup(parsed: IAResponse, metodo: "local" | "ia") {
     if (!localImport) return;
     if (!Array.isArray(parsed.movimientos) || parsed.movimientos.length === 0) {
       const adv = parsed.advertencias?.join(" · ") || "Sin movimientos detectados";
@@ -254,6 +256,7 @@ Si el archivo no parece un extracto de MercadoPago, devolvé:
       rango: parsed.rango_fechas?.desde ? parsed.rango_fechas : null,
       confianza: parsed.confianza_global ?? 0,
       advertencias: parsed.advertencias || [],
+      metodo,
     });
   }
 
@@ -402,17 +405,30 @@ Si el archivo no parece un extracto de MercadoPago, devolvé:
               <div style={{ fontSize: "var(--pase-fs-xl)", fontWeight: 500, color: "var(--pase-text-muted)" }}>{yaExisten}</div>
             </div>
             <div className="panel" style={{ padding: "10px 14px", flex: 1, minWidth: 150 }}>
-              <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", marginBottom: 4 }}>Confianza IA</div>
-              <div style={{ fontSize: "var(--pase-fs-xl)", fontWeight: 500, color: resultado.confianza >= 80 ? "var(--pase-celeste)" : "#D97706" }}>
-                {resultado.confianza}%
+              <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", marginBottom: 4 }}>
+                {resultado.metodo === "local" ? "Procesado" : "Confianza IA"}
               </div>
+              {resultado.metodo === "local" ? (
+                <>
+                  <div style={{ fontSize: "var(--pase-fs-xl)", fontWeight: 500, color: "var(--pase-celeste)" }}>
+                    Exacto
+                  </div>
+                  <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", marginTop: 2 }}>
+                    CSV parseado local · sin IA
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: "var(--pase-fs-xl)", fontWeight: 500, color: resultado.confianza >= 80 ? "var(--pase-celeste)" : "#D97706" }}>
+                  {resultado.confianza}%
+                </div>
+              )}
             </div>
           </div>
 
           {resultado.advertencias.length > 0 && (
             <div className="alert" style={{ marginBottom: 14, fontSize: "var(--pase-fs-sm)" }}>
               <strong style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <AlertIcon size={14} tone="muted" /> Advertencias de la IA:
+                <AlertIcon size={14} tone="muted" /> Advertencias{resultado.metodo === "ia" ? " de la IA" : ""}:
               </strong>
               <ul style={{ margin: "4px 0 0", paddingLeft: 20 }}>
                 {resultado.advertencias.map((a, i) => <li key={i}>{a}</li>)}
