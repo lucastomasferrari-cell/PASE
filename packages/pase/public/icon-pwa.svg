@@ -4,10 +4,10 @@
        según la forma del launcher: círculo, squircle, cuadrado redondeado).
        El sol queda dentro del 60% central para asegurar visibilidad. -->
 
-  <!-- Background navy PASE (graphite-blue dark) — llena hasta los bordes
-       para que en modo maskable el OS pueda recortar como quiera sin
-       dejar bordes blancos. -->
-  <rect width="512" height="512" fill="#0E1726"/>
+  <!-- Background celeste PASE (#75AADB, mismo del logo del sidebar y
+       brand). Llena hasta los bordes para que en modo maskable el OS
+       pueda recortar como quiera sin dejar bordes blancos. -->
+  <rect width="512" height="512" fill="#75AADB"/>
 
   <!-- Sol centrado en (256, 256), escalado para ocupar el 60% del canvas
        (radio efectivo ~150px sobre 256 disponibles a cada lado). -->
