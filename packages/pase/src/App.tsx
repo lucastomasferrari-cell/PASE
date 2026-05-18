@@ -432,8 +432,14 @@ function AppMain() {
 
               {/* Accesibles internamente (no en sidebar top-level) */}
               <Route path="/gastos" element={<Gastos {...props}/>} />
-              <Route path="/usuarios" element={<Usuarios {...props}/>} />
-              <Route path="/maxirest" element={<ImportarMaxirest {...props}/>} />
+              <Route path="/usuarios" element={
+                tienePermiso(user, "usuarios") ? <Usuarios {...props}/> : <Navigate to="/inicio" replace />
+              } />
+              <Route path="/maxirest" element={
+                // Maxirest: import diario de cierre POS. Cualquiera con permiso
+                // "ventas" puede usarlo (es la pantalla equivalente a cargar venta).
+                tienePermiso(user, "ventas") ? <ImportarMaxirest {...props}/> : <Navigate to="/inicio" replace />
+              } />
               <Route path="/tenants" element={user.rol === "superadmin" ? <Tenants user={user as Usuario} /> : <DefaultRedirect user={user} />} />
 
               {/* Redirects de URLs viejas */}
