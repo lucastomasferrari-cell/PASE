@@ -400,6 +400,15 @@ export default function Ajustes({ user }: AjustesProps = {}) {
           </InfoTooltip>
         </div>
         <div className={styles.actions}>
+          {user && (user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin") && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => navigate("/ajustes/codigos-manager")}
+              title="Códigos rotativos para autorizar acciones de empleados"
+            >
+              Códigos Manager
+            </button>
+          )}
           {user && (
             <button
               className="btn btn-ghost btn-sm"

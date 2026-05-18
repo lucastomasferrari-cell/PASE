@@ -31,6 +31,7 @@ const Ajustes = lazy(() => import("./pages/Ajustes"));
 const Importar = lazy(() => import("./pages/Importar"));
 const LectorExtractoMP = lazy(() => import("./pages/LectorExtractoMP"));
 const Reservas = lazy(() => import("./pages/Reservas"));
+const CodigosManager = lazy(() => import("./pages/CodigosManager"));
 const DashboardHome = lazy(() => import("./dashboards/DashboardHome").then(m => ({ default: m.DashboardHome })));
 const SettingsDashboards = lazy(() => import("./dashboards/SettingsDashboards"));
 
@@ -388,6 +389,17 @@ function AppMain() {
                   // silencioso por RLS (policy permite solo dueño/admin).
                   user?.tenant_id && tienePermiso(user, "ajustes_dashboards")
                     ? <SettingsDashboards tenantId={user.tenant_id} />
+                    : <Navigate to="/inicio" replace />
+                }
+              />
+              <Route
+                path="/ajustes/codigos-manager"
+                element={
+                  // Solo dueño/admin/superadmin: la RPC obtener_codigo_totp_actual
+                  // valida el rol en pgsql. El gate del frontend evita que un
+                  // encargado entre por URL y vea la UI rota.
+                  user && (user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin")
+                    ? <CodigosManager user={user} />
                     : <Navigate to="/inicio" replace />
                 }
               />

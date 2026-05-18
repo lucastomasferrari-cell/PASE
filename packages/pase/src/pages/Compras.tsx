@@ -8,6 +8,7 @@ import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, genId, parseMonto, estadoFactura } from "../lib/utils";
 import { RightSubNav, type SubNavSection, PageHeader, EmptyState, BoxIcon, ReceiptIcon } from "../components/ui";
+import { ManagerOverrideModal } from "../components/ManagerOverrideModal";
 import { exportCSV } from "../lib/exportCSV";
 import type { Usuario, Local } from "../types";
 import type { Proveedor, Factura } from "../types/finanzas";
@@ -527,12 +528,30 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     }
   };
 
+  // Pending override: cuando el user no tiene `compras_anular` y se intenta
+  // anular, guardamos la factura/motivo acá y abrimos el modal. Cuando llega
+  // el código válido, llamamos a la RPC con p_override_code.
+  const [pendingAnular, setPendingAnular] = useState<{ factura: Factura; motivo: string } | null>(null);
+
+  async function ejecutarAnular(f: Factura, motivo: string, overrideCode?: string) {
+    const { error } = await db.rpc("anular_factura", {
+      p_factura_id: f.id,
+      p_motivo: motivo,
+      ...(overrideCode ? { p_override_code: overrideCode } : {}),
+    });
+    if (error) { alert(translateRpcError(error)); return; }
+    load();
+  }
+
   const anular = async (f: Factura) => {
     if (!confirm(`¿Anular factura ${f.nro}? Esta acción queda registrada.`)) return;
     const motivo = prompt("Motivo (opcional):") || "Anulada desde UI";
-    const { error } = await db.rpc("anular_factura", { p_factura_id: f.id, p_motivo: motivo });
-    if (error) { alert(translateRpcError(error)); return; }
-    load();
+    // Si el user tiene permiso, ejecuta directo. Si no, abre modal de override.
+    if (tienePermiso(user, "compras_anular")) {
+      await ejecutarAnular(f, motivo);
+    } else {
+      setPendingAnular({ factura: f, motivo });
+    }
   };
 
   // ─── Remitos ────────────────────────────────────────────────────────────
@@ -1069,6 +1088,19 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
         remito={pagarRemModal} onClose={() => setPagarRemModal(null)}
         form={remPagoForm} setForm={setRemPagoForm}
         cuentasUsables={cuentasUsables} pagar={pagarRemito} pagando={pagandoRem}
+      />
+
+      {/* MODAL MANAGER OVERRIDE — para anular factura sin permiso compras_anular */}
+      <ManagerOverrideModal
+        open={pendingAnular !== null}
+        descripcion={pendingAnular ? `Anular factura ${pendingAnular.factura.nro}` : undefined}
+        onClose={() => setPendingAnular(null)}
+        onValidated={async (codigo) => {
+          if (!pendingAnular) return;
+          const { factura, motivo } = pendingAnular;
+          setPendingAnular(null);
+          await ejecutarAnular(factura, motivo, codigo);
+        }}
       />
     </div>
   );

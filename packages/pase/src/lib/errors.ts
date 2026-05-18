@@ -77,6 +77,13 @@ const MAP: Record<string, string> = {
   NO_AUTORIZADO_PARA_TAREA: "No podés completar esta tarea — está asignada a otro usuario o rol",
   NO_AUTH: "Sesión inválida — volvé a entrar",
 
+  // Manager Override TOTP (validar_manager_override + generar_tenant_totp_secret)
+  CODIGO_INVALIDO: "El código debe ser de 6 dígitos numéricos",
+  CODIGO_NO_VALIDO: "Código incorrecto. Pedile al dueño un código nuevo (cambian cada 30s).",
+  CODIGO_YA_USADO: "Ese código ya fue usado. Pedile al dueño el actual.",
+  ACCION_REQUERIDA: "Falta especificar qué acción se está autorizando",
+  TOTP_NO_INICIALIZADO: "El sistema de códigos no está inicializado. El dueño debe entrar a Ajustes → Códigos Manager.",
+
   // Auth / tenant
   AUTH_SIN_TENANT: "Sesión sin tenant — volvé a entrar",
   TENANT_ES_DEL_CALLER: "No podés borrar el tenant en el que estás autenticado",
