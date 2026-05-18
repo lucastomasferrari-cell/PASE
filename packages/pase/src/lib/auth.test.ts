@@ -155,6 +155,19 @@ describe("tienePermiso", () => {
     expect(tienePermiso(userEncCajaVentas, "lector_mp")).toBe(false);
   });
 
+  it("'herramientas_hub' = true si tiene AL MENOS UNA de las 4 (importar/lector_mp/dashboards/blindaje)", () => {
+    expect(tienePermiso(userDueno, "herramientas_hub")).toBe(true);
+    expect(tienePermiso(userAdmin, "herramientas_hub")).toBe(true);
+    expect(tienePermiso(userSuperadmin, "herramientas_hub")).toBe(true);
+    // Encargado con 'mp' tiene lector_mp derivado → tiene hub
+    expect(tienePermiso(userEncMp, "herramientas_hub")).toBe(true);
+    // Encargado con blindaje en matriz → tiene hub
+    const userEncBlindaje = { rol: "encargado", _permisos: ["blindaje"] } as Usuario;
+    expect(tienePermiso(userEncBlindaje, "herramientas_hub")).toBe(true);
+    // Encargado solo con caja/ventas → NO tiene hub (no engloba ninguna de las 4)
+    expect(tienePermiso(userEncCajaVentas, "herramientas_hub")).toBe(false);
+  });
+
   it("dueno y superadmin ven todo (short-circuit)", () => {
     expect(tienePermiso(userDueno, "caja")).toBe(true);
     expect(tienePermiso(userDueno, "compras")).toBe(true);
