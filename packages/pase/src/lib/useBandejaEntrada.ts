@@ -17,7 +17,7 @@ import type { Usuario } from "../types";
  * tipo Notif es estable — los call-sites no se rompen.
  */
 
-export type NotifSource = "tarea" | "override" | "factura_vencida" | "factura_por_vencer";
+export type NotifSource = "tarea" | "override" | "factura_vencida" | "factura_por_vencer" | "mp_sin_conciliar";
 
 export interface Notif {
   /** Clave única: `${source}:${originalId}`. Se usa para read tracking. */
@@ -161,6 +161,34 @@ async function fetchFacturasVencidas(): Promise<Notif[]> {
   }];
 }
 
+async function fetchMpSinConciliar(user: Usuario): Promise<Notif[]> {
+  // Solo a quienes les compete la conciliación MP.
+  if (!tienePermiso(user, "mp")) return [];
+
+  const hace7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  // eslint-disable-next-line pase-local/require-apply-local-scope -- bandeja de entrada: scope cross-local intencional, RLS ya filtra por tenant + locales visibles.
+  const { data, error } = await db.from("mp_movimientos")
+    .select("id, fecha, monto")
+    .eq("conciliado", false)
+    .eq("ignorado", false)
+    .eq("anulado", false)
+    .lt("fecha", hace7d)
+    .limit(50);
+  if (error || !data || data.length === 0) return [];
+
+  const total = data.reduce((s, r) => s + Math.abs(Number((r as { monto: number | string }).monto || 0)), 0);
+  const masViejo = (data[0] as { fecha: string }).fecha;
+  return [{
+    id: `mp_sin_conciliar:${hace7d}`,
+    source: "mp_sin_conciliar",
+    titulo: `${data.length} ${data.length === 1 ? "mov MP sin conciliar" : "movs MP sin conciliar"} de hace +7 días`,
+    descripcion: `Total $${Math.round(total).toLocaleString("es-AR")}. Más viejo: ${masViejo}.`,
+    fecha: new Date().toISOString(),
+    href: "/caja/conciliacion",
+    leido: false,
+  }];
+}
+
 async function fetchFacturasPorVencer(): Promise<Notif[]> {
   const hoy = new Date();
   const hoyIso = hoy.toISOString().slice(0, 10);
@@ -203,14 +231,15 @@ export function useBandejaEntrada(user: Usuario | null | undefined): BandejaStat
 
   const reload = useCallback(async () => {
     if (!user) { setNotifs([]); setLoading(false); return; }
-    const [tareas, overrides, vencidas, porVencer] = await Promise.all([
+    const [tareas, overrides, vencidas, porVencer, mpSinConc] = await Promise.all([
       fetchTareas(user).catch(() => [] as Notif[]),
       fetchOverrides(user).catch(() => [] as Notif[]),
       fetchFacturasVencidas().catch(() => [] as Notif[]),
       fetchFacturasPorVencer().catch(() => [] as Notif[]),
+      fetchMpSinConciliar(user).catch(() => [] as Notif[]),
     ]);
     const readMap = leerReadMap();
-    const all = [...tareas, ...overrides, ...vencidas, ...porVencer]
+    const all = [...tareas, ...overrides, ...vencidas, ...porVencer, ...mpSinConc]
       .map(n => ({ ...n, leido: !!readMap[n.id] }))
       .sort((a, b) => b.fecha.localeCompare(a.fecha));
     setNotifs(all);

@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type ReactElement } from "react";
 import { useNavigate } from "react-router-dom";
 import { useBandejaEntrada, type Notif, type NotifSource } from "../lib/useBandejaEntrada";
 import { fmt_dt_ar } from "../lib/utils";
+import { PinIcon, KeyIcon, AlertIcon, CalendarIcon, BellIcon, WalletIcon } from "./ui";
 import type { Usuario } from "../types";
 
 /**
@@ -22,11 +23,15 @@ interface Props {
   user: Usuario;
 }
 
-const SOURCE_ICONS: Record<NotifSource, string> = {
-  tarea: "📌",
-  override: "🔑",
-  factura_vencida: "⚠",
-  factura_por_vencer: "📅",
+// Cada fuente tiene su icono SVG line-art (coherente con el design system).
+// Tono: factura_vencida usa gold para llamar atención sin gritar; el resto
+// queda en muted neutro para no competir entre sí.
+const SOURCE_ICON_RENDER: Record<NotifSource, () => ReactElement> = {
+  tarea:              () => <PinIcon size={14} tone="muted" />,
+  override:           () => <KeyIcon size={14} tone="muted" />,
+  factura_vencida:    () => <AlertIcon size={14} tone="gold" />,
+  factura_por_vencer: () => <CalendarIcon size={14} tone="muted" />,
+  mp_sin_conciliar:   () => <WalletIcon size={14} tone="muted" />,
 };
 
 const SOURCE_LABELS: Record<NotifSource, string> = {
@@ -34,6 +39,7 @@ const SOURCE_LABELS: Record<NotifSource, string> = {
   override: "Código usado",
   factura_vencida: "Vencidas",
   factura_por_vencer: "Por vencer",
+  mp_sin_conciliar: "MP sin conciliar",
 };
 
 function fmtRelativo(iso: string): string {
@@ -205,7 +211,9 @@ export function BandejaEntradaBoton({ user }: Props) {
             )}
             {!loading && notifs.length === 0 && (
               <div style={{ padding: 32, textAlign: "center", color: "var(--pase-text-muted)" }}>
-                <div style={{ fontSize: 24, marginBottom: 8 }}>📭</div>
+                <div style={{ marginBottom: 10, display: "flex", justifyContent: "center" }}>
+                  <BellIcon size={28} tone="muted" />
+                </div>
                 <div style={{ fontSize: "var(--pase-fs-sm)" }}>Sin novedades.</div>
                 <div style={{ fontSize: "var(--pase-fs-xs)", marginTop: 4 }}>
                   Acá te van a llegar las tareas, alertas y otros avisos.
@@ -234,8 +242,10 @@ export function BandejaEntradaBoton({ user }: Props) {
                 onMouseLeave={e => { e.currentTarget.style.background = n.leido ? "transparent" : "var(--pase-celeste-100)"; }}
               >
                 <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 6, flex: 1, minWidth: 0 }}>
-                    <span aria-hidden style={{ fontSize: 12 }}>{SOURCE_ICONS[n.source]}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+                    <span aria-hidden style={{ display: "inline-flex", alignItems: "center" }}>
+                      {SOURCE_ICON_RENDER[n.source]()}
+                    </span>
                     <span style={{
                       fontSize: "var(--pase-fs-xs)",
                       color: "var(--pase-text-muted)",
