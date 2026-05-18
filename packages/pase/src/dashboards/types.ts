@@ -82,6 +82,7 @@ export const DEFAULT_WIDGETS_POR_ROL: Record<RolPase, string[]> = {
     "comparativa_sucursales",
     "facturas_por_vencer",
     "facturas_vencidas",
+    "ultimos_overrides",
   ],
   admin: [
     "tareas_pineadas",
@@ -89,6 +90,7 @@ export const DEFAULT_WIDGETS_POR_ROL: Record<RolPase, string[]> = {
     "objetivos_mes",
     "punto_equilibrio",
     "facturas_vencidas",
+    "ultimos_overrides",
   ],
   encargado: [
     "tareas_pineadas",
