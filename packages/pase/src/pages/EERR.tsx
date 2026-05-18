@@ -12,7 +12,7 @@
  * TODO(eerr-refactor): mover ERow/ESection a archivos separados con pct
  * y totalVentas como props. Hacer en PR aparte cuando se toque la lógica.
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
 import { useCategorias } from "../lib/useCategorias";
@@ -20,7 +20,12 @@ import { useMediosCobro } from "../lib/useMediosCobro";
 import { InfoTooltip } from "../components/ui";
 import { toISO, today, fmt_$ } from "../lib/utils";
 import { exportCSV } from "../lib/exportCSV";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, Legend, CartesianGrid } from "recharts";
+
+// Recharts pesa ~250KB. Se code-splittea aparte para que el chunk inicial
+// de /reportes no lo arrastre. Si el usuario ve EERR sin meses comparados
+// y sin categorías CMV (caso común mid-month), recharts NUNCA se descarga.
+const EvolucionChart = lazy(() => import("./EERRCharts").then(m => ({ default: m.EvolucionChart })));
+const CategoriaCMVChart = lazy(() => import("./EERRCharts").then(m => ({ default: m.CategoriaCMVChart })));
 import type { Usuario } from "../types/auth";
 import type { Venta, Factura, Gasto } from "../types/finanzas";
 import type { LiquidacionConEmpleado } from "../types/rrhh";
@@ -440,27 +445,9 @@ export default function EERR({ user, localActivo }: EERRProps) {
             <div className="panel" style={{marginBottom:20}}>
               <div className="panel-hd"><span className="panel-title">Evolución</span>{loadingComp && <span style={{fontSize:10,color:"var(--muted)"}}>Cargando...</span>}</div>
               <div style={{padding:"12px 8px"}}>
-                <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={evolucionData} margin={{top:8,right:24,left:8,bottom:0}}>
-                    <CartesianGrid stroke="var(--bd2)" strokeDasharray="3 3"/>
-                    <XAxis dataKey="mes" tick={{fontSize:10,fill:"var(--muted)"}} axisLine={{stroke:"var(--bd2)"}} tickLine={false}/>
-                    <YAxis tick={{fontSize:10,fill:"var(--muted)"}} axisLine={false} tickLine={false} tickFormatter={(v)=>{
-                      const n = Number(v);
-                      if (Math.abs(n) >= 1_000_000) return (n/1_000_000).toFixed(1)+"M";
-                      if (Math.abs(n) >= 1_000) return Math.round(n/1_000)+"k";
-                      return String(n);
-                    }}/>
-                    <Tooltip
-                      contentStyle={{background:"var(--s1)",border:"1px solid var(--bd2)",borderRadius:6,fontSize:11}}
-                      formatter={(v)=>[`$${Number(v).toLocaleString("es-AR")}`] as [string]}
-                    />
-                    <Legend wrapperStyle={{fontSize:11}}/>
-                    <Line type="monotone" dataKey="Ventas" stroke="var(--success)" strokeWidth={2} dot={{r:3}} />
-                    <Line type="monotone" dataKey="CMV" stroke="var(--warn)" strokeWidth={2} dot={{r:3}} />
-                    <Line type="monotone" dataKey="Sueldos" stroke="var(--danger)" strokeWidth={2} dot={{r:3}} />
-                    <Line type="monotone" dataKey="Util. Neta" stroke="var(--acc)" strokeWidth={2} dot={{r:3}} />
-                  </LineChart>
-                </ResponsiveContainer>
+                <Suspense fallback={<div style={{height:220,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--muted)",fontSize:11}}>Cargando gráfico…</div>}>
+                  <EvolucionChart data={evolucionData} />
+                </Suspense>
               </div>
             </div>
           )}
@@ -562,19 +549,9 @@ export default function EERR({ user, localActivo }: EERRProps) {
             <div className="panel-hd"><span className="panel-title">Detalle por Categoría</span></div>
             {porCatCMV.length > 0 && (
               <div style={{padding:"12px 4px"}}>
-                <ResponsiveContainer width="100%" height={120}>
-                  <BarChart data={porCatCMV.map(x=>({cat:x.c, monto:x.t}))} margin={{top:0,right:8,left:0,bottom:0}}>
-                    <XAxis dataKey="cat" tick={{fontSize:9,fill:"var(--muted)"}} axisLine={false} tickLine={false}/>
-                    <YAxis hide/>
-                    <Tooltip
-                      contentStyle={{background:"var(--s1)",border:"1px solid var(--bd2)",borderRadius:6,fontSize:11}}
-                      formatter={(v)=>[`$${Number(v).toLocaleString("es-AR")}`, "CMV"] as [string, string]}
-                    />
-                    <Bar dataKey="monto" radius={[4,4,0,0]}>
-                      {porCatCMV.map((_,i)=><Cell key={i} fill={i===0?"var(--warn)":i===1?"var(--acc)":"var(--info)"}/>)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                <Suspense fallback={<div style={{height:120,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--muted)",fontSize:11}}>Cargando gráfico…</div>}>
+                  <CategoriaCMVChart data={porCatCMV.map(x=>({cat:x.c, monto:x.t}))} />
+                </Suspense>
               </div>
             )}
             <ESection title="MERCADERÍA (CMV)" items={porCatCMV} total={totalCMV} color="var(--warn)"/>
