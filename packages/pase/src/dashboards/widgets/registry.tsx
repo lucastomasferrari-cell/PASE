@@ -21,6 +21,7 @@ import { VentasSemanaWidget } from "./VentasSemanaWidget";
 import { ComparativaSucursalesWidget } from "./ComparativaSucursalesWidget";
 import { ObjetivosMesWidget } from "./ObjetivosMesWidget";
 import { PuntoEquilibrioWidget } from "./PuntoEquilibrioWidget";
+import { UltimosOverridesWidget } from "./UltimosOverridesWidget";
 
 export const WIDGETS: WidgetDefinition[] = [
   // ─── Cross-rol ─────────────────────────────────────────────────────────
@@ -101,6 +102,16 @@ export const WIDGETS: WidgetDefinition[] = [
     permisosRequeridos: ["negocio", "finanzas"],
     size: "md",
     render: (ctx) => <ComparativaSucursalesWidget ctx={ctx} />,
+  },
+
+  // ─── Seguridad (admin only) ─────────────────────────────────────────────
+  {
+    id: "ultimos_overrides",
+    title: "Códigos manager usados",
+    description: "Log live de empleados que usaron códigos de autorización. Se actualiza al instante via Realtime y highlightea el más reciente.",
+    permisosRequeridos: ["codigos_manager"],
+    size: "md",
+    render: (ctx) => <UltimosOverridesWidget ctx={ctx} />,
   },
 
   // TODO COMANDA (cuando esté integrado):
