@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 import { ROLES, tienePermiso } from "../lib/auth";
 import type { Usuario, Local, Tenant } from "../types";
 import { ThemeToggle } from "./ui/ThemeToggle";
+import { BandejaEntradaBoton } from "./BandejaEntradaBoton";
 
 interface SidebarProps {
   user: Usuario;
@@ -127,7 +128,10 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
               al row del nombre para agrupar visualmente la zona inferior. */}
           <div className="sb-user-row">
             <div className="sb-uname">{user.nombre}</div>
-            <ThemeToggle />
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <BandejaEntradaBoton user={user} />
+              <ThemeToggle />
+            </div>
           </div>
           {/* Decisión 2026-05-13: roles sin color. La distinción es solo textual. */}
           <div className="sb-urole">{ROLES[user.rol]?.label}</div>
