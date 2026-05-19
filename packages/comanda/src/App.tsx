@@ -94,6 +94,7 @@ const DisponibilidadLista = lazy(() => import('./pages/Catalogo/DisponibilidadLi
 const SettingsLocal = lazy(() => import('./pages/Settings/SettingsLocal').then(m => ({ default: m.SettingsLocal })));
 const SettingsAfip = lazy(() => import('./pages/Settings/SettingsAfip').then(m => ({ default: m.SettingsAfip })));
 const IntegracionPartnerScreen = lazy(() => import('./pages/Integraciones/IntegracionPartnerScreen').then(m => ({ default: m.IntegracionPartnerScreen })));
+const HardwareImpresoras = lazy(() => import('./pages/Hardware/HardwareImpresoras').then(m => ({ default: m.HardwareImpresoras })));
 const SettingsMesas = lazy(() => import('./pages/Settings/SettingsMesas').then(m => ({ default: m.SettingsMesas })));
 const SettingsMetodosCobro = lazy(() => import('./pages/Settings/SettingsMetodosCobro').then(m => ({ default: m.SettingsMetodosCobro })));
 const SettingsPermisos = lazy(() => import('./pages/Settings/SettingsPermisos').then(m => ({ default: m.SettingsPermisos })));
@@ -258,7 +259,7 @@ export default function App() {
                   {/* ── Hardware ──────────────────────────────────────── */}
                   <Route path="/hardware" element={<Navigate to="/hardware/estaciones" replace />} />
                   <Route path="/hardware/estaciones" element={<SettingsEstaciones />} />
-                  <Route path="/hardware/impresoras" element={<StubRoute />} />
+                  <Route path="/hardware/impresoras" element={<HardwareImpresoras />} />
                   <Route path="/hardware/cajon" element={<StubRoute />} />
                   <Route path="/hardware/mp-point" element={<StubRoute />} />
                   <Route path="/hardware/tablets-kds" element={<StubRoute />} />

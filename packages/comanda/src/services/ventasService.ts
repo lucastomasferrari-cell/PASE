@@ -290,6 +290,8 @@ export async function mandarCurso(ventaId: number, curso: number): Promise<{ cou
     const { mandarCursoOffline } = await import('./offline/ventasOfflineService');
     try {
       const r = await mandarCursoOffline(ventaId, curso);
+      // Fire-and-forget impresión de cocina si hay impresora configurada
+      void imprimirCocinaSiCorresponde(ventaId, curso);
       return { count: r.count, error: null };
     } catch (err) {
       return { count: 0, error: err instanceof Error ? err.message : 'Error mandando curso' };
@@ -299,7 +301,72 @@ export async function mandarCurso(ventaId: number, curso: number): Promise<{ cou
     p_venta_id: ventaId, p_curso: curso,
   });
   if (error) return { count: 0, error: translateError(error) };
+  // Fire-and-forget impresión de cocina. Si falla, el KDS digital sigue
+  // teniendo el ticket — el operador no pierde el pedido.
+  void imprimirCocinaSiCorresponde(ventaId, curso);
   return { count: Number(data ?? 0), error: null };
+}
+
+// Helper interno: agrupa items del curso por estación y dispara impresión
+// a cada impresora correspondiente via printerService (que rutea por
+// estación cuando hay print server, o fallback a WebUSB).
+async function imprimirCocinaSiCorresponde(ventaId: number, curso: number): Promise<void> {
+  try {
+    const { imprimirPorEstacion } = await import('./printerService');
+    const { data: items } = await db.from('ventas_pos_items')
+      .select('item_id, cantidad, modificadores, notas, items(nombre, estacion)')
+      .eq('venta_id', ventaId)
+      .eq('curso', curso)
+      .eq('estado', 'enviado')
+      .is('deleted_at', null);
+    if (!items || items.length === 0) return;
+
+    // Agrupar por estación. Supabase devuelve la relación items como
+    // array (porque PostgREST infiere FK como to-many por defecto), así
+    // que tomamos el primero. Cast a unknown porque no tenemos tipos
+    // generados de la relación.
+    type ItemRowJoined = {
+      item_id: number;
+      cantidad: number;
+      modificadores: Array<{ nombre: string }> | null;
+      notas: string | null;
+      items: { nombre: string; estacion: string | null } | { nombre: string; estacion: string | null }[] | null;
+    };
+    const porEstacion = new Map<string, Array<{ cantidad: number; nombre: string; notas: string | null; modificadores: string[] | null }>>();
+    for (const it of items as unknown as ItemRowJoined[]) {
+      const linked = Array.isArray(it.items) ? it.items[0] : it.items;
+      const estacion = linked?.estacion || 'cocina_caliente';
+      if (!porEstacion.has(estacion)) porEstacion.set(estacion, []);
+      porEstacion.get(estacion)!.push({
+        cantidad: Number(it.cantidad),
+        nombre: linked?.nombre ?? `Item ${it.item_id}`,
+        notas: it.notas,
+        modificadores: it.modificadores ? it.modificadores.map((m) => m.nombre) : null,
+      });
+    }
+
+    const { data: venta } = await db.from('ventas_pos')
+      .select('numero_local, mesa_id')
+      .eq('id', ventaId)
+      .single();
+    const mesaStr = venta?.mesa_id ? String(venta.mesa_id) : undefined;
+
+    // Imprimir en paralelo a cada estación
+    await Promise.all(Array.from(porEstacion.entries()).map(async ([estacion, items]) => {
+      const r = await imprimirPorEstacion(estacion, {
+        estacion,
+        mesa: mesaStr,
+        items,
+        curso,
+        fechaHora: new Date().toLocaleString('es-AR'),
+      });
+      if (!r.ok) {
+        console.warn(`[print kitchen] estación ${estacion} falló: ${r.error}`);
+      }
+    }));
+  } catch (err) {
+    console.warn('[print kitchen] error inesperado:', err);
+  }
 }
 
 // Sprint 2 F #1: enviar UN item específico (no el curso entero).

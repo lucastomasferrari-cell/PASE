@@ -1,0 +1,20 @@
+{
+  "name": "@pase/print-server",
+  "version": "1.0.0",
+  "description": "Print server local para COMANDA — conecta impresoras térmicas USB / Network / Serial al POS via HTTP localhost",
+  "main": "src/server.js",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "cors": "^2.8.5",
+    "node-thermal-printer": "^4.5.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

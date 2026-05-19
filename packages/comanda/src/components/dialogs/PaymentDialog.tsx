@@ -171,6 +171,36 @@ export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado
         p.confirmado = true;
       }
       toast.success('Venta cobrada');
+      // Fire-and-forget impresión del ticket de cliente. Si falla (sin
+      // impresora, server caído, etc) NO bloqueamos el flow del POS — la
+      // venta ya está cobrada. El operador puede reimprimir desde el
+      // detalle del pedido.
+      void (async () => {
+        try {
+          const { imprimirTicket } = await import('@/services/printerService');
+          const { listVentasItems } = await import('@/services/ventasService');
+          const itemsR = await listVentasItems(venta.id);
+          await imprimirTicket({
+            titulo: 'COMANDA',
+            items: itemsR.data.map((it) => ({
+              nombre: 'Item ' + it.item_id,
+              cantidad: Number(it.cantidad),
+              subtotal: Number(it.subtotal),
+            })),
+            total: Number(venta.total),
+            pagos: pagosAEnviar.map((p) => ({
+              metodo: p.metodo,
+              monto: p.monto,
+              cuotas: p.cuotas ?? null,
+            })),
+            fechaHora: new Date().toLocaleString('es-AR'),
+            venta_id: venta.numero_local ?? venta.id,
+            propina,
+          });
+        } catch (err) {
+          console.warn('[print ticket] falló (no bloquea):', err);
+        }
+      })();
       onCobrado();
       onOpenChange(false);
     } finally {

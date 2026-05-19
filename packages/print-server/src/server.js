@@ -1,0 +1,217 @@
+// COMANDA Print Server — corre en la PC del local, expone HTTP localhost
+// que COMANDA (en el browser) usa para mandar tickets a las impresoras.
+//
+// Soporta 3 tipos de transporte:
+//   - usb:     identificada por (vendor_id, product_id)
+//   - network: IP + puerto (9100 RAW estándar ESC/POS)
+//   - serial:  COM port (COM3, /dev/ttyUSB0). Cubre impresoras Bluetooth
+//              después de hacer pair en Windows (que crea un virtual COM).
+//
+// Endpoints:
+//   GET  /ping         — health check (que el browser use para detectar
+//                        si el server está corriendo).
+//   GET  /printers     — lista impresoras configuradas y su estado.
+//   POST /printers     — agregar / actualizar config de una impresora.
+//   DELETE /printers/:id — borrar una impresora.
+//   POST /print        — body: { printer_id, ticket: { ... } } → imprime.
+//   POST /test/:id     — imprimir página de prueba.
+//
+// Persistencia: config en un JSON local (~/.comanda-print-server.json)
+// para que sobreviva reinicios.
+
+import express from 'express';
+import cors from 'cors';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { printers as printerHandler } from './printerHandler.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PORT = parseInt(process.env.PRINT_SERVER_PORT || '9100');
+const CONFIG_PATH = path.join(os.homedir(), '.comanda-print-server.json');
+
+// ─── Config persistida ─────────────────────────────────────────────────────
+
+function loadConfig() {
+  try {
+    if (fs.existsSync(CONFIG_PATH)) {
+      return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
+    }
+  } catch (err) {
+    console.error('[config] error leyendo config:', err.message);
+  }
+  return { printers: [] };
+}
+
+function saveConfig(config) {
+  try {
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('[config] error guardando config:', err.message);
+  }
+}
+
+let config = loadConfig();
+
+// ─── App Express ───────────────────────────────────────────────────────────
+
+const app = express();
+app.use(cors({ origin: true, credentials: false }));
+app.use(express.json({ limit: '1mb' }));
+
+// Logging mínimo de requests
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
+// ── Health check
+app.get('/ping', (req, res) => {
+  res.json({
+    ok: true,
+    version: '1.0.0',
+    server: 'COMANDA Print Server',
+    config_path: CONFIG_PATH,
+    printers_configured: config.printers.length,
+  });
+});
+
+// ── Listar impresoras + status
+app.get('/printers', async (req, res) => {
+  const detailed = await Promise.all(config.printers.map(async (p) => {
+    const status = await printerHandler.ping(p).catch((err) => ({ ok: false, error: err.message }));
+    return { ...p, status };
+  }));
+  res.json({ printers: detailed });
+});
+
+// ── Agregar / actualizar impresora
+app.post('/printers', (req, res) => {
+  const { id, nombre, estacion, transporte, config: printerConfig } = req.body || {};
+  if (!nombre || !transporte) {
+    return res.status(400).json({ error: 'nombre y transporte requeridos' });
+  }
+  if (!['usb', 'network', 'serial'].includes(transporte)) {
+    return res.status(400).json({ error: 'transporte debe ser usb | network | serial' });
+  }
+
+  const printerId = id || `printer_${Date.now()}`;
+  const existing = config.printers.findIndex((p) => p.id === printerId);
+  const entry = {
+    id: printerId,
+    nombre,
+    estacion: estacion || null,
+    transporte,
+    config: printerConfig || {},
+  };
+  if (existing >= 0) {
+    config.printers[existing] = entry;
+  } else {
+    config.printers.push(entry);
+  }
+  saveConfig(config);
+  res.json({ ok: true, printer: entry });
+});
+
+// ── Eliminar impresora
+app.delete('/printers/:id', (req, res) => {
+  const id = req.params.id;
+  const before = config.printers.length;
+  config.printers = config.printers.filter((p) => p.id !== id);
+  if (config.printers.length === before) {
+    return res.status(404).json({ error: 'Impresora no encontrada' });
+  }
+  saveConfig(config);
+  res.json({ ok: true });
+});
+
+// ── Imprimir un ticket
+app.post('/print', async (req, res) => {
+  const { printer_id, ticket } = req.body || {};
+  if (!printer_id || !ticket) {
+    return res.status(400).json({ error: 'printer_id y ticket requeridos' });
+  }
+  const printer = config.printers.find((p) => p.id === printer_id);
+  if (!printer) {
+    return res.status(404).json({ error: `Impresora ${printer_id} no configurada` });
+  }
+  try {
+    await printerHandler.print(printer, ticket);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(`[print] ${printer_id} failed:`, err.message);
+    res.status(502).json({ error: 'PRINT_FAILED', detail: err.message });
+  }
+});
+
+// ── Imprimir por estación (helper: busca la impresora con esa estación
+//    y le manda el ticket).
+app.post('/print-by-estacion', async (req, res) => {
+  const { estacion, ticket } = req.body || {};
+  if (!estacion || !ticket) {
+    return res.status(400).json({ error: 'estacion y ticket requeridos' });
+  }
+  const printer = config.printers.find((p) => p.estacion === estacion);
+  if (!printer) {
+    return res.status(404).json({ error: `Sin impresora asignada a estación "${estacion}"` });
+  }
+  try {
+    await printerHandler.print(printer, ticket);
+    res.json({ ok: true, printer_id: printer.id });
+  } catch (err) {
+    console.error(`[print] estación ${estacion} failed:`, err.message);
+    res.status(502).json({ error: 'PRINT_FAILED', detail: err.message });
+  }
+});
+
+// ── Página de prueba
+app.post('/test/:id', async (req, res) => {
+  const printer = config.printers.find((p) => p.id === req.params.id);
+  if (!printer) return res.status(404).json({ error: 'Impresora no encontrada' });
+  const ticket = {
+    titulo: 'COMANDA — PRUEBA DE IMPRESIÓN',
+    items: [
+      { nombre: 'Test item 1', cantidad: 1, subtotal: 100 },
+      { nombre: 'Test item 2 con nombre largo', cantidad: 2, subtotal: 250 },
+    ],
+    total: 350,
+    pagos: [{ metodo: 'Test', monto: 350 }],
+    fechaHora: new Date().toLocaleString('es-AR'),
+    venta_id: 'TEST-' + Date.now(),
+  };
+  try {
+    await printerHandler.print(printer, ticket);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(502).json({ error: 'TEST_FAILED', detail: err.message });
+  }
+});
+
+// ── Endpoint para auto-detectar impresoras USB conectadas
+//    (útil para que la UI muestre opciones sin pedir vendor_id a mano).
+app.get('/discover/usb', async (req, res) => {
+  try {
+    const devices = await printerHandler.discoverUsb();
+    res.json({ devices });
+  } catch (err) {
+    res.status(502).json({ error: 'DISCOVER_FAILED', detail: err.message });
+  }
+});
+
+// ─── Start ─────────────────────────────────────────────────────────────────
+
+app.listen(PORT, '127.0.0.1', () => {
+  console.log('═══════════════════════════════════════════════');
+  console.log('  COMANDA Print Server v1.0.0');
+  console.log(`  Escuchando en http://127.0.0.1:${PORT}`);
+  console.log(`  Config: ${CONFIG_PATH}`);
+  console.log(`  Impresoras configuradas: ${config.printers.length}`);
+  console.log('═══════════════════════════════════════════════');
+});
+
+// Cleanup grácil
+process.on('SIGINT', () => {
+  console.log('\n[server] cerrando...');
+  process.exit(0);
+});
