@@ -50,6 +50,41 @@ export async function eliminarCredencialesAFIP(): Promise<{ ok: boolean; error: 
 }
 
 /**
+ * Prueba la conexión con AFIP: WSAA login + getLastVoucher contra el
+ * punto de venta + tipo configurado. Si pasa, confirma que el cert/key
+ * son válidos y que los servicios están adheridos correctamente.
+ */
+export async function probarConexionAFIP(): Promise<{
+  ok: boolean;
+  message?: string;
+  proximo_numero?: number;
+  tipo_chequeado?: string;
+  ambiente?: string;
+  error?: string;
+}> {
+  const sess = (await db.auth.getSession()).data.session;
+  if (!sess?.access_token) return { ok: false, error: 'Sesión expirada' };
+
+  try {
+    const resp = await fetch('/api/tienda-mp?action=afip-test-connection', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${sess.access_token}`,
+      },
+      body: JSON.stringify({}),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      return { ok: false, error: data?.detail || data?.error || `HTTP ${resp.status}` };
+    }
+    return { ok: true, ...data };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
  * Parseo client-side básico de un certificado X.509 PEM para extraer la
  * fecha de vencimiento. Hace minimal ASN.1 parsing — alcanza para sacar
  * el `notAfter` (UTCTime).

@@ -22,6 +22,7 @@ import { sendEmail, htmlPedidoConfirmado, htmlPedidoListo } from './_email.js';
 import { createRappiClient, getRappiCredentials, verifyRappiWebhookSignature } from './_rappi.js';
 import { createPedidosYaClient, getPedidosYaCredentials, verifyPedidosYaWebhookSignature } from './_pedidosya.js';
 import { checkUserAuth } from './_user-auth.js';
+import { Afip } from '@afipsdk/afip.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -84,6 +85,9 @@ export default async function handler(req, res) {
     }
     if (action === 'pedidosya-order-action' && req.method === 'POST') {
       return await handlePedidosyaOrderAction(req, res);
+    }
+    if (action === 'afip-test-connection' && req.method === 'POST') {
+      return await handleAfipTestConnection(req, res);
     }
     res.status(405).json({ error: 'Método o action inválido' });
   } catch (e) {
@@ -1204,6 +1208,69 @@ async function handlePedidosyaOrderAction(req, res) {
     res.status(200).json({ ok: true, action: ordAction, peya_response: result });
   } catch (err) {
     res.status(502).json({ error: `PEYA_${ordAction.toUpperCase()}_FAILED`, detail: err.message || String(err) });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AFIP — probar conexión (validar cert + key + WSAA login)
+// Útil ANTES de emitir la primera factura real: confirma que las creds
+// realmente funcionan contra AFIP. Si falla acá, el dueño sabe que hay
+// algo mal (cert vencido, key incorrecta, ambiente equivocado) sin tener
+// que cobrar una venta para enterarse.
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function handleAfipTestConnection(req, res) {
+  const auth = await checkUserAuth(req, res);
+  if (!auth) return;
+  if (!['dueno', 'admin', 'superadmin'].includes(auth.row.rol)) {
+    return res.status(403).json({ error: 'PERMISO_DENEGADO' });
+  }
+
+  const supabase = db();
+  const { data: cred, error: credErr } = await supabase
+    .from('afip_credenciales')
+    .select('cuit, ambiente, cert_pem, key_pem, punto_venta, activa, tipo_contribuyente')
+    .eq('tenant_id', auth.row.tenant_id)
+    .single();
+
+  if (credErr || !cred) {
+    return res.status(400).json({ error: 'AFIP_NO_CONFIGURADA' });
+  }
+  if (!cred.cert_pem || !cred.key_pem) {
+    return res.status(400).json({ error: 'AFIP_SIN_CERT_KEY' });
+  }
+
+  try {
+    const afip = new Afip({
+      CUIT: cred.cuit,
+      cert: cred.cert_pem,
+      key: cred.key_pem,
+      production: cred.ambiente === 'produccion',
+    });
+
+    // 1) WSAA login — saca token para WSFEv1. Si falla acá, el cert/key
+    //    es inválido o el servicio no está adherido.
+    // 2) getLastVoucher — confirma que el punto de venta + tipo está
+    //    habilitado. Tipo 11 = Factura C (más común para monotributo).
+    const tipoChequeo = cred.tipo_contribuyente === 'responsable_inscripto' ? 6 : 11;
+    const ultimoNumero = await afip.ElectronicBilling.getLastVoucher(cred.punto_venta, tipoChequeo);
+
+    // Marcar last token success
+    await supabase.from('afip_credenciales')
+      .update({ ultimo_token_at: new Date().toISOString() })
+      .eq('tenant_id', auth.row.tenant_id);
+
+    return res.status(200).json({
+      ok: true,
+      message: 'Conexión exitosa con AFIP',
+      ambiente: cred.ambiente,
+      punto_venta: cred.punto_venta,
+      proximo_numero: (ultimoNumero || 0) + 1,
+      tipo_chequeado: tipoChequeo === 6 ? 'Factura B' : 'Factura C',
+    });
+  } catch (err) {
+    const msg = err.message || String(err);
+    return res.status(502).json({ error: 'AFIP_TEST_FAILED', detail: msg });
   }
 }
 

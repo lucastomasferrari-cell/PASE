@@ -17,7 +17,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { ShieldCheck, ShieldAlert, Trash2, Eye, EyeOff, Receipt, Ban } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Trash2, Eye, EyeOff, Receipt, Ban, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,6 +27,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   getCredencialesAFIP, upsertCredencialesAFIP, eliminarCredencialesAFIP, parsearCertVencimiento,
+  probarConexionAFIP,
 } from '@/lib/afip/service';
 import { listarFacturasAFIP, anularFacturaConNC } from '@/lib/afip/client';
 import type { AfipTipoComprobante } from '@/lib/afip/types';
@@ -85,6 +86,7 @@ export function SettingsAfip() {
   const [facturas, setFacturas] = useState<FacturaRow[]>([]);
   const [loadingFacturas, setLoadingFacturas] = useState(false);
   const [anulandoId, setAnulandoId] = useState<number | null>(null);
+  const [probando, setProbando] = useState(false);
 
   // Cargar histórico de facturas emitidas
   async function cargarFacturas() {
@@ -248,6 +250,26 @@ export function SettingsAfip() {
     }
   }
 
+  async function handleProbarConexion() {
+    setProbando(true);
+    try {
+      const r = await probarConexionAFIP();
+      if (!r.ok) {
+        toast.error('Conexión con AFIP falló', {
+          description: r.error,
+          duration: 8000,
+        });
+        return;
+      }
+      toast.success('Conexión OK con AFIP', {
+        description: `Ambiente: ${r.ambiente} · Próx número (${r.tipo_chequeado}): #${r.proximo_numero}`,
+        duration: 6000,
+      });
+    } finally {
+      setProbando(false);
+    }
+  }
+
   async function handleEliminar() {
     if (!confirm('¿Eliminar las credenciales AFIP del tenant? Esto bloquea la emisión de facturas hasta que vuelvas a cargar cert + key.')) return;
     setEliminando(true);
@@ -293,10 +315,22 @@ export function SettingsAfip() {
                   <><ShieldAlert className="h-5 w-5 text-warning" /> AFIP configurado pero NO activo</>
                 )}
               </CardTitle>
-              <Button variant="ghost" size="sm" onClick={handleEliminar} disabled={eliminando} className="text-destructive">
-                <Trash2 className="h-3.5 w-3.5 mr-1" />
-                {eliminando ? 'Eliminando…' : 'Eliminar'}
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleProbarConexion}
+                  disabled={probando}
+                  title="Validar que el cert + key funcionan haciendo WSAA login real"
+                >
+                  <Zap className="h-3.5 w-3.5 mr-1" />
+                  {probando ? 'Probando…' : 'Probar conexión'}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleEliminar} disabled={eliminando} className="text-destructive">
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  {eliminando ? 'Eliminando…' : 'Eliminar'}
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="text-sm space-y-1">
