@@ -64,6 +64,7 @@ const PropinasReparto = lazy(() => import('./pages/Empleados/PropinasReparto').t
 const FidelidadLista = lazy(() => import('./pages/Marketing/FidelidadLista').then(m => ({ default: m.FidelidadLista })));
 const CajaChica = lazy(() => import('./pages/Caja/CajaChica').then(m => ({ default: m.CajaChica })));
 const EmpleadosTrabajando = lazy(() => import('./pages/Empleados/EmpleadosTrabajando').then(m => ({ default: m.EmpleadosTrabajando })));
+const MiCierreView = lazy(() => import('./pages/Empleados/MiCierre').then(m => ({ default: m.MiCierreView })));
 const ReporteVentas = lazy(() => import('./pages/Reportes/ReporteVentas').then(m => ({ default: m.ReporteVentas })));
 const SettingsRecibos = lazy(() => import('./pages/Configuracion/SettingsRecibos').then(m => ({ default: m.SettingsRecibos })));
 const ReportePerformanceEmpleados = lazy(() => import('./pages/Reportes/ReportePerformanceEmpleados').then(m => ({ default: m.ReportePerformanceEmpleados })));
@@ -233,6 +234,7 @@ export default function App() {
                   <Route path="/empleados/horarios" element={<EmpleadosTrabajando />} />
                   <Route path="/empleados/performance" element={<StubRoute />} />
                   <Route path="/empleados/propinas" element={<PropinasReparto />} />
+                  <Route path="/empleados/mi-cierre" element={<MiCierreView />} />
 
                   {/* ── Pagos y caja ──────────────────────────────────── */}
                   <Route path="/pagos" element={<Navigate to="/pagos/metodos" replace />} />

@@ -93,6 +93,7 @@ export const ADMIN_NAVIGATION: NavCategory[] = [
     subItems: [
       { slug: 'lista',       label: 'Lista',             href: '/empleados/lista' },
       { slug: 'permisos',    label: 'Permisos',          href: '/empleados/permisos' },
+      { slug: 'mi-cierre',   label: 'Mi cierre del día',  href: '/empleados/mi-cierre' },
       { slug: 'propinas',    label: 'Reparto propinas',  href: '/empleados/propinas' },
       { slug: 'horarios',    label: 'Trabajando ahora',  href: '/empleados/horarios' },
       { slug: 'performance', label: 'Performance',       href: '/empleados/performance', badge: 'soon' },
