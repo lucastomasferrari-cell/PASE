@@ -44,6 +44,7 @@ import { fileURLToPath } from 'node:url';
 import { printers as printerHandler } from './printerHandler.js';
 import { PrintQueue } from './queue.js';
 import { PrintWorker } from './worker.js';
+import { Heartbeat, loadHeartbeatConfig } from './heartbeat.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PRINT_SERVER_PORT || '9100');
@@ -80,6 +81,40 @@ const worker = new PrintWorker({
   getPrinters: () => config.printers, // siempre lee fresh
 });
 worker.start();
+
+// ─── Heartbeat → backend Supabase (Sprint 2) ───────────────────────────────
+// Stats agregadas cada 60s. Sin token configurado, no hace nada.
+let heartbeat = null;
+function initHeartbeat() {
+  const hbCfg = loadHeartbeatConfig(CONFIG_PATH);
+  if (!hbCfg.agentToken) return; // sin token, no se manda nada — local-only mode
+
+  heartbeat = new Heartbeat({
+    getPrinters: () => config.printers,
+    checkPrintersOnline: async () => {
+      const map = {};
+      // Ping en paralelo con timeout para no bloquear el heartbeat tick si
+      // una impresora cuelga.
+      await Promise.all(config.printers.map(async (p) => {
+        try {
+          const s = await Promise.race([
+            printerHandler.ping(p),
+            new Promise((r) => setTimeout(() => r({ ok: false }), 3000)),
+          ]);
+          map[p.id] = !!s.ok;
+        } catch {
+          map[p.id] = false;
+        }
+      }));
+      return map;
+    },
+    getQueueStats: () => queue.stats(),
+    agentToken: hbCfg.agentToken,
+    heartbeatUrl: hbCfg.heartbeatUrl,
+  });
+  heartbeat.start();
+}
+initHeartbeat();
 
 // ─── App Express ───────────────────────────────────────────────────────────
 
@@ -303,6 +338,50 @@ app.get('/discover/usb', async (req, res) => {
   }
 });
 
+// ─── Config del agent: token de vinculación + heartbeat URL ───────────────
+// La UI Electron usa estos endpoints para gestionar la vinculación.
+
+app.get('/config', (req, res) => {
+  // No exponemos el token completo — solo si está seteado (para UI).
+  res.json({
+    has_token: !!config.agent_token,
+    token_preview: config.agent_token
+      ? `${config.agent_token.slice(0, 6)}...${config.agent_token.slice(-4)}`
+      : null,
+    heartbeat_url: config.heartbeat_url || null,
+    agent_name: config.agent_name || null,
+  });
+});
+
+app.post('/config/token', (req, res) => {
+  const { agent_token, heartbeat_url, agent_name } = req.body || {};
+  if (!agent_token || typeof agent_token !== 'string' || agent_token.length < 16) {
+    return res.status(400).json({ error: 'agent_token inválido (mínimo 16 chars)' });
+  }
+  config.agent_token = agent_token.trim();
+  if (heartbeat_url) config.heartbeat_url = String(heartbeat_url).trim();
+  if (agent_name) config.agent_name = String(agent_name).trim();
+  saveConfig(config);
+
+  // Reiniciar heartbeat con la nueva config
+  if (heartbeat) heartbeat.stop();
+  initHeartbeat();
+
+  res.json({ ok: true });
+});
+
+app.delete('/config/token', (req, res) => {
+  delete config.agent_token;
+  delete config.heartbeat_url;
+  delete config.agent_name;
+  saveConfig(config);
+  if (heartbeat) {
+    heartbeat.stop();
+    heartbeat = null;
+  }
+  res.json({ ok: true });
+});
+
 // ─── Start ─────────────────────────────────────────────────────────────────
 
 const server = app.listen(PORT, '127.0.0.1', () => {
@@ -318,6 +397,7 @@ const server = app.listen(PORT, '127.0.0.1', () => {
 // Cleanup grácil
 async function shutdown(signal) {
   console.log(`\n[server] ${signal} recibido — cerrando...`);
+  if (heartbeat) heartbeat.stop();
   await worker.stop();
   queue.close();
   server.close(() => {

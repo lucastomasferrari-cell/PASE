@@ -136,6 +136,7 @@ export const ADMIN_NAVIGATION: NavCategory[] = [
     subItems: [
       { slug: 'estaciones',  label: 'Estaciones',     href: '/hardware/estaciones' },
       { slug: 'impresoras',  label: 'Impresoras',     href: '/hardware/impresoras' },
+      { slug: 'agentes',     label: 'Print Agents (PCs)', href: '/hardware/agentes' },
       { slug: 'cajon',       label: 'Cajón de dinero', href: '/hardware/cajon',      badge: 'soon' },
       { slug: 'mp-point',    label: 'MP Point',       href: '/hardware/mp-point',    badge: 'soon' },
       { slug: 'tablets-kds', label: 'Tablets KDS',    href: '/hardware/tablets-kds', badge: 'soon' },

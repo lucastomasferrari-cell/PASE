@@ -66,6 +66,10 @@ export default async function handler(req, res) {
     if (action === 'notify-entregado' && req.method === 'POST') {
       return await handleNotifyEntregado(req, res);
     }
+    // ── Print Agent heartbeat (Sprint 2 impresoras) ──
+    if (action === 'agent-heartbeat' && req.method === 'POST') {
+      return await handleAgentHeartbeat(req, res);
+    }
     // ── Rappi: operaciones contra Rappi Restaurant Integration API v3 ──
     if (action === 'rappi-test' && req.method === 'POST') {
       return await handleRappiTest(req, res);
@@ -713,6 +717,74 @@ async function handleNotifyEntregado(req, res) {
     .update({ notif_email_entregado_at: new Date().toISOString() })
     .eq('id', venta_id);
   res.status(200).json({ ok: true, sent: !sent.skipped });
+}
+
+// ─── PRINT AGENT HEARTBEAT (Sprint 2 impresoras) ──────────────────────────
+//
+// Recibe heartbeat de cada Print Agent corriendo en una PC del comerciante.
+// Auth: token único pre-vinculado (no JWT — el agent no tiene usuario).
+// Cada 60s el agent hace POST con stats. Si el token no existe / fue
+// revocado, devolvemos 401 — el agent dejará de mandar.
+//
+// Body:
+//   {
+//     agent_token: "abc123...",
+//     agent_version: "1.1.0",
+//     hostname: "PC-Cocina",
+//     os_platform: "win32" | "darwin" | "linux",
+//     printers: [{ id, nombre, estacion, online: bool }],
+//     queue: { queued, printing, done, failed, dead_letter }
+//   }
+async function handleAgentHeartbeat(req, res) {
+  const { agent_token, agent_version, hostname, os_platform, printers, queue } = req.body || {};
+  if (!agent_token || typeof agent_token !== 'string') {
+    return res.status(400).json({ error: 'agent_token requerido' });
+  }
+
+  const supabase = db();
+  const { data: agent, error } = await supabase
+    .from('comanda_print_agents')
+    .select('id, local_id, tenant_id, deleted_at')
+    .eq('agent_token', agent_token)
+    .maybeSingle();
+  if (error) {
+    console.error('[heartbeat] DB error:', error.message);
+    return res.status(500).json({ error: 'DB_ERROR' });
+  }
+  if (!agent || agent.deleted_at) {
+    return res.status(401).json({ error: 'INVALID_TOKEN' });
+  }
+
+  const printersArr = Array.isArray(printers) ? printers : [];
+  const onlineCount = printersArr.filter((p) => p && p.online).length;
+  const q = queue || {};
+
+  const { error: upErr } = await supabase
+    .from('comanda_print_agents')
+    .update({
+      last_seen_at: new Date().toISOString(),
+      agent_version: agent_version ?? null,
+      hostname: hostname ?? null,
+      os_platform: os_platform ?? null,
+      printers_total: printersArr.length,
+      printers_online: onlineCount,
+      queue_queued: Number(q.queued ?? 0),
+      queue_printing: Number(q.printing ?? 0),
+      queue_failed: Number(q.failed ?? 0),
+      queue_dead_letter: Number(q.dead_letter ?? 0),
+      metadata: { printers: printersArr.slice(0, 20) }, // cap para no inflar la row
+    })
+    .eq('id', agent.id);
+  if (upErr) {
+    console.error('[heartbeat] update error:', upErr.message);
+    return res.status(500).json({ error: 'UPDATE_FAILED' });
+  }
+
+  return res.status(200).json({
+    ok: true,
+    local_id: agent.local_id,
+    server_time: new Date().toISOString(),
+  });
 }
 
 // ─── RAPPI: test de conexión (auth check) ─────────────────────────────
