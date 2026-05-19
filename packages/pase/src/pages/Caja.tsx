@@ -9,6 +9,7 @@ import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { CUENTAS, CUENTAS_OCULTAS_TEMPORAL } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import { RightSubNav, type SubNavSection, PageHeader, EmptyState, LocalLockedChip } from "../components/ui";
+import { ManagerOverrideModal } from "../components/ManagerOverrideModal";
 import { exportCSV } from "../lib/exportCSV";
 import { CajaCardsRow } from "./caja/CajaCardsRow";
 import type { Usuario, Local } from "../types/auth";
@@ -394,15 +395,29 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     }
   };
 
-  const eliminarMov = async (m: Movimiento) => {
-    const motivo = prompt("¿Por qué anulás este movimiento? (obligatorio)");
-    if (!motivo?.trim()) return;
+  // Pending override: si el user no tiene 'compras_anular', guardamos el
+  // mov/motivo y abrimos el modal de código. Mismo patrón que anular_factura,
+  // anular_remito, anular_gasto.
+  const [pendingAnularMov, setPendingAnularMov] = useState<{ mov: Movimiento; motivo: string } | null>(null);
+
+  async function ejecutarAnularMov(m: Movimiento, motivo: string, overrideCode?: string) {
     const { error } = await db.rpc("anular_movimiento", {
       p_mov_id: m.id,
       p_motivo: motivo,
+      ...(overrideCode ? { p_override_code: overrideCode } : {}),
     });
     if (error) { alert(translateRpcError(error)); return; }
     load();
+  }
+
+  const eliminarMov = async (m: Movimiento) => {
+    const motivo = prompt("¿Por qué anulás este movimiento? (obligatorio)");
+    if (!motivo?.trim()) return;
+    if (tienePermiso(user, "compras_anular")) {
+      await ejecutarAnularMov(m, motivo);
+    } else {
+      setPendingAnularMov({ mov: m, motivo });
+    }
   };
 
   const guardarEditMov = async () => {
@@ -818,6 +833,19 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
           </div>
         </div>
       )}
+
+      {/* MODAL MANAGER OVERRIDE — para anular movimiento sin permiso compras_anular */}
+      <ManagerOverrideModal
+        open={pendingAnularMov !== null}
+        descripcion={pendingAnularMov ? `Anular movimiento de ${fmt_$(Math.abs(pendingAnularMov.mov.importe || 0))}` : undefined}
+        onClose={() => setPendingAnularMov(null)}
+        onValidated={async (codigo) => {
+          if (!pendingAnularMov) return;
+          const { mov, motivo } = pendingAnularMov;
+          setPendingAnularMov(null);
+          await ejecutarAnularMov(mov, motivo, codigo);
+        }}
+      />
     </div>
   );
 }
