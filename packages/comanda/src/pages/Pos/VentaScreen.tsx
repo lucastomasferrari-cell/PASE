@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ModifiersDialog } from '@/components/dialogs/ModifiersDialog';
 import { PaymentDialog } from '@/components/dialogs/PaymentDialog';
+import { EmitirFacturaDialog } from '@/components/dialogs/EmitirFacturaDialog';
 import { DiscountDialog } from '@/components/dialogs/DiscountDialog';
 import { TransferMesaDialog } from '@/components/dialogs/TransferMesaDialog';
 import { MergeMesasDialog } from '@/components/dialogs/MergeMesasDialog';
@@ -65,6 +66,7 @@ export function VentaScreen() {
 
   // Dialogs
   const [showCobro, setShowCobro] = useState(false);
+  const [showEmitirFactura, setShowEmitirFactura] = useState(false);
   const [showDescuento, setShowDescuento] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
@@ -785,7 +787,22 @@ export function VentaScreen() {
           empleadoId={empleado.id}
           onCobrado={() => {
             reload();
-            setTimeout(() => navigate(venta.modo === 'salon' ? '/pos/salon' : '/pos/mostrador'), 800);
+            // Post-cobro: ofrecer emitir factura electrónica. El modal
+            // EmitirFacturaDialog chequea solo si AFIP está activo en el
+            // tenant; si no lo está, el user igual lo cierra con "solo
+            // ticket no fiscal" y navegamos como antes.
+            setShowEmitirFactura(true);
+          }}
+        />
+      )}
+
+      {showEmitirFactura && (
+        <EmitirFacturaDialog
+          open={showEmitirFactura}
+          onOpenChange={setShowEmitirFactura}
+          venta={venta}
+          onClose={() => {
+            navigate(venta.modo === 'salon' ? '/pos/salon' : '/pos/mostrador');
           }}
         />
       )}
