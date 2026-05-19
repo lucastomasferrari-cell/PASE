@@ -72,19 +72,38 @@ const TOURS_POR_PERMISO: Record<string, PaseStep[]> = {
       step: {
         popover: {
           title: "💰 Caja",
-          description: `Acá ves los saldos de tus cuentas y todos los movimientos del local.<br /><br />
-            Te llevo a esta pantalla para que veas cómo se ve.`,
+          description: `Acá ves los saldos de cada cuenta y todos los movimientos del local.<br /><br />
+            Te muestro las 3 cosas que más vas a usar.`,
           side: "over", align: "center",
         },
       },
     },
     {
       step: {
-        // Botón "+ Movimiento" del header
-        element: "button.btn.btn-acc",
+        element: "[data-tour='caja-cards']",
+        popover: {
+          title: "Cards de saldo",
+          description: `Saldo en tiempo real de cada cuenta. Click en una card para filtrar el listado de abajo por esa cuenta.`,
+          side: "bottom",
+        },
+      },
+    },
+    {
+      step: {
+        element: "[data-tour='caja-nuevo-mov']",
         popover: {
           title: "+ Movimiento",
-          description: `Acá cargás un movimiento manual (ingreso o egreso). La mayoría se generan automático al cargar ventas/gastos/facturas — solo usás esto para ajustes manuales.`,
+          description: `Acá cargás un movimiento manual (ingreso o egreso). La mayoría se generan automático al cargar ventas, gastos o pagar facturas — solo usás esto para ajustes manuales (ej: corregir un faltante de caja).`,
+          side: "bottom",
+        },
+      },
+    },
+    {
+      step: {
+        element: "[data-tour='caja-transfer']",
+        popover: {
+          title: "Transferir entre cuentas",
+          description: `Movés plata de una cuenta a otra (ej: depositás efectivo al banco). Genera 2 movimientos: egreso en origen + ingreso en destino. El saldo total no cambia.`,
           side: "bottom",
         },
       },
@@ -97,8 +116,20 @@ const TOURS_POR_PERMISO: Record<string, PaseStep[]> = {
       step: {
         popover: {
           title: "📈 Ventas",
-          description: `Cargás los cierres de venta por turno (almuerzo/cena). Las ventas en efectivo generan automáticamente un movimiento en Caja.`,
+          description: `Cargás los cierres de venta por turno (almuerzo / cena).<br /><br />
+            Las ventas en efectivo generan automáticamente un movimiento en Caja. Las de tarjeta / MP / Rappi / etc. quedan registradas pero no impactan caja hasta que se acrediten.`,
           side: "over", align: "center",
+        },
+      },
+    },
+    {
+      step: {
+        element: "[data-tour='ventas-nueva']",
+        popover: {
+          title: "+ Cargar venta",
+          description: `Una venta = un cierre de turno. Cargás un total por cada medio de cobro (efectivo, tarjeta, QR, etc.).<br /><br />
+            Si usás Maxirest, podés importar el cierre Z directamente desde el botón "Importar Maxirest".`,
+          side: "bottom",
         },
       },
     },
@@ -110,18 +141,37 @@ const TOURS_POR_PERMISO: Record<string, PaseStep[]> = {
       step: {
         popover: {
           title: "📄 Compras",
-          description: `Acá viven las facturas de proveedores. Te muestro cómo se cargan.`,
+          description: `Acá viven las facturas y remitos de proveedores. Te muestro las 3 formas de cargar.`,
           side: "over", align: "center",
         },
       },
     },
     {
       step: {
-        // Botón "+ Cargar factura"
-        element: "button.btn.btn-acc",
+        element: "[data-tour='compras-cargar']",
         popover: {
           title: "+ Cargar factura",
-          description: `Cargás facturas manualmente o usá <strong>Lector IA</strong> (subís foto/PDF y se autocompleta). Compras informales sin factura → cargás como <strong>Remito</strong>.`,
+          description: `Form manual: número, fecha, vencimiento, neto, IVA. Todo lo que viene en el comprobante.`,
+          side: "bottom",
+        },
+      },
+    },
+    {
+      step: {
+        element: "[data-tour='compras-lector-ia']",
+        popover: {
+          title: "Lector IA",
+          description: `Subís foto o PDF de la factura → la IA la lee y te autocompleta el form. Vos solo revisás y confirmás. 95% de las veces no hay que tocar nada.`,
+          side: "bottom",
+        },
+      },
+    },
+    {
+      step: {
+        element: "[data-tour='compras-remito']",
+        popover: {
+          title: "+ Remito",
+          description: `Compras informales sin factura (verdulero del barrio, mandadero, etc.). Anotás monto + proveedor sin desglosar IVA. Después se puede convertir en factura si llega una formal.`,
           side: "bottom",
         },
       },
@@ -134,8 +184,28 @@ const TOURS_POR_PERMISO: Record<string, PaseStep[]> = {
       step: {
         popover: {
           title: "💸 Gastos",
-          description: `Cargás gastos del día (servicios, alquiler, etc). Cada gasto genera automáticamente un movimiento en Caja descontando el saldo.`,
+          description: `Servicios, alquiler, sueldos, mantenimiento. Cada gasto genera automáticamente un movimiento en Caja descontando el saldo de la cuenta que uses.`,
           side: "over", align: "center",
+        },
+      },
+    },
+    {
+      step: {
+        element: "[data-tour='gastos-nuevo']",
+        popover: {
+          title: "+ Cargar gasto",
+          description: `Elegís tipo (fijo / variable / publicidad / etc.) → categoría → monto → cuenta de egreso. El movimiento de Caja se genera solo.`,
+          side: "bottom",
+        },
+      },
+    },
+    {
+      step: {
+        element: "[data-tour='gastos-plantillas']",
+        popover: {
+          title: "Plantillas",
+          description: `Si tenés gastos que se repiten todos los meses (alquiler, internet, etc.) creás una plantilla con los datos pre-cargados. Después solo confirmás el pago de cada mes con un click.`,
+          side: "bottom",
         },
       },
     },

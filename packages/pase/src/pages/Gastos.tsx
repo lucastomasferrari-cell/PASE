@@ -358,7 +358,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
               disabled={gastos.length === 0}
               title="Exportar gastos visibles a CSV"
             >⬇ Exportar</button>
-            <button className="btn btn-acc" onClick={() => { setForm(emptyForm); setModal(true); setIdempKeyCrearGasto(crypto.randomUUID()); }}>
+            <button data-tour="gastos-nuevo" className="btn btn-acc" onClick={() => { setForm(emptyForm); setModal(true); setIdempKeyCrearGasto(crypto.randomUUID()); }}>
               + Cargar Gasto
             </button>
           </>
@@ -418,7 +418,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                 </div>
               );
             })}
-            <div style={{ padding: "9px 14px", fontSize: 11, color: "var(--muted2)", cursor: "pointer", borderTop: "1px solid var(--bd)" }} onClick={() => setGestionarModal(true)}>
+            <div data-tour="gastos-plantillas" style={{ padding: "9px 14px", fontSize: 11, color: "var(--muted2)", cursor: "pointer", borderTop: "1px solid var(--bd)" }} onClick={() => setGestionarModal(true)}>
               + Gestionar recurrentes
             </div>
           </div>

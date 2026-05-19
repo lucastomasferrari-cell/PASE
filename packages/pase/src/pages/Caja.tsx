@@ -505,8 +505,8 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
               disabled={mFilt.length === 0}
               title="Exportar movimientos visibles a CSV (abre en Excel)"
             >⬇ Exportar</button>
-            <button className="btn btn-sec" onClick={()=>setTransfModal(true)} disabled={cuentasOperablesList.length<2}>↔ Transferir</button>
-            <button className="btn btn-acc" onClick={abrirNuevoMovimiento}>+ Movimiento</button>
+            <button data-tour="caja-transfer" className="btn btn-sec" onClick={()=>setTransfModal(true)} disabled={cuentasOperablesList.length<2}>↔ Transferir</button>
+            <button data-tour="caja-nuevo-mov" className="btn btn-acc" onClick={abrirNuevoMovimiento}>+ Movimiento</button>
           </>
         ) : (
           <>
@@ -543,14 +543,16 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         const orden = ["Caja Efectivo", "Caja Chica", "Caja Mayor"];
         const cardsVisibles = orden.filter(k => cuentasVisibles.includes(k));
         return (
-          <CajaCardsRow
-            cards={cardsVisibles.map((cuenta, i) => ({
-              cuenta,
-              label: cuenta,
-              saldo: saldos[cuenta] || 0,
-              variant: i === 0 && cuenta === "Caja Efectivo" ? "anchor" : "normal",
-            }))}
-          />
+          <div data-tour="caja-cards">
+            <CajaCardsRow
+              cards={cardsVisibles.map((cuenta, i) => ({
+                cuenta,
+                label: cuenta,
+                saldo: saldos[cuenta] || 0,
+                variant: i === 0 && cuenta === "Caja Efectivo" ? "anchor" : "normal",
+              }))}
+            />
+          </div>
         );
       })()}
       <div className="panel">

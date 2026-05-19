@@ -22,9 +22,18 @@ import { ComparativaSucursalesWidget } from "./ComparativaSucursalesWidget";
 import { ObjetivosMesWidget } from "./ObjetivosMesWidget";
 import { PuntoEquilibrioWidget } from "./PuntoEquilibrioWidget";
 import { UltimosOverridesWidget } from "./UltimosOverridesWidget";
+import { ProximoPasoWidget } from "./ProximoPasoWidget";
 
 export const WIDGETS: WidgetDefinition[] = [
   // ─── Cross-rol ─────────────────────────────────────────────────────────
+  {
+    id: "proximo_paso",
+    title: "Tu próximo paso",
+    description: "Recorrido guiado de las pantallas principales. Va sugiriendo qué explorar a continuación basado en lo que ya viste.",
+    permisosRequeridos: [],  // cross-rol — útil para todos los empleados nuevos
+    size: "md",
+    render: (ctx) => <ProximoPasoWidget ctx={ctx} />,
+  },
   {
     id: "tareas_pineadas",
     title: "Tareas y mensajes",

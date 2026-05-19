@@ -795,12 +795,12 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                 title={`Exportar ${subSection} a CSV`}
               >⬇ Exportar</button>
             )}
-            {subSection === "facturas" && puedeFacturas && <button className="btn btn-sec" onClick={() => setLectorModal(true)}>Lector IA</button>}
+            {subSection === "facturas" && puedeFacturas && <button data-tour="compras-lector-ia" className="btn btn-sec" onClick={() => setLectorModal(true)}>Lector IA</button>}
             {subSection === "facturas" && puedeRemitos && (
-              <button className="btn btn-sec" onClick={() => { setRemForm({ ...emptyRemForm, local_id: localActivo ? String(localActivo) : "" }); setRemModal(true); }}>+ Cargar remito</button>
+              <button data-tour="compras-remito" className="btn btn-sec" onClick={() => { setRemForm({ ...emptyRemForm, local_id: localActivo ? String(localActivo) : "" }); setRemModal(true); }}>+ Cargar remito</button>
             )}
             {subSection === "facturas" && puedeFacturas && (
-              <button className="btn btn-acc" onClick={() => { setForm({ ...emptyForm, local_id: localActivo ? String(localActivo) : "" }); setItems([]); setModal(true); }}>+ Cargar factura</button>
+              <button data-tour="compras-cargar" className="btn btn-acc" onClick={() => { setForm({ ...emptyForm, local_id: localActivo ? String(localActivo) : "" }); setItems([]); setModal(true); }}>+ Cargar factura</button>
             )}
             {subSection === "remitos" && puedeRemitos && (
               <button className="btn btn-acc" onClick={() => { setRemForm({ ...emptyRemForm, local_id: localActivo ? String(localActivo) : "" }); setRemModal(true); }}>+ Cargar remito</button>

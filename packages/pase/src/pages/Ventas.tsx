@@ -265,7 +265,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
               title="Exportar ventas visibles a CSV"
             >⬇ Exportar</button>
             <button className="btn btn-ghost" onClick={()=>setShowMaxirest(true)}>Importar cierre Maxirest</button>
-            <button className="btn btn-acc" onClick={()=>setModalNuevo(true)}>+ Cargar venta</button>
+            <button data-tour="ventas-nueva" className="btn btn-acc" onClick={()=>setModalNuevo(true)}>+ Cargar venta</button>
           </>
         }
       />
