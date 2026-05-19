@@ -410,5 +410,9 @@ async function shutdown(signal) {
     process.exit(1);
   }, 5000);
 }
-process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
+// Si estamos embebidos en Electron (parent ya maneja el lifecycle), no
+// instalamos handlers que llamen process.exit — eso mataría Electron.
+if (!process.env.PRINT_SERVER_EMBEDDED) {
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+}

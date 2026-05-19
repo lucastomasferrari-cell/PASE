@@ -13,13 +13,19 @@ El browser solo puede hablar con impresoras via WebUSB (Chrome/Edge únicamente,
 
 ## Instalación
 
-Requiere Node.js 18+.
+**Para usuarios finales (comerciantes):** descargar el instalador del `@pase/print-agent` (Electron) — no toques este paquete directo. El agent ya empaqueta este server adentro.
+
+**Para desarrollo / debug:**
+
+Requiere Node.js 22.x (la misma versión que ships con Electron 33). Si tenés Node 24+, el módulo nativo `better-sqlite3` va a fallar con `NODE_MODULE_VERSION mismatch`.
 
 ```bash
 cd packages/print-server
 npm install
 npm start
 ```
+
+Si tenés `NODE_MODULE_VERSION X` error: corré `pnpm --filter @pase/print-server rebuild-native` y volvé a probar.
 
 El servidor escucha en `http://127.0.0.1:9100` por default. Se puede cambiar con env var `PRINT_SERVER_PORT`.
 

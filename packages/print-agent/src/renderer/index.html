@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>COMANDA Print Agent</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <div class="logo">🖨️</div>
+    <h1>COMANDA Print Agent</h1>
+    <p class="subtitle">Servidor local de impresión</p>
+  </header>
+
+  <main class="content">
+    <!-- Status del print-server -->
+    <section class="card">
+      <div class="status-indicator" id="status-indicator">
+        <span class="dot dot-yellow"></span>
+        <span class="label">Iniciando…</span>
+      </div>
+      <div class="status-detail">
+        <div class="row"><span>Puerto:</span> <strong id="port">—</strong></div>
+        <div class="row"><span>Versión:</span> <strong id="version">—</strong></div>
+        <div class="row" id="error-row" hidden>
+          <span>Error:</span> <code id="error-text"></code>
+        </div>
+      </div>
+    </section>
+
+    <!-- Próximos pasos -->
+    <section class="card">
+      <h2>Próximos pasos</h2>
+      <ol class="steps">
+        <li>
+          Abrí <a href="#" id="open-comanda">COMANDA en el navegador</a>
+          (Hardware → Impresoras).
+        </li>
+        <li>
+          Agregá tus impresoras térmicas. Esta app las maneja por vos.
+        </li>
+        <li>
+          Vinculá esta PC: COMANDA → Hardware → Print Agents → "Vincular nueva PC".
+          Te da un token que pegás abajo.
+        </li>
+      </ol>
+    </section>
+
+    <!-- Configuración -->
+    <section class="card">
+      <h2>Configuración</h2>
+      <div class="checkbox-row">
+        <input type="checkbox" id="login-startup" />
+        <label for="login-startup">Arrancar cuando se prende la PC</label>
+      </div>
+      <p class="hint">Recomendado para que el local no tenga que abrir el agent manualmente cada vez.</p>
+
+      <button id="open-logs-btn" class="btn-secondary">Ver logs</button>
+    </section>
+
+    <p class="footer">
+      Cerrá esta ventana cuando quieras — el agent sigue corriendo en segundo plano.
+      Para salir completamente: click derecho en el ícono de bandeja → Salir.
+    </p>
+  </main>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

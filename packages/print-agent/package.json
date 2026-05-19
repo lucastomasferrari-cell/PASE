@@ -1,0 +1,84 @@
+{
+  "name": "@pase/print-agent",
+  "version": "1.0.0",
+  "description": "COMANDA Print Agent — Electron wrapper que corre el print-server localmente con UI tray + auto-start.",
+  "main": "src/main/main.js",
+  "type": "commonjs",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "@pase/print-server": "workspace:*",
+    "electron-log": "^5.2.4",
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.pase.printagent",
+    "productName": "COMANDA Print Agent",
+    "copyright": "Copyright © 2026 PASE",
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "!**/*.test.*",
+      "!**/.DS_Store"
+    ],
+    "extraResources": [
+      {
+        "from": "../print-server",
+        "to": "print-server",
+        "filter": [
+          "src/**/*",
+          "package.json",
+          "node_modules/**/*",
+          "!node_modules/**/test/**",
+          "!node_modules/**/tests/**",
+          "!node_modules/**/*.md"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ],
+      "icon": "assets/icon.ico",
+      "publisherName": "PASE"
+    },
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] }
+      ],
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "icon": "assets/icon.png",
+      "category": "Office"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "COMANDA Print Agent",
+      "runAfterFinish": true
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://pase-yndx.vercel.app/print-agent-releases/${os}/"
+      }
+    ]
+  }
+}
