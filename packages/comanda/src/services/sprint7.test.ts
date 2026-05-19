@@ -11,6 +11,13 @@ vi.mock('../lib/supabase', () => ({
   db: { rpc: (...args: unknown[]) => mockRpc(...args), from: () => ({}) },
 }));
 
+// Estos tests validan que la rama ONLINE de los services pasa idempotencyKey
+// correctamente. La rama offline (cuando flag está ON) usa otro path con
+// p_idempotency_uuid en la cola — tiene tests propios.
+vi.mock('../lib/featureFlags', () => ({
+  featureFlags: { offlineFirstVentas: false },
+}));
+
 import { abrirTurno, registrarMovimiento } from './turnosCajaService';
 import { aplicarDescuento } from './descuentosService';
 import { anularItem, anularVenta } from './overridesService';

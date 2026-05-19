@@ -14,6 +14,13 @@ vi.mock('../lib/supabase', () => ({
   },
 }));
 
+// Estos tests validan la rama ONLINE de mesasService. La rama offline tiene
+// su propio test suite (transferenciasOfflineService). Fijamos el flag en
+// false explícitamente para no depender del default global.
+vi.mock('../lib/featureFlags', () => ({
+  featureFlags: { offlineFirstVentas: false },
+}));
+
 import {
   transferirMesaService, unirMesasService, partirCuentaService,
   setMesaEstado,

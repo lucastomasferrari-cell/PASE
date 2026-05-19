@@ -10,6 +10,13 @@ vi.mock('../lib/supabase', () => ({
   },
 }));
 
+// Estos tests validan la rama ONLINE de ventasService. La rama offline tiene
+// su propio test suite (ventasOfflineService.test.ts). Fijamos el flag en
+// false explícitamente para no depender del default global.
+vi.mock('../lib/featureFlags', () => ({
+  featureFlags: { offlineFirstVentas: false },
+}));
+
 import {
   abrirVenta, agregarItem, mandarCurso, anularItem, modificarItem,
 } from './ventasService';

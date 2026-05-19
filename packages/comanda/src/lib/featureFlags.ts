@@ -1,14 +1,13 @@
 // Feature flags para rollout gradual de capacidades nuevas.
 //
-// Para activar: en build time `VITE_FF_OFFLINE_FIRST_VENTAS=1` o
-// (mejor) en runtime via localStorage para flexibilidad:
+// Override por usuario en runtime:
+//   localStorage.setItem('comanda.ff.offline_first_ventas', '0')  // apagar
+//   localStorage.setItem('comanda.ff.offline_first_ventas', '1')  // prender
 //
-//   localStorage.setItem('comanda.ff.offline_first_ventas', '1')
-//
-// Default false. La idea es que pase por una etapa de testing manual
-// lado-a-lado online vs offline antes de hacer default true.
+// O en build time:
+//   VITE_FF_OFFLINE_FIRST_VENTAS=0 (override del default)
 
-function getFlag(key: string, envKey: string): boolean {
+function getFlag(key: string, envKey: string, defaultValue: boolean): boolean {
   // Runtime localStorage (override por usuario, útil para testing en prod sin
   // redeploy)
   if (typeof localStorage !== 'undefined') {
@@ -20,14 +19,19 @@ function getFlag(key: string, envKey: string): boolean {
   const env = (typeof import.meta !== 'undefined' && import.meta.env)
     ? (import.meta.env as Record<string, string | undefined>)[envKey]
     : undefined;
-  return env === '1' || env === 'true';
+  if (env === '1' || env === 'true') return true;
+  if (env === '0' || env === 'false') return false;
+  return defaultValue;
 }
 
 export const featureFlags = {
-  // Fase 4.3: usar ventasOfflineService en lugar de los services online.
-  // Default false. Activar manualmente cuando esté testeado.
+  // Sprint A2 (2026-05-19): offline-first encendido por default. Único
+  // usuario activo es Lucas, no hay clientes externos. Si rompe algo, el
+  // user puede apagarlo desde Hardware o con un localStorage.setItem.
+  // Cuando entren más usuarios reales, evaluar si dejarlo ON o gating
+  // por tenant.
   get offlineFirstVentas(): boolean {
-    return getFlag('offline_first_ventas', 'VITE_FF_OFFLINE_FIRST_VENTAS');
+    return getFlag('offline_first_ventas', 'VITE_FF_OFFLINE_FIRST_VENTAS', true);
   },
 };
 
