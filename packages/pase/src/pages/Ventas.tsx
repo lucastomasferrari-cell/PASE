@@ -8,6 +8,7 @@ import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import ImportarMaxirest from "./ImportarMaxirest";
 import { Modal, PageHeader, EmptyState, LocalLockedChip, LocalSelectorObligatorio } from "../components/ui";
+import { ManagerOverrideModal } from "../components/ManagerOverrideModal";
 import { exportCSV } from "../lib/exportCSV";
 import type { Usuario, Local, Venta, CierreVentas } from "../types";
 
@@ -169,46 +170,61 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
     }
   };
 
-  const guardarEdit=async()=>{
-    if(!editModal)return;
-    const id=editModal.id;
-    const nuevoMonto=parseFloat(String(editModal.monto));
-    if(!Number.isFinite(nuevoMonto)||nuevoMonto<=0){
-      alert("El monto debe ser un número mayor a 0");return;
-    }
-    // editar_venta RPC: ajusta monto + recalcula movimiento + saldos
-    // atómicamente. Solo se puede cambiar el monto desde acá; otros
-    // campos se actualizan después con un update directo (no afectan
-    // movimientos en el caso típico).
-    const {error:rpcErr}=await db.rpc("editar_venta",{p_venta_id:id,p_nuevo_monto:nuevoMonto});
+  // Helper que ejecuta TODO el flow de guardar edición. Lo invocan tanto
+  // guardarEdit (path directo, con permiso) como el modal de override
+  // (path con código TOTP del dueño).
+  async function ejecutarGuardarEditCompleto(em: VentaEditable, overrideCode?: string) {
+    const id=em.id;
+    const nuevoMonto=parseFloat(String(em.monto));
+    const args: { p_venta_id: string; p_nuevo_monto: number; p_override_code?: string } = {
+      p_venta_id: id,
+      p_nuevo_monto: nuevoMonto,
+    };
+    if (overrideCode) args.p_override_code = overrideCode;
+    const {error:rpcErr}=await db.rpc("editar_venta", args);
     if(rpcErr){alert("Error al editar venta: "+(rpcErr.message||""));return;}
 
     // Otros campos (fecha, turno, medio, local_id) — update directo.
-    // Cambiar estos puede descuadrar el saldo en casos raros (ej:
-    // pasar de EFECTIVO a TARJETA). Para esos casos hay que borrar y
-    // re-cargar manualmente. La UI debería desactivar esos campos en
-    // un sprint futuro.
     // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4: editar_venta RPC solo cubre monto; cambiar fecha/turno/medio/local_id va por UPDATE directo. Necesita RPC editar_venta_completa para ser 100% atómico — F1 ya cerró la creación, esto es deuda residual del flow de edición.
     await db.from("ventas").update({
-      fecha:editModal.fecha,
-      turno:editModal.turno,
-      medio:editModal.medio,
-      local_id:parseInt(String(editModal.local_id)),
+      fecha:em.fecha,
+      turno:em.turno,
+      medio:em.medio,
+      local_id:parseInt(String(em.local_id)),
     }).eq("id",id);
 
     setEditModal(null);
     if(detalleModal){
-      const updated: Venta[]=detalleModal.items.map(i=>i.id===id?{...i,...editModal,monto:nuevoMonto,local_id:parseInt(String(editModal.local_id))}:i);
+      const updated: Venta[]=detalleModal.items.map(i=>i.id===id?{...i,...em,monto:nuevoMonto,local_id:parseInt(String(em.local_id))}:i);
       setDetalleModal({...detalleModal,items:updated,total:updated.reduce((s,i)=>s+(i.monto||0),0)});
     }
     load();
+  }
+
+  const guardarEdit=async()=>{
+    if(!editModal)return;
+    const nuevoMonto=parseFloat(String(editModal.monto));
+    if(!Number.isFinite(nuevoMonto)||nuevoMonto<=0){
+      alert("El monto debe ser un número mayor a 0");return;
+    }
+    if (!tienePermiso(user, "ventas_anular")) {
+      setPendingEditarVenta(editModal);
+      return;
+    }
+    await ejecutarGuardarEditCompleto(editModal);
   };
 
-  const eliminarLinea=async(id: string)=>{
-    if(!confirm("¿Eliminar este registro?"))return;
-    // eliminar_venta RPC: borra venta + ajusta movimiento + saldos
-    // atómicamente. Si el mov es legacy sin venta_ids, solo borra la venta.
-    const {error}=await db.rpc("eliminar_venta",{p_venta_id:id});
+  // Pending override states. Misma pattern que Gastos/Caja/Compras.
+  // Si el user NO tiene ventas_anular, guardamos los args y abrimos
+  // ManagerOverrideModal pidiendo código TOTP del dueño.
+  const [pendingEliminarLinea, setPendingEliminarLinea] = useState<string | null>(null);
+  const [pendingEliminarCierre, setPendingEliminarCierre] = useState<CierreVentas | null>(null);
+  const [pendingEditarVenta, setPendingEditarVenta] = useState<VentaEditable | null>(null);
+
+  async function ejecutarEliminarLinea(id: string, overrideCode?: string) {
+    const args: { p_venta_id: string; p_override_code?: string } = { p_venta_id: id };
+    if (overrideCode) args.p_override_code = overrideCode;
+    const {error}=await db.rpc("eliminar_venta", args);
     if(error){alert("Error al eliminar venta: "+(error.message||""));return;}
     if(detalleModal){
       const updated=detalleModal.items.filter(i=>i.id!==id);
@@ -216,23 +232,39 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
       else{setDetalleModal({...detalleModal,items:updated,total:updated.reduce((s: number,i: Venta)=>s+(i.monto||0),0)});}
     }
     load();
+  }
+
+  const eliminarLinea=async(id: string)=>{
+    if(!confirm("¿Eliminar este registro?"))return;
+    if(tienePermiso(user, "ventas_anular")) {
+      await ejecutarEliminarLinea(id);
+    } else {
+      setPendingEliminarLinea(id);
+    }
   };
 
-  const eliminarBloque=async(grupo: CierreVentas)=>{
-    if(!confirm(`¿Eliminar el cierre completo del ${fmt_d(grupo.fecha)} ${grupo.turno}?`))return;
-    // RPC eliminar_cierre: atómico a nivel cierre completo. Si falla en
-    // mitad, rollback transaccional → no quedan estados parciales como
-    // pasaba con el loop secuencial de eliminar_venta.
-    const {data,error}=await db.rpc("eliminar_cierre",{
+  async function ejecutarEliminarCierre(grupo: CierreVentas, overrideCode?: string) {
+    const args: { p_local_id: number; p_fecha: string; p_turno: string; p_override_code?: string } = {
       p_local_id:grupo.local_id,
       p_fecha:grupo.fecha,
       p_turno:grupo.turno,
-    });
+    };
+    if (overrideCode) args.p_override_code = overrideCode;
+    const {data,error}=await db.rpc("eliminar_cierre", args);
     if(error){alert("Error eliminando cierre: "+(error.message||""));return;}
-    if(data?.contiene_legacy){
+    if((data as { contiene_legacy?: boolean })?.contiene_legacy){
       alert("Cierre borrado. Algunos movimientos antiguos en Caja Chica pueden requerir borrado manual (cierres pre-2026-04-27 sin link a sus ventas).");
     }
     setDetalleModal(null);load();
+  }
+
+  const eliminarBloque=async(grupo: CierreVentas)=>{
+    if(!confirm(`¿Eliminar el cierre completo del ${fmt_d(grupo.fecha)} ${grupo.turno}?`))return;
+    if(tienePermiso(user, "ventas_anular")) {
+      await ejecutarEliminarCierre(grupo);
+    } else {
+      setPendingEliminarCierre(grupo);
+    }
   };
 
   return (
@@ -449,6 +481,41 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
           </div>
         </div>
       )}
+
+      {/* Manager Override modals (acciones destructivas sin permiso ventas_anular) */}
+      <ManagerOverrideModal
+        open={pendingEliminarLinea !== null}
+        descripcion={pendingEliminarLinea ? `Eliminar venta` : undefined}
+        onClose={() => setPendingEliminarLinea(null)}
+        onValidated={async (codigo: string) => {
+          if (!pendingEliminarLinea) return;
+          const id = pendingEliminarLinea;
+          setPendingEliminarLinea(null);
+          await ejecutarEliminarLinea(id, codigo);
+        }}
+      />
+      <ManagerOverrideModal
+        open={pendingEliminarCierre !== null}
+        descripcion={pendingEliminarCierre ? `Eliminar cierre del ${fmt_d(pendingEliminarCierre.fecha)} ${pendingEliminarCierre.turno}` : undefined}
+        onClose={() => setPendingEliminarCierre(null)}
+        onValidated={async (codigo: string) => {
+          if (!pendingEliminarCierre) return;
+          const grupo = pendingEliminarCierre;
+          setPendingEliminarCierre(null);
+          await ejecutarEliminarCierre(grupo, codigo);
+        }}
+      />
+      <ManagerOverrideModal
+        open={pendingEditarVenta !== null}
+        descripcion={pendingEditarVenta ? `Editar venta — nuevo monto ${fmt_$(parseFloat(String(pendingEditarVenta.monto)))}` : undefined}
+        onClose={() => setPendingEditarVenta(null)}
+        onValidated={async (codigo: string) => {
+          if (!pendingEditarVenta) return;
+          const em = pendingEditarVenta;
+          setPendingEditarVenta(null);
+          await ejecutarGuardarEditCompleto(em, codigo);
+        }}
+      />
     </div>
   );
 }
