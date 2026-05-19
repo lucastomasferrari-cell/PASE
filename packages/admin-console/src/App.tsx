@@ -29,7 +29,7 @@ export default function App() {
   return (
     <div className="min-h-screen flex bg-admin-bg">
       <Sidebar user={auth.user} />
-      <main className="flex-1 overflow-auto px-8 py-6">
+      <main className="flex-1 overflow-auto md:px-8 md:py-6">
         <Routes>
           <Route path="/" element={<Navigate to="/soporte" replace />} />
           <Route path="/soporte" element={<Soporte />} />

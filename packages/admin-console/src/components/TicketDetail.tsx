@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LifeBuoy, CheckCircle, RotateCcw, MessageSquare, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { LifeBuoy, CheckCircle, RotateCcw, MessageSquare, Image as ImageIcon, Loader2, ArrowLeft } from 'lucide-react';
 import {
   type Ticket,
   type PrioridadTicket,
@@ -10,13 +10,15 @@ import {
   getScreenshotUrl,
 } from '@/lib/tickets';
 import { cn } from '@/lib/cn';
+import { AgentPanel } from './AgentPanel';
 
 interface Props {
   ticket: Ticket;
   onChange: () => void;   // pedir refetch al padre cuando cambia algo
+  onBack?: () => void;    // mobile: volver al listado (oculta selección)
 }
 
-export function TicketDetail({ ticket, onChange }: Props) {
+export function TicketDetail({ ticket, onChange, onBack }: Props) {
   const [comentario, setComentario] = useState('');
   const [sending, setSending] = useState(false);
   const [closing, setClosing] = useState(false);
@@ -85,8 +87,18 @@ export function TicketDetail({ ticket, onChange }: Props) {
   return (
     <div className="flex-1 flex flex-col bg-admin-bg overflow-hidden">
       {/* Header */}
-      <header className="px-6 py-4 border-b border-admin-border">
+      <header className="px-4 md:px-6 py-4 border-b border-admin-border">
         <div className="flex items-start gap-3">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="md:hidden w-9 h-9 rounded hover:bg-admin-border/40 flex items-center justify-center text-admin-muted shrink-0"
+              aria-label="Volver al listado"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+          )}
           <div className="w-9 h-9 rounded bg-admin-accent/15 text-admin-accent flex items-center justify-center shrink-0">
             <LifeBuoy className="w-4 h-4" />
           </div>
@@ -117,7 +129,10 @@ export function TicketDetail({ ticket, onChange }: Props) {
       </header>
 
       {/* Body scrollable */}
-      <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
+      <div className="flex-1 overflow-auto px-4 md:px-6 py-4 space-y-4">
+        {/* Panel del agente — destacado arriba del todo cuando hay actividad. */}
+        <AgentPanel ticket={ticket} onChange={onChange} />
+
         {/* Mensaje original */}
         <div className="rounded border border-admin-border bg-admin-surface p-4">
           <div className="text-[10px] uppercase tracking-wider text-admin-muted mb-2">Mensaje original</div>

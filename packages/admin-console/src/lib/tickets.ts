@@ -16,6 +16,14 @@ export interface TicketComentario {
   created_at: string;
 }
 
+export type AgentStatus = 'pending' | 'investigating' | 'escalating' | 'fixing' | 'pr_opened' | 'resolved' | 'failed';
+
+export interface AgentLogEntry {
+  event: string;
+  ts?: string;
+  [k: string]: unknown;
+}
+
 export interface Ticket {
   id: string;
   tenant_id: string;
@@ -37,12 +45,24 @@ export interface Ticket {
   resuelto_at: string | null;
   created_at: string;
   updated_at: string;
+  // Auto-fix agent (migration 202605201500).
+  agent_status: AgentStatus | null;
+  agent_pr_url: string | null;
+  agent_pr_number: number | null;
+  agent_started_at: string | null;
+  agent_finished_at: string | null;
+  agent_model_used: string | null;
+  agent_cost_usd: number | null;
+  agent_log: AgentLogEntry[];
+  agent_diff_summary: string | null;
 }
 
 export interface ListFilters {
   estado?: EstadoTicket | 'todos';
   sistema?: SistemaOrigen | 'todos';
   prioridad?: PrioridadTicket | 'todos';
+  /** Cuando 'pr_opened', filtra agent_status. Útil para vista "PRs pendientes". */
+  agentStatus?: AgentStatus | 'todos';
 }
 
 export async function listTickets(filters: ListFilters = {}): Promise<{ data: Ticket[]; error: string | null }> {
@@ -50,8 +70,21 @@ export async function listTickets(filters: ListFilters = {}): Promise<{ data: Ti
   if (filters.estado && filters.estado !== 'todos') q = q.eq('estado', filters.estado);
   if (filters.sistema && filters.sistema !== 'todos') q = q.eq('sistema', filters.sistema);
   if (filters.prioridad && filters.prioridad !== 'todos') q = q.eq('prioridad', filters.prioridad);
+  if (filters.agentStatus && filters.agentStatus !== 'todos') q = q.eq('agent_status', filters.agentStatus);
   const { data, error } = await q;
   return { data: (data as Ticket[]) ?? [], error: error?.message ?? null };
+}
+
+// Marca un ticket como resuelto. Lo usa el superadmin cuando aprueba+mergeó
+// un PR auto-generado desde GitHub directamente. Setea estado='cerrado' y
+// agent_status='resolved' para sacar el ticket de las colas activas.
+export async function marcarResuelto(ticketId: string): Promise<{ error: string | null }> {
+  const { error } = await db.from('tickets_soporte').update({
+    estado: 'cerrado',
+    resuelto_at: new Date().toISOString(),
+    agent_status: 'resolved',
+  }).eq('id', ticketId);
+  return { error: error?.message ?? null };
 }
 
 export async function getTicket(id: string): Promise<{ data: Ticket | null; error: string | null }> {

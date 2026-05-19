@@ -17,7 +17,7 @@ const NAV = [
 
 export function Sidebar({ user }: Props) {
   return (
-    <aside className="w-56 shrink-0 bg-admin-surface border-r border-admin-border flex flex-col">
+    <aside className="hidden md:flex w-56 shrink-0 bg-admin-surface border-r border-admin-border flex-col">
       <div className="px-4 py-5 border-b border-admin-border">
         <div className="text-xs uppercase tracking-wider text-admin-muted">PASE</div>
         <div className="text-base font-semibold text-admin-text mt-0.5">Admin Console</div>
