@@ -2,7 +2,7 @@ import { useCallback, useState, useSyncExternalStore } from 'react';
 import { useNavigate, useOutletContext, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
-import { crearPedidoPublico } from '@/services/tiendaService';
+import { crearPedidoPublico, notificarPedidoRecibido } from '@/services/tiendaService';
 import { setPedidoGeo, precisarConGoogle } from '@/services/direccionesService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -113,6 +113,14 @@ export function TiendaCheckout() {
       return;
     }
     sessionStorage.setItem(`comanda-tel-${ventaId}`, telefono.trim());
+
+    // Fase B item 3 — Email "Recibimos tu pedido". Solo se manda si el
+    // cliente puso email. Idempotente server-side: si se reintenta, no
+    // duplica. No bloqueamos el flow si falla (mejor pedido sin email
+    // que error 500 después de cobrar).
+    if (email.trim()) {
+      void notificarPedidoRecibido({ ventaId, email: email.trim() });
+    }
 
     // Geocoding: si tenemos lat/lon del autocomplete (GeoRef), guardarlas.
     // Si hay API key de Google, intentar precisar (mejor lat/lon del número

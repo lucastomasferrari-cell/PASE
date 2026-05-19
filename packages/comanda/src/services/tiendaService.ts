@@ -203,3 +203,54 @@ export async function listPedidosPorAprobar(localId: number): Promise<{ data: Ve
   if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as VentaPos[], error: null };
 }
+
+// Fase B item 3 — disparar email "Recibimos tu pedido" al cliente.
+// Idempotente server-side: si el endpoint ya envió este pedido, devuelve
+// skipped=YA_ENVIADO sin re-enviar. Si Resend falla, no rompemos el flow
+// del cliente (mejor que el pedido siga sin email a que tire error).
+export async function notificarPedidoRecibido(args: {
+  ventaId: number;
+  email: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const resp = await fetch('/api/tienda-mp?action=notify-pedido', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        venta_id: args.ventaId,
+        email_destinatario: args.email,
+      }),
+    });
+    if (!resp.ok) {
+      const detail = await resp.text();
+      console.warn('[notif-pedido] non-ok:', resp.status, detail);
+      return { ok: false, error: `HTTP ${resp.status}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    console.warn('[notif-pedido] fetch threw:', err);
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+// Llamado desde el POS cuando alguien marca venta como 'lista'. Mismo
+// patrón idempotente.
+export async function notificarPedidoListo(args: {
+  ventaId: number;
+  email: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const resp = await fetch('/api/tienda-mp?action=notify-listo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        venta_id: args.ventaId,
+        email_destinatario: args.email,
+      }),
+    });
+    if (!resp.ok) return { ok: false, error: `HTTP ${resp.status}` };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}

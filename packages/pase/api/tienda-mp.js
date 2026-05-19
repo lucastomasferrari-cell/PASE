@@ -2,19 +2,23 @@
 // Una sola function para no agotar el límite de 12 functions de Vercel Hobby.
 //
 // Routes:
-//   POST /api/tienda-mp?action=preference     → MP Checkout preference
-//   POST /api/tienda-mp?action=webhook        → MP payment notification
-//   POST /api/tienda-mp?action=rappi-webhook  → Rappi Partner API order webhook
+//   POST /api/tienda-mp?action=preference        → MP Checkout preference
+//   POST /api/tienda-mp?action=webhook           → MP payment notification
+//   POST /api/tienda-mp?action=rappi-webhook     → Rappi Partner API order webhook
 //   POST /api/tienda-mp?action=pedidosya-webhook → PedidosYa POS Integration webhook
+//   POST /api/tienda-mp?action=notify-pedido     → Email "Recibimos tu pedido"
+//   POST /api/tienda-mp?action=notify-listo      → Email "Tu pedido está listo"
 //
 // Auth:
 //   - preference: anon (cliente público armando carrito en tienda online)
 //   - MP webhook: anon (validamos contra MP API antes de cobrar)
+//   - notify-*: anon (idempotent — chequea notif_email_*_at antes de mandar)
 //   - Rappi/PedidosYa webhooks: validar firma HMAC del partner header
 //     (deuda: implementar cuando se tenga credencial real del partner).
 
 import { createClient } from '@supabase/supabase-js';
 import { createMpTokenGetter } from './_mp-token.js';
+import { sendEmail, htmlPedidoConfirmado, htmlPedidoListo } from './_email.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -42,6 +46,12 @@ export default async function handler(req, res) {
     }
     if (action === 'pedidosya-webhook' && req.method === 'POST') {
       return await handlePartnerWebhook(req, res, 'pedidos-ya');
+    }
+    if (action === 'notify-pedido' && req.method === 'POST') {
+      return await handleNotifyPedido(req, res);
+    }
+    if (action === 'notify-listo' && req.method === 'POST') {
+      return await handleNotifyListo(req, res);
     }
     res.status(405).json({ error: 'Método o action inválido' });
   } catch (e) {
@@ -357,4 +367,133 @@ async function handlePartnerWebhook(req, res, provider) {
     provider,
     items_creados: externalItems.length,
   });
+}
+
+// ─── NOTIFY: Recibimos tu pedido ────────────────────────────────────────────
+async function handleNotifyPedido(req, res) {
+  const { venta_id, email_destinatario } = req.body || {};
+  if (!venta_id || !email_destinatario) {
+    res.status(400).json({ error: 'venta_id y email_destinatario requeridos' });
+    return;
+  }
+
+  const supabase = db();
+
+  // Lookup venta + local. Idempotency: si ya hay notif_email_recibido_at, skip.
+  const { data: venta, error: verr } = await supabase
+    .from('ventas_pos')
+    .select('id, local_id, numero_local, total, tipo_entrega, cliente_nombre, notif_email_recibido_at, programada_para')
+    .eq('id', venta_id)
+    .single();
+  if (verr || !venta) { res.status(404).json({ error: 'Venta no encontrada' }); return; }
+
+  if (venta.notif_email_recibido_at) {
+    res.status(200).json({ ok: true, skipped: 'YA_ENVIADO', sent_at: venta.notif_email_recibido_at });
+    return;
+  }
+
+  const { data: local, error: lerr } = await supabase
+    .from('locales').select('nombre').eq('id', venta.local_id).single();
+  if (lerr || !local) { res.status(404).json({ error: 'Local no encontrado' }); return; }
+  const { data: cls } = await supabase
+    .from('comanda_local_settings')
+    .select('slug, telefono, tiempo_delivery_min, tiempo_retiro_min')
+    .eq('local_id', venta.local_id).single();
+
+  // URL pública de seguimiento. Origin = host del request (PASE).
+  const origin = req.headers.origin || (`https://${req.headers.host || 'pase-yndx.vercel.app'}`);
+  const seguimientoUrl = `${origin}/comanda-app/tienda/${cls?.slug ?? ''}/confirmacion/${venta_id}`;
+
+  const tiempo = venta.tipo_entrega === 'delivery'
+    ? cls?.tiempo_delivery_min
+    : cls?.tiempo_retiro_min;
+
+  const html = htmlPedidoConfirmado({
+    localNombre: local.nombre,
+    clienteNombre: venta.cliente_nombre ?? '',
+    ventaNumero: venta.numero_local ?? venta.id,
+    total: venta.total,
+    tipoEntrega: venta.tipo_entrega,
+    tiempoEstimado: tiempo,
+    seguimientoUrl,
+    telefono: cls?.telefono ?? null,
+  });
+
+  const sent = await sendEmail({
+    to: email_destinatario,
+    subject: `Recibimos tu pedido — ${local.nombre}`,
+    html,
+  });
+
+  if (!sent.ok && !sent.skipped) {
+    res.status(502).json({ error: sent.error, detail: sent.detail });
+    return;
+  }
+
+  // Marcar como enviado (también si skipped, así no reintenta cada navegación).
+  // eslint-disable-next-line pase-local/no-direct-financiera-write -- campo no-financiero (timestamp notif), endpoint server-side con service_role
+  await supabase
+    .from('ventas_pos')
+    .update({ notif_email_recibido_at: new Date().toISOString() })
+    .eq('id', venta_id);
+
+  res.status(200).json({ ok: true, sent: !sent.skipped, email_id: sent.id });
+}
+
+// ─── NOTIFY: Tu pedido está listo ───────────────────────────────────────────
+// Llamado por el POS cuando alguien marca venta como 'lista'. Idempotency
+// igual que el de arriba.
+async function handleNotifyListo(req, res) {
+  const { venta_id, email_destinatario } = req.body || {};
+  if (!venta_id || !email_destinatario) {
+    res.status(400).json({ error: 'venta_id y email_destinatario requeridos' });
+    return;
+  }
+
+  const supabase = db();
+  const { data: venta, error: verr } = await supabase
+    .from('ventas_pos')
+    .select('id, local_id, numero_local, tipo_entrega, cliente_nombre, notif_email_listo_at')
+    .eq('id', venta_id)
+    .single();
+  if (verr || !venta) { res.status(404).json({ error: 'Venta no encontrada' }); return; }
+
+  if (venta.notif_email_listo_at) {
+    res.status(200).json({ ok: true, skipped: 'YA_ENVIADO' });
+    return;
+  }
+
+  const { data: local } = await supabase
+    .from('locales').select('nombre').eq('id', venta.local_id).single();
+  const { data: cls } = await supabase
+    .from('comanda_local_settings')
+    .select('direccion, telefono')
+    .eq('local_id', venta.local_id).single();
+
+  const html = htmlPedidoListo({
+    localNombre: local?.nombre ?? '',
+    clienteNombre: venta.cliente_nombre ?? '',
+    ventaNumero: venta.numero_local ?? venta.id,
+    tipoEntrega: venta.tipo_entrega,
+    direccionLocal: cls?.direccion ?? null,
+    telefono: cls?.telefono ?? null,
+  });
+
+  const subject = venta.tipo_entrega === 'delivery'
+    ? `Salió tu pedido — ${local?.nombre ?? ''}`
+    : `Tu pedido está listo — ${local?.nombre ?? ''}`;
+
+  const sent = await sendEmail({ to: email_destinatario, subject, html });
+  if (!sent.ok && !sent.skipped) {
+    res.status(502).json({ error: sent.error, detail: sent.detail });
+    return;
+  }
+
+  // eslint-disable-next-line pase-local/no-direct-financiera-write -- campo no-financiero
+  await supabase
+    .from('ventas_pos')
+    .update({ notif_email_listo_at: new Date().toISOString() })
+    .eq('id', venta_id);
+
+  res.status(200).json({ ok: true, sent: !sent.skipped });
 }
