@@ -5,6 +5,7 @@ import { AuthProvider, necesitaElegirLocal, getPermisos, tienePermiso } from "./
 import { getDefaultRoute, LEGACY_REDIRECTS } from "./lib/sidebar-nav";
 import type { Usuario, UsuarioRow, Local, Tenant } from "./types";
 import { Sidebar, css } from "./components/Layout";
+import { SoporteWidget } from "./components/SoporteWidget";
 import Login from "./pages/Login";
 
 // F5 (plan sunny-creek): code-splitting por página. Login queda eager porque
@@ -483,6 +484,10 @@ function AppMain() {
             </Routes>
           </Suspense>
         </main>
+        {/* Widget de soporte flotante — visible siempre que haya user logueado.
+            Llama a /api/claude con task=soporte-chat y persiste tickets en
+            tickets_soporte para que Lucas los atienda desde Admin Console. */}
+        <SoporteWidget user={user} />
       </div>
     </AuthProvider>
   );

@@ -4,6 +4,7 @@ import { Toaster } from 'sonner';
 import { AuthProvider } from './lib/AuthProvider';
 import { AuthPosProvider } from './lib/AuthPosProvider';
 import { SyncEngineLifecycle } from './lib/sync/SyncEngineLifecycle';
+import { SoporteWidget } from './components/SoporteWidget';
 import { RedirectIfAuth } from './components/RedirectIfAuth';
 import { PinGate } from './components/PinGate';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -160,6 +161,10 @@ export default function App() {
       <BrowserRouter basename={basename}>
         <AuthPosProvider>
           <SyncEngineLifecycle />
+          {/* Widget de soporte flotante. Solo renderiza si el user está
+              logueado (chequea adentro). Llama a /api/claude con
+              task=soporte-chat y persiste tickets en tickets_soporte. */}
+          <SoporteWidget />
           <Toaster
             position="top-center"
             richColors
