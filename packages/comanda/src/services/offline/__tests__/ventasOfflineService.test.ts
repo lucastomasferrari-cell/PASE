@@ -143,23 +143,24 @@ describe('ventasOfflineService', () => {
   });
 
   it('depends_on encadena items con venta cuando ambas son tempIds', async () => {
-    const { tempVentaId, queuedOpId: ventaOpId } = await abrirVentaOffline({
+    const r = await abrirVentaOffline({
       tenantId: 'T', localId: 1, canalId: 2, modo: 'salon',
     });
     await agregarItemOffline({
-      ventaId: tempVentaId, itemId: 100, cantidad: 1,
+      ventaId: r.tempVentaId, itemId: 100, cantidad: 1,
       precioUnitario: 500, tenantId: 'T', localId: 1,
     });
     const ops = await listPendingOps();
-    // Encontrar la op del item (no asumir orden — created_at puede coincidir
-    // si están en el mismo ms).
     const itemOp = ops.find((o) => o.target === 'fn_agregar_item_comanda');
-    const ventaOp = ops.find((o) => o.id === ventaOpId);
+    const ventaOp = ops.find((o) => o.id === r.queuedOpId);
     expect(ventaOp).toBeDefined();
     expect(itemOp).toBeDefined();
-    // El payload del item lleva p_venta_idempotency_uuid='__pending_parent__'
-    // indicando que necesita la venta primero.
+    // El payload del item lleva el UUID real de la venta padre (no un
+    // placeholder), así el server puede resolverlo a venta_id real.
     expect((itemOp!.payload as Record<string, unknown>).p_venta_idempotency_uuid)
-      .toBe('__pending_parent__');
+      .toBe(r.idempotencyUuid);
+    // Y el item declara depends_on con el id del op de la venta, así el
+    // pushQueue lo retiene hasta que la venta haya sido synced.
+    expect(itemOp!.depends_on).toBe(r.queuedOpId);
   });
 });

@@ -342,7 +342,16 @@ export async function transferirMesa(
 
 export async function marcarListo(ventaId: number): Promise<{ error: string | null }> {
   const { error } = await db.rpc('fn_marcar_listo_comanda', { p_venta_id: ventaId });
-  return { error: error?.message ?? null };
+  if (error) return { error: error.message };
+  // Fire-and-forget: dispara notificación email "Tu pedido está listo" al
+  // cliente si la venta tiene cliente_email. El endpoint es idempotente
+  // (no re-envía si ya se mandó). Si falla, no rompemos el flow del POS.
+  void fetch('/api/tienda-mp?action=notify-listo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ venta_id: ventaId }),
+  }).catch(() => { /* silent */ });
+  return { error: null };
 }
 
 export async function marcarEntregado(ventaId: number): Promise<{ error: string | null }> {

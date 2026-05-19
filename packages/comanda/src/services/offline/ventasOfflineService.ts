@@ -67,6 +67,29 @@ export async function abrirVentaOffline(args: AbrirVentaArgs): Promise<AbrirVent
   const idempotencyUuid = genUUID();
   const now = new Date().toISOString();
 
+  // Enqueue PRIMERO así tenemos el queuedOpId para guardarlo en la venta.
+  // Sirve para que items hijos puedan usar depends_on con este id sin
+  // tener que buscar después en pending_ops.
+  const queuedOpId = await enqueueOperation({
+    target: 'fn_abrir_venta_comanda',
+    op_type: 'rpc',
+    payload: {
+      p_local_id: args.localId,
+      p_canal_id: args.canalId,
+      p_modo: args.modo,
+      p_mesa_id: args.mesaId ?? null,
+      p_mozo_id: args.mozoId ?? null,
+      p_cajero_id: args.cajeroId ?? null,
+      p_cliente_id: args.clienteId ?? null,
+      p_covers: args.covers ?? null,
+      p_tab_nombre: args.tabNombre ?? null,
+      // El server usa este UUID para detectar duplicados + para devolver
+      // el BIGINT real correlacionado con esta op.
+      p_idempotency_uuid: idempotencyUuid,
+    },
+    reconcile: { kind: 'venta', tempVentaId: tempId },
+  });
+
   const venta: LocalVentaPos = {
     id: tempId,
     tenant_id: args.tenantId,
@@ -96,28 +119,13 @@ export async function abrirVentaOffline(args: AbrirVentaArgs): Promise<AbrirVent
     created_at: now,
     updated_at: now,
     deleted_at: null,
+    // Offline-first: el UUID local + opId quedan en la venta para que ops
+    // dependientes (agregar item, mandar curso) puedan referenciarla.
+    idempotency_uuid: idempotencyUuid,
+    _local_op_id: queuedOpId,
   } as unknown as LocalVentaPos;
 
   await ventasRepo.put(venta);
-  const queuedOpId = await enqueueOperation({
-    target: 'fn_abrir_venta_comanda',
-    op_type: 'rpc',
-    payload: {
-      p_local_id: args.localId,
-      p_canal_id: args.canalId,
-      p_modo: args.modo,
-      p_mesa_id: args.mesaId ?? null,
-      p_mozo_id: args.mozoId ?? null,
-      p_cajero_id: args.cajeroId ?? null,
-      p_cliente_id: args.clienteId ?? null,
-      p_covers: args.covers ?? null,
-      p_tab_nombre: args.tabNombre ?? null,
-      // El server usa este UUID para detectar duplicados + para devolver
-      // el BIGINT real correlacionado con esta op.
-      p_idempotency_uuid: idempotencyUuid,
-    },
-    reconcile: { kind: 'venta', tempVentaId: tempId },
-  });
 
   // Trigger push inmediato si está online (no espera el ciclo de 30s)
   void syncEngine.triggerPush();
@@ -184,7 +192,9 @@ export async function agregarItemOffline(args: AgregarItemArgs): Promise<Agregar
   await ventasItemsRepo.put(item);
 
   // Update total local de la venta (optimistic — el server recalcula al
-  // procesar la RPC)
+  // procesar la RPC). También sacamos el UUID + opId de la venta padre
+  // para que la op del item pueda referenciarla aunque la venta todavía
+  // no esté sincronizada.
   const venta = await ventasRepo.getById(args.ventaId);
   if (venta) {
     venta.subtotal = Number(venta.subtotal) + subtotal;
@@ -192,20 +202,18 @@ export async function agregarItemOffline(args: AgregarItemArgs): Promise<Agregar
     venta.updated_at = now;
     await ventasRepo.put(venta);
   }
+  const ventaUuid = (venta as { idempotency_uuid?: string | null } | null)?.idempotency_uuid ?? null;
+  const ventaOpId = (venta as { _local_op_id?: string } | null)?._local_op_id ?? null;
 
-  // Si la venta padre tiene id temporal (negativo), tenemos que esperar
-  // al sync de la venta antes de procesar el item.
-  // En el patrón actual el server-side no soporta esta encadenación
-  // automática — necesita la RPC fn_agregar_item_comanda con
-  // p_venta_idempotency_uuid en lugar de p_venta_id. Ver Fase 4.2.
   const queuedOpId = await enqueueOperation({
     target: 'fn_agregar_item_comanda',
     op_type: 'rpc',
     payload: {
       p_venta_id: args.ventaId > 0 ? args.ventaId : null,
-      // Si la venta es local-only, mandamos su UUID para que el server
-      // resuelva el venta_id real (requiere actualización de la RPC).
-      p_venta_idempotency_uuid: args.ventaId < 0 ? '__pending_parent__' : null,
+      // Si la venta es local-only (tempId < 0), mandamos su UUID real.
+      // La RPC server-side fn_agregar_item_comanda_offline lo resuelve a
+      // venta_id real haciendo lookup contra ventas_pos.idempotency_uuid.
+      p_venta_idempotency_uuid: args.ventaId < 0 ? ventaUuid : null,
       p_item_id: args.itemId,
       p_cantidad: args.cantidad,
       p_precio_unitario: args.precioUnitario,
@@ -215,6 +223,10 @@ export async function agregarItemOffline(args: AgregarItemArgs): Promise<Agregar
       p_cargado_por: args.cargadoPor ?? null,
       p_idempotency_uuid: idempotencyUuid,
     },
+    // Si la venta es local-only, este item depende del op que crea la
+    // venta. El pushQueue va a esperar (isBlocked) hasta que ese opId
+    // esté en estado 'synced' antes de procesarnos.
+    depends_on: args.ventaId < 0 ? ventaOpId : null,
     reconcile: { kind: 'venta_item', tempItemId, tempVentaId: args.ventaId < 0 ? args.ventaId : null },
   });
 
@@ -241,14 +253,25 @@ export async function mandarCursoOffline(ventaId: number, curso: number): Promis
     sentCount++;
   }
 
+  // Si la venta es local-only, leemos su UUID + opId para depends_on igual
+  // que en agregarItemOffline.
+  let ventaUuid: string | null = null;
+  let ventaOpId: string | null = null;
+  if (ventaId < 0) {
+    const venta = await ventasRepo.getById(ventaId);
+    ventaUuid = (venta as { idempotency_uuid?: string | null } | null)?.idempotency_uuid ?? null;
+    ventaOpId = (venta as { _local_op_id?: string } | null)?._local_op_id ?? null;
+  }
+
   const queuedOpId = await enqueueOperation({
     target: 'fn_mandar_curso_comanda',
     op_type: 'rpc',
     payload: {
       p_venta_id: ventaId > 0 ? ventaId : null,
-      p_venta_idempotency_uuid: ventaId < 0 ? '__pending_parent__' : null,
+      p_venta_idempotency_uuid: ventaId < 0 ? ventaUuid : null,
       p_curso: curso,
     },
+    depends_on: ventaId < 0 ? ventaOpId : null,
   });
 
   void syncEngine.triggerPush();

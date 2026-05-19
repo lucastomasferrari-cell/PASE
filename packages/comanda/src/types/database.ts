@@ -295,6 +295,16 @@ export interface VentaPos {
   // Sprint 16/05 — geocoding cliente (delivery)
   cliente_lat?: number | null;
   cliente_lon?: number | null;
+  // Sprint 2026-05-18 (Fase B) — email del cliente como columna propia
+  // (antes vivía dentro de notas con prefix "email:")
+  cliente_email?: string | null;
+  // Sprint 2026-05-19 (Fase B) — notif idempotency
+  notif_email_recibido_at?: string | null;
+  notif_email_listo_at?: string | null;
+  // Sprint offline-first — UUID generado client-side. Permite que items
+  // creados offline antes que se sincronice la venta padre puedan
+  // referenciarla por uuid en lugar de bigint.
+  idempotency_uuid?: string | null;
 }
 
 export interface VentaPosItemModificador {

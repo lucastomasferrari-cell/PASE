@@ -234,10 +234,11 @@ export async function notificarPedidoRecibido(args: {
 }
 
 // Llamado desde el POS cuando alguien marca venta como 'lista'. Mismo
-// patrón idempotente.
+// patrón idempotente. Email opcional: si no se pasa, el endpoint lee
+// ventas_pos.cliente_email; si tampoco hay ahí, skip silencioso.
 export async function notificarPedidoListo(args: {
   ventaId: number;
-  email: string;
+  email?: string;
 }): Promise<{ ok: boolean; error?: string }> {
   try {
     const resp = await fetch('/api/tienda-mp?action=notify-listo', {

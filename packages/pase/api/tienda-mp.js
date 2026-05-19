@@ -445,21 +445,30 @@ async function handleNotifyPedido(req, res) {
 // igual que el de arriba.
 async function handleNotifyListo(req, res) {
   const { venta_id, email_destinatario } = req.body || {};
-  if (!venta_id || !email_destinatario) {
-    res.status(400).json({ error: 'venta_id y email_destinatario requeridos' });
+  if (!venta_id) {
+    res.status(400).json({ error: 'venta_id requerido' });
     return;
   }
 
   const supabase = db();
   const { data: venta, error: verr } = await supabase
     .from('ventas_pos')
-    .select('id, local_id, numero_local, tipo_entrega, cliente_nombre, notif_email_listo_at')
+    .select('id, local_id, numero_local, tipo_entrega, cliente_nombre, cliente_email, notif_email_listo_at')
     .eq('id', venta_id)
     .single();
   if (verr || !venta) { res.status(404).json({ error: 'Venta no encontrada' }); return; }
 
   if (venta.notif_email_listo_at) {
     res.status(200).json({ ok: true, skipped: 'YA_ENVIADO' });
+    return;
+  }
+
+  // Email viene del body o de la columna ventas_pos.cliente_email (migration
+  // 202605200200). Si no hay ninguno, skip silencioso — pedidos sin email
+  // (POS interno o cliente que no quiso dar) no rompen el flow del POS.
+  const emailFinal = email_destinatario || venta.cliente_email;
+  if (!emailFinal) {
+    res.status(200).json({ ok: true, skipped: 'NO_EMAIL' });
     return;
   }
 
@@ -483,7 +492,7 @@ async function handleNotifyListo(req, res) {
     ? `Salió tu pedido — ${local?.nombre ?? ''}`
     : `Tu pedido está listo — ${local?.nombre ?? ''}`;
 
-  const sent = await sendEmail({ to: email_destinatario, subject, html });
+  const sent = await sendEmail({ to: emailFinal, subject, html });
   if (!sent.ok && !sent.skipped) {
     res.status(502).json({ error: sent.error, detail: sent.detail });
     return;

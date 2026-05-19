@@ -33,11 +33,14 @@ export const DB_NAME = 'comanda-local';
 //   _local_op      última operación local (insert/update/delete)
 //   _local_synced_at  última vez que se confirmó sincronizado
 //   _local_origin  device que generó el record (UUID device)
+//   _local_op_id   id de la PendingOp que creó este record (para depends_on
+//                  de ops dependientes — ej. item depende de su venta padre)
 export interface LocalMeta {
   _local_dirty?: boolean;
   _local_op?: 'insert' | 'update' | 'delete';
   _local_synced_at?: string | null;
   _local_origin?: string;
+  _local_op_id?: string;
 }
 
 // ─── Tipos por store ────────────────────────────────────────────────────────
