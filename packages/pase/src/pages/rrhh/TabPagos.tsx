@@ -1,6 +1,6 @@
 import { db } from "../../lib/supabase";
 import { translateRpcError } from "../../lib/errors";
-import { toISO, today, fmt_d, fmt_$ } from "../../lib/utils";
+import { toISO, today, fmt_d, fmt_$, parseMonto } from "../../lib/utils";
 import type { Local } from "../../types";
 import type {
   Empleado, Novedad, Liquidacion, Adelanto, LineaPago,
@@ -127,15 +127,27 @@ export function TabPagos({
         const yaPagado = Math.round(Number(liq.pagos_realizados || 0));
         const pendiente = Math.max(0, total - yaPagado);
         const totalAdelantos = Math.round((adelantosPendientes || []).reduce((s, a) => s + Number(a.monto), 0));
-        const asignadoCash = Math.round(formasPago.reduce((s, f) => s + (parseFloat(f.monto) || 0), 0));
+        const asignadoCash = Math.round(formasPago.reduce((s, f) => s + parseMonto(f.monto), 0));
         const asignadoTotal = asignadoCash + totalAdelantos;
         const restanteTrasEste = pendiente - asignadoTotal;
         const completaPago = asignadoTotal >= pendiente;
         const esPagoParcial = asignadoTotal > 0 && asignadoTotal < pendiente;
-        // Bug Caja-1: cada línea de pago debe tener cuenta seleccionada.
-        // Sin este check, una línea con cuenta="" colaba el placeholder y
-        // pagar_sueldo persistía cuenta vacía.
-        const puedeConfirmar = asignadoTotal > 0 && asignadoTotal <= pendiente && formasPago.every(f => parseFloat(f.monto) > 0 && !!f.cuenta);
+        const sobrepago = asignadoTotal > pendiente ? asignadoTotal - pendiente : 0;
+        // Validación por línea + diagnóstico claro de por qué el botón está
+        // deshabilitado. Tolerancia ±$1 por redondeos de decimales.
+        // Bug Caja-1: cada línea debe tener cuenta seleccionada.
+        const lineaSinCuenta = formasPago.findIndex(f => parseMonto(f.monto) > 0 && !f.cuenta);
+        const lineaSinMonto = formasPago.findIndex(f => f.cuenta && parseMonto(f.monto) <= 0);
+        const puedeConfirmar = asignadoTotal > 0
+          && sobrepago <= 1   // tolerancia de redondeo
+          && lineaSinCuenta === -1
+          && lineaSinMonto === -1;
+
+        let motivoBloqueo: string | null = null;
+        if (asignadoTotal === 0) motivoBloqueo = 'Asigná un monto en alguna línea para confirmar.';
+        else if (lineaSinCuenta !== -1) motivoBloqueo = `Línea ${lineaSinCuenta + 1}: falta elegir cuenta.`;
+        else if (lineaSinMonto !== -1) motivoBloqueo = `Línea ${lineaSinMonto + 1}: falta el monto.`;
+        else if (sobrepago > 1) motivoBloqueo = `Te pasaste $${sobrepago.toLocaleString('es-AR')} del total. Bajá algún monto.`;
         const cerrarModal = () => { setPagoModal(null); setFormasPago([]); setAdelantosPendientes([]); };
 
         const confirmarPago = async () => {
@@ -144,8 +156,8 @@ export function TabPagos({
           try {
             // Serializar las formas de pago (sólo las con monto > 0).
             const formasValidas = formasPago
-              .filter(fp => (parseFloat(fp.monto) || 0) > 0 && !!fp.cuenta)
-              .map(fp => ({ cuenta: fp.cuenta, monto: parseFloat(fp.monto) }));
+              .filter(fp => parseMonto(fp.monto) > 0 && !!fp.cuenta)
+              .map(fp => ({ cuenta: fp.cuenta, monto: parseMonto(fp.monto) }));
             const adelIds = (adelantosPendientes || []).map(a => a.id);
 
             // Si la liq vino _generated (frontend la armó sin persistir),
@@ -259,17 +271,33 @@ export function TabPagos({
                 )}
 
                 <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
-                  <span style={{fontSize:12,color: esPagoParcial ? "var(--warn)" : "var(--muted2)"}}>
-                    {esPagoParcial ? "Pago parcial — Restante" : "Restante"}
+                  <span style={{fontSize:12,color: sobrepago > 0 ? "var(--danger)" : esPagoParcial ? "var(--warn)" : "var(--muted2)"}}>
+                    {sobrepago > 0 ? "Sobrepago" : esPagoParcial ? "Pago parcial — Restante" : "Restante"}
                   </span>
-                  <span style={{fontSize:14,fontWeight:500,color: Math.abs(restanteTrasEste) < 0.01 ? "var(--success)" : restanteTrasEste < 0 ? "var(--danger)" : "var(--warn)"}}>
-                    {fmt_$(Math.max(0, restanteTrasEste))}
+                  <span style={{fontSize:14,fontWeight:500,color: sobrepago > 0 ? "var(--danger)" : Math.abs(restanteTrasEste) < 1 ? "var(--success)" : "var(--warn)"}}>
+                    {sobrepago > 0 ? `+${fmt_$(sobrepago)}` : fmt_$(Math.max(0, restanteTrasEste))}
                   </span>
                 </div>
+                {motivoBloqueo && (
+                  <div style={{
+                    marginTop:8, padding:"8px 10px",
+                    background:"rgba(217,119,6,0.08)",
+                    border:"1px solid rgba(217,119,6,0.25)",
+                    borderRadius:"var(--r)",
+                    fontSize:11, color:"var(--warn)",
+                  }}>
+                    ⚠ {motivoBloqueo}
+                  </div>
+                )}
               </div>
               <div className="modal-ft">
                 <button className="btn btn-sec" onClick={cerrarModal}>Cancelar</button>
-                <button className="btn btn-success" onClick={confirmarPago} disabled={!puedeConfirmar || pagando}>
+                <button
+                  className="btn btn-success"
+                  onClick={confirmarPago}
+                  disabled={!puedeConfirmar || pagando}
+                  title={motivoBloqueo ?? undefined}
+                >
                   {pagando ? "Procesando..." : completaPago ? "Confirmar pago" : "Registrar pago parcial"}
                 </button>
               </div>
