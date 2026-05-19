@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db } from "../../lib/supabase";
 import { applyLocalScope } from "../../lib/auth";
 import { toISO, today, fmt_d } from "../../lib/utils";
@@ -108,27 +108,28 @@ export default function Blindaje({ user, locales, localActivo }: BlindajeProps) 
     setTipoForm({ nombre: t.nombre, descripcion: t.descripcion || "", orden: t.orden || 0 });
     setTipoModal(t);
   };
+  const guardandoTipoRef = useRef(false);
   const guardarTipo = async () => {
+    if (guardandoTipoRef.current) return;
     if (!tipoForm.nombre.trim()) return;
-    // tipoModal puede ser "new" | BlindajeTipo | null. Si es BlindajeTipo
-    // tiene id (edición); si es "new" no (creación).
-    // El UNIQUE (tenant_id, nombre) puede tirar 23505 si ya existe un tipo
-    // con el mismo nombre — el catch lo traduce a mensaje claro.
     const isEdit = tipoModal && tipoModal !== "new" && tipoModal.id;
     const payload = { nombre: tipoForm.nombre.trim(), descripcion: tipoForm.descripcion || null, orden: tipoForm.orden };
-    const { error } = isEdit
-      ? await db.from("blindaje_tipos_documento").update(payload).eq("id", (tipoModal as BlindajeTipo).id)
-      : await db.from("blindaje_tipos_documento").insert([payload]);
-    if (error) {
-      if (error.code === "23505") {
-        alert(`Ya existe un tipo de documento con el nombre "${payload.nombre}".`);
-      } else {
-        alert("No se pudo guardar: " + error.message);
+    guardandoTipoRef.current = true;
+    try {
+      const { error } = isEdit
+        ? await db.from("blindaje_tipos_documento").update(payload).eq("id", (tipoModal as BlindajeTipo).id)
+        : await db.from("blindaje_tipos_documento").insert([payload]);
+      if (error) {
+        if (error.code === "23505") {
+          alert(`Ya existe un tipo de documento con el nombre "${payload.nombre}".`);
+        } else {
+          alert("No se pudo guardar: " + error.message);
+        }
+        return;
       }
-      return; // dejar el modal abierto para que pueda corregir
-    }
-    setTipoModal(null);
-    loadTipos();
+      setTipoModal(null);
+      loadTipos();
+    } finally { guardandoTipoRef.current = false; }
   };
 
   // Eliminación real (cascade). Cuenta los documentos de TODOS los locales
@@ -177,10 +178,13 @@ export default function Blindaje({ user, locales, localActivo }: BlindajeProps) 
     setDocModal({ tipo, doc });
   };
 
+  const guardandoDocRef = useRef(false);
   const guardarDoc = async () => {
+    if (guardandoDocRef.current) return;
     if (!localActivo || !docModal) return;
     const { tipo, doc } = docModal;
     const lid = parseInt(String(localActivo));
+    guardandoDocRef.current = true;
     setUploading(true);
 
     let archivo_url = doc?.archivo_url || null;
@@ -213,6 +217,7 @@ export default function Blindaje({ user, locales, localActivo }: BlindajeProps) 
     };
     const { error } = await db.from("blindaje_documentos").upsert([payload], { onConflict: "id" });
     setUploading(false);
+    guardandoDocRef.current = false;
     if (error) {
       alert("No se pudo guardar el documento: " + error.message);
       return;

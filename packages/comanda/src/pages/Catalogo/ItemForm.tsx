@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Usuario } from '../../types/auth';
 import type { Item, ItemGrupo, TaxRate, Estacion } from '../../types/database';
 import type { ItemDraft } from '../../services/itemsService';
@@ -54,6 +54,7 @@ export function ItemForm({ user, grupos, item, onClose, onSaved }: Props) {
   const [tiempoPrepMin, setTiempoPrepMin] = useState<number | ''>(item?.tiempo_prep_min ?? '');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   useEffect(() => {
     listTaxRates(user.tenant_id).then((res) => setTaxRates(res.data));
@@ -61,6 +62,7 @@ export function ItemForm({ user, grupos, item, onClose, onSaved }: Props) {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (savingRef.current) return;
     const eN = validarNombre(nombre);
     if (eN) { setError(eN); return; }
     const eP = validarPrecio(precio);
@@ -69,40 +71,44 @@ export function ItemForm({ user, grupos, item, onClose, onSaved }: Props) {
       setError('Tu usuario no tiene tenant asignado. Contactá soporte.');
       return;
     }
+    savingRef.current = true;
     setSaving(true);
     setError(null);
+    try {
+      const draft: ItemDraft = {
+        nombre: nombre.trim(),
+        descripcion: descripcion.trim() || null,
+        emoji,
+        codigo: codigo.trim() || null,
+        grupo_id: grupoId,
+        precio_madre: precio,
+        tax_rate_id: taxRateId,
+        estacion: estacion || null,
+        visible_pos: visiblePos,
+        visible_qr: visibleQr,
+        visible_tienda: visibleTienda,
+        es_combo: esCombo,
+        tiempo_prep_min: typeof tiempoPrepMin === 'number' && tiempoPrepMin > 0 ? tiempoPrepMin : null,
+        tenant_id: user.tenant_id,
+        local_id: null,
+      };
 
-    const draft: ItemDraft = {
-      nombre: nombre.trim(),
-      descripcion: descripcion.trim() || null,
-      emoji,
-      codigo: codigo.trim() || null,
-      grupo_id: grupoId,
-      precio_madre: precio,
-      tax_rate_id: taxRateId,
-      estacion: estacion || null,
-      visible_pos: visiblePos,
-      visible_qr: visibleQr,
-      visible_tienda: visibleTienda,
-      es_combo: esCombo,
-      tiempo_prep_min: typeof tiempoPrepMin === 'number' && tiempoPrepMin > 0 ? tiempoPrepMin : null,
-      tenant_id: user.tenant_id,
-      local_id: null,
-    };
-
-    if (isEdit && item) {
-      const precioCambio = item.precio_madre !== precio;
-      const { error: err } = await updateItem(item.id, draft);
-      if (err) { setError(err); setSaving(false); return; }
-      if (precioCambio) {
-        await recalcularAtadosDeItem(item.id);
+      if (isEdit && item) {
+        const precioCambio = item.precio_madre !== precio;
+        const { error: err } = await updateItem(item.id, draft);
+        if (err) { setError(err); return; }
+        if (precioCambio) {
+          await recalcularAtadosDeItem(item.id);
+        }
+      } else {
+        const { error: err } = await createItem(draft);
+        if (err) { setError(err); return; }
       }
-    } else {
-      const { error: err } = await createItem(draft);
-      if (err) { setError(err); setSaving(false); return; }
+      onSaved();
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
-    setSaving(false);
-    onSaved();
   }
 
   return (

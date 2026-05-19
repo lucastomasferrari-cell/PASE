@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasOperables as cuentasOperablesFn } from "../lib/auth";
@@ -209,6 +209,10 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
   const [loading,setLoading]=useState(true);
   const [sincronizando,setSincronizando]=useState(false);
   const [conciliando,setConciliando]=useState(false);
+  // Ref-based guard contra doble-click (fix sistémico 2026-05-18). Atrapa el
+  // segundo click sincrónicamente, antes de que el setState de `conciliando`
+  // se aplique en el re-render.
+  const conciliandoRef = useRef(false);
   // Duración 5000ms (defaults a 3000) — los mensajes de conciliación pueden
   // ser largos (error de RPC con detalle). El toast es dismissible con click.
   const { toast, showToast, showError, dismiss } = useToast(5000);
@@ -476,18 +480,23 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, embedded]);
 
+  const guardandoCredRef = useRef(false);
   const guardarCredencial=async()=>{
+    if(guardandoCredRef.current)return;
     if(!configForm.local_id||!configForm.access_token)return;
-    const {error}=await db.rpc("set_mp_token",{
-      p_local_id:parseInt(configForm.local_id),
-      p_access_token:configForm.access_token,
-    });
-    if(error){
-      console.error("set_mp_token error:",error);
-      showError("⚠ Error guardando credencial: "+(error.message||""));
-      return;
-    }
-    setConfigModal(false);setConfigForm({local_id:"",access_token:""});load();
+    guardandoCredRef.current=true;
+    try{
+      const {error}=await db.rpc("set_mp_token",{
+        p_local_id:parseInt(configForm.local_id),
+        p_access_token:configForm.access_token,
+      });
+      if(error){
+        console.error("set_mp_token error:",error);
+        showError("⚠ Error guardando credencial: "+(error.message||""));
+        return;
+      }
+      setConfigModal(false);setConfigForm({local_id:"",access_token:""});load();
+    } finally { guardandoCredRef.current=false; }
   };
 
   // Borra todos los mp_movimientos de un local y vuelve a sincronizar,
@@ -647,6 +656,7 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
   // ── Multi-factura: pagar varias facturas con un solo MP. La suma puede
   // diferir del monto MP (Lucas pidió no bloquear): la UI muestra el delta.
   const justificarConMultiplesFacturas=async()=>{
+    if(conciliandoRef.current)return;
     if(!conciliarModal)return;
     const lineasValidas=lineasMulti
       .filter(l=>l.factura_id && parseFloat(l.monto)>0)
@@ -655,128 +665,148 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
       showError("Tenés que elegir al menos una factura con monto > 0");
       return;
     }
+    conciliandoRef.current=true;
     setConciliando(true);
-    const {error}=await db.rpc("fn_conciliar_mp_con_facturas",{
-      p_mp_mov_id:conciliarModal.id,
-      p_lineas:lineasValidas,
-      p_idempotency_key:idempKey,
-    });
-    setConciliando(false);
-    if(error){showError("No se pudo conciliar: "+error.message);return;}
-    showToast(`Conciliado contra ${lineasValidas.length} factura${lineasValidas.length===1?"":"s"}`);
-    cerrarConciliar(); load();
+    try{
+      const {error}=await db.rpc("fn_conciliar_mp_con_facturas",{
+        p_mp_mov_id:conciliarModal.id,
+        p_lineas:lineasValidas,
+        p_idempotency_key:idempKey,
+      });
+      if(error){showError("No se pudo conciliar: "+error.message);return;}
+      showToast(`Conciliado contra ${lineasValidas.length} factura${lineasValidas.length===1?"":"s"}`);
+      cerrarConciliar(); load();
+    } finally {
+      conciliandoRef.current=false;
+      setConciliando(false);
+    }
   };
 
   // ── Ignorar: marca el egreso como "no requiere conciliación". El KPI lo
   // excluye, pero el rastro queda con motivo + usuario + timestamp.
   const ignorarMP=async()=>{
+    if(conciliandoRef.current)return;
     if(!conciliarModal)return;
+    conciliandoRef.current=true;
     setConciliando(true);
-    const {error}=await db.rpc("fn_ignorar_mp",{
-      p_mp_mov_id:conciliarModal.id,
-      p_motivo:motivoIgnorar.trim()||null,
-    });
-    setConciliando(false);
-    if(error){showError("No se pudo ignorar: "+error.message);return;}
-    showToast("Egreso ignorado");
-    cerrarConciliar(); load();
+    try{
+      const {error}=await db.rpc("fn_ignorar_mp",{
+        p_mp_mov_id:conciliarModal.id,
+        p_motivo:motivoIgnorar.trim()||null,
+      });
+      if(error){showError("No se pudo ignorar: "+error.message);return;}
+      showToast("Egreso ignorado");
+      cerrarConciliar(); load();
+    } finally { conciliandoRef.current=false; setConciliando(false); }
   };
 
   // ── Des-ignorar: revertir un "ignorado" (típicamente porque fue error).
   const designorarMP=async(mp_mov_id:string)=>{
+    if(conciliandoRef.current)return;
+    conciliandoRef.current=true;
     setConciliando(true);
-    const {error}=await db.rpc("fn_designorar_mp",{p_mp_mov_id:mp_mov_id});
-    setConciliando(false);
-    if(error){showError("No se pudo des-ignorar: "+error.message);return;}
-    showToast("Egreso vuelto a pendiente");
-    load();
+    try{
+      const {error}=await db.rpc("fn_designorar_mp",{p_mp_mov_id:mp_mov_id});
+      if(error){showError("No se pudo des-ignorar: "+error.message);return;}
+      showToast("Egreso vuelto a pendiente");
+      load();
+    } finally { conciliandoRef.current=false; setConciliando(false); }
   };
 
   const justificarConExistente=async(tipo:"factura"|"remito"|"gasto",justifId:string)=>{
+    if(conciliandoRef.current)return;
     if(!conciliarModal||!justifId)return;
+    conciliandoRef.current=true;
     setConciliando(true);
-    const {data,error}=await db.rpc(tipo==="gasto"?"fn_conciliar_mp_con_gasto_existente":"fn_conciliar_mp_con_existente",
-      tipo==="gasto"
-        ? { p_mp_mov_id:conciliarModal.id, p_gasto_id:justifId }
-        : { p_mp_mov_id:conciliarModal.id, p_tipo:tipo, p_justif_id:justifId }
-    );
-    setConciliando(false);
-    if(error){showError("No se pudo conciliar: "+error.message);return;}
-    // fn_conciliar_mp_con_gasto_existente puede devolver {warning} si los
-    // montos difieren — la conciliación se aplica igual.
-    const warning=(data as {warning?:string|null}|null)?.warning||null;
-    if (warning) showError("Vinculado con discrepancia: "+warning);
-    else showToast("Egreso justificado contra "+tipo);
-    cerrarConciliar(); load();
+    try{
+      const {data,error}=await db.rpc(tipo==="gasto"?"fn_conciliar_mp_con_gasto_existente":"fn_conciliar_mp_con_existente",
+        tipo==="gasto"
+          ? { p_mp_mov_id:conciliarModal.id, p_gasto_id:justifId }
+          : { p_mp_mov_id:conciliarModal.id, p_tipo:tipo, p_justif_id:justifId }
+      );
+      if(error){showError("No se pudo conciliar: "+error.message);return;}
+      const warning=(data as {warning?:string|null}|null)?.warning||null;
+      if (warning) showError("Vinculado con discrepancia: "+warning);
+      else showToast("Egreso justificado contra "+tipo);
+      cerrarConciliar(); load();
+    } finally { conciliandoRef.current=false; setConciliando(false); }
   };
 
   const justificarConGastoNuevo=async()=>{
+    if(conciliandoRef.current)return;
     if(!conciliarModal||!nuevoGastoForm.categoria)return;
-    // El tipo se deriva de la categoría via config_categorias. Si la cat
-    // todavía no está mapeada (ej. legacy), defaulteamos a "variable".
     const tipoDerivado = categoriaToTipo[nuevoGastoForm.categoria] || "variable";
+    conciliandoRef.current=true;
     setConciliando(true);
-    const {error}=await db.rpc("fn_conciliar_mp_con_gasto",{
-      p_mp_mov_id:conciliarModal.id,
-      p_gasto_data:{categoria:nuevoGastoForm.categoria, detalle:nuevoGastoForm.detalle, tipo:tipoDerivado},
-    });
-    setConciliando(false);
-    if(error){showError("No se pudo crear el gasto: "+error.message);return;}
-    showToast("Gasto creado y conciliado");
-    cerrarConciliar(); load();
+    try{
+      const {error}=await db.rpc("fn_conciliar_mp_con_gasto",{
+        p_mp_mov_id:conciliarModal.id,
+        p_gasto_data:{categoria:nuevoGastoForm.categoria, detalle:nuevoGastoForm.detalle, tipo:tipoDerivado},
+      });
+      if(error){showError("No se pudo crear el gasto: "+error.message);return;}
+      showToast("Gasto creado y conciliado");
+      cerrarConciliar(); load();
+    } finally { conciliandoRef.current=false; setConciliando(false); }
   };
 
   const justificarConFacturaNueva=async()=>{
+    if(conciliandoRef.current)return;
     if(!conciliarModal||!nuevaFacturaForm.prov_id||!nuevaFacturaForm.nro)return;
+    conciliandoRef.current=true;
     setConciliando(true);
-    const {error}=await db.rpc("fn_conciliar_mp_con_factura_nueva",{
-      p_mp_mov_id:conciliarModal.id,
-      p_factura_data:{
-        prov_id:parseInt(nuevaFacturaForm.prov_id),
-        nro:nuevaFacturaForm.nro,
-        fecha:nuevaFacturaForm.fecha||null,
-        // cat ya no se pasa: la RPC la deriva de proveedor.cat por default
-        // (fallback a "Conciliación MP" si el proveedor no tiene cat seteada).
-        detalle:nuevaFacturaForm.detalle,
-      },
-    });
-    setConciliando(false);
-    if(error){showError("No se pudo crear la factura: "+error.message);return;}
-    showToast("Factura creada y conciliada");
-    cerrarConciliar(); load();
+    try{
+      const {error}=await db.rpc("fn_conciliar_mp_con_factura_nueva",{
+        p_mp_mov_id:conciliarModal.id,
+        p_factura_data:{
+          prov_id:parseInt(nuevaFacturaForm.prov_id),
+          nro:nuevaFacturaForm.nro,
+          fecha:nuevaFacturaForm.fecha||null,
+          detalle:nuevaFacturaForm.detalle,
+        },
+      });
+      if(error){showError("No se pudo crear la factura: "+error.message);return;}
+      showToast("Factura creada y conciliada");
+      cerrarConciliar(); load();
+    } finally { conciliandoRef.current=false; setConciliando(false); }
   };
 
   const justificarConRemitoNuevo=async()=>{
+    if(conciliandoRef.current)return;
     if(!conciliarModal||!nuevoRemitoForm.prov_id||!nuevoRemitoForm.nro)return;
+    conciliandoRef.current=true;
     setConciliando(true);
-    const {error}=await db.rpc("fn_conciliar_mp_con_remito_nuevo",{
-      p_mp_mov_id:conciliarModal.id,
-      p_remito_data:{
-        prov_id:parseInt(nuevoRemitoForm.prov_id),
-        nro:nuevoRemitoForm.nro,
-        fecha:nuevoRemitoForm.fecha||null,
-        cat:nuevoRemitoForm.cat,
-        detalle:nuevoRemitoForm.detalle,
-      },
-    });
-    setConciliando(false);
-    if(error){showError("No se pudo crear el remito: "+error.message);return;}
-    showToast("Remito creado y conciliado");
-    cerrarConciliar(); load();
+    try{
+      const {error}=await db.rpc("fn_conciliar_mp_con_remito_nuevo",{
+        p_mp_mov_id:conciliarModal.id,
+        p_remito_data:{
+          prov_id:parseInt(nuevoRemitoForm.prov_id),
+          nro:nuevoRemitoForm.nro,
+          fecha:nuevoRemitoForm.fecha||null,
+          cat:nuevoRemitoForm.cat,
+          detalle:nuevoRemitoForm.detalle,
+        },
+      });
+      if(error){showError("No se pudo crear el remito: "+error.message);return;}
+      showToast("Remito creado y conciliado");
+      cerrarConciliar(); load();
+    } finally { conciliandoRef.current=false; setConciliando(false); }
   };
 
   const justificarConMovimientoInterno=async()=>{
+    if(conciliandoRef.current)return;
     if(!conciliarModal||!movInternoForm.destino)return;
+    conciliandoRef.current=true;
     setConciliando(true);
-    const {error}=await db.rpc("fn_conciliar_mp_con_movimiento_interno",{
-      p_mp_mov_id:conciliarModal.id,
-      p_destino_cuenta:movInternoForm.destino,
-      p_detalle:movInternoForm.detalle||null,
-    });
-    setConciliando(false);
-    if(error){showError("No se pudo registrar la transferencia: "+error.message);return;}
-    showToast("Transferencia registrada");
-    cerrarConciliar(); load();
+    try{
+      const {error}=await db.rpc("fn_conciliar_mp_con_movimiento_interno",{
+        p_mp_mov_id:conciliarModal.id,
+        p_destino_cuenta:movInternoForm.destino,
+        p_detalle:movInternoForm.detalle||null,
+      });
+      if(error){showError("No se pudo registrar la transferencia: "+error.message);return;}
+      showToast("Transferencia registrada");
+      cerrarConciliar(); load();
+    } finally { conciliandoRef.current=false; setConciliando(false); }
   };
 
   return (

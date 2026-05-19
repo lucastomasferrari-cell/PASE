@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { Modal, InfoTooltip } from "../components/ui";
@@ -212,8 +212,11 @@ export default function Ajustes({ user }: AjustesProps = {}) {
     setNuevoTipoGasto("fijo");
   };
 
+  const savingRef = useRef(false);
   const guardarNuevo = async () => {
+    if (savingRef.current) return;
     if (!nuevoModalGrupo || !nuevoNombre.trim() || saving) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       const nombre = nuevoNombre.trim();
@@ -257,6 +260,7 @@ export default function Ajustes({ user }: AjustesProps = {}) {
       setNuevoNombre("");
       await load();
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -321,12 +325,14 @@ export default function Ajustes({ user }: AjustesProps = {}) {
   };
 
   const guardarEdit = async () => {
+    if (savingRef.current) return;
     if (!editTarget || !editNombre.trim() || saving) return;
     const nuevo = editNombre.trim();
     if (nuevo === ("nombre" in editTarget.row ? editTarget.row.nombre : "")) {
       setEditTarget(null);
       return;
     }
+    savingRef.current = true;
     setSaving(true);
     try {
       let err: { message: string } | null = null;
@@ -350,6 +356,7 @@ export default function Ajustes({ user }: AjustesProps = {}) {
       setEditTarget(null);
       await load();
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };

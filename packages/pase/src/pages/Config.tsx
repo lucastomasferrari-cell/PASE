@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
 import { ROLES } from "../lib/auth";
 import type { Local, UsuarioRow } from "../types";
@@ -43,8 +43,11 @@ export default function Config(_props: ConfigProps) {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(()=>{load();},[]);
 
+  const savingRef = useRef(false);
   const guardar=async()=>{
+    if(savingRef.current)return;
     if(!form.nombre||!form.email||!form.password)return;
+    savingRef.current=true;
     setSaving(true);setFormErr("");
     try{
       const r=await fetch("/api/auth-admin",{
@@ -53,32 +56,33 @@ export default function Config(_props: ConfigProps) {
         body:JSON.stringify({action:"create",nombre:form.nombre,usuario:form.email,password:form.password,rol:form.rol,locales:form.locales}),
       });
       const d=await r.json();
-      if(!d.ok){setFormErr(d.error||"Error creando usuario");setSaving(false);return;}
+      if(!d.ok){setFormErr(d.error||"Error creando usuario");return;}
       setModal(false);setForm({nombre:"",email:"",password:"",rol:"cajero",locales:[]});load();
     }catch(e){setFormErr(e instanceof Error ? e.message : String(e));}
-    setSaving(false);
+    finally{ savingRef.current=false; setSaving(false); }
   };
 
   const guardarEdit=async()=>{
+    if(savingRef.current)return;
     if(!editModal||!editModal.password)return;
+    savingRef.current=true;
     setSaving(true);setFormErr("");
-    if(editModal.auth_id){
-      // Via Supabase Auth
-      try{
+    try{
+      if(editModal.auth_id){
         const r=await fetch("/api/auth-admin",{
           method:"POST",
           headers:{"Content-Type":"application/json"},
           body:JSON.stringify({action:"change_password",authId:editModal.auth_id,password:editModal.password}),
         });
         const d=await r.json();
-        if(!d.ok){setFormErr(d.error||"Error cambiando contraseña");setSaving(false);return;}
-      }catch(e){setFormErr(e instanceof Error ? e.message : String(e));setSaving(false);return;}
-    }else{
-      // Fallback: usuario no migrado — guardar hash
-      const hash = await sha256(editModal.password);
-      await db.from("usuarios").update({password:hash}).eq("id",editModal.id);
-    }
-    setSaving(false);setEditModal(null);load();
+        if(!d.ok){setFormErr(d.error||"Error cambiando contraseña");return;}
+      }else{
+        const hash = await sha256(editModal.password);
+        await db.from("usuarios").update({password:hash}).eq("id",editModal.id);
+      }
+      setEditModal(null);load();
+    }catch(e){setFormErr(e instanceof Error ? e.message : String(e));}
+    finally{ savingRef.current=false; setSaving(false); }
   };
 
   return (

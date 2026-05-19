@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Usuario } from '../../types/auth';
 import type { ItemGrupo } from '../../types/database';
 import { aumentoMasivo } from '../../services/preciosService';
@@ -28,25 +28,32 @@ export function AumentoMasivoDialog({ user, grupos, totalItems, onClose, onDone 
   const [redondeoA, setRedondeoA] = useState<number>(1);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   const itemsPreview = grupoId === null ? totalItems : null;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (savingRef.current) return;
     const eP = validarPorcentaje(porcentaje);
     if (eP) { setError(eP); return; }
     if (!user.tenant_id) { setError('Sin tenant'); return; }
+    savingRef.current = true;
     setSaving(true); setError(null);
-    const { data, error: err } = await aumentoMasivo({
-      tenantId: user.tenant_id,
-      localId: null,
-      grupoId,
-      porcentaje,
-      redondeoA,
-    });
-    setSaving(false);
-    if (err || !data) { setError(translateError({ message: err ?? 'Error' })); return; }
-    onDone(data);
+    try {
+      const { data, error: err } = await aumentoMasivo({
+        tenantId: user.tenant_id,
+        localId: null,
+        grupoId,
+        porcentaje,
+        redondeoA,
+      });
+      if (err || !data) { setError(translateError({ message: err ?? 'Error' })); return; }
+      onDone(data);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   }
 
   return (

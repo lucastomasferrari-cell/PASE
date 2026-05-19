@@ -3,6 +3,7 @@ import { db } from "../lib/supabase";
 import { localesVisibles, applyLocalScope, cuentasOperables, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { usePuestosRRHH } from "../lib/usePuestosRRHH";
+import { useGuardedHandler } from "../lib/useGuardedHandler";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import { toISO, today } from "../lib/utils";
@@ -67,7 +68,9 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const [allEmps, setAllEmps] = useState<Empleado[]>([]);
   const [empSearch, setEmpSearch] = useState("");
   const [vacTomadas, setVacTomadas] = useState<Record<string, number>>({});
-  const [empFiltLocal, setEmpFiltLocal] = useState(defaultLocal);
+  // empFiltLocal eliminado 2026-05-18: era fuente de contradicción con el
+  // localActivo del sidebar (header del sidebar decía X, header del Equipo
+  // decía Y). Ahora todo el scope viene del sidebar via applyLocalScope.
   // BUG 2: por defecto solo mostramos empleados activos. Toggle para incluir inactivos.
   const [empMostrarInactivos, setEmpMostrarInactivos] = useState(false);
   const [empModal, setEmpModal] = useState<EmpModalState>(null);
@@ -483,24 +486,28 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const puestosLegacy = [...new Set(allEmps.map(e => e.puesto).filter(Boolean))]
     .filter(p => !puestosCatalogo.includes(p));
   const puestos = [...puestosCatalogo, ...puestosLegacy].sort();
+  // Bug 2026-05-18 (Lucas): el filtro "Sucursal" de la pantalla creaba una
+  // contradicción cuando el sidebar marcaba un local pero la pantalla otro.
+  // Decisión: la fuente única de verdad para el local es el sidebar
+  // (localActivo). La pantalla ya NO tiene filtro propio; solo respeta el
+  // scope del sidebar (vía applyLocalScope en loadEmpleados).
   const empsFilt = allEmps.filter(e => {
     if (!empMostrarInactivos && e.activo === false) return false;
-    if (empFiltLocal && e.local_id !== parseInt(String(empFiltLocal))) return false;
     if (empSearch && !(`${e.apellido} ${e.nombre}`).toLowerCase().includes(empSearch.toLowerCase())) return false;
     return true;
   });
 
-  const guardarEmp = async () => {
+  // Guarded por useGuardedHandler — bloquea doble-click rápido. Bug
+  // 2026-05-18: Anto pegó dos veces "Guardar" y se duplicó el empleado.
+  const guardarEmpHandler = useGuardedHandler(async () => {
     if (!empForm.apellido || !empForm.nombre || !empForm.local_id || !empForm.puesto || !empForm.sueldo_mensual || !empForm.fecha_inicio) return;
     const payload = {
       ...empForm,
       local_id: parseInt(empForm.local_id),
       sueldo_mensual: parseFloat(empForm.sueldo_mensual) || 0,
-      // Nuevos 2 campos (migration 202605172000):
       dias_vacaciones_ya_tomados_al_alta: parseInt(empForm.dias_vacaciones_ya_tomados_al_alta || "0") || 0,
       registrado: empForm.registrado,
     };
-    // Estrechar empModal: si tiene .id (no es "new" ni null), es Empleado.
     const existing = empModal && empModal !== "new" ? empModal : null;
     if (existing) {
       const sueldoAnt = Number(existing.sueldo_mensual);
@@ -510,8 +517,6 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
           motivo: "Edición desde listado", registrado_por: user?.id,
         }]);
       }
-      // Strip de campos calculados/derivados que no van al UPDATE; los nombres
-      // documentan qué se descarta (más legible que renombrar a `_x`).
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { valor_dia, valor_hora, creado_at, vacaciones_dias_acumulados, aguinaldo_acumulado, fecha_egreso, motivo_baja, ...upd } = payload as Partial<Empleado> & Record<string, unknown>;
       await db.from("rrhh_empleados").update(upd).eq("id", existing.id);
@@ -519,7 +524,9 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       await db.from("rrhh_empleados").insert([payload]);
     }
     setEmpModal(null); loadEmpleados();
-  };
+  });
+  const guardarEmp = guardarEmpHandler.run;
+  const guardandoEmp = guardarEmpHandler.isPending;
 
   const abrirEmpNuevo = () => {
     // Pre-popular SOLO si el sidebar tiene una sucursal específica O si el
@@ -655,7 +662,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     setFormasPago(pendienteCash > 0 ? [{ cuenta: "", monto: String(pendienteCash) }] : []);
   };
 
-  const guardarAdelanto = async () => {
+  const { run: guardarAdelanto, isPending: guardandoAdelanto } = useGuardedHandler(async () => {
     const monto = parseFloat(adelForm.monto);
     if (!monto || monto <= 0 || !adelForm.empleado_id || !adelForm.cuenta) return;
     const emp = allEmps.find(e => e.id === adelForm.empleado_id);
@@ -673,7 +680,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     setAdelModal(false);
     setAdelForm({ empleado_id:"", monto:"", cuenta:"", fecha:toISO(today), descripcion:"" });
     if (tab === "pagos") await loadPagos();
-  };
+  });
 
   // ─── DERIVED ───────────────────────────────────────────────────────────────
   const totalPagosPend = pagoData.filter(r => r.liq && r.liq.estado !== "pagado").length;
@@ -703,8 +710,6 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
 
       {tab === "empleados" && (
         <TabEmpleados
-          empFiltLocal={empFiltLocal}
-          setEmpFiltLocal={setEmpFiltLocal}
           empSearch={empSearch}
           setEmpSearch={setEmpSearch}
           empMostrarInactivos={empMostrarInactivos}
@@ -723,6 +728,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
           abrirEmpNuevo={abrirEmpNuevo}
           abrirEmpEditar={abrirEmpEditar}
           guardarEmp={guardarEmp}
+          guardandoEmp={guardandoEmp}
           setLegajoId={setLegajoId}
           puedeVerInactivos={tienePermiso(user, "ver_anulados")}
         />
@@ -780,6 +786,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
           adelForm={adelForm}
           setAdelForm={setAdelForm}
           guardarAdelanto={guardarAdelanto}
+          guardandoAdelanto={guardandoAdelanto}
           adelantosPendientes={adelantosPendientes}
           setAdelantosPendientes={setAdelantosPendientes}
           abrirPagoSueldo={abrirPagoSueldo}

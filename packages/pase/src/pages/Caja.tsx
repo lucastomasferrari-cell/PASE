@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasVisibles as cuentasVisiblesFn, cuentasOperables as cuentasOperablesFn, cuentasVisiblesParaListados, localesVisibles, tienePermiso } from "../lib/auth";
@@ -339,16 +339,19 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     .filter(m => filtCuenta === "Todas" || m.cuenta === filtCuenta)
     .filter(m => mostrarAnulados ? true : !m.anulado);
 
+  // Ref-based guard contra doble-click (fix sistémico 2026-05-18). El state
+  // `saving` por sí solo tiene race condition: dos clicks rápidos ven
+  // `saving===false` antes del re-render. La ref es sincrónica.
+  const savingRef = useRef(false);
   const guardar = async () => {
-    if (saving) return;
+    if (savingRef.current || saving) return;
     if(!form.importe) return;
     if (!form.cuenta) { alert("Elegí una cuenta"); return; }
     const lid = lidImplicito != null ? lidImplicito : parseInt(localFormId);
     if (!Number.isFinite(lid)) return;
     const importe = parseFloat(form.importe)*(form.esEgreso?-1:1);
-    // Sin dropdown de Categoría, deriveTipoMov("") devuelve "Egreso Manual"
-    // o "Ingreso Manual" según la dirección.
     const tipoEfectivo = deriveTipoMov("", form.esEgreso);
+    savingRef.current = true;
     setSaving(true);
     try {
       const { error } = await db.rpc("crear_movimiento_caja", {
@@ -365,17 +368,21 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
       setForm({...emptyForm, fecha: toISO(today)});
       load();
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
 
+  const transfSavingRef = useRef(false);
   const guardarTransferencia = async () => {
+    if (transfSavingRef.current || transfSaving) return;
     const lid = lidImplicito != null ? lidImplicito : parseInt(localFormId);
     if (!Number.isFinite(lid)) { alert("Elegí un local"); return; }
     if (!transfForm.origen || !transfForm.destino) { alert("Elegí cuenta origen y destino"); return; }
     if (transfForm.origen === transfForm.destino) { alert("Las cuentas deben ser distintas"); return; }
     const monto = parseFloat(transfForm.monto);
     if (!Number.isFinite(monto) || monto <= 0) { alert("Monto inválido"); return; }
+    transfSavingRef.current = true;
     setTransfSaving(true);
     try {
       const { error } = await db.rpc("transferencia_cuentas", {
@@ -391,6 +398,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
       setTransfForm({fecha:toISO(today),origen:"",destino:"",monto:"",detalle:""});
       load();
     } finally {
+      transfSavingRef.current = false;
       setTransfSaving(false);
     }
   };

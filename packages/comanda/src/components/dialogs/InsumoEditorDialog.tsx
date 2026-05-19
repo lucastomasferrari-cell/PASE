@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
@@ -45,6 +45,7 @@ const EMPTY: FormState = {
 export function InsumoEditorDialog({ open, onOpenChange, insumo, tenantId, onSaved }: Props) {
   const [form, setForm] = useState<FormState>(EMPTY);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   useEffect(() => {
     if (open) {
@@ -63,30 +64,36 @@ export function InsumoEditorDialog({ open, onOpenChange, insumo, tenantId, onSav
     setForm((f) => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
+    if (savingRef.current) return;
     if (!form.nombre.trim()) { toast.error('El nombre es obligatorio'); return; }
+    savingRef.current = true;
     setSaving(true);
-    const payload = {
-      nombre: form.nombre.trim(),
-      emoji: form.emoji.trim() || null,
-      descripcion: form.descripcion.trim() || null,
-      unidad: form.unidad,
-      costo_actual: form.costo_actual > 0 ? form.costo_actual : null,
-      es_comprado: form.es_comprado,
-    };
-    const r = insumo
-      ? await updateInsumo(insumo.id, payload)
-      : await createInsumo(tenantId, payload);
-    setSaving(false);
-    if (r.error) {
-      if (r.error.toLowerCase().includes('uniq_insumo') || r.error.toLowerCase().includes('duplicate')) {
-        toast.error(`Ya existe un insumo con nombre "${form.nombre}"`);
-      } else {
-        toast.error(r.error);
+    try {
+      const payload = {
+        nombre: form.nombre.trim(),
+        emoji: form.emoji.trim() || null,
+        descripcion: form.descripcion.trim() || null,
+        unidad: form.unidad,
+        costo_actual: form.costo_actual > 0 ? form.costo_actual : null,
+        es_comprado: form.es_comprado,
+      };
+      const r = insumo
+        ? await updateInsumo(insumo.id, payload)
+        : await createInsumo(tenantId, payload);
+      if (r.error) {
+        if (r.error.toLowerCase().includes('uniq_insumo') || r.error.toLowerCase().includes('duplicate')) {
+          toast.error(`Ya existe un insumo con nombre "${form.nombre}"`);
+        } else {
+          toast.error(r.error);
+        }
+        return;
       }
-      return;
+      toast.success(insumo ? 'Insumo actualizado' : 'Insumo creado');
+      onSaved();
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
-    toast.success(insumo ? 'Insumo actualizado' : 'Insumo creado');
-    onSaved();
   };
 
   return (

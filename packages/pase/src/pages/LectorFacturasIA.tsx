@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
 import { fmt_d, fmt_$, genId, parseMonto } from "../lib/utils";
 import { useCategorias } from "../lib/useCategorias";
@@ -259,7 +259,9 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
     setLoading(false);
   };
 
+  const guardandoRef = useRef(false);
   const guardar=async()=>{
+    if(guardandoRef.current)return;
     if(!form.prov_id&&!form.local_id){alert("⚠ Seleccioná el proveedor y el local antes de guardar.");return;}
     if(!form.prov_id){alert("⚠ Seleccioná el proveedor antes de guardar.");return;}
     if(!form.local_id){alert("⚠ Seleccioná el local antes de guardar.");return;}
@@ -292,50 +294,51 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
       }
     }
 
+    guardandoRef.current = true;
     setGuardando(true);
-    const id=genId("FACT");
+    try {
+      const id=genId("FACT");
+      let imagen_url=null;
+      if(archivo){
+        const ext=(archivo.name.split(".").pop()||"bin").toLowerCase();
+        const path=`${id}.${ext}`;
+        const {error:upErr}=await db.storage.from("facturas").upload(path,archivo,{contentType:archivo.type||"application/octet-stream",upsert:false});
+        if(upErr){
+          alert("Error subiendo la imagen: "+upErr.message);
+          return;
+        }
+        imagen_url=path;
+      }
 
-    // Subir archivo original a Supabase Storage si viene adjunto
-    let imagen_url=null;
-    if(archivo){
-      const ext=(archivo.name.split(".").pop()||"bin").toLowerCase();
-      const path=`${id}.${ext}`;
-      const {error:upErr}=await db.storage.from("facturas").upload(path,archivo,{contentType:archivo.type||"application/octet-stream",upsert:false});
-      if(upErr){
-        alert("Error subiendo la imagen: "+upErr.message);
-        setGuardando(false);
+      const confGlobal=resultado?.confianza_global??100;
+      const estado=confGlobal<70?"revision":"pendiente";
+      const nueva = {...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(String(form.local_id)), neto: parseMonto(form.neto), iva21: parseMonto(form.iva21), iva105: parseMonto(form.iva105), iibb: parseMonto(form.iibb), total: parseMonto(form.total), estado, pagos: [], imagen_url, fecha: form.fecha || null, venc: form.venc || null, tipo: "factura"};
+      const {error:insErr} = await db.rpc("crear_factura_completa", {
+        p_factura: nueva,
+        p_items: [],
+        p_idempotency_key: crypto.randomUUID(),
+      });
+      if(insErr){
+        if(imagen_url) await db.storage.from("facturas").remove([imagen_url]);
+        alert("Error guardando la factura: "+(insErr.message || insErr));
         return;
       }
-      imagen_url=path;
-    }
 
-    const confGlobal=resultado?.confianza_global??100;
-    const estado=confGlobal<70?"revision":"pendiente";
-    // RPC atómica (deuda C4-F12 cerrada).
-    const nueva = {...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(String(form.local_id)), neto: parseMonto(form.neto), iva21: parseMonto(form.iva21), iva105: parseMonto(form.iva105), iibb: parseMonto(form.iibb), total: parseMonto(form.total), estado, pagos: [], imagen_url, fecha: form.fecha || null, venc: form.venc || null, tipo: "factura"};
-    const {error:insErr} = await db.rpc("crear_factura_completa", {
-      p_factura: nueva,
-      p_items: [],
-      p_idempotency_key: crypto.randomUUID(),
-    });
-    if(insErr){
-      // Rollback del archivo si el insert falló, así no queda huérfano
-      if(imagen_url) await db.storage.from("facturas").remove([imagen_url]);
-      alert("Error guardando la factura: "+(insErr.message || insErr));
+      setArchivo(null);setPreview(null);setResultado(null);
+      setForm({local_id:localActivo||"",prov_id:"",fecha:"",venc:"",nro:"",neto:0,iva21:0,iva105:0,iibb:0,total:0,cat:""});
+      alert("✓ Factura cargada correctamente");
+      onSaved?.();
+    } finally {
+      guardandoRef.current = false;
       setGuardando(false);
-      return;
     }
-
-    // El trigger trg_saldo_prov_facturas (migration 202605070900) recalcula
-    // proveedores.saldo automáticamente al insertar la factura.
-    setGuardando(false);setArchivo(null);setPreview(null);setResultado(null);
-    setForm({local_id:localActivo||"",prov_id:"",fecha:"",venc:"",nro:"",neto:0,iva21:0,iva105:0,iibb:0,total:0,cat:""});
-    alert("✓ Factura cargada correctamente");
-    onSaved?.();
   };
 
+  const guardandoProvRef = useRef(false);
   const guardarProvInline = async () => {
+    if (guardandoProvRef.current) return;
     if (provSaving || !provModal?.nombre) return;
+    guardandoProvRef.current = true;
     setProvSaving(true);
     try {
       const { data, error } = await db.from("proveedores")
@@ -356,6 +359,7 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
         setProvModal(null);
       }
     } finally {
+      guardandoProvRef.current = false;
       setProvSaving(false);
     }
   };

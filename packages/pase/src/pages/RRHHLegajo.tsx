@@ -5,7 +5,7 @@
 // queries directas sobre tablas con `local_id` quedan con disable de C3
 // porque la defense-in-depth se hace en la página padre RRHH, no acá.
 /* eslint-disable pase-local/require-apply-local-scope */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
 import { cuentasOperables } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
@@ -238,19 +238,24 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
   // (deuda C4 cerrada). Antes podían quedar inconsistentes si el INSERT
   // pasaba y el UPDATE fallaba → historial mostraba cambio pero legajo
   // seguía con sueldo viejo.
+  const guardandoSueldoRef = useRef(false);
   const guardarSueldo = async () => {
+    if (guardandoSueldoRef.current) return;
     const nuevo = parseFloat(sueldoForm.monto);
     if (!nuevo || nuevo === emp.sueldo_mensual) return;
-    const { error } = await db.rpc("cambiar_sueldo_empleado", {
-      p_emp_id: emp.id,
-      p_nuevo_sueldo: nuevo,
-      p_motivo: sueldoForm.motivo || null,
-      p_idempotency_key: crypto.randomUUID(),
-    });
-    if (error) { alert(translateRpcError(error)); return; }
-    setSueldoModal(false); setSueldoForm({ monto:"", motivo:"" });
-    loadEmp(); loadHistSueldos();
-    showToast("Sueldo actualizado");
+    guardandoSueldoRef.current = true;
+    try {
+      const { error } = await db.rpc("cambiar_sueldo_empleado", {
+        p_emp_id: emp.id,
+        p_nuevo_sueldo: nuevo,
+        p_motivo: sueldoForm.motivo || null,
+        p_idempotency_key: crypto.randomUUID(),
+      });
+      if (error) { alert(translateRpcError(error)); return; }
+      setSueldoModal(false); setSueldoForm({ monto:"", motivo:"" });
+      loadEmp(); loadHistSueldos();
+      showToast("Sueldo actualizado");
+    } finally { guardandoSueldoRef.current = false; }
   };
 
   const toggleActivo = async () => {
@@ -261,7 +266,9 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
   // ─── ACCIONES: VACACIONES ──────────────────────────────────────────────────
   const plusVacacional = vacAcumuladas * valorDiaVacacional;
 
+  const pagandoVacRef = useRef(false);
   const pagarVacaciones = async () => {
+    if (pagandoVacRef.current) return;
     if (!emp) return;
     const dias = parseFloat(vacDias) || vacAcumuladas;
     const montoEsperado = plusVacacional;
@@ -273,25 +280,29 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
       .map(l => ({ cuenta: l.cuenta, monto: parseFloat(l.monto) }));
 
     if (lineas.length === 0) { showToast("Elegí una cuenta para cada línea de pago"); return; }
+    pagandoVacRef.current = true;
+    try {
+      const { error } = await db.rpc("pagar_vacaciones", {
+        p_empleado_id: emp.id,
+        p_lineas: lineas,
+        p_dias: dias,
+        p_monto_esperado: montoEsperado,
+        p_fecha: toISO(today),
+      });
+      if (error) { showToast(translateRpcError(error)); return; }
 
-    const { error } = await db.rpc("pagar_vacaciones", {
-      p_empleado_id: emp.id,
-      p_lineas: lineas,
-      p_dias: dias,
-      p_monto_esperado: montoEsperado,
-      p_fecha: toISO(today),
-    });
-    if (error) { showToast(translateRpcError(error)); return; }
-
-    const pendiente = totalPagado < montoEsperado - 0.01;
-    setVacModal(false); setVacDias("");
-    setVacLineas([{cuenta:"", monto:""}]);
-    showToast(pendiente ? `Pago parcial — Resta ${fmt_$(montoEsperado - totalPagado)}` : "Vacaciones pagadas");
-    loadAll();
+      const pendiente = totalPagado < montoEsperado - 0.01;
+      setVacModal(false); setVacDias("");
+      setVacLineas([{cuenta:"", monto:""}]);
+      showToast(pendiente ? `Pago parcial — Resta ${fmt_$(montoEsperado - totalPagado)}` : "Vacaciones pagadas");
+      loadAll();
+    } finally { pagandoVacRef.current = false; }
   };
 
   // ─── ACCIONES: AGUINALDO ───────────────────────────────────────────────────
+  const pagandoAguRef = useRef(false);
   const pagarAguinaldo = async () => {
+    if (pagandoAguRef.current) return;
     if (!emp) return;
     const montoEsperado = sacAcumulado;
     const totalPagado = aguLineas.reduce((s, l) => s + (parseFloat(l.monto) || 0), 0);
@@ -302,20 +313,22 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
       .map(l => ({ cuenta: l.cuenta, monto: parseFloat(l.monto) }));
 
     if (lineas.length === 0) { showToast("Elegí una cuenta para cada línea de pago"); return; }
+    pagandoAguRef.current = true;
+    try {
+      const { error } = await db.rpc("pagar_aguinaldo", {
+        p_empleado_id: emp.id,
+        p_lineas: lineas,
+        p_monto_esperado: montoEsperado,
+        p_fecha: toISO(today),
+      });
+      if (error) { showToast(translateRpcError(error)); return; }
 
-    const { error } = await db.rpc("pagar_aguinaldo", {
-      p_empleado_id: emp.id,
-      p_lineas: lineas,
-      p_monto_esperado: montoEsperado,
-      p_fecha: toISO(today),
-    });
-    if (error) { showToast(translateRpcError(error)); return; }
-
-    const pendiente = totalPagado < montoEsperado - 0.01;
-    setAguModal(false);
-    setAguLineas([{cuenta:"", monto:""}]);
-    showToast(pendiente ? `Pago parcial — Resta ${fmt_$(montoEsperado - totalPagado)}` : "Aguinaldo pagado");
-    loadAll();
+      const pendiente = totalPagado < montoEsperado - 0.01;
+      setAguModal(false);
+      setAguLineas([{cuenta:"", monto:""}]);
+      showToast(pendiente ? `Pago parcial — Resta ${fmt_$(montoEsperado - totalPagado)}` : "Aguinaldo pagado");
+      loadAll();
+    } finally { pagandoAguRef.current = false; }
   };
 
   // ─── ACCIONES: DOCUMENTOS ─────────────────────────────────────────────────

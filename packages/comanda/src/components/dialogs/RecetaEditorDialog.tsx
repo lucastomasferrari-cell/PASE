@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Trash2, Plus } from 'lucide-react';
 import {
@@ -40,6 +40,7 @@ export function RecetaEditorDialog({ open, onOpenChange, item, tenantId, onSaved
   const [insumosDisponibles, setInsumosDisponibles] = useState<Insumo[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   useEffect(() => {
     if (!open || !item) return;
@@ -95,6 +96,7 @@ export function RecetaEditorDialog({ open, onOpenChange, item, tenantId, onSaved
   })();
 
   const handleSave = async () => {
+    if (savingRef.current) return;
     if (!item) return;
     if (!nombre.trim()) { toast.error('El nombre de la receta es obligatorio'); return; }
     if (rendimiento <= 0) { toast.error('El rendimiento debe ser > 0'); return; }
@@ -133,25 +135,30 @@ export function RecetaEditorDialog({ open, onOpenChange, item, tenantId, onSaved
       toast.error('Merma debe ser < 100% (sino el costo es infinito)');
       return;
     }
+    savingRef.current = true;
     setSaving(true);
-    const insumos: RecetaInsumoInput[] = lineasFilled.map((l, idx) => ({
-      insumo_id: l.insumo_id!,
-      cantidad: l.cantidad,
-      merma_pct: l.merma_pct,
-      notas: l.notas.trim() || null,
-      orden: idx,
-    }));
-    const r = await upsertReceta({
-      itemId: item.id, tenantId, localId: null,
-      nombre: nombre.trim(),
-      rendimiento,
-      notas: notas.trim() || null,
-      insumos,
-    });
-    setSaving(false);
-    if (r.error) { toast.error(r.error); return; }
-    toast.success('Receta guardada');
-    onSaved();
+    try {
+      const insumos: RecetaInsumoInput[] = lineasFilled.map((l, idx) => ({
+        insumo_id: l.insumo_id!,
+        cantidad: l.cantidad,
+        merma_pct: l.merma_pct,
+        notas: l.notas.trim() || null,
+        orden: idx,
+      }));
+      const r = await upsertReceta({
+        itemId: item.id, tenantId, localId: null,
+        nombre: nombre.trim(),
+        rendimiento,
+        notas: notas.trim() || null,
+        insumos,
+      });
+      if (r.error) { toast.error(r.error); return; }
+      toast.success('Receta guardada');
+      onSaved();
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   };
 
   if (!item) return null;

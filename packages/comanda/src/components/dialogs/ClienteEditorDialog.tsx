@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Star } from 'lucide-react';
 import {
@@ -42,6 +42,7 @@ const EMPTY: FormState = {
 export function ClienteEditorDialog({ open, onOpenChange, cliente, tenantId, onSaved }: Props) {
   const [form, setForm] = useState<FormState>(EMPTY);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   useEffect(() => {
     if (open) {
@@ -64,38 +65,43 @@ export function ClienteEditorDialog({ open, onOpenChange, cliente, tenantId, onS
     setForm((f) => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
+    if (savingRef.current) return;
     if (!form.telefono.trim()) {
       toast.error('El teléfono es obligatorio');
       return;
     }
+    savingRef.current = true;
     setSaving(true);
-    const payload = {
-      telefono: form.telefono.trim(),
-      nombre: form.nombre.trim() || null,
-      apellido: form.apellido.trim() || null,
-      email: form.email.trim() || null,
-      direccion: form.direccion.trim() || null,
-      direccion_aclaracion: form.direccion_aclaracion.trim() || null,
-      zona: form.zona.trim() || null,
-      notas: form.notas.trim() || null,
-      vip: form.vip,
-      acepta_marketing: form.acepta_marketing,
-    };
-    const r = cliente
-      ? await updateCliente(cliente.id, payload)
-      : await createCliente(tenantId, payload);
-    setSaving(false);
-    if (r.error) {
-      // Postgres UNIQUE violation tiene mensaje específico.
-      if (r.error.toLowerCase().includes('uniq_cliente') || r.error.toLowerCase().includes('duplicate')) {
-        toast.error(`Ya existe un cliente con teléfono ${form.telefono}`);
-      } else {
-        toast.error(r.error);
+    try {
+      const payload = {
+        telefono: form.telefono.trim(),
+        nombre: form.nombre.trim() || null,
+        apellido: form.apellido.trim() || null,
+        email: form.email.trim() || null,
+        direccion: form.direccion.trim() || null,
+        direccion_aclaracion: form.direccion_aclaracion.trim() || null,
+        zona: form.zona.trim() || null,
+        notas: form.notas.trim() || null,
+        vip: form.vip,
+        acepta_marketing: form.acepta_marketing,
+      };
+      const r = cliente
+        ? await updateCliente(cliente.id, payload)
+        : await createCliente(tenantId, payload);
+      if (r.error) {
+        if (r.error.toLowerCase().includes('uniq_cliente') || r.error.toLowerCase().includes('duplicate')) {
+          toast.error(`Ya existe un cliente con teléfono ${form.telefono}`);
+        } else {
+          toast.error(r.error);
+        }
+        return;
       }
-      return;
+      toast.success(cliente ? 'Cliente actualizado' : 'Cliente creado');
+      onSaved();
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
-    toast.success(cliente ? 'Cliente actualizado' : 'Cliente creado');
-    onSaved();
   };
 
   return (

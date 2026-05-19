@@ -36,7 +36,8 @@ interface TabPagosProps {
   setAdelModal: React.Dispatch<React.SetStateAction<boolean>>;
   adelForm: AdelantoForm;
   setAdelForm: React.Dispatch<React.SetStateAction<AdelantoForm>>;
-  guardarAdelanto: () => Promise<void>;
+  guardarAdelanto: () => Promise<void | undefined>;
+  guardandoAdelanto: boolean;
   adelantosPendientes: Adelanto[];
   setAdelantosPendientes: React.Dispatch<React.SetStateAction<Adelanto[]>>;
   abrirPagoSueldo: (emp: Empleado, nov: Novedad, liq: LiquidacionConGenerated) => Promise<void>;
@@ -50,7 +51,7 @@ export function TabPagos({
   totalPagosPend, totalGeneral,
   pagoModal, setPagoModal, formasPago, setFormasPago,
   pagando, setPagando, loadPagos, loadEmpleados, showToast,
-  allEmps, adelModal, setAdelModal, adelForm, setAdelForm, guardarAdelanto,
+  allEmps, adelModal, setAdelModal, adelForm, setAdelForm, guardarAdelanto, guardandoAdelanto,
   adelantosPendientes, setAdelantosPendientes, abrirPagoSueldo,
   cuentasUsables, idempKeyPagarSueldo,
 }: TabPagosProps) {
@@ -316,9 +317,9 @@ export function TabPagos({
               </div>
             </div>
             <div className="modal-ft">
-              <button className="btn btn-sec" onClick={() => setAdelModal(false)}>Cancelar</button>
-              <button className="btn btn-acc" onClick={guardarAdelanto} disabled={!adelForm.empleado_id || !adelForm.monto || parseFloat(adelForm.monto) <= 0}>
-                Registrar adelanto
+              <button className="btn btn-sec" onClick={() => setAdelModal(false)} disabled={guardandoAdelanto}>Cancelar</button>
+              <button className="btn btn-acc" onClick={guardarAdelanto} disabled={guardandoAdelanto || !adelForm.empleado_id || !adelForm.monto || parseFloat(adelForm.monto) <= 0}>
+                {guardandoAdelanto ? "Registrando…" : "Registrar adelanto"}
               </button>
             </div>
           </div>

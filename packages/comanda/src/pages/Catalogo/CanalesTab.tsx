@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Plus, Pencil, Link2, Pencil as PencilIcon, ShoppingBag } from 'lucide-react';
 import type { Usuario } from '../../types/auth';
 import type { Canal, ModoPos } from '../../types/database';
@@ -187,27 +187,34 @@ function CanalForm({ user, canal, onClose, onSaved }: { user: Usuario; canal: Ca
   const [grupo, setGrupo] = useState(canal?.grupo ?? '');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (savingRef.current) return;
     const eN = validarNombre(nombre); if (eN) { setError(eN); return; }
     const eS = validarSlug(slug); if (eS) { setError(eS); return; }
     const eA = validarPorcentaje(ajustePct); if (eA) { setError(eA); return; }
     const eC = validarPorcentaje(comisionPct); if (eC) { setError(eC); return; }
     if (!user.tenant_id) { setError('Sin tenant'); return; }
 
+    savingRef.current = true;
     setSaving(true);
-    const draft: CanalDraft = {
-      nombre: nombre.trim(), slug: slug.trim(), emoji, color,
-      modo_pos: modoPos, atado_madre: atadoMadre,
-      ajuste_madre_pct: ajustePct, comision_externa_pct: comisionPct,
-      redondeo_a: redondeoA, activo, grupo: grupo.trim() || null,
-      tenant_id: user.tenant_id, local_id: null,
-    };
-    const { error: err } = canal ? await updateCanal(canal.id, draft) : await createCanal(draft);
-    setSaving(false);
-    if (err) { setError(err); return; }
-    onSaved();
+    try {
+      const draft: CanalDraft = {
+        nombre: nombre.trim(), slug: slug.trim(), emoji, color,
+        modo_pos: modoPos, atado_madre: atadoMadre,
+        ajuste_madre_pct: ajustePct, comision_externa_pct: comisionPct,
+        redondeo_a: redondeoA, activo, grupo: grupo.trim() || null,
+        tenant_id: user.tenant_id, local_id: null,
+      };
+      const { error: err } = canal ? await updateCanal(canal.id, draft) : await createCanal(draft);
+      if (err) { setError(err); return; }
+      onSaved();
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   }
 
   return (

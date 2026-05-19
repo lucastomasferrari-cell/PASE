@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { applyLocalScope, tienePermiso } from "../lib/auth";
+import { useGuardedHandler } from "../lib/useGuardedHandler";
 import { useCategorias } from "../lib/useCategorias";
 import { toISO, today, fmt_$ } from "../lib/utils";
 import { calcularSaldosPorProveedor } from "../lib/saldoProveedor";
@@ -89,20 +90,25 @@ export default function Proveedores({ user, localActivo, embedded = false, embed
       return verInactivos || p.estado !== "Inactivo";
     })
     .filter(p=>!search||p.nombre.toLowerCase().includes(search.toLowerCase())||(p.cuit||"").includes(search));
-  const guardar=async()=>{
+  // Guarded contra doble-click (fix sistémico 2026-05-18).
+  const guardarHandler = useGuardedHandler(async () => {
     if(!form.nombre)return;
     const {error}=await db.from("proveedores").insert([{...form,saldo:0}]);
     if(error){alert("Error creando proveedor: "+error.message);return;}
     setModal(false);setForm(emptyForm);
     await load();
-  };
-  const guardarEdit=async()=>{
+  });
+  const guardar = guardarHandler.run;
+  const guardando = guardarHandler.isPending;
+  const guardarEditHandler = useGuardedHandler(async () => {
     if(!editModal) return;
     const {error}=await db.from("proveedores").update({nombre:editModal.nombre,cuit:editModal.cuit,cat:editModal.cat,estado:editModal.estado}).eq("id",editModal.id);
     if(error){alert("Error editando proveedor: "+error.message);return;}
     setEditModal(null);
     await load();
-  };
+  });
+  const guardarEdit = guardarEditHandler.run;
+  const guardandoEdit = guardarEditHandler.isPending;
   const toggleEstado=async(p: Proveedor)=>{
     const {error}=await db.from("proveedores").update({estado:p.estado==="Activo"?"Inactivo":"Activo"}).eq("id",p.id);
     if(error){alert("Error: "+error.message);return;}
@@ -173,7 +179,7 @@ export default function Proveedores({ user, localActivo, embedded = false, embed
             <div className="field"><label>Categoría EERR</label><select value={form.cat} onChange={e=>setForm({...form,cat:e.target.value})}>{CATEGORIAS_COMPRA.map(c=><option key={c}>{c}</option>)}</select></div>
           </div>
         </div>
-        <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar}>Guardar</button></div>
+        <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModal(false)} disabled={guardando}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={guardando}>{guardando ? "Guardando…" : "Guardar"}</button></div>
       </div></div>)}
       {editModal&&(<div className="overlay" onClick={()=>setEditModal(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
         <div className="modal-hd"><div className="modal-title">Editar Proveedor</div><button className="close-btn" onClick={()=>setEditModal(null)}>✕</button></div>
@@ -184,7 +190,7 @@ export default function Proveedores({ user, localActivo, embedded = false, embed
             <div className="field"><label>Categoría EERR</label><select value={editModal.cat||""} onChange={e=>setEditModal({...editModal,cat:e.target.value})}>{CATEGORIAS_COMPRA.map(c=><option key={c}>{c}</option>)}</select></div>
           </div>
         </div>
-        <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setEditModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={guardarEdit}>Guardar</button></div>
+        <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setEditModal(null)} disabled={guardandoEdit}>Cancelar</button><button className="btn btn-acc" onClick={guardarEdit} disabled={guardandoEdit}>{guardandoEdit ? "Guardando…" : "Guardar"}</button></div>
       </div></div>)}
 
       {/* Drawer Estado de Cuenta (sprint mayo 2026 v2 Commit 4).

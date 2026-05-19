@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Plus, Pencil, X, Settings2 } from 'lucide-react';
 import type { Usuario } from '../../types/auth';
 import type { ModifierGroup, Modifier, ModifierTipo } from '../../types/database';
@@ -306,22 +306,29 @@ function GroupForm({ user, group, onClose, onSaved }: { user: Usuario; group: Mo
   const [maxSel, setMaxSel] = useState<number | null>(group?.max_seleccion ?? 1);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (savingRef.current) return;
     const eN = validarNombre(nombre); if (eN) { setError(eN); return; }
     const eM = validarMinMax(minSel, maxSel); if (eM) { setError(eM); return; }
     if (!user.tenant_id) { setError('Sin tenant'); return; }
+    savingRef.current = true;
     setSaving(true);
-    const draft = {
-      nombre: nombre.trim(), descripcion: descripcion.trim() || null,
-      tipo, requerido, min_seleccion: minSel, max_seleccion: maxSel,
-      tenant_id: user.tenant_id, local_id: null,
-    };
-    const { error: err } = group ? await updateModifierGroup(group.id, draft) : await createModifierGroup(draft);
-    setSaving(false);
-    if (err) { setError(err); return; }
-    onSaved();
+    try {
+      const draft = {
+        nombre: nombre.trim(), descripcion: descripcion.trim() || null,
+        tipo, requerido, min_seleccion: minSel, max_seleccion: maxSel,
+        tenant_id: user.tenant_id, local_id: null,
+      };
+      const { error: err } = group ? await updateModifierGroup(group.id, draft) : await createModifierGroup(draft);
+      if (err) { setError(err); return; }
+      onSaved();
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   }
 
   return (

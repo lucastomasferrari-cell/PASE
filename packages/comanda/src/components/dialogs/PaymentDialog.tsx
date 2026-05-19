@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import { Trash2, Plus, CheckCircle2 } from 'lucide-react';
 import {
@@ -63,6 +63,11 @@ export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado
   const [cuotasNuevo, setCuotasNuevo] = useState<number>(1);
   const [montoEntregado, setMontoEntregado] = useState<number>(0);
   const [confirmando, setConfirmando] = useState(false);
+  // Ref-based guard contra doble-click (fix sistémico 2026-05-18). En cobro
+  // es crítico: si el cajero toca "Cobrar" dos veces, se generan 2 pagos
+  // contra el mismo idempotencyKey — el segundo lo rechaza el backend pero
+  // ensucia logs. Ref sincrónico ataja antes del re-render.
+  const confirmandoRef = useRef(false);
 
   useEffect(() => {
     if (!open) return;
@@ -124,9 +129,7 @@ export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado
   }
 
   async function confirmar() {
-    // 1-click UX: si el cajero NO presionó "+ Agregar pago" pero el form
-    // tiene un monto que cubre todo, auto-agregar el pago antes de procesar.
-    // Caso de uso 99%: 1 método + total exacto → tocar "Cobrar" y listo.
+    if (confirmandoRef.current) return;
     let pagosAEnviar = pagos;
     if (pagos.length === 0 && montoNuevo > 0 && Math.abs(montoNuevo - totalConPropina) < 0.01) {
       const aceptaCuotas = metodoAceptaCuotas(metodoNuevo);
@@ -143,32 +146,37 @@ export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado
       toast.error('Faltan pagos para cubrir el total');
       return;
     }
+    confirmandoRef.current = true;
     setConfirmando(true);
-    let propinaRestante = propina;
-    for (const p of pagosAEnviar) {
-      if (p.confirmado) continue;
-      const propinaIncl = Math.min(propinaRestante, p.monto);
-      propinaRestante -= propinaIncl;
-      const { error } = await agregarPago({
-        ventaId: venta.id,
-        metodo: p.metodo,
-        monto: p.monto,
-        idempotencyKey: p.idempotencyKey,
-        cobradoPor: empleadoId,
-        vuelto: p.vuelto ?? null,
-        propinaIncluida: propinaIncl,
-        cuotas: p.cuotas ?? null,
-      });
-      if (error) {
-        toast.error(`Error procesando pago: ${error}`);
-        setConfirmando(false);
-        return;
+    try {
+      let propinaRestante = propina;
+      for (const p of pagosAEnviar) {
+        if (p.confirmado) continue;
+        const propinaIncl = Math.min(propinaRestante, p.monto);
+        propinaRestante -= propinaIncl;
+        const { error } = await agregarPago({
+          ventaId: venta.id,
+          metodo: p.metodo,
+          monto: p.monto,
+          idempotencyKey: p.idempotencyKey,
+          cobradoPor: empleadoId,
+          vuelto: p.vuelto ?? null,
+          propinaIncluida: propinaIncl,
+          cuotas: p.cuotas ?? null,
+        });
+        if (error) {
+          toast.error(`Error procesando pago: ${error}`);
+          return;
+        }
+        p.confirmado = true;
       }
-      p.confirmado = true;
+      toast.success('Venta cobrada');
+      onCobrado();
+      onOpenChange(false);
+    } finally {
+      confirmandoRef.current = false;
+      setConfirmando(false);
     }
-    toast.success('Venta cobrada');
-    onCobrado();
-    onOpenChange(false);
   }
 
   return (

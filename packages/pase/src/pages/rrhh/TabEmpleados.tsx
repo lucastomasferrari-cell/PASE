@@ -6,8 +6,6 @@ import type { Empleado } from "../../types/rrhh";
 import type { EmpForm, EmpModalState } from "./types";
 
 interface TabEmpleadosProps {
-  empFiltLocal: string | number;
-  setEmpFiltLocal: React.Dispatch<React.SetStateAction<string | number>>;
   empSearch: string;
   setEmpSearch: React.Dispatch<React.SetStateAction<string>>;
   empMostrarInactivos: boolean;
@@ -26,17 +24,18 @@ interface TabEmpleadosProps {
   setEmpForm: React.Dispatch<React.SetStateAction<EmpForm>>;
   abrirEmpNuevo: () => void;
   abrirEmpEditar: (e: Empleado) => void;
-  guardarEmp: () => Promise<void>;
+  guardarEmp: () => Promise<void | undefined>;
+  guardandoEmp: boolean;
   setLegajoId: React.Dispatch<React.SetStateAction<string | null>>;
   puedeVerInactivos: boolean;
 }
 
 export function TabEmpleados({
-  empFiltLocal, setEmpFiltLocal, empSearch, setEmpSearch,
+  empSearch, setEmpSearch,
   empMostrarInactivos, setEmpMostrarInactivos,
-  esEnc, locsDisp, locales, localActivo, empsFilt, vacTomadas, puestos,
+  esEnc: _esEnc, locsDisp, locales, localActivo, empsFilt, vacTomadas, puestos,
   empModal, setEmpModal, empForm, setEmpForm,
-  abrirEmpNuevo, abrirEmpEditar, guardarEmp, setLegajoId, puedeVerInactivos,
+  abrirEmpNuevo, abrirEmpEditar, guardarEmp, guardandoEmp, setLegajoId, puedeVerInactivos,
 }: TabEmpleadosProps) {
   // Contador "X sin registrar" — solo cuenta los activos (los inactivos
   // no necesitan estar en AFIP). Pedido Lucas 2026-05-17.
@@ -46,11 +45,7 @@ export function TabEmpleados({
   return (
     <>
       <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
-        <select className="search" style={{width:160}} value={empFiltLocal} onChange={e => setEmpFiltLocal(e.target.value)}>
-          {!esEnc && <option value="">Todas las sucursales</option>}
-          {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-        </select>
-        <input className="search" placeholder="Buscar..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} style={{width:160}} />
+        <input className="search" placeholder="Buscar..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} style={{width:200}} />
         {puedeVerInactivos && (
           <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"var(--muted2)",cursor:"pointer"}}>
             <input type="checkbox" checked={empMostrarInactivos} onChange={e => setEmpMostrarInactivos(e.target.checked)} />
@@ -176,7 +171,7 @@ export function TabEmpleados({
                 </div>
               </div>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setEmpModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={guardarEmp} disabled={!empForm.apellido || !empForm.nombre || !empForm.local_id || !empForm.puesto || !empForm.sueldo_mensual || !empForm.fecha_inicio}>Guardar</button></div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setEmpModal(null)} disabled={guardandoEmp}>Cancelar</button><button className="btn btn-acc" onClick={guardarEmp} disabled={guardandoEmp || !empForm.apellido || !empForm.nombre || !empForm.local_id || !empForm.puesto || !empForm.sueldo_mensual || !empForm.fecha_inicio}>{guardandoEmp ? "Guardando…" : "Guardar"}</button></div>
           </div>
         </div>
       )}
