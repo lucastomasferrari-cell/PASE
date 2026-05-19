@@ -108,6 +108,21 @@ export function createRappiClient(creds, opts = {}) {
     },
 
     /**
+     * GET del menú existente de una tienda. Útil para "importar" el
+     * catálogo que ya está en Rappi al onboarding inicial — el dueño no
+     * tiene que crear los items de cero en COMANDA.
+     *
+     * Rappi v3 expone:
+     *   - GET /api/v3/menu/{storeId}  → catálogo completo
+     *   - El shape de la respuesta varía según versión de la API y el flag
+     *     de "consolidated_menu". Devolvemos el JSON crudo y el caller
+     *     mapea las propiedades que necesita.
+     */
+    async getMenu(storeId) {
+      return apiRequest('GET', `/api/restaurants-integrations-public-api/api/v3/menu/${storeId}`);
+    },
+
+    /**
      * Acepta un pedido. Rappi notifica al cliente final que el restaurant
      * está preparando. Equivalente a "necesita_aprobacion" → "en_preparacion".
      * @param prepTimeMinutes tiempo estimado de preparación

@@ -65,6 +65,9 @@ export default async function handler(req, res) {
     if (action === 'rappi-sync-menu' && req.method === 'POST') {
       return await handleRappiSyncMenu(req, res);
     }
+    if (action === 'rappi-import-menu' && req.method === 'POST') {
+      return await handleRappiImportMenu(req, res);
+    }
     if (action === 'rappi-order-action' && req.method === 'POST') {
       return await handleRappiOrderAction(req, res);
     }
@@ -721,6 +724,173 @@ async function handleRappiOrderAction(req, res) {
   } catch (err) {
     res.status(502).json({ error: `RAPPI_${ordAction.toUpperCase()}_FAILED`, detail: err.message || String(err) });
   }
+}
+
+// ─── RAPPI: importar menú existente de Rappi → COMANDA ─────────────────────
+// El dueño pega su store_id, el server hace GET al menú de Rappi, mapea
+// categorías → item_grupos y productos → items en COMANDA (con sku_rappi
+// pre-poblado). Idempotente: si un item ya existe con ese sku_rappi, lo
+// actualiza en vez de duplicarlo.
+//
+// Esto es lo que hace Datalive y aggregators: con solo el store_id ya
+// tenés todo tu catálogo importado, sin recargarlo de cero.
+async function handleRappiImportMenu(req, res) {
+  const auth = await checkUserAuth(req, res);
+  if (!auth) return;
+  if (!['dueno', 'admin', 'superadmin'].includes(auth.row.rol)) {
+    return res.status(403).json({ error: 'PERMISO_DENEGADO' });
+  }
+
+  const { store_id, local_id, production, dry_run } = req.body || {};
+  if (!store_id) return res.status(400).json({ error: 'STORE_ID_REQUERIDO' });
+
+  const supabase = db();
+  const creds = await getRappiCredentials(supabase, auth.row.tenant_id);
+  if (!creds) return res.status(400).json({ error: 'RAPPI_NO_CONFIGURADA' });
+
+  // 1) Pull del menú de Rappi
+  let rappiMenu;
+  try {
+    const rappi = createRappiClient(creds, { production: !!production });
+    rappiMenu = await rappi.getMenu(store_id);
+  } catch (err) {
+    return res.status(502).json({ error: 'RAPPI_GET_MENU_FAILED', detail: err.message || String(err) });
+  }
+
+  // 2) Normalizar shape — Rappi v3 a veces usa categories/products, otras
+  // veces sections/items. Defensivo: intentamos las dos variantes.
+  const categoriasRaw = rappiMenu?.categories ?? rappiMenu?.sections ?? rappiMenu?.menu?.categories ?? [];
+  const productosRaw = rappiMenu?.products ?? rappiMenu?.items ?? rappiMenu?.menu?.products ?? [];
+
+  if (!Array.isArray(categoriasRaw) || !Array.isArray(productosRaw)) {
+    return res.status(502).json({
+      error: 'RAPPI_MENU_SHAPE_INESPERADO',
+      detail: 'No pudimos identificar categories[] ni products[] en el response. Revisar logs server.',
+      raw_keys: rappiMenu ? Object.keys(rappiMenu) : [],
+    });
+  }
+
+  // 3) Plan de cambios
+  const tenantId = auth.row.tenant_id;
+  const localId = local_id ? Number(local_id) : null;
+  const summary = {
+    grupos_a_crear: 0, grupos_a_actualizar: 0,
+    items_a_crear: 0, items_a_actualizar: 0,
+    items_ignorados: 0,
+  };
+
+  // Mapeo external_id Rappi → id COMANDA (para que productos referencien grupo correcto)
+  const gruposMap = new Map(); // external_id Rappi → grupo_id COMANDA
+
+  // 4) Procesar categorías
+  for (const cat of categoriasRaw) {
+    const nombre = (cat.name || cat.nombre || '').trim();
+    if (!nombre) continue;
+    const externalId = String(cat.external_id || cat.id || nombre);
+
+    // Buscar grupo existente por external_id_rappi o por nombre como fallback
+    const { data: existente } = await supabase
+      .from('item_grupos')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('nombre', nombre)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (existente) {
+      gruposMap.set(externalId, existente.id);
+      summary.grupos_a_actualizar++;
+      if (!dry_run) {
+        await supabase.from('item_grupos').update({
+          descripcion: cat.description || cat.descripcion || null,
+          orden: cat.sort_order ?? cat.orden ?? 0,
+        }).eq('id', existente.id);
+      }
+    } else {
+      summary.grupos_a_crear++;
+      if (!dry_run) {
+        const { data: nuevo } = await supabase.from('item_grupos').insert({
+          tenant_id: tenantId,
+          local_id: localId,
+          nombre,
+          descripcion: cat.description || cat.descripcion || null,
+          orden: cat.sort_order ?? cat.orden ?? 0,
+          color: '#94a3b8',
+          activo: true,
+        }).select('id').single();
+        if (nuevo) gruposMap.set(externalId, nuevo.id);
+      }
+    }
+  }
+
+  // 5) Procesar productos
+  for (const prod of productosRaw) {
+    const nombre = (prod.name || prod.nombre || '').trim();
+    if (!nombre) { summary.items_ignorados++; continue; }
+
+    const skuRappi = String(prod.external_id || prod.id || `rappi_${Date.now()}_${Math.random()}`);
+    const precio = Number(prod.price ?? prod.precio ?? 0);
+    if (precio <= 0) { summary.items_ignorados++; continue; }
+
+    const catExternalId = prod.category_external_id || prod.category_id || prod.section_id;
+    const grupoId = catExternalId ? gruposMap.get(String(catExternalId)) : null;
+
+    // Buscar por sku_rappi (preferido) o por nombre como fallback
+    const { data: existente } = await supabase
+      .from('items')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .or(`sku_rappi.eq.${skuRappi},nombre.eq.${nombre}`)
+      .is('deleted_at', null)
+      .limit(1)
+      .maybeSingle();
+
+    if (existente) {
+      summary.items_a_actualizar++;
+      if (!dry_run) {
+        await supabase.from('items').update({
+          nombre,
+          descripcion: prod.description || prod.descripcion || null,
+          precio_madre: precio,
+          foto_url: prod.image_url || prod.foto_url || null,
+          grupo_id: grupoId,
+          sku_rappi: skuRappi,
+          estado: (prod.is_available === false) ? 'agotado' : 'disponible',
+        }).eq('id', existente.id);
+      }
+    } else {
+      summary.items_a_crear++;
+      if (!dry_run) {
+        await supabase.from('items').insert({
+          tenant_id: tenantId,
+          local_id: localId,
+          nombre,
+          descripcion: prod.description || prod.descripcion || null,
+          precio_madre: precio,
+          foto_url: prod.image_url || prod.foto_url || null,
+          grupo_id: grupoId,
+          sku_rappi: skuRappi,
+          estado: (prod.is_available === false) ? 'agotado' : 'disponible',
+          visible_pos: true,
+          visible_qr: false,    // Por defecto solo Rappi — el dueño puede activar después
+          visible_tienda: false,
+        });
+      }
+    }
+  }
+
+  // 6) Marcar integración como activa
+  if (!dry_run) {
+    await supabase.from('integraciones_externas_credenciales')
+      .update({ estado: 'active', last_test_at: new Date().toISOString(), last_error: null })
+      .eq('tenant_id', tenantId).eq('provider', 'rappi');
+  }
+
+  res.status(200).json({
+    ok: true,
+    dry_run: !!dry_run,
+    summary,
+  });
 }
 
 // Note: verifyRappiWebhookSignature está importada pero no usada todavía

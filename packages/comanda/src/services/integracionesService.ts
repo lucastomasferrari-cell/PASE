@@ -142,6 +142,21 @@ export async function rappiSyncMenu(args: {
   return callTiendaMpAction('rappi-sync-menu', args);
 }
 
+/**
+ * Importa el menú existente de una tienda Rappi → COMANDA. Crea
+ * item_grupos y items con sku_rappi pre-poblado para futuro mapeo
+ * bidireccional. Si dry_run=true, no escribe nada y solo devuelve
+ * conteo de cambios (preview).
+ */
+export async function rappiImportMenu(args: {
+  store_id: string;
+  local_id?: number | null;
+  production: boolean;
+  dry_run?: boolean;
+}): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+  return callTiendaMpAction('rappi-import-menu', args);
+}
+
 export async function rappiOrderAction(args: {
   order_id: string;
   action: 'take' | 'dispatch' | 'cancel';

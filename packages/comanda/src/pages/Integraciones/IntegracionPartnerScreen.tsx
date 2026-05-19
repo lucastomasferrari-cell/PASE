@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Plug, CheckCircle2, AlertCircle, Trash2, Plus, Copy, Zap, RefreshCw } from 'lucide-react';
+import { Plug, CheckCircle2, AlertCircle, Trash2, Plus, Copy, Zap, RefreshCw, Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,7 +23,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   getIntegracion, upsertIntegracion, eliminarIntegracion,
   listMapeos, upsertMapeo, eliminarMapeo,
-  rappiTestConnection, rappiSyncMenu,
+  rappiTestConnection, rappiSyncMenu, rappiImportMenu,
   type ExternalProvider, type IntegracionPublica, type MapeoLocal,
 } from '@/services/integracionesService';
 import { listLocalesAccesibles, type LocalSimple } from '@/services/configService';
@@ -121,7 +121,15 @@ export function IntegracionPartnerScreen({ provider }: Props) {
   // Operaciones específicas Rappi
   const [testeando, setTesteando] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
+  const [importando, setImportando] = useState(false);
   const [usaProduccion, setUsaProduccion] = useState(false); // toggle staging/prod
+  const [importPreview, setImportPreview] = useState<{
+    grupos_a_crear: number;
+    grupos_a_actualizar: number;
+    items_a_crear: number;
+    items_a_actualizar: number;
+    items_ignorados: number;
+  } | null>(null);
 
   // Cargar todo al montar / cambiar provider
   useEffect(() => {
@@ -267,6 +275,56 @@ export function IntegracionPartnerScreen({ provider }: Props) {
     }
   }
 
+  /**
+   * Import en 2 pasos: primero dry-run para mostrar preview de cambios.
+   * El user confirma → segundo call sin dry_run que aplica.
+   */
+  async function handlePreviewImport(localId: number | null, storeId: string) {
+    setImportando(true);
+    setImportPreview(null);
+    try {
+      const r = await rappiImportMenu({
+        store_id: storeId,
+        local_id: localId,
+        production: usaProduccion,
+        dry_run: true,
+      });
+      if (!r.ok) {
+        toast.error('No se pudo leer el menú de Rappi', { description: r.error });
+        return;
+      }
+      const data = r.data as { summary: typeof importPreview };
+      setImportPreview(data.summary);
+    } finally {
+      setImportando(false);
+    }
+  }
+
+  async function handleConfirmImport(localId: number | null, storeId: string) {
+    setImportando(true);
+    try {
+      const r = await rappiImportMenu({
+        store_id: storeId,
+        local_id: localId,
+        production: usaProduccion,
+        dry_run: false,
+      });
+      if (!r.ok) {
+        toast.error('Import falló', { description: r.error });
+        return;
+      }
+      const d = r.data as { summary: NonNullable<typeof importPreview> };
+      toast.success(
+        `Menú importado: ${d.summary.items_a_crear} items nuevos, ${d.summary.items_a_actualizar} actualizados`,
+      );
+      setImportPreview(null);
+      const fresh = await getIntegracion(provider);
+      setInteg(fresh.data);
+    } finally {
+      setImportando(false);
+    }
+  }
+
   if (loading) return <div className="py-12 text-center text-muted-foreground">Cargando…</div>;
 
   return (
@@ -388,15 +446,12 @@ export function IntegracionPartnerScreen({ provider }: Props) {
               </p>
             </div>
 
-            <div className="rounded-md border border-dashed border-border p-3 space-y-2">
+            {/* Selector de store + local — compartido entre import y sync */}
+            <div className="rounded-md border border-dashed border-border p-3 space-y-3">
               <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Sincronizar menú COMANDA → Rappi
+                Sincronizar catálogo con Rappi
               </div>
-              <p className="text-xs text-muted-foreground">
-                Empuja todo el catálogo de items + grupos visibles_tienda al store_id que indiques.
-                Si Rappi devuelve product_id propios, los guardamos en items.sku_rappi automáticamente.
-              </p>
-              <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <Select
                   onValueChange={(v) => (window as Window & { _rappi_local?: string })._rappi_local = v}
                 >
@@ -414,7 +469,93 @@ export function IntegracionPartnerScreen({ provider }: Props) {
                   id="rappi-store-id-input"
                   onChange={(e) => (window as Window & { _rappi_store?: string })._rappi_store = e.target.value}
                 />
+              </div>
+
+              {/* Import — Datalive-style: pegás store_id y trae todo */}
+              <div className="rounded-md bg-primary/5 border border-primary/20 p-3 space-y-2">
+                <div className="flex items-start gap-2">
+                  <Download className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                  <div className="text-xs">
+                    <strong className="text-foreground">Importar menú DESDE Rappi</strong>
+                    <p className="text-muted-foreground mt-0.5">
+                      Si ya vendés en Rappi y tu catálogo está allá, traelo a COMANDA en
+                      1 click. Mapeamos categorías → grupos, productos → items con
+                      sku_rappi pre-poblado. Idempotente — si volvés a importar,
+                      actualiza en vez de duplicar.
+                    </p>
+                  </div>
+                </div>
+
+                {importPreview && (
+                  <div className="rounded-md bg-background border border-border p-2 text-xs space-y-0.5">
+                    <div className="font-medium mb-1">Preview — esto se va a hacer:</div>
+                    <div>• {importPreview.grupos_a_crear} grupos nuevos, {importPreview.grupos_a_actualizar} actualizados</div>
+                    <div>• {importPreview.items_a_crear} items nuevos, {importPreview.items_a_actualizar} actualizados</div>
+                    {importPreview.items_ignorados > 0 && (
+                      <div className="text-warning">• {importPreview.items_ignorados} items ignorados (sin nombre o precio)</div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  {!importPreview ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const w = window as Window & { _rappi_local?: string; _rappi_store?: string };
+                        const storeId = w._rappi_store?.trim();
+                        if (!storeId) { toast.error('Pegá el store_id de Rappi'); return; }
+                        const localStr = w._rappi_local ?? '0';
+                        const localId = localStr === '0' ? null : parseInt(localStr);
+                        handlePreviewImport(localId, storeId);
+                      }}
+                      disabled={importando}
+                      className="h-9"
+                    >
+                      <Download className="h-3.5 w-3.5 mr-1.5" />
+                      {importando ? 'Leyendo Rappi…' : 'Vista previa import'}
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const w = window as Window & { _rappi_local?: string; _rappi_store?: string };
+                          const storeId = w._rappi_store?.trim() ?? '';
+                          const localStr = w._rappi_local ?? '0';
+                          const localId = localStr === '0' ? null : parseInt(localStr);
+                          handleConfirmImport(localId, storeId);
+                        }}
+                        disabled={importando}
+                        className="h-9"
+                      >
+                        {importando ? 'Importando…' : 'Confirmar import'}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setImportPreview(null)} disabled={importando} className="h-9">
+                        Cancelar
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Sync — push del menú COMANDA a Rappi */}
+              <div className="rounded-md border border-border p-3 space-y-2">
+                <div className="flex items-start gap-2">
+                  <Upload className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                  <div className="text-xs">
+                    <strong className="text-foreground">Empujar menú COMANDA → Rappi</strong>
+                    <p className="text-muted-foreground mt-0.5">
+                      Si tu fuente de verdad es COMANDA (no Rappi), usá esto para
+                      pushear todos los items visible_tienda al catálogo Rappi.
+                      Sobrescribe lo que esté allá.
+                    </p>
+                  </div>
+                </div>
                 <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => {
                     const w = window as Window & { _rappi_local?: string; _rappi_store?: string };
                     const storeId = w._rappi_store?.trim();
@@ -424,8 +565,10 @@ export function IntegracionPartnerScreen({ provider }: Props) {
                     handleSyncMenu(localId, storeId);
                   }}
                   disabled={sincronizando}
+                  className="h-9"
                 >
-                  {sincronizando ? 'Sincronizando…' : 'Sync'}
+                  <Upload className="h-3.5 w-3.5 mr-1.5" />
+                  {sincronizando ? 'Sincronizando…' : 'Push menú a Rappi'}
                 </Button>
               </div>
             </div>
