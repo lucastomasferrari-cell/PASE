@@ -130,15 +130,21 @@ async function imprimirTicketWebUsb(args: TicketArgs): Promise<PrintResult> {
   }
 }
 
-/** Imprime ticket de cocina ruteado por estación. */
+/**
+ * Imprime ticket de cocina ruteado por estación.
+ * @param idempotencyKey — dedupe server-side para reintentos seguros (ej.
+ *                        si el browser se cuelga a mitad o re-aprueba).
+ *                        Formato sugerido: `cocina-${ventaId}-c${curso}-${estacion}`.
+ */
 export async function imprimirPorEstacion(
   estacion: string,
   args: KitchenTicketArgs,
+  idempotencyKey?: string,
 ): Promise<PrintResult> {
   const mode = await detectMode();
   if (mode === 'server') {
     try {
-      await printServer.printByEstacion(estacion, args as unknown as Record<string, unknown>);
+      await printServer.printByEstacion(estacion, args as unknown as Record<string, unknown>, idempotencyKey);
       return { ok: true, mode };
     } catch (err) {
       // Si no hay impresora asignada a esta estación: fallback a WebUSB

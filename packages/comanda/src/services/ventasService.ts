@@ -310,34 +310,52 @@ export async function mandarCurso(ventaId: number, curso: number): Promise<{ cou
 // Helper interno: agrupa items del curso por estación y dispara impresión
 // a cada impresora correspondiente via printerService (que rutea por
 // estación cuando hay print server, o fallback a WebUSB).
-async function imprimirCocinaSiCorresponde(ventaId: number, curso: number): Promise<void> {
+//
+// Idempotency key determinista: `cocina-${ventaId}-c${curso}-${estacion}` o
+// `cocina-${ventaId}-c${curso}-${estacion}-r${retryToken}` si se fuerza
+// reimpresión (botón "Reimprimir" del POS).
+export async function imprimirCocinaSiCorresponde(
+  ventaId: number,
+  curso: number,
+  options: { retryToken?: string } = {},
+): Promise<void> {
   try {
     const { imprimirPorEstacion } = await import('./printerService');
-    const { data: items } = await db.from('ventas_pos_items')
-      .select('item_id, cantidad, modificadores, notas, items(nombre, estacion)')
+    // Cuando curso === 0 (sentinel) = "imprimir TODOS los cursos enviados".
+    // Se usa al aprobar pedidos del marketplace donde los items van directo
+    // a 'enviado' sin pasar por mandar-curso manual.
+    let q = db.from('ventas_pos_items')
+      .select('item_id, cantidad, curso, modificadores, notas, items(nombre, estacion)')
       .eq('venta_id', ventaId)
-      .eq('curso', curso)
       .eq('estado', 'enviado')
       .is('deleted_at', null);
+    if (curso > 0) q = q.eq('curso', curso);
+    const { data: items } = await q;
     if (!items || items.length === 0) return;
 
-    // Agrupar por estación. Supabase devuelve la relación items como
-    // array (porque PostgREST infiere FK como to-many por defecto), así
-    // que tomamos el primero. Cast a unknown porque no tenemos tipos
-    // generados de la relación.
+    // Agrupar por (estación, curso). Supabase devuelve la relación items
+    // como array (PostgREST infiere FK to-many por defecto).
     type ItemRowJoined = {
       item_id: number;
       cantidad: number;
+      curso: number;
       modificadores: Array<{ nombre: string }> | null;
       notas: string | null;
       items: { nombre: string; estacion: string | null } | { nombre: string; estacion: string | null }[] | null;
     };
-    const porEstacion = new Map<string, Array<{ cantidad: number; nombre: string; notas: string | null; modificadores: string[] | null }>>();
+    const porEstacionCurso = new Map<
+      string,
+      { estacion: string; curso: number; items: Array<{ cantidad: number; nombre: string; notas: string | null; modificadores: string[] | null }> }
+    >();
     for (const it of items as unknown as ItemRowJoined[]) {
       const linked = Array.isArray(it.items) ? it.items[0] : it.items;
       const estacion = linked?.estacion || 'cocina_caliente';
-      if (!porEstacion.has(estacion)) porEstacion.set(estacion, []);
-      porEstacion.get(estacion)!.push({
+      const itemCurso = Number(it.curso) || 1;
+      const key = `${estacion}|${itemCurso}`;
+      if (!porEstacionCurso.has(key)) {
+        porEstacionCurso.set(key, { estacion, curso: itemCurso, items: [] });
+      }
+      porEstacionCurso.get(key)!.items.push({
         cantidad: Number(it.cantidad),
         nombre: linked?.nombre ?? `Item ${it.item_id}`,
         notas: it.notas,
@@ -350,18 +368,20 @@ async function imprimirCocinaSiCorresponde(ventaId: number, curso: number): Prom
       .eq('id', ventaId)
       .single();
     const mesaStr = venta?.mesa_id ? String(venta.mesa_id) : undefined;
+    const retrySuffix = options.retryToken ? `-r${options.retryToken}` : '';
 
-    // Imprimir en paralelo a cada estación
-    await Promise.all(Array.from(porEstacion.entries()).map(async ([estacion, items]) => {
+    // Imprimir en paralelo a cada (estación, curso)
+    await Promise.all(Array.from(porEstacionCurso.values()).map(async ({ estacion, curso: c, items: itemList }) => {
+      const idempotencyKey = `cocina-${ventaId}-c${c}-${estacion}${retrySuffix}`;
       const r = await imprimirPorEstacion(estacion, {
         estacion,
         mesa: mesaStr,
-        items,
-        curso,
+        items: itemList,
+        curso: c,
         fechaHora: new Date().toLocaleString('es-AR'),
-      });
+      }, idempotencyKey);
       if (!r.ok) {
-        console.warn(`[print kitchen] estación ${estacion} falló: ${r.error}`);
+        console.warn(`[print kitchen] estación ${estacion} curso ${c} falló: ${r.error}`);
       }
     }));
   } catch (err) {
@@ -489,5 +509,27 @@ export async function aprobarPedido(ventaId: number): Promise<{ error: string | 
   if (error) return { error: error.message };
   // Si la venta vino de Rappi/PeYa/Deliverect, avisar al partner que aceptamos.
   void notifyPartnerStatusChange(ventaId, 'accept', { prepTimeMinutes: 30 });
+  // Imprimir comanda de cocina — los items ya están en 'enviado' tras aprobar.
+  // curso=0 = todos los cursos del pedido. Idempotency: si se aprueba dos
+  // veces, no se duplica el ticket gracias a la key determinista.
+  void imprimirCocinaSiCorresponde(ventaId, 0);
   return { error: null };
+}
+
+/**
+ * Reimprime la comanda completa de un pedido (todos los cursos enviados).
+ * Usa un retryToken (timestamp) para que la idempotency_key sea distinta
+ * y el server SÍ reimprima en lugar de detectar duplicado.
+ *
+ * Caso de uso: papel atascado, comanda perdida, dudas de cocina.
+ */
+export async function reimprimirComanda(ventaId: number): Promise<{ error: string | null }> {
+  try {
+    await imprimirCocinaSiCorresponde(ventaId, 0, {
+      retryToken: String(Date.now()),
+    });
+    return { error: null };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Error reimprimiendo' };
+  }
 }

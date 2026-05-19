@@ -176,7 +176,18 @@ export async function getQuoteTimes(
 
 export async function aprobarPedidoService(ventaId: number): Promise<{ error: string | null }> {
   const { error } = await db.rpc('fn_aprobar_pedido_comanda', { p_venta_id: ventaId });
-  return { error: error?.message ?? null };
+  if (error) return { error: error.message };
+  // Gap impresoras Sprint 4: imprimir comanda de cocina al aprobar.
+  // Fire-and-forget — el agent maneja queue + retries. Idempotente.
+  void (async () => {
+    try {
+      const { imprimirCocinaSiCorresponde } = await import('./ventasService');
+      await imprimirCocinaSiCorresponde(ventaId, 0);
+    } catch (err) {
+      console.warn('[aprobar] print kitchen falló:', err);
+    }
+  })();
+  return { error: null };
 }
 
 export async function marcarListoService(ventaId: number): Promise<{ error: string | null }> {

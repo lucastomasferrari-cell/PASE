@@ -106,12 +106,23 @@ export class PrintServerClient {
     }
   }
 
-  /** Imprime ticket en una impresora específica. */
-  async print(printerId: string, ticket: Record<string, unknown>): Promise<void> {
+  /**
+   * Imprime ticket en una impresora específica.
+   * @param idempotencyKey — si llega, el server deduplica. Útil para reintentos.
+   */
+  async print(
+    printerId: string,
+    ticket: Record<string, unknown>,
+    idempotencyKey?: string,
+  ): Promise<void> {
     const resp = await fetch(`${this.baseUrl}/print`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ printer_id: printerId, ticket }),
+      body: JSON.stringify({
+        printer_id: printerId,
+        ticket,
+        idempotency_key: idempotencyKey ?? null,
+      }),
     });
     if (!resp.ok) {
       const detail = await resp.json().catch(() => ({}));
@@ -119,12 +130,23 @@ export class PrintServerClient {
     }
   }
 
-  /** Imprime ruteando por estación. Si no hay impresora asignada, error. */
-  async printByEstacion(estacion: string, ticket: Record<string, unknown>): Promise<void> {
+  /**
+   * Imprime ruteando por estación. Si no hay impresora asignada, error.
+   * @param idempotencyKey — server-side dedupe para reintentos seguros.
+   */
+  async printByEstacion(
+    estacion: string,
+    ticket: Record<string, unknown>,
+    idempotencyKey?: string,
+  ): Promise<void> {
     const resp = await fetch(`${this.baseUrl}/print-by-estacion`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ estacion, ticket }),
+      body: JSON.stringify({
+        estacion,
+        ticket,
+        idempotency_key: idempotencyKey ?? null,
+      }),
     });
     if (!resp.ok) {
       const detail = await resp.json().catch(() => ({}));

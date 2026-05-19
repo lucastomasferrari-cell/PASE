@@ -189,9 +189,19 @@ export function PedidoDetalle() {
           <BadgePago estadoPago={estadoPago} tipoEntrega={venta.tipo_entrega} size="md" />
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => window.print()}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              const { reimprimirComanda } = await import('@/services/ventasService');
+              const r = await reimprimirComanda(venta.id);
+              if (r.error) toast.error(r.error);
+              else toast.success('Comanda reenviada a impresora(s) de cocina');
+            }}
+            title="Reenviar comanda completa a las impresoras de cocina"
+          >
             <Printer className="h-4 w-4 mr-1" />
-            Imprimir
+            Reimprimir
           </Button>
           <Button variant="outline" size="sm" disabled title="Próximamente">
             <MoreVertical className="h-4 w-4" />
