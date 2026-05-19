@@ -392,8 +392,13 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   // Patrones fetch-on-mount / fetch-on-dep-change. Las funciones loadX
   // hacen setState async post-fetch — agregarlas a deps causaría re-fetch
   // infinito (se recrean cada render).
+  // Recarga empleados cuando cambia el sidebar (localActivo). Bug 2026-05-18:
+  // antes era `[]` (solo on mount), así que cambiar el local desde el sidebar
+  // dejaba la lista stale — Lucas pasaba de Villa Crespo a Belgrano y seguía
+  // viendo los empleados de Villa Crespo (o ninguno si era un local sin data
+  // cuando montó la pantalla).
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
-  useEffect(() => { loadEmpleados(); }, []);
+  useEffect(() => { loadEmpleados(); }, [localActivo]);
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { if (tab === "dashboard") loadDashboard(); }, [tab]);
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
