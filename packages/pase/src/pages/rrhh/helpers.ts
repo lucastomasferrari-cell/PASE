@@ -7,12 +7,13 @@ import type { Empleado } from "../../types/rrhh";
 import type { NovedadEditable } from "./types";
 
 // Cálculo del valor del día doble: deriva del sueldo mensual del empleado
-// (sueldo / 30 * 2). Antes existía una tabla rrhh_valores_doble que guardaba
-// un valor fijo por puesto — eliminado porque dos empleados del mismo puesto
-// pueden tener sueldos distintos. Liquidaciones ya persistidas conservan el
-// valor histórico que se calculó en su momento; solo afecta cálculos nuevos.
+// Un "turno doble" en gastronomía AR es trabajar 2 turnos consecutivos
+// en el mismo día (almuerzo + cena). El sueldo mensual ya cubre 1 jornada
+// por día → el doble se paga como 1 DÍA EXTRA encima (no 2 días).
+// Antes calculábamos sueldo/30*2 (mal — pedido Anto 2026-05-19).
+// Liquidaciones ya persistidas conservan su valor histórico.
 export const calcularValorDoble = (emp: Pick<Empleado, "sueldo_mensual">): number =>
-  (Number(emp.sueldo_mensual) || 0) / 30 * 2;
+  (Number(emp.sueldo_mensual) || 0) / 30;
 
 // Liquidación con efectivo/transferencia computados (lo que devuelve
 // calcLiquidacion). Compatible con Liquidacion completa pero parcial porque

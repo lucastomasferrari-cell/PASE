@@ -522,7 +522,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
             </div>
             <div className="modal-ft">
               <button className="btn btn-sec" onClick={() => setEditModal(null)} disabled={savingEdit}>Cancelar</button>
-              <button className="btn btn-acc" onClick={guardarEdit} disabled={savingEdit || !editModal.justificativo?.trim()}>{savingEdit ? "Guardando..." : "Guardar cambios"}</button>
+              <button className="btn btn-acc" onClick={guardarEdit} disabled={savingEdit}>{savingEdit ? "Guardando..." : "Guardar cambios"}</button>
             </div>
           </div>
         </div>

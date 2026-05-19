@@ -272,10 +272,13 @@ function EmpleadoCard({ emp, nov, adelantosDelMes, expanded, onToggle, updateNov
                   value={nov.inasistencias ?? 0}
                   onChange={e => updateNov(emp.id, "inasistencias", Math.max(0, Math.min(31, parseFloat(e.target.value) || 0)))} />
               </Field>
-              <Field label="Horas extras" hint="cantidad de horas">
-                <input type="number" min="0" max="200" style={{...inp, width:"100%", textAlign:"left"}} disabled={confirmado}
+              <Field label="Horas extras" hint="positivo = paga · negativo = descuenta">
+                <input type="number" min="-200" max="200" step="0.5" style={{...inp, width:"100%", textAlign:"left"}} disabled={confirmado}
                   value={nov.horas_extras ?? 0}
-                  onChange={e => updateNov(emp.id, "horas_extras", Math.max(0, parseFloat(e.target.value) || 0))} />
+                  onChange={e => {
+                    const v = parseFloat(e.target.value);
+                    updateNov(emp.id, "horas_extras", Number.isFinite(v) ? Math.max(-200, Math.min(200, v)) : 0);
+                  }} />
               </Field>
               <Field label="Turnos dobles" hint="cantidad">
                 <input type="number" min="0" max="31" style={{...inp, width:"100%", textAlign:"left"}} disabled={confirmado}
@@ -286,6 +289,11 @@ function EmpleadoCard({ emp, nov, adelantosDelMes, expanded, onToggle, updateNov
                 <input type="number" min="0" max="31" style={{...inp, width:"100%", textAlign:"left"}} disabled={confirmado}
                   value={nov.feriados ?? 0}
                   onChange={e => updateNov(emp.id, "feriados", Math.max(0, parseFloat(e.target.value) || 0))} />
+              </Field>
+              <Field label="Vacaciones (días tomados)" hint="paga el plus vacacional (1.2× día)">
+                <input type="number" min="0" max="35" style={{...inp, width:"100%", textAlign:"left"}} disabled={confirmado}
+                  value={nov.vacaciones_dias ?? 0}
+                  onChange={e => updateNov(emp.id, "vacaciones_dias", Math.max(0, parseFloat(e.target.value) || 0))} />
               </Field>
               <Field label="Adelantos del mes" hint="suma de los cargados en Pagos">
                 <div style={{display:"flex", gap:4, alignItems:"center"}}>
@@ -362,8 +370,10 @@ function EmpleadoCard({ emp, nov, adelantosDelMes, expanded, onToggle, updateNov
             </div>
             <BreakdownLine label="Sueldo base" value={Number(emp.sueldo_mensual)} />
             {(calc.total_horas_extras || 0) > 0 && <BreakdownLine label="+ Horas extras" value={calc.total_horas_extras} positive />}
+            {(calc.total_horas_extras || 0) < 0 && <BreakdownLine label="− Horas no trabajadas" value={calc.total_horas_extras} negative />}
             {(calc.total_dobles || 0) > 0 && <BreakdownLine label="+ Turnos dobles" value={calc.total_dobles} positive />}
             {(calc.total_feriados || 0) > 0 && <BreakdownLine label="+ Feriados" value={calc.total_feriados} positive />}
+            {(calc.total_vacaciones || 0) > 0 && <BreakdownLine label="+ Vacaciones (días tomados)" value={calc.total_vacaciones} positive />}
             {(calc.monto_presentismo || 0) > 0 && <BreakdownLine label="+ Presentismo (5%)" value={calc.monto_presentismo} positive />}
             {(calc.descuento_ausencias || 0) > 0 && <BreakdownLine label="− Inasistencias" value={-calc.descuento_ausencias} negative />}
             {adelantosDelMes > 0 && <BreakdownLine label="− Adelantos" value={-adelantosDelMes} negative />}

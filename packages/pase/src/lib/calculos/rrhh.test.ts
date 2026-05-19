@@ -400,8 +400,13 @@ describe("calcularHorasExtras", () => {
     expect(calcularHorasExtras(0, sueldo)).toBe(0);
   });
 
-  it("horas negativas → 0", () => {
-    expect(calcularHorasExtras(-5, sueldo)).toBe(0);
+  // Cambio de comportamiento 2026-05-19 (Anto): horas negativas ahora
+  // descuentan (útil para empleado que tomó horas que no trabajó). Antes
+  // devolvían 0.
+  it("horas negativas → monto negativo (descuento)", () => {
+    // sueldo 600000 → valor_hora = 600000/30/8 = 2500
+    // -5 horas → -12500
+    expect(calcularHorasExtras(-5, sueldo)).toBe(-12500);
   });
 
   it("sueldo 0 → 0", () => {

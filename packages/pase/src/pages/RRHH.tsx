@@ -598,6 +598,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       horas_extras: nov.horas_extras || 0,
       dobles: nov.dobles || 0,
       feriados: nov.feriados || 0,
+      vacaciones_dias: nov.vacaciones_dias || 0,
       adelantos: adelantosDelMes,
       otros_descuentos: otrosDesc,
       otros_descuentos_motivo: otrosDesc > 0 ? otrosDescMotivo : null,

@@ -206,9 +206,13 @@ export function calcularDescuentoAusencias(inasistencias: number, sueldo: number
   return inasistencias * valorDia;
 }
 
-/** Total horas extras = horas × valor_hora (valor_hora = sueldo/30/8) */
+/**
+ * Total horas extras = horas × valor_hora (valor_hora = sueldo/30/8).
+ * Acepta horas NEGATIVAS para descontar horas no trabajadas (pedido Anto
+ * 2026-05-19). Ej: -2 horas con sueldo 720000 → -6000.
+ */
 export function calcularHorasExtras(horas: number, sueldo: number): number {
-  if (horas <= 0 || sueldo <= 0) return 0;
+  if (horas === 0 || sueldo <= 0) return 0;
   const valorHora = sueldo / 30 / 8;
   return horas * valorHora;
 }
