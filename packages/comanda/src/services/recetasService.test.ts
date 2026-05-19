@@ -26,9 +26,12 @@ describe('calcularCostoPorPorcion', () => {
     })),
   });
 
-  it('receta vacía → costo 0', () => {
+  it('receta vacía → costo null (semántica "desconocido", no "0")', () => {
+    // Comentario en recetasService.ts:198-200 documenta por qué NO retorna 0:
+    // "sería falsa precisión — vendés a $5000 con costo 0 → margen 100% mostrado,
+    // pero el costo real es desconocido".
     const r = recetaBase([]);
-    expect(calcularCostoPorPorcion(r)).toBe(0);
+    expect(calcularCostoPorPorcion(r)).toBeNull();
   });
 
   it('1 insumo sin merma + rendimiento 1', () => {
