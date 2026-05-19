@@ -125,6 +125,7 @@ export const ADMIN_NAVIGATION: NavCategory[] = [
       { slug: 'menu-qr',  label: 'Menú QR',       href: '/online/menu-qr' },
       { slug: 'kds',      label: 'KDS',           href: '/online/kds' },
       { slug: 'tracking', label: 'Tracking pedidos', href: '/online/tracking', badge: 'soon' },
+      { slug: 'dispatch', label: 'Despacho delivery (mapa)', href: '/online/dispatch' },
     ],
   },
   {
@@ -137,6 +138,7 @@ export const ADMIN_NAVIGATION: NavCategory[] = [
       { slug: 'estaciones',  label: 'Estaciones',     href: '/hardware/estaciones' },
       { slug: 'impresoras',  label: 'Impresoras',     href: '/hardware/impresoras' },
       { slug: 'agentes',     label: 'Print Agents (PCs)', href: '/hardware/agentes' },
+      { slug: 'riders',      label: 'Repartidores',   href: '/hardware/riders' },
       { slug: 'cajon',       label: 'Cajón de dinero', href: '/hardware/cajon',      badge: 'soon' },
       { slug: 'mp-point',    label: 'MP Point',       href: '/hardware/mp-point',    badge: 'soon' },
       { slug: 'tablets-kds', label: 'Tablets KDS',    href: '/hardware/tablets-kds', badge: 'soon' },

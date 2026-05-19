@@ -98,6 +98,9 @@ const SettingsAfip = lazy(() => import('./pages/Settings/SettingsAfip').then(m =
 const IntegracionPartnerScreen = lazy(() => import('./pages/Integraciones/IntegracionPartnerScreen').then(m => ({ default: m.IntegracionPartnerScreen })));
 const HardwareImpresoras = lazy(() => import('./pages/Hardware/HardwareImpresoras').then(m => ({ default: m.HardwareImpresoras })));
 const HardwareAgentes = lazy(() => import('./pages/Hardware/HardwareAgentes').then(m => ({ default: m.HardwareAgentes })));
+const HardwareRiders = lazy(() => import('./pages/Hardware/HardwareRiders').then(m => ({ default: m.HardwareRiders })));
+const DispatchMap = lazy(() => import('./pages/Delivery/DispatchMap').then(m => ({ default: m.DispatchMap })));
+const RiderPWA = lazy(() => import('./pages/Rider/RiderPWA').then(m => ({ default: m.RiderPWA })));
 const SettingsMesas = lazy(() => import('./pages/Settings/SettingsMesas').then(m => ({ default: m.SettingsMesas })));
 const SettingsMetodosCobro = lazy(() => import('./pages/Settings/SettingsMetodosCobro').then(m => ({ default: m.SettingsMetodosCobro })));
 const SettingsPermisos = lazy(() => import('./pages/Settings/SettingsPermisos').then(m => ({ default: m.SettingsPermisos })));
@@ -192,6 +195,7 @@ export default function App() {
                 </Route>
                 <Route path="/kds/:estacion" element={<KdsView />} />
                 <Route path="/menu/:token" element={<MenuQrView />} />
+                <Route path="/r/:token" element={<RiderPWA />} />
 
                 {/* Redirects de rutas viejas a nuevas (sprint 6) */}
                 {REDIRECTS.map(([from, to]) => (
@@ -262,12 +266,14 @@ export default function App() {
                   <Route path="/online/kds" element={<SettingsKds />} />
                   <Route path="/online/tienda" element={<StubRoute />} />
                   <Route path="/online/tracking" element={<TrackingDelivery />} />
+                  <Route path="/online/dispatch" element={<DispatchMap />} />
 
                   {/* ── Hardware ──────────────────────────────────────── */}
                   <Route path="/hardware" element={<Navigate to="/hardware/estaciones" replace />} />
                   <Route path="/hardware/estaciones" element={<SettingsEstaciones />} />
                   <Route path="/hardware/impresoras" element={<HardwareImpresoras />} />
                   <Route path="/hardware/agentes" element={<HardwareAgentes />} />
+                  <Route path="/hardware/riders" element={<HardwareRiders />} />
                   <Route path="/hardware/cajon" element={<StubRoute />} />
                   <Route path="/hardware/mp-point" element={<StubRoute />} />
                   <Route path="/hardware/tablets-kds" element={<StubRoute />} />
