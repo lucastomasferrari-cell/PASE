@@ -133,13 +133,21 @@ export async function anularFacturaConNC(args: {
 
 /**
  * Lista las últimas facturas emitidas del tenant (para historial UI).
+ * Incluye los campos necesarios para emitir NC (importe_neto/iva, doc_*,
+ * razón social, punto_venta).
  */
 export async function listarFacturasAFIP(limit = 50): Promise<Array<{
   id: number;
   venta_pos_id: number | null;
   tipo_comprobante: number;
   numero: number;
+  punto_venta: number;
+  importe_neto: number;
+  importe_iva: number;
   importe_total: number;
+  doc_tipo: number | null;
+  doc_nro: string | null;
+  cliente_razon_social: string | null;
   cae: string | null;
   cae_vence_at: string | null;
   qr_fiscal_url: string | null;
@@ -148,7 +156,7 @@ export async function listarFacturasAFIP(limit = 50): Promise<Array<{
 }>> {
   const { data, error } = await db
     .from('afip_facturas')
-    .select('id, venta_pos_id, tipo_comprobante, numero, importe_total, cae, cae_vence_at, qr_fiscal_url, estado, emitida_at')
+    .select('id, venta_pos_id, tipo_comprobante, numero, punto_venta, importe_neto, importe_iva, importe_total, doc_tipo, doc_nro, cliente_razon_social, cae, cae_vence_at, qr_fiscal_url, estado, emitida_at')
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error || !data) return [];
@@ -157,7 +165,13 @@ export async function listarFacturasAFIP(limit = 50): Promise<Array<{
     venta_pos_id: number | null;
     tipo_comprobante: number;
     numero: number;
+    punto_venta: number;
+    importe_neto: number;
+    importe_iva: number;
     importe_total: number;
+    doc_tipo: number | null;
+    doc_nro: string | null;
+    cliente_razon_social: string | null;
     cae: string | null;
     cae_vence_at: string | null;
     qr_fiscal_url: string | null;

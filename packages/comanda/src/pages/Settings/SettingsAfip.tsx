@@ -17,7 +17,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { ShieldCheck, ShieldAlert, Trash2, Eye, EyeOff, Receipt } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Trash2, Eye, EyeOff, Receipt, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,7 +28,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   getCredencialesAFIP, upsertCredencialesAFIP, eliminarCredencialesAFIP, parsearCertVencimiento,
 } from '@/lib/afip/service';
-import { listarFacturasAFIP } from '@/lib/afip/client';
+import { listarFacturasAFIP, anularFacturaConNC } from '@/lib/afip/client';
+import type { AfipTipoComprobante } from '@/lib/afip/types';
 import type { AfipAmbiente, AfipCredencialesPublic } from '@/lib/afip/types';
 
 interface FormState {
@@ -56,13 +57,22 @@ interface FacturaRow {
   venta_pos_id: number | null;
   tipo_comprobante: number;
   numero: number;
+  punto_venta: number;
+  importe_neto: number;
+  importe_iva: number;
   importe_total: number;
+  doc_tipo: number | null;
+  doc_nro: string | null;
+  cliente_razon_social: string | null;
   cae: string | null;
   cae_vence_at: string | null;
   qr_fiscal_url: string | null;
   estado: string;
   emitida_at: string | null;
 }
+
+const TIPOS_FACTURA_ANULABLES = new Set<number>([1, 6, 11]); // A, B, C
+const TIPOS_NC = new Set<number>([3, 8, 13]); // ya son NC, no se "anulan"
 
 export function SettingsAfip() {
   const [actuales, setActuales] = useState<AfipCredencialesPublic | null>(null);
@@ -74,6 +84,7 @@ export function SettingsAfip() {
   const [eliminando, setEliminando] = useState(false);
   const [facturas, setFacturas] = useState<FacturaRow[]>([]);
   const [loadingFacturas, setLoadingFacturas] = useState(false);
+  const [anulandoId, setAnulandoId] = useState<number | null>(null);
 
   // Cargar histórico de facturas emitidas
   async function cargarFacturas() {
@@ -84,6 +95,71 @@ export function SettingsAfip() {
     } finally {
       setLoadingFacturas(false);
     }
+  }
+
+  // Calcular qué facturas ya fueron anuladas (tienen una NC asociada con
+  // CbtesAsoc apuntando a su número). Lo hago client-side a partir de la
+  // lista ya cargada — no es 100% preciso porque CbtesAsoc no se guarda
+  // explícito en afip_facturas, pero matcheamos por importe + tipo NC
+  // contiguo.
+  const facturasAnuladas = new Set<number>(); // ids de facturas ya anuladas
+  for (const f of facturas) {
+    if (TIPOS_NC.has(f.tipo_comprobante)) {
+      // Buscar la factura original con el mismo importe y tipo equivalente
+      const tipoOriginal = f.tipo_comprobante === 3 ? 1 : f.tipo_comprobante === 8 ? 6 : 11;
+      const original = facturas.find(o =>
+        o.tipo_comprobante === tipoOriginal &&
+        Math.abs(Number(o.importe_total) - Number(f.importe_total)) < 0.01 &&
+        Number(o.numero) < Number(f.numero) &&
+        o.estado === 'aprobada'
+      );
+      if (original) facturasAnuladas.add(original.id);
+    }
+  }
+
+  async function handleAnularFactura(f: FacturaRow) {
+    if (!confirm(
+      `¿Anular la factura ${formatTipoCompr(f.tipo_comprobante)} #${f.numero}?\n\n` +
+      `Esto emite una Nota de Crédito por el mismo importe ($${Number(f.importe_total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}) ` +
+      `que cancela la factura ante AFIP. La factura original queda emitida en AFIP, pero contablemente queda saldada.\n\n` +
+      `Esta acción NO se puede deshacer.`,
+    )) return;
+
+    setAnulandoId(f.id);
+    try {
+      await anularFacturaConNC({
+        factura_original_id: f.id,
+        factura_original_tipo: f.tipo_comprobante as AfipTipoComprobante,
+        factura_original_numero: f.numero,
+        punto_venta: f.punto_venta,
+        cuit_emisor: actuales?.cuit ?? '',
+        importe_neto: Number(f.importe_neto),
+        importe_iva: Number(f.importe_iva),
+        importe_total: Number(f.importe_total),
+        venta_pos_id: f.venta_pos_id ?? 0,
+        doc_tipo: (f.doc_tipo ?? undefined) as undefined | 80 | 86 | 87 | 89 | 90 | 91 | 92 | 93 | 94 | 96 | 99,
+        doc_nro: f.doc_nro ?? undefined,
+        cliente_razon_social: f.cliente_razon_social ?? undefined,
+      });
+      toast.success(`Factura anulada con NC`);
+      cargarFacturas();
+    } catch (err) {
+      toast.error('No se pudo anular', {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setAnulandoId(null);
+    }
+  }
+
+  function formatTipoCompr(t: number): string {
+    return t === 1 ? 'Factura A' :
+           t === 6 ? 'Factura B' :
+           t === 11 ? 'Factura C' :
+           t === 3 ? 'NC A' :
+           t === 8 ? 'NC B' :
+           t === 13 ? 'NC C' :
+           `Tipo ${t}`;
   }
 
   // Cargar credenciales + histórico de facturas al montar
@@ -441,16 +517,36 @@ export function SettingsAfip() {
                           </span>
                         </td>
                         <td className="px-3 py-2 text-right">
-                          {f.qr_fiscal_url && (
-                            <a
-                              href={f.qr_fiscal_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-primary underline"
-                            >
-                              QR
-                            </a>
-                          )}
+                          <div className="flex items-center justify-end gap-2">
+                            {f.qr_fiscal_url && (
+                              <a
+                                href={f.qr_fiscal_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-primary underline"
+                              >
+                                QR
+                              </a>
+                            )}
+                            {TIPOS_FACTURA_ANULABLES.has(f.tipo_comprobante)
+                              && f.estado === 'aprobada'
+                              && !facturasAnuladas.has(f.id) && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleAnularFactura(f)}
+                                disabled={anulandoId === f.id}
+                                className="h-7 px-2 text-destructive"
+                                title="Emitir Nota de Crédito por el mismo importe"
+                              >
+                                <Ban className="h-3 w-3 mr-1" />
+                                {anulandoId === f.id ? 'Anulando…' : 'Anular'}
+                              </Button>
+                            )}
+                            {facturasAnuladas.has(f.id) && (
+                              <span className="text-[10px] text-muted-foreground italic">anulada</span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
