@@ -664,7 +664,11 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
               <td>
                 <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
                   {!m.anulado && <button className="btn btn-ghost btn-sm" onClick={() => { setEditMov({...m, justificativo: ""}); setIdempKeyEditMov(crypto.randomUUID()); }}>Editar</button>}
-                  {!m.anulado && tienePermiso(user, "caja_anular") && <button className="btn btn-danger btn-sm" onClick={() => eliminarMov(m)}>Anular</button>}
+                  {/* Botón siempre visible. Si el user no tiene caja_anular, el
+                      handler eliminarMov abre el modal de Manager Override
+                      pidiendo código del dueño. Decisión Lucas 2026-05-19:
+                      ausencia de permiso NO oculta la acción. */}
+                  {!m.anulado && <button className="btn btn-danger btn-sm" onClick={() => eliminarMov(m)}>Anular</button>}
                 </div>
               </td>
             </tr>

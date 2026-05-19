@@ -952,7 +952,9 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                           {r.estado === "sin_factura" && (
                             <IconBtn title="Registrar pago" tone="success" onClick={() => { setPagarRemModal(r); setRemPagoForm({ cuenta: "", monto: r.monto, fecha: toISO(today) }); setIdempKeyPagarRem(crypto.randomUUID()); }}>{IconPay}</IconBtn>
                           )}
-                          {r.estado !== "pagado" && tienePermiso(user, "compras_anular") && (
+                          {/* Siempre visible. Si no tiene permiso, anularRemito
+                              abre modal de Manager Override pidiendo código TOTP. */}
+                          {r.estado !== "pagado" && (
                             <IconBtn title="Anular" tone="danger" onClick={() => anularRemito(r)}>{IconX}</IconBtn>
                           )}
                         </div>
@@ -1028,9 +1030,9 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                       {!isNC && f.estado !== "pagada" && (
                         <IconBtn title="Registrar pago" tone="success" onClick={() => { setPagarModal(f); setPagoForm({ cuenta: "", monto: Number(f.total) || 0, fecha: toISO(today) }); setIdempKeyPagarFac(crypto.randomUUID()); }}>{IconPay}</IconBtn>
                       )}
-                      {tienePermiso(user, "compras_anular") && (
-                        <IconBtn title="Anular" tone="danger" onClick={() => anular(f)}>{IconX}</IconBtn>
-                      )}
+                      {/* Siempre visible. Si no tiene permiso, anular() abre
+                          modal de Manager Override pidiendo código del dueño. */}
+                      <IconBtn title="Anular" tone="danger" onClick={() => anular(f)}>{IconX}</IconBtn>
                     </div>
                   </td>
                 </tr>

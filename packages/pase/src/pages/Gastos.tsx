@@ -86,7 +86,10 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
   const [editModal, setEditModal] = useState<(GastoExt & { justificativo: string }) | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [idempKeyEditGasto, setIdempKeyEditGasto] = useState<string>(() => crypto.randomUUID());
-  const puedeEditarAnular = tienePermiso(user, "compras_anular");
+  // Lucas 2026-05-19: ya no usamos puedeEditarAnular para ocultar botones.
+  // Los botones quedan siempre visibles; si el user no tiene permiso, los
+  // handlers (anularGasto / abrirEditar→guardar) abren el modal de Manager
+  // Override TOTP.
   const puedeVerAnulados = tienePermiso(user, "ver_anulados");
   const { toast, showToast } = useToast();
   const [plantillas, setPlantillas] = useState<GastoPlantilla[]>([]);
@@ -463,7 +466,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
             />
           ) : (
             <table>
-              <thead><tr><th className="col-fecha">Fecha</th><th>Tipo</th><th>Categoría</th><th>Detalle</th><th>Local</th><th>Cuenta</th><th className="num-right">Monto</th>{puedeEditarAnular && <th></th>}</tr></thead>
+              <thead><tr><th className="col-fecha">Fecha</th><th>Tipo</th><th>Categoría</th><th>Detalle</th><th>Local</th><th>Cuenta</th><th className="num-right">Monto</th><th></th></tr></thead>
               <tbody>{histFiltrado.map(g => {
                 const anulado = g.estado === "anulado";
                 return (
@@ -479,14 +482,17 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                   <td style={{ fontSize: 11, color: "var(--muted2)" }}>{locales.find((l: Local) => String(l.id) === String(g.local_id))?.nombre || "Todos"}</td>
                   <td style={{ fontSize: 11, color: "var(--muted2)" }}>{g.cuenta || "—"}</td>
                   <td className="num-right">{fmt_$(g.monto)}</td>
-                  {puedeEditarAnular && (
-                    <td>
-                      <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                        {!anulado && <button className="btn btn-ghost btn-sm" onClick={() => abrirEditar(g)}>Editar</button>}
-                        {!anulado && <button className="btn btn-danger btn-sm" onClick={() => anularGasto(g)}>Anular</button>}
-                      </div>
-                    </td>
-                  )}
+                  <td>
+                    <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                      {/* Botones siempre visibles. Si el user no tiene
+                          compras_anular, los handlers abren el modal de
+                          Manager Override pidiendo código TOTP del dueño.
+                          Decisión Lucas 2026-05-19: la ausencia de permiso
+                          NO oculta la acción, solo la gatea con código. */}
+                      {!anulado && <button className="btn btn-ghost btn-sm" onClick={() => abrirEditar(g)}>Editar</button>}
+                      {!anulado && <button className="btn btn-danger btn-sm" onClick={() => anularGasto(g)}>Anular</button>}
+                    </div>
+                  </td>
                 </tr>
                 );
               })}</tbody>
