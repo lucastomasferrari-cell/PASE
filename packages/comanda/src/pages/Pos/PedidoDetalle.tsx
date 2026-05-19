@@ -11,6 +11,9 @@ import {
   cancelarPedidoService, calcularEstadoPago,
   type PedidoDetalleData,
 } from '@/services/pedidosService';
+import {
+  notificarPedidoListo, notificarPedidoEntregado, notificarPedidoRechazado,
+} from '@/services/tiendaService';
 import { formatARS, formatHora } from '@/lib/format';
 import { CanalBadge } from '@/components/CanalBadge';
 import { BadgePago } from '@/components/BadgePago';
@@ -118,14 +121,24 @@ export function PedidoDetalle() {
     const r = await marcarListoService(venta.id);
     setAccionLoading(false);
     if (r.error) toast.error(r.error);
-    else { toast.success('Pedido marcado como listo'); reload(); }
+    else {
+      toast.success('Pedido marcado como listo');
+      // Gap #4: avisar al cliente. Fire-and-forget — idempotente server-side.
+      if (venta.origen === 'tienda_online') void notificarPedidoListo({ ventaId: venta.id });
+      reload();
+    }
   };
   const handleEntregado = async () => {
     setAccionLoading(true);
     const r = await marcarEntregadoService(venta.id);
     setAccionLoading(false);
     if (r.error) toast.error(r.error);
-    else { toast.success('Pedido entregado'); navigate('/pos/pedidos'); }
+    else {
+      toast.success('Pedido entregado');
+      // Gap #4: invitación a calificar — solo si era pedido del marketplace.
+      if (venta.origen === 'tienda_online') void notificarPedidoEntregado({ ventaId: venta.id });
+      navigate('/pos/pedidos');
+    }
   };
   const handleCancelarConfirmado = async (managerId: string, motivo: string) => {
     setAccionLoading(true);
@@ -133,7 +146,14 @@ export function PedidoDetalle() {
     setAccionLoading(false);
     setCancelOpen(false);
     if (r.error) toast.error(r.error);
-    else { toast.success('Pedido cancelado'); navigate('/pos/pedidos'); }
+    else {
+      toast.success('Pedido cancelado');
+      // Gap #4: avisar al cliente del rechazo con el motivo. Solo marketplace.
+      if (venta.origen === 'tienda_online') {
+        void notificarPedidoRechazado({ ventaId: venta.id, motivo });
+      }
+      navigate('/pos/pedidos');
+    }
   };
 
   // ─── Cálculo total con comisión ────────────────────────────────────────────

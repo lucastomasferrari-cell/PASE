@@ -18,7 +18,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { createMpTokenGetter } from './_mp-token.js';
-import { sendEmail, htmlPedidoConfirmado, htmlPedidoListo } from './_email.js';
+import { sendEmail, htmlPedidoConfirmado, htmlPedidoListo, htmlPedidoRechazado, htmlPedidoEntregado } from './_email.js';
 import { createRappiClient, getRappiCredentials, verifyRappiWebhookSignature } from './_rappi.js';
 import { createPedidosYaClient, getPedidosYaCredentials, verifyPedidosYaWebhookSignature } from './_pedidosya.js';
 import { checkUserAuth } from './_user-auth.js';
@@ -59,6 +59,12 @@ export default async function handler(req, res) {
     }
     if (action === 'notify-listo' && req.method === 'POST') {
       return await handleNotifyListo(req, res);
+    }
+    if (action === 'notify-rechazado' && req.method === 'POST') {
+      return await handleNotifyRechazado(req, res);
+    }
+    if (action === 'notify-entregado' && req.method === 'POST') {
+      return await handleNotifyEntregado(req, res);
     }
     // ── Rappi: operaciones contra Rappi Restaurant Integration API v3 ──
     if (action === 'rappi-test' && req.method === 'POST') {
@@ -577,6 +583,135 @@ async function handleNotifyListo(req, res) {
     .update({ notif_email_listo_at: new Date().toISOString() })
     .eq('id', venta_id);
 
+  res.status(200).json({ ok: true, sent: !sent.skipped });
+}
+
+// ─── NOTIFY: Pedido rechazado / cancelado ───────────────────────────────────
+// Llamado por el POS cuando alguien rechaza un pedido pending (estado=
+// 'necesita_aprobacion' → 'anulada') o cancela uno ya activo. Le avisamos
+// al cliente con el motivo para que no quede esperando.
+async function handleNotifyRechazado(req, res) {
+  const { venta_id, motivo, email_destinatario } = req.body || {};
+  if (!venta_id) {
+    res.status(400).json({ error: 'venta_id requerido' });
+    return;
+  }
+
+  const supabase = db();
+  const { data: venta, error: verr } = await supabase
+    .from('ventas_pos')
+    .select('id, local_id, numero_local, cliente_nombre, cliente_email, notif_email_rechazado_at')
+    .eq('id', venta_id)
+    .single();
+  if (verr || !venta) { res.status(404).json({ error: 'Venta no encontrada' }); return; }
+
+  if (venta.notif_email_rechazado_at) {
+    res.status(200).json({ ok: true, skipped: 'YA_ENVIADO' });
+    return;
+  }
+
+  const emailFinal = email_destinatario || venta.cliente_email;
+  if (!emailFinal) {
+    res.status(200).json({ ok: true, skipped: 'NO_EMAIL' });
+    return;
+  }
+
+  const { data: local } = await supabase
+    .from('locales').select('nombre').eq('id', venta.local_id).single();
+  const { data: cls } = await supabase
+    .from('comanda_local_settings')
+    .select('telefono')
+    .eq('local_id', venta.local_id).single();
+
+  const html = htmlPedidoRechazado({
+    localNombre: local?.nombre ?? '',
+    clienteNombre: venta.cliente_nombre ?? '',
+    ventaNumero: venta.numero_local ?? venta.id,
+    motivo: motivo || null,
+    telefono: cls?.telefono ?? null,
+  });
+
+  const sent = await sendEmail({
+    to: emailFinal,
+    subject: `Pedido cancelado — ${local?.nombre ?? ''}`,
+    html,
+  });
+  if (!sent.ok && !sent.skipped) {
+    res.status(502).json({ error: sent.error, detail: sent.detail });
+    return;
+  }
+
+  // eslint-disable-next-line pase-local/no-direct-financiera-write -- campo no-financiero
+  await supabase
+    .from('ventas_pos')
+    .update({ notif_email_rechazado_at: new Date().toISOString() })
+    .eq('id', venta_id);
+  res.status(200).json({ ok: true, sent: !sent.skipped });
+}
+
+// ─── NOTIFY: Pedido entregado / invitación a calificar ─────────────────────
+// Llamado por el POS cuando una venta pasa a 'entregada' o 'cobrada'.
+// Le mandamos invitación a dejar review.
+async function handleNotifyEntregado(req, res) {
+  const { venta_id, email_destinatario } = req.body || {};
+  if (!venta_id) {
+    res.status(400).json({ error: 'venta_id requerido' });
+    return;
+  }
+
+  const supabase = db();
+  const { data: venta, error: verr } = await supabase
+    .from('ventas_pos')
+    .select('id, local_id, numero_local, cliente_nombre, cliente_email, notif_email_entregado_at')
+    .eq('id', venta_id)
+    .single();
+  if (verr || !venta) { res.status(404).json({ error: 'Venta no encontrada' }); return; }
+
+  if (venta.notif_email_entregado_at) {
+    res.status(200).json({ ok: true, skipped: 'YA_ENVIADO' });
+    return;
+  }
+
+  const emailFinal = email_destinatario || venta.cliente_email;
+  if (!emailFinal) {
+    res.status(200).json({ ok: true, skipped: 'NO_EMAIL' });
+    return;
+  }
+
+  const { data: local } = await supabase
+    .from('locales').select('nombre').eq('id', venta.local_id).single();
+  const { data: cls } = await supabase
+    .from('comanda_local_settings')
+    .select('slug')
+    .eq('local_id', venta.local_id).single();
+
+  // URL pública con el form de review (la confirmación detecta entregada
+  // y muestra el ReviewForm).
+  const origin = req.headers.origin || (`https://${req.headers.host || 'pase-yndx.vercel.app'}`);
+  const calificarUrl = `${origin}/comanda-app/tienda/${cls?.slug ?? ''}/confirmacion/${venta_id}`;
+
+  const html = htmlPedidoEntregado({
+    localNombre: local?.nombre ?? '',
+    clienteNombre: venta.cliente_nombre ?? '',
+    ventaNumero: venta.numero_local ?? venta.id,
+    calificarUrl,
+  });
+
+  const sent = await sendEmail({
+    to: emailFinal,
+    subject: `¿Cómo estuvo tu pedido? — ${local?.nombre ?? ''}`,
+    html,
+  });
+  if (!sent.ok && !sent.skipped) {
+    res.status(502).json({ error: sent.error, detail: sent.detail });
+    return;
+  }
+
+  // eslint-disable-next-line pase-local/no-direct-financiera-write -- campo no-financiero
+  await supabase
+    .from('ventas_pos')
+    .update({ notif_email_entregado_at: new Date().toISOString() })
+    .eq('id', venta_id);
   res.status(200).json({ ok: true, sent: !sent.skipped });
 }
 

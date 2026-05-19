@@ -263,3 +263,52 @@ export async function notificarPedidoListo(args: {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
+
+// Gap #4 marketplace — pedido rechazado / cancelado por el comerciante.
+// Lo dispara el POS cuando alguien anula (estado → anulada) un pedido
+// origen=tienda_online. El motivo se incluye en el email para que el
+// cliente entienda por qué.
+export async function notificarPedidoRechazado(args: {
+  ventaId: number;
+  motivo?: string;
+  email?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const resp = await fetch('/api/tienda-mp?action=notify-rechazado', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        venta_id: args.ventaId,
+        motivo: args.motivo ?? null,
+        email_destinatario: args.email,
+      }),
+    });
+    if (!resp.ok) return { ok: false, error: `HTTP ${resp.status}` };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+// Gap #4 marketplace — pedido entregado, invitación a calificar.
+// Lo dispara el POS cuando la venta pasa a entregada/cobrada. El email
+// trae link a la página de confirmación donde aparece el ReviewForm.
+export async function notificarPedidoEntregado(args: {
+  ventaId: number;
+  email?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const resp = await fetch('/api/tienda-mp?action=notify-entregado', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        venta_id: args.ventaId,
+        email_destinatario: args.email,
+      }),
+    });
+    if (!resp.ok) return { ok: false, error: `HTTP ${resp.status}` };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}

@@ -128,6 +128,75 @@ export function htmlPedidoConfirmado({ localNombre, clienteNombre, ventaNumero, 
   `.trim();
 }
 
+// Email "pedido rechazado / cancelado": cuando el comerciante anula el pedido
+// (ej. está cerrado, falta producto, fuera de zona). Le avisamos al cliente
+// con el motivo para que no espere indefinidamente.
+export function htmlPedidoRechazado({ localNombre, clienteNombre, ventaNumero, motivo, telefono }) {
+  return `
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;background:#f4f4f5;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#111">
+<div style="max-width:560px;margin:32px auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7">
+  <div style="padding:24px 28px;border-bottom:1px solid #e4e4e7;background:#fef2f2">
+    <div style="font-size:13px;color:#7f1d1d;letter-spacing:.08em;text-transform:uppercase">${escapeHtml(localNombre)}</div>
+    <h1 style="margin:8px 0 0;font-size:22px;color:#991b1b">No pudimos tomar tu pedido</h1>
+  </div>
+  <div style="padding:24px 28px">
+    <p style="margin:0 0 12px;font-size:14px;color:#3f3f46;line-height:1.5">
+      ${escapeHtml(clienteNombre)}, tu pedido <strong>#${ventaNumero}</strong> fue cancelado.
+    </p>
+    ${motivo ? `<div style="background:#fef2f2;border-left:3px solid #dc2626;padding:12px 16px;margin:12px 0;font-size:13px;color:#3f3f46;line-height:1.5;border-radius:0 6px 6px 0">
+      <strong>Motivo:</strong> ${escapeHtml(motivo)}
+    </div>` : ''}
+    <p style="margin:16px 0 0;font-size:13px;color:#3f3f46;line-height:1.5">
+      No se realizó ningún cargo. Si pagaste online, se devuelve automáticamente.
+    </p>
+    ${telefono ? `<p style="margin:16px 0 0;font-size:12px;color:#71717a">
+      Cualquier consulta: ${escapeHtml(telefono)}.
+    </p>` : ''}
+  </div>
+</div>
+</body>
+</html>
+  `.trim();
+}
+
+// Email "pedido entregado / calificá tu experiencia": invitación a dejar
+// review post-delivery. Linkea al seguimiento donde aparece el form de review.
+export function htmlPedidoEntregado({ localNombre, clienteNombre, ventaNumero, calificarUrl }) {
+  return `
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;background:#f4f4f5;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#111">
+<div style="max-width:560px;margin:32px auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7">
+  <div style="padding:24px 28px;border-bottom:1px solid #e4e4e7">
+    <div style="font-size:13px;color:#71717a;letter-spacing:.08em;text-transform:uppercase">${escapeHtml(localNombre)}</div>
+    <h1 style="margin:8px 0 0;font-size:22px">¡Gracias por tu pedido, ${escapeHtml(clienteNombre)}!</h1>
+  </div>
+  <div style="padding:24px 28px">
+    <p style="margin:0 0 16px;font-size:14px;color:#3f3f46;line-height:1.5">
+      Tu pedido <strong>#${ventaNumero}</strong> fue entregado. Esperamos que lo hayas disfrutado.
+    </p>
+    <p style="margin:0 0 20px;font-size:14px;color:#3f3f46;line-height:1.5">
+      ¿Nos contás cómo estuvo? Tu opinión ayuda a otros clientes y al restaurante a mejorar.
+    </p>
+    <div style="margin:24px 0">
+      <a href="${calificarUrl}" style="display:inline-block;background:#f59e0b;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:500;font-size:14px">
+        ⭐ Calificar mi pedido
+      </a>
+    </div>
+    <p style="margin:24px 0 0;font-size:12px;color:#a1a1aa;line-height:1.5">
+      Tarda menos de 1 minuto. Solo se muestra tu primer nombre, es semi-anónimo.
+    </p>
+  </div>
+</div>
+</body>
+</html>
+  `.trim();
+}
+
 export function htmlPedidoListo({ localNombre, clienteNombre, ventaNumero, tipoEntrega, direccionLocal, telefono }) {
   const subjectAction = tipoEntrega === 'delivery'
     ? 'Salió tu pedido'
