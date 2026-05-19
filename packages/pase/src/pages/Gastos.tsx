@@ -225,6 +225,28 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
     setIdempKeyEditGasto(crypto.randomUUID());
   };
 
+  // Pending override de editar gasto: si el user no tiene permiso
+  // compras_anular, guardamos los args y abrimos el Manager Override
+  // modal. Igual patrón que pendingAnularGasto.
+  async function ejecutarEditarGasto(gasto: GastoExt & { justificativo: string }, overrideCode?: string) {
+    const { error } = await db.rpc("editar_gasto", {
+      p_gasto_id: gasto.id,
+      p_fecha: gasto.fecha,
+      p_categoria: gasto.categoria,
+      p_tipo: gasto.tipo,
+      p_monto: typeof gasto.monto === "number" ? gasto.monto : parseFloat(String(gasto.monto)),
+      p_cuenta: gasto.cuenta,
+      p_detalle: gasto.detalle || "",
+      p_justificativo: gasto.justificativo,
+      p_idempotency_key: idempKeyEditGasto,
+      ...(overrideCode ? { p_override_code: overrideCode } : {}),
+    });
+    if (error) { alert(translateRpcError(error)); return; }
+    showToast("Gasto editado · saldos actualizados");
+    setEditModal(null);
+    load();
+  }
+
   const guardarEdit = async () => {
     if (savingEdit || !editModal) return;
     if (!editModal.justificativo?.trim()) { alert("El motivo de la edición es obligatorio"); return; }
@@ -233,21 +255,12 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
     }
     setSavingEdit(true);
     try {
-      const { error } = await db.rpc("editar_gasto", {
-        p_gasto_id: editModal.id,
-        p_fecha: editModal.fecha,
-        p_categoria: editModal.categoria,
-        p_tipo: editModal.tipo,
-        p_monto: typeof editModal.monto === "number" ? editModal.monto : parseFloat(String(editModal.monto)),
-        p_cuenta: editModal.cuenta,
-        p_detalle: editModal.detalle || "",
-        p_justificativo: editModal.justificativo,
-        p_idempotency_key: idempKeyEditGasto,
-      });
-      if (error) { alert(translateRpcError(error)); return; }
-      showToast("Gasto editado · saldos actualizados");
-      setEditModal(null);
-      load();
+      if (tienePermiso(user, "compras_anular")) {
+        await ejecutarEditarGasto(editModal);
+      } else {
+        // No tiene permiso → abrir modal de Manager Override TOTP.
+        setPendingEditarGasto(editModal);
+      }
     } finally {
       setSavingEdit(false);
     }
@@ -255,6 +268,8 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
 
   // Pending override de anular gasto. Misma pattern que en Compras.
   const [pendingAnularGasto, setPendingAnularGasto] = useState<{ gasto: GastoExt; motivo: string } | null>(null);
+  // Pending override de editar gasto (encargado sin permiso compras_anular).
+  const [pendingEditarGasto, setPendingEditarGasto] = useState<GastoExt & { justificativo: string } | null>(null);
 
   async function ejecutarAnularGasto(g: GastoExt, motivo: string, overrideCode?: string) {
     const { error } = await db.rpc("anular_gasto", {
@@ -685,6 +700,21 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
           const { gasto, motivo } = pendingAnularGasto;
           setPendingAnularGasto(null);
           await ejecutarAnularGasto(gasto, motivo, codigo);
+        }}
+      />
+
+      {/* MODAL MANAGER OVERRIDE — para editar gasto sin permiso compras_anular */}
+      <ManagerOverrideModal
+        open={pendingEditarGasto !== null}
+        descripcion={pendingEditarGasto
+          ? `Editar gasto ${pendingEditarGasto.categoria} → ${fmt_$(typeof pendingEditarGasto.monto === 'number' ? pendingEditarGasto.monto : parseFloat(String(pendingEditarGasto.monto)) || 0)}`
+          : undefined}
+        onClose={() => setPendingEditarGasto(null)}
+        onValidated={async (codigo) => {
+          if (!pendingEditarGasto) return;
+          const gasto = pendingEditarGasto;
+          setPendingEditarGasto(null);
+          await ejecutarEditarGasto(gasto, codigo);
         }}
       />
     </div>
