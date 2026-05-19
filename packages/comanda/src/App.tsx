@@ -92,6 +92,7 @@ const DisponibilidadLista = lazy(() => import('./pages/Catalogo/DisponibilidadLi
 
 // Admin — Settings
 const SettingsLocal = lazy(() => import('./pages/Settings/SettingsLocal').then(m => ({ default: m.SettingsLocal })));
+const SettingsAfip = lazy(() => import('./pages/Settings/SettingsAfip').then(m => ({ default: m.SettingsAfip })));
 const SettingsMesas = lazy(() => import('./pages/Settings/SettingsMesas').then(m => ({ default: m.SettingsMesas })));
 const SettingsMetodosCobro = lazy(() => import('./pages/Settings/SettingsMetodosCobro').then(m => ({ default: m.SettingsMetodosCobro })));
 const SettingsPermisos = lazy(() => import('./pages/Settings/SettingsPermisos').then(m => ({ default: m.SettingsPermisos })));
@@ -288,6 +289,7 @@ export default function App() {
                   {/* ── Configuración ─────────────────────────────────── */}
                   <Route path="/configuracion" element={<Navigate to="/configuracion/local" replace />} />
                   <Route path="/configuracion/local" element={<SettingsLocal />} />
+                  <Route path="/configuracion/afip" element={<SettingsAfip />} />
                   <Route path="/configuracion/branding" element={<SettingsBranding />} />
                   <Route path="/configuracion/notificaciones" element={<SettingsRecibos />} />
                   <Route path="/configuracion/recibos" element={<SettingsRecibos />} />

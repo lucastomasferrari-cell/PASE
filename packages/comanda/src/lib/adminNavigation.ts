@@ -189,6 +189,7 @@ export const ADMIN_NAVIGATION: NavCategory[] = [
     requiredPermission: 'comanda.configuracion.editar',
     subItems: [
       { slug: 'local',          label: 'Local',                 href: '/configuracion/local' },
+      { slug: 'afip',           label: 'Factura electrónica AFIP', href: '/configuracion/afip' },
       { slug: 'branding',       label: 'Branding y logos',      href: '/configuracion/branding',       badge: 'soon' },
       { slug: 'notificaciones', label: 'Notificaciones',        href: '/configuracion/notificaciones', badge: 'soon' },
       { slug: 'recibos',        label: 'Recibos e impresión',   href: '/configuracion/recibos',        badge: 'soon' },
