@@ -177,6 +177,48 @@ jobs:
           echo "PR: $PR_URL"
           node scripts/auto-fix-mark-resolved.mjs "$TICKET_ID" "$PR_URL" "pr" "$PR_NUM"
 
+      - name: Push notification → superadmins (resuelto, commit directo)
+        if: steps.agent.outputs.action == 'fix' && steps.decide.outputs.mode == 'commit'
+        env:
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+        run: |
+          node scripts/send-push-to-superadmins.mjs \
+            "✓ Bug resuelto automáticamente" \
+            "Cambio chico mergeado a main. Refrescá la app para probarlo." \
+            "/soporte" \
+            "normal" \
+            "$TICKET_ID" || true
+
+      - name: Push notification → superadmins (PR pendiente)
+        if: steps.agent.outputs.action == 'fix' && steps.decide.outputs.mode == 'pr'
+        env:
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+        run: |
+          node scripts/send-push-to-superadmins.mjs \
+            "🔍 PR auto-fix listo para revisar" \
+            "Cambio grande. Abrí el ticket y aprobá si está OK." \
+            "/soporte" \
+            "critical" \
+            "$TICKET_ID" || true
+
+      - name: Push notification → superadmins (agent se rindió)
+        if: steps.agent.outputs.action == 'give_up'
+        env:
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+        run: |
+          node scripts/send-push-to-superadmins.mjs \
+            "⚠ Auto-fix no pudo resolver" \
+            "Ticket queda en cola para atención manual." \
+            "/soporte" \
+            "normal" \
+            "$TICKET_ID" || true
+
       - name: Upload agent logs
         if: always()
         uses: actions/upload-artifact@v4

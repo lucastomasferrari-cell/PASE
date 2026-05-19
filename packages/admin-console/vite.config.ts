@@ -32,6 +32,8 @@ export default defineConfig({
         // No cachear requests a Supabase (datos vivos — no quiero servir
         // tickets stale al superadmin). Solo cachear shell + assets.
         navigateFallbackDenylist: [/^\/api\//, /\.supabase\.co/],
+        // SW addon: handler de Web Push notifications (público/sw-push.js).
+        importScripts: ['/sw-push.js'],
         runtimeCaching: [
           {
             urlPattern: /\.(?:png|jpg|jpeg|svg|webp)$/,

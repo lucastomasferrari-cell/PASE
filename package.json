@@ -15,7 +15,8 @@
     "@anthropic-ai/sdk": "^0.39.0",
     "@supabase/supabase-js": "^2.103.0",
     "pg": "^8.20.0",
-    "turbo": "^2.3.3"
+    "turbo": "^2.3.3",
+    "web-push": "^3.6.7"
   },
   "packageManager": "pnpm@9.15.9",
   "engines": {

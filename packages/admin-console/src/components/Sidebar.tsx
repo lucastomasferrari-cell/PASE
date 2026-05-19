@@ -3,6 +3,7 @@ import { LifeBuoy, Building2, Wallet, BarChart3, LogOut } from 'lucide-react';
 import { signOut } from '@/lib/auth';
 import type { AdminUser } from '@/lib/auth';
 import { cn } from '@/lib/cn';
+import { PushToggle } from './PushToggle';
 
 interface Props {
   user: AdminUser;
@@ -46,19 +47,22 @@ export function Sidebar({ user }: Props) {
           </NavLink>
         ))}
       </nav>
-      <div className="border-t border-admin-border p-3 text-xs">
-        <div className="text-admin-muted">Logueado como</div>
-        <div className="text-admin-text truncate" title={user.email}>
-          {user.nombre || user.email}
+      <div className="border-t border-admin-border p-3 text-xs space-y-2">
+        <PushToggle userId={user.id} />
+        <div className="border-t border-admin-border pt-2">
+          <div className="text-admin-muted">Logueado como</div>
+          <div className="text-admin-text truncate" title={user.email}>
+            {user.nombre || user.email}
+          </div>
+          <button
+            type="button"
+            onClick={() => { void signOut(); }}
+            className="mt-2 flex items-center gap-1.5 text-admin-muted hover:text-admin-danger transition-colors"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Cerrar sesión
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => { void signOut(); }}
-          className="mt-2 flex items-center gap-1.5 text-admin-muted hover:text-admin-danger transition-colors"
-        >
-          <LogOut className="w-3.5 h-3.5" />
-          Cerrar sesión
-        </button>
       </div>
     </aside>
   );
