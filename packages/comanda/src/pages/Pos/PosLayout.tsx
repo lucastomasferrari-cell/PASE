@@ -15,6 +15,7 @@ import { UserAvatarMenu } from '@/components/UserAvatarMenu';
 import { AllChecksModal } from '@/components/AllChecksModal';
 import { MobileModoMozoBanner } from '@/components/MobileModoMozoBanner';
 import { OfflineBanner } from '@/components/OfflineBanner';
+import { SyncStatusBadge } from '@/components/SyncStatusBadge';
 
 // Layout principal POS: header sticky con marca + turno + acciones,
 // sidebar permanente de 72px (Salón/Mostrador/Pedidos), contenido en
@@ -112,6 +113,7 @@ export function PosLayout() {
 
           {/* Derecha: acciones */}
           <div className="flex items-center gap-2 flex-shrink-0">
+            <SyncStatusBadge />
             <Button
               variant="outline"
               size="sm"

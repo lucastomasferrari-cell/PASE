@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import { Toaster } from 'sonner';
 import { AuthProvider } from './lib/AuthProvider';
 import { AuthPosProvider } from './lib/AuthPosProvider';
+import { SyncEngineLifecycle } from './lib/sync/SyncEngineLifecycle';
 import { RedirectIfAuth } from './components/RedirectIfAuth';
 import { PinGate } from './components/PinGate';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -155,6 +156,7 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter basename={basename}>
         <AuthPosProvider>
+          <SyncEngineLifecycle />
           <Toaster
             position="top-center"
             richColors
