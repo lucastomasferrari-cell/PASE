@@ -108,7 +108,15 @@ export type ItemDraft = Pick<
   Item,
   'nombre' | 'descripcion' | 'emoji' | 'codigo' | 'grupo_id' | 'precio_madre' |
   'tax_rate_id' | 'estacion' | 'visible_pos' | 'visible_qr' | 'visible_tienda' | 'es_combo'
-> & { tenant_id: string; local_id: number | null; tiempo_prep_min?: number | null };
+> & {
+  tenant_id: string;
+  local_id: number | null;
+  tiempo_prep_min?: number | null;
+  // SKU externos para sync con partners. null si no integra con ese partner.
+  sku_rappi?: string | null;
+  sku_pedidosya?: string | null;
+  sku_deliverect?: string | null;
+};
 
 export async function createItem(draft: ItemDraft): Promise<{ id: number | null; error: string | null }> {
   const { data, error } = await db.from('items').insert(draft).select('id').single();
