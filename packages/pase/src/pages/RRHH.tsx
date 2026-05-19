@@ -27,6 +27,7 @@ import type {
 } from "./rrhh/types";
 import {
   calcLiquidacion, calcularValorDoble, MESES_NOMBRE, CUENTAS_PAGO,
+  calcularCuotas, dividirEnCuotas,
 } from "./rrhh/helpers";
 // Sub-componentes (split F6 del 2026-05-11).
 import { TabDashboard } from "./rrhh/TabDashboard";
@@ -75,7 +76,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   // BUG 2: por defecto solo mostramos empleados activos. Toggle para incluir inactivos.
   const [empMostrarInactivos, setEmpMostrarInactivos] = useState(false);
   const [empModal, setEmpModal] = useState<EmpModalState>(null);
-  const empEmpty: EmpForm = { local_id:"", apellido:"", nombre:"", cuil:"", puesto:"", sueldo_mensual:"", alias_mp:"", fecha_inicio:"", activo:true, dias_vacaciones_ya_tomados_al_alta:"0", registrado:false };
+  const empEmpty: EmpForm = { local_id:"", apellido:"", nombre:"", cuil:"", puesto:"", sueldo_mensual:"", alias_mp:"", fecha_inicio:"", activo:true, dias_vacaciones_ya_tomados_al_alta:"0", registrado:false, modo_pago:"MENSUAL" };
   const [empForm, setEmpForm] = useState<EmpForm>(empEmpty);
 
   // Novedades
@@ -241,18 +242,31 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       liqs = (data as Liquidacion[]) || [];
     }
 
+    // Para multi-cuota (modo_pago != MENSUAL) una novedad tiene N filas en
+    // liqs (cuota_num=1..N). Devolvemos una fila de pagoData por cuota.
+    // Si no hay liqs persistidas (caso "_generated" para novedades viejas o
+    // sin confirmar todavía con calc on-the-fly), generamos 1 sola — esos
+    // empleados quedan como MENSUAL por backward compat.
     const merged: PagoDataRow[] = empleados.flatMap((emp) => {
       const nov = novedades.find(n => n.empleado_id === emp.id);
       if (!nov) return [];
-      const persisted = liqs.find(l => l.novedad_id === nov.id);
-      let liq: LiquidacionConGenerated;
-      if (persisted) {
-        liq = persisted;
-      } else {
-        const vd = calcularValorDoble(emp);
-        const calc = calcLiquidacion(emp, nov, vd);
-        liq = { ...calc, total_a_pagar: Math.round(calc.total_a_pagar), estado: "pendiente", _novedadId: nov.id, _generated: true };
+      const persistedRows = liqs
+        .filter(l => l.novedad_id === nov.id)
+        .sort((a, b) => (a.cuota_num ?? 1) - (b.cuota_num ?? 1));
+      if (persistedRows.length > 0) {
+        return persistedRows.map(liq => ({ emp, nov, liq: liq as LiquidacionConGenerated }));
       }
+      const vd = calcularValorDoble(emp);
+      const calc = calcLiquidacion(emp, nov, vd);
+      const liq: LiquidacionConGenerated = {
+        ...calc,
+        total_a_pagar: Math.round(calc.total_a_pagar),
+        estado: "pendiente",
+        cuota_num: 1,
+        cuotas_total: 1,
+        _novedadId: nov.id,
+        _generated: true,
+      };
       return [{ emp, nov, liq }];
     });
 
@@ -287,17 +301,24 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
         .in("novedad_id", novIds);
       liqsDash = (liqData as Pick<Liquidacion, "novedad_id" | "estado" | "total_a_pagar">[]) || [];
     }
+    // Multi-cuota: una novedad puede tener N liqs. "Pagado" solo si TODAS
+    // las cuotas están pagadas. "Total" es la suma de cuotas.
+    const liqsPorNov = (novId: string) => liqsDash.filter(l => l.novedad_id === novId);
     const pagados = novsMes.filter(n => {
-      const liq = liqsDash.find(l => l.novedad_id === n.id);
-      return liq?.estado === "pagado";
+      const ls = liqsPorNov(n.id ?? "");
+      return ls.length > 0 && ls.every(l => l.estado === "pagado");
     }).length;
-    // Estimado a pagar
+    // Estimado a pagar (suma total mensual por empleado, agregando cuotas).
     let estimado = 0;
     activos.forEach(emp => {
       const nov = novsMes.find(n => n.empleado_id === emp.id);
       if (nov && nov.estado === "confirmado") {
-        const liq = liqsDash.find(l => l.novedad_id === nov.id);
-        estimado += liq ? Number(liq.total_a_pagar || 0) : Number(emp.sueldo_mensual);
+        const ls = liqsPorNov(nov.id ?? "");
+        if (ls.length > 0) {
+          estimado += ls.reduce((s, l) => s + Number(l.total_a_pagar || 0), 0);
+        } else {
+          estimado += Number(emp.sueldo_mensual);
+        }
       } else {
         estimado += Number(emp.sueldo_mensual);
       }
@@ -552,6 +573,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       alias_mp:e.alias_mp||"", fecha_inicio:e.fecha_inicio||"", activo:e.activo,
       dias_vacaciones_ya_tomados_al_alta: String((e as { dias_vacaciones_ya_tomados_al_alta?: number }).dias_vacaciones_ya_tomados_al_alta ?? 0),
       registrado: Boolean((e as { registrado?: boolean }).registrado),
+      modo_pago: e.modo_pago || "MENSUAL",
     });
     setEmpModal(e);
   };
@@ -612,11 +634,16 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     if (saved) {
       const vd = calcularValorDoble(emp);
       const calc = calcLiquidacion(emp, nov, vd, adelantosDelMes);
-      // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F14: el upsert de liquidación al confirmar novedad debe ir por RPC confirmar_novedad atómica. Hoy si el upsert falla, la novedad queda confirmada pero sin liquidación calculada.
-      await db.from("rrhh_liquidaciones").upsert({
-        novedad_id: saved.id, ...calc, estado: "pendiente",
-        calculado_at: new Date().toISOString(),
-      }, { onConflict: "novedad_id" });
+      // Modo de pago del empleado → cantidad de cuotas a generar.
+      // MENSUAL=1 (comportamiento legacy), QUINCENAL=2, SEMANAL=4.
+      const { cuotas_total, vencimientos } = calcularCuotas(emp.modo_pago, novMes, novAnio);
+      const filas = dividirEnCuotas(calc, cuotas_total, vencimientos, saved.id);
+      // Delete + insert (en vez de upsert) para que cambiar el modo_pago
+      // entre confirmaciones no deje filas huérfanas con cuotas_total viejo.
+      // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F14: el delete+insert de cuotas al confirmar novedad debería ir por RPC confirmar_novedad atómica. Hoy si el insert falla post-delete, la novedad queda confirmada sin liquidación.
+      await db.from("rrhh_liquidaciones").delete().eq("novedad_id", saved.id);
+      // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F14: idem comentario anterior.
+      await db.from("rrhh_liquidaciones").insert(filas);
     }
     showToast(`${emp.apellido} confirmado`);
     loadNovedades();

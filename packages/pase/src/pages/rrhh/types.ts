@@ -27,6 +27,8 @@ export interface EmpForm {
   dias_vacaciones_ya_tomados_al_alta: string;
   /** TRUE = en nómina formal (AFIP), FALSE = "en blanco" (default FALSE). */
   registrado: boolean;
+  /** Forma de pago: MENSUAL (1 cuota), QUINCENAL (2), SEMANAL (4). */
+  modo_pago: "MENSUAL" | "QUINCENAL" | "SEMANAL";
 }
 
 // State de empModal: null cuando cerrado, "new" cuando agregando nuevo,

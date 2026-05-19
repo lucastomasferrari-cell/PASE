@@ -203,6 +203,16 @@ export function TabEmpleados({
                 <div className="field"><label>Fecha inicio *</label><input type="date" required value={empForm.fecha_inicio} onChange={e => setEmpForm({...empForm, fecha_inicio:e.target.value})} /></div>
               </div>
               <div className="form3">
+                <div className="field">
+                  <label title="Cada cuántos días se le paga. Cambia cuántas cuotas se generan al confirmar la novedad mensual: Mensual=1, Quincenal=2, Semanal=4. El sueldo mensual no cambia.">Forma de pago *</label>
+                  <select value={empForm.modo_pago} onChange={e => setEmpForm({...empForm, modo_pago: e.target.value as "MENSUAL" | "QUINCENAL" | "SEMANAL"})}>
+                    <option value="MENSUAL">Mensual (1 pago/mes)</option>
+                    <option value="QUINCENAL">Quincenal (2 pagos/mes)</option>
+                    <option value="SEMANAL">Semanal (4 pagos/mes)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form3">
                 <div className="field"><label>Activo</label><select value={empForm.activo ? "1" : "0"} onChange={e => setEmpForm({...empForm, activo:e.target.value === "1"})}><option value="1">Si</option><option value="0">No</option></select></div>
                 <div className="field">
                   <label title="TRUE si está en nómina formal AFIP. Sirve para identificar empleados 'en blanco' vs 'en negro'.">Registrado (AFIP)</label>

@@ -59,6 +59,85 @@ export function calcLiquidacion(emp: Empleado, nov: NovedadEditable, valorDoble:
   };
 }
 
+// Cuotas para multi-pago (modo_pago != MENSUAL).
+// MENSUAL=1 cuota (fin de mes), QUINCENAL=2 (día 15 + fin), SEMANAL=4 (7/14/21/28).
+// Decisión Lucas 2026-05-19: fechas fijas (no viernes flotantes) — más simple
+// para conciliar a fin de mes.
+export function calcularCuotas(
+  modo_pago: "MENSUAL" | "QUINCENAL" | "SEMANAL" | undefined,
+  mes: number,
+  anio: number,
+): { cuotas_total: number; vencimientos: string[] } {
+  const cuotas_total = modo_pago === "QUINCENAL" ? 2 : modo_pago === "SEMANAL" ? 4 : 1;
+  const lastDay = new Date(anio, mes, 0).getDate();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const dateFor = (d: number) => `${anio}-${pad(mes)}-${pad(d)}`;
+  let vencimientos: string[];
+  if (cuotas_total === 1) {
+    vencimientos = [dateFor(lastDay)];
+  } else if (cuotas_total === 2) {
+    vencimientos = [dateFor(15), dateFor(lastDay)];
+  } else {
+    vencimientos = [dateFor(7), dateFor(14), dateFor(21), dateFor(Math.min(28, lastDay))];
+  }
+  return { cuotas_total, vencimientos };
+}
+
+// Divide los componentes de una liquidación en N cuotas. Cada cuota es la
+// Nava parte. La última cuota absorbe redondeo para que la suma cierre exacta.
+// total_a_pagar redondea a entero; el resto queda como número (numeric en DB).
+export function dividirEnCuotas(
+  calc: LiquidacionCalculada,
+  cuotas_total: number,
+  vencimientos: string[],
+  novedad_id: string,
+): Array<Partial<LiquidacionCalculada> & {
+  novedad_id: string;
+  cuota_num: number;
+  cuotas_total: number;
+  fecha_vencimiento: string | null;
+  estado: "pendiente";
+  pagos_realizados: number;
+  total_a_pagar: number;
+  calculado_at: string;
+}> {
+  const divisor = cuotas_total;
+  const totalEntero = Math.round(calc.total_a_pagar);
+  const cuotaEntera = Math.round(totalEntero / divisor);
+  const calculado_at = new Date().toISOString();
+  return Array.from({ length: divisor }, (_, i) => {
+    const cuota_num = i + 1;
+    // Última cuota = total - suma de las anteriores. Garantiza cierre exacto.
+    const total_a_pagar = cuota_num === divisor
+      ? totalEntero - cuotaEntera * (divisor - 1)
+      : cuotaEntera;
+    return {
+      novedad_id,
+      sueldo_base: calc.sueldo_base / divisor,
+      descuento_ausencias: calc.descuento_ausencias / divisor,
+      total_horas_extras: calc.total_horas_extras / divisor,
+      total_dobles: calc.total_dobles / divisor,
+      total_feriados: calc.total_feriados / divisor,
+      total_vacaciones: calc.total_vacaciones / divisor,
+      subtotal1: calc.subtotal1 / divisor,
+      monto_presentismo: calc.monto_presentismo / divisor,
+      subtotal2: calc.subtotal2 / divisor,
+      // Adelantos en cuota 1 únicamente (display info — el consume real
+      // pasa al pagar via p_adelantos_ids).
+      adelantos: cuota_num === 1 ? calc.adelantos : 0,
+      pagos_realizados: 0,
+      total_a_pagar,
+      efectivo: calc.efectivo / divisor,
+      transferencia: calc.transferencia / divisor,
+      estado: "pendiente" as const,
+      cuota_num,
+      cuotas_total: divisor,
+      fecha_vencimiento: vencimientos[i] ?? null,
+      calculado_at,
+    };
+  });
+}
+
 export const MESES_NOMBRE = ["","Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 export const MESES_SEL = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 export const PRESENTISMO_OPTS = [

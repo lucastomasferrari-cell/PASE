@@ -734,22 +734,46 @@ function TabMovimientos({ emp, movMeses, expanded, setExpanded, esDueno, adelant
 
       {movMeses.length === 0 ? <div className="empty">Sin movimientos registrados</div> : movMeses.map((nov) => {
         const liqArr = Array.isArray(nov.rrhh_liquidaciones) ? nov.rrhh_liquidaciones : [];
-        const liq = liqArr[0];
+        // Para multi-cuota una novedad tiene N liqs. Agregamos: el total del
+        // mes es la suma de cuotas; el estado del mes es "Pagado" solo si
+        // TODAS las cuotas están pagadas, "Parcial" si alguna está pagada y
+        // otras no, "Pendiente" si ninguna.
+        const totalMes = liqArr.reduce((s, l) => s + Number(l?.total_a_pagar || 0), 0);
+        const cuotasTotales = liqArr.length;
+        const cuotasPagadas = liqArr.filter(l => l?.estado === "pagado").length;
+        const todoPagado = cuotasTotales > 0 && cuotasPagadas === cuotasTotales;
+        const parcial = cuotasPagadas > 0 && cuotasPagadas < cuotasTotales;
+        // Componentes agregados del mes (suma de las N cuotas). Para MENSUAL
+        // es la única liq; para QUINCENAL/SEMANAL es la suma de cuotas.
+        const liqAgg = liqArr.length > 0 ? {
+          sueldo_base: liqArr.reduce((s, l) => s + Number(l?.sueldo_base || 0), 0),
+          descuento_ausencias: liqArr.reduce((s, l) => s + Number(l?.descuento_ausencias || 0), 0),
+          total_horas_extras: liqArr.reduce((s, l) => s + Number(l?.total_horas_extras || 0), 0),
+          total_dobles: liqArr.reduce((s, l) => s + Number(l?.total_dobles || 0), 0),
+          total_feriados: liqArr.reduce((s, l) => s + Number(l?.total_feriados || 0), 0),
+          monto_presentismo: liqArr.reduce((s, l) => s + Number(l?.monto_presentismo || 0), 0),
+          adelantos: liqArr.reduce((s, l) => s + Number(l?.adelantos || 0), 0),
+          pagos_realizados: liqArr.reduce((s, l) => s + Number(l?.pagos_realizados || 0), 0),
+          total_a_pagar: totalMes,
+          efectivo: liqArr.reduce((s, l) => s + Number(l?.efectivo || 0), 0),
+          transferencia: liqArr.reduce((s, l) => s + Number(l?.transferencia || 0), 0),
+        } : null;
         const key = `${nov.anio}-${nov.mes}`;
         const isExp = expanded === key;
-        const pagado = liq?.estado === "pagado";
 
         return (
           <div key={key} className="panel" style={{marginBottom:8}}>
             <div className="panel-hd" style={{cursor:"pointer"}} onClick={() => setExpanded(isExp ? null : key)}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
                 <span className="panel-title">{MESES[nov.mes]} {nov.anio}</span>
-                <span className={`badge ${nov.estado === "confirmado" ? (pagado ? "b-success" : "b-warn") : "b-muted"}`}>
-                  {nov.estado === "confirmado" ? (pagado ? "Pagado" : "Pendiente") : "Borrador"}
+                <span className={`badge ${nov.estado === "confirmado" ? (todoPagado ? "b-success" : parcial ? "b-info" : "b-warn") : "b-muted"}`}>
+                  {nov.estado === "confirmado"
+                    ? (todoPagado ? "Pagado" : parcial ? `Parcial (${cuotasPagadas}/${cuotasTotales})` : "Pendiente")
+                    : "Borrador"}
                 </span>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
-                {liq && <span className="num" style={{color: pagado ? "var(--success)" : "var(--acc)"}}>{fmt_$(liq.total_a_pagar)}</span>}
+                {liqAgg && <span className="num" style={{color: todoPagado ? "var(--success)" : "var(--acc)"}}>{fmt_$(totalMes)}</span>}
                 <span style={{color:"var(--muted2)"}}>{isExp ? "▲" : "▼"}</span>
               </div>
             </div>
@@ -767,30 +791,35 @@ function TabMovimientos({ emp, movMeses, expanded, setExpanded, esDueno, adelant
                 </div>
                 {nov.observaciones && <div style={{fontSize:11,color:"var(--muted2)",marginBottom:12}}>Obs: {nov.observaciones}</div>}
 
-                {liq && (
+                {liqAgg && (
                   <div style={{background:"var(--s2)",borderRadius:"var(--r)",padding:12,marginBottom:12}}>
+                    {cuotasTotales > 1 && (
+                      <div style={{fontSize:10,color:"var(--muted)",marginBottom:6}}>
+                        Mes completo (suma de {cuotasTotales} cuotas).
+                      </div>
+                    )}
                     <div style={{display:"flex",flexWrap:"wrap",gap:16,fontSize:11}}>
-                      <div>Base: <strong>{fmt_$(liq.sueldo_base)}</strong></div>
-                      {liq.descuento_ausencias > 0 && <div style={{color:"var(--danger)"}}>-Ausencias: {fmt_$(liq.descuento_ausencias)}</div>}
-                      {liq.total_horas_extras > 0 && <div>+HE: {fmt_$(liq.total_horas_extras)}</div>}
-                      {liq.total_dobles > 0 && <div>+Dobles: {fmt_$(liq.total_dobles)}</div>}
-                      {liq.total_feriados > 0 && <div>+Feriados: {fmt_$(liq.total_feriados)}</div>}
-                      {liq.monto_presentismo > 0 && <div style={{color:"var(--success)"}}>+Present.: {fmt_$(liq.monto_presentismo)}</div>}
-                      {liq.adelantos > 0 && <div style={{color:"var(--warn)"}}>-Adelantos: {fmt_$(liq.adelantos)}</div>}
-                      {liq.pagos_realizados > 0 && <div style={{color:"var(--warn)"}}>-Pagos: {fmt_$(liq.pagos_realizados)}</div>}
+                      <div>Base: <strong>{fmt_$(liqAgg.sueldo_base)}</strong></div>
+                      {liqAgg.descuento_ausencias > 0 && <div style={{color:"var(--danger)"}}>-Ausencias: {fmt_$(liqAgg.descuento_ausencias)}</div>}
+                      {liqAgg.total_horas_extras > 0 && <div>+HE: {fmt_$(liqAgg.total_horas_extras)}</div>}
+                      {liqAgg.total_dobles > 0 && <div>+Dobles: {fmt_$(liqAgg.total_dobles)}</div>}
+                      {liqAgg.total_feriados > 0 && <div>+Feriados: {fmt_$(liqAgg.total_feriados)}</div>}
+                      {liqAgg.monto_presentismo > 0 && <div style={{color:"var(--success)"}}>+Present.: {fmt_$(liqAgg.monto_presentismo)}</div>}
+                      {liqAgg.adelantos > 0 && <div style={{color:"var(--warn)"}}>-Adelantos: {fmt_$(liqAgg.adelantos)}</div>}
+                      {liqAgg.pagos_realizados > 0 && <div style={{color:"var(--warn)"}}>-Pagos: {fmt_$(liqAgg.pagos_realizados)}</div>}
                     </div>
                     <div style={{marginTop:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div>
-                        <span className="num" style={{fontSize:14,color:"var(--success)"}}>{fmt_$(liq.total_a_pagar)}</span>
-                        {liq.efectivo > 0 && <span style={{fontSize:10,color:"var(--muted2)",marginLeft:8}}>Efvo: {fmt_$(liq.efectivo)}</span>}
-                        {liq.transferencia > 0 && <span style={{fontSize:10,color:"var(--info)",marginLeft:8}}>Transf: {fmt_$(liq.transferencia)}</span>}
+                        <span className="num" style={{fontSize:14,color:"var(--success)"}}>{fmt_$(liqAgg.total_a_pagar)}</span>
+                        {liqAgg.efectivo > 0 && <span style={{fontSize:10,color:"var(--muted2)",marginLeft:8}}>Efvo: {fmt_$(liqAgg.efectivo)}</span>}
+                        {liqAgg.transferencia > 0 && <span style={{fontSize:10,color:"var(--info)",marginLeft:8}}>Transf: {fmt_$(liqAgg.transferencia)}</span>}
                       </div>
-                      {esDueno && !pagado && onGoToPago && (
+                      {esDueno && !todoPagado && onGoToPago && (
                         <button
                           className="btn btn-success btn-sm"
                           onClick={(e) => { e.stopPropagation(); onGoToPago(emp, nov); }}
                           title="Cierra el legajo y abre el pago en el tab Pagos"
-                        >Pagar</button>
+                        >{parcial ? "Pagar próxima cuota" : "Pagar"}</button>
                       )}
                     </div>
                   </div>

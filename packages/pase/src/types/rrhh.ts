@@ -13,6 +13,9 @@ export interface Empleado {
   vacaciones_dias_acumulados: number;
   fecha_egreso: string | null;
   motivo_baja: string | null;
+  /** Forma de pago del empleado. Default 'MENSUAL'. Determina cuántas cuotas
+   *  se generan al confirmar una novedad: MENSUAL=1, QUINCENAL=2, SEMANAL=4. */
+  modo_pago?: "MENSUAL" | "QUINCENAL" | "SEMANAL";
 }
 
 export interface Novedad {
@@ -61,6 +64,11 @@ export interface Liquidacion {
   pagado_por: string | null;
   calculado_at: string | null;
   anulado: boolean;
+  // Cuotas: para empleados QUINCENAL/SEMANAL una novedad genera N filas en
+  // rrhh_liquidaciones. cuota_num=1..cuotas_total. Para MENSUAL ambas valen 1.
+  cuota_num?: number;
+  cuotas_total?: number;
+  fecha_vencimiento?: string | null;
 }
 
 export interface PagoEspecial {

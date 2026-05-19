@@ -77,7 +77,7 @@ export function TabPagos({
         <div className="panel">
           <div style={{overflowX:"auto"}}>
           <table>
-            <thead><tr><th>Empleado</th><th>Puesto</th><th style={{textAlign:"right"}}>Total</th><th>CBU / Alias</th><th>Estado</th><th></th></tr></thead>
+            <thead><tr><th>Empleado</th><th>Puesto</th><th>Cuota</th><th style={{textAlign:"right"}}>Total</th><th>CBU / Alias</th><th>Estado</th><th></th></tr></thead>
             <tbody>{pagoData.map(row => {
               const { emp, nov, liq } = row;
               if (!liq) return null;
@@ -87,10 +87,29 @@ export function TabPagos({
               const pendiente = Math.max(0, Math.round(total) - Math.round(yaPagado));
               const esParcial = !pagado && yaPagado > 0;
               const pct = total > 0 ? Math.round((yaPagado / total) * 100) : 0;
+              const cuotaN = liq.cuota_num ?? 1;
+              const cuotasT = liq.cuotas_total ?? 1;
+              const esMultiCuota = cuotasT > 1;
+              // key estable: si la liq está persistida usa su id, si está
+              // generada usa (emp.id, cuota_num) para que el remap por cuota
+              // dentro de un mismo empleado tenga keys únicas.
+              const rowKey = liq.id ?? `${emp.id}-${cuotaN}`;
               return (
-                <tr key={emp.id}>
+                <tr key={rowKey}>
                   <td style={{fontWeight:500,fontSize:12}}>{emp.apellido}, {emp.nombre}</td>
                   <td><span className="badge b-muted" style={{fontSize:8}}>{emp.puesto}</span></td>
+                  <td style={{fontSize:10}}>
+                    {esMultiCuota ? (
+                      <>
+                        <span className="badge b-info">{cuotaN}/{cuotasT}</span>
+                        {liq.fecha_vencimiento && (
+                          <div style={{fontSize:9,color:"var(--muted2)",marginTop:2}}>
+                            vence {fmt_d(liq.fecha_vencimiento)}
+                          </div>
+                        )}
+                      </>
+                    ) : <span style={{color:"var(--muted2)"}}>—</span>}
+                  </td>
                   <td style={{textAlign:"right"}}><span className="num" style={{color:"var(--acc)"}}>{fmt_$(total)}</span></td>
                   <td className="mono" style={{fontSize:10,color:"var(--muted2)"}}>{emp.alias_mp || "—"}</td>
                   <td>
@@ -178,6 +197,11 @@ export function TabPagos({
               p_crear_liq: !!liq._generated,
               p_calc: pCalc,
               p_idempotency_key: idempKeyPagarSueldo,
+              // Multi-cuota: si la liq está persistida (no _generated),
+              // mandamos su id para que la RPC pague esa cuota específica.
+              // Para _generated (legacy mensual on-the-fly) queda null y
+              // la RPC la crea o la busca por novedad_id.
+              p_liq_id: liq._generated ? null : (liq.id ?? null),
             });
             if (error) throw error;
 
@@ -204,7 +228,15 @@ export function TabPagos({
           <div className="overlay" onClick={cerrarModal}>
             <div className="modal" style={{width:480}} onClick={e => e.stopPropagation()}>
               <div className="modal-hd">
-                <div className="modal-title">Pagar — {emp.apellido}, {emp.nombre}</div>
+                <div className="modal-title">
+                  Pagar — {emp.apellido}, {emp.nombre}
+                  {(liq.cuotas_total ?? 1) > 1 && (
+                    <span style={{fontSize:11,color:"var(--muted2)",fontWeight:400,marginLeft:8}}>
+                      · Cuota {liq.cuota_num}/{liq.cuotas_total}
+                      {liq.fecha_vencimiento && ` · vence ${fmt_d(liq.fecha_vencimiento)}`}
+                    </span>
+                  )}
+                </div>
                 <button className="close-btn" onClick={cerrarModal}>✕</button>
               </div>
               <div className="modal-body">
