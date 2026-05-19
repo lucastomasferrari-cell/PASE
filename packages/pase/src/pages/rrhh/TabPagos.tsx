@@ -306,53 +306,8 @@ export function TabPagos({
         );
       })()}
 
-      {adelModal && (
-        <div className="overlay" onClick={() => setAdelModal(false)}>
-          <div className="modal" style={{width:480}} onClick={e => e.stopPropagation()}>
-            <div className="modal-hd">
-              <div className="modal-title">Adelanto a empleado</div>
-              <button className="close-btn" onClick={() => setAdelModal(false)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <div className="field"><label>Empleado</label>
-                <select value={adelForm.empleado_id} onChange={e => setAdelForm({...adelForm, empleado_id: e.target.value})}>
-                  <option value="">Seleccionar...</option>
-                  {(allEmps || [])
-                    .filter(e => e.activo !== false)
-                    .filter(e => !pagoLocal || e.local_id === parseInt(String(pagoLocal)))
-                    .map(e => <option key={e.id} value={e.id}>{e.apellido}, {e.nombre}</option>)}
-                </select>
-              </div>
-              <div className="form2">
-                <div className="field"><label>Monto $</label>
-                  <input type="number" value={adelForm.monto} onChange={e => setAdelForm({...adelForm, monto: e.target.value})} placeholder="0"/>
-                </div>
-                <div className="field"><label>Fecha</label>
-                  <input type="date" value={adelForm.fecha} onChange={e => setAdelForm({...adelForm, fecha: e.target.value})}/>
-                </div>
-              </div>
-              <div className="field"><label>Cuenta de egreso</label>
-                <select value={adelForm.cuenta} onChange={e => setAdelForm({...adelForm, cuenta: e.target.value})}>
-                  <option value="">Seleccioná una cuenta…</option>
-                  {cuentasUsables.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div className="field"><label>Descripción (opcional)</label>
-                <input value={adelForm.descripcion} onChange={e => setAdelForm({...adelForm, descripcion: e.target.value})} placeholder="Ej: Adelanto solicitado por urgencia..."/>
-              </div>
-              <div style={{fontSize:10,color:"var(--muted2)",marginTop:4}}>
-                Se registra como movimiento (cat SUELDOS), afecta saldos de caja y queda como adelanto descontable a futuro.
-              </div>
-            </div>
-            <div className="modal-ft">
-              <button className="btn btn-sec" onClick={() => setAdelModal(false)} disabled={guardandoAdelanto}>Cancelar</button>
-              <button className="btn btn-acc" onClick={guardarAdelanto} disabled={guardandoAdelanto || !adelForm.empleado_id || !adelForm.monto || parseFloat(adelForm.monto) <= 0}>
-                {guardandoAdelanto ? "Registrando…" : "Registrar adelanto"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modal de adelanto extraído a packages/pase/src/pages/rrhh/AdelantoModal.tsx
+          y renderizado desde RRHH.tsx para que esté disponible en cualquier tab. */}
     </>
   );
 }

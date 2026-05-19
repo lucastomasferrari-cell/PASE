@@ -49,6 +49,7 @@ export function calcLiquidacion(emp: Empleado, nov: NovedadEditable, valorDoble:
     presentismo_mantiene: nov.presentismo === "MANTIENE",
     adelantos: adelantosFinal,
     pagos_dobles_realizados: 0,
+    otros_descuentos: nov.otros_descuentos || 0,
   });
   return {
     ...result,

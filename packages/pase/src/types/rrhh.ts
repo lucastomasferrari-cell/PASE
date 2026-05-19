@@ -31,6 +31,9 @@ export interface Novedad {
   estado: "borrador" | "confirmado";
   cargado_por?: string;
   updated_at?: string;
+  /** Descuentos manuales arbitrarios (préstamos, daños, faltantes de caja). */
+  otros_descuentos?: number;
+  otros_descuentos_motivo?: string | null;
 }
 
 export interface Liquidacion {

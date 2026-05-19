@@ -34,6 +34,7 @@ import { TabEmpleados } from "./rrhh/TabEmpleados";
 import { TabNovedades } from "./rrhh/TabNovedades";
 import { TabPagos } from "./rrhh/TabPagos";
 import { TabHistorial } from "./rrhh/TabHistorial";
+import { AdelantoModal } from "./rrhh/AdelantoModal";
 
 interface RRHHProps {
   user: Usuario;
@@ -581,6 +582,14 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     // (leído desde rrhh_adelantos via loadNovedades). Reemplaza el campo
     // legacy nov.adelantos (input libre, "fantasma" sin link a la tabla real).
     const adelantosDelMes = novAdelantosPorEmp[emp.id] ?? 0;
+    // Validación de descuentos: si hay monto, el motivo es obligatorio
+    // (auditoría, para que el dueño después sepa por qué descontó).
+    const otrosDesc = nov.otros_descuentos || 0;
+    const otrosDescMotivo = (nov.otros_descuentos_motivo || "").trim();
+    if (otrosDesc > 0 && !otrosDescMotivo) {
+      alert(`${emp.apellido} ${emp.nombre}: cargá el motivo del descuento de $${otrosDesc.toLocaleString('es-AR')}.`);
+      return;
+    }
     const { data: saved } = await db.from("rrhh_novedades").upsert({
       ...(nov.id ? { id: nov.id } : {}),
       empleado_id: emp.id, mes: novMes, anio: novAnio,
@@ -590,6 +599,8 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       dobles: nov.dobles || 0,
       feriados: nov.feriados || 0,
       adelantos: adelantosDelMes,
+      otros_descuentos: otrosDesc,
+      otros_descuentos_motivo: otrosDesc > 0 ? otrosDescMotivo : null,
       fecha_inicio_mes: nov.fecha_inicio_mes || null,
       observaciones: nov.observaciones || "",
       estado: "confirmado",
@@ -757,6 +768,12 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
           confirmarTodas={confirmarTodas}
           editarNov={editarNov}
           irAPagos={irAPagosDesdeNovedades}
+          abrirModalAdelanto={(empId: string) => {
+            // Pre-cargar el empleado en el form + abrir modal (que vive
+            // en TabPagos pero el state está acá → funciona en cualquier tab).
+            setAdelForm(a => ({ ...a, empleado_id: empId }));
+            setAdelModal(true);
+          }}
           esDueno={esDueno}
         />
       )}
@@ -834,6 +851,19 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
         </div>
       )}
 
+      {/* Modal de adelanto a nivel padre — accesible desde cualquier tab.
+          Antes estaba dentro de TabPagos y no funcionaba desde Novedades. */}
+      <AdelantoModal
+        open={adelModal}
+        onClose={() => setAdelModal(false)}
+        allEmps={allEmps}
+        filtroLocalId={pagoLocal ? parseInt(String(pagoLocal)) : (novLocal ? parseInt(String(novLocal)) : null)}
+        adelForm={adelForm}
+        setAdelForm={setAdelForm}
+        cuentasUsables={cuentasUsables}
+        guardarAdelanto={guardarAdelanto}
+        guardando={guardandoAdelanto}
+      />
     </div>
   );
 }

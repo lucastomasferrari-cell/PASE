@@ -41,13 +41,17 @@ interface TabNovedadesProps {
   confirmarTodas: () => Promise<void>;
   editarNov: (empId: string) => Promise<void>;
   irAPagos: () => void;
+  /** Abre el modal de adelanto pre-cargando este empleado. Si no se pasa,
+   *  el botón "+ Adelanto" no aparece. */
+  abrirModalAdelanto?: (empId: string) => void;
   esDueno: boolean;
 }
 
 export function TabNovedades({
   novMes, setNovMes, novAnio, setNovAnio, novLocal, setNovLocal,
   locsDisp, novLoading, novEmps, novMap, novAdelantosPorEmp,
-  updateNov, confirmarUno, confirmarTodas, editarNov, irAPagos, esDueno,
+  updateNov, confirmarUno, confirmarTodas, editarNov, irAPagos,
+  abrirModalAdelanto, esDueno,
 }: TabNovedadesProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleExpanded = (empId: string) => {
@@ -190,6 +194,7 @@ export function TabNovedades({
               confirmar={() => confirmarUno(emp)}
               editar={() => editarNov(emp.id)}
               irAPagos={irAPagos}
+              onAgregarAdelanto={abrirModalAdelanto ? () => abrirModalAdelanto(emp.id) : undefined}
               esDueno={esDueno}
             />
           ))}
@@ -211,10 +216,12 @@ interface EmpleadoCardProps {
   confirmar: () => Promise<void>;
   editar: () => Promise<void>;
   irAPagos: () => void;
+  /** Opcional: callback para abrir el modal de adelanto pre-cargado. */
+  onAgregarAdelanto?: () => void;
   esDueno: boolean;
 }
 
-function EmpleadoCard({ emp, nov, adelantosDelMes, expanded, onToggle, updateNov, confirmar, editar, irAPagos, esDueno }: EmpleadoCardProps) {
+function EmpleadoCard({ emp, nov, adelantosDelMes, expanded, onToggle, updateNov, confirmar, editar, irAPagos, onAgregarAdelanto, esDueno }: EmpleadoCardProps) {
   const vd = calcularValorDoble(emp);
   const calc = calcLiquidacion(emp, nov, vd, adelantosDelMes);
   const total = calc.total_a_pagar;
@@ -280,9 +287,22 @@ function EmpleadoCard({ emp, nov, adelantosDelMes, expanded, onToggle, updateNov
                   value={nov.feriados ?? 0}
                   onChange={e => updateNov(emp.id, "feriados", Math.max(0, parseFloat(e.target.value) || 0))} />
               </Field>
-              <Field label="Adelantos del mes" hint="suma de los cargados en Pagos · solo lectura">
-                <input type="text" style={{...inp, width:"100%", textAlign:"left", background:"var(--s3)", cursor:"not-allowed"}}
-                  disabled value={fmt_$(adelantosDelMes)} readOnly />
+              <Field label="Adelantos del mes" hint="suma de los cargados en Pagos">
+                <div style={{display:"flex", gap:4, alignItems:"center"}}>
+                  <input type="text" style={{...inp, flex:1, textAlign:"left", background:"var(--s3)", cursor:"not-allowed"}}
+                    disabled value={fmt_$(adelantosDelMes)} readOnly />
+                  {!confirmado && (
+                    <button
+                      type="button"
+                      className="btn btn-sec btn-sm"
+                      onClick={onAgregarAdelanto}
+                      title="Cargar un adelanto nuevo para este empleado sin salir de Novedades"
+                      style={{padding:"4px 8px", fontSize:10, whiteSpace:"nowrap"}}
+                    >
+                      + Adelanto
+                    </button>
+                  )}
+                </div>
               </Field>
               <Field label="Presentismo" hint="bono del 5% del subtotal">
                 <label style={{
@@ -299,6 +319,23 @@ function EmpleadoCard({ emp, nov, adelantosDelMes, expanded, onToggle, updateNov
                     style={{accentColor:"var(--acc)"}} />
                   Mantiene (+5%)
                 </label>
+              </Field>
+            </div>
+
+            {/* Otros descuentos manuales: préstamos, daños, faltantes,
+                vales sin formalizar como adelanto, etc. Se descuenta del
+                total después de adelantos. Motivo libre para auditoría. */}
+            <div className="pase-emp-card__inputs" style={{marginTop:12}}>
+              <Field label="Otros descuentos ($)" hint="préstamo, daño, faltante, etc">
+                <input type="number" min="0" style={{...inp, width:"100%", textAlign:"left"}} disabled={confirmado}
+                  value={nov.otros_descuentos ?? 0}
+                  onChange={e => updateNov(emp.id, "otros_descuentos", Math.max(0, parseFloat(e.target.value) || 0))} />
+              </Field>
+              <Field label="Motivo del descuento" hint={(nov.otros_descuentos ?? 0) > 0 ? "obligatorio si hay monto" : "opcional"}>
+                <input type="text" style={{...inp, width:"100%", textAlign:"left"}} disabled={confirmado}
+                  placeholder="Ej: rompió 2 platos / préstamo personal / faltante caja"
+                  value={nov.otros_descuentos_motivo || ""}
+                  onChange={e => updateNov(emp.id, "otros_descuentos_motivo", e.target.value)} />
               </Field>
             </div>
 
@@ -330,6 +367,13 @@ function EmpleadoCard({ emp, nov, adelantosDelMes, expanded, onToggle, updateNov
             {(calc.monto_presentismo || 0) > 0 && <BreakdownLine label="+ Presentismo (5%)" value={calc.monto_presentismo} positive />}
             {(calc.descuento_ausencias || 0) > 0 && <BreakdownLine label="− Inasistencias" value={-calc.descuento_ausencias} negative />}
             {adelantosDelMes > 0 && <BreakdownLine label="− Adelantos" value={-adelantosDelMes} negative />}
+            {(nov.otros_descuentos ?? 0) > 0 && (
+              <BreakdownLine
+                label={`− ${nov.otros_descuentos_motivo || 'Otros descuentos'}`}
+                value={-(nov.otros_descuentos ?? 0)}
+                negative
+              />
+            )}
             <div style={{borderTop:"1px solid var(--bd)", marginTop:10, paddingTop:10,
               display:"flex", justifyContent:"space-between", fontWeight:600, fontSize:13}}>
               <span>Total</span>

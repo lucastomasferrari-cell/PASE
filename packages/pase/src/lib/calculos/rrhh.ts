@@ -16,6 +16,8 @@ export interface LiquidacionParams {
   presentismo_mantiene: boolean;
   adelantos: number;
   pagos_dobles_realizados: number;
+  /** Descuentos manuales arbitrarios (préstamos, daños, faltantes). */
+  otros_descuentos?: number;
 }
 
 export interface LiquidacionResult {
@@ -29,6 +31,7 @@ export interface LiquidacionResult {
   monto_presentismo: number;
   subtotal2: number;
   adelantos: number;
+  otros_descuentos: number;
   pagos_realizados: number;
   total_a_pagar: number;
 }
@@ -224,6 +227,7 @@ export function calcularTotalLiquidacion(params: LiquidacionParams): Liquidacion
     sueldo_mensual, modo_pago, inasistencias, horas_extras,
     dobles, valor_doble, feriados, vacaciones_dias,
     presentismo_mantiene, adelantos, pagos_dobles_realizados,
+    otros_descuentos = 0,
   } = params;
 
   const sueldo_base = calcularSueldoBase(sueldo_mensual, modo_pago);
@@ -239,7 +243,10 @@ export function calcularTotalLiquidacion(params: LiquidacionParams): Liquidacion
     total_dobles + total_feriados + total_vacaciones;
   const monto_presentismo = calcularPresentismo(sueldo_mensual, presentismo_mantiene);
   const subtotal2 = subtotal1 + monto_presentismo;
-  const total_a_pagar = Math.round(subtotal2 - Math.max(0, adelantos) - Math.max(0, pagos_dobles_realizados));
+  const descuentos_extra = Math.max(0, otros_descuentos);
+  const total_a_pagar = Math.round(
+    subtotal2 - Math.max(0, adelantos) - Math.max(0, pagos_dobles_realizados) - descuentos_extra,
+  );
 
   return {
     sueldo_base,
@@ -252,6 +259,7 @@ export function calcularTotalLiquidacion(params: LiquidacionParams): Liquidacion
     monto_presentismo,
     subtotal2,
     adelantos: Math.max(0, adelantos),
+    otros_descuentos: descuentos_extra,
     pagos_realizados: Math.max(0, pagos_dobles_realizados),
     total_a_pagar,
   };
