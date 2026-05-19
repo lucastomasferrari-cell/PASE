@@ -20,6 +20,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { emitirFactura } from '@/lib/afip/client';
 import { getCredencialesAFIP } from '@/lib/afip/service';
+import { imprimirTicket } from '@/services/printerService';
+import { listVentasItems } from '@/services/ventasService';
+import { listLocalesAccesibles } from '@/services/configService';
 import type { AfipCredencialesPublic, AfipFacturaResult, AfipTipoComprobante, AfipDocTipo } from '@/lib/afip/types';
 import type { VentaPos } from '@/types/database';
 import { formatARS } from '@/lib/format';
@@ -53,6 +56,7 @@ export function EmitirFacturaDialog({ open, onOpenChange, venta, onClose }: Prop
   const [emitting, setEmitting] = useState(false);
   const emittingRef = useRef(false);
   const [resultado, setResultado] = useState<AfipFacturaResult | null>(null);
+  const [imprimiendo, setImprimiendo] = useState(false);
 
   // Cargar credenciales y setear defaults según tipo_contribuyente
   useEffect(() => {
@@ -135,6 +139,66 @@ export function EmitirFacturaDialog({ open, onOpenChange, venta, onClose }: Prop
     onClose();
   }
 
+  async function handleImprimir() {
+    if (!resultado || !creds) return;
+    setImprimiendo(true);
+    try {
+      // Cargar items + local en paralelo
+      const [itemsR, locales] = await Promise.all([
+        listVentasItems(venta.id),
+        listLocalesAccesibles(),
+      ]);
+      const local = locales.data.find((l) => l.id === venta.local_id);
+
+      // Buscar pagos en venta (no los traemos desde la DB acá — usamos los
+      // datos que la propia venta_pos tiene en total). Si querés el detalle
+      // de método, hacer otra query a ventas_pos_pagos.
+      const pagos: Array<{ metodo: string; monto: number; cuotas?: number | null }> = [
+        { metodo: 'Pagado', monto: Number(venta.total) },
+      ];
+
+      const letra: 'A' | 'B' | 'C' =
+        form.tipo_comprobante === 1 ? 'A' :
+        form.tipo_comprobante === 6 ? 'B' :
+        'C';
+
+      const r = await imprimirTicket({
+        titulo: local?.nombre ?? 'COMANDA',
+        cuit_emisor: creds.cuit,
+        items: itemsR.data.map((it) => ({
+          nombre: 'Item ' + it.item_id,
+          cantidad: Number(it.cantidad),
+          subtotal: Number(it.subtotal),
+        })),
+        total: Number(venta.total),
+        pagos,
+        fechaHora: new Date().toLocaleString('es-AR'),
+        venta_id: venta.numero_local ?? venta.id,
+        tipo_comprobante_letra: letra,
+        punto_venta: creds.punto_venta,
+        numero_comprobante: resultado.numero,
+        importe_neto: importeNeto,
+        importe_iva: importeIva,
+        cae: resultado.cae,
+        cae_vto: resultado.cae_vence_at,
+        qr_afip: resultado.qr_fiscal_url,
+        cliente_doc_tipo: form.doc_tipo === 99 ? 'CF' :
+                          form.doc_tipo === 96 ? 'DNI' :
+                          form.doc_tipo === 80 ? 'CUIT' :
+                          form.doc_tipo === 86 ? 'CUIL' : undefined,
+        cliente_doc_nro: form.doc_nro || undefined,
+        cliente_razon_social: form.cliente_razon_social || undefined,
+      });
+      if (!r.ok) {
+        toast.error(`No se pudo imprimir: ${r.error}`);
+      } else {
+        toast.success('Ticket fiscal enviado a la impresora');
+      }
+    } finally {
+      setImprimiendo(false);
+    }
+  }
+
   // Pantalla post-éxito
   if (resultado) {
     return (
@@ -163,9 +227,9 @@ export function EmitirFacturaDialog({ open, onOpenChange, venta, onClose }: Prop
             )}
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" disabled title="Próximamente: imprimir ticket fiscal con QR">
+            <Button variant="outline" onClick={handleImprimir} disabled={imprimiendo}>
               <Printer className="h-4 w-4 mr-2" />
-              Imprimir (próx)
+              {imprimiendo ? 'Imprimiendo…' : 'Imprimir ticket fiscal'}
             </Button>
             <Button onClick={handleCerrarPostExito}>Cerrar</Button>
           </DialogFooter>

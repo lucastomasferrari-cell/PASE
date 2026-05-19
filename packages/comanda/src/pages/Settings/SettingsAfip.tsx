@@ -28,6 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   getCredencialesAFIP, upsertCredencialesAFIP, eliminarCredencialesAFIP, parsearCertVencimiento,
 } from '@/lib/afip/service';
+import { listarFacturasAFIP } from '@/lib/afip/client';
 import type { AfipAmbiente, AfipCredencialesPublic } from '@/lib/afip/types';
 
 interface FormState {
@@ -50,6 +51,19 @@ const EMPTY: FormState = {
   activa: false,
 };
 
+interface FacturaRow {
+  id: number;
+  venta_pos_id: number | null;
+  tipo_comprobante: number;
+  numero: number;
+  importe_total: number;
+  cae: string | null;
+  cae_vence_at: string | null;
+  qr_fiscal_url: string | null;
+  estado: string;
+  emitida_at: string | null;
+}
+
 export function SettingsAfip() {
   const [actuales, setActuales] = useState<AfipCredencialesPublic | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,15 +72,25 @@ export function SettingsAfip() {
   const savingRef = useRef(false);
   const [mostrarKey, setMostrarKey] = useState(false);
   const [eliminando, setEliminando] = useState(false);
+  const [facturas, setFacturas] = useState<FacturaRow[]>([]);
+  const [loadingFacturas, setLoadingFacturas] = useState(false);
 
-  // Cargar credenciales existentes al montar
+  // Cargar histórico de facturas emitidas
+  async function cargarFacturas() {
+    setLoadingFacturas(true);
+    try {
+      const data = await listarFacturasAFIP(50);
+      setFacturas(data as FacturaRow[]);
+    } finally {
+      setLoadingFacturas(false);
+    }
+  }
+
+  // Cargar credenciales + histórico de facturas al montar
   useEffect(() => {
     getCredencialesAFIP().then((r) => {
       if (r.data) {
         setActuales(r.data);
-        // No prellenamos cert + key (no llegan al browser). El user puede
-        // re-subir o solo editar metadata. Si re-subes ambas vacías, falla
-        // validación server-side.
         setForm({
           cuit: r.data.cuit,
           ambiente: r.data.ambiente,
@@ -76,6 +100,8 @@ export function SettingsAfip() {
           key_pem: '',
           activa: r.data.activa,
         });
+        // Solo cargar histórico si hay credenciales (sino la tabla queda vacía)
+        cargarFacturas();
       }
       setLoading(false);
     });
@@ -356,6 +382,85 @@ export function SettingsAfip() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Histórico de facturas emitidas */}
+      {actuales && (
+        <Card>
+          <CardHeader className="pb-3 flex flex-row items-center justify-between gap-3">
+            <CardTitle className="text-base">Facturas emitidas</CardTitle>
+            <Button variant="ghost" size="sm" onClick={cargarFacturas} disabled={loadingFacturas} className="h-8">
+              {loadingFacturas ? 'Cargando…' : 'Refrescar'}
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {facturas.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                {loadingFacturas ? 'Cargando histórico…' : 'Todavía no emitiste ninguna factura.'}
+              </p>
+            ) : (
+              <div className="rounded-md border border-border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 text-[11px] uppercase tracking-wide">
+                    <tr>
+                      <th className="text-left px-3 py-2">Fecha</th>
+                      <th className="text-left px-3 py-2">Tipo</th>
+                      <th className="text-left px-3 py-2">Número</th>
+                      <th className="text-right px-3 py-2">Total</th>
+                      <th className="text-left px-3 py-2">CAE</th>
+                      <th className="text-left px-3 py-2">Estado</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {facturas.map((f) => (
+                      <tr key={f.id} className="border-t border-border">
+                        <td className="px-3 py-2 text-xs">
+                          {f.emitida_at ? new Date(f.emitida_at).toLocaleDateString('es-AR') : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-xs">
+                          {f.tipo_comprobante === 1 ? 'Factura A' :
+                           f.tipo_comprobante === 6 ? 'Factura B' :
+                           f.tipo_comprobante === 11 ? 'Factura C' :
+                           f.tipo_comprobante === 3 ? 'NC A' :
+                           f.tipo_comprobante === 8 ? 'NC B' :
+                           f.tipo_comprobante === 13 ? 'NC C' :
+                           `Tipo ${f.tipo_comprobante}`}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-xs">#{f.numero}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-xs">
+                          ${Number(f.importe_total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-[10px]">{f.cae ?? '—'}</td>
+                        <td className="px-3 py-2">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                            f.estado === 'aprobada' ? 'bg-success/10 text-success' :
+                            f.estado === 'rechazada' ? 'bg-destructive/10 text-destructive' :
+                            'bg-muted text-muted-foreground'
+                          }`}>
+                            {f.estado}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          {f.qr_fiscal_url && (
+                            <a
+                              href={f.qr_fiscal_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-primary underline"
+                            >
+                              QR
+                            </a>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="rounded-lg border border-border bg-muted/40 p-4 text-sm space-y-2">
         <div className="font-medium">Cómo obtener el certificado AFIP (resumen)</div>

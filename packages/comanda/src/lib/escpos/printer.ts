@@ -108,6 +108,40 @@ class TicketBuilder {
   line(s: string) { return this.text(s).newline(); }
   separator(char = '-', width = 32) { return this.line(char.repeat(width)); }
 
+  /**
+   * Imprime un código QR usando comandos nativos ESC/POS GS ( k. Soportado
+   * por la mayoría de las impresoras modernas (Epson TM-T20II+, Bixolon
+   * SRP-350, Xprinter genéricas, Gainscha).
+   *
+   * Si la impresora no soporta GS ( k, los bytes se ignoran silenciosamente
+   * (no rompe el ticket). Para garantizar QR visible en TODA impresora,
+   * habría que renderizar bitmap y usar GS v 0 — sprint futuro.
+   *
+   * @param data el string a codificar (típicamente URL).
+   * @param size módulo del QR (1-16, default 8 ≈ 2-3cm de lado).
+   * @param ec   nivel de error correction: 'L'=7% | 'M'=15% | 'Q'=25% | 'H'=30%.
+   *             Para QR fiscal AFIP, 'L' alcanza y deja el QR más chico.
+   */
+  qr(data: string, size = 8, ec: 'L' | 'M' | 'Q' | 'H' = 'L') {
+    // 1) Function 165: select model (cn=49, fn=65). Modelo 2 = 50.
+    this.push([GS, 0x28, 0x6b, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00]);
+    // 2) Function 167: set size (cn=49, fn=67). size en [1,16].
+    const sizeClamped = Math.max(1, Math.min(16, size));
+    this.push([GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x43, sizeClamped]);
+    // 3) Function 169: set error correction (cn=49, fn=69). 48=L, 49=M, 50=Q, 51=H.
+    const ecByte = ec === 'L' ? 48 : ec === 'M' ? 49 : ec === 'Q' ? 50 : 51;
+    this.push([GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x45, ecByte]);
+    // 4) Function 180: store data (cn=49, fn=80, m=48 + data).
+    const dataBytes = Array.from(strToBytes(data, 'utf8'));
+    const len = dataBytes.length + 3;
+    const pL = len & 0xff;
+    const pH = (len >> 8) & 0xff;
+    this.push([GS, 0x28, 0x6b, pL, pH, 0x31, 0x50, 0x30, ...dataBytes]);
+    // 5) Function 181: print (cn=49, fn=81, m=48).
+    this.push([GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x51, 0x30]);
+    return this;
+  }
+
   build(): Uint8Array {
     return new Uint8Array(this.buffer);
   }
@@ -200,10 +234,20 @@ export class Printer {
 
   // ─── Helpers de alto nivel ───────────────────────────────────────────
 
-  /** Imprime un ticket de venta (cliente). Formato típico AR. */
+  /** Imprime un ticket de venta (cliente). Formato típico AR.
+   *
+   * Si vienen los campos AFIP (`tipo_comprobante`, `numero_comprobante`,
+   * `cae`, `qr_afip`), el ticket lleva además:
+   *   - Tipo factura (B/C/A) + razón social emisor + CUIT en el header
+   *   - Bloque CAE + vencimiento + QR fiscal AR (Res. 4892/2020)
+   *   - Datos del receptor (DocTipo/DocNro/Razón social) si no es CF
+   *   - Discriminación de IVA cuando aplica (Responsable Inscripto)
+   * Sin los campos AFIP, es un ticket no fiscal (X).
+   */
   async printReceipt(args: {
     titulo: string;
     direccion?: string;
+    cuit_emisor?: string;
     items: Array<{ nombre: string; cantidad: number; subtotal: number }>;
     descuento?: number;
     total: number;
@@ -211,25 +255,73 @@ export class Printer {
     fechaHora: string;
     venta_id: string | number;
     propina?: number;
-    cae?: string;  // futuro: AFIP CAE
-    cae_vto?: string;
-    qr_afip?: string;  // url QR fiscal AR
+    // AFIP (opcional — si no viene, ticket "no fiscal" tipo X)
+    tipo_comprobante_letra?: 'A' | 'B' | 'C' | 'X';
+    punto_venta?: number;
+    numero_comprobante?: number;
+    importe_neto?: number;
+    importe_iva?: number;
+    cae?: string;
+    cae_vto?: string; // YYYY-MM-DD
+    qr_afip?: string; // URL completa al QR fiscal AFIP
+    // Receptor (opcional)
+    cliente_doc_tipo?: string;     // 'DNI' | 'CUIT' | 'CUIL' | 'CF'
+    cliente_doc_nro?: string;
+    cliente_razon_social?: string;
   }): Promise<void> {
     const tb = new TicketBuilder();
     tb.init();
+
+    // ─── Header ───────────────────────────────────────────────────────
+    const tipoLetra = args.tipo_comprobante_letra ?? 'X';
+    if (tipoLetra !== 'X') {
+      // Recuadro con la letra grande tipo factura AFIP (centrado al tope).
+      tb.alignCenter().bold(true).size('both').line(`[ ${tipoLetra} ]`);
+      tb.size('normal').bold(false);
+      tb.line(`Codigo ${tipoCodigoNumerico(tipoLetra)}`);
+      tb.newline();
+    }
+
     tb.alignCenter().bold(true).size('both').line(args.titulo);
     tb.size('normal').bold(false);
+    if (args.cuit_emisor) tb.line(`CUIT ${formatCuit(args.cuit_emisor)}`);
     if (args.direccion) tb.line(args.direccion);
     tb.newline();
-    tb.line(`Venta #${args.venta_id} - ${args.fechaHora}`);
-    tb.separator();
+
+    // ─── Identificación comprobante ──────────────────────────────────
+    if (tipoLetra !== 'X' && args.punto_venta != null && args.numero_comprobante != null) {
+      const pv = String(args.punto_venta).padStart(5, '0');
+      const num = String(args.numero_comprobante).padStart(8, '0');
+      tb.alignCenter().bold(true).line(`${pv}-${num}`);
+      tb.bold(false);
+      tb.line(args.fechaHora);
+    } else {
+      // No fiscal: solo nro interno
+      tb.line(`Ticket #${args.venta_id} - ${args.fechaHora}`);
+    }
     tb.alignLeft();
+
+    // ─── Receptor (si no es CF) ───────────────────────────────────────
+    if (args.cliente_doc_tipo && args.cliente_doc_tipo !== 'CF' && args.cliente_doc_nro) {
+      tb.newline();
+      tb.line(`Cliente: ${args.cliente_razon_social ?? ''}`);
+      tb.line(`${args.cliente_doc_tipo}: ${args.cliente_doc_nro}`);
+    } else if (tipoLetra !== 'X') {
+      tb.newline();
+      tb.line('A consumidor final');
+    }
+
+    tb.separator();
+
+    // ─── Items ───────────────────────────────────────────────────────
     for (const it of args.items) {
       tb.text(`${it.cantidad}x ${it.nombre.slice(0, 22).padEnd(22)} `);
       tb.alignRight().text(formatMoney(it.subtotal)).newline();
       tb.alignLeft();
     }
     tb.separator();
+
+    // ─── Subtotales ──────────────────────────────────────────────────
     if (args.descuento && args.descuento > 0) {
       tb.text('Descuento: ').alignRight().text(`-${formatMoney(args.descuento)}`).newline();
       tb.alignLeft();
@@ -238,19 +330,46 @@ export class Printer {
       tb.text('Propina: ').alignRight().text(formatMoney(args.propina)).newline();
       tb.alignLeft();
     }
+
+    // Discriminación de IVA — solo factura A o B (Responsable Inscripto).
+    // Para C (monotributista) NO se discrimina IVA por norma.
+    if ((tipoLetra === 'A' || tipoLetra === 'B') && args.importe_iva && args.importe_iva > 0) {
+      const neto = args.importe_neto ?? (args.total - args.importe_iva);
+      tb.text('Neto:     ').alignRight().text(formatMoney(neto)).newline();
+      tb.alignLeft();
+      tb.text('IVA 21%:  ').alignRight().text(formatMoney(args.importe_iva)).newline();
+      tb.alignLeft();
+    }
+
     tb.bold(true).size('tall').text('TOTAL: ').alignRight().text(formatMoney(args.total)).newline();
     tb.size('normal').bold(false).alignLeft();
     tb.newline();
+
+    // ─── Pagos ───────────────────────────────────────────────────────
     for (const p of args.pagos) {
       const cuotasStr = p.cuotas && p.cuotas > 1 ? ` (${p.cuotas} cuotas)` : '';
       tb.line(`${p.metodo}${cuotasStr}: ${formatMoney(p.monto)}`);
     }
+
+    // ─── CAE + QR fiscal AFIP ────────────────────────────────────────
     if (args.cae) {
       tb.newline().separator();
-      tb.alignCenter().line(`CAE: ${args.cae}`);
-      if (args.cae_vto) tb.line(`Vto: ${args.cae_vto}`);
+      tb.alignCenter();
+      tb.line(`CAE N°: ${args.cae}`);
+      if (args.cae_vto) tb.line(`Vto CAE: ${formatVto(args.cae_vto)}`);
+      tb.newline();
+      if (args.qr_afip) {
+        // QR ESC/POS nativo. Tamaño 6 ≈ 1.8cm de lado, suficiente para
+        // que ARCA escanee desde un celular a 20cm.
+        tb.qr(args.qr_afip, 6, 'L');
+        tb.newline();
+      }
+      tb.alignLeft();
+    } else if (tipoLetra === 'X') {
+      tb.newline().alignCenter().line('** DOCUMENTO NO FISCAL **');
       tb.alignLeft();
     }
+
     tb.newline().alignCenter().line('Gracias por su visita');
     tb.feed(4);
     tb.cut();
@@ -297,6 +416,27 @@ export class Printer {
 
 function formatMoney(n: number): string {
   return '$' + n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+// Mapea letra de factura al código AFIP que se imprime debajo del recuadro.
+function tipoCodigoNumerico(letra: 'A' | 'B' | 'C'): string {
+  switch (letra) {
+    case 'A': return '01'; case 'B': return '06'; case 'C': return '11';
+  }
+}
+
+function formatCuit(cuit: string): string {
+  // 11 dígitos → XX-XXXXXXXX-X
+  const c = cuit.replace(/\D/g, '');
+  if (c.length !== 11) return cuit;
+  return `${c.slice(0, 2)}-${c.slice(2, 10)}-${c.slice(10)}`;
+}
+
+function formatVto(yyyymmdd: string): string {
+  // AFIP devuelve CAEFchVto en YYYYMMDD o YYYY-MM-DD. Normalizo a DD/MM/YYYY.
+  const clean = yyyymmdd.replace(/-/g, '');
+  if (clean.length !== 8) return yyyymmdd;
+  return `${clean.slice(6, 8)}/${clean.slice(4, 6)}/${clean.slice(0, 4)}`;
 }
 
 /** Helper: verifica si el browser soporta WebUSB. */
