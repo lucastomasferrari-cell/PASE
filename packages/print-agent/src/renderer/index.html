@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src http://127.0.0.1:9100" />
   <title>COMANDA Print Agent</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -29,20 +29,51 @@
       </div>
     </section>
 
+    <!-- Vinculación -->
+    <section class="card" id="link-card">
+      <h2>Vinculación con COMANDA</h2>
+      <div id="link-unlinked">
+        <p class="hint" style="margin-top:0">
+          Pegá el <strong>agent token</strong> que generaste desde
+          <a href="#" id="open-comanda-link">COMANDA → Hardware → Print Agents</a>.
+        </p>
+        <input
+          type="text"
+          id="token-input"
+          placeholder="ej: 8f3a2b1c..."
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button id="link-btn" class="btn-primary" disabled>Vincular esta PC</button>
+        <div id="link-error" class="error-msg" hidden></div>
+      </div>
+      <div id="link-linked" hidden>
+        <div class="linked-status">
+          <span class="dot dot-green"></span>
+          <div>
+            <strong>Vinculado a COMANDA</strong>
+            <div class="hint" style="margin-top:2px">Token: <code id="token-preview">—</code></div>
+          </div>
+        </div>
+        <button id="unlink-btn" class="btn-secondary">Desvincular</button>
+      </div>
+    </section>
+
     <!-- Próximos pasos -->
     <section class="card">
-      <h2>Próximos pasos</h2>
+      <h2>Cómo conectar impresoras</h2>
       <ol class="steps">
         <li>
           Abrí <a href="#" id="open-comanda">COMANDA en el navegador</a>
-          (Hardware → Impresoras).
+          (menú Hardware → Impresoras).
         </li>
         <li>
-          Agregá tus impresoras térmicas. Esta app las maneja por vos.
+          Agregá tus impresoras térmicas (USB / Red / Serial).
+          La pantalla detecta esta PC automáticamente.
         </li>
         <li>
-          Vinculá esta PC: COMANDA → Hardware → Print Agents → "Vincular nueva PC".
-          Te da un token que pegás abajo.
+          Click "Imprimir prueba" para validar. Listo — ya imprime
+          comandas cuando aprobás pedidos.
         </li>
       </ol>
     </section>

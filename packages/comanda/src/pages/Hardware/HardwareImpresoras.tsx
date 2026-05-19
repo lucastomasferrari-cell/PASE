@@ -17,7 +17,7 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Printer as PrinterIcon, Plus, Trash2, RefreshCw, CheckCircle2,
-  AlertCircle, Server, Wifi, Cable, Usb, FileText, Zap,
+  AlertCircle, Server, Wifi, Cable, Usb, Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -273,31 +273,52 @@ export function HardwareImpresoras() {
         </CardContent>
       </Card>
 
-      {/* Instrucciones de instalación si el server no está */}
+      {/* Instalación del Print Agent (Electron) si el server no está */}
       {mode !== 'server' && (
-        <Card>
+        <Card className="border-primary/30 bg-primary/5">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Cómo iniciar el Print Server
+              <Server className="h-4 w-4 text-primary" />
+              Instalá COMANDA Print Agent en esta PC
             </CardTitle>
           </CardHeader>
-          <CardContent className="text-sm space-y-2">
-            <p className="text-muted-foreground">
-              El Print Server es una app Node.js que corre en la misma PC donde están las impresoras.
-              Habla con ellas (USB / Network / Serial) y le ofrece API HTTP al POS.
+          <CardContent className="text-sm space-y-3">
+            <p>
+              Es una app que corre en segundo plano y conecta tus impresoras
+              térmicas con COMANDA. Doble click → siguiente → listo.
             </p>
-            <ol className="list-decimal list-inside space-y-1 text-xs">
-              <li>Instalá Node.js 18+ desde <a href="https://nodejs.org" target="_blank" rel="noopener" className="text-primary underline">nodejs.org</a>.</li>
-              <li>Bajá el repo PASE.</li>
-              <li>En la terminal: <code className="px-1 py-0.5 bg-muted rounded">cd packages/print-server && npm install && npm start</code></li>
-              <li>Debería decir "Escuchando en http://127.0.0.1:9100".</li>
-              <li>Volvé acá y refrescá — debería detectarlo.</li>
-            </ol>
-            <p className="text-xs text-muted-foreground mt-2 pt-2 border-t border-border">
-              Para que el server arranque solo cuando prendés la PC: agregar acceso directo a "npm start"
-              en la carpeta Inicio (Windows: Win+R → <code>shell:startup</code>).
-            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild size="sm">
+                <a
+                  href="https://pase-yndx.vercel.app/print-agent-releases/win/COMANDA-Print-Agent-Setup.exe"
+                  download
+                >
+                  <Zap className="h-4 w-4 mr-1.5" />
+                  Descargar para Windows
+                </a>
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <a
+                  href="https://pase-yndx.vercel.app/print-agent-releases/mac/COMANDA-Print-Agent.dmg"
+                  download
+                >
+                  Descargar para Mac
+                </a>
+              </Button>
+            </div>
+            <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t border-border/50">
+              <p className="font-medium text-foreground">Después de instalarlo:</p>
+              <ol className="list-decimal list-inside space-y-0.5">
+                <li>Generá un token desde <strong>Hardware → Print Agents → Vincular nueva PC</strong></li>
+                <li>Pegalo en la ventana del agent que se abre al instalar.</li>
+                <li>Volvé acá y refrescá — el server debería aparecer "conectado".</li>
+                <li>Configurá tus impresoras desde esta misma pantalla.</li>
+              </ol>
+              <p className="pt-1 text-foreground/50">
+                ⚠️ Windows va a mostrar "Windows protegió su PC" la primera vez —
+                click en "Más información" → "Ejecutar de todas formas".
+              </p>
+            </div>
           </CardContent>
         </Card>
       )}
