@@ -5,6 +5,47 @@ import type {
   TipoEntrega, OrigenVenta,
 } from '../types/database';
 
+// Helper interno: si la venta tiene external_provider + external_order_id,
+// dispara fire-and-forget al endpoint que notifica al partner de un cambio
+// de estado. No bloqueamos el flow del POS si falla — el dueño puede
+// reintentar manualmente desde la UI de pedidos externos.
+async function notifyPartnerStatusChange(
+  ventaId: number,
+  action: 'take' | 'dispatch' | 'cancel',
+  opts: { prepTimeMinutes?: number; reason?: string } = {},
+): Promise<void> {
+  try {
+    const { data: venta } = await db.from('ventas_pos')
+      .select('external_provider, external_order_id')
+      .eq('id', ventaId)
+      .single();
+    if (!venta?.external_provider || !venta.external_order_id) return;
+
+    // Por ahora solo wire para rappi — los otros providers en sprint próximo.
+    if (venta.external_provider !== 'rappi') return;
+
+    const sess = (await db.auth.getSession()).data.session;
+    if (!sess?.access_token) return;
+
+    void fetch('/api/tienda-mp?action=rappi-order-action', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${sess.access_token}`,
+      },
+      body: JSON.stringify({
+        order_id: venta.external_order_id,
+        action,
+        prep_time_minutes: opts.prepTimeMinutes,
+        reason: opts.reason,
+        production: false, // por default staging — el dueño puede hardcodear true cuando esté listo
+      }),
+    }).catch(() => { /* silent fire-and-forget */ });
+  } catch {
+    /* silent — no rompemos POS si el lookup falla */
+  }
+}
+
 export interface AbrirVentaArgs {
   localId: number;
   modo: ModoVenta;
@@ -321,7 +362,10 @@ export async function anularVenta(
     p_motivo: motivo,
     p_idempotency_key: idempotencyKey ?? null,
   });
-  return { error: error?.message ?? null };
+  if (error) return { error: error.message };
+  // Si la venta vino de un partner externo, cancelar también allá.
+  void notifyPartnerStatusChange(ventaId, 'cancel', { reason: motivo || 'OTHER' });
+  return { error: null };
 }
 
 export async function reabrirVenta(ventaId: number, managerId: string, motivo: string): Promise<{ error: string | null }> {
@@ -343,14 +387,13 @@ export async function transferirMesa(
 export async function marcarListo(ventaId: number): Promise<{ error: string | null }> {
   const { error } = await db.rpc('fn_marcar_listo_comanda', { p_venta_id: ventaId });
   if (error) return { error: error.message };
-  // Fire-and-forget: dispara notificación email "Tu pedido está listo" al
-  // cliente si la venta tiene cliente_email. El endpoint es idempotente
-  // (no re-envía si ya se mandó). Si falla, no rompemos el flow del POS.
+  // Fire-and-forget: email cliente + (si externo) notificar partner.
   void fetch('/api/tienda-mp?action=notify-listo', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ venta_id: ventaId }),
   }).catch(() => { /* silent */ });
+  void notifyPartnerStatusChange(ventaId, 'dispatch');
   return { error: null };
 }
 
@@ -361,5 +404,8 @@ export async function marcarEntregado(ventaId: number): Promise<{ error: string 
 
 export async function aprobarPedido(ventaId: number): Promise<{ error: string | null }> {
   const { error } = await db.rpc('fn_aprobar_pedido_comanda', { p_venta_id: ventaId });
-  return { error: error?.message ?? null };
+  if (error) return { error: error.message };
+  // Si la venta vino de Rappi/PeYa/Deliverect, avisar al partner que aceptamos.
+  void notifyPartnerStatusChange(ventaId, 'take', { prepTimeMinutes: 30 });
+  return { error: null };
 }

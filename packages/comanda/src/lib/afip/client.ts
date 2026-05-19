@@ -1,5 +1,8 @@
 import { db } from '../supabase';
-import type { AfipCredencialesPublic, AfipFacturaInput, AfipFacturaResult } from './types';
+import type {
+  AfipCredencialesPublic, AfipFacturaInput, AfipFacturaResult,
+  AfipTipoComprobante, AfipDocTipo,
+} from './types';
 
 /**
  * Cliente browser-side de AFIP facturación electrónica.
@@ -69,6 +72,63 @@ export async function emitirFactura(input: AfipFacturaInput): Promise<AfipFactur
   }
 
   return await resp.json();
+}
+
+/**
+ * Anula una factura emitiendo la nota de crédito correspondiente.
+ * AFIP no permite "borrar" facturas — se anulan emitiendo una NC del
+ * mismo monto, mismo tipo (B → NC B, C → NC C, A → NC A) con referencia
+ * al comprobante original. La NC se guarda en afip_facturas como una
+ * fila más con estado 'aprobada' (no es lo mismo que estado='anulada' —
+ * eso último es para facturas que fallaron en emitirse).
+ *
+ * Mapeo tipo factura → tipo NC:
+ *   Factura A (1)  → NC A (3)
+ *   Factura B (6)  → NC B (8)
+ *   Factura C (11) → NC C (13)
+ */
+export async function anularFacturaConNC(args: {
+  factura_original_id: number;
+  factura_original_tipo: AfipTipoComprobante;
+  factura_original_numero: number;
+  punto_venta: number;
+  cuit_emisor: string;
+  importe_neto: number;
+  importe_iva: number;
+  importe_total: number;
+  venta_pos_id: number;
+  doc_tipo?: AfipDocTipo;
+  doc_nro?: string;
+  cliente_razon_social?: string;
+}): Promise<AfipFacturaResult> {
+  // Mapeo tipo origen → tipo NC.
+  const tipoNC = args.factura_original_tipo === 1 ? 3
+              : args.factura_original_tipo === 6 ? 8
+              : args.factura_original_tipo === 11 ? 13
+              : null;
+  if (!tipoNC) {
+    throw new Error(`No hay mapeo NC para tipo de comprobante ${args.factura_original_tipo}`);
+  }
+
+  return await emitirFactura({
+    tenant_id: '', // server lo resuelve via JWT
+    venta_pos_id: args.venta_pos_id,
+    tipo_comprobante: tipoNC,
+    importe_neto: args.importe_neto,
+    importe_iva: args.importe_iva,
+    importe_total: args.importe_total,
+    concepto: 1,
+    doc_tipo: args.doc_tipo,
+    doc_nro: args.doc_nro,
+    cliente_razon_social: args.cliente_razon_social,
+    request_uuid: crypto.randomUUID(),
+    cbtes_asoc: [{
+      tipo: args.factura_original_tipo,
+      pto_vta: args.punto_venta,
+      numero: args.factura_original_numero,
+      cuit: args.cuit_emisor,
+    }],
+  });
 }
 
 /**

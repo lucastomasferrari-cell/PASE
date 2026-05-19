@@ -19,6 +19,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { createMpTokenGetter } from './_mp-token.js';
 import { sendEmail, htmlPedidoConfirmado, htmlPedidoListo } from './_email.js';
+import { createRappiClient, getRappiCredentials, verifyRappiWebhookSignature } from './_rappi.js';
+import { checkUserAuth } from './_user-auth.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -55,6 +57,16 @@ export default async function handler(req, res) {
     }
     if (action === 'notify-listo' && req.method === 'POST') {
       return await handleNotifyListo(req, res);
+    }
+    // ── Rappi: operaciones contra Rappi Restaurant Integration API v3 ──
+    if (action === 'rappi-test' && req.method === 'POST') {
+      return await handleRappiTest(req, res);
+    }
+    if (action === 'rappi-sync-menu' && req.method === 'POST') {
+      return await handleRappiSyncMenu(req, res);
+    }
+    if (action === 'rappi-order-action' && req.method === 'POST') {
+      return await handleRappiOrderAction(req, res);
     }
     res.status(405).json({ error: 'Método o action inválido' });
   } catch (e) {
@@ -338,6 +350,12 @@ async function handlePartnerWebhook(req, res, provider) {
   const clienteDireccion = payload.delivery?.address || payload.direccion || null;
   const total = Number(payload.total || payload.amount || 0);
 
+  // External order ID — el ID que el partner usa para este pedido. Lo
+  // necesitamos para llamadas de vuelta (take/dispatch/cancel).
+  const externalOrderId = String(
+    payload.order_id ?? payload.id ?? payload.external_id ?? ''
+  ) || null;
+
   // Crear venta_pos con estado necesita_aprobacion
   const { data: nuevaVenta, error: errVenta } = await supabase.from('ventas_pos').insert({
     tenant_id: local.tenant_id,
@@ -347,13 +365,15 @@ async function handlePartnerWebhook(req, res, provider) {
     canal_id: canal.id,
     estado: 'necesita_aprobacion',
     origen: 'webhook_' + provider,
+    external_order_id: externalOrderId,
+    external_provider: provider,
     tipo_entrega: payload.delivery ? 'delivery' : 'retiro',
     cliente_nombre: clienteNombre,
     cliente_telefono: clienteTelefono,
     cliente_direccion: clienteDireccion,
     subtotal: total,
     total: total,
-    notas: payload.instructions || payload.notes || `Pedido externo ${provider} #${payload.id ?? '?'}`,
+    notas: payload.instructions || payload.notes || `Pedido externo ${provider} #${externalOrderId ?? '?'}`,
   }).select('id').single();
 
   if (errVenta) {
@@ -538,3 +558,172 @@ async function handleNotifyListo(req, res) {
 
   res.status(200).json({ ok: true, sent: !sent.skipped });
 }
+
+// ─── RAPPI: test de conexión (auth check) ─────────────────────────────
+async function handleRappiTest(req, res) {
+  const auth = await checkUserAuth(req, res);
+  if (!auth) return;
+  if (!['dueno', 'admin', 'superadmin'].includes(auth.row.rol)) {
+    return res.status(403).json({ error: 'PERMISO_DENEGADO' });
+  }
+
+  const supabase = db();
+  const creds = await getRappiCredentials(supabase, auth.row.tenant_id);
+  if (!creds) return res.status(400).json({ error: 'RAPPI_NO_CONFIGURADA' });
+
+  const useProduction = req.body?.production === true;
+  try {
+    const client = createRappiClient(creds, { production: useProduction });
+    await client.testConnection();
+    // Marcar como active
+    await supabase.from('integraciones_externas_credenciales')
+      .update({ estado: 'active', last_test_at: new Date().toISOString(), last_error: null })
+      .eq('tenant_id', auth.row.tenant_id).eq('provider', 'rappi');
+    res.status(200).json({ ok: true, message: 'Conexión exitosa con Rappi' });
+  } catch (err) {
+    const msg = err.message || String(err);
+    await supabase.from('integraciones_externas_credenciales')
+      .update({ estado: 'error', last_test_at: new Date().toISOString(), last_error: msg })
+      .eq('tenant_id', auth.row.tenant_id).eq('provider', 'rappi');
+    res.status(502).json({ error: 'RAPPI_TEST_FAILED', detail: msg });
+  }
+}
+
+// ─── RAPPI: sync menú COMANDA → Rappi ─────────────────────────────────
+// Toma todos los items + grupos del tenant, los convierte al formato JSON
+// que pide Rappi y hace PUT al menu del store_id.
+async function handleRappiSyncMenu(req, res) {
+  const auth = await checkUserAuth(req, res);
+  if (!auth) return;
+  if (!['dueno', 'admin', 'superadmin'].includes(auth.row.rol)) {
+    return res.status(403).json({ error: 'PERMISO_DENEGADO' });
+  }
+
+  const { store_id, local_id, production } = req.body || {};
+  if (!store_id) return res.status(400).json({ error: 'STORE_ID_REQUERIDO' });
+
+  const supabase = db();
+  const creds = await getRappiCredentials(supabase, auth.row.tenant_id);
+  if (!creds) return res.status(400).json({ error: 'RAPPI_NO_CONFIGURADA' });
+
+  // Pull grupos + items + modificadores del tenant (filtrado por local si
+  // se pasa local_id explícito; sin local_id = catálogo global del tenant).
+  let itemsQ = supabase.from('items')
+    .select('id, sku_rappi, nombre, descripcion, emoji, foto_url, precio_madre, grupo_id, visible_tienda, estado, agotado_at, agotado_hasta')
+    .eq('tenant_id', auth.row.tenant_id)
+    .is('deleted_at', null)
+    .eq('visible_tienda', true);
+  if (local_id) itemsQ = itemsQ.or(`local_id.eq.${local_id},local_id.is.null`);
+  const { data: items, error: itemsErr } = await itemsQ;
+  if (itemsErr) return res.status(500).json({ error: 'DB_ITEMS_FAILED', detail: itemsErr.message });
+
+  const { data: grupos, error: gruposErr } = await supabase.from('item_grupos')
+    .select('id, nombre, descripcion, orden')
+    .eq('tenant_id', auth.row.tenant_id)
+    .is('deleted_at', null)
+    .order('orden');
+  if (gruposErr) return res.status(500).json({ error: 'DB_GRUPOS_FAILED', detail: gruposErr.message });
+
+  // Convertir a formato Rappi v3
+  // Refs: services-staging.dev.rappi.com docs OpenAPI
+  const menuPayload = {
+    categories: (grupos || []).map((g) => ({
+      external_id: `cat_${g.id}`,
+      name: g.nombre,
+      description: g.descripcion || '',
+      sort_order: g.orden ?? 0,
+    })),
+    products: (items || []).map((it) => {
+      const ahora = Date.now();
+      const agotado = it.estado === 'agotado'
+        || (it.agotado_at && (!it.agotado_hasta || new Date(it.agotado_hasta).getTime() > ahora));
+      return {
+        external_id: it.sku_rappi || `item_${it.id}`,
+        category_external_id: it.grupo_id ? `cat_${it.grupo_id}` : null,
+        name: it.nombre,
+        description: it.descripcion || '',
+        price: Number(it.precio_madre),
+        image_url: it.foto_url || null,
+        is_available: !agotado,
+      };
+    }),
+    // modifier_groups + modifiers: TODO sprint Rappi#2 — requiere mapear
+    // modifier_groups y modifier_options al schema Rappi. Por ahora menú
+    // plano sin extras.
+  };
+
+  // PUT al endpoint de Rappi
+  let result;
+  try {
+    const rappi = createRappiClient(creds, { production: !!production });
+    result = await rappi.syncMenu(store_id, menuPayload);
+  } catch (err) {
+    const detail = err.message || String(err);
+    await supabase.from('integraciones_externas_credenciales')
+      .update({ estado: 'error', last_test_at: new Date().toISOString(), last_error: detail })
+      .eq('tenant_id', auth.row.tenant_id).eq('provider', 'rappi');
+    return res.status(502).json({ error: 'RAPPI_SYNC_FAILED', detail });
+  }
+
+  // Backfill items.sku_rappi si Rappi devolvió IDs nuevos en la respuesta
+  // (Rappi v3 a veces retorna product_id asignado por ellos).
+  if (result?.products && Array.isArray(result.products)) {
+    for (const p of result.products) {
+      if (p.external_id?.startsWith('item_') && p.rappi_id) {
+        const internalId = parseInt(p.external_id.replace('item_', ''));
+        if (Number.isFinite(internalId)) {
+          await supabase.from('items').update({ sku_rappi: p.rappi_id }).eq('id', internalId);
+        }
+      }
+    }
+  }
+
+  await supabase.from('integraciones_externas_credenciales')
+    .update({ estado: 'active', last_test_at: new Date().toISOString(), last_error: null })
+    .eq('tenant_id', auth.row.tenant_id).eq('provider', 'rappi');
+
+  res.status(200).json({
+    ok: true,
+    productos_sincronizados: menuPayload.products.length,
+    categorias_sincronizadas: menuPayload.categories.length,
+  });
+}
+
+// ─── RAPPI: cambiar estado de pedido (take / dispatch / cancel) ────────
+// Llamado desde el POS cuando el operador marca el pedido. Mapeo:
+//   "Aceptar pedido" → take    (en_preparacion)
+//   "Está listo / Salió" → dispatch
+//   "Rechazar" → cancel con reason
+async function handleRappiOrderAction(req, res) {
+  const auth = await checkUserAuth(req, res);
+  if (!auth) return;
+
+  const { order_id, action: ordAction, prep_time_minutes, reason, production } = req.body || {};
+  if (!order_id || !ordAction) {
+    return res.status(400).json({ error: 'PARAMS_REQUERIDOS: order_id + action' });
+  }
+  if (!['take', 'dispatch', 'cancel'].includes(ordAction)) {
+    return res.status(400).json({ error: 'ACTION_INVALIDA' });
+  }
+
+  const supabase = db();
+  const creds = await getRappiCredentials(supabase, auth.row.tenant_id);
+  if (!creds) return res.status(400).json({ error: 'RAPPI_NO_CONFIGURADA' });
+
+  try {
+    const rappi = createRappiClient(creds, { production: !!production });
+    let result;
+    if (ordAction === 'take') result = await rappi.takeOrder(order_id, prep_time_minutes || 30);
+    else if (ordAction === 'dispatch') result = await rappi.dispatchOrder(order_id, prep_time_minutes || 0);
+    else result = await rappi.cancelOrder(order_id, reason);
+
+    res.status(200).json({ ok: true, action: ordAction, rappi_response: result });
+  } catch (err) {
+    res.status(502).json({ error: `RAPPI_${ordAction.toUpperCase()}_FAILED`, detail: err.message || String(err) });
+  }
+}
+
+// Note: verifyRappiWebhookSignature está importada pero no usada todavía
+// en handlePartnerWebhook (que es genérico). Wire-up de validación HMAC
+// en sprint próximo cuando Lucas tenga creds reales para testear.
+void verifyRappiWebhookSignature;

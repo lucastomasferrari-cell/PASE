@@ -140,6 +140,22 @@ export default async function handler(req, res) {
     Importe: importeIva,
   }] : undefined;
 
+  // Notas de crédito (tipos 3, 8, 13) requieren referencia a la factura
+  // original via CbtesAsoc. El frontend pasa { cbtes_asoc: [{ tipo, pto_vta,
+  // nro, cuit }] } y nosotros lo convertimos al shape que espera AFIPSDK.
+  const cbteTipoEsNC = [3, 8, 13].includes(cbteTipo);
+  const cbtesAsoc = (body.cbtes_asoc && Array.isArray(body.cbtes_asoc) && body.cbtes_asoc.length > 0)
+    ? body.cbtes_asoc.map((c) => ({
+        Tipo: Number(c.tipo),
+        PtoVta: Number(c.pto_vta || c.punto_venta || ptoVta),
+        Nro: Number(c.nro || c.numero),
+        Cuit: c.cuit ? String(c.cuit) : cred.cuit,
+      }))
+    : undefined;
+  if (cbteTipoEsNC && !cbtesAsoc) {
+    return res.status(400).json({ error: 'NC_REQUIERE_CBTES_ASOC', detail: 'Las notas de crédito requieren referencia a la factura original.' });
+  }
+
   let caeResult;
   try {
     caeResult = await afip.ElectronicBilling.createVoucher({
@@ -161,6 +177,7 @@ export default async function handler(req, res) {
       MonId: 'PES',
       MonCotiz: 1,
       ...(ivaArray ? { Iva: ivaArray } : {}),
+      ...(cbtesAsoc ? { CbtesAsoc: cbtesAsoc } : {}),
     });
   } catch (err) {
     console.error('[afip-cae] createVoucher failed', err.message);

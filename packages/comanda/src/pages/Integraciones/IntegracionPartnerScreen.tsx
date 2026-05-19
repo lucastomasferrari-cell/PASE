@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Plug, CheckCircle2, AlertCircle, Trash2, Plus, Copy } from 'lucide-react';
+import { Plug, CheckCircle2, AlertCircle, Trash2, Plus, Copy, Zap, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,6 +23,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   getIntegracion, upsertIntegracion, eliminarIntegracion,
   listMapeos, upsertMapeo, eliminarMapeo,
+  rappiTestConnection, rappiSyncMenu,
   type ExternalProvider, type IntegracionPublica, type MapeoLocal,
 } from '@/services/integracionesService';
 import { listLocalesAccesibles, type LocalSimple } from '@/services/configService';
@@ -116,6 +117,11 @@ export function IntegracionPartnerScreen({ provider }: Props) {
   const [mapeos, setMapeos] = useState<MapeoLocal[]>([]);
   const [locales, setLocales] = useState<LocalSimple[]>([]);
   const [nuevoMapeo, setNuevoMapeo] = useState({ external_local_id: '', local_id: '' });
+
+  // Operaciones específicas Rappi
+  const [testeando, setTesteando] = useState(false);
+  const [sincronizando, setSincronizando] = useState(false);
+  const [usaProduccion, setUsaProduccion] = useState(false); // toggle staging/prod
 
   // Cargar todo al montar / cambiar provider
   useEffect(() => {
@@ -224,6 +230,43 @@ export function IntegracionPartnerScreen({ provider }: Props) {
     }).catch(() => toast.error('No se pudo copiar'));
   }
 
+  async function handleTestConnection() {
+    setTesteando(true);
+    try {
+      const r = await rappiTestConnection(usaProduccion);
+      if (!r.ok) {
+        toast.error('Conexión Rappi falló', { description: r.error });
+      } else {
+        toast.success('Conexión con Rappi OK');
+      }
+      const fresh = await getIntegracion(provider);
+      setInteg(fresh.data);
+    } finally {
+      setTesteando(false);
+    }
+  }
+
+  async function handleSyncMenu(localId: number | null, storeId: string) {
+    setSincronizando(true);
+    try {
+      const r = await rappiSyncMenu({
+        store_id: storeId,
+        local_id: localId,
+        production: usaProduccion,
+      });
+      if (!r.ok) {
+        toast.error('Sync menú falló', { description: r.error });
+      } else {
+        const d = r.data as { productos_sincronizados?: number; categorias_sincronizadas?: number };
+        toast.success(`Menú sincronizado: ${d?.productos_sincronizados ?? '?'} productos, ${d?.categorias_sincronizadas ?? '?'} categorías`);
+      }
+      const fresh = await getIntegracion(provider);
+      setInteg(fresh.data);
+    } finally {
+      setSincronizando(false);
+    }
+  }
+
   if (loading) return <div className="py-12 text-center text-muted-foreground">Cargando…</div>;
 
   return (
@@ -310,6 +353,85 @@ export function IntegracionPartnerScreen({ provider }: Props) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Operaciones (solo Rappi y con creds cargadas) */}
+      {provider === 'rappi' && integ && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Zap className="h-4 w-4 text-amber-500" />
+              Operaciones
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-3 rounded-md border border-border p-3 text-sm">
+              <input
+                type="checkbox"
+                id="usaProduccion"
+                checked={usaProduccion}
+                onChange={(e) => setUsaProduccion(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <label htmlFor="usaProduccion" className="cursor-pointer">
+                Usar endpoints de <strong>producción</strong> (sin marcar = staging/sandbox)
+              </label>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Button variant="outline" onClick={handleTestConnection} disabled={testeando} className="w-fit">
+                <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${testeando ? 'animate-spin' : ''}`} />
+                {testeando ? 'Probando…' : 'Probar conexión OAuth'}
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Intenta autenticar contra el endpoint /api/cargo-public-api-token de Rappi.
+                Si pasa, marcamos la integración como <strong>activa</strong>.
+              </p>
+            </div>
+
+            <div className="rounded-md border border-dashed border-border p-3 space-y-2">
+              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Sincronizar menú COMANDA → Rappi
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Empuja todo el catálogo de items + grupos visibles_tienda al store_id que indiques.
+                Si Rappi devuelve product_id propios, los guardamos en items.sku_rappi automáticamente.
+              </p>
+              <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                <Select
+                  onValueChange={(v) => (window as Window & { _rappi_local?: string })._rappi_local = v}
+                >
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Local COMANDA…" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Todos los locales</SelectItem>
+                    {locales.map((l) => (
+                      <SelectItem key={l.id} value={String(l.id)}>{l.nombre}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="store_id de Rappi (ej: 12345)"
+                  className="h-10 font-mono text-xs"
+                  id="rappi-store-id-input"
+                  onChange={(e) => (window as Window & { _rappi_store?: string })._rappi_store = e.target.value}
+                />
+                <Button
+                  onClick={() => {
+                    const w = window as Window & { _rappi_local?: string; _rappi_store?: string };
+                    const storeId = w._rappi_store?.trim();
+                    if (!storeId) { toast.error('Pegá el store_id de Rappi'); return; }
+                    const localStr = w._rappi_local ?? '0';
+                    const localId = localStr === '0' ? null : parseInt(localStr);
+                    handleSyncMenu(localId, storeId);
+                  }}
+                  disabled={sincronizando}
+                >
+                  {sincronizando ? 'Sincronizando…' : 'Sync'}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Webhook URL */}
       <Card>

@@ -10,6 +10,12 @@ export type AfipTipoComprobante =
   | 1   // Factura A
   | 6   // Factura B
   | 11  // Factura C
+  | 3   // Nota de Crédito A
+  | 8   // Nota de Crédito B
+  | 13  // Nota de Crédito C
+  | 2   // Nota de Débito A
+  | 7   // Nota de Débito B
+  | 12  // Nota de Débito C
   | 51  // Factura M
   | 56  // Comprobante M
   | 61  // Recibo C
@@ -18,6 +24,14 @@ export type AfipTipoComprobante =
   | 86  // Tique factura B
   | 91  // Comprobante turista A
   | 96; // Comprobante turista B
+
+/** Para NC/ND: referencia al comprobante original. */
+export interface AfipCbteAsoc {
+  tipo: AfipTipoComprobante;
+  pto_vta?: number;
+  numero: number;
+  cuit?: string;
+}
 
 export type AfipConcepto = 1 | 2 | 3;
 // 1 = Productos | 2 = Servicios | 3 = Productos y Servicios
@@ -58,6 +72,8 @@ export interface AfipFacturaInput {
   doc_nro?: string;
   cliente_razon_social?: string;
   request_uuid: string; // UUID estable para idempotency
+  /** Para NC/ND: referencia a la factura original. AFIP rechaza si falta. */
+  cbtes_asoc?: AfipCbteAsoc[];
 }
 
 export interface AfipFacturaResult {

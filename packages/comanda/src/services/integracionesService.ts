@@ -105,3 +105,49 @@ export async function eliminarMapeo(id: number): Promise<{ ok: boolean; error: s
   if (error) return { ok: false, error: error.message };
   return { ok: true, error: null };
 }
+
+// ─── Operaciones contra Rappi API ─────────────────────────────────────────
+
+async function callTiendaMpAction(action: string, body: object): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+  const sess = (await db.auth.getSession()).data.session;
+  if (!sess?.access_token) return { ok: false, error: 'Sesión expirada' };
+  try {
+    const resp = await fetch(`/api/tienda-mp?action=${action}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${sess.access_token}`,
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      return { ok: false, error: data?.error || data?.detail || `HTTP ${resp.status}` };
+    }
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function rappiTestConnection(production: boolean): Promise<{ ok: boolean; error?: string }> {
+  return callTiendaMpAction('rappi-test', { production });
+}
+
+export async function rappiSyncMenu(args: {
+  store_id: string;
+  local_id?: number | null;
+  production: boolean;
+}): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+  return callTiendaMpAction('rappi-sync-menu', args);
+}
+
+export async function rappiOrderAction(args: {
+  order_id: string;
+  action: 'take' | 'dispatch' | 'cancel';
+  prep_time_minutes?: number;
+  reason?: string;
+  production: boolean;
+}): Promise<{ ok: boolean; error?: string }> {
+  return callTiendaMpAction('rappi-order-action', args);
+}
