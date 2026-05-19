@@ -26,18 +26,36 @@ export async function listPedidosPorTab(
   localId: number,
   tab: PedidoTab,
 ): Promise<{ data: PedidoConItems[]; error: string | null }> {
-  const estados = TAB_TO_ESTADOS[tab];
-  const { data, error } = await db
+  let q = db
     .from('ventas_pos')
     .select('*, items:ventas_pos_items(*, item:items(nombre, emoji))')
     .eq('local_id', localId)
     .eq('modo', 'pedidos')
-    .in('estado', estados)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false })
-    .limit(100);
+    .is('deleted_at', null);
+
+  // Tab "programados" (Lucas 2026-05-19): un pedido es "programado" si
+  // tiene programada_para futuro Y todavía no fue entregado/cobrado.
+  // Esto incluye los que están en 'necesita_aprobacion' con fecha futura
+  // (caso típico del marketplace: cliente pidió para mañana, comerciante
+  // todavía no aprobó).
+  // El tab "necesita_aprobacion" excluye los programados — solo muestra
+  // los que son para AHORA (sin programada_para o vencida).
+  if (tab === 'programados') {
+    q = q.in('estado', ['necesita_aprobacion', 'programada', 'enviada', 'lista'])
+         .gt('programada_para', new Date().toISOString())
+         .order('programada_para', { ascending: true });
+  } else if (tab === 'necesita_aprobacion') {
+    // Solo pedidos para AHORA (sin programada_para futura).
+    q = q.eq('estado', 'necesita_aprobacion')
+         .or(`programada_para.is.null,programada_para.lte.${new Date().toISOString()}`)
+         .order('created_at', { ascending: false });
+  } else {
+    const estados = TAB_TO_ESTADOS[tab];
+    q = q.in('estado', estados).order('created_at', { ascending: false });
+  }
+
+  const { data, error } = await q.limit(100);
   if (error) return { data: [], error: translateError(error) };
-  // Filtrar items soft-deleted client-side (Supabase no permite filter en relación embedded sin RLS).
   const cleaned = (data ?? []).map((row) => {
     const r = row as PedidoConItems;
     return { ...r, items: (r.items ?? []).filter((it) => it.deleted_at === null) };
@@ -49,7 +67,7 @@ export async function listPedidosPorTab(
 export async function getCountersPedidos(localId: number): Promise<Record<PedidoTab, number>> {
   const { data } = await db
     .from('ventas_pos')
-    .select('estado')
+    .select('estado, programada_para')
     .eq('local_id', localId)
     .eq('modo', 'pedidos')
     .is('deleted_at', null)
@@ -57,10 +75,19 @@ export async function getCountersPedidos(localId: number): Promise<Record<Pedido
   const out: Record<PedidoTab, number> = {
     necesita_aprobacion: 0, programados: 0, activos: 0, listos: 0, completados: 0,
   };
+  const ahora = Date.now();
   for (const row of data ?? []) {
-    const e = (row as { estado: EstadoVenta }).estado;
+    const r = row as { estado: EstadoVenta; programada_para: string | null };
+    const esFuturo = r.programada_para && new Date(r.programada_para).getTime() > ahora;
+    // Si tiene programada_para futuro, va al tab "programados" (sin importar estado).
+    if (esFuturo) {
+      out.programados++;
+      continue;
+    }
+    // Sino, va al tab que corresponda a su estado.
     for (const [tab, estados] of Object.entries(TAB_TO_ESTADOS)) {
-      if (estados.includes(e)) {
+      if (tab === 'programados') continue;
+      if (estados.includes(r.estado)) {
         out[tab as PedidoTab] = (out[tab as PedidoTab] ?? 0) + 1;
       }
     }

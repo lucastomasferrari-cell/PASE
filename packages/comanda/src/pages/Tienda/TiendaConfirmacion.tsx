@@ -101,6 +101,20 @@ export function TiendaConfirmacion() {
             <span className="text-foreground/60">Total</span>
             <span className="font-medium">{formatARS(estado.total)}</span>
           </div>
+          {estado.programada_para && (
+            <div className="flex justify-between border-t border-gray-100 pt-2 mt-1">
+              <span className="text-foreground/60">📅 Programado para</span>
+              <span className="font-medium">
+                {new Date(estado.programada_para).toLocaleString('es-AR', {
+                  weekday: 'short',
+                  day: '2-digit',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
+            </div>
+          )}
         </div>
       )}
 

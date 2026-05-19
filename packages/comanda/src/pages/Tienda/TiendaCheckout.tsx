@@ -31,6 +31,16 @@ export function TiendaCheckout() {
   const [notas, setNotas] = useState('');
   const [metodoPago, setMetodoPago] = useState<'pagar_al_recibir' | 'mp_qr' | 'mp_checkout'>('pagar_al_recibir');
   const [enviando, setEnviando] = useState(false);
+  // Programar pedido a futuro (Lucas 2026-05-19, Marketplace Gap #2).
+  // Modo "ahora" (default): el comerciante lo prepara apenas lo aprueba.
+  // Modo "programar": el cliente elige fecha+hora. La RPC valida que sea
+  // entre 15min y 14 días desde now().
+  const [modoEntrega, setModoEntrega] = useState<'ahora' | 'programar'>('ahora');
+  const [fechaProgramada, setFechaProgramada] = useState<string>('');
+  // Idempotency key — se genera al montar el form. Si el cliente hace
+  // doble click en Pagar, la 2da llamada con misma key devuelve el
+  // mismo venta_id (no crea pedido duplicado).
+  const [idempotencyKey] = useState<string>(() => crypto.randomUUID());
 
   const subtotal = calcularSubtotal(carrito.items);
   const costoEnvio = carrito.tipoEntrega === 'delivery' ? Number(local.costo_envio_default) || 0 : 0;
@@ -88,6 +98,30 @@ export function TiendaCheckout() {
       });
       return;
     }
+    // Validación programación: la fecha debe ser válida + al menos 15min en el futuro.
+    let programadaParaIso: string | null = null;
+    if (modoEntrega === 'programar') {
+      if (!fechaProgramada) {
+        toast.error('Elegí fecha y hora para programar el pedido');
+        return;
+      }
+      const date = new Date(fechaProgramada);
+      if (isNaN(date.getTime())) {
+        toast.error('Fecha inválida');
+        return;
+      }
+      const minMs = Date.now() + 15 * 60 * 1000;
+      const maxMs = Date.now() + 14 * 24 * 60 * 60 * 1000;
+      if (date.getTime() < minMs) {
+        toast.error('La hora elegida ya pasó', { description: 'Programá al menos 15 minutos en el futuro.' });
+        return;
+      }
+      if (date.getTime() > maxMs) {
+        toast.error('Fecha demasiado lejana', { description: 'Máximo 14 días.' });
+        return;
+      }
+      programadaParaIso = date.toISOString();
+    }
     setEnviando(true);
     const { ventaId, error } = await crearPedidoPublico({
       localSlug: local.slug,
@@ -103,6 +137,8 @@ export function TiendaCheckout() {
       metodoPagoPreferido: metodoPago,
       notas: [notas.trim(), notasRepartidor.trim() && `Repartidor: ${notasRepartidor.trim()}`]
         .filter(Boolean).join(' · ') || null,
+      programadaPara: programadaParaIso,
+      idempotencyKey,
     });
     setEnviando(false);
     if (error || !ventaId) {
@@ -239,6 +275,90 @@ export function TiendaCheckout() {
           </FormField>
         </Section>
       )}
+
+      {/* ¿Cuándo querés el pedido? */}
+      <Section titulo="¿Cuándo querés el pedido?">
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setModoEntrega('ahora')}
+            className={cn(
+              'w-full text-left p-4 rounded-md border-2 transition-colors',
+              modoEntrega === 'ahora'
+                ? 'border-primary bg-primary/5'
+                : 'border-gray-200 hover:border-gray-300',
+            )}
+          >
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">⚡</span>
+              <div className="flex-1">
+                <div className="font-medium text-sm">Lo antes posible</div>
+                <div className="text-xs text-foreground/60 mt-0.5">
+                  {carrito.tipoEntrega === 'delivery'
+                    ? `Llega en ~${local.tiempo_delivery_min ?? 45} min después de confirmar.`
+                    : `Listo en ~${local.tiempo_retiro_min ?? 20} min después de confirmar.`}
+                </div>
+              </div>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setModoEntrega('programar')}
+            className={cn(
+              'w-full text-left p-4 rounded-md border-2 transition-colors',
+              modoEntrega === 'programar'
+                ? 'border-primary bg-primary/5'
+                : 'border-gray-200 hover:border-gray-300',
+            )}
+          >
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">📅</span>
+              <div className="flex-1">
+                <div className="font-medium text-sm">Programar para más tarde</div>
+                <div className="text-xs text-foreground/60 mt-0.5">
+                  Elegí fecha y hora. Mínimo 15 min, máximo 14 días.
+                </div>
+              </div>
+            </div>
+          </button>
+          {modoEntrega === 'programar' && (
+            <FormField label="Fecha y hora *" htmlFor="prog">
+              <Input
+                id="prog"
+                type="datetime-local"
+                value={fechaProgramada}
+                onChange={(e) => setFechaProgramada(e.target.value)}
+                min={(() => {
+                  // Min = ahora + 15 min, en formato yyyy-MM-ddTHH:mm
+                  const d = new Date(Date.now() + 15 * 60 * 1000);
+                  const tzOff = d.getTimezoneOffset() * 60000;
+                  return new Date(d.getTime() - tzOff).toISOString().slice(0, 16);
+                })()}
+                max={(() => {
+                  const d = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+                  const tzOff = d.getTimezoneOffset() * 60000;
+                  return new Date(d.getTime() - tzOff).toISOString().slice(0, 16);
+                })()}
+                className="h-12"
+              />
+              {fechaProgramada && (
+                <div className="text-xs text-foreground/70 mt-2">
+                  Pedido programado para el{' '}
+                  <strong>
+                    {new Date(fechaProgramada).toLocaleString('es-AR', {
+                      weekday: 'long',
+                      day: '2-digit',
+                      month: 'long',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </strong>
+                </div>
+              )}
+            </FormField>
+          )}
+        </div>
+      </Section>
 
       {/* Notas generales */}
       <Section titulo="Notas para el local">

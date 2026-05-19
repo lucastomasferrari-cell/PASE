@@ -100,6 +100,12 @@ export interface CrearPedidoArgs {
   }>;
   metodoPagoPreferido: string;
   notas?: string | null;
+  /** Si el cliente programó el pedido para una fecha+hora futura. ISO timestamp.
+   *  Si es null, el pedido es "lo antes posible". */
+  programadaPara?: string | null;
+  /** Idempotency key (UUID) para evitar doble click. Server-side cachea el
+   *  primer resultado y devuelve el mismo si llega misma key. */
+  idempotencyKey?: string | null;
 }
 
 export async function crearPedidoPublico(args: CrearPedidoArgs): Promise<{ ventaId: number | null; numero: number | null; error: string | null }> {
@@ -115,6 +121,8 @@ export async function crearPedidoPublico(args: CrearPedidoArgs): Promise<{ venta
     p_items: args.items,
     p_metodo_pago_preferido: args.metodoPagoPreferido,
     p_notas: args.notas ?? null,
+    p_programada_para: args.programadaPara ?? null,
+    p_idempotency_key: args.idempotencyKey ?? null,
   });
   if (error) return { ventaId: null, numero: null, error: translateError(error) };
   const arr = data as Array<{ venta_id: number; numero_local: number }> | null;
