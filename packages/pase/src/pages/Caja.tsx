@@ -407,6 +407,8 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   // mov/motivo y abrimos el modal de código. Mismo patrón que anular_factura,
   // anular_remito, anular_gasto.
   const [pendingAnularMov, setPendingAnularMov] = useState<{ mov: Movimiento; motivo: string } | null>(null);
+  // Pending para edición de movimiento sin permiso caja_anular.
+  const [pendingEditarMov, setPendingEditarMov] = useState<typeof editMov>(null);
 
   async function ejecutarAnularMov(m: Movimiento, motivo: string, overrideCode?: string) {
     const { error } = await db.rpc("anular_movimiento", {
@@ -428,44 +430,53 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     }
   };
 
-  const guardarEditMov = async () => {
-    if (savingEdit) return;
-    if (!editMov) return;
-    if (!editMov.justificativo?.trim()) { alert("El justificativo es obligatorio"); return; }
-    const original = movimientos.find(m => m.id === editMov.id);
+  async function ejecutarEditMov(em: typeof editMov, overrideCode?: string) {
+    if (!em) return;
+    const original = movimientos.find(m => m.id === em.id);
     setSavingEdit(true);
     try {
-      // Si el signo o la categoría cambiaron, recalcular tipo. deriveTipoMov
-      // mantiene la coherencia (ej: cat="Liquidación Rappi" + ingreso →
-      // "Liquidación Plataforma", no el tipo viejo).
-      const nuevoImporte = parseFloat(String(editMov.importe)) || original?.importe || 0;
+      const nuevoImporte = parseFloat(String(em.importe)) || original?.importe || 0;
       const signoOriginal = (original?.importe || 0) >= 0 ? 1 : -1;
       const signoNuevo = nuevoImporte >= 0 ? 1 : -1;
       const cambioSigno = signoOriginal !== signoNuevo;
-      const catCambio = editMov.cat !== original?.cat;
+      const catCambio = em.cat !== original?.cat;
       const tipoNuevo = (cambioSigno || catCambio)
-        ? deriveTipoMov(editMov.cat || "", signoNuevo < 0)
+        ? deriveTipoMov(em.cat || "", signoNuevo < 0)
         : original?.tipo;
 
-      // RPC atómica: ajusta saldos + actualiza movimiento + auditoria en una
-      // sola TX. Antes era 4 operaciones sueltas (deuda C4-F11) que podían
-      // dejar saldos descalibrados si fallaban a mitad.
-      const { error } = await db.rpc("editar_movimiento_caja", {
-        p_mov_id: editMov.id,
-        p_fecha: editMov.fecha,
-        p_detalle: editMov.detalle,
-        p_cat: editMov.cat || null,
+      const args: Record<string, unknown> = {
+        p_mov_id: em.id,
+        p_fecha: em.fecha,
+        p_detalle: em.detalle,
+        p_cat: em.cat || null,
         p_importe: nuevoImporte,
-        p_cuenta: editMov.cuenta,
+        p_cuenta: em.cuenta,
         p_tipo: tipoNuevo,
-        p_justificativo: editMov.justificativo,
+        p_justificativo: em.justificativo,
         p_idempotency_key: idempKeyEditMov,
-      });
+      };
+      if (overrideCode) args.p_override_code = overrideCode;
+      const { error } = await db.rpc("editar_movimiento_caja", args);
       if (error) { alert(translateRpcError(error)); return; }
       setEditMov(null); load();
     } finally {
       setSavingEdit(false);
     }
+  }
+
+  const guardarEditMov = async () => {
+    if (savingEdit) return;
+    if (!editMov) return;
+    if (!editMov.justificativo?.trim()) { alert("El justificativo es obligatorio"); return; }
+    // Lucas 2026-05-19: si NO tiene caja_anular, guardamos los args y
+    // abrimos modal de Manager Override pidiendo código TOTP del dueño.
+    // El handler del modal llama a ejecutarEditMov(em, codigo) cuando
+    // el código valida.
+    if (!tienePermiso(user, "caja_anular")) {
+      setPendingEditarMov(editMov);
+      return;
+    }
+    await ejecutarEditMov(editMov);
   };
 
   const cc = (c: string) => c==="Caja Chica"?"var(--acc)":c==="Caja Mayor"?"var(--acc2)":c==="MercadoPago"?"var(--acc3)":"var(--info)";
@@ -886,6 +897,18 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
           const { mov, motivo } = pendingAnularMov;
           setPendingAnularMov(null);
           await ejecutarAnularMov(mov, motivo, codigo);
+        }}
+      />
+      {/* MODAL MANAGER OVERRIDE — para editar movimiento sin permiso caja_anular */}
+      <ManagerOverrideModal
+        open={pendingEditarMov !== null}
+        descripcion={pendingEditarMov ? `Editar movimiento de ${fmt_$(Math.abs(parseFloat(String(pendingEditarMov.importe)) || 0))}` : undefined}
+        onClose={() => setPendingEditarMov(null)}
+        onValidated={async (codigo) => {
+          if (!pendingEditarMov) return;
+          const em = pendingEditarMov;
+          setPendingEditarMov(null);
+          await ejecutarEditMov(em, codigo);
         }}
       />
     </div>
