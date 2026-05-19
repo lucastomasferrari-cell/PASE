@@ -474,8 +474,42 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                   <td className="mono">{fmt_d(g.fecha)}</td>
                   <td>
                     <TipoPill tipo={g.tipo} />
-                    {anulado && <span className="badge b-danger" style={{ marginLeft: 4, fontSize: 9 }}>ANULADO</span>}
-                    {g.editado && !anulado && <span className="badge b-warn" style={{ marginLeft: 4, fontSize: 9 }} title={g.editado_motivo || ""}>EDITADO</span>}
+                    {/* Badges sutiles: solo borde + texto, sin fondo lleno.
+                        Lucas 2026-05-19: minimalista, que no compita visualmente
+                        con el badge del tipo. */}
+                    {anulado && (
+                      <span
+                        style={{
+                          marginLeft: 6,
+                          fontSize: 9,
+                          padding: "1px 5px",
+                          borderRadius: 3,
+                          color: "var(--danger)",
+                          border: "0.5px solid var(--danger)",
+                          background: "transparent",
+                          letterSpacing: 0.3,
+                          fontWeight: 400,
+                          textTransform: "lowercase",
+                        }}
+                      >anulado</span>
+                    )}
+                    {g.editado && !anulado && (
+                      <span
+                        title={g.editado_motivo || ""}
+                        style={{
+                          marginLeft: 6,
+                          fontSize: 9,
+                          padding: "1px 5px",
+                          borderRadius: 3,
+                          color: "var(--muted2)",
+                          border: "0.5px solid var(--bd)",
+                          background: "transparent",
+                          letterSpacing: 0.3,
+                          fontWeight: 400,
+                          textTransform: "lowercase",
+                        }}
+                      >editado</span>
+                    )}
                   </td>
                   <td style={{ fontSize: 11 }}>{g.categoria}</td>
                   <td style={{ fontSize: 11, color: "var(--muted2)" }}>{g.detalle || "—"}</td>

@@ -625,17 +625,43 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
               <td><span className="badge" style={{background:"transparent",color:cc(m.cuenta),border:`1px solid ${cc(m.cuenta)}44`}}>{m.cuenta}</span></td>
               <td style={{fontSize:11,color:"var(--muted2)"}}>
                 <span>{m.tipo}</span>
-                {/* Badge Anulado/Editado fusionado en columna Tipo */}
+                {/* Badges sutiles: borde + texto, sin fondo. Coherente con
+                    Gastos. Lucas 2026-05-19: minimalista. */}
                 {m.anulado && (
-                  <span className="badge b-danger" style={{fontSize:8,marginLeft:4}} title={m.anulado_motivo ?? undefined}>Anulado</span>
+                  <span
+                    title={m.anulado_motivo ?? undefined}
+                    style={{
+                      marginLeft: 6,
+                      fontSize: 9,
+                      padding: "1px 5px",
+                      borderRadius: 3,
+                      color: "var(--danger)",
+                      border: "0.5px solid var(--danger)",
+                      background: "transparent",
+                      letterSpacing: 0.3,
+                      fontWeight: 400,
+                      textTransform: "lowercase",
+                    }}
+                  >anulado</span>
                 )}
                 {m.editado && !m.anulado && (
                   <span
-                    className="badge b-warn"
-                    style={{fontSize:8, cursor:"pointer", marginLeft:4}}
                     onClick={() => setDetalleEdicion(m)}
                     title="Ver detalle de edición"
-                  >Editado</span>
+                    style={{
+                      marginLeft: 6,
+                      fontSize: 9,
+                      padding: "1px 5px",
+                      borderRadius: 3,
+                      color: "var(--muted2)",
+                      border: "0.5px solid var(--bd)",
+                      background: "transparent",
+                      letterSpacing: 0.3,
+                      fontWeight: 400,
+                      textTransform: "lowercase",
+                      cursor: "pointer",
+                    }}
+                  >editado</span>
                 )}
               </td>
               <td>{m.cat?<span className="badge b-muted">{m.cat}</span>:"—"}</td>
