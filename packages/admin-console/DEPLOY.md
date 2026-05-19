@@ -13,8 +13,13 @@
      - Output Directory: ya viene `dist`
      - Install Command: ya viene `cd ../.. && pnpm install --frozen-lockfile`
 4. **Environment Variables** (Production + Preview + Development):
-   - `VITE_SUPABASE_URL` = https://pduxydviqiaxfqnshhdc.supabase.co
-   - `VITE_SUPABASE_ANON_KEY` = (la misma anon key que usás en PASE y COMANDA — copiar de Vercel proyecto PASE → Settings → Environment Variables)
+   - `VITE_SUPABASE_ANON_KEY` = la misma anon key que usás en PASE y COMANDA.
+     - Sacala de Vercel → proyecto `pase-yndx` → Settings → Environment Variables.
+     - Buscá la que tenga prefijo `VITE_` (ej. `VITE_SUPABASE_ANON_KEY`).
+     - Click en los tres puntos → "Reveal" / "Copy Value".
+   - ⚠ La URL de Supabase NO se configura como env var — está hardcodeada
+     en el código (`src/lib/supabase.ts`) porque es pública (sale en
+     cualquier request del browser).
 5. Click **Deploy**.
 
 ## Después del primer deploy
@@ -39,8 +44,8 @@ Para correr `pnpm --filter admin-console dev` en localhost:
 
 ```bash
 # packages/admin-console/.env.local
-VITE_SUPABASE_URL=https://pduxydviqiaxfqnshhdc.supabase.co
 VITE_SUPABASE_ANON_KEY=<la anon key>
 ```
 
-Sin esto, el supabase client tira error en bootstrap.
+Sin esto, el supabase client tira error en bootstrap. La URL ya está
+hardcodeada en `src/lib/supabase.ts`.
