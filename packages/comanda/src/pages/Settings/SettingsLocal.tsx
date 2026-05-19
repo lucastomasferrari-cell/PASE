@@ -326,6 +326,32 @@ export function SettingsLocal() {
               onChange={(v) => setField('acepta_delivery', v)}
             />
           </div>
+
+          {/* Radio de delivery — vive en tabla `locales`, va al patch mp */}
+          {mpMerged && (
+            <div className="rounded-md border border-border p-3 space-y-2">
+              <Label>Radio máximo de entrega (km)</Label>
+              <Input
+                type="number"
+                step="0.5"
+                min={0.5}
+                max={50}
+                value={mpMerged.radio_delivery_km ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setMpField('radio_delivery_km', v === '' ? null : Number(v));
+                }}
+                placeholder="Vacío = sin límite"
+                className="h-11 max-w-[200px]"
+              />
+              <p className="text-xs text-muted-foreground">
+                Si lo dejás vacío, no hay límite (cualquier dirección se acepta).
+                Sugerido para CABA típico: 3-5 km. La validación corre en el
+                checkout — si el cliente está fuera del radio, no puede pagar
+                y le mostramos el mensaje.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

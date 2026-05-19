@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { formatARS } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { haversineKm } from '@/lib/geo';
 import { carritoStore, calcularSubtotal } from './carritoStore';
 import type { TiendaCtx } from './TiendaLayout';
 
@@ -35,6 +36,27 @@ export function TiendaCheckout() {
   const costoEnvio = carrito.tipoEntrega === 'delivery' ? Number(local.costo_envio_default) || 0 : 0;
   const total = subtotal + costoEnvio;
 
+  // Validación zona delivery (Fase B 2026-05-18). Si el local definió
+  // radio_delivery_km Y tenemos lat/lon del local + del cliente, calculamos
+  // distancia haversine. Si excede el radio, bloqueamos "Pagar".
+  // - Sin coords del cliente: dejamos pasar (mejor false-negativo que false-positivo
+  //   por no tener autocomplete bueno; la verificación visual del comerciante puede
+  //   atrapar errores grandes en POS al aprobar).
+  // - Sin radio configurado: sin límite.
+  const radioKm = Number(local.radio_delivery_km ?? 0);
+  const tieneRadio = radioKm > 0;
+  const tieneCoordsLocal = local.lat != null && local.lon != null;
+  const tieneCoordsCliente = carrito.direccion_lat != null && carrito.direccion_lon != null;
+  const distanciaKm = tieneRadio && tieneCoordsLocal && tieneCoordsCliente
+    ? haversineKm(
+        Number(local.lat), Number(local.lon),
+        Number(carrito.direccion_lat), Number(carrito.direccion_lon),
+      )
+    : null;
+  const fueraDeZona = carrito.tipoEntrega === 'delivery'
+    && distanciaKm != null
+    && distanciaKm > radioKm;
+
   if (carrito.items.length === 0) {
     return (
       <div className="max-w-md mx-auto p-12 text-center">
@@ -59,6 +81,12 @@ export function TiendaCheckout() {
     }
     if (carrito.tipoEntrega === 'delivery' && !carrito.direccion.trim()) {
       toast.error('Falta la dirección de entrega'); return;
+    }
+    if (fueraDeZona) {
+      toast.error('Fuera de la zona de entrega', {
+        description: `Estás a ${distanciaKm?.toFixed(1)} km del local. El radio máximo es ${radioKm} km.`,
+      });
+      return;
     }
     setEnviando(true);
     const { ventaId, error } = await crearPedidoPublico({
@@ -269,19 +297,34 @@ export function TiendaCheckout() {
         </div>
       </Section>
 
+      {/* Banner zona de delivery — solo cuando el local tiene radio configurado
+          + tenemos coords + estás fuera de zona. */}
+      {fueraDeZona && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm space-y-1">
+          <p className="font-medium text-destructive">Fuera de zona de entrega</p>
+          <p className="text-foreground/80">
+            Esta dirección está a <strong>{distanciaKm?.toFixed(1)} km</strong> del
+            local. {local.nombre} entrega hasta <strong>{radioKm} km</strong>.
+            Cambiá la dirección o elegí "Retiro en el local".
+          </p>
+        </div>
+      )}
+
       {/* Sticky CTA mobile / inline desktop */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 md:static md:bg-transparent md:border-0 md:p-0 md:mt-8 z-30">
         <div className="max-w-2xl mx-auto md:max-w-none">
           <Button
             onClick={confirmar}
-            disabled={enviando}
+            disabled={enviando || fueraDeZona}
             className="w-full h-12 text-base font-medium"
           >
             {enviando
               ? 'Enviando…'
-              : metodoPago === 'mp_checkout'
-                ? `Pagar online · ${formatARS(total)}`
-                : `Confirmar pedido · ${formatARS(total)}`
+              : fueraDeZona
+                ? 'Fuera de zona'
+                : metodoPago === 'mp_checkout'
+                  ? `Pagar online · ${formatARS(total)}`
+                  : `Confirmar pedido · ${formatARS(total)}`
             }
           </Button>
         </div>

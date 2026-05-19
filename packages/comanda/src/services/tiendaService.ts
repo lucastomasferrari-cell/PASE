@@ -40,6 +40,8 @@ export interface LocalPublico {
   localidad?: string | null;
   lat?: number | null;
   lon?: number | null;
+  /** Radio max delivery en km. NULL = sin límite. Fase B 2026-05-18. */
+  radio_delivery_km?: number | null;
 }
 
 export async function getLocalPorSlug(slug: string): Promise<{ data: LocalPublico | null; error: string | null }> {
