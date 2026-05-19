@@ -603,7 +603,10 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
           <table><thead><tr>
             <th className="col-fecha">Fecha</th>
             {ordenPor === "carga" && <th className="col-fecha" title="Cuándo se cargó realmente al sistema (puede diferir de la fecha del movimiento)">Cargado</th>}
-            <th>Cuenta</th><th>Tipo</th><th>Categoría</th><th>Detalle</th><th className="num-right">Importe</th><th>Estado</th><th></th>
+            {/* Columna "Estado" fusionada con "Tipo" para que la tabla entre
+                en la pantalla sin scroll horizontal (Lucas 2026-05-19).
+                El badge "Anulado"/"Editado" va al lado del tipo. */}
+            <th>Cuenta</th><th>Tipo</th><th>Categoría</th><th>Detalle</th><th className="num-right">Importe</th><th></th>
           </tr></thead>
           <tbody>{mFilt.map(m=>{
             const fCarga = fechaCargaFromId(m.id);
@@ -620,7 +623,21 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
               </td>
               {ordenPor === "carga" && <td className="mono" style={{fontSize:11,color:"var(--muted2)"}}>{fmtFechaCarga(fCarga)}</td>}
               <td><span className="badge" style={{background:"transparent",color:cc(m.cuenta),border:`1px solid ${cc(m.cuenta)}44`}}>{m.cuenta}</span></td>
-              <td style={{fontSize:11,color:"var(--muted2)"}}>{m.tipo}</td>
+              <td style={{fontSize:11,color:"var(--muted2)"}}>
+                <span>{m.tipo}</span>
+                {/* Badge Anulado/Editado fusionado en columna Tipo */}
+                {m.anulado && (
+                  <span className="badge b-danger" style={{fontSize:8,marginLeft:4}} title={m.anulado_motivo ?? undefined}>Anulado</span>
+                )}
+                {m.editado && !m.anulado && (
+                  <span
+                    className="badge b-warn"
+                    style={{fontSize:8, cursor:"pointer", marginLeft:4}}
+                    onClick={() => setDetalleEdicion(m)}
+                    title="Ver detalle de edición"
+                  >Editado</span>
+                )}
+              </td>
               <td>{m.cat?<span className="badge b-muted">{m.cat}</span>:"—"}</td>
               <td style={{fontSize:11,maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                 {(() => {
@@ -646,21 +663,6 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
                 {m.detalle}
               </td>
               <td className="num-right"><span style={{color:m.importe<0?"var(--danger)":"var(--success)"}}>{fmt_$(m.importe)}</span></td>
-              <td>
-                {m.anulado && (
-                  <span className="badge b-danger" style={{fontSize:8}} title={m.anulado_motivo ?? undefined}>Anulado</span>
-                )}
-                {m.editado && !m.anulado && (
-                  <span
-                    className="badge b-warn"
-                    style={{fontSize:8, cursor:"pointer"}}
-                    onClick={() => setDetalleEdicion(m)}
-                    title="Ver detalle de edición"
-                  >
-                    Editado
-                  </span>
-                )}
-              </td>
               <td>
                 <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
                   {!m.anulado && <button className="btn btn-ghost btn-sm" onClick={() => { setEditMov({...m, justificativo: ""}); setIdempKeyEditMov(crypto.randomUUID()); }}>Editar</button>}
