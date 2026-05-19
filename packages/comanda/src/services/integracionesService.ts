@@ -157,6 +157,39 @@ export async function rappiImportMenu(args: {
   return callTiendaMpAction('rappi-import-menu', args);
 }
 
+// ─── Operaciones contra PedidosYa API ─────────────────────────────────────
+
+export async function pedidosyaTestConnection(production: boolean): Promise<{ ok: boolean; error?: string }> {
+  return callTiendaMpAction('pedidosya-test', { production });
+}
+
+export async function pedidosyaSyncMenu(args: {
+  restaurant_id: string;
+  local_id?: number | null;
+  production: boolean;
+}): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+  return callTiendaMpAction('pedidosya-sync-menu', args);
+}
+
+export async function pedidosyaImportMenu(args: {
+  restaurant_id: string;
+  local_id?: number | null;
+  production: boolean;
+  dry_run?: boolean;
+}): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+  return callTiendaMpAction('pedidosya-import-menu', args);
+}
+
+export async function pedidosyaOrderAction(args: {
+  order_id: string;
+  action: 'accept' | 'dispatch' | 'cancel';
+  prep_time_minutes?: number;
+  reason?: string;
+  production: boolean;
+}): Promise<{ ok: boolean; error?: string }> {
+  return callTiendaMpAction('pedidosya-order-action', args);
+}
+
 export async function rappiOrderAction(args: {
   order_id: string;
   action: 'take' | 'dispatch' | 'cancel';

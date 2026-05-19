@@ -20,6 +20,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createMpTokenGetter } from './_mp-token.js';
 import { sendEmail, htmlPedidoConfirmado, htmlPedidoListo } from './_email.js';
 import { createRappiClient, getRappiCredentials, verifyRappiWebhookSignature } from './_rappi.js';
+import { createPedidosYaClient, getPedidosYaCredentials, verifyPedidosYaWebhookSignature } from './_pedidosya.js';
 import { checkUserAuth } from './_user-auth.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -70,6 +71,19 @@ export default async function handler(req, res) {
     }
     if (action === 'rappi-order-action' && req.method === 'POST') {
       return await handleRappiOrderAction(req, res);
+    }
+    // ── PedidosYa: operaciones contra PeYa POS Integration API ──
+    if (action === 'pedidosya-test' && req.method === 'POST') {
+      return await handlePedidosyaTest(req, res);
+    }
+    if (action === 'pedidosya-sync-menu' && req.method === 'POST') {
+      return await handlePedidosyaSyncMenu(req, res);
+    }
+    if (action === 'pedidosya-import-menu' && req.method === 'POST') {
+      return await handlePedidosyaImportMenu(req, res);
+    }
+    if (action === 'pedidosya-order-action' && req.method === 'POST') {
+      return await handlePedidosyaOrderAction(req, res);
     }
     res.status(405).json({ error: 'Método o action inválido' });
   } catch (e) {
@@ -893,7 +907,307 @@ async function handleRappiImportMenu(req, res) {
   });
 }
 
-// Note: verifyRappiWebhookSignature está importada pero no usada todavía
-// en handlePartnerWebhook (que es genérico). Wire-up de validación HMAC
-// en sprint próximo cuando Lucas tenga creds reales para testear.
+// ═══════════════════════════════════════════════════════════════════════════
+// PEDIDOSYA — operaciones contra PeYa POS Integration API
+// Espejo de los handlers de Rappi adaptados al schema PeYa.
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function handlePedidosyaTest(req, res) {
+  const auth = await checkUserAuth(req, res);
+  if (!auth) return;
+  if (!['dueno', 'admin', 'superadmin'].includes(auth.row.rol)) {
+    return res.status(403).json({ error: 'PERMISO_DENEGADO' });
+  }
+
+  const supabase = db();
+  const creds = await getPedidosYaCredentials(supabase, auth.row.tenant_id);
+  if (!creds) return res.status(400).json({ error: 'PEYA_NO_CONFIGURADA' });
+
+  const useProduction = req.body?.production === true;
+  try {
+    const client = createPedidosYaClient(creds, { production: useProduction });
+    await client.testConnection();
+    await supabase.from('integraciones_externas_credenciales')
+      .update({ estado: 'active', last_test_at: new Date().toISOString(), last_error: null })
+      .eq('tenant_id', auth.row.tenant_id).eq('provider', 'pedidos-ya');
+    res.status(200).json({ ok: true, message: 'Conexión exitosa con PedidosYa' });
+  } catch (err) {
+    const msg = err.message || String(err);
+    await supabase.from('integraciones_externas_credenciales')
+      .update({ estado: 'error', last_test_at: new Date().toISOString(), last_error: msg })
+      .eq('tenant_id', auth.row.tenant_id).eq('provider', 'pedidos-ya');
+    res.status(502).json({ error: 'PEYA_TEST_FAILED', detail: msg });
+  }
+}
+
+async function handlePedidosyaSyncMenu(req, res) {
+  const auth = await checkUserAuth(req, res);
+  if (!auth) return;
+  if (!['dueno', 'admin', 'superadmin'].includes(auth.row.rol)) {
+    return res.status(403).json({ error: 'PERMISO_DENEGADO' });
+  }
+
+  const { restaurant_id, local_id, production } = req.body || {};
+  if (!restaurant_id) return res.status(400).json({ error: 'RESTAURANT_ID_REQUERIDO' });
+
+  const supabase = db();
+  const creds = await getPedidosYaCredentials(supabase, auth.row.tenant_id);
+  if (!creds) return res.status(400).json({ error: 'PEYA_NO_CONFIGURADA' });
+
+  // Pull catálogo COMANDA (mismo flow que Rappi)
+  let itemsQ = supabase.from('items')
+    .select('id, sku_pedidosya, nombre, descripcion, emoji, foto_url, precio_madre, grupo_id, visible_tienda, estado, agotado_at, agotado_hasta')
+    .eq('tenant_id', auth.row.tenant_id)
+    .is('deleted_at', null)
+    .eq('visible_tienda', true);
+  if (local_id) itemsQ = itemsQ.or(`local_id.eq.${local_id},local_id.is.null`);
+  const { data: items, error: itemsErr } = await itemsQ;
+  if (itemsErr) return res.status(500).json({ error: 'DB_ITEMS_FAILED', detail: itemsErr.message });
+
+  const { data: grupos, error: gruposErr } = await supabase.from('item_grupos')
+    .select('id, nombre, descripcion, orden')
+    .eq('tenant_id', auth.row.tenant_id)
+    .is('deleted_at', null)
+    .order('orden');
+  if (gruposErr) return res.status(500).json({ error: 'DB_GRUPOS_FAILED', detail: gruposErr.message });
+
+  // Schema PedidosYa v3 (Partner Integration). Similar a Rappi pero con
+  // nombres distintos: sections en vez de categories, products igual.
+  const menuPayload = {
+    sections: (grupos || []).map((g) => ({
+      external_id: `cat_${g.id}`,
+      name: g.nombre,
+      description: g.descripcion || '',
+      sort_order: g.orden ?? 0,
+    })),
+    products: (items || []).map((it) => {
+      const ahora = Date.now();
+      const agotado = it.estado === 'agotado'
+        || (it.agotado_at && (!it.agotado_hasta || new Date(it.agotado_hasta).getTime() > ahora));
+      return {
+        external_id: it.sku_pedidosya || `item_${it.id}`,
+        section_external_id: it.grupo_id ? `cat_${it.grupo_id}` : null,
+        name: it.nombre,
+        description: it.descripcion || '',
+        price: Number(it.precio_madre),
+        image_url: it.foto_url || null,
+        enabled: !agotado,
+      };
+    }),
+  };
+
+  let result;
+  try {
+    const peya = createPedidosYaClient(creds, { production: !!production });
+    result = await peya.syncMenu(restaurant_id, menuPayload);
+  } catch (err) {
+    const detail = err.message || String(err);
+    await supabase.from('integraciones_externas_credenciales')
+      .update({ estado: 'error', last_test_at: new Date().toISOString(), last_error: detail })
+      .eq('tenant_id', auth.row.tenant_id).eq('provider', 'pedidos-ya');
+    return res.status(502).json({ error: 'PEYA_SYNC_FAILED', detail });
+  }
+
+  // Backfill items.sku_pedidosya si PeYa devolvió IDs nuevos
+  if (result?.products && Array.isArray(result.products)) {
+    for (const p of result.products) {
+      if (p.external_id?.startsWith('item_') && p.peya_id) {
+        const internalId = parseInt(p.external_id.replace('item_', ''));
+        if (Number.isFinite(internalId)) {
+          await supabase.from('items').update({ sku_pedidosya: p.peya_id }).eq('id', internalId);
+        }
+      }
+    }
+  }
+
+  await supabase.from('integraciones_externas_credenciales')
+    .update({ estado: 'active', last_test_at: new Date().toISOString(), last_error: null })
+    .eq('tenant_id', auth.row.tenant_id).eq('provider', 'pedidos-ya');
+
+  res.status(200).json({
+    ok: true,
+    productos_sincronizados: menuPayload.products.length,
+    categorias_sincronizadas: menuPayload.sections.length,
+  });
+}
+
+// Import menú existente de PedidosYa → COMANDA. Mismo flow que Rappi
+// pero con shape PeYa (sections en vez de categories).
+async function handlePedidosyaImportMenu(req, res) {
+  const auth = await checkUserAuth(req, res);
+  if (!auth) return;
+  if (!['dueno', 'admin', 'superadmin'].includes(auth.row.rol)) {
+    return res.status(403).json({ error: 'PERMISO_DENEGADO' });
+  }
+
+  const { restaurant_id, local_id, production, dry_run } = req.body || {};
+  if (!restaurant_id) return res.status(400).json({ error: 'RESTAURANT_ID_REQUERIDO' });
+
+  const supabase = db();
+  const creds = await getPedidosYaCredentials(supabase, auth.row.tenant_id);
+  if (!creds) return res.status(400).json({ error: 'PEYA_NO_CONFIGURADA' });
+
+  let peyaMenu;
+  try {
+    const peya = createPedidosYaClient(creds, { production: !!production });
+    peyaMenu = await peya.getMenu(restaurant_id);
+  } catch (err) {
+    return res.status(502).json({ error: 'PEYA_GET_MENU_FAILED', detail: err.message || String(err) });
+  }
+
+  // Normalizar shape — PeYa usa sections/products típicamente
+  const categoriasRaw = peyaMenu?.sections ?? peyaMenu?.categories ?? peyaMenu?.menu?.sections ?? [];
+  const productosRaw = peyaMenu?.products ?? peyaMenu?.items ?? peyaMenu?.menu?.products ?? [];
+
+  if (!Array.isArray(categoriasRaw) || !Array.isArray(productosRaw)) {
+    return res.status(502).json({
+      error: 'PEYA_MENU_SHAPE_INESPERADO',
+      detail: 'No pudimos identificar sections[] ni products[] en el response.',
+      raw_keys: peyaMenu ? Object.keys(peyaMenu) : [],
+    });
+  }
+
+  const tenantId = auth.row.tenant_id;
+  const localId = local_id ? Number(local_id) : null;
+  const summary = {
+    grupos_a_crear: 0, grupos_a_actualizar: 0,
+    items_a_crear: 0, items_a_actualizar: 0,
+    items_ignorados: 0,
+  };
+  const gruposMap = new Map();
+
+  for (const cat of categoriasRaw) {
+    const nombre = (cat.name || cat.nombre || '').trim();
+    if (!nombre) continue;
+    const externalId = String(cat.external_id || cat.id || nombre);
+
+    const { data: existente } = await supabase
+      .from('item_grupos')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('nombre', nombre)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (existente) {
+      gruposMap.set(externalId, existente.id);
+      summary.grupos_a_actualizar++;
+      if (!dry_run) {
+        await supabase.from('item_grupos').update({
+          descripcion: cat.description || cat.descripcion || null,
+          orden: cat.sort_order ?? cat.orden ?? 0,
+        }).eq('id', existente.id);
+      }
+    } else {
+      summary.grupos_a_crear++;
+      if (!dry_run) {
+        const { data: nuevo } = await supabase.from('item_grupos').insert({
+          tenant_id: tenantId,
+          local_id: localId,
+          nombre,
+          descripcion: cat.description || cat.descripcion || null,
+          orden: cat.sort_order ?? cat.orden ?? 0,
+          color: '#94a3b8',
+          activo: true,
+        }).select('id').single();
+        if (nuevo) gruposMap.set(externalId, nuevo.id);
+      }
+    }
+  }
+
+  for (const prod of productosRaw) {
+    const nombre = (prod.name || prod.nombre || '').trim();
+    if (!nombre) { summary.items_ignorados++; continue; }
+
+    const skuPeya = String(prod.external_id || prod.id || `peya_${Date.now()}_${Math.random()}`);
+    const precio = Number(prod.price ?? prod.precio ?? 0);
+    if (precio <= 0) { summary.items_ignorados++; continue; }
+
+    const catExternalId = prod.section_external_id || prod.category_id || prod.section_id;
+    const grupoId = catExternalId ? gruposMap.get(String(catExternalId)) : null;
+
+    const { data: existente } = await supabase
+      .from('items')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .or(`sku_pedidosya.eq.${skuPeya},nombre.eq.${nombre}`)
+      .is('deleted_at', null)
+      .limit(1)
+      .maybeSingle();
+
+    if (existente) {
+      summary.items_a_actualizar++;
+      if (!dry_run) {
+        await supabase.from('items').update({
+          nombre,
+          descripcion: prod.description || prod.descripcion || null,
+          precio_madre: precio,
+          foto_url: prod.image_url || prod.foto_url || null,
+          grupo_id: grupoId,
+          sku_pedidosya: skuPeya,
+          estado: (prod.enabled === false) ? 'agotado' : 'disponible',
+        }).eq('id', existente.id);
+      }
+    } else {
+      summary.items_a_crear++;
+      if (!dry_run) {
+        await supabase.from('items').insert({
+          tenant_id: tenantId,
+          local_id: localId,
+          nombre,
+          descripcion: prod.description || prod.descripcion || null,
+          precio_madre: precio,
+          foto_url: prod.image_url || prod.foto_url || null,
+          grupo_id: grupoId,
+          sku_pedidosya: skuPeya,
+          estado: (prod.enabled === false) ? 'agotado' : 'disponible',
+          visible_pos: true,
+          visible_qr: false,
+          visible_tienda: false,
+        });
+      }
+    }
+  }
+
+  if (!dry_run) {
+    await supabase.from('integraciones_externas_credenciales')
+      .update({ estado: 'active', last_test_at: new Date().toISOString(), last_error: null })
+      .eq('tenant_id', tenantId).eq('provider', 'pedidos-ya');
+  }
+
+  res.status(200).json({ ok: true, dry_run: !!dry_run, summary });
+}
+
+async function handlePedidosyaOrderAction(req, res) {
+  const auth = await checkUserAuth(req, res);
+  if (!auth) return;
+
+  const { order_id, action: ordAction, prep_time_minutes, reason, production } = req.body || {};
+  if (!order_id || !ordAction) {
+    return res.status(400).json({ error: 'PARAMS_REQUERIDOS: order_id + action' });
+  }
+  if (!['accept', 'dispatch', 'cancel'].includes(ordAction)) {
+    return res.status(400).json({ error: 'ACTION_INVALIDA: accept | dispatch | cancel' });
+  }
+
+  const supabase = db();
+  const creds = await getPedidosYaCredentials(supabase, auth.row.tenant_id);
+  if (!creds) return res.status(400).json({ error: 'PEYA_NO_CONFIGURADA' });
+
+  try {
+    const peya = createPedidosYaClient(creds, { production: !!production });
+    let result;
+    if (ordAction === 'accept') result = await peya.acceptOrder(order_id, prep_time_minutes || 30);
+    else if (ordAction === 'dispatch') result = await peya.dispatchOrder(order_id);
+    else result = await peya.cancelOrder(order_id, reason);
+
+    res.status(200).json({ ok: true, action: ordAction, peya_response: result });
+  } catch (err) {
+    res.status(502).json({ error: `PEYA_${ordAction.toUpperCase()}_FAILED`, detail: err.message || String(err) });
+  }
+}
+
+// Verificadores de firma HMAC importados pero no wireados al webhook
+// genérico todavía. Sprint próximo cuando Lucas tenga creds.
 void verifyRappiWebhookSignature;
+void verifyPedidosYaWebhookSignature;

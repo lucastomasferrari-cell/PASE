@@ -24,6 +24,7 @@ import {
   getIntegracion, upsertIntegracion, eliminarIntegracion,
   listMapeos, upsertMapeo, eliminarMapeo,
   rappiTestConnection, rappiSyncMenu, rappiImportMenu,
+  pedidosyaTestConnection, pedidosyaSyncMenu, pedidosyaImportMenu,
   type ExternalProvider, type IntegracionPublica, type MapeoLocal,
 } from '@/services/integracionesService';
 import { listLocalesAccesibles, type LocalSimple } from '@/services/configService';
@@ -238,14 +239,48 @@ export function IntegracionPartnerScreen({ provider }: Props) {
     }).catch(() => toast.error('No se pudo copiar'));
   }
 
+  // Wrapper genérico: rappi usa store_id, peya usa restaurant_id.
+  // Devolvemos las funciones específicas según el provider.
+  function getProviderOps() {
+    if (provider === 'rappi') {
+      return {
+        test: () => rappiTestConnection(usaProduccion),
+        sync: (localId: number | null, externalId: string) => rappiSyncMenu({
+          store_id: externalId, local_id: localId, production: usaProduccion,
+        }),
+        importMenu: (localId: number | null, externalId: string, dry: boolean) => rappiImportMenu({
+          store_id: externalId, local_id: localId, production: usaProduccion, dry_run: dry,
+        }),
+        externalIdLabel: 'store_id de Rappi',
+        externalIdPlaceholder: 'store_id de Rappi (ej: 12345)',
+      };
+    }
+    if (provider === 'pedidos-ya') {
+      return {
+        test: () => pedidosyaTestConnection(usaProduccion),
+        sync: (localId: number | null, externalId: string) => pedidosyaSyncMenu({
+          restaurant_id: externalId, local_id: localId, production: usaProduccion,
+        }),
+        importMenu: (localId: number | null, externalId: string, dry: boolean) => pedidosyaImportMenu({
+          restaurant_id: externalId, local_id: localId, production: usaProduccion, dry_run: dry,
+        }),
+        externalIdLabel: 'restaurant_id de PedidosYa',
+        externalIdPlaceholder: 'restaurant_id de PeYa (ej: rest_xyz)',
+      };
+    }
+    return null; // deliverect u otros: aún sin operaciones
+  }
+
   async function handleTestConnection() {
+    const ops = getProviderOps();
+    if (!ops) return;
     setTesteando(true);
     try {
-      const r = await rappiTestConnection(usaProduccion);
+      const r = await ops.test();
       if (!r.ok) {
-        toast.error('Conexión Rappi falló', { description: r.error });
+        toast.error(`Conexión ${cfg.nombre} falló`, { description: r.error });
       } else {
-        toast.success('Conexión con Rappi OK');
+        toast.success(`Conexión con ${cfg.nombre} OK`);
       }
       const fresh = await getIntegracion(provider);
       setInteg(fresh.data);
@@ -254,14 +289,12 @@ export function IntegracionPartnerScreen({ provider }: Props) {
     }
   }
 
-  async function handleSyncMenu(localId: number | null, storeId: string) {
+  async function handleSyncMenu(localId: number | null, externalId: string) {
+    const ops = getProviderOps();
+    if (!ops) return;
     setSincronizando(true);
     try {
-      const r = await rappiSyncMenu({
-        store_id: storeId,
-        local_id: localId,
-        production: usaProduccion,
-      });
+      const r = await ops.sync(localId, externalId);
       if (!r.ok) {
         toast.error('Sync menú falló', { description: r.error });
       } else {
@@ -276,21 +309,17 @@ export function IntegracionPartnerScreen({ provider }: Props) {
   }
 
   /**
-   * Import en 2 pasos: primero dry-run para mostrar preview de cambios.
-   * El user confirma → segundo call sin dry_run que aplica.
+   * Import en 2 pasos: dry-run preview → confirm.
    */
-  async function handlePreviewImport(localId: number | null, storeId: string) {
+  async function handlePreviewImport(localId: number | null, externalId: string) {
+    const ops = getProviderOps();
+    if (!ops) return;
     setImportando(true);
     setImportPreview(null);
     try {
-      const r = await rappiImportMenu({
-        store_id: storeId,
-        local_id: localId,
-        production: usaProduccion,
-        dry_run: true,
-      });
+      const r = await ops.importMenu(localId, externalId, true);
       if (!r.ok) {
-        toast.error('No se pudo leer el menú de Rappi', { description: r.error });
+        toast.error(`No se pudo leer el menú de ${cfg.nombre}`, { description: r.error });
         return;
       }
       const data = r.data as { summary: typeof importPreview };
@@ -300,15 +329,12 @@ export function IntegracionPartnerScreen({ provider }: Props) {
     }
   }
 
-  async function handleConfirmImport(localId: number | null, storeId: string) {
+  async function handleConfirmImport(localId: number | null, externalId: string) {
+    const ops = getProviderOps();
+    if (!ops) return;
     setImportando(true);
     try {
-      const r = await rappiImportMenu({
-        store_id: storeId,
-        local_id: localId,
-        production: usaProduccion,
-        dry_run: false,
-      });
+      const r = await ops.importMenu(localId, externalId, false);
       if (!r.ok) {
         toast.error('Import falló', { description: r.error });
         return;
@@ -412,8 +438,8 @@ export function IntegracionPartnerScreen({ provider }: Props) {
         </CardContent>
       </Card>
 
-      {/* Operaciones (solo Rappi y con creds cargadas) */}
-      {provider === 'rappi' && integ && (
+      {/* Operaciones (Rappi y PeYa, con creds cargadas) */}
+      {(provider === 'rappi' || provider === 'pedidos-ya') && integ && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
@@ -441,7 +467,7 @@ export function IntegracionPartnerScreen({ provider }: Props) {
                 {testeando ? 'Probando…' : 'Probar conexión OAuth'}
               </Button>
               <p className="text-xs text-muted-foreground">
-                Intenta autenticar contra el endpoint /api/cargo-public-api-token de Rappi.
+                Intenta autenticar contra el endpoint OAuth de {cfg.nombre}.
                 Si pasa, marcamos la integración como <strong>activa</strong>.
               </p>
             </div>
@@ -449,11 +475,11 @@ export function IntegracionPartnerScreen({ provider }: Props) {
             {/* Selector de store + local — compartido entre import y sync */}
             <div className="rounded-md border border-dashed border-border p-3 space-y-3">
               <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Sincronizar catálogo con Rappi
+                Sincronizar catálogo con {cfg.nombre}
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <Select
-                  onValueChange={(v) => (window as Window & { _rappi_local?: string })._rappi_local = v}
+                  onValueChange={(v) => (window as Window & { _partner_local?: string })._partner_local = v}
                 >
                   <SelectTrigger className="h-10"><SelectValue placeholder="Local COMANDA…" /></SelectTrigger>
                   <SelectContent>
@@ -464,23 +490,23 @@ export function IntegracionPartnerScreen({ provider }: Props) {
                   </SelectContent>
                 </Select>
                 <Input
-                  placeholder="store_id de Rappi (ej: 12345)"
+                  placeholder={getProviderOps()?.externalIdPlaceholder ?? 'ID externo…'}
                   className="h-10 font-mono text-xs"
-                  id="rappi-store-id-input"
-                  onChange={(e) => (window as Window & { _rappi_store?: string })._rappi_store = e.target.value}
+                  id="partner-external-id-input"
+                  onChange={(e) => (window as Window & { _partner_external?: string })._partner_external = e.target.value}
                 />
               </div>
 
-              {/* Import — Datalive-style: pegás store_id y trae todo */}
+              {/* Import — Datalive-style: pegás ID y trae todo */}
               <div className="rounded-md bg-primary/5 border border-primary/20 p-3 space-y-2">
                 <div className="flex items-start gap-2">
                   <Download className="h-4 w-4 text-primary mt-0.5 shrink-0" />
                   <div className="text-xs">
-                    <strong className="text-foreground">Importar menú DESDE Rappi</strong>
+                    <strong className="text-foreground">Importar menú DESDE {cfg.nombre}</strong>
                     <p className="text-muted-foreground mt-0.5">
-                      Si ya vendés en Rappi y tu catálogo está allá, traelo a COMANDA en
+                      Si ya vendés en {cfg.nombre} y tu catálogo está allá, traelo a COMANDA en
                       1 click. Mapeamos categorías → grupos, productos → items con
-                      sku_rappi pre-poblado. Idempotente — si volvés a importar,
+                      SKU pre-poblado. Idempotente — si volvés a importar,
                       actualiza en vez de duplicar.
                     </p>
                   </div>
@@ -503,29 +529,29 @@ export function IntegracionPartnerScreen({ provider }: Props) {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        const w = window as Window & { _rappi_local?: string; _rappi_store?: string };
-                        const storeId = w._rappi_store?.trim();
-                        if (!storeId) { toast.error('Pegá el store_id de Rappi'); return; }
-                        const localStr = w._rappi_local ?? '0';
+                        const w = window as Window & { _partner_local?: string; _partner_external?: string };
+                        const extId = w._partner_external?.trim();
+                        if (!extId) { toast.error(`Pegá el ${getProviderOps()?.externalIdLabel ?? 'ID externo'}`); return; }
+                        const localStr = w._partner_local ?? '0';
                         const localId = localStr === '0' ? null : parseInt(localStr);
-                        handlePreviewImport(localId, storeId);
+                        handlePreviewImport(localId, extId);
                       }}
                       disabled={importando}
                       className="h-9"
                     >
                       <Download className="h-3.5 w-3.5 mr-1.5" />
-                      {importando ? 'Leyendo Rappi…' : 'Vista previa import'}
+                      {importando ? `Leyendo ${cfg.nombre}…` : 'Vista previa import'}
                     </Button>
                   ) : (
                     <>
                       <Button
                         size="sm"
                         onClick={() => {
-                          const w = window as Window & { _rappi_local?: string; _rappi_store?: string };
-                          const storeId = w._rappi_store?.trim() ?? '';
-                          const localStr = w._rappi_local ?? '0';
+                          const w = window as Window & { _partner_local?: string; _partner_external?: string };
+                          const extId = w._partner_external?.trim() ?? '';
+                          const localStr = w._partner_local ?? '0';
                           const localId = localStr === '0' ? null : parseInt(localStr);
-                          handleConfirmImport(localId, storeId);
+                          handleConfirmImport(localId, extId);
                         }}
                         disabled={importando}
                         className="h-9"
@@ -540,15 +566,15 @@ export function IntegracionPartnerScreen({ provider }: Props) {
                 </div>
               </div>
 
-              {/* Sync — push del menú COMANDA a Rappi */}
+              {/* Sync — push del menú COMANDA al partner */}
               <div className="rounded-md border border-border p-3 space-y-2">
                 <div className="flex items-start gap-2">
                   <Upload className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                   <div className="text-xs">
-                    <strong className="text-foreground">Empujar menú COMANDA → Rappi</strong>
+                    <strong className="text-foreground">Empujar menú COMANDA → {cfg.nombre}</strong>
                     <p className="text-muted-foreground mt-0.5">
-                      Si tu fuente de verdad es COMANDA (no Rappi), usá esto para
-                      pushear todos los items visible_tienda al catálogo Rappi.
+                      Si tu fuente de verdad es COMANDA (no {cfg.nombre}), usá esto para
+                      pushear todos los items visible_tienda al catálogo de {cfg.nombre}.
                       Sobrescribe lo que esté allá.
                     </p>
                   </div>
@@ -557,18 +583,18 @@ export function IntegracionPartnerScreen({ provider }: Props) {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const w = window as Window & { _rappi_local?: string; _rappi_store?: string };
-                    const storeId = w._rappi_store?.trim();
-                    if (!storeId) { toast.error('Pegá el store_id de Rappi'); return; }
-                    const localStr = w._rappi_local ?? '0';
+                    const w = window as Window & { _partner_local?: string; _partner_external?: string };
+                    const extId = w._partner_external?.trim();
+                    if (!extId) { toast.error(`Pegá el ${getProviderOps()?.externalIdLabel ?? 'ID externo'}`); return; }
+                    const localStr = w._partner_local ?? '0';
                     const localId = localStr === '0' ? null : parseInt(localStr);
-                    handleSyncMenu(localId, storeId);
+                    handleSyncMenu(localId, extId);
                   }}
                   disabled={sincronizando}
                   className="h-9"
                 >
                   <Upload className="h-3.5 w-3.5 mr-1.5" />
-                  {sincronizando ? 'Sincronizando…' : 'Push menú a Rappi'}
+                  {sincronizando ? 'Sincronizando…' : `Push menú a ${cfg.nombre}`}
                 </Button>
               </div>
             </div>

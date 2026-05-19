@@ -9,9 +9,14 @@ import type {
 // dispara fire-and-forget al endpoint que notifica al partner de un cambio
 // de estado. No bloqueamos el flow del POS si falla — el dueño puede
 // reintentar manualmente desde la UI de pedidos externos.
+//
+// Action es genérica ('accept' / 'dispatch' / 'cancel') — el wrapper la
+// traduce al verbo específico del partner:
+//   Rappi: take / dispatch / cancel
+//   PedidosYa: accept / dispatch / cancel
 async function notifyPartnerStatusChange(
   ventaId: number,
-  action: 'take' | 'dispatch' | 'cancel',
+  action: 'accept' | 'dispatch' | 'cancel',
   opts: { prepTimeMinutes?: number; reason?: string } = {},
 ): Promise<void> {
   try {
@@ -21,13 +26,23 @@ async function notifyPartnerStatusChange(
       .single();
     if (!venta?.external_provider || !venta.external_order_id) return;
 
-    // Por ahora solo wire para rappi — los otros providers en sprint próximo.
-    if (venta.external_provider !== 'rappi') return;
-
     const sess = (await db.auth.getSession()).data.session;
     if (!sess?.access_token) return;
 
-    void fetch('/api/tienda-mp?action=rappi-order-action', {
+    // Wireup por provider
+    let endpointAction: string;
+    let providerAction: string;
+    if (venta.external_provider === 'rappi') {
+      endpointAction = 'rappi-order-action';
+      providerAction = action === 'accept' ? 'take' : action;
+    } else if (venta.external_provider === 'pedidos-ya') {
+      endpointAction = 'pedidosya-order-action';
+      providerAction = action; // PeYa usa accept/dispatch/cancel directamente
+    } else {
+      return; // Deliverect u otros — sin wire todavía
+    }
+
+    void fetch(`/api/tienda-mp?action=${endpointAction}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -35,10 +50,10 @@ async function notifyPartnerStatusChange(
       },
       body: JSON.stringify({
         order_id: venta.external_order_id,
-        action,
+        action: providerAction,
         prep_time_minutes: opts.prepTimeMinutes,
         reason: opts.reason,
-        production: false, // por default staging — el dueño puede hardcodear true cuando esté listo
+        production: false, // por default staging hasta que el dueño esté listo
       }),
     }).catch(() => { /* silent fire-and-forget */ });
   } catch {
@@ -406,6 +421,6 @@ export async function aprobarPedido(ventaId: number): Promise<{ error: string | 
   const { error } = await db.rpc('fn_aprobar_pedido_comanda', { p_venta_id: ventaId });
   if (error) return { error: error.message };
   // Si la venta vino de Rappi/PeYa/Deliverect, avisar al partner que aceptamos.
-  void notifyPartnerStatusChange(ventaId, 'take', { prepTimeMinutes: 30 });
+  void notifyPartnerStatusChange(ventaId, 'accept', { prepTimeMinutes: 30 });
   return { error: null };
 }
