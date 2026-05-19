@@ -1,0 +1,188 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Auto-fix bug — disparado cuando entra un ticket nuevo de soporte.
+#
+# Trigger: repository_dispatch con event_type='auto_fix_bug' enviado desde
+# /api/auto-fix-trigger (Vercel function). El payload trae { ticket_id }.
+#
+# Flow:
+#   1. Checkout repo + setup pnpm.
+#   2. Install deps (cacheado).
+#   3. Corre scripts/auto-fix-agent.mjs que pasa por Sonnet (y escala a Opus
+#      si hace falta).
+#   4. Si el agent devolvió { action: 'fix', ... }:
+#      - Lee qué archivos cambiaron + explicación.
+#      - Si diff < 50 líneas Y < 5 archivos → commit directo a main.
+#      - Si diff >= 50 líneas O >= 5 archivos → crear PR a main para review.
+#   5. Update final del ticket con el commit/PR URL.
+#
+# Secrets requeridos:
+#   - ANTHROPIC_API_KEY
+#   - SUPABASE_SERVICE_KEY
+#   - SUPABASE_URL
+#
+# Permisos GITHUB_TOKEN: contents:write + pull-requests:write (declarados abajo).
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Auto-fix bug
+
+on:
+  repository_dispatch:
+    types: [auto_fix_bug]
+  # Permitir disparo manual para testing.
+  workflow_dispatch:
+    inputs:
+      ticket_id:
+        description: 'UUID del ticket en tickets_soporte'
+        required: true
+
+# Solo 1 ticket a la vez para evitar conflictos de git push paralelos a main.
+concurrency:
+  group: auto-fix-bug
+  cancel-in-progress: false
+
+jobs:
+  auto-fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      TICKET_ID: ${{ github.event.client_payload.ticket_id || github.event.inputs.ticket_id }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+      GIT_USER_NAME: 'Claude Auto-Fix Bot'
+      GIT_USER_EMAIL: 'auto-fix-bot@pase.local'
+
+    steps:
+      - name: Validate inputs
+        run: |
+          if [ -z "$TICKET_ID" ]; then
+            echo "::error::TICKET_ID is required"
+            exit 1
+          fi
+          echo "Procesando ticket: $TICKET_ID"
+
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure git
+        run: |
+          git config user.name "$GIT_USER_NAME"
+          git config user.email "$GIT_USER_EMAIL"
+
+      - name: Run auto-fix agent
+        id: agent
+        run: |
+          set -e
+          # Capturamos stdout en archivo para parsear el JSON final.
+          # El script imprime logs en stderr y devuelve JSON en stdout.
+          node scripts/auto-fix-agent.mjs > agent-output.json 2> agent.log
+          cat agent.log
+          echo "--- agent output ---"
+          cat agent-output.json
+          # Exportar action al output del step.
+          ACTION=$(node -e "console.log(JSON.parse(require('fs').readFileSync('agent-output.json','utf8')).action)")
+          echo "action=$ACTION" >> $GITHUB_OUTPUT
+
+      - name: Decide commit vs PR
+        id: decide
+        if: steps.agent.outputs.action == 'fix'
+        run: |
+          # Cuento líneas y archivos modificados.
+          LINES_CHANGED=$(git diff --shortstat | grep -oE '[0-9]+ insertion|[0-9]+ deletion' | grep -oE '[0-9]+' | paste -sd+ | bc || echo 0)
+          FILES_CHANGED=$(git diff --name-only | wc -l)
+          echo "lines_changed=$LINES_CHANGED" >> $GITHUB_OUTPUT
+          echo "files_changed=$FILES_CHANGED" >> $GITHUB_OUTPUT
+          # Regla: cambio chico → commit directo. Cambio grande → PR.
+          if [ "$LINES_CHANGED" -lt 50 ] && [ "$FILES_CHANGED" -lt 5 ]; then
+            echo "mode=commit" >> $GITHUB_OUTPUT
+          else
+            echo "mode=pr" >> $GITHUB_OUTPUT
+          fi
+          echo "Diff: $LINES_CHANGED líneas en $FILES_CHANGED archivos"
+
+      - name: Run tests one more time (gate final)
+        if: steps.agent.outputs.action == 'fix'
+        id: tests
+        run: |
+          set +e
+          PKGS=$(git diff --name-only | grep -oE '^packages/[^/]+' | sort -u | sed 's|packages/||' | tr '\n' ' ')
+          echo "Paquetes afectados: $PKGS"
+          for pkg in $PKGS; do
+            echo "→ Validando $pkg"
+            pnpm --filter "$pkg" typecheck || { echo "::error::typecheck $pkg falló"; exit 1; }
+            pnpm --filter "$pkg" lint || { echo "::error::lint $pkg falló"; exit 1; }
+            pnpm --filter "$pkg" test || { echo "::error::test $pkg falló"; exit 1; }
+          done
+
+      - name: Commit directo a main (cambio chico)
+        if: steps.agent.outputs.action == 'fix' && steps.decide.outputs.mode == 'commit'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          EXPL=$(node -e "console.log(JSON.parse(require('fs').readFileSync('agent-output.json','utf8')).explanation)")
+          git add -A
+          git commit -m "fix: $EXPL
+
+          Auto-fix por Claude Agent.
+          Ticket: $TICKET_ID
+
+          Co-Authored-By: Claude Auto-Fix Bot <auto-fix-bot@pase.local>"
+          git push origin main
+          COMMIT_SHA=$(git rev-parse HEAD)
+          echo "Commit: $COMMIT_SHA"
+          # Update ticket en supabase.
+          node scripts/auto-fix-mark-resolved.mjs "$TICKET_ID" "$COMMIT_SHA" "commit"
+
+      - name: Abrir PR (cambio grande)
+        if: steps.agent.outputs.action == 'fix' && steps.decide.outputs.mode == 'pr'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          EXPL=$(node -e "console.log(JSON.parse(require('fs').readFileSync('agent-output.json','utf8')).explanation)")
+          BRANCH="auto-fix/ticket-$(echo $TICKET_ID | cut -c1-8)"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "fix: $EXPL
+
+          Auto-fix por Claude Agent.
+          Ticket: $TICKET_ID
+
+          Co-Authored-By: Claude Auto-Fix Bot <auto-fix-bot@pase.local>"
+          git push origin "$BRANCH"
+          PR_URL=$(gh pr create --title "fix: $EXPL" \
+            --body "Auto-fix por Claude Agent. Ticket: \`$TICKET_ID\`. Revisar diff antes de mergear." \
+            --base main --head "$BRANCH")
+          PR_NUM=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+          echo "PR: $PR_URL"
+          node scripts/auto-fix-mark-resolved.mjs "$TICKET_ID" "$PR_URL" "pr" "$PR_NUM"
+
+      - name: Upload agent logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-logs-${{ env.TICKET_ID }}
+          path: |
+            agent.log
+            agent-output.json
+          retention-days: 7
