@@ -152,13 +152,14 @@ export function TabPagos({
         const completaPago = asignadoTotal >= pendiente;
         const esPagoParcial = asignadoTotal > 0 && asignadoTotal < pendiente;
         const sobrepago = asignadoTotal > pendiente ? asignadoTotal - pendiente : 0;
-        // Validación por línea + diagnóstico claro de por qué el botón está
-        // deshabilitado. Tolerancia ±$1 por redondeos de decimales.
-        // Bug Caja-1: cada línea debe tener cuenta seleccionada.
+        // Validación por línea. Bug Caja-1: cada línea debe tener cuenta.
+        // Sobrepago permitido (Lucas 2026-05-19): si no hay cambio justo
+        // se acepta pagar de más sin acumular saldo a favor ni deuda.
+        // El exceso sale de caja como verdad pero no queda registrado en
+        // la liquidación. Solo mostramos warning + pedimos confirmación.
         const lineaSinCuenta = formasPago.findIndex(f => parseMonto(f.monto) > 0 && !f.cuenta);
         const lineaSinMonto = formasPago.findIndex(f => f.cuenta && parseMonto(f.monto) <= 0);
         const puedeConfirmar = asignadoTotal > 0
-          && sobrepago <= 1   // tolerancia de redondeo
           && lineaSinCuenta === -1
           && lineaSinMonto === -1;
 
@@ -166,11 +167,21 @@ export function TabPagos({
         if (asignadoTotal === 0) motivoBloqueo = 'Asigná un monto en alguna línea para confirmar.';
         else if (lineaSinCuenta !== -1) motivoBloqueo = `Línea ${lineaSinCuenta + 1}: falta elegir cuenta.`;
         else if (lineaSinMonto !== -1) motivoBloqueo = `Línea ${lineaSinMonto + 1}: falta el monto.`;
-        else if (sobrepago > 1) motivoBloqueo = `Te pasaste $${sobrepago.toLocaleString('es-AR')} del total. Bajá algún monto.`;
         const cerrarModal = () => { setPagoModal(null); setFormasPago([]); setAdelantosPendientes([]); };
 
         const confirmarPago = async () => {
           if (!puedeConfirmar || pagando) return;
+          // Sobrepago > $1 (toleramos $1 de redondeo): pedimos confirmación
+          // explícita. Lucas 2026-05-19: que pase pero quede claro que el
+          // exceso es absorbido (no acumula saldo ni deuda).
+          if (sobrepago > 1) {
+            const ok = window.confirm(
+              `Vas a pagar $${sobrepago.toLocaleString('es-AR')} de MÁS sobre lo adeudado.\n\n` +
+              `El sueldo queda registrado como pagado completo. Los $${sobrepago.toLocaleString('es-AR')} extra salen de caja real (refleja el efectivo) pero NO se acumulan como saldo a favor del empleado ni como deuda.\n\n` +
+              `¿Confirmar pago con sobrepago?`,
+            );
+            if (!ok) return;
+          }
           setPagando(true);
           try {
             // Serializar las formas de pago (sólo las con monto > 0).
@@ -303,13 +314,26 @@ export function TabPagos({
                 )}
 
                 <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
-                  <span style={{fontSize:12,color: sobrepago > 0 ? "var(--danger)" : esPagoParcial ? "var(--warn)" : "var(--muted2)"}}>
-                    {sobrepago > 0 ? "Sobrepago" : esPagoParcial ? "Pago parcial — Restante" : "Restante"}
+                  <span style={{fontSize:12,color: sobrepago > 1 ? "var(--warn)" : esPagoParcial ? "var(--warn)" : "var(--muted2)"}}>
+                    {sobrepago > 1 ? "Sobrepago" : esPagoParcial ? "Pago parcial — Restante" : "Restante"}
                   </span>
-                  <span style={{fontSize:14,fontWeight:500,color: sobrepago > 0 ? "var(--danger)" : Math.abs(restanteTrasEste) < 1 ? "var(--success)" : "var(--warn)"}}>
-                    {sobrepago > 0 ? `+${fmt_$(sobrepago)}` : fmt_$(Math.max(0, restanteTrasEste))}
+                  <span style={{fontSize:14,fontWeight:500,color: sobrepago > 1 ? "var(--warn)" : Math.abs(restanteTrasEste) < 1 ? "var(--success)" : "var(--warn)"}}>
+                    {sobrepago > 1 ? `+${fmt_$(sobrepago)}` : fmt_$(Math.max(0, restanteTrasEste))}
                   </span>
                 </div>
+                {sobrepago > 1 && (
+                  <div style={{
+                    marginTop:8, padding:"8px 10px",
+                    background:"rgba(217,119,6,0.08)",
+                    border:"1px solid rgba(217,119,6,0.25)",
+                    borderRadius:"var(--r)",
+                    fontSize:11, color:"var(--warn)",
+                  }}>
+                    ⚠ Vas a pagar {fmt_$(sobrepago)} de más. Sale de caja real,
+                    el sueldo queda pagado completo. No se acumula como saldo a
+                    favor ni como deuda.
+                  </div>
+                )}
                 {motivoBloqueo && (
                   <div style={{
                     marginTop:8, padding:"8px 10px",
@@ -330,7 +354,11 @@ export function TabPagos({
                   disabled={!puedeConfirmar || pagando}
                   title={motivoBloqueo ?? undefined}
                 >
-                  {pagando ? "Procesando..." : completaPago ? "Confirmar pago" : "Registrar pago parcial"}
+                  {pagando
+                    ? "Procesando..."
+                    : sobrepago > 1
+                      ? `Pagar con sobrepago (+${fmt_$(sobrepago)})`
+                      : completaPago ? "Confirmar pago" : "Registrar pago parcial"}
                 </button>
               </div>
             </div>
