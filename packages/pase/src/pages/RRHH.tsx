@@ -111,6 +111,10 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   // sueldo. Se regenera al abrir el modal (línea ~711).
   const [idempKeyPagarSueldo, setIdempKeyPagarSueldo] = useState<string>(() => crypto.randomUUID());
   const [formasPago, setFormasPago] = useState<LineaPago[]>([]);
+  // Fecha del pago — editable en el modal de pago de sueldo. Default today
+  // pero Anto puede atrasarla cuando paga un sueldo de un mes anterior y
+  // quiere que el movimiento quede registrado con la fecha real.
+  const [fechaPago, setFechaPago] = useState<string>(toISO(today));
   const [adelantosPendientes, setAdelantosPendientes] = useState<Adelanto[]>([]);
   const [adelModal, setAdelModal] = useState(false);
   // Bug Caja-1: default vacío en cuenta fuerza elección consciente del user.
@@ -704,6 +708,9 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     setPagoModal({ emp, nov, liq });
     setIdempKeyPagarSueldo(crypto.randomUUID());
     setFormasPago(pendienteCash > 0 ? [{ cuenta: "", monto: String(pendienteCash) }] : []);
+    // Default a la fecha de vencimiento de la cuota si la liq tiene una,
+    // sino hoy. Si Anto necesita otra fecha, lo edita en el modal.
+    setFechaPago(liq.fecha_vencimiento || toISO(today));
   };
 
   const { run: guardarAdelanto, isPending: guardandoAdelanto } = useGuardedHandler(async () => {
@@ -842,6 +849,8 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
           abrirPagoSueldo={abrirPagoSueldo}
           cuentasUsables={cuentasUsables}
           idempKeyPagarSueldo={idempKeyPagarSueldo}
+          fechaPago={fechaPago}
+          setFechaPago={setFechaPago}
         />
       )}
 

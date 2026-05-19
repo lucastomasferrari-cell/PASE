@@ -43,6 +43,9 @@ interface TabPagosProps {
   abrirPagoSueldo: (emp: Empleado, nov: Novedad, liq: LiquidacionConGenerated) => Promise<void>;
   cuentasUsables: string[];
   idempKeyPagarSueldo: string;
+  /** Fecha del movimiento de pago (editable en el modal). Default: today. */
+  fechaPago: string;
+  setFechaPago: React.Dispatch<React.SetStateAction<string>>;
 }
 
 export function TabPagos({
@@ -54,6 +57,7 @@ export function TabPagos({
   allEmps, adelModal, setAdelModal, adelForm, setAdelForm, guardarAdelanto, guardandoAdelanto,
   adelantosPendientes, setAdelantosPendientes, abrirPagoSueldo,
   cuentasUsables, idempKeyPagarSueldo,
+  fechaPago, setFechaPago,
 }: TabPagosProps) {
   return (
     <>
@@ -202,7 +206,10 @@ export function TabPagos({
               p_nov_id: nov.id,
               p_formas_pago: formasValidas,
               p_adelantos_ids: adelIds,
-              p_fecha: toISO(today),
+              // Fecha editable desde el modal (default today). Permite a
+              // Anto registrar pagos atrasados con la fecha real en la que
+              // salió la plata (ej. pago de sueldo de Abril hecho en Mayo).
+              p_fecha: fechaPago || toISO(today),
               p_mes: pagoMes,
               p_anio: pagoAnio,
               p_crear_liq: !!liq._generated,
@@ -251,6 +258,20 @@ export function TabPagos({
                 <button className="close-btn" onClick={cerrarModal}>✕</button>
               </div>
               <div className="modal-body">
+                <div className="field" style={{marginBottom:12}}>
+                  <label style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <span>Fecha del pago</span>
+                    <span style={{fontSize:10,color:"var(--muted2)",fontWeight:400}}>
+                      podés editar si pagás un sueldo de otro mes
+                    </span>
+                  </label>
+                  <input
+                    type="date"
+                    value={fechaPago}
+                    onChange={(e) => setFechaPago(e.target.value)}
+                    style={{width:"100%"}}
+                  />
+                </div>
                 <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginBottom:yaPagado>0?8:16,borderBottom:"1px solid var(--bd)"}}>
                   <span style={{fontSize:12,color:"var(--muted2)"}}>Total a pagar</span>
                   <span style={{fontSize:16,fontWeight:500,color:"var(--acc)"}}>{fmt_$(total)}</span>
