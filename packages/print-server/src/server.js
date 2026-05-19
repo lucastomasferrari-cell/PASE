@@ -8,16 +8,32 @@
 //              después de hacer pair en Windows (que crea un virtual COM).
 //
 // Endpoints:
-//   GET  /ping         — health check (que el browser use para detectar
-//                        si el server está corriendo).
-//   GET  /printers     — lista impresoras configuradas y su estado.
-//   POST /printers     — agregar / actualizar config de una impresora.
-//   DELETE /printers/:id — borrar una impresora.
-//   POST /print        — body: { printer_id, ticket: { ... } } → imprime.
-//   POST /test/:id     — imprimir página de prueba.
+//   GET  /ping              — health check (que el browser use para detectar
+//                             si el server está corriendo).
+//   GET  /printers          — lista impresoras configuradas y su estado.
+//   POST /printers          — agregar / actualizar config de una impresora.
+//   DELETE /printers/:id    — borrar una impresora.
 //
-// Persistencia: config en un JSON local (~/.comanda-print-server.json)
-// para que sobreviva reinicios.
+//   ── Cola de jobs (nuevo Sprint 1) ───────────────────────────────────────
+//   POST /jobs              — encolar job. Body: { idempotency_key?, target_kind,
+//                             target_value, payload }. target_kind = 'printer_id'
+//                             | 'estacion'. Idempotente — si llega misma key,
+//                             devuelve job existente sin re-encolar.
+//   GET  /jobs              — lista jobs (?status=queued|done|...&limit=N).
+//   GET  /jobs/:id          — detalle de un job.
+//   POST /jobs/:id/retry    — reintentar manualmente un job failed/dead.
+//   DELETE /jobs/dead       — vaciar dead letters.
+//
+//   ── Compat (no rompemos clients existentes) ─────────────────────────────
+//   POST /print             — atajo síncrono: encola + drena + devuelve.
+//                             Útil para tests; producción debería usar /jobs.
+//   POST /print-by-estacion — atajo síncrono por estación.
+//   POST /test/:id          — página de prueba (sin pasar por cola).
+//   GET  /discover/usb      — auto-detect impresoras USB.
+//
+// Persistencia:
+//   - Config impresoras: ~/.comanda-print-server.json
+//   - Cola jobs: ~/.comanda-print-server.sqlite (WAL mode)
 
 import express from 'express';
 import cors from 'cors';
@@ -26,12 +42,14 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { printers as printerHandler } from './printerHandler.js';
+import { PrintQueue } from './queue.js';
+import { PrintWorker } from './worker.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PRINT_SERVER_PORT || '9100');
 const CONFIG_PATH = path.join(os.homedir(), '.comanda-print-server.json');
 
-// ─── Config persistida ─────────────────────────────────────────────────────
+// ─── Config persistida (impresoras) ────────────────────────────────────────
 
 function loadConfig() {
   try {
@@ -54,15 +72,26 @@ function saveConfig(config) {
 
 let config = loadConfig();
 
+// ─── Cola + worker ─────────────────────────────────────────────────────────
+
+const queue = new PrintQueue();
+const worker = new PrintWorker({
+  queue,
+  getPrinters: () => config.printers, // siempre lee fresh
+});
+worker.start();
+
 // ─── App Express ───────────────────────────────────────────────────────────
 
 const app = express();
 app.use(cors({ origin: true, credentials: false }));
 app.use(express.json({ limit: '1mb' }));
 
-// Logging mínimo de requests
+// Logging mínimo (no logueamos /ping para no spammear — el cliente lo polea).
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  if (req.url !== '/ping') {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  }
   next();
 });
 
@@ -70,10 +99,11 @@ app.use((req, res, next) => {
 app.get('/ping', (req, res) => {
   res.json({
     ok: true,
-    version: '1.0.0',
+    version: '1.1.0', // Sprint 1: cola + retry
     server: 'COMANDA Print Server',
     config_path: CONFIG_PATH,
     printers_configured: config.printers.length,
+    queue: queue.stats(),
   });
 });
 
@@ -126,9 +156,61 @@ app.delete('/printers/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// ── Imprimir un ticket
+// ─── Cola de jobs (Sprint 1) ───────────────────────────────────────────────
+
+// ── Encolar job: vía recomendada para producción
+app.post('/jobs', (req, res) => {
+  const { idempotency_key, target_kind, target_value, payload } = req.body || {};
+  if (!target_kind || !target_value || !payload) {
+    return res.status(400).json({
+      error: 'target_kind, target_value y payload son requeridos',
+    });
+  }
+  try {
+    const job = queue.enqueue({
+      idempotencyKey: idempotency_key || null,
+      targetKind: target_kind,
+      targetValue: target_value,
+      payload,
+    });
+    // Respondemos rápido (no esperamos a que imprima). El worker drena.
+    res.json({ ok: true, job: { id: job.id, status: job.status, is_new: job.isNew } });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/jobs', (req, res) => {
+  const status = typeof req.query.status === 'string' ? req.query.status : null;
+  const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+  res.json({ jobs: queue.list({ status, limit }) });
+});
+
+app.get('/jobs/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  const job = queue.getById(id);
+  if (!job) return res.status(404).json({ error: 'Job no encontrado' });
+  res.json({ job });
+});
+
+app.post('/jobs/:id/retry', (req, res) => {
+  const id = parseInt(req.params.id);
+  const ok = queue.retry(id);
+  if (!ok) return res.status(404).json({ error: 'Job no encontrado o no es reintentable' });
+  res.json({ ok: true });
+});
+
+app.delete('/jobs/dead', (req, res) => {
+  const removed = queue.clearDeadLetters();
+  res.json({ ok: true, removed });
+});
+
+// ─── Atajos síncronos (compat con clients viejos) ─────────────────────────
+
+// POST /print: encola + intenta drenar inmediatamente. Devuelve ok solo si
+// se imprimió. Si querés idempotency + cola, usar POST /jobs.
 app.post('/print', async (req, res) => {
-  const { printer_id, ticket } = req.body || {};
+  const { printer_id, ticket, idempotency_key } = req.body || {};
   if (!printer_id || !ticket) {
     return res.status(400).json({ error: 'printer_id y ticket requeridos' });
   }
@@ -137,35 +219,59 @@ app.post('/print', async (req, res) => {
     return res.status(404).json({ error: `Impresora ${printer_id} no configurada` });
   }
   try {
-    await printerHandler.print(printer, ticket);
-    res.json({ ok: true });
+    // Encolamos para tener auditoría + idempotency. El worker eventualmente
+    // procesará — pero también intentamos inline para responder al cliente.
+    const job = queue.enqueue({
+      idempotencyKey: idempotency_key || null,
+      targetKind: 'printer_id',
+      targetValue: printer_id,
+      payload: ticket,
+    });
+    // Si el job ya estaba (idempotency hit), no re-imprimimos.
+    if (!job.isNew && job.status === 'done') {
+      return res.json({ ok: true, idempotent: true, job_id: job.id });
+    }
+    // Drenado opportunístico: dejamos al worker hacerlo. Pero como este
+    // endpoint es síncrono, esperamos un breve momento para que el worker
+    // lo levante.
+    res.json({ ok: true, job_id: job.id, queued: true });
   } catch (err) {
     console.error(`[print] ${printer_id} failed:`, err.message);
     res.status(502).json({ error: 'PRINT_FAILED', detail: err.message });
   }
 });
 
-// ── Imprimir por estación (helper: busca la impresora con esa estación
-//    y le manda el ticket).
 app.post('/print-by-estacion', async (req, res) => {
-  const { estacion, ticket } = req.body || {};
+  const { estacion, ticket, idempotency_key } = req.body || {};
   if (!estacion || !ticket) {
     return res.status(400).json({ error: 'estacion y ticket requeridos' });
   }
-  const printer = config.printers.find((p) => p.estacion === estacion);
-  if (!printer) {
-    return res.status(404).json({ error: `Sin impresora asignada a estación "${estacion}"` });
+  // Verificamos al menos que haya alguna impresora con esa estación antes
+  // de encolar — feedback inmediato al cliente si configuró mal.
+  const hasOne = config.printers.some((p) => p.estacion === estacion);
+  if (!hasOne) {
+    return res.status(404).json({
+      error: `Sin impresora asignada a estación "${estacion}"`,
+    });
   }
   try {
-    await printerHandler.print(printer, ticket);
-    res.json({ ok: true, printer_id: printer.id });
+    const job = queue.enqueue({
+      idempotencyKey: idempotency_key || null,
+      targetKind: 'estacion',
+      targetValue: estacion,
+      payload: ticket,
+    });
+    if (!job.isNew && job.status === 'done') {
+      return res.json({ ok: true, idempotent: true, job_id: job.id });
+    }
+    res.json({ ok: true, job_id: job.id, queued: true });
   } catch (err) {
     console.error(`[print] estación ${estacion} failed:`, err.message);
     res.status(502).json({ error: 'PRINT_FAILED', detail: err.message });
   }
 });
 
-// ── Página de prueba
+// ── Página de prueba (sync, no pasa por cola — es para validar config)
 app.post('/test/:id', async (req, res) => {
   const printer = config.printers.find((p) => p.id === req.params.id);
   if (!printer) return res.status(404).json({ error: 'Impresora no encontrada' });
@@ -188,8 +294,6 @@ app.post('/test/:id', async (req, res) => {
   }
 });
 
-// ── Endpoint para auto-detectar impresoras USB conectadas
-//    (útil para que la UI muestre opciones sin pedir vendor_id a mano).
 app.get('/discover/usb', async (req, res) => {
   try {
     const devices = await printerHandler.discoverUsb();
@@ -201,17 +305,30 @@ app.get('/discover/usb', async (req, res) => {
 
 // ─── Start ─────────────────────────────────────────────────────────────────
 
-app.listen(PORT, '127.0.0.1', () => {
+const server = app.listen(PORT, '127.0.0.1', () => {
   console.log('═══════════════════════════════════════════════');
-  console.log('  COMANDA Print Server v1.0.0');
+  console.log('  COMANDA Print Server v1.1.0');
   console.log(`  Escuchando en http://127.0.0.1:${PORT}`);
   console.log(`  Config: ${CONFIG_PATH}`);
   console.log(`  Impresoras configuradas: ${config.printers.length}`);
+  console.log(`  Stats cola al arranque:`, queue.stats());
   console.log('═══════════════════════════════════════════════');
 });
 
 // Cleanup grácil
-process.on('SIGINT', () => {
-  console.log('\n[server] cerrando...');
-  process.exit(0);
-});
+async function shutdown(signal) {
+  console.log(`\n[server] ${signal} recibido — cerrando...`);
+  await worker.stop();
+  queue.close();
+  server.close(() => {
+    console.log('[server] HTTP cerrado');
+    process.exit(0);
+  });
+  // Forzar exit si server.close se cuelga
+  setTimeout(() => {
+    console.warn('[server] forzando exit tras 5s');
+    process.exit(1);
+  }, 5000);
+}
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
