@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { fmt_$ } from "../../lib/utils";
 import { calcularVacaciones } from "../../lib/calculos/rrhh";
 import { LocalLockedChip, LocalSelectorObligatorio } from "../../components/ui";
@@ -41,6 +42,27 @@ export function TabEmpleados({
   // no necesitan estar en AFIP). Pedido Lucas 2026-05-17.
   const sinRegistrar = empsFilt.filter(e => e.activo !== false && !(e as { registrado?: boolean }).registrado).length;
   const totalActivos = empsFilt.filter(e => e.activo !== false).length;
+
+  // Flag separado para "Puesto custom". Bug 2026-05-18: antes el input
+  // "Escribir puesto..." se mostraba si `puesto === '__otro'`, pero al
+  // escribir la primera letra el value cambiaba y el input desaparecía.
+  // Ahora el flag se setea al elegir "Otro" en el select y se mantiene
+  // hasta que se cierre el modal o se elija otro puesto del catálogo.
+  const [usandoOtroPuesto, setUsandoOtroPuesto] = useState(false);
+
+  // Si el modal abre con un empleado cuyo puesto NO está en el catálogo
+  // (puesto legacy o creado ad-hoc antes), arrancamos en modo "Otro" con
+  // el valor pre-cargado para que el cajero pueda editarlo.
+  useEffect(() => {
+    if (empModal === null) {
+      setUsandoOtroPuesto(false);
+      return;
+    }
+    if (empForm.puesto && !puestos.includes(empForm.puesto)) {
+      setUsandoOtroPuesto(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empModal]);
 
   return (
     <>
@@ -148,8 +170,32 @@ export function TabEmpleados({
                 </div>
                 <div className="field"><label>CUIL</label><input value={empForm.cuil} onChange={e => setEmpForm({...empForm, cuil:e.target.value})} placeholder="XX-XXXXXXXX-X" /></div>
               </div>
-              <div className="field"><label>Puesto *</label><select value={empForm.puesto} onChange={e => setEmpForm({...empForm, puesto:e.target.value})}><option value="">Seleccionar...</option>{puestos.map(p => <option key={p} value={p}>{p}</option>)}<option value="__otro">-- Otro --</option></select>
-                {empForm.puesto === "__otro" && <input style={{marginTop:4}} placeholder="Escribir puesto..." onChange={e => setEmpForm({...empForm, puesto:e.target.value})} />}
+              <div className="field"><label>Puesto *</label>
+                <select
+                  value={usandoOtroPuesto ? "__otro" : empForm.puesto}
+                  onChange={e => {
+                    if (e.target.value === "__otro") {
+                      setUsandoOtroPuesto(true);
+                      setEmpForm({ ...empForm, puesto: "" });
+                    } else {
+                      setUsandoOtroPuesto(false);
+                      setEmpForm({ ...empForm, puesto: e.target.value });
+                    }
+                  }}
+                >
+                  <option value="">Seleccionar...</option>
+                  {puestos.map(p => <option key={p} value={p}>{p}</option>)}
+                  <option value="__otro">-- Otro (escribir nuevo) --</option>
+                </select>
+                {usandoOtroPuesto && (
+                  <input
+                    style={{ marginTop: 4 }}
+                    placeholder="Escribir puesto nuevo..."
+                    value={empForm.puesto}
+                    onChange={e => setEmpForm({ ...empForm, puesto: e.target.value })}
+                    autoFocus
+                  />
+                )}
               </div>
               <div className="form3">
                 <div className="field"><label>Sueldo mensual *</label><input type="number" value={empForm.sueldo_mensual} onChange={e => setEmpForm({...empForm, sueldo_mensual:e.target.value})} placeholder="0" /></div>
