@@ -19,8 +19,18 @@ interface PagoEnCurso {
   metodo: string;
   monto: number;
   vuelto?: number | null;
+  cuotas?: number | null; // 3/6/12 típico AR — solo aplica a crédito
   confirmado: boolean;    // true cuando ya se mandó al backend OK
 }
+
+// Helper: detectar si el método de cobro es de crédito (acepta cuotas).
+// Reconoce por slug (configurable en metodos_cobro).
+function metodoAceptaCuotas(slug: string): boolean {
+  const s = slug.toLowerCase();
+  return s.includes('credit') || s === 'tc' || s.includes('tarjeta_credito');
+}
+
+const OPCIONES_CUOTAS = [1, 3, 6, 9, 12, 18];
 
 interface Props {
   open: boolean;
@@ -50,12 +60,13 @@ export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado
   const [pagos, setPagos] = useState<PagoEnCurso[]>([]);
   const [montoNuevo, setMontoNuevo] = useState<number>(0);
   const [metodoNuevo, setMetodoNuevo] = useState<string>('efectivo');
+  const [cuotasNuevo, setCuotasNuevo] = useState<number>(1);
   const [montoEntregado, setMontoEntregado] = useState<number>(0);
   const [confirmando, setConfirmando] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setPagos([]); setMontoNuevo(0); setMontoEntregado(0); setConfirmando(false);
+    setPagos([]); setMontoNuevo(0); setMontoEntregado(0); setCuotasNuevo(1); setConfirmando(false);
     listMetodosCobroActivos(venta.local_id).then((r) => {
       setMetodos(r.data);
       if (r.data.length > 0 && r.data[0]) setMetodoNuevo(r.data[0].slug);
@@ -93,16 +104,19 @@ export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado
       toast.error('Monto supera lo que falta cobrar');
       return;
     }
+    const aceptaCuotas = metodoAceptaCuotas(metodoNuevo);
     setPagos((p) => [...p, {
       id: crypto.randomUUID?.() ?? `local-${Date.now()}-${Math.random()}`,
       idempotencyKey: newIdempotencyKey(),
       metodo: metodoNuevo,
       monto: montoNuevo,
       vuelto: pideVuelto ? vueltoCalc : null,
+      cuotas: aceptaCuotas ? cuotasNuevo : null,
       confirmado: false,
     }]);
     setMontoNuevo(0);
     setMontoEntregado(0);
+    setCuotasNuevo(1);
   }
 
   function eliminarPago(id: string) {
@@ -115,12 +129,14 @@ export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado
     // Caso de uso 99%: 1 método + total exacto → tocar "Cobrar" y listo.
     let pagosAEnviar = pagos;
     if (pagos.length === 0 && montoNuevo > 0 && Math.abs(montoNuevo - totalConPropina) < 0.01) {
+      const aceptaCuotas = metodoAceptaCuotas(metodoNuevo);
       pagosAEnviar = [{
         id: crypto.randomUUID?.() ?? `local-${Date.now()}-${Math.random()}`,
         idempotencyKey: newIdempotencyKey(),
         metodo: metodoNuevo,
         monto: montoNuevo,
         vuelto: pideVuelto ? vueltoCalc : null,
+        cuotas: aceptaCuotas ? cuotasNuevo : null,
         confirmado: false,
       }];
     } else if (!cubrió) {
@@ -141,6 +157,7 @@ export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado
         cobradoPor: empleadoId,
         vuelto: p.vuelto ?? null,
         propinaIncluida: propinaIncl,
+        cuotas: p.cuotas ?? null,
       });
       if (error) {
         toast.error(`Error procesando pago: ${error}`);
@@ -187,6 +204,9 @@ export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado
                     <div>
                       <strong>{m?.emoji} {m?.nombre ?? p.metodo}</strong>
                       <span className="ml-2 tabular-nums">{formatARS(p.monto)}</span>
+                      {p.cuotas && p.cuotas > 1 && (
+                        <span className="ml-2 text-xs text-muted-foreground">en {p.cuotas} cuotas de {formatARS(p.monto / p.cuotas)}</span>
+                      )}
                       {p.vuelto && p.vuelto > 0 && (
                         <span className="ml-2 text-xs text-warning">vuelto: {formatARS(p.vuelto)}</span>
                       )}
@@ -238,6 +258,34 @@ export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado
                 <div>
                   <Label className="text-xs text-muted-foreground">Cliente entrega</Label>
                   <MoneyInput value={montoEntregado} onChange={setMontoEntregado} />
+                </div>
+              )}
+              {/* Cuotas: solo si el método es de crédito (típico AR) */}
+              {metodoAceptaCuotas(metodoNuevo) && (
+                <div className={pideVuelto ? "col-span-2" : ""}>
+                  <Label className="text-xs text-muted-foreground">Cuotas</Label>
+                  <div className="grid grid-cols-6 gap-1">
+                    {OPCIONES_CUOTAS.map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setCuotasNuevo(n)}
+                        className={cn(
+                          'h-9 rounded-md text-xs border transition-colors',
+                          cuotasNuevo === n
+                            ? 'border-primary border-2 bg-primary/5 font-semibold'
+                            : 'border-input bg-background hover:bg-accent',
+                        )}
+                      >
+                        {n === 1 ? '1 pago' : `${n}c`}
+                      </button>
+                    ))}
+                  </div>
+                  {cuotasNuevo > 1 && montoNuevo > 0 && (
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      {cuotasNuevo} cuotas de {formatARS(montoNuevo / cuotasNuevo)}
+                    </p>
+                  )}
                 </div>
               )}
             </div>

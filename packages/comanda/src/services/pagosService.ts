@@ -75,6 +75,9 @@ export interface AgregarPagoArgs {
   cobradoPor?: string | null;
   vuelto?: number | null;
   propinaIncluida?: number;
+  /** Cuotas (3/6/12 típico AR). Solo aplica a métodos de crédito —
+   * la RPC ignora el valor si el método no es 'credito'/'tc'. */
+  cuotas?: number | null;
 }
 
 export async function agregarPago(args: AgregarPagoArgs): Promise<{ pagoId: number | null; error: string | null }> {
@@ -86,6 +89,7 @@ export async function agregarPago(args: AgregarPagoArgs): Promise<{ pagoId: numb
     p_cobrado_por: args.cobradoPor ?? null,
     p_vuelto: args.vuelto ?? null,
     p_propina_incluida: args.propinaIncluida ?? 0,
+    p_cuotas: args.cuotas ?? null,
   });
   if (error) return { pagoId: null, error: translateError(error) };
   return { pagoId: data as number, error: null };

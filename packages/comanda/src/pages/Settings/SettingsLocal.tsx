@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { MoneyInput } from '@/components/MoneyInput';
 import { PROVINCIAS_AR, buscarLocalidades } from '@/services/direccionesService';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { featureFlags, setFeatureFlag } from '@/lib/featureFlags';
 
 const MODOS: { value: PosModo; label: string }[] = [
   { value: 'salon', label: 'Salón' },
@@ -570,6 +571,30 @@ export function SettingsLocal() {
               />
             ))}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Feature flags experimentales — solo dueño los configura. Default off. */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Laboratorio (experimental)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-3">
+            Features en testing. Activá uno por vez y testealo antes de pasarlo a producción real.
+            Cualquier cambio acá te hace recargar la app.
+          </p>
+          <div className="space-y-2">
+            <ToggleField
+              label="Offline-first (POS funciona sin internet — sync automático al volver)"
+              checked={featureFlags.offlineFirstVentas}
+              onChange={(v) => setFeatureFlag('offline_first_ventas', v)}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground mt-3">
+            Offline-first: cuando lo prendés, todas las operaciones del POS (abrir mesa, cargar items, mandar curso, cobrar, anular, descuentos, transferir mesa) escriben primero a la base local del browser y se sincronizan cuando vuelve internet.
+            Las URLs van a tener IDs negativos temporales mientras estés offline — eso es normal, se reemplazan por el ID real cuando sincroniza.
+          </p>
         </CardContent>
       </Card>
 
