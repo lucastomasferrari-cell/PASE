@@ -19,6 +19,11 @@ export interface LocalMarketplace {
   tiempo_delivery_min?: number | null;
   abierto_ahora?: boolean | null;
   horario_hoy?: string | null;
+  // Sprint 2026-05-18 (Fase B): coords para filtro por cercanía
+  provincia?: string | null;
+  localidad?: string | null;
+  lat?: number | null;
+  lon?: number | null;
 }
 
 export async function listMarketplaceLocales(): Promise<{ data: LocalMarketplace[]; error: string | null }> {

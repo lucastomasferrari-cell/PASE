@@ -1,12 +1,15 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Search, MapPin, ExternalLink, Store, Clock, Share2 } from 'lucide-react';
+import { Search, MapPin, ExternalLink, Store, Clock, Share2, Navigation, NavigationOff } from 'lucide-react';
 import { listMarketplaceLocales, type LocalMarketplace } from '@/services/marketplaceService';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { useGeolocation } from '@/lib/useGeolocation';
+import { haversineKm } from '@/lib/geo';
 import { cn } from '@/lib/utils';
 
 // Marketplace público — feed cross-tenant de locales que activaron
@@ -17,7 +20,8 @@ import { cn } from '@/lib/utils';
 // filtros por radio. Por ahora: search por nombre + chips de tags +
 // grid de cards.
 
-type SortBy = 'abiertos' | 'nombre' | 'rapido';
+type SortBy = 'abiertos' | 'nombre' | 'rapido' | 'cercanos';
+type RadioFiltro = 'todos' | '5' | '10' | '20';
 const PAGE_SIZE = 24;
 
 export function MarketplaceHome() {
@@ -27,8 +31,10 @@ export function MarketplaceHome() {
   const [search, setSearch] = useState('');
   const [tagFiltro, setTagFiltro] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortBy>('abiertos');
+  const [radioFiltro, setRadioFiltro] = useState<RadioFiltro>('todos');
   const [pagina, setPagina] = useState(1);
   const debouncedSearch = useDebouncedValue(search, 300);
+  const geo = useGeolocation(true);
 
   // SEO/OG tags básicos sin React Helmet — manipulación directa del head
   useEffect(() => {
@@ -59,7 +65,16 @@ export function MarketplaceHome() {
   }, []);
 
   // Reset paginación al cambiar filtros
-  useEffect(() => { setPagina(1); }, [debouncedSearch, tagFiltro, sortBy]);
+  useEffect(() => { setPagina(1); }, [debouncedSearch, tagFiltro, sortBy, radioFiltro]);
+
+  // Auto-switch a sort 'cercanos' la primera vez que el user dio permiso
+  // (preserva la decisión consciente si después cambia a otro sort).
+  useEffect(() => {
+    if (geo.status === 'granted' && sortBy === 'abiertos') {
+      setSortBy('cercanos');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geo.status === 'granted']);
 
   // Tags únicos para chips de filtro
   const tags = useMemo(() => {
@@ -70,14 +85,33 @@ export function MarketplaceHome() {
     return Array.from(set).sort();
   }, [locales]);
 
+  // Adornamos cada local con `distanciaKm` cuando tenemos coords del user
+  // y coords del local. Null si falta alguno.
+  const localesConDist = useMemo(() => {
+    return locales.map((l) => {
+      const dist = (geo.data && l.lat != null && l.lon != null)
+        ? haversineKm(geo.data.lat, geo.data.lon, Number(l.lat), Number(l.lon))
+        : null;
+      return { ...l, distanciaKm: dist };
+    });
+  }, [locales, geo.data]);
+
   const localesFiltrados = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
-    const filtered = locales.filter((l) => {
+    const filtered = localesConDist.filter((l) => {
       if (q && !l.nombre.toLowerCase().includes(q) && !(l.marketplace_descripcion ?? '').toLowerCase().includes(q)) {
         return false;
       }
       if (tagFiltro && !(l.marketplace_tags ?? []).includes(tagFiltro)) {
         return false;
+      }
+      // Filtro por radio (solo aplica si tenemos coords del cliente)
+      if (radioFiltro !== 'todos' && geo.data) {
+        const max = Number(radioFiltro);
+        // Locales sin coords se ocultan cuando hay filtro activo (no podemos
+        // saber si están cerca — mejor esconderlos que mostrarlos sin distancia).
+        if (l.distanciaKm == null) return false;
+        if (l.distanciaKm > max) return false;
       }
       return true;
     });
@@ -86,19 +120,23 @@ export function MarketplaceHome() {
     sorted.sort((a, b) => {
       switch (sortBy) {
         case 'abiertos':
-          // abierto primero, luego alfabético
           if (a.abierto_ahora !== b.abierto_ahora) return b.abierto_ahora ? 1 : -1;
           return a.nombre.localeCompare(b.nombre);
         case 'nombre':
           return a.nombre.localeCompare(b.nombre);
         case 'rapido':
-          // por tiempo delivery ascendente (los rápidos primero)
           return (a.tiempo_delivery_min ?? 999) - (b.tiempo_delivery_min ?? 999);
+        case 'cercanos':
+          // Locales con distancia conocida primero, ascendente. Sin coords al final.
+          if (a.distanciaKm == null && b.distanciaKm == null) return a.nombre.localeCompare(b.nombre);
+          if (a.distanciaKm == null) return 1;
+          if (b.distanciaKm == null) return -1;
+          return a.distanciaKm - b.distanciaKm;
         default: return 0;
       }
     });
     return sorted;
-  }, [locales, debouncedSearch, tagFiltro, sortBy]);
+  }, [localesConDist, debouncedSearch, tagFiltro, sortBy, radioFiltro, geo.data]);
 
   const totalPaginas = Math.max(1, Math.ceil(localesFiltrados.length / PAGE_SIZE));
   const localesPagina = localesFiltrados.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE);
@@ -165,16 +203,63 @@ export function MarketplaceHome() {
             </div>
           )}
           {!loading && locales.length > 0 && (
-            <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortBy)}>
-              <SelectTrigger className="w-[170px] h-9 ml-auto">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="abiertos">Abiertos primero</SelectItem>
-                <SelectItem value="nombre">Por nombre A-Z</SelectItem>
-                <SelectItem value="rapido">Más rápidos</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2 ml-auto flex-wrap">
+              {/* Geolocalización: pedir / mostrar status / limpiar */}
+              {geo.status === 'idle' || geo.status === 'denied' ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={geo.request}
+                  className="gap-1.5 h-9"
+                  title="Mostrar restaurantes ordenados por cercanía"
+                >
+                  <Navigation className="h-3.5 w-3.5" />
+                  Cerca de mí
+                </Button>
+              ) : geo.status === 'loading' ? (
+                <Button variant="outline" size="sm" disabled className="gap-1.5 h-9">
+                  <Navigation className="h-3.5 w-3.5 animate-pulse" />
+                  Detectando…
+                </Button>
+              ) : geo.status === 'granted' ? (
+                <>
+                  <Select value={radioFiltro} onValueChange={(v) => setRadioFiltro(v as RadioFiltro)}>
+                    <SelectTrigger className="w-[140px] h-9 gap-1">
+                      <Navigation className="h-3 w-3 text-success" />
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Sin radio</SelectItem>
+                      <SelectItem value="5">≤ 5 km</SelectItem>
+                      <SelectItem value="10">≤ 10 km</SelectItem>
+                      <SelectItem value="20">≤ 20 km</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={geo.clear}
+                    className="h-9 w-9 p-0"
+                    title="Olvidar mi ubicación"
+                  >
+                    <NavigationOff className="h-3.5 w-3.5" />
+                  </Button>
+                </>
+              ) : null}
+              <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortBy)}>
+                <SelectTrigger className="w-[170px] h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="abiertos">Abiertos primero</SelectItem>
+                  <SelectItem value="nombre">Por nombre A-Z</SelectItem>
+                  <SelectItem value="rapido">Más rápidos</SelectItem>
+                  {geo.status === 'granted' && (
+                    <SelectItem value="cercanos">Más cercanos</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
           )}
         </div>
 
@@ -208,7 +293,7 @@ export function MarketplaceHome() {
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {localesPagina.map((local) => (
-                <RestauranteCard key={local.id} local={local} />
+                <RestauranteCard key={local.id} local={local} distanciaKm={local.distanciaKm} />
               ))}
             </div>
             {totalPaginas > 1 && (
@@ -241,7 +326,7 @@ export function MarketplaceHome() {
   );
 }
 
-function RestauranteCard({ local }: { local: LocalMarketplace }) {
+function RestauranteCard({ local, distanciaKm }: { local: LocalMarketplace; distanciaKm: number | null }) {
   async function compartir(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
@@ -340,6 +425,12 @@ function RestauranteCard({ local }: { local: LocalMarketplace }) {
               <span className="flex items-center gap-1">
                 <Clock className="h-3 w-3" />
                 ~{tiempo} min
+              </span>
+            )}
+            {distanciaKm != null && (
+              <span className="flex items-center gap-1" title="Distancia desde tu ubicación">
+                <Navigation className="h-3 w-3" />
+                {distanciaKm < 1 ? `${(distanciaKm * 1000).toFixed(0)} m` : `${distanciaKm.toFixed(1)} km`}
               </span>
             )}
             {local.horario_hoy && cerrado && (
