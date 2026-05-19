@@ -477,14 +477,13 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
 
               {/* Módulos */}
               {(() => {
-                const isDueno = form.esDueno;
+                // isDueno se deriva del rol elegido en el dropdown. Si seleccionó
+                // el rol "Dueño" del sistema (slug='dueno'), tiene acceso total.
+                const rolSeleccionado = rolesDisponibles.find(r => r.id === form.rol_id);
+                const isDueno = rolSeleccionado?.slug === "dueno" || form.esDueno;
                 // isSelf: el user logueado está editando su propia row. Bloqueamos
                 // edición de permisos/módulos/permisos-avanzados para evitar
-                // que se deje sin acceso por error (bug reportado 2026-05-13:
-                // Lucas se editó a sí mismo, el form arrancó con módulos vacíos
-                // — su rol los recibía implícitos del ROLES dict — y al guardar
-                // se persistió un usuario_permisos vacío que sobreescribió los
-                // implícitos del rol).
+                // que se deje sin acceso por error.
                 const isSelf = modal !== "new" && modal !== null && modal.id === user.id;
                 const lockPermisos = isDueno || isSelf;
                 // Hardening 2026-05-14: solo dueño/admin/superadmin pueden
@@ -499,74 +498,54 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                     </div>
                   )}
 
-                  {/* ─── Nivel de acceso ───────────────────────────────── */}
-                  <SectionTitle locked={isSelf}>Nivel de acceso</SectionTitle>
-                  <label
-                    style={{
-                      display: "flex", alignItems: "flex-start", gap: 12,
-                      padding: "14px 16px", borderRadius: 10,
-                      border: `0.5px solid ${form.esDueno ? "var(--pase-celeste-300)" : "var(--pase-border-strong)"}`,
-                      background: form.esDueno ? "var(--pase-celeste-100)" : "var(--pase-bg)",
-                      cursor: isSelf ? "default" : "pointer",
-                      opacity: isSelf ? 0.6 : 1,
-                      marginBottom: 4,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={form.esDueno}
-                      disabled={isSelf || !currentUserPuedeGrantUsuarios}
-                      onChange={e => setForm(f => ({ ...f, esDueno: e.target.checked }))}
-                      style={{ accentColor: "var(--pase-celeste)", width: 18, height: 18, marginTop: 2, flexShrink: 0 }}
-                    />
-                    <div>
-                      <div style={{ fontSize: "var(--pase-fs-base)", fontWeight: 500, color: "var(--pase-text)" }}>
-                        Dueño / Admin <span style={{ color: "var(--pase-text-muted)", fontWeight: 400, fontSize: "var(--pase-fs-sm)" }}>· acceso total</span>
-                      </div>
-                      <div style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-text-muted)", marginTop: 4, lineHeight: 1.5 }}>
-                        Ve todos los módulos, todas las cuentas, todas las sucursales. Puede crear y editar usuarios.<br />
-                        Si NO está marcado, abajo elegís manualmente los módulos y permisos que querés que tenga.
-                        {!currentUserPuedeGrantUsuarios && (
-                          <><br /><span style={{ color: "#D97706", fontStyle: "italic" }}>Solo un dueño/admin existente puede otorgar este nivel.</span></>
-                        )}
-                      </div>
-                    </div>
-                  </label>
-
                   {/* ─── Rol (RBAC) ───────────────────────────────────── */}
-                  {!form.esDueno && (
-                    <div style={{ marginTop: 16, marginBottom: 8 }}>
-                      <SectionTitle locked={isSelf}>Rol</SectionTitle>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <select
-                          value={form.rol_id}
-                          disabled={isSelf}
-                          onChange={(e) => setForm((f) => ({ ...f, rol_id: e.target.value }))}
-                          style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "0.5px solid var(--pase-border-strong)", background: "var(--pase-bg)", color: "var(--pase-text)", fontSize: "var(--pase-fs-base)" }}
-                        >
-                          <option value="">— Sin rol asignado (usa los permisos sueltos de abajo) —</option>
-                          <optgroup label="Roles del sistema">
-                            {rolesDisponibles.filter(r => r.es_sistema).map(r => (
-                              <option key={r.id} value={r.id}>{r.nombre}</option>
-                            ))}
-                          </optgroup>
-                          {rolesDisponibles.some(r => !r.es_sistema) && (
-                            <optgroup label="Roles custom">
-                              {rolesDisponibles.filter(r => !r.es_sistema).map(r => (
-                                <option key={r.id} value={r.id}>{r.nombre}</option>
-                              ))}
-                            </optgroup>
-                          )}
-                        </select>
-                        <a href="/usuarios/roles" target="_blank" rel="noreferrer" className="btn btn-sec btn-sm" style={{ whiteSpace: "nowrap" }}>
-                          Gestionar roles →
-                        </a>
-                      </div>
-                      <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", marginTop: 6 }}>
-                        El rol determina qué puede hacer el usuario. Si no le alcanza, podés sumar/sacar permisos sueltos abajo, pero lo más limpio es crear un rol custom.
-                      </div>
-                    </div>
-                  )}
+                  {/* Reemplaza el viejo checkbox "Dueño/Admin": ahora el nivel
+                      de acceso lo da el rol elegido. El rol "Dueño" del sistema
+                      equivale al viejo toggle de acceso total. */}
+                  <SectionTitle locked={isSelf}>Rol</SectionTitle>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <select
+                      value={form.rol_id}
+                      disabled={isSelf || !currentUserPuedeGrantUsuarios}
+                      onChange={(e) => {
+                        const newRolId = e.target.value;
+                        const rolElegido = rolesDisponibles.find(r => r.id === newRolId);
+                        // Si elige Dueño, marcamos esDueno true para que el save
+                        // legacy ponga rol='dueno' en usuarios.
+                        const esDuenoNuevo = rolElegido?.slug === "dueno";
+                        setForm((f) => ({ ...f, rol_id: newRolId, esDueno: esDuenoNuevo }));
+                      }}
+                      style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "0.5px solid var(--pase-border-strong)", background: "var(--pase-bg)", color: "var(--pase-text)", fontSize: "var(--pase-fs-base)" }}
+                    >
+                      <option value="">— Sin rol asignado (usa los permisos sueltos de abajo) —</option>
+                      <optgroup label="Roles del sistema">
+                        {rolesDisponibles.filter(r => r.es_sistema).map(r => (
+                          <option key={r.id} value={r.id}>{r.nombre}</option>
+                        ))}
+                      </optgroup>
+                      {rolesDisponibles.some(r => !r.es_sistema) && (
+                        <optgroup label="Roles custom">
+                          {rolesDisponibles.filter(r => !r.es_sistema).map(r => (
+                            <option key={r.id} value={r.id}>{r.nombre}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                    <a href="/usuarios/roles" target="_blank" rel="noreferrer" className="btn btn-sec btn-sm" style={{ whiteSpace: "nowrap" }}>
+                      Gestionar roles →
+                    </a>
+                  </div>
+                  <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", marginTop: 6, marginBottom: 8 }}>
+                    El rol determina qué puede hacer el usuario.{" "}
+                    {isDueno ? (
+                      <strong>Rol "Dueño" = acceso total a todo. No necesita configurar módulos abajo.</strong>
+                    ) : (
+                      "Si no le alcanza el rol elegido, sumá permisos sueltos abajo o creá un rol custom desde 'Gestionar roles'."
+                    )}
+                    {!currentUserPuedeGrantUsuarios && (
+                      <><br /><span style={{ color: "#D97706", fontStyle: "italic" }}>Solo un dueño/admin existente puede cambiar el rol.</span></>
+                    )}
+                  </div>
 
                   {/* ─── Módulos ───────────────────────────────────────── */}
                   <SectionTitle locked={isSelf || form.esDueno}>
