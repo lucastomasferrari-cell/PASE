@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { formatARS } from '@/lib/format';
 import type { TiendaCtx } from './TiendaLayout';
 import { EstadoPedidoTimeline, PASOS_DELIVERY, PASOS_RETIRO } from './components/EstadoPedidoTimeline';
+import { ReviewForm } from '@/components/ReviewForm';
 
 const POLL_MS = 15000;
 
@@ -135,6 +136,14 @@ export function TiendaConfirmacion() {
             Estado del pedido
           </div>
           <EstadoPedidoTimeline pasos={pasos} estadoActual={estado.estado} />
+
+          {/* Review: solo aparece cuando el pedido ya fue entregado/cobrado.
+              Si el cliente ya dejó review, el componente muestra la previa. */}
+          {(estado.estado === 'entregada' || estado.estado === 'cobrada') && (
+            <div className="mt-8">
+              <ReviewForm ventaId={id} telefono={telefono} />
+            </div>
+          )}
         </>
       )}
 

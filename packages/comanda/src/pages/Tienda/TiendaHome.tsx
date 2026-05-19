@@ -12,6 +12,8 @@ import { CarritoSheet } from './components/CarritoSheet';
 import type { ProductCardItem } from './components/ProductCard';
 import { tiendaCarritoBadge } from './tiendaCarritoBadge';
 import { DireccionAutocomplete } from '@/components/DireccionAutocomplete';
+import { StarRating } from '@/components/StarRating';
+import { listarReviewsPublicas, type ReviewsResumen } from '@/services/reviewsService';
 
 const POPULARES_DIAS = 30;
 const POPULARES_LIMIT = 8;
@@ -278,7 +280,7 @@ export function TiendaHome() {
         <CategoriaTabs categorias={categorias} activa={seccionActiva} onClick={scrollASeccion} />
 
         <div className="flex-1 max-w-5xl w-full mx-auto px-5 sm:px-8 py-8 pb-32">
-          {/* Hero local */}
+          {/* Hero local + resumen rating */}
           <div className="mb-8">
             <h1 className="text-3xl sm:text-4xl font-medium tracking-tight">{local.nombre}</h1>
             {(local.direccion || local.telefono) && (
@@ -288,6 +290,7 @@ export function TiendaHome() {
                 {local.telefono}
               </p>
             )}
+            <RatingResumen localSlug={local.slug} />
           </div>
 
           {/* Pills entrega */}
@@ -411,4 +414,23 @@ export function TiendaHome() {
 // Inline para evitar import — formatARS está en lib/format.
 function formatTotal(n: number): string {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0 }).format(n);
+}
+
+// Resumen compacto de rating bajo el nombre del local (Marketplace Gap #3).
+// Si no hay reviews aún, no renderiza nada.
+function RatingResumen({ localSlug }: { localSlug: string }) {
+  const [data, setData] = useState<ReviewsResumen | null>(null);
+  useEffect(() => {
+    void listarReviewsPublicas(localSlug).then((r) => setData(r.data));
+  }, [localSlug]);
+  if (!data || data.total_reviews === 0 || data.rating_promedio == null) return null;
+  return (
+    <div className="mt-3 inline-flex items-center gap-2">
+      <StarRating value={data.rating_promedio} size="sm" />
+      <span className="text-sm text-foreground/70">
+        <strong>{data.rating_promedio.toFixed(1)}</strong>
+        <span className="text-foreground/50"> · {data.total_reviews} opinion{data.total_reviews === 1 ? '' : 'es'}</span>
+      </span>
+    </div>
+  );
 }

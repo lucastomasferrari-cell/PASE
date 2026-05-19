@@ -81,6 +81,7 @@ const ConectarPartners = lazy(() => import('./pages/Integraciones/ConectarPartne
 
 // Admin — Clientes (F1.2)
 const ClientesLista = lazy(() => import('./pages/Clientes/ClientesLista').then(m => ({ default: m.ClientesLista })));
+const ResenasAdmin = lazy(() => import('./pages/Clientes/ResenasAdmin').then(m => ({ default: m.ResenasAdmin })));
 
 // Admin — CMV: Insumos + Recetas (F1.1b)
 const InsumosLista = lazy(() => import('./pages/Catalogo/InsumosLista').then(m => ({ default: m.InsumosLista })));
@@ -280,7 +281,7 @@ export default function App() {
                   <Route path="/clientes" element={<Navigate to="/clientes/lista" replace />} />
                   <Route path="/clientes/lista" element={<ClientesLista />} />
                   <Route path="/clientes/historial" element={<StubRoute />} />
-                  <Route path="/clientes/resenas" element={<StubRoute />} />
+                  <Route path="/clientes/resenas" element={<ResenasAdmin />} />
 
                   {/* ── Integraciones (todos stubs) ───────────────────── */}
                   <Route path="/integraciones" element={<Navigate to="/integraciones/mercadopago" replace />} />

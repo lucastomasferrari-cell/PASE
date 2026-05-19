@@ -163,7 +163,7 @@ export const ADMIN_NAVIGATION: NavCategory[] = [
     subItems: [
       { slug: 'lista',     label: 'Lista de clientes',  href: '/clientes/lista',     badge: 'soon' },
       { slug: 'historial', label: 'Historial pedidos',  href: '/clientes/historial', badge: 'soon' },
-      { slug: 'resenas',   label: 'Reseñas',            href: '/clientes/resenas',   badge: 'soon' },
+      { slug: 'resenas',   label: 'Reseñas',            href: '/clientes/resenas' },
     ],
   },
   {
