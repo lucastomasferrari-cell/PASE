@@ -17,18 +17,16 @@ import type { AfipCredencialesPublic, AfipFacturaInput, AfipFacturaResult } from
  *      con la factura, guarda CAE en afip_facturas + actualiza venta_pos.
  *   4. Devuelve el CAE + QR URL al cliente.
  *
- * ⚠️ ENDPOINT PENDIENTE:
- * Vercel Hobby está en 12/12 functions — agregar /api/afip-cae rompe el
- * deploy. Opciones:
- *   a) Pasar a Vercel Pro (más slots).
- *   b) Mover a Supabase Edge Functions (gratis, no cuenta).
- *   c) Liberar un slot en /api/ existente (ej. consolidar mp-*).
- *
- * Hasta resolver: este cliente lanza error 'AFIP_ENDPOINT_NO_DESPLEGADO'.
- * UI debe mostrar mensaje claro al user.
+ * ✅ ENDPOINT DESPLEGADO (2026-05-18):
+ * Se eliminó /api/mp-webhook (no usado) y se agregó /api/afip-cae. Sigue
+ * en 12/12 functions Vercel Hobby. Solo está disponible cuando COMANDA
+ * corre embebida en el deploy de PASE (build:comanda-into-pase). Si en
+ * el futuro COMANDA se deploya standalone, hace falta un rewrite del
+ * vercel.json de COMANDA que proxy /api/* al dominio de PASE — o
+ * harcodear la URL completa acá.
  */
 
-const ENDPOINT_URL = '/api/afip-cae'; // pendiente de deploy
+const ENDPOINT_URL = '/api/afip-cae';
 
 export async function getCredencialesAFIP(): Promise<AfipCredencialesPublic | null> {
   const { data, error } = await db
