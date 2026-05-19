@@ -236,12 +236,19 @@ export function calcularTotalLiquidacion(params: LiquidacionParams): Liquidacion
 
   const sueldo_base = calcularSueldoBase(sueldo_mensual, modo_pago);
   const valor_dia = sueldo_mensual / 30;
-  const valor_dia_vacacional = sueldo_mensual / 25; // LCT Art 155: vacaciones se calculan sobre días hábiles
+  // LCT Art 155: día de vacaciones se paga sobre días hábiles (sueldo/25).
+  // PERO el sueldo_base mensual ya cubre los días que el empleado estuvo de
+  // vacaciones (no se le descuenta por no asistir). Lo único que falta sumar
+  // es el PLUS vacacional: diferencia entre el valor vacacional (sueldo/25)
+  // y el valor del día normal (sueldo/30). Pedido Lucas 2026-05-19 — antes
+  // sumaba el día completo y quedaba doblemente pago.
+  const valor_dia_vacacional = sueldo_mensual / 25;
+  const plus_vacacional_por_dia = valor_dia_vacacional - valor_dia;
   const descuento_ausencias = calcularDescuentoAusencias(inasistencias, sueldo_mensual);
   const total_horas_extras = calcularHorasExtras(horas_extras, sueldo_mensual);
   const total_dobles = Math.max(0, dobles) * Math.max(0, valor_doble);
   const total_feriados = Math.max(0, feriados) * valor_dia;
-  const total_vacaciones = Math.max(0, vacaciones_dias) * valor_dia_vacacional;
+  const total_vacaciones = Math.max(0, vacaciones_dias) * plus_vacacional_por_dia;
   const subtotal1 =
     sueldo_base - descuento_ausencias + total_horas_extras +
     total_dobles + total_feriados + total_vacaciones;

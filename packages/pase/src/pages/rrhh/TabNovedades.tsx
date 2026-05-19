@@ -373,7 +373,7 @@ function EmpleadoCard({ emp, nov, adelantosDelMes, expanded, onToggle, updateNov
             {(calc.total_horas_extras || 0) < 0 && <BreakdownLine label="− Horas no trabajadas" value={calc.total_horas_extras} negative />}
             {(calc.total_dobles || 0) > 0 && <BreakdownLine label="+ Turnos dobles" value={calc.total_dobles} positive />}
             {(calc.total_feriados || 0) > 0 && <BreakdownLine label="+ Feriados" value={calc.total_feriados} positive />}
-            {(calc.total_vacaciones || 0) > 0 && <BreakdownLine label="+ Vacaciones (días tomados)" value={calc.total_vacaciones} positive />}
+            {(calc.total_vacaciones || 0) > 0 && <BreakdownLine label="+ Plus vacacional (sueldo/25 − sueldo/30 × días)" value={calc.total_vacaciones} positive />}
             {(calc.monto_presentismo || 0) > 0 && <BreakdownLine label="+ Presentismo (5%)" value={calc.monto_presentismo} positive />}
             {(calc.descuento_ausencias || 0) > 0 && <BreakdownLine label="− Inasistencias" value={-calc.descuento_ausencias} negative />}
             {adelantosDelMes > 0 && <BreakdownLine label="− Adelantos" value={-adelantosDelMes} negative />}
