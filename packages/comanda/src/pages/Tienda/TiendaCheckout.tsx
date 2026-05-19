@@ -1,8 +1,8 @@
-import { useCallback, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { useNavigate, useOutletContext, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
-import { crearPedidoPublico, notificarPedidoRecibido } from '@/services/tiendaService';
+import { crearPedidoPublico, notificarPedidoRecibido, calcularETALocal, type ETACalculado } from '@/services/tiendaService';
 import { setPedidoGeo, precisarConGoogle } from '@/services/direccionesService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,6 +41,27 @@ export function TiendaCheckout() {
   // doble click en Pagar, la 2da llamada con misma key devuelve el
   // mismo venta_id (no crea pedido duplicado).
   const [idempotencyKey] = useState<string>(() => crypto.randomUUID());
+
+  // ETA dinámico: el RPC suma minutos por cada pedido en cola. Refresca
+  // cuando cambia el tipo_entrega. Si el RPC falla (red, etc), fallback
+  // a los tiempos fijos de local_settings.
+  const [eta, setEta] = useState<ETACalculado | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await calcularETALocal(local.slug, carrito.tipoEntrega);
+      if (!cancelled && data) setEta(data);
+    })();
+    return () => { cancelled = true; };
+  }, [local.slug, carrito.tipoEntrega]);
+
+  // ETA a mostrar: usa el dinámico si está disponible, sino fallback a
+  // los tiempos estáticos del local.
+  const etaMin = eta?.eta_minutos
+    ?? (carrito.tipoEntrega === 'delivery' ? local.tiempo_delivery_min ?? 45 : local.tiempo_retiro_min ?? 20);
+  const etaBadgeCola = eta && eta.pedidos_en_cola > 0
+    ? ` (con ${eta.pedidos_en_cola} pedido${eta.pedidos_en_cola === 1 ? '' : 's'} antes tuyo)`
+    : '';
 
   const subtotal = calcularSubtotal(carrito.items);
   const costoEnvio = carrito.tipoEntrega === 'delivery' ? Number(local.costo_envio_default) || 0 : 0;
@@ -295,8 +316,8 @@ export function TiendaCheckout() {
                 <div className="font-medium text-sm">Lo antes posible</div>
                 <div className="text-xs text-foreground/60 mt-0.5">
                   {carrito.tipoEntrega === 'delivery'
-                    ? `Llega en ~${local.tiempo_delivery_min ?? 45} min después de confirmar.`
-                    : `Listo en ~${local.tiempo_retiro_min ?? 20} min después de confirmar.`}
+                    ? `Llega en ~${etaMin} min${etaBadgeCola}.`
+                    : `Listo en ~${etaMin} min${etaBadgeCola}.`}
                 </div>
               </div>
             </div>
