@@ -20,6 +20,7 @@ const Contador = lazy(() => import("./pages/herramientas/ContadorIVA"));
 const ImportarMaxirest = lazy(() => import("./pages/ImportarMaxirest"));
 const Gastos = lazy(() => import("./pages/Gastos"));
 const Usuarios = lazy(() => import("./pages/Usuarios"));
+const RolesPermisos = lazy(() => import("./pages/RolesPermisos"));
 const Blindaje = lazy(() => import("./pages/herramientas/Blindaje"));
 const ConciliacionBancaria = lazy(() => import("./pages/ConciliacionBancaria").then(m => ({ default: m.ConciliacionBancaria })));
 const RRHHPage = lazy(() => import("./pages/RRHH"));
@@ -458,6 +459,10 @@ function AppMain() {
               <Route path="/gastos" element={<Gastos {...props}/>} />
               <Route path="/usuarios" element={
                 tienePermiso(user, "usuarios") ? <Usuarios {...props}/> : <Navigate to="/inicio" replace />
+              } />
+              {/* RBAC: pantalla de roles y permisos. Solo dueño/admin/superadmin. */}
+              <Route path="/usuarios/roles" element={
+                tienePermiso(user, "usuarios") ? <RolesPermisos user={user!}/> : <Navigate to="/inicio" replace />
               } />
               <Route path="/maxirest" element={
                 // Maxirest: import diario de cierre POS. Cualquiera con permiso

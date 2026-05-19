@@ -34,8 +34,15 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
   // guarda rol="dueno" o rol="encargado" según ese toggle. Decisión Lucas
   // 2026-05-17: eliminar la noción de roles intermedios (admin/cajero/compras).
   // Cada user con permisos personalizados, o "dueño" con acceso total.
-  const emptyForm = { nombre:"", email:"", password:"", activo:true, esDueno:false, modulos:[] as string[], locales_ids:[] as number[], cuentas_all:true, cuentas_visibles:[] as string[], cuentas_operables:[] as string[] };
+  // rol_id: UUID del rol asignado (sistema o custom). Si está vacío y el
+  // usuario es dueño, usamos el rol del sistema "Dueño". Para nuevos
+  // usuarios, default a "encargado" (rol del sistema).
+  const emptyForm = { nombre:"", email:"", password:"", activo:true, esDueno:false, modulos:[] as string[], locales_ids:[] as number[], cuentas_all:true, cuentas_visibles:[] as string[], cuentas_operables:[] as string[], rol_id:"" as string };
   const [form, setForm] = useState(emptyForm);
+  // Roles disponibles (sistema + custom del tenant). Se cargan al montar y
+  // se exponen en un dropdown dentro del form de usuario. Si el dueño
+  // necesita un set custom, va a /usuarios/roles a crear uno.
+  const [rolesDisponibles, setRolesDisponibles] = useState<Array<{ id: string; nombre: string; slug: string; es_sistema: boolean }>>([]);
 
   const load = async () => {
     setLoading(true);
@@ -55,6 +62,16 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
   // Patrón fetch-on-mount.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, []);
+
+  // Cargar roles disponibles (sistema + custom del tenant) para el dropdown
+  // del form. RLS filtra: sistema (tenant_id NULL) + tenant del user.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    void db.from("roles").select("id, nombre, slug, es_sistema, tenant_id")
+      .order("es_sistema", { ascending: false })
+      .order("nombre")
+      .then(({ data }) => setRolesDisponibles(data ?? []));
+  }, []);
 
   // Sprint Realtime: cambios remotos en usuarios o usuario_permisos del
   // mismo tenant disparan reload. Si otro admin agrega permisos a un
@@ -88,6 +105,7 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
       cuentas_operables: Array.isArray(u.cuentas_operables)
         ? u.cuentas_operables
         : (Array.isArray(u.cuentas_visibles) ? u.cuentas_visibles : []),
+      rol_id: (u as Usuario & { rol_id?: string }).rol_id || "",
     });
     setModal(u); setErr(""); setShowPw(false);
   };
@@ -214,6 +232,21 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
           if (permErr) {
             console.error("Error guardando permisos:", permErr.message);
             setErr("Error guardando permisos: " + permErr.message + " (Los permisos quedaron en blanco. Re-editar y reintentar.)");
+            setSaving(false);
+            return;
+          }
+        }
+
+        // RBAC: asignar rol_id al usuario. Si el form trae un rol elegido,
+        // lo asignamos via RPC. Si no, queda como está (sin tocar).
+        if (form.rol_id) {
+          const { error: rolErr } = await db.rpc("asignar_rol_a_usuario", {
+            p_usuario_id: userId as number,
+            p_rol_id: form.rol_id,
+          });
+          if (rolErr) {
+            console.error("Error asignando rol:", rolErr.message);
+            setErr("Error asignando rol: " + rolErr.message);
             setSaving(false);
             return;
           }
@@ -499,6 +532,41 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                       </div>
                     </div>
                   </label>
+
+                  {/* ─── Rol (RBAC) ───────────────────────────────────── */}
+                  {!form.esDueno && (
+                    <div style={{ marginTop: 16, marginBottom: 8 }}>
+                      <SectionTitle locked={isSelf}>Rol</SectionTitle>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <select
+                          value={form.rol_id}
+                          disabled={isSelf}
+                          onChange={(e) => setForm((f) => ({ ...f, rol_id: e.target.value }))}
+                          style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "0.5px solid var(--pase-border-strong)", background: "var(--pase-bg)", color: "var(--pase-text)", fontSize: "var(--pase-fs-base)" }}
+                        >
+                          <option value="">— Sin rol asignado (usa los permisos sueltos de abajo) —</option>
+                          <optgroup label="Roles del sistema">
+                            {rolesDisponibles.filter(r => r.es_sistema).map(r => (
+                              <option key={r.id} value={r.id}>{r.nombre}</option>
+                            ))}
+                          </optgroup>
+                          {rolesDisponibles.some(r => !r.es_sistema) && (
+                            <optgroup label="Roles custom">
+                              {rolesDisponibles.filter(r => !r.es_sistema).map(r => (
+                                <option key={r.id} value={r.id}>{r.nombre}</option>
+                              ))}
+                            </optgroup>
+                          )}
+                        </select>
+                        <a href="/usuarios/roles" target="_blank" rel="noreferrer" className="btn btn-sec btn-sm" style={{ whiteSpace: "nowrap" }}>
+                          Gestionar roles →
+                        </a>
+                      </div>
+                      <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", marginTop: 6 }}>
+                        El rol determina qué puede hacer el usuario. Si no le alcanza, podés sumar/sacar permisos sueltos abajo, pero lo más limpio es crear un rol custom.
+                      </div>
+                    </div>
+                  )}
 
                   {/* ─── Módulos ───────────────────────────────────────── */}
                   <SectionTitle locked={isSelf || form.esDueno}>
