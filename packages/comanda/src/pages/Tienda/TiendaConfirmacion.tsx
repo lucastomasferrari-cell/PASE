@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useOutletContext, useParams } from 'react-router-dom';
-import { Check } from 'lucide-react';
+import { Check, Bike } from 'lucide-react';
 import { getPedidoPublico, type PedidoPublicoEstado } from '@/services/tiendaService';
+import { getRiderPositionPublica, type RiderPositionPublica } from '@/services/ridersService';
 import { useVisiblePolling } from '@/lib/useVisiblePolling';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -9,6 +10,7 @@ import { formatARS } from '@/lib/format';
 import type { TiendaCtx } from './TiendaLayout';
 import { EstadoPedidoTimeline, PASOS_DELIVERY, PASOS_RETIRO } from './components/EstadoPedidoTimeline';
 import { ReviewForm } from '@/components/ReviewForm';
+import { RiderEnCamino } from './components/RiderEnCamino';
 
 const POLL_MS = 15000;
 
@@ -17,6 +19,7 @@ export function TiendaConfirmacion() {
   const { ventaId } = useParams<{ ventaId: string }>();
   const id = ventaId ? Number(ventaId) : 0;
   const [estado, setEstado] = useState<PedidoPublicoEstado | null>(null);
+  const [riderPos, setRiderPos] = useState<RiderPositionPublica | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -24,8 +27,14 @@ export function TiendaConfirmacion() {
 
   const tick = useCallback(async () => {
     if (!id || !telefono) return;
-    const { data } = await getPedidoPublico(id, telefono);
-    if (!data) setNotFound(true); else setEstado(data);
+    const [{ data: pedido }, { data: rider }] = await Promise.all([
+      getPedidoPublico(id, telefono),
+      // Solo intentamos traer rider si el pedido está delivery — pero igualmente
+      // el RPC es seguro (valida tel) y devuelve vacío si no aplica.
+      getRiderPositionPublica(id, telefono),
+    ]);
+    if (!pedido) setNotFound(true); else setEstado(pedido);
+    setRiderPos(rider);
     setLoading(false);
   }, [id, telefono]);
 
@@ -136,6 +145,19 @@ export function TiendaConfirmacion() {
             Estado del pedido
           </div>
           <EstadoPedidoTimeline pasos={pasos} estadoActual={estado.estado} />
+
+          {/* Rider en camino: cuando el pedido está delivery + rider online + le falta entregarlo */}
+          {estado.tipo_entrega === 'delivery' &&
+           (estado.estado === 'enviada' || estado.estado === 'lista') &&
+           riderPos && (
+            <div className="mt-8">
+              <div className="text-xs uppercase tracking-wide text-foreground/60 mb-3 flex items-center gap-1.5">
+                <Bike className="h-3.5 w-3.5" />
+                Tu pedido viene en camino
+              </div>
+              <RiderEnCamino rider={riderPos} />
+            </div>
+          )}
 
           {/* Review: solo aparece cuando el pedido ya fue entregado/cobrado.
               Si el cliente ya dejó review, el componente muestra la previa. */}

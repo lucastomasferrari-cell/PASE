@@ -70,6 +70,12 @@ export default async function handler(req, res) {
     if (action === 'agent-heartbeat' && req.method === 'POST') {
       return await handleAgentHeartbeat(req, res);
     }
+    // ── Cron: procesar emails de pedidos auto-entregados (delivery) ──
+    // Llamado por cron externo (Vercel cron, GH Actions, etc) cada 1-2min.
+    // Auth: header X-Cron-Token == process.env.CRON_TOKEN.
+    if (action === 'cron-process-delivered' && req.method === 'POST') {
+      return await handleCronProcessDelivered(req, res);
+    }
     // ── Rappi: operaciones contra Rappi Restaurant Integration API v3 ──
     if (action === 'rappi-test' && req.method === 'POST') {
       return await handleRappiTest(req, res);
@@ -785,6 +791,119 @@ async function handleAgentHeartbeat(req, res) {
     local_id: agent.local_id,
     server_time: new Date().toISOString(),
   });
+}
+
+// ─── CRON: emails post auto-entrega ─────────────────────────────────────
+//
+// Busca ventas que pasaron a 'entregada' (por geofencing trigger PG o por
+// el comerciante) y todavía no tienen notif_email_entregado_at marcado.
+// Dispara el email "calificá tu pedido" para cada una.
+//
+// Diseñado para ser llamado cada 1-2min. Idempotente — el flag
+// notif_email_entregado_at evita doble envío.
+//
+// Auth: header X-Cron-Token. Si no matchea CRON_TOKEN env var, 401.
+async function handleCronProcessDelivered(req, res) {
+  const tokenHeader = req.headers['x-cron-token'];
+  const expected = process.env.CRON_TOKEN;
+  if (!expected) {
+    return res.status(500).json({ error: 'CRON_TOKEN no configurado en env' });
+  }
+  if (tokenHeader !== expected) {
+    return res.status(401).json({ error: 'Token inválido' });
+  }
+
+  const supabase = db();
+  // Trae hasta 50 candidatos por tick — más que suficiente para 1-2min.
+  const { data: candidatos, error } = await supabase
+    .from('ventas_pos')
+    .select('id, local_id, numero_local, cliente_nombre, cliente_email, tipo_entrega')
+    .eq('estado', 'entregada')
+    .eq('tipo_entrega', 'delivery')
+    .eq('origen', 'tienda_online')
+    .is('deleted_at', null)
+    .is('notif_email_entregado_at', null)
+    .not('cliente_email', 'is', null)
+    .limit(50);
+
+  if (error) {
+    console.error('[cron-deliver]', error);
+    return res.status(500).json({ error: error.message });
+  }
+
+  if (!candidatos || candidatos.length === 0) {
+    return res.status(200).json({ ok: true, processed: 0, msg: 'sin pendientes' });
+  }
+
+  let sent = 0;
+  let failed = 0;
+  for (const v of candidatos) {
+    try {
+      // Reutilizamos exactamente el mismo handler que ya existe.
+      // Llamada interna fake: armamos req/res mocks.
+      const fakeReq = {
+        body: { venta_id: v.id },
+        headers: req.headers,
+      };
+      const fakeRes = {
+        status() { return this; },
+        json() { return this; },
+      };
+      // Pero más limpio: refactorizamos el body de handleNotifyEntregado
+      // a una función reutilizable. Por ahora hacemos call inline.
+      const r = await sendNotifyEntregadoInline(supabase, v.id, req);
+      if (r.ok) sent++;
+      else failed++;
+    } catch (e) {
+      failed++;
+      console.error('[cron-deliver] venta', v.id, e.message);
+    }
+  }
+
+  res.status(200).json({ ok: true, candidatos: candidatos.length, sent, failed });
+}
+
+// Helper inline para reutilizar la lógica de handleNotifyEntregado.
+// (Refactor mínimo — no rompemos el handler original.)
+async function sendNotifyEntregadoInline(supabase, ventaId, req) {
+  const { data: venta } = await supabase
+    .from('ventas_pos')
+    .select('id, local_id, numero_local, cliente_nombre, cliente_email, notif_email_entregado_at')
+    .eq('id', ventaId)
+    .single();
+  if (!venta) return { ok: false, error: 'NOT_FOUND' };
+  if (venta.notif_email_entregado_at) return { ok: true, skipped: 'YA_ENVIADO' };
+  if (!venta.cliente_email) return { ok: false, error: 'NO_EMAIL' };
+
+  const { data: local } = await supabase.from('locales').select('nombre').eq('id', venta.local_id).single();
+  const { data: cls } = await supabase
+    .from('comanda_local_settings')
+    .select('slug')
+    .eq('local_id', venta.local_id).single();
+
+  const origin = req.headers.origin || (`https://${req.headers.host || 'pase-yndx.vercel.app'}`);
+  const calificarUrl = `${origin}/comanda-app/tienda/${cls?.slug ?? ''}/confirmacion/${ventaId}`;
+
+  const html = htmlPedidoEntregado({
+    localNombre: local?.nombre ?? '',
+    clienteNombre: venta.cliente_nombre ?? '',
+    ventaNumero: venta.numero_local ?? venta.id,
+    calificarUrl,
+  });
+  const sent = await sendEmail({
+    to: venta.cliente_email,
+    subject: `¿Cómo estuvo tu pedido? — ${local?.nombre ?? ''}`,
+    html,
+  });
+  if (!sent.ok && !sent.skipped) return { ok: false, error: sent.error };
+
+  // eslint-disable-next-line pase-local/no-direct-financiera-write -- campo no-financiero
+  await supabase
+    .from('ventas_pos')
+    .update({ notif_email_entregado_at: new Date().toISOString() })
+    .eq('id', ventaId);
+
+  return { ok: true };
 }
 
 // ─── RAPPI: test de conexión (auth check) ─────────────────────────────

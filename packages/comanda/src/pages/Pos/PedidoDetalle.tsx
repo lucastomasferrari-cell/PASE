@@ -4,7 +4,9 @@ import { toast } from 'sonner';
 import {
   ArrowLeft, Phone, MapPin, Home, Clock, CreditCard,
   Printer, MoreVertical, CheckCircle2, ChefHat, X, MessageSquareWarning, Edit3,
+  MessageCircle,
 } from 'lucide-react';
+import { whatsAppUrl, mensajeGenericoCliente } from '@/lib/whatsapp';
 import {
   getPedidoDetalle,
   aprobarPedidoService, marcarListoService, marcarEntregadoService,
@@ -219,9 +221,22 @@ export function PedidoDetalle() {
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Cliente</div>
               <div className="font-medium text-sm">{venta.cliente_nombre ?? '—'}</div>
               {venta.cliente_telefono && (
-                <a href={`tel:${venta.cliente_telefono}`} className="flex items-center gap-1.5 text-xs text-primary hover:underline">
-                  <Phone className="h-3 w-3" /> {venta.cliente_telefono}
-                </a>
+                <div className="flex items-center gap-3 text-xs">
+                  <a href={`tel:${venta.cliente_telefono}`} className="flex items-center gap-1.5 text-primary hover:underline">
+                    <Phone className="h-3 w-3" /> {venta.cliente_telefono}
+                  </a>
+                  {(() => {
+                    const wp = whatsAppUrl(
+                      venta.cliente_telefono,
+                      mensajeGenericoCliente(venta.cliente_nombre ?? '', venta.numero_local),
+                    );
+                    return wp ? (
+                      <a href={wp} target="_blank" rel="noopener" className="flex items-center gap-1 text-green-700 hover:underline">
+                        <MessageCircle className="h-3 w-3" /> WhatsApp
+                      </a>
+                    ) : null;
+                  })()}
+                </div>
               )}
             </CardContent>
           </Card>

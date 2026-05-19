@@ -27,6 +27,7 @@ import {
 } from '@/services/ridersService';
 import { formatARS } from '@/lib/format';
 import { db } from '@/lib/supabase';
+import { whatsAppUrl, mensajeGenericoCliente } from '@/lib/whatsapp';
 
 const REFRESH_MS = 15_000;
 
@@ -109,14 +110,7 @@ export function DispatchMap() {
     }
   }
 
-  // ── WhatsApp click-to-chat
-  function whatsappLink(telefono: string | null | undefined, mensaje: string): string | null {
-    if (!telefono) return null;
-    // Limpiar tel: dejar solo dígitos, prefix 54 si no tiene
-    const clean = telefono.replace(/[^\d]/g, '');
-    const withCountry = clean.startsWith('54') ? clean : `54${clean}`;
-    return `https://wa.me/${withCountry}?text=${encodeURIComponent(mensaje)}`;
-  }
+  // ── WhatsApp click-to-chat: usa helper compartido lib/whatsapp.ts
 
   if (loading) {
     return <div className="p-12 text-center text-foreground/60">Cargando despacho…</div>;
@@ -203,7 +197,6 @@ export function DispatchMap() {
               onAsignar={handleAsignar}
               onDesasignar={() => handleDesasignar(selectedPedido.venta_id)}
               onClose={() => setSelectedPedidoId(null)}
-              whatsappLink={whatsappLink}
             />
           ) : (
             <RidersSidebar riders={riders} />
@@ -274,18 +267,17 @@ function PedidoRow({ pedido: p, selected, onClick }: {
 // ─── DetallePedidoSidebar ─────────────────────────────────────────────
 
 function DetallePedidoSidebar({
-  pedido: p, ridersDisponibles, onAsignar, onDesasignar, onClose, whatsappLink,
+  pedido: p, ridersDisponibles, onAsignar, onDesasignar, onClose,
 }: {
   pedido: PedidoDeliveryMapa;
   ridersDisponibles: Rider[];
   onAsignar: (riderId: number) => void;
   onDesasignar: () => void;
   onClose: () => void;
-  whatsappLink: (tel: string | null | undefined, mensaje: string) => string | null;
 }) {
-  const wpUrl = whatsappLink(
+  const wpUrl = whatsAppUrl(
     p.cliente_telefono,
-    `Hola ${p.cliente_nombre ?? ''}, te escribimos por tu pedido #${p.numero_local}. `,
+    mensajeGenericoCliente(p.cliente_nombre ?? '', p.numero_local),
   );
 
   return (

@@ -67,6 +67,28 @@ export async function getCatalogoPorSlug(slug: string): Promise<{ data: Catalogo
   return { data: (data ?? []) as CatalogoPublicoItem[], error: null };
 }
 
+// ETA dinámico — recalcula tiempo de espera según cola actual del local.
+// Public (anon) porque se usa en checkout sin login.
+export interface ETACalculado {
+  eta_minutos: number;
+  tiempo_base: number;
+  pedidos_en_cola: number;
+  incremento_por_pedido: number;
+}
+
+export async function calcularETALocal(
+  slug: string,
+  tipoEntrega: 'retiro' | 'delivery',
+): Promise<{ data: ETACalculado | null; error: string | null }> {
+  const { data, error } = await dbAnon.rpc('fn_calcular_eta_local', {
+    p_local_slug: slug,
+    p_tipo_entrega: tipoEntrega,
+  });
+  if (error) return { data: null, error: translateError(error) };
+  const arr = data as ETACalculado[] | null;
+  return { data: arr?.[0] ?? null, error: null };
+}
+
 // Tracking público — cliente verifica con su número de teléfono.
 export interface PedidoPublicoEstado {
   estado: string;
