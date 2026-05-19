@@ -17,13 +17,42 @@ interface Props {
   cuentasUsables: string[];
   guardarAdelanto: () => Promise<void | undefined>;
   guardando: boolean;
+  /** Empleados adicionales para mergear con allEmps. Cubre el caso del
+   *  modal abierto desde TabNovedades con novLocal distinto del sidebar. */
+  empleadosExtra?: Empleado[];
 }
 
 export function AdelantoModal({
   open, onClose, allEmps, filtroLocalId,
   adelForm, setAdelForm, cuentasUsables, guardarAdelanto, guardando,
+  empleadosExtra,
 }: Props) {
   if (!open) return null;
+
+  // Merge allEmps + empleadosExtra (dedupe por id). Sin esto, abrir el
+  // modal desde una card del tab Novedades cuando allEmps está filtrado
+  // por sidebar dejaba el dropdown vacío (bug Lucas 2026-05-19).
+  const empleadosVisibles = (() => {
+    const map = new Map<string, Empleado>();
+    for (const e of allEmps || []) map.set(String(e.id), e);
+    for (const e of empleadosExtra || []) {
+      if (!map.has(String(e.id))) map.set(String(e.id), e);
+    }
+    let list = Array.from(map.values()).filter((e) => e.activo !== false);
+    if (filtroLocalId != null && !adelForm.empleado_id) {
+      list = list.filter((e) => e.local_id === filtroLocalId);
+    }
+    if (adelForm.empleado_id && !list.some((e) => String(e.id) === String(adelForm.empleado_id))) {
+      const fromAny = (empleadosExtra || []).find((e) => String(e.id) === String(adelForm.empleado_id))
+                   ?? (allEmps || []).find((e) => String(e.id) === String(adelForm.empleado_id));
+      if (fromAny) list = [fromAny, ...list];
+    }
+    return list.sort((a, b) => a.apellido.localeCompare(b.apellido));
+  })();
+
+  const empPreSeleccionado = adelForm.empleado_id
+    ? empleadosVisibles.find((e) => String(e.id) === String(adelForm.empleado_id))
+    : undefined;
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -35,20 +64,45 @@ export function AdelantoModal({
         <div className="modal-body">
           <div className="field">
             <label>Empleado</label>
-            <select
-              value={adelForm.empleado_id}
-              onChange={(e) => setAdelForm({ ...adelForm, empleado_id: e.target.value })}
-            >
-              <option value="">Seleccionar...</option>
-              {(allEmps || [])
-                .filter((e) => e.activo !== false)
-                .filter((e) => filtroLocalId == null || e.local_id === filtroLocalId)
-                .map((e) => (
+            {empPreSeleccionado ? (
+              // Pre-seleccionado (vino del botón "+ Adelanto" en una card):
+              // mostramos chip readonly con opción de "Cambiar". Más claro
+              // que un dropdown lleno donde no se sabe cuál está elegido.
+              <div style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "8px 10px", background: "var(--s2)",
+                border: "1px solid var(--bd)", borderRadius: "var(--r)",
+                fontSize: 13,
+              }}>
+                <span style={{ fontWeight: 500 }}>
+                  {empPreSeleccionado.apellido}, {empPreSeleccionado.nombre}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setAdelForm({ ...adelForm, empleado_id: "" })}
+                  style={{
+                    marginLeft: "auto", padding: "2px 8px", fontSize: 10,
+                    background: "transparent", border: "1px solid var(--bd)",
+                    borderRadius: "var(--r)", color: "var(--muted2)", cursor: "pointer",
+                  }}
+                  title="Elegir otro empleado"
+                >
+                  Cambiar
+                </button>
+              </div>
+            ) : (
+              <select
+                value={adelForm.empleado_id}
+                onChange={(e) => setAdelForm({ ...adelForm, empleado_id: e.target.value })}
+              >
+                <option value="">Seleccionar...</option>
+                {empleadosVisibles.map((e) => (
                   <option key={e.id} value={e.id}>
                     {e.apellido}, {e.nombre}
                   </option>
                 ))}
-            </select>
+              </select>
+            )}
           </div>
           <div className="form2">
             <div className="field">

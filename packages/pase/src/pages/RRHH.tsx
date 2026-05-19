@@ -858,6 +858,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
         open={adelModal}
         onClose={() => setAdelModal(false)}
         allEmps={allEmps}
+        empleadosExtra={novEmps}
         filtroLocalId={pagoLocal ? parseInt(String(pagoLocal)) : (novLocal ? parseInt(String(novLocal)) : null)}
         adelForm={adelForm}
         setAdelForm={setAdelForm}
