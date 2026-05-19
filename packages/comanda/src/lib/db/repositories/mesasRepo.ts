@@ -1,27 +1,29 @@
 // Repository de mesas + helpers para enriquecer con la venta abierta.
+// Refactor 2026-05-19: sin herencia de clase.
 
-import { BaseRepository } from './base';
-import { getDb } from '../index';
+import * as base from './base';
 import type { LocalMesa, LocalVentaPos } from '../schema';
 import { ventasRepo } from './ventasRepo';
 
-class MesasRepository extends BaseRepository<'mesas'> {
-  constructor() {
-    super('mesas');
-  }
+export const mesasRepo = {
+  getById: (id: number) => base.getById<'mesas'>('mesas', id),
+  put: (row: LocalMesa, opts?: base.PutOptions) => base.put<'mesas'>('mesas', row, opts),
+  putMany: (rows: LocalMesa[], opts?: base.PutOptions) => base.putMany<'mesas'>('mesas', rows, opts),
+  delete: (id: number) => base.deleteById('mesas', id),
+  findByIndex: (indexName: string, value: IDBValidKey) =>
+    base.findByIndex<'mesas'>('mesas', indexName, value),
 
   async listByLocal(localId: number): Promise<LocalMesa[]> {
-    const all = await this.findByIndex('by_local', localId);
+    const all = await base.findByIndex<'mesas'>('mesas', 'by_local', localId);
     return all
       .filter((m) => !m.deleted_at)
       .sort((a, b) => {
-        // Orden: zona asc nullsLast, después id asc
         if (a.zona && !b.zona) return -1;
         if (!a.zona && b.zona) return 1;
         if (a.zona && b.zona && a.zona !== b.zona) return a.zona.localeCompare(b.zona);
         return a.id - b.id;
       });
-  }
+  },
 
   // Mesa con info de la venta abierta (si existe). Útil para la grid del
   // salón sin tener que joinear server-side.
@@ -47,10 +49,10 @@ class MesasRepository extends BaseRepository<'mesas'> {
         venta_abierta_at: v?.abierta_at ?? null,
       };
     });
-  }
+  },
 
   async replaceForLocal(localId: number, rows: LocalMesa[]): Promise<void> {
-    const db = await getDb();
+    const db = await base.getDb();
     const tx = db.transaction('mesas', 'readwrite');
     const index = tx.store.index('by_local');
     let cursor = await index.openCursor(IDBKeyRange.only(localId));
@@ -62,7 +64,5 @@ class MesasRepository extends BaseRepository<'mesas'> {
       await tx.store.put({ ...r, _local_dirty: false, _local_synced_at: new Date().toISOString() });
     }
     await tx.done;
-  }
-}
-
-export const mesasRepo = new MesasRepository();
+  },
+};

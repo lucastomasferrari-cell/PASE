@@ -1,65 +1,58 @@
 // Repository de items (catálogo del POS) en DB local.
 //
-// Lectura crítica: el cajero/mozo escanea catálogo mientras opera. La query
-// más común es "items visibles_pos del tenant agrupados por grupo_id". Por
-// eso el índice by_grupo + filtros en memoria son suficientes para
-// catálogos típicos (200-2000 items por tenant).
+// Refactor 2026-05-19: NO usa herencia de clase para evitar el bug
+// "Class extends value undefined" cuando rolldown hace code splitting.
+// En vez de eso, expone un objeto con funciones que componen las
+// operaciones genéricas de ./base.
 
-import { BaseRepository } from './base';
-import { getDb } from '../index';
+import * as base from './base';
 import type { LocalItem } from '../schema';
 
-class ItemsRepository extends BaseRepository<'items'> {
-  constructor() {
-    super('items');
-  }
+export interface ListItemsOpts {
+  grupoId?: number;
+  soloVisiblesPos?: boolean;
+  soloDisponibles?: boolean;
+}
+
+export const itemsRepo = {
+  getById: (id: number) => base.getById<'items'>('items', id),
+  getAll: () => base.getAll<'items'>('items'),
+  count: () => base.count('items'),
+  put: (row: LocalItem, opts?: base.PutOptions) => base.put<'items'>('items', row, opts),
+  putMany: (rows: LocalItem[], opts?: base.PutOptions) => base.putMany<'items'>('items', rows, opts),
+  delete: (id: number) => base.deleteById('items', id),
+  clear: () => base.clearStore('items'),
+  findByIndex: (indexName: string, value: IDBValidKey) =>
+    base.findByIndex<'items'>('items', indexName, value),
+  findDirty: () => base.findDirty<'items'>('items'),
+  markSynced: (id: number) => base.markSynced<'items'>('items', id),
 
   // Listar items del tenant ordenados por orden + id. Filtros opcionales
   // por grupo y por estado. La UI hace filtrado adicional in-memory por
   // search text para evitar cursors.
-  async listByTenant(
-    tenantId: string,
-    opts: { grupoId?: number; soloVisiblesPos?: boolean; soloDisponibles?: boolean } = {},
-  ): Promise<LocalItem[]> {
-    const all = await this.findByIndex('by_tenant', tenantId);
+  async listByTenant(tenantId: string, opts: ListItemsOpts = {}): Promise<LocalItem[]> {
+    const all = await base.findByIndex<'items'>('items', 'by_tenant', tenantId);
     let filtered = all;
-    if (opts.grupoId != null) {
-      filtered = filtered.filter((i) => i.grupo_id === opts.grupoId);
-    }
-    if (opts.soloVisiblesPos) {
-      filtered = filtered.filter((i) => i.visible_pos);
-    }
-    if (opts.soloDisponibles) {
-      filtered = filtered.filter((i) => i.estado === 'disponible');
-    }
-    // Sin deleted_at — los borrados se eliminan del local al sync.
+    if (opts.grupoId != null) filtered = filtered.filter((i) => i.grupo_id === opts.grupoId);
+    if (opts.soloVisiblesPos) filtered = filtered.filter((i) => i.visible_pos);
+    if (opts.soloDisponibles) filtered = filtered.filter((i) => i.estado === 'disponible');
     filtered = filtered.filter((i) => !i.deleted_at);
     return filtered.sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0) || a.id - b.id);
-  }
+  },
 
-  // Reemplaza el catálogo entero del tenant. Usado por `pullInitial` cuando
-  // el cliente arranca el turno: snapshot atómico del catálogo.
-  //
-  // Implementación: borra todas las filas del tenant y reinserta. Es
-  // simple y atómico dentro de una transaction. Si el catálogo crece a
-  // miles de items vale la pena cambiar a "diff + apply" pero hoy no es
-  // problema (200-2000 items).
+  // Reemplaza el catálogo entero del tenant. Usado por pullInitial.
   async replaceForTenant(tenantId: string, rows: LocalItem[]): Promise<void> {
-    const db = await getDb();
+    const db = await base.getDb();
     const tx = db.transaction('items', 'readwrite');
     const index = tx.store.index('by_tenant');
-    // Borrar existentes del tenant
     let cursor = await index.openCursor(IDBKeyRange.only(tenantId));
     while (cursor) {
       await cursor.delete();
       cursor = await cursor.continue();
     }
-    // Insertar nuevos (skipDirty=true → vienen del cloud).
     for (const r of rows) {
       await tx.store.put({ ...r, _local_dirty: false, _local_synced_at: new Date().toISOString() });
     }
     await tx.done;
-  }
-}
-
-export const itemsRepo = new ItemsRepository();
+  },
+};

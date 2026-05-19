@@ -70,23 +70,7 @@ export default defineConfig({
     },
   },
   build: {
-    // Fix bug 2026-05-19: rolldown estaba creando chunks separados para
-    // repositorios (itemsRepo, etc) que extienden BaseRepository. Si el
-    // chunk del repo concreto se ejecuta antes que el del base, la clase
-    // padre llega como undefined → "Class extends value undefined".
-    // Forzamos que todos los repos + base + schema vayan al MISMO chunk
-    // para garantizar orden de inicialización correcto.
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes('/lib/db/repositories/') || id.includes('/lib/db/base') ||
-              id.includes('/lib/db/index') || id.includes('/lib/db/schema') ||
-              id.includes('/lib/db/migrations')) {
-            return 'db-layer';
-          }
-        },
-      },
-    },
+    chunkSizeWarningLimit: 1000,
   },
   server: { port: 5174 },
 });
