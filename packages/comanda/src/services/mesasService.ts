@@ -118,6 +118,10 @@ export async function softDeleteMesa(id: number): Promise<{ error: string | null
 }
 
 // ─── Operaciones de mesa con override (Sprint 4) ──────────────────────────
+// Sprint A2 (2026-05-19): cuando el flag offline-first está ON, escribimos
+// local + encolamos. La capa offline NO transporta managerId/motivo: el
+// override ya fue verificado en cliente al mostrar el diálogo, y el server
+// re-aplica auth_es_manager() al procesar la cola.
 
 export async function transferirMesaService(
   ventaId: number,
@@ -125,6 +129,17 @@ export async function transferirMesaService(
   managerId: string,
   motivo: string,
 ): Promise<{ error: string | null }> {
+  const { featureFlags } = await import('../lib/featureFlags');
+  if (featureFlags.offlineFirstVentas) {
+    const { transferirMesaOffline } = await import('./offline/transferenciasOfflineService');
+    try {
+      await transferirMesaOffline({ ventaId, mesaDestinoId });
+      return { error: null };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error transfiriendo mesa (offline)';
+      return { error: msg };
+    }
+  }
   const { error } = await db.rpc('fn_transferir_mesa_comanda', {
     p_venta_id: ventaId,
     p_mesa_destino: mesaDestinoId,
@@ -140,6 +155,17 @@ export async function unirMesasService(
   managerId: string,
   motivo: string,
 ): Promise<{ error: string | null }> {
+  const { featureFlags } = await import('../lib/featureFlags');
+  if (featureFlags.offlineFirstVentas) {
+    const { unirMesasOffline } = await import('./offline/transferenciasOfflineService');
+    try {
+      await unirMesasOffline({ ventaDestinoId, ventaOrigenId });
+      return { error: null };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error uniendo mesas (offline)';
+      return { error: msg };
+    }
+  }
   const { error } = await db.rpc('fn_unir_mesas_comanda', {
     p_venta_origen_id: ventaOrigenId,
     p_venta_destino_id: ventaDestinoId,
@@ -154,7 +180,29 @@ export async function partirCuentaService(
   itemIds: number[],
   managerId: string,
   motivo: string,
+  tenantId?: string,
+  localId?: number,
 ): Promise<{ ventaNuevaId: number | null; error: string | null }> {
+  const { featureFlags } = await import('../lib/featureFlags');
+  if (featureFlags.offlineFirstVentas) {
+    if (!tenantId || localId == null) {
+      // partirCuentaOffline necesita tenantId+localId para inicializar la
+      // venta nueva en local. Si los callers viejos no los pasan, caemos
+      // al flujo online (no es regresión — antes solo había online).
+      // TODO: actualizar callers para pasar tenantId+localId siempre.
+    } else {
+      const { partirCuentaOffline } = await import('./offline/transferenciasOfflineService');
+      try {
+        const r = await partirCuentaOffline({
+          ventaOriginalId: ventaId, itemsToMove: itemIds, tenantId, localId,
+        });
+        return { ventaNuevaId: r.tempVentaNuevaId, error: null };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Error partiendo cuenta (offline)';
+        return { ventaNuevaId: null, error: msg };
+      }
+    }
+  }
   const { data, error } = await db.rpc('fn_partir_cuenta_comanda', {
     p_venta_id: ventaId,
     p_item_ids: itemIds,
