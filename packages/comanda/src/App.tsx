@@ -93,6 +93,7 @@ const DisponibilidadLista = lazy(() => import('./pages/Catalogo/DisponibilidadLi
 // Admin — Settings
 const SettingsLocal = lazy(() => import('./pages/Settings/SettingsLocal').then(m => ({ default: m.SettingsLocal })));
 const SettingsAfip = lazy(() => import('./pages/Settings/SettingsAfip').then(m => ({ default: m.SettingsAfip })));
+const IntegracionPartnerScreen = lazy(() => import('./pages/Integraciones/IntegracionPartnerScreen').then(m => ({ default: m.IntegracionPartnerScreen })));
 const SettingsMesas = lazy(() => import('./pages/Settings/SettingsMesas').then(m => ({ default: m.SettingsMesas })));
 const SettingsMetodosCobro = lazy(() => import('./pages/Settings/SettingsMetodosCobro').then(m => ({ default: m.SettingsMetodosCobro })));
 const SettingsPermisos = lazy(() => import('./pages/Settings/SettingsPermisos').then(m => ({ default: m.SettingsPermisos })));
@@ -279,8 +280,9 @@ export default function App() {
                   <Route path="/integraciones" element={<Navigate to="/integraciones/mercadopago" replace />} />
                   <Route path="/integraciones/mercadopago" element={<ConectarPartners />} />
                   <Route path="/integraciones/conectar" element={<ConectarPartners />} />
-                  <Route path="/integraciones/rappi" element={<LogWebhooksExternos />} />
-                  <Route path="/integraciones/pedidosya" element={<LogWebhooksExternos />} />
+                  <Route path="/integraciones/rappi" element={<IntegracionPartnerScreen provider="rappi" />} />
+                  <Route path="/integraciones/pedidosya" element={<IntegracionPartnerScreen provider="pedidos-ya" />} />
+                  <Route path="/integraciones/deliverect" element={<IntegracionPartnerScreen provider="deliverect" />} />
                   <Route path="/integraciones/webhooks" element={<LogWebhooksExternos />} />
                   <Route path="/integraciones/whatsapp" element={<IntegracionWhatsapp />} />
                   <Route path="/integraciones/contabilidad" element={<StubRoute />} />

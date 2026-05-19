@@ -174,8 +174,9 @@ export const ADMIN_NAVIGATION: NavCategory[] = [
     requiredPermission: 'comanda.integraciones.gestionar',
     subItems: [
       { slug: 'mercadopago',   label: 'Mercado Pago',     href: '/integraciones/mercadopago',   badge: 'soon' },
-      { slug: 'rappi',         label: 'Rappi',            href: '/integraciones/rappi',         badge: 'soon' },
-      { slug: 'pedidosya',     label: 'PedidosYa',        href: '/integraciones/pedidosya',     badge: 'soon' },
+      { slug: 'rappi',         label: 'Rappi',            href: '/integraciones/rappi' },
+      { slug: 'pedidosya',     label: 'PedidosYa',        href: '/integraciones/pedidosya' },
+      { slug: 'deliverect',    label: 'Deliverect',       href: '/integraciones/deliverect' },
       { slug: 'whatsapp',      label: 'WhatsApp Business', href: '/integraciones/whatsapp',     badge: 'soon' },
       { slug: 'contabilidad',  label: 'Contabilidad',     href: '/integraciones/contabilidad',  badge: 'soon' },
       { slug: 'api',           label: 'Webhooks / API',   href: '/integraciones/api',           badge: 'soon' },

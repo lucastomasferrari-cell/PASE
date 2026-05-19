@@ -47,6 +47,9 @@ export default async function handler(req, res) {
     if (action === 'pedidosya-webhook' && req.method === 'POST') {
       return await handlePartnerWebhook(req, res, 'pedidos-ya');
     }
+    if (action === 'deliverect-webhook' && req.method === 'POST') {
+      return await handlePartnerWebhook(req, res, 'deliverect');
+    }
     if (action === 'notify-pedido' && req.method === 'POST') {
       return await handleNotifyPedido(req, res);
     }
@@ -280,19 +283,48 @@ async function handlePartnerWebhook(req, res, provider) {
   //   external_id, items[], cliente.nombre, cliente.telefono, total,
   //   tipo_entrega, direccion, local_external_id, instrucciones.
   //
-  // Mapeo de local: por ahora hardcoded a Local Prueba 2 (id=7) para test.
-  // Producción: tabla `mapeos_locales_externos` (provider, external_local_id, local_id).
-  const localId = Number(req.query.local_id) || 7;
+  // Mapeo de local: lookup en mapeos_locales_externos por (provider, external_local_id).
+  // Si vino ?local_id explícito en query, lo respetamos (modo testing/dev).
+  // Si no hay mapeo Y no hay override, devolvemos 404 con mensaje claro para
+  // que el dueño sepa que tiene que configurar el mapeo.
+  const externalLocalId = String(
+    payload.store_id ?? payload.local_id ?? payload.restaurant_id ?? payload.location_id ?? ''
+  ) || null;
 
-  // Resolver tenant del local
+  let localId = Number(req.query.local_id) || null;
+  if (!localId && externalLocalId) {
+    const { data: mapeo } = await supabase.from('mapeos_locales_externos')
+      .select('local_id')
+      .eq('provider', provider)
+      .eq('external_local_id', externalLocalId)
+      .eq('activo', true)
+      .maybeSingle();
+    if (mapeo) localId = mapeo.local_id;
+  }
+  if (!localId) {
+    res.status(404).json({
+      error: `Sin mapeo de local para ${provider}.${externalLocalId ?? '(no se detectó external_local_id en payload)'}`,
+      hint: 'Configurá el mapeo en /integraciones/' + (provider === 'pedidos-ya' ? 'pedidosya' : provider),
+    });
+    return;
+  }
+
   const { data: local } = await supabase.from('locales').select('tenant_id').eq('id', localId).single();
   if (!local) {
     res.status(404).json({ error: `Local ${localId} no encontrado` });
     return;
   }
 
-  // Canal slug por provider
-  const canalSlug = provider === 'rappi' ? 'rappi' : 'pedidos-ya';
+  // Canal slug por provider. Deliverect actúa como aggregator — usa el
+  // canal del partner downstream que pase en payload.channel (rappi/peya/etc).
+  // Por defecto, si Deliverect manda sin channel, lo mapeamos a 'deliverect'.
+  const canalSlug = provider === 'rappi'
+    ? 'rappi'
+    : provider === 'pedidos-ya'
+    ? 'pedidos-ya'
+    : provider === 'deliverect'
+    ? (payload.channel || 'deliverect')
+    : provider;
   const { data: canal } = await supabase.from('canales')
     .select('id').eq('tenant_id', local.tenant_id).eq('slug', canalSlug).single();
   if (!canal) {
