@@ -148,7 +148,16 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
     concepto: "adelanto",
   };
 
-  // Empleados visibles para el usuario (Feature 2: incluye los cedidos a sus locales).
+  // Empleados visibles para el usuario.
+  //
+  // Bug fix 2026-05-20: antes este array traía TODOS los empleados visibles
+  // (sin filtrar por local activo). Estando en Cantina René (que no tiene
+  // empleados propios ni cesiones), aparecían los 54 empleados de todos
+  // los locales de Neko. El fix filtra por el local efectivo del formulario:
+  // si el sidebar tiene un local activo o el form lo eligió manualmente,
+  // mostramos solo empleados cuyo `locales_ids` contiene ese local.
+  // (El filtro RLS de defense-in-depth ya está en la vista server-side —
+  // migration 202605211300.)
   const [empleadosVisibles, setEmpleadosVisibles] = useState<EmpleadoVisible[]>([]);
   useEffect(() => {
     (async () => {
@@ -687,19 +696,46 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                       </select>
                     </div>
                     <div className="field"><label>Empleado *</label>
-                      <select value={form.empleado_id} onChange={e => setForm({ ...form, empleado_id: e.target.value })}>
-                        <option value="">Seleccioná…</option>
-                        {empleadosVisibles.map(emp => (
-                          <option key={emp.id} value={emp.id}>
-                            {emp.apellido ? `${emp.apellido}, ${emp.nombre}` : emp.nombre}
-                            {/* Si es cesión (no su local principal): marca visual */}
-                            {form.local_id && Number(form.local_id) !== emp.local_principal_id ? ' ◆ cedido' : ''}
-                          </option>
-                        ))}
-                      </select>
-                      <div style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 4 }}>
-                        Se cargará en Novedades y se descontará del próximo sueldo automáticamente.
-                      </div>
+                      {(() => {
+                        // Local efectivo del form: el activo del sidebar > el elegido en el form.
+                        const localEff: number | null = localActivo != null
+                          ? Number(localActivo)
+                          : (form.local_id ? Number(form.local_id) : null);
+                        // Si hay local seleccionado, mostrar solo empleados que trabajan
+                        // en ese local (principal o cesión). Si no hay local (caso
+                        // "Todos"), mostrar todos los visibles.
+                        const empsFiltrados = localEff != null
+                          ? empleadosVisibles.filter(emp =>
+                              (emp.locales_ids ?? [emp.local_principal_id]).includes(localEff),
+                            )
+                          : empleadosVisibles;
+                        return (
+                          <>
+                            <select value={form.empleado_id} onChange={e => setForm({ ...form, empleado_id: e.target.value })}>
+                              <option value="">Seleccioná…</option>
+                              {empsFiltrados.map(emp => (
+                                <option key={emp.id} value={emp.id}>
+                                  {emp.apellido ? `${emp.apellido}, ${emp.nombre}` : emp.nombre}
+                                  {/* Si es cesión (no su local principal): marca visual */}
+                                  {localEff !== null && localEff !== emp.local_principal_id ? ' ◆ cedido' : ''}
+                                </option>
+                              ))}
+                            </select>
+                            {empsFiltrados.length === 0 && (
+                              <div style={{ fontSize: 11, color: 'var(--warn, #d29922)', marginTop: 4 }}>
+                                Este local no tiene empleados asignados ni cedidos. Si necesitás
+                                cargar un gasto de un empleado de otro local, asignalo desde
+                                RRHH → Legajo del empleado → Cesiones.
+                              </div>
+                            )}
+                            {empsFiltrados.length > 0 && (
+                              <div style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 4 }}>
+                                Se cargará en Novedades y se descontará del próximo sueldo automáticamente.
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </>
                 ) : (
