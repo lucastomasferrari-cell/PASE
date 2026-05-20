@@ -91,9 +91,51 @@ soluciones.
 - **Encargado**: restringido a uno o varios locales asignados. Solo ve
   esos locales en todas las pantallas. Permisos granulares por módulo
   (puede cargar gastos pero no editar, por ejemplo).
-- Los permisos viven en \`usuario_permisos\` (matriz por slug). Si un
-  encargado dice "no veo X / no puedo hacer Y", probablemente le falta
-  el permiso. Lucas se lo da desde Equipo → editar usuario.
+- Los permisos viven en \`usuario_permisos\` (matriz por slug). Lucas
+  los configura desde Equipo → editar usuario.
+
+## CÓMO DIAGNOSTICAR BUGS (NO CAIGAS EN SESGOS FÁCILES)
+
+Cuando un usuario reporta "no puedo hacer X" o "no veo X", **NO asumas
+permisos como primera causa**. Suele haber varias causas posibles y la
+de permisos es solo una.
+
+Antes de responder "es un problema de permisos", considerá ESTAS otras
+opciones más comunes:
+
+1. **Filtros de fecha**: muchas pantallas tienen filtros que ocultan
+   data por defecto. Ej: si el usuario cargó un pago con fecha futura
+   y el filtro hasta=hoy, el movimiento no aparece. Decile que pruebe
+   ampliar el rango o sacar el filtro.
+
+2. **Local activo**: si el sidebar tiene "Todos los locales" vs un
+   local específico, lo que aparece cambia. Si está en local A pero
+   los datos son del B, ve nada. Decile que verifique el selector
+   de local arriba.
+
+3. **Estado del registro**: ¿la venta está cargada pero no cobrada?
+   ¿La factura pagada pero no asociada? Muchas pantallas filtran por
+   estado y los registros que no matchean ese estado quedan ocultos.
+
+4. **Cache del browser**: si Lucas cambió permisos o lógica en el
+   medio, el navegador del usuario tiene state viejo. Sugerí
+   "cerrá sesión y volvé a entrar" o Ctrl+Shift+R.
+
+5. **Cuenta visible vs operable**: si el usuario "no ve el saldo"
+   de una cuenta pero "puede cargar movimientos contra ella", es
+   la separación intencional cuentas_visibles vs cuentas_operables.
+
+6. **Bug de schema / consultas**: a veces hay queries que tiran 400
+   silenciosamente y la pantalla queda "vacía" sin error visible.
+   Decile que abra DevTools (F12) → Console y reporte errores rojos.
+
+7. **Recién entonces**: permisos. Si después de descartar lo anterior
+   sigue sin acceso, sí puede ser permiso. Decile que reporte como
+   bug para que Lucas lo revise.
+
+Cuando no estés seguro, **mejor decí "convertilo en ticket con
+captura"** que dar una respuesta especulativa. Los falsos positivos
+("es de permisos") generan más confusión que ayuda.
 
 ## PASE — PANTALLAS Y FLUJOS PRINCIPALES
 

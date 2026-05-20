@@ -18,7 +18,10 @@
 import { checkUserAuth } from './_user-auth.js';
 import { SOPORTE_SYSTEM_PROMPT } from './_soporte-prompt.js';
 
-const DEFAULT_MODEL_SOPORTE = 'claude-opus-4-7';
+// Sonnet 4.6 — 5x más barato que Opus 4.7 ($3/$15 vs $15/$75 per M tokens).
+// Para chat de soporte tipo "¿cómo cargo un adelanto?" alcanza perfecto.
+// Decisión Lucas 2026-05-20 para bajar gasto.
+const DEFAULT_MODEL_SOPORTE = 'claude-sonnet-4-6';
 const DEFAULT_MAX_TOKENS_SOPORTE = 1024;
 
 export default async function handler(req, res) {
