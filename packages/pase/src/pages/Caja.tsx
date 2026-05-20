@@ -171,7 +171,17 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   // (consistente con Compras/Gastos/ConciliacionMP). hasMore=true mientras
   // la última query devolvió exactamente PAGE_SIZE filas.
   const [filtDesde, setFiltDesde] = useState(() => { const d = new Date(today); d.setDate(d.getDate() - 90); return toISO(d); });
-  const [filtHasta, setFiltHasta] = useState(toISO(today));
+  // Default `filtHasta`: fin del mes corriente o hoy + 30 días, lo que sea
+  // mayor. Esto cubre el caso típico (reportado 2026-05-20): el usuario carga
+  // pagos de sueldo con fecha "31 del mes" (cierre contable), y antes del fix
+  // esos movimientos quedaban OCULTOS porque `filtHasta` estaba en hoy. El
+  // saldo SÍ se veía (no depende de fecha) pero el listado de movimientos
+  // mostraba "no hay movimientos" — falso negativo confuso.
+  const [filtHasta, setFiltHasta] = useState(() => {
+    const finDeMes = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    const plus30 = new Date(today); plus30.setDate(plus30.getDate() + 30);
+    return toISO(finDeMes > plus30 ? finDeMes : plus30);
+  });
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   // Debounce: evita disparar fetch en cada keystroke del datepicker.
@@ -264,16 +274,14 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     return q;
   };
 
+  // Count de movimientos fuera del rango (fechas futuras > filtHasta) —
+  // para banner que avisa al usuario que existen movimientos "ocultos".
+  // Caso típico: pagos de sueldo con fecha fin de mes futura.
+  const [movsFueraRango, setMovsFueraRango] = useState(0);
+
   const load = async () => {
     setLoading(true);
-    // Tabla de movimientos: visibles ∪ operables. Coherente con
-    // "puedo ver el movimiento aunque no vea el saldo consolidado de la
-    // cuenta destino". visParaListado === null = sin restricción.
     const mQ = queryMovimientos(0, TESORERIA_PAGE_SIZE);
-    // Saldos: SOLO cuentas_visibles. La separación de Fase 5 — operar sin
-    // ver saldo es intencional. Si el user no tiene la cuenta en visibles,
-    // la card no se renderiza pero los movimientos sí aparecen via la tabla.
-    // Los saldos son estado actual — NO se filtran por fecha.
     let sq = db.from("saldos_caja").select("cuenta, saldo, local_id");
     sq = applyLocalScope(sq, user, localActivo);
     if (vis !== null) {
@@ -283,11 +291,19 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         sq = sq.in("cuenta", vis);
       }
     }
-    const [{data:m},{data:s}] = await Promise.all([mQ, sq]);
+    // Count de movimientos con fecha > filtHasta (mismo scope local + cuenta)
+    let countQ = db.from("movimientos")
+      .select("id", { count: 'exact', head: true })
+      .gt("fecha", debHasta);
+    countQ = applyLocalScope(countQ, user, localActivo);
+    if (visParaListado !== null && visParaListado.length > 0) {
+      countQ = countQ.in("cuenta", visParaListado);
+    }
+    const [{data:m},{data:s},{count: futuros}] = await Promise.all([mQ, sq, countQ]);
     const movs = (m as Movimiento[]) || [];
     setMovimientos(movs);
     setHasMore(movs.length === TESORERIA_PAGE_SIZE);
-    // Si no hay localActivo, se agregan saldos de todos los locales por cuenta
+    setMovsFueraRango(futuros ?? 0);
     const obj: Record<string, number> = {};
     (s||[]).forEach(x=> { obj[x.cuenta] = (obj[x.cuenta]||0) + (x.saldo||0); });
     setSaldos(obj);
@@ -604,6 +620,43 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
             </select>
           </div>
         </div>
+        {/* Banner: movimientos con fecha posterior al rango seleccionado.
+            Caso típico: pagos de sueldo cargados con fecha fin de mes
+            cuando el filtro "hasta" no cubre esa fecha. Sin este banner,
+            el usuario veía "Sin movimientos" mientras el saldo decía otra
+            cosa (reporte Anto 2026-05-20). */}
+        {movsFueraRango > 0 && (
+          <div style={{
+            padding: "10px 14px",
+            background: "rgba(245, 158, 11, 0.1)",
+            border: "1px solid rgba(245, 158, 11, 0.3)",
+            borderRadius: 6,
+            margin: "0 14px 12px",
+            fontSize: 12,
+            color: "var(--text)",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+          }}>
+            <span style={{ fontSize: 16 }}>📅</span>
+            <div style={{ flex: 1 }}>
+              Hay <strong>{movsFueraRango} movimiento{movsFueraRango === 1 ? "" : "s"}</strong> con
+              fecha posterior a <strong>{filtHasta}</strong> (típicamente sueldos cargados con fecha
+              fin de mes). No aparecen en el listado actual.
+            </div>
+            <button
+              className="btn btn-sec"
+              style={{ fontSize: 11, padding: "4px 12px" }}
+              onClick={() => {
+                // Ampliar rango hasta fin del año
+                const finDeAnio = new Date(today.getFullYear(), 11, 31);
+                setFiltHasta(toISO(finDeAnio));
+              }}
+            >
+              Ampliar rango
+            </button>
+          </div>
+        )}
         {loading?<div className="loading">Cargando...</div>:mFilt.length===0?(
           <EmptyState
             icon="📋"
