@@ -101,6 +101,8 @@ const HardwareAgentes = lazy(() => import('./pages/Hardware/HardwareAgentes').th
 const HardwareRiders = lazy(() => import('./pages/Hardware/HardwareRiders').then(m => ({ default: m.HardwareRiders })));
 const DispatchMap = lazy(() => import('./pages/Delivery/DispatchMap').then(m => ({ default: m.DispatchMap })));
 const RiderPWA = lazy(() => import('./pages/Rider/RiderPWA').then(m => ({ default: m.RiderPWA })));
+const InventarioAlertas = lazy(() => import('./pages/Inventario/InventarioAlertas').then(m => ({ default: m.InventarioAlertas })));
+const InventarioConteo = lazy(() => import('./pages/Inventario/InventarioConteo').then(m => ({ default: m.InventarioConteo })));
 const SettingsMesas = lazy(() => import('./pages/Settings/SettingsMesas').then(m => ({ default: m.SettingsMesas })));
 const SettingsMetodosCobro = lazy(() => import('./pages/Settings/SettingsMetodosCobro').then(m => ({ default: m.SettingsMetodosCobro })));
 const SettingsPermisos = lazy(() => import('./pages/Settings/SettingsPermisos').then(m => ({ default: m.SettingsPermisos })));
@@ -231,6 +233,11 @@ export default function App() {
                   <Route path="/menu/disponibilidad" element={<DisponibilidadLista />} />
                   {/* F1.1b CMV — insumos + recetas + materias primas + alertas margen */}
                   <Route path="/menu/insumos" element={<InsumosLista />} />
+
+                  {/* ── Inventario ─────────────────────────────────────── */}
+                  <Route path="/inventario" element={<Navigate to="/inventario/alertas" replace />} />
+                  <Route path="/inventario/alertas" element={<InventarioAlertas />} />
+                  <Route path="/inventario/conteo" element={<InventarioConteo />} />
                   <Route path="/menu/recetas" element={<RecetasLista />} />
                   <Route path="/menu/alertas-margen" element={<AlertasMargenLista />} />
                   <Route path="/menu/revision" element={<ItemReviewQueue />} />

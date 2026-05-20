@@ -1,6 +1,6 @@
 import {
   BarChart3, BookOpen, Utensils, Users, DollarSign,
-  Globe, Printer, Megaphone, User, Plug, Settings, CreditCard,
+  Globe, Printer, Megaphone, User, Plug, Settings, CreditCard, Package,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -70,6 +70,17 @@ export const ADMIN_NAVIGATION: NavCategory[] = [
       { slug: 'recetas',         label: 'Recetas',         href: '/menu/recetas' },
       { slug: 'alertas-margen',  label: 'Alertas margen',  href: '/menu/alertas-margen' },
       { slug: 'revision',        label: 'Items por revisar', href: '/menu/revision' },
+    ],
+  },
+  {
+    slug: 'inventario',
+    label: 'Inventario',
+    icon: Package,
+    href: '/inventario/alertas',
+    requiredPermission: 'comanda.catalogo.ver',
+    subItems: [
+      { slug: 'alertas', label: 'Stock + alertas',  href: '/inventario/alertas' },
+      { slug: 'conteo',  label: 'Conteo físico',    href: '/inventario/conteo' },
     ],
   },
   {
