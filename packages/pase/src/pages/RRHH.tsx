@@ -60,7 +60,11 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const visLocs = localesVisibles(user);
   const locsDisp = visLocs === null ? locales : locales.filter((l: Local) => visLocs.includes(l.id));
   const esEnc = user?.rol === "encargado";
-  const esDueno = user?.rol === "dueno" || user?.rol === "admin";
+  // esDueno controla acciones de escritura en el módulo (pagar sueldos,
+  // adelantos, confirmar novedades). Los encargados con permiso rrhh
+  // explícito también pueden operar — fue el bug reportado en #dcd4f071:
+  // el botón "Pagar" era invisible para encargados aunque tuvieran rrhh.
+  const esDueno = user?.rol === "dueno" || user?.rol === "admin" || tienePermiso(user, "rrhh");
   // Default explícito a "" en vez de undefined cuando no hay match — los
   // selects luego usan String(...) y los handlers aceptan string vacío.
   const defaultLocal: string | number = localActivo
