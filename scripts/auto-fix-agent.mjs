@@ -55,13 +55,13 @@ const sb = createClient(
 
 // ─── Tracking de costos ────────────────────────────────────────────────────
 const PRICING = {
-  'claude-sonnet-4-7': { input: 3.00, output: 15.00, cache_read: 0.30, cache_write: 3.75 },
+  'claude-sonnet-4-6': { input: 3.00, output: 15.00, cache_read: 0.30, cache_write: 3.75 },
   'claude-opus-4-7':   { input: 15.00, output: 75.00, cache_read: 1.50, cache_write: 18.75 },
 };
 const billing = { totalUsd: 0, byModel: {} };
 
 function trackUsage(model, usage) {
-  const p = PRICING[model] || PRICING['claude-sonnet-4-7'];
+  const p = PRICING[model] || PRICING['claude-sonnet-4-6'];
   const inputCost = (usage.input_tokens / 1_000_000) * p.input;
   const outputCost = (usage.output_tokens / 1_000_000) * p.output;
   const cacheReadCost = ((usage.cache_read_input_tokens || 0) / 1_000_000) * p.cache_read;
@@ -475,7 +475,7 @@ async function main() {
 
   await updateTicket({
     status: 'investigating',
-    modelUsed: 'claude-sonnet-4-7',
+    modelUsed: 'claude-sonnet-4-6',
     logEntry: { event: 'agent_started' },
   });
 
@@ -491,7 +491,7 @@ async function main() {
     `## Archivos candidatos (pre-filtrados)\n\n${candidates.length === 0 ? '(ninguno encontrado por grep)' : candidates.map(c => `- ${c}`).join('\n')}\n\n` +
     `Investigá, identificá la causa raíz, escribí el fix mínimo, corré tests. Si todo OK, llamá complete_with_fix.`;
 
-  let result = await runAgentLoop('claude-sonnet-4-7', initialUserMsg);
+  let result = await runAgentLoop('claude-sonnet-4-6', initialUserMsg);
 
   if (result.action === 'escalate') {
     await updateTicket({
