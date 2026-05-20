@@ -108,6 +108,10 @@ jobs:
         id: decide
         if: steps.agent.outputs.action == 'fix'
         run: |
+          # Limpiamos artifacts del agent que no deben commitearse (el
+          # workflow los upload como GH Artifact via "Upload agent logs"
+          # más abajo). Sin esto, "git add -A" los incluiría.
+          rm -f agent-output.json agent.log
           # git diff sin args muestra solo unstaged. Como el agent escribe
           # archivos directo, también consideramos untracked.
           git add -A

@@ -45,3 +45,8 @@ packages/pase/scripts/verify_*.cjs
 *.sln
 *.sw?
 .vercel
+
+# Auto-fix agent: artifacts del workflow (no commit)
+agent-output.json
+agent.log
+

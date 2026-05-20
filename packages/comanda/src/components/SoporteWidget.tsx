@@ -25,6 +25,93 @@ export function SoporteWidget() {
   const [reporteOk, setReporteOk] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  // Screenshot adjunto (2026-05-20): paste con Ctrl+V, drop, o file picker.
+  const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
+  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  function aceptarImagen(f: File) {
+    if (!f.type.startsWith('image/')) {
+      setError('Solo imágenes (PNG, JPG, GIF, WebP)');
+      return;
+    }
+    if (f.size > 5 * 1024 * 1024) {
+      setError('Imagen > 5MB. Comprimila o usá screenshot más chico.');
+      return;
+    }
+    setScreenshotFile(f);
+    setError(null);
+    const reader = new FileReader();
+    reader.onload = (e) => setScreenshotPreview(typeof e.target?.result === 'string' ? e.target.result : null);
+    reader.readAsDataURL(f);
+  }
+
+  function quitarImagen() {
+    setScreenshotFile(null);
+    setScreenshotPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item && item.type.startsWith('image/')) {
+        const f = item.getAsFile();
+        if (f) { e.preventDefault(); aceptarImagen(f); return; }
+      }
+    }
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer?.files?.[0];
+    if (f) aceptarImagen(f);
+  }
+
+  async function resizeImage(file: File, maxWidth = 1600): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('Canvas null')); return; }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(
+          (blob) => blob ? resolve(blob) : reject(new Error('toBlob failed')),
+          file.type === 'image/png' ? 'image/png' : 'image/jpeg',
+          0.85,
+        );
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image load failed')); };
+      img.src = url;
+    });
+  }
+
+  async function uploadScreenshot(file: File, tenantId: string): Promise<string | null> {
+    try {
+      const resized = await resizeImage(file);
+      const ext = file.type === 'image/png' ? 'png' : 'jpg';
+      const path = `${tenantId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: upErr } = await db.storage
+        .from('soporte-screenshots')
+        .upload(path, resized, { cacheControl: '3600', contentType: file.type });
+      if (upErr) { console.error('Upload error:', upErr); return null; }
+      const { data: pub } = db.storage.from('soporte-screenshots').getPublicUrl(path);
+      return pub.publicUrl ?? null;
+    } catch (e) {
+      console.error('uploadScreenshot:', e);
+      return null;
+    }
+  }
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -88,6 +175,12 @@ export function SoporteWidget() {
     setReportando(true);
     setError(null);
     try {
+      let screenshotUrl: string | null = null;
+      if (screenshotFile) {
+        screenshotUrl = await uploadScreenshot(screenshotFile, u.tenant_id);
+        if (!screenshotUrl) console.warn('Screenshot no se pudo subir, reportando sin imagen');
+      }
+
       const ultimaUser = [...msgs].reverse().find((m) => m.role === 'user');
       const ultimaAssistant = [...msgs].reverse().find((m) => m.role === 'assistant');
       const { error: rpcErr } = await db.from('tickets_soporte').insert({
@@ -101,10 +194,12 @@ export function SoporteWidget() {
         categoria: 'bug',
         prioridad: 'media',
         respuesta_llm: ultimaAssistant?.content || null,
+        screenshot_url: screenshotUrl,
         contexto_jsonb: {
           historial: msgs,
           user_agent: navigator.userAgent,
           url_completa: window.location.href,
+          screenshot_url: screenshotUrl,
         },
       });
       if (rpcErr) throw rpcErr;
@@ -128,6 +223,7 @@ export function SoporteWidget() {
     setInput('');
     setError(null);
     setReporteOk(false);
+    quitarImagen();
   }
 
   return (
@@ -217,7 +313,40 @@ export function SoporteWidget() {
           </div>
 
           {/* Footer */}
-          <footer className="border-t border-border p-3 space-y-2">
+          <footer
+            className={cn(
+              'border-t border-border p-3 space-y-2 transition-colors',
+              dragOver && 'bg-primary/10'
+            )}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+          >
+            {/* Thumbnail screenshot */}
+            {screenshotPreview && (
+              <div className="flex items-center gap-2 p-1.5 bg-muted rounded border border-border">
+                <img
+                  src={screenshotPreview}
+                  alt="Screenshot adjunto"
+                  className="w-12 h-12 object-cover rounded border border-border"
+                />
+                <div className="flex-1 min-w-0 text-xs text-muted-foreground">
+                  {screenshotFile?.name ?? 'imagen pegada'}
+                  {screenshotFile && (
+                    <span className="ml-1.5">({Math.round((screenshotFile.size / 1024))} KB)</span>
+                  )}
+                </div>
+                <button
+                  onClick={quitarImagen}
+                  className="text-muted-foreground hover:text-destructive p-1"
+                  title="Quitar imagen"
+                  type="button"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -227,11 +356,32 @@ export function SoporteWidget() {
                   void enviar();
                 }
               }}
-              placeholder="Escribí tu duda y enter…"
+              onPaste={handlePaste}
+              placeholder="Escribí tu duda y enter… (podés pegar screenshots con Ctrl+V)"
               rows={2}
               className="w-full px-2 py-1.5 rounded bg-muted border border-border text-sm focus:outline-none focus:border-primary resize-none"
             />
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) aceptarImagen(f);
+              }}
+            />
+
             <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="px-2.5 py-1.5 rounded bg-muted border border-border text-sm hover:bg-accent"
+                title="Adjuntar imagen (también con Ctrl+V o drag)"
+              >
+                📎
+              </button>
               <button
                 type="button"
                 onClick={() => void enviar()}
@@ -254,6 +404,11 @@ export function SoporteWidget() {
                 </button>
               )}
             </div>
+            {dragOver && (
+              <div className="text-xs text-primary text-center p-1.5 border border-dashed border-primary rounded">
+                Soltá la imagen acá…
+              </div>
+            )}
           </footer>
         </div>
       )}
