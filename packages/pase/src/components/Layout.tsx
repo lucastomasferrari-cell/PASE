@@ -343,6 +343,29 @@ td.num,td.num-right,td.col-monto{font-variant-numeric:tabular-nums;text-align:ri
 td.col-fecha,td.col-id{font-variant-numeric:tabular-nums;color:var(--pase-text-muted)}
 td.col-truncate{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
+/* Wrapper de scroll horizontal para tablas. Necesario porque el contenedor
+   .panel tiene overflow hidden (para preservar el border-radius del
+   border) — sin este wrapper, las tablas anchas se cortan en seco. Usar
+   envolviendo la tabla y además darle a la tabla un min-width para
+   garantizar legibilidad mínima.
+   Creado 2026-05-20 (Lucas: "se desconfigura a cada rato" cuando se
+   agregaba/quitaba una columna en Caja).
+*/
+.table-scroll-wrap{
+  width:100%;
+  overflow-x:auto;
+  /* Saca la barra de scroll cuando la tabla ya entra (mejora UX en desktop).
+     Solo aparece cuando hace falta. */
+  scrollbar-gutter:stable;
+  /* Custom scrollbar más sutil (igual que el resto de la app). */
+  scrollbar-width:thin;
+  scrollbar-color:var(--pase-border) transparent;
+}
+.table-scroll-wrap::-webkit-scrollbar{height:8px}
+.table-scroll-wrap::-webkit-scrollbar-track{background:transparent}
+.table-scroll-wrap::-webkit-scrollbar-thumb{background:var(--pase-border);border-radius:4px}
+.table-scroll-wrap::-webkit-scrollbar-thumb:hover{background:var(--pase-text-muted)}
+
 /* ─── FOCUS RING UNIFICADO (a11y) ───────────────────────────────────── */
 /* Cualquier elemento interactivo con :focus-visible recibe el mismo ring
    celeste. Reemplaza los outlines nativos del browser inconsistentes. */

@@ -668,7 +668,14 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
             description="No hay movimientos en el rango de fechas seleccionado. Probá ampliar el rango o cargar un movimiento manual."
           />
         ):(
-          <table><thead><tr>
+          // table-scroll-wrap (global, en Layout.tsx) = overflow-x auto.
+          // Antes la tabla se cortaba a la derecha (los importes salían como
+          // "-$65." sin completar) cuando el ancho del aside + sidebar dejaba
+          // poco espacio. Cada vez que agregábamos una columna se rompía de
+          // nuevo. Ahora: scroll horizontal automático si no entra. Lucas
+          // 2026-05-20 ("se desconfigura a cada rato").
+          <div className="table-scroll-wrap">
+          <table style={{minWidth: 720}}><thead><tr>
             <th className="col-fecha">Fecha</th>
             {ordenPor === "carga" && <th className="col-fecha" title="Cuándo se cargó realmente al sistema (puede diferir de la fecha del movimiento)">Cargado</th>}
             {/* Columna "Estado" fusionada con "Tipo" para que la tabla entre
@@ -770,6 +777,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
             </tr>
             );
           })}</tbody></table>
+          </div>
         )}
         {/* Contador + paginación. Total exacto del rango lo trae el conteo
             del último query (proxy con movimientos.length + hasMore=true ⇒
