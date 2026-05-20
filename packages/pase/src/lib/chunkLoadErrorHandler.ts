@@ -9,14 +9,15 @@
 //      apuntando al chunk viejo → 404 → "Failed to fetch dynamically
 //      imported module".
 //
-// Solución: cuando detectamos ese error específico, recargamos la página
-// para que el browser pegue al index.html nuevo (que tiene los nombres de
-// chunks actualizados). Anti-loop: solo recargamos 1 vez por minuto via
-// flag en sessionStorage, así si el error persiste por otra razón el user
-// ve el ErrorBoundary tradicional.
+// Solución: listener global a `unhandledrejection` + `error` que captura
+// el rejection ANTES de que React intente renderizar el fallback. Cuando
+// detectamos ese error específico, recargamos la página con anti-loop
+// via flag en sessionStorage (max 1 reload por minuto).
 //
-// Patrón cubierto en Vite docs:
-// https://vitejs.dev/guide/build.html#load-error-handling
+// Decisión 2026-05-20: NO usar un wrapper custom sobre React.lazy()
+// (lazyWithReload). El wrapper introducía un re-render extra que causaba
+// inconsistencia de hooks en pantallas grandes (React error #310 en
+// /equipo). El listener global es suficiente y menos invasivo.
 
 const RELOAD_KEY = 'pase_chunk_reload_attempt';
 const RELOAD_COOLDOWN_MS = 60_000; // 1 minuto
@@ -67,45 +68,6 @@ export function tryReloadOnChunkError(error: unknown): boolean {
   // (vercel.json le mete no-cache al "/" y "/index.html").
   window.location.reload();
   return true;
-}
-
-/**
- * Wrap de `React.lazy()` con auto-reload on chunk load error.
- *
- * Reemplaza `lazy(() => import('./Page'))` por
- *           `lazyWithReload(() => import('./Page'))`.
- *
- * Funciona aun si el ErrorBoundary o el listener global del bundle viejo
- * no tiene este código todavía — porque la lógica vive EN cada importer,
- * y los importers nuevos (deploy nuevo) usan automáticamente esta versión.
- *
- * Anti-loop: usa el mismo flag de sessionStorage que tryReloadOnChunkError.
- */
-import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
-
-// Firma idéntica a React.lazy() para preservar tipos de props.
-// `ComponentType<any>` es intencional acá — replicamos exactamente lo que
-// hace React internamente para que el wrapper sea transparente.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function lazyWithReload<T extends ComponentType<any>>(
-  importer: () => Promise<{ default: T }>,
-): LazyExoticComponent<T> {
-  return lazy(() =>
-    importer().catch((error) => {
-      // Si es chunk load error y no estamos en cooldown, recargamos.
-      // tryReloadOnChunkError devuelve true cuando programó el reload —
-      // en ese caso devolvemos una promise que NUNCA resuelve para evitar
-      // que React renderice nada (la página va a recargar en milisegundos).
-      if (tryReloadOnChunkError(error)) {
-        // Devolver promise pendiente: el componente queda en Suspense
-        // hasta que se complete el reload. El user ve el fallback de
-        // Suspense (loading), no la pantalla de error.
-        return new Promise<{ default: T }>(() => { /* never resolves */ });
-      }
-      // No es chunk error o cooldown agotado — propagar al ErrorBoundary.
-      throw error;
-    }),
-  );
 }
 
 /**

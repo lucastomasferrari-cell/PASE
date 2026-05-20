@@ -1,4 +1,4 @@
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { db } from "./lib/supabase";
 import { initConsoleCapture } from "./lib/consoleCapture";
@@ -12,12 +12,12 @@ import type { Usuario, UsuarioRow, Local, Tenant } from "./types";
 import { Sidebar, css } from "./components/Layout";
 import { SoporteWidget } from "./components/SoporteWidget";
 import Login from "./pages/Login";
-// lazyWithReload reemplazó a React.lazy(). Si el import falla por chunk
-// load error (deploy nuevo de Vercel mientras el user tenía la tab abierta),
-// el helper hace location.reload() automático antes de que el error llegue
-// al ErrorBoundary. Patrón seguro: si ya recargó hace <60s, deja que el
-// error suba normal para evitar loop. Ver src/lib/chunkLoadErrorHandler.ts.
-import { lazyWithReload as lazy } from "./lib/chunkLoadErrorHandler";
+// Nota 2026-05-20: el chunk load error está cubierto via listener global en
+// main.tsx (installChunkLoadErrorHandler) + ErrorBoundary. NO usamos un
+// wrapper custom sobre React.lazy() — el wrapper introducía un re-render
+// extra que causaba inconsistencia de hooks en /equipo (React error #310).
+// El listener global es suficiente porque captura el error en
+// `unhandledrejection`, antes de que React intente renderizar el fallback.
 
 // F5 (plan sunny-creek): code-splitting por página. Login queda eager porque
 // es entry point para users sin sesión.

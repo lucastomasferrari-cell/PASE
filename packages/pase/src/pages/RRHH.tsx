@@ -1,5 +1,4 @@
-﻿import { useState, useEffect, useRef, Suspense } from "react";
-import { lazyWithReload as lazy } from "../lib/chunkLoadErrorHandler";
+﻿import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { db } from "../lib/supabase";
 import { localesVisibles, applyLocalScope, cuentasOperables, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";

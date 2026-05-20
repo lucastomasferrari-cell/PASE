@@ -1,5 +1,4 @@
-import { useState, useEffect, Suspense } from "react";
-import { lazyWithReload as lazy } from "../lib/chunkLoadErrorHandler";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasOperables, localesVisibles, tienePermiso } from "../lib/auth";

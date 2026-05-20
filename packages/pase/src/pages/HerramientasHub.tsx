@@ -1,5 +1,4 @@
-import { useState, Suspense } from "react";
-import { lazyWithReload as lazy } from "../lib/chunkLoadErrorHandler";
+import { useState, lazy, Suspense } from "react";
 import type { Usuario, Local } from "../types";
 import { tienePermiso } from "../lib/auth";
 import { PageHeader, FolderIcon, DocumentIcon, AlertIcon, UploadIcon, KeyIcon, ReceiptIcon } from "../components/ui";
