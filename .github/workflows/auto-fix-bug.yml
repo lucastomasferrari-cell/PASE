@@ -72,9 +72,9 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup pnpm
+        # No declarar 'version' acá: pnpm/action-setup@v4 ya lee
+        # packageManager de package.json. Tener ambas tira ERR_PNPM_BAD_PM_VERSION.
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Setup Node
         uses: actions/setup-node@v4
