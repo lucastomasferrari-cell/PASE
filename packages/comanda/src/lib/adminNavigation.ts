@@ -163,7 +163,7 @@ export const ADMIN_NAVIGATION: NavCategory[] = [
     requiredPermission: 'comanda.marketing.gestionar',
     subItems: [
       { slug: 'promociones', label: 'Promociones y descuentos', href: '/marketing/promociones', badge: 'soon' },
-      { slug: 'cupones',     label: 'Cupones',                  href: '/marketing/cupones',     badge: 'soon' },
+      { slug: 'cupones',     label: 'Cupones',                  href: '/marketing/cupones' },
       { slug: 'fidelidad',   label: 'Programa de fidelidad',    href: '/marketing/fidelidad',   badge: 'soon' },
       { slug: 'campanas',    label: 'Email/WhatsApp campaigns', href: '/marketing/campanas',    badge: 'soon' },
     ],

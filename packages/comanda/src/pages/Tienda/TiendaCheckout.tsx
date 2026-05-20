@@ -16,6 +16,16 @@ import type { TiendaCtx } from './TiendaLayout';
 
 const TEL_AR = /^\+?54?\s?\d{10,11}$/;
 
+const MOTIVO_CUPON_LABELS: Record<string, string> = {
+  CUPON_INVALIDO: 'Ese código no existe',
+  CUPON_NO_VIGENTE_AUN: 'El cupón empieza más adelante',
+  CUPON_VENCIDO: 'El cupón está vencido',
+  MONTO_MIN_NO_ALCANZADO: 'Tu pedido no llega al mínimo requerido',
+  CUPON_AGOTADO: 'Ese cupón se agotó',
+  YA_USASTE_ESTE_CUPON: 'Ya usaste este cupón',
+  SOLO_PRIMERA_COMPRA: 'Este cupón es solo para clientes nuevos',
+};
+
 export function TiendaCheckout() {
   const { local } = useOutletContext<TiendaCtx>();
   const navigate = useNavigate();
@@ -65,7 +75,50 @@ export function TiendaCheckout() {
 
   const subtotal = calcularSubtotal(carrito.items);
   const costoEnvio = carrito.tipoEntrega === 'delivery' ? Number(local.costo_envio_default) || 0 : 0;
-  const total = subtotal + costoEnvio;
+
+  // Cupón aplicado (cliente lo valida con el endpoint público; descuento
+  // real se aplica server-side al crear pedido)
+  const [cuponCode, setCuponCode] = useState('');
+  const [cuponDescuento, setCuponDescuento] = useState(0);
+  const [cuponValidando, setCuponValidando] = useState(false);
+  const [cuponMotivo, setCuponMotivo] = useState<string | null>(null);
+
+  const total = subtotal + costoEnvio - cuponDescuento;
+
+  async function validarCuponLocal() {
+    if (!cuponCode.trim()) return;
+    setCuponValidando(true);
+    setCuponMotivo(null);
+    const { validarCupon } = await import('@/services/cuponesService');
+    const { data, error } = await validarCupon({
+      slug: local.slug,
+      code: cuponCode.trim(),
+      montoCompra: subtotal + costoEnvio,
+      clienteTelefono: telefono || undefined,
+    });
+    setCuponValidando(false);
+    if (error || !data) {
+      setCuponDescuento(0);
+      setCuponMotivo(error || 'Error');
+      toast.error(error || 'No se pudo validar el cupón');
+      return;
+    }
+    if (!data.valido) {
+      setCuponDescuento(0);
+      setCuponMotivo(data.motivo);
+      toast.error(MOTIVO_CUPON_LABELS[data.motivo] ?? data.motivo);
+      return;
+    }
+    setCuponDescuento(Number(data.descuento));
+    setCuponMotivo(null);
+    toast.success(`Cupón aplicado: -${formatARS(Number(data.descuento))}`);
+  }
+
+  function quitarCupon() {
+    setCuponCode('');
+    setCuponDescuento(0);
+    setCuponMotivo(null);
+  }
 
   // Validación zona delivery (Fase B 2026-05-18). Si el local definió
   // radio_delivery_km Y tenemos lat/lon del local + del cliente, calculamos
@@ -429,6 +482,36 @@ export function TiendaCheckout() {
         </div>
       </Section>
 
+      {/* Cupón */}
+      <Section titulo="Cupón">
+        {cuponDescuento > 0 ? (
+          <div className="flex items-center justify-between p-2.5 bg-green-50 border border-green-200 rounded-md">
+            <div className="text-sm">
+              <div className="font-medium text-green-800">✓ {cuponCode.toUpperCase()}</div>
+              <div className="text-xs text-green-700">−{formatARS(cuponDescuento)} aplicado</div>
+            </div>
+            <Button variant="ghost" size="sm" onClick={quitarCupon} className="text-red-700">Quitar</Button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <Input
+              value={cuponCode}
+              onChange={(e) => setCuponCode(e.target.value.toUpperCase())}
+              placeholder="Código (ej: VERANO10)"
+              className="font-mono uppercase flex-1"
+            />
+            <Button variant="outline" onClick={validarCuponLocal} disabled={!cuponCode.trim() || cuponValidando}>
+              {cuponValidando ? '…' : 'Aplicar'}
+            </Button>
+          </div>
+        )}
+        {cuponMotivo && cuponDescuento === 0 && (
+          <p className="text-xs text-red-700 mt-2">
+            {MOTIVO_CUPON_LABELS[cuponMotivo] ?? cuponMotivo}
+          </p>
+        )}
+      </Section>
+
       {/* Resumen */}
       <Section titulo="Resumen">
         <div className="space-y-1.5 text-sm">
@@ -438,6 +521,11 @@ export function TiendaCheckout() {
           {costoEnvio > 0 && (
             <div className="flex justify-between text-foreground/70">
               <span>Envío</span><span>{formatARS(costoEnvio)}</span>
+            </div>
+          )}
+          {cuponDescuento > 0 && (
+            <div className="flex justify-between text-green-700">
+              <span>Cupón {cuponCode.toUpperCase()}</span><span>−{formatARS(cuponDescuento)}</span>
             </div>
           )}
           <div className="flex justify-between text-base font-medium pt-2.5 border-t border-gray-200">
