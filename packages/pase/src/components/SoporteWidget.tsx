@@ -13,6 +13,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { db } from "../lib/supabase";
+import { getConsoleErrors } from "../lib/consoleCapture";
 import type { Usuario } from "../types";
 
 interface Props {
@@ -222,6 +223,11 @@ export function SoporteWidget({ user }: Props) {
           user_agent: navigator.userAgent,
           url_completa: window.location.href,
           screenshot_url: screenshotUrl,
+          // 2026-05-20: console_errors recientes del browser. El agent
+          // auto-fix los usa para diagnosticar bugs como queries 400 o
+          // unhandled rejections que rompen la UI sin que el usuario
+          // sepa el origen.
+          console_errors: getConsoleErrors(),
         },
       });
       if (rpcErr) throw rpcErr;

@@ -8,6 +8,7 @@ import { useState, useRef, useEffect } from 'react';
 import { LifeBuoy, X, Send, Bug, RotateCcw } from 'lucide-react';
 import { db } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import { getConsoleErrors } from '@/lib/consoleCapture';
 import { cn } from '@/lib/utils';
 
 interface ChatMsg {
@@ -200,6 +201,10 @@ export function SoporteWidget() {
           user_agent: navigator.userAgent,
           url_completa: window.location.href,
           screenshot_url: screenshotUrl,
+          // 2026-05-20: console_errors recientes del browser. El agent
+          // auto-fix los usa para diagnosticar bugs como queries 400 o
+          // unhandled rejections que rompen la UI silenciosamente.
+          console_errors: getConsoleErrors(),
         },
       });
       if (rpcErr) throw rpcErr;

@@ -215,6 +215,33 @@ const TOOLS_SPEC = [
     },
   },
   {
+    name: 'query_db',
+    description: `Ejecuta SQL SELECT contra la DB Postgres del producto. Solo lectura, con guardrails:
+- Solo SELECT o WITH (CTEs). INSERT/UPDATE/DELETE/DROP/ALTER/TRUNCATE/CREATE/GRANT/REVOKE rechazados.
+- Limit forzado a 100 rows si no especificás uno.
+- Timeout 10s.
+
+USOS típicos cuando el bug puede ser de backend:
+- Inspeccionar schema: \`SELECT column_name, data_type FROM information_schema.columns WHERE table_name='X'\`
+- Ver FKs: \`SELECT * FROM information_schema.table_constraints WHERE table_name='X' AND constraint_type='FOREIGN KEY'\`
+- Ver RLS policies: \`SELECT * FROM pg_policies WHERE tablename='X'\`
+- Ver function def: \`SELECT pg_get_functiondef('nombre_fn'::regproc::oid)\`
+- Ver sample data: \`SELECT * FROM tabla WHERE ... LIMIT 5\`
+- Contar rows: \`SELECT COUNT(*) FROM tabla WHERE ...\`
+- Ver triggers: \`SELECT tgname, tgrelid::regclass FROM pg_trigger WHERE tgrelid='tabla'::regclass\`
+
+CUÁNDO USAR: cuando el bug del ticket menciona HTTP 400/500, errores de RLS, "no se ve X cuando debería", trigger no se dispara, RPC tira error críptico — antes de tocar código, inspeccioná la DB.
+
+NO ES UN REEMPLAZO de read_file/edit_file. Es complemento para entender mejor el contexto.`,
+    input_schema: {
+      type: 'object',
+      properties: {
+        sql: { type: 'string', description: 'Query SELECT/WITH. Sin punto y coma final.' },
+      },
+      required: ['sql'],
+    },
+  },
+  {
     name: 'escalate_to_opus',
     description: 'Pide ayuda a Opus (modelo más potente) cuando el bug es complejo. Pasale un resumen detallado de lo investigado hasta ahora.',
     input_schema: {
@@ -412,6 +439,26 @@ function toolList(args) {
   }
 }
 
+async function toolQueryDb(args) {
+  const sql = (args.sql || '').trim();
+  if (!sql) return { error: 'sql vacío' };
+  if (sql.length > 4000) return { error: 'sql demasiado largo (>4000 chars)' };
+  // El RPC fn_agent_select hace toda la validación server-side. Acá solo lo
+  // llamamos via supabase client con SERVICE_KEY.
+  const { data, error } = await sb.rpc('fn_agent_select', { p_sql: sql });
+  if (error) {
+    return { error: error.message, hint: error.hint, code: error.code };
+  }
+  // data es JSONB array. Limitamos tamaño del payload al modelo a 8KB.
+  const json = JSON.stringify(data ?? []);
+  return {
+    rows: data ?? [],
+    row_count: Array.isArray(data) ? data.length : 0,
+    truncated_to_8kb: json.length > 8000,
+    raw_size_bytes: json.length,
+  };
+}
+
 function toolRunCommand(args) {
   if (!commandPermitido(args.command)) {
     return { error: `Comando no permitido: ${args.command}` };
@@ -441,12 +488,43 @@ PASE = back-office gastronómico AR. COMANDA = POS. Stack: React 19 + TS strict
 
 ## TU CICLO
 
-1. Leé el ticket (te lo paso en el primer mensaje).
-2. Investigá: grep, list_files, read_file. Identificá la causa raíz.
-3. Escribí el fix MÍNIMO con edit_file.
-4. Corré tests: run_command con \`pnpm --filter <pkg> typecheck && pnpm --filter <pkg> lint && pnpm --filter <pkg> test\`.
-5. Si tests pasan, llamá complete_with_fix con explicación + lista de archivos modificados.
-6. Si tests fallan, ajustá el fix y reintentá. Máximo 3 intentos.
+1. Leé el ticket (te lo paso en el primer mensaje). Mirá especialmente
+   \`console_errors\` en el contexto técnico — son los errores que el
+   usuario VIO en su browser cuando el bug ocurrió. Son evidencia directa.
+2. Investigá. Empezá por la pista más fuerte:
+   - **Si hay console_errors con HTTP 4XX o 5XX**: el bug es probablemente
+     de backend (RPC con bug, FK rota, RLS policy). Usá \`query_db\` para
+     inspeccionar schema/policies ANTES de tocar código frontend.
+   - **Si hay console_errors con "TypeError" / "undefined"**: bug puro de
+     frontend. \`grep\` y \`read_file\` para encontrar la línea exacta.
+   - **Si NO hay console_errors**: bug visual o de UX. Investigá el archivo
+     que el usuario mencionó (pantalla_origen).
+3. Escribí el fix MÍNIMO con edit_file (frontend) o create_file (migration
+   SQL nueva — ver reglas más abajo).
+4. Corré tests: run_command con \`pnpm --filter <pkg> typecheck && pnpm
+   --filter <pkg> lint && pnpm --filter <pkg> test\`.
+5. Si tests pasan, llamá complete_with_fix.
+6. Si tests fallan, ajustá. Máximo 3 intentos.
+
+## DIAGNÓSTICO BACKEND (query_db)
+
+Caso típico (que viste antes mal diagnosticado): "botón X invisible para
+encargado Y aunque tenga permiso". La causa raíz NO era permiso — era una
+FK faltante que rompía un widget del dashboard, lo cual dejaba state
+inconsistente en React, lo cual bloqueaba el render del botón.
+
+Cómo lo habrías encontrado con query_db:
+1. Ver console_errors → HTTP 400 a /rest/v1/facturas?...proveedores(nombre)
+2. \`query_db({sql:"SELECT * FROM information_schema.table_constraints WHERE table_name='facturas' AND constraint_type='FOREIGN KEY'"})\`
+3. Ver que falta FK \`facturas.prov_id → proveedores.id\`
+4. Crear migration: agregar la FK.
+5. NO tocar el render del botón — el bug no estaba ahí.
+
+Otras queries útiles:
+- RLS policies: \`SELECT * FROM pg_policies WHERE tablename='X'\`
+- Function def: \`SELECT pg_get_functiondef('fn_xxx'::regproc)\`
+- Triggers de una tabla: \`SELECT tgname FROM pg_trigger WHERE tgrelid='tabla'::regclass\`
+- Schema de tabla: \`SELECT column_name, data_type FROM information_schema.columns WHERE table_name='X' ORDER BY ordinal_position\`
 
 ## REGLAS DURAS
 
@@ -581,6 +659,7 @@ async function runAgentLoop(model, initialUserMsg, opusContext = null) {
         case 'grep': result = toolGrep(input); break;
         case 'list_files': result = toolList(input); break;
         case 'run_command': result = toolRunCommand(input); break;
+        case 'query_db': result = await toolQueryDb(input); break;
         default: result = { error: `Tool desconocida: ${name}` };
       }
       toolResults.push({
@@ -613,13 +692,38 @@ async function main() {
 
   const candidates = preFilter(ticket.mensaje, ticket.contexto_jsonb || {});
 
+  // Extraer console_errors del contexto_jsonb si vinieron, y resaltarlos
+  // separado del resto del contexto (que puede ser largo y diluir la señal).
+  const ctx = ticket.contexto_jsonb || {};
+  const consoleErrors = Array.isArray(ctx.console_errors) ? ctx.console_errors : [];
+  const ctxSinErrors = { ...ctx };
+  delete ctxSinErrors.console_errors;
+
+  let consoleSection = '';
+  if (consoleErrors.length > 0) {
+    const slim = consoleErrors.slice(-10).map((e) => {
+      const ts = (e.ts || '').slice(11, 19); // HH:MM:SS
+      const msg = (e.message || '').slice(0, 300);
+      const extra = e.source ? ` @ ${e.source}:${e.lineno ?? '?'}` : '';
+      return `[${ts}] ${e.type}: ${msg}${extra}`;
+    });
+    consoleSection =
+      `## ⚠ Errores de consola del browser (PISTA FUERTE)\n\n` +
+      `El usuario tenía estos errores en su DevTools cuando reportó:\n\n` +
+      `\`\`\`\n${slim.join('\n')}\n\`\`\`\n\n` +
+      `Si ves HTTP 4XX/5XX, antes de tocar código frontend usá query_db ` +
+      `para inspeccionar schema/policies. El bug puede estar en backend ` +
+      `y manifestarse con síntoma engañoso en frontend.\n\n`;
+  }
+
   const initialUserMsg =
     `# Ticket #${ticket.id.slice(0, 8)}\n\n` +
     `**Sistema**: ${ticket.sistema}\n` +
     `**Pantalla**: ${ticket.pantalla_origen || '(no especificada)'}\n` +
     `**Autor**: ${ticket.autor_email} (${ticket.autor_rol})\n\n` +
     `## Mensaje del usuario\n\n${ticket.mensaje}\n\n` +
-    `## Contexto técnico\n\n\`\`\`json\n${JSON.stringify(ticket.contexto_jsonb || {}, null, 2)}\n\`\`\`\n\n` +
+    consoleSection +
+    `## Contexto técnico\n\n\`\`\`json\n${JSON.stringify(ctxSinErrors, null, 2)}\n\`\`\`\n\n` +
     `## Archivos candidatos (pre-filtrados)\n\n${candidates.length === 0 ? '(ninguno encontrado por grep)' : candidates.map(c => `- ${c}`).join('\n')}\n\n` +
     `Investigá, identificá la causa raíz, escribí el fix mínimo, corré tests. Si todo OK, llamá complete_with_fix.`;
 
