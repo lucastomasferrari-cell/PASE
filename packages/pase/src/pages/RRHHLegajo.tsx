@@ -196,6 +196,17 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setLiqFinalOverrides({}); }, [liqFinalForm.motivo]);
 
+  // ─── REFS ANTI-DOBLE-CLICK ────────────────────────────────────────────────
+  // BUG FIX 2026-05-20: estos 3 useRef estaban DESPUÉS del early return de
+  // línea de abajo (if loading || !emp). Eso violaba las reglas de hooks:
+  // cuando loading=true se llamaban 0 useRef, cuando loading=false se
+  // llamaban 3 → React error #310 "Rendered fewer hooks than expected".
+  // Reportado por Lucas: crash al abrir legajo. Fix: declararlos siempre,
+  // antes de cualquier return condicional.
+  const guardandoSueldoRef = useRef(false);
+  const pagandoVacRef = useRef(false);
+  const pagandoAguRef = useRef(false);
+
   if (loading || !emp) return <div className="loading">Cargando legajo...</div>;
 
   const localNombre = locales.find((l) => l.id === emp.local_id)?.nombre || "—";
@@ -239,7 +250,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
   // (deuda C4 cerrada). Antes podían quedar inconsistentes si el INSERT
   // pasaba y el UPDATE fallaba → historial mostraba cambio pero legajo
   // seguía con sueldo viejo.
-  const guardandoSueldoRef = useRef(false);
+  // (guardandoSueldoRef declarado arriba, antes del early return — fix 310)
   const guardarSueldo = async () => {
     if (guardandoSueldoRef.current) return;
     const nuevo = parseFloat(sueldoForm.monto);
@@ -267,7 +278,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
   // ─── ACCIONES: VACACIONES ──────────────────────────────────────────────────
   const plusVacacional = vacAcumuladas * valorDiaVacacional;
 
-  const pagandoVacRef = useRef(false);
+  // (pagandoVacRef declarado arriba, antes del early return — fix 310)
   const pagarVacaciones = async () => {
     if (pagandoVacRef.current) return;
     if (!emp) return;
@@ -301,7 +312,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
   };
 
   // ─── ACCIONES: AGUINALDO ───────────────────────────────────────────────────
-  const pagandoAguRef = useRef(false);
+  // (pagandoAguRef declarado arriba, antes del early return — fix 310)
   const pagarAguinaldo = async () => {
     if (pagandoAguRef.current) return;
     if (!emp) return;
