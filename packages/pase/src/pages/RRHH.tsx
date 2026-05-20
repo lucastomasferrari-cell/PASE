@@ -712,9 +712,13 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     setPagoModal({ emp, nov, liq });
     setIdempKeyPagarSueldo(crypto.randomUUID());
     setFormasPago(pendienteCash > 0 ? [{ cuenta: "", monto: String(pendienteCash) }] : []);
-    // Default a la fecha de vencimiento de la cuota si la liq tiene una,
-    // sino hoy. Si Anto necesita otra fecha, lo edita en el modal.
-    setFechaPago(liq.fecha_vencimiento || toISO(today));
+    // Default a HOY (cuando realmente sale la plata). Anto reportó
+    // 2026-05-20 que antes el default era `fecha_vencimiento` (fin de mes)
+    // y no se daba cuenta de que podía cambiarla — el resultado: pagos
+    // con fecha futura que no aparecían en el listado de movimientos
+    // (filtro por defecto hasta hoy). El mes liquidado ya está en el
+    // filtro de Pagos, no hace falta repetirlo en la fecha del movimiento.
+    setFechaPago(toISO(today));
   };
 
   const { run: guardarAdelanto, isPending: guardandoAdelanto } = useGuardedHandler(async () => {

@@ -259,11 +259,8 @@ export function TabPagos({
               </div>
               <div className="modal-body">
                 <div className="field" style={{marginBottom:12}}>
-                  <label style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                    <span>Fecha del pago</span>
-                    <span style={{fontSize:10,color:"var(--muted2)",fontWeight:400}}>
-                      podés editar si pagás un sueldo de otro mes
-                    </span>
+                  <label>
+                    <span>📅 Fecha del movimiento</span>
                   </label>
                   <input
                     type="date"
@@ -271,6 +268,10 @@ export function TabPagos({
                     onChange={(e) => setFechaPago(e.target.value)}
                     style={{width:"100%"}}
                   />
+                  <div style={{fontSize:10,color:"var(--muted2)",marginTop:4,lineHeight:1.4}}>
+                    Cuando realmente sale la plata de caja. Por default es hoy.
+                    Cambialo si registrás un pago atrasado o adelantado.
+                  </div>
                 </div>
                 <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginBottom:yaPagado>0?8:16,borderBottom:"1px solid var(--bd)"}}>
                   <span style={{fontSize:12,color:"var(--muted2)"}}>Total a pagar</span>
