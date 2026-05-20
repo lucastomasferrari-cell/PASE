@@ -22,6 +22,7 @@ import {
   type LiquidacionFinalResult,
 } from "../lib/calculos/rrhh";
 import type { Usuario, Local } from "../types/auth";
+import { EmpleadoCesiones } from "./rrhh/EmpleadoCesiones";
 import type {
   Empleado, Novedad, PagoEspecial, HistorialSueldo,
   Adelanto, DocumentoLegajo, NovedadConLiquidaciones, LineaPago,
@@ -387,9 +388,15 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
       <ToastComponent toast={toast} />
 
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:12,flexWrap:"wrap"}}>
-        <div>
+        <div style={{flex:1, minWidth: 280}}>
           <div style={{fontFamily:"var(--pase-font)",fontSize:18,fontWeight:500,lineHeight:1.1,color:"var(--pase-text)",letterSpacing:"-0.02em"}}>{emp.apellido}, {emp.nombre}</div>
-          <div style={{fontSize:11,color:"var(--muted2)",marginTop:4}}>{emp.puesto} · {localNombre} · {emp.activo ? "Activo" : "Inactivo"}</div>
+          <div style={{fontSize:11,color:"var(--muted2)",marginTop:4}}>{emp.puesto} · {localNombre} (principal) · {emp.activo ? "Activo" : "Inactivo"}</div>
+          {/* Feature 2: gestión de cesiones a otros locales */}
+          <EmpleadoCesiones
+            empleadoId={emp.id}
+            localPrincipalId={emp.local_id}
+            locales={locales}
+          />
         </div>
         <div style={{textAlign:"right"}}>
           <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"var(--muted)"}}>Sueldo mensual</div>

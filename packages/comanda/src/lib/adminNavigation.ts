@@ -81,6 +81,7 @@ export const ADMIN_NAVIGATION: NavCategory[] = [
     subItems: [
       { slug: 'alertas', label: 'Stock + alertas',  href: '/inventario/alertas' },
       { slug: 'conteo',  label: 'Conteo físico',    href: '/inventario/conteo' },
+      { slug: 'transferencias', label: 'Transferencias entre locales', href: '/inventario/transferencias' },
     ],
   },
   {

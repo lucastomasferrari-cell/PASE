@@ -52,7 +52,29 @@ const TIPOS = [
   { id: "impuesto", label: "Impuestos" },
   { id: "comision", label: "Comisiones" },
   { id: "retiro_socio", label: "Retiro de Socios" },
+  // Feature 1 (2026-05-20): pago anticipado a empleado. Va a rrhh_adelantos
+  // con concepto. Se descuenta del sueldo final.
+  { id: "empleado", label: "Empleados" },
 ];
+
+// Conceptos para tipo=empleado. Mapean a rrhh_adelantos.concepto.
+const CONCEPTOS_EMPLEADO = [
+  { id: "adelanto",     label: "Adelanto" },
+  { id: "dia_doble",    label: "Día doble" },
+  { id: "horas_extras", label: "Horas extra" },
+  { id: "feriado",      label: "Feriado trabajado" },
+  { id: "comida",       label: "Comida / refrigerio" },
+  { id: "viatico",      label: "Viático" },
+  { id: "otros",        label: "Otros" },
+];
+
+interface EmpleadoVisible {
+  id: string;
+  nombre: string;
+  apellido?: string;
+  local_principal_id: number;
+  locales_ids?: number[] | null;
+}
 export default function Gastos({ user, locales, localActivo }: GastosProps) {
   const { GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, COMISIONES_CATS, RETIROS_SOCIOS } = useCategorias();
   const ALL_CATS = [...GASTOS_FIJOS, ...GASTOS_VARIABLES, ...GASTOS_PUBLICIDAD, ...GASTOS_IMPUESTOS, ...COMISIONES_CATS, ...RETIROS_SOCIOS];
@@ -116,7 +138,40 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
   const lidImplicito: number | null = localActivo != null
     ? Number(localActivo)
     : (locsDisp.length === 1 ? Number(locsDisp[0]!.id) : null);
-  const emptyForm = { fecha: toISO(today), local_id: lidImplicito != null ? String(lidImplicito) : "", categoria: "", tipo: "fijo", monto: "", detalle: "", cuenta: "", plantilla_id: null as number | null };
+  const emptyForm = {
+    fecha: toISO(today),
+    local_id: lidImplicito != null ? String(lidImplicito) : "",
+    categoria: "", tipo: "fijo", monto: "", detalle: "", cuenta: "",
+    plantilla_id: null as number | null,
+    // Feature 1: campos extra cuando tipo='empleado'
+    empleado_id: "",
+    concepto: "adelanto",
+  };
+
+  // Empleados visibles para el usuario (Feature 2: incluye los cedidos a sus locales).
+  const [empleadosVisibles, setEmpleadosVisibles] = useState<EmpleadoVisible[]>([]);
+  useEffect(() => {
+    (async () => {
+      const { data } = await db.from('v_rrhh_empleados_visible')
+        .select('id, nombre, local_principal_id, locales_ids')
+        .eq('activo', true)
+        .order('nombre');
+      // Joineamos con rrhh_empleados para traer apellido
+      if (data && data.length > 0) {
+        const ids = data.map((e: { id: string }) => e.id);
+        const { data: emps } = await db.from('rrhh_empleados')
+          .select('id, apellido')
+          .in('id', ids);
+        const apMap = new Map((emps ?? []).map((e: { id: string; apellido: string }) => [e.id, e.apellido]));
+        setEmpleadosVisibles(data.map((e: { id: string; nombre: string; local_principal_id: number; locales_ids: number[] | null }) => ({
+          ...e,
+          apellido: apMap.get(e.id),
+        })));
+      } else {
+        setEmpleadosVisibles([]);
+      }
+    })();
+  }, []);
   const [form, setForm] = useState(emptyForm);
 
   const emptyPagoPlant = { monto: "", fecha: toISO(today), cuenta: "" };
@@ -201,6 +256,27 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
       const tipo = getTipo();
       const lid = form.local_id ? parseInt(form.local_id) : null;
       if (!lid) { alert("Seleccioná un local"); return; }
+
+      // ─── Feature 1: tipo=empleado va por RPC dedicada que también escribe
+      //     en rrhh_adelantos para que se descuente del sueldo. ──────────
+      if (tipo === 'empleado') {
+        if (!form.empleado_id) { alert("Seleccioná el empleado"); return; }
+        if (!form.concepto) { alert("Seleccioná el concepto"); return; }
+        const { error } = await db.rpc("crear_gasto_empleado", {
+          p_local_id: lid,
+          p_empleado_id: form.empleado_id,
+          p_concepto: form.concepto,
+          p_monto: parseFloat(form.monto),
+          p_cuenta: form.cuenta,
+          p_fecha: form.fecha,
+          p_detalle: form.detalle || null,
+          p_idempotency_key: idempKeyCrearGasto,
+        });
+        if (error) throw error;
+        setModal(false); setForm(emptyForm); load();
+        return;
+      }
+
       const { error } = await db.rpc("crear_gasto", {
         p_fecha: form.fecha,
         p_local_id: lid,
@@ -602,12 +678,38 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                     </select>
                   </div>
                 )}
-                <div className="field"><label>Categoría *</label>
-                  <select value={form.categoria} onChange={e => setForm({ ...form, categoria: e.target.value })}>
-                    <option value="">Seleccioná...</option>
-                    {catsByTipo(tipoFiltro === "todos" ? form.tipo : tipoFiltro).map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </div>
+                {/* Tipo "empleado" → dropdowns específicos. Otros tipos → categoría normal. */}
+                {(tipoFiltro === "todos" ? form.tipo : tipoFiltro) === 'empleado' ? (
+                  <>
+                    <div className="field"><label>Concepto *</label>
+                      <select value={form.concepto} onChange={e => setForm({ ...form, concepto: e.target.value })}>
+                        {CONCEPTOS_EMPLEADO.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                      </select>
+                    </div>
+                    <div className="field"><label>Empleado *</label>
+                      <select value={form.empleado_id} onChange={e => setForm({ ...form, empleado_id: e.target.value })}>
+                        <option value="">Seleccioná…</option>
+                        {empleadosVisibles.map(emp => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.apellido ? `${emp.apellido}, ${emp.nombre}` : emp.nombre}
+                            {/* Si es cesión (no su local principal): marca visual */}
+                            {form.local_id && Number(form.local_id) !== emp.local_principal_id ? ' ◆ cedido' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <div style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 4 }}>
+                        Se cargará en Novedades y se descontará del próximo sueldo automáticamente.
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="field"><label>Categoría *</label>
+                    <select value={form.categoria} onChange={e => setForm({ ...form, categoria: e.target.value })}>
+                      <option value="">Seleccioná...</option>
+                      {catsByTipo(tipoFiltro === "todos" ? form.tipo : tipoFiltro).map(c => <option key={c}>{c}</option>)}
+                    </select>
+                  </div>
+                )}
                 {/* Sucursal: 3 estados (acordado Lucas 2026-05-17):
                     1) User con 1 solo local → input fijo (sin elección).
                     2) Sidebar tiene sucursal seleccionada → chip LOCKED.
@@ -646,7 +748,19 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
               <div className="field"><label>Monto $</label><input type="number" value={form.monto} onChange={e => setForm({ ...form, monto: e.target.value })} placeholder="0" /></div>
               <div className="field"><label>Detalle (opcional)</label><input value={form.detalle} onChange={e => setForm({ ...form, detalle: e.target.value })} placeholder="Descripción..." /></div>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={saving || !form.cuenta || !form.monto || !form.categoria || (locsDisp.length > 1 && localActivo === null && !form.local_id)}>{saving ? "Guardando..." : "Guardar"}</button></div>
+            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setModal(false)}>Cancelar</button><button
+              className="btn btn-acc"
+              onClick={guardar}
+              disabled={(() => {
+                if (saving || !form.cuenta || !form.monto) return true;
+                if (locsDisp.length > 1 && localActivo === null && !form.local_id) return true;
+                const tEff = tipoFiltro === "todos" ? form.tipo : tipoFiltro;
+                if (tEff === 'empleado') {
+                  return !form.empleado_id || !form.concepto;
+                }
+                return !form.categoria;
+              })()}
+            >{saving ? "Guardando..." : "Guardar"}</button></div>
           </div>
         </div>
       )}
