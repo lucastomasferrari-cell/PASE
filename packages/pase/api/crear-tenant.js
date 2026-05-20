@@ -25,6 +25,15 @@
 //   500 — error inesperado (auth.admin falló, RPC falló, etc.).
 
 export default async function handler(req, res) {
+  // CORS: el admin-console vive en otro dominio (deploy Vercel separado) y
+  // necesita poder llamar este endpoint. La auth se hace por JWT en
+  // Authorization header — no usamos cookies — así que es seguro aceptar
+  // cualquier origin.
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.status(204).end();
+
   if (req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
   }

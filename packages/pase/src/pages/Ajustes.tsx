@@ -84,16 +84,18 @@ const IconPlus = (
 interface GrupoSpec {
   id: GrupoId;
   label: string;
-  iconChar: string;
 }
 
+// Sacamos los iconitos por grupo (decisión Lucas 2026-05-20):
+// quedaban inconsistentes (▼ ▲ ■ ● ◷) y no aportaban info.
+// La chevron de abrir/colapsar es la única indicación visual ahora.
 const GRUPOS_DEF: GrupoSpec[] = [
-  { id: "gastos",   label: "Categorías de gastos",    iconChar: "▼" },
-  { id: "compras",  label: "Categorías de compras",   iconChar: "▼" },
-  { id: "ingresos", label: "Categorías de ingresos",  iconChar: "▲" },
-  { id: "medios",   label: "Medios de cobro",         iconChar: "■" },
-  { id: "puestos",  label: "Puestos del equipo",      iconChar: "●" },
-  { id: "turnos",   label: "Turnos y horarios",       iconChar: "◷" },
+  { id: "gastos",   label: "Categorías de gastos"   },
+  { id: "compras",  label: "Categorías de compras"  },
+  { id: "ingresos", label: "Categorías de ingresos" },
+  { id: "medios",   label: "Medios de cobro"        },
+  { id: "puestos",  label: "Puestos del equipo"     },
+  { id: "turnos",   label: "Turnos y horarios"      },
 ];
 
 interface AjustesProps {
@@ -485,7 +487,6 @@ export default function Ajustes({ user }: AjustesProps = {}) {
                   aria-expanded={open}
                 >
                   <span className={`${styles.chevron} ${open ? styles.chevronOpen : ""}`}>{IconChevron}</span>
-                  <span className={styles.grupoIcon} aria-hidden>{g.iconChar}</span>
                   <span className={styles.grupoLabel}>{g.label}</span>
                   <span className={styles.grupoCount}>{count}</span>
                   <span className={styles.grupoToggleText}>{open ? "Colapsar" : "Expandir"}</span>

@@ -11,9 +11,9 @@ interface Props {
 
 const NAV = [
   { to: '/soporte',  label: 'Soporte',  icon: LifeBuoy,  badge: null },
-  { to: '/tenants',  label: 'Tenants',  icon: Building2, badge: 'soon' },
-  { to: '/pagos',    label: 'Pagos',    icon: Wallet,    badge: 'soon' },
-  { to: '/metricas', label: 'Métricas', icon: BarChart3, badge: 'soon' },
+  { to: '/tenants',  label: 'Tenants',  icon: Building2, badge: null },
+  { to: '/pagos',    label: 'Pagos',    icon: Wallet,    badge: null },
+  { to: '/metricas', label: 'Métricas', icon: BarChart3, badge: null },
 ] as const;
 
 export function Sidebar({ user }: Props) {

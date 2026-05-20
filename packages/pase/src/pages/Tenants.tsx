@@ -1,10 +1,18 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { fmt_d } from "../lib/utils";
-import OnboardingTenant from "./OnboardingTenant";
 import BackupsAdmin from "./BackupsAdmin";
 import { InfoTooltip } from "../components/ui";
 import type { Tenant, Usuario } from "../types";
+
+// URL del Admin Console (deploy Vercel separado). Mover la creación de
+// tenants allá fue decisión Lucas 2026-05-20: el Admin Console ya tiene
+// gestión completa (CRUD + billing + métricas) y dejar la pantalla
+// duplicada confunde. Esta pantalla en PASE queda solo lectura + acción
+// de "ver como" + tab Backups.
+const ADMIN_CONSOLE_URL =
+  (import.meta.env.VITE_ADMIN_CONSOLE_URL as string | undefined)
+  || "https://admin.pase.local";
 
 interface TenantsProps {
   user: Usuario;
@@ -22,8 +30,7 @@ type Tab = "tenants" | "backups";
 export default function Tenants({ user }: TenantsProps) {
   const [tenants, setTenants] = useState<TenantWithCounts[]>([]);
   const [loading, setLoading] = useState(true);
-  const [wizardOpen, setWizardOpen] = useState(false);
-  const [flash, setFlash] = useState<string | null>(null);
+  const [flash] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("tenants");
 
   const load = async () => {
@@ -77,13 +84,6 @@ export default function Tenants({ user }: TenantsProps) {
     load();
   };
 
-  const onTenantCreated = (slug: string) => {
-    setWizardOpen(false);
-    setFlash(`Tenant "${slug}" creado correctamente.`);
-    setTimeout(() => setFlash(null), 5000);
-    load();
-  };
-
   return (
     <div>
       <div className="ph-row">
@@ -94,7 +94,15 @@ export default function Tenants({ user }: TenantsProps) {
           </InfoTooltip>
         </div>
         {tab === "tenants" && (
-          <button className="btn btn-acc" onClick={() => setWizardOpen(true)}>+ Nuevo tenant</button>
+          <a
+            href={`${ADMIN_CONSOLE_URL}/tenants`}
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn-acc"
+            title="La creación de tenants se hace ahora desde Admin Console"
+          >
+            Crear tenant ↗
+          </a>
         )}
       </div>
 
@@ -155,10 +163,6 @@ export default function Tenants({ user }: TenantsProps) {
       )}
 
       {tab === "backups" && <BackupsAdmin tenants={tenants} />}
-
-      {wizardOpen && (
-        <OnboardingTenant onClose={() => setWizardOpen(false)} onCreated={onTenantCreated} />
-      )}
     </div>
   );
 }
