@@ -19,6 +19,14 @@
 // Whitelist de paths que el agent puede editar:
 //   - packages/{pase,comanda,admin-console}/src/**/*.{ts,tsx,js,jsx,css,md}
 //
+// Whitelist de paths que el agent puede CREAR (no modificar):
+//   - packages/pase/supabase/migrations/YYYYMMDDHHMM_*.sql (solo archivos nuevos)
+//     El humano sigue siendo dueño del schema vivo. El agent solo puede
+//     proponer migrations agregando ADELANTE; nunca modificar las existentes.
+//     Si la migration es chica (< 50 líneas) y los tests pasan, el workflow
+//     la commitea directo. Si es grande, abre PR. En ambos casos el push
+//     notification al admin incluye un aviso "aplicar manual en Supabase".
+//
 // Whitelist de comandos bash:
 //   - pnpm typecheck / lint / test (con --filter o sin)
 //   - git status / diff / add / commit / push (a branch específico)
@@ -37,7 +45,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { execSync, spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, statSync, mkdirSync } from 'node:fs';
 import { resolve, relative, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -153,7 +161,7 @@ const TOOLS_SPEC = [
   },
   {
     name: 'edit_file',
-    description: 'Reemplaza una porción exacta del archivo. old_string debe coincidir exactamente (incluyendo whitespace). Path debe estar en whitelist: packages/{pase,comanda,admin-console}/src/**.',
+    description: 'Reemplaza una porción exacta de un archivo existente. old_string debe coincidir exactamente (incluyendo whitespace). Path debe estar en whitelist: packages/{pase,comanda,admin-console}/src/**.',
     input_schema: {
       type: 'object',
       properties: {
@@ -162,6 +170,18 @@ const TOOLS_SPEC = [
         new_string: { type: 'string' },
       },
       required: ['path', 'old_string', 'new_string'],
+    },
+  },
+  {
+    name: 'create_file',
+    description: 'Crea un archivo NUEVO (el archivo NO debe existir todavía). Usalo para nuevas migrations SQL en packages/pase/supabase/migrations/YYYYMMDDHHMM_descripcion.sql. El nombre debe matchear el formato timestamp YYYYMMDDHHMM (ej. 202605210900_fix_xxx.sql). NO sirve para modificar migrations existentes — eso está prohibido. Tampoco crear archivos sueltos fuera de migrations; usá edit_file en su lugar.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Ruta completa desde la raíz del repo' },
+        content: { type: 'string', description: 'Contenido del archivo' },
+      },
+      required: ['path', 'content'],
     },
   },
   {
@@ -230,14 +250,49 @@ const TOOLS_SPEC = [
 ];
 
 // ─── Validación de paths ────────────────────────────────────────────────────
+//
+// Para EDIT_FILE: solo el código de las apps. Migrations existentes están
+// fuera porque son immutable (schema histórico).
 function pathPermitido(path) {
-  // Solo packages/{pase,comanda,admin-console}/src/**.
-  // Excluye migrations, package.json, configs, .env*, etc.
   if (!path) return false;
   const normalized = path.replace(/\\/g, '/');
   if (/\.\./.test(normalized)) return false;
   const allowed = /^packages\/(pase|comanda|admin-console)\/src\/.+\.(ts|tsx|js|jsx|css|md)$/;
   return allowed.test(normalized);
+}
+
+// Para CREATE_FILE: solo migrations NUEVAS con timestamp válido.
+//
+// El timestamp debe ser >= ahora (no podés crear una migration "del pasado"
+// porque rompería el orden temporal). Y el nombre del archivo no puede
+// existir todavía.
+function pathPermitidoParaCrear(path, ts = Date.now()) {
+  if (!path) return { ok: false, error: 'Path vacío' };
+  const normalized = path.replace(/\\/g, '/');
+  if (/\.\./.test(normalized)) return { ok: false, error: 'Path con .. no permitido' };
+
+  const re = /^packages\/pase\/supabase\/migrations\/(\d{12})_[a-z0-9_]+\.sql$/i;
+  const match = normalized.match(re);
+  if (!match) {
+    return {
+      ok: false,
+      error: 'Solo se permite crear migrations SQL en packages/pase/supabase/migrations/. Formato: YYYYMMDDHHMM_descripcion.sql (12 dígitos timestamp + descripción snake_case).',
+    };
+  }
+
+  const tsStr = match[1];
+  // Validar que el timestamp parsea como fecha razonable.
+  // Aceptamos cualquier YYYYMMDDHHMM con YYYY entre 2025 y 2030.
+  const yyyy = parseInt(tsStr.slice(0, 4));
+  const mm = parseInt(tsStr.slice(4, 6));
+  const dd = parseInt(tsStr.slice(6, 8));
+  const hh = parseInt(tsStr.slice(8, 10));
+  const mi = parseInt(tsStr.slice(10, 12));
+  if (yyyy < 2025 || yyyy > 2030 || mm < 1 || mm > 12 || dd < 1 || dd > 31 || hh > 23 || mi > 59) {
+    return { ok: false, error: `Timestamp inválido en filename: ${tsStr}. Usá YYYYMMDDHHMM coherente.` };
+  }
+
+  return { ok: true };
 }
 
 function commandPermitido(cmd) {
@@ -271,7 +326,7 @@ function toolRead(args) {
 
 function toolEdit(args) {
   if (!pathPermitido(args.path)) {
-    return { error: `Path no permitido: ${args.path}. Solo packages/{pase,comanda,admin-console}/src/**.` };
+    return { error: `Path no permitido: ${args.path}. Solo packages/{pase,comanda,admin-console}/src/**. Para crear migrations nuevas usá create_file.` };
   }
   const p = resolve(REPO_ROOT, args.path);
   if (!existsSync(p)) return { error: `Archivo no existe: ${args.path}` };
@@ -286,6 +341,49 @@ function toolEdit(args) {
   const updated = content.replace(args.old_string, args.new_string);
   writeFileSync(p, updated);
   return { ok: true, lines_changed: args.new_string.split('\n').length - args.old_string.split('\n').length };
+}
+
+function toolCreate(args) {
+  const check = pathPermitidoParaCrear(args.path);
+  if (!check.ok) return { error: check.error };
+  const p = resolve(REPO_ROOT, args.path);
+  if (!p.startsWith(REPO_ROOT)) return { error: 'Path fuera del repo' };
+  if (existsSync(p)) {
+    return { error: `Archivo ya existe: ${args.path}. create_file SOLO sirve para archivos nuevos. Si querés modificar, eso no se puede en migrations.` };
+  }
+  if (!args.content || args.content.length === 0) {
+    return { error: 'content vacío' };
+  }
+  if (args.content.length > 50_000) {
+    return { error: 'Contenido demasiado grande (>50KB). Migrations grandes son sospechosas — pensá si necesitás partirlas.' };
+  }
+  // Heurística de seguridad: rechazar operaciones destructivas obvias.
+  // El humano puede crear estas si las necesita; el agent no.
+  const peligrosas = [
+    /\bDROP\s+TABLE\b/i,
+    /\bDROP\s+SCHEMA\b/i,
+    /\bDROP\s+DATABASE\b/i,
+    /\bDROP\s+ROLE\b/i,
+    /\bTRUNCATE\b/i,
+    /\bDELETE\s+FROM\s+\w+\s*;/i,   // DELETE sin WHERE = mata todo
+    /\bDROP\s+COLUMN\b/i,
+    /\bDROP\s+CONSTRAINT\b/i,
+  ];
+  for (const pattern of peligrosas) {
+    if (pattern.test(args.content)) {
+      return {
+        error: `Migration contiene operación destructiva (${pattern.source}). Eso requiere revisión humana — escalá o usá give_up para que un humano lo evalúe.`,
+      };
+    }
+  }
+  // Crear directorio si no existe (los migrations dir SI existe ya, pero defensive).
+  mkdirSync(dirname(p), { recursive: true });
+  writeFileSync(p, args.content);
+  return {
+    ok: true,
+    bytes_written: args.content.length,
+    note: 'Migration creada como archivo. NO se aplica automáticamente — el humano debe correrla en Supabase SQL editor antes de testear en producción.',
+  };
 }
 
 function toolGrep(args) {
@@ -353,10 +451,42 @@ PASE = back-office gastronómico AR. COMANDA = POS. Stack: React 19 + TS strict
 ## REGLAS DURAS
 
 - NUNCA modifiques archivos fuera de packages/{pase,comanda,admin-console}/src.
-- NUNCA tocás migrations (packages/pase/supabase/migrations/).
+- NUNCA modifiques migrations existentes en packages/pase/supabase/migrations/.
+  El schema vivo es histórico — modificar una migration ya aplicada rompe
+  los entornos donde corrió. SÍ podés CREAR migrations nuevas (ver abajo).
 - NUNCA tocás archivos de config: package.json, vite.config, tsconfig, eslint, .env, vercel.json.
 - NUNCA hacés git push, commit o cambios destructivos. El sistema se encarga del commit final.
 - NUNCA inventes datos del bug. Si no entendés algo, escalá.
+
+## MIGRATIONS SQL NUEVAS (sí podés crear)
+
+Si el bug es de una función PL/pgSQL, un trigger, una RLS policy o cualquier
+cosa server-side de Supabase: usá create_file con path:
+
+  packages/pase/supabase/migrations/YYYYMMDDHHMM_descripcion_corta.sql
+
+Donde YYYYMMDDHHMM es timestamp futuro (ej. usá la fecha actual +1 minuto).
+Snake_case descripción, max 40 chars. Ejemplos:
+
+  202605211045_fix_ambiguous_id_in_crear_rider.sql
+  202605211046_add_index_ventas_pos_cliente_telefono.sql
+  202605211047_fix_trg_acumular_puntos_dups.sql
+
+REGLAS de la migration:
+- DEBE ser idempotente (DROP IF EXISTS + CREATE OR REPLACE).
+- NO uses DROP TABLE, DROP COLUMN, DROP CONSTRAINT, TRUNCATE, DELETE sin WHERE.
+  Esas operaciones requieren revisión humana — usá give_up con el SQL en la
+  explicación y un humano decide.
+- Si la fn original tiene firma vieja con misma cantidad de argumentos, hacé
+  DROP FUNCTION IF EXISTS antes del CREATE para evitar 2 versiones.
+- Terminá con NOTIFY pgrst, 'reload schema'; para que PostgREST refresque.
+- Si renombrás columnas de retorno (ej. id → rider_id por ambigüedad),
+  ACTUALIZÁ también los services TypeScript del cliente — el consumer
+  espera columnas con cierto nombre.
+
+IMPORTANTE: el sistema NO aplica la migration automático. Crea el archivo +
+notifica al admin "🗃 esta fix incluye SQL — aplicar manual en Supabase".
+Vos solo proponés; el humano aplica con visto bueno.
 
 ## CUÁNDO ESCALAR A OPUS
 
@@ -371,9 +501,10 @@ hipótesis, qué descartaste.
 ## CUÁNDO RENDIRSE
 
 Llamá give_up si:
-- Es un cambio que requiere migration SQL.
-- Es un cambio que afecta config/build/deploy.
+- Es un cambio que requiere modificar config/build/deploy (vite, tsconfig, vercel.json).
 - Es un cambio que requiere decisión de negocio (no es bug, es feature request).
+- La migration SQL requiere operación destructiva (DROP, TRUNCATE) — ese caso
+  el humano lo aprueba, no vos.
 - Después de 3 intentos de fix los tests siguen fallando.
 
 ## ESTILO DE CÓDIGO
@@ -446,6 +577,7 @@ async function runAgentLoop(model, initialUserMsg, opusContext = null) {
       switch (name) {
         case 'read_file': result = toolRead(input); break;
         case 'edit_file': result = toolEdit(input); break;
+        case 'create_file': result = toolCreate(input); break;
         case 'grep': result = toolGrep(input); break;
         case 'list_files': result = toolList(input); break;
         case 'run_command': result = toolRunCommand(input); break;

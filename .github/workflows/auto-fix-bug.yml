@@ -108,18 +108,34 @@ jobs:
         id: decide
         if: steps.agent.outputs.action == 'fix'
         run: |
-          # Cuento líneas y archivos modificados.
-          LINES_CHANGED=$(git diff --shortstat | grep -oE '[0-9]+ insertion|[0-9]+ deletion' | grep -oE '[0-9]+' | paste -sd+ | bc || echo 0)
-          FILES_CHANGED=$(git diff --name-only | wc -l)
+          # git diff sin args muestra solo unstaged. Como el agent escribe
+          # archivos directo, también consideramos untracked.
+          git add -A
+          LINES_CHANGED=$(git diff --cached --shortstat | grep -oE '[0-9]+ insertion|[0-9]+ deletion' | grep -oE '[0-9]+' | paste -sd+ | bc || echo 0)
+          FILES_CHANGED=$(git diff --cached --name-only | wc -l)
+          # Detectar si hay migration SQL nueva (forzar PR si la hay)
+          NEW_MIGRATIONS=$(git diff --cached --name-only --diff-filter=A | grep -E '^packages/pase/supabase/migrations/.+\.sql$' || true)
+          HAS_MIGRATION=$([ -n "$NEW_MIGRATIONS" ] && echo "true" || echo "false")
+          MIGRATION_FILES=$(echo "$NEW_MIGRATIONS" | tr '\n' ',' | sed 's/,$//')
+
           echo "lines_changed=$LINES_CHANGED" >> $GITHUB_OUTPUT
           echo "files_changed=$FILES_CHANGED" >> $GITHUB_OUTPUT
-          # Regla: cambio chico → commit directo. Cambio grande → PR.
-          if [ "$LINES_CHANGED" -lt 50 ] && [ "$FILES_CHANGED" -lt 5 ]; then
+          echo "has_migration=$HAS_MIGRATION" >> $GITHUB_OUTPUT
+          echo "migration_files=$MIGRATION_FILES" >> $GITHUB_OUTPUT
+
+          # Reglas:
+          # 1. Si hay migration nueva → FORZAR PR (humano debe aplicarla en DB).
+          # 2. Sino, cambio chico → commit directo. Cambio grande → PR.
+          if [ "$HAS_MIGRATION" = "true" ]; then
+            echo "mode=pr" >> $GITHUB_OUTPUT
+            echo "::notice::Migration SQL nueva detectada → forzando PR para review humano"
+            echo "Files: $MIGRATION_FILES"
+          elif [ "$LINES_CHANGED" -lt 50 ] && [ "$FILES_CHANGED" -lt 5 ]; then
             echo "mode=commit" >> $GITHUB_OUTPUT
           else
             echo "mode=pr" >> $GITHUB_OUTPUT
           fi
-          echo "Diff: $LINES_CHANGED líneas en $FILES_CHANGED archivos"
+          echo "Diff: $LINES_CHANGED líneas en $FILES_CHANGED archivos · has_migration=$HAS_MIGRATION"
 
       - name: Run tests one more time (gate final)
         if: steps.agent.outputs.action == 'fix'
@@ -135,13 +151,13 @@ jobs:
             pnpm --filter "$pkg" test || { echo "::error::test $pkg falló"; exit 1; }
           done
 
-      - name: Commit directo a main (cambio chico)
+      - name: Commit directo a main (cambio chico, sin migration)
         if: steps.agent.outputs.action == 'fix' && steps.decide.outputs.mode == 'commit'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           EXPL=$(node -e "console.log(JSON.parse(require('fs').readFileSync('agent-output.json','utf8')).explanation)")
-          git add -A
+          # Files ya están staged del step "Decide" via git add -A.
           git commit -m "fix: $EXPL
 
           Auto-fix por Claude Agent.
@@ -154,15 +170,17 @@ jobs:
           # Update ticket en supabase.
           node scripts/auto-fix-mark-resolved.mjs "$TICKET_ID" "$COMMIT_SHA" "commit"
 
-      - name: Abrir PR (cambio grande)
+      - name: Abrir PR (cambio grande o con migration SQL)
         if: steps.agent.outputs.action == 'fix' && steps.decide.outputs.mode == 'pr'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HAS_MIGRATION: ${{ steps.decide.outputs.has_migration }}
+          MIGRATION_FILES: ${{ steps.decide.outputs.migration_files }}
         run: |
           EXPL=$(node -e "console.log(JSON.parse(require('fs').readFileSync('agent-output.json','utf8')).explanation)")
           BRANCH="auto-fix/ticket-$(echo $TICKET_ID | cut -c1-8)"
           git checkout -b "$BRANCH"
-          git add -A
+          # Files ya están staged del step anterior (Decide commit vs PR).
           git commit -m "fix: $EXPL
 
           Auto-fix por Claude Agent.
@@ -170,12 +188,70 @@ jobs:
 
           Co-Authored-By: Claude Auto-Fix Bot <auto-fix-bot@pase.local>"
           git push origin "$BRANCH"
+
+          # Body del PR. Si hay migration, agregamos sección destacada con
+          # instrucciones para aplicar.
+          PR_BODY_FILE=$(mktemp)
+          cat > "$PR_BODY_FILE" <<EOF
+          ## Auto-fix propuesto por Claude
+
+          **Ticket**: \`$TICKET_ID\`
+
+          ### Explicación
+          $EXPL
+          EOF
+
+          if [ "$HAS_MIGRATION" = "true" ]; then
+            cat >> "$PR_BODY_FILE" <<EOF
+
+          ### ⚠️ MIGRATION SQL NUEVA — aplicar manualmente
+
+          Este PR incluye migration(s) SQL que **NO se aplican automáticamente**.
+          Antes de mergear el PR, aplicalas en producción:
+
+          \`\`\`bash
+          # Para cada archivo:
+          # 1. Abrí Supabase Dashboard → SQL Editor
+          # 2. Pegá el contenido de $MIGRATION_FILES
+          # 3. Run
+          # Alternativa con script Node + POSTGRES_URL_NON_POOLING (ver CLAUDE.md)
+          \`\`\`
+
+          Migration(s) incluida(s): \`$MIGRATION_FILES\`
+
+          ### Checklist antes de mergear
+
+          - [ ] Revisé el código del fix
+          - [ ] Revisé el SQL de la migration
+          - [ ] Apliqué la migration en Supabase producción
+          - [ ] Verifiqué que el bug original está resuelto
+          EOF
+          else
+            cat >> "$PR_BODY_FILE" <<EOF
+
+          ### Checklist antes de mergear
+
+          - [ ] Revisé el código del fix
+          - [ ] Verifiqué que el bug original está resuelto
+          EOF
+          fi
+
+          # Labels para filtrado
+          LABELS="auto-fix"
+          if [ "$HAS_MIGRATION" = "true" ]; then
+            LABELS="$LABELS,needs-sql-apply"
+          fi
+
           PR_URL=$(gh pr create --title "fix: $EXPL" \
-            --body "Auto-fix por Claude Agent. Ticket: \`$TICKET_ID\`. Revisar diff antes de mergear." \
-            --base main --head "$BRANCH")
+            --body-file "$PR_BODY_FILE" \
+            --base main --head "$BRANCH" \
+            --label "$LABELS" 2>/dev/null || gh pr create --title "fix: $EXPL" \
+              --body-file "$PR_BODY_FILE" \
+              --base main --head "$BRANCH")
           PR_NUM=$(echo "$PR_URL" | grep -oE '[0-9]+$')
           echo "PR: $PR_URL"
           node scripts/auto-fix-mark-resolved.mjs "$TICKET_ID" "$PR_URL" "pr" "$PR_NUM"
+          rm -f "$PR_BODY_FILE"
 
       - name: Push notification → superadmins (resuelto, commit directo)
         if: steps.agent.outputs.action == 'fix' && steps.decide.outputs.mode == 'commit'
@@ -197,12 +273,22 @@ jobs:
           VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+          HAS_MIGRATION: ${{ steps.decide.outputs.has_migration }}
         run: |
+          if [ "$HAS_MIGRATION" = "true" ]; then
+            TITLE="🗃 PR auto-fix con SQL — requiere aplicar migration"
+            BODY="Migration SQL nueva incluida. Aplicala en Supabase antes de mergear. Click para abrir."
+            URGENCY="critical"
+          else
+            TITLE="🔍 PR auto-fix listo para revisar"
+            BODY="Cambio grande. Abrí el ticket y aprobá si está OK."
+            URGENCY="critical"
+          fi
           node scripts/send-push-to-superadmins.mjs \
-            "🔍 PR auto-fix listo para revisar" \
-            "Cambio grande. Abrí el ticket y aprobá si está OK." \
+            "$TITLE" \
+            "$BODY" \
             "/soporte" \
-            "critical" \
+            "$URGENCY" \
             "$TICKET_ID" || true
 
       - name: Push notification → superadmins (agent se rindió)
