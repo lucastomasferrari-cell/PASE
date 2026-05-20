@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { tryReloadOnChunkError, isChunkLoadError } from "../lib/chunkLoadErrorHandler";
 
 /**
  * ErrorBoundary global — captura crashes de React y muestra una pantalla
@@ -46,6 +47,12 @@ export class ErrorBoundary extends Component<Props, State> {
     console.error("[ErrorBoundary] React crash:", error);
     console.error("[ErrorBoundary] Component stack:", errorInfo.componentStack);
     this.setState({ errorInfo });
+
+    // Si es "Failed to fetch dynamically imported module" (típico después
+    // de un deploy nuevo de Vercel), intentamos auto-reload. La función
+    // tiene cooldown anti-loop: solo recarga 1 vez por minuto. Si recargó,
+    // el user ni ve esta pantalla.
+    tryReloadOnChunkError(error);
   }
 
   render() {
@@ -54,6 +61,12 @@ export class ErrorBoundary extends Component<Props, State> {
     const errMsg = this.state.error?.message || "Error desconocido";
     const stack = this.state.error?.stack || "";
     const componentStack = this.state.errorInfo?.componentStack || "";
+    // Mensaje específico si es chunk load error post-deploy (la caída más
+    // común). Aclara al user qué hacer y por qué pasó.
+    const esChunkError = isChunkLoadError(this.state.error);
+    const mensajeUser = esChunkError
+      ? "Hubo una actualización nueva del sistema mientras estabas adentro. Recargá la página para usar la versión actualizada."
+      : "Tu data está segura. Probá recargar primero. Si el error sigue, limpiá la sesión y volvé a entrar.";
 
     return (
       <div style={{
@@ -86,10 +99,10 @@ export class ErrorBoundary extends Component<Props, State> {
           fontSize: 13, color: "#FCA5A5",
           textAlign: "left", lineHeight: 1.5,
         }}>
-          <strong>{errMsg}</strong>
+          <strong>{esChunkError ? "Versión desactualizada" : errMsg}</strong>
           <br />
           <span style={{ color: "#93A8C2", fontSize: 12 }}>
-            Tu data está segura. Probá recargar primero. Si el error sigue, limpiá la sesión y volvé a entrar.
+            {mensajeUser}
           </span>
         </div>
 
