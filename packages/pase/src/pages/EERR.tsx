@@ -12,7 +12,8 @@
  * TODO(eerr-refactor): mover ERow/ESection a archivos separados con pct
  * y totalVentas como props. Hacer en PR aparte cuando se toque la lógica.
  */
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { lazyWithReload as lazy } from "../lib/chunkLoadErrorHandler";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
 import { useCategorias } from "../lib/useCategorias";

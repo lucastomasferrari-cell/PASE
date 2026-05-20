@@ -70,6 +70,45 @@ export function tryReloadOnChunkError(error: unknown): boolean {
 }
 
 /**
+ * Wrap de `React.lazy()` con auto-reload on chunk load error.
+ *
+ * Reemplaza `lazy(() => import('./Page'))` por
+ *           `lazyWithReload(() => import('./Page'))`.
+ *
+ * Funciona aun si el ErrorBoundary o el listener global del bundle viejo
+ * no tiene este código todavía — porque la lógica vive EN cada importer,
+ * y los importers nuevos (deploy nuevo) usan automáticamente esta versión.
+ *
+ * Anti-loop: usa el mismo flag de sessionStorage que tryReloadOnChunkError.
+ */
+import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
+
+// Firma idéntica a React.lazy() para preservar tipos de props.
+// `ComponentType<any>` es intencional acá — replicamos exactamente lo que
+// hace React internamente para que el wrapper sea transparente.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function lazyWithReload<T extends ComponentType<any>>(
+  importer: () => Promise<{ default: T }>,
+): LazyExoticComponent<T> {
+  return lazy(() =>
+    importer().catch((error) => {
+      // Si es chunk load error y no estamos en cooldown, recargamos.
+      // tryReloadOnChunkError devuelve true cuando programó el reload —
+      // en ese caso devolvemos una promise que NUNCA resuelve para evitar
+      // que React renderice nada (la página va a recargar en milisegundos).
+      if (tryReloadOnChunkError(error)) {
+        // Devolver promise pendiente: el componente queda en Suspense
+        // hasta que se complete el reload. El user ve el fallback de
+        // Suspense (loading), no la pantalla de error.
+        return new Promise<{ default: T }>(() => { /* never resolves */ });
+      }
+      // No es chunk error o cooldown agotado — propagar al ErrorBoundary.
+      throw error;
+    }),
+  );
+}
+
+/**
  * Instala listeners globales en `window` para capturar chunk load errors que
  * salen como unhandled promise rejections (cuando lazy() falla antes de
  * llegar al ErrorBoundary de React).

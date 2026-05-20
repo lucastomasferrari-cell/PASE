@@ -1,4 +1,5 @@
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
+import { lazyWithReload as lazy } from "../../lib/chunkLoadErrorHandler";
 import type { Usuario, Local } from "../../types";
 
 // Lazy: LectorFacturasIA (~550 LOC) solo se carga cuando se abre el modal.
