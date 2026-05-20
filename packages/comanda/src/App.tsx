@@ -103,6 +103,8 @@ const DispatchMap = lazy(() => import('./pages/Delivery/DispatchMap').then(m => 
 const RiderPWA = lazy(() => import('./pages/Rider/RiderPWA').then(m => ({ default: m.RiderPWA })));
 const InventarioAlertas = lazy(() => import('./pages/Inventario/InventarioAlertas').then(m => ({ default: m.InventarioAlertas })));
 const InventarioConteo = lazy(() => import('./pages/Inventario/InventarioConteo').then(m => ({ default: m.InventarioConteo })));
+const ReservasAdmin = lazy(() => import('./pages/Salon/ReservasAdmin').then(m => ({ default: m.ReservasAdmin })));
+const TiendaReservar = lazy(() => import('./pages/Tienda/TiendaReservar').then(m => ({ default: m.TiendaReservar })));
 const SettingsMesas = lazy(() => import('./pages/Settings/SettingsMesas').then(m => ({ default: m.SettingsMesas })));
 const SettingsMetodosCobro = lazy(() => import('./pages/Settings/SettingsMetodosCobro').then(m => ({ default: m.SettingsMetodosCobro })));
 const SettingsPermisos = lazy(() => import('./pages/Settings/SettingsPermisos').then(m => ({ default: m.SettingsPermisos })));
@@ -194,6 +196,7 @@ export default function App() {
                   <Route path="checkout" element={<TiendaCheckout />} />
                   <Route path="confirmacion/:ventaId" element={<TiendaConfirmacion />} />
                   <Route path="seguimiento" element={<TiendaSeguimiento />} />
+                  <Route path="reservar" element={<TiendaReservar />} />
                 </Route>
                 <Route path="/kds/:estacion" element={<KdsView />} />
                 <Route path="/menu/:token" element={<MenuQrView />} />
@@ -248,7 +251,7 @@ export default function App() {
                   <Route path="/salon" element={<Navigate to="/salon/mesas" replace />} />
                   <Route path="/salon/mesas" element={<SettingsMesas />} />
                   <Route path="/salon/servicios" element={<StubRoute />} />
-                  <Route path="/salon/reservas" element={<StubRoute />} />
+                  <Route path="/salon/reservas" element={<ReservasAdmin />} />
 
                   {/* ── Empleados ─────────────────────────────────────── */}
                   <Route path="/empleados" element={<Navigate to="/empleados/lista" replace />} />

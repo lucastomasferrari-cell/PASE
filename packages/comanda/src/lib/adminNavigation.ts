@@ -92,7 +92,7 @@ export const ADMIN_NAVIGATION: NavCategory[] = [
     subItems: [
       { slug: 'mesas',     label: 'Mesas',              href: '/salon/mesas' },
       { slug: 'servicios', label: 'Servicios y turnos', href: '/salon/servicios', badge: 'soon' },
-      { slug: 'reservas',  label: 'Reservas',           href: '/salon/reservas',  badge: 'soon' },
+      { slug: 'reservas',  label: 'Reservas',           href: '/salon/reservas' },
     ],
   },
   {
