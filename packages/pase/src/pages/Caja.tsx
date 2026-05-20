@@ -165,23 +165,23 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   //    MOV-<unix>-<rand>). Ordenar por id DESC equivale a fecha de carga DESC
   //    porque el timestamp del id se compara correctamente lexicográficamente.
   //    Sirve para detectar cargas tardías que descuadran un saldo de hoy.
-  const [ordenPor, setOrdenPor] = useState<"fecha" | "carga">("fecha");
+  // Default: por carga (los últimos ingresados primero). Antes era "fecha"
+  // pero combinado con filtro fecha=hoy, los pagos con fecha futura (típico
+  // sueldos fin de mes) quedaban ocultos. Default "carga" muestra siempre
+  // lo último cargado, independiente de la fecha del movimiento.
+  const [ordenPor, setOrdenPor] = useState<"fecha" | "carga">("carga");
   const [loading, setLoading] = useState(true);
   // F4 (sunny-creek): filtros de fecha + paginación cursor. Default 90d
   // (consistente con Compras/Gastos/ConciliacionMP). hasMore=true mientras
   // la última query devolvió exactamente PAGE_SIZE filas.
-  const [filtDesde, setFiltDesde] = useState(() => { const d = new Date(today); d.setDate(d.getDate() - 90); return toISO(d); });
-  // Default `filtHasta`: fin del mes corriente o hoy + 30 días, lo que sea
-  // mayor. Esto cubre el caso típico (reportado 2026-05-20): el usuario carga
-  // pagos de sueldo con fecha "31 del mes" (cierre contable), y antes del fix
-  // esos movimientos quedaban OCULTOS porque `filtHasta` estaba en hoy. El
-  // saldo SÍ se veía (no depende de fecha) pero el listado de movimientos
-  // mostraba "no hay movimientos" — falso negativo confuso.
-  const [filtHasta, setFiltHasta] = useState(() => {
-    const finDeMes = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    const plus30 = new Date(today); plus30.setDate(plus30.getDate() + 30);
-    return toISO(finDeMes > plus30 ? finDeMes : plus30);
-  });
+  // Defaults VACÍOS: por default NO se filtra por fecha — se muestran los
+  // últimos cargados (ordenados por carga). El usuario aplica filtro de
+  // fecha SOLO si quiere acotar rango. Decisión Lucas 2026-05-20: antes
+  // los movimientos con fecha futura (típico pagos con fecha fin de mes)
+  // quedaban ocultos por el default `hasta=hoy`. Sin filtro default,
+  // siempre aparece todo lo último cargado.
+  const [filtDesde, setFiltDesde] = useState<string>("");
+  const [filtHasta, setFiltHasta] = useState<string>("");
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   // Debounce: evita disparar fetch en cada keystroke del datepicker.
@@ -251,9 +251,10 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     // (saca payload ~40% vs SELECT *). Movimientos puede tener tenant_id,
     // created_at, otros campos que la tabla NO necesita renderizar.
     let q = db.from("movimientos")
-      .select("id, fecha, cuenta, tipo, cat, importe, detalle, local_id, fact_id, remito_id_ref, liquidacion_id, adelanto_id_ref, pago_especial_id_ref, gasto_id_ref, anulado, anulado_motivo, editado, editado_motivo, editado_at")
-      .gte("fecha", debDesde)
-      .lte("fecha", debHasta);
+      .select("id, fecha, cuenta, tipo, cat, importe, detalle, local_id, fact_id, remito_id_ref, liquidacion_id, adelanto_id_ref, pago_especial_id_ref, gasto_id_ref, anulado, anulado_motivo, editado, editado_motivo, editado_at");
+    // Filtro de fecha SOLO si el usuario lo aplicó (campos no vacíos).
+    if (debDesde) q = q.gte("fecha", debDesde);
+    if (debHasta) q = q.lte("fecha", debHasta);
     if (ordenPor === "carga") {
       // Orden por id (timestamp de creación). DESC trae los cargados más
       // recientemente primero — útil cuando alguien cargó hoy un mov con
@@ -291,19 +292,25 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         sq = sq.in("cuenta", vis);
       }
     }
-    // Count de movimientos con fecha > filtHasta (mismo scope local + cuenta)
-    let countQ = db.from("movimientos")
-      .select("id", { count: 'exact', head: true })
-      .gt("fecha", debHasta);
-    countQ = applyLocalScope(countQ, user, localActivo);
-    if (visParaListado !== null && visParaListado.length > 0) {
-      countQ = countQ.in("cuenta", visParaListado);
+    // Count de movimientos con fecha > filtHasta — SOLO si hay filtro hasta
+    // activo. Si no hay filtro, no hay "fuera de rango" porque mostramos todo.
+    let futurosCount = 0;
+    if (debHasta) {
+      let countQ = db.from("movimientos")
+        .select("id", { count: 'exact', head: true })
+        .gt("fecha", debHasta);
+      countQ = applyLocalScope(countQ, user, localActivo);
+      if (visParaListado !== null && visParaListado.length > 0) {
+        countQ = countQ.in("cuenta", visParaListado);
+      }
+      const { count } = await countQ;
+      futurosCount = count ?? 0;
     }
-    const [{data:m},{data:s},{count: futuros}] = await Promise.all([mQ, sq, countQ]);
+    const [{data:m},{data:s}] = await Promise.all([mQ, sq]);
     const movs = (m as Movimiento[]) || [];
     setMovimientos(movs);
     setHasMore(movs.length === TESORERIA_PAGE_SIZE);
-    setMovsFueraRango(futuros ?? 0);
+    setMovsFueraRango(futurosCount);
     const obj: Record<string, number> = {};
     (s||[]).forEach(x=> { obj[x.cuenta] = (obj[x.cuenta]||0) + (x.saldo||0); });
     setSaldos(obj);
@@ -524,7 +531,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
             <button
               className="btn btn-ghost btn-sm"
               onClick={() => {
-                const filename = `movimientos_caja_${filtDesde}_${filtHasta}.csv`;
+                const filename = `movimientos_caja_${filtDesde || 'inicio'}_${filtHasta || 'hoy'}.csv`;
                 const headers = ["Fecha", "Cuenta", "Tipo", "Categoría", "Detalle", "Importe", "Estado"];
                 const rows = mFilt.map(m => [
                   m.fecha?.slice(0, 10) || "",
@@ -620,12 +627,11 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
             </select>
           </div>
         </div>
-        {/* Banner: movimientos con fecha posterior al rango seleccionado.
-            Caso típico: pagos de sueldo cargados con fecha fin de mes
-            cuando el filtro "hasta" no cubre esa fecha. Sin este banner,
-            el usuario veía "Sin movimientos" mientras el saldo decía otra
-            cosa (reporte Anto 2026-05-20). */}
-        {movsFueraRango > 0 && (
+        {/* Banner: movimientos con fecha posterior al filtro "hasta" activo.
+            Solo aparece cuando el usuario aplicó manualmente un filtro hasta
+            (defaults vacíos no filtran nada). Caso típico: usuario filtra
+            "hasta hoy" y queda fuera el pago con fecha fin de mes. */}
+        {movsFueraRango > 0 && filtHasta && (
           <div style={{
             padding: "10px 14px",
             background: "rgba(245, 158, 11, 0.1)",
@@ -641,19 +647,17 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
             <span style={{ fontSize: 16 }}>📅</span>
             <div style={{ flex: 1 }}>
               Hay <strong>{movsFueraRango} movimiento{movsFueraRango === 1 ? "" : "s"}</strong> con
-              fecha posterior a <strong>{filtHasta}</strong> (típicamente sueldos cargados con fecha
-              fin de mes). No aparecen en el listado actual.
+              fecha posterior a <strong>{filtHasta}</strong>. No aparecen porque tenés filtro activo.
             </div>
             <button
               className="btn btn-sec"
               style={{ fontSize: 11, padding: "4px 12px" }}
               onClick={() => {
-                // Ampliar rango hasta fin del año
-                const finDeAnio = new Date(today.getFullYear(), 11, 31);
-                setFiltHasta(toISO(finDeAnio));
+                // Quitar filtro hasta para verlos
+                setFiltHasta("");
               }}
             >
-              Ampliar rango
+              Quitar filtro
             </button>
           </div>
         )}
