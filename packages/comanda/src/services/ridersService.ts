@@ -97,10 +97,12 @@ export async function crearRider(args: {
     p_foto_url: args.fotoUrl ?? null,
   });
   if (error) return { data: null, error: translateError(error) };
-  const arr = data as Array<{ id: number; rider_token: string }> | null;
+  // Migration 202605203900 renombró el out param a rider_id (para evitar
+  // ambigüedad SQL). Mapeamos a `id` para mantener la API igual.
+  const arr = data as Array<{ rider_id: number; rider_token: string }> | null;
   const row = arr?.[0];
   if (!row) return { data: null, error: 'Sin resultado' };
-  return { data: row, error: null };
+  return { data: { id: row.rider_id, rider_token: row.rider_token }, error: null };
 }
 
 export async function revocarRider(id: number): Promise<{ error: string | null }> {

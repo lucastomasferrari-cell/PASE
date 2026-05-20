@@ -59,10 +59,11 @@ export async function crearAgentToken(
     p_nombre: nombre,
   });
   if (error) return { data: null, error: translateError(error) };
-  const arr = data as Array<{ id: number; agent_token: string }> | null;
+  // Migration 202605203900 renombró el out param a agent_id.
+  const arr = data as Array<{ agent_id: number; agent_token: string }> | null;
   const row = arr?.[0];
   if (!row) return { data: null, error: 'Sin resultado' };
-  return { data: row, error: null };
+  return { data: { id: row.agent_id, agent_token: row.agent_token }, error: null };
 }
 
 export async function revocarAgent(id: number): Promise<{ error: string | null }> {
