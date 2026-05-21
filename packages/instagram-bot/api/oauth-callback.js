@@ -92,16 +92,29 @@ export default async function handler(req, res) {
     // URLSearchParams.toString() codifica todos los valores con encodeURIComponent.
     // El frontend usa el mismo método en la URL de autorización, así que
     // ambos lados producen el mismo string codificado del redirect_uri.
+    const requestBody = new URLSearchParams({
+      client_id: IG_APP_ID,
+      client_secret: IG_APP_SECRET,
+      grant_type: 'authorization_code',
+      redirect_uri: OAUTH_REDIRECT_URI,
+      code: String(code),
+    }).toString();
+
+    // Loguear el body completo enmascarando el secret + code (para debug)
+    const bodyDebug = requestBody
+      .replace(IG_APP_SECRET, '***SECRET***')
+      .replace(encodeURIComponent(IG_APP_SECRET), '***SECRET***')
+      .replace(String(code), '***CODE***')
+      .replace(encodeURIComponent(String(code)), '***CODE***');
+    await logEvent('oauth_debug', stateRow.tenant_id, null, null, {
+      stage: 'request_body_to_meta',
+      body_masked: bodyDebug,
+    });
+
     const shortTokenResp = await fetch('https://api.instagram.com/oauth/access_token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: IG_APP_ID,
-        client_secret: IG_APP_SECRET,
-        grant_type: 'authorization_code',
-        redirect_uri: OAUTH_REDIRECT_URI,
-        code: String(code),
-      }).toString(),
+      body: requestBody,
     });
     const shortData = await shortTokenResp.json();
     if (!shortTokenResp.ok || !shortData.access_token) {
