@@ -84,20 +84,19 @@ export default async function handler(req, res) {
       client_id: IG_APP_ID,
     });
 
-    // Body manualmente, sin URLSearchParams: solo codificamos client_secret y code
-    // (que pueden tener caracteres especiales). redirect_uri queda sin codificar
-    // para que Meta lo vea como string literal igual que en la URL de autorización.
-    const bodyParts = [
-      `client_id=${IG_APP_ID}`,
-      `client_secret=${encodeURIComponent(IG_APP_SECRET)}`,
-      `grant_type=authorization_code`,
-      `redirect_uri=${OAUTH_REDIRECT_URI}`,
-      `code=${encodeURIComponent(String(code))}`,
-    ];
+    // URLSearchParams.toString() codifica todos los valores con encodeURIComponent.
+    // El frontend usa el mismo método en la URL de autorización, así que
+    // ambos lados producen el mismo string codificado del redirect_uri.
     const shortTokenResp = await fetch('https://api.instagram.com/oauth/access_token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: bodyParts.join('&'),
+      body: new URLSearchParams({
+        client_id: IG_APP_ID,
+        client_secret: IG_APP_SECRET,
+        grant_type: 'authorization_code',
+        redirect_uri: OAUTH_REDIRECT_URI,
+        code: String(code),
+      }).toString(),
     });
     const shortData = await shortTokenResp.json();
     if (!shortTokenResp.ok || !shortData.access_token) {
