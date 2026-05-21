@@ -72,7 +72,9 @@ const TABLAS_BACKUP = [
 const BUCKETS_CON_ARCHIVOS = ['facturas', 'blindaje', 'rrhh-documentos', 'empleados'];
 
 export default async function handler(req, res) {
-  if (!checkCronAuth(req, res)) return;
+  // Fix auditoría 2026-05-21 CRIT-2: checkCronAuth es async, sin await
+  // !Promise era siempre false → guardia nunca disparaba → endpoint abierto.
+  if (!(await checkCronAuth(req, res))) return;
   try {
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
       return res.status(500).json({

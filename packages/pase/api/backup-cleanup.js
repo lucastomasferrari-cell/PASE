@@ -20,7 +20,9 @@ const RETENTION_DAYS = 365;
 const PATH_REGEX = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/(\d{4}-\d{2}-\d{2})\.json\.gz$/;
 
 export default async function handler(req, res) {
-  if (!checkCronAuth(req, res)) return;
+  // Fix auditoría 2026-05-21 CRIT-2: checkCronAuth es async, sin await
+  // !Promise era siempre false → guardia nunca disparaba → endpoint abierto.
+  if (!(await checkCronAuth(req, res))) return;
   try {
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
       return res.status(500).json({

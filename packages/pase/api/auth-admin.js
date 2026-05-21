@@ -1,17 +1,39 @@
 // Endpoint para crear usuarios y cambiar contraseñas via Supabase Auth admin API.
-// Solo accesible desde el frontend cuando el usuario tiene rol=dueno.
+// Solo accesible desde el frontend cuando el usuario tiene rol=dueno/admin/superadmin.
 //
-// Multi-tenant (TASK 0.15):
-// - El endpoint corre con service_role (bypassa RLS), así que NO tiene auth
-//   context del caller automático.
-// - El payload puede incluir `tenant_id` explícito (frontend de superadmin
-//   lo va a pasar en etapas futuras).
-// - Si no viene tenant_id en el payload, se asume tenant Neko como default
-//   (defensive, mantiene compat con frontend pre-multitenant).
-async function resolveTenantId(db, payloadTenantId) {
-  if (payloadTenantId) return payloadTenantId;
-  const { data } = await db.from('tenants').select('id').eq('slug', 'neko').single();
-  return data?.id || null;
+// SEGURIDAD (fix auditoría 2026-05-21 CRIT-1):
+//   - Requiere JWT del caller en Authorization header.
+//   - Solo dueno/admin/superadmin pueden invocar.
+//   - change_password: el target authId debe pertenecer al mismo tenant que el
+//     caller (excepto superadmin que puede cruzar tenants).
+//   - create: rol pedido NO puede ser >= al del caller. Tenant_id forzado al
+//     del caller si NO es superadmin (no podés crear usuarios en otro tenant).
+//
+// Multi-tenant:
+// - El payload puede incluir `tenant_id` explícito (solo respetado si caller
+//   es superadmin).
+// - Si no viene tenant_id y el caller no es superadmin, se usa el tenant del caller.
+// - Mantiene fallback a Neko solo para superadmin sin tenant_id pasado.
+import { checkUserAuth } from './_user-auth.js';
+
+// Jerarquía de roles (más alto = más poder). Si un rol no está acá, se ignora.
+const ROLE_RANK = {
+  superadmin: 100,
+  dueno: 50,
+  admin: 40,
+  encargado: 20,
+  cajero: 10,
+};
+
+async function resolveTenantId(db, payloadTenantId, callerRow) {
+  // Solo superadmin puede pasar tenant_id explícito y respetarse.
+  if (callerRow.rol === 'superadmin') {
+    if (payloadTenantId) return payloadTenantId;
+    const { data } = await db.from('tenants').select('id').eq('slug', 'neko').single();
+    return data?.id || null;
+  }
+  // No-superadmin: forzar al tenant del caller (defensa contra cross-tenant create).
+  return callerRow.tenant_id;
 }
 
 export default async function handler(req, res) {
@@ -20,32 +42,53 @@ export default async function handler(req, res) {
       return res.status(500).json({ ok: false, error: 'Missing env vars' });
     }
 
+    // ─── AUTH del caller (CRIT-1 fix) ────────────────────────────────────
+    const auth = await checkUserAuth(req, res);
+    if (!auth) return; // checkUserAuth ya respondió 401/403/500
+
+    // Solo roles administrativos pueden invocar este endpoint.
+    if (!['superadmin', 'dueno', 'admin'].includes(auth.row.rol)) {
+      return res.status(403).json({ ok: false, error: 'forbidden_role' });
+    }
+    const callerRank = ROLE_RANK[auth.row.rol] || 0;
+    // ─────────────────────────────────────────────────────────────────────
+
     const { createClient } = await import('@supabase/supabase-js');
     const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { action, nombre, usuario, password, rol, locales: userLocales, userId, authId, tenant_id: payloadTenantId } = req.body || {};
+    const { action, nombre, usuario, password, rol, locales: userLocales, authId, tenant_id: payloadTenantId } = req.body || {};
 
     if (action === 'create') {
       if (!nombre || !usuario || !password) {
         return res.status(400).json({ ok: false, error: 'Faltan campos requeridos' });
       }
 
+      const requestedRol = rol || 'encargado';
+      const requestedRank = ROLE_RANK[requestedRol] || 0;
+
+      // No podés crear un usuario con rol >= al tuyo.
+      // (superadmin=100 sí puede crear superadmin=100 — caso edge para Lucas;
+      // dueno=50 NO puede crear dueno=50; admin=40 NO puede crear dueno=50.)
+      if (auth.row.rol !== 'superadmin' && requestedRank >= callerRank) {
+        return res.status(403).json({ ok: false, error: 'cannot_create_role_higher_or_equal' });
+      }
+
       // 1. Intentar crear en Supabase Auth (no bloquea si falla)
-      let authId = null;
+      let newAuthId = null;
       try {
         const authEmail = usuario.includes('@') ? usuario : usuario + '@pase.local';
         const { data: authUser, error: authErr } = await db.auth.admin.createUser({
           email: authEmail,
           password,
           email_confirm: true,
-          user_metadata: { nombre, rol: rol || 'encargado' },
+          user_metadata: { nombre, rol: requestedRol },
         });
         if (authErr) {
           console.warn('[auth-admin] Supabase Auth falló (continuando sin auth):', authErr.message);
         } else {
-          authId = authUser.user.id;
+          newAuthId = authUser.user.id;
         }
       } catch (authCatchErr) {
         console.warn('[auth-admin] Supabase Auth exception (continuando sin auth):', authCatchErr.message);
@@ -55,21 +98,20 @@ export default async function handler(req, res) {
       const { createHash } = await import('crypto');
       const hashPassword = createHash('sha256').update(password).digest('hex');
 
-      // 3. INSERT en tabla usuarios (sin campo id, SERIAL auto-incremental)
-      // tenant_id resolved del payload o default a Neko.
-      const tenantId = await resolveTenantId(db, payloadTenantId);
+      // 3. INSERT en tabla usuarios.
+      // tenant_id forzado al del caller si NO es superadmin (defensa cross-tenant).
+      const tenantId = await resolveTenantId(db, payloadTenantId, auth.row);
       const userRow = {
         nombre,
         email: usuario,
         password: hashPassword,
-        rol: rol || 'encargado',
+        rol: requestedRol,
         activo: true,
         locales: userLocales || [],
-        auth_id: authId,
+        auth_id: newAuthId,
       };
-      // Solo poner tenant_id si NO es superadmin. Superadmin debe quedar
-      // con tenant_id NULL (CHECK usuarios_tenant_check lo respalda).
-      if ((rol || 'encargado') !== 'superadmin') {
+      // Solo poner tenant_id si NO es superadmin (CHECK usuarios_tenant_check).
+      if (requestedRol !== 'superadmin') {
         userRow.tenant_id = tenantId;
       }
       const { error: insertErr } = await db.from('usuarios').insert([userRow]);
@@ -78,7 +120,7 @@ export default async function handler(req, res) {
         return res.status(500).json({ ok: false, error: insertErr.message });
       }
 
-      return res.status(200).json({ ok: true, auth_id: authId });
+      return res.status(200).json({ ok: true, auth_id: newAuthId });
 
     } else if (action === 'change_password') {
       // Cambiar contraseña en Supabase Auth
@@ -87,7 +129,27 @@ export default async function handler(req, res) {
         return res.status(400).json({ ok: false, error: 'Faltan authId o password' });
       }
 
-      console.log('[auth-admin] change_password para authId:', authId);
+      // ─── Validar que el target pertenece al mismo tenant que el caller ───
+      // (superadmin puede cruzar tenants; resto no).
+      if (auth.row.rol !== 'superadmin') {
+        const { data: targetRow } = await db.from('usuarios')
+          .select('id, rol, tenant_id')
+          .eq('auth_id', authId)
+          .maybeSingle();
+        if (!targetRow) {
+          return res.status(404).json({ ok: false, error: 'target_user_not_found' });
+        }
+        if (targetRow.tenant_id !== auth.row.tenant_id) {
+          return res.status(403).json({ ok: false, error: 'cross_tenant_password_change_denied' });
+        }
+        // No podés cambiar la contraseña de alguien con rol >= al tuyo.
+        const targetRank = ROLE_RANK[targetRow.rol] || 0;
+        if (targetRank >= callerRank) {
+          return res.status(403).json({ ok: false, error: 'cannot_change_password_of_higher_role' });
+        }
+      }
+
+      console.log('[auth-admin] change_password para authId:', authId, '(por caller:', auth.row.id, auth.row.rol + ')');
       const { error: updErr } = await db.auth.admin.updateUserById(authId, {
         password,
       });
