@@ -20,6 +20,8 @@ import { db } from "../lib/supabase";
 import { tienePermiso } from "../lib/auth";
 import { fmt_$ } from "../lib/utils";
 import { EmptyState, InfoTooltip } from "../components/ui";
+import { IGConfigModal } from "./mensajeria/IGConfigModal";
+import { IGClienteModal } from "./mensajeria/IGClienteModal";
 import type { Usuario } from "../types";
 
 // URL del bot (deploy Vercel separado). Configurable por env.
@@ -88,6 +90,8 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
   const [respuesta, setRespuesta] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [accionLoading, setAccionLoading] = useState<string | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [clienteEditId, setClienteEditId] = useState<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   if (!tienePermiso(user, 'mensajeria')) {
@@ -258,6 +262,11 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
             y el bot se queda quieto hasta que la devuelvas.
           </InfoTooltip>
         </div>
+        <div>
+          <button className="btn btn-acc" onClick={() => setConfigOpen(true)}>
+            ⚙ Configurar bot
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -375,9 +384,14 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
             <>
               {/* Header del thread */}
               <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--bd)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-                <div>
-                  <div style={{ fontWeight: 500, fontSize: 14 }}>
+                <div
+                  onClick={() => setClienteEditId(selectedConv.cliente_id)}
+                  style={{ cursor: "pointer" }}
+                  title="Click para editar memoria del cliente"
+                >
+                  <div style={{ fontWeight: 500, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
                     {selectedConv.cliente_nombre || `@${selectedConv.igsid.slice(0, 12)}…`}
+                    <span style={{ fontSize: 11, color: "var(--muted2)" }}>🧠 editar memoria</span>
                   </div>
                   <div style={{ fontSize: 11, color: "var(--muted2)" }}>
                     {selectedConv.cliente_telefono && `📞 ${selectedConv.cliente_telefono} · `}
@@ -512,6 +526,17 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
           )}
         </div>
       </div>
+
+      {/* Modales de configuración */}
+      <IGConfigModal
+        isOpen={configOpen}
+        onClose={() => setConfigOpen(false)}
+      />
+      <IGClienteModal
+        clienteId={clienteEditId}
+        onClose={() => setClienteEditId(null)}
+        onSaved={loadConversaciones}
+      />
     </div>
   );
 }
