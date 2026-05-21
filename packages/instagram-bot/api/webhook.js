@@ -94,10 +94,10 @@ export default async function handler(req, res) {
     payload,
   });
 
-  // Procesamos en background y respondemos 200 al toque para que Meta
-  // no reintente. Si el procesamiento falla, queda registrado en ig_eventos.
-  res.status(200).send('EVENT_RECEIVED');
-
+  // IMPORTANTE: procesar ANTES de responder 200 porque en Vercel
+  // serverless la función termina al responder y el await en background
+  // se cancela. Meta tolera respuestas en <20s antes de retry, y Claude
+  // Haiku responde en 1-3s, así que tenemos margen.
   try {
     await procesarPayload(payload);
   } catch (e) {
@@ -108,6 +108,8 @@ export default async function handler(req, res) {
       payload: { stage: 'procesarPayload', original: payload },
     });
   }
+
+  return res.status(200).send('EVENT_RECEIVED');
 }
 
 // ─── Procesamiento ────────────────────────────────────────────────────
