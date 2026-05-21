@@ -15,6 +15,9 @@
     },
     "api/refresh-tokens.js": {
       "maxDuration": 60
+    },
+    "api/diagnostic.js": {
+      "maxDuration": 10
     }
   },
   "headers": [

@@ -43,12 +43,52 @@ interface EstadoConexion {
   estado: 'conectada' | 'desconectada' | 'vencida' | 'por_vencer' | 'desconocido';
 }
 
+// URL del bot (la usamos para llamar /api/diagnostic además de /api/send)
+const BOT_API_URL = (import.meta.env.VITE_IG_BOT_URL as string | undefined)
+  || "https://pase-instagram-bot.vercel.app";
+
 export function IGConexionPanel() {
   const [params, setParams] = useSearchParams();
   const [conexion, setConexion] = useState<EstadoConexion | null>(null);
   const [loading, setLoading] = useState(true);
   const [conectando, setConectando] = useState(false);
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
+
+  // Diagnóstico: llamar al endpoint del bot que devuelve metadata enmascarada
+  const runDiagnostic = async () => {
+    const { data: { session } } = await db.auth.getSession();
+    const token = session?.access_token;
+    if (!token) { alert('Sesión expirada'); return; }
+    try {
+      const r = await fetch(`${BOT_API_URL}/api/diagnostic`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        alert('Error: ' + (data.error || `HTTP ${r.status}`));
+        return;
+      }
+      // Mostrar el reporte formateado
+      const lines: string[] = ['=== Configuración del bot ==='];
+      const rep = data.report;
+      lines.push(`IG_APP_ID: ${rep.IG_APP_ID}`);
+      lines.push(`OAUTH_REDIRECT_URI: ${rep.OAUTH_REDIRECT_URI}`);
+      lines.push(`PASE_BASE_URL: ${rep.PASE_BASE_URL}`);
+      lines.push('');
+      lines.push('--- Secretos (enmascarados) ---');
+      for (const [k, v] of Object.entries(rep)) {
+        if (typeof v === 'object' && v !== null && 'set' in (v as object)) {
+          const p = v as { set: boolean; length?: number; first4?: string; last4?: string };
+          lines.push(`${k}: ${p.set ? `[${p.length} chars] ${p.first4}...${p.last4}` : '(NO SET)'}`);
+        }
+      }
+      lines.push('');
+      lines.push(`Timestamp: ${rep.timestamp}`);
+      alert(lines.join('\n'));
+    } catch (e) {
+      alert('Error: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  };
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -172,14 +212,30 @@ export function IGConexionPanel() {
               con memoria total + integrado al menú/horarios/reservas. Onboarding en 1 click.
             </div>
           </div>
-          <button
-            className="btn btn-acc"
-            onClick={iniciarOAuth}
-            disabled={conectando}
-            style={{ padding: "10px 20px", fontSize: 14 }}
-          >
-            {conectando ? "Conectando..." : "📷 Conectar Instagram"}
-          </button>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "stretch" }}>
+            <button
+              className="btn btn-acc"
+              onClick={iniciarOAuth}
+              disabled={conectando}
+              style={{ padding: "10px 20px", fontSize: 14 }}
+            >
+              {conectando ? "Conectando..." : "📷 Conectar Instagram"}
+            </button>
+            <button
+              type="button"
+              onClick={runDiagnostic}
+              style={{
+                fontSize: 10,
+                color: "var(--muted2)",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                textDecoration: "underline",
+              }}
+            >
+              🔧 Verificar configuración del bot
+            </button>
+          </div>
         </div>
       </>
     );
