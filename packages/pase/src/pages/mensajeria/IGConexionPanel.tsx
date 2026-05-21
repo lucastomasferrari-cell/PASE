@@ -103,38 +103,17 @@ export function IGConexionPanel() {
       const state = (data as Array<{ state: string }>)[0]!.state;
 
       // 2. Armar URL de autorización de Instagram + redirigir el browser
-      //
-      // IMPORTANTE: construir la URL manualmente sin URLSearchParams.
-      // Meta es estricto con el redirect_uri — exige que coincida EXACTO
-      // entre la URL de autorización y el body del POST de exchange.
-      // URLSearchParams.set codifica el redirect_uri (https:// → https%3A%2F%2F)
-      // pero Meta lo compara con el redirect_uri del backend SIN decodificar,
-      // así que si codifica uno y no el otro, falla con SHORT_TOKEN_FAILED.
-      // La URL de inserción que Meta sugiere usa el redirect_uri SIN codificar,
-      // así que replicamos eso.
-      const authParams = [
-        `client_id=${IG_APP_ID}`,
-        `redirect_uri=${OAUTH_REDIRECT_URI}`,  // sin encode
-        `scope=${SCOPES}`,
-        `response_type=code`,
-        `state=${state}`,
-      ].join('&');
-      const authUrl = `https://www.instagram.com/oauth/authorize?${authParams}`;
-
-      // DEBUG: mostrar la URL antes de redirigir para verificar encoding
-      console.log('[ig-oauth] authUrl:', authUrl);
-      const ok = window.confirm(
-        `Voy a abrir Instagram con esta URL:\n\n${authUrl}\n\n` +
-        `Verificá que el redirect_uri NO esté codificado (debe decir "https://" sin %3A%2F%2F).\n\n` +
-        `Click OK para continuar, Cancelar para detener.`,
-      );
-      if (!ok) {
-        setConectando(false);
-        return;
-      }
+      // URLSearchParams codifica ambos lados (frontend y backend usan
+      // URLSearchParams.toString()) → match garantizado.
+      const authUrl = new URL('https://www.instagram.com/oauth/authorize');
+      authUrl.searchParams.set('client_id', IG_APP_ID);
+      authUrl.searchParams.set('redirect_uri', OAUTH_REDIRECT_URI);
+      authUrl.searchParams.set('scope', SCOPES);
+      authUrl.searchParams.set('response_type', 'code');
+      authUrl.searchParams.set('state', state);
 
       // Redirigimos top-window (no popup) porque Meta a veces bloquea popups
-      window.location.href = authUrl;
+      window.location.href = authUrl.toString();
     } catch (e) {
       alert('Error: ' + (e instanceof Error ? e.message : String(e)));
       setConectando(false);
