@@ -17,6 +17,15 @@ export default defineConfig({
           if (id.includes('node_modules/@supabase')) {
             return 'vendor-supabase';
           }
+          // Fix auditoría 2026-05-21 CRIT-12: recharts (~400KB) y driver.js
+          // (~80KB) iban al chunk principal por no estar particionados.
+          // Ahora bajan solo cuando se carga una pantalla que los usa.
+          if (id.includes('node_modules/recharts') || id.includes('node_modules/d3-')) {
+            return 'vendor-charts';
+          }
+          if (id.includes('node_modules/driver.js')) {
+            return 'vendor-onboarding';
+          }
           return undefined;
         },
       },
