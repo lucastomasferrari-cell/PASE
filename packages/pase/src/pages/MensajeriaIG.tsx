@@ -445,14 +445,17 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
                         maxWidth: "70%",
                         padding: "8px 12px",
                         borderRadius: 12,
+                        // Burbuja del cliente (in): usar celeste-100 que se adapta al
+                        // tema (light: celeste pálido, dark: navy claro). Antes era
+                        // "white" hardcoded → texto blanco sobre blanco en dark mode.
                         background: isOut
                           ? (m.origen === 'humano' ? "var(--success)" : "var(--acc)")
-                          : "white",
-                        color: isOut ? "white" : "var(--text)",
-                        boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                          : "var(--pase-celeste-100)",
+                        color: isOut ? "white" : "var(--pase-text)",
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
                       }}>
                         {!isOut && (
-                          <div style={{ fontSize: 9, color: "var(--muted2)", marginBottom: 2 }}>
+                          <div style={{ fontSize: 9, color: "var(--pase-text-muted)", marginBottom: 2, fontWeight: 500 }}>
                             Cliente
                           </div>
                         )}
@@ -474,7 +477,12 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
                             ⚠ {m.error}
                           </div>
                         )}
-                        <div style={{ fontSize: 9, opacity: 0.6, marginTop: 4 }}>
+                        <div style={{
+                          fontSize: 9,
+                          opacity: isOut ? 0.85 : 0.6,
+                          marginTop: 4,
+                          color: isOut ? "white" : "var(--pase-text-muted)",
+                        }}>
                           {new Date(m.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
                           {m.llm_cost_usd && ` · ${fmt_$(Number(m.llm_cost_usd) * 1000)}/mil`}
                         </div>
