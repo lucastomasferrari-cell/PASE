@@ -16,9 +16,9 @@ import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { db } from "../../lib/supabase";
 
-// ID público de la app de Instagram (no es secret — sale en URLs)
+// ID público de la app de Meta "PASE Bot" (no es secret — sale en URLs).
 // Configurable por env por si en el futuro hay multiples apps por entorno.
-const IG_APP_ID = import.meta.env.VITE_IG_APP_ID || "28110839805172593";
+const IG_APP_ID = import.meta.env.VITE_IG_APP_ID || "1357691826231040";
 
 // URL del callback (debe coincidir con OAUTH_REDIRECT_URI configurado en el bot)
 const OAUTH_REDIRECT_URI = import.meta.env.VITE_IG_OAUTH_REDIRECT
