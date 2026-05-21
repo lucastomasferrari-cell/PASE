@@ -143,18 +143,33 @@ export default async function handler(req, res) {
       return redirectToPase(res, { ok: false, error: 'ME_FAILED' });
     }
 
-    // ─── 5. Buscar el "Page-scoped Instagram Business Account ID" ─────────
-    // Cuando llega un webhook de IG, Meta usa el ID page-scoped (no el IGSID
-    // del owner). Lo conseguimos via el endpoint específico.
+    // ─── 5. ig_account_id: distinguir page-scoped vs IGSID ────────────────
+    // OJO: meData.id devuelve el "IGSID del owner" (Instagram-scoped User ID).
+    // Pero los webhooks de Meta llegan con el "Page-scoped Instagram Business
+    // Account ID" (otro número diferente). Si sobrescribimos el page-scoped
+    // con el IGSID, el webhook no va a encontrar el ig_config y el bot deja
+    // de responder.
     //
-    // Para Instagram Login API esto va a venir igual en el evento, así que
-    // usamos meData.id como fallback.
-    const ig_account_id = String(meData.id);
+    // Estrategia:
+    //   - Si ya existe ig_config para este tenant → respetar el ig_account_id
+    //     guardado (suponemos que es el page-scoped correcto, viene del
+    //     webhook o configuración manual previa).
+    //   - Si NO existe → usar meData.id como fallback. Para apps nuevas que
+    //     no tienen webhook configurado todavía, esto se reemplazará por el
+    //     page-scoped cuando llegue el primer webhook.
+    const ig_account_id_fallback = String(meData.id);
 
-    // ─── 6. Insert/Update ig_config ───────────────────────────────────────
+    // ─── 6. Insert/Update ig_config (preservando ig_account_id si existe) ─
+    const { data: existingConfig } = await db.from('ig_config')
+      .select('ig_account_id')
+      .eq('tenant_id', stateRow.tenant_id)
+      .maybeSingle();
+
+    const finalAccountId = existingConfig?.ig_account_id || ig_account_id_fallback;
+
     const upsertData = {
       tenant_id: stateRow.tenant_id,
-      ig_account_id,
+      ig_account_id: finalAccountId,
       ig_username: meData.username,
       page_access_token: longToken,
       bot_activo: true,
@@ -171,6 +186,9 @@ export default async function handler(req, res) {
       await logEvent('error', stateRow.tenant_id, null, `upsert ig_config failed: ${upsertErr.message}`);
       return redirectToPase(res, { ok: false, error: 'CONFIG_UPSERT_FAILED' });
     }
+
+    // Variable que usamos abajo para el subscribed_apps endpoint
+    const ig_account_id = finalAccountId;
 
     // ─── 7. Subscribir la cuenta al webhook ───────────────────────────────
     // Sin esto, los DMs llegan a Meta pero NO al endpoint del bot.
