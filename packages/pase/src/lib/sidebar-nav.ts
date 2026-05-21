@@ -65,6 +65,7 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   // === Herramientas ===
   // Equipo MOVIDO a Operación 2026-05-18.
   { path: "/herramientas/contador-iva",  slug: "contador",      label: "Contador / IVA",  sec: "Herramientas" },
+  { path: "/mensajeria",                 slug: "mensajeria",    label: "Mensajería",      sec: "Herramientas" },
   // Hub de herramientas avanzadas (Importar, Lector MP, Configurar dashboards,
   // Blindaje). 2026-05-18: Lucas pidió consolidar estos 4 detrás de un solo
   // entry para limpiar el sidebar. Las rutas standalone siguen existiendo

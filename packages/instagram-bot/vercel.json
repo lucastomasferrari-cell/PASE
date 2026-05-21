@@ -6,6 +6,9 @@
   "functions": {
     "api/webhook.js": {
       "maxDuration": 30
+    },
+    "api/send.js": {
+      "maxDuration": 15
     }
   },
   "headers": [

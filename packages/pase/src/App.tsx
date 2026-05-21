@@ -39,6 +39,7 @@ const Tenants = lazy(() => import("./pages/Tenants"));
 const DesignSystem = lazy(() => import("./pages/DesignSystem"));
 const Finanzas = lazy(() => import("./pages/Finanzas"));
 const Rentabilidad = lazy(() => import("./pages/Rentabilidad"));
+const MensajeriaIG = lazy(() => import("./pages/MensajeriaIG"));
 const Negocio = lazy(() => import("./pages/Negocio"));
 const Objetivos = lazy(() => import("./pages/Objetivos"));
 const Ajustes = lazy(() => import("./pages/Ajustes"));
@@ -458,6 +459,9 @@ function AppMain() {
 
               {/* Herramientas */}
               <Route path="/equipo" element={<RRHHPage {...props}/>} />
+              <Route path="/mensajeria" element={
+                user ? <MensajeriaIG user={user} /> : <Navigate to="/" replace/>
+              } />
               <Route path="/herramientas/contador-iva" element={<Contador {...props}/>} />
               <Route path="/herramientas/blindaje" element={<Blindaje {...props}/>} />
               <Route path="/herramientas/conciliacion-bancaria" element={<ConciliacionBancaria />} />

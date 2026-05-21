@@ -26,7 +26,7 @@ export const ROLES: Record<string, { label: string; color: string; permisos?: st
   // permisos de UI (todos los módulos del MODULOS array).
   superadmin:{ label:"Super Admin",color:"#DC2626" },
   dueno:     { label:"Dueño",      color:"#9333EA" },
-  admin:     { label:"Admin",      color:"#3B82F6", permisos:["negocio","finanzas","objetivos","ajustes","ventas","compras","remitos","gastos","caja","proveedores","rrhh","blindaje","eerr","rentabilidad"] },
+  admin:     { label:"Admin",      color:"#3B82F6", permisos:["negocio","finanzas","objetivos","ajustes","ventas","compras","remitos","gastos","caja","proveedores","rrhh","blindaje","eerr","rentabilidad","mensajeria"] },
   encargado: { label:"Encargado",  color:"#6B7280", permisos:["caja","ventas"] },
   // Rol "compras" incluye compras_anular por retro-compatibilidad (antes
   // anulaba sin chequeo). Si querés un "compras lite" sin poder anular,
@@ -82,6 +82,9 @@ export const MODULOS = [
   // Rentabilidad: Stock valorizado + CMV teórico vs real + Simulador + Alertas.
   // Visión PASE original (doc Lucas): "el lugar donde se protege la rentabilidad".
   { slug:"rentabilidad", label:"Rentabilidad", icon:"📈" },
+  // Mensajería: panel para supervisar el bot de Instagram + responder como humano.
+  // Sprint D del proyecto IG bot (mayo 2026).
+  { slug:"mensajeria", label:"Mensajería", icon:"💬" },
   { slug:"eerr", label:"Reportes", icon:"📊" },
   { slug:"rrhh", label:"Equipo", icon:"💼" },
   { slug:"ajustes", label:"Ajustes", icon:"⚙" },
