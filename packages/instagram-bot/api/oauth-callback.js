@@ -1,0 +1,202 @@
+// Endpoint OAuth callback de Instagram.
+//
+// Flow:
+//   GET /api/oauth-callback?code=XXX&state=YYY
+//   1. Validar state en ig_oauth_states (existe + no consumido + no expirado)
+//   2. Marcar state como consumido
+//   3. Intercambiar code por short-lived token via api.instagram.com/oauth/access_token
+//   4. Intercambiar short-lived por long-lived token (60 días) via graph.instagram.com
+//   5. GET /me para obtener IG account ID + username
+//   6. INSERT/UPDATE ig_config con el token + datos
+//   7. Subscribir la cuenta al webhook (subscribed_apps)
+//   8. Redirigir al user a PASE con el resultado
+//
+// Env vars necesarias:
+//   IG_APP_ID         - Identificador de la app de Instagram (público, ej 28110839805172593)
+//   IG_APP_SECRET     - Clave secreta de la app de Instagram
+//   OAUTH_REDIRECT_URI - URL completa de este endpoint (ej https://pase-instagram-bot.vercel.app/api/oauth-callback)
+//   PASE_BASE_URL     - URL de PASE para redirect post-conexión (ej https://pase-yndx.vercel.app)
+
+import { createClient } from '@supabase/supabase-js';
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+const IG_APP_ID = process.env.IG_APP_ID;
+const IG_APP_SECRET = process.env.IG_APP_SECRET;
+const OAUTH_REDIRECT_URI = process.env.OAUTH_REDIRECT_URI || 'https://pase-instagram-bot.vercel.app/api/oauth-callback';
+const PASE_BASE_URL = process.env.PASE_BASE_URL || 'https://pase-yndx.vercel.app';
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+  throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY');
+}
+
+const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+  auth: { autoRefreshToken: false, persistSession: false },
+});
+
+export default async function handler(req, res) {
+  if (req.method !== 'GET') {
+    return res.status(405).send('Method not allowed');
+  }
+
+  const { code, state, error: oauthError, error_reason, error_description } = req.query;
+
+  // Caso 1: el user canceló o hubo error en el OAuth de Meta
+  if (oauthError) {
+    return redirectToPase(res, {
+      ok: false,
+      error: error_reason || oauthError,
+      detail: error_description,
+    });
+  }
+
+  if (!code || !state) {
+    return redirectToPase(res, { ok: false, error: 'MISSING_PARAMS' });
+  }
+
+  // ─── 1. Validar state ──────────────────────────────────────────────────
+  const { data: stateRow } = await db.from('ig_oauth_states')
+    .select('*')
+    .eq('state', state)
+    .single();
+
+  if (!stateRow) {
+    return redirectToPase(res, { ok: false, error: 'STATE_NOT_FOUND' });
+  }
+  if (stateRow.consumed) {
+    return redirectToPase(res, { ok: false, error: 'STATE_ALREADY_USED' });
+  }
+  if (new Date(stateRow.expires_at) < new Date()) {
+    return redirectToPase(res, { ok: false, error: 'STATE_EXPIRED' });
+  }
+
+  // Marcar consumido al toque para evitar replay
+  await db.from('ig_oauth_states')
+    .update({ consumed: true, consumed_at: new Date().toISOString() })
+    .eq('state', state);
+
+  try {
+    // ─── 2. Intercambiar code por short-lived token ────────────────────────
+    const shortTokenResp = await fetch('https://api.instagram.com/oauth/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: IG_APP_ID,
+        client_secret: IG_APP_SECRET,
+        grant_type: 'authorization_code',
+        redirect_uri: OAUTH_REDIRECT_URI,
+        code: String(code),
+      }).toString(),
+    });
+    const shortData = await shortTokenResp.json();
+    if (!shortTokenResp.ok || !shortData.access_token) {
+      await logEvent('error', stateRow.tenant_id, null, `exchange_short_token failed: ${JSON.stringify(shortData)}`);
+      return redirectToPase(res, { ok: false, error: 'SHORT_TOKEN_FAILED', detail: shortData?.error_message || 'unknown' });
+    }
+    const shortToken = shortData.access_token;
+    const userId = shortData.user_id; // Instagram-scoped User ID
+
+    // ─── 3. Intercambiar short-lived por long-lived (60 días) ─────────────
+    const longTokenResp = await fetch(`https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${encodeURIComponent(IG_APP_SECRET)}&access_token=${encodeURIComponent(shortToken)}`);
+    const longData = await longTokenResp.json();
+    if (!longTokenResp.ok || !longData.access_token) {
+      await logEvent('error', stateRow.tenant_id, null, `exchange_long_token failed: ${JSON.stringify(longData)}`);
+      return redirectToPase(res, { ok: false, error: 'LONG_TOKEN_FAILED', detail: longData?.error_message || 'unknown' });
+    }
+    const longToken = longData.access_token;
+    const expiresIn = longData.expires_in || 5184000; // 60 días en segundos
+    const tokenExpiraAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+
+    // ─── 4. Obtener info de la cuenta IG ──────────────────────────────────
+    const meResp = await fetch(`https://graph.instagram.com/v21.0/me?fields=id,username,account_type&access_token=${encodeURIComponent(longToken)}`);
+    const meData = await meResp.json();
+    if (!meResp.ok || !meData.id) {
+      await logEvent('error', stateRow.tenant_id, null, `me failed: ${JSON.stringify(meData)}`);
+      return redirectToPase(res, { ok: false, error: 'ME_FAILED' });
+    }
+
+    // ─── 5. Buscar el "Page-scoped Instagram Business Account ID" ─────────
+    // Cuando llega un webhook de IG, Meta usa el ID page-scoped (no el IGSID
+    // del owner). Lo conseguimos via el endpoint específico.
+    //
+    // Para Instagram Login API esto va a venir igual en el evento, así que
+    // usamos meData.id como fallback.
+    const ig_account_id = String(meData.id);
+
+    // ─── 6. Insert/Update ig_config ───────────────────────────────────────
+    const upsertData = {
+      tenant_id: stateRow.tenant_id,
+      ig_account_id,
+      ig_username: meData.username,
+      page_access_token: longToken,
+      bot_activo: true,
+      token_creado_at: new Date().toISOString(),
+      token_expira_at: tokenExpiraAt,
+      connected_by: stateRow.usuario_id,
+      desconectado_at: null,
+    };
+
+    const { error: upsertErr } = await db.from('ig_config')
+      .upsert(upsertData, { onConflict: 'tenant_id' });
+
+    if (upsertErr) {
+      await logEvent('error', stateRow.tenant_id, null, `upsert ig_config failed: ${upsertErr.message}`);
+      return redirectToPase(res, { ok: false, error: 'CONFIG_UPSERT_FAILED' });
+    }
+
+    // ─── 7. Subscribir la cuenta al webhook ───────────────────────────────
+    // Sin esto, los DMs llegan a Meta pero NO al endpoint del bot.
+    const subResp = await fetch(`https://graph.instagram.com/v21.0/${ig_account_id}/subscribed_apps`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `subscribed_fields=messages&access_token=${encodeURIComponent(longToken)}`,
+    });
+    const subData = await subResp.json();
+    if (!subResp.ok || !subData.success) {
+      // No es crítico — el bot va a funcionar pero los DMs no llegan
+      // hasta que se subscriba. Logueamos warning.
+      await logEvent('error', stateRow.tenant_id, null, `subscribe webhook warning: ${JSON.stringify(subData)}`);
+    }
+
+    // ─── 8. Loguear éxito ────────────────────────────────────────────────
+    await logEvent('oauth_conectado', stateRow.tenant_id, null, null, {
+      ig_username: meData.username,
+      ig_account_id,
+      account_type: meData.account_type,
+    });
+
+    return redirectToPase(res, {
+      ok: true,
+      username: meData.username,
+      account_id: ig_account_id,
+      expires_in_days: Math.floor(expiresIn / 86400),
+    });
+  } catch (e) {
+    await logEvent('error', stateRow.tenant_id, null, `callback exception: ${String(e?.message || e)}`);
+    return redirectToPase(res, { ok: false, error: 'EXCEPTION', detail: String(e?.message || e) });
+  }
+}
+
+function redirectToPase(res, result) {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(result)) {
+    if (v !== null && v !== undefined) params.set(k, String(v));
+  }
+  const returnUrl = `${PASE_BASE_URL}/mensajeria?ig_oauth=${result.ok ? 'success' : 'error'}&${params.toString()}`;
+  res.writeHead(302, { Location: returnUrl });
+  res.end();
+}
+
+async function logEvent(tipo, tenant_id, conversacion_id, error_message, payload = null) {
+  try {
+    await db.from('ig_eventos').insert({
+      tenant_id,
+      conversacion_id,
+      tipo,
+      error_message,
+      payload,
+    });
+  } catch {
+    // ignore
+  }
+}

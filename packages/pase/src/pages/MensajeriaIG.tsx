@@ -22,6 +22,7 @@ import { fmt_$ } from "../lib/utils";
 import { EmptyState, InfoTooltip } from "../components/ui";
 import { IGConfigModal } from "./mensajeria/IGConfigModal";
 import { IGClienteModal } from "./mensajeria/IGClienteModal";
+import { IGConexionPanel } from "./mensajeria/IGConexionPanel";
 import type { Usuario } from "../types";
 
 // URL del bot (deploy Vercel separado). Configurable por env.
@@ -268,6 +269,9 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
           </button>
         </div>
       </div>
+
+      {/* Panel de conexión Instagram (botón si no conectado / estado si conectado) */}
+      <IGConexionPanel />
 
       {/* KPIs */}
       <div className="grid4" style={{ marginBottom: 16 }}>

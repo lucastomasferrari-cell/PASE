@@ -9,6 +9,12 @@
     },
     "api/send.js": {
       "maxDuration": 15
+    },
+    "api/oauth-callback.js": {
+      "maxDuration": 15
+    },
+    "api/refresh-tokens.js": {
+      "maxDuration": 60
     }
   },
   "headers": [
