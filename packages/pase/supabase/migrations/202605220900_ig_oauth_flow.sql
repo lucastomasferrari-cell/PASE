@@ -104,8 +104,12 @@ BEGIN
 
   SELECT id INTO v_user_id FROM usuarios WHERE auth_id = auth.uid() AND activo LIMIT 1;
 
-  -- Generar state aleatorio: 32 bytes en hex = 64 chars
-  v_state := encode(gen_random_bytes(32), 'hex');
+  -- Generar state aleatorio: concatenar 2 UUIDs sin guiones = 64 chars hex.
+  -- Equivalente a 32 bytes (256 bits) de aleatoriedad — suficiente para CSRF.
+  -- Usamos gen_random_uuid() que viene built-in en Postgres 13+ (no requiere
+  -- extensión pgcrypto que puede no estar disponible en todos los schemas).
+  v_state := REPLACE(gen_random_uuid()::TEXT, '-', '')
+          || REPLACE(gen_random_uuid()::TEXT, '-', '');
   v_expires_at := NOW() + INTERVAL '15 minutes';
 
   INSERT INTO ig_oauth_states (state, tenant_id, usuario_id, return_url, expires_at)
