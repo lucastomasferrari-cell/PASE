@@ -164,4 +164,9 @@ export interface NovedadConLiquidaciones extends Novedad {
 // Linea de pago (cuenta + monto en string desde el input). Usada en formasPago,
 // vacLineas, aguLineas. El monto viene como string desde el input numérico
 // y se parsea con parseFloat al sumar/enviar.
-export interface LineaPago { cuenta: string; monto: string }
+//
+// local_id (opcional, sumado 2026-05-20): cada línea puede pagar desde un
+// local distinto. Caso de uso: sueldo admin que se reparte entre Villa
+// Crespo + Belgrano + Devoto. Si la línea no incluye local_id, la RPC
+// pagar_sueldo usa el local principal del empleado (compatibilidad legacy).
+export interface LineaPago { cuenta: string; monto: string; local_id?: number | null }

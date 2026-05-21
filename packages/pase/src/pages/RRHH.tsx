@@ -711,7 +711,12 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     setAdelantosPendientes(pendientes);
     setPagoModal({ emp, nov, liq });
     setIdempKeyPagarSueldo(crypto.randomUUID());
-    setFormasPago(pendienteCash > 0 ? [{ cuenta: "", monto: String(pendienteCash) }] : []);
+    // La primera línea de pago hereda el local principal del empleado.
+    // Lucas 2026-05-20: el dueño puede cambiarlo para repartir el sueldo
+    // entre varios locales (ej. admin que trabaja para varias sucursales).
+    setFormasPago(pendienteCash > 0
+      ? [{ cuenta: "", monto: String(pendienteCash), local_id: emp.local_id ?? null }]
+      : []);
     // Default a HOY (cuando realmente sale la plata). Anto reportó
     // 2026-05-20 que antes el default era `fecha_vencimiento` (fin de mes)
     // y no se daba cuenta de que podía cambiarla — el resultado: pagos

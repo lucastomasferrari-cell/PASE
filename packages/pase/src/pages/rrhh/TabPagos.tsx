@@ -189,9 +189,19 @@ export function TabPagos({
           setPagando(true);
           try {
             // Serializar las formas de pago (sólo las con monto > 0).
+            // local_id por línea (2026-05-20): si la línea trae uno, lo
+            // pasamos; si no, omitimos el campo y la RPC usa el local
+            // principal del empleado.
             const formasValidas = formasPago
               .filter(fp => parseMonto(fp.monto) > 0 && !!fp.cuenta)
-              .map(fp => ({ cuenta: fp.cuenta, monto: parseMonto(fp.monto) }));
+              .map(fp => {
+                const base: { cuenta: string; monto: number; local_id?: number } = {
+                  cuenta: fp.cuenta,
+                  monto: parseMonto(fp.monto),
+                };
+                if (fp.local_id != null) base.local_id = fp.local_id;
+                return base;
+              });
             const adelIds = (adelantosPendientes || []).map(a => a.id);
 
             // Si la liq vino _generated (frontend la armó sin persistir),
@@ -304,21 +314,70 @@ export function TabPagos({
                   </div>
                 )}
 
-                {formasPago.map((fp, i) => (
-                  <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
-                    <select className="search" style={{flex:1}} value={fp.cuenta}
-                      onChange={e => setFormasPago(prev => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
-                      <option value="">Seleccioná una cuenta…</option>
-                      {cuentasUsables.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                    <input type="number" className="search" style={{width:120}} placeholder="Monto" value={fp.monto}
-                      onChange={e => setFormasPago(prev => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
-                    <button className="btn btn-danger btn-sm" onClick={() => setFormasPago(prev => prev.filter((_, j) => j !== i))}>✕</button>
-                  </div>
-                ))}
+                {/* Líneas de pago: cada una con SU local + SU cuenta + SU monto.
+                    Esto permite repartir un pago de sueldo entre varios locales
+                    (ej. sueldo admin que se reparte entre VC + Belgrano + Devoto).
+                    Default del local: el local principal del empleado. El usuario
+                    lo puede cambiar para repartir. Lucas 2026-05-20. */}
+                {formasPago.map((fp, i) => {
+                  const localLinea = fp.local_id ?? emp.local_id ?? null;
+                  const localEmp = emp.local_id ?? null;
+                  const distinto = localLinea !== null && localEmp !== null && localLinea !== localEmp;
+                  return (
+                    <div key={i} style={{ marginBottom: 8 }}>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <select
+                          className="search"
+                          style={{ width: 150 }}
+                          value={localLinea ?? ""}
+                          onChange={e => setFormasPago(prev => prev.map((f, j) =>
+                            j === i ? { ...f, local_id: e.target.value ? Number(e.target.value) : null } : f
+                          ))}
+                          title="Local desde donde sale el dinero"
+                        >
+                          <option value="">Local…</option>
+                          {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+                        </select>
+                        <select
+                          className="search"
+                          style={{ flex: 1 }}
+                          value={fp.cuenta}
+                          onChange={e => setFormasPago(prev => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}
+                          title="Cuenta / caja de pago"
+                        >
+                          <option value="">Cuenta…</option>
+                          {cuentasUsables.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <input
+                          type="number"
+                          className="search"
+                          style={{ width: 110 }}
+                          placeholder="Monto"
+                          value={fp.monto}
+                          onChange={e => setFormasPago(prev => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))}
+                        />
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => setFormasPago(prev => prev.filter((_, j) => j !== i))}
+                          title="Quitar esta línea"
+                        >✕</button>
+                      </div>
+                      {distinto && (
+                        <div style={{ fontSize: 10, color: "var(--warn)", paddingLeft: 4, marginTop: 2 }}>
+                          ⚠ Pago repartido — origen del empleado: {locsDisp.find(l => l.id === localEmp)?.nombre ?? "—"}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
 
                 <button className="btn btn-ghost btn-sm" style={{marginBottom:16}}
-                  onClick={() => setFormasPago(prev => [...prev, { cuenta: "", monto: restanteTrasEste > 0 ? String(restanteTrasEste) : "" }])}>
+                  onClick={() => setFormasPago(prev => [...prev, {
+                    cuenta: "",
+                    monto: restanteTrasEste > 0 ? String(restanteTrasEste) : "",
+                    // La nueva línea hereda el local del empleado por default
+                    local_id: emp.local_id ?? null,
+                  }])}>
                   + Agregar forma de pago
                 </button>
 
