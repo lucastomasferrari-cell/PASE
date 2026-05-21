@@ -209,11 +209,46 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const [lectorModal, setLectorModal] = useState(false);
   const [modal, setModal] = useState(false);
   const [pagarModal, setPagarModal] = useState<Factura | null>(null);
-  // Idempotency keys (convención C1): se regeneran al abrir cada modal de
-  // pago. Si el operador hace doble-click en "Confirmar", la 2da llamada
-  // con la misma key devuelve el resultado cacheado (no duplica el pago).
+  // Idempotency keys (convención C1 + C10): persistidos en sessionStorage
+  // por factura/remito. Si el operador hace doble-click → mismo key, RPC
+  // cachea. Fix auditoría 2026-05-21 ALTO-12: si el browser muere a mitad,
+  // al recargar el modal con la misma factura se REUSA el mismo key del
+  // sessionStorage → el server detecta retry y no duplica el pago.
+  // El key se borra recién cuando la operación termina exitosa.
   const [idempKeyPagarFac, setIdempKeyPagarFac] = useState<string>(() => crypto.randomUUID());
   const [idempKeyPagarRem, setIdempKeyPagarRem] = useState<string>(() => crypto.randomUUID());
+
+  // Cuando se abre el modal de pagar factura/remito, asegurar que el idempKey
+  // está persistido (se reusa si ya existía un intento previo). Fix ALTO-12.
+  useEffect(() => {
+    if (!pagarModal) return;
+    const storageKey = `pase_idemp_pagarfac_${pagarModal.id}`;
+    const existing = sessionStorage.getItem(storageKey);
+    if (existing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIdempKeyPagarFac(existing);
+    } else {
+      const fresh = crypto.randomUUID();
+      sessionStorage.setItem(storageKey, fresh);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIdempKeyPagarFac(fresh);
+    }
+  }, [pagarModal]);
+
+  useEffect(() => {
+    if (!pagarRemModal) return;
+    const storageKey = `pase_idemp_pagarrem_${pagarRemModal.id}`;
+    const existing = sessionStorage.getItem(storageKey);
+    if (existing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIdempKeyPagarRem(existing);
+    } else {
+      const fresh = crypto.randomUUID();
+      sessionStorage.setItem(storageKey, fresh);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIdempKeyPagarRem(fresh);
+    }
+  }, [pagarRemModal]);
   // NCs disponibles del proveedor de la factura abierta + saldo restante de
   // cada una. Saldo viene del frontend: nc.total - SUM(pagos[]) — los pagos
   // ya incluyen las aplicaciones previas (tipo='nc').
@@ -517,6 +552,11 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
         return;
       }
 
+      // Operación exitosa — borrar el idempKey persistido para esta factura.
+      // Si el operador vuelve a abrir el modal (mismo o distinto), va a
+      // recibir un key fresco (sería un pago parcial nuevo).
+      sessionStorage.removeItem(`pase_idemp_pagarfac_${pagarModal.id}`);
+
       setPagarModal(null);
       setNcsAplicar({});
       load();
@@ -600,6 +640,8 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
         p_idempotency_key: idempKeyPagarRem,
       });
       if (error) throw error;
+      // Limpiar idempKey persistido — operación exitosa.
+      sessionStorage.removeItem(`pase_idemp_pagarrem_${pagarRemModal.id}`);
       setPagarRemModal(null); load();
     } catch (err) {
       console.error("Error pagando remito:", err);
@@ -950,7 +992,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                           )}
                           {r.factura_id && <span className="mono" style={{ fontSize: 10, color: "var(--info)" }}>→ {facturas.find(f => f.id === r.factura_id)?.nro || r.factura_id}</span>}
                           {r.estado === "sin_factura" && (
-                            <IconBtn title="Registrar pago" tone="success" onClick={() => { setPagarRemModal(r); setRemPagoForm({ cuenta: "", monto: r.monto, fecha: toISO(today) }); setIdempKeyPagarRem(crypto.randomUUID()); }}>{IconPay}</IconBtn>
+                            <IconBtn title="Registrar pago" tone="success" onClick={() => { setPagarRemModal(r); setRemPagoForm({ cuenta: "", monto: r.monto, fecha: toISO(today) }); /* idempKey se setea via useEffect según sessionStorage */ }}>{IconPay}</IconBtn>
                           )}
                           {/* Siempre visible. Si no tiene permiso, anularRemito
                               abre modal de Manager Override pidiendo código TOTP. */}
