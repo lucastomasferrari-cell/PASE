@@ -1,9 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
-  "buildCommand": "echo 'instagram-bot: solo serverless functions, sin build step'",
-  "outputDirectory": ".",
+  "buildCommand": "echo 'no build step'",
   "functions": {
     "api/webhook.js": {
       "maxDuration": 30
