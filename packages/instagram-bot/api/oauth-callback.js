@@ -77,6 +77,13 @@ export default async function handler(req, res) {
 
   try {
     // ─── 2. Intercambiar code por short-lived token ────────────────────────
+    // Loguear qué redirect_uri estamos enviando (debug del mismatch común)
+    await logEvent('oauth_debug', stateRow.tenant_id, null, null, {
+      stage: 'short_token_exchange',
+      redirect_uri_enviado: OAUTH_REDIRECT_URI,
+      client_id: IG_APP_ID,
+    });
+
     const shortTokenResp = await fetch('https://api.instagram.com/oauth/access_token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -90,8 +97,8 @@ export default async function handler(req, res) {
     });
     const shortData = await shortTokenResp.json();
     if (!shortTokenResp.ok || !shortData.access_token) {
-      await logEvent('error', stateRow.tenant_id, null, `exchange_short_token failed: ${JSON.stringify(shortData)}`);
-      return redirectToPase(res, { ok: false, error: 'SHORT_TOKEN_FAILED', detail: shortData?.error_message || 'unknown' });
+      await logEvent('error', stateRow.tenant_id, null, `exchange_short_token failed: ${JSON.stringify(shortData)} | redirect_uri usado: ${OAUTH_REDIRECT_URI}`);
+      return redirectToPase(res, { ok: false, error: 'SHORT_TOKEN_FAILED', detail: shortData?.error_message || shortData?.error?.message || 'unknown' });
     }
     const shortToken = shortData.access_token;
     const userId = shortData.user_id; // Instagram-scoped User ID
