@@ -4,13 +4,14 @@
 **Scope:** `packages/pase` (prod), `packages/comanda` (WIP), `packages/admin-console` (consola Lucas). NO se auditó `packages/instagram-bot` (ya validado funcional).
 **Método:** 4 auditores Claude especializados en paralelo (seguridad, multitenant, lógica financiera, escalabilidad).
 
-**Estado actual (post sprint hardening 21-may madrugada):**
+**Estado actual (post sprint hardening 21-may 04am):**
 
 | Severidad | Total | Cerrados | Pendientes |
 |---|---|---|---|
 | CRÍTICOS | 13 | **11 ✅** | 2 (CRIT-11, CRIT-13 — requieren decisión Lucas) |
-| ALTOS | 13 | **10 ✅** | 3 (HMAC webhooks A4, sueldo pre-validar A9, UI idempotency A12) |
-| MEDIOS | 12 | 2 ✅ | 10 (próximo sprint) |
+| ALTOS | 13 | **12 ✅** | 1 (ALTO-4 HMAC webhooks — necesita secrets de Lucas) |
+| MEDIOS | 12 | **8 ✅** | 4 (M5 no urgente, M7, M10, M11 — sprints futuros) |
+| **TOTAL** | **38** | **31 (82%)** | 7 |
 
 El sistema pasó de **"NO seguro para producción multi-cliente"** a **"HARDENED — listo para multi-cliente"**. Los pendientes son mejoras incrementales o decisiones de arquitectura, NO vulnerabilidades activas.
 
