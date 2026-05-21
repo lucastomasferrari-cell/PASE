@@ -22,7 +22,11 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const IG_APP_ID = process.env.IG_APP_ID;
-const IG_APP_SECRET = process.env.IG_APP_SECRET;
+// IG_APP_SECRET = "Clave secreta de la app de Instagram" de Meta.
+// En la app de Lucas, este secret es el MISMO que META_APP_SECRET (ambos
+// se sacan del mismo lugar en Meta). Si IG_APP_SECRET no está set,
+// usamos META_APP_SECRET como fallback para evitar duplicar config.
+const IG_APP_SECRET = process.env.IG_APP_SECRET || process.env.META_APP_SECRET;
 const OAUTH_REDIRECT_URI = process.env.OAUTH_REDIRECT_URI || 'https://pase-instagram-bot.vercel.app/api/oauth-callback';
 const PASE_BASE_URL = process.env.PASE_BASE_URL || 'https://pase-yndx.vercel.app';
 
