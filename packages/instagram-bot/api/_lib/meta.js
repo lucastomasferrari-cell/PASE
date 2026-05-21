@@ -1,7 +1,11 @@
 // Helpers para hablar con la Graph API de Meta (Instagram Messaging).
 //
-// Docs oficiales:
-// https://developers.facebook.com/docs/messenger-platform/instagram/sending-messages
+// IMPORTANTE: usamos Instagram Login API (token empieza con IGAA), por lo
+// tanto el endpoint es graph.instagram.com (no graph.facebook.com como
+// es con Facebook Login API).
+//
+// Docs:
+// https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api
 
 import crypto from 'crypto';
 
@@ -48,7 +52,7 @@ export function validarFirmaWebhook(rawBody, signatureHeader, appSecret) {
  * @returns {Promise<{ok: boolean, message_id?: string, error?: string}>}
  */
 export async function enviarMensaje({ pageAccessToken, igsid, texto }) {
-  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/me/messages?access_token=${encodeURIComponent(pageAccessToken)}`;
+  const url = `https://graph.instagram.com/${GRAPH_API_VERSION}/me/messages?access_token=${encodeURIComponent(pageAccessToken)}`;
   const body = {
     recipient: { id: igsid },
     message: { text: texto },
@@ -86,7 +90,7 @@ export async function enviarMensaje({ pageAccessToken, igsid, texto }) {
  * después de procesar un mensaje para que el usuario sepa que llegó.
  */
 export async function marcarLeido({ pageAccessToken, igsid }) {
-  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/me/messages?access_token=${encodeURIComponent(pageAccessToken)}`;
+  const url = `https://graph.instagram.com/${GRAPH_API_VERSION}/me/messages?access_token=${encodeURIComponent(pageAccessToken)}`;
   try {
     await fetch(url, {
       method: 'POST',
@@ -109,7 +113,7 @@ export async function marcarLeido({ pageAccessToken, igsid }) {
  * manda un mensaje real, lo que pase primero.
  */
 export async function escribiendo({ pageAccessToken, igsid, on = true }) {
-  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/me/messages?access_token=${encodeURIComponent(pageAccessToken)}`;
+  const url = `https://graph.instagram.com/${GRAPH_API_VERSION}/me/messages?access_token=${encodeURIComponent(pageAccessToken)}`;
   try {
     await fetch(url, {
       method: 'POST',
