@@ -87,6 +87,56 @@ const MAP: Record<string, string> = {
   // Auth / tenant
   AUTH_SIN_TENANT: "Sesión sin tenant — volvé a entrar",
   TENANT_ES_DEL_CALLER: "No podés borrar el tenant en el que estás autenticado",
+  TENANT_MISMATCH: "No tenés permiso para acceder a datos de ese tenant",
+
+  // Stock module (sprints 1-4 mayo 2026)
+  STOCK_INSUFICIENTE: "No hay suficiente stock disponible para esa operación",
+  STOCK_NEGATIVO: "El stock no puede ser negativo",
+  CANTIDAD_INVALIDA: "La cantidad debe ser mayor a cero",
+  INSUMO_NO_ENCONTRADO: "Ese insumo no existe o fue eliminado",
+  MOTIVO_NO_ENCONTRADO: "El motivo de merma seleccionado no existe",
+  ROBO_REQUIERE_OVERRIDE: "Para registrar robo de stock necesitás un código manager",
+  OVERRIDE_INVALIDO: "El código manager es inválido o ya fue usado",
+  TIPO_AJUSTE_INVALIDO: "Tipo de ajuste de stock inválido",
+  MANAGER_REQUERIDO_PARA_TIPO: "Esta operación requiere autorización del manager",
+  CONTEO_NO_ABIERTO: "El conteo físico no está abierto o no existe",
+  CONTEO_YA_ABIERTO: "Ya hay un conteo físico abierto para este local — cerralo primero",
+
+  // Traspasos entre locales
+  LOCALES_IGUALES: "El local de origen y destino no pueden ser el mismo",
+  LOCAL_ORIGEN_NO_ENCONTRADO: "El local de origen no existe",
+  LOCAL_DESTINO_NO_ENCONTRADO: "El local de destino no existe",
+  PERMISO_DENEGADO_ORIGEN: "No tenés permiso sobre el local de origen del traspaso",
+  PERMISO_DENEGADO_DESTINO: "No tenés permiso sobre el local de destino del traspaso",
+  TRANSFERENCIA_NO_ENCONTRADA: "Ese traspaso no existe",
+  TRANSFERENCIA_NO_PENDIENTE: "Ese traspaso ya fue procesado",
+
+  // Subscriptions / Billing (admin-console)
+  SOLO_SUPERADMIN: "Solo el dueño del ecosistema puede realizar esta operación",
+  INVOICE_NO_ENCONTRADA: "Esa factura del SaaS no existe",
+  INVOICE_YA_PAGADA: "Esa factura ya está marcada como pagada",
+  SUB_NO_ENCONTRADA: "Esa suscripción no existe",
+  PLAN_GRATUITO_NO_GENERA_INVOICE: "El plan gratuito no requiere facturación",
+
+  // Idempotency offline (COMANDA)
+  IDEMPOTENCY_UUID_REUSE: "Operación rechazada — el cliente está reusando un identificador para una acción distinta",
+  ITEM_NO_SINCRONIZADO: "El item todavía no sincronizó con el server. Reintentá en unos segundos.",
+  ITEM_REFERENCIA_FALTANTE: "Falta referencia al item",
+
+  // Fidelidad / puntos
+  PUNTOS_INVALIDOS: "La cantidad de puntos debe ser mayor a cero",
+  PUNTOS_INSUFICIENTES: "El cliente no tiene suficientes puntos para canjear",
+  CLIENTE_NO_ENCONTRADO: "Cliente no encontrado",
+  FIDELIDAD_NO_CONFIGURADA: "Configurá la equivalencia pesos/punto antes de canjear",
+  VENTA_NO_ENCONTRADA: "La venta no existe",
+  PERMISO_DENEGADO: "No tenés permiso para esta operación en este local",
+
+  // Permission denied genérico
+  forbidden_role: "Solo dueño/admin/superadmin pueden hacer esta operación",
+  cannot_create_role_higher_or_equal: "No podés crear un usuario con rol superior o igual al tuyo",
+  cannot_change_password_of_higher_role: "No podés cambiar la contraseña de alguien con rol superior al tuyo",
+  cross_tenant_password_change_denied: "Solo el superadmin puede cambiar contraseñas de otros tenants",
+  target_user_not_found: "El usuario a modificar no existe",
 
   // Genérico: cualquier RPC que tire NO_AUTORIZADO sin sufijo. Las RPCs
   // de gastos/movimientos/etc tiran "NO_AUTORIZADO: requiere permiso XXX"

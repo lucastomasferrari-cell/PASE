@@ -9,10 +9,16 @@
 // Path 2 — User JWT (frontend manual trigger):
 //   Authorization: Bearer ${supabase_access_token}
 //   Se valida con supabase admin client → auth.getUser(jwt) → lookup en
-//   usuarios.rol. Solo dueno/admin/cajero/superadmin pueden disparar.
+//   usuarios.rol. Solo dueno/admin/superadmin pueden disparar (cajero NO
+//   — fix auditoría 2026-05-21 ALTO-1: cajero podía disparar mp-sync con
+//   reset cross-tenant).
 //
-// Path 3 — Legacy (sin CRON_BEARER seteado):
-//   Pasa todo. Backwards compat para dev local o setup intermedio.
+// Path 3 — Solo dev local (sin CRON_BEARER seteado):
+//   En desarrollo (sin VERCEL=1 ni CRON_BEARER) pasa todo, para que el
+//   localhost no requiera setup. En producción/preview de Vercel, exigir
+//   CRON_BEARER o JWT válido (fix auditoría 2026-05-21 ALTO-2: si la env
+//   var se borraba accidentalmente, todos los endpoints quedaban abiertos
+//   al mundo).
 //
 // Uso:
 //   import { checkCronAuth } from './_cron-auth.js';
@@ -21,7 +27,11 @@
 //     ... resto del handler
 //   }
 
-const ALLOWED_ROLES = ['superadmin', 'dueno', 'admin', 'cajero'];
+// ALTO-1 fix: 'cajero' removido — un cajero no debería poder disparar
+// crons que afectan otros locales del tenant. Solo dueño/admin operacional
+// + superadmin para Lucas. Si alguna pantalla específica necesita que un
+// cajero dispare algo, expone ese endpoint específico con checkUserAuth.
+const ALLOWED_ROLES = ['superadmin', 'dueno', 'admin'];
 
 export async function checkCronAuth(req, res) {
   const header = req.headers?.authorization || '';
@@ -58,9 +68,13 @@ export async function checkCronAuth(req, res) {
     }
   }
 
-  // Path 3: Backwards compat — sin CRON_BEARER en env, no validamos.
-  // Solo aplica cuando la env var no está configurada (dev local).
-  if (!cronExpected) {
+  // Path 3: Solo dev local sin CRON_BEARER. En producción (Vercel) o
+  // preview (VERCEL=1), nunca dejamos pasar sin token válido.
+  // ALTO-2 fix: antes pasaba todo si se borraba la env var por accidente.
+  const isVercel = process.env.VERCEL === '1' || process.env.VERCEL_ENV;
+  if (!cronExpected && !isVercel) {
+    // Dev local sin secret seteado: pasa, pero log warning.
+    console.warn('[cron-auth] DEV MODE: CRON_BEARER no seteado, request pasa sin auth');
     return true;
   }
 

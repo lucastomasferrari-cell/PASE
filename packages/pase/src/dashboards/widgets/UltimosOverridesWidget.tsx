@@ -67,14 +67,14 @@ export function UltimosOverridesWidget({ ctx }: { ctx: WidgetContext }) {
 
   const reload = useCallback(async () => {
     if (!ctx.usuario.tenant_id) { setLoading(false); return; }
-    const [{ data: usosData }, { data: usrData }] = await Promise.all([
-      db.from("manager_override_usos")
-        .select("id, usuario_id, accion, context, time_step, usado_at")
-        .eq("tenant_id", ctx.usuario.tenant_id)
-        .order("usado_at", { ascending: false })
-        .limit(5),
-      db.from("usuarios").select("id, nombre"),
-    ]);
+    // Primero traer los 5 usos. Después solo los usuarios de esos 5 ids.
+    // Fix auditoría 2026-05-21 ALTO-7: antes hacía SELECT * FROM usuarios
+    // sin filtro (tenant con 80 empleados descargaba 80 filas para mapear 5).
+    const { data: usosData } = await db.from("manager_override_usos")
+      .select("id, usuario_id, accion, context, time_step, usado_at")
+      .eq("tenant_id", ctx.usuario.tenant_id)
+      .order("usado_at", { ascending: false })
+      .limit(5);
 
     const prevMaxId = Math.max(0, ...usos.map(u => u.id));
     const nuevos = (usosData as UsoOverride[] | null) ?? [];
@@ -88,10 +88,19 @@ export function UltimosOverridesWidget({ ctx }: { ctx: WidgetContext }) {
       highlightTimerRef.current = setTimeout(() => setHighlightedId(null), 8000);
     }
 
-    if (usrData) {
-      const map = new Map<number, string>();
-      for (const u of usrData as UsuarioRow[]) map.set(u.id, u.nombre);
-      setUsuarios(map);
+    // Lookup solo de los usuarios que aparecen en los 5 usos.
+    const uniqueUserIds = Array.from(new Set(nuevos.map(u => u.usuario_id).filter((id): id is number => id != null)));
+    if (uniqueUserIds.length > 0) {
+      const { data: usrData } = await db.from("usuarios")
+        .select("id, nombre")
+        .in("id", uniqueUserIds);
+      if (usrData) {
+        const map = new Map<number, string>();
+        for (const u of usrData as UsuarioRow[]) map.set(u.id, u.nombre);
+        setUsuarios(map);
+      }
+    } else {
+      setUsuarios(new Map());
     }
     setLoading(false);
   // ctx.usuario.tenant_id está en deps. `usos` se evita en deps para no
