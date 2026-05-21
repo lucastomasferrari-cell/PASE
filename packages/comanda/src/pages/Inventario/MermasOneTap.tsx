@@ -26,7 +26,7 @@ import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import { formatARS } from '@/lib/format';
 import {
-  listMotivos, listTop10Mermados, registrarMerma,
+  listMotivos, listTop10Mermados, registrarMerma, precheckManagerCode,
   type MermaMotivo, type MermaTopInsumo,
 } from '@/services/mermasService';
 import { listInsumos } from '@/services/insumosService';
@@ -202,20 +202,23 @@ function MermaDialog({
     const cant = parseFloat(cantidad);
     if (!Number.isFinite(cant) || cant <= 0) { toast.error('Cantidad inválida'); return; }
 
-    // Si es robo, requerir código manager
-    let managerId: number | undefined;
+    let overrideCode: string | undefined;
+
+    // Si es robo: pre-validar código TOTP antes de gastarlo
     if (esRobo) {
-      if (!managerCode.trim()) {
-        toast.error('Ingresá el código del manager');
+      const code = managerCode.trim();
+      if (!/^\d{6}$/.test(code)) {
+        toast.error('El código del manager debe ser de 6 dígitos');
         return;
       }
-      // TODO sprint siguiente: validar el código TOTP contra el endpoint
-      // /api/validar-manager-override. Por ahora aceptamos el código y
-      // pasamos un manager_id placeholder. La validación real queda al
-      // final del Sprint 3.
-      // Por ahora rechazamos hasta tener la validación TOTP correcta.
-      toast.error('Validación de manager TOTP pendiente de integrar. Mientras tanto, cargá el robo desde la pantalla "Ajustar stock" en Inventario.');
-      return;
+      // Precheck no consume el código — útil para feedback rápido. Si pasa,
+      // se manda a la RPC final que SÍ lo consume (anti-reuse).
+      const { ok, error: pcErr } = await precheckManagerCode(code);
+      if (!ok) {
+        toast.error(pcErr || 'Código inválido');
+        return;
+      }
+      overrideCode = code;
     }
 
     setSaving(true);
@@ -225,7 +228,7 @@ function MermaDialog({
       cantidad: cant,
       motivoId: motivo.id,
       notas: notas.trim() || undefined,
-      managerId,
+      overrideCode,
     });
     setSaving(false);
 

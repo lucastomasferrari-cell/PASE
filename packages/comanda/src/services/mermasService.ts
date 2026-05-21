@@ -63,7 +63,10 @@ export async function registrarMerma(opts: {
   cantidad: number;
   motivoId: number;
   notas?: string;
-  managerId?: number;  // requerido si motivo.tipo_movimiento === 'robo'
+  /** Código TOTP del manager — requerido si motivo.tipo_movimiento === 'robo'
+   * y el caller no es dueño/admin. La RPC valida + consume el código en
+   * manager_override_usos (anti-reuse). */
+  overrideCode?: string;
 }): Promise<{ id: number | null; error: string | null }> {
   const { data, error } = await db.rpc('fn_registrar_merma', {
     p_insumo_id: opts.insumoId,
@@ -71,8 +74,36 @@ export async function registrarMerma(opts: {
     p_cantidad: opts.cantidad,
     p_motivo_id: opts.motivoId,
     p_notas: opts.notas ?? null,
-    p_manager_id: opts.managerId ?? null,
+    p_manager_id: null,  // legacy, no usar
+    p_override_code: opts.overrideCode ?? null,
   });
-  if (error) return { id: null, error: translateError(error) };
+  if (error) {
+    // Errores específicos del flujo TOTP — traducir para feedback claro al user
+    const msg = error.message || '';
+    if (msg.includes('ROBO_REQUIERE_OVERRIDE')) {
+      return { id: null, error: 'Esta acción requiere código del manager. Pedíselo al dueño.' };
+    }
+    if (msg.includes('OVERRIDE_INVALIDO') || msg.includes('CODIGO_NO_VALIDO') || msg.includes('CODIGO_YA_USADO')) {
+      return { id: null, error: 'Código de manager inválido o ya usado. Pedí uno nuevo.' };
+    }
+    return { id: null, error: translateError(error) };
+  }
   return { id: data as number, error: null };
+}
+
+/** Valida si un código TOTP es correcto sin consumirlo. Usado por el modal
+ * para feedback inmediato antes de hacer la operación final. */
+export async function precheckManagerCode(
+  codigo: string,
+): Promise<{ ok: boolean; error: string | null }> {
+  const { data, error } = await db.rpc('precheck_manager_override', { p_codigo: codigo });
+  if (error) {
+    const msg = error.message || '';
+    if (msg.includes('CODIGO_INVALIDO')) return { ok: false, error: 'El código debe tener 6 dígitos' };
+    if (msg.includes('CODIGO_NO_VALIDO')) return { ok: false, error: 'Código incorrecto' };
+    if (msg.includes('CODIGO_YA_USADO')) return { ok: false, error: 'Este código ya se usó. Pedí uno nuevo.' };
+    if (msg.includes('TOTP_NO_INICIALIZADO')) return { ok: false, error: 'El dueño tiene que activar Códigos Manager en PASE primero.' };
+    return { ok: false, error: translateError(error) };
+  }
+  return { ok: data === true, error: null };
 }
