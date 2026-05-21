@@ -3,9 +3,10 @@
 // Sprint B: respuesta simple sin tools. Sprint C agrega tool calling
 // con loop hasta respuesta final.
 //
-// Modelo default: Haiku 4.6 — barato (~$1 USD / 1M tokens input) y rápido.
-// Suficiente para 99% de DMs. Si Lucas necesita razonamiento más fuerte
-// (ej. reserva compleja) puede pasar a Sonnet por tenant en `ig_config.modelo`.
+// Modelo default: Sonnet 4.6 — usado también por PASE para soporte chat.
+// Costo aprox $3/M input + $15/M output. Lo bajamos a Haiku cuando salga
+// el nombre correcto disponible (claude-haiku-4-6 tira 404 al 2026-05-21).
+// Configurable por tenant en `ig_config.modelo`.
 
 import Anthropic from '@anthropic-ai/sdk';
 
@@ -24,14 +25,14 @@ export const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
  * @param {object} opts
  * @param {string} opts.systemPrompt
  * @param {Array<{role:'user'|'assistant', content:string}>} opts.messages
- * @param {string} opts.modelo - default 'claude-haiku-4-6'
+ * @param {string} opts.modelo - default 'claude-sonnet-4-6'
  * @param {number} opts.maxTokens - default 1024
  * @returns {Promise<{texto: string, tokens_in: number, tokens_out: number, costo_usd: number, stop_reason: string}>}
  */
 export async function llamarClaude({
   systemPrompt,
   messages,
-  modelo = 'claude-haiku-4-6',
+  modelo = 'claude-sonnet-4-6',
   maxTokens = 1024,
 }) {
   const resp = await anthropic.messages.create({

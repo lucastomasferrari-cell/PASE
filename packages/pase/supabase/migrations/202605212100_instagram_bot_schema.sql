@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS ig_config (
   system_prompt       TEXT,
   -- Modelo de Claude a usar. Default Haiku (más barato, suficiente para
   -- la mayoría de respuestas).
-  modelo              TEXT NOT NULL DEFAULT 'claude-haiku-4-6',
+  modelo              TEXT NOT NULL DEFAULT 'claude-sonnet-4-6',
   -- Máximo de tokens por respuesta del LLM.
   max_tokens          INTEGER NOT NULL DEFAULT 1024,
   -- Cuántos mensajes históricos mandar al LLM como contexto.
