@@ -103,15 +103,26 @@ export function IGConexionPanel() {
       const state = (data as Array<{ state: string }>)[0]!.state;
 
       // 2. Armar URL de autorización de Instagram + redirigir el browser
-      const authUrl = new URL('https://www.instagram.com/oauth/authorize');
-      authUrl.searchParams.set('client_id', IG_APP_ID);
-      authUrl.searchParams.set('redirect_uri', OAUTH_REDIRECT_URI);
-      authUrl.searchParams.set('scope', SCOPES);
-      authUrl.searchParams.set('response_type', 'code');
-      authUrl.searchParams.set('state', state);
+      //
+      // IMPORTANTE: construir la URL manualmente sin URLSearchParams.
+      // Meta es estricto con el redirect_uri — exige que coincida EXACTO
+      // entre la URL de autorización y el body del POST de exchange.
+      // URLSearchParams.set codifica el redirect_uri (https:// → https%3A%2F%2F)
+      // pero Meta lo compara con el redirect_uri del backend SIN decodificar,
+      // así que si codifica uno y no el otro, falla con SHORT_TOKEN_FAILED.
+      // La URL de inserción que Meta sugiere usa el redirect_uri SIN codificar,
+      // así que replicamos eso.
+      const authParams = [
+        `client_id=${IG_APP_ID}`,
+        `redirect_uri=${OAUTH_REDIRECT_URI}`,  // sin encode
+        `scope=${SCOPES}`,
+        `response_type=code`,
+        `state=${state}`,
+      ].join('&');
+      const authUrl = `https://www.instagram.com/oauth/authorize?${authParams}`;
 
       // Redirigimos top-window (no popup) porque Meta a veces bloquea popups
-      window.location.href = authUrl.toString();
+      window.location.href = authUrl;
     } catch (e) {
       alert('Error: ' + (e instanceof Error ? e.message : String(e)));
       setConectando(false);
