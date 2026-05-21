@@ -121,6 +121,18 @@ export function IGConexionPanel() {
       ].join('&');
       const authUrl = `https://www.instagram.com/oauth/authorize?${authParams}`;
 
+      // DEBUG: mostrar la URL antes de redirigir para verificar encoding
+      console.log('[ig-oauth] authUrl:', authUrl);
+      const ok = window.confirm(
+        `Voy a abrir Instagram con esta URL:\n\n${authUrl}\n\n` +
+        `Verificá que el redirect_uri NO esté codificado (debe decir "https://" sin %3A%2F%2F).\n\n` +
+        `Click OK para continuar, Cancelar para detener.`,
+      );
+      if (!ok) {
+        setConectando(false);
+        return;
+      }
+
       // Redirigimos top-window (no popup) porque Meta a veces bloquea popups
       window.location.href = authUrl;
     } catch (e) {
