@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   ClipboardCheck, RefreshCw, Save, ChevronLeft, AlertCircle, Check,
+  Eye, EyeOff,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +41,17 @@ export function InventarioConteo() {
   const [savingLine, setSavingLine] = useState<number | null>(null);
   const [finalizando, setFinalizando] = useState(false);
   const [notasIniciales, setNotasIniciales] = useState('');
+  // Conteo CIEGO: por default el usuario que cuenta NO ve el stock teórico
+  // ni la diferencia mientras carga. Esto es el requisito del doc original:
+  // "El empleado ve la lista de nombres pero el campo de Cantidad está vacío.
+  // No puede ver el teórico". Sin esto, el empleado puede "dibujar" para
+  // que coincida.
+  //
+  // Toggle "Ver teóricos" solo lo ve dueño/admin (ellos sí pueden auditar
+  // en vivo). Encargados y cualquier otro rol quedan en modo ciego siempre.
+  const esAuditorAlto = user?.rol === 'dueno' || user?.rol === 'admin' || user?.rol === 'superadmin';
+  const [revelarTeoricos, setRevelarTeoricos] = useState(false);
+  const mostrarTeorico = esAuditorAlto && revelarTeoricos;
 
   const reload = useCallback(async () => {
     if (!localActivo) return;
@@ -243,16 +255,50 @@ export function InventarioConteo() {
             </p>
           </div>
         </div>
-        {activeConteo.estado === 'abierto' && (
-          <Button onClick={handleFinalizar} disabled={finalizando}>
-            <Save className="h-4 w-4 mr-1.5" />
-            {finalizando ? 'Finalizando…' : 'Finalizar conteo'}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Toggle conteo ciego (solo dueño/admin pueden revelar teórico
+              mientras se cuenta). Encargados y empleados siempre van ciegos. */}
+          {esAuditorAlto && activeConteo.estado === 'abierto' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRevelarTeoricos(!revelarTeoricos)}
+              title={revelarTeoricos
+                ? "Ocultar teóricos (modo auditor)"
+                : "Mostrar teóricos (modo dueño)"}
+            >
+              {revelarTeoricos ? <EyeOff className="h-4 w-4 mr-1.5" /> : <Eye className="h-4 w-4 mr-1.5" />}
+              {revelarTeoricos ? 'Ocultar teóricos' : 'Ver teóricos'}
+            </Button>
+          )}
+          {activeConteo.estado === 'abierto' && (
+            <Button onClick={handleFinalizar} disabled={finalizando}>
+              <Save className="h-4 w-4 mr-1.5" />
+              {finalizando ? 'Finalizando…' : 'Finalizar conteo'}
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Resumen diferencia neta */}
-      {lineasConDiff.length > 0 && (
+      {/* Mensaje informativo cuando conteo ciego está activo */}
+      {!mostrarTeorico && activeConteo.estado === 'abierto' && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="p-3 text-sm flex items-start gap-3">
+            <EyeOff className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+            <div>
+              <strong className="text-blue-900">Conteo ciego activado</strong>
+              <p className="text-xs text-blue-800/70 mt-0.5">
+                Cargá la cantidad real de cada insumo sin mirar el stock que tiene cargado el sistema.
+                El resultado se compara automáticamente al cerrar el conteo.
+                {esAuditorAlto && ' Si querés ver el teórico, usá el botón "Ver teóricos".'}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Resumen diferencia neta — solo visible cuando se revelan teóricos */}
+      {mostrarTeorico && lineasConDiff.length > 0 && (
         <Card className={Math.abs(valorDiff) > 1000 ? 'border-amber-300 bg-amber-50' : ''}>
           <CardContent className="p-3 text-sm flex items-center gap-3">
             <AlertCircle className="h-5 w-5 text-amber-600" />
@@ -276,9 +322,9 @@ export function InventarioConteo() {
               <thead>
                 <tr className="text-left border-b">
                   <th className="p-2 px-3 font-medium text-foreground/60">Insumo</th>
-                  <th className="p-2 px-3 font-medium text-foreground/60 text-right">Teórico</th>
+                  {mostrarTeorico && <th className="p-2 px-3 font-medium text-foreground/60 text-right">Teórico</th>}
                   <th className="p-2 px-3 font-medium text-foreground/60 text-right">Contado</th>
-                  <th className="p-2 px-3 font-medium text-foreground/60 text-right">Diferencia</th>
+                  {mostrarTeorico && <th className="p-2 px-3 font-medium text-foreground/60 text-right">Diferencia</th>}
                 </tr>
               </thead>
               <tbody>
@@ -289,6 +335,7 @@ export function InventarioConteo() {
                     saving={savingLine === l.insumo_id}
                     onSave={(c, n) => handleCargarLinea(l, c, n)}
                     readOnly={activeConteo.estado !== 'abierto'}
+                    mostrarTeorico={mostrarTeorico}
                   />
                 ))}
               </tbody>
@@ -302,11 +349,12 @@ export function InventarioConteo() {
 
 // ─── Row con input cantidad ───────────────────────────────────────────
 
-function ConteoLineaRow({ linea, saving, onSave, readOnly }: {
+function ConteoLineaRow({ linea, saving, onSave, readOnly, mostrarTeorico }: {
   linea: StockConteoLinea;
   saving: boolean;
   onSave: (contado: number, notas?: string) => void;
   readOnly: boolean;
+  mostrarTeorico: boolean;
 }) {
   const [valor, setValor] = useState(linea.stock_contado?.toString() ?? '');
   const dirty = linea.stock_contado == null
@@ -326,11 +374,14 @@ function ConteoLineaRow({ linea, saving, onSave, readOnly }: {
     <tr className="border-b last:border-0 hover:bg-gray-50/50">
       <td className="p-2 px-3">
         <span className="font-medium">{linea.insumo_nombre}</span>
+        <span className="text-xs text-foreground/40 ml-2">({linea.insumo_unidad})</span>
         {linea.notas && <span className="text-xs text-foreground/60 ml-2">({linea.notas})</span>}
       </td>
-      <td className="p-2 px-3 text-right tabular-nums text-foreground/60">
-        {Number(linea.stock_teorico).toFixed(2)} {linea.insumo_unidad}
-      </td>
+      {mostrarTeorico && (
+        <td className="p-2 px-3 text-right tabular-nums text-foreground/60">
+          {Number(linea.stock_teorico).toFixed(2)} {linea.insumo_unidad}
+        </td>
+      )}
       <td className="p-2 px-3 text-right">
         <div className="flex items-center justify-end gap-1">
           <Input
@@ -349,13 +400,15 @@ function ConteoLineaRow({ linea, saving, onSave, readOnly }: {
           {saving && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
         </div>
       </td>
-      <td className="p-2 px-3 text-right tabular-nums">
-        {hayContado ? (
-          <span className={diff === 0 ? 'text-foreground/40' : diff > 0 ? 'text-green-700' : 'text-red-700'}>
-            {diff > 0 ? '+' : ''}{diff.toFixed(2)} {linea.insumo_unidad}
-          </span>
-        ) : '—'}
-      </td>
+      {mostrarTeorico && (
+        <td className="p-2 px-3 text-right tabular-nums">
+          {hayContado ? (
+            <span className={diff === 0 ? 'text-foreground/40' : diff > 0 ? 'text-green-700' : 'text-red-700'}>
+              {diff > 0 ? '+' : ''}{diff.toFixed(2)} {linea.insumo_unidad}
+            </span>
+          ) : '—'}
+        </td>
+      )}
     </tr>
   );
 }

@@ -80,6 +80,7 @@ export const ADMIN_NAVIGATION: NavCategory[] = [
     requiredPermission: 'comanda.catalogo.ver',
     subItems: [
       { slug: 'alertas', label: 'Stock + alertas',  href: '/inventario/alertas' },
+      { slug: 'mermas',  label: 'Cargar merma (one-tap)', href: '/inventario/mermas' },
       { slug: 'conteo',  label: 'Conteo físico',    href: '/inventario/conteo' },
       { slug: 'transferencias', label: 'Transferencias entre locales', href: '/inventario/transferencias' },
     ],

@@ -110,6 +110,7 @@ const RiderPWA = lazy(() => import('./pages/Rider/RiderPWA').then(m => ({ defaul
 const InventarioAlertas = lazy(() => import('./pages/Inventario/InventarioAlertas').then(m => ({ default: m.InventarioAlertas })));
 const InventarioConteo = lazy(() => import('./pages/Inventario/InventarioConteo').then(m => ({ default: m.InventarioConteo })));
 const InventarioTransferencias = lazy(() => import('./pages/Inventario/InventarioTransferencias').then(m => ({ default: m.InventarioTransferencias })));
+const MermasOneTap = lazy(() => import('./pages/Inventario/MermasOneTap').then(m => ({ default: m.MermasOneTap })));
 const ReservasAdmin = lazy(() => import('./pages/Salon/ReservasAdmin').then(m => ({ default: m.ReservasAdmin })));
 const TiendaReservar = lazy(() => import('./pages/Tienda/TiendaReservar').then(m => ({ default: m.TiendaReservar })));
 const CuponesAdmin = lazy(() => import('./pages/Marketing/CuponesAdmin').then(m => ({ default: m.CuponesAdmin })));
@@ -249,6 +250,7 @@ export default function App() {
                   <Route path="/inventario" element={<Navigate to="/inventario/alertas" replace />} />
                   <Route path="/inventario/alertas" element={<InventarioAlertas />} />
                   <Route path="/inventario/conteo" element={<InventarioConteo />} />
+                  <Route path="/inventario/mermas" element={<MermasOneTap />} />
                   <Route path="/inventario/transferencias" element={<InventarioTransferencias />} />
                   <Route path="/menu/recetas" element={<RecetasLista />} />
                   <Route path="/menu/alertas-margen" element={<AlertasMargenLista />} />

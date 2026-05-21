@@ -474,6 +474,16 @@ export interface Insumo {
   es_comprado: boolean;
   /** Auto-86 CMV: cuando es FALSE, los items con receta que usan este insumo se marcan agotados auto. */
   stock_disponible: boolean;
+  /** Stock actual en unidad del insumo. Mantenido por triggers sobre insumo_movimientos. */
+  stock_actual: number | null;
+  /** Cantidad por debajo de la cual el insumo dispara alerta. NULL = sin alerta. */
+  stock_minimo: number | null;
+  /** Cantidad por encima de la cual se considera sobrestock. NULL = sin tope. */
+  stock_maximo: number | null;
+  /** Ubicación física en el depósito (ej: "Cámara fría", "Almacén seco"). */
+  ubicacion: string | null;
+  /** Categoría P&L: 'alimentos' | 'bebidas' | 'limpieza' | 'descartables' | 'condimentos' | 'otros'. NULL = sin categorizar. */
+  categoria_pl: string | null;
 }
 
 export interface Receta {
