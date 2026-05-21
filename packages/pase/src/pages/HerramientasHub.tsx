@@ -1,4 +1,5 @@
 import { useState, lazy, Suspense } from "react";
+import { useNavigate } from "react-router-dom";
 import type { Usuario, Local } from "../types";
 import { tienePermiso } from "../lib/auth";
 import { PageHeader, FolderIcon, DocumentIcon, AlertIcon, UploadIcon, KeyIcon, ReceiptIcon } from "../components/ui";
@@ -38,7 +39,7 @@ interface Props {
   localActivo: number | null;
 }
 
-type ToolId = "importar" | "lector_mp" | "blindaje" | "ajustes_dashboards" | "codigos_manager" | "contador_iva";
+type ToolId = "importar" | "lector_mp" | "blindaje" | "ajustes_dashboards" | "codigos_manager" | "contador_iva" | "mensajeria";
 
 interface ToolDef {
   id: ToolId;
@@ -48,6 +49,9 @@ interface ToolDef {
   slug: string;
   /** Ícono SVG line-art (component). */
   Icon: typeof FolderIcon;
+  /** Si está set, el card NAVEGA a esa URL en vez de abrir el modal embebido.
+   *  Útil para herramientas que necesitan pantalla completa (ej. Mensajería). */
+  navigateTo?: string;
 }
 
 const TOOLS: ToolDef[] = [
@@ -93,9 +97,18 @@ const TOOLS: ToolDef[] = [
     slug: "codigos_manager",
     Icon: KeyIcon,
   },
+  {
+    id: "mensajeria",
+    label: "Mensajería 💬",
+    description: "Bot de Instagram con memoria. Ver conversaciones, tomar el control y responder como humano.",
+    slug: "mensajeria",
+    Icon: DocumentIcon,
+    navigateTo: "/mensajeria",
+  },
 ];
 
 export default function HerramientasHub({ user, locales, localActivo }: Props) {
+  const navigate = useNavigate();
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
   const toolsHabilitadas = TOOLS.filter(t => tienePermiso(user, t.slug));
 
@@ -138,7 +151,13 @@ export default function HerramientasHub({ user, locales, localActivo }: Props) {
           <button
             key={t.id}
             type="button"
-            onClick={() => setActiveTool(t.id)}
+            onClick={() => {
+              if (t.navigateTo) {
+                navigate(t.navigateTo);
+              } else {
+                setActiveTool(t.id);
+              }
+            }}
             style={{
               display: "flex",
               flexDirection: "column",
