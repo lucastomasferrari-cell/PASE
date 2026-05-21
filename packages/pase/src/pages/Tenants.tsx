@@ -35,21 +35,18 @@ export default function Tenants({ user }: TenantsProps) {
 
   const load = async () => {
     setLoading(true);
-    const { data: ts, error: tsErr } = await db.from("tenants").select("*").order("created_at", { ascending: false });
-    if (tsErr) {
-      console.error("Error cargando tenants:", tsErr);
+    // Fix auditoría 2026-05-21 ALTO-6: antes hacía N+1 (1 SELECT tenants +
+    // 2 COUNTs por cada tenant en Promise.all). Ahora 1 RPC con LEFT JOIN.
+    const { data: rows, error: rpcErr } = await db.rpc("fn_tenants_con_counts");
+    if (rpcErr) {
+      console.error("Error cargando tenants:", rpcErr);
       setLoading(false);
       return;
     }
-    const list = (ts || []) as Tenant[];
-
-    // Counts: locales y usuarios por tenant. RLS deja al superadmin ver todos.
-    const enriched: TenantWithCounts[] = await Promise.all(list.map(async (t) => {
-      const [{ count: locCount }, { count: usrCount }] = await Promise.all([
-        db.from("locales").select("*", { count: "exact", head: true }).eq("tenant_id", t.id),
-        db.from("usuarios").select("*", { count: "exact", head: true }).eq("tenant_id", t.id),
-      ]);
-      return { ...t, num_locales: locCount || 0, num_usuarios: usrCount || 0 };
+    const enriched: TenantWithCounts[] = ((rows || []) as Array<TenantWithCounts & { num_locales: number; num_usuarios: number }>).map(r => ({
+      ...r,
+      num_locales: Number(r.num_locales) || 0,
+      num_usuarios: Number(r.num_usuarios) || 0,
     }));
     setTenants(enriched);
     setLoading(false);

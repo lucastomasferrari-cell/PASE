@@ -471,10 +471,26 @@ async function handleNotifyPedido(req, res) {
   // Lookup venta + local. Idempotency: si ya hay notif_email_recibido_at, skip.
   const { data: venta, error: verr } = await supabase
     .from('ventas_pos')
-    .select('id, local_id, numero_local, total, tipo_entrega, cliente_nombre, notif_email_recibido_at, programada_para')
+    .select('id, local_id, numero_local, total, tipo_entrega, cliente_nombre, cliente_email, notif_email_recibido_at, programada_para')
     .eq('id', venta_id)
     .single();
   if (verr || !venta) { res.status(404).json({ error: 'Venta no encontrada' }); return; }
+
+  // Fix auditoría 2026-05-21 ALTO-3: validar que email_destinatario sea el
+  // del cliente de la venta. Antes el endpoint era anónimo + sin validación
+  // → spam dirigido con dominio del local víctima.
+  // - Si venta tiene cliente_email guardado: debe matchear.
+  // - Si no lo tiene: lo guardamos ahora (1er envío, legítimo del cliente).
+  if (venta.cliente_email) {
+    if (venta.cliente_email.toLowerCase().trim() !== email_destinatario.toLowerCase().trim()) {
+      res.status(403).json({ error: 'EMAIL_MISMATCH' });
+      return;
+    }
+  } else {
+    // Persistir el email para validación de notif siguientes.
+    // eslint-disable-next-line pase-local/no-direct-financiera-write -- campo no-financiero
+    await supabase.from('ventas_pos').update({ cliente_email: email_destinatario }).eq('id', venta_id);
+  }
 
   if (venta.notif_email_recibido_at) {
     res.status(200).json({ ok: true, skipped: 'YA_ENVIADO', sent_at: venta.notif_email_recibido_at });
@@ -552,10 +568,15 @@ async function handleNotifyListo(req, res) {
     return;
   }
 
-  // Email viene del body o de la columna ventas_pos.cliente_email (migration
-  // 202605200200). Si no hay ninguno, skip silencioso — pedidos sin email
-  // (POS interno o cliente que no quiso dar) no rompen el flow del POS.
-  const emailFinal = email_destinatario || venta.cliente_email;
+  // Fix auditoría 2026-05-21 ALTO-3: si el body trae email_destinatario,
+  // debe matchear con venta.cliente_email (evitar spam con dominio víctima).
+  // Si solo está en DB, usarlo. Si ninguno, skip silencioso.
+  if (email_destinatario && venta.cliente_email
+      && email_destinatario.toLowerCase().trim() !== venta.cliente_email.toLowerCase().trim()) {
+    res.status(403).json({ error: 'EMAIL_MISMATCH' });
+    return;
+  }
+  const emailFinal = venta.cliente_email || email_destinatario;
   if (!emailFinal) {
     res.status(200).json({ ok: true, skipped: 'NO_EMAIL' });
     return;

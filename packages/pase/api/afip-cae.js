@@ -37,12 +37,11 @@
 import { createClient } from '@supabase/supabase-js';
 import { Afip } from '@afipsdk/afip.js';
 import { checkUserAuth } from './_user-auth.js';
+import { setCorsHeaders } from './_cors.js';
 
 export default async function handler(req, res) {
-  // CORS — el browser hace OPTIONS preflight desde lib/afip/client.ts
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'authorization, content-type');
+  // Fix auditoría 2026-05-21 ALTO-5: CORS allow-list explícito.
+  setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'METHOD_NOT_ALLOWED' });
 

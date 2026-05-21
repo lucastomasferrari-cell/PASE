@@ -1,3 +1,5 @@
+import { setCorsHeaders } from './_cors.js';
+
 // Endpoint para crear un tenant nuevo end-to-end.
 //
 // Flow:
@@ -25,13 +27,10 @@
 //   500 — error inesperado (auth.admin falló, RPC falló, etc.).
 
 export default async function handler(req, res) {
-  // CORS: el admin-console vive en otro dominio (deploy Vercel separado) y
-  // necesita poder llamar este endpoint. La auth se hace por JWT en
-  // Authorization header — no usamos cookies — así que es seguro aceptar
-  // cualquier origin.
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  // Fix auditoría 2026-05-21 ALTO-5: CORS allow-list explícito en vez de "*".
+  // El admin-console vive en otro dominio (deploy Vercel separado) — la auth
+  // JWT mitiga, pero validar Origin reduce superficie si un token se roba.
+  setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   if (req.method !== 'POST') {
