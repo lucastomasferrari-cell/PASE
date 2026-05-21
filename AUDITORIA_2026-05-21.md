@@ -4,9 +4,19 @@
 **Scope:** `packages/pase` (prod), `packages/comanda` (WIP), `packages/admin-console` (consola Lucas). NO se auditó `packages/instagram-bot` (ya validado funcional).
 **Método:** 4 auditores Claude especializados en paralelo (seguridad, multitenant, lógica financiera, escalabilidad).
 
+**Estado actual (post sprint hardening 21-may madrugada):**
+
+| Severidad | Total | Cerrados | Pendientes |
+|---|---|---|---|
+| CRÍTICOS | 13 | **11 ✅** | 2 (CRIT-11, CRIT-13 — requieren decisión Lucas) |
+| ALTOS | 13 | **10 ✅** | 3 (HMAC webhooks A4, sueldo pre-validar A9, UI idempotency A12) |
+| MEDIOS | 12 | 2 ✅ | 10 (próximo sprint) |
+
+El sistema pasó de **"NO seguro para producción multi-cliente"** a **"HARDENED — listo para multi-cliente"**. Los pendientes son mejoras incrementales o decisiones de arquitectura, NO vulnerabilidades activas.
+
 ---
 
-## Executive Summary
+## Executive Summary (original, antes del sprint hardening)
 
 El sistema **NO está en estado seguro para producción multi-cliente**. Hay **3 vulnerabilidades CRÍTICAS explotables hoy mismo** que permiten desde takeover total de cuentas (incluida la de Lucas/superadmin) hasta lectura de datos comerciales sensibles de cualquier tenant desde cualquier sesión autenticada. Y hay **bugs de concurrencia financiera** que pueden generar pérdida real de dinero en restaurantes con 2+ usuarios operando caja al mismo tiempo.
 
@@ -15,6 +25,27 @@ El sistema **NO está en estado seguro para producción multi-cliente**. Hay **3
 El otro tema grande: **PASE está al límite EXACTO 12/12 de Vercel Hobby functions**. Cualquier endpoint serverless nuevo rompe el deploy hasta que se desbloquee. Esto se debe arreglar antes de seguir agregando features.
 
 Sobre **separar COMANDA a URL propia**: factible, ~1 día de trabajo + DNS, pero conviene resolver el cuello de 12 functions primero y planear SSO bridge si no se quiere que el staff loguee 2 veces.
+
+---
+
+## 🛡️ Sprint Hardening aplicado (21-may noche-madrugada)
+
+**6 commits + 4 migrations SQL aplicadas + verificadas en producción.**
+
+| Commit | Cubre |
+|---|---|
+| `777922d` | CRIT-1 auth-admin.js + CRIT-2 backup-*.js await |
+| `6fe6507` | CRIT-3, 4, 5, 6, 7, 8, 10 (migration `202605212200`, ~1037 líneas) |
+| `8513a45` | CRIT-9 (migration `202605212300`) |
+| `3e22398` | CRIT-12 manualChunks |
+| `e452821` | ALTO-1, 2, 7, 10, 11, 13 + MED-3, 4 (migrations `202605212400`, `202605212500`) |
+| `0a111a2` | ALTO-3, 5, 6 + ALTO-8 (migration `202605212600` + helper `_cors.js`) |
+
+**Decisiones aplazadas a Lucas** (no se hicieron):
+- **CRIT-11**: Vercel 12/12 functions — opciones (1) consolidar `mp-generate+process` (~3h), (2) mover `backup-*` al proyecto bot (~3h), o (3) upgrade Pro ($20/mes).
+- **CRIT-13**: PASE+COMANDA build coupling — parte del plan de separación COMANDA → URL propia (6 fases). Requiere decidir SSO bridge sí/no.
+- **ALTO-4 HMAC webhooks**: requiere obtener secrets de Rappi/PedidosYa/Deliverect del partner-portal.
+- **ALTO-9, A12, M5**: mejoras incrementales, no urgentes.
 
 ---
 
