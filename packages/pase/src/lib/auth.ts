@@ -26,7 +26,7 @@ export const ROLES: Record<string, { label: string; color: string; permisos?: st
   // permisos de UI (todos los módulos del MODULOS array).
   superadmin:{ label:"Super Admin",color:"#DC2626" },
   dueno:     { label:"Dueño",      color:"#9333EA" },
-  admin:     { label:"Admin",      color:"#3B82F6", permisos:["negocio","finanzas","objetivos","ajustes","ventas","compras","remitos","gastos","caja","proveedores","rrhh","blindaje","eerr"] },
+  admin:     { label:"Admin",      color:"#3B82F6", permisos:["negocio","finanzas","objetivos","ajustes","ventas","compras","remitos","gastos","caja","proveedores","rrhh","blindaje","eerr","rentabilidad"] },
   encargado: { label:"Encargado",  color:"#6B7280", permisos:["caja","ventas"] },
   // Rol "compras" incluye compras_anular por retro-compatibilidad (antes
   // anulaba sin chequeo). Si querés un "compras lite" sin poder anular,
@@ -79,6 +79,9 @@ export const MODULOS = [
   { slug:"negocio", label:"Negocio", icon:"📊" },
   { slug:"finanzas", label:"Finanzas", icon:"💼" },
   { slug:"objetivos", label:"Objetivos", icon:"◎" },
+  // Rentabilidad: Stock valorizado + CMV teórico vs real + Simulador + Alertas.
+  // Visión PASE original (doc Lucas): "el lugar donde se protege la rentabilidad".
+  { slug:"rentabilidad", label:"Rentabilidad", icon:"📈" },
   { slug:"eerr", label:"Reportes", icon:"📊" },
   { slug:"rrhh", label:"Equipo", icon:"💼" },
   { slug:"ajustes", label:"Ajustes", icon:"⚙" },

@@ -58,6 +58,7 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   // === Dirección ===
   { path: "/negocio",                    slug: "negocio",       label: "Negocio",         sec: "Dirección" },
   { path: "/finanzas",                   slug: "finanzas",      label: "Finanzas",        sec: "Dirección" },
+  { path: "/rentabilidad",               slug: "rentabilidad",  label: "Rentabilidad",    sec: "Dirección" },
   { path: "/objetivos",                  slug: "objetivos",     label: "Objetivos",       sec: "Dirección" },
   { path: "/reportes",                   slug: "eerr",          label: "Reportes",        sec: "Dirección" },
 

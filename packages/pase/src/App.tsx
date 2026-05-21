@@ -38,6 +38,7 @@ const RRHHPage = lazy(() => import("./pages/RRHH"));
 const Tenants = lazy(() => import("./pages/Tenants"));
 const DesignSystem = lazy(() => import("./pages/DesignSystem"));
 const Finanzas = lazy(() => import("./pages/Finanzas"));
+const Rentabilidad = lazy(() => import("./pages/Rentabilidad"));
 const Negocio = lazy(() => import("./pages/Negocio"));
 const Objetivos = lazy(() => import("./pages/Objetivos"));
 const Ajustes = lazy(() => import("./pages/Ajustes"));
@@ -447,6 +448,9 @@ function AppMain() {
               {/* Dirección */}
               <Route path="/negocio" element={<Negocio user={user || undefined} locales={locales} localActivo={localActivo}/>} />
               <Route path="/finanzas" element={<Finanzas user={user || undefined} locales={locales} localActivo={localActivo}/>} />
+              <Route path="/rentabilidad" element={
+                user ? <Rentabilidad user={user} locales={locales} localActivo={localActivo}/> : <Navigate to="/" replace/>
+              } />
               <Route path="/objetivos" element={
                 user?.tenant_id ? <Objetivos locales={locales} tenantId={user.tenant_id} localActivo={localActivo}/> : <Navigate to="/" replace/>
               } />
