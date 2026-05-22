@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node ../../scripts/build-comanda-into-pase.mjs && vite build",
-    "build:pase-only": "vite build",
+    "build": "vite build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",

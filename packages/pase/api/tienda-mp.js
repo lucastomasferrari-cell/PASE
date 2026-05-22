@@ -27,6 +27,11 @@ import { Afip } from '@afipsdk/afip.js';
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
+// URL pública de COMANDA (post-cleanup 22-may noche: ya no vive embebida en
+// /comanda-app/, tiene URL propia). Las URLs de seguimiento/calificación que
+// salen por email apuntan acá. Default a la URL canónica si no hay env var.
+const COMANDA_PUBLIC_URL = (process.env.VITE_COMANDA_URL || 'https://pase-comanda.vercel.app').replace(/\/$/, '');
+
 function db() {
   if (!SUPABASE_URL || !SERVICE_KEY) throw new Error('Faltan SUPABASE_URL o SUPABASE_SERVICE_KEY');
   return createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
@@ -505,9 +510,8 @@ async function handleNotifyPedido(req, res) {
     .select('slug, telefono, tiempo_delivery_min, tiempo_retiro_min')
     .eq('local_id', venta.local_id).single();
 
-  // URL pública de seguimiento. Origin = host del request (PASE).
-  const origin = req.headers.origin || (`https://${req.headers.host || 'pase-yndx.vercel.app'}`);
-  const seguimientoUrl = `${origin}/comanda-app/tienda/${cls?.slug ?? ''}/confirmacion/${venta_id}`;
+  // URL pública de seguimiento — apunta al deploy independiente de COMANDA.
+  const seguimientoUrl = `${COMANDA_PUBLIC_URL}/tienda/${cls?.slug ?? ''}/confirmacion/${venta_id}`;
 
   const tiempo = venta.tipo_entrega === 'delivery'
     ? cls?.tiempo_delivery_min
@@ -718,8 +722,7 @@ async function handleNotifyEntregado(req, res) {
 
   // URL pública con el form de review (la confirmación detecta entregada
   // y muestra el ReviewForm).
-  const origin = req.headers.origin || (`https://${req.headers.host || 'pase-yndx.vercel.app'}`);
-  const calificarUrl = `${origin}/comanda-app/tienda/${cls?.slug ?? ''}/confirmacion/${venta_id}`;
+  const calificarUrl = `${COMANDA_PUBLIC_URL}/tienda/${cls?.slug ?? ''}/confirmacion/${venta_id}`;
 
   const html = htmlPedidoEntregado({
     localNombre: local?.nombre ?? '',
@@ -902,8 +905,7 @@ async function sendNotifyEntregadoInline(supabase, ventaId, req) {
     .select('slug')
     .eq('local_id', venta.local_id).single();
 
-  const origin = req.headers.origin || (`https://${req.headers.host || 'pase-yndx.vercel.app'}`);
-  const calificarUrl = `${origin}/comanda-app/tienda/${cls?.slug ?? ''}/confirmacion/${ventaId}`;
+  const calificarUrl = `${COMANDA_PUBLIC_URL}/tienda/${cls?.slug ?? ''}/confirmacion/${ventaId}`;
 
   const html = htmlPedidoEntregado({
     localNombre: local?.nombre ?? '',

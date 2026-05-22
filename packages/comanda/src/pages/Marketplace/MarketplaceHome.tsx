@@ -330,7 +330,10 @@ function RestauranteCard({ local, distanciaKm }: { local: LocalMarketplace; dist
   async function compartir(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    const url = `${window.location.origin}/comanda-app/tienda/${local.slug}`;
+    // Post 22-may noche: COMANDA vive en su URL propia (pase-comanda.vercel.app),
+    // ya no embebida bajo /comanda-app/. El share apunta al origin actual + path
+    // limpio. Si el user comparte desde el deploy nuevo, el link es directo.
+    const url = `${window.location.origin}/tienda/${local.slug}`;
     const titulo = `${local.nombre} — pedí online`;
     if (navigator.share) {
       try { await navigator.share({ title: titulo, url }); } catch { /* user canceled */ }

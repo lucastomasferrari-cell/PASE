@@ -1,8 +1,19 @@
 {
   "outputDirectory": "dist",
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
+  "redirects": [
+    {
+      "source": "/comanda-app",
+      "destination": "https://pase-comanda.vercel.app/",
+      "permanent": true
+    },
+    {
+      "source": "/comanda-app/:path*",
+      "destination": "https://pase-comanda.vercel.app/:path*",
+      "permanent": true
+    }
+  ],
   "rewrites": [
-    { "source": "/comanda-app/(.*)", "destination": "/comanda-app/index.html" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "functions": {
@@ -39,25 +50,7 @@
       ]
     },
     {
-      "source": "/comanda-app/",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
-      ]
-    },
-    {
-      "source": "/comanda-app/index.html",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
-      ]
-    },
-    {
       "source": "/assets/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
-      ]
-    },
-    {
-      "source": "/comanda-app/assets/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]

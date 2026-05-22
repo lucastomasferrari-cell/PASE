@@ -1,16 +1,16 @@
 // Helper para abrir COMANDA con SSO bridge.
 //
-// COMANDA vive en URL propia desde 21-may noche. Como Supabase Auth no
-// comparte cookie cross-domain, sin bridge el staff tendría que loguearse
-// 2 veces. Este helper:
+// COMANDA vive en URL propia desde 22-may noche (deploy `pase-comanda.vercel.app`).
+// Como Supabase Auth no comparte cookie cross-domain, sin bridge el staff
+// tendría que loguearse 2 veces. Este helper:
 //   1. Lee la sesión actual de Supabase Auth (access + refresh tokens).
 //   2. La cambia por una fresca contra el endpoint /api/auth-bridge del bot.
 //   3. Abre COMANDA con los tokens en query string (?at=... &rt=...).
 //   4. COMANDA detecta los tokens en main.tsx y hace db.auth.setSession.
 //
-// Fallback: si VITE_COMANDA_URL no está configurada O el bridge falla,
-// abre /comanda-app/ (la versión embedded en PASE — mismo dominio, no
-// hace falta SSO porque comparte cookie de auth).
+// El embed `/comanda-app/` fue eliminado el 22-may noche en el cleanup post-
+// SSO bridge. Si VITE_COMANDA_URL no está configurada (típico en dev local),
+// el botón alerta al user en vez de fallar silencioso.
 
 import { db } from "./supabase";
 
@@ -18,23 +18,25 @@ const COMANDA_URL = (import.meta.env.VITE_COMANDA_URL as string | undefined)?.tr
 const BOT_URL = (import.meta.env.VITE_IG_BOT_URL as string | undefined)?.trim() || "https://pase-instagram-bot.vercel.app";
 
 /**
- * Abre COMANDA en una nueva tab. Si VITE_COMANDA_URL apunta a otro dominio,
- * usa el bridge SSO para que el user no tenga que loguearse de nuevo.
+ * Abre COMANDA en una nueva tab con SSO automático.
  *
- * @param path Ruta dentro de COMANDA (default "/pos"). Sin slash inicial.
+ * @param path Ruta dentro de COMANDA (default "/"). Sin slash inicial.
  */
 export async function abrirComanda(path: string = "/"): Promise<void> {
-  // Si COMANDA_URL no está configurada o apunta a /comanda-app (embedded),
-  // abrimos directo — no hace falta SSO porque comparte cookie.
-  const targetUrl = COMANDA_URL && !COMANDA_URL.includes("/comanda-app")
-    ? COMANDA_URL
-    : "/comanda-app";
+  if (!COMANDA_URL) {
+    alert(
+      "VITE_COMANDA_URL no configurada. En prod debería apuntar a https://pase-comanda.vercel.app. " +
+      "En dev local, seteala en .env.local para que el botón funcione.",
+    );
+    return;
+  }
 
-  const isExternal = targetUrl.startsWith("http") && !targetUrl.startsWith(window.location.origin);
+  const isExternal = COMANDA_URL.startsWith("http") && !COMANDA_URL.startsWith(window.location.origin);
 
   if (!isExternal) {
-    // Same-origin → abrir directo, la cookie de Supabase Auth viaja.
-    window.open(`${targetUrl}${path}`, "_blank", "noopener");
+    // Same-origin (raro pero soportado: dev con proxy) → abrir directo,
+    // la cookie de Supabase Auth viaja.
+    window.open(`${COMANDA_URL}${path}`, "_blank", "noopener");
     return;
   }
 
@@ -60,7 +62,7 @@ export async function abrirComanda(path: string = "/"): Promise<void> {
       return;
     }
 
-    const url = new URL(`${targetUrl}${path}`);
+    const url = new URL(`${COMANDA_URL}${path}`);
     url.searchParams.set("at", data.access_token);
     url.searchParams.set("rt", data.refresh_token);
     window.open(url.toString(), "_blank", "noopener");

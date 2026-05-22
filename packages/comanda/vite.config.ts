@@ -3,8 +3,9 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'node:path';
 
-// `base` se setea via env var VITE_BASE_PATH cuando se buildea embebido en
-// PASE (script scripts/build-comanda-into-pase.mjs). En dev queda "/".
+// `base` queda fijo en "/" desde el cleanup 22-may noche (COMANDA pasó a
+// URL propia, ya no se buildea con base="/comanda-app/"). Mantengo la env
+// var por si en el futuro se reintroduce el embed o se sirve bajo sub-path.
 export default defineConfig({
   base: process.env.VITE_BASE_PATH ?? '/',
   plugins: [

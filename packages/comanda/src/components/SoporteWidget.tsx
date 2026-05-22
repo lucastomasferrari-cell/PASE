@@ -1,8 +1,8 @@
 // Widget de soporte en COMANDA. Mismo diseño funcional que el de PASE pero
-// con Tailwind y radix. Llama a /api/claude (vive en pase-yndx.vercel.app
-// pero COMANDA hoy se sirve embebida en PASE bajo /comanda-app/*, así que
-// fetch relativo funciona). Si en algún momento COMANDA se despliega en un
-// dominio distinto, hay que agregar CORS al endpoint o usar URL absoluta.
+// con Tailwind y radix. Llama a /api/claude — el fetch relativo funciona
+// porque `packages/comanda/vercel.json` tiene rewrite `/api/:path*` →
+// `https://pase-yndx.vercel.app/api/:path*` (proxy server-side, sin CORS).
+// Sumado post cleanup 22-may noche cuando COMANDA se separó a URL propia.
 
 import { useState, useRef, useEffect } from 'react';
 import { LifeBuoy, X, Send, Bug, RotateCcw } from 'lucide-react';
