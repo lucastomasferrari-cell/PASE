@@ -622,8 +622,18 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const vincularRemitoAFactura = async (fid: string) => {
     const r = vincModal;
     if (!r) return;
-    // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F12: vincular remito↔factura debe pasar por RPC vincular_remito que valide consistencia (proveedor, monto) atomicamente.
-    await db.from("remitos").update({ estado: "vinculado", factura_id: fid }).eq("id", r.id);
+    // Fix bug Anto 21-may: si el remito ya estaba pagado, la RPC propaga
+    // el pago a la factura (estado='pagada' si cubre total). Antes el UPDATE
+    // directo dejaba la factura como pendiente aunque el dinero ya hubiera
+    // salido por el pago del remito. Migration 202605213100.
+    const { error } = await db.rpc("vincular_remito_factura", {
+      p_remito_id: r.id,
+      p_factura_id: fid,
+    });
+    if (error) {
+      alert("Error al vincular: " + translateRpcError(error));
+      return;
+    }
     setVincModal(null); load();
   };
 

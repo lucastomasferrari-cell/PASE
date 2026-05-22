@@ -38,6 +38,9 @@ const MAP: Record<string, string> = {
   REMITO_YA_PAGADO: "Este remito ya está pagado",
   REMITO_ANULADO: "El remito está anulado",
   REMITO_YA_ANULADO: "El remito ya estaba anulado",
+  REMITO_YA_VINCULADO: "Este remito ya está vinculado a otra factura",
+  PROVEEDOR_DISTINTO: "El remito y la factura son de proveedores distintos",
+  PARAMETROS_INVALIDOS: "Faltan datos requeridos para la operación",
 
   // Movimientos
   MOVIMIENTO_NO_ENCONTRADO: "El movimiento no existe",
