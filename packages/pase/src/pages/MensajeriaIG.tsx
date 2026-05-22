@@ -23,6 +23,7 @@ import { EmptyState, InfoTooltip } from "../components/ui";
 import { IGConfigModal } from "./mensajeria/IGConfigModal";
 import { IGClienteModal } from "./mensajeria/IGClienteModal";
 import { IGConexionPanel } from "./mensajeria/IGConexionPanel";
+import { NotificacionesPushToggle } from "./mensajeria/NotificacionesPushToggle";
 import type { Usuario } from "../types";
 
 // URL del bot (deploy Vercel separado). Configurable por env.
@@ -272,6 +273,10 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
 
       {/* Panel de conexión Instagram (botón si no conectado / estado si conectado) */}
       <IGConexionPanel />
+
+      {/* Toggle de notificaciones push (visible para cualquier user que llegó
+          a Mensajería — el gate de permiso `mensajeria` ya filtró antes). */}
+      <NotificacionesPushToggle />
 
       {/* KPIs */}
       <div className="grid4" style={{ marginBottom: 16 }}>

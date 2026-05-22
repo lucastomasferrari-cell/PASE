@@ -61,15 +61,13 @@ export async function notificarDMNuevo({ db, cfg, cliente, texto, conv }) {
     return { sent: 0, skipped: 1, reason: 'cooldown' };
   }
 
-  // Buscar suscripciones del tenant del bot:
-  // - Dueño/admin del MISMO tenant que el config (reciben push de SUS DMs)
-  // - Superadmin (Lucas, tenant_id=NULL — recibe push de TODOS los tenants
-  //   del ecosistema, para soporte global)
-  // Ajustado 22-may noche: antes era solo superadmin global, no escalable
-  // cuando hay varios tenants.
+  // Buscar suscripciones de cualquier user del tenant del bot.
+  // Ajustado 22-may noche por Lucas: sin filtro de rol. Si el user se suscribió
+  // (vía el toggle en /mensajeria al que solo accede gente con permiso del
+  // módulo) → ya pasó el gate, recibe push.
+  // Superadmin con tenant_id=NULL recibe push de TODOS los tenants (Lucas global).
   const { data: subs } = await db.from('admin_push_subscriptions')
-    .select('endpoint, p256dh, auth, user_id, usuarios!inner(rol, tenant_id)')
-    .in('usuarios.rol', ['dueno', 'admin', 'superadmin'])
+    .select('endpoint, p256dh, auth, user_id, usuarios!inner(tenant_id)')
     .or(`tenant_id.eq.${cfg.tenant_id},tenant_id.is.null`, { foreignTable: 'usuarios' });
 
   if (!subs || subs.length === 0) {

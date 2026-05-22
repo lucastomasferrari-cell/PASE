@@ -1,14 +1,13 @@
 // Botón para activar/desactivar notificaciones push de DMs IG en el celu.
-// Solo visible para superadmin (Lucas). El bot IG invoca webpush cuando
-// llega un DM de cliente → llega notif al device suscrito.
+// Sin restricciones de rol (Lucas 22-may noche): si el user llegó a la
+// pantalla de Mensajería, ya pasó el gate de permiso `mensajeria` →
+// puede suscribirse. El bot IG invoca webpush cuando llega un DM al
+// tenant del user.
 
 import { useEffect, useState, useCallback } from "react";
 import { getPushPermissionStatus, isCurrentlySubscribed, subscribeToPush, unsubscribeFromPush } from "../../lib/push";
-import type { Usuario } from "../../types";
 
-interface Props { user: Usuario; }
-
-export function NotificacionesPushToggle({ user }: Props) {
+export function NotificacionesPushToggle() {
   const [subscribed, setSubscribed] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err" | "info"; text: string } | null>(null);
@@ -18,11 +17,6 @@ export function NotificacionesPushToggle({ user }: Props) {
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
-
-  // Dueño/admin/superadmin se pueden suscribir (Lucas 22-may noche: el botón
-  // estaba limitado a superadmin pero Lucas opera como dueño en el día a día).
-  // RLS de la tabla limita la suscripción al propio usuario.
-  if (user?.rol !== "superadmin" && user?.rol !== "dueno" && user?.rol !== "admin") return null;
 
   const perm = getPushPermissionStatus();
   if (perm === "unsupported") {
