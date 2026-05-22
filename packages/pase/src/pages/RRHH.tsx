@@ -746,6 +746,48 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     setNovMap(prev => ({ ...prev, [key]: { ...prev[key], estado: "borrador" } }));
   };
 
+  // Eliminar novedad completa. Usos:
+  //   1. Convertir mensual existente a quincenal (Lucas 21-may noche):
+  //      borrar la mensual, recargar Novedades, aparecen 2 slots vacíos Q1+Q2.
+  //   2. Limpiar novedad cargada por error.
+  // Bloqueos:
+  //   - Si la liquidación está pagada (pagos_realizados > 0): NO permite borrar.
+  //     Hay que anular el pago primero desde Pagos. (Trazabilidad financiera.)
+  const eliminarNov = async (key: string) => {
+    const nov = novMap[key];
+    if (!nov?.id) {
+      // No existe en DB todavía — solo limpiamos el slot del mapa.
+      setNovMap(prev => ({ ...prev, [key]: {
+        inasistencias: 0, presentismo: "MANTIENE", horas_extras: 0, dobles: 0,
+        feriados: 0, adelantos: 0, vacaciones_dias: 0, fecha_inicio_mes: null,
+        observaciones: "", estado: "borrador",
+        cuota_num: prev[key]?.cuota_num, cuotas_total: prev[key]?.cuotas_total,
+      } }));
+      return;
+    }
+    // Chequear si hay liquidaciones pagadas.
+    const { data: liqs } = await db.from("rrhh_liquidaciones")
+      .select("id, pagos_realizados, estado")
+      .eq("novedad_id", nov.id);
+    const hayPagada = (liqs || []).some(l => Number(l.pagos_realizados || 0) > 0 || l.estado === "pagado");
+    if (hayPagada) {
+      alert("Esta novedad tiene una liquidación con pagos registrados. Primero anulá el pago desde Pagos.");
+      return;
+    }
+    const cuotasTotal = nov.cuotas_total ?? 1;
+    const motivo = cuotasTotal === 1
+      ? "Eliminar la novedad de este mes? Si el empleado tiene modo_pago QUINCENAL/SEMANAL, al recargar Novedades vas a ver los slots vacíos por quincena/semana."
+      : "Eliminar esta novedad? Se borra del mes y queda en blanco para volver a cargar.";
+    if (!confirm(motivo)) return;
+
+    // Borrar liquidaciones pendientes + novedad.
+    // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F14: borrado de novedad debe ir por RPC eliminar_novedad atómica.
+    await db.from("rrhh_liquidaciones").delete().eq("novedad_id", nov.id);
+    await db.from("rrhh_novedades").delete().eq("id", nov.id);
+    showToast("Novedad eliminada");
+    loadNovedades();
+  };
+
   // BUG 4: bulk-confirmar todos los empleados en borrador. Cierra de un tirón
   // las novedades del mes y crea las liquidaciones (estado "pendiente"), que
   // es el equivalente a "listo para pago".
@@ -901,6 +943,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
           confirmarUno={confirmarUno}
           confirmarTodas={confirmarTodas}
           editarNov={editarNov}
+          eliminarNov={eliminarNov}
           irAPagos={irAPagosDesdeNovedades}
           abrirModalAdelanto={(empId: string) => {
             // Pre-cargar el empleado en el form + abrir modal (que vive

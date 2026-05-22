@@ -49,6 +49,7 @@ interface TabNovedadesProps {
   confirmarUno: (emp: Empleado, cuotaNum: number, cuotasTotal: number) => Promise<void>;
   confirmarTodas: () => Promise<void>;
   editarNov: (key: string) => Promise<void>;
+  eliminarNov: (key: string) => Promise<void>;
   irAPagos: () => void;
   /** Abre el modal de adelanto pre-cargando este empleado. Si no se pasa,
    *  el botón "+ Adelanto" no aparece. */
@@ -59,7 +60,7 @@ interface TabNovedadesProps {
 export function TabNovedades({
   novMes, setNovMes, novAnio, setNovAnio, novLocal, setNovLocal,
   locsDisp, novLoading, novSlots, novMap, novAdelantosPorEmp,
-  updateNov, confirmarUno, confirmarTodas, editarNov, irAPagos,
+  updateNov, confirmarUno, confirmarTodas, editarNov, eliminarNov, irAPagos,
   abrirModalAdelanto, esDueno,
 }: TabNovedadesProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -207,6 +208,7 @@ export function TabNovedades({
                 updateNov={updateNov}
                 confirmar={() => confirmarUno(slot.emp, slot.cuota_num, slot.cuotas_total)}
                 editar={() => editarNov(key)}
+                eliminar={() => eliminarNov(key)}
                 irAPagos={irAPagos}
                 onAgregarAdelanto={abrirModalAdelanto ? () => abrirModalAdelanto(slot.emp.id) : undefined}
                 esDueno={esDueno}
@@ -234,13 +236,14 @@ interface EmpleadoCardProps {
   updateNov: (slotId: string, field: keyof NovedadEditable, value: string | number) => void;
   confirmar: () => Promise<void>;
   editar: () => Promise<void>;
+  eliminar: () => Promise<void>;
   irAPagos: () => void;
   /** Opcional: callback para abrir el modal de adelanto pre-cargado. */
   onAgregarAdelanto?: () => void;
   esDueno: boolean;
 }
 
-function EmpleadoCard({ slotId, emp, cuotaNum, cuotasTotal, nov, adelantosDelMes, expanded, onToggle, updateNov, confirmar, editar, irAPagos, onAgregarAdelanto, esDueno }: EmpleadoCardProps) {
+function EmpleadoCard({ slotId, emp, cuotaNum, cuotasTotal, nov, adelantosDelMes, expanded, onToggle, updateNov, confirmar, editar, eliminar, irAPagos, onAgregarAdelanto, esDueno }: EmpleadoCardProps) {
   const vd = calcularValorDoble(emp);
   const calc = calcLiquidacion(emp, nov, vd, adelantosDelMes);
   const total = calc.total_a_pagar;
@@ -384,11 +387,25 @@ function EmpleadoCard({ slotId, emp, cuotaNum, cuotasTotal, nov, adelantosDelMes
                 onChange={e => updateNov(slotId,"observaciones", e.target.value)} />
             </Field>
 
-            {confirmado && esDueno && (
-              <button className="btn btn-ghost btn-sm" style={{marginTop:12}} onClick={editar}>
-                ← Volver a borrador para editar
-              </button>
-            )}
+            <div style={{display:"flex", gap:8, marginTop:12, flexWrap:"wrap"}}>
+              {confirmado && esDueno && (
+                <button className="btn btn-ghost btn-sm" onClick={editar}>
+                  ← Volver a borrador para editar
+                </button>
+              )}
+              {esDueno && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={eliminar}
+                  title={cuotasTotal === 1
+                    ? "Eliminar novedad. Si el empleado es QUINCENAL/SEMANAL, al recargar van a aparecer los slots vacíos por cuota."
+                    : "Eliminar esta novedad. Si tiene liquidación pagada se bloquea."}
+                  style={{color:"var(--danger)"}}
+                >
+                  Eliminar
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Columna der: desglose del cálculo */}
