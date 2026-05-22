@@ -237,7 +237,13 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   // genera 2 movimientos (egreso en origen, ingreso en destino) vía RPC
   // transferencia_cuentas.
   const [transfModal, setTransfModal] = useState(false);
-  const [transfForm, setTransfForm] = useState({fecha:toISO(today),origen:"",destino:"",monto:"",detalle:""});
+  // transfForm: ahora soporta cross-local (Lucas 22-may noche).
+  // local_destino_id null = same-local (el origen). Si se setea distinto,
+  // la transferencia es cross-local.
+  const [transfForm, setTransfForm] = useState<{
+    fecha: string; origen: string; destino: string; monto: string; detalle: string;
+    local_destino_id: number | null;
+  }>({fecha:toISO(today),origen:"",destino:"",monto:"",detalle:"",local_destino_id:null});
   const [transfSaving, setTransfSaving] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -402,7 +408,13 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     const lid = lidImplicito != null ? lidImplicito : parseInt(localFormId);
     if (!Number.isFinite(lid)) { alert("Elegí un local"); return; }
     if (!transfForm.origen || !transfForm.destino) { alert("Elegí cuenta origen y destino"); return; }
-    if (transfForm.origen === transfForm.destino) { alert("Las cuentas deben ser distintas"); return; }
+    // Validación: si es same-local (destino null o igual al origen) y misma cuenta → error.
+    // Si es cross-local, misma cuenta es OK (ej: Caja Efectivo VC → Caja Efectivo Belgrano).
+    const localDst = transfForm.local_destino_id ?? lid;
+    if (localDst === lid && transfForm.origen === transfForm.destino) {
+      alert("Las cuentas deben ser distintas dentro del mismo local");
+      return;
+    }
     const monto = parseFloat(transfForm.monto);
     if (!Number.isFinite(monto) || monto <= 0) { alert("Monto inválido"); return; }
     transfSavingRef.current = true;
@@ -415,10 +427,13 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         p_monto: monto,
         p_fecha: transfForm.fecha,
         p_detalle: transfForm.detalle || null,
+        // Si destino != origen, lo pasamos. Si es same-local, mandamos null
+        // (el RPC interpreta NULL = same-local, backward compat).
+        p_local_destino_id: localDst !== lid ? localDst : null,
       });
       if (error) { alert(translateRpcError(error)); return; }
       setTransfModal(false);
-      setTransfForm({fecha:toISO(today),origen:"",destino:"",monto:"",detalle:""});
+      setTransfForm({fecha:toISO(today),origen:"",destino:"",monto:"",detalle:"",local_destino_id:null});
       load();
     } finally {
       transfSavingRef.current = false;
@@ -936,18 +951,73 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
                   </select>
                 </div>
               )}
+              {/* Bloque CROSS-LOCAL: si hay más de un local visible, mostrar
+                  selector "Local destino" para permitir transferir entre
+                  cuentas de distintas sucursales (Lucas 22-may noche).
+                  Default: null = same local. */}
+              {locsDisp.length > 1 && (
+                <div className="field">
+                  <label>Local destino (opcional)</label>
+                  <select
+                    value={transfForm.local_destino_id ?? ""}
+                    onChange={e=>setTransfForm({...transfForm,local_destino_id: e.target.value ? Number(e.target.value) : null})}
+                  >
+                    <option value="">Mismo local (default)</option>
+                    {locsDisp.filter((l: Local)=> l.id !== (lidImplicito ?? parseInt(localFormId || "0"))).map((l: Local) => (
+                      <option key={l.id} value={l.id}>→ {l.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="form2">
                 <div className="field"><label>Cuenta origen</label><select value={transfForm.origen} onChange={e=>setTransfForm({...transfForm,origen:e.target.value})}><option value="">— elegí cuenta —</option>{cuentasOperablesList.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
-                <div className="field"><label>Cuenta destino</label><select value={transfForm.destino} onChange={e=>setTransfForm({...transfForm,destino:e.target.value})}><option value="">— elegí cuenta —</option>{cuentasOperablesList.filter(c=>c!==transfForm.origen).map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+                <div className="field">
+                  <label>Cuenta destino</label>
+                  {/* Si es cross-local, NO filtramos por cuenta distinta (se permite
+                      misma cuenta en otro local, ej: Caja Efectivo VC → Caja Efectivo Belgrano). */}
+                  <select value={transfForm.destino} onChange={e=>setTransfForm({...transfForm,destino:e.target.value})}>
+                    <option value="">— elegí cuenta —</option>
+                    {(transfForm.local_destino_id != null
+                      ? cuentasOperablesList
+                      : cuentasOperablesList.filter(c=>c!==transfForm.origen)
+                    ).map(c=><option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
               </div>
               <div className="form2">
                 <div className="field"><label>Monto $</label><input type="number" value={transfForm.monto} onChange={e=>setTransfForm({...transfForm,monto:e.target.value})} placeholder="0"/></div>
                 <div className="field"><label>Fecha</label><input type="date" value={transfForm.fecha} onChange={e=>setTransfForm({...transfForm,fecha:e.target.value})}/></div>
               </div>
               <div className="field"><label>Detalle (opcional)</label><input value={transfForm.detalle} onChange={e=>setTransfForm({...transfForm,detalle:e.target.value})} placeholder="Motivo de la transferencia..."/></div>
-              <div style={{fontSize:11,color:"var(--muted)",marginTop:8}}>Genera 2 movimientos: egreso en <b>{transfForm.origen||"origen"}</b> e ingreso en <b>{transfForm.destino||"destino"}</b>. No afecta el saldo total.</div>
+              <div style={{fontSize:11,color:"var(--muted)",marginTop:8}}>
+                {transfForm.local_destino_id != null ? (
+                  <>
+                    🔀 Transferencia <b>cross-local</b>: egresa <b>{transfForm.origen||"origen"}</b> del local actual
+                    e ingresa en <b>{transfForm.destino||"destino"}</b> de <b>{locales.find((l: Local) => l.id === transfForm.local_destino_id)?.nombre ?? "—"}</b>.
+                  </>
+                ) : (
+                  <>Genera 2 movimientos: egreso en <b>{transfForm.origen||"origen"}</b> e ingreso en <b>{transfForm.destino||"destino"}</b>. No afecta el saldo total.</>
+                )}
+              </div>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setTransfModal(false)} disabled={transfSaving}>Cancelar</button><button className="btn btn-acc" onClick={guardarTransferencia} disabled={transfSaving || !transfForm.origen || !transfForm.destino || transfForm.origen===transfForm.destino || !transfForm.monto || (necesitaSelectorLocal && !localFormId)}>{transfSaving?"Transfiriendo…":"Transferir"}</button></div>
+            <div className="modal-ft">
+              <button className="btn btn-sec" onClick={()=>setTransfModal(false)} disabled={transfSaving}>Cancelar</button>
+              <button
+                className="btn btn-acc"
+                onClick={guardarTransferencia}
+                disabled={
+                  transfSaving ||
+                  !transfForm.origen ||
+                  !transfForm.destino ||
+                  // Same-local con misma cuenta = inválido. Cross-local con misma cuenta = válido.
+                  (transfForm.local_destino_id == null && transfForm.origen === transfForm.destino) ||
+                  !transfForm.monto ||
+                  (necesitaSelectorLocal && !localFormId)
+                }
+              >
+                {transfSaving?"Transfiriendo…":"Transferir"}
+              </button>
+            </div>
           </div>
         </div>
       )}
