@@ -50,6 +50,7 @@ const LectorExtractoMP = lazy(() => import("./pages/LectorExtractoMP"));
 // reintroduce o se migra a COMANDA.
 // const Reservas = lazy(() => import("./pages/Reservas"));
 const CodigosManager = lazy(() => import("./pages/CodigosManager"));
+const ConfiguracionNotificaciones = lazy(() => import("./pages/ConfiguracionNotificaciones"));
 const HerramientasHub = lazy(() => import("./pages/HerramientasHub"));
 const DashboardHome = lazy(() => import("./dashboards/DashboardHome").then(m => ({ default: m.DashboardHome })));
 const SettingsDashboards = lazy(() => import("./dashboards/SettingsDashboards"));
@@ -409,6 +410,14 @@ function AppMain() {
                   user?.tenant_id && tienePermiso(user, "ajustes_dashboards")
                     ? <SettingsDashboards tenantId={user.tenant_id} />
                     : <Navigate to="/inicio" replace />
+                }
+              />
+              <Route
+                path="/ajustes/notificaciones"
+                element={
+                  user
+                    ? <ConfiguracionNotificaciones user={user} />
+                    : <Navigate to="/" replace />
                 }
               />
               <Route

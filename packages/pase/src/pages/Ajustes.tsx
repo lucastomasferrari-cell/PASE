@@ -415,6 +415,15 @@ export default function Ajustes({ user }: AjustesProps = {}) {
           {user && (
             <button
               className="btn btn-ghost btn-sm"
+              onClick={() => navigate("/ajustes/notificaciones")}
+              title="Configurar qué notificaciones recibís en compu y celu"
+            >
+              🔔 Notificaciones
+            </button>
+          )}
+          {user && (
+            <button
+              className="btn btn-ghost btn-sm"
               onClick={() => {
                 resetTour(user.id);
                 const slugs = getPermisos(user);

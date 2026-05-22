@@ -84,11 +84,26 @@ export async function notificarDMNuevo({ db, cfg, cliente, texto, conv }) {
     tag: `ig-conv-${conv.id}`, // mismo tag → reemplaza notif anterior
   });
 
+  // Filtrar subs cuyo dueño desactivó `ig_dm_new` en /ajustes/notificaciones.
+  // Default ON: si el user no tocó la pantalla, recibe push. Solo skip si
+  // explícitamente está enabled=false.
+  const userIds = Array.from(new Set(subs.map((s) => s.user_id)));
+  const { data: prefsRows } = await db
+    .from('notification_preferences')
+    .select('user_id, enabled')
+    .eq('notification_type', 'ig_dm_new')
+    .in('user_id', userIds);
+  const disabledUserIds = new Set(
+    (prefsRows || []).filter((r) => r.enabled === false).map((r) => r.user_id),
+  );
+  const subsToNotify = subs.filter((s) => !disabledUserIds.has(s.user_id));
+  const skippedByPref = subs.length - subsToNotify.length;
+
   let sent = 0;
   let failed = 0;
   const toDelete = [];
 
-  for (const sub of subs) {
+  for (const sub of subsToNotify) {
     try {
       await webpush.sendNotification(
         { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
@@ -115,9 +130,9 @@ export async function notificarDMNuevo({ db, cfg, cliente, texto, conv }) {
       tenant_id: cfg.tenant_id,
       conversacion_id: conv.id,
       tipo: 'push_enviado',
-      payload: { sent, failed, deleted: toDelete.length },
+      payload: { sent, failed, deleted: toDelete.length, skipped_by_pref: skippedByPref },
     });
   }
 
-  return { sent, skipped: failed, reason: 'ok' };
+  return { sent, skipped: failed, skippedByPref, reason: 'ok' };
 }
