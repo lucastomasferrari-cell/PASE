@@ -18,6 +18,9 @@
     },
     "api/diagnostic.js": {
       "maxDuration": 10
+    },
+    "api/auth-bridge.js": {
+      "maxDuration": 10
     }
   },
   "headers": [

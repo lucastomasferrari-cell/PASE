@@ -4,6 +4,7 @@ import { ROLES, tienePermiso } from "../lib/auth";
 import type { Usuario, Local, Tenant } from "../types";
 import { ThemeToggle } from "./ui/ThemeToggle";
 import { BandejaEntradaBoton } from "./BandejaEntradaBoton";
+import { abrirComanda } from "../lib/comanda-sso";
 
 interface SidebarProps {
   user: Usuario;
@@ -148,11 +149,12 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
               COMANDA esté en WIP. Sale en nueva pestaña para no perder el
               contexto de PASE. Optimizado para celular. */}
           {(user.rol === "dueno" || user.rol === "superadmin") && (
-            <a
-              href="/comanda-app/"
-              target="_blank"
-              rel="noopener"
+            <button
+              type="button"
+              onClick={() => void abrirComanda("/")}
               className="sb-comanda"
+              title="Abre COMANDA en una nueva tab. Si está en URL propia, hace SSO automático."
+              style={{background:"transparent",border:"none",cursor:"pointer",width:"100%",textAlign:"left",padding:0,font:"inherit",color:"inherit"}}
             >
               <span style={{display:"inline-flex",alignItems:"center",gap:6}}>
                 <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -161,7 +163,7 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
                 </svg>
                 Abrir COMANDA
               </span>
-            </a>
+            </button>
           )}
           <button className="sb-logout" onClick={onLogout}>Cerrar sesión →</button>
         </div>
