@@ -244,15 +244,24 @@ async function procesarMensajeEntrante({ cfg, event, sender_igsid }) {
   await marcarLeido({ pageAccessToken: cfg.page_access_token, igsid: sender_igsid });
   await escribiendo({ pageAccessToken: cfg.page_access_token, igsid: sender_igsid, on: true });
 
-  // Armar contexto: últimos N mensajes de la conversación
-  const { data: historico } = await db
+  // Armar contexto: últimos N mensajes de la conversación.
+  // Bug encontrado 22-may noche (Lucas reportó que el bot no respondía
+  // mensajes nuevos en conversaciones largas): la query traía los PRIMEROS
+  // N en orden ascendente, no los últimos N. En convs con muchos mensajes
+  // viejos, el "Hola" reciente quedaba fuera de la ventana y el bot
+  // skipeaba con "último mensaje no es user".
+  // Fix: order DESC + limit + reverse en JS para devolver los últimos N
+  // ordenados cronológicamente (lo que necesita Claude).
+  const { data: historicoDesc } = await db
     .from('ig_mensajes')
     .select('direccion, origen, tipo, texto, created_at')
     .eq('conversacion_id', conv.id)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(cfg.contexto_mensajes || 30);
 
-  const messagesParaClaude = (historico || [])
+  const historico = (historicoDesc || []).reverse();
+
+  const messagesParaClaude = historico
     .filter((m) => m.texto)  // solo mensajes de texto para Sprint B
     .map((m) => ({
       role: m.direccion === 'in' ? 'user' : 'assistant',
