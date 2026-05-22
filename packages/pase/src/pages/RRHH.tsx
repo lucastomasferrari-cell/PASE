@@ -27,7 +27,7 @@ import type {
 } from "./rrhh/types";
 import {
   calcLiquidacion, calcularValorDoble, MESES_NOMBRE, CUENTAS_PAGO,
-  calcularCuotas, dividirEnCuotas,
+  calcularCuotas, dividirEnCuotas, slotKey, cuotasParaModoPago,
 } from "./rrhh/helpers";
 // Sub-componentes (split F6 del 2026-05-11).
 import { TabDashboard } from "./rrhh/TabDashboard";
@@ -89,6 +89,11 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const [novLocal, setNovLocal] = useState(defaultLocal);
   const [novLocalTouched, setNovLocalTouched] = useState(false);
   const [novEmps, setNovEmps] = useState<Empleado[]>([]);
+  // Slots de novedades: para cada empleado generamos N filas según modo_pago.
+  // MENSUAL=1 slot, QUINCENAL=2 slots (Primera/Segunda Quincena), SEMANAL=4 slots.
+  // Cada slot es una novedad independiente con cuota_num + cuotas_total.
+  // Key del map: `${emp.id}__${cuota_num}` (acordado Lucas 21-may noche).
+  const [novSlots, setNovSlots] = useState<Array<{ emp: Empleado; cuota_num: number; cuotas_total: number }>>([]);
   const [novMap, setNovMap] = useState<Record<string, NovedadEditable>>({});
   // Adelantos pendientes (descontado=false) del mes seleccionado, agrupados
   // por empleado_id. Reemplaza el viejo input editable "Adel.$" en la novedad
@@ -176,9 +181,6 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       novs = (data as Novedad[]) || [];
     }
     // Cargar adelantos pendientes (descontado=false) del mes seleccionado.
-    // Filtro por fecha dentro del mes — esto incluye adelantos registrados en
-    // ese mes pero todavía no descontados de ningún pago. Es la fuente de
-    // verdad para el monto a descontar al confirmar la novedad.
     const inicioMes = `${novAnio}-${String(novMes).padStart(2, "0")}-01`;
     const finMes = new Date(novAnio, novMes, 0).toISOString().slice(0, 10);
     const adelMap: Record<string, number> = {};
@@ -196,16 +198,37 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
         }
       });
     }
+
+    // Generar slots según modo_pago de cada empleado.
+    // Si ya hay novedades existentes con cuotas_total distinto, las priorizamos
+    // (data en DB manda — pej. una mensual vieja con cuotas_total=1 sigue
+    // mostrándose como mensual aunque el empleado haya cambiado a quincenal).
+    const slots: Array<{ emp: Empleado; cuota_num: number; cuotas_total: number }> = [];
     const map: Record<string, NovedadEditable> = {};
-    empleados.forEach(e => {
-      const existing = novs.find(n => n.empleado_id === e.id);
-      map[e.id] = existing || {
-        inasistencias: 0, presentismo: "MANTIENE", horas_extras: 0, dobles: 0,
-        feriados: 0, adelantos: 0, vacaciones_dias: 0, fecha_inicio_mes: null,
-        observaciones: "", estado: "borrador",
-      };
-    });
+    for (const emp of empleados) {
+      const novsEmp = novs.filter(n => n.empleado_id === emp.id);
+      const cuotasPorModo = cuotasParaModoPago(emp.modo_pago);
+
+      // Si ya hay novedades, usamos el cuotas_total que tienen guardado
+      // (puede no coincidir con el modo_pago actual si cambió).
+      const cuotasTotalDB = novsEmp.length > 0
+        ? Math.max(...novsEmp.map(n => n.cuotas_total ?? 1))
+        : cuotasPorModo;
+
+      for (let c = 1; c <= cuotasTotalDB; c++) {
+        const existing = novsEmp.find(n => (n.cuota_num ?? 1) === c);
+        const key = slotKey(emp.id, c);
+        slots.push({ emp, cuota_num: c, cuotas_total: cuotasTotalDB });
+        map[key] = existing || {
+          inasistencias: 0, presentismo: "MANTIENE", horas_extras: 0, dobles: 0,
+          feriados: 0, adelantos: 0, vacaciones_dias: 0, fecha_inicio_mes: null,
+          observaciones: "", estado: "borrador",
+          cuota_num: c, cuotas_total: cuotasTotalDB,
+        };
+      }
+    }
     setNovEmps(empleados);
+    setNovSlots(slots);
     setNovMap(map);
     setNovAdelantosPorEmp(adelMap);
     setNovLoading(false);
@@ -608,33 +631,41 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   };
 
   // ─── NOVEDADES ACTIONS ─────────────────────────────────────────────────────
-  const updateNov = (empId: string, field: keyof NovedadEditable, value: string | number) => {
+  // Las funciones de abajo reciben `key` = slotKey(empId, cuota_num).
+  // Para empleados MENSUAL, cuota_num=1 (key = `${empId}__1`).
+  // Para QUINCENAL hay 2 slots (cuota_num=1 y 2). SEMANAL: 4.
+  const updateNov = (key: string, field: keyof NovedadEditable, value: string | number) => {
     setNovMap(prev => {
-      const nextNov: NovedadEditable = { ...prev[empId], [field]: value };
-      const updated = { ...prev, [empId]: nextNov };
-      if (saveTimers.current[empId]) clearTimeout(saveTimers.current[empId]);
-      saveTimers.current[empId] = setTimeout(() => saveNovedad(empId, nextNov), 800);
+      const nextNov: NovedadEditable = { ...prev[key], [field]: value };
+      const updated = { ...prev, [key]: nextNov };
+      if (saveTimers.current[key]) clearTimeout(saveTimers.current[key]);
+      saveTimers.current[key] = setTimeout(() => saveNovedad(key, nextNov), 800);
       return updated;
     });
   };
 
-  const saveNovedad = async (empId: string, nov: NovedadEditable) => {
+  const saveNovedad = async (key: string, nov: NovedadEditable) => {
+    const empId = key.split("__")[0]!;
+    const cuotaNum = nov.cuota_num ?? Number(key.split("__")[1] ?? 1);
+    const cuotasTotal = nov.cuotas_total ?? 1;
     const { id, estado, vacaciones_dias: _vac, ...rest } = nov;
     await db.from("rrhh_novedades").upsert({
-      ...(id ? { id } : {}), empleado_id: empId, mes: novMes, anio: novAnio,
-      ...rest, estado: estado || "borrador", cargado_por: user?.id, updated_at: new Date().toISOString(),
-    }, { onConflict: "empleado_id,mes,anio" });
+      ...(id ? { id } : {}),
+      empleado_id: empId,
+      mes: novMes, anio: novAnio,
+      cuota_num: cuotaNum, cuotas_total: cuotasTotal,
+      ...rest,
+      estado: estado || "borrador",
+      cargado_por: user?.id,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "empleado_id,mes,anio,cuota_num" });
   };
 
-  const confirmarUno = async (emp: Empleado) => {
-    const nov = novMap[emp.id];
+  const confirmarUno = async (emp: Empleado, cuotaNum: number, cuotasTotal: number) => {
+    const key = slotKey(emp.id, cuotaNum);
+    const nov = novMap[key];
     if (!nov) return;
-    // Snapshot del monto real de adelantos pendientes al momento de confirmar
-    // (leído desde rrhh_adelantos via loadNovedades). Reemplaza el campo
-    // legacy nov.adelantos (input libre, "fantasma" sin link a la tabla real).
     const adelantosDelMes = novAdelantosPorEmp[emp.id] ?? 0;
-    // Validación de descuentos: si hay monto, el motivo es obligatorio
-    // (auditoría, para que el dueño después sepa por qué descontó).
     const otrosDesc = nov.otros_descuentos || 0;
     const otrosDescMotivo = (nov.otros_descuentos_motivo || "").trim();
     if (otrosDesc > 0 && !otrosDescMotivo) {
@@ -643,7 +674,9 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     }
     const { data: saved } = await db.from("rrhh_novedades").upsert({
       ...(nov.id ? { id: nov.id } : {}),
-      empleado_id: emp.id, mes: novMes, anio: novAnio,
+      empleado_id: emp.id,
+      mes: novMes, anio: novAnio,
+      cuota_num: cuotaNum, cuotas_total: cuotasTotal,
       inasistencias: nov.inasistencias || 0,
       presentismo: nov.presentismo || "MANTIENE",
       horas_extras: nov.horas_extras || 0,
@@ -658,45 +691,77 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       estado: "confirmado",
       cargado_por: user?.id,
       updated_at: new Date().toISOString(),
-    }, { onConflict: "empleado_id,mes,anio" }).select().single();
+    }, { onConflict: "empleado_id,mes,anio,cuota_num" }).select().single();
 
     if (saved) {
       const vd = calcularValorDoble(emp);
       const calc = calcLiquidacion(emp, nov, vd, adelantosDelMes);
-      // Modo de pago del empleado → cantidad de cuotas a generar.
-      // MENSUAL=1 (comportamiento legacy), QUINCENAL=2, SEMANAL=4.
-      const { cuotas_total, vencimientos } = calcularCuotas(emp.modo_pago, novMes, novAnio);
-      const filas = dividirEnCuotas(calc, cuotas_total, vencimientos, saved.id);
-      // Delete + insert (en vez de upsert) para que cambiar el modo_pago
-      // entre confirmaciones no deje filas huérfanas con cuotas_total viejo.
-      // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F14: el delete+insert de cuotas al confirmar novedad debería ir por RPC confirmar_novedad atómica. Hoy si el insert falla post-delete, la novedad queda confirmada sin liquidación.
+      // Modelo nuevo (21-may noche): cada novedad cuota_num genera UNA sola
+      // liquidación (no N cuotas). El cuotas_total se preserva para que la
+      // UI sepa que es una quincena/semana. El vencimiento de la cuota se
+      // calcula según cuota_num + cuotas_total.
+      const { vencimientos } = calcularCuotas(
+        cuotasTotal === 2 ? "QUINCENAL" : cuotasTotal === 4 ? "SEMANAL" : "MENSUAL",
+        novMes, novAnio,
+      );
+      const vencimiento = vencimientos[cuotaNum - 1] || vencimientos[vencimientos.length - 1];
+      // Borrar liquidación previa de esta novedad (re-confirmar) y crear la nueva
+      // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F14: el delete+insert de la liquidación al confirmar novedad debería ir por RPC confirmar_novedad atómica.
       await db.from("rrhh_liquidaciones").delete().eq("novedad_id", saved.id);
-      // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F14: idem comentario anterior.
-      await db.from("rrhh_liquidaciones").insert(filas);
+      // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F14: idem.
+      await db.from("rrhh_liquidaciones").insert([{
+        novedad_id: saved.id,
+        sueldo_base: calc.sueldo_base,
+        descuento_ausencias: calc.descuento_ausencias,
+        total_horas_extras: calc.total_horas_extras,
+        total_dobles: calc.total_dobles,
+        total_feriados: calc.total_feriados,
+        total_vacaciones: calc.total_vacaciones,
+        subtotal1: calc.subtotal1,
+        monto_presentismo: calc.monto_presentismo,
+        subtotal2: calc.subtotal2,
+        adelantos: calc.adelantos,
+        pagos_realizados: 0,
+        total_a_pagar: calc.total_a_pagar,
+        efectivo: calc.efectivo,
+        transferencia: calc.transferencia,
+        estado: "pendiente",
+        calculado_at: new Date().toISOString(),
+        cuota_num: cuotaNum,
+        cuotas_total: cuotasTotal,
+        fecha_vencimiento: vencimiento,
+      }]);
     }
-    showToast(`${emp.apellido} confirmado`);
+    const label = cuotasTotal > 1 ? ` (${cuotaNum}/${cuotasTotal})` : "";
+    showToast(`${emp.apellido}${label} confirmado`);
     loadNovedades();
   };
 
-  const editarNov = async (empId: string) => {
-    const nov = novMap[empId];
+  const editarNov = async (key: string) => {
+    const nov = novMap[key];
     if (!nov?.id) return;
     // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F14: rollback novedad→borrador debe pasar por RPC editar_novedad que borre liq + cambie estado atómicamente.
     await db.from("rrhh_liquidaciones").delete().eq("novedad_id", nov.id);
     await db.from("rrhh_novedades").update({ estado: "borrador" }).eq("id", nov.id);
-    setNovMap(prev => ({ ...prev, [empId]: { ...prev[empId], estado: "borrador" } }));
+    setNovMap(prev => ({ ...prev, [key]: { ...prev[key], estado: "borrador" } }));
   };
 
   // BUG 4: bulk-confirmar todos los empleados en borrador. Cierra de un tirón
   // las novedades del mes y crea las liquidaciones (estado "pendiente"), que
   // es el equivalente a "listo para pago".
   const confirmarTodas = async () => {
-    const enBorrador = novEmps.filter(e => (novMap[e.id]?.estado ?? "borrador") !== "confirmado");
+    // En el modelo nuevo (quincenas: 21-may noche) iteramos slots, no empleados.
+    // Cada slot es una novedad independiente con su cuota_num + cuotas_total.
+    const enBorrador = novSlots.filter(s => {
+      const nov = novMap[slotKey(s.emp.id, s.cuota_num)];
+      return (nov?.estado ?? "borrador") !== "confirmado";
+    });
     if (enBorrador.length === 0) { showToast("Todas ya están confirmadas"); return; }
-    if (!confirm(`Confirmar novedades de ${enBorrador.length} empleado${enBorrador.length > 1 ? "s" : ""}? Pasan a estado "listo para pago".`)) return;
-    // Flush autosaves pendientes para no pisar el confirmar.
+    if (!confirm(`Confirmar ${enBorrador.length} novedad${enBorrador.length > 1 ? "es" : ""} pendiente${enBorrador.length > 1 ? "s" : ""}? Pasan a estado "listo para pago".`)) return;
     Object.values(saveTimers.current).forEach(t => clearTimeout(t));
-    for (const emp of enBorrador) await confirmarUno(emp);
+    for (const slot of enBorrador) {
+      await confirmarUno(slot.emp, slot.cuota_num, slot.cuotas_total);
+    }
     showToast(`${enBorrador.length} novedad${enBorrador.length > 1 ? "es" : ""} confirmada${enBorrador.length > 1 ? "s" : ""} → listo para pago`);
   };
 
@@ -829,7 +894,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
           setNovLocal={handleNovLocalChange}
           locsDisp={locsDisp}
           novLoading={novLoading}
-          novEmps={novEmps}
+          novSlots={novSlots}
           novMap={novMap}
           novAdelantosPorEmp={novAdelantosPorEmp}
           updateNov={updateNov}

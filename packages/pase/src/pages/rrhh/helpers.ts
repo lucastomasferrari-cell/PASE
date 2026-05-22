@@ -64,6 +64,25 @@ export function calcLiquidacion(emp: Empleado, nov: NovedadEditable, valorDoble:
   };
 }
 
+// Acordado Lucas 21-may noche: cada quincena/semana es una novedad
+// INDEPENDIENTE. El key en novMap es `${emp.id}__${cuota_num}`.
+export const slotKey = (empId: string, cuotaNum: number) => `${empId}__${cuotaNum}`;
+
+// Devuelve cuántas novedades genera un empleado según su modo de pago.
+// QUINCENAL → 2 (Primera/Segunda Quincena). SEMANAL → 4 (1ra/2da/3ra/4ta semana).
+// MENSUAL (default) → 1.
+export function cuotasParaModoPago(modo: "MENSUAL" | "QUINCENAL" | "SEMANAL" | undefined | null): number {
+  return modo === "QUINCENAL" ? 2 : modo === "SEMANAL" ? 4 : 1;
+}
+
+// Label visible para el slot ("Primera Quincena", "Segunda Quincena", "1ra semana", etc).
+export function labelSlot(cuotaNum: number, cuotasTotal: number): string {
+  if (cuotasTotal <= 1) return "";
+  if (cuotasTotal === 2) return cuotaNum === 1 ? "Primera Quincena" : "Segunda Quincena";
+  if (cuotasTotal === 4) return `${cuotaNum}ª Semana`;
+  return `Cuota ${cuotaNum}/${cuotasTotal}`;
+}
+
 // Cuotas para multi-pago (modo_pago != MENSUAL).
 // MENSUAL=1 cuota (fin de mes), QUINCENAL=2 (día 15 + fin), SEMANAL=4 (7/14/21/28).
 // Decisión Lucas 2026-05-19: fechas fijas (no viernes flotantes) — más simple

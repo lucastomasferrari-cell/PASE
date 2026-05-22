@@ -37,6 +37,12 @@ export interface Novedad {
   /** Descuentos manuales arbitrarios (préstamos, daños, faltantes de caja). */
   otros_descuentos?: number;
   otros_descuentos_motivo?: string | null;
+  /** Cuotas: para empleados QUINCENAL/SEMANAL hay N novedades por mes
+   *  (1 por quincena/semana). cuota_num=1..cuotas_total. MENSUAL = ambas 1.
+   *  Cada novedad genera su propia liquidación independiente — sin descuentos
+   *  cruzados entre quincenas (pedido Lucas 21-may noche). */
+  cuota_num?: number;
+  cuotas_total?: number;
 }
 
 export interface Liquidacion {

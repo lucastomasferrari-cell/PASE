@@ -3,7 +3,7 @@ import { fmt_$ } from "../../lib/utils";
 import type { Local } from "../../types";
 import type { Empleado } from "../../types/rrhh";
 import type { NovedadEditable } from "./types";
-import { MESES_SEL, calcularValorDoble, calcLiquidacion, inp } from "./helpers";
+import { MESES_SEL, calcularValorDoble, calcLiquidacion, inp, slotKey, labelSlot } from "./helpers";
 
 // Rediseño 2026-05-14 (auditoría UX RRHH):
 //   • Pasamos de tabla angosta de 9 columnas + scroll horizontal a una lista
@@ -24,6 +24,12 @@ import { MESES_SEL, calcularValorDoble, calcLiquidacion, inp } from "./helpers";
 //     en caja + adelanto en DB).
 //   • Selector de período con flechas ← → además del select de mes/año.
 
+export interface NovedadSlot {
+  emp: Empleado;
+  cuota_num: number;
+  cuotas_total: number;
+}
+
 interface TabNovedadesProps {
   novMes: number;
   setNovMes: React.Dispatch<React.SetStateAction<number>>;
@@ -33,13 +39,16 @@ interface TabNovedadesProps {
   setNovLocal: (v: string) => void;
   locsDisp: Local[];
   novLoading: boolean;
-  novEmps: Empleado[];
+  /** Slots a renderizar — uno por (empleado, cuota_num). Para QUINCENAL hay 2
+   *  slots por empleado. Para MENSUAL, 1. Pedido Lucas 21-may noche. */
+  novSlots: NovedadSlot[];
+  /** Map keyed por `${emp.id}__${cuota_num}` (helper slotKey). */
   novMap: Record<string, NovedadEditable>;
   novAdelantosPorEmp: Record<string, number>;
-  updateNov: (empId: string, field: keyof NovedadEditable, value: string | number) => void;
-  confirmarUno: (emp: Empleado) => Promise<void>;
+  updateNov: (key: string, field: keyof NovedadEditable, value: string | number) => void;
+  confirmarUno: (emp: Empleado, cuotaNum: number, cuotasTotal: number) => Promise<void>;
   confirmarTodas: () => Promise<void>;
-  editarNov: (empId: string) => Promise<void>;
+  editarNov: (key: string) => Promise<void>;
   irAPagos: () => void;
   /** Abre el modal de adelanto pre-cargando este empleado. Si no se pasa,
    *  el botón "+ Adelanto" no aparece. */
@@ -49,16 +58,16 @@ interface TabNovedadesProps {
 
 export function TabNovedades({
   novMes, setNovMes, novAnio, setNovAnio, novLocal, setNovLocal,
-  locsDisp, novLoading, novEmps, novMap, novAdelantosPorEmp,
+  locsDisp, novLoading, novSlots, novMap, novAdelantosPorEmp,
   updateNov, confirmarUno, confirmarTodas, editarNov, irAPagos,
   abrirModalAdelanto, esDueno,
 }: TabNovedadesProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const toggleExpanded = (empId: string) => {
+  const toggleExpanded = (key: string) => {
     setExpanded(prev => {
       const next = new Set(prev);
-      if (next.has(empId)) next.delete(empId);
-      else next.add(empId);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -72,8 +81,8 @@ export function TabNovedades({
     else setNovMes(novMes + 1);
   };
 
-  const totalEmps = novEmps.length;
-  const confirmadas = novEmps.filter(e => novMap[e.id]?.estado === "confirmado").length;
+  const totalEmps = novSlots.length;
+  const confirmadas = novSlots.filter(s => novMap[slotKey(s.emp.id, s.cuota_num)]?.estado === "confirmado").length;
   const pendientes = totalEmps - confirmadas;
 
   return (
@@ -180,24 +189,30 @@ export function TabNovedades({
       {/* Cuerpo */}
       {!novLocal ? <div className="alert alert-info">Seleccioná un local para cargar novedades</div> :
        novLoading ? <div className="loading">Cargando...</div> :
-       novEmps.length === 0 ? <div className="empty">Sin empleados activos en este local</div> : (
+       novSlots.length === 0 ? <div className="empty">Sin empleados activos en este local</div> : (
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {novEmps.map(emp => (
-            <EmpleadoCard
-              key={emp.id}
-              emp={emp}
-              nov={novMap[emp.id] || {}}
-              adelantosDelMes={novAdelantosPorEmp[emp.id] ?? 0}
-              expanded={expanded.has(emp.id)}
-              onToggle={() => toggleExpanded(emp.id)}
-              updateNov={updateNov}
-              confirmar={() => confirmarUno(emp)}
-              editar={() => editarNov(emp.id)}
-              irAPagos={irAPagos}
-              onAgregarAdelanto={abrirModalAdelanto ? () => abrirModalAdelanto(emp.id) : undefined}
-              esDueno={esDueno}
-            />
-          ))}
+          {novSlots.map(slot => {
+            const key = slotKey(slot.emp.id, slot.cuota_num);
+            return (
+              <EmpleadoCard
+                key={key}
+                slotId={key}
+                emp={slot.emp}
+                cuotaNum={slot.cuota_num}
+                cuotasTotal={slot.cuotas_total}
+                nov={novMap[key] || {}}
+                adelantosDelMes={novAdelantosPorEmp[slot.emp.id] ?? 0}
+                expanded={expanded.has(key)}
+                onToggle={() => toggleExpanded(key)}
+                updateNov={updateNov}
+                confirmar={() => confirmarUno(slot.emp, slot.cuota_num, slot.cuotas_total)}
+                editar={() => editarNov(key)}
+                irAPagos={irAPagos}
+                onAgregarAdelanto={abrirModalAdelanto ? () => abrirModalAdelanto(slot.emp.id) : undefined}
+                esDueno={esDueno}
+              />
+            );
+          })}
         </div>
       )}
     </>
@@ -207,12 +222,16 @@ export function TabNovedades({
 // ─── Empleado Card ─────────────────────────────────────────────────────────
 
 interface EmpleadoCardProps {
+  /** Key compuesta para el map (`${emp.id}__${cuota_num}`). */
+  slotId: string;
   emp: Empleado;
+  cuotaNum: number;
+  cuotasTotal: number;
   nov: NovedadEditable;
   adelantosDelMes: number;
   expanded: boolean;
   onToggle: () => void;
-  updateNov: (empId: string, field: keyof NovedadEditable, value: string | number) => void;
+  updateNov: (slotId: string, field: keyof NovedadEditable, value: string | number) => void;
   confirmar: () => Promise<void>;
   editar: () => Promise<void>;
   irAPagos: () => void;
@@ -221,11 +240,12 @@ interface EmpleadoCardProps {
   esDueno: boolean;
 }
 
-function EmpleadoCard({ emp, nov, adelantosDelMes, expanded, onToggle, updateNov, confirmar, editar, irAPagos, onAgregarAdelanto, esDueno }: EmpleadoCardProps) {
+function EmpleadoCard({ slotId, emp, cuotaNum, cuotasTotal, nov, adelantosDelMes, expanded, onToggle, updateNov, confirmar, editar, irAPagos, onAgregarAdelanto, esDueno }: EmpleadoCardProps) {
   const vd = calcularValorDoble(emp);
   const calc = calcLiquidacion(emp, nov, vd, adelantosDelMes);
   const total = calc.total_a_pagar;
   const confirmado = nov.estado === "confirmado";
+  const labelCuota = labelSlot(cuotaNum, cuotasTotal);
 
   return (
     <div className="panel pase-emp-card" style={{padding:0, overflow:"hidden"}}>
@@ -235,12 +255,23 @@ function EmpleadoCard({ emp, nov, adelantosDelMes, expanded, onToggle, updateNov
         style={{ background: confirmado ? "var(--s2)" : "transparent" }}>
         <span className="pase-emp-card__chev">{expanded ? "▾" : "▸"}</span>
         <div className="pase-emp-card__name">
-          <div style={{fontWeight:500, fontSize:13, lineHeight:1.25}}>{emp.apellido}, {emp.nombre}</div>
+          <div style={{fontWeight:500, fontSize:13, lineHeight:1.25}}>
+            {emp.apellido}, {emp.nombre}
+            {labelCuota && (
+              <span style={{
+                marginLeft: 8, fontSize: 10, fontWeight: 400,
+                color: "var(--acc)", background: "var(--pase-celeste-100)",
+                padding: "2px 6px", borderRadius: 4,
+              }}>
+                {labelCuota}
+              </span>
+            )}
+          </div>
           <div style={{fontSize:10, color:"var(--muted2)", marginTop:2}}>{emp.puesto}</div>
         </div>
         <div className="pase-emp-card__sueldo">
-          <div className="pase-emp-card__label">Sueldo base</div>
-          <div className="num" style={{fontSize:12}}>{fmt_$(emp.sueldo_mensual)}</div>
+          <div className="pase-emp-card__label">Sueldo {cuotasTotal > 1 ? "(esta cuota)" : "base"}</div>
+          <div className="num" style={{fontSize:12}}>{fmt_$(calc.sueldo_base ?? emp.sueldo_mensual)}</div>
         </div>
         <div className="pase-emp-card__badge">
           {confirmado
@@ -270,30 +301,30 @@ function EmpleadoCard({ emp, nov, adelantosDelMes, expanded, onToggle, updateNov
               <Field label="Inasistencias (días)" hint="0 a 31">
                 <input type="number" min="0" max="31" style={{...inp, width:"100%", textAlign:"left"}} disabled={confirmado}
                   value={nov.inasistencias ?? 0}
-                  onChange={e => updateNov(emp.id, "inasistencias", Math.max(0, Math.min(31, parseFloat(e.target.value) || 0)))} />
+                  onChange={e => updateNov(slotId,"inasistencias", Math.max(0, Math.min(31, parseFloat(e.target.value) || 0)))} />
               </Field>
               <Field label="Horas extras" hint="positivo = paga · negativo = descuenta">
                 <input type="number" min="-200" max="200" step="0.5" style={{...inp, width:"100%", textAlign:"left"}} disabled={confirmado}
                   value={nov.horas_extras ?? 0}
                   onChange={e => {
                     const v = parseFloat(e.target.value);
-                    updateNov(emp.id, "horas_extras", Number.isFinite(v) ? Math.max(-200, Math.min(200, v)) : 0);
+                    updateNov(slotId,"horas_extras", Number.isFinite(v) ? Math.max(-200, Math.min(200, v)) : 0);
                   }} />
               </Field>
               <Field label="Turnos dobles" hint="cantidad">
                 <input type="number" min="0" max="31" style={{...inp, width:"100%", textAlign:"left"}} disabled={confirmado}
                   value={nov.dobles ?? 0}
-                  onChange={e => updateNov(emp.id, "dobles", Math.max(0, parseFloat(e.target.value) || 0))} />
+                  onChange={e => updateNov(slotId,"dobles", Math.max(0, parseFloat(e.target.value) || 0))} />
               </Field>
               <Field label="Feriados trabajados" hint="cantidad">
                 <input type="number" min="0" max="31" style={{...inp, width:"100%", textAlign:"left"}} disabled={confirmado}
                   value={nov.feriados ?? 0}
-                  onChange={e => updateNov(emp.id, "feriados", Math.max(0, parseFloat(e.target.value) || 0))} />
+                  onChange={e => updateNov(slotId,"feriados", Math.max(0, parseFloat(e.target.value) || 0))} />
               </Field>
               <Field label="Vacaciones (días tomados)" hint="paga el plus vacacional (1.2× día)">
                 <input type="number" min="0" max="35" style={{...inp, width:"100%", textAlign:"left"}} disabled={confirmado}
                   value={nov.vacaciones_dias ?? 0}
-                  onChange={e => updateNov(emp.id, "vacaciones_dias", Math.max(0, parseFloat(e.target.value) || 0))} />
+                  onChange={e => updateNov(slotId,"vacaciones_dias", Math.max(0, parseFloat(e.target.value) || 0))} />
               </Field>
               <Field label="Adelantos del mes" hint="suma de los cargados en Pagos">
                 <div style={{display:"flex", gap:4, alignItems:"center"}}>
@@ -323,7 +354,7 @@ function EmpleadoCard({ emp, nov, adelantosDelMes, expanded, onToggle, updateNov
                 }}>
                   <input type="checkbox" disabled={confirmado}
                     checked={nov.presentismo === "MANTIENE"}
-                    onChange={e => updateNov(emp.id, "presentismo", e.target.checked ? "MANTIENE" : "PIERDE")}
+                    onChange={e => updateNov(slotId,"presentismo", e.target.checked ? "MANTIENE" : "PIERDE")}
                     style={{accentColor:"var(--acc)"}} />
                   Mantiene (+5%)
                 </label>
@@ -337,20 +368,20 @@ function EmpleadoCard({ emp, nov, adelantosDelMes, expanded, onToggle, updateNov
               <Field label="Otros descuentos ($)" hint="préstamo, daño, faltante, etc">
                 <input type="number" min="0" style={{...inp, width:"100%", textAlign:"left"}} disabled={confirmado}
                   value={nov.otros_descuentos ?? 0}
-                  onChange={e => updateNov(emp.id, "otros_descuentos", Math.max(0, parseFloat(e.target.value) || 0))} />
+                  onChange={e => updateNov(slotId,"otros_descuentos", Math.max(0, parseFloat(e.target.value) || 0))} />
               </Field>
               <Field label="Motivo del descuento" hint={(nov.otros_descuentos ?? 0) > 0 ? "obligatorio si hay monto" : "opcional"}>
                 <input type="text" style={{...inp, width:"100%", textAlign:"left"}} disabled={confirmado}
                   placeholder="Ej: rompió 2 platos / préstamo personal / faltante caja"
                   value={nov.otros_descuentos_motivo || ""}
-                  onChange={e => updateNov(emp.id, "otros_descuentos_motivo", e.target.value)} />
+                  onChange={e => updateNov(slotId,"otros_descuentos_motivo", e.target.value)} />
               </Field>
             </div>
 
             <Field label="Observaciones" hint="texto libre">
               <input style={{...inp, width:"100%", textAlign:"left"}} disabled={confirmado}
                 value={nov.observaciones || ""}
-                onChange={e => updateNov(emp.id, "observaciones", e.target.value)} />
+                onChange={e => updateNov(slotId,"observaciones", e.target.value)} />
             </Field>
 
             {confirmado && esDueno && (
