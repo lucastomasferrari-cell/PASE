@@ -34,7 +34,10 @@ export function getPushPermissionStatus(): PushPermissionStatus {
 
 /**
  * Devuelve true si el browser está suscrito Y la suscripción está persistida
- * en admin_push_subscriptions de este user.
+ * en admin_push_subscriptions de este user. Si el sub del browser local no
+ * coincide con la DB (porque el server detectó 410 Gone y la borró, o porque
+ * Chrome rotó el endpoint), devuelve false → el toggle muestra "Desactivado"
+ * y el user vuelve a activar (re-suscribe).
  */
 export async function isCurrentlySubscribed(): Promise<boolean> {
   if (getPushPermissionStatus() !== "granted") return false;
@@ -46,7 +49,14 @@ export async function isCurrentlySubscribed(): Promise<boolean> {
       .select("id")
       .eq("endpoint", sub.endpoint)
       .limit(1);
-    return !!(data && data.length > 0);
+    if (!data || data.length === 0) {
+      // El browser cree que está suscrito pero la DB no tiene la sub —
+      // probablemente expiró y el server la borró por 410 Gone. Limpiar
+      // el sub local para que el user pueda re-suscribirse.
+      try { await sub.unsubscribe(); } catch { /* noop */ }
+      return false;
+    }
+    return true;
   } catch {
     return false;
   }
