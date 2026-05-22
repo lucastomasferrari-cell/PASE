@@ -544,6 +544,27 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       registrado: empForm.registrado,
     };
     const existing = empModal && empModal !== "new" ? empModal : null;
+
+    // Fix bug Anto 21-may: prevenir duplicados de CUIL al crear (no al editar).
+    // Hay casos en DB con mismo CUIL en distintos registros (JANKOWSKY x2,
+    // Argañaraz x2). El useGuardedHandler bloquea doble-click pero no impide
+    // que un usuario crea de nuevo a un empleado que ya existe.
+    if (!existing && empForm.cuil && empForm.cuil.replace(/[^0-9]/g, '').length >= 8) {
+      const { data: dup } = await db.from("rrhh_empleados")
+        .select("id, apellido, nombre, local_id")
+        .eq("cuil", empForm.cuil)
+        .limit(1);
+      if (dup && dup.length > 0) {
+        const d = dup[0]!;
+        const confirmar = window.confirm(
+          `Ya existe un empleado con CUIL ${empForm.cuil}:\n\n` +
+          `  ${d.apellido}, ${d.nombre} (local ${d.local_id})\n\n` +
+          `¿Querés crear OTRO registro igual? (cancelá si es un error de carga)`
+        );
+        if (!confirmar) return;
+      }
+    }
+
     if (existing) {
       const sueldoAnt = Number(existing.sueldo_mensual);
       if (sueldoAnt !== payload.sueldo_mensual && sueldoAnt > 0) {
