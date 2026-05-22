@@ -21,6 +21,7 @@ import { db } from './_lib/db.js';
 import { validarFirmaWebhook, enviarMensaje, marcarLeido, escribiendo } from './_lib/meta.js';
 import { llamarClaude } from './_lib/claude.js';
 import { getSystemPrompt } from './_lib/prompt.js';
+import { notificarDMNuevo } from './_lib/push.js';
 
 const META_VERIFY_TOKEN = process.env.META_VERIFY_TOKEN;
 const META_APP_SECRET = process.env.META_APP_SECRET;
@@ -226,6 +227,13 @@ async function procesarMensajeEntrante({ cfg, event, sender_igsid }) {
     }
     throw new Error(`insertar mensaje: ${msgInsertErr.message}`);
   }
+
+  // Push notification a superadmins suscriptos (Lucas en celu).
+  // Cooldown de 5min por conversación — anti-spam.
+  // No bloquea el flujo del bot si falla.
+  notificarDMNuevo({ db, cfg, cliente, texto, conv }).catch((e) => {
+    console.warn('[webhook] push notif falló (no crítico):', e?.message);
+  });
 
   // Si el bot está apagado o la conversación está en humano/cerrada,
   // solo guardamos el mensaje y no respondemos.
