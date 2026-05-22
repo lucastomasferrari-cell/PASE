@@ -26,12 +26,23 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body,
-    icon: '/icon-pwa.svg',
-    badge: '/icon-pwa.svg',
+    // icon comentado: SVG da problemas en algunos Android Chrome y la notif
+    // falla silenciosamente. Sin icon usa el del manifest (más confiable).
+    // icon: '/icon-pwa.svg',
+    badge: '/favicon.svg',
     data: { url: data.url, ticket_id: data.ticket_id || null },
-    // priority='critical' = vibración + sonido + persistencia
+    // requireInteraction: la notif se queda hasta que el user la cierra
+    // (sin esto Android la oculta en ~10s).
     requireInteraction: data.priority === 'critical',
+    // vibrate: pattern explícito en ms — Android lo respeta para todas las
+    // notif "high priority". Sin esto puede salir silenciosa.
+    vibrate: [200, 100, 200, 100, 200],
+    // tag: si llega otra notif del mismo tag mientras la anterior está
+    // visible, la reemplaza (no se acumulan 10 notif).
     tag: data.tag || 'pase-notif',
+    // renotify: si el tag es el mismo pero hay actualización, vuelve a
+    // hacer sonido/vibrar (sin esto, la 2da llegada del mismo tag es silenciosa).
+    renotify: true,
   };
 
   event.waitUntil(self.registration.showNotification(data.title, options));
