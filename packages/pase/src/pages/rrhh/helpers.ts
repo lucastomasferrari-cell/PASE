@@ -38,9 +38,14 @@ export type LiquidacionCalculada = ReturnType<typeof calcularTotalLiquidacion> &
  */
 export function calcLiquidacion(emp: Empleado, nov: NovedadEditable, valorDoble: number, adelantosOverride?: number): LiquidacionCalculada {
   const adelantosFinal = adelantosOverride !== undefined ? adelantosOverride : (nov.adelantos || 0);
+  // Bug reportado por Anto 21-may: Caro (QUINCENAL) salía con sueldo completo
+  // porque modo_pago estaba hardcodeado a "MENSUAL". Ahora respeta emp.modo_pago.
+  const modoPagoEmp = (emp.modo_pago === "QUINCENAL" || emp.modo_pago === "SEMANAL")
+    ? emp.modo_pago
+    : "MENSUAL";
   const result = calcularTotalLiquidacion({
     sueldo_mensual: emp.sueldo_mensual,
-    modo_pago: "MENSUAL",
+    modo_pago: modoPagoEmp,
     inasistencias: nov.inasistencias || 0,
     horas_extras: nov.horas_extras || 0,
     dobles: nov.dobles || 0,

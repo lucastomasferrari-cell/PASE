@@ -368,7 +368,9 @@ function EmpleadoCard({ emp, nov, adelantosDelMes, expanded, onToggle, updateNov
             <div style={{fontSize:9, color:"var(--muted)", textTransform:"uppercase", letterSpacing:1, marginBottom:10}}>
               Desglose del cálculo
             </div>
-            <BreakdownLine label="Sueldo base" value={Number(emp.sueldo_mensual)} />
+            {/* Fix bug Anto 21-may: usar calc.sueldo_base (ya ajustado por
+                modo_pago QUINCENAL/SEMANAL) en lugar de emp.sueldo_mensual. */}
+            <BreakdownLine label="Sueldo base" value={Number(calc.sueldo_base ?? emp.sueldo_mensual)} />
             {(calc.total_horas_extras || 0) > 0 && <BreakdownLine label="+ Horas extras" value={calc.total_horas_extras} positive />}
             {(calc.total_horas_extras || 0) < 0 && <BreakdownLine label="− Horas no trabajadas" value={calc.total_horas_extras} negative />}
             {(calc.total_dobles || 0) > 0 && <BreakdownLine label="+ Turnos dobles" value={calc.total_dobles} positive />}
