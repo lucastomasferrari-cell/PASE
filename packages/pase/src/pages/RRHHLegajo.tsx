@@ -459,6 +459,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
           esDueno={esDueno}
           adelantos={adelantos}
           onGoToPago={onGoToPago}
+          onAnulado={loadMovimientos}
         />
       )}
 
@@ -723,9 +724,73 @@ interface TabMovimientosProps {
   esDueno: boolean;
   adelantos: Adelanto[];
   onGoToPago?: (emp: Empleado, nov: Novedad) => void;
+  onAnulado?: () => Promise<void>;
 }
 
-function TabMovimientos({ emp, movMeses, expanded, setExpanded, esDueno, adelantos, onGoToPago }: TabMovimientosProps) {
+// Botón para anular un pago de sueldo del mes. Llama anular_movimiento
+// para CADA mov activo linkeado a las liquidaciones del mes. La RPC
+// (migration 202605141800) revierte todo correctamente: saldo de caja,
+// adelantos consumidos, aguinaldo acumulado, estado de la liquidación.
+function AnularPagoBtn({
+  nov,
+  liqArr,
+  onDone,
+}: {
+  nov: NovedadConLiquidaciones;
+  liqArr: NovedadConLiquidaciones["rrhh_liquidaciones"];
+  onDone?: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const handleClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (busy) return;
+    const liqIds = (liqArr || []).map(l => l.id).filter(Boolean);
+    if (liqIds.length === 0) { alert("No hay liquidaciones para anular"); return; }
+    // Buscar movs activos linkeados
+    const { data: movs, error: movErr } = await db.from("movimientos")
+      .select("id, importe, cuenta, fecha")
+      .in("liquidacion_id", liqIds)
+      .eq("anulado", false);
+    if (movErr) { alert(`Error: ${movErr.message}`); return; }
+    if (!movs || movs.length === 0) {
+      alert("No hay pagos activos para anular en este mes.");
+      return;
+    }
+    const resumen = movs.map(m => `• ${fmt_d(m.fecha)} ${m.cuenta} ${fmt_$(m.importe)}`).join("\n");
+    const motivo = prompt(
+      `¿Anular ${movs.length} pago(s) de sueldo de ${MESES[nov.mes]} ${nov.anio}?\n\n${resumen}\n\nVa a:\n• Devolver la plata a la cuenta\n• Re-habilitar adelantos consumidos\n• Bajar el aguinaldo acumulado\n• Marcar la liquidación pendiente\n\nMotivo (obligatorio):`,
+    );
+    if (!motivo || !motivo.trim()) return;
+    setBusy(true);
+    try {
+      for (const m of movs) {
+        const { error } = await db.rpc("anular_movimiento", {
+          p_mov_id: m.id,
+          p_motivo: motivo.trim(),
+        });
+        if (error) throw error;
+      }
+      alert(`✓ ${movs.length} pago(s) anulados. La liquidación vuelve a pendiente.`);
+      if (onDone) await onDone();
+    } catch (e) {
+      alert(`Error anulando: ${translateRpcError(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      className="btn btn-danger btn-sm"
+      onClick={handleClick}
+      disabled={busy}
+      title="Anula los movimientos de pago y restituye saldos, adelantos y aguinaldo. Reversible."
+    >
+      {busy ? "Anulando…" : "Anular pago"}
+    </button>
+  );
+}
+
+function TabMovimientos({ emp, movMeses, expanded, setExpanded, esDueno, adelantos, onGoToPago, onAnulado }: TabMovimientosProps) {
   return (
     <>
       {(adelantos || []).length > 0 && (
@@ -832,13 +897,18 @@ function TabMovimientos({ emp, movMeses, expanded, setExpanded, esDueno, adelant
                         {liqAgg.efectivo > 0 && <span style={{fontSize:10,color:"var(--muted2)",marginLeft:8}}>Efvo: {fmt_$(liqAgg.efectivo)}</span>}
                         {liqAgg.transferencia > 0 && <span style={{fontSize:10,color:"var(--info)",marginLeft:8}}>Transf: {fmt_$(liqAgg.transferencia)}</span>}
                       </div>
-                      {esDueno && !todoPagado && onGoToPago && (
-                        <button
-                          className="btn btn-success btn-sm"
-                          onClick={(e) => { e.stopPropagation(); onGoToPago(emp, nov); }}
-                          title="Cierra el legajo y abre el pago en el tab Pagos"
-                        >{parcial ? "Pagar próxima cuota" : "Pagar"}</button>
-                      )}
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {esDueno && !todoPagado && onGoToPago && (
+                          <button
+                            className="btn btn-success btn-sm"
+                            onClick={(e) => { e.stopPropagation(); onGoToPago(emp, nov); }}
+                            title="Cierra el legajo y abre el pago en el tab Pagos"
+                          >{parcial ? "Pagar próxima cuota" : "Pagar"}</button>
+                        )}
+                        {esDueno && liqAgg.pagos_realizados > 0 && (
+                          <AnularPagoBtn nov={nov} liqArr={liqArr} onDone={onAnulado} />
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
