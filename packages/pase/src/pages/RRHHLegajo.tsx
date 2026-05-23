@@ -875,18 +875,19 @@ function TabMovimientos({ emp, movMeses, expanded, setExpanded, esDueno, adelant
               </div>
             </div>
             {isExp && (
-              <div style={{padding:16}}>
-                <div className="grid3" style={{marginBottom:12}}>
-                  <div><span style={{fontSize:9,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>Inasistencias</span><div>{nov.inasistencias || 0}</div></div>
-                  <div><span style={{fontSize:9,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>Presentismo</span><div>{nov.presentismo}</div></div>
-                  <div><span style={{fontSize:9,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>Hs Extras</span><div>{nov.horas_extras || 0}</div></div>
+              <div style={{padding:12}}>
+                {/* Stats del mes en una sola fila flex inline (refactor 23-may
+                    para densidad). Antes eran 2 grid3 con 6 cards bajas y
+                    mucho aire — ahora 1 fila label:valor separados por · */}
+                <div style={{display:"flex",flexWrap:"wrap",gap:14,fontSize:11,color:"var(--muted2)",marginBottom:10,paddingBottom:8,borderBottom:"0.5px solid var(--pase-border)"}}>
+                  <span><span style={{color:"var(--pase-text-muted)"}}>Inasist:</span> <strong style={{color:"var(--pase-text)"}}>{nov.inasistencias || 0}</strong></span>
+                  <span><span style={{color:"var(--pase-text-muted)"}}>Presentismo:</span> <strong style={{color:"var(--pase-text)"}}>{nov.presentismo}</strong></span>
+                  <span><span style={{color:"var(--pase-text-muted)"}}>Hs Extras:</span> <strong style={{color:"var(--pase-text)"}}>{nov.horas_extras || 0}</strong></span>
+                  <span><span style={{color:"var(--pase-text-muted)"}}>Dobles:</span> <strong style={{color:"var(--pase-text)"}}>{nov.dobles || 0}</strong></span>
+                  <span><span style={{color:"var(--pase-text-muted)"}}>Feriados:</span> <strong style={{color:"var(--pase-text)"}}>{nov.feriados || 0}</strong></span>
+                  <span><span style={{color:"var(--pase-text-muted)"}}>Adelantos:</span> <strong style={{color:"var(--pase-text)"}}>{fmt_$(nov.adelantos || 0)}</strong></span>
                 </div>
-                <div className="grid3" style={{marginBottom:12}}>
-                  <div><span style={{fontSize:9,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>Dobles</span><div>{nov.dobles || 0}</div></div>
-                  <div><span style={{fontSize:9,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>Feriados</span><div>{nov.feriados || 0}</div></div>
-                  <div><span style={{fontSize:9,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>Adelantos</span><div>{fmt_$(nov.adelantos || 0)}</div></div>
-                </div>
-                {nov.observaciones && <div style={{fontSize:11,color:"var(--muted2)",marginBottom:12}}>Obs: {nov.observaciones}</div>}
+                {nov.observaciones && <div style={{fontSize:11,color:"var(--muted2)",marginBottom:10}}>Obs: {nov.observaciones}</div>}
 
                 {liqAgg && (
                   <div style={{background:"var(--s2)",borderRadius:"var(--r)",padding:12,marginBottom:12}}>
@@ -978,24 +979,28 @@ function TabVacAgu({
 }: TabVacAguProps) {
   return (
     <>
-      <div className="grid2" style={{marginBottom:20}}>
+      {/* Refactor 23-may: panels más densos. Antes padding:16 con bastante aire,
+          fontSize:17 del valor → muchos px verticales para 1 dato. Ahora
+          padding:12, value en fontSize:15, separadores como meta-text. */}
+      <div className="grid2" style={{marginBottom:16}}>
         {/* Vacaciones */}
         <div className="panel">
           <div className="panel-hd"><span className="panel-title">Vacaciones</span></div>
-          <div style={{padding:16}}>
-            <div style={{marginBottom:12}}>
-              <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Días disponibles</div>
-              {sinFechaInicio ? (
-                <div style={{fontSize:14,color:"var(--warn)"}}>— (falta fecha de ingreso)</div>
-              ) : (<>
-                <div className="num" style={{fontSize:17,fontWeight:500,color:"var(--acc)"}}>{vacAcumuladas.toFixed(1)} días</div>
-                <div style={{fontSize:11,color:"var(--muted2)",marginTop:2}}>Equivale a {fmt_$(vacAcumuladas * valorDia)}</div>
-                {vacTomadas > 0 && <div style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>Tomadas: {vacTomadas.toFixed(1)} días</div>}
-              </>)}
-            </div>
+          <div style={{padding:12}}>
+            {sinFechaInicio ? (
+              <div style={{fontSize:13,color:"var(--warn)"}}>— (falta fecha de ingreso)</div>
+            ) : (
+              <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:8}}>
+                <span className="num" style={{fontSize:15,fontWeight:500,color:"var(--acc)"}}>{vacAcumuladas.toFixed(1)} días</span>
+                <span style={{fontSize:10,color:"var(--muted2)"}}>
+                  ≈ {fmt_$(vacAcumuladas * valorDia)}
+                  {vacTomadas > 0 && ` · ${vacTomadas.toFixed(1)} tomadas`}
+                </span>
+              </div>
+            )}
             {!sinFechaInicio && (
-              <div style={{fontSize:10,color:"var(--muted2)",marginBottom:12}}>
-                Corresponde: {diasVacAnuales} días/año ({diasVacPorMes.toFixed(2)} días/mes) · Antigüedad: {Math.floor(antiguedadAnios)} años
+              <div style={{fontSize:10,color:"var(--muted2)",marginBottom:10}}>
+                {diasVacAnuales} d/año ({diasVacPorMes.toFixed(2)} d/mes) · Antigüedad {Math.floor(antiguedadAnios)} años
               </div>
             )}
             {esDueno && !sinFechaInicio && vacAcumuladas > 0 && (
@@ -1011,17 +1016,22 @@ function TabVacAgu({
         {/* Aguinaldo */}
         <div className="panel">
           <div className="panel-hd"><span className="panel-title">Aguinaldo</span></div>
-          <div style={{padding:16}}>
-            <div style={{marginBottom:12}}>
-              {sinSueldo ? (
-                <div style={{fontSize:14,color:"var(--warn)"}}>— (falta sueldo)</div>
-              ) : (<>
-                <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Acumulado proporcional ({mesesEnSemestre} {mesesEnSemestre === 1 ? "mes" : "meses"} del semestre)</div>
-                <div className="num" style={{fontSize:17,fontWeight:500,color:"var(--acc)"}}>{fmt_$(sacAcumulado)}</div>
-                <div style={{fontSize:11,color:"var(--muted2)",marginTop:4}}>Teórico semestre completo: {fmt_$(sacTeorico)}</div>
-                <div style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>SAC = mejor sueldo del semestre × meses trabajados / 12 · Pago en {mesActual <= 6 ? "junio" : "diciembre"}</div>
-              </>)}
-            </div>
+          <div style={{padding:12}}>
+            {sinSueldo ? (
+              <div style={{fontSize:13,color:"var(--warn)"}}>— (falta sueldo)</div>
+            ) : (
+              <>
+                <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:6}}>
+                  <span className="num" style={{fontSize:15,fontWeight:500,color:"var(--acc)"}}>{fmt_$(sacAcumulado)}</span>
+                  <span style={{fontSize:10,color:"var(--muted2)"}}>
+                    acumulado · {mesesEnSemestre} {mesesEnSemestre === 1 ? "mes" : "meses"} del semestre
+                  </span>
+                </div>
+                <div style={{fontSize:10,color:"var(--muted2)",marginBottom:10}}>
+                  Teórico {fmt_$(sacTeorico)} · Pago en {mesActual <= 6 ? "junio" : "diciembre"}
+                </div>
+              </>
+            )}
             {esDueno && !sinSueldo && sacAcumulado > 0 && (
               <button className="btn btn-acc btn-sm" onClick={() => {
                 setAguLineas([{cuenta:"", monto: String(Math.round(sacAcumulado))}]);
