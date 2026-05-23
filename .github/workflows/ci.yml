@@ -47,5 +47,13 @@ jobs:
 
       # Gate estricto: test + typecheck + lint. Cualquier paquete afectado debe pasar.
       # Lint pasó a bloqueante en PR8 (cleanup completo: 481 → 0 errors / 0 warnings).
+      #
+      # VITE_SUPABASE_ANON_KEY: necesario porque packages/comanda/src/lib/supabase.ts
+      # hace throw si no está definida al ser importada (ocurre durante el test
+      # collection de vitest). Sin esta env var, tests COMANDA fallan en CI con
+      # "VITE_SUPABASE_ANON_KEY no configurada" desde 22-may noche cuando se
+      # separó COMANDA a URL propia. El secret ya existe en repo.
       - name: turbo run test typecheck lint (affected only)
+        env:
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: pnpm exec turbo run test typecheck lint --filter='...[HEAD^1]'
