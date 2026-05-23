@@ -931,13 +931,17 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
         @media (max-width: 700px) {
           .mp-bento { grid-template-columns: 1fr; }
         }
+        /* Refactor 23-may por feedback de Lucas: bento más denso.
+           Antes min-height 100px + valor 26/22px + padding 14-16×16-18 →
+           cards gigantes con poco contenido. Ahora min-height 64 + valor
+           18/20 + padding 10×12. Margin-bottom del bento baja también. */
         .mp-anchor {
           position: relative;
           background: var(--pase-celeste);
           color: #fff;
           border-radius: var(--pase-radius-card);
-          padding: 16px 18px;
-          min-height: 100px;
+          padding: 10px 14px;
+          min-height: 64px;
           overflow: hidden;
           display: flex;
           flex-direction: column;
@@ -945,49 +949,50 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
         }
         .mp-anchor-circle {
           position: absolute;
-          bottom: -40px;
-          right: -40px;
-          width: 130px;
-          height: 130px;
+          bottom: -50px;
+          right: -50px;
+          width: 110px;
+          height: 110px;
           border-radius: 50%;
           background: rgba(255,255,255,0.12);
           pointer-events: none;
         }
         .mp-anchor-label {
           position: relative;
-          font-size: 11px;
+          font-size: 10.5px;
           font-weight: 500;
           color: rgba(255,255,255,0.78);
           letter-spacing: -0.005em;
         }
         .mp-anchor-value {
           position: relative;
-          font-size: 26px;
+          font-size: 20px;
           font-weight: 500;
           color: #fff;
           letter-spacing: -0.03em;
           line-height: 1.1;
-          margin-top: 6px;
+          margin-top: 3px;
           font-variant-numeric: tabular-nums;
         }
         .mp-anchor-sub {
           position: relative;
-          font-size: 10.5px;
+          font-size: 10px;
           color: rgba(255,255,255,0.78);
-          margin-top: 6px;
+          margin-top: 3px;
           letter-spacing: -0.005em;
         }
         .mp-kpi {
           background: var(--pase-bg);
           border: 0.5px solid var(--pase-border);
           border-radius: var(--pase-radius-card);
-          padding: 14px 16px;
+          padding: 10px 12px;
           display: flex;
           flex-direction: column;
           justify-content: center;
           text-align: left;
           font-family: var(--pase-font);
           color: var(--pase-text);
+          min-height: 64px;
         }
         .mp-kpi-warn {
           background: var(--pase-bg-soft);
@@ -996,43 +1001,43 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
         }
         .mp-kpi-warn:disabled { cursor: default; opacity: 0.85; }
         .mp-kpi-label {
-          font-size: 11px;
+          font-size: 10.5px;
           font-weight: 500;
           color: var(--pase-text-muted);
           letter-spacing: -0.005em;
         }
         .mp-kpi-value {
-          font-size: 22px;
+          font-size: 18px;
           font-weight: 500;
           color: var(--pase-text);
           letter-spacing: -0.025em;
           line-height: 1.1;
-          margin-top: 6px;
+          margin-top: 3px;
           font-variant-numeric: tabular-nums;
         }
         .mp-kpi-value-warn {
-          font-size: 22px;
+          font-size: 18px;
           font-weight: 500;
           color: #8B6F0A;
           letter-spacing: -0.025em;
           line-height: 1.1;
-          margin-top: 6px;
+          margin-top: 3px;
           font-variant-numeric: tabular-nums;
         }
         .mp-kpi-sub {
-          font-size: 10.5px;
+          font-size: 10px;
           color: var(--pase-text-muted);
-          margin-top: 6px;
+          margin-top: 3px;
           letter-spacing: -0.005em;
         }
         .mp-kpi-sub-warn {
-          font-size: 10.5px;
+          font-size: 10px;
           color: #8B6F0A;
-          margin-top: 6px;
+          margin-top: 3px;
           letter-spacing: -0.005em;
           display: inline-flex;
           align-items: center;
-          gap: 6px;
+          gap: 5px;
         }
         .mp-dot-warn {
           width: 6px;
@@ -1067,10 +1072,19 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
           const cantIgnorados = egresosManuales.filter(m=>m.ignorado).length;
           return (
             <div className="panel">
+              {/* Header denso refactor 23-may: el "Total egresado" se mueve
+                  inline (al lado del título). El KPI "Sin justificar" se quita
+                  porque ya está arriba en el bento. Antes había 2 cards
+                  enormes redundantes ocupando 16+20px de padding + 60px alto. */}
               <div className="panel-hd" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
                 <div style={{display:"flex",flexDirection:"column",gap:2}}>
-                  <span className="panel-title">Egresos — {lista.length} {lista.length===1?"egreso":"egresos"}{filtroSinJustif?" sin justificar":""}</span>
-                  <span style={{fontSize:11,color:"var(--muted2)"}}>Transferencias y pagos del período · monto neto</span>
+                  <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}>
+                    <span className="panel-title">Egresos — {lista.length} {lista.length===1?"egreso":"egresos"}{filtroSinJustif?" sin justificar":""}</span>
+                    <span style={{fontSize:13,fontWeight:500,color:"var(--danger)",fontVariantNumeric:"tabular-nums"}}>{fmt_mp(totalLista)}</span>
+                  </div>
+                  <span style={{fontSize:11,color:"var(--muted2)"}}>
+                    {filtroSinJustif?"Solo sin justificar · ":"Manuales sin comisiones · "}monto neto
+                  </span>
                 </div>
                 <div style={{display:"flex",gap:14,alignItems:"center",flexWrap:"wrap"}}>
                   <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,cursor:"pointer",userSelect:"none",color:"var(--muted2)"}}>
@@ -1083,18 +1097,6 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
                       Mostrar ignorados ({cantIgnorados})
                     </label>
                   )}
-                </div>
-              </div>
-              <div style={{padding:"16px 20px",display:"grid",gap:10,gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))"}}>
-                <div className="kpi">
-                  <div className="kpi-label">Total egresado</div>
-                  <div className="kpi-value kpi-danger" style={{fontSize:16}}>{fmt_mp(totalLista)}</div>
-                  <div className="kpi-sub">{filtroSinJustif?"Solo sin justificar":"Manuales (sin comisiones)"}</div>
-                </div>
-                <div className="kpi">
-                  <div className="kpi-label">Sin justificar</div>
-                  <div className="kpi-value kpi-warn" style={{fontSize:16}}>{pendientesCount}</div>
-                  <div className="kpi-sub">{pendientesCount===0?"Todos justificados ✓":"Requieren conciliación"}</div>
                 </div>
               </div>
               {lista.length===0?<div className="empty">{filtroSinJustif?"Sin egresos pendientes. Todo justificado ✓":"Sin egresos manuales en el período."}</div>:(
