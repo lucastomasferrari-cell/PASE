@@ -36,6 +36,11 @@ test.describe.serial("E2E Sprint 2 — POS cobro efectivo (DB-only)", () => {
   let pos: E2EComandaPosSeed | null = null;
 
   test.beforeAll(async ({}, testInfo) => {
+    // Idempotencia: limpiar tenant E2E previo si quedó de un run anterior.
+    // Hacer ANTES de obtener token superadmin (cleanup re-loguea y eso
+    // invalida sesiones previas del mismo user).
+    await cleanupE2ETenant();
+
     const superdb = await createSuperadminClient();
     if (!superdb) {
       test.skip(true, "SUPERADMIN_PASSWORD no seteado en packages/pase/.env.local");
@@ -106,12 +111,11 @@ test.describe.serial("E2E Sprint 2 — POS cobro efectivo (DB-only)", () => {
     const itemSushi = seed.items.find(i => i.nombre.includes("Sushi"))!;
     const itemBebida = seed.items.find(i => i.nombre.includes("Bebida"))!;
 
+    // fn_agregar_item_comanda no recibe precio: lo toma de items.precio_madre.
     const { error: addErr1 } = await duenoDb.rpc("fn_agregar_item_comanda", {
       p_venta_id: ventaId,
       p_item_id: itemSushi.id,
       p_cantidad: 1,
-      p_precio_unitario: itemSushi.precio, // 12000
-      p_observaciones: null,
     });
     if (addErr1) throw new Error(`agregar item sushi: ${addErr1.message}`);
 
@@ -119,8 +123,6 @@ test.describe.serial("E2E Sprint 2 — POS cobro efectivo (DB-only)", () => {
       p_venta_id: ventaId,
       p_item_id: itemBebida.id,
       p_cantidad: 1,
-      p_precio_unitario: itemBebida.precio, // 3500
-      p_observaciones: null,
     });
     if (addErr2) throw new Error(`agregar item bebida: ${addErr2.message}`);
 
@@ -133,43 +135,50 @@ test.describe.serial("E2E Sprint 2 — POS cobro efectivo (DB-only)", () => {
     const totalEsperado = 12000 + 3500; // 15500
 
     // ── 4. Cobrar efectivo ─────────────────────────────────────────────
+    // fn_cobrar_venta_comanda(p_venta_id, p_pagos JSONB, p_propina, p_cobrado_por, p_idempotency_key)
+    // p_pagos shape: [{ metodo: TEXT, monto: NUMERIC, idempotency_key: TEXT, vuelto?: NUMERIC, propina_incluida?: NUMERIC }]
     const { error: cobrErr } = await duenoDb.rpc("fn_cobrar_venta_comanda", {
       p_venta_id: ventaId,
       p_pagos: [
-        { medio_cobro_id: seed.medioEfectivoId, monto: totalEsperado },
+        {
+          metodo: "EFECTIVO",
+          monto: totalEsperado,
+          idempotency_key: `e2e-pago-${ventaId}-${Date.now()}`,
+        },
       ],
       p_propina: 0,
-      p_descuento: 0,
     });
     if (cobrErr) throw new Error(`fn_cobrar_venta_comanda: ${cobrErr.message}`);
 
     // ── 5. Verificar resultados ────────────────────────────────────────
     // (a) venta queda cobrada
     const { data: venta } = await svc.from("ventas_pos")
-      .select("estado, total, cobrada_at")
+      .select("estado, total")
       .eq("id", ventaId)
       .single();
     expect(venta?.estado).toBe("cobrada");
     expect(Number(venta?.total)).toBe(totalEsperado);
 
-    // (b) movimiento creado con el monto correcto
-    const { data: movs } = await svc.from("movimientos")
-      .select("importe, cuenta, anulado")
-      .eq("tenant_id", seed.tenantId)
-      .eq("local_id", seed.local1Id)
-      .eq("cuenta", "Caja Efectivo")
-      .eq("anulado", false);
-    expect(movs).toHaveLength(1);
-    expect(Number(movs![0]!.importe)).toBe(totalEsperado);
+    // (b) pagos guardados en ventas_pos_pagos
+    const { data: pagos } = await svc.from("ventas_pos_pagos")
+      .select("metodo, monto, estado")
+      .eq("venta_id", ventaId);
+    expect(pagos).toHaveLength(1);
+    expect(pagos![0]!.metodo).toBe("EFECTIVO");
+    expect(Number(pagos![0]!.monto)).toBe(totalEsperado);
+    expect(pagos![0]!.estado).toBe("confirmado");
 
-    // (c) saldo Caja Efectivo subió en totalEsperado
-    const { data: saldoDespues } = await svc.from("saldos_caja")
-      .select("saldo")
+    // (c) movimiento creado en movimientos_caja (COMANDA usa su propia tabla,
+    // distinta de movimientos de PASE — el passage a PASE pasa al cerrar turno).
+    const { data: movs, error: movsErr } = await svc.from("movimientos_caja")
+      .select("*")
       .eq("tenant_id", seed.tenantId)
-      .eq("local_id", seed.local1Id)
-      .eq("cuenta", "Caja Efectivo")
-      .single();
-    expect(Number(saldoDespues!.saldo) - saldoInicial).toBe(totalEsperado);
+      .eq("turno_caja_id", pos.turnoCajaId);
+    if (movsErr) throw new Error(`Query movimientos_caja: ${movsErr.message}`);
+    expect(movs!.length).toBeGreaterThan(0);
+    // El mov del cobro debe estar — buscar uno con monto = totalEsperado
+    const cobroMov = movs!.find(m => Number(m.monto) === totalEsperado || Number(m.importe) === totalEsperado);
+    expect(cobroMov, `No encontré mov con monto ${totalEsperado}. Filas: ${JSON.stringify(movs)}`).toBeDefined();
 
     // (d) mesa queda libre después del cobro (fn_cobrar libera mesa)
     const { data: mesa } = await svc.from("mesas")
@@ -177,6 +186,11 @@ test.describe.serial("E2E Sprint 2 — POS cobro efectivo (DB-only)", () => {
       .eq("id", mesa1Id)
       .single();
     expect(mesa?.estado).toBe("libre");
+
+    // NOTA: saldos_caja NO se modifica acá. COMANDA mantiene `movimientos_caja`
+    // del turno. El passage a `saldos_caja` y `movimientos` de PASE ocurre al
+    // cerrar el turno (fn_cerrar_turno_caja) — eso lo cubre un test futuro.
+    void saldoInicial;
 
     await duenoDb.auth.signOut();
   });
