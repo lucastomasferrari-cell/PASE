@@ -278,32 +278,42 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       liqs = (data as Liquidacion[]) || [];
     }
 
-    // Para multi-cuota (modo_pago != MENSUAL) una novedad tiene N filas en
-    // liqs (cuota_num=1..N). Devolvemos una fila de pagoData por cuota.
-    // Si no hay liqs persistidas (caso "_generated" para novedades viejas o
-    // sin confirmar todavía con calc on-the-fly), generamos 1 sola — esos
-    // empleados quedan como MENSUAL por backward compat.
+    // Nuevo modelo (22-may noche): cada cuota es una novedad independiente con
+    // su propio cuota_num + cuotas_total. Para empleados QUINCENAL hay 2
+    // novedades por mes (cuota 1 + cuota 2), para SEMANAL hay 4.
+    //
+    // BUG FIX 22-may noche (Carolina Vazquez 2da quincena no aparecía): antes
+    // hacíamos `novedades.find(...)` y solo procesábamos la primera. Ahora
+    // iteramos sobre TODAS las novedades del empleado en el mes y mostramos
+    // una fila por cada cuota independiente.
     const merged: PagoDataRow[] = empleados.flatMap((emp) => {
-      const nov = novedades.find(n => n.empleado_id === emp.id);
-      if (!nov) return [];
-      const persistedRows = liqs
-        .filter(l => l.novedad_id === nov.id)
+      const novsEmp = novedades
+        .filter(n => n.empleado_id === emp.id)
         .sort((a, b) => (a.cuota_num ?? 1) - (b.cuota_num ?? 1));
-      if (persistedRows.length > 0) {
-        return persistedRows.map(liq => ({ emp, nov, liq: liq as LiquidacionConGenerated }));
-      }
-      const vd = calcularValorDoble(emp);
-      const calc = calcLiquidacion(emp, nov, vd);
-      const liq: LiquidacionConGenerated = {
-        ...calc,
-        total_a_pagar: Math.round(calc.total_a_pagar),
-        estado: "pendiente",
-        cuota_num: 1,
-        cuotas_total: 1,
-        _novedadId: nov.id,
-        _generated: true,
-      };
-      return [{ emp, nov, liq }];
+      if (novsEmp.length === 0) return [];
+
+      return novsEmp.flatMap((nov) => {
+        const persistedRows = liqs
+          .filter(l => l.novedad_id === nov.id)
+          .sort((a, b) => (a.cuota_num ?? 1) - (b.cuota_num ?? 1));
+        if (persistedRows.length > 0) {
+          return persistedRows.map(liq => ({ emp, nov, liq: liq as LiquidacionConGenerated }));
+        }
+        // Sin liq persistida: calculamos on-the-fly. Respeta el cuota_num
+        // de la novedad (que vino de la migration 213200).
+        const vd = calcularValorDoble(emp);
+        const calc = calcLiquidacion(emp, nov, vd);
+        const liq: LiquidacionConGenerated = {
+          ...calc,
+          total_a_pagar: Math.round(calc.total_a_pagar),
+          estado: "pendiente",
+          cuota_num: nov.cuota_num ?? 1,
+          cuotas_total: nov.cuotas_total ?? 1,
+          _novedadId: nov.id,
+          _generated: true,
+        };
+        return [{ emp, nov, liq }];
+      });
     });
 
     setPagoData(merged);
