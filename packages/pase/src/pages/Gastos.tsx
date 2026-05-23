@@ -795,6 +795,41 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
               <div className="field"><label>Monto $</label><input type="number" value={form.monto} onChange={e => setForm({ ...form, monto: e.target.value })} placeholder="0" /></div>
               <div className="field"><label>Detalle (opcional)</label><input value={form.detalle} onChange={e => setForm({ ...form, detalle: e.target.value })} placeholder="Descripción..." /></div>
             </div>
+            {/* Hint visible si el botón está disabled — Anto no entendía por qué
+                no respondía al tocar Guardar. Acordado 22-may noche con Lucas. */}
+            {(() => {
+              const tEff = tipoFiltro === "todos" ? form.tipo : tipoFiltro;
+              const faltantes: string[] = [];
+              if (!form.cuenta) faltantes.push("cuenta de egreso");
+              if (!form.monto) faltantes.push("monto");
+              if (locsDisp.length > 1 && localActivo === null && !form.local_id) faltantes.push("local");
+              if (tEff === 'empleado') {
+                if (!form.concepto) faltantes.push("concepto");
+                if (!form.empleado_id) faltantes.push("empleado");
+              } else {
+                if (!form.categoria) faltantes.push("categoría");
+              }
+              if (faltantes.length === 0) return null;
+              return (
+                <div style={{
+                  margin: "0 14px 8px",
+                  padding: "8px 12px",
+                  background: "rgba(210,150,30,0.1)",
+                  border: "1px solid rgba(210,150,30,0.3)",
+                  borderRadius: 6,
+                  fontSize: 12,
+                  color: "var(--warn, #d29922)",
+                }}>
+                  ⚠️ Falta completar: <strong>{faltantes.join(", ")}</strong>
+                  {tEff === 'empleado' && !form.empleado_id && (
+                    <div style={{ fontSize: 11, marginTop: 4, color: "var(--muted2)" }}>
+                      ¿Es un gasto general de RRHH (juicios, abogados, indemnizaciones genéricas)?
+                      Cambiá <strong>Tipo</strong> a <em>Gastos Fijos</em> y elegí la categoría correspondiente.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             <div className="modal-ft"><button className="btn btn-sec" onClick={() => setModal(false)}>Cancelar</button><button
               className="btn btn-acc"
               onClick={guardar}
