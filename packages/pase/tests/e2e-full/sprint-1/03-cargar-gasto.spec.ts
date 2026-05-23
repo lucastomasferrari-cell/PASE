@@ -104,4 +104,69 @@ test.describe.serial("E2E Sprint 2 — Cargar gasto desde Caja (DB-only)", () =>
 
     await duenoDb.auth.signOut();
   });
+
+  test("cargar gasto JUICIOS Y DEMANDAS (grupo independiente, sin empleado)", async () => {
+    if (!seed) { test.skip(true, "Seed falló"); return; }
+
+    const svc = createServiceClient();
+    const duenoDb = await createE2EDuenoClient();
+
+    // El tenant E2E no trae las categorías de juicios en el seed básico
+    // (se crearon en migration 223700 para tenants existentes pero el seed
+    // E2E es nuevo). Las inserto manualmente para este test.
+    await svc.from("config_categorias").insert({
+      tenant_id: seed.tenantId,
+      nombre: "JUICIOS Y DEMANDAS",
+      tipo: "gasto_juicios_demandas",
+      orden: 10,
+      activo: true,
+    });
+
+    // Resetear saldo para arrancar limpio del test anterior
+    await svc.from("saldos_caja")
+      .update({ saldo: 50000 })
+      .eq("tenant_id", seed.tenantId)
+      .eq("local_id", seed.local1Id)
+      .eq("cuenta", "Caja Efectivo");
+
+    const monto = 8500;
+    // Act: cargar gasto tipo 'juicios_demandas' (NO requiere empleado).
+    // Esto valida que:
+    //   - CHECK constraint gastos_tipo_check acepta 'juicios_demandas'
+    //   - RPC crear_gasto funciona con el tipo nuevo
+    //   - Se puede cargar sin tener que asociar a empleado puntual
+    const { data: gastoRes, error: gastoErr } = await duenoDb.rpc("crear_gasto", {
+      p_fecha: new Date().toISOString().slice(0, 10),
+      p_local_id: seed.local1Id,
+      p_categoria: "JUICIOS Y DEMANDAS",
+      p_tipo: "juicios_demandas",
+      p_monto: monto,
+      p_detalle: "E2E — Honorarios abogado juicio laboral",
+      p_cuenta: "Caja Efectivo",
+    });
+    if (gastoErr) throw new Error(`crear_gasto juicios: ${gastoErr.message}`);
+    expect(gastoRes).toBeTruthy();
+
+    // Assert: gasto guardado con tipo correcto
+    const { data: gastos } = await svc.from("gastos")
+      .select("monto, categoria, tipo")
+      .eq("tenant_id", seed.tenantId)
+      .eq("local_id", seed.local1Id)
+      .eq("tipo", "juicios_demandas");
+    expect(gastos).toHaveLength(1);
+    expect(Number(gastos![0]!.monto)).toBe(monto);
+    expect(gastos![0]!.categoria).toBe("JUICIOS Y DEMANDAS");
+    expect(gastos![0]!.tipo).toBe("juicios_demandas");
+
+    // Assert: saldo bajó
+    const { data: saldo } = await svc.from("saldos_caja")
+      .select("saldo")
+      .eq("tenant_id", seed.tenantId)
+      .eq("local_id", seed.local1Id)
+      .eq("cuenta", "Caja Efectivo")
+      .single();
+    expect(Number(saldo!.saldo)).toBe(50000 - monto);
+
+    await duenoDb.auth.signOut();
+  });
 });
