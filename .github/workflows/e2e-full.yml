@@ -1,0 +1,82 @@
+name: E2E Full Suite (tenant aislado)
+
+# Corre la suite E2E completa contra prod usando un tenant aislado
+# "E2E Test Suite (no tocar)" creado/destruido por cada run.
+#
+# Trigger: cada push a main + manual (workflow_dispatch).
+# Tiempo: ~2 min para 13+ tests.
+#
+# Requiere secrets en GitHub:
+#   - SUPERADMIN_PASSWORD: password de superadmin@pase.local
+#   - SUPABASE_SERVICE_KEY: para bypassar RLS en seed/cleanup
+#   - VITE_SUPABASE_ANON_KEY: para auth Supabase desde el cliente
+#
+# Si la suite falla, se bloquea cualquier feature nueva (regla CLAUDE.md).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/pase/**'
+      - 'packages/comanda/**'
+      - 'packages/instagram-bot/**'
+      - '.github/workflows/e2e-full.yml'
+  workflow_dispatch:
+    inputs:
+      grep:
+        description: 'Filtro de tests (regex). Vacío = todos.'
+        required: false
+        default: ''
+
+jobs:
+  e2e-full:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        run: pnpm --filter pase exec playwright install --with-deps chromium
+
+      - name: Create .env.local for tests
+        run: |
+          cat > packages/pase/.env.local <<EOF
+          VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          SUPERADMIN_PASSWORD=${{ secrets.SUPERADMIN_PASSWORD }}
+          SUPABASE_SERVICE_KEY=${{ secrets.SUPABASE_SERVICE_KEY }}
+          EOF
+
+      - name: Run E2E Full Suite
+        run: |
+          if [ -n "${{ github.event.inputs.grep }}" ]; then
+            pnpm --filter pase exec playwright test --project=e2e-full --grep="${{ github.event.inputs.grep }}"
+          else
+            pnpm --filter pase exec playwright test --project=e2e-full
+          fi
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: packages/pase/playwright-report/
+          retention-days: 14
+
+      - name: Upload trace screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: packages/pase/screenshots/
+          retention-days: 14
