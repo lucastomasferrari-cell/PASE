@@ -8,6 +8,11 @@
       "permanent": true
     },
     {
+      "source": "/comanda-app/",
+      "destination": "https://pase-comanda.vercel.app/",
+      "permanent": true
+    },
+    {
       "source": "/comanda-app/:path*",
       "destination": "https://pase-comanda.vercel.app/:path*",
       "permanent": true
