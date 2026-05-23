@@ -425,7 +425,11 @@ textarea:focus-visible,
 .form4{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:8px;align-items:end}
 
 /* ─── MODALES ──────────────────────────────────────────────────────── */
-.overlay{position:fixed;inset:0;background:rgba(26,58,94,0.32);display:flex;align-items:center;justify-content:center;z-index:100}
+/* overlay con padding-left:200px para respetar el sidebar fijo. Sin esto,
+   modales anchos (legajo, pago de sueldo) se centraban en el viewport
+   total y quedaban tapados parcialmente por el sidebar. */
+.overlay{position:fixed;inset:0;padding-left:200px;background:rgba(26,58,94,0.32);display:flex;align-items:center;justify-content:center;z-index:100}
+@media (max-width: 920px){ .overlay{padding-left:0} }
 .modal{background:var(--pase-bg);border:0.5px solid var(--pase-border);border-radius:14px;width:640px;max-width:96vw;max-height:92vh;overflow-y:auto}
 .modal-hd{padding:16px 20px;border-bottom:0.5px solid var(--pase-border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--pase-bg);z-index:1}
 .modal-title{font-family:var(--pase-font);font-size:var(--pase-fs-lg);font-weight:500;color:var(--pase-text);letter-spacing:var(--pase-ls-tight)}

@@ -1031,14 +1031,10 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       {/* ═══ LEGAJO MODAL ═════════════════════════════════════════════════ */}
       {legajoId && (
         <div className="overlay" onClick={() => { setLegajoId(null); loadEmpleados(); }}>
-          {/* Usa clase .modal (centrado correcto, max-width:96vw responsive) en vez
-              de width:90vw inline que se cortaba del lado izquierdo en algunas
-              configuraciones (reportado por Lucas 22-may noche). */}
           <div
             className="modal"
             style={{
               width: 1100,
-              maxWidth: "calc(100vw - 40px)",
               maxHeight: "92vh",
               display: "flex",
               flexDirection: "column",
