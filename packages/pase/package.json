@@ -15,6 +15,7 @@
     "test:e2e": "pnpm run test:e2e:smoke && pnpm run test:e2e:mutante",
     "test:e2e:smoke": "playwright test --project=smoke",
     "test:e2e:mutante": "playwright test --project=mutante --workers=1",
+    "test:e2e:full": "playwright test --project=e2e-full",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report"
   },
