@@ -573,17 +573,29 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         )}
       />
 
-      {/* Layout 2-bandas (refactor 2026-05-23 por feedback de Lucas):
-          - BANDA 1 (top, grid 1fr 168px): cards de saldo + RightSubNav.
-            Movimientos/Conciliación quedan a la altura de las cards.
-          - BANDA 2 (full-width): tabla de movimientos o conciliación.
-            La tabla ya no compite con el aside por ancho → no requiere scroll horizontal.
-          Antes el wrapper .module-with-aside envolvía TODO el contenido, lo que
-          dejaba 168px+gap menos para la tabla y forzaba scroll horizontal para
-          ver Editar/Anular. */}
+      {/* Layout dual por sub-sección (refactor 2026-05-23 v2):
+          - MOVIMIENTOS: 2 bandas. Arriba cards + aside, abajo tabla full-width
+            (la tabla necesita full-width porque tiene muchas columnas + Editar/Anular).
+          - CONCILIACIÓN: 1 banda grid (contenido + aside). El componente
+            ConciliacionMP es más estrecho que la tabla de movs y coexiste bien
+            con el aside de 168px → no deja espacio vacío arriba.
+          Antes (v1) había una BANDA 1 vacía en conciliación porque las cards
+          no se mostraban → la fila del grid se estiraba a la altura del aside,
+          dejando un gap gigante arriba del ConciliacionMP. */}
+      {subSection === "conciliacion" ? (
+        <div className="module-with-aside">
+          <div style={{ minWidth: 0 }}>
+            <Suspense fallback={<div className="loading">Cargando conciliación MP…</div>}>
+              <ConciliacionMP user={user as Usuario} locales={locales} localActivo={localActivo} embedded />
+            </Suspense>
+          </div>
+          <RightSubNav sections={subNavSections} />
+        </div>
+      ) : (
+        <>
       <div className="module-with-aside" style={{ marginBottom: 16 }}>
         <div style={{ minWidth: 0 }}>
-          {subSection === "movimientos" && (cuentasVisibles.length === 0 ? (
+          {cuentasVisibles.length === 0 ? (
             <div className="panel">
               <EmptyState
                 icon="🔐"
@@ -609,18 +621,12 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
                 />
               </div>
             );
-          })())}
+          })()}
         </div>
         <RightSubNav sections={subNavSections} />
       </div>
 
-      {/* BANDA 2: contenido principal full-width */}
-      {subSection === "conciliacion" ? (
-        <Suspense fallback={<div className="loading">Cargando conciliación MP…</div>}>
-          <ConciliacionMP user={user as Usuario} locales={locales} localActivo={localActivo} embedded />
-        </Suspense>
-      ) : (
-        <>
+      {/* BANDA 2: tabla full-width */}
       <div className="panel">
         <div className="panel-hd" style={{flexWrap:"wrap",gap:8}}>
           <span className="panel-title">Movimientos</span>
