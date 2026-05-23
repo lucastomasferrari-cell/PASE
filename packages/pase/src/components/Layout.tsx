@@ -293,8 +293,12 @@ body{
 
 /* ─── KPI / PANEL / CARDS ──────────────────────────────────────────── */
 .kpi{background:var(--pase-bg);border:0.5px solid var(--pase-border);border-radius:14px;padding:14px 16px}
+.kpi.kpi-sm{padding:10px 12px}
 .kpi-label{font-size:var(--pase-fs-sm);color:var(--pase-text-muted);margin-bottom:8px;font-weight:500;letter-spacing:var(--pase-ls-snug)}
 .kpi-value{font-size:var(--pase-fs-2xl);font-weight:500;line-height:1.1;color:var(--pase-text);letter-spacing:var(--pase-ls-tight);font-variant-numeric:tabular-nums}
+/* Variante compacta — antes vivía solo en EERR.tsx (inline), promovida a
+   global 2026-05-23 para usar también en TabDashboard RRHH + ContadorIVA. */
+.kpi-value-compact{font-size:18px;font-weight:500;line-height:1.1;color:var(--pase-text);letter-spacing:var(--pase-ls-tight);font-variant-numeric:tabular-nums}
 .kpi-sub{font-size:var(--pase-fs-sm);color:var(--pase-text-muted);margin-top:5px}
 .kpi-acc{color:var(--pase-celeste)}
 .kpi-danger{color:var(--pase-text)}

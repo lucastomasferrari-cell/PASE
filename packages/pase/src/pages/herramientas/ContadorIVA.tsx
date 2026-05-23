@@ -63,10 +63,11 @@ export default function Contador({ user, locales, localActivo }: ContadorProps) 
       </div>
       {loading?<div className="loading">Cargando...</div>:tab==="iva"?(
         <>
+          {/* Refactor 23-may: kpi-sm + kpi-value-compact para densidad. */}
           <div className="grid3">
-            <div className="kpi"><div className="kpi-label">IVA Ventas (Débito)</div><div className="kpi-value kpi-danger">{fmt_$(ivaV)}</div><div className="kpi-sub">Estimado s/ {fmt_$(totalV)}</div></div>
-            <div className="kpi"><div className="kpi-label">IVA Compras (Crédito)</div><div className="kpi-value kpi-success">{fmt_$(totalIvaC)}</div><div className="kpi-sub">21%: {fmt_$(ivaC21)} · 10.5%: {fmt_$(ivaC105)}</div></div>
-            <div className="kpi"><div className="kpi-label">Posición Neta</div><div className={`kpi-value ${pos>0?"kpi-danger":"kpi-success"}`}>{fmt_$(pos)}</div><div className="kpi-sub">{pos>0?"⚠ A pagar a AFIP":"✓ Saldo a favor"}</div></div>
+            <div className="kpi kpi-sm"><div className="kpi-label">IVA Ventas (Débito)</div><div className="kpi-value-compact kpi-danger">{fmt_$(ivaV)}</div><div className="kpi-sub">Estimado s/ {fmt_$(totalV)}</div></div>
+            <div className="kpi kpi-sm"><div className="kpi-label">IVA Compras (Crédito)</div><div className="kpi-value-compact kpi-success">{fmt_$(totalIvaC)}</div><div className="kpi-sub">21%: {fmt_$(ivaC21)} · 10.5%: {fmt_$(ivaC105)}</div></div>
+            <div className="kpi kpi-sm"><div className="kpi-label">Posición Neta</div><div className={`kpi-value-compact ${pos>0?"kpi-danger":"kpi-success"}`}>{fmt_$(pos)}</div><div className="kpi-sub">{pos>0?"⚠ A pagar a AFIP":"✓ Saldo a favor"}</div></div>
           </div>
           <div className="panel">
             <div className="panel-hd"><span className="panel-title">Resumen Fiscal — {mes}</span></div>
