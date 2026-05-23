@@ -1,0 +1,107 @@
+// ─────────────────────────────────────────────────────────────────────────
+// E2E Sprint 2 — Test 03: cargar gasto desde Caja (DB-only)
+//
+// Flujo testeado:
+//   1. Setup tenant E2E (sin COMANDA — gasto es flow PASE puro).
+//   2. Snapshot saldo Caja Efectivo del local.
+//   3. RPC crear_gasto: gasto de $5000 categoría INSUMOS COCINA, paga
+//      desde Caja Efectivo.
+//   4. Verificar:
+//      - Fila en `gastos` con monto correcto + linked al tenant.
+//      - Fila en `movimientos` tipo "Gasto variable" con importe NEGATIVO.
+//      - Saldo Caja Efectivo bajó en 5000.
+//   5. Cleanup tenant E2E.
+// ─────────────────────────────────────────────────────────────────────────
+
+import { test, expect } from "@playwright/test";
+import { createSuperadminClient } from "../../helpers/supabaseClient";
+import {
+  seedE2ETenant,
+  cleanupE2ETenant,
+  createServiceClient,
+  createE2EDuenoClient,
+  type E2ETenantSeedResult,
+} from "../setup/seed-tenant";
+
+test.describe.serial("E2E Sprint 2 — Cargar gasto desde Caja (DB-only)", () => {
+  let seed: E2ETenantSeedResult | null = null;
+
+  test.beforeAll(async ({}, testInfo) => {
+    await cleanupE2ETenant();
+    const superdb = await createSuperadminClient();
+    if (!superdb) { test.skip(true, "SUPERADMIN_PASSWORD no seteado"); return; }
+    const { data: sess } = await superdb.auth.getSession();
+    const superToken = sess?.session?.access_token!;
+    const baseUrl = (testInfo.project.use.baseURL || "https://pase-yndx.vercel.app").replace(/\/$/, "");
+    seed = await seedE2ETenant({ superadminToken: superToken, baseUrl });
+    await superdb.auth.signOut();
+  });
+
+  test.afterAll(async () => {
+    try { await cleanupE2ETenant(); } catch (e) {
+
+      console.error("[afterAll]", e);
+    }
+  });
+
+  test("cargar gasto $5000 desde Caja Efectivo → mov negativo + saldo baja", async () => {
+    if (!seed) { test.skip(true, "Seed falló"); return; }
+
+    const svc = createServiceClient();
+    const duenoDb = await createE2EDuenoClient();
+
+    // Setear saldo inicial $50.000 en Caja Efectivo (sino no podemos pagar)
+    await svc.from("saldos_caja")
+      .update({ saldo: 50000 })
+      .eq("tenant_id", seed.tenantId)
+      .eq("local_id", seed.local1Id)
+      .eq("cuenta", "Caja Efectivo");
+
+    const saldoInicial = 50000;
+    const monto = 5000;
+
+    // Act: cargar gasto
+    const { data: gastoRes, error: gastoErr } = await duenoDb.rpc("crear_gasto", {
+      p_fecha: new Date().toISOString().slice(0, 10),
+      p_local_id: seed.local1Id,
+      p_categoria: "INSUMOS COCINA",
+      p_tipo: "variable", // CHECK acepta fijo/variable/publicidad/comision/impuesto/retiro_socio
+      p_monto: monto,
+      p_detalle: "E2E test — bolsa harina",
+      p_cuenta: "Caja Efectivo",
+    });
+    if (gastoErr) throw new Error(`crear_gasto: ${gastoErr.message}`);
+    expect(gastoRes).toBeTruthy();
+
+    // Assert: fila en gastos
+    const { data: gastos } = await svc.from("gastos")
+      .select("id, monto, categoria, detalle")
+      .eq("tenant_id", seed.tenantId)
+      .eq("local_id", seed.local1Id);
+    expect(gastos).toHaveLength(1);
+    expect(Number(gastos![0]!.monto)).toBe(monto);
+    expect(gastos![0]!.categoria).toBe("INSUMOS COCINA");
+
+    // Assert: movimiento negativo en Caja Efectivo
+    const { data: movs } = await svc.from("movimientos")
+      .select("tipo, importe, cuenta, gasto_id_ref")
+      .eq("tenant_id", seed.tenantId)
+      .eq("local_id", seed.local1Id)
+      .eq("cuenta", "Caja Efectivo")
+      .eq("anulado", false);
+    expect(movs).toHaveLength(1);
+    expect(Number(movs![0]!.importe)).toBe(-monto);
+    expect(movs![0]!.gasto_id_ref).toBe(gastos![0]!.id);
+
+    // Assert: saldo bajó
+    const { data: saldo } = await svc.from("saldos_caja")
+      .select("saldo")
+      .eq("tenant_id", seed.tenantId)
+      .eq("local_id", seed.local1Id)
+      .eq("cuenta", "Caja Efectivo")
+      .single();
+    expect(Number(saldo!.saldo)).toBe(saldoInicial - monto);
+
+    await duenoDb.auth.signOut();
+  });
+});
