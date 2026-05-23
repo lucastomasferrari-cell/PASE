@@ -25,7 +25,7 @@ type GrupoId = "gastos" | "compras" | "ingresos" | "medios" | "puestos" | "turno
 type TipoGasto = "fijo" | "variable";
 
 // Sub-tipos de "Categorías de gastos" para mostrar pill Fijo/Variable.
-const TIPOS_GASTO_FIJO = ["gasto_fijo", "gasto_publicidad", "gasto_comision", "gasto_impuesto", "retiro_socio"];
+const TIPOS_GASTO_FIJO = ["gasto_fijo", "gasto_publicidad", "gasto_comision", "gasto_impuesto", "retiro_socio", "gasto_juicios_demandas"];
 const TIPOS_GASTO_VARIABLE = ["gasto_variable"];
 const TIPOS_GASTO_TODOS = [...TIPOS_GASTO_FIJO, ...TIPOS_GASTO_VARIABLE];
 
@@ -294,6 +294,7 @@ export default function Ajustes({ user }: AjustesProps = {}) {
       case "gasto_comision":   return "Comisión";
       case "gasto_impuesto":   return "Impuesto";
       case "retiro_socio":     return "Retiro socio";
+      case "gasto_juicios_demandas": return "Juicios y Demandas";
       default:                 return t;
     }
   };
@@ -308,6 +309,7 @@ export default function Ajustes({ user }: AjustesProps = {}) {
       case "gasto_comision":   return styles.pillComision ?? "";
       case "gasto_impuesto":   return styles.pillImpuesto ?? "";
       case "retiro_socio":     return styles.pillRetiro ?? "";
+      case "gasto_juicios_demandas": return styles.pillFijo ?? ""; // reusa estilo fijo
       default:                 return styles.pillFijo ?? "";
     }
   };
@@ -521,6 +523,7 @@ export default function Ajustes({ user }: AjustesProps = {}) {
                             <option value="gasto_comision">{labelPorTipo("gasto_comision")}</option>
                             <option value="gasto_impuesto">{labelPorTipo("gasto_impuesto")}</option>
                             <option value="retiro_socio">{labelPorTipo("retiro_socio")}</option>
+                            <option value="gasto_juicios_demandas">{labelPorTipo("gasto_juicios_demandas")}</option>
                           </select>
                           <button className={styles.itemAccion} title="Editar nombre" onClick={() => abrirEditCategoria(c)}>✏</button>
                           <button className={`${styles.itemAccion} ${styles.itemAccionDanger}`} title="Eliminar (soft delete)" onClick={() => eliminarCategoria(c)}>×</button>

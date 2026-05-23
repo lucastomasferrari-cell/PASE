@@ -25,6 +25,9 @@ export interface CategoriasState {
   // Retiro de socios — distribución de utilidades, NO gasto operativo.
   // EERR los muestra en sección post-Util.Neta (no resta al cálculo).
   RETIROS_SOCIOS: string[];     // tipo = retiro_socio
+  // Lucas 22-may: grupo independiente para juicios/abogados/indemnizaciones.
+  // No requiere empleado puntual (a diferencia de tipo='empleado').
+  GASTOS_JUICIOS: string[];     // tipo = gasto_juicios_demandas
   CATEGORIAS_INGRESO: string[]; // grupo = INGRESOS (nuevas)
   // Mapa categoría (nombre) → tipo de gasto (variable/fijo/publicidad/comision/impuesto).
   // Permite que los forms muestren el tipo derivado de la categoría como
@@ -41,8 +44,8 @@ export interface CategoriasState {
   refresh: () => Promise<void>; // invalida sessionStorage y re-fetcha
 }
 
-// Bump v5→v6: incorpora RETIROS_SOCIOS (distribución de utilidades).
-const CACHE_KEY = "pase_categorias_v6";
+// Bump v6→v7: incorpora GASTOS_JUICIOS (juicios y demandas).
+const CACHE_KEY = "pase_categorias_v7";
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1h
 
 type CategoriasData = Omit<CategoriasState, "loading" | "source" | "refresh">;
@@ -62,6 +65,7 @@ const TIPO_DB_TO_FORM: Record<string, string> = {
   gasto_comision: "comision",
   gasto_impuesto: "impuesto",
   retiro_socio: "retiro_socio",
+  gasto_juicios_demandas: "juicios_demandas",
 };
 
 type BaseData = Omit<CategoriasData, "categoriaToTipo" | "categoriaToBucket">;
@@ -74,6 +78,7 @@ function buildCategoriaToTipo(data: BaseData): Record<string, string> {
   for (const c of data.COMISIONES_CATS)   m[c] = "comision";
   for (const c of data.GASTOS_IMPUESTOS)  m[c] = "impuesto";
   for (const c of data.RETIROS_SOCIOS)    m[c] = "retiro_socio";
+  for (const c of data.GASTOS_JUICIOS)    m[c] = "juicios_demandas";
   return m;
 }
 
@@ -85,6 +90,7 @@ function buildCategoriaToBucket(data: BaseData): Record<string, string> {
   for (const c of data.GASTOS_PUBLICIDAD)  m[c] = "gasto_publicidad";
   for (const c of data.COMISIONES_CATS)    m[c] = "gasto_comision";
   for (const c of data.GASTOS_IMPUESTOS)   m[c] = "gasto_impuesto";
+  for (const c of data.GASTOS_JUICIOS)     m[c] = "gasto_juicios_demandas";
   return m;
 }
 
@@ -96,6 +102,7 @@ const _FALLBACK_BASE: BaseData = {
   COMISIONES_CATS: [..._CO],
   GASTOS_IMPUESTOS: [..._GI],
   RETIROS_SOCIOS: [],
+  GASTOS_JUICIOS: ["JUICIOS Y DEMANDAS", "ABOGADO / LEGAL", "INDEMNIZACIONES"],
   CATEGORIAS_INGRESO: [
     "Liquidación Rappi", "Liquidación MercadoPago", "Liquidación PedidosYa",
     "Liquidación Evento", "Liquidación Bigbox", "Liquidación Fanbag",
@@ -147,6 +154,7 @@ function fromRows(rows: ConfigCategoriaRow[]): CategoriasData {
     COMISIONES_CATS: byTipo("gasto_comision"),
     GASTOS_IMPUESTOS: byTipo("gasto_impuesto"),
     RETIROS_SOCIOS: byTipo("retiro_socio"),
+    GASTOS_JUICIOS: byTipo("gasto_juicios_demandas"),
     CATEGORIAS_INGRESO: byTipo("cat_ingreso"),
   };
   // Maps directos desde los rows para soportar cualquier categoría que viva

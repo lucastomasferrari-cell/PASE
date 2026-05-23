@@ -51,6 +51,10 @@ const TIPOS = [
   { id: "publicidad", label: "Publicidad" },
   { id: "impuesto", label: "Impuestos" },
   { id: "comision", label: "Comisiones" },
+  // Lucas 22-may noche: juicios/demandas es grupo independiente
+  // (NO es fijo, NO requiere empleado puntual). Contiene: abogado,
+  // indemnizaciones, juicios y demandas.
+  { id: "juicios_demandas", label: "Juicios y Demandas" },
   { id: "retiro_socio", label: "Retiro de Socios" },
   // Feature 1 (2026-05-20): pago anticipado a empleado. Va a rrhh_adelantos
   // con concepto. Se descuenta del sueldo final.
@@ -76,8 +80,8 @@ interface EmpleadoVisible {
   locales_ids?: number[] | null;
 }
 export default function Gastos({ user, locales, localActivo }: GastosProps) {
-  const { GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, COMISIONES_CATS, RETIROS_SOCIOS } = useCategorias();
-  const ALL_CATS = [...GASTOS_FIJOS, ...GASTOS_VARIABLES, ...GASTOS_PUBLICIDAD, ...GASTOS_IMPUESTOS, ...COMISIONES_CATS, ...RETIROS_SOCIOS];
+  const { GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, COMISIONES_CATS, RETIROS_SOCIOS, GASTOS_JUICIOS } = useCategorias();
+  const ALL_CATS = [...GASTOS_FIJOS, ...GASTOS_VARIABLES, ...GASTOS_PUBLICIDAD, ...GASTOS_IMPUESTOS, ...COMISIONES_CATS, ...RETIROS_SOCIOS, ...GASTOS_JUICIOS];
   const catsByTipo = (t: string) =>
     t === "fijo" ? GASTOS_FIJOS :
     t === "variable" ? GASTOS_VARIABLES :
@@ -85,6 +89,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
     t === "impuesto" ? GASTOS_IMPUESTOS :
     t === "comision" ? COMISIONES_CATS :
     t === "retiro_socio" ? RETIROS_SOCIOS :
+    t === "juicios_demandas" ? GASTOS_JUICIOS :
     ALL_CATS;
   // Cuentas para el dropdown "Cuenta de egreso" — filtra por cuentas_operables
   // (no visibles): un usuario puede pagar contra una cuenta cuyo saldo no ve.
@@ -823,8 +828,8 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                   ⚠️ Falta completar: <strong>{faltantes.join(", ")}</strong>
                   {tEff === 'empleado' && !form.empleado_id && (
                     <div style={{ fontSize: 11, marginTop: 4, color: "var(--muted2)" }}>
-                      ¿Es un gasto general de RRHH (juicios, abogados, indemnizaciones genéricas)?
-                      Cambiá <strong>Tipo</strong> a <em>Gastos Fijos</em> y elegí la categoría correspondiente.
+                      ¿Es un gasto genérico de RRHH (juicios, abogados, indemnizaciones)?
+                      Cambiá <strong>Tipo</strong> a <em>Juicios y Demandas</em>.
                     </div>
                   )}
                 </div>
