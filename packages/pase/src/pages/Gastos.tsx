@@ -258,11 +258,22 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
 
   // ─── ACCIONES ──────────────────────────────────────────────────────────────
   const guardar = async () => {
-    if (saving || !form.monto || !form.categoria) return;
+    if (saving) return;
+    // ─── Validación amistosa con mensajes claros ────────────────────────
+    // Bug fix 22-may noche (Anto): antes el botón hacía `return` silencioso
+    // si !form.categoria → para tipo='empleado' (que usa `concepto` y no
+    // categoria) el botón quedaba muerto sin avisar nada al user.
+    const tipo = getTipo();
+    if (!form.monto) { alert("Falta el monto"); return; }
+    if (tipo === 'empleado') {
+      if (!form.empleado_id) { alert("Seleccioná el empleado"); return; }
+      if (!form.concepto) { alert("Seleccioná el concepto del pago"); return; }
+    } else {
+      if (!form.categoria) { alert("Seleccioná una categoría"); return; }
+    }
     if (!form.cuenta) { alert("Elegí una cuenta de egreso"); return; }
     setSaving(true);
     try {
-      const tipo = getTipo();
       const lid = form.local_id ? parseInt(form.local_id) : null;
       if (!lid) { alert("Seleccioná un local"); return; }
 
