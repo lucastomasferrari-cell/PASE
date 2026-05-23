@@ -573,45 +573,54 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         )}
       />
 
-      {/* Layout módulo madre: contenido a la izquierda + RightSubNav derecha.
-          Clase global .module-with-aside (Layout.tsx) maneja el grid + media
-          query mobile <900px que mueve el sub-nav arriba para que las tablas
-          del contenido principal no queden apretadas. */}
-      <div className="module-with-aside">
+      {/* Layout 2-bandas (refactor 2026-05-23 por feedback de Lucas):
+          - BANDA 1 (top, grid 1fr 168px): cards de saldo + RightSubNav.
+            Movimientos/Conciliación quedan a la altura de las cards.
+          - BANDA 2 (full-width): tabla de movimientos o conciliación.
+            La tabla ya no compite con el aside por ancho → no requiere scroll horizontal.
+          Antes el wrapper .module-with-aside envolvía TODO el contenido, lo que
+          dejaba 168px+gap menos para la tabla y forzaba scroll horizontal para
+          ver Editar/Anular. */}
+      <div className="module-with-aside" style={{ marginBottom: 16 }}>
         <div style={{ minWidth: 0 }}>
-          {subSection === "conciliacion" ? (
-            <Suspense fallback={<div className="loading">Cargando conciliación MP…</div>}>
-              <ConciliacionMP user={user as Usuario} locales={locales} localActivo={localActivo} embedded />
-            </Suspense>
-          ) : (
-            <>
-      {cuentasVisibles.length === 0 ? (
-        <div className="panel" style={{marginBottom:16}}>
-          <EmptyState
-            icon="🔐"
-            title="Sin cuentas asignadas"
-            description="Pedile a un administrador que te habilite acceso a las cuentas de caja."
-          />
+          {subSection === "movimientos" && (cuentasVisibles.length === 0 ? (
+            <div className="panel">
+              <EmptyState
+                icon="🔐"
+                title="Sin cuentas asignadas"
+                description="Pedile a un administrador que te habilite acceso a las cuentas de caja."
+              />
+            </div>
+          ) : (() => {
+            // Sprint v2 Commit 5: layout de 3 cards (anchor + 2 normales).
+            // Caja Efectivo es el anchor celeste; Chica y Mayor son blancas.
+            // Banco se removió de esta vista hasta que se concilie con MP.
+            const orden = ["Caja Efectivo", "Caja Chica", "Caja Mayor"];
+            const cardsVisibles = orden.filter(k => cuentasVisibles.includes(k));
+            return (
+              <div data-tour="caja-cards">
+                <CajaCardsRow
+                  cards={cardsVisibles.map((cuenta, i) => ({
+                    cuenta,
+                    label: cuenta,
+                    saldo: saldos[cuenta] || 0,
+                    variant: i === 0 && cuenta === "Caja Efectivo" ? "anchor" : "normal",
+                  }))}
+                />
+              </div>
+            );
+          })())}
         </div>
-      ) : (() => {
-        // Sprint v2 Commit 5: layout de 3 cards (anchor + 2 normales).
-        // Caja Efectivo es el anchor celeste; Chica y Mayor son blancas.
-        // Banco se removió de esta vista hasta que se concilie con MP.
-        const orden = ["Caja Efectivo", "Caja Chica", "Caja Mayor"];
-        const cardsVisibles = orden.filter(k => cuentasVisibles.includes(k));
-        return (
-          <div data-tour="caja-cards">
-            <CajaCardsRow
-              cards={cardsVisibles.map((cuenta, i) => ({
-                cuenta,
-                label: cuenta,
-                saldo: saldos[cuenta] || 0,
-                variant: i === 0 && cuenta === "Caja Efectivo" ? "anchor" : "normal",
-              }))}
-            />
-          </div>
-        );
-      })()}
+        <RightSubNav sections={subNavSections} />
+      </div>
+
+      {/* BANDA 2: contenido principal full-width */}
+      {subSection === "conciliacion" ? (
+        <Suspense fallback={<div className="loading">Cargando conciliación MP…</div>}>
+          <ConciliacionMP user={user as Usuario} locales={locales} localActivo={localActivo} embedded />
+        </Suspense>
+      ) : (
+        <>
       <div className="panel">
         <div className="panel-hd" style={{flexWrap:"wrap",gap:8}}>
           <span className="panel-title">Movimientos</span>
@@ -808,12 +817,8 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
           </div>
         )}
       </div>
-            </>
-          )}
-        </div>
-        {/* RightSubNav del módulo madre — controla subSection (movimientos vs conciliación) */}
-        <RightSubNav sections={subNavSections} />
-      </div>
+        </>
+      )}
 
       {editMov && (
         <div className="overlay" onClick={() => setEditMov(null)}>

@@ -552,20 +552,34 @@ function TabDatos({
   liqFinalLoading, setLiqFinalLoading,
   cuentasUsables, showToast, loadAll,
 }: TabDatosProps) {
+  // Refactor 2026-05-23 (Lucas: "cuadros muy grandes con poco texto adentro").
+  // Antes cada dato era un .kpi con padding 14×16 → mucha caja para 1 línea.
+  // Ahora 5 datos en una sola card de 2 columnas con filas label/valor.
+  const dataRow = (label: string, value: React.ReactNode) => (
+    <div style={{display:"flex",alignItems:"baseline",gap:10,padding:"6px 0",borderBottom:"0.5px solid var(--pase-border)",fontSize:12}}>
+      <span style={{minWidth:110,color:"var(--pase-text-muted)",fontSize:11,letterSpacing:"var(--pase-ls-snug)"}}>{label}</span>
+      <span style={{color:"var(--pase-text)",flex:1}}>{value}</span>
+    </div>
+  );
   return (
     <>
-      <div className="grid3" style={{marginBottom:16}}>
-        <div className="kpi"><div className="kpi-label">CUIL</div><div style={{fontSize:13}}>{emp.cuil || "—"}</div></div>
-        <div className="kpi"><div className="kpi-label">Fecha ingreso</div><div style={{fontSize:13,color: emp.fecha_inicio ? undefined : "var(--warn)"}}>{emp.fecha_inicio ? fmt_d(emp.fecha_inicio) : "— (falta cargar)"}</div></div>
-        <div className="kpi"><div className="kpi-label">Antigüedad</div><div style={{fontSize:13}}>{emp.fecha_inicio ? `${Math.floor(antiguedadAnios)} años, ${Math.floor((antiguedadAnios % 1) * 12)} meses` : "—"}</div></div>
-      </div>
-      <div className="grid2" style={{marginBottom:16}}>
-        <div className="kpi"><div className="kpi-label">CBU / Alias</div><div style={{fontSize:13}}>{emp.alias_mp || "—"}</div></div>
-        <div className="kpi">
-          <div className="kpi-label">Estado</div>
-          <span className={`badge ${emp.activo ? "b-success" : "b-muted"}`} style={{cursor:"pointer"}} onClick={toggleActivo}>
-            {emp.activo ? "Activo" : "Inactivo"}
-          </span>
+      <div className="panel" style={{padding:"4px 14px",marginBottom:16,display:"grid",gridTemplateColumns:"1fr 1fr",columnGap:24}}>
+        <div>
+          {dataRow("CUIL", emp.cuil || "—")}
+          {dataRow("Fecha ingreso", emp.fecha_inicio
+            ? fmt_d(emp.fecha_inicio)
+            : <span style={{color:"var(--warn)"}}>— (falta cargar)</span>)}
+          {dataRow("Antigüedad", emp.fecha_inicio
+            ? `${Math.floor(antiguedadAnios)} años, ${Math.floor((antiguedadAnios % 1) * 12)} meses`
+            : "—")}
+        </div>
+        <div>
+          {dataRow("CBU / Alias", emp.alias_mp || "—")}
+          {dataRow("Estado",
+            <span className={`badge ${emp.activo ? "b-success" : "b-muted"}`} style={{cursor:"pointer"}} onClick={toggleActivo}>
+              {emp.activo ? "Activo" : "Inactivo"}
+            </span>)}
+          {dataRow("Vacaciones acum.", `${vacAcumuladas.toFixed(1)} días`)}
         </div>
       </div>
 
