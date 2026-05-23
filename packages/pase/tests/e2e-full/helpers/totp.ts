@@ -2,32 +2,14 @@
 // Replica el algoritmo de la RPC `fn_calcular_totp` (migration 202605180000)
 // para que los tests puedan generar códigos válidos del lado del cliente.
 //
+// El secret en `tenant_totp_secret.secret` es BYTEA (20 bytes random). En el
+// seed E2E lo guardamos como hex string para facilitar pasarlo en results.
+//
 // Uso típico:
-//   const code = currentTotpCode(tenantTotpSecret); // ej "123456"
+//   const code = currentTotpCode(seed.totpSecret); // hex
 //   await ui.fillManagerOverrideModal(code);
 
 import crypto from "node:crypto";
-
-/**
- * Decodifica un secret base32 a Buffer (RFC 4648).
- * Postgres pgcrypto guarda el secret en base32; replicamos el decode acá
- * para hashear lo mismo.
- */
-function base32Decode(s: string): Buffer {
-  const clean = s.replace(/=+$/, "").toUpperCase().replace(/\s+/g, "");
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  let bits = "";
-  for (const ch of clean) {
-    const idx = alphabet.indexOf(ch);
-    if (idx < 0) throw new Error(`Char inválido base32: ${ch}`);
-    bits += idx.toString(2).padStart(5, "0");
-  }
-  const bytes: number[] = [];
-  for (let i = 0; i + 8 <= bits.length; i += 8) {
-    bytes.push(parseInt(bits.slice(i, i + 8), 2));
-  }
-  return Buffer.from(bytes);
-}
 
 /**
  * Calcula el código TOTP actual (RFC 6238) para el secret dado.
@@ -35,11 +17,12 @@ function base32Decode(s: string): Buffer {
  * Algorithm: HMAC-SHA1 (compatible con Google Authenticator).
  * Dígitos: 6.
  *
- * @param secretBase32 Secret en base32, como lo guarda `tenant_totp_secret.secret_base32`
+ * @param secretHex Secret en hex (40 chars = 20 bytes), tal como lo
+ *                  expone `seedE2ETenant().totpSecret`.
  * @returns Código de 6 dígitos como string (con leading zeros si es necesario)
  */
-export function currentTotpCode(secretBase32: string): string {
-  const key = base32Decode(secretBase32);
+export function currentTotpCode(secretHex: string): string {
+  const key = Buffer.from(secretHex, "hex");
   const counter = Math.floor(Date.now() / 1000 / 30);
 
   const counterBuf = Buffer.alloc(8);

@@ -46,7 +46,13 @@ test.describe.serial("E2E Sprint 1 — Setup tenant aislado", () => {
     }
   });
 
-  test("crea tenant E2E aislado + seed completo + verifica todo", async ({ request }) => {
+  test("crea tenant E2E aislado + seed completo + verifica todo", async ({}, testInfo) => {
+    // ── Limpieza idempotente PRIMERO: si quedó un tenant de un run previo ─
+    // Esto hace su propio login superadmin internamente. Es importante
+    // hacerlo ANTES de obtener nuestro token, porque Supabase puede invalidar
+    // sesiones previas del mismo user al re-loguear desde otro cliente.
+    await cleanupE2ETenant();
+
     // Gate: superadmin password disponible
     const superdb = await createSuperadminClient();
     if (!superdb) {
@@ -57,13 +63,9 @@ test.describe.serial("E2E Sprint 1 — Setup tenant aislado", () => {
     const superToken = sess?.session?.access_token;
     if (!superToken) throw new Error("No se obtuvo token superadmin");
 
-    // ── Limpieza idempotente: si quedó un tenant de un run previo ────────
-    await cleanupE2ETenant();
-
     // ── Act: seedear tenant nuevo desde cero ─────────────────────────────
-    // baseUrl viene de Playwright config. Default: http://localhost:5173
-    // En CI: la URL del deploy preview.
-    const baseUrl = request.url().replace(/\/$/, "");
+    // baseUrl viene del proyecto config (use.baseURL).
+    const baseUrl = (testInfo.project.use.baseURL || "https://pase-yndx.vercel.app").replace(/\/$/, "");
     seed = await seedE2ETenant({ superadminToken: superToken, baseUrl });
 
     // ── Assert: estructura básica del seed ───────────────────────────────
@@ -97,11 +99,11 @@ test.describe.serial("E2E Sprint 1 — Setup tenant aislado", () => {
       .eq("tenant_id", seed.tenantId);
     expect(empls).toHaveLength(3);
     const modos = new Set(empls!.map(e => e.modo_pago));
-    expect(modos).toEqual(new Set(["MENSUAL", "QUINCENAL", "JORNAL"]));
+    expect(modos).toEqual(new Set(["MENSUAL", "QUINCENAL", "SEMANAL"]));
 
     // ── Assert: 5 items de menú ──────────────────────────────────────────
     const { data: items } = await svc.from("items")
-      .select("id, nombre, precio")
+      .select("id, nombre, precio_madre")
       .eq("tenant_id", seed.tenantId);
     expect(items).toHaveLength(5);
 
@@ -121,22 +123,24 @@ test.describe.serial("E2E Sprint 1 — Setup tenant aislado", () => {
       expect(Number(s.saldo)).toBe(0);
     }
 
-    // ── Assert: TOTP secret generado ─────────────────────────────────────
+    // ── Assert: TOTP secret generado (BYTEA, 20 bytes random) ────────────
     const { data: totpRow } = await svc.from("tenant_totp_secret")
-      .select("secret_base32")
+      .select("secret")
       .eq("tenant_id", seed.tenantId)
       .single();
-    expect(totpRow?.secret_base32).toBeTruthy();
-    expect((totpRow!.secret_base32 as string).length).toBeGreaterThanOrEqual(16);
+    expect(totpRow?.secret).toBeTruthy();
+    // Supabase devuelve BYTEA como "\\x..." (hex literal de pg) en JSON.
+    const secretHexFromDb = String(totpRow!.secret).startsWith("\\x")
+      ? String(totpRow!.secret).slice(2)
+      : String(totpRow!.secret);
+    expect(secretHexFromDb).toBe(seed.totpSecret);
 
-    // ── Assert: el código TOTP local coincide con el de la RPC ───────────
-    // (esto valida que nuestro helper currentTotpCode funciona)
-    const codeLocal = currentTotpCode(totpRow!.secret_base32 as string);
-    const { data: codeRpcRow } = await svc.rpc("obtener_codigo_totp_actual", {
-      p_tenant_id: seed.tenantId,
-    });
-    const codeRpc = codeRpcRow as unknown as string;
-    expect(codeLocal).toBe(codeRpc);
+    // ── Assert: nuestro helper currentTotpCode genera 6 dígitos válidos ──
+    // No comparamos con la RPC `obtener_codigo_totp_actual()` porque no
+    // acepta params (lee tenant del caller). Validación cruzada vive en
+    // los tests de Manager Override que usan el código real para autorizar.
+    const codeLocal = currentTotpCode(seed.totpSecret);
+    expect(codeLocal).toMatch(/^\d{6}$/);
 
     // ── Assert: login del dueño E2E funciona y NO ve data de Neko ────────
     const duenoDb = await createE2EDuenoClient();
@@ -179,11 +183,13 @@ test.describe.serial("E2E Sprint 1 — Setup tenant aislado", () => {
     expect(liqCount).toBe(0);
 
     // INV4: sentinel presente — todas las entidades del seed tienen el marker
+    // El sentinel se guarda en `apellido` para empleados (el nombre es el
+    // modo_pago para que sean distinguibles entre sí).
     const { data: emplsSentinel } = await svc.from("rrhh_empleados")
-      .select("nombre")
+      .select("nombre, apellido")
       .eq("tenant_id", seed.tenantId);
     for (const e of emplsSentinel!) {
-      expect(e.nombre).toContain(E2E_SENTINEL);
+      expect(e.apellido).toBe(E2E_SENTINEL);
     }
   });
 

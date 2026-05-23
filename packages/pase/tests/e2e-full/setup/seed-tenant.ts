@@ -19,6 +19,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import crypto from "node:crypto";
 
 // ─── Constantes del tenant E2E ─────────────────────────────────────────
 export const E2E_TENANT_SLUG = "e2e-test-suite";
@@ -84,25 +85,29 @@ export async function createE2EDuenoClient(): Promise<SupabaseClient> {
 }
 
 // ─── Resultado del seed ────────────────────────────────────────────────
+//
+// IMPORTANTE: `rrhh_empleados.id` es UUID (no INTEGER) y `items.id` es INTEGER.
+// Cuidado al usarlos: el dato en `tenants` y `usuarios` también difiere
+// (tenant_id UUID, usuario_id INTEGER).
 export interface E2ETenantSeedResult {
-  tenantId: string;
-  duenoUsuarioId: number;
-  duenoAuthId: string;
-  local1Id: number;
-  local2Id: number;
+  tenantId: string;            // UUID
+  duenoUsuarioId: number;       // INTEGER (usuarios.id)
+  duenoAuthId: string;          // UUID (auth.users.id)
+  local1Id: number;             // INTEGER (locales.id)
+  local2Id: number;             // INTEGER
   // Catálogos
   medioEfectivoId: number;
   medioTarjetaId: number;
   medioMpId: number;
-  // Empleados (5)
+  // Empleados (3, todos UUID)
   empleados: {
-    mensual: { id: number; nombre: string; cuil: string };
-    quincenal: { id: number; nombre: string; cuil: string };
-    jornal: { id: number; nombre: string; cuil: string };
+    mensual: { id: string; nombre: string; apellido: string; cuil: string };
+    quincenal: { id: string; nombre: string; apellido: string; cuil: string };
+    semanal: { id: string; nombre: string; apellido: string; cuil: string };
   };
-  // Items + recetas
+  // Items (INTEGER)
   items: { id: number; nombre: string; precio: number }[];
-  // Proveedores
+  // Proveedores (INTEGER)
   proveedorId: number;
   // TOTP secret (para que tests puedan generar códigos válidos)
   totpSecret: string;
@@ -113,8 +118,9 @@ export async function seedE2ETenant(opts: {
   superadminToken: string;
   baseUrl: string; // ej "http://localhost:5173" o "https://pase-yndx.vercel.app"
 }): Promise<E2ETenantSeedResult> {
-  // Limpiar tenant previo si existe (idempotencia)
-  await cleanupE2ETenant().catch(() => { /* primer run, no existía */ });
+  // NOTA: NO llamamos cleanupE2ETenant() acá porque eso haría un login
+  // superadmin internamente y podría invalidar el `superadminToken` recibido.
+  // El caller debe limpiar ANTES de pasar el token.
 
   // 1. Crear tenant via endpoint oficial /api/crear-tenant
   const resp = await fetch(`${opts.baseUrl}/api/crear-tenant`, {
@@ -179,61 +185,78 @@ export async function seedE2ETenant(opts: {
   const duenoAuthId = duenoRow!.auth_id as string;
 
   // 6. Seed catálogos
-  const { data: medios } = await svc.from("medios_cobro").insert([
+  // medios_cobro: tenant_id default usa auth_tenant_id() que es NULL con
+  // service_role → hay que pasarlo explícito.
+  const { data: medios, error: mediosErr } = await svc.from("medios_cobro").insert([
     { tenant_id: tenantId, nombre: "EFECTIVO", cuenta_destino: "Caja Efectivo", activo: true },
     { tenant_id: tenantId, nombre: "TARJETA", cuenta_destino: "MercadoPago", activo: true },
     { tenant_id: tenantId, nombre: "MP_QR", cuenta_destino: "MercadoPago", activo: true },
   ]).select("id, nombre");
+  if (mediosErr) throw new Error(`Seed medios_cobro: ${mediosErr.message}`);
   const medioEfectivoId = medios!.find(m => m.nombre === "EFECTIVO")!.id as number;
   const medioTarjetaId = medios!.find(m => m.nombre === "TARJETA")!.id as number;
   const medioMpId = medios!.find(m => m.nombre === "MP_QR")!.id as number;
 
   // Categorías de gastos básicas
-  await svc.from("config_categorias").insert([
+  const { error: catErr } = await svc.from("config_categorias").insert([
     { tenant_id: tenantId, nombre: "INSUMOS COCINA", tipo: "gasto_variable", orden: 10, activo: true },
     { tenant_id: tenantId, nombre: "ALQUILER", tipo: "gasto_fijo", orden: 20, activo: true },
     { tenant_id: tenantId, nombre: "SUELDOS", tipo: "gasto_fijo", orden: 30, activo: true },
   ]);
+  if (catErr) throw new Error(`Seed config_categorias: ${catErr.message}`);
 
-  // Puestos RRHH
+  // Puestos RRHH (tabla rrhh_puestos: id INTEGER, nombre TEXT, activo BOOL, tenant_id UUID)
   await svc.from("rrhh_puestos").insert([
     { tenant_id: tenantId, nombre: "MOZO", activo: true },
     { tenant_id: tenantId, nombre: "COCINERO", activo: true },
     { tenant_id: tenantId, nombre: "CAJERO", activo: true },
   ]);
 
-  // 7. Seed empleados (3 modos de pago distintos)
+  // 7. Seed empleados (3 modos de pago — SEMANAL en lugar de JORNAL que no existe)
+  // Schema real:
+  //   - id UUID
+  //   - apellido TEXT NOT NULL
+  //   - nombre TEXT NOT NULL
+  //   - puesto TEXT NOT NULL (no FK, texto libre)
+  //   - sueldo_mensual NUMERIC NOT NULL
+  //   - fecha_inicio DATE (no fecha_alta)
+  //   - modo_pago CHECK IN ('MENSUAL', 'QUINCENAL', 'SEMANAL')
   const empleadosData = [
-    { nombre: `${E2E_SENTINEL} Mensual`, cuil: "20111111110", modo_pago: "MENSUAL", sueldo_base: 1500000 },
-    { nombre: `${E2E_SENTINEL} Quincenal`, cuil: "20222222220", modo_pago: "QUINCENAL", sueldo_base: 1200000 },
-    { nombre: `${E2E_SENTINEL} Jornal`, cuil: "20333333330", modo_pago: "JORNAL", sueldo_base: 50000 },
+    { nombre: "Mensual", apellido: `${E2E_SENTINEL}`, cuil: "20111111110", puesto: "MOZO", modo_pago: "MENSUAL", sueldo_mensual: 1500000 },
+    { nombre: "Quincenal", apellido: `${E2E_SENTINEL}`, cuil: "20222222220", puesto: "COCINERO", modo_pago: "QUINCENAL", sueldo_mensual: 1200000 },
+    { nombre: "Semanal", apellido: `${E2E_SENTINEL}`, cuil: "20333333330", puesto: "CAJERO", modo_pago: "SEMANAL", sueldo_mensual: 1000000 },
   ];
-  const { data: empleados } = await svc.from("rrhh_empleados").insert(
+  const { data: empleados, error: emplsErr } = await svc.from("rrhh_empleados").insert(
     empleadosData.map(e => ({
       tenant_id: tenantId,
       local_id: local1Id,
+      apellido: e.apellido,
       nombre: e.nombre,
       cuil: e.cuil,
+      puesto: e.puesto,
       modo_pago: e.modo_pago,
-      sueldo_base: e.sueldo_base,
-      fecha_alta: new Date().toISOString().slice(0, 10),
+      sueldo_mensual: e.sueldo_mensual,
+      fecha_inicio: new Date().toISOString().slice(0, 10),
       activo: true,
     }))
-  ).select("id, nombre, cuil");
+  ).select("id, nombre, apellido, cuil, modo_pago");
+  if (emplsErr) throw new Error(`Seed rrhh_empleados: ${emplsErr.message}`);
 
-  const empMensual = empleados!.find(e => e.nombre.includes("Mensual"))!;
-  const empQuincenal = empleados!.find(e => e.nombre.includes("Quincenal"))!;
-  const empJornal = empleados!.find(e => e.nombre.includes("Jornal"))!;
+  const empMensual = empleados!.find(e => e.modo_pago === "MENSUAL")!;
+  const empQuincenal = empleados!.find(e => e.modo_pago === "QUINCENAL")!;
+  const empSemanal = empleados!.find(e => e.modo_pago === "SEMANAL")!;
 
-  // 8. Seed proveedor
-  const { data: proveedor } = await svc.from("proveedores").insert({
+  // 8. Seed proveedor (no tiene "activo", solo estado='Activo')
+  const { data: proveedor, error: provErr } = await svc.from("proveedores").insert({
     tenant_id: tenantId,
     nombre: `${E2E_SENTINEL} Proveedor`,
     cuit: "30999999999",
-    activo: true,
+    estado: "Activo",
   }).select("id").single();
+  if (provErr) throw new Error(`Seed proveedores: ${provErr.message}`);
 
   // 9. Seed items de menú (5 items)
+  // Schema real: items.precio_madre (no "precio"), estado default 'disponible'.
   const itemsData = [
     { nombre: `${E2E_SENTINEL} Sushi Tradicional`, precio: 12000 },
     { nombre: `${E2E_SENTINEL} Roll Especial`, precio: 18000 },
@@ -241,14 +264,16 @@ export async function seedE2ETenant(opts: {
     { nombre: `${E2E_SENTINEL} Postre`, precio: 5500 },
     { nombre: `${E2E_SENTINEL} Cubierto`, precio: 1000 },
   ];
-  const { data: items } = await svc.from("items").insert(
+  const { data: items, error: itemsErr } = await svc.from("items").insert(
     itemsData.map(i => ({
       tenant_id: tenantId,
       nombre: i.nombre,
-      precio: i.precio,
-      activo: true,
+      precio_madre: i.precio,
+      estado: "disponible",
+      visible_pos: true,
     }))
-  ).select("id, nombre, precio");
+  ).select("id, nombre, precio_madre");
+  if (itemsErr) throw new Error(`Seed items: ${itemsErr.message}`);
 
   // 10. Seed saldos iniciales en saldos_caja para ambos locales
   const cuentas = ["Caja Efectivo", "Caja Chica", "Caja Mayor", "MercadoPago", "Banco"];
@@ -264,16 +289,21 @@ export async function seedE2ETenant(opts: {
       });
     }
   }
-  await svc.from("saldos_caja").insert(saldosData);
+  const { error: saldosErr } = await svc.from("saldos_caja").insert(saldosData);
+  if (saldosErr) throw new Error(`Seed saldos_caja: ${saldosErr.message}`);
 
-  // 11. Generar TOTP secret del tenant (para tests de manager override)
-  const { data: totpRow, error: totpErr } = await svc.rpc("generar_tenant_totp_secret", {
-    p_tenant_id: tenantId,
+  // 11. Generar TOTP secret del tenant (para tests de manager override).
+  // Schema real: `tenant_totp_secret.secret BYTEA` con CHECK octet_length=20.
+  // Insertamos 20 bytes random y guardamos también en formato hex string
+  // (el seed result expone `totpSecret` como hex para que los tests no tengan
+  // que tocar BYTEA serializaciones de Supabase).
+  const secretBytes = crypto.randomBytes(20);
+  const totpSecret = secretBytes.toString("hex"); // 40 chars hex
+  const { error: totpErr } = await svc.from("tenant_totp_secret").insert({
+    tenant_id: tenantId,
+    secret: `\\x${totpSecret}`, // pg BYTEA literal
   });
-  if (totpErr) throw new Error(`Generar TOTP falló: ${totpErr.message}`);
-  // generar_tenant_totp_secret devuelve el secret en base32; lo cacheamos
-  // para que el test pueda calcular el código actual con `currentTotpCode(secret)`.
-  const totpSecret = totpRow as unknown as string;
+  if (totpErr) throw new Error(`Insert tenant_totp_secret: ${totpErr.message}`);
 
   return {
     tenantId,
@@ -285,11 +315,11 @@ export async function seedE2ETenant(opts: {
     medioTarjetaId,
     medioMpId,
     empleados: {
-      mensual: { id: empMensual.id as number, nombre: empMensual.nombre, cuil: empMensual.cuil },
-      quincenal: { id: empQuincenal.id as number, nombre: empQuincenal.nombre, cuil: empQuincenal.cuil },
-      jornal: { id: empJornal.id as number, nombre: empJornal.nombre, cuil: empJornal.cuil },
+      mensual: { id: empMensual.id as string, nombre: empMensual.nombre, apellido: empMensual.apellido, cuil: empMensual.cuil },
+      quincenal: { id: empQuincenal.id as string, nombre: empQuincenal.nombre, apellido: empQuincenal.apellido, cuil: empQuincenal.cuil },
+      semanal: { id: empSemanal.id as string, nombre: empSemanal.nombre, apellido: empSemanal.apellido, cuil: empSemanal.cuil },
     },
-    items: items!.map(i => ({ id: i.id as number, nombre: i.nombre, precio: i.precio as number })),
+    items: items!.map(i => ({ id: i.id as number, nombre: i.nombre, precio: i.precio_madre as number })),
     proveedorId: proveedor!.id as number,
     totpSecret,
   };
@@ -301,22 +331,66 @@ export async function seedE2ETenant(opts: {
  * desactiva los triggers append-only de auditoria y borra todas las tablas
  * con tenant_id en orden topológico + el tenant.
  *
- * Idempotente: si el tenant no existe, no rompe.
+ * IMPORTANTE: `eliminar_tenant_completo` chequea `auth_es_superadmin()` →
+ * NO acepta service_role (devuelve NULL en auth). Por eso esta función crea
+ * un cliente superadmin a partir de SUPERADMIN_PASSWORD del .env.local.
+ * Después del tenant, borra el auth.user del dueño E2E vía service_role.
+ *
+ * Sin el cleanup del auth.user, un re-run falla con "EMAIL_ALREADY_IN_AUTH"
+ * porque /api/crear-tenant rechaza emails ya registrados.
+ *
+ * Idempotente: si el tenant/auth.user no existen, no rompe.
+ *
+ * Requiere ambos secrets en packages/pase/.env.local:
+ *   - SUPABASE_SERVICE_KEY (para borrar auth.user)
+ *   - SUPERADMIN_PASSWORD (para borrar tenant)
  */
 export async function cleanupE2ETenant(): Promise<void> {
-  const svc = createServiceClient();
-  const { data: tenant } = await svc.from("tenants")
+  // 1. Login superadmin (requerido para eliminar_tenant_completo)
+  const anonClient = createClient(SUPABASE_URL, loadAnonKey(), {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const superPwd = loadEnv("SUPERADMIN_PASSWORD");
+  const { error: loginErr } = await anonClient.auth.signInWithPassword({
+    email: "superadmin@pase.local",
+    password: superPwd,
+  });
+  if (loginErr) {
+
+    console.error(`[cleanupE2ETenant] login superadmin falló: ${loginErr.message}`);
+    return;
+  }
+
+  // 2. Buscar tenant E2E (con superadmin para ver ocultos)
+  const { data: tenant } = await anonClient.from("tenants")
     .select("id")
     .eq("slug", E2E_TENANT_SLUG)
     .maybeSingle();
-  if (!tenant) return; // No existía, nada que hacer.
 
-  const { error } = await svc.rpc("eliminar_tenant_completo", {
-    p_tenant_id: tenant.id,
-  });
-  if (error) {
-    // No throw: queremos que el cleanup sea best-effort. Log para diagnosticar.
+  // 3. Si existe, eliminar tenant completo (via superadmin)
+  if (tenant) {
+    const { error } = await anonClient.rpc("eliminar_tenant_completo", {
+      p_tenant_id: tenant.id,
+    });
+    if (error) {
 
-    console.error(`[cleanupE2ETenant] eliminar_tenant_completo falló: ${error.message}`);
+      console.error(`[cleanupE2ETenant] eliminar_tenant_completo falló: ${error.message}`);
+    }
+  }
+
+  await anonClient.auth.signOut();
+
+  // 4. Borrar el auth.user del dueño E2E (via service_role).
+  const svc = createServiceClient();
+  try {
+    const { data: users } = await svc.auth.admin.listUsers({ page: 1, perPage: 100 });
+    const target = users?.users?.find(u => u.email === E2E_DUENO_EMAIL);
+    if (target) {
+      const { error: delErr } = await svc.auth.admin.deleteUser(target.id);
+      if (delErr) console.error(`[cleanupE2ETenant] borrar auth.user falló: ${delErr.message}`);
+    }
+  } catch (e) {
+
+    console.error(`[cleanupE2ETenant] auth admin falló:`, e);
   }
 }
