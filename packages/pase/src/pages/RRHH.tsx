@@ -200,20 +200,25 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     }
 
     // Generar slots según modo_pago de cada empleado.
-    // Si ya hay novedades existentes con cuotas_total distinto, las priorizamos
-    // (data en DB manda — pej. una mensual vieja con cuotas_total=1 sigue
-    // mostrándose como mensual aunque el empleado haya cambiado a quincenal).
+    // BUG FIX 22-may noche (Anto): antes priorizábamos el `cuotas_total`
+    // guardado en DB, pero las novedades pre-22-may tienen cuotas_total=1
+    // (default histórico). Para empleados QUINCENAL/SEMANAL eso mostraba
+    // 1 sola fila en lugar de 2 o 4. Ahora SIEMPRE usamos el modo_pago
+    // del empleado como fuente de verdad. Las novedades viejas se asignan
+    // a la cuota 1; los slots faltantes (2,3,4) aparecen en estado borrador.
     const slots: Array<{ emp: Empleado; cuota_num: number; cuotas_total: number }> = [];
     const map: Record<string, NovedadEditable> = {};
     for (const emp of empleados) {
       const novsEmp = novs.filter(n => n.empleado_id === emp.id);
       const cuotasPorModo = cuotasParaModoPago(emp.modo_pago);
 
-      // Si ya hay novedades, usamos el cuotas_total que tienen guardado
-      // (puede no coincidir con el modo_pago actual si cambió).
-      const cuotasTotalDB = novsEmp.length > 0
+      // Tomamos el máximo entre modo_pago y lo que ya hay en DB. Esto
+      // protege el caso edge donde alguien cambia un empleado de QUINCENAL
+      // a MENSUAL: la novedad vieja con cuotas_total=2 sigue visible.
+      const cuotasMaxDB = novsEmp.length > 0
         ? Math.max(...novsEmp.map(n => n.cuotas_total ?? 1))
-        : cuotasPorModo;
+        : 0;
+      const cuotasTotalDB = Math.max(cuotasPorModo, cuotasMaxDB);
 
       for (let c = 1; c <= cuotasTotalDB; c++) {
         const existing = novsEmp.find(n => (n.cuota_num ?? 1) === c);
