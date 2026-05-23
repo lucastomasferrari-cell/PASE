@@ -1021,12 +1021,27 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       {/* ═══ LEGAJO MODAL ═════════════════════════════════════════════════ */}
       {legajoId && (
         <div className="overlay" onClick={() => { setLegajoId(null); loadEmpleados(); }}>
-          <div style={{background:"var(--s1)",border:"1px solid var(--bd2)",borderRadius:"var(--r)",width:"90vw",maxWidth:1100,height:"90vh",display:"flex",flexDirection:"column",overflow:"hidden"}} onClick={e => e.stopPropagation()}>
+          {/* Usa clase .modal (centrado correcto, max-width:96vw responsive) en vez
+              de width:90vw inline que se cortaba del lado izquierdo en algunas
+              configuraciones (reportado por Lucas 22-may noche). */}
+          <div
+            className="modal"
+            style={{
+              width: 1100,
+              maxWidth: "calc(100vw - 40px)",
+              maxHeight: "92vh",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              padding: 0,
+            }}
+            onClick={e => e.stopPropagation()}
+          >
             <div className="modal-hd">
               <div className="modal-title">Legajo</div>
               <button className="close-btn" onClick={() => { setLegajoId(null); loadEmpleados(); }}>✕</button>
             </div>
-            <div style={{flex:1,overflowY:"auto",padding:20}}>
+            <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: 20, minWidth: 0 }}>
               <Suspense fallback={<div style={{padding:24,color:"var(--muted)"}}>Cargando legajo…</div>}>
                 <RRHHLegajo empleadoId={legajoId} user={user} locales={locales} onClose={() => { setLegajoId(null); loadEmpleados(); }} onGoToPago={goToPagoFromLegajo} />
               </Suspense>
