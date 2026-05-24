@@ -18,9 +18,23 @@ export function readLocalActivo(): number | null {
   }
 }
 
+// Evento custom para que TODOS los componentes que usen useLocalActivo se
+// enteren cuando se cambia el local desde cualquier lugar. Antes (bug 24-may
+// reportado por Lucas): el dropdown del sidebar cambiaba localId y escribía
+// localStorage, pero el ReportesLayout (montado independiente) NO se
+// enteraba — sus datos quedaban del local viejo. Fix: emitir CustomEvent al
+// escribir + escuchar en el hook.
+const LOCAL_CHANGED_EVENT = 'comanda:local-activo-changed';
+
 export function writeLocalActivo(localId: number | null) {
   if (localId === null) localStorage.removeItem(LS_KEY);
   else localStorage.setItem(LS_KEY, String(localId));
+  // Notificar a todos los useLocalActivo() activos en la misma tab.
+  // (El evento nativo 'storage' solo se dispara entre tabs distintas, no
+  // entre componentes de la misma tab.)
+  try {
+    window.dispatchEvent(new CustomEvent(LOCAL_CHANGED_EVENT, { detail: localId }));
+  } catch { /* no-op si window no existe (SSR) */ }
 }
 
 // Hook: devuelve el local activo + setter. Default razonable según user.
@@ -61,6 +75,22 @@ export function useLocalActivo(user: Usuario | null): [number | null, (id: numbe
       if (def !== null) setLocalId(def);
     }
   }, [localId, user]);
+
+  // Bug fix 24-may: cuando otro componente (típicamente el dropdown del
+  // sidebar) llama writeLocalActivo(), todos los demás useLocalActivo()
+  // activos en la misma tab deben actualizar su state. Sin este listener,
+  // ReportesLayout seguía mostrando datos del local viejo aunque el
+  // sidebar mostrara el nuevo.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const newId = (e as CustomEvent<number | null>).detail;
+      if (typeof newId === 'number' && newId !== localId) {
+        setLocalId(newId);
+      }
+    };
+    window.addEventListener(LOCAL_CHANGED_EVENT, handler);
+    return () => window.removeEventListener(LOCAL_CHANGED_EVENT, handler);
+  }, [localId]);
 
   const set = (id: number) => {
     writeLocalActivo(id);
