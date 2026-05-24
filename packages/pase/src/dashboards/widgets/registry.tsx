@@ -15,7 +15,11 @@ import type { WidgetDefinition } from "../types";
 import { TareasPineadasWidget } from "./TareasPineadasWidget";
 import { FacturasVencidasWidget } from "./FacturasVencidasWidget";
 import { FacturasPorVencerWidget } from "./FacturasPorVencerWidget";
-import { SaldoCajaWidget } from "./SaldoCajaWidget";
+// SaldoCajaWidget ELIMINADO 24-may noche (Lucas): leakeaba Caja Efectivo
+// a encargados en /inicio. Aunque agregamos filtro por cuentas_visibles
+// (commit 016d806), Lucas decidió sacar el widget completo. La info de
+// saldos vive en /caja, no en el dashboard.
+// import { SaldoCajaWidget } from "./SaldoCajaWidget";
 import { VentasHoyWidget } from "./VentasHoyWidget";
 import { VentasSemanaWidget } from "./VentasSemanaWidget";
 import { ComparativaSucursalesWidget } from "./ComparativaSucursalesWidget";
@@ -44,14 +48,10 @@ export const WIDGETS: WidgetDefinition[] = [
   },
 
   // ─── Operación (caja / ventas) ─────────────────────────────────────────
-  {
-    id: "saldo_caja",
-    title: "Saldos de caja",
-    description: "Saldo de cada cuenta del local (efectivo, MP, banco) en tiempo real.",
-    permisosRequeridos: ["caja"],
-    size: "md",
-    render: (ctx) => <SaldoCajaWidget ctx={ctx} />,
-  },
+  // saldo_caja ELIMINADO 24-may noche por leak Caja Efectivo a encargados.
+  // Los users que ya lo tenían en su dashboard config van a verlo desaparecer
+  // (el filtro por permisosRequeridos al renderizar deja afuera widgets
+  // que ya no existen).
   {
     id: "ventas_hoy",
     title: "Ventas hoy",

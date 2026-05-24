@@ -100,11 +100,11 @@ export const DEFAULT_WIDGETS_POR_ROL: Record<RolPase, string[]> = {
     "facturas_vencidas",
     "ultimos_overrides",
   ],
+  // saldo_caja ELIMINADO 24-may noche por leak Caja Efectivo a encargados.
   encargado: [
     "proximo_paso",
     "tareas_pineadas",
     "ventas_hoy",
-    "saldo_caja",
   ],
   compras: [
     "proximo_paso",
@@ -115,7 +115,6 @@ export const DEFAULT_WIDGETS_POR_ROL: Record<RolPase, string[]> = {
   cajero: [
     "proximo_paso",
     "tareas_pineadas",
-    "saldo_caja",
     "ventas_hoy",
   ],
 };
