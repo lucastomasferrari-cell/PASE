@@ -4,7 +4,9 @@ import { PageHeader } from "../components/ui";
 import { formatCurrency, formatCurrencyCompact } from "../lib/format";
 import { VentasSemanaWidget } from "../dashboards/widgets/VentasSemanaWidget";
 import { ComparativaSucursalesWidget } from "../dashboards/widgets/ComparativaSucursalesWidget";
-import { SaldoCajaWidget } from "../dashboards/widgets/SaldoCajaWidget";
+// SaldoCajaWidget eliminado 24-may noche (leak Caja Efectivo). En Finanzas
+// reemplazamos esa card por algo más analítico — el saldo de caja vive en
+// /caja, no en Finanzas (vista analítica para dueño).
 import { FacturasPorVencerWidget } from "../dashboards/widgets/FacturasPorVencerWidget";
 import type { WidgetContext, RolPase } from "../dashboards/types";
 
@@ -64,9 +66,8 @@ export default function Finanzas({ user, locales = [], localActivo = null }: Pro
         <Card title="Ventas — últimos 7 días" wide>
           <VentasSemanaWidget ctx={ctx} />
         </Card>
-        <Card title="Saldos en caja">
-          <SaldoCajaWidget ctx={ctx} />
-        </Card>
+        {/* Card "Saldos en caja" eliminada 24-may junto con SaldoCajaWidget.
+            Si necesitás ver saldos, andá a /caja directamente. */}
 
         <Card title="Ventas mes a mes" wide>
           <VentasMensualesChart localActivo={localActivo} />
