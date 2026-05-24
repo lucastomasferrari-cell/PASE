@@ -39,7 +39,7 @@ interface Props {
   localActivo: number | null;
 }
 
-type ToolId = "importar" | "lector_mp" | "blindaje" | "ajustes_dashboards" | "codigos_manager" | "contador_iva" | "mensajeria" | "usuarios_comanda";
+type ToolId = "importar" | "lector_mp" | "blindaje" | "ajustes_dashboards" | "codigos_manager" | "contador_iva" | "mensajeria";
 
 interface ToolDef {
   id: ToolId;
@@ -105,15 +105,10 @@ const TOOLS: ToolDef[] = [
     Icon: DocumentIcon,
     navigateTo: "/mensajeria",
   },
-  {
-    id: "usuarios_comanda",
-    label: "Usuarios COMANDA",
-    description: "Crear y gestionar los usuarios del POS. Permisos separados de PASE, mismo email/password.",
-    slug: "usuarios",
-    Icon: KeyIcon,
-    navigateTo: "/usuarios-comanda",
-  },
 ];
+// "Usuarios COMANDA" eliminado 24-may noche: la gestión vive ahora EN
+// COMANDA misma (Sprint COMANDA Autónomo Fase 2.b). Ir a
+// pase-comanda.vercel.app → Empleados → Usuarios POS.
 
 export default function HerramientasHub({ user, locales, localActivo }: Props) {
   const navigate = useNavigate();

@@ -73,6 +73,7 @@ const FidelidadLista = lazy(() => import('./pages/Marketing/FidelidadLista').the
 const CajaChica = lazy(() => import('./pages/Caja/CajaChica').then(m => ({ default: m.CajaChica })));
 const EmpleadosTrabajando = lazy(() => import('./pages/Empleados/EmpleadosTrabajando').then(m => ({ default: m.EmpleadosTrabajando })));
 const MiCierreView = lazy(() => import('./pages/Empleados/MiCierre').then(m => ({ default: m.MiCierreView })));
+const UsuariosPosPage = lazy(() => import('./pages/Empleados/UsuariosPosPage'));
 const ReporteVentas = lazy(() => import('./pages/Reportes/ReporteVentas').then(m => ({ default: m.ReporteVentas })));
 const SettingsRecibos = lazy(() => import('./pages/Configuracion/SettingsRecibos').then(m => ({ default: m.SettingsRecibos })));
 const ReportePerformanceEmpleados = lazy(() => import('./pages/Reportes/ReportePerformanceEmpleados').then(m => ({ default: m.ReportePerformanceEmpleados })));
@@ -269,6 +270,9 @@ export default function App() {
                   <Route path="/empleados" element={<Navigate to="/empleados/lista" replace />} />
                   <Route path="/empleados/lista" element={<EmpleadosListaRoute />} />
                   <Route path="/empleados/permisos" element={<SettingsPermisos />} />
+                  {/* Sprint COMANDA Autónomo Fase 2.b (24-may noche): gestión
+                      de usuarios POS nativa de COMANDA (antes vivía en PASE). */}
+                  <Route path="/empleados/usuarios-pos" element={<UsuariosPosPage />} />
                   <Route path="/empleados/horarios" element={<EmpleadosTrabajando />} />
                   <Route path="/empleados/performance" element={<StubRoute />} />
                   <Route path="/empleados/propinas" element={<PropinasReparto />} />
