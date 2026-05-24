@@ -390,6 +390,11 @@ function AppMain() {
                         nombre: user.nombre,
                         rol: (user.rol as "dueno" | "admin" | "encargado" | "compras" | "cajero" | "superadmin"),
                         tenant_id: user.tenant_id ?? null,
+                        // Bug fix 24-may: el widget SaldoCajaWidget necesita
+                        // cuentas_visibles del user para no mostrar Caja
+                        // Efectivo a encargados. Antes solo se pasaba en
+                        // /caja, no en /inicio → leak en dashboard.
+                        cuentas_visibles: user.cuentas_visibles ?? null,
                       }}
                       permisos={getPermisos(user)}
                       locales={locales}

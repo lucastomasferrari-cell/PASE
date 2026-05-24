@@ -26,6 +26,14 @@ export interface WidgetContext {
     nombre: string;
     rol: RolPase;
     tenant_id: string | null;
+    /**
+     * Restricción de cuentas que el user puede VER el saldo (cards de Caja
+     * + widgets de dashboard). null = sin restricción (dueño/admin típico).
+     * Se respeta también para widgets del dashboard, no solo en /caja.
+     * Bug 24-may: SaldoCajaWidget mostraba TODAS las cuentas sin respetar
+     * esto, exponiendo Caja Efectivo a encargados que no la tenían.
+     */
+    cuentas_visibles: string[] | null;
   };
   /** Locales del tenant que el usuario puede ver */
   locales: Array<{ id: number; nombre: string }>;

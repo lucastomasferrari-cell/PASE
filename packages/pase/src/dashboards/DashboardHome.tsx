@@ -32,6 +32,7 @@ interface Props {
     nombre: string;
     rol: RolPase;
     tenant_id: string | null;
+    cuentas_visibles: string[] | null;
   };
   permisos: string[];
   locales: Array<{ id: number; nombre: string }>;

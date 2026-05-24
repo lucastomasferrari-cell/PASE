@@ -24,10 +24,14 @@ export function SaldoCajaWidget({ ctx }: { ctx: WidgetContext }) {
       const { data, error } = await q;
       if (cancelled || error) { setLoading(false); return; }
       const map = new Map<string, number>();
+      // Bug 24-may: encargados veían Caja Efectivo acá porque el widget no
+      // respetaba cuentas_visibles del user (a diferencia de /caja que sí).
+      // Filtramos en el cliente. null = sin restricción (dueño/admin típico).
+      const restriccion = ctx.usuario.cuentas_visibles;
       for (const r of data ?? []) {
         const cuenta = (r as { cuenta: string }).cuenta;
-        // Lucas 2026-05-17: ocultar MP/Banco hasta que conciliación esté real.
         if (CUENTAS_OCULTAS_TEMPORAL.includes(cuenta)) continue;
+        if (restriccion !== null && !restriccion.includes(cuenta)) continue;
         const saldo = Number((r as { saldo: number | string }).saldo ?? 0);
         map.set(cuenta, (map.get(cuenta) ?? 0) + saldo);
       }
@@ -36,7 +40,8 @@ export function SaldoCajaWidget({ ctx }: { ctx: WidgetContext }) {
     }
     void reload();
     return () => { cancelled = true; };
-  }, [ctx.localActivo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx.localActivo, (ctx.usuario.cuentas_visibles ?? []).join("|")]);
 
   if (loading) {
     return <div style={{ padding: "16px 0", textAlign: "center", color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-sm)" }}>Cargando…</div>;
