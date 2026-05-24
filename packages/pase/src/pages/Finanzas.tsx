@@ -32,7 +32,7 @@ import type { WidgetContext, RolPase } from "../dashboards/types";
 interface LocalRef { id: number; nombre: string }
 
 interface Props {
-  user?: { id: number; nombre: string; rol: string; tenant_id?: string | null };
+  user?: { id: number; nombre: string; rol: string; tenant_id?: string | null; cuentas_visibles?: string[] | null };
   locales?: LocalRef[];
   /** Sucursal activa del sidebar — fuente única de verdad (2026-05-17). */
   localActivo?: number | null;
