@@ -8,7 +8,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Permite email completo (con @) o solo username (concatena @pase.local).
+// Mismo comportamiento que PASE — si el user es "dueno", lo expandimos a
+// "dueno@pase.local" antes de pasarle a Supabase Auth. Si ya tiene @, no
+// toca nada.
+const EMAIL_O_USER_RE = /^[^\s@]+(@[^\s@]+\.[^\s@]+)?$/;
+
+function normalizarEmail(input: string): string {
+  const s = input.trim();
+  return s.includes('@') ? s : `${s}@pase.local`;
+}
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -19,8 +28,8 @@ export function LoginPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!EMAIL_RE.test(email.trim())) {
-      setError('Email inválido');
+    if (!EMAIL_O_USER_RE.test(email.trim())) {
+      setError('Email o usuario inválido');
       return;
     }
     if (!password) {
@@ -30,7 +39,7 @@ export function LoginPage() {
     setError(null);
     setLoading(true);
     const { error: err } = await db.auth.signInWithPassword({
-      email: email.trim(),
+      email: normalizarEmail(email),
       password,
     });
     setLoading(false);
@@ -55,22 +64,22 @@ export function LoginPage() {
             </div>
             <h1 className="text-3xl font-bold tracking-tight">COMANDA</h1>
             <p className="text-sm text-muted-foreground mt-2">
-              Iniciá sesión con tu email y contraseña
+              Iniciá sesión con tu usuario y contraseña
             </p>
           </div>
 
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">Usuario o email</Label>
               <Input
                 id="email"
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoFocus
-                autoComplete="email"
+                autoComplete="username"
                 required
-                placeholder="tu@email.com"
+                placeholder="dueno (o tu@email.com)"
                 className="h-11"
               />
             </div>

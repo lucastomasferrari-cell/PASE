@@ -4,7 +4,10 @@ import { ROLES, tienePermiso } from "../lib/auth";
 import type { Usuario, Local, Tenant } from "../types";
 import { ThemeToggle } from "./ui/ThemeToggle";
 import { BandejaEntradaBoton } from "./BandejaEntradaBoton";
-import { abrirComanda } from "../lib/comanda-sso";
+// Sprint COMANDA Autónomo (24-may noche): abrirComanda eliminado del sidebar.
+// COMANDA es un sistema independiente — los users se loguean directo en
+// pase-comanda.vercel.app. No hay más botón cross-sistema.
+// import { abrirComanda } from "../lib/comanda-sso";
 
 interface SidebarProps {
   user: Usuario;
@@ -145,26 +148,11 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
           </div>
           {/* Decisión 2026-05-13: roles sin color. La distinción es solo textual. */}
           <div className="sb-urole">{ROLES[user.rol]?.label}</div>
-          {/* Acceso COMANDA (POS) embebido — solo dueño/superadmin mientras
-              COMANDA esté en WIP. Sale en nueva pestaña para no perder el
-              contexto de PASE. Optimizado para celular. */}
-          {(user.rol === "dueno" || user.rol === "superadmin") && (
-            <button
-              type="button"
-              onClick={() => void abrirComanda("/")}
-              className="sb-comanda"
-              title="Abre COMANDA en una nueva tab. Si está en URL propia, hace SSO automático."
-              style={{background:"transparent",border:"none",cursor:"pointer",width:"100%",textAlign:"left",padding:0,font:"inherit",color:"inherit"}}
-            >
-              <span style={{display:"inline-flex",alignItems:"center",gap:6}}>
-                <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="1.5" y="1.5" width="11" height="11" rx="1.5"/>
-                  <path d="M4 5h6M4 7h6M4 9h4"/>
-                </svg>
-                Abrir COMANDA
-              </span>
-            </button>
-          )}
+          {/* Botón "Abrir COMANDA" ELIMINADO 24-may noche.
+              Sprint COMANDA Autónomo Fase 5: COMANDA es un sistema
+              independiente — el dueño se loguea directo en
+              pase-comanda.vercel.app con su email/password de PASE
+              (auth compartido, perfiles separados). */}
           <button className="sb-logout" onClick={onLogout}>Cerrar sesión →</button>
         </div>
       </div>
