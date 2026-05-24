@@ -184,6 +184,22 @@ export async function seedE2ETenant(opts: {
     .single();
   const duenoAuthId = duenoRow!.auth_id as string;
 
+  // 5b. Sprint COMANDA Autónomo Fase 4 (24-may noche): crear espejo del
+  // dueño en comanda_usuarios con rol_pos='admin' (bypass total POS).
+  // Esto es necesario porque fn_check_perm_comanda ahora lee de
+  // comanda_usuario_permisos — sin perfil COMANDA, el dueño no puede
+  // operar las RPCs POS (fn_cobrar_venta_comanda, etc.).
+  const { error: cuErr } = await svc.from("comanda_usuarios").insert({
+    tenant_id: tenantId,
+    auth_id: duenoAuthId,
+    nombre: E2E_DUENO_NOMBRE,
+    email: E2E_DUENO_EMAIL,
+    rol_pos: "admin",
+    locales: null, // todos los locales
+    activo: true,
+  });
+  if (cuErr) throw new Error(`Seed comanda_usuario dueño: ${cuErr.message}`);
+
   // 6. Seed catálogos
   // medios_cobro: tenant_id default usa auth_tenant_id() que es NULL con
   // service_role → hay que pasarlo explícito.
