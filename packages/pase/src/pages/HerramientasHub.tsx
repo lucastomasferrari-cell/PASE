@@ -39,7 +39,7 @@ interface Props {
   localActivo: number | null;
 }
 
-type ToolId = "importar" | "lector_mp" | "blindaje" | "ajustes_dashboards" | "codigos_manager" | "contador_iva" | "mensajeria";
+type ToolId = "importar" | "lector_mp" | "blindaje" | "ajustes_dashboards" | "codigos_manager" | "contador_iva" | "mensajeria" | "usuarios_comanda";
 
 interface ToolDef {
   id: ToolId;
@@ -104,6 +104,14 @@ const TOOLS: ToolDef[] = [
     slug: "mensajeria",
     Icon: DocumentIcon,
     navigateTo: "/mensajeria",
+  },
+  {
+    id: "usuarios_comanda",
+    label: "Usuarios COMANDA",
+    description: "Crear y gestionar los usuarios del POS. Permisos separados de PASE, mismo email/password.",
+    slug: "usuarios",
+    Icon: KeyIcon,
+    navigateTo: "/usuarios-comanda",
   },
 ];
 

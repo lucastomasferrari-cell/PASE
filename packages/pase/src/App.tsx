@@ -51,6 +51,7 @@ const LectorExtractoMP = lazy(() => import("./pages/LectorExtractoMP"));
 // const Reservas = lazy(() => import("./pages/Reservas"));
 const CodigosManager = lazy(() => import("./pages/CodigosManager"));
 const ConfiguracionNotificaciones = lazy(() => import("./pages/ConfiguracionNotificaciones"));
+const UsuariosComanda = lazy(() => import("./pages/UsuariosComanda"));
 const HerramientasHub = lazy(() => import("./pages/HerramientasHub"));
 const DashboardHome = lazy(() => import("./dashboards/DashboardHome").then(m => ({ default: m.DashboardHome })));
 const SettingsDashboards = lazy(() => import("./dashboards/SettingsDashboards"));
@@ -433,6 +434,16 @@ function AppMain() {
                   // encargado entre por URL y vea la UI rota.
                   user && (user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin")
                     ? <CodigosManager user={user} />
+                    : <Navigate to="/inicio" replace />
+                }
+              />
+              <Route
+                path="/usuarios-comanda"
+                element={
+                  // Sprint COMANDA Autónomo Fase 2 (24-may): pantalla para
+                  // gestionar usuarios POS desde PASE. Solo dueño/admin.
+                  user && (user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin")
+                    ? <UsuariosComanda user={user} locales={locales} />
                     : <Navigate to="/inicio" replace />
                 }
               />

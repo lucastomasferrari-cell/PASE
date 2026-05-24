@@ -162,8 +162,86 @@ export default async function handler(req, res) {
       console.log('[auth-admin] change_password OK para authId:', authId);
       return res.status(200).json({ ok: true });
 
+    } else if (action === 'create_comanda') {
+      // ─── Sprint COMANDA Autónomo (24-may) ──────────────────────────────
+      // Crea un comanda_usuario + sus permisos. Si el email ya existe en
+      // auth.users (porque el user tiene cuenta PASE), REUSA el auth_id en
+      // lugar de crear uno nuevo. Esto es lo que permite que el mismo email/
+      // password loguee en ambos sistemas con perfiles separados.
+      const { email, rol_pos, locales: comandaLocales, pin_pos, permisos } = req.body || {};
+      if (!nombre || !email || !rol_pos) {
+        return res.status(400).json({ ok: false, error: 'Faltan nombre/email/rol_pos' });
+      }
+      if (!['mozo','cajero','manager','admin'].includes(rol_pos)) {
+        return res.status(400).json({ ok: false, error: 'rol_pos_invalido' });
+      }
+
+      const tenantId = await resolveTenantId(db, payloadTenantId, auth.row);
+
+      // 1. Buscar auth_id existente — primero en usuarios PASE, después en
+      //    comanda_usuarios de otros tenants (caso edge).
+      const emailNorm = email.includes('@') ? email : email + '@pase.local';
+      let authIdToUse = null;
+      const { data: pasaUser } = await db.from('usuarios')
+        .select('auth_id').eq('email', email).maybeSingle();
+      authIdToUse = pasaUser?.auth_id || null;
+
+      // Si no encontró, ver en otro tenant
+      if (!authIdToUse) {
+        const { data: comOtro } = await db.from('comanda_usuarios')
+          .select('auth_id').eq('email', email).maybeSingle();
+        authIdToUse = comOtro?.auth_id || null;
+      }
+
+      // 2. Si no existe, crear auth.user
+      if (!authIdToUse) {
+        if (!password) {
+          return res.status(400).json({ ok: false, error: 'password_requerido_para_user_nuevo' });
+        }
+        const { data: newAuth, error: authErr } = await db.auth.admin.createUser({
+          email: emailNorm,
+          password,
+          email_confirm: true,
+          user_metadata: { nombre, rol_pos },
+        });
+        if (authErr) {
+          return res.status(500).json({ ok: false, error: 'auth_create_failed: ' + authErr.message });
+        }
+        authIdToUse = newAuth.user.id;
+      }
+
+      // 3. Insert comanda_usuario
+      const { data: cuRow, error: cuErr } = await db.from('comanda_usuarios').insert({
+        auth_id: authIdToUse,
+        tenant_id: tenantId,
+        nombre,
+        email,
+        rol_pos,
+        locales: comandaLocales || null,
+        pin_pos: pin_pos || null,
+        activo: true,
+      }).select('id').single();
+      if (cuErr) {
+        return res.status(500).json({ ok: false, error: cuErr.message });
+      }
+
+      // 4. Insert permisos (si los hay). Admin POS bypassa todo, no necesita.
+      if (Array.isArray(permisos) && permisos.length > 0 && rol_pos !== 'admin') {
+        const permisosRows = permisos.map(slug => ({
+          comanda_usuario_id: cuRow.id,
+          tenant_id: tenantId,
+          modulo_slug: slug,
+        }));
+        const { error: permErr } = await db.from('comanda_usuario_permisos').insert(permisosRows);
+        if (permErr) {
+          return res.status(500).json({ ok: false, error: 'permisos_insert_failed: ' + permErr.message });
+        }
+      }
+
+      return res.status(200).json({ ok: true, id: cuRow.id, auth_id: authIdToUse });
+
     } else {
-      return res.status(400).json({ ok: false, error: 'action requerida: create | change_password' });
+      return res.status(400).json({ ok: false, error: 'action requerida: create | change_password | create_comanda' });
     }
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
