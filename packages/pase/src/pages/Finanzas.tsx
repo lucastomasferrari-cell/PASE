@@ -45,6 +45,7 @@ export default function Finanzas({ user, locales = [], localActivo = null }: Pro
       nombre: user?.nombre ?? "",
       rol: (user?.rol ?? "dueno") as RolPase,
       tenant_id: user?.tenant_id ?? null,
+      cuentas_visibles: user?.cuentas_visibles ?? null,
     },
     locales,
     localActivo,

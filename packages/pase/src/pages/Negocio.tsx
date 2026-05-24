@@ -44,6 +44,7 @@ export default function Negocio({ user, locales = [], localActivo = null }: Prop
       nombre: user?.nombre ?? "",
       rol: (user?.rol ?? "dueno") as RolPase,
       tenant_id: user?.tenant_id ?? null,
+      cuentas_visibles: user?.cuentas_visibles ?? null,
     },
     locales,
     localActivo,
