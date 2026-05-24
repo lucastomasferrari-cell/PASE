@@ -1,20 +1,23 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { db } from './supabase';
-import type { Usuario, Rol } from '../types/auth';
+import type { Usuario, RolPos } from '../types/auth';
 
 // ─── Permisos ──────────────────────────────────────────────────────────────
-// Superadmin/dueño bypassan; el resto chequea contra usuario_permisos.
+// Sprint COMANDA Autónomo Fase 3 (24-may):
+// - rol_pos='admin' bypassa todos los chequeos (acceso total POS).
+// - El resto: chequea contra `comanda_usuario_permisos` (slugs comanda.*).
+// - Roles 'superadmin' / 'dueno' de PASE NO aplican acá — son ortogonales.
 
 export function tienePermiso(user: Usuario | null, slug: string): boolean {
   if (!user) return false;
-  if (user.rol === 'superadmin' || user.rol === 'dueno') return true;
+  if (user.rol_pos === 'admin') return true;
   return user.permisos.includes(slug);
 }
 
 // ─── Sesión ────────────────────────────────────────────────────────────────
-// El estado vive en un Context inicializado por <AuthProvider>. Los componentes
-// llaman useAuth() (lee del context). El hook useAuthInternal (no exportado)
-// hace el fetch real una sola vez por sesión.
+// El user logueado proviene de `comanda_usuarios` (no de `usuarios` de PASE).
+// Si el email tiene cuenta PASE pero no tiene fila en comanda_usuarios, NO
+// puede entrar a COMANDA — se le muestra error "Sin acceso a COMANDA".
 
 export interface AuthState {
   user: Usuario | null;
@@ -30,8 +33,6 @@ export function useAuth(): AuthState {
   return useContext(AuthContext);
 }
 
-// useAuthInternal: hook que vive dentro del AuthProvider. No usar directamente
-// desde componentes de pantalla — usar useAuth().
 export function useAuthInternal(): AuthState {
   const [state, setState] = useState<AuthState>(INITIAL);
 
@@ -46,9 +47,10 @@ export function useAuthInternal(): AuthState {
         return;
       }
 
+      // ─── Cargar perfil COMANDA por auth_id (no PASE) ──────────────────
       const { data: rows, error } = await db
-        .from('usuarios')
-        .select('id, auth_id, email, nombre, rol, activo, tenant_id')
+        .from('comanda_usuarios')
+        .select('id, auth_id, email, nombre, rol_pos, activo, tenant_id, locales, pin_pos')
         .eq('auth_id', authId)
         .eq('activo', true)
         .limit(1);
@@ -59,30 +61,38 @@ export function useAuthInternal(): AuthState {
       }
       const row = rows?.[0];
       if (!row) {
-        if (mounted) setState({ user: null, loading: false, error: 'Usuario no encontrado' });
+        // El user tiene auth.users pero NO tiene fila en comanda_usuarios.
+        // Esto pasa cuando: (a) tiene cuenta PASE pero no se le asignó COMANDA,
+        // (b) el comanda_usuario está desactivado.
+        if (mounted) setState({
+          user: null,
+          loading: false,
+          error: 'Este usuario no tiene acceso a COMANDA. Pedile al dueño que te lo habilite desde PASE → Herramientas → Usuarios COMANDA.',
+        });
         return;
       }
 
-      const [permsRes, localesRes] = await Promise.all([
-        db.from('usuario_permisos').select('modulo_slug').eq('usuario_id', row.id),
-        db.from('usuario_locales').select('local_id').eq('usuario_id', row.id),
-      ]);
+      // ─── Cargar permisos comanda.* del user ───────────────────────────
+      const { data: permsRes } = await db
+        .from('comanda_usuario_permisos')
+        .select('modulo_slug')
+        .eq('comanda_usuario_id', row.id as string);
 
-      const permisos = (permsRes.data ?? []).map((p) => p.modulo_slug as string);
-      const locales = (localesRes.data ?? [])
-        .map((l) => l.local_id as number | null)
-        .filter((n): n is number => typeof n === 'number');
+      const permisos = (permsRes ?? []).map((p) => p.modulo_slug as string);
 
+      const rolPos = row.rol_pos as RolPos;
       const user: Usuario = {
-        id: row.id as number,
+        id: row.id as string,
         auth_id: row.auth_id as string,
-        email: row.email as string | null,
+        email: row.email as string,
         nombre: row.nombre as string,
-        rol: row.rol as Rol,
+        rol_pos: rolPos,
+        rol: rolPos, // compat alias
         activo: row.activo as boolean,
         tenant_id: row.tenant_id as string | null,
         permisos,
-        locales,
+        locales: (row.locales as number[] | null) ?? null,
+        pin_pos: (row.pin_pos as string | null) ?? null,
       };
       if (mounted) setState({ user, loading: false, error: null });
     }

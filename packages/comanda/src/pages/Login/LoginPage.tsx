@@ -55,7 +55,7 @@ export function LoginPage() {
             </div>
             <h1 className="text-3xl font-bold tracking-tight">COMANDA</h1>
             <p className="text-sm text-muted-foreground mt-2">
-              Iniciá sesión con tu email y contraseña de PASE
+              Iniciá sesión con tu email y contraseña
             </p>
           </div>
 

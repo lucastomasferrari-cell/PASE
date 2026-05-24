@@ -1,3 +1,14 @@
+// ⚠️ DEPRECATED 24-may: Sprint COMANDA Autónomo Fase 3 eliminó el SSO bridge.
+// COMANDA ahora tiene su propia tabla `comanda_usuarios` con perfiles
+// independientes. El user se loguea directamente en COMANDA con su
+// email/password (Supabase Auth compartido). El botón "Abrir COMANDA"
+// de PASE ya no llama a este endpoint.
+//
+// Lo dejamos respondiendo 410 Gone para detectar cualquier cliente legacy
+// que todavía intente usarlo. Si en X meses no hay tráfico, eliminar.
+//
+// (Histórico original abajo)
+// ─────────────────────────────────────────────────────────────────────────
 // Endpoint SSO bridge: PASE → COMANDA.
 //
 // Contexto: COMANDA se está separando a URL propia (decisión Lucas
@@ -41,6 +52,17 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
 export default async function handler(req, res) {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(204).end();
+
+  // Sprint COMANDA Autónomo Fase 3 (24-may): endpoint deprecated. COMANDA
+  // ahora tiene su propio login → no necesita el bridge. Devolvemos 410 Gone
+  // para que cualquier cliente legacy que aún llame se entere claro.
+  return res.status(410).json({
+    ok: false,
+    error: 'AUTH_BRIDGE_DEPRECATED',
+    message: 'El SSO bridge fue eliminado en Sprint COMANDA Autónomo (24-may). Loguearse directamente en COMANDA con el mismo email/password de PASE.',
+  });
+
+  // eslint-disable-next-line no-unreachable -- código histórico preservado por si rollback
   if (req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
   }

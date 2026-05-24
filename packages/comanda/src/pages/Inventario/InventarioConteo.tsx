@@ -49,7 +49,10 @@ export function InventarioConteo() {
   //
   // Toggle "Ver teóricos" solo lo ve dueño/admin (ellos sí pueden auditar
   // en vivo). Encargados y cualquier otro rol quedan en modo ciego siempre.
-  const esAuditorAlto = user?.rol === 'dueno' || user?.rol === 'admin' || user?.rol === 'superadmin';
+  // Sprint Autónomo: COMANDA usa rol_pos en lugar de rol PASE.
+  // 'admin' POS = acceso total, equivalente a dueño/admin de PASE.
+  // 'manager' también puede auditar (suele ser quien hace conteo físico).
+  const esAuditorAlto = user?.rol_pos === 'admin' || user?.rol_pos === 'manager';
   const [revelarTeoricos, setRevelarTeoricos] = useState(false);
   const mostrarTeorico = esAuditorAlto && revelarTeoricos;
 

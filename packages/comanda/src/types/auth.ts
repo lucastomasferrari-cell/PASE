@@ -1,31 +1,39 @@
-// Modelo del usuario logueado para COMANDA. Subset del de PASE.
-// usuario_permisos.modulo_slug se cachea como string[].
+// Modelo del usuario logueado para COMANDA.
+//
+// Sprint COMANDA Autónomo Fase 3 (Lucas 24-may): COMANDA dejó de leer la
+// tabla `usuarios` de PASE. Ahora lee `comanda_usuarios` (perfil POS
+// independiente). Auth compartido (mismo Supabase Auth) pero perfiles y
+// permisos separados.
+//
+// La tabla usa UUID como PK (no INTEGER como `usuarios` de PASE).
 
-export type Rol = 'superadmin' | 'dueno' | 'admin' | 'encargado' | 'compras' | 'cajero';
+// Roles POS (separados de los roles administrativos de PASE).
+export type RolPos = 'mozo' | 'cajero' | 'manager' | 'admin';
+
+// Rol legacy mantenido como compat para componentes que aún esperan `rol`
+// de PASE. La pantalla de Settings/Permisos puede recibir Rol legacy si
+// quedó algún componente sin migrar.
+export type Rol = RolPos;
 
 export interface Usuario {
-  id: number;
+  /**
+   * UUID del comanda_usuario. Antes era INTEGER (de `usuarios` de PASE).
+   * Sprint Autónomo cambia tipo — ojo con cualquier código que asuma number.
+   */
+  id: string;
   auth_id: string;
   email: string | null;
   nombre: string;
-  rol: Rol;
+  /** Rol POS — admin bypassa todos los permisos. */
+  rol_pos: RolPos;
+  /** Compat: alias de `rol_pos` para componentes legacy de COMANDA. */
+  rol: RolPos;
   activo: boolean;
   tenant_id: string | null;
-  /**
-   * Cache local de los slugs de permisos del usuario para sesión Supabase.
-   *
-   * @deprecated NO usar `user.permisos.includes(slug)` directamente desde
-   * componentes. Usar el hook `usePermiso(slug)` (lib/usePermiso.ts) que:
-   *  - Combina sesión Supabase + rol POS empleado.
-   *  - Aplica bypass para superadmin/dueño/admin.
-   *  - Es el único lugar donde se toma la decisión final de autorización.
-   *
-   * Este campo se mantiene para retrocompatibilidad y porque `usePermiso`
-   * lo lee internamente. Nunca usarlo desde JSX/components.
-   *
-   * Eliminación planificada: cuando exista la tabla `rol_pos_permisos`
-   * formal y se reemplace todo el mapping por queries.
-   */
+  /** Cache de los slugs comanda.* del usuario. */
   permisos: string[];
-  locales: number[];
+  /** Locales asignados. null/undefined = todos los del tenant. */
+  locales: number[] | null;
+  /** PIN POS opcional (4-6 dígitos). */
+  pin_pos: string | null;
 }

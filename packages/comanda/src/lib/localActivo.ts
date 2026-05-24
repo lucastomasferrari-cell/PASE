@@ -46,18 +46,18 @@ export function useLocalActivo(user: Usuario | null): [number | null, (id: numbe
     const stored = readLocalActivo();
     if (stored !== null) return stored;
     if (user) {
-      if (user.locales.length > 0) return user.locales[0] ?? null;
-      // dueño/superadmin sin locales asignados → default 1
-      if (user.rol === 'superadmin' || user.rol === 'dueno') return 1;
+      // Sprint Autónomo: user.locales puede ser null (= todos los locales del tenant).
+      // admin POS sin restricción de locales → default 1 si no hay nada cargado.
+      if (user.locales && user.locales.length > 0) return user.locales[0] ?? null;
+      if (user.rol_pos === 'admin') return 1;
     }
     return null;
   });
 
   useEffect(() => {
-    // Solo dispara cuando el user llegó async post-mount con localId=null.
-    // El guard de localId previene re-disparos en cadena.
     if (localId === null && user) {
-      const def = user.locales[0] ?? (user.rol === 'superadmin' || user.rol === 'dueno' ? 1 : null);
+      const first = (user.locales && user.locales[0]) ?? null;
+      const def = first ?? (user.rol_pos === 'admin' ? 1 : null);
       if (def !== null) setLocalId(def);
     }
   }, [localId, user]);
