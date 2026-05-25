@@ -4,6 +4,29 @@ import { ROLES, tienePermiso } from "../lib/auth";
 import type { Usuario, Local, Tenant } from "../types";
 import { ThemeToggle } from "./ui/ThemeToggle";
 import { BandejaEntradaBoton } from "./BandejaEntradaBoton";
+import { useTenantFeatures } from "../lib/useTenantFeatures";
+import { tenantTieneFeature } from "../lib/features";
+
+// Mapa de slug del sidebar → feature flag del catálogo (src/lib/features.ts).
+// Si el feature está OFF para el tenant, el item NO aparece en el sidebar.
+// Slugs no listados acá son siempre visibles (inicio, tenants).
+//
+// Sprint 27-may noche: feature flags por tenant. Superadmin administra
+// desde /tenants → "Funciones".
+const SLUG_TO_FEATURE: Record<string, string> = {
+  caja: "modulo.caja",
+  compras: "modulo.compras",
+  ventas: "modulo.ventas",
+  gastos: "modulo.gastos",
+  rrhh: "modulo.rrhh",
+  negocio: "modulo.negocio",
+  finanzas: "modulo.finanzas",
+  objetivos: "modulo.objetivos",
+  eerr: "modulo.reportes",
+  herramientas_hub: "modulo.herramientas_hub",
+  ajustes: "modulo.ajustes",
+  usuarios: "modulo.usuarios",
+};
 // Sprint COMANDA Autónomo (24-may noche): abrirComanda eliminado del sidebar.
 // COMANDA es un sistema independiente — los users se loguean directo en
 // pase-comanda.vercel.app. No hay más botón cross-sistema.
@@ -27,6 +50,9 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
   const close = () => setOpen(false);
   const esSuperAdmin = user.rol === "superadmin";
   const localesDisp = (user.rol==="dueno" || user.rol==="admin" || esSuperAdmin) ? locales : locales.filter((l: { id: number })=>(user._locales||user.locales||[]).includes(l.id));
+  // Sprint 27-may noche: features por tenant. Para superadmin, el helper
+  // tenantTieneFeature siempre devuelve TRUE — ven todo.
+  const { features: tenantFeatures } = useTenantFeatures(user.tenant_id ?? null);
   // ───────────────────────────────────────────────────────────────────
   // Sidebar consolidado a 13 items en 4 secciones (sprint mayo 2026):
   //   • OPERACIÓN    (4) — caja, compras, ventas, gastos
@@ -120,7 +146,17 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
             // tienePermiso (no perms.includes) para respetar los short-circuits
             // de slugs especiales: 'inicio' (todos), 'ajustes_dashboards' (dueño/admin),
             // 'tenants' (superadmin). Estos no viven en MODULOS pero sí en `nav`.
-            const items = nav.filter(n=>n.sec===s && tienePermiso(user, n.slug));
+            const items = nav.filter(n => {
+              if (n.sec !== s) return false;
+              if (!tienePermiso(user, n.slug)) return false;
+              // Feature flag gate — superadmin bypassa (tenantTieneFeature
+              // siempre devuelve TRUE). Tenant normal: si el feature está
+              // mapeado y desactivado, ocultar.
+              if (esSuperAdmin) return true;
+              const featureSlug = SLUG_TO_FEATURE[n.slug];
+              if (!featureSlug) return true; // sin mapeo = siempre visible
+              return tenantTieneFeature(featureSlug, tenantFeatures);
+            });
             if(!items.length) return null;
             return (<div key={s}><div className="sb-section">{s}</div>{items.map(n=>(
               <NavLink

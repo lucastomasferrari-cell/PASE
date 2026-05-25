@@ -56,6 +56,7 @@ const ConfiguracionNotificaciones = lazy(() => import("./pages/ConfiguracionNoti
 // Empleados → Usuarios POS.
 const HerramientasHub = lazy(() => import("./pages/HerramientasHub"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
+const TenantFeaturesDetalle = lazy(() => import("./pages/TenantFeaturesDetalle"));
 const DashboardHome = lazy(() => import("./dashboards/DashboardHome").then(m => ({ default: m.DashboardHome })));
 const SettingsDashboards = lazy(() => import("./dashboards/SettingsDashboards"));
 
@@ -539,6 +540,7 @@ function AppMain() {
                 tienePermiso(user, "ventas") ? <ImportarMaxirest {...props}/> : <Navigate to="/inicio" replace />
               } />
               <Route path="/tenants" element={user.rol === "superadmin" ? <Tenants user={user as Usuario} /> : <DefaultRedirect user={user} />} />
+              <Route path="/tenants/:tenantId/features" element={user.rol === "superadmin" ? <TenantFeaturesDetalle /> : <DefaultRedirect user={user} />} />
 
               {/* Redirects de URLs viejas */}
               {Object.entries(LEGACY_REDIRECTS).map(([from, to]) => (
