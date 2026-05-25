@@ -63,6 +63,16 @@ export function TabCMV({ user, locales, localActivo }: Props) {
   const [detalle, setDetalle] = useState<DetalleInsumo[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Gastro-Sensei IA: análisis automático del CMV con sugerencias accionables.
+  // Llama a /api/claude task=gastro-sensei con resumen + top insumos.
+  // Spec original del dueño: "Tu CMV de Salmón subió un 4% pero tus ventas no.
+  // El encargado de Palermo está porcionando de más o hay una fuga en la
+  // recepción de mercadería".
+  const [senseiOpen, setSenseiOpen] = useState(false);
+  const [senseiLoading, setSenseiLoading] = useState(false);
+  const [senseiText, setSenseiText] = useState<string | null>(null);
+  const [senseiError, setSenseiError] = useState<string | null>(null);
+
   const tenantId = user.tenant_id;
 
   useEffect(() => {
@@ -230,6 +240,84 @@ export function TabCMV({ user, locales, localActivo }: Props) {
               )}
             </div>
           )}
+
+          {/* ─── Gastro-Sensei IA ─── */}
+          <div className="panel" style={{ marginBottom: 16 }}>
+            <div className="panel-hd" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span className="panel-title">🤖 Gastro-Sensei (análisis IA)</span>
+              {!senseiOpen ? (
+                <button
+                  className="btn btn-acc btn-sm"
+                  onClick={async () => {
+                    setSenseiOpen(true);
+                    setSenseiLoading(true);
+                    setSenseiError(null);
+                    setSenseiText(null);
+                    try {
+                      const { data: sess } = await db.auth.getSession();
+                      const token = sess.session?.access_token;
+                      if (!token) throw new Error("Sesión expirada. Refrescá.");
+                      // Top 10 insumos con mayor magnitud de diferencia
+                      const topInsumos = [...detalle]
+                        .sort((a, b) => Math.abs(Number(b.diferencia_valor)) - Math.abs(Number(a.diferencia_valor)))
+                        .slice(0, 10);
+                      const localNombre = locales.find(l => l.id === localFiltro)?.nombre;
+                      const resp = await fetch("/api/claude", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({
+                          task: "gastro-sensei",
+                          cmv_resumen: resumen,
+                          top_insumos: topInsumos,
+                          periodo: { desde, hasta },
+                          contexto: { local_nombre: localNombre },
+                        }),
+                      });
+                      const json = await resp.json();
+                      if (!resp.ok) throw new Error(json?.error?.message || `HTTP ${resp.status}`);
+                      const text = json.content?.[0]?.text || "(Respuesta vacía)";
+                      setSenseiText(text);
+                    } catch (e) {
+                      setSenseiError(e instanceof Error ? e.message : String(e));
+                    } finally {
+                      setSenseiLoading(false);
+                    }
+                  }}
+                  disabled={!resumen || detalle.length === 0}
+                  title={!resumen || detalle.length === 0 ? "Cargá un período con datos primero" : "Analizar este CMV con IA"}
+                >
+                  Analizar mi CMV
+                </button>
+              ) : (
+                <button className="btn btn-ghost btn-sm" onClick={() => { setSenseiOpen(false); setSenseiText(null); setSenseiError(null); }}>
+                  Cerrar
+                </button>
+              )}
+            </div>
+            {senseiOpen && (
+              <div style={{ padding: "14px 16px" }}>
+                {senseiLoading ? (
+                  <div style={{ color: "var(--muted2)", fontSize: 13 }}>
+                    Analizando tus números… <span style={{ animation: "pulse 1.5s ease-in-out infinite" }}>🤔</span>
+                  </div>
+                ) : senseiError ? (
+                  <div style={{ color: "var(--danger)", fontSize: 13 }}>
+                    Error: {senseiError}
+                  </div>
+                ) : senseiText ? (
+                  <div style={{
+                    whiteSpace: "pre-wrap",
+                    fontSize: 13,
+                    lineHeight: 1.6,
+                    color: "var(--txt)",
+                    fontFamily: "var(--font-sans, system-ui)",
+                  }}>
+                    {senseiText}
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
 
           {/* ─── Detalle por insumo ─── */}
           <div className="panel">
