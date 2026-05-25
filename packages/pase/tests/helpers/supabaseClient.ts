@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { getCachedAuth, setCachedAuth } from "../e2e-full/setup/auth-cache";
 
 // URL hardcodeada igual que src/lib/supabase.ts — el proyecto Supabase es uno solo.
 const SUPABASE_URL = "https://pduxydviqiaxfqnshhdc.supabase.co";
@@ -30,11 +31,27 @@ export async function createDuenoClient(): Promise<SupabaseClient> {
   const client = createClient(SUPABASE_URL, loadAnonKey(), {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { error } = await client.auth.signInWithPassword({
+
+  // Fast path: si hay token cacheado vigente (50min TTL), lo aplicamos
+  // sin tocar Supabase Auth → evita rate limit.
+  const cached = getCachedAuth(DUENO_EMAIL);
+  if (cached) {
+    const { error } = await client.auth.setSession({
+      access_token: cached.access_token,
+      refresh_token: cached.refresh_token,
+    });
+    if (!error) return client;
+    // Si setSession falla (token revocado, etc.), fallback a login real.
+  }
+
+  const { data, error } = await client.auth.signInWithPassword({
     email: DUENO_EMAIL,
     password: DUENO_PASSWORD,
   });
   if (error) throw new Error(`Login dueño falló: ${error.message}`);
+  if (data.session) {
+    setCachedAuth(DUENO_EMAIL, data.session.access_token, data.session.refresh_token);
+  }
   return client;
 }
 
@@ -66,22 +83,38 @@ export async function createSuperadminClient(): Promise<SupabaseClient | null> {
   const client = createClient(SUPABASE_URL, loadAnonKey(), {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  // Retry con backoff exponencial — Supabase rate-limita logins agresivamente
-  // (~30/min/IP). En la suite E2E full hay 34 tests, cada uno hace login
-  // superadmin en su beforeAll → garantizado golpear el límite. Sin retry,
-  // los últimos ~5 tests fallaban con "Request rate limit reached".
-  // Fix proper: globalSetup (1 solo login compartido) — anotado como deuda.
+
+  // Fast path: token cacheado vigente → setSession sin tocar Auth.
+  // Resuelve el rate limit definitivamente: 1 login real por sesión CI
+  // en lugar de 85 logins.
+  const cached = getCachedAuth(SUPERADMIN_EMAIL);
+  if (cached) {
+    const { error } = await client.auth.setSession({
+      access_token: cached.access_token,
+      refresh_token: cached.refresh_token,
+    });
+    if (!error) return client;
+    // Fallback a login real si el token cacheado está revocado.
+  }
+
+  // Login real con retry exponencial — defensive fallback en caso de que el
+  // cache no exista aún (primer test) y el primer login coincida con un
+  // burst de logins de otro proceso (raro, pero pasa en CI con paralelismo).
   const backoffs = [0, 2000, 5000, 10000, 20000];
   let lastError: Error | null = null;
   for (const wait of backoffs) {
     if (wait > 0) await new Promise(r => setTimeout(r, wait));
-    const { error } = await client.auth.signInWithPassword({
+    const { data, error } = await client.auth.signInWithPassword({
       email: SUPERADMIN_EMAIL,
       password: pwd,
     });
-    if (!error) return client;
+    if (!error) {
+      if (data.session) {
+        setCachedAuth(SUPERADMIN_EMAIL, data.session.access_token, data.session.refresh_token);
+      }
+      return client;
+    }
     lastError = new Error(error.message);
-    // Si NO es rate limit, no tiene sentido retry — falla inmediato
     if (!/rate.?limit/i.test(error.message)) break;
   }
   throw new Error(`Login superadmin falló (tras retry): ${lastError?.message ?? "desconocido"}`);

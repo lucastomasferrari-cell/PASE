@@ -73,21 +73,40 @@ export function createServiceClient(): SupabaseClient {
  * operaciones del test que requieren JWT real (RPCs con auth check, RLS).
  */
 export async function createE2EDuenoClient(): Promise<SupabaseClient> {
+  // Import lazy para evitar circular import (auth-cache → este archivo).
+  const { getCachedAuth, setCachedAuth } = await import("./auth-cache");
+
   const c = createClient(SUPABASE_URL, loadAnonKey(), {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  // Retry con backoff exponencial — Supabase rate-limita logins agresivamente
-  // (~30/min/IP). Con 85 tests cada uno haciendo login dueño en sus tests,
-  // los últimos golpean el límite. Mismo patrón que createSuperadminClient.
+
+  // Fast path: token cacheado vigente → setSession sin tocar Auth.
+  // Resuelve el rate limit: 1 login real por sesión CI en lugar de 85.
+  const cached = getCachedAuth(E2E_DUENO_EMAIL);
+  if (cached) {
+    const { error } = await c.auth.setSession({
+      access_token: cached.access_token,
+      refresh_token: cached.refresh_token,
+    });
+    if (!error) return c;
+    // Fallback a login real si setSession falla (token revocado).
+  }
+
+  // Login real con retry (defensive fallback).
   const backoffs = [0, 2000, 5000, 10000, 20000];
   let lastError: Error | null = null;
   for (const wait of backoffs) {
     if (wait > 0) await new Promise(r => setTimeout(r, wait));
-    const { error } = await c.auth.signInWithPassword({
+    const { data, error } = await c.auth.signInWithPassword({
       email: E2E_DUENO_EMAIL,
       password: E2E_DUENO_PASSWORD,
     });
-    if (!error) return c;
+    if (!error) {
+      if (data.session) {
+        setCachedAuth(E2E_DUENO_EMAIL, data.session.access_token, data.session.refresh_token);
+      }
+      return c;
+    }
     lastError = new Error(error.message);
     if (!/rate.?limit/i.test(error.message)) break;
   }
@@ -471,5 +490,15 @@ export async function cleanupE2ETenant(): Promise<void> {
   } catch (e) {
 
     console.error(`[cleanupE2ETenant] auth admin falló:`, e);
+  }
+
+  // 5. Invalidar el cache de auth del dueño E2E — el token cacheado quedó
+  //    huérfano (el auth.user que lo emitió ya no existe). Si no limpiamos,
+  //    el próximo test va a intentar setSession con un token revocado.
+  try {
+    const { clearCachedAuth } = await import("./auth-cache");
+    clearCachedAuth(E2E_DUENO_EMAIL);
+  } catch {
+    // No-op si auth-cache no existe (escenario muy raro)
   }
 }
