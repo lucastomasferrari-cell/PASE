@@ -144,7 +144,41 @@ export function InventarioConteo() {
       toast.error(error);
       return;
     }
-    toast.success(`Conteo finalizado: ${data?.ajustes ?? 0} ajustes aplicados (diferencia neta ${formatARS(Number(data?.diferencia_valor ?? 0))})`);
+    // Spec original del dueño: "Si la diferencia es negativa y no hay
+    // mermas cargadas, el sistema dispara una Notificación Roja de
+    // Posible Fuga". Si la pérdida supera $5k, mostramos alert
+    // PROMINENTE además del toast (lo ve solo el dueño porque la pantalla
+    // de finalizar solo la usa quien tiene permiso del módulo).
+    //
+    // Fix 25-may: por ahora alert visual prominente (no push real al celu
+    // — eso requiere infra cross-service bot IG). El umbral $5k cubre
+    // pérdidas significativas sin spam por diferencias de redondeo.
+    const diffNeta = Number(data?.diferencia_valor ?? 0);
+    const UMBRAL_FUGA = -5000;  // pérdida >$5k considera "posible fuga"
+    if (diffNeta < UMBRAL_FUGA) {
+      // Alert MUY visible (no solo toast). Toast como backup. Para que el
+      // dueño NO siga su día sin haberlo registrado.
+      toast.error(
+        `🚨 POSIBLE FUGA detectada — pérdida ${formatARS(Math.abs(diffNeta))}. ` +
+        `Revisá los ${data?.ajustes ?? 0} ajustes en el historial.`,
+        { duration: 15000 }, // 15s, no se va solo
+      );
+      // Alert nativo bloqueante — fuerza al dueño a "ver" el dato antes de
+      // continuar. Es feo pero efectivo (no se pierde en el feed de toasts).
+      setTimeout(() => {
+        alert(
+          `⚠️ POSIBLE FUGA DETECTADA\n\n` +
+          `El conteo terminó con ${data?.ajustes ?? 0} ajustes y una pérdida de ${formatARS(Math.abs(diffNeta))}.\n\n` +
+          `Esto supera el umbral normal — revisá:\n` +
+          `• ¿Hay mermas no declaradas en cocina?\n` +
+          `• ¿Alguien movió mercadería sin registrar?\n` +
+          `• ¿La cocina porcionó más de lo que dicen las recetas?\n\n` +
+          `Las diferencias quedaron registradas en el historial.`,
+        );
+      }, 500); // pequeño delay para que el toast se vea primero
+    } else {
+      toast.success(`Conteo finalizado: ${data?.ajustes ?? 0} ajustes aplicados (diferencia neta ${formatARS(diffNeta)})`);
+    }
     setActiveConteo(null);
     setLineas([]);
     void reload();
