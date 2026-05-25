@@ -24,6 +24,29 @@ interface ForcePasswordChangeProps {
 
 const AUTH_UPDATE_TIMEOUT_MS = 12_000;
 
+// Traducción de códigos comunes de Supabase Auth al español.
+// `same_password` es el caso que más confundía en producción: el flow
+// se cuelga sin explicación cuando el user tipea la misma contraseña que ya
+// tiene (típicamente porque el cambio anterior funcionó pero quedó el flag
+// password_temporal=true por un race condition pre-fix).
+function translateAuthError(err: { code?: string; message?: string } | null): string {
+  if (!err) return "Error desconocido";
+  const code = err.code || "";
+  switch (code) {
+    case "same_password":
+      return "Tenés que poner una contraseña distinta a la actual. Si no te acordás, probá una nueva — la de antes ya quedó cambiada en un intento previo.";
+    case "weak_password":
+      return "Contraseña demasiado débil. Usá una más larga o combiná mayúsculas, números y símbolos.";
+    case "password_too_short":
+      return "La contraseña es muy corta. Mínimo 8 caracteres.";
+    case "session_not_found":
+    case "invalid_credentials":
+      return "Tu sesión venció. Refrescá la página y volvé a entrar.";
+    default:
+      return err.message || "No se pudo cambiar la contraseña";
+  }
+}
+
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`TIMEOUT_${label}`)), ms);
@@ -55,7 +78,11 @@ export default function ForcePasswordChange({ user, onDone }: ForcePasswordChang
         "AUTH_UPDATE",
       );
       if (authErr) {
-        setErr(authErr.message || "No se pudo cambiar la contraseña");
+        // Loguear el error completo en consola para debug — la pantalla
+        // muestra solo el mensaje traducido.
+        // eslint-disable-next-line no-console
+        console.error("[ForcePasswordChange] auth.updateUser error:", authErr);
+        setErr(translateAuthError(authErr));
         return;
       }
 
