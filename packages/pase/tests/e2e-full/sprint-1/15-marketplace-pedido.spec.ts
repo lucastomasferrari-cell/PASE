@@ -1,19 +1,26 @@
 // ─────────────────────────────────────────────────────────────────────────
-// E2E Test 15: Marketplace pedido online + flow del cliente
+// E2E Test 15: Marketplace flow post-cobro (estructural)
 //
-// Cubre el flow tienda online:
+// ⚠️ HISTÓRICO: este test originalmente "validaba el marketplace" pero NO
+// invocaba `fn_crear_pedido_publico_comanda` — hacía INSERT directo a
+// ventas_pos simulando lo que la RPC haría. Por eso nunca atrapó el bug
+// crítico que dejó el marketplace muerto 3 semanas (5-may → 24-may).
+//
+// 24-may: agregamos Test 34 que SÍ ejercita el flow end-to-end real:
+//   pedido público → idempotency → aprobar → cobrar webhook MP → stock baja.
+// **Test 34 es el guardian del marketplace.**
+//
+// Este Test 15 queda como guardián de los pasos POST-pedido (cambios de
+// estado del pedido: enviado → listo → entregado, reviews, etc.) que NO
+// ejercita el Test 34.
+//
+// Cubre:
 //   1. Configurar local con marketplace activo (slug + tienda_activa=true).
 //   2. Crear item disponible en tienda.
-//   3. Simular pedido online: insert ventas_pos con origen='tienda_online',
-//      modo='pedidos', tipo_entrega='delivery' o 'retiro'.
-//   4. Agregar items al pedido (sin pasar por POS — el cliente no usa el POS).
-//   5. Simular pago aprobado (insert mp_movimiento + marcar venta cobrada).
-//   6. Cambiar estado a 'enviado' → 'listo' → 'entregado'.
-//   7. Verificar reviews opcional.
-//
-// Como simular MP webhook real requiere acceso al API MP, hacemos la
-// inserción directa de mp_movimientos (caso aprobado) que es lo que el
-// webhook real haría al recibir notification.
+//   3. Insert ventas_pos directo — NO usar este patrón para tests nuevos.
+//      Para flow real: usar fn_crear_pedido_publico_comanda (Test 34).
+//   4. Cambios de estado post-cobro: enviado → listo → entregado.
+//   5. Verificar reviews opcional.
 // ─────────────────────────────────────────────────────────────────────────
 
 import { test, expect } from "@playwright/test";
