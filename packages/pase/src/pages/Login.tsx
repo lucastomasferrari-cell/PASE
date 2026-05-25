@@ -13,6 +13,10 @@ export default function Login({ onLogin }: LoginProps) {
   const [loading, setLoading] = useState(false);
   const passRef = useRef<HTMLInputElement>(null);
 
+  // Mensaje "contraseña cambiada OK" cuando el user viene del flow de
+  // ForcePasswordChange exitoso (redirige a /?changed=1).
+  const cambioOk = typeof window !== "undefined" && window.location.search.includes("changed=1");
+
   const go = async () => {
     const password = passRef.current?.value || "";
     if (!usuario || !password) return;
@@ -53,6 +57,19 @@ export default function Login({ onLogin }: LoginProps) {
       <div className="login-card">
         <div className="login-brand">PASE</div>
         <div className="login-sub">aliado gastronómico</div>
+        {cambioOk && !err && (
+          <div className="alert" style={{
+            background: "rgba(43,182,115,0.12)",
+            border: "1px solid rgba(43,182,115,0.3)",
+            color: "#2BB673",
+            padding: "10px 14px",
+            borderRadius: 8,
+            fontSize: 14,
+            marginBottom: 14,
+          }}>
+            ✓ Contraseña cambiada. Ingresá con la nueva.
+          </div>
+        )}
         {err && <div className="alert alert-danger">{err}</div>}
         <div className="field"><label>Usuario</label><input autoComplete="username" value={usuario} onChange={e=>setUsuario(e.target.value)} placeholder="Ingresá tu usuario" onKeyDown={e=>e.key==="Enter"&&go()} /></div>
         <div className="field"><label>Contraseña</label><input ref={passRef} type="password" autoComplete="current-password" defaultValue="" placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&go()} /></div>

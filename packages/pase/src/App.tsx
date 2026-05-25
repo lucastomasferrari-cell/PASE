@@ -220,6 +220,22 @@ function AppMain() {
       try {
         const { data: { session } } = await db.auth.getSession();
         if (session?.user) {
+          // CRÍTICO (fix bug 27-may): getSession() solo lee localStorage,
+          // NO valida con el server. Si los tokens fueron revocados
+          // (típico: admin reset de password via Admin API), getSession()
+          // sigue devolviendo "ok" con tokens stale → user queda atrapado
+          // en ForcePasswordChange aunque cierre y refresque la pestaña.
+          // getUser() SÍ hace HTTP al server y rechaza tokens inválidos.
+          const { data: serverUser, error: getUserErr } = await db.auth.getUser();
+          if (getUserErr || !serverUser?.user) {
+            // Tokens revocados / vencidos / inválidos → signOut limpio.
+            // eslint-disable-next-line no-console
+            console.warn("[App] getUser() rechazó tokens stale, forzando signOut:", getUserErr?.message);
+            await db.auth.signOut().catch(() => { /* idem */ });
+            try { sessionStorage.removeItem("pase_user"); } catch { /* idem */ }
+            setAuthLoading(false);
+            return;
+          }
           const { data: perfil } = await db.from("usuarios").select("id, auth_id, email, nombre, rol, activo, password_temporal, locales, cuentas_visibles, cuentas_operables, tenant_id").eq("auth_id", session.user.id).single();
           if (perfil && perfil.activo !== false) {
             // eslint-disable-next-line react-hooks/immutability
