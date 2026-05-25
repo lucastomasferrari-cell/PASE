@@ -63,13 +63,15 @@ test.describe.serial("E2E Sprint 2 — Transferencia entre cuentas", () => {
     });
     if (error) throw new Error(`transferencia_cuentas same-local: ${error.message}`);
 
-    // Verificar 2 movs creados con el mismo transferencia_id
+    // Verificar 2 movs creados con el mismo transferencia_id.
+    // Filtramos ajuste_inicial porque el opening balance del seed también es mov.
     const { data: movs } = await svc.from("movimientos")
       .select("cuenta, importe, transferencia_id, tipo")
       .eq("tenant_id", seed.tenantId)
       .eq("local_id", seed.local1Id)
       .in("cuenta", ["Caja Efectivo", "Caja Mayor"])
       .eq("anulado", false)
+      .neq("tipo", "ajuste_inicial")
       .order("cuenta");
     expect(movs).toHaveLength(2);
     expect(movs![0]!.transferencia_id).toBe(movs![1]!.transferencia_id);

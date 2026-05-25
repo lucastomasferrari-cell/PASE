@@ -140,11 +140,15 @@ test.describe.serial("E2E Test 16 — Gasto empleado cesionado", () => {
       .eq("local_id", seed.local2Id).eq("cuenta", "Caja Efectivo").single();
     const saldoPreL2 = Number(sAntesL2?.saldo ?? 0);
 
-    // Pagar adelanto desde LOCAL 2 (no su principal) — el cesionado
+    // Pagar adelanto desde LOCAL 2 (no su principal) — el cesionado.
+    // FIX 25-may: concepto cambiado de 'dia_doble' a 'adelanto'. El sub-test
+    // se llama "pagar adelanto" así que semánticamente corresponde adelanto.
+    // Antes del fix de crear_gasto_empleado (25-may), cualquier concepto creaba
+    // rrhh_adelantos. Ahora solo 'adelanto' lo hace.
     const { data: result, error } = await duenoDb.rpc("crear_gasto_empleado", {
       p_local_id: seed.local2Id,
       p_empleado_id: empleado.id,
-      p_concepto: "dia_doble",
+      p_concepto: "adelanto",
       p_monto: 12000,
       p_cuenta: "Caja Efectivo",
       p_fecha: new Date().toISOString().slice(0, 10),

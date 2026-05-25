@@ -20,6 +20,7 @@ import {
   cleanupE2ETenant,
   createServiceClient,
   createE2EDuenoClient,
+  seedSaldoInicial,
   type E2ETenantSeedResult,
 } from "../setup/seed-tenant";
 
@@ -50,12 +51,9 @@ test.describe.serial("E2E Sprint 2 — Cargar gasto desde Caja (DB-only)", () =>
     const svc = createServiceClient();
     const duenoDb = await createE2EDuenoClient();
 
-    // Setear saldo inicial $50.000 en Caja Efectivo (sino no podemos pagar)
-    await svc.from("saldos_caja")
-      .update({ saldo: 50000 })
-      .eq("tenant_id", seed.tenantId)
-      .eq("local_id", seed.local1Id)
-      .eq("cuenta", "Caja Efectivo");
+    // Setear saldo inicial $50.000 vía opening balance (cache derivado del
+    // ledger desde 23-may → UPDATE directo no funciona).
+    await seedSaldoInicial(svc, seed.tenantId, seed.local1Id, "Caja Efectivo", 50000);
 
     const saldoInicial = 50000;
     const monto = 5000;
@@ -83,12 +81,14 @@ test.describe.serial("E2E Sprint 2 — Cargar gasto desde Caja (DB-only)", () =>
     expect(gastos![0]!.categoria).toBe("INSUMOS COCINA");
 
     // Assert: movimiento negativo en Caja Efectivo
+    // Filtramos ajuste_inicial porque el opening balance del seed también es un mov.
     const { data: movs } = await svc.from("movimientos")
       .select("tipo, importe, cuenta, gasto_id_ref")
       .eq("tenant_id", seed.tenantId)
       .eq("local_id", seed.local1Id)
       .eq("cuenta", "Caja Efectivo")
-      .eq("anulado", false);
+      .eq("anulado", false)
+      .neq("tipo", "ajuste_inicial");
     expect(movs).toHaveLength(1);
     expect(Number(movs![0]!.importe)).toBe(-monto);
     expect(movs![0]!.gasto_id_ref).toBe(gastos![0]!.id);
@@ -122,12 +122,15 @@ test.describe.serial("E2E Sprint 2 — Cargar gasto desde Caja (DB-only)", () =>
       activo: true,
     });
 
-    // Resetear saldo para arrancar limpio del test anterior
-    await svc.from("saldos_caja")
-      .update({ saldo: 50000 })
-      .eq("tenant_id", seed.tenantId)
-      .eq("local_id", seed.local1Id)
-      .eq("cuenta", "Caja Efectivo");
+    // Resetear saldo a $50.000 (reemplaza opening balance anterior + el gasto
+    // del test previo bajó el saldo a $45k → re-seedear lo deja en $50k limpio).
+    await seedSaldoInicial(svc, seed.tenantId, seed.local1Id, "Caja Efectivo", 50000);
+    // Borrar mov del gasto del test 1 para que no contamine
+    await svc.from("movimientos")
+      .delete()
+      .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id)
+      .eq("cuenta", "Caja Efectivo")
+      .neq("tipo", "ajuste_inicial");
 
     const monto = 8500;
     // Act: cargar gasto tipo 'juicios_demandas' (NO requiere empleado).
