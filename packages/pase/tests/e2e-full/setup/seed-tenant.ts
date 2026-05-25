@@ -76,12 +76,22 @@ export async function createE2EDuenoClient(): Promise<SupabaseClient> {
   const c = createClient(SUPABASE_URL, loadAnonKey(), {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { error } = await c.auth.signInWithPassword({
-    email: E2E_DUENO_EMAIL,
-    password: E2E_DUENO_PASSWORD,
-  });
-  if (error) throw new Error(`Login dueño E2E falló: ${error.message}`);
-  return c;
+  // Retry con backoff exponencial — Supabase rate-limita logins agresivamente
+  // (~30/min/IP). Con 85 tests cada uno haciendo login dueño en sus tests,
+  // los últimos golpean el límite. Mismo patrón que createSuperadminClient.
+  const backoffs = [0, 2000, 5000, 10000, 20000];
+  let lastError: Error | null = null;
+  for (const wait of backoffs) {
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+    const { error } = await c.auth.signInWithPassword({
+      email: E2E_DUENO_EMAIL,
+      password: E2E_DUENO_PASSWORD,
+    });
+    if (!error) return c;
+    lastError = new Error(error.message);
+    if (!/rate.?limit/i.test(error.message)) break;
+  }
+  throw new Error(`Login dueño E2E falló (tras retry): ${lastError?.message ?? "desconocido"}`);
 }
 
 // ─── Resultado del seed ────────────────────────────────────────────────
