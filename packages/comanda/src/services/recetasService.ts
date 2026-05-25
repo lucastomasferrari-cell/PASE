@@ -189,6 +189,103 @@ export async function upsertReceta(
   return getRecetaConInsumos(recetaId);
 }
 
+// ─── Importador bulk ────────────────────────────────────────────────────────
+// Carga masiva desde CSV. La RPC `fn_importar_recetas_bulk` valida + agrupa
+// por plato + crea items/insumos faltantes en transacción única.
+//
+// Patrón de uso: 1) parsear CSV en cliente, 2) llamar con dry_run=true para
+// preview, 3) si el usuario confirma, llamar con dry_run=false.
+
+export type LineaImportRecetas = {
+  plato: string;
+  ingrediente: string;
+  cantidad: number;
+  unidad: string;
+  merma_pct?: number;
+  precio_plato?: number | null;
+};
+
+export type ReporteImport = {
+  ok: boolean;
+  dry_run: boolean;
+  filas_total: number;
+  recetas_a_crear?: number;
+  items_a_crear?: number;
+  insumos_a_crear?: number;
+  recetas_creadas?: number;
+  items_creados?: number;
+  insumos_creados?: number;
+  items_nuevos?: string[];
+  insumos_nuevos?: string[];
+  errores: Array<{
+    linea: number;
+    plato?: string;
+    ingrediente?: string;
+    error: string;
+    recibido?: unknown;
+    validas?: string[];
+  }>;
+};
+
+export async function importarRecetasBulk(
+  lineas: LineaImportRecetas[],
+  opts: { dryRun: boolean; idempotencyKey?: string },
+): Promise<{ data: ReporteImport | null; error: string | null }> {
+  const { data, error } = await db.rpc('fn_importar_recetas_bulk', {
+    p_recetas: lineas,
+    p_dry_run: opts.dryRun,
+    p_idempotency_key: opts.idempotencyKey ?? null,
+  });
+  if (error) return { data: null, error: translateError(error) };
+  return { data: data as ReporteImport, error: null };
+}
+
+// Parsea CSV (con header en la primera fila). Tolerante a:
+//   - separador `,` o `;` (Excel ES exporta con ;)
+//   - filas vacías al final
+//   - espacios extra
+// Columnas esperadas (header): plato, ingrediente, cantidad, unidad, merma_pct, precio_plato
+// Las 4 primeras son obligatorias; merma_pct y precio_plato opcionales.
+export function parsearCsvRecetas(csv: string): { data: LineaImportRecetas[]; error: string | null } {
+  const lineas = csv.replace(/\r\n/g, '\n').split('\n').filter(l => l.trim().length > 0);
+  if (lineas.length < 2) return { data: [], error: 'CSV vacío o solo header' };
+
+  // Detectar separador del header
+  const headerLine = lineas[0] ?? '';
+  const sep = headerLine.includes(';') ? ';' : ',';
+  const cols = headerLine.split(sep).map(c => c.trim().toLowerCase());
+
+  const idx = {
+    plato: cols.indexOf('plato'),
+    ingrediente: cols.indexOf('ingrediente'),
+    cantidad: cols.indexOf('cantidad'),
+    unidad: cols.indexOf('unidad'),
+    merma_pct: cols.indexOf('merma_pct'),
+    precio_plato: cols.indexOf('precio_plato'),
+  };
+  if (idx.plato === -1 || idx.ingrediente === -1 || idx.cantidad === -1 || idx.unidad === -1) {
+    return { data: [], error: 'Header debe incluir: plato, ingrediente, cantidad, unidad' };
+  }
+
+  const data: LineaImportRecetas[] = [];
+  for (let i = 1; i < lineas.length; i++) {
+    const row = (lineas[i] ?? '').split(sep).map(c => c.trim());
+    const get = (j: number) => (j >= 0 && j < row.length ? (row[j] ?? '') : '');
+    const cantidadStr = get(idx.cantidad).replace(',', '.');
+    const mermaStr = idx.merma_pct >= 0 ? get(idx.merma_pct).replace(',', '.') : '';
+    const precioStr = idx.precio_plato >= 0 ? get(idx.precio_plato).replace(',', '.') : '';
+    data.push({
+      plato: get(idx.plato),
+      ingrediente: get(idx.ingrediente),
+      cantidad: Number(cantidadStr),
+      unidad: get(idx.unidad),
+      merma_pct: mermaStr ? Number(mermaStr) : 0,
+      precio_plato: precioStr ? Number(precioStr) : null,
+    });
+  }
+  return { data, error: null };
+}
+
 // Calcula el costo total estimado de UNA porción de la receta.
 // formula: sum(insumo.costo_actual × ri.cantidad × (1 + merma_pct/100)) / rendimiento
 //

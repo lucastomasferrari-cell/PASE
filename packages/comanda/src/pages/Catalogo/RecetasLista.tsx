@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Search, ChefHat, AlertCircle } from 'lucide-react';
+import { Search, ChefHat, AlertCircle, Upload } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { listItemsConReceta, type ItemConReceta } from '@/services/recetasService';
 import { Card, CardContent } from '@/components/ui/card';
@@ -49,11 +50,19 @@ export function RecetasLista() {
 
   return (
     <div className="container py-6">
-      <header className="mb-5">
-        <h1 className="text-2xl font-bold tracking-tight">Recetas</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Vinculá insumos a cada item del catálogo con cantidades y merma. Base para CMV.
-        </p>
+      <header className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Recetas</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Vinculá insumos a cada item del catálogo con cantidades y merma. Base para CMV.
+          </p>
+        </div>
+        <Button asChild variant="outline">
+          <Link to="/menu/recetas/importar">
+            <Upload className="h-3.5 w-3.5 mr-1.5" />
+            Importar desde CSV
+          </Link>
+        </Button>
       </header>
 
       <div className="flex items-center gap-3 mb-4 flex-wrap">

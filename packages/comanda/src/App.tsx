@@ -93,6 +93,7 @@ const ResenasAdmin = lazy(() => import('./pages/Clientes/ResenasAdmin').then(m =
 // Admin — CMV: Insumos + Recetas (F1.1b)
 const InsumosLista = lazy(() => import('./pages/Catalogo/InsumosLista').then(m => ({ default: m.InsumosLista })));
 const RecetasLista = lazy(() => import('./pages/Catalogo/RecetasLista').then(m => ({ default: m.RecetasLista })));
+const RecetasImportar = lazy(() => import('./pages/Catalogo/RecetasImportar').then(m => ({ default: m.RecetasImportar })));
 const AlertasMargenLista = lazy(() => import('./pages/Catalogo/AlertasMargenLista').then(m => ({ default: m.AlertasMargenLista })));
 const ItemReviewQueue = lazy(() => import('./pages/Catalogo/ItemReviewQueue').then(m => ({ default: m.ItemReviewQueue })));
 
@@ -255,6 +256,7 @@ export default function App() {
                   <Route path="/inventario/mermas" element={<MermasOneTap />} />
                   <Route path="/inventario/transferencias" element={<InventarioTransferencias />} />
                   <Route path="/menu/recetas" element={<RecetasLista />} />
+                  <Route path="/menu/recetas/importar" element={<RecetasImportar />} />
                   <Route path="/menu/alertas-margen" element={<AlertasMargenLista />} />
                   <Route path="/menu/revision" element={<ItemReviewQueue />} />
                   <Route path="/menu/materias-primas" element={<MateriasPrimasLista />} />
