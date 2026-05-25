@@ -34,6 +34,9 @@ interface InsumoRow {
   stock_minimo: number | null;
   costo_actual: number | null;
   ubicacion: string | null;
+  // Nuevas columnas de la vista v_insumos_alertas_stock (25-may):
+  dias_estimados_restantes: number | null;
+  alerta_nivel: 'agotado' | 'bajo' | 'sobrestock' | 'ok';
 }
 
 const CATEGORIAS_PL: Array<{ id: string; label: string; emoji: string }> = [
@@ -54,10 +57,11 @@ export function TabStock({ user, locales, localActivo }: Props) {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      let q = db.from("insumos")
-        .select("id, nombre, unidad, local_id, categoria_pl, stock_actual, stock_minimo, costo_actual, ubicacion")
-        .eq("activo", true)
-        .is("deleted_at", null)
+      // Lee de la vista v_insumos_alertas_stock que ya trae calculados
+      // `dias_estimados_restantes` y `alerta_nivel` (consumo promedio
+      // últimos 30d basado en movs salida_venta).
+      let q = db.from("v_insumos_alertas_stock")
+        .select("id, nombre, unidad, local_id, categoria_pl, stock_actual, stock_minimo, costo_actual, ubicacion, dias_estimados_restantes, alerta_nivel")
         .order("nombre");
       q = applyLocalScope(q, user, localActivo);
       const { data } = await q;
@@ -196,6 +200,7 @@ export function TabStock({ user, locales, localActivo }: Props) {
                 <th className="num-right">Mínimo</th>
                 <th className="num-right">Costo/u</th>
                 <th className="num-right">Valor</th>
+                <th className="num-right" title="Días que aguanta el stock al ritmo de venta de los últimos 30 días">Aguanta</th>
                 <th>Estado</th>
               </tr>
             </thead>
@@ -219,6 +224,17 @@ export function TabStock({ user, locales, localActivo }: Props) {
                     </td>
                     <td className="num-right mono">{fmt_$(Number(i.costo_actual) || 0)}</td>
                     <td className="num-right mono" style={{ fontWeight: 500 }}>{fmt_$(valor)}</td>
+                    {/* "Aguanta": días estimados al ritmo de venta de los últimos 30d.
+                        Verde >7d / Amarillo 3-7d / Rojo <3d. Gris si sin datos. */}
+                    <td className="num-right mono" style={{ fontSize: 11 }}>
+                      {(() => {
+                        const d = Number(i.dias_estimados_restantes ?? 0);
+                        if (Number(i.stock_actual ?? 0) <= 0) return <span style={{ color: "var(--muted2)" }}>—</span>;
+                        if (d <= 0) return <span style={{ color: "var(--muted2)" }} title="Sin ventas en últimos 30d">∞</span>;
+                        const color = d < 3 ? "var(--danger)" : d < 7 ? "var(--warn)" : "var(--success)";
+                        return <span style={{ color, fontWeight: 500 }}>{d.toFixed(1)}d</span>;
+                      })()}
+                    </td>
                     <td>
                       {bajoMin ? (
                         <span className="badge b-warn" style={{ fontSize: 10 }}>↓ bajo mínimo</span>
