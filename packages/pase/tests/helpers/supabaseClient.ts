@@ -66,10 +66,23 @@ export async function createSuperadminClient(): Promise<SupabaseClient | null> {
   const client = createClient(SUPABASE_URL, loadAnonKey(), {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { error } = await client.auth.signInWithPassword({
-    email: SUPERADMIN_EMAIL,
-    password: pwd,
-  });
-  if (error) throw new Error(`Login superadmin falló: ${error.message}`);
-  return client;
+  // Retry con backoff exponencial — Supabase rate-limita logins agresivamente
+  // (~30/min/IP). En la suite E2E full hay 34 tests, cada uno hace login
+  // superadmin en su beforeAll → garantizado golpear el límite. Sin retry,
+  // los últimos ~5 tests fallaban con "Request rate limit reached".
+  // Fix proper: globalSetup (1 solo login compartido) — anotado como deuda.
+  const backoffs = [0, 2000, 5000, 10000, 20000];
+  let lastError: Error | null = null;
+  for (const wait of backoffs) {
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+    const { error } = await client.auth.signInWithPassword({
+      email: SUPERADMIN_EMAIL,
+      password: pwd,
+    });
+    if (!error) return client;
+    lastError = new Error(error.message);
+    // Si NO es rate limit, no tiene sentido retry — falla inmediato
+    if (!/rate.?limit/i.test(error.message)) break;
+  }
+  throw new Error(`Login superadmin falló (tras retry): ${lastError?.message ?? "desconocido"}`);
 }
