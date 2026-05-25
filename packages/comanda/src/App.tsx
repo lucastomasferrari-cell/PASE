@@ -11,6 +11,7 @@ import { AuthProvider } from './lib/AuthProvider';
 import { AuthPosProvider } from './lib/AuthPosProvider';
 import { SyncEngineLifecycle } from './lib/sync/SyncEngineLifecycle';
 import { SoporteWidget } from './components/SoporteWidget';
+import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
 import { RedirectIfAuth } from './components/RedirectIfAuth';
 import { PinGate } from './components/PinGate';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -186,6 +187,10 @@ export default function App() {
               logueado (chequea adentro). Llama a /api/claude con
               task=soporte-chat y persiste tickets en tickets_soporte. */}
           <SoporteWidget />
+          {/* PWA update prompt: detecta nuevo deploy y muestra toast
+              "actualizar ahora". Reemplaza el autoUpdate viejo que dejaba
+              al usuario con la versión cacheada hasta cerrar todas las tabs. */}
+          <PWAUpdatePrompt />
           <Toaster
             position="top-center"
             richColors

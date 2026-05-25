@@ -14,7 +14,17 @@ export default defineConfig({
     // standalone = abre sin barras del navegador. Service worker offline
     // mínimo: precachea el shell + assets, fallback offline.
     VitePWA({
-      registerType: 'autoUpdate',
+      // Estrategia post 24-may noche: 'prompt' en vez de 'autoUpdate' porque
+      // autoUpdate dejaba el SW nuevo en estado "waiting" hasta que se
+      // cerraran TODAS las tabs — sin tabs cerradas, los empleados seguían
+      // viendo la versión vieja durante semanas (incidente Lucas reportó
+      // que el login de COMANDA seguía pidiendo @ después del fix).
+      // 'prompt' habilita el hook useRegisterSW que disparamos desde
+      // <PWAUpdatePrompt /> con un toast no-disruptivo ("hay versión nueva,
+      // actualizar"). El usuario decide cuándo recargar — clave en COMANDA
+      // donde un mozo puede estar a mitad de cobrar y un auto-reload le
+      // borraría el carrito.
+      registerType: 'prompt',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'COMANDA',
@@ -49,8 +59,17 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Cachear shell + assets de la app. Excluir requests a Supabase
-        // (datos vivos, no quiero servir stale al mozo).
+        // clientsClaim + skipWaiting: el SW nuevo toma control INMEDIATO
+        // de las pestañas existentes (no espera a que el user cierre todo).
+        // Combinado con registerType:'prompt', el flow es:
+        //   1) browser baja SW nuevo en background
+        //   2) <PWAUpdatePrompt /> muestra toast "actualizar"
+        //   3) user click → skipWaiting → recarga la SPA con la versión nueva
+        clientsClaim: true,
+        skipWaiting: true,
+        // NetworkFirst para navegación (HTML): si hay internet, siempre
+        // trae fresco. Si cae, cae al cache (offline funciona). Antes era
+        // CacheFirst implícito (default workbox), que servía HTML stale.
         navigateFallbackDenylist: [/^\/api\//, /\.supabase\.co/],
         runtimeCaching: [
           {
@@ -59,6 +78,17 @@ export default defineConfig({
             options: {
               cacheName: 'images',
               expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
+          {
+            // HTML del navigate (cuando el user va a otra ruta): siempre
+            // pegar a network primero. Si timeout 3s o falla, usar cache.
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'pages',
+              networkTimeoutSeconds: 3,
+              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 },
             },
           },
         ],
