@@ -62,14 +62,24 @@ const TIPOS = [
 ];
 
 // Conceptos para tipo=empleado. Mapean a rrhh_adelantos.concepto.
+//
+// `descuenta_sueldo`: indica si este pago se descuenta del próximo sueldo.
+// Solo `adelanto` lo hace — los demás son beneficios/pagos accesorios que
+// el empleado ya cobró en el momento (comida, viático) o que se cargan
+// como input separado en la novedad del mes (horas extras, día doble,
+// feriado trabajado).
+//
+// Fix 25-may post-bug Bernal Rueda: antes la RPC creaba un adelanto fantasma
+// para CUALQUIER concepto → la liquidación del mes intentaba descontar del
+// sueldo gastos como "comida" o "otros" que no eran adelantos reales.
 const CONCEPTOS_EMPLEADO = [
-  { id: "adelanto",     label: "Adelanto" },
-  { id: "dia_doble",    label: "Día doble" },
-  { id: "horas_extras", label: "Horas extra" },
-  { id: "feriado",      label: "Feriado trabajado" },
-  { id: "comida",       label: "Comida / refrigerio" },
-  { id: "viatico",      label: "Viático" },
-  { id: "otros",        label: "Otros" },
+  { id: "adelanto",     label: "Adelanto",            descuenta_sueldo: true  },
+  { id: "dia_doble",    label: "Día doble",           descuenta_sueldo: false },
+  { id: "horas_extras", label: "Horas extra",         descuenta_sueldo: false },
+  { id: "feriado",      label: "Feriado trabajado",   descuenta_sueldo: false },
+  { id: "comida",       label: "Comida / refrigerio", descuenta_sueldo: false },
+  { id: "viatico",      label: "Viático",             descuenta_sueldo: false },
+  { id: "otros",        label: "Otros",               descuenta_sueldo: false },
 ];
 
 interface EmpleadoVisible {
@@ -708,8 +718,30 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                   <>
                     <div className="field"><label>Concepto *</label>
                       <select value={form.concepto} onChange={e => setForm({ ...form, concepto: e.target.value })}>
-                        {CONCEPTOS_EMPLEADO.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                        {CONCEPTOS_EMPLEADO.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.label}{c.descuenta_sueldo ? " (se descuenta del próximo sueldo)" : ""}
+                          </option>
+                        ))}
                       </select>
+                      {/* Hint visual: clarificar qué pasa con el sueldo del empleado.
+                          Fix UX post-bug Bernal Rueda (25-may): Anto cargó "Otros" pensando
+                          que era solo un gasto puntual, pero el sistema lo trataba como
+                          adelanto. Ahora el dropdown + hint dejan claro qué descuenta. */}
+                      {(() => {
+                        const c = CONCEPTOS_EMPLEADO.find(x => x.id === form.concepto);
+                        if (!c) return null;
+                        return (
+                          <div className="hint" style={{
+                            fontSize: 11, marginTop: 4,
+                            color: c.descuenta_sueldo ? "var(--warn)" : "var(--muted2)",
+                          }}>
+                            {c.descuenta_sueldo
+                              ? "⚠ Este monto se descuenta del próximo sueldo del empleado."
+                              : "ℹ Pago accesorio. NO se descuenta del próximo sueldo."}
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div className="field"><label>Empleado *</label>
                       {(() => {
