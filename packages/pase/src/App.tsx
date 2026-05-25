@@ -55,6 +55,7 @@ const ConfiguracionNotificaciones = lazy(() => import("./pages/ConfiguracionNoti
 // (Sprint COMANDA Autónomo Fase 2.b). Ir a pase-comanda.vercel.app →
 // Empleados → Usuarios POS.
 const HerramientasHub = lazy(() => import("./pages/HerramientasHub"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
 const DashboardHome = lazy(() => import("./dashboards/DashboardHome").then(m => ({ default: m.DashboardHome })));
 const SettingsDashboards = lazy(() => import("./dashboards/SettingsDashboards"));
 
@@ -465,6 +466,14 @@ function AppMain() {
                   en DB se mantienen — si se decide reintroducir o migrar a
                   COMANDA, descomentar la ruta original. */}
               <Route path="/reservas" element={<Navigate to="/inicio" replace />} />
+
+              {/* Wizard de onboarding — guía paso a paso para tenant nuevo.
+                  Tenants existentes ya tienen todo completado por backfill en
+                  migration 202605270100. Accesible siempre vía link directo. */}
+              <Route
+                path="/onboarding"
+                element={user ? <Onboarding user={user} /> : <Navigate to="/" replace />}
+              />
 
               {/* Operación */}
               <Route path="/caja/*" element={<Caja {...props}/>} />

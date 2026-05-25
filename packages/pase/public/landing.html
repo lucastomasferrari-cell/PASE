@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="PASE — el sistema de gestión que un dueño de restaurante puede manejar solo. Caja, gastos, sueldos, conciliación MP, y POS integrado." />
+    <title>PASE · aliado gastronómico</title>
+    <link rel="icon" href="/favicon.svg" />
+    <style>
+      :root {
+        --bg: #0E1726;
+        --bg-elev: #15203A;
+        --text: #F0F4F8;
+        --text-muted: #93A8C2;
+        --celeste: #75AADB;
+        --gold: #A8893A;
+        --success: #2BB673;
+        --border: rgba(147, 168, 194, 0.15);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: var(--celeste); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .container { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+      header {
+        padding: 24px 0;
+        border-bottom: 1px solid var(--border);
+        position: sticky;
+        top: 0;
+        background: rgba(14, 23, 38, 0.85);
+        backdrop-filter: blur(12px);
+        z-index: 100;
+      }
+      .header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .brand {
+        font-size: 28px;
+        font-weight: 500;
+        letter-spacing: -0.035em;
+      }
+      .brand-dot { color: var(--gold); }
+      .nav { display: flex; gap: 24px; align-items: center; }
+      .nav a { font-size: 14px; color: var(--text-muted); }
+      .btn {
+        display: inline-block;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-weight: 500;
+        font-size: 14px;
+        transition: all 0.2s;
+        cursor: pointer;
+        border: none;
+      }
+      .btn-primary {
+        background: var(--celeste);
+        color: var(--bg);
+      }
+      .btn-primary:hover { opacity: 0.9; text-decoration: none; }
+      .btn-ghost {
+        background: transparent;
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+      .btn-ghost:hover { border-color: var(--celeste); text-decoration: none; }
+      .hero { padding: 80px 0 60px; text-align: center; }
+      .hero h1 {
+        font-size: clamp(36px, 6vw, 56px);
+        font-weight: 600;
+        letter-spacing: -0.03em;
+        margin: 0 0 20px;
+        line-height: 1.1;
+      }
+      .hero h1 .accent { color: var(--celeste); }
+      .hero p {
+        font-size: clamp(16px, 2vw, 19px);
+        color: var(--text-muted);
+        max-width: 640px;
+        margin: 0 auto 36px;
+      }
+      .hero-cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+      .section { padding: 60px 0; border-top: 1px solid var(--border); }
+      .section h2 {
+        font-size: clamp(26px, 4vw, 36px);
+        font-weight: 600;
+        letter-spacing: -0.025em;
+        margin: 0 0 12px;
+      }
+      .section .lead {
+        color: var(--text-muted);
+        max-width: 640px;
+        margin: 0 0 36px;
+        font-size: 16px;
+      }
+      .features {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 18px;
+      }
+      .feature {
+        background: var(--bg-elev);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 24px;
+      }
+      .feature h3 {
+        font-size: 17px;
+        font-weight: 600;
+        margin: 0 0 8px;
+      }
+      .feature p {
+        color: var(--text-muted);
+        font-size: 14px;
+        margin: 0;
+      }
+      .feature .icon {
+        width: 36px; height: 36px;
+        border-radius: 8px;
+        background: rgba(117, 170, 219, 0.12);
+        color: var(--celeste);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 18px;
+        margin-bottom: 16px;
+      }
+      .pricing-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 18px;
+      }
+      .pricing-card {
+        background: var(--bg-elev);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 28px;
+      }
+      .pricing-card.highlight {
+        border-color: var(--celeste);
+        box-shadow: 0 0 0 1px var(--celeste);
+      }
+      .pricing-card h3 { margin: 0 0 4px; font-size: 18px; }
+      .pricing-card .price {
+        font-size: 32px;
+        font-weight: 600;
+        margin: 12px 0;
+      }
+      .pricing-card .price small {
+        font-size: 14px;
+        color: var(--text-muted);
+        font-weight: 400;
+      }
+      .pricing-card ul {
+        list-style: none;
+        padding: 0;
+        margin: 16px 0 24px;
+        color: var(--text-muted);
+        font-size: 14px;
+      }
+      .pricing-card ul li {
+        padding: 4px 0;
+      }
+      .pricing-card ul li::before {
+        content: "✓ ";
+        color: var(--success);
+        font-weight: 600;
+        margin-right: 4px;
+      }
+      .cta-final {
+        text-align: center;
+        padding: 80px 0;
+        border-top: 1px solid var(--border);
+      }
+      .cta-final h2 { margin-bottom: 16px; }
+      footer {
+        padding: 32px 0;
+        border-top: 1px solid var(--border);
+        color: var(--text-muted);
+        font-size: 13px;
+      }
+      .footer-row {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+      .quote {
+        background: var(--bg-elev);
+        border-left: 3px solid var(--gold);
+        padding: 20px 24px;
+        border-radius: 8px;
+        margin: 24px 0;
+        font-style: italic;
+        color: var(--text-muted);
+      }
+      @media (max-width: 600px) {
+        .nav a:not(.btn) { display: none; }
+        .hero { padding: 48px 0 40px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="container header-row">
+        <div class="brand">pase<span class="brand-dot">.</span></div>
+        <nav class="nav">
+          <a href="#features">Funciones</a>
+          <a href="#pricing">Precios</a>
+          <a href="/" class="btn btn-ghost">Iniciar sesión</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="container">
+          <h1>El sistema de gestión que un dueño puede manejar <span class="accent">solo</span>.</h1>
+          <p>
+            Caja, gastos, sueldos, conciliación de Mercado Pago y POS integrado.
+            Pensado para restaurantes argentinos chicos y medianos —
+            sin contador interno, sin equipo de IT.
+          </p>
+          <div class="hero-cta">
+            <a href="mailto:lucastomasferrari@gmail.com?subject=Quiero%20probar%20PASE" class="btn btn-primary">
+              Pedir una demo
+            </a>
+            <a href="#features" class="btn btn-ghost">Ver qué hace</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="features">
+        <div class="container">
+          <h2>Lo que hace</h2>
+          <p class="lead">
+            Todo lo que un restaurante chico necesita para tener la plata bajo
+            control, en un solo lugar.
+          </p>
+          <div class="features">
+            <div class="feature">
+              <div class="icon">💰</div>
+              <h3>Caja y bancos</h3>
+              <p>Ingresos y egresos diarios. Conciliación de Mercado Pago automática cada 30 min.</p>
+            </div>
+            <div class="feature">
+              <div class="icon">📄</div>
+              <h3>Facturas y proveedores</h3>
+              <p>Cargá facturas con foto y un lector de IA las transcribe. Listado por proveedor y vencimiento.</p>
+            </div>
+            <div class="feature">
+              <div class="icon">👥</div>
+              <h3>Sueldos y empleados</h3>
+              <p>Liquidación mensual o quincenal. Adelantos que se descuentan automático. Vacaciones, aguinaldo, liquidación final.</p>
+            </div>
+            <div class="feature">
+              <div class="icon">📊</div>
+              <h3>Reportes que entendés</h3>
+              <p>Punto de equilibrio, objetivos del mes, comparativa entre sucursales. Sin jerga contable.</p>
+            </div>
+            <div class="feature">
+              <div class="icon">🍽️</div>
+              <h3>POS integrado (COMANDA)</h3>
+              <p>Salón, mostrador, delivery. Recetas que descuentan stock automático. Modo offline.</p>
+            </div>
+            <div class="feature">
+              <div class="icon">🛒</div>
+              <h3>Marketplace propio</h3>
+              <p>Tu carta online con dominio propio. Pedidos online cobrados por Mercado Pago directo a tu cuenta.</p>
+            </div>
+            <div class="feature">
+              <div class="icon">🤖</div>
+              <h3>Bot Instagram</h3>
+              <p>Responde DMs de tus clientes 24/7 con info real del local (horarios, ubicación, menú, promos).</p>
+            </div>
+            <div class="feature">
+              <div class="icon">📱</div>
+              <h3>Multi-sucursal</h3>
+              <p>Hasta donde quieras. Tu encargado solo ve su sucursal, vos ves todo. Sin leaks.</p>
+            </div>
+            <div class="feature">
+              <div class="icon">🇦🇷</div>
+              <h3>Pensado para Argentina</h3>
+              <p>Inflación, AFIP, Rappi/PedidosYa/MP, quincenas, aguinaldo. Sin adaptaciones forzadas.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="pricing">
+        <div class="container">
+          <h2>Precios</h2>
+          <p class="lead">
+            Plan único, sin sorpresas. Sin comisión por venta.
+          </p>
+          <div class="pricing-cards">
+            <div class="pricing-card highlight">
+              <h3>Restaurante</h3>
+              <div class="price">A definir<small> /mes</small></div>
+              <p style="color: var(--text-muted); font-size: 13px; margin: 0;">
+                Plan único — todas las funciones, hasta 3 sucursales.
+              </p>
+              <ul>
+                <li>Usuarios ilimitados</li>
+                <li>Conciliación MP automática</li>
+                <li>POS COMANDA incluido</li>
+                <li>Marketplace propio</li>
+                <li>Bot Instagram</li>
+                <li>Soporte por WhatsApp</li>
+              </ul>
+              <a href="mailto:lucastomasferrari@gmail.com?subject=Quiero%20probar%20PASE" class="btn btn-primary">
+                Pedir demo
+              </a>
+            </div>
+            <div class="pricing-card">
+              <h3>Cadena (4+ sucursales)</h3>
+              <div class="price">Hablemos</div>
+              <p style="color: var(--text-muted); font-size: 13px; margin: 0;">
+                Setup asistido, importación de datos viejos, capacitación al equipo.
+              </p>
+              <ul>
+                <li>Todo lo del plan Restaurante</li>
+                <li>Sucursales ilimitadas</li>
+                <li>Onboarding asistido</li>
+                <li>SLA de soporte</li>
+                <li>Integraciones a medida</li>
+              </ul>
+              <a href="mailto:lucastomasferrari@gmail.com?subject=Plan%20cadena" class="btn btn-ghost">
+                Contactar
+              </a>
+            </div>
+          </div>
+
+          <div class="quote">
+            "Lo que probás en la demo es lo que usás. No hay 'versión enterprise'
+            escondida. Si te falta algo, lo hablamos."
+          </div>
+        </div>
+      </section>
+
+      <section class="cta-final">
+        <div class="container">
+          <h2>¿Querés ver cómo funciona con tus datos?</h2>
+          <p style="color: var(--text-muted); margin-bottom: 28px;">
+            Te armamos un tenant de prueba con tus locales y empleados reales,
+            sin compromiso.
+          </p>
+          <a href="mailto:lucastomasferrari@gmail.com?subject=Quiero%20una%20demo%20de%20PASE" class="btn btn-primary">
+            Pedir demo
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="container footer-row">
+        <div>© 2026 PASE · aliado gastronómico</div>
+        <div>
+          <a href="mailto:lucastomasferrari@gmail.com">Contacto</a>
+          &nbsp;·&nbsp;
+          <a href="/">Iniciar sesión</a>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
