@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { fmt_d } from "../lib/utils";
 import BackupsAdmin from "./BackupsAdmin";
-import TenantsFeaturesMatriz from "./TenantsFeaturesMatriz";
 import { InfoTooltip } from "../components/ui";
 import type { Tenant, Usuario } from "../types";
 
@@ -27,10 +25,9 @@ interface TenantWithCounts extends Tenant {
 
 const TENANT_OVERRIDE_KEY = "pase_tenant_override__superadmin_only";
 
-type Tab = "tenants" | "features_matriz" | "backups";
+type Tab = "tenants" | "backups";
 
 export default function Tenants({ user }: TenantsProps) {
-  const navigate = useNavigate();
   const [tenants, setTenants] = useState<TenantWithCounts[]>([]);
   const [loading, setLoading] = useState(true);
   const [flash] = useState<string | null>(null);
@@ -115,13 +112,6 @@ export default function Tenants({ user }: TenantsProps) {
           Tenants ({tenants.length})
         </button>
         <button
-          className={"btn " + (tab === "features_matriz" ? "btn-acc" : "btn-ghost")}
-          onClick={() => setTab("features_matriz")}
-          style={{ borderRadius: 0, borderBottom: tab === "features_matriz" ? "2px solid var(--acc)" : "2px solid transparent" }}
-        >
-          Funciones (matriz)
-        </button>
-        <button
           className={"btn " + (tab === "backups" ? "btn-acc" : "btn-ghost")}
           onClick={() => setTab("backups")}
           style={{ borderRadius: 0, borderBottom: tab === "backups" ? "2px solid var(--acc)" : "2px solid transparent" }}
@@ -158,7 +148,6 @@ export default function Tenants({ user }: TenantsProps) {
                   <td className="mono" style={{ fontSize: 11 }}>{t.trial_ends_at ? fmt_d(t.trial_ends_at.slice(0,10)) : "—"}</td>
                   <td><div style={{ display: "flex", gap: 4 }}>
                     <button className="btn btn-ghost btn-sm" onClick={() => verComo(t)}>Ver como</button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/tenants/${t.id}/features`)}>Funciones</button>
                     <button className="btn btn-ghost btn-sm" onClick={() => toggleActivo(t)}>
                       {t.activo ? "Desactivar" : "Activar"}
                     </button>
@@ -169,8 +158,6 @@ export default function Tenants({ user }: TenantsProps) {
           )}
         </div>
       )}
-
-      {tab === "features_matriz" && <TenantsFeaturesMatriz />}
 
       {tab === "backups" && <BackupsAdmin tenants={tenants} />}
     </div>

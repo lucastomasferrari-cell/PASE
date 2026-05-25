@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LifeBuoy, Building2, Wallet, BarChart3, LogOut } from 'lucide-react';
+import { LifeBuoy, Building2, Wallet, BarChart3, LogOut, Grid3x3 } from 'lucide-react';
 import { signOut } from '@/lib/auth';
 import type { AdminUser } from '@/lib/auth';
 import { cn } from '@/lib/cn';
@@ -10,10 +10,11 @@ interface Props {
 }
 
 const NAV = [
-  { to: '/soporte',  label: 'Soporte',  icon: LifeBuoy,  badge: null },
-  { to: '/tenants',  label: 'Tenants',  icon: Building2, badge: null },
-  { to: '/pagos',    label: 'Pagos',    icon: Wallet,    badge: null },
-  { to: '/metricas', label: 'Métricas', icon: BarChart3, badge: null },
+  { to: '/soporte',          label: 'Soporte',         icon: LifeBuoy,  badge: null },
+  { to: '/tenants',          label: 'Tenants',         icon: Building2, badge: null },
+  { to: '/tenants/features', label: 'Funciones',       icon: Grid3x3,   badge: null },
+  { to: '/pagos',            label: 'Pagos',           icon: Wallet,    badge: null },
+  { to: '/metricas',         label: 'Métricas',        icon: BarChart3, badge: null },
 ] as const;
 
 export function Sidebar({ user }: Props) {
