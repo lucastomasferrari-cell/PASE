@@ -55,7 +55,21 @@ jobs:
           VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
           SUPERADMIN_PASSWORD=${{ secrets.SUPERADMIN_PASSWORD }}
           SUPABASE_SERVICE_KEY=${{ secrets.SUPABASE_SERVICE_KEY }}
+          POSTGRES_URL_NON_POOLING=${{ secrets.POSTGRES_URL_NON_POOLING }}
           EOF
+
+      # ─── Auditoría defensiva RPCs (pre-tests) ──────────────────────────
+      # Corre check-rpcs-schema.mjs que invoca cada RPC pública con args
+      # dummy y detecta errores de schema (COLUMNA_INEXISTENTE, AMBIGUA,
+      # FUNCION_INEXISTENTE, etc.). Si encuentra alguno, falla el CI sin
+      # gastar los ~3 min de la suite E2E. Patrón establecido 24-may post
+      # 3 bugs RPC latentes que vivieron meses en prod sin que nadie los
+      # detectara (fn_crear_delivery_rider, fn_crear_print_agent_token,
+      # fn_reporte_menu_engineering_comanda).
+      - name: Auditoría defensiva RPCs (schema check)
+        env:
+          DUENO_PASSWORD: ${{ secrets.DUENO_PASSWORD }}
+        run: node packages/pase/scripts/check-rpcs-schema.mjs
 
       - name: Run E2E Full Suite
         run: |
