@@ -29,8 +29,24 @@ const AUTH_UPDATE_TIMEOUT_MS = 12_000;
 // se cuelga sin explicación cuando el user tipea la misma contraseña que ya
 // tiene (típicamente porque el cambio anterior funcionó pero quedó el flag
 // password_temporal=true por un race condition pre-fix).
-function translateAuthError(err: { code?: string; message?: string } | null): string {
+// Detecta si el error es "sesión perdida" — pasa cuando los tokens del
+// browser fueron revocados (típicamente porque un admin reseteó el password
+// vía Admin API, o porque pasó mucho tiempo y el refresh token venció).
+// En ese caso, NO hay forma de recuperar desde la pantalla: hay que volver
+// al login con la pass nueva.
+function isSessionError(err: { code?: string; message?: string; name?: string } | null): boolean {
+  if (!err) return false;
+  if (err.code === "session_not_found" || err.code === "invalid_credentials") return true;
+  if (err.name === "AuthSessionMissingError") return true;
+  if ((err.message || "").toLowerCase().includes("session missing")) return true;
+  return false;
+}
+
+function translateAuthError(err: { code?: string; message?: string; name?: string } | null): string {
   if (!err) return "Error desconocido";
+  if (isSessionError(err)) {
+    return "Tu sesión venció. Apretá el botón de abajo para volver al login y entrar de nuevo con tu contraseña.";
+  }
   const code = err.code || "";
   switch (code) {
     case "same_password":
@@ -39,9 +55,6 @@ function translateAuthError(err: { code?: string; message?: string } | null): st
       return "Contraseña demasiado débil. Usá una más larga o combiná mayúsculas, números y símbolos.";
     case "password_too_short":
       return "La contraseña es muy corta. Mínimo 8 caracteres.";
-    case "session_not_found":
-    case "invalid_credentials":
-      return "Tu sesión venció. Refrescá la página y volvé a entrar.";
     default:
       return err.message || "No se pudo cambiar la contraseña";
   }
@@ -60,6 +73,17 @@ export default function ForcePasswordChange({ user, onDone }: ForcePasswordChang
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  // Se setea TRUE cuando el error es de sesión perdida → muestra botón
+  // "Volver al login" en lugar de seguir intentando.
+  const [sessionLost, setSessionLost] = useState(false);
+
+  // Cierra sesión y recarga — única vía limpia cuando los tokens fueron
+  // revocados. Después del reload el user cae al Login y entra de nuevo.
+  const volverAlLogin = async () => {
+    try { await db.auth.signOut(); } catch { /* ignoramos */ }
+    try { sessionStorage.removeItem("pase_user"); } catch { /* ignoramos */ }
+    window.location.reload();
+  };
 
   const submit = async () => {
     setErr("");
@@ -82,6 +106,7 @@ export default function ForcePasswordChange({ user, onDone }: ForcePasswordChang
         // muestra solo el mensaje traducido.
         // eslint-disable-next-line no-console
         console.error("[ForcePasswordChange] auth.updateUser error:", authErr);
+        if (isSessionError(authErr)) setSessionLost(true);
         setErr(translateAuthError(authErr));
         return;
       }
@@ -131,9 +156,21 @@ export default function ForcePasswordChange({ user, onDone }: ForcePasswordChang
         <div className="login-brand">Cambiá tu contraseña</div>
         <div className="login-sub">Es la primera vez que ingresás. Definí una contraseña nueva para continuar.</div>
         {err && <div className="alert alert-danger">{err}</div>}
-        <div className="field"><label>Nueva contraseña</label><input type="password" autoComplete="new-password" value={newPass} onChange={e=>setNewPass(e.target.value)} placeholder="mínimo 8 caracteres" /></div>
-        <div className="field"><label>Confirmar</label><input type="password" autoComplete="new-password" value={confirm} onChange={e=>setConfirm(e.target.value)} placeholder="repetí la contraseña" onKeyDown={e=>e.key==="Enter"&&submit()} /></div>
-        <button className="btn btn-acc" style={{width:"100%",justifyContent:"center"}} onClick={submit} disabled={loading}>{loading?"Guardando...":"Guardar y continuar"}</button>
+        {sessionLost ? (
+          <button
+            className="btn btn-acc"
+            style={{width:"100%",justifyContent:"center",marginTop:8}}
+            onClick={volverAlLogin}
+          >
+            Volver al login
+          </button>
+        ) : (
+          <>
+            <div className="field"><label>Nueva contraseña</label><input type="password" autoComplete="new-password" value={newPass} onChange={e=>setNewPass(e.target.value)} placeholder="mínimo 8 caracteres" /></div>
+            <div className="field"><label>Confirmar</label><input type="password" autoComplete="new-password" value={confirm} onChange={e=>setConfirm(e.target.value)} placeholder="repetí la contraseña" onKeyDown={e=>e.key==="Enter"&&submit()} /></div>
+            <button className="btn btn-acc" style={{width:"100%",justifyContent:"center"}} onClick={submit} disabled={loading}>{loading?"Guardando...":"Guardar y continuar"}</button>
+          </>
+        )}
       </div>
     </div>
   );
