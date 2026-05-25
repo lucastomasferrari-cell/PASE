@@ -18,7 +18,7 @@ import { test, expect } from "@playwright/test";
 import { createSuperadminClient } from "../../helpers/supabaseClient";
 import {
   seedE2ETenant, cleanupE2ETenant, createServiceClient, createE2EDuenoClient,
-  type E2ETenantSeedResult,
+  seedSaldoInicial, type E2ETenantSeedResult,
 } from "../setup/seed-tenant";
 
 test.describe.serial("E2E Test 16 — Gasto empleado cesionado", () => {
@@ -32,9 +32,10 @@ test.describe.serial("E2E Test 16 — Gasto empleado cesionado", () => {
     const baseUrl = (testInfo.project.use.baseURL || "https://pase-yndx.vercel.app").replace(/\/$/, "");
     seed = await seedE2ETenant({ superadminToken: sess?.session?.access_token!, baseUrl });
     const svc = createServiceClient();
-    // Saldo en Caja Efectivo de ambos locales
-    await svc.from("saldos_caja").update({ saldo: 100000 })
-      .eq("tenant_id", seed.tenantId).eq("cuenta", "Caja Efectivo");
+    // Saldo $100K en Caja Efectivo de AMBOS locales (vía opening balance,
+    // cache derivado del ledger desde 23-may).
+    await seedSaldoInicial(svc, seed.tenantId, seed.local1Id, "Caja Efectivo", 100000);
+    await seedSaldoInicial(svc, seed.tenantId, seed.local2Id, "Caja Efectivo", 100000);
     await superdb.auth.signOut();
   });
 

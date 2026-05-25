@@ -3,7 +3,7 @@
 
 import { test, expect } from "@playwright/test";
 import { createSuperadminClient } from "../../helpers/supabaseClient";
-import { seedE2ETenant, cleanupE2ETenant, createServiceClient, createE2EDuenoClient, type E2ETenantSeedResult } from "../setup/seed-tenant";
+import { seedE2ETenant, cleanupE2ETenant, createServiceClient, createE2EDuenoClient, seedSaldoInicial, type E2ETenantSeedResult } from "../setup/seed-tenant";
 
 test.describe.serial("E2E Test 19 — Pagos RRHH especiales", () => {
   let seed: E2ETenantSeedResult | null = null;
@@ -16,8 +16,7 @@ test.describe.serial("E2E Test 19 — Pagos RRHH especiales", () => {
     const baseUrl = (testInfo.project.use.baseURL || "https://pase-yndx.vercel.app").replace(/\/$/, "");
     seed = await seedE2ETenant({ superadminToken: sess?.session?.access_token!, baseUrl });
     const svc = createServiceClient();
-    await svc.from("saldos_caja").update({ saldo: 2000000 })
-      .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id).eq("cuenta", "Caja Efectivo");
+    await seedSaldoInicial(svc, seed.tenantId, seed.local1Id, "Caja Efectivo", 2000000);
     await superdb.auth.signOut();
   });
 

@@ -40,10 +40,10 @@ test.describe.serial("E2E Test 26 — editar_movimiento_caja", () => {
     seed = await seedE2ETenant({ superadminToken: token, baseUrl });
     await superdb.auth.signOut();
 
-    // Forzar saldos = 0 conocido
+    // Saldos arrancan en 0 por default después del seed (ledger vacío + trigger
+    // recalcula cache desde movimientos). Antes había un UPDATE saldo=0 manual,
+    // pero post sprint 23-may eso es redundante — el trigger ya garantiza 0.
     const svc = createServiceClient();
-    await svc.from("saldos_caja").update({ saldo: 0 })
-      .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id);
 
     // Crear un mov inicial via RPC para tener algo que editar
     const duenoDb = await createE2EDuenoClient();

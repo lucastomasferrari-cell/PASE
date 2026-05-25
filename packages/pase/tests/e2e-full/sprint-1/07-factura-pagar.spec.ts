@@ -25,6 +25,7 @@ import {
   cleanupE2ETenant,
   createServiceClient,
   createE2EDuenoClient,
+  seedSaldoInicial,
   type E2ETenantSeedResult,
 } from "../setup/seed-tenant";
 
@@ -39,10 +40,9 @@ test.describe.serial("E2E Sprint 2 — Cargar + pagar factura", () => {
     const superToken = sess?.session?.access_token!;
     const baseUrl = (testInfo.project.use.baseURL || "https://pase-yndx.vercel.app").replace(/\/$/, "");
     seed = await seedE2ETenant({ superadminToken: superToken, baseUrl });
-    // Saldo inicial para pagar
+    // Saldo inicial vía opening balance (cache derivado del ledger desde 23-may).
     const svc = createServiceClient();
-    await svc.from("saldos_caja").update({ saldo: 100000 })
-      .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id).eq("cuenta", "Caja Efectivo");
+    await seedSaldoInicial(svc, seed.tenantId, seed.local1Id, "Caja Efectivo", 100000);
     await superdb.auth.signOut();
   });
 

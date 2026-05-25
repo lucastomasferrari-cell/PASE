@@ -46,10 +46,8 @@ test.describe.serial("E2E Test 25 — Trigger sync saldos_caja", () => {
     const { data: sess } = await superdb.auth.getSession();
     const baseUrl = (testInfo.project.use.baseURL || "https://pase-yndx.vercel.app").replace(/\/$/, "");
     seed = await seedE2ETenant({ superadminToken: sess?.session?.access_token!, baseUrl });
-    // Forzamos saldo inicial conocido en Caja Efectivo (cache = 0, ledger vacío).
-    const svc = createServiceClient();
-    await svc.from("saldos_caja").update({ saldo: 0 })
-      .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id);
+    // Saldos arrancan en 0 por default después del seed (ledger vacío + trigger).
+    // Antes había un UPDATE saldo=0 manual; post sprint 23-may es redundante.
     await superdb.auth.signOut();
   });
 

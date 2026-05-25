@@ -89,6 +89,59 @@ export async function createE2EDuenoClient(): Promise<SupabaseClient> {
 // IMPORTANTE: `rrhh_empleados.id` es UUID (no INTEGER) y `items.id` es INTEGER.
 // Cuidado al usarlos: el dato en `tenants` y `usuarios` también difiere
 // (tenant_id UUID, usuario_id INTEGER).
+
+/**
+ * Helper: seedear saldo inicial en una cuenta usando el patrón Opening
+ * Balance Adjustment Entry (QuickBooks/Xero).
+ *
+ * Necesario desde 23-may noche cuando `saldos_caja` pasó a ser cache
+ * derivado del ledger `movimientos` via trigger `trg_sync_saldos_caja`.
+ * Hacer `UPDATE saldos_caja SET saldo=X` directamente NO funciona porque
+ * el primer movimiento del test dispara el trigger que recalcula
+ * `saldo = SUM(importe) FROM movimientos` → el saldo manual se pisa.
+ *
+ * Solución industria: insertar un movimiento "Opening Balance" que
+ * REPRESENTE el saldo inicial. Después cualquier mov subsecuente se suma
+ * desde ahí.
+ *
+ * Idempotente: si se llama 2 veces con la misma cuenta+local, reemplaza
+ * el opening balance anterior (no acumula).
+ *
+ * Uso típico en tests:
+ *   await seedSaldoInicial(svc, seed.tenantId, seed.local1Id, "Caja Efectivo", 50000);
+ *   // → saldo arranca en $50.000 + cualquier mov posterior se calcula bien
+ */
+export async function seedSaldoInicial(
+  svc: SupabaseClient,
+  tenantId: string,
+  localId: number,
+  cuenta: string,
+  monto: number,
+): Promise<void> {
+  // 1. Borrar opening balance anterior si existe (idempotente)
+  await svc.from("movimientos")
+    .delete()
+    .eq("tenant_id", tenantId)
+    .eq("local_id", localId)
+    .eq("cuenta", cuenta)
+    .eq("tipo", "ajuste_inicial")
+    .eq("cat", "OPENING_BALANCE");
+
+  // 2. Insertar opening balance nuevo (el trigger recalcula saldos_caja solo)
+  const { error } = await svc.from("movimientos").insert({
+    id: `OB-${tenantId.slice(0, 8)}-${localId}-${cuenta.replace(/\s+/g, "_")}-${Date.now()}`,
+    tenant_id: tenantId,
+    local_id: localId,
+    cuenta,
+    tipo: "ajuste_inicial",
+    cat: "OPENING_BALANCE",
+    importe: monto,
+    detalle: `[E2E SEED] Saldo inicial de ${cuenta}`,
+    fecha: new Date().toISOString().slice(0, 10),
+    anulado: false,
+  });
+  if (error) throw new Error(`seedSaldoInicial(${cuenta}=${monto}): ${error.message}`);
+}
 export interface E2ETenantSeedResult {
   tenantId: string;            // UUID
   duenoUsuarioId: number;       // INTEGER (usuarios.id)

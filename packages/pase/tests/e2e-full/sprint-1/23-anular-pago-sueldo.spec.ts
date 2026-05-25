@@ -12,7 +12,7 @@
 
 import { test, expect } from "@playwright/test";
 import { createSuperadminClient } from "../../helpers/supabaseClient";
-import { seedE2ETenant, cleanupE2ETenant, createServiceClient, createE2EDuenoClient, type E2ETenantSeedResult } from "../setup/seed-tenant";
+import { seedE2ETenant, cleanupE2ETenant, createServiceClient, createE2EDuenoClient, seedSaldoInicial, type E2ETenantSeedResult } from "../setup/seed-tenant";
 
 test.describe.serial("E2E Test 23 — Anular pago de sueldo", () => {
   let seed: E2ETenantSeedResult | null = null;
@@ -25,8 +25,7 @@ test.describe.serial("E2E Test 23 — Anular pago de sueldo", () => {
     const baseUrl = (testInfo.project.use.baseURL || "https://pase-yndx.vercel.app").replace(/\/$/, "");
     seed = await seedE2ETenant({ superadminToken: sess?.session?.access_token!, baseUrl });
     const svc = createServiceClient();
-    await svc.from("saldos_caja").update({ saldo: 200000 })
-      .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id).eq("cuenta", "Caja Efectivo");
+    await seedSaldoInicial(svc, seed.tenantId, seed.local1Id, "Caja Efectivo", 200000);
     await superdb.auth.signOut();
   });
 
@@ -85,9 +84,10 @@ test.describe.serial("E2E Test 23 — Anular pago de sueldo", () => {
       .select("pagos_realizados").eq("id", liq!.id).single();
     expect(Number(liqAfter1!.pagos_realizados)).toBe(100000);
 
-    // Actualizar saldos_caja a mano (simulando lo que hace pagar_sueldo)
-    await svc.from("saldos_caja").update({ saldo: 100000 })
-      .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id).eq("cuenta", "Caja Efectivo");
+    // [Eliminado 25-may] El UPDATE manual de saldos_caja era redundante.
+    // Desde el sprint 23-may, el trigger trg_sync_saldos_caja recalcula el
+    // saldo automáticamente al insertar el movimiento de arriba ($200K opening
+    // balance - $100K pago = $100K). No hace falta seteo manual.
 
     // Marcar liq como pagada
     await svc.from("rrhh_liquidaciones").update({ estado: "pagado", pagado_at: new Date().toISOString() }).eq("id", liq!.id);

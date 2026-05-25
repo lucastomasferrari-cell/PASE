@@ -21,6 +21,7 @@ import {
   cleanupE2ETenant,
   createServiceClient,
   createE2EDuenoClient,
+  seedSaldoInicial,
   type E2ETenantSeedResult,
 } from "../setup/seed-tenant";
 
@@ -37,10 +38,9 @@ test.describe.serial("E2E Test 27 — anular_remito + anular_gasto", () => {
     const token = sess?.session?.access_token;
     if (!token) throw new Error("token superadmin no obtenido");
     seed = await seedE2ETenant({ superadminToken: token, baseUrl });
-    // Cargar saldo inicial para poder pagar
+    // Cargar saldo inicial vía opening balance (cache derivado del ledger 23-may).
     const svc = createServiceClient();
-    await svc.from("saldos_caja").update({ saldo: 500000 })
-      .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id).eq("cuenta", "Caja Efectivo");
+    await seedSaldoInicial(svc, seed.tenantId, seed.local1Id, "Caja Efectivo", 500000);
     await superdb.auth.signOut();
   });
 
