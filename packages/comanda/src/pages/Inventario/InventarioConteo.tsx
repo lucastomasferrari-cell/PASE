@@ -47,14 +47,17 @@ export function InventarioConteo() {
   // No puede ver el teórico". Sin esto, el empleado puede "dibujar" para
   // que coincida.
   //
-  // Toggle "Ver teóricos" solo lo ve dueño/admin (ellos sí pueden auditar
-  // en vivo). Encargados y cualquier otro rol quedan en modo ciego siempre.
-  // Sprint Autónomo: COMANDA usa rol_pos en lugar de rol PASE.
-  // 'admin' POS = acceso total, equivalente a dueño/admin de PASE.
-  // 'manager' también puede auditar (suele ser quien hace conteo físico).
-  const esAuditorAlto = user?.rol_pos === 'admin' || user?.rol_pos === 'manager';
+  // FIX 25-may: la "Brecha de Eficiencia" (cuánta plata se perdió en el
+  // conteo) solo la ve el DUEÑO según spec del doc original. Antes el
+  // manager también la veía — ahora solo admin (= dueño en POS).
+  // Manager y otros roles pueden cargar/finalizar conteos pero no ven el
+  // dato financiero de la diferencia. Razón: la decisión de "¿hay fuga?"
+  // es del dueño, no operativa.
+  const esDueno = user?.rol_pos === 'admin';
   const [revelarTeoricos, setRevelarTeoricos] = useState(false);
-  const mostrarTeorico = esAuditorAlto && revelarTeoricos;
+  // mostrarTeorico (durante conteo activo): solo dueño puede revelar
+  // teóricos en vivo para auditar. Manager queda en modo ciego siempre.
+  const mostrarTeorico = esDueno && revelarTeoricos;
 
   const reload = useCallback(async () => {
     if (!localActivo) return;
@@ -218,8 +221,14 @@ export function InventarioConteo() {
                       </div>
                       <p className="text-xs text-foreground/60 mt-0.5">
                         {new Date(c.iniciado_at).toLocaleString('es-AR')} ·{' '}
-                        {c.total_insumos} insumos · {c.total_ajustes} ajustes ·{' '}
-                        {Number(c.valor_diferencia) !== 0 && <>diferencia <strong>{formatARS(Number(c.valor_diferencia))}</strong></>}
+                        {c.total_insumos} insumos · {c.total_ajustes} ajustes
+                        {/* FIX 25-may: el valor financiero de la diferencia
+                            ("brecha de eficiencia") solo lo ve el dueño, según
+                            spec. Manager/encargado ven cantidad de ajustes pero
+                            no el monto perdido. */}
+                        {esDueno && Number(c.valor_diferencia) !== 0 && (
+                          <> · diferencia <strong>{formatARS(Number(c.valor_diferencia))}</strong></>
+                        )}
                       </p>
                       {c.notas && <p className="text-xs text-foreground/70 mt-1">{c.notas}</p>}
                     </div>
@@ -259,9 +268,10 @@ export function InventarioConteo() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* Toggle conteo ciego (solo dueño/admin pueden revelar teórico
-              mientras se cuenta). Encargados y empleados siempre van ciegos. */}
-          {esAuditorAlto && activeConteo.estado === 'abierto' && (
+          {/* Toggle conteo ciego (solo DUEÑO puede revelar teórico
+              mientras se cuenta — fix 25-may según spec original).
+              Manager / encargados / empleados siempre van ciegos. */}
+          {esDueno && activeConteo.estado === 'abierto' && (
             <Button
               variant="outline"
               size="sm"
@@ -293,7 +303,7 @@ export function InventarioConteo() {
               <p className="text-xs text-blue-800/70 mt-0.5">
                 Cargá la cantidad real de cada insumo sin mirar el stock que tiene cargado el sistema.
                 El resultado se compara automáticamente al cerrar el conteo.
-                {esAuditorAlto && ' Si querés ver el teórico, usá el botón "Ver teóricos".'}
+                {esDueno && ' Si querés ver el teórico, usá el botón "Ver teóricos".'}
               </p>
             </div>
           </CardContent>
