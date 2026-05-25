@@ -147,14 +147,33 @@ export function InventarioConteo() {
     // Spec original del dueño: "Si la diferencia es negativa y no hay
     // mermas cargadas, el sistema dispara una Notificación Roja de
     // Posible Fuga". Si la pérdida supera $5k, mostramos alert
-    // PROMINENTE además del toast (lo ve solo el dueño porque la pantalla
-    // de finalizar solo la usa quien tiene permiso del módulo).
+    // PROMINENTE además del toast.
     //
-    // Fix 25-may: por ahora alert visual prominente (no push real al celu
-    // — eso requiere infra cross-service bot IG). El umbral $5k cubre
-    // pérdidas significativas sin spam por diferencias de redondeo.
+    // Fix 26-may: ahora ADEMÁS del alert UI, el trigger SQL
+    // (`trg_conteo_finalizado_check_fuga`) inserta una notificación en
+    // `notificaciones_pendientes` que el bot IG procesa via cron cada
+    // 5min y manda PUSH al celu del dueño. Doble cobertura: alert local
+    // inmediato + push al celu durante el día.
     const diffNeta = Number(data?.diferencia_valor ?? 0);
+    const movsDurante = Number(data?.movs_durante ?? 0);
     const UMBRAL_FUGA = -5000;  // pérdida >$5k considera "posible fuga"
+
+    // NUEVO 26-may: si hubo movs durante el conteo, el stock_actual
+    // post-ajuste puede descuadrar. Advertir al dueño explícitamente.
+    if (movsDurante > 0) {
+      setTimeout(() => {
+        alert(
+          `⚠️ ATENCIÓN: hubo ${movsDurante} movimientos durante el conteo\n\n` +
+          `Hubo ventas, mermas o compras entre el inicio y el cierre del conteo. ` +
+          `El ajuste se aplicó contra el snapshot original (modo blind count), ` +
+          `por lo que el stock_actual final puede no coincidir exactamente con ` +
+          `lo que contaste físicamente.\n\n` +
+          `Próximamente: hacer conteos en horarios sin operación, o usar la ` +
+          `versión "lock teórico" (en backlog).`,
+        );
+      }, 1000);
+    }
+
     if (diffNeta < UMBRAL_FUGA) {
       // Alert MUY visible (no solo toast). Toast como backup. Para que el
       // dueño NO siga su día sin haberlo registrado.

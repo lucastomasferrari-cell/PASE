@@ -1,0 +1,31 @@
+name: Notificaciones pendientes - process cola
+
+# Dispara cada 5 min para procesar la cola de `notificaciones_pendientes`.
+# La cola se popula desde triggers SQL (ej: stock_posible_fuga cuando un
+# conteo termina con pérdida >$5k) y otros emisors futuros.
+#
+# El endpoint vive en el bot IG porque ya tiene web-push configurado
+# (VAPID keys + admin_push_subscriptions). Reusa esa infra.
+#
+# Idempotente: cada notif se marca enviado_at cuando se procesa. Si el
+# cron se atrasa o se duplica run, el endpoint solo procesa pendientes.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'   # cada 5 min
+  workflow_dispatch:
+
+concurrency:
+  group: notif-pendientes-cron
+  cancel-in-progress: false
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: POST /api/notif-pendientes-process
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.MP_CRON_BEARER }}" \
+            'https://pase-ig-bot.vercel.app/api/notif-pendientes-process'

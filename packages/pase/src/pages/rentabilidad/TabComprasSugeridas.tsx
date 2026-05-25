@@ -93,6 +93,67 @@ export function TabComprasSugeridas({ user, locales, localActivo }: Props) {
   const insumosUrgentes = rows.filter(r => r.estado_urgencia === 'urgente' || r.estado_urgencia === 'agotado').length;
   const insumosSinDatos = rows.filter(r => r.datos_insuficientes).length;
 
+  // Agrupación por proveedor para "Generar orden de compra"
+  const porProveedor = useMemo(() => {
+    const map = new Map<string, { nombre: string; total: number; insumos: ForecastRow[] }>();
+    for (const r of rows) {
+      if (Number(r.cantidad_sugerida) <= 0) continue;
+      const key = r.proveedor_preferido_id != null ? String(r.proveedor_preferido_id) : "sin_proveedor";
+      const nombre = r.proveedor_preferido_nombre ?? "Sin proveedor preferido";
+      const cur = map.get(key) ?? { nombre, total: 0, insumos: [] };
+      cur.total += Number(r.costo_estimado_compra);
+      cur.insumos.push(r);
+      map.set(key, cur);
+    }
+    return Array.from(map.entries()).sort((a, b) => b[1].total - a[1].total);
+  }, [rows]);
+
+  const [generandoRemitos, setGenerandoRemitos] = useState(false);
+  async function generarRemitos() {
+    if (!localFiltro || porProveedor.length === 0) return;
+    const proveedoresValidos = porProveedor.filter(([key]) => key !== "sin_proveedor");
+    if (proveedoresValidos.length === 0) {
+      alert("Ningún insumo sugerido tiene proveedor asignado. Definí proveedor preferido vía materias_primas primero.");
+      return;
+    }
+    const resumen = proveedoresValidos.map(([, p]) => `• ${p.nombre}: ${p.insumos.length} items · ${fmt_$(p.total)}`).join("\n");
+    if (!confirm(`Vas a crear ${proveedoresValidos.length} remito(s) pendientes:\n\n${resumen}\n\nDespués los editás/confirmás desde Compras → Remitos.\n¿Continuar?`)) {
+      return;
+    }
+    setGenerandoRemitos(true);
+    try {
+      const fecha = new Date().toISOString().slice(0, 10);
+      const remitosACrear = proveedoresValidos.map(([key, p]) => {
+        const provId = key !== "sin_proveedor" ? parseInt(key) : null;
+        const detalleItems = p.insumos
+          .map(i => `${i.insumo_nombre}: ${Number(i.cantidad_sugerida).toFixed(2)} ${i.unidad}`)
+          .join(" | ");
+        return {
+          id: `REM-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          tenant_id: tenantId,
+          local_id: localFiltro,
+          prov_id: provId,
+          fecha,
+          nro: `AUTO-${Date.now().toString().slice(-6)}`,
+          monto: Math.round(p.total),
+          detalle: `[AUTO-FORECAST ${diasHorizonte}d/+${safetyStock}%] ${detalleItems}`,
+          cuenta: "Caja Efectivo",
+          estado: "sin_factura",
+          cat: "INSUMOS COCINA",
+        };
+      });
+      // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F12: cargar remito debe ir por RPC crear_remito atómica. Hoy se respeta la convención de Compras.tsx (insert directo). Migrar todo junto.
+      const { error } = await db.from("remitos").insert(remitosACrear);
+      if (error) throw new Error(error.message);
+      alert(`✓ ${remitosACrear.length} remito(s) creado(s).\nVas a verlos en Compras → Remitos para editar/confirmar.`);
+      // Recargar el forecast (los datos no cambian, pero la UI siente refresco)
+    } catch (e) {
+      alert(`Error generando remitos: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setGenerandoRemitos(false);
+    }
+  }
+
   // Distribución por estado para chips
   const porEstado = useMemo(() => {
     const m = new Map<string, number>();
@@ -183,6 +244,31 @@ export function TabComprasSugeridas({ user, locales, localActivo }: Props) {
               <div className="kpi-sub">comprar HOY</div>
             </div>
           </div>
+
+          {/* ─── Botón Generar Remitos (agrupados por proveedor) ─── */}
+          {insumosACompar > 0 && (
+            <div className="panel" style={{ marginBottom: 16, padding: "12px 16px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <div>
+                  <strong style={{ fontSize: 13 }}>📋 Generar remitos automáticos</strong>
+                  <div style={{ fontSize: 11, color: "var(--muted2)", marginTop: 4 }}>
+                    Crea {porProveedor.filter(([k]) => k !== "sin_proveedor").length} remito(s) pendiente(s) agrupado(s) por proveedor preferido.
+                    Después los editás y confirmás desde <strong>Compras → Remitos</strong>.
+                  </div>
+                </div>
+                <button
+                  onClick={generarRemitos}
+                  disabled={generandoRemitos || porProveedor.filter(([k]) => k !== "sin_proveedor").length === 0}
+                  className="btn btn-acc"
+                  title={porProveedor.filter(([k]) => k !== "sin_proveedor").length === 0
+                    ? "Ningún insumo sugerido tiene proveedor asignado"
+                    : "Crear remitos pre-llenados"}
+                >
+                  {generandoRemitos ? "Generando…" : `Generar ${porProveedor.filter(([k]) => k !== "sin_proveedor").length} remito(s)`}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* ─── Chips de filtro por estado ─── */}
           <div className="panel" style={{ marginBottom: 16 }}>

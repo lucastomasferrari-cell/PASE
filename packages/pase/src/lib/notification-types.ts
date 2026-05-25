@@ -18,7 +18,8 @@ export type NotificationTypeId =
   | "marketplace_order_new"
   | "ig_escalation_human"
   | "cashbox_negative"
-  | "daily_closing_summary";
+  | "daily_closing_summary"
+  | "stock_posible_fuga";
 
 export interface NotificationTypeMeta {
   id: NotificationTypeId;
@@ -76,6 +77,14 @@ export const NOTIFICATION_TYPES: NotificationTypeMeta[] = [
     emoji: "📊",
     description: "Una vez por día, después del cierre de turno noche: total ventas, total gastos, neto del día y top 3 productos.",
     status: "proximamente",
+    group: "operacion",
+  },
+  {
+    id: "stock_posible_fuga",
+    label: "Posible fuga detectada en conteo",
+    emoji: "🚨",
+    description: "Cuando un conteo físico termina con pérdida >$5.000 sin justificar (no es merma declarada). El bot manda push al celu con detalle: monto perdido, local y posibles causas.",
+    status: "implementada",
     group: "operacion",
   },
 ];

@@ -324,9 +324,12 @@ export async function cargarConteoLinea(args: {
 
 export async function finalizarConteoFisico(
   conteoId: number,
-): Promise<{ data: { ajustes: number; diferencia_valor: number } | null; error: string | null }> {
+): Promise<{ data: { ajustes: number; diferencia_valor: number; movs_durante: number } | null; error: string | null }> {
   const { data, error } = await db.rpc('fn_finalizar_conteo_fisico', { p_conteo_id: conteoId });
   if (error) return { data: null, error: translateError(error) };
-  const arr = data as Array<{ ajustes: number; diferencia_valor: number }> | null;
+  // Desde migration 202605260200, el RPC devuelve ademas movs_durante
+  // (cantidad de movs venta/merma/compra que ocurrieron entre iniciado_at
+  // y finalizado_at). Si > 0, el ajuste puede descuadrar.
+  const arr = data as Array<{ ajustes: number; diferencia_valor: number; movs_durante: number }> | null;
   return { data: arr?.[0] ?? null, error: null };
 }
