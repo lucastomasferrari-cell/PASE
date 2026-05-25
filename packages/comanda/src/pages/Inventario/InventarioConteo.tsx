@@ -396,19 +396,29 @@ function ConteoLineaRow({ linea, saving, onSave, readOnly, mostrarTeorico }: {
         </td>
       )}
       <td className="p-2 px-3 text-right">
+        {/* FIX 25-may: input con sufijo de unidad VISIBLE (spec original
+            del dueño: "obligá a poner Kilos, no cajones"). Antes la
+            unidad solo aparecía al lado del nombre — fácil confundir
+            "cargué 5" pensando 5 cajones cuando son 5 kg. Ahora el
+            input lleva el sufijo pegado, imposible no verlo. */}
         <div className="flex items-center justify-end gap-1">
-          <Input
-            type="number"
-            step="0.01"
-            min="0"
-            value={valor}
-            onChange={(e) => setValor(e.target.value)}
-            onBlur={() => { if (dirty) commit(); }}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur(); } }}
-            disabled={readOnly}
-            className="w-24 h-8 text-right tabular-nums"
-            placeholder="—"
-          />
+          <div className="relative">
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
+              onBlur={() => { if (dirty) commit(); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur(); } }}
+              disabled={readOnly}
+              className="w-28 h-8 text-right tabular-nums pr-9"
+              placeholder={`0 ${linea.insumo_unidad}`}
+            />
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-foreground/50 font-medium pointer-events-none">
+              {linea.insumo_unidad}
+            </span>
+          </div>
           {hayContado && !dirty && <Check className="h-3.5 w-3.5 text-green-600" />}
           {saving && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
         </div>
