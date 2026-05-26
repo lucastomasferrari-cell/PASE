@@ -26,6 +26,10 @@ jobs:
     steps:
       - name: POST /api/notif-pendientes-process
         run: |
-          curl -sf -X POST \
+          set -e
+          HTTP=$(curl -s -o /tmp/body -w "%{http_code}" -X POST \
             -H "Authorization: Bearer ${{ secrets.MP_CRON_BEARER }}" \
-            'https://pase-instagram-bot.vercel.app/api/notif-pendientes-process'
+            'https://pase-instagram-bot.vercel.app/api/notif-pendientes-process')
+          echo "HTTP: $HTTP"
+          cat /tmp/body
+          if [ "$HTTP" -ge 400 ]; then exit 1; fi
