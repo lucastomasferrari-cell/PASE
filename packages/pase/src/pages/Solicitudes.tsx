@@ -17,6 +17,13 @@ import type { Usuario } from "../types";
 
 interface Props { user: Usuario; }
 
+interface ContentProps {
+  user: Usuario;
+  /** Si true (default), envuelve en padding + PageHeader. False = sin header
+   *  para embeber dentro de otra pantalla (ej. tab dentro de CodigosManager). */
+  withHeader?: boolean;
+}
+
 type Estado = "pendiente" | "aprobada" | "rechazada" | "expirada" | "usada";
 
 interface SolicitudRow {
@@ -56,7 +63,12 @@ const ESTADO_BADGE: Record<Estado, { label: string; color: string; bg: string }>
   expirada:  { label: "Expirada",  color: "#93A8C2", bg: "rgba(147,168,194,0.15)" },
 };
 
-export default function Solicitudes({ user }: Props) {
+/**
+ * Componente reusable: solo el contenido (tabs filtro + lista).
+ * Sin PageHeader ni padding-root para poder embeberse en otras pantallas
+ * (ej. /herramientas → tab dentro de CodigosManager).
+ */
+export function SolicitudesContent({ user, withHeader = true }: ContentProps) {
   const navigate = useNavigate();
   const [rows, setRows] = useState<SolicitudRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -137,25 +149,29 @@ export default function Solicitudes({ user }: Props) {
     return c;
   }, [rows]);
 
+  const wrap = withHeader;
+
   if (!puedeVer) {
     return (
-      <div style={{ padding: 24 }}>
-        <PageHeader title="Solicitudes" />
+      <div style={wrap ? { padding: 24 } : undefined}>
+        {wrap && <PageHeader title="Solicitudes" />}
         <p style={{ color: "var(--pase-text-muted)" }}>Solo el dueño puede ver esta pantalla.</p>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
-      <PageHeader
-        title="Solicitudes de autorización"
-        info={<>
-          Acá ves todas las veces que tus empleados pidieron permiso para hacer
-          algo que normalmente requiere tu autorización. Click en una pendiente
-          para aprobarla o rechazarla.
-        </>}
-      />
+    <div style={wrap ? { padding: 24, maxWidth: 900, margin: "0 auto" } : undefined}>
+      {wrap && (
+        <PageHeader
+          title="Solicitudes de autorización"
+          info={<>
+            Acá ves todas las veces que tus empleados pidieron permiso para hacer
+            algo que normalmente requiere tu autorización. Click en una pendiente
+            para aprobarla o rechazarla.
+          </>}
+        />
+      )}
 
       {/* Tabs filtro */}
       <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
@@ -264,4 +280,9 @@ export default function Solicitudes({ user }: Props) {
       </div>
     </div>
   );
+}
+
+/** Default export: pantalla completa con header. Usada por la ruta /solicitudes. */
+export default function Solicitudes({ user }: Props) {
+  return <SolicitudesContent user={user} withHeader />;
 }

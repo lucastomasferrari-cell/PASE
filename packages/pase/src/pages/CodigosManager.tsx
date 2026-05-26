@@ -3,7 +3,10 @@ import { db } from "../lib/supabase";
 import { PageHeader, InfoTooltip } from "../components/ui";
 import { translateRpcError } from "../lib/errors";
 import { fmt_dt_ar } from "../lib/utils";
+import { SolicitudesContent } from "./Solicitudes";
 import type { Usuario } from "../types";
+
+type Tab = "codigo" | "solicitudes";
 
 /**
  * Códigos Manager — pantalla para el dueño/admin.
@@ -44,6 +47,7 @@ interface Props {
 }
 
 export default function CodigosManager({ user }: Props) {
+  const [tab, setTab] = useState<Tab>("solicitudes");
   const [actual, setActual] = useState<CodigoTOTP | null>(null);
   const [usos, setUsos] = useState<UsoOverride[]>([]);
   const [usuarios, setUsuarios] = useState<Map<number, string>>(new Map());
@@ -139,20 +143,89 @@ export default function CodigosManager({ user }: Props) {
   }
 
   return (
-    <div style={{ padding: "0 20px", maxWidth: 720 }}>
+    <div style={{ padding: "0 20px", maxWidth: 900 }}>
       <PageHeader
-        title="Códigos Manager"
-        subtitle="autorización de empleados con códigos rotativos"
+        title="Autorizaciones"
+        subtitle="solicitudes pendientes + códigos de autorización"
         info={<>
-          Cuando un empleado intenta hacer algo que no tiene autorización (anular una venta,
-          aplicar descuento, etc.), el sistema le pide un código.<br /><br />
-          Vos abrís esta pantalla, le dictás el código que está visible (cambia cada 30s) y el
-          empleado lo tipea. Una vez usado, ese código no sirve de nuevo.<br /><br />
-          Tu password de dueño sigue funcionando como hoy — esto es solo para cuando un empleado
-          necesita autorización puntual sin que vos tengas que entrar con tu cuenta.
+          Cuando un empleado quiere hacer algo que no tiene autorización (anular una venta,
+          descuentos grandes, etc.), tenés 2 caminos:<br /><br />
+          <strong>1. Solicitud (recomendado):</strong> el empleado pide desde su pantalla, te
+          llega al celu con el detalle, aprobás/rechazás con un click.<br />
+          <strong>2. Código rotativo:</strong> le dictás un código de 6 dígitos que cambia
+          cada 30s. Útil cuando no estás online o no tenés notificaciones.<br /><br />
+          Tu password de dueño sigue funcionando como siempre.
         </>}
       />
 
+      {/* Tabs */}
+      <div style={{
+        display: "flex", gap: 4, marginBottom: 18,
+        borderBottom: "1px solid var(--pase-border)",
+      }}>
+        <TabBtn active={tab === "solicitudes"} onClick={() => setTab("solicitudes")}>
+          📲 Solicitudes
+        </TabBtn>
+        <TabBtn active={tab === "codigo"} onClick={() => setTab("codigo")}>
+          🔢 Código rotativo
+        </TabBtn>
+      </div>
+
+      {tab === "solicitudes" && <SolicitudesContent user={user} withHeader={false} />}
+
+      {tab === "codigo" && (
+        <CodigoTab
+          actual={actual}
+          usos={usos}
+          usuarios={usuarios}
+          err={err}
+          regenerating={regenerating}
+          showConfirmRegen={showConfirmRegen}
+          setShowConfirmRegen={setShowConfirmRegen}
+          handleRegenerar={handleRegenerar}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Sub-componente: tab del código rotativo ────────────────────────────
+// Extraído del original CodigosManager para que los 2 tabs coexistan.
+interface CodigoTabProps {
+  actual: CodigoTOTP | null;
+  usos: UsoOverride[];
+  usuarios: Map<number, string>;
+  err: string | null;
+  regenerating: boolean;
+  showConfirmRegen: boolean;
+  setShowConfirmRegen: (v: boolean) => void;
+  handleRegenerar: () => Promise<void>;
+}
+
+function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "10px 16px",
+        fontSize: 14,
+        fontWeight: active ? 600 : 400,
+        color: active ? "var(--pase-celeste)" : "var(--pase-text-muted)",
+        background: "transparent",
+        border: "none",
+        borderBottom: active ? "2px solid var(--pase-celeste)" : "2px solid transparent",
+        cursor: "pointer",
+        marginBottom: -1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function CodigoTab({ actual, usos, usuarios, err, regenerating, showConfirmRegen, setShowConfirmRegen, handleRegenerar }: CodigoTabProps) {
+  return (
+    <div>
       {err && (
         <div className="alert alert-danger" style={{ marginBottom: 16 }}>{err}</div>
       )}
