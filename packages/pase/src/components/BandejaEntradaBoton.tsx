@@ -27,11 +27,14 @@ interface Props {
 // Tono: factura_vencida usa gold para llamar atención sin gritar; el resto
 // queda en muted neutro para no competir entre sí.
 const SOURCE_ICON_RENDER: Record<NotifSource, () => ReactElement> = {
-  tarea:              () => <PinIcon size={14} tone="muted" />,
-  override:           () => <KeyIcon size={14} tone="muted" />,
-  factura_vencida:    () => <AlertIcon size={14} tone="gold" />,
-  factura_por_vencer: () => <CalendarIcon size={14} tone="muted" />,
-  mp_sin_conciliar:   () => <WalletIcon size={14} tone="muted" />,
+  tarea:                () => <PinIcon size={14} tone="muted" />,
+  override:             () => <KeyIcon size={14} tone="muted" />,
+  factura_vencida:      () => <AlertIcon size={14} tone="gold" />,
+  factura_por_vencer:   () => <CalendarIcon size={14} tone="muted" />,
+  mp_sin_conciliar:     () => <WalletIcon size={14} tone="muted" />,
+  // Solicitudes de autorización pendientes — usa el ícono key (mismo
+  // significado que override) con tono gold para llamar atención.
+  solicitud_pendiente:  () => <KeyIcon size={14} tone="gold" />,
 };
 
 const SOURCE_LABELS: Record<NotifSource, string> = {
@@ -40,6 +43,7 @@ const SOURCE_LABELS: Record<NotifSource, string> = {
   factura_vencida: "Vencidas",
   factura_por_vencer: "Por vencer",
   mp_sin_conciliar: "MP sin conciliar",
+  solicitud_pendiente: "Solicitud pendiente",
 };
 
 function fmtRelativo(iso: string): string {

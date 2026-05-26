@@ -57,6 +57,7 @@ const ConfiguracionNotificaciones = lazy(() => import("./pages/ConfiguracionNoti
 const HerramientasHub = lazy(() => import("./pages/HerramientasHub"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const AprobarSolicitud = lazy(() => import("./pages/AprobarSolicitud"));
+const Solicitudes = lazy(() => import("./pages/Solicitudes"));
 // Gestión de feature flags por tenant migrada al admin-console (24-may).
 // Acá solo se LEEN las features para filtrar el sidebar (ver Layout.tsx).
 const DashboardHome = lazy(() => import("./dashboards/DashboardHome").then(m => ({ default: m.DashboardHome })));
@@ -499,6 +500,10 @@ function AppMain() {
               <Route
                 path="/aprobar-solicitud/:id"
                 element={user ? <AprobarSolicitud user={user} /> : <Navigate to="/" replace />}
+              />
+              <Route
+                path="/solicitudes"
+                element={user ? <Solicitudes user={user} /> : <Navigate to="/" replace />}
               />
 
               {/* Operación */}

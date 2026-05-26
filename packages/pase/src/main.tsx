@@ -22,11 +22,20 @@ if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
   });
 
   // Cuando el SW manda postMessage type:'navigate' (al click en notif),
-  // navegamos sin recargar.
+  // navegamos a la URL pedida.
+  //
+  // Bug 27-may noche (Lucas: "las notificaciones no abren bien abre cualquier
+  // cosa"): el approach viejo era `history.pushState + popstate sintético`
+  // para hacer SPA navigation sin recargar. Pero React Router NO siempre
+  // escucha el popstate sintético → la URL del browser cambiaba pero la
+  // pantalla quedaba en la ruta anterior. Usuario veía "cualquier cosa".
+  //
+  // Fix: window.location.assign garantiza navegación real (con recarga).
+  // Trade-off aceptable porque viene de una notif push (no navegación
+  // cotidiana donde la recarga molestaría).
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data?.type === 'navigate' && event.data?.url) {
-      history.pushState({}, '', event.data.url);
-      window.dispatchEvent(new PopStateEvent('popstate'));
+      window.location.assign(event.data.url);
     }
   });
 }

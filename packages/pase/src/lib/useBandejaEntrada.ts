@@ -17,7 +17,7 @@ import type { Usuario } from "../types";
  * tipo Notif es estable — los call-sites no se rompen.
  */
 
-export type NotifSource = "tarea" | "override" | "factura_vencida" | "factura_por_vencer" | "mp_sin_conciliar";
+export type NotifSource = "tarea" | "override" | "factura_vencida" | "factura_por_vencer" | "mp_sin_conciliar" | "solicitud_pendiente";
 
 export interface Notif {
   /** Clave única: `${source}:${originalId}`. Se usa para read tracking. */
@@ -189,6 +189,45 @@ async function fetchMpSinConciliar(user: Usuario): Promise<Notif[]> {
   }];
 }
 
+// Solicitudes de autorización pendientes (sprint 27-may noche).
+// Solo dueño/admin las ven — son las que esperan su aprobación.
+async function fetchSolicitudesPendientes(user: Usuario): Promise<Notif[]> {
+  if (!(user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin")) return [];
+  const { data, error } = await db.rpc("fn_listar_solicitudes_pendientes");
+  if (error || !data) return [];
+  const rows = data as Array<{
+    id: number; accion: string; context: Record<string, unknown>;
+    creador_nombre: string; created_at: string;
+  }>;
+  const ACCION_LABEL: Record<string, string> = {
+    anular_factura: "anular una factura",
+    anular_remito: "anular un remito",
+    anular_gasto: "anular un gasto",
+    anular_movimiento: "anular un movimiento",
+    eliminar_venta: "eliminar una venta",
+    eliminar_cierre: "eliminar un cierre",
+    editar_venta: "editar una venta",
+    editar_gasto: "editar un gasto",
+    editar_movimiento: "editar un movimiento",
+  };
+  return rows.map((r) => {
+    const accionTxt = ACCION_LABEL[r.accion] ?? r.accion.replace(/_/g, " ");
+    const total = r.context?.total ?? r.context?.monto;
+    const detalle = total != null
+      ? ` $${Math.round(Number(total)).toLocaleString("es-AR")}`
+      : "";
+    return {
+      id: `solicitud_pendiente:${r.id}`,
+      source: "solicitud_pendiente" as const,
+      titulo: `${r.creador_nombre} pide autorización`,
+      descripcion: `Quiere ${accionTxt}${detalle}. Click para aprobar/rechazar.`,
+      fecha: r.created_at,
+      href: `/aprobar-solicitud/${r.id}`,
+      leido: false,
+    };
+  });
+}
+
 async function fetchFacturasPorVencer(): Promise<Notif[]> {
   const hoy = new Date();
   const hoyIso = hoy.toISOString().slice(0, 10);
@@ -231,16 +270,21 @@ export function useBandejaEntrada(user: Usuario | null | undefined): BandejaStat
 
   const reload = useCallback(async () => {
     if (!user) { setNotifs([]); setLoading(false); return; }
-    const [tareas, overrides, vencidas, porVencer, mpSinConc] = await Promise.all([
+    const [tareas, overrides, solicitudes, vencidas, porVencer, mpSinConc] = await Promise.all([
       fetchTareas(user).catch(() => [] as Notif[]),
       fetchOverrides(user).catch(() => [] as Notif[]),
+      fetchSolicitudesPendientes(user).catch(() => [] as Notif[]),
       fetchFacturasVencidas().catch(() => [] as Notif[]),
       fetchFacturasPorVencer().catch(() => [] as Notif[]),
       fetchMpSinConciliar(user).catch(() => [] as Notif[]),
     ]);
     const readMap = leerReadMap();
-    const all = [...tareas, ...overrides, ...vencidas, ...porVencer, ...mpSinConc]
-      .map(n => ({ ...n, leido: !!readMap[n.id] }))
+    // Solicitudes pendientes NUNCA se marcan como leídas (siempre actionables).
+    const all = [...tareas, ...overrides, ...solicitudes, ...vencidas, ...porVencer, ...mpSinConc]
+      .map(n => ({
+        ...n,
+        leido: n.source === "solicitud_pendiente" ? false : !!readMap[n.id],
+      }))
       .sort((a, b) => b.fecha.localeCompare(a.fecha));
     setNotifs(all);
     setLoading(false);
@@ -261,6 +305,13 @@ export function useBandejaEntrada(user: Usuario | null | undefined): BandejaStat
     onChange: reload,
     events: ["INSERT"],
     enabled: !!user && tienePermiso(user, "codigos_manager"),
+  });
+  // Solicitudes nuevas en tiempo real para el dueño/admin.
+  useRealtimeTable({
+    table: "manager_solicitudes",
+    onChange: reload,
+    events: ["INSERT", "UPDATE"],
+    enabled: !!user && (user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin"),
   });
 
   const countNoLeidas = notifs.filter(n => !n.leido).length;
