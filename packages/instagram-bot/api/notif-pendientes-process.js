@@ -38,17 +38,37 @@ function vapidReady() {
 }
 
 export default async function handler(req, res) {
-  // Auth: aceptamos 2 paths (mismo patrón que packages/pase/api/_cron-auth.js):
-  //   Path 1: CRON_BEARER (env var en este project, opcional)
-  //   Path 2: SUPABASE_SERVICE_KEY como bearer (lo que el secret
-  //           MP_CRON_BEARER en GitHub realmente contiene — los crons MP
-  //           legacy lo usan así desde 2026-05).
-  // Sin esto el cron mandaba MP_CRON_BEARER = service_key, el endpoint
-  // pedía CRON_BEARER vacío → 401 eterno (bug 27-may noche).
+  // Auth: aceptamos 3 paths (mismo patrón que packages/pase/api/_cron-auth.js):
+  //   1. CRON_BEARER env var del bot (si está seteada y matchea).
+  //   2. SUPABASE_SERVICE_KEY env var del bot (si matchea, atajo común).
+  //   3. JWT Supabase válido + user role superadmin/dueno/admin. Este
+  //      path es el que SIEMPRE funciona: el secret MP_CRON_BEARER de
+  //      GitHub contiene un JWT firmado de un service account; lo
+  //      validamos pidiéndole a Supabase Auth getUser() + chequeando
+  //      el rol del user en la tabla `usuarios`.
   const auth = (req.headers.authorization || req.headers.Authorization || '').replace(/^Bearer /, '');
-  const ok = (CRON_BEARER && auth === CRON_BEARER)
-          || (SUPABASE_SERVICE_KEY_ENV && auth === SUPABASE_SERVICE_KEY_ENV);
-  if (!ok) {
+  let authorized = false;
+  if (CRON_BEARER && auth === CRON_BEARER) authorized = true;
+  else if (SUPABASE_SERVICE_KEY_ENV && auth === SUPABASE_SERVICE_KEY_ENV) authorized = true;
+  else if (auth && process.env.SUPABASE_URL && SUPABASE_SERVICE_KEY_ENV) {
+    // Path 3: validar JWT con Supabase Admin
+    try {
+      const admin = createClient(process.env.SUPABASE_URL, SUPABASE_SERVICE_KEY_ENV, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      const { data: userData, error: userErr } = await admin.auth.getUser(auth);
+      if (!userErr && userData?.user) {
+        const { data: row } = await admin.from('usuarios')
+          .select('rol, activo').eq('auth_id', userData.user.id).maybeSingle();
+        if (row && row.activo !== false && ['superadmin', 'dueno', 'admin'].includes(row.rol)) {
+          authorized = true;
+        }
+      }
+    } catch (e) {
+      console.warn('[notif-cron] JWT validation threw:', e?.message);
+    }
+  }
+  if (!authorized) {
     return res.status(401).json({ error: 'UNAUTHORIZED' });
   }
 
