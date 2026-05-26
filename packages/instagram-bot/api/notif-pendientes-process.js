@@ -21,6 +21,7 @@ const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:noreply@pase.local';
 const CRON_BEARER = process.env.CRON_BEARER;
+const SUPABASE_SERVICE_KEY_ENV = process.env.SUPABASE_SERVICE_KEY;
 
 // Máximo de notifs a procesar por invocación. Si la cola se infló mucho,
 // el siguiente cron sigue. 50 es un buen compromiso (no timeout en 10s
@@ -37,9 +38,17 @@ function vapidReady() {
 }
 
 export default async function handler(req, res) {
-  // Auth: bearer del cron. Solo GitHub Actions debería invocar este endpoint.
-  const auth = req.headers.authorization || req.headers.Authorization;
-  if (!CRON_BEARER || auth !== `Bearer ${CRON_BEARER}`) {
+  // Auth: aceptamos 2 paths (mismo patrón que packages/pase/api/_cron-auth.js):
+  //   Path 1: CRON_BEARER (env var en este project, opcional)
+  //   Path 2: SUPABASE_SERVICE_KEY como bearer (lo que el secret
+  //           MP_CRON_BEARER en GitHub realmente contiene — los crons MP
+  //           legacy lo usan así desde 2026-05).
+  // Sin esto el cron mandaba MP_CRON_BEARER = service_key, el endpoint
+  // pedía CRON_BEARER vacío → 401 eterno (bug 27-may noche).
+  const auth = (req.headers.authorization || req.headers.Authorization || '').replace(/^Bearer /, '');
+  const ok = (CRON_BEARER && auth === CRON_BEARER)
+          || (SUPABASE_SERVICE_KEY_ENV && auth === SUPABASE_SERVICE_KEY_ENV);
+  if (!ok) {
     return res.status(401).json({ error: 'UNAUTHORIZED' });
   }
 
