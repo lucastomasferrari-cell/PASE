@@ -966,6 +966,14 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
       {/* MODAL MANAGER OVERRIDE — para anular gasto sin permiso compras_anular */}
       <ManagerOverrideModal
         open={pendingAnularGasto !== null}
+        permiso="compras_anular"
+        accion="anular_gasto"
+        context={pendingAnularGasto ? {
+          gasto_id: pendingAnularGasto.gasto.id,
+          categoria: pendingAnularGasto.gasto.categoria,
+          total: pendingAnularGasto.gasto.monto,
+          motivo: pendingAnularGasto.motivo,
+        } : undefined}
         descripcion={pendingAnularGasto ? `Anular gasto ${pendingAnularGasto.gasto.categoria} de ${fmt_$(pendingAnularGasto.gasto.monto || 0)}` : undefined}
         onClose={() => setPendingAnularGasto(null)}
         onValidated={async (codigo) => {
@@ -979,6 +987,13 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
       {/* MODAL MANAGER OVERRIDE — para editar gasto sin permiso compras_anular */}
       <ManagerOverrideModal
         open={pendingEditarGasto !== null}
+        permiso="compras_anular"
+        accion="editar_gasto"
+        context={pendingEditarGasto ? {
+          gasto_id: pendingEditarGasto.id,
+          categoria: pendingEditarGasto.categoria,
+          total: pendingEditarGasto.monto,
+        } : undefined}
         descripcion={pendingEditarGasto
           ? `Editar gasto ${pendingEditarGasto.categoria} → ${fmt_$(typeof pendingEditarGasto.monto === 'number' ? pendingEditarGasto.monto : parseFloat(String(pendingEditarGasto.monto)) || 0)}`
           : undefined}

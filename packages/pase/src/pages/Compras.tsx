@@ -1162,6 +1162,14 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       {/* MODAL MANAGER OVERRIDE — para anular factura sin permiso compras_anular */}
       <ManagerOverrideModal
         open={pendingAnular !== null}
+        permiso="compras_anular"
+        accion="anular_factura"
+        context={pendingAnular ? {
+          factura_id: pendingAnular.factura.id,
+          factura_nro: pendingAnular.factura.nro,
+          total: pendingAnular.factura.total,
+          motivo: pendingAnular.motivo,
+        } : undefined}
         descripcion={pendingAnular ? `Anular factura ${pendingAnular.factura.nro}` : undefined}
         onClose={() => setPendingAnular(null)}
         onValidated={async (codigo) => {
@@ -1175,6 +1183,14 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       {/* MODAL MANAGER OVERRIDE — para anular remito sin permiso compras_anular */}
       <ManagerOverrideModal
         open={pendingAnularRemito !== null}
+        permiso="compras_anular"
+        accion="anular_remito"
+        context={pendingAnularRemito ? {
+          remito_id: pendingAnularRemito.remito.id,
+          remito_nro: pendingAnularRemito.remito.nro,
+          total: pendingAnularRemito.remito.monto,
+          motivo: pendingAnularRemito.motivo,
+        } : undefined}
         descripcion={pendingAnularRemito ? `Anular remito ${pendingAnularRemito.remito.nro}` : undefined}
         onClose={() => setPendingAnularRemito(null)}
         onValidated={async (codigo) => {

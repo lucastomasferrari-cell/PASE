@@ -56,6 +56,7 @@ const ConfiguracionNotificaciones = lazy(() => import("./pages/ConfiguracionNoti
 // Empleados → Usuarios POS.
 const HerramientasHub = lazy(() => import("./pages/HerramientasHub"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
+const AprobarSolicitud = lazy(() => import("./pages/AprobarSolicitud"));
 // Gestión de feature flags por tenant migrada al admin-console (24-may).
 // Acá solo se LEEN las features para filtrar el sidebar (ver Layout.tsx).
 const DashboardHome = lazy(() => import("./dashboards/DashboardHome").then(m => ({ default: m.DashboardHome })));
@@ -491,6 +492,13 @@ function AppMain() {
               <Route
                 path="/onboarding"
                 element={user ? <Onboarding user={user} /> : <Navigate to="/" replace />}
+              />
+              {/* Pantalla mobile-first: el dueño aprueba/rechaza solicitudes
+                  de autorización de sus encargados desde el celu (deeplink
+                  desde push notification). Solo dueño/admin pueden ver. */}
+              <Route
+                path="/aprobar-solicitud/:id"
+                element={user ? <AprobarSolicitud user={user} /> : <Navigate to="/" replace />}
               />
 
               {/* Operación */}

@@ -114,8 +114,99 @@ async function procesarNotif(db, notif) {
   if (notif.tipo === 'stock_posible_fuga') {
     return procesarPosibleFuga(db, notif);
   }
+  if (notif.tipo === 'manager_solicitud_nueva') {
+    return procesarSolicitudManager(db, notif);
+  }
   // Tipo desconocido → marcar como procesada con error para no loop
   return { ok: true, sent: 0, error: 'unknown_type' };
+}
+
+// ─── Solicitud nueva de autorización (sprint 27-may noche) ────────────
+// Empleado pidió autorización al dueño para una acción gated. Push al
+// celu con deeplink a /aprobar-solicitud/:id.
+async function procesarSolicitudManager(db, notif) {
+  const p = notif.payload || {};
+  const solicitudId = p.solicitud_id;
+  const accion = p.accion || 'acción';
+  const creador = p.creador_nombre || 'Alguien';
+  const context = p.context || {};
+
+  // Texto humano según la acción.
+  const ACCION_LABEL = {
+    anular_factura: 'anular una factura',
+    anular_gasto: 'anular un gasto',
+    anular_movimiento: 'anular un movimiento',
+    descuento_pos: 'aplicar un descuento',
+    merma_robo: 'registrar una merma',
+    cortesia: 'dar una cortesía',
+  };
+  const accionTxt = ACCION_LABEL[accion] || `hacer "${accion}"`;
+
+  // Detalle compacto del contexto, mostrado en el body.
+  let detalle = '';
+  if (context.factura_nro || context.nro) detalle = ` Fact ${context.factura_nro || context.nro}`;
+  if (context.total) detalle += ` $${Math.round(Number(context.total)).toLocaleString('es-AR')}`;
+  if (context.proveedor_nombre) detalle += ` · ${context.proveedor_nombre}`;
+  if (context.local_nombre) detalle += ` · ${context.local_nombre}`;
+  if (context.motivo) detalle += ` · "${context.motivo}"`;
+
+  // Buscar dueño/admins suscriptos del tenant.
+  const { data: subs } = await db.from('admin_push_subscriptions')
+    .select('endpoint, p256dh, auth, user_id, usuarios!inner(tenant_id, rol)')
+    .or(`tenant_id.eq.${notif.tenant_id},tenant_id.is.null`, { foreignTable: 'usuarios' });
+
+  // Filtrar solo dueño/admin (encargado no tiene que aprobarse a sí mismo).
+  const subsDueno = (subs || []).filter(s =>
+    s.usuarios && ['dueno', 'admin', 'superadmin'].includes(s.usuarios.rol),
+  );
+
+  if (subsDueno.length === 0) {
+    return { ok: true, sent: 0 };
+  }
+
+  // Respetar preferencias del user (default ON).
+  const userIds = Array.from(new Set(subsDueno.map(s => s.user_id)));
+  const { data: prefsRows } = await db
+    .from('notification_preferences')
+    .select('user_id, enabled')
+    .eq('notification_type', 'manager_solicitud_nueva')
+    .in('user_id', userIds);
+  const disabled = new Set((prefsRows || []).filter(r => r.enabled === false).map(r => r.user_id));
+  const subsToNotify = subsDueno.filter(s => !disabled.has(s.user_id));
+
+  if (subsToNotify.length === 0) {
+    return { ok: false, skipped_by_pref: true };
+  }
+
+  const payload = JSON.stringify({
+    title: `🔐 ${creador} pide autorización`,
+    body: `Quiere ${accionTxt}.${detalle}`,
+    url: `/aprobar-solicitud/${solicitudId}`,
+    priority: 'high',
+    tag: `solicitud-${solicitudId}`,
+    requireInteraction: true,  // que el push no desaparezca automáticamente
+  });
+
+  let sent = 0;
+  const toDelete = [];
+  for (const sub of subsToNotify) {
+    try {
+      await webpush.sendNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        payload,
+      );
+      sent++;
+    } catch (e) {
+      if (e.statusCode === 410 || e.statusCode === 404) {
+        toDelete.push(sub.endpoint);
+      }
+    }
+  }
+  if (toDelete.length > 0) {
+    await db.from('admin_push_subscriptions').delete().in('endpoint', toDelete);
+  }
+
+  return { ok: true, sent };
 }
 
 async function procesarPosibleFuga(db, notif) {

@@ -1036,6 +1036,13 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
       {/* MODAL MANAGER OVERRIDE — para anular movimiento sin permiso compras_anular */}
       <ManagerOverrideModal
         open={pendingAnularMov !== null}
+        permiso="caja_anular"
+        accion="anular_movimiento"
+        context={pendingAnularMov ? {
+          movimiento_id: pendingAnularMov.mov.id,
+          total: Math.abs(pendingAnularMov.mov.importe || 0),
+          motivo: pendingAnularMov.motivo,
+        } : undefined}
         descripcion={pendingAnularMov ? `Anular movimiento de ${fmt_$(Math.abs(pendingAnularMov.mov.importe || 0))}` : undefined}
         onClose={() => setPendingAnularMov(null)}
         onValidated={async (codigo) => {
@@ -1048,6 +1055,12 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
       {/* MODAL MANAGER OVERRIDE — para editar movimiento sin permiso caja_anular */}
       <ManagerOverrideModal
         open={pendingEditarMov !== null}
+        permiso="caja_anular"
+        accion="editar_movimiento"
+        context={pendingEditarMov ? {
+          movimiento_id: pendingEditarMov.id,
+          total: Math.abs(parseFloat(String(pendingEditarMov.importe)) || 0),
+        } : undefined}
         descripcion={pendingEditarMov ? `Editar movimiento de ${fmt_$(Math.abs(parseFloat(String(pendingEditarMov.importe)) || 0))}` : undefined}
         onClose={() => setPendingEditarMov(null)}
         onValidated={async (codigo) => {

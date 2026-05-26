@@ -485,6 +485,9 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
       {/* Manager Override modals (acciones destructivas sin permiso ventas_anular) */}
       <ManagerOverrideModal
         open={pendingEliminarLinea !== null}
+        permiso="ventas_anular"
+        accion="eliminar_venta"
+        context={pendingEliminarLinea ? { venta_id: pendingEliminarLinea } : undefined}
         descripcion={pendingEliminarLinea ? `Eliminar venta` : undefined}
         onClose={() => setPendingEliminarLinea(null)}
         onValidated={async (codigo: string) => {
@@ -496,6 +499,9 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
       />
       <ManagerOverrideModal
         open={pendingEliminarCierre !== null}
+        permiso="ventas_anular"
+        accion="eliminar_cierre"
+        context={pendingEliminarCierre ? { fecha: pendingEliminarCierre.fecha, turno: pendingEliminarCierre.turno } : undefined}
         descripcion={pendingEliminarCierre ? `Eliminar cierre del ${fmt_d(pendingEliminarCierre.fecha)} ${pendingEliminarCierre.turno}` : undefined}
         onClose={() => setPendingEliminarCierre(null)}
         onValidated={async (codigo: string) => {
@@ -507,6 +513,9 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
       />
       <ManagerOverrideModal
         open={pendingEditarVenta !== null}
+        permiso="ventas_anular"
+        accion="editar_venta"
+        context={pendingEditarVenta ? { venta_id: pendingEditarVenta.id, total: parseFloat(String(pendingEditarVenta.monto)) } : undefined}
         descripcion={pendingEditarVenta ? `Editar venta — nuevo monto ${fmt_$(parseFloat(String(pendingEditarVenta.monto)))}` : undefined}
         onClose={() => setPendingEditarVenta(null)}
         onValidated={async (codigo: string) => {
