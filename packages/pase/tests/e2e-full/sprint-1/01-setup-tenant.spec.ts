@@ -46,7 +46,7 @@ test.describe.serial("E2E Sprint 1 — Setup tenant aislado", () => {
     }
   });
 
-  test("crea tenant E2E aislado + seed completo + verifica todo", async ({}, testInfo) => {
+  test("crea tenant E2E aislado + seed completo + verifica todo", async (_, testInfo) => {
     // ── Limpieza idempotente PRIMERO: si quedó un tenant de un run previo ─
     // Esto hace su propio login superadmin internamente. Es importante
     // hacerlo ANTES de obtener nuestro token, porque Supabase puede invalidar

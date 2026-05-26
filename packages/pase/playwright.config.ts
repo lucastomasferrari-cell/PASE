@@ -18,6 +18,11 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
+  // globalSetup/Teardown a nivel root — corren solo para projects que
+  // los usan (e2e-full vía la flag --project=e2e-full). smoke y mutante
+  // NO los disparan porque sus testDirs no los matchean.
+  globalSetup: "./tests/e2e-full/global-setup.ts",
+  globalTeardown: "./tests/e2e-full/global-teardown.ts",
   projects: [
     {
       name: "smoke",
@@ -39,6 +44,8 @@ export default defineConfig({
       fullyParallel: false,
       workers: 1,
       use: { browserName: "chromium" },
+      // Excluir archivos de setup/teardown del descubrimiento de tests.
+      testIgnore: [/global-setup\.ts$/, /global-teardown\.ts$/, /\/setup\//, /\/helpers\//, /\/fixtures\//],
     },
   ],
   reporter: [["html", { open: "never" }]],

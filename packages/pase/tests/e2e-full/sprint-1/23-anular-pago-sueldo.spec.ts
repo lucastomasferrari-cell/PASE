@@ -10,23 +10,24 @@
 //
 // Este test valida que TODO eso se ejecuta correctamente.
 
-import { test, expect } from "@playwright/test";
-import { createSuperadminClient } from "../../helpers/supabaseClient";
-import { seedE2ETenant, cleanupE2ETenant, createServiceClient, createE2EDuenoClient, seedSaldoInicial, type E2ETenantSeedResult } from "../setup/seed-tenant";
+import {
+  test,
+  expect,
+} from "@playwright/test";
+import {
+  cleanupE2ETenant,
+  createServiceClient,
+  createE2EDuenoClient,
+  type E2ETenantSeedResult,
+} from "../setup/seed-tenant";
 
 test.describe.serial("E2E Test 23 — Anular pago de sueldo", () => {
   let seed: E2ETenantSeedResult | null = null;
 
-  test.beforeAll(async ({}, testInfo) => {
-    await cleanupE2ETenant();
-    const superdb = await createSuperadminClient();
-    if (!superdb) { test.skip(true, "SUPERADMIN_PASSWORD no seteado"); return; }
-    const { data: sess } = await superdb.auth.getSession();
-    const baseUrl = (testInfo.project.use.baseURL || "https://pase-yndx.vercel.app").replace(/\/$/, "");
-    seed = await seedE2ETenant({ superadminToken: sess?.session?.access_token!, baseUrl });
-    const svc = createServiceClient();
-    await seedSaldoInicial(svc, seed.tenantId, seed.local1Id, "Caja Efectivo", 200000);
-    await superdb.auth.signOut();
+  test.beforeAll(async () => {
+    // Lee el seed compartido creado por globalSetup (UN tenant E2E para toda
+    // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
+    seed = loadSharedSeed();
   });
 
   test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });

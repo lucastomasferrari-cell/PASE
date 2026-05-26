@@ -20,45 +20,32 @@
 //  H) descuento negativo → DESCUENTO_INVALIDO
 // ─────────────────────────────────────────────────────────────────────────
 
-import { test, expect } from "@playwright/test";
-import { createSuperadminClient } from "../../helpers/supabaseClient";
 import {
-  seedE2ETenant,
+  test,
+  expect,
+} from "@playwright/test";
+import {
   cleanupE2ETenant,
   createServiceClient,
   createE2EDuenoClient,
   type E2ETenantSeedResult,
 } from "../setup/seed-tenant";
-import { seedComandaPos, type E2EComandaPosSeed } from "../setup/seed-comanda";
+import {
+  seedComandaPos,
+  type E2EComandaPosSeed,
+} from "../setup/seed-comanda";
 
 test.describe.serial("E2E Test 28 — POS: modificar precio / cortesía / descuento", () => {
   let seed: E2ETenantSeedResult | null = null;
   let pos: E2EComandaPosSeed | null = null;
   let managerId: string;  // empleado activo con rol_pos='manager'
 
-  // eslint-disable-next-line no-empty-pattern -- patrón Playwright estándar
-  test.beforeAll(async ({}, testInfo) => {
-    await cleanupE2ETenant();
-    const superdb = await createSuperadminClient();
-    if (!superdb) { test.skip(true, "SUPERADMIN_PASSWORD no seteado"); return; }
-    const { data: sess } = await superdb.auth.getSession();
-    const baseUrl = (testInfo.project.use.baseURL || "https://pase-yndx.vercel.app").replace(/\/$/, "");
-    const token = sess?.session?.access_token;
-    if (!token) throw new Error("token superadmin no obtenido");
-    seed = await seedE2ETenant({ superadminToken: token, baseUrl });
+   
+  test.beforeAll(async () => {
+    // Lee el seed compartido creado por globalSetup (UN tenant E2E para toda
+    // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
+    seed = loadSharedSeed();
     pos = await seedComandaPos(seed);
-
-    // Promover al empleado mensual a manager POS para que pueda autorizar
-    // overrides. El seed lo crea como rol_pos='mozo' por default — acá lo
-    // promovemos para usarlo en los tests de override.
-    const svc = createServiceClient();
-    managerId = seed.empleados.mensual.id;
-    await svc.from("rrhh_empleados").update({
-      rol_pos: "manager",
-      pos_activo: true,
-    }).eq("id", managerId);
-
-    await superdb.auth.signOut();
   });
 
   test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });

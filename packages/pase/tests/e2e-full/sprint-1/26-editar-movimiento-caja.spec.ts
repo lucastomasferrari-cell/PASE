@@ -14,10 +14,11 @@
 //  G) Auditoría: queda registro con antes/despues + justificativo
 // ─────────────────────────────────────────────────────────────────────────
 
-import { test, expect } from "@playwright/test";
-import { createSuperadminClient } from "../../helpers/supabaseClient";
 import {
-  seedE2ETenant,
+  test,
+  expect,
+} from "@playwright/test";
+import {
   cleanupE2ETenant,
   createServiceClient,
   createE2EDuenoClient,
@@ -28,36 +29,11 @@ test.describe.serial("E2E Test 26 — editar_movimiento_caja", () => {
   let seed: E2ETenantSeedResult | null = null;
   let movId: string;
 
-  // eslint-disable-next-line no-empty-pattern -- patrón Playwright estándar
-  test.beforeAll(async ({}, testInfo) => {
-    await cleanupE2ETenant();
-    const superdb = await createSuperadminClient();
-    if (!superdb) { test.skip(true, "SUPERADMIN_PASSWORD no seteado"); return; }
-    const { data: sess } = await superdb.auth.getSession();
-    const baseUrl = (testInfo.project.use.baseURL || "https://pase-yndx.vercel.app").replace(/\/$/, "");
-    const token = sess?.session?.access_token;
-    if (!token) throw new Error("token superadmin no obtenido");
-    seed = await seedE2ETenant({ superadminToken: token, baseUrl });
-    await superdb.auth.signOut();
-
-    // Saldos arrancan en 0 por default después del seed (ledger vacío + trigger
-    // recalcula cache desde movimientos). Antes había un UPDATE saldo=0 manual,
-    // pero post sprint 23-may eso es redundante — el trigger ya garantiza 0.
-    const svc = createServiceClient();
-
-    // Crear un mov inicial via RPC para tener algo que editar
-    const duenoDb = await createE2EDuenoClient();
-    const { data: created } = await duenoDb.rpc("crear_movimiento_caja", {
-      p_fecha: new Date().toISOString().slice(0, 10),
-      p_cuenta: "Caja Efectivo",
-      p_tipo: "Ingreso Manual",
-      p_cat: null,
-      p_importe: 100000,
-      p_detalle: "T26 mov inicial",
-      p_local_id: seed.local1Id,
-    });
-    movId = (created as { mov_id: string }).mov_id;
-    await duenoDb.auth.signOut();
+   
+  test.beforeAll(async () => {
+    // Lee el seed compartido creado por globalSetup (UN tenant E2E para toda
+    // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
+    seed = loadSharedSeed();
   });
 
   test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });

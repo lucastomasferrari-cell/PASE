@@ -33,27 +33,31 @@
 // receta vinculada, este test lo detecta inmediatamente.
 // ─────────────────────────────────────────────────────────────────────────
 
-import { test, expect } from "@playwright/test";
-import { createSuperadminClient } from "../../helpers/supabaseClient";
 import {
-  seedE2ETenant, cleanupE2ETenant, createServiceClient, createE2EDuenoClient,
-  E2E_SENTINEL, type E2ETenantSeedResult,
+  test,
+  expect,
+} from "@playwright/test";
+import {
+  cleanupE2ETenant,
+  createServiceClient,
+  createE2EDuenoClient,
+  E2E_SENTINEL,
+  type E2ETenantSeedResult,
 } from "../setup/seed-tenant";
-import { seedComandaPos, type E2EComandaPosSeed } from "../setup/seed-comanda";
+import {
+  seedComandaPos,
+  type E2EComandaPosSeed,
+} from "../setup/seed-comanda";
 
 test.describe.serial("E2E Test 14 — Menú desde cero + POS + stock baja", () => {
   let seed: E2ETenantSeedResult | null = null;
   let pos: E2EComandaPosSeed | null = null;
 
-  test.beforeAll(async ({}, testInfo) => {
-    await cleanupE2ETenant();
-    const superdb = await createSuperadminClient();
-    if (!superdb) { test.skip(true, "SUPERADMIN_PASSWORD no seteado"); return; }
-    const { data: sess } = await superdb.auth.getSession();
-    const baseUrl = (testInfo.project.use.baseURL || "https://pase-yndx.vercel.app").replace(/\/$/, "");
-    seed = await seedE2ETenant({ superadminToken: sess?.session?.access_token!, baseUrl });
+  test.beforeAll(async () => {
+    // Lee el seed compartido creado por globalSetup (UN tenant E2E para toda
+    // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
+    seed = loadSharedSeed();
     pos = await seedComandaPos(seed);
-    await superdb.auth.signOut();
   });
 
   test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });
@@ -220,7 +224,7 @@ test.describe.serial("E2E Test 14 — Menú desde cero + POS + stock baja", () =
     // RPC fn_aplicar_descuento_comanda — descuento de monto fijo o %
     const subtotalEsperado = 18000 * 2; // $36.000
     const descuento = subtotalEsperado * 0.10; // $3.600
-    const totalEsperado = subtotalEsperado - descuento; // $32.400
+    const _totalEsperado = subtotalEsperado - descuento; // $32.400
 
     // fn_aplicar_descuento_comanda signature: (p_venta_id, p_monto_descuento, p_motivo, p_manager_id?)
     const { error: descErr } = await duenoDb.rpc("fn_aplicar_descuento_comanda", {

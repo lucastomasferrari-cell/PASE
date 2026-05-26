@@ -22,10 +22,11 @@
 // → exactamente el bug que reportó Anto antes del 22-may.
 // ─────────────────────────────────────────────────────────────────────────
 
-import { test, expect } from "@playwright/test";
-import { createSuperadminClient } from "../../helpers/supabaseClient";
 import {
-  seedE2ETenant,
+  test,
+  expect,
+} from "@playwright/test";
+import {
   cleanupE2ETenant,
   createServiceClient,
   type E2ETenantSeedResult,
@@ -34,15 +35,10 @@ import {
 test.describe.serial("E2E Sprint 3 — Trigger sync RRHH (C4-F15)", () => {
   let seed: E2ETenantSeedResult | null = null;
 
-  test.beforeAll(async ({}, testInfo) => {
-    await cleanupE2ETenant();
-    const superdb = await createSuperadminClient();
-    if (!superdb) { test.skip(true, "SUPERADMIN_PASSWORD no seteado"); return; }
-    const { data: sess } = await superdb.auth.getSession();
-    const superToken = sess?.session?.access_token!;
-    const baseUrl = (testInfo.project.use.baseURL || "https://pase-yndx.vercel.app").replace(/\/$/, "");
-    seed = await seedE2ETenant({ superadminToken: superToken, baseUrl });
-    await superdb.auth.signOut();
+  test.beforeAll(async () => {
+    // Lee el seed compartido creado por globalSetup (UN tenant E2E para toda
+    // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
+    seed = loadSharedSeed();
   });
 
   test.afterAll(async () => {
@@ -110,7 +106,7 @@ test.describe.serial("E2E Sprint 3 — Trigger sync RRHH (C4-F15)", () => {
     if (movErr) throw new Error(`Insert mov: ${movErr.message}`);
 
     // ── Assert: trigger actualizó liq.pagos_realizados a $60K ──────────
-    let { data: liqAfter1 } = await svc.from("rrhh_liquidaciones")
+    const { data: liqAfter1 } = await svc.from("rrhh_liquidaciones")
       .select("pagos_realizados, estado").eq("id", liq.id).single();
     expect(Number(liqAfter1!.pagos_realizados)).toBe(60000);
 
@@ -122,7 +118,7 @@ test.describe.serial("E2E Sprint 3 — Trigger sync RRHH (C4-F15)", () => {
 
     // ── Assert: trigger reconcilió a $80K ──────────────────────────────
     // ESTE es el caso real que rompía antes del trigger (commit d0f67df).
-    let { data: liqAfter2 } = await svc.from("rrhh_liquidaciones")
+    const { data: liqAfter2 } = await svc.from("rrhh_liquidaciones")
       .select("pagos_realizados, estado").eq("id", liq.id).single();
     expect(Number(liqAfter2!.pagos_realizados)).toBe(80000);
 
@@ -132,19 +128,19 @@ test.describe.serial("E2E Sprint 3 — Trigger sync RRHH (C4-F15)", () => {
       .eq("id", movId);
     if (anuErr) throw new Error(`Anular mov: ${anuErr.message}`);
 
-    let { data: liqAfter3 } = await svc.from("rrhh_liquidaciones")
+    const { data: liqAfter3 } = await svc.from("rrhh_liquidaciones")
       .select("pagos_realizados").eq("id", liq.id).single();
     expect(Number(liqAfter3!.pagos_realizados)).toBe(0);
 
     // ── 6. Re-activar el movimiento → vuelve a $80K ─────────────────────
     await svc.from("movimientos").update({ anulado: false }).eq("id", movId);
-    let { data: liqAfter4 } = await svc.from("rrhh_liquidaciones")
+    const { data: liqAfter4 } = await svc.from("rrhh_liquidaciones")
       .select("pagos_realizados").eq("id", liq.id).single();
     expect(Number(liqAfter4!.pagos_realizados)).toBe(80000);
 
     // ── 7. DELETE del movimiento → vuelve a $0 ──────────────────────────
     await svc.from("movimientos").delete().eq("id", movId);
-    let { data: liqAfter5 } = await svc.from("rrhh_liquidaciones")
+    const { data: liqAfter5 } = await svc.from("rrhh_liquidaciones")
       .select("pagos_realizados").eq("id", liq.id).single();
     expect(Number(liqAfter5!.pagos_realizados)).toBe(0);
   });

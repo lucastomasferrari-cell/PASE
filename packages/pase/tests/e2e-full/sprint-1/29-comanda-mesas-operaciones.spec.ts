@@ -18,57 +18,34 @@
 //  F) partir_cuenta sin items → ITEMS_REQUERIDOS
 // ─────────────────────────────────────────────────────────────────────────
 
-import { test, expect } from "@playwright/test";
-import { createSuperadminClient } from "../../helpers/supabaseClient";
 import {
-  seedE2ETenant,
+  test,
+  expect,
+} from "@playwright/test";
+import {
   cleanupE2ETenant,
   createServiceClient,
   createE2EDuenoClient,
   type E2ETenantSeedResult,
 } from "../setup/seed-tenant";
-import { seedComandaPos, type E2EComandaPosSeed } from "../setup/seed-comanda";
+import {
+  seedComandaPos,
+  type E2EComandaPosSeed,
+} from "../setup/seed-comanda";
 
 test.describe.serial("E2E Test 29 — POS: mesas (transferir / unir / partir)", () => {
   let seed: E2ETenantSeedResult | null = null;
   let pos: E2EComandaPosSeed | null = null;
-  let mesasExtra: { id: number; numero: string }[] = [];  // mesas 5-8 del local1
+  const mesasExtra: { id: number; numero: string }[] = [];  // mesas 5-8 del local1
   let mesaLocal2Id: number;
   let managerId: string;
 
-  // eslint-disable-next-line no-empty-pattern -- patrón Playwright estándar
-  test.beforeAll(async ({}, testInfo) => {
-    await cleanupE2ETenant();
-    const superdb = await createSuperadminClient();
-    if (!superdb) { test.skip(true, "SUPERADMIN_PASSWORD no seteado"); return; }
-    const { data: sess } = await superdb.auth.getSession();
-    const baseUrl = (testInfo.project.use.baseURL || "https://pase-yndx.vercel.app").replace(/\/$/, "");
-    const token = sess?.session?.access_token;
-    if (!token) throw new Error("token superadmin no obtenido");
-    seed = await seedE2ETenant({ superadminToken: token, baseUrl });
+   
+  test.beforeAll(async () => {
+    // Lee el seed compartido creado por globalSetup (UN tenant E2E para toda
+    // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
+    seed = loadSharedSeed();
     pos = await seedComandaPos(seed);
-
-    const svc = createServiceClient();
-    // Crear 4 mesas extra (5-8) en local 1 para tener 8 totales (1 por test)
-    const { data: extras } = await svc.from("mesas").insert([
-      { tenant_id: seed.tenantId, local_id: seed.local1Id, numero: "5", capacidad: 4, estado: "libre" },
-      { tenant_id: seed.tenantId, local_id: seed.local1Id, numero: "6", capacidad: 4, estado: "libre" },
-      { tenant_id: seed.tenantId, local_id: seed.local1Id, numero: "7", capacidad: 4, estado: "libre" },
-      { tenant_id: seed.tenantId, local_id: seed.local1Id, numero: "8", capacidad: 4, estado: "libre" },
-    ]).select("id, numero");
-    mesasExtra = (extras || []).map(m => ({ id: m.id as number, numero: m.numero }));
-
-    // 1 mesa en local 2 para el test B (cross-local)
-    const { data: m2 } = await svc.from("mesas").insert({
-      tenant_id: seed.tenantId, local_id: seed.local2Id, numero: "L2-1", capacidad: 4, estado: "libre",
-    }).select("id").single();
-    mesaLocal2Id = m2!.id as number;
-
-    managerId = seed.empleados.mensual.id;
-    await svc.from("rrhh_empleados").update({
-      rol_pos: "manager", pos_activo: true,
-    }).eq("id", managerId);
-    await superdb.auth.signOut();
   });
 
   // Helper: combina mesas del seed (0-3) + extras (4-7).

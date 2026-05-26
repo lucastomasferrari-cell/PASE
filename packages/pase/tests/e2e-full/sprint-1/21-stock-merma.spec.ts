@@ -1,38 +1,25 @@
 // E2E Test 21: registrar merma de stock (con TOTP cuando es robo)
 
-import { test, expect } from "@playwright/test";
-import { createSuperadminClient } from "../../helpers/supabaseClient";
-import { seedE2ETenant, cleanupE2ETenant, createServiceClient, createE2EDuenoClient, E2E_SENTINEL, type E2ETenantSeedResult } from "../setup/seed-tenant";
+import {
+  test,
+  expect,
+} from "@playwright/test";
+import {
+  cleanupE2ETenant,
+  createServiceClient,
+  createE2EDuenoClient,
+  type E2ETenantSeedResult,
+} from "../setup/seed-tenant";
 
 test.describe.serial("E2E Test 21 — Stock merma", () => {
   let seed: E2ETenantSeedResult | null = null;
-  let insumoId: number = 0;
-  let motivoMermaId: number = 0;
+  const insumoId: number = 0;
+  const motivoMermaId: number = 0;
 
-  test.beforeAll(async ({}, testInfo) => {
-    await cleanupE2ETenant();
-    const superdb = await createSuperadminClient();
-    if (!superdb) { test.skip(true, "SUPERADMIN_PASSWORD no seteado"); return; }
-    const { data: sess } = await superdb.auth.getSession();
-    const baseUrl = (testInfo.project.use.baseURL || "https://pase-yndx.vercel.app").replace(/\/$/, "");
-    seed = await seedE2ETenant({ superadminToken: sess?.session?.access_token!, baseUrl });
-
-    // Crear insumo con stock + motivo de merma
-    const svc = createServiceClient();
-    const { data: ins } = await svc.from("insumos").insert({
-      tenant_id: seed.tenantId, nombre: `${E2E_SENTINEL} Tomate`, unidad: "kg",
-      costo_actual: 2500, stock_actual: 10, activo: true, es_comprado: true,
-      stock_disponible: true, categoria_pl: "alimentos",
-    }).select("id").single();
-    insumoId = ins!.id as number;
-
-    const { data: mot } = await svc.from("mermas_motivos").insert({
-      tenant_id: seed.tenantId, nombre: "Vencimiento E2E", tipo_movimiento: "merma",
-      orden: 99, activo: true,
-    }).select("id").single();
-    motivoMermaId = mot!.id as number;
-
-    await superdb.auth.signOut();
+  test.beforeAll(async () => {
+    // Lee el seed compartido creado por globalSetup (UN tenant E2E para toda
+    // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
+    seed = loadSharedSeed();
   });
 
   test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });
