@@ -148,16 +148,26 @@ export function BandejaEntradaBoton({ user }: Props) {
         <div
           ref={popoverRef}
           style={{
-            position: "absolute",
-            top: "calc(100% + 8px)",
-            right: 0,
+            position: "fixed",
+            // Bug fix 27-may noche (Lucas): el dropdown usaba `top + right:0`
+            // posicionado relativo a la campana. Como la campana está al
+            // FONDO del sidebar IZQUIERDO, salía por abajo y por la izquierda
+            // de la pantalla — solo se veía la esquinita superior-derecha.
+            //
+            // Ahora usa position:fixed para sacarse del flujo del sidebar +
+            // se ancla al fondo-izquierda (sobre la campana), abre hacia
+            // arriba y hacia la derecha. En mobile (PWA): respeta safe-area
+            // y se limita al viewport visible.
+            bottom: 70,
+            left: 8,
             width: 380,
-            maxHeight: 540,
+            maxWidth: "calc(100vw - 16px)",
+            maxHeight: "min(540px, calc(100vh - 100px))",
             background: "var(--pase-bg)",
             border: "0.5px solid var(--pase-border)",
             borderRadius: 12,
-            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.04)",
-            zIndex: 200,
+            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.24), 0 2px 4px rgba(0, 0, 0, 0.08)",
+            zIndex: 1000,
             display: "flex",
             flexDirection: "column",
           }}
