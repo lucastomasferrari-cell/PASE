@@ -8,7 +8,12 @@ const MAP: Record<string, string> = {
   CUENTA_INVALIDA: "Cuenta inválida",
   CUENTAS_IGUALES: "No se puede transferir a la misma cuenta",
   LOCAL_REQUERIDO: "Seleccioná un local",
-  LOCAL_NO_AUTORIZADO: "No tenés permiso sobre este local",
+  // Mensaje específico (sprint 27-may): Caro reportó confusión cuando intentó
+  // anular una factura de un local que no tenía asignado — el código del dueño
+  // fue válido pero igual le dió "no tenés permiso" y entendió que el código
+  // había fallado. El código autoriza ACCIONES en locales que ya tenés, no
+  // da acceso a locales nuevos.
+  LOCAL_NO_AUTORIZADO: "No tenés asignado este local. Pedile al dueño que te lo asigne (Usuarios → tu nombre → Locales). El código de autorización del dueño NO sirve para esto — solo autoriza acciones en locales que ya tenés.",
   SALDO_INSUFICIENTE: "Saldo insuficiente en la cuenta seleccionada",
   CATEGORIA_REQUERIDA: "La categoría es obligatoria",
   MOTIVO_REQUERIDO: "El motivo es obligatorio",

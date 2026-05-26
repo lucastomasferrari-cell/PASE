@@ -28,4 +28,4 @@ jobs:
         run: |
           curl -sf -X POST \
             -H "Authorization: Bearer ${{ secrets.MP_CRON_BEARER }}" \
-            'https://pase-ig-bot.vercel.app/api/notif-pendientes-process'
+            'https://pase-instagram-bot.vercel.app/api/notif-pendientes-process'
