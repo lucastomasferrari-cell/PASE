@@ -143,6 +143,31 @@ async function procesarPayload(payload) {
       // Filtrar para no caer en loop.
       if (event.message?.is_echo) continue;
 
+      // Bug 27-may (Lucas reportó "[unsupported]" pollutando los chats):
+      // Meta manda varios eventos sin `event.message` que no son mensajes
+      // reales del cliente:
+      //   - event.read    → read receipt ("visto"), el cliente leyó algo nuestro
+      //   - event.reaction → like/heart en uno de nuestros mensajes
+      //   - event.delivery → confirmación de delivery
+      //   - event.postback → click de botón (no usamos)
+      //   - event.referral → click desde una ad o link parámetro
+      // Estos NO deberían crear filas en `ig_mensajes` — solo loguearlos.
+      if (!event.message) {
+        const otroTipo = event.read ? 'read_receipt'
+          : event.reaction ? 'reaction'
+          : event.delivery ? 'delivery'
+          : event.postback ? 'postback'
+          : event.referral ? 'referral'
+          : 'desconocido';
+        // Log opcional pero NO insert en ig_mensajes.
+        await db.from('ig_eventos').insert({
+          tenant_id: cfg.tenant_id,
+          tipo: `meta_${otroTipo}`,
+          payload: event,
+        }).catch(() => { /* no crítico */ });
+        continue;
+      }
+
       const sender_igsid = event.sender?.id;
       if (!sender_igsid) continue;
 

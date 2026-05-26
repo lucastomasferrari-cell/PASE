@@ -302,16 +302,35 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
         </div>
       </div>
 
-      {/* Layout 2 columnas */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "320px 1fr",
-        gap: 12,
-        height: "calc(100vh - 280px)",
-        minHeight: 500,
-      }}>
+      {/* Layout responsive (sprint 27-may noche, bug Lucas en celu):
+          - Desktop (>=768px): 2 columnas fijas, lista + chat lado a lado.
+          - Mobile (<768px): 1 columna. Si NO hay conv seleccionada → muestra lista;
+            si HAY conv seleccionada → muestra chat con botón "Volver" en el header.
+          Sin esto, en celu el grid 320px+1fr deja al chat con ~50px de ancho,
+          imposible de leer y los clicks de la lista parecían no responder. */}
+      <style>{`
+        .mensajeria-grid {
+          display: grid;
+          grid-template-columns: 320px 1fr;
+          gap: 12px;
+          height: calc(100vh - 280px);
+          min-height: 500px;
+        }
+        @media (max-width: 767px) {
+          .mensajeria-grid {
+            grid-template-columns: 1fr;
+            height: calc(100vh - 200px);
+          }
+          .mensajeria-col-lista.mobile-hide { display: none; }
+          .mensajeria-col-chat.mobile-hide { display: none; }
+        }
+        @media (min-width: 768px) {
+          .mensajeria-back-btn { display: none !important; }
+        }
+      `}</style>
+      <div className={"mensajeria-grid"}>
         {/* ─── COLUMNA IZQUIERDA: lista ─── */}
-        <div className="panel" style={{ display: "flex", flexDirection: "column", overflow: "hidden", margin: 0 }}>
+        <div className={`panel mensajeria-col-lista ${selectedId ? "mobile-hide" : ""}`} style={{ display: "flex", flexDirection: "column", overflow: "hidden", margin: 0 }}>
           <div className="panel-hd" style={{ padding: "10px 14px" }}>
             <span className="panel-title" style={{ fontSize: 13 }}>
               {conversacionesFiltradas.length} de {conversaciones.length}
@@ -386,13 +405,21 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
         </div>
 
         {/* ─── COLUMNA DERECHA: thread ─── */}
-        <div className="panel" style={{ display: "flex", flexDirection: "column", overflow: "hidden", margin: 0 }}>
+        <div className={`panel mensajeria-col-chat ${!selectedId ? "mobile-hide" : ""}`} style={{ display: "flex", flexDirection: "column", overflow: "hidden", margin: 0 }}>
           {!selectedConv ? (
             <EmptyState icon="💬" title="Elegí una conversación" description="Seleccioná un chat de la lista para verlo." />
           ) : (
             <>
               {/* Header del thread */}
               <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--bd)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                <button
+                  className="btn btn-ghost btn-sm mensajeria-back-btn"
+                  onClick={() => setSelectedId(null)}
+                  style={{ fontSize: 13, padding: "4px 10px" }}
+                  title="Volver a la lista"
+                >
+                  ← Volver
+                </button>
                 <div
                   onClick={() => setClienteEditId(selectedConv.cliente_id)}
                   style={{ cursor: "pointer" }}
