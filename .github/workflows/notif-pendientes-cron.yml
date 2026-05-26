@@ -27,8 +27,11 @@ jobs:
       - name: POST /api/notif-pendientes-process
         run: |
           set -e
+          # Usamos SUPABASE_SERVICE_KEY como bearer (path 2 del auth del
+          # endpoint). MP_CRON_BEARER no funciona acá porque su valor real
+          # no está replicado al proyecto Vercel del bot (sí en pase-yndx).
           HTTP=$(curl -s -o /tmp/body -w "%{http_code}" -X POST \
-            -H "Authorization: Bearer ${{ secrets.MP_CRON_BEARER }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_KEY }}" \
             'https://pase-instagram-bot.vercel.app/api/notif-pendientes-process')
           echo "HTTP: $HTTP"
           cat /tmp/body
