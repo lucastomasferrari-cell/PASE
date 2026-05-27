@@ -6,7 +6,7 @@ import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { CUENTAS } from "../lib/constants";
-import { toISO, today, fmt_d, fmt_$, genId, parseMonto, estadoFactura } from "../lib/utils";
+import { toISO, today, fmt_d, fmt_$, genId, parseMonto, estadoFactura, toLocalISO } from '../lib/utils';
 import { RightSubNav, type SubNavSection, PageHeader, EmptyState, BoxIcon, ReceiptIcon } from "../components/ui";
 import { ManagerOverrideModal } from "../components/ManagerOverrideModal";
 import { exportCSV } from "../lib/exportCSV";
@@ -293,7 +293,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     // Optimización egress 2026-05-17: proyectar campos específicos en vez
     // de SELECT * + limit 1000 + filtro fecha default 365 días. Las facturas
     // muy viejas se ven con el date range picker manual del usuario.
-    const haceUnAnio = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const haceUnAnio = toLocalISO(new Date(Date.now() - 365 * 24 * 60 * 60 * 1000));
     let fq = db.from("facturas")
       .select("id, prov_id, local_id, nro, fecha, venc, neto, iva21, iva105, iibb, total, cat, estado, detalle, pagos, tipo, perc_iva, otros_cargos, descuentos")
       .gte("fecha", haceUnAnio)

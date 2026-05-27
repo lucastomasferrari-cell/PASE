@@ -4,7 +4,7 @@ import { db } from "../../lib/supabase";
 import { formatCurrency } from "../../lib/format";
 import { EmptyState, TargetIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
-import { now, todayAR_ISO } from "../../lib/utils";
+import { now, todayAR_ISO, toLocalISO } from '../../lib/utils';
 
 interface ObjetivoMes {
   facturacion_objetivo: number | null;
@@ -27,7 +27,7 @@ export function ObjetivosMesWidget({ ctx }: { ctx: WidgetContext }) {
       const today = now();
       const year = today.getFullYear();
       const month = today.getMonth();
-      const primerDiaMes = new Date(year, month, 1).toISOString().slice(0, 10);
+      const primerDiaMes = toLocalISO(new Date(year, month, 1));
       const ultimoDiaMes = new Date(year, month + 1, 0).getDate();
       const diaActual = today.getDate();
       const hastaIso = todayAR_ISO();

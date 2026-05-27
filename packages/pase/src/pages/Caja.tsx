@@ -7,7 +7,7 @@ import { useCategorias } from "../lib/useCategorias";
 import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { CUENTAS, CUENTAS_OCULTAS_TEMPORAL } from "../lib/constants";
-import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
+import { toISO, today, fmt_d, fmt_$, toLocalISO } from '../lib/utils';
 import { RightSubNav, type SubNavSection, PageHeader, EmptyState, LocalLockedChip } from "../components/ui";
 import { ManagerOverrideModal } from "../components/ManagerOverrideModal";
 import { exportCSV } from "../lib/exportCSV";
@@ -722,7 +722,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
           <tbody>{mFilt.map(m=>{
             const fCarga = fechaCargaFromId(m.id);
             const fMovISO = m.fecha?.slice(0,10) || "";
-            const fCargaISO = fCarga ? fCarga.toISOString().slice(0,10) : "";
+            const fCargaISO = fCarga ? toLocalISO(fCarga) : "";
             // Si la fecha de carga difiere de la fecha del mov, lo destacamos
             // sutilmente para alertar al user (cargada con fecha vieja).
             const fechasDifieren = fCargaISO && fMovISO && fCargaISO !== fMovISO;

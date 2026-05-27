@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { db } from "../../lib/supabase";
-import { fmt_$ } from "../../lib/utils";
+import { fmt_$, todayAR_ISO } from '../../lib/utils';
 import { EmptyState } from "../../components/ui";
 import type { Usuario, Local } from "../../types";
 
@@ -122,7 +122,7 @@ export function TabComprasSugeridas({ user, locales, localActivo }: Props) {
     }
     setGenerandoRemitos(true);
     try {
-      const fecha = new Date().toISOString().slice(0, 10);
+      const fecha = todayAR_ISO();
       const remitosACrear = proveedoresValidos.map(([key, p]) => {
         const provId = key !== "sin_proveedor" ? parseInt(key) : null;
         const detalleItems = p.insumos

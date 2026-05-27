@@ -4,7 +4,7 @@ import { db } from "../../lib/supabase";
 import { formatCurrency } from "../../lib/format";
 import { EmptyState, ScaleIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
-import { now, todayAR_ISO } from "../../lib/utils";
+import { now, todayAR_ISO, toLocalISO } from '../../lib/utils';
 
 interface BepData {
   costos_fijos_mes: number;
@@ -43,7 +43,7 @@ export function PuntoEquilibrioWidget({ ctx }: { ctx: WidgetContext }) {
       const today = now();
       const year = today.getFullYear();
       const month = today.getMonth();
-      const primerDiaMes = new Date(year, month, 1).toISOString().slice(0, 10);
+      const primerDiaMes = toLocalISO(new Date(year, month, 1));
       const ultimoDiaMes = new Date(year, month + 1, 0).getDate();
       const diaActual = today.getDate();
       const hastaIso = todayAR_ISO();
@@ -88,8 +88,8 @@ export function PuntoEquilibrioWidget({ ctx }: { ctx: WidgetContext }) {
       // 2. Labor cost del MES ANTERIOR (sueldos liquidados+pagados). Es la
       //    referencia más confiable del costo de personal del mes en curso
       //    porque los sueldos varían poco mes a mes. Decisión Lucas 2026-05-17.
-      const primerDiaMesAnt = new Date(year, month - 1, 1).toISOString().slice(0, 10);
-      const ultimoDiaMesAnt = new Date(year, month, 0).toISOString().slice(0, 10);
+      const primerDiaMesAnt = toLocalISO(new Date(year, month - 1, 1));
+      const ultimoDiaMesAnt = toLocalISO(new Date(year, month, 0));
       const qLabor = db
         .from("rrhh_liquidaciones")
         .select("total_a_pagar, rrhh_novedades!inner(rrhh_empleados!inner(local_id))")

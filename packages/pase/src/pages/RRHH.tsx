@@ -6,7 +6,7 @@ import { usePuestosRRHH } from "../lib/usePuestosRRHH";
 import { useGuardedHandler } from "../lib/useGuardedHandler";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
-import { toISO, today } from "../lib/utils";
+import { toISO, today, toLocalISO } from '../lib/utils';
 import {
   calcularSACProporcional,
 } from "../lib/calculos/rrhh";
@@ -182,7 +182,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     }
     // Cargar adelantos pendientes (descontado=false) del mes seleccionado.
     const inicioMes = `${novAnio}-${String(novMes).padStart(2, "0")}-01`;
-    const finMes = new Date(novAnio, novMes, 0).toISOString().slice(0, 10);
+    const finMes = toLocalISO(new Date(novAnio, novMes, 0));
     const adelMap: Record<string, number> = {};
     empleados.forEach(e => { adelMap[e.id] = 0; });
     if (empIds.length) {

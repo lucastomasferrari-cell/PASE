@@ -4,6 +4,7 @@ import { PageHeader } from "../components/ui";
 import { formatCurrency, formatCurrencyCompact } from "../lib/format";
 import { VentasSemanaWidget } from "../dashboards/widgets/VentasSemanaWidget";
 import { ComparativaSucursalesWidget } from "../dashboards/widgets/ComparativaSucursalesWidget";
+import { toLocalISO } from "../lib/utils";
 // SaldoCajaWidget eliminado 24-may noche (leak Caja Efectivo). En Finanzas
 // reemplazamos esa card por algo más analítico — el saldo de caja vive en
 // /caja, no en Finanzas (vista analítica para dueño).
@@ -151,8 +152,8 @@ function VentasMensualesChart({ localActivo }: { localActivo: number | null }) {
       const today = new Date();
       // 6 meses atrás (primer día) → hoy
       const desde = new Date(today.getFullYear(), today.getMonth() - 5, 1);
-      const desdeIso = desde.toISOString().slice(0, 10);
-      const hastaIso = today.toISOString().slice(0, 10);
+      const desdeIso = toLocalISO(desde);
+      const hastaIso = toLocalISO(today);
       let q = db
         .from("ventas")
         .select("fecha, monto")
@@ -231,8 +232,8 @@ function DiasMasVendidos({ localActivo }: { localActivo: number | null }) {
     async function load() {
       setLoading(true);
       const today = new Date();
-      const desde = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const hasta = today.toISOString().slice(0, 10);
+      const desde = toLocalISO(new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000));
+      const hasta = toLocalISO(today);
       let q = db
         .from("ventas")
         .select("fecha, monto")

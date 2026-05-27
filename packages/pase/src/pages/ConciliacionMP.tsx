@@ -4,7 +4,7 @@ import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasOperables as cuentasOperablesFn } from "../lib/auth";
 import { CUENTAS } from "../lib/constants";
 import { useCategorias } from "../lib/useCategorias";
-import { toISO, today, fmt_d, fmt_$, fmt_dt_ar } from "../lib/utils";
+import { toISO, today, fmt_d, fmt_$, fmt_dt_ar, toLocalISO } from '../lib/utils';
 import { useDebouncedValue } from "../lib/useDebouncedValue";
 import { Combobox } from "../components/Combobox";
 import { useToast } from "../hooks/useToast";
@@ -315,8 +315,8 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
       // — un gasto pagado con efectivo y mal cargado podría ser el correcto link.
       const desdeAmpl=new Date(`${desde}T00:00:00-03:00`);desdeAmpl.setUTCDate(desdeAmpl.getUTCDate()-15);
       const hastaAmpl=new Date(`${hasta}T00:00:00-03:00`);hastaAmpl.setUTCDate(hastaAmpl.getUTCDate()+15);
-      const desdeGas=desdeAmpl.toISOString().slice(0,10);
-      const hastaGas=hastaAmpl.toISOString().slice(0,10);
+      const desdeGas=toLocalISO(desdeAmpl);
+      const hastaGas=toLocalISO(hastaAmpl);
       let gasQ=db.from("gastos").select("id,fecha,categoria,subcategoria,detalle,monto,local_id,cuenta").gte("fecha",desdeGas).lte("fecha",hastaGas).order("fecha",{ascending:false}).limit(2000);
       gasQ=applyLocalScope(gasQ,user,localActivo);
       // mp_movimientos ya vinculados a un gasto/factura/remito — para excluirlos

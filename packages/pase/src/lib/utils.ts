@@ -54,6 +54,22 @@ export const todayAR_ISO = (): string => {
   return ar.toISOString().split("T")[0]!;
 };
 
+/**
+ * AUDIT F4C #2: convierte cualquier Date a YYYY-MM-DD usando las
+ * COMPONENTES LOCALES (lo que el browser muestra), no UTC. Esto es lo que
+ * queremos al filtrar por "fecha" en queries — la fecha como la ve el user.
+ *
+ * toLocalISO(`d)` siempre devuelve UTC → en AR (UTC-3) a las
+ * 21-23:59 del día N devuelve la fecha N+1, corriendo los filtros al
+ * día siguiente. `toLocalISO(d)` arregla eso.
+ */
+export const toLocalISO = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
 // Estado efectivo de una factura — deriva "vencida" al vuelo cuando el
 // estado guardado es "pendiente" y la fecha de vencimiento ya pasó.
 // Antes los reportes y filtros hacían `factura.estado === 'vencida'` y

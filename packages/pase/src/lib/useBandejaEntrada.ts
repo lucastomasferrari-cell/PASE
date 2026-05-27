@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { db } from "./supabase";
 import { useRealtimeTable } from "./useRealtimeTable";
 import { tienePermiso } from "./auth";
-import { todayAR_ISO } from "./utils";
+import { todayAR_ISO, toLocalISO } from './utils';
 import type { Usuario } from "../types";
 
 /**
@@ -170,7 +170,7 @@ async function fetchMpSinConciliar(user: Usuario): Promise<Notif[]> {
   // Solo a quienes les compete la conciliación MP.
   if (!tienePermiso(user, "mp")) return [];
 
-  const hace7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const hace7d = toLocalISO(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
   // eslint-disable-next-line pase-local/require-apply-local-scope -- bandeja de entrada: scope cross-local intencional, RLS ya filtra por tenant + locales visibles.
   const { data, error } = await db.from("mp_movimientos")
     .select("id, fecha, monto")
@@ -237,7 +237,7 @@ async function fetchFacturasPorVencer(): Promise<Notif[]> {
   // AUDIT F4C #2: fecha de "hoy" en zona AR, fresh por cada call.
   const hoyIso = todayAR_ISO();
   const en7Date = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 - 3 * 60 * 60 * 1000);
-  const en7 = en7Date.toISOString().slice(0, 10);
+  const en7 = toLocalISO(en7Date);
   // eslint-disable-next-line pase-local/require-apply-local-scope -- bandeja de entrada: idem fetchFacturasVencidas, scope cross-local intencional.
   const { data, error } = await db.from("facturas")
     .select("id, total, venc")

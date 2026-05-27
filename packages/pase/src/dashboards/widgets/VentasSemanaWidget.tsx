@@ -3,7 +3,7 @@ import { db } from "../../lib/supabase";
 import { formatCurrency, formatCurrencyCompact } from "../../lib/format";
 import { EmptyState, TrendUpIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
-import { now, todayAR_ISO } from "../../lib/utils";
+import { now, todayAR_ISO, toLocalISO } from '../../lib/utils';
 
 interface DiaVenta {
   fecha: string;     // YYYY-MM-DD
@@ -34,7 +34,7 @@ export function VentasSemanaWidget({ ctx }: { ctx: WidgetContext }) {
       const today = now();
       const ms = 24 * 60 * 60 * 1000;
       // Rango: 14 días atrás → hoy. Particionamos en 2 semanas.
-      const desde = new Date(today.getTime() - 13 * ms).toISOString().slice(0, 10);
+      const desde = toLocalISO(new Date(today.getTime() - 13 * ms));
       const hasta = todayAR_ISO();
       // Sin filtro de estado (Maxirest no lo setea — ver VentasHoyWidget).
       let q = db
@@ -57,7 +57,7 @@ export function VentasSemanaWidget({ ctx }: { ctx: WidgetContext }) {
       let totalPrev = 0;
       for (let i = 13; i >= 0; i--) {
         const d = new Date(today.getTime() - i * ms);
-        const fecha = d.toISOString().slice(0, 10);
+        const fecha = toLocalISO(d);
         const total = totalPorFecha.get(fecha) ?? 0;
         if (i < 7) {
           totalSemana += total;
