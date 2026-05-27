@@ -8,7 +8,7 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   enqueueOperation, listPendingOps, markSyncing, markSynced, markFailed,
-  pendingCount, failedCount, backoffMs, cleanupOldSynced,
+  pendingCount, failedCount, backoffMs, cleanupOldSynced, resetSyncingOpsAtBoot,
 } from '../operations';
 import { resetDb, _resetSingletonForTest } from '../../db/index';
 import { getDb } from '../../db/index';
@@ -120,5 +120,52 @@ describe('sync/operations', () => {
     const db = await getDb();
     const op = await db.get('pending_ops', child);
     expect(op?.depends_on).toBe(parent);
+  });
+
+  // AUDIT F5B#1 (regression): resetSyncingOpsAtBoot debe resetear ops huérfanas
+  // en estado 'syncing' a 'pending' al iniciar el engine. Sin esto quedaban
+  // permanente en ese estado si el browser moría a mitad de un push.
+  describe('resetSyncingOpsAtBoot (F5B#1)', () => {
+    it('resetea ops en syncing a pending', async () => {
+      const a = await enqueueOperation({ target: 'a', op_type: 'rpc', payload: null });
+      const b = await enqueueOperation({ target: 'b', op_type: 'rpc', payload: null });
+      await markSyncing(a);
+      await markSyncing(b);
+      // listPendingOps trae pending Y syncing — pero ambos están como syncing.
+      // Verificamos via getDb directamente.
+      const db = await getDb();
+      expect((await db.get('pending_ops', a))?.status).toBe('syncing');
+      expect((await db.get('pending_ops', b))?.status).toBe('syncing');
+
+      const reset = await resetSyncingOpsAtBoot();
+      expect(reset).toBe(2);
+
+      const aOp = await db.get('pending_ops', a);
+      const bOp = await db.get('pending_ops', b);
+      expect(aOp?.status).toBe('pending');
+      expect(bOp?.status).toBe('pending');
+      expect(aOp?.last_error).toContain('reset_at_boot');
+    });
+
+    it('no toca ops en pending/synced/failed', async () => {
+      const pendingOp = await enqueueOperation({ target: 'p', op_type: 'rpc', payload: null });
+      const syncedOp = await enqueueOperation({ target: 's', op_type: 'rpc', payload: null });
+      const failedOp = await enqueueOperation({ target: 'f', op_type: 'rpc', payload: null });
+      await markSynced(syncedOp);
+      for (let i = 0; i < 5; i++) await markFailed(failedOp, 'err'); // → status='failed'
+
+      const reset = await resetSyncingOpsAtBoot();
+      expect(reset).toBe(0); // ninguno estaba en syncing
+
+      const db = await getDb();
+      expect((await db.get('pending_ops', pendingOp))?.status).toBe('pending');
+      expect((await db.get('pending_ops', syncedOp))?.status).toBe('synced');
+      expect((await db.get('pending_ops', failedOp))?.status).toBe('failed');
+    });
+
+    it('retorna 0 cuando no hay ops huérfanas', async () => {
+      const reset = await resetSyncingOpsAtBoot();
+      expect(reset).toBe(0);
+    });
   });
 });

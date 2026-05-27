@@ -178,7 +178,24 @@ class SyncEngine {
       try { l(next); } catch { /* listener errors no rompen el engine */ }
     }
   }
+
+  // Solo para tests: resetear el state interno del singleton sin tocar IndexedDB.
+  // Permite escribir tests deterministas que no se afectan entre sí.
+  _resetForTest(): void {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+    this.ctx = null;
+    this.inFlight = false;
+    this.lastSyncAt = null;
+    this.state = { kind: 'idle', pendingOps: 0, failedOps: 0, lastSyncAt: null };
+    this.listeners.clear();
+  }
 }
+
+// Exportar la clase para tests que necesitan instancia limpia.
+export { SyncEngine };
 
 // Singleton por sesión del browser.
 export const syncEngine = new SyncEngine();
