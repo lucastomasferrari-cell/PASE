@@ -3,6 +3,7 @@ import { db } from "../../lib/supabase";
 import { formatCurrency } from "../../lib/format";
 import { EmptyState, ShopIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
+import { now, todayAR_ISO } from "../../lib/utils";
 
 interface LocalRow {
   id: number;
@@ -26,9 +27,9 @@ export function ComparativaSucursalesWidget({ ctx }: { ctx: WidgetContext }) {
     let cancelled = false;
     async function reload() {
       setLoading(true);
-      const today = new Date();
+      const today = now();
       const desde = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const hasta = today.toISOString().slice(0, 10);
+      const hasta = todayAR_ISO();
 
       // Traer ventas + nombres de locales en paralelo (ambos limitados por RLS).
       // Sin filtro estado (Maxirest no lo setea — sería NULL y NEQ excluye).

@@ -77,6 +77,10 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
   const [pagosEsp, setPagosEsp] = useState<PagoEspecial[]>([]);
   const [adelantos, setAdelantos] = useState<Adelanto[]>([]);
   const [vacTomadas, setVacTomadas] = useState(0);
+  // AUDIT F4A#3: flag para que el botón "Liquidación final" no permita abrir
+  // el modal hasta tener vacTomadas real (sino el primer cálculo arranca con
+  // vacAcum incorrecto = vacaciones acumuladas sin restar las ya tomadas).
+  const [vacTomadasLoaded, setVacTomadasLoaded] = useState(false);
   const [vacModal, setVacModal] = useState(false);
   const [vacDias, setVacDias] = useState("");
   // Bug Caja-1: default vacío fuerza elección consciente del user.
@@ -137,10 +141,15 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
     setMovMeses((novs as NovedadConLiquidaciones[]) || []);
   };
 
+  // AUDIT F4A#3: traemos vacaciones tomadas con un flag de loaded para que
+  // el botón "Liquidación final" no permita abrir el modal antes de tener
+  // el valor real. Antes vacTomadas arrancaba en 0 y si el usuario clickeaba
+  // rápido, el modal calculaba la liq con vacAcum incorrecto.
   const loadVacTomadas = async () => {
     const { data } = await db.from("rrhh_novedades").select("vacaciones_dias").eq("empleado_id", empleadoId).eq("estado", "confirmado").gt("vacaciones_dias", 0);
     const total = (data || []).reduce((s, n) => s + Number(n.vacaciones_dias || 0), 0);
     setVacTomadas(total);
+    setVacTomadasLoaded(true);
   };
 
   const loadPagosEsp = async () => {
@@ -447,6 +456,8 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
           cuentasUsables={cuentasUsables}
           showToast={showToast}
           loadAll={loadAll}
+          vacTomadasLoaded={vacTomadasLoaded}
+          loadVacTomadas={loadVacTomadas}
         />
       )}
 
@@ -542,6 +553,8 @@ interface TabDatosProps {
   cuentasUsables: string[];
   showToast: (msg: string) => void;
   loadAll: () => Promise<void>;
+  vacTomadasLoaded: boolean;
+  loadVacTomadas: () => Promise<void>;
 }
 
 function TabDatos({
@@ -551,6 +564,7 @@ function TabDatos({
   liqFinalCuenta, setLiqFinalCuenta, liqFinalOverrides, setLiqFinalOverrides,
   liqFinalLoading, setLiqFinalLoading,
   cuentasUsables, showToast, loadAll,
+  vacTomadasLoaded, loadVacTomadas,
 }: TabDatosProps) {
   // Refactor 2026-05-23 (Lucas: "cuadros muy grandes con poco texto adentro").
   // Antes cada dato era un .kpi con padding 14×16 → mucha caja para 1 línea.
@@ -602,7 +616,17 @@ function TabDatos({
       </div>
 
       {esDueno && emp.activo && (
-        <button className="btn btn-danger btn-sm" style={{marginTop:12}} onClick={() => setLiqFinalModal(true)}>Liquidación final</button>
+        <button
+          className="btn btn-danger btn-sm"
+          style={{marginTop:12}}
+          disabled={!vacTomadasLoaded}
+          title={!vacTomadasLoaded ? "Cargando vacaciones tomadas..." : "Liquidación final"}
+          onClick={() => {
+            // AUDIT F4A#3: refresh vacTomadas justo antes de abrir el modal por
+            // si pasaron pagos de vacaciones entre el primer load y ahora.
+            void loadVacTomadas().then(() => setLiqFinalModal(true));
+          }}
+        >Liquidación final{!vacTomadasLoaded ? " ⏳" : ""}</button>
       )}
 
       {sueldoModal && (

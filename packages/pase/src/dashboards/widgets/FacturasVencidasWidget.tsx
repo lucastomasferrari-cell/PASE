@@ -4,6 +4,7 @@ import { db } from "../../lib/supabase";
 import { formatCurrency } from "../../lib/format";
 import { CheckIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
+import { todayAR_ISO } from "../../lib/utils";
 
 interface FacturaVencida {
   id: number;
@@ -33,7 +34,7 @@ export function FacturasVencidasWidget({ ctx }: { ctx: WidgetContext }) {
     let cancelled = false;
     async function reload() {
       setLoading(true);
-      const nowIso = new Date().toISOString().slice(0, 10);
+      const nowIso = todayAR_ISO();
       // Query 1: vencidas (pendientes con venc < hoy)
       let qVenc = db
         .from("facturas")

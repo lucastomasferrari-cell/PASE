@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { db } from "../../lib/supabase";
 import { formatCurrency } from "../../lib/format";
 import type { WidgetContext } from "../types";
+import { todayAR_ISO } from "../../lib/utils";
 
 interface UltimaVenta {
   fecha: string;
@@ -21,7 +22,7 @@ export function VentasHoyWidget({ ctx }: { ctx: WidgetContext }) {
     let cancelled = false;
     async function reload() {
       setLoading(true);
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayAR_ISO();
 
       // Query 1: ventas de hoy (con count para evitar agregación client-side cuando hay muchas).
       let qHoy = db

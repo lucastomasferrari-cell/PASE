@@ -175,6 +175,14 @@ async function handlePreference(req, res) {
       currency_id: 'ARS',
     })),
     external_reference: String(venta_id),
+    // AUDIT F5C#4: metadata.mp_credencial_id permite que el webhook resuelva
+    // directo qué credencial procesó el pago sin iterar todas las creds activas
+    // del sistema (era leak + side-channel timing cross-tenant).
+    metadata: {
+      mp_credencial_id: cred.id,
+      tenant_id: venta.tenant_id,
+      local_id: venta.local_id,
+    },
     back_urls: {
       success: baseBack,
       pending: baseBack,
@@ -232,33 +240,66 @@ async function handleWebhook(req, res) {
 
   const supabase = db();
 
-  // Necesitamos buscar la venta asociada. external_reference fue venta_id.
-  // Pero MP nos manda solo el payment_id; tenemos que consultar el payment
-  // a MP para sacar external_reference.
-  // Probamos con todas las credenciales activas hasta encontrar match (MP
-  // no nos dice qué credencial procesó).
-  const { data: creds } = await supabase.from('mp_credenciales').select('id').eq('activa', true);
-  if (!creds || creds.length === 0) {
-    res.status(200).json({ ok: true, no_creds: true });
-    return;
-  }
-
+  // AUDIT F5C#4: resolver credencial usando metadata.mp_credencial_id que
+  // mandamos al crear la preference. Antes el webhook iteraba TODAS las
+  // mp_credenciales activas del sistema para encontrar el match, lo que
+  // generaba leak cross-tenant + posibles throttlings a tenants ajenos.
+  // Si el payment no tiene metadata (legacy), fallback al método anterior.
   const getToken = createMpTokenGetter(supabase);
   let payment = null;
+  let credIdHint = null;
 
-  for (const c of creds) {
+  // Intento 1: traer payment desde QUALQUIER credencial activa SOLO para
+  // leer metadata.mp_credencial_id. Esto se simplifica a 1 sola call cuando
+  // el primer cred matchea (lo más común porque el payment es válido en
+  // toda credencial del MISMO tenant — MP lo deja consultar).
+  // OPCIÓN: si el body trae mp_credencial_id como hint, usarlo directo.
+  if (req.body?.metadata?.mp_credencial_id || req.query?.cred_id) {
+    credIdHint = Number(req.body?.metadata?.mp_credencial_id || req.query?.cred_id);
+  }
+
+  if (credIdHint) {
     try {
-      const token = await getToken(c.id);
+      const token = await getToken(credIdHint);
       const r = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
-      if (r.ok) {
-        payment = await r.json();
-        break;
-      }
+      if (r.ok) payment = await r.json();
     } catch (e) {
-      console.warn(`[tienda-mp webhook] creds ${c.id} no encontró pago`, e.message);
+      console.warn(`[tienda-mp webhook] cred hint ${credIdHint} no funcionó`, e.message);
     }
+  }
+
+  // Si no hubo hint o el hint falló, fallback al método legacy (itera).
+  // Pero ahora MP devuelve metadata en el payment → podemos cortar al primer
+  // hit para no consumir N calls por webhook.
+  if (!payment) {
+    const { data: creds } = await supabase.from('mp_credenciales').select('id').eq('activa', true);
+    if (!creds || creds.length === 0) {
+      res.status(200).json({ ok: true, no_creds: true });
+      return;
+    }
+    for (const c of creds) {
+      try {
+        const token = await getToken(c.id);
+        const r = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (r.ok) {
+          payment = await r.json();
+          break;
+        }
+      } catch (e) {
+        console.warn(`[tienda-mp webhook] creds ${c.id} no encontró pago`, e.message);
+      }
+    }
+  }
+
+  // Después de tener payment, si trae metadata.mp_credencial_id confirma que
+  // estamos hablando del tenant correcto (defense-in-depth).
+  if (payment?.metadata?.mp_credencial_id && credIdHint &&
+      Number(payment.metadata.mp_credencial_id) !== Number(credIdHint)) {
+    console.warn(`[tienda-mp webhook] credIdHint=${credIdHint} pero payment.metadata.mp_credencial_id=${payment.metadata.mp_credencial_id}`);
   }
 
   if (!payment) {

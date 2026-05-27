@@ -101,8 +101,45 @@ export function Tenants() {
   const toggleActivo = async (t: TenantRow) => {
     const accion = t.activo ? 'Desactivar' : 'Activar';
     if (!confirm(`¿${accion} el tenant "${t.nombre}"?`)) return;
-    const { error } = await db.from('tenants').update({ activo: !t.activo }).eq('id', t.id);
+    // AUDIT F6B: usar RPC fn_set_tenant_activo que audita el cambio
+    // (antes era UPDATE directo sin rastro de quién lo cambió).
+    const { error } = await db.rpc('fn_set_tenant_activo', {
+      p_tenant_id: t.id,
+      p_activo: !t.activo,
+    });
     if (error) { alert('Error: ' + error.message); return; }
+    void load();
+  };
+
+  // AUDIT F6B: UI para eliminar tenant con confirmación fuerte (typing del slug).
+  // Llama a la RPC eliminar_tenant_completo que existe en DB desde hace meses
+  // pero solo se usaba via script a mano. Decisión Lucas pendiente: si quiere
+  // un soft-delete (set activo=false + delete diferido N días) en vez del hard.
+  const eliminarTenant = async (t: TenantRow) => {
+    const confirmText = prompt(
+      `⚠ ELIMINAR PERMANENTEMENTE el tenant "${t.nombre}".\n\n` +
+      `Esto borra: ventas, facturas, gastos, empleados, movimientos, ` +
+      `mesas, items, recetas, configuración, usuarios — TODA la data del tenant.\n\n` +
+      `Hay una RPC restore_tenant para deshacer pero requiere backup previo.\n\n` +
+      `Para CONFIRMAR escribí exactamente: ${t.slug}`
+    );
+    if (confirmText !== t.slug) {
+      if (confirmText !== null) alert('Slug no coincide. Cancelado.');
+      return;
+    }
+    const { error } = await db.rpc('eliminar_tenant_completo', { p_tenant_id: t.id });
+    if (error) { alert('Error: ' + error.message); return; }
+    setFlash(`Tenant "${t.slug}" eliminado.`);
+    setTimeout(() => setFlash(null), 5000);
+    void load();
+  };
+
+  const restaurarTenant = async (t: TenantRow) => {
+    if (!confirm(`Restaurar tenant "${t.nombre}" desde último backup?`)) return;
+    const { error } = await db.rpc('restore_tenant', { p_tenant_id: t.id });
+    if (error) { alert('Error: ' + error.message); return; }
+    setFlash(`Tenant "${t.slug}" restaurado.`);
+    setTimeout(() => setFlash(null), 5000);
     void load();
   };
 
@@ -229,6 +266,25 @@ export function Tenants() {
                         )}
                       >
                         {t.activo ? 'Desactivar' : 'Activar'}
+                      </button>
+                      {/* AUDIT F6B: botones eliminar/restaurar (antes solo
+                          accesibles vía scripts a mano). Confirmación fuerte
+                          en eliminar — requiere typing del slug. */}
+                      {!t.activo && (
+                        <button
+                          onClick={() => restaurarTenant(t)}
+                          className="px-2 py-1 rounded text-xs text-admin-success hover:bg-admin-border/40"
+                          title="Restaurar tenant desde backup"
+                        >
+                          Restaurar
+                        </button>
+                      )}
+                      <button
+                        onClick={() => eliminarTenant(t)}
+                        className="px-2 py-1 rounded text-xs text-admin-danger hover:bg-admin-border/40"
+                        title="Eliminar tenant PERMANENTEMENTE (requiere typing del slug)"
+                      >
+                        Eliminar
                       </button>
                     </div>
                   </td>

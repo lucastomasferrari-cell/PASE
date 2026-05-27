@@ -4,6 +4,7 @@ import { db } from "../../lib/supabase";
 import { formatCurrency } from "../../lib/format";
 import { EmptyState, CalendarIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
+import { now, todayAR_ISO } from "../../lib/utils";
 
 interface FacturaProx {
   id: number;
@@ -23,8 +24,8 @@ export function FacturasPorVencerWidget({ ctx }: { ctx: WidgetContext }) {
     let cancelled = false;
     async function reload() {
       setLoading(true);
-      const today = new Date();
-      const todayIso = today.toISOString().slice(0, 10);
+      const today = now();
+      const todayIso = todayAR_ISO();
       const in7 = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       // Schema real: columna `venc` (no `vencimiento`) y `estado` IN
       // ('pendiente','pagada','anulada') — no hay boolean `pagada`. Fix 2026-05-17.

@@ -206,79 +206,31 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
       const editingSelf = modal !== "new" && modal !== null && modal.id === user.id;
 
       if (!editingSelf) {
-        // Save permisos (delete + re-insert)
-        // Dueño/admin/superadmin tienen todos implícitos, no necesitan rows.
-        // 2026-05-17: usamos form.esDueno (no el rol viejo del modal).
+        // AUDIT F4A#4: una sola RPC atómica reemplaza los 5 calls separados
+        // (UPDATE usuarios + DELETE/INSERT usuario_permisos + DELETE/INSERT
+        // usuario_locales + UPDATE cuentas + asignar_rol_a_usuario). Antes,
+        // si el INSERT de permisos fallaba después del DELETE, el user
+        // quedaba con 0 permisos (bug histórico parchado solo en reporte).
+        // Ahora ROLLBACK transaccional automático si cualquier paso falla.
+        // Mantenemos targetTenantId como referencia para debugging — la
+        // RPC server-side lo deriva del usuarios.tenant_id por seguridad.
+        void targetTenantId;
         const userRol = form.esDueno ? "dueno" : "encargado";
-        const { error: delPermErr } = await db.from("usuario_permisos").delete().eq("usuario_id", userId);
-        if (delPermErr) {
-          console.error("Error borrando permisos previos:", delPermErr.message);
-          setErr("Error borrando permisos previos: " + delPermErr.message);
+        const { error: rpcErr } = await db.rpc("sincronizar_permisos_usuario", {
+          p_usuario_id: userId as number,
+          p_rol: userRol,
+          p_modulos: form.modulos,
+          p_locales: form.locales_ids.map(Number),
+          p_cuentas_visibles: form.cuentas_visibles,
+          p_cuentas_operables: form.cuentas_operables,
+          p_cuentas_all: form.cuentas_all,
+          p_rol_id: form.rol_id || null,
+        });
+        if (rpcErr) {
+          setErr("Error sincronizando permisos: " + rpcErr.message);
           setSaving(false);
           return;
         }
-        if (userRol !== "dueno" && form.modulos.length) {
-          const { error: permErr } = await db.from("usuario_permisos").insert(
-            form.modulos.map(slug => ({ usuario_id: userId as number, modulo_slug: slug, tenant_id: targetTenantId }))
-          );
-          // Bug crítico fixeado 2026-05-14: antes este error se logueaba y se
-          // tragaba silenciosamente. Resultado: si RLS bloquea el INSERT (caso
-          // user no-dueño antes del fix de migration 202605141500), el DELETE
-          // previo ya borró todo y el user editado quedaba con 0 permisos.
-          // Ahora paramos el flow y reportamos. Por defense-in-depth dejamos
-          // este check aunque la RLS ya está alineada.
-          if (permErr) {
-            console.error("Error guardando permisos:", permErr.message);
-            setErr("Error guardando permisos: " + permErr.message + " (Los permisos quedaron en blanco. Re-editar y reintentar.)");
-            setSaving(false);
-            return;
-          }
-        }
-
-        // RBAC: asignar rol_id al usuario. Si el form trae un rol elegido,
-        // lo asignamos via RPC. Si no, queda como está (sin tocar).
-        if (form.rol_id) {
-          const { error: rolErr } = await db.rpc("asignar_rol_a_usuario", {
-            p_usuario_id: userId as number,
-            p_rol_id: form.rol_id,
-          });
-          if (rolErr) {
-            console.error("Error asignando rol:", rolErr.message);
-            setErr("Error asignando rol: " + rolErr.message);
-            setSaving(false);
-            return;
-          }
-        }
-
-        // Save locales en usuario_locales (delete + re-insert)
-        await db.from("usuario_locales").delete().eq("usuario_id", userId);
-        if (form.locales_ids.length > 0) {
-          const rows = form.locales_ids.map(lid => ({
-            usuario_id: userId as number,
-            local_id: Number(lid),
-            tenant_id: targetTenantId,
-          }));
-          const { error: locErr } = await db.from("usuario_locales").insert(rows);
-          if (locErr) {
-            console.error("Error guardando locales:", locErr.message);
-            setErr("Error guardando locales: " + locErr.message);
-            setSaving(false);
-            return;
-          }
-        }
-
-        // Actualizar también campo viejo usuarios.locales para backward compat
-        await db.from("usuarios").update({ locales: form.locales_ids }).eq("id", userId);
-
-        // Cuentas: null = todas; array = personalizado. cuentas_visibles
-        // controla saldos visibles; cuentas_operables controla los dropdowns
-        // de pago (Compras, Remitos, RRHH, Caja, Gastos).
-        const visiblesPayload = form.cuentas_all ? null : form.cuentas_visibles;
-        const operablesPayload = form.cuentas_all ? null : form.cuentas_operables;
-        await db.from("usuarios").update({
-          cuentas_visibles: visiblesPayload,
-          cuentas_operables: operablesPayload,
-        }).eq("id", userId);
       }
 
       setModal(null); load();

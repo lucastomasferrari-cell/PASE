@@ -4,6 +4,7 @@ import { db } from "../../lib/supabase";
 import { formatCurrency } from "../../lib/format";
 import { EmptyState, TargetIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
+import { now, todayAR_ISO } from "../../lib/utils";
 
 interface ObjetivoMes {
   facturacion_objetivo: number | null;
@@ -23,13 +24,13 @@ export function ObjetivosMesWidget({ ctx }: { ctx: WidgetContext }) {
     let cancelled = false;
     async function reload() {
       setLoading(true);
-      const today = new Date();
+      const today = now();
       const year = today.getFullYear();
       const month = today.getMonth();
       const primerDiaMes = new Date(year, month, 1).toISOString().slice(0, 10);
       const ultimoDiaMes = new Date(year, month + 1, 0).getDate();
       const diaActual = today.getDate();
-      const hastaIso = today.toISOString().slice(0, 10);
+      const hastaIso = todayAR_ISO();
 
       // 1. Objetivo (de tabla objetivos_mes). Si hay local activo → ese local;
       //    si no, sumamos los objetivos de TODOS los locales con objetivo cargado.

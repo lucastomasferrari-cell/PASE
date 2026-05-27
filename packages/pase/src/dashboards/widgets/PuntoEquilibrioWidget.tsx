@@ -4,6 +4,7 @@ import { db } from "../../lib/supabase";
 import { formatCurrency } from "../../lib/format";
 import { EmptyState, ScaleIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
+import { now, todayAR_ISO } from "../../lib/utils";
 
 interface BepData {
   costos_fijos_mes: number;
@@ -39,13 +40,13 @@ export function PuntoEquilibrioWidget({ ctx }: { ctx: WidgetContext }) {
     let cancelled = false;
     async function reload() {
       setLoading(true);
-      const today = new Date();
+      const today = now();
       const year = today.getFullYear();
       const month = today.getMonth();
       const primerDiaMes = new Date(year, month, 1).toISOString().slice(0, 10);
       const ultimoDiaMes = new Date(year, month + 1, 0).getDate();
       const diaActual = today.getDate();
-      const hastaIso = today.toISOString().slice(0, 10);
+      const hastaIso = todayAR_ISO();
 
       // 1. Objetivos del mes (costos_fijos + margen)
       let qObj = db

@@ -160,10 +160,27 @@ export default async function handler(req, res) {
     const ig_account_id_fallback = String(meData.id);
 
     // ─── 6. Insert/Update ig_config (preservando ig_account_id si existe) ─
+    // AUDIT F6A#7: chequear si el ig_account_id del NUEVO token coincide
+    // con el guardado. Si NO coincide, significa que el dueño está intentando
+    // vincular una SEGUNDA cuenta IG sobre el mismo tenant. La estructura
+    // actual de ig_config (1 fila por tenant) no soporta esto — el guardado
+    // pisaría el token de la cuenta vieja y el ig_account_id quedaría con
+    // mismatch. Hasta que el schema soporte multi-account, abortar con
+    // mensaje claro al dueño.
     const { data: existingConfig } = await db.from('ig_config')
-      .select('ig_account_id')
+      .select('ig_account_id, ig_username')
       .eq('tenant_id', stateRow.tenant_id)
       .maybeSingle();
+
+    if (existingConfig?.ig_account_id && existingConfig.ig_account_id !== ig_account_id_fallback) {
+      await logEvent('error', stateRow.tenant_id, null,
+        `multi-account NO soportado: existente=${existingConfig.ig_username || existingConfig.ig_account_id}, nueva=${meData.username || ig_account_id_fallback}`);
+      return redirectToPase(res, {
+        ok: false,
+        error: 'MULTI_ACCOUNT_NO_SOPORTADO',
+        detail: `Ya tenés vinculada la cuenta IG "${existingConfig.ig_username || existingConfig.ig_account_id}". Para vincular otra cuenta primero desconectá la actual desde Configuración → Bot IG.`,
+      });
+    }
 
     const finalAccountId = existingConfig?.ig_account_id || ig_account_id_fallback;
 
