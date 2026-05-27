@@ -24,6 +24,7 @@ Pedido por Lucas, ejecutado en 9 fases.
 |---|------|--------|---------|
 | 0 | Reconocimiento | ✅ Completa | [00-reconocimiento.md](./00-reconocimiento.md) |
 | 1 | 💰 Bugs financieros | ✅ Completa | [01-bugs-financieros.md](./01-bugs-financieros.md) — **52 findings, 15 CRÍTICOS** |
+| F1🔧 | Fix sprint F1 críticos | ✅ Completa | **13 fixes aplicados** ([FIXES.md](./FIXES.md)) — 2 quedan para decisión humana (#3 pagar_remito, #6 sobrepago) |
 | 2 | 🔐 Seguridad multi-tenant | ⚪ Pendiente | — |
 | 3 | ⚡ Performance | ⚪ Pendiente | — |
 | 4 | 🎨 Frontend PASE | ⚪ Pendiente | — |
