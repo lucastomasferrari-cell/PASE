@@ -24,10 +24,15 @@ import { LoginPage } from './pages/Login/LoginPage';
 import { DefaultModeRedirect } from './components/DefaultModeRedirect';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { StubRoute } from './pages/admin-stubs/StubRoute';
-import {
-  ItemsRoute, GruposRoute, CanalesRoute, ListaPreciosRoute,
-  ModificadoresRoute, EmpleadosListaRoute,
-} from './pages/admin-stubs/routeWrappers';
+// AUDIT F3B#2: routeWrappers tiene eager-imports de 6 tabs admin (1.882 LOC
+// + sus deps de UI) que entraban al bundle inicial aunque el user nunca abriera
+// admin. Pasar a lazy individual viola un poco la simetría pero respeta regla C8.
+const ItemsRoute = lazy(() => import('./pages/admin-stubs/routeWrappers').then(m => ({ default: m.ItemsRoute })));
+const GruposRoute = lazy(() => import('./pages/admin-stubs/routeWrappers').then(m => ({ default: m.GruposRoute })));
+const CanalesRoute = lazy(() => import('./pages/admin-stubs/routeWrappers').then(m => ({ default: m.CanalesRoute })));
+const ListaPreciosRoute = lazy(() => import('./pages/admin-stubs/routeWrappers').then(m => ({ default: m.ListaPreciosRoute })));
+const ModificadoresRoute = lazy(() => import('./pages/admin-stubs/routeWrappers').then(m => ({ default: m.ModificadoresRoute })));
+const EmpleadosListaRoute = lazy(() => import('./pages/admin-stubs/routeWrappers').then(m => ({ default: m.EmpleadosListaRoute })));
 
 // ─── LAZY: regla C8 (auditoría 2026-05-15). Todas las páginas son
 // named exports, así que usamos el patrón `.then(m => ({ default: m.X }))`

@@ -777,14 +777,18 @@ function AnularPagoBtn({
     if (!motivo || !motivo.trim()) return;
     setBusy(true);
     try {
-      for (const m of movs) {
-        const { error } = await db.rpc("anular_movimiento", {
-          p_mov_id: m.id,
-          p_motivo: motivo.trim(),
-        });
-        if (error) throw error;
+      // AUDIT F3A#8: 1 RPC batch (antes era for+await con N round-trips).
+      const { data: batchRes, error } = await db.rpc("anular_movimientos_batch", {
+        p_mov_ids: movs.map(m => m.id),
+        p_motivo: motivo.trim(),
+      });
+      if (error) throw error;
+      const res = batchRes as { anulados?: number; fallidos?: number; detalles?: Array<{ ok: boolean; error?: string; mov_id: string }> } | null;
+      if (res && (res.fallidos ?? 0) > 0) {
+        const primeraFalla = (res.detalles || []).find(d => !d.ok);
+        throw new Error(`Mov ${primeraFalla?.mov_id} falló: ${primeraFalla?.error || "error desconocido"}`);
       }
-      alert(`✓ ${movs.length} pago(s) anulados. La liquidación vuelve a pendiente.`);
+      alert(`✓ ${res?.anulados ?? movs.length} pago(s) anulados. La liquidación vuelve a pendiente.`);
       if (onDone) await onDone();
     } catch (e) {
       alert(`Error anulando: ${translateRpcError(e)}`);

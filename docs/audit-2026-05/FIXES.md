@@ -79,6 +79,34 @@ Una entrada por commit, con:
 - Deuda residual de 15 filas con hash SHA-256 viejo en `usuarios.password` — pendiente cleanup en migration aparte.
 - IG token plano (TEXT) sigue en columna `page_access_token` por compat. Drop en migration posterior una vez confirmado que prod funciona con encrypted.
 
+### 2026-05-27 — F3 sprint críticos performance
+
+**Migration:** `packages/pase/supabase/migrations/202605271000_audit_f3_criticos.sql` (589ms, 4 smoke checks ✅)
+**Reporte fuente:** [03-performance.md](./03-performance.md) (sub-reportes 03a/03b/03c).
+
+10 fixes aplicados (de 15 críticos/altos totales — los 5 restantes son refactors arquitectónicos que dejé para después):
+
+| # | Cambio |
+|---|---|
+| F3A#1 | Publication `supabase_realtime` de 42 → 20 tablas. Saqué 22 catálogos y master data (proveedores, config_categorias, medios_cobro, tenants, usuarios, etc.) que casi no cambian. Apunta al **#1 absoluto del workload DB** (Realtime publisher consumía ~7h CPU/día solo en publish WAL). |
+| F3A#2 | Cron `fn_reactivar_items_vencidos` de `* * * * *` → `*/15 * * * *`. -92% invocaciones. |
+| F3A#6 | `CREATE INDEX idx_movimientos_local_cuenta_activo` partial — el trigger `trg_sync_saldos_caja` baja de 0.47ms → <0.1ms y escala lineal con el local más grande. |
+| F3A#10 | `CREATE INDEX idx_facturas_estado_venc` — bandeja vencidas baja a index scan. |
+| F3A#15 | DROP 5 índices muertos: `idx_mp_mov_anulado_false` (368KB), `idx_mp_mov_release_date_released` (112KB), `idx_mp_mov_sin_justificar` (40KB), `idx_movimientos_anulado_false` (40KB), `idx_items_nombre_trgm` (72KB). |
+| F3A#7 | Nueva RPC `aplicar_ncs_a_factura(p_ncs jsonb)` + refactor `Compras.tsx:520`. Antes: `for+await` con N round-trips. Ahora: 1 round-trip. |
+| F3A#8 | Nueva RPC `anular_movimientos_batch(p_mov_ids[], p_motivo, p_override_code)` + refactor `RRHHLegajo.tsx:780`. Antes: `for+await` con N round-trips. |
+| F3A#9 | `Caja.tsx:354` audit lookup ahora con `.ilike()` filter por id + `.limit(1)`. Antes traía TODA la auditoria EDICION (3.5k hoy, crece). |
+| F3B#1+#3 | `packages/comanda/vite.config.ts`: `manualChunks` (vendor-react/supabase/radix/pwa/idb) + `chunkSizeWarningLimit` 1000 → 500. Apunta al index.js 765 KB monolítico. |
+| F3B#2 | `packages/comanda/src/App.tsx`: routeWrappers (6 admin tabs, 1.882 LOC) pasaron a `lazy()` individual. |
+| F3C#14 | `packages/comanda/src/lib/sync/syncEngine.ts`: pause `setInterval(30s)` cuando `document.hidden`. Antes una pestaña POS oculta tiraba 5 queries/30s indefinidamente. |
+
+**No incluidos (refactors arquitectónicos para decisión / sprint dedicado):**
+- F3A#11 `mp-process.js` UPDATE con `IS DISTINCT FROM` (necesita re-diseñar upsert logic con SELECT previo).
+- F3C#5 `Caja.tsx` unificar 2 hooks Realtime + debounce conjunto.
+- F3C#12 `useBandejaEntrada` consolidación a 1 RPC `fn_bandeja_resumen(user_id)`.
+- F3C#13 catálogos (`useCategorias`/`useMediosCobro`/`usePuestosRRHH`) on-focus invalidation + BroadcastChannel cross-tab (en vez de Realtime permanente 24×7).
+- Cache `pg_timezone_names` en JS const (580s CPU acumulada, fix de 30 min pero requiere identificar todos los date pickers).
+
 ---
 
 **Última actualización:** 2026-05-27

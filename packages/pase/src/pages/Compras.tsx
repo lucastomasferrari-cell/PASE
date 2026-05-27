@@ -512,19 +512,29 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       const prov = proveedores.find(p => String(p.id) === String(f.prov_id));
       const detalle = `Pago ${prov?.nombre || ""} - Fact ${f.nro}`;
 
-      // 1) Aplicar NCs seleccionadas. Cada una en su propia llamada RPC para
-      //    que el error de una no rompa las otras (la transacción de cada
-      //    aplicación es atómica del lado servidor).
+      // 1) Aplicar NCs seleccionadas. AUDIT F3A#7: 1 RPC batch (antes había
+      //    un loop con for+await que generaba N round-trips secuenciales).
+      //    La batch es atómica por NC adentro (cada aplicación es su propia
+      //    transacción server-side); el response trae detalles por NC.
       const ncEntries = Object.entries(ncsAplicar).filter(([, m]) => m > 0);
       const totalNcAplicado = ncEntries.reduce((s, [, m]) => s + m, 0);
-      for (const [nc_id, monto] of ncEntries) {
-        const { error: ncErr } = await db.rpc("aplicar_nc_a_factura", {
-          p_nc_id: nc_id,
+      if (ncEntries.length > 0) {
+        const ncsPayload = ncEntries.map(([nc_id, monto]) => ({
+          nc_id,
+          monto,
+          fecha: pagoForm.fecha,
+        }));
+        const { data: batchRes, error: ncErr } = await db.rpc("aplicar_ncs_a_factura", {
           p_factura_id: f.id,
-          p_monto: monto,
-          p_fecha: pagoForm.fecha,
+          p_ncs: ncsPayload,
         });
         if (ncErr) throw ncErr;
+        // Si alguna NC individual falló, propagar el primer error.
+        const fallidas = (batchRes as { fallidas?: number; detalles?: Array<{ ok: boolean; error?: string; nc_id: string }> } | null);
+        if (fallidas && (fallidas.fallidas ?? 0) > 0) {
+          const primeraFalla = (fallidas.detalles || []).find(d => !d.ok);
+          throw new Error(`NC ${primeraFalla?.nc_id} falló: ${primeraFalla?.error || "error desconocido"}`);
+        }
       }
 
       // 2) Pagar el resto con plata si queda saldo. Si solo se aplicaron NCs

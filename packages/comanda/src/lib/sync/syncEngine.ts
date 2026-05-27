@@ -95,6 +95,11 @@ class SyncEngine {
   private startPeriodicSync(): void {
     if (this.intervalId) clearInterval(this.intervalId);
     this.intervalId = setInterval(() => {
+      // AUDIT F3C#14: pausar polling cuando la pestaña está oculta.
+      // Antes: un cocinero/cajero con el POS en una pestaña oculta seguía
+      // tirando 5 queries Supabase cada 30s (items + grupos + mesas + ventas
+      // + items) por terminal. Multiplicado por N terminales era ruido puro.
+      if (typeof document !== 'undefined' && document.hidden) return;
       void this.runFullCycle(false);
     }, 30_000);
   }

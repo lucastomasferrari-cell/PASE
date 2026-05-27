@@ -101,7 +101,36 @@ export default defineConfig({
     },
   },
   build: {
-    chunkSizeWarningLimit: 1000,
+    // AUDIT F3B#3: era 1000 — ocultaba que el index.js tenía 765 KB monolítico.
+    chunkSizeWarningLimit: 500,
+    rollupOptions: {
+      output: {
+        // AUDIT F3B#1: el index.js de COMANDA tenía 765 KB monolítico (sin
+        // vendor splitting). PASE prueba que el patrón function funciona:
+        // con 4 buckets baja el inicial a 117 KB. Replicamos acá.
+        manualChunks: (id: string) => {
+          if (id.includes('node_modules/react-router') ||
+              id.includes('node_modules/react-dom') ||
+              /node_modules[\\/]react[\\/]/.test(id) ||
+              id.includes('node_modules/scheduler')) {
+            return 'vendor-react';
+          }
+          if (id.includes('node_modules/@supabase')) {
+            return 'vendor-supabase';
+          }
+          if (id.includes('node_modules/@radix-ui')) {
+            return 'vendor-radix';
+          }
+          if (id.includes('node_modules/workbox-')) {
+            return 'vendor-pwa';
+          }
+          if (id.includes('node_modules/idb')) {
+            return 'vendor-idb';
+          }
+          return undefined;
+        },
+      },
+    },
   },
   server: { port: 5174 },
 });

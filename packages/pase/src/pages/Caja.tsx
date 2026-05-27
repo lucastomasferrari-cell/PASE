@@ -348,14 +348,20 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
 
   // Carga el auditoría log cuando el usuario clickea "Ver edición" en
   // un movimiento. setAuditLog es derivada del detalleEdicion.
+  // AUDIT F3A#9: antes esta query traía TODA la auditoria histórica de
+  // EDICION movimientos (3.5k hoy, crece linealmente). Con 50k filas el
+  // browser se cuelga parseando JSONs. Ahora filtramos por mov_id en el
+  // server vía operador JSON `detalle::jsonb ->> 'id'` y agregamos LIMIT.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!detalleEdicion) { setAuditLog(null); return; }
     db.from("auditoria")
-      .select("*")
+      .select("detalle")
       .eq("tabla", "movimientos")
       .eq("accion", "EDICION")
+      .ilike("detalle", `%"id":"${detalleEdicion.id}"%`)
       .order("fecha", { ascending: false })
+      .limit(1)
       .then(({ data }) => {
         const log = (data || []).find(l => {
           try { return JSON.parse(l.detalle)?.id === detalleEdicion.id; } catch { return false; }
