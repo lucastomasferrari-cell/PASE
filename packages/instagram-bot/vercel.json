@@ -23,12 +23,5 @@
       "maxDuration": 10
     }
   },
-  "headers": [
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" }
-      ]
-    }
-  ]
+  "_comment_headers": "AUDIT F6A#3: eliminado el header CORS '*' global. El bot solo recibe webhooks de Meta (no necesita CORS) + crons (también no necesitan). El endpoint send.js y otros que sí pueden ser llamados desde browser usan _lib/cors.js con allow-list de pase-yndx.vercel.app y admin-console."
 }

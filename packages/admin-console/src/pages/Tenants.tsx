@@ -85,14 +85,18 @@ export function Tenants() {
 
   useEffect(() => { void load(); }, [load]);
 
+  // AUDIT F6B#1: verComo está deshabilitado hasta implementar el lado PASE.
+  // Antes: el botón abría URL `?as=<uuid>` que PASE NUNCA leía → Lucas
+  // clickeaba "Ver" y veía su propio tenant (Neko), silently broken.
+  // Para implementar realmente: handler en PASE App.tsx que lea ?as, valide
+  // que el caller es superadmin, escriba pase_tenant_override en sessionStorage
+  // y recargue. Por ahora el botón está oculto para no engañar.
   const verComo = (t: TenantRow) => {
-    // Override en sessionStorage del dominio PASE. Pero como estamos en otro
-    // dominio (admin-console), no podemos escribir en su sessionStorage
-    // directamente. Lo hacemos abriendo PASE con query param ?as=<tenant_id>
-    // que PASE puede levantar en su entry.
-    const url = `${PASE_API_BASE}/?as=${encodeURIComponent(t.id)}`;
-    window.open(url, '_blank');
+    alert(`Función "Ver como" deshabilitada — el handler ?as=<uuid> en PASE no está implementado todavía. Pendiente sprint dedicado. Tenant: ${t.nombre}`);
   };
+  // Mantener referencia explícita para que TS/ESLint no se queje del unused var.
+  // PASE_API_BASE se mantiene en uso por otros features (si los hay).
+  void PASE_API_BASE;
 
   const toggleActivo = async (t: TenantRow) => {
     const accion = t.activo ? 'Desactivar' : 'Activar';
@@ -201,10 +205,12 @@ export function Tenants() {
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center justify-end gap-1">
+                      {/* AUDIT F6B#1: botón "Ver" oculto hasta implementar el handler en PASE.
+                          Antes hacía window.open(?as=uuid) pero PASE nunca lo leía. */}
                       <button
                         onClick={() => verComo(t)}
-                        className="px-2 py-1 rounded text-xs text-admin-muted hover:text-admin-text hover:bg-admin-border/40 flex items-center gap-1"
-                        title="Abrir PASE como este tenant"
+                        className="hidden px-2 py-1 rounded text-xs text-admin-muted hover:text-admin-text hover:bg-admin-border/40 flex items-center gap-1"
+                        title="Pendiente: implementar handler ?as=<uuid> en PASE"
                       >
                         <ExternalLink className="w-3 h-3" /> Ver
                       </button>

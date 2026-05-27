@@ -157,6 +157,32 @@ Una entrada por commit, con:
 - F5A#14 VentaScreen god-object 1378 LOC — sprint dedicado de split.
 - **Tests E2E del sync engine** — alta prioridad, sprint dedicado.
 
+### 2026-05-27 — F6 sprint críticos bot IG + admin
+
+**Migration:** `packages/pase/supabase/migrations/202605271100_audit_f6_ig_constraints.sql` (454ms, smoke ✅)
+**Reporte fuente:** [06-bot-ig-admin-console.md](./06-bot-ig-admin-console.md) (sub-reportes 06a/06b).
+
+5 fixes aplicados (= total de críticos):
+
+| # | Cambio |
+|---|---|
+| F6A#1 | `webhook.js`: upsert de `ig_conversaciones` reemplazado por SELECT + INSERT condicional. Antes el upsert seteaba `estado='bot'` en cada DM nuevo → si el dueño tomaba la conversación como humano y el cliente seguía escribiendo, el bot reactivaba y respondía sobre lo que el humano había dicho. Ahora respeta el estado existente. |
+| F6A#2 | `webhook.js`: implementado rate limit per-tenant antes de llamar a Claude. Lee `cfg.rate_limit_msgs` (default 30) y `cfg.rate_limit_minutos` (default 5). Si excede, skip respuesta + insert evento `rate_limit_hit` en `ig_eventos`. Antes esas columnas existían pero nunca se leían → 5000 DMs en 30s ≈ $150 USD sin tope. |
+| F6A#3 | `packages/instagram-bot/vercel.json`: eliminado header global `Access-Control-Allow-Origin: *` que anulaba el allow-list de `_lib/cors.js`. Defense-in-depth restaurada. |
+| F6A#4 | Migration `202605271100_audit_f6_ig_constraints.sql`: 5 CHECK constraints en `ig_config` (max_tokens 256-4096, contexto_mensajes 1-50, system_prompt ≤8000 chars, rate_limit_msgs 0-500, rate_limit_minutos 1-1440). Antes un dueño podía setear `max_tokens=200000` y disparar ~$3 USD por mensaje. |
+| F2D #27 fase 2 | Misma migration F6: drop columna `page_access_token` plana de `ig_config`. Token IG ahora SOLO existe encrypted vía `get_ig_token` RPC. `webhook.js` actualizado para no usar fallback. |
+| F6B#1 | `admin-console/src/pages/Tenants.tsx`: botón "Ver como tenant" OCULTO (`hidden` CSS) hasta implementar el handler `?as=<uuid>` en PASE. Antes Lucas clickeaba "Ver" y el botón abría URL que PASE nunca leía — silently broken. |
+
+**No incluidos (decisiones / sprints dedicados):**
+- F6A#5 prompt caching en `_lib/claude.js` (5x más caro de lo necesario, no es crítico).
+- F6A#6 rate limit + cap `max_tokens` en `/api/claude` proxy de PASE.
+- F6A#7 fix multi-account OAuth (vincular 2da cuenta IG corrompe token).
+- F6A#8 CHECK constraint `ig_mensajes.tipo` para cubrir `file/template/fallback`.
+- F6A#9 tests del bot (cero tests en 1945 LOC con manejo de dinero).
+- F6B `toggleActivo` tenant con audit (RPC nueva `fn_set_tenant_activo`).
+- F6B UI eliminar/restaurar tenant (Lucas hoy usa scripts a mano).
+- `diagnostic.js` info disclosure (sigue exponiendo first4+last4 de secrets).
+
 ---
 
 **Última actualización:** 2026-05-27

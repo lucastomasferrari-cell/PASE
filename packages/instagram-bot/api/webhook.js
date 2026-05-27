@@ -206,15 +206,31 @@ async function procesarMensajeEntrante({ cfg, event, sender_igsid }) {
     return;
   }
 
-  // Upsert conversación
-  const { data: conv } = await db
-    .from('ig_conversaciones')
-    .upsert(
-      { tenant_id: cfg.tenant_id, cliente_id: cliente.id, estado: 'bot' },
-      { onConflict: 'tenant_id,cliente_id', ignoreDuplicates: false },
-    )
-    .select('*')
-    .single();
+  // AUDIT F6A#1: NO sobreescribir el `estado` de una conversación existente.
+  // Antes el upsert seteaba estado='bot' en cada DM nuevo → si el dueño
+  // tomaba la conversación como humano y el cliente seguía escribiendo, el
+  // bot reactivaba la conversación automáticamente y respondía sobre lo
+  // que el humano había dicho. Ahora: SELECT primero, si no existe creamos
+  // con 'bot' por default; si existe respetamos su estado actual.
+  let conv;
+  {
+    const { data: existing } = await db
+      .from('ig_conversaciones')
+      .select('*')
+      .eq('tenant_id', cfg.tenant_id)
+      .eq('cliente_id', cliente.id)
+      .maybeSingle();
+    if (existing) {
+      conv = existing;
+    } else {
+      const { data: nueva } = await db
+        .from('ig_conversaciones')
+        .insert({ tenant_id: cfg.tenant_id, cliente_id: cliente.id, estado: 'bot' })
+        .select('*')
+        .single();
+      conv = nueva;
+    }
+  }
 
   // Extraer info del mensaje
   const msg = event.message;
@@ -265,12 +281,40 @@ async function procesarMensajeEntrante({ cfg, event, sender_igsid }) {
   if (!cfg.bot_activo) return;
   if (conv.estado !== 'bot') return;
 
-  // AUDIT F2D #27: token vía RPC encrypted (page_access_token plano queda como fallback temporal).
+  // AUDIT F2D #27 fase 2: la columna page_access_token plana fue droppeada
+  // en F6 sprint. get_ig_token RPC es la única fuente del token IG ahora.
   const { data: tokenIG } = await db.rpc('get_ig_token', { p_tenant_id: cfg.tenant_id });
-  const pageAccessToken = tokenIG || cfg.page_access_token;
+  const pageAccessToken = tokenIG;
   if (!pageAccessToken) {
     console.warn('[webhook] no hay token IG para tenant', cfg.tenant_id);
     return;
+  }
+
+  // AUDIT F6A#2: rate limit per-tenant. Las columnas existían pero NUNCA
+  // se leían. Sin esto, 5000 DMs de un mismo cliente en 30s ≈ $150 USD de
+  // Claude sin tope. Defaults: 30 msgs en 5min si la config no define.
+  const rateMaxMsgs = cfg.rate_limit_msgs ?? 30;
+  const rateWindowMin = cfg.rate_limit_minutos ?? 5;
+  if (rateMaxMsgs > 0 && rateWindowMin > 0) {
+    const cutoff = new Date(Date.now() - rateWindowMin * 60_000).toISOString();
+    const { count } = await db.from('ig_mensajes')
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', cfg.tenant_id)
+      .eq('direccion', 'out')
+      .eq('origen', 'bot')
+      .gte('created_at', cutoff);
+    if ((count ?? 0) >= rateMaxMsgs) {
+      console.warn(`[webhook] rate limit hit tenant=${cfg.tenant_id} (${count}/${rateMaxMsgs} en ${rateWindowMin}min). Skip respuesta.`);
+      // Loguear evento para que el dueño lo vea en Mensajería
+      await db.from('ig_eventos').insert({
+        tenant_id: cfg.tenant_id,
+        conversacion_id: conv.id,
+        tipo: 'rate_limit_hit',
+        error_message: `${count} respuestas del bot en ${rateWindowMin}min (limite ${rateMaxMsgs})`,
+        payload: { igsid: sender_igsid, ig_username: cliente.ig_username || null },
+      }).catch(() => { /* no crítico */ });
+      return;
+    }
   }
 
   // Marcar como leído + mostrar "escribiendo"

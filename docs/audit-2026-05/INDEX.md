@@ -33,7 +33,8 @@ Pedido por Lucas, ejecutado en 9 fases.
 | F4🔧 | Fix sprint F4 críticos | ✅ Completa | **5 fixes aplicados** ([FIXES.md](./FIXES.md)) — 6 quedan (refactors arquitectónicos: modal, toast, money helper, logError, race vacTomadas, permisos atómicos) |
 | 5 | 📱 COMANDA completo | ✅ Completa | [05-comanda.md](./05-comanda.md) — **~80 findings, 14 críticos** (logout no limpia IndexedDB, AFIP recovery, HMAC desconectado, pullVentasAbiertas borra dirty, sin tests del sync engine) |
 | F5🔧 | Fix sprint F5 críticos | ✅ Completa | **7 fixes aplicados** ([FIXES.md](./FIXES.md)) — 7 quedan (AFIP recovery, MP webhook tenant, print server auth, VentaScreen split, idempotency window, tempIdCounter persist, tests E2E sync) |
-| 6 | 🤖 Bot IG + admin-console | ⚪ Pendiente | — |
+| 6 | 🤖 Bot IG + admin-console | ✅ Completa | [06-bot-ig-admin-console.md](./06-bot-ig-admin-console.md) — **~45 findings, 5 críticos** (bot upsert resetea estado, sin rate limit per-tenant, CORS `*` global, max_tokens sin CHECK, "ver como" roto) |
+| F6🔧 | Fix sprint F6 críticos | ✅ Completa | **5 fixes aplicados + F2D#27 fase 2** ([FIXES.md](./FIXES.md)) — incluye drop columna IG plain. Deuda: prompt caching, /api/claude rate limit, multi-account OAuth, tests bot. |
 | 7 | 🧹 Deuda + overengineering | ⚪ Pendiente | — |
 | 8 | 📊 Consolidación ejecutiva | ⚪ Pendiente | — |
 
