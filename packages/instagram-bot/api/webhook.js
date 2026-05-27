@@ -265,9 +265,17 @@ async function procesarMensajeEntrante({ cfg, event, sender_igsid }) {
   if (!cfg.bot_activo) return;
   if (conv.estado !== 'bot') return;
 
+  // AUDIT F2D #27: token vía RPC encrypted (page_access_token plano queda como fallback temporal).
+  const { data: tokenIG } = await db.rpc('get_ig_token', { p_tenant_id: cfg.tenant_id });
+  const pageAccessToken = tokenIG || cfg.page_access_token;
+  if (!pageAccessToken) {
+    console.warn('[webhook] no hay token IG para tenant', cfg.tenant_id);
+    return;
+  }
+
   // Marcar como leído + mostrar "escribiendo"
-  await marcarLeido({ pageAccessToken: cfg.page_access_token, igsid: sender_igsid });
-  await escribiendo({ pageAccessToken: cfg.page_access_token, igsid: sender_igsid, on: true });
+  await marcarLeido({ pageAccessToken, igsid: sender_igsid });
+  await escribiendo({ pageAccessToken, igsid: sender_igsid, on: true });
 
   // Armar contexto: últimos N mensajes de la conversación.
   // Bug encontrado 22-may noche (Lucas reportó que el bot no respondía
@@ -332,9 +340,9 @@ async function procesarMensajeEntrante({ cfg, event, sender_igsid }) {
     return;
   }
 
-  // Enviar respuesta a Instagram
+  // Enviar respuesta a Instagram (token encrypted)
   const envio = await enviarMensaje({
-    pageAccessToken: cfg.page_access_token,
+    pageAccessToken,
     igsid: sender_igsid,
     texto: respuesta.texto,
   });
@@ -355,7 +363,7 @@ async function procesarMensajeEntrante({ cfg, event, sender_igsid }) {
   });
 
   // Apagar typing indicator
-  await escribiendo({ pageAccessToken: cfg.page_access_token, igsid: sender_igsid, on: false });
+  await escribiendo({ pageAccessToken, igsid: sender_igsid, on: false });
 }
 
 function construirSystemPromptConContexto(cfg, cliente) {

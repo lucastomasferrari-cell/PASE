@@ -13,11 +13,10 @@ interface UsuariosProps {
 
 type ModalState = null | "new" | Usuario;
 
-async function sha256(text: string) {
-  const enc = new TextEncoder().encode(text);
-  const buf = await crypto.subtle.digest("SHA-256", enc);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
-}
+// AUDIT F2D #29: SHA-256 client-side eliminado. Antes este archivo escribía
+// `usuarios.password` con SHA-256 sin sal (rompible con rainbow) y filtraba
+// los primeros 16 chars del hash en console.log. Ahora solo cambia password
+// via /api/auth-admin (Supabase Auth con Argon2id).
 
 export default function Usuarios({ user, locales }: UsuariosProps) {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -172,31 +171,30 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
         }
         await db.from("usuarios").update(updatePayload).eq("id", userId);
         if (form.password) {
-          // Actualizar hash SHA-256 en tabla usuarios (usado por login fallback)
-          const hash = await sha256(form.password);
-          console.log("[Usuarios] UPDATE password:", { userId, hashPreview: hash.slice(0, 16) + "...", authId: modal.auth_id || "NULL" });
-          const { error: pwErr } = await db.from("usuarios").update({ password: hash }).eq("id", userId);
-          if (pwErr) console.error("[Usuarios] UPDATE password falló:", pwErr.message);
-          else console.log("[Usuarios] UPDATE password OK para userId:", userId);
-          // También actualizar en Supabase Auth si el usuario está migrado
-          if (modal.auth_id) {
-            try {
-              const r = await fetch("/api/auth-admin", {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action:"change_password", authId:modal.auth_id, password:form.password }),
-              });
-              const d = await r.json();
-              if (!d.ok) {
-                // No bloquear el guardado — la contraseña ya se actualizó en la tabla
-                console.warn("Supabase Auth change_password falló:", d.error);
-                setErr("Contraseña actualizada en sistema local pero falló en Supabase Auth — el usuario puede seguir usando la contraseña anterior vía Auth");
-              }
-            } catch (authErr) {
-              console.warn("Error llamando auth-admin:", authErr instanceof Error ? authErr.message : String(authErr));
-              setErr("Contraseña actualizada localmente. Error de red al sincronizar con Supabase Auth.");
-            }
+          // AUDIT F2D #29: cambio de password SOLO via Supabase Auth.
+          // Antes este branch escribía SHA-256 sin sal en usuarios.password
+          // y filtraba 16 chars del hash en console.log.
+          if (!modal.auth_id) {
+            setErr("Usuario legacy sin Supabase Auth — el cambio de password requiere migración previa.");
+            setSaving(false);
+            return;
           }
-          // auth_id null: no hay user en Supabase Auth, solo funciona SHA-256
+          try {
+            const r = await fetch("/api/auth-admin", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action:"change_password", authId:modal.auth_id, password:form.password }),
+            });
+            const d = await r.json();
+            if (!d.ok) {
+              setErr(d.error || "Error cambiando contraseña en Supabase Auth.");
+              setSaving(false);
+              return;
+            }
+          } catch (authErr) {
+            setErr("Error de red llamando auth-admin: " + (authErr instanceof Error ? authErr.message : String(authErr)));
+            setSaving(false);
+            return;
+          }
         }
       }
 

@@ -3,11 +3,10 @@ import { db } from "../lib/supabase";
 import { ROLES } from "../lib/auth";
 import type { Local, UsuarioRow } from "../types";
 
-async function sha256(text: string) {
-  const enc = new TextEncoder().encode(text);
-  const buf = await crypto.subtle.digest("SHA-256", enc);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
-}
+// AUDIT F2D #29: SHA-256 client-side eliminado. Antes este archivo escribía
+// `usuarios.password` con SHA-256 sin sal — contradice CLAUDE.md y es vulnerable
+// a rainbow tables. Ahora solo se cambian passwords via /api/auth-admin que
+// usa Supabase Auth (Argon2id internamente).
 
 interface ConfigProps {
   locales: Local[];
@@ -68,18 +67,20 @@ export default function Config(_props: ConfigProps) {
     savingRef.current=true;
     setSaving(true);setFormErr("");
     try{
-      if(editModal.auth_id){
-        const r=await fetch("/api/auth-admin",{
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({action:"change_password",authId:editModal.auth_id,password:editModal.password}),
-        });
-        const d=await r.json();
-        if(!d.ok){setFormErr(d.error||"Error cambiando contraseña");return;}
-      }else{
-        const hash = await sha256(editModal.password);
-        await db.from("usuarios").update({password:hash}).eq("id",editModal.id);
+      // AUDIT F2D #29: NO escribimos a usuarios.password (SHA-256 sin sal).
+      // Solo cambio de password via Supabase Auth. Si el user no tiene auth_id
+      // (legacy), debe migrarse primero desde /usuarios.
+      if(!editModal.auth_id){
+        setFormErr("Usuario legacy sin Supabase Auth — migralo desde /usuarios primero.");
+        return;
       }
+      const r=await fetch("/api/auth-admin",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"change_password",authId:editModal.auth_id,password:editModal.password}),
+      });
+      const d=await r.json();
+      if(!d.ok){setFormErr(d.error||"Error cambiando contraseña");return;}
       setEditModal(null);load();
     }catch(e){setFormErr(e instanceof Error ? e.message : String(e));}
     finally{ savingRef.current=false; setSaving(false); }

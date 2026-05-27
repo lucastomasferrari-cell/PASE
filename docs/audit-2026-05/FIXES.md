@@ -47,6 +47,38 @@ Una entrada por commit, con:
 - 3 liquidaciones con estado=`pagado` y `pagos_realizados < total_a_pagar`
 - 2 adelantos con `descontado=true` sin `liquidacion_consumidora_id`
 
+### 2026-05-27 — F2 sprint críticos seguridad multi-tenant
+
+**Migrations:**
+- `packages/pase/supabase/migrations/202605270800_audit_f2_criticos.sql` (744ms, smoke ✅)
+- `packages/pase/supabase/migrations/202605270900_ig_token_encryption.sql` (415ms, smoke ✅)
+**Reportes fuente:**
+[02-seguridad-multi-tenant.md](./02-seguridad-multi-tenant.md) — sub-reportes 02a/02b/02c/02d.
+
+26 críticos aplicados (de 32 totales — los 6 restantes son ALTO/MEDIO o requieren rediseño):
+
+| Grupo | Bugs | Cambio |
+|---|---|---|
+| A - RLS history tables | #1-4 | 4 policies con filter `(old_data\|new_data)->>'tenant_id' = auth_tenant_id()` — corta leak de 363+116+115+1 rows × hasta 64 tenants distintos |
+| B - RPCs Comanda sin auth | #5-14 | `fn_agregar_pago_venta_comanda`, `fn_procesar_reversos_pendientes_comanda`, `fn_aplicar_cupon`, `fn_aplicar_stock_venta` (+revertir), `fn_marcar_listo`/`entregado_comanda`, `fn_set_pedido_geo`, `fn_recalc_costo_insumo`/`recalcular_stock_insumo`, `fn_recalcular_totales_venta_comanda`, `fn_recalcular_saldo_proveedor`: agregaron `fn_assert_local_autorizado` |
+| C - REVOKE helpers | #15-18 | `agent_update_ticket`, `dispatch_auto_fix_workflow`, `_resync_liquidacion_pagos`, `_resync_pago_especial`, `fn_user_quiere_notif` ahora REVOKE FROM PUBLIC, anon, authenticated. Triggers internos siguen funcionando porque corren como postgres |
+| D - RLS gaps | #19 | `comanda_permisos_catalogo` ENABLE RLS + 2 policies (select abierto, write superadmin-only) |
+| D - tenant escape | #20 | `comanda_print_agents` UPDATE WITH CHECK simétrico (cerraba ventana de cambiar tenant_id en UPDATE) |
+| D - UNIQUE leak | #21 | `usuarios.email` UNIQUE → `(email, COALESCE(tenant_id, nil-uuid))` — squatting / enumeration cross-tenant |
+| D - UNIQUE leak | #22 | `comanda_local_settings.slug` UNIQUE → `(slug, tenant_id)` |
+| E - serverless | #25 | `afip-cae.js` idempotency lookup filtra `tenant_id` |
+| E - serverless | #26 + ALTO #8 | `LectorFacturasIA.tsx` + `Blindaje.tsx` Storage upload con prefijo `${tenant_id}/...` |
+| E - serverless | ALTO #2 | `tienda-mp.js` eliminada rama `?local_id` en query de webhooks rappi/pedidosya — antes permitía spoof unauth |
+| F - auth | #27 | IG `page_access_token` ahora encriptado at-rest con pgcrypto + vault.secrets (passphrase aleatoria 256-bit). Nuevas RPCs `get_ig_token`/`set_ig_token`. 4 endpoints IG (oauth-callback, refresh-tokens, send, webhook) refactor para usar las RPCs |
+| F - auth | #28 | `_user-auth.js` chequea `password_temporal` server-side. Antes el flag solo se enforced en frontend — user recién creado podía llamar `/api/claude` con curl |
+| F - auth | #29 | Eliminado SHA-256 client-side de `Config.tsx` y `Usuarios.tsx`. Cambio de password SOLO via Supabase Auth (Argon2id). Eliminado el `console.log` que filtraba 16 chars del hash |
+| F - auth | ALTO #7 | `refresh-tokens.js` fail-closed si `REFRESH_SECRET` falta en producción |
+
+**No incluidos (requieren decisión o rediseño):**
+- F2C#23 `tienda-mp?action=preference` anon + venta_id BIGSERIAL enumerable → necesita rediseño checkout (HMAC short-lived).
+- Deuda residual de 15 filas con hash SHA-256 viejo en `usuarios.password` — pendiente cleanup en migration aparte.
+- IG token plano (TEXT) sigue en columna `page_access_token` por compat. Drop en migration posterior una vez confirmado que prod funciona con encrypted.
+
 ---
 
 **Última actualización:** 2026-05-27

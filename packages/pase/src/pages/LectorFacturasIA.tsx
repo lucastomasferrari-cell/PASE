@@ -301,7 +301,12 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
       let imagen_url=null;
       if(archivo){
         const ext=(archivo.name.split(".").pop()||"bin").toLowerCase();
-        const path=`${id}.${ext}`;
+        // AUDIT F2C #4: prefijo tenant_id obligatorio por Storage RLS.
+        // Sin esto, tenants nuevos no pueden subir (RLS rechaza) y el
+        // fallback legacy abre los archivos a Neko. Superadmin sin tenant
+        // usa "superadmin" como bucket virtual.
+        const tenantPath = user.tenant_id ?? "superadmin";
+        const path=`${tenantPath}/${id}.${ext}`;
         const {error:upErr}=await db.storage.from("facturas").upload(path,archivo,{contentType:archivo.type||"application/octet-stream",upsert:false});
         if(upErr){
           alert("Error subiendo la imagen: "+upErr.message);

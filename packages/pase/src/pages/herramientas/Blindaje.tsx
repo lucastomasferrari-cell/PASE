@@ -192,7 +192,10 @@ export default function Blindaje({ user, locales, localActivo }: BlindajeProps) 
     if (archivo) {
       const ext = (archivo.name.split(".").pop() || "bin").toLowerCase();
       const yyyymmdd = toISO(today).replace(/-/g, "");
-      const path = `${lid}/${tipo.id}_${yyyymmdd}.${ext}`;
+      // AUDIT F2C #8: prefijo tenant_id obligatorio por Storage RLS.
+      // Sin esto los tenants nuevos no podrían subir documentos blindaje.
+      const tenantPath = user?.tenant_id ?? "superadmin";
+      const path = `${tenantPath}/${lid}/${tipo.id}_${yyyymmdd}.${ext}`;
       const { error: upErr } = await db.storage.from("blindaje").upload(path, archivo, {
         contentType: archivo.type || "application/octet-stream",
         upsert: true,

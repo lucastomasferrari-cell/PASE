@@ -34,7 +34,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
   }
 
-  // Auth básico: header X-Refresh-Secret debe coincidir con env
+  // AUDIT F2D #7 (refactor): fail-closed si REFRESH_SECRET falta en producción.
+  // Antes: si se olvidaba la env var, el endpoint quedaba abierto.
+  if (process.env.VERCEL && !REFRESH_SECRET) {
+    return res.status(500).json({ ok: false, error: 'REFRESH_SECRET_NOT_CONFIGURED' });
+  }
   if (REFRESH_SECRET) {
     const secret = req.headers['x-refresh-secret'];
     if (secret !== REFRESH_SECRET) {
@@ -42,10 +46,11 @@ export default async function handler(req, res) {
     }
   }
 
-  // Buscar configs cuyo token vence en <=14 días o ya venció (rescate)
+  // Buscar configs cuyo token vence en <=14 días o ya venció (rescate).
+  // AUDIT F2D #27: NO seleccionamos page_access_token; lo leemos via RPC encrypted.
   const cutoff = new Date(Date.now() + 14 * 86400_000).toISOString();
   const { data: configs, error } = await db.from('ig_config')
-    .select('tenant_id, ig_account_id, ig_username, page_access_token, token_expira_at, bot_activo')
+    .select('tenant_id, ig_account_id, ig_username, token_expira_at, bot_activo')
     .eq('bot_activo', true)
     .is('desconectado_at', null)
     .lte('token_expira_at', cutoff);
@@ -57,15 +62,19 @@ export default async function handler(req, res) {
   const resultados = [];
   for (const cfg of configs || []) {
     try {
-      // Endpoint de refresh de Instagram Login API
+      // AUDIT F2D #27: obtener token vía RPC encrypted.
+      const { data: tokenActual, error: tokErr } = await db.rpc('get_ig_token', { p_tenant_id: cfg.tenant_id });
+      if (tokErr || !tokenActual) {
+        resultados.push({ tenant_id: cfg.tenant_id, ig_username: cfg.ig_username, ok: false, error: 'NO_PUDIMOS_LEER_TOKEN' });
+        continue;
+      }
+
       const refreshResp = await fetch(
-        `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${encodeURIComponent(cfg.page_access_token)}`,
+        `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${encodeURIComponent(tokenActual)}`,
       );
       const refreshData = await refreshResp.json();
 
       if (!refreshResp.ok || !refreshData.access_token) {
-        // Si el token ya venció hace mucho, Meta puede rechazar el refresh.
-        // En ese caso, marcamos la config como desconectada y avisamos al dueño.
         const motivo = refreshData?.error?.message || `HTTP ${refreshResp.status}`;
         await db.from('ig_config')
           .update({ desconectado_at: new Date().toISOString(), bot_activo: false })
@@ -91,13 +100,17 @@ export default async function handler(req, res) {
       const expiresIn = refreshData.expires_in || 5184000; // 60 días
       const nuevaExpiracion = new Date(Date.now() + expiresIn * 1000).toISOString();
 
-      await db.from('ig_config')
-        .update({
-          page_access_token: nuevoToken,
-          token_creado_at: new Date().toISOString(),
-          token_expira_at: nuevaExpiracion,
-        })
-        .eq('ig_account_id', cfg.ig_account_id);
+      // AUDIT F2D #27: escribir token nuevo vía RPC encrypted.
+      const { error: setErr } = await db.rpc('set_ig_token', {
+        p_tenant_id: cfg.tenant_id,
+        p_token: nuevoToken,
+        p_token_creado_at: new Date().toISOString(),
+        p_token_expira_at: nuevaExpiracion,
+      });
+      if (setErr) {
+        resultados.push({ tenant_id: cfg.tenant_id, ig_username: cfg.ig_username, ok: false, error: 'SET_TOKEN_FAILED: ' + setErr.message });
+        continue;
+      }
 
       await db.from('ig_eventos').insert({
         tenant_id: cfg.tenant_id,

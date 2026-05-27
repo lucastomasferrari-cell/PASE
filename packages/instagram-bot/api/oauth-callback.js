@@ -167,20 +167,26 @@ export default async function handler(req, res) {
 
     const finalAccountId = existingConfig?.ig_account_id || ig_account_id_fallback;
 
-    const upsertData = {
-      tenant_id: stateRow.tenant_id,
-      ig_account_id: finalAccountId,
-      ig_username: meData.username,
-      page_access_token: longToken,
-      bot_activo: true,
-      token_creado_at: new Date().toISOString(),
-      token_expira_at: tokenExpiraAt,
-      connected_by: stateRow.usuario_id,
-      desconectado_at: null,
-    };
+    // AUDIT F2D #27: token va encrypted vía RPC set_ig_token (vault + pgcrypto).
+    // Antes se escribía page_access_token plano en la columna TEXT — dump
+    // de Postgres exponía tokens IG long-lived de 60d.
+    const { error: setTokErr } = await db.rpc('set_ig_token', {
+      p_tenant_id: stateRow.tenant_id,
+      p_token: longToken,
+      p_ig_account_id: finalAccountId,
+      p_ig_username: meData.username,
+      p_token_creado_at: new Date().toISOString(),
+      p_token_expira_at: tokenExpiraAt,
+    });
+    if (setTokErr) {
+      console.error('[oauth-callback] set_ig_token failed:', setTokErr.message);
+      return res.status(500).json({ error: 'no_pudimos_guardar_token', detail: setTokErr.message });
+    }
 
+    // Actualizar campos que set_ig_token no toca (bot_activo, connected_by).
     const { error: upsertErr } = await db.from('ig_config')
-      .upsert(upsertData, { onConflict: 'tenant_id' });
+      .update({ bot_activo: true, connected_by: stateRow.usuario_id })
+      .eq('tenant_id', stateRow.tenant_id);
 
     if (upsertErr) {
       await logEvent('error', stateRow.tenant_id, null, `upsert ig_config failed: ${upsertErr.message}`);

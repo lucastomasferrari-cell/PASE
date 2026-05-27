@@ -338,15 +338,15 @@ async function handlePartnerWebhook(req, res, provider) {
   //   tipo_entrega, direccion, local_external_id, instrucciones.
   //
   // Mapeo de local: lookup en mapeos_locales_externos por (provider, external_local_id).
-  // Si vino ?local_id explícito en query, lo respetamos (modo testing/dev).
-  // Si no hay mapeo Y no hay override, devolvemos 404 con mensaje claro para
-  // que el dueño sepa que tiene que configurar el mapeo.
+  // AUDIT F2C #2: eliminada la rama `Number(req.query.local_id)` que permitía
+  // que un atacante anónimo pegara `?local_id=N` y creara ventas_pos en el
+  // local víctima. Solo el mapeo DB-side autoriza el destino.
   const externalLocalId = String(
     payload.store_id ?? payload.local_id ?? payload.restaurant_id ?? payload.location_id ?? ''
   ) || null;
 
-  let localId = Number(req.query.local_id) || null;
-  if (!localId && externalLocalId) {
+  let localId = null;
+  if (externalLocalId) {
     const { data: mapeo } = await supabase.from('mapeos_locales_externos')
       .select('local_id')
       .eq('provider', provider)

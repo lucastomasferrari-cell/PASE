@@ -15,10 +15,18 @@
 //     // auth = { user, row } — user de Supabase Auth + row de tabla usuarios
 //     ...
 //   }
+//
+// AUDIT F2D #28: el flag `password_temporal` ahora se chequea acá (server-side).
+// Antes solo lo enforced el frontend (App.tsx), entonces un user recién creado
+// podía llamar /api/claude, /api/afip-cae, etc. desde curl sin haber cambiado
+// el password obligatorio. La excepción: pasar `allowPasswordTemporal: true`
+// al checkUserAuth desde endpoints que SÍ deben aceptar el flag (auth-change-password).
 
 const ALLOWED_ROLES = ['superadmin', 'dueno', 'admin', 'cajero', 'encargado'];
 
-export async function checkUserAuth(req, res) {
+export async function checkUserAuth(req, res, opts = {}) {
+  const { allowPasswordTemporal = false } = opts;
+
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
     res.status(500).json({ ok: false, error: 'auth_config_missing' });
     return null;
@@ -45,7 +53,7 @@ export async function checkUserAuth(req, res) {
     const user = userData.user;
     const { data: row } = await admin
       .from('usuarios')
-      .select('id, rol, activo, tenant_id')
+      .select('id, rol, activo, tenant_id, password_temporal')
       .eq('auth_id', user.id)
       .maybeSingle();
     if (!row) {
@@ -58,6 +66,12 @@ export async function checkUserAuth(req, res) {
     }
     if (!ALLOWED_ROLES.includes(row.rol)) {
       res.status(403).json({ ok: false, error: 'role_not_allowed' });
+      return null;
+    }
+    // AUDIT F2D #28: bloqueo server-side de usuarios con password temporal.
+    if (row.password_temporal === true && !allowPasswordTemporal) {
+      res.status(403).json({ ok: false, error: 'password_temporal_pending',
+        hint: 'Cambiá la contraseña en la pantalla inicial antes de usar la API.' });
       return null;
     }
     return { user, row };

@@ -99,18 +99,15 @@ export default async function handler(req, res) {
     if (!cliente) return res.status(404).json({ ok: false, error: 'CLIENTE_NOT_FOUND' });
     if (cliente.bloqueado) return res.status(403).json({ ok: false, error: 'CLIENTE_BLOQUEADO' });
 
-    const { data: cfg } = await db.from('ig_config')
-      .select('page_access_token')
-      .eq('tenant_id', conv.tenant_id)
-      .single();
-
-    if (!cfg?.page_access_token) {
-      return res.status(500).json({ ok: false, error: 'IG_CONFIG_NO_TOKEN' });
+    // AUDIT F2D #27: token leído vía RPC encrypted (no más TEXT plano).
+    const { data: tokenIG, error: tokErr } = await db.rpc('get_ig_token', { p_tenant_id: conv.tenant_id });
+    if (tokErr || !tokenIG) {
+      return res.status(500).json({ ok: false, error: 'IG_CONFIG_NO_TOKEN', detail: tokErr?.message });
     }
 
     // ─── 5. Enviar via Graph API ────────────────────────────────────────
     const envio = await enviarMensaje({
-      pageAccessToken: cfg.page_access_token,
+      pageAccessToken: tokenIG,
       igsid: cliente.igsid,
       texto: texto.trim(),
     });

@@ -68,10 +68,14 @@ export default async function handler(req, res) {
   }
 
   // ── Idempotency: si ya hay factura aprobada con este request_uuid, devolver cache ──
+  // AUDIT F2C #3: agregar filtro por tenant_id. Sin esto, si un atacante de tenant B
+  // aprende un request_uuid de tenant A (por logs/network), puede recibir el CAE/QR
+  // fiscal completo de tenant A.
   const { data: prev } = await supabase
     .from('afip_facturas')
     .select('id, cae, cae_vence_at, numero, qr_fiscal_url, estado, rechazo_motivo')
     .eq('request_uuid', body.request_uuid)
+    .eq('tenant_id', tenantId)
     .maybeSingle();
   if (prev?.cae) {
     return res.status(200).json({
