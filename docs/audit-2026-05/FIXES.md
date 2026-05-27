@@ -183,6 +183,31 @@ Una entrada por commit, con:
 - F6B UI eliminar/restaurar tenant (Lucas hoy usa scripts a mano).
 - `diagnostic.js` info disclosure (sigue exponiendo first4+last4 de secrets).
 
+### 2026-05-27 — F7 sprint críticos deuda técnica
+
+**Migration:** `packages/pase/supabase/migrations/202605271200_audit_f7_retention_buckets.sql` (434ms, 2 smoke ✅)
+**Reporte fuente:** [07-deuda-tecnica.md](./07-deuda-tecnica.md) (sub-reportes 07a/07b).
+
+3 fixes aplicados (de 10 críticos — el resto requieren sprints dedicados o decisión):
+
+| # | Cambio |
+|---|---|
+| F7B#1+#10 | Migration crea `fn_retention_cleanup()` + cron job `retention-cleanup` (domingos 3am). Borra rows viejas: `auditoria` >180d, `ig_eventos` >90d, `pedidos_externos_log` >30d, `idempotency_keys` >7d, las 7 tablas `*_history` >180d. Sin esto las tablas crecen indefinido y degradan queries con el tiempo. |
+| F7B#2 (partial) | Bucket toggle no posible desde Postgres (owned por `supabase_storage_admin`). **Agregado a tareas manuales pendientes** — Lucas debe togglear `empleados` y `rrhh-documentos` a privados desde panel Supabase Storage en 30 seg. La migration loguea WARNING. |
+| F7A#3 | DELETE 196 LOC dead code: `packages/comanda/src/hooks/use-toast.ts` (shadcn pattern jamás importado) + `packages/comanda/src/components/ui/toaster.tsx` (su único consumer). COMANDA usa Sonner (71 archivos) que sigue funcionando. Typecheck ✅. |
+
+**No incluidos (decisiones / sprints dedicados):**
+- F7A#1 `@pase/shared` sprint (970 LOC duplicados consolidación).
+- F7A#4 IG bot helpers (`_lib/db.js` ignorado por 5 de 7 endpoints).
+- F7A#6 consolidación endpoints PASE (`?action=`) — API Vercel Hobby al límite.
+- F7A C4-F13 Maxirest importer atomic batch.
+- F7B-S3 triage 96 SD funcs sin auth check.
+- F7B-S4 cleanup `tenant_id NULL` en 3 tablas operativas (webhooks pre-resolución).
+- F7B-S5 numeric(15,2) en 68 columnas de plata — migración data.
+- F7B-S6/S7 CHECK constraints en tablas/enums (sprint hardening).
+- F7B-S8 updated_at + trigger en 63 tablas.
+- Tests para admin-console + instagram-bot (0 cobertura hoy).
+
 ---
 
 **Última actualización:** 2026-05-27
