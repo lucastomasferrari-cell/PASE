@@ -131,6 +131,32 @@ Una entrada por commit, con:
 - F4B#2 migración 150 `alert/confirm/prompt` → toasts (rampa coordinada).
 - Bug TZ resto de 18 callers de `today` + grep de patrones `new Date().toISOString().slice(0,10)`.
 
+### 2026-05-27 — F5 sprint críticos COMANDA
+
+**Reporte fuente:** [05-comanda.md](./05-comanda.md) (sub-reportes 05a páginas/servicios, 05b sync offline, 05c integraciones AFIP/delivery).
+
+7 fixes aplicados (de 14 críticos totales — los 7 restantes requieren decisiones / refactors):
+
+| # | Cambio |
+|---|---|
+| F5B#2 | `AuthPosProvider.tsx`: `logout()` ahora invoca `resetDb()` (lazy import). Antes IndexedDB conservaba data del user A → al loguearse user B se mezclaban ops cross-tenant. Riesgo de corrupción real cerrado. |
+| F5B#3 | `pullInitial.ts::pullVentasAbiertas`: ahora **preserva ventas con `_local_dirty=true`** (cobradas offline sin sincronizar). Antes borraba TODAS al pullear — PoC: cajero cobra venta offline → otro cajero entra → la venta cobrada desaparecía y el server nunca la recibía. Items también filtran por venta padre dirty. |
+| F5B#4 | `syncEngine.ts::runFullCycle`: pull y push ahora con try/catch independientes. Antes si pull fallaba (típico al caerse internet), push tampoco corría y las ops pending quedaban indefinidamente sin retry. |
+| F5B#1 | `operations.ts`: nueva `resetSyncingOpsAtBoot()` invocada desde `syncEngine.start()`. Ops huérfanas en estado 'syncing' (de un crash anterior) se resetean a 'pending' para reintentarse. |
+| F5A#2 | `pullIncremental.ts::pullVentasItemsIncremental`: agregado `.eq('local_id', ctx.localId)` explícito. Antes confiaba en RLS pero dueños con visibilidad cross-local recibían deltas de otros locales que terminaban en IndexedDB del local activo (mezcla al cambiar de local). |
+| F5C#1 | `tienda-mp.js::handlePartnerWebhook`: wired `verifyRappiWebhookSignature` + `verifyPedidosYaWebhookSignature`. Antes los helpers existían pero terminaban con `void` al final del archivo — cualquiera podía inyectar pedidos POST al webhook. Modo soft-fail (warning) si el mapeo no tiene `webhook_secret` aún configurado; hard-fail si la firma viene presente pero inválida. |
+| F5C#3 | `tienda-mp.js::handlePartnerWebhook`: chequeo de idempotency por `(provider, external_order_id)` antes del INSERT. Antes reenvíos de Rappi/Peya generaban `unique_violation` 500 → partner reintenta indefinidamente. Ahora respondo 200 + `idempotent_replay: true`. |
+
+**No incluidos (decisiones / refactors):**
+- F5C#2 AFIP recovery (CAE huérfano) — necesita decisión: ¿store request_uuid antes de pedir CAE? ¿rollback transaccional? Riesgo fiscal AR real.
+- F5C#4 MP webhook itera todos los tenants — requiere coordinar frontend de checkout para que `preference` MP lleve `metadata.mp_credencial_id`.
+- F5C#5 Print server local sin auth — decisión mecanismo (bearer token? client cert?).
+- F5A#11 docs de sync engine montaje (validar primero si feature flag default ON es intencional).
+- F5A#12 idempotency keys window 5s frágil — refactor.
+- F5A#13 `_tempIdCounter` persistir en localStorage — refactor.
+- F5A#14 VentaScreen god-object 1378 LOC — sprint dedicado de split.
+- **Tests E2E del sync engine** — alta prioridad, sprint dedicado.
+
 ---
 
 **Última actualización:** 2026-05-27

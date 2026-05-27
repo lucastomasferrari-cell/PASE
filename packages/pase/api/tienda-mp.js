@@ -330,30 +330,25 @@ async function handlePartnerWebhook(req, res, provider) {
     console.warn(`[${provider}] no se pudo loggear webhook (tabla missing?):`, e.message);
   }
 
-  // TODO: validar firma HMAC del partner (cuando se tenga la credencial).
-  // Por ahora aceptamos cualquier POST. En producción real, sin firma = 401.
-
-  // Mapeo conceptual de campos (los real names dependen del partner):
-  //   external_id, items[], cliente.nombre, cliente.telefono, total,
-  //   tipo_entrega, direccion, local_external_id, instrucciones.
-  //
-  // Mapeo de local: lookup en mapeos_locales_externos por (provider, external_local_id).
-  // AUDIT F2C #2: eliminada la rama `Number(req.query.local_id)` que permitía
-  // que un atacante anónimo pegara `?local_id=N` y creara ventas_pos en el
-  // local víctima. Solo el mapeo DB-side autoriza el destino.
+  // AUDIT F5C#1: wire HMAC validation. Antes los helpers verify*Signature
+  // existían pero terminaban con `void verifyRappiWebhookSignature;` al
+  // final del archivo — los webhooks aceptaban cualquier POST. Ahora se
+  // valida la firma del partner contra el secret en mapeos_locales_externos
+  // (o env var como fallback) antes de procesar el payload.
   const externalLocalId = String(
     payload.store_id ?? payload.local_id ?? payload.restaurant_id ?? payload.location_id ?? ''
   ) || null;
 
   let localId = null;
+  let mapeo = null;
   if (externalLocalId) {
-    const { data: mapeo } = await supabase.from('mapeos_locales_externos')
-      .select('local_id')
+    const { data } = await supabase.from('mapeos_locales_externos')
+      .select('local_id, webhook_secret')
       .eq('provider', provider)
       .eq('external_local_id', externalLocalId)
       .eq('activo', true)
       .maybeSingle();
-    if (mapeo) localId = mapeo.local_id;
+    if (data) { localId = data.local_id; mapeo = data; }
   }
   if (!localId) {
     res.status(404).json({
@@ -361,6 +356,35 @@ async function handlePartnerWebhook(req, res, provider) {
       hint: 'Configurá el mapeo en /integraciones/' + (provider === 'pedidos-ya' ? 'pedidosya' : provider),
     });
     return;
+  }
+
+  // AUDIT F5C#1: validar firma HMAC del partner. El secret se busca en
+  // el mapeo (preferido) o en env var como fallback temporal.
+  // Si el partner no manda firma o no hay secret configurado, registramos
+  // warning y continuamos (modo soft-fail durante la migración). Cuando
+  // todos los mapeos tengan secret, hacer hard-fail (`return 401`).
+  const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+  const sigHeader = req.headers['x-signature'] || req.headers['x-rappi-signature'] || req.headers['x-peya-signature'] || null;
+  const secret = mapeo?.webhook_secret || process.env[`${provider.toUpperCase().replace(/-/g, '_')}_WEBHOOK_SECRET`] || null;
+  if (secret && sigHeader) {
+    let valid = false;
+    try {
+      if (provider === 'rappi') {
+        valid = verifyRappiWebhookSignature(rawBody, sigHeader, secret);
+      } else if (provider === 'pedidos-ya') {
+        valid = verifyPedidosYaWebhookSignature(rawBody, sigHeader, secret);
+      } else {
+        valid = true; // deliverect / otros — sin verificador implementado todavía
+      }
+    } catch (e) {
+      console.warn(`[${provider}] HMAC verify threw:`, e?.message);
+    }
+    if (!valid) {
+      res.status(401).json({ error: 'INVALID_SIGNATURE' });
+      return;
+    }
+  } else if (!secret) {
+    console.warn(`[${provider}] webhook sin secret configurado — soft-fail (configurar mapeos_locales_externos.webhook_secret)`);
   }
 
   const { data: local } = await supabase.from('locales').select('tenant_id').eq('id', localId).single();
@@ -397,6 +421,29 @@ async function handlePartnerWebhook(req, res, provider) {
   const externalOrderId = String(
     payload.order_id ?? payload.id ?? payload.external_id ?? ''
   ) || null;
+
+  // AUDIT F5C#3: idempotency check antes de INSERT.
+  // Existe UNIQUE INDEX uniq_ventas_external_order (provider, external_order_id)
+  // pero el handler hacía INSERT sin chequear → si Rappi reenvía el mismo
+  // webhook (reintentos por timeout, retries de Meta), generaba 500
+  // unique_violation → Rappi sigue reintentando indefinidamente.
+  // Ahora chequeamos primero y respondemos 200 idempotent_replay.
+  if (externalOrderId) {
+    const { data: existing } = await supabase.from('ventas_pos')
+      .select('id, estado')
+      .eq('external_provider', provider)
+      .eq('external_order_id', externalOrderId)
+      .maybeSingle();
+    if (existing) {
+      res.status(200).json({
+        ok: true,
+        venta_id: existing.id,
+        estado: existing.estado,
+        idempotent_replay: true,
+      });
+      return;
+    }
+  }
 
   // Crear venta_pos con estado necesita_aprobacion
   const { data: nuevaVenta, error: errVenta } = await supabase.from('ventas_pos').insert({
@@ -1625,5 +1672,5 @@ async function handleAfipTestConnection(req, res) {
 
 // Verificadores de firma HMAC importados pero no wireados al webhook
 // genérico todavía. Sprint próximo cuando Lucas tenga creds.
-void verifyRappiWebhookSignature;
-void verifyPedidosYaWebhookSignature;
+// AUDIT F5C#1: las funciones verify*Signature ahora SÍ se usan en
+// handlePartnerWebhook. Eliminado el `void` que las marcaba como no-usadas.

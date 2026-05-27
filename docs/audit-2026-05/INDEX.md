@@ -31,7 +31,8 @@ Pedido por Lucas, ejecutado en 9 fases.
 | F3🔧 | Fix sprint F3 críticos | ✅ Completa | **10 fixes aplicados** ([FIXES.md](./FIXES.md)) — 5 quedan (refactors arquitectónicos: Caja unificar, useBandejaEntrada, catálogos on-focus) |
 | 4 | 🎨 Frontend PASE | ✅ Completa | [04-frontend-pase.md](./04-frontend-pase.md) — **~80 findings, 11 críticos** (`today` frozen, dead code 25KB, setInterval sin cleanup, modal 8% adoption, sin money helper) |
 | F4🔧 | Fix sprint F4 críticos | ✅ Completa | **5 fixes aplicados** ([FIXES.md](./FIXES.md)) — 6 quedan (refactors arquitectónicos: modal, toast, money helper, logError, race vacTomadas, permisos atómicos) |
-| 5 | 📱 COMANDA completo | ⚪ Pendiente | — |
+| 5 | 📱 COMANDA completo | ✅ Completa | [05-comanda.md](./05-comanda.md) — **~80 findings, 14 críticos** (logout no limpia IndexedDB, AFIP recovery, HMAC desconectado, pullVentasAbiertas borra dirty, sin tests del sync engine) |
+| F5🔧 | Fix sprint F5 críticos | ✅ Completa | **7 fixes aplicados** ([FIXES.md](./FIXES.md)) — 7 quedan (AFIP recovery, MP webhook tenant, print server auth, VentaScreen split, idempotency window, tempIdCounter persist, tests E2E sync) |
 | 6 | 🤖 Bot IG + admin-console | ⚪ Pendiente | — |
 | 7 | 🧹 Deuda + overengineering | ⚪ Pendiente | — |
 | 8 | 📊 Consolidación ejecutiva | ⚪ Pendiente | — |

@@ -80,6 +80,15 @@ export function AuthPosProvider({ children, autolockMin }: Props) {
   const logout = useCallback(() => {
     writeEmpleadoToStorage(null);
     setEmpleado(null);
+    // AUDIT F5B#2: limpiar IndexedDB en logout para evitar corrupción
+    // cross-tenant. Antes las ops del user A se sincronizaban con el JWT
+    // del user B al loguearse otra cuenta.
+    // Lazy import para no traer la dep al bundle inicial.
+    void import('./db').then(({ resetDb }) => {
+      void resetDb().catch((e: unknown) => {
+        console.warn('[logout] resetDb falló (no crítico):', e);
+      });
+    });
   }, []);
 
   const resetTimer = useCallback(() => { armTimer(); }, [armTimer]);

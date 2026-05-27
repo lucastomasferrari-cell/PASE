@@ -20,7 +20,7 @@
 import { pullInitialAll, type PullContext } from './pullInitial';
 import { pullIncrementalAll } from './pullIncremental';
 import { processPushQueue } from './pushQueue';
-import { pendingCount, failedCount } from './operations';
+import { pendingCount, failedCount, resetSyncingOpsAtBoot } from './operations';
 
 export type SyncState =
   | { kind: 'idle'; pendingOps: number; failedOps: number; lastSyncAt: string | null }
@@ -44,6 +44,15 @@ class SyncEngine {
   // el ciclo periódico.
   async start(ctx: PullContext): Promise<void> {
     this.ctx = ctx;
+    // AUDIT F5B#1: resetear ops huérfanas en 'syncing' que quedaron del
+    // crash anterior. Sin esto quedan permanente en ese estado y no se
+    // reintentan nunca.
+    try {
+      const reset = await resetSyncingOpsAtBoot();
+      if (reset > 0) console.log(`[syncEngine] reset ${reset} ops huérfanas en 'syncing'`);
+    } catch (e) {
+      console.warn('[syncEngine] resetSyncingOpsAtBoot falló:', e);
+    }
     this.startPeriodicSync();
     await this.runFullCycle(true); // primer ciclo con pull initial
   }
@@ -107,8 +116,15 @@ class SyncEngine {
   private async runFullCycle(isInitial: boolean): Promise<void> {
     if (!this.ctx || this.inFlight) return;
     this.inFlight = true;
+
+    // AUDIT F5B#4: pull y push tienen try/catch independientes — antes si
+    // pull fallaba (típico cuando se cae internet a mitad), el push NO
+    // corría aunque hubiera ops pending → quedaban encoladas indefinidamente
+    // hasta que el usuario hiciera algo que disparara otro ciclo.
+    let pullErr: unknown = null;
+    let pushErr: unknown = null;
+
     try {
-      // Pull (initial o incremental)
       this.setState({
         kind: 'pulling',
         pendingOps: await pendingCount(),
@@ -119,30 +135,38 @@ class SyncEngine {
       } else {
         await pullIncrementalAll(this.ctx);
       }
+    } catch (e) {
+      pullErr = e;
+    }
 
-      // Push
+    try {
       this.setState({
         kind: 'pushing',
         pendingOps: await pendingCount(),
         failedOps: await failedCount(),
       });
       await processPushQueue();
+    } catch (e) {
+      pushErr = e;
+    }
 
+    try {
       this.lastSyncAt = new Date().toISOString();
-      this.setState({
-        kind: 'idle',
-        pendingOps: await pendingCount(),
-        failedOps: await failedCount(),
-        lastSyncAt: this.lastSyncAt,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.setState({
-        kind: 'error',
-        message,
-        pendingOps: await pendingCount().catch(() => 0),
-        failedOps: await failedCount().catch(() => 0),
-      });
+      const pending = await pendingCount().catch(() => 0);
+      const failed = await failedCount().catch(() => 0);
+      if (pullErr || pushErr) {
+        const message = pullErr
+          ? `pull: ${pullErr instanceof Error ? pullErr.message : String(pullErr)}`
+          : `push: ${pushErr instanceof Error ? pushErr.message : String(pushErr)}`;
+        this.setState({ kind: 'error', message, pendingOps: pending, failedOps: failed });
+      } else {
+        this.setState({
+          kind: 'idle',
+          pendingOps: pending,
+          failedOps: failed,
+          lastSyncAt: this.lastSyncAt,
+        });
+      }
     } finally {
       this.inFlight = false;
     }

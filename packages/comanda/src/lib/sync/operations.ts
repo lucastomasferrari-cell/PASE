@@ -146,6 +146,26 @@ export async function failedCount(): Promise<number> {
   return all.filter((op) => op.status === 'failed').length;
 }
 
+// AUDIT F5B#1: si el browser muere a mitad de un push (battery 0%, tab
+// crash, etc.), las ops quedan en estado 'syncing' indefinidamente — no
+// las vuelve a tomar el próximo ciclo porque listPendingOps filtra por
+// status='pending'. Esta function resetea esas ops huérfanas a 'pending'
+// para que se reintenten. Se llama desde syncEngine.start().
+export async function resetSyncingOpsAtBoot(): Promise<number> {
+  const db = await getDb();
+  const all = (await db.getAll('pending_ops')) as PendingOp[];
+  let reset = 0;
+  for (const op of all) {
+    if (op.status === 'syncing') {
+      op.status = 'pending';
+      op.last_error = 'reset_at_boot: op estaba en syncing al iniciar engine';
+      await db.put('pending_ops', op);
+      reset++;
+    }
+  }
+  return reset;
+}
+
 // Cleanup: elimina ops `synced` con más de N días. Llamar periódicamente
 // (cron del frontend o al cerrar turno) para no acumular history.
 const KEEP_SYNCED_DAYS = 7;

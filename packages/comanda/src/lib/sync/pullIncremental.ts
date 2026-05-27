@@ -230,8 +230,12 @@ async function pullVentasItemsIncremental(ctx: PullCtx): Promise<PullDelta> {
   const t0 = performance.now();
   const scope = `${ctx.tenantId}:${ctx.localId}`;
   const since = await getLastPullAt('ventas_pos_items', scope);
-  // No filtramos por venta — confiamos en el RLS (que ya filtra por local).
-  let q = supabase.from('ventas_pos_items').select('*');
+  // AUDIT F5A#2: filtrar por local_id explícito. Antes confiaba en RLS pero
+  // si el usuario tiene visibilidad cross-local (dueño con acceso a varios),
+  // recibía deltas de items de OTROS locales, que terminaban en IndexedDB
+  // del local activo. Al cambiar de local, mezclas. La columna `local_id`
+  // existe en ventas_pos_items (redundante con la de su venta padre).
+  let q = supabase.from('ventas_pos_items').select('*').eq('local_id', ctx.localId);
   if (since) q = q.gt('updated_at', since);
   const { data, error } = await q.limit(500);
   if (error) throw error;

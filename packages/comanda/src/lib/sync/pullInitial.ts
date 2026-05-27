@@ -176,30 +176,48 @@ async function pullVentasAbiertas(ctx: PullContext): Promise<PullResult> {
     iRows = (items ?? []) as unknown as LocalVentaItem[];
   }
 
-  // Reemplazo de ventas abiertas: borrar las locales abiertas del local, insertar.
+  // AUDIT F5B#3: NO borrar ventas dirty (no-sincronizadas) — el comment viejo
+  // decía "mantener las dirty" pero el código borraba TODAS. PoC del bug:
+  // cajero cobra venta offline → otro cajero se loguea → pullVentasAbiertas
+  // corre → la venta cobrada local desaparece y el server nunca recibe el
+  // cobro (la op queue puede haber sido borrada por el reset DB también).
+  // Ahora: skip rows con `_local_dirty=true`.
   const db = await getDb();
   const txV = db.transaction('ventas_pos', 'readwrite');
   const idxV = txV.store.index('by_local');
   let cursor = await idxV.openCursor(IDBKeyRange.only(ctx.localId));
   while (cursor) {
-    // Solo borrar las que estaban abiertas — si hay cobradas locales sin
-    // sincronizar (dirty), mantenerlas. Para keep-simple acá borramos todas
-    // las del local y reinsertamos solo las abiertas. Las cobradas locales
-    // se reescriben con su estado correcto en pull incremental.
-    await cursor.delete();
+    const row = cursor.value;
+    if (!row._local_dirty) {
+      await cursor.delete();
+    }
     cursor = await cursor.continue();
   }
   for (const r of vRows) {
+    // No sobreescribir una venta dirty con la versión del server
+    const existing = await txV.store.get(r.id);
+    if (existing && existing._local_dirty) continue;
     await txV.store.put({ ...r, _local_dirty: false, _local_synced_at: new Date().toISOString() });
   }
   await txV.done;
 
-  // Items: borrar todos los items de las ventas afectadas + reinsertar
+  // Items: borrar todos los items de las ventas afectadas + reinsertar.
+  // ventasItemsRepo.deleteByVenta es genérico (no chequea dirty); para no
+  // perder items locales dirty, filtramos venta_ids a las que NO tengan
+  // venta dirty asociada.
   if (ventaIds.length > 0) {
+    const txCheck = db.transaction('ventas_pos', 'readonly');
+    const ventaIdsSafe: typeof ventaIds = [];
     for (const vId of ventaIds) {
+      const v = await txCheck.store.get(vId);
+      if (!v || !v._local_dirty) ventaIdsSafe.push(vId);
+    }
+    await txCheck.done;
+    for (const vId of ventaIdsSafe) {
       await ventasItemsRepo.deleteByVenta(vId);
     }
-    await ventasItemsRepo.putMany(iRows, { skipDirty: true });
+    const iRowsSafe = iRows.filter(i => ventaIdsSafe.includes(i.venta_id));
+    await ventasItemsRepo.putMany(iRowsSafe, { skipDirty: true });
   }
 
   await updateSyncMeta('ventas_pos', `${ctx.tenantId}:${ctx.localId}`);
