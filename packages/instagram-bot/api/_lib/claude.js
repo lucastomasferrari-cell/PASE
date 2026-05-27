@@ -7,6 +7,18 @@
 // Costo aprox $3/M input + $15/M output. Lo bajamos a Haiku cuando salga
 // el nombre correcto disponible (claude-haiku-4-6 tira 404 al 2026-05-21).
 // Configurable por tenant en `ig_config.modelo`.
+//
+// AUDIT F6A#5 — PROMPT CACHING (2026-05-27): el system prompt del bot
+// (típicamente 800-3000 tokens con info del negocio + menú + horarios +
+// memoria del cliente) se repetía en cada llamada y se cobraba a full price.
+// Anthropic ofrece cache de 5 min con costo de write 25% más caro pero
+// reads a 10% del precio. Resultado neto: ~5x más barato cuando se llama
+// múltiples veces en ventana corta (típico durante una conversación).
+//
+// Cómo activar caching: cache_control en el último system block.
+// El cache hit vs miss se reporta en usage.cache_read_input_tokens y
+// usage.cache_creation_input_tokens — ambos campos contemplados en el
+// costo total para tracking real.
 
 import Anthropic from '@anthropic-ai/sdk';
 
@@ -27,7 +39,7 @@ export const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
  * @param {Array<{role:'user'|'assistant', content:string}>} opts.messages
  * @param {string} opts.modelo - default 'claude-sonnet-4-6'
  * @param {number} opts.maxTokens - default 1024
- * @returns {Promise<{texto: string, tokens_in: number, tokens_out: number, costo_usd: number, stop_reason: string}>}
+ * @returns {Promise<{texto: string, tokens_in: number, tokens_out: number, cache_read: number, cache_write: number, costo_usd: number, stop_reason: string}>}
  */
 export async function llamarClaude({
   systemPrompt,
@@ -35,33 +47,52 @@ export async function llamarClaude({
   modelo = 'claude-sonnet-4-6',
   maxTokens = 1024,
 }) {
+  // AUDIT F6A#5: el system prompt va como array con cache_control para
+  // que Anthropic lo cachee 5 min. Solo cachea si pesa ≥ 1024 tokens
+  // (Sonnet) — más cortos siguen siendo full price (no rompe nada).
+  const systemArr = systemPrompt
+    ? [
+        {
+          type: 'text',
+          text: systemPrompt,
+          cache_control: { type: 'ephemeral' },
+        },
+      ]
+    : undefined;
+
   const resp = await anthropic.messages.create({
     model: modelo,
     max_tokens: maxTokens,
-    system: systemPrompt,
+    system: systemArr,
     messages,
   });
 
-  // El response.content puede ser un array de blocks. Para Sprint B
-  // (sin tools) solo nos interesa el texto.
   const textBlock = resp.content.find((b) => b.type === 'text');
   const texto = textBlock?.text || '';
 
   const tokens_in = resp.usage?.input_tokens || 0;
   const tokens_out = resp.usage?.output_tokens || 0;
+  const cache_read = resp.usage?.cache_read_input_tokens || 0;
+  const cache_write = resp.usage?.cache_creation_input_tokens || 0;
 
-  // Costo estimado (Haiku 4.6 pricing): $1/M input + $5/M output (aprox).
-  // Ajustar si cambia el pricing.
+  // Pricing con cache (Anthropic 2026):
+  //   - Cache write: input × 1.25  (más caro la primera vez)
+  //   - Cache read:  input × 0.10  (10% del precio normal)
+  //   - input/output: normal.
   const PRECIO_INPUT_PER_MTOK = modelo.includes('haiku') ? 1.0 : modelo.includes('sonnet') ? 3.0 : 15.0;
   const PRECIO_OUTPUT_PER_MTOK = modelo.includes('haiku') ? 5.0 : modelo.includes('sonnet') ? 15.0 : 75.0;
   const costo_usd =
     (tokens_in / 1_000_000) * PRECIO_INPUT_PER_MTOK +
+    (cache_write / 1_000_000) * PRECIO_INPUT_PER_MTOK * 1.25 +
+    (cache_read / 1_000_000) * PRECIO_INPUT_PER_MTOK * 0.10 +
     (tokens_out / 1_000_000) * PRECIO_OUTPUT_PER_MTOK;
 
   return {
     texto,
     tokens_in,
     tokens_out,
+    cache_read,
+    cache_write,
     costo_usd,
     stop_reason: resp.stop_reason,
   };

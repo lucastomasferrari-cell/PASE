@@ -25,11 +25,52 @@ import { GASTRO_SENSEI_SYSTEM_PROMPT } from './_gastro-sensei-prompt.js';
 const DEFAULT_MODEL_SOPORTE = 'claude-sonnet-4-6';
 const DEFAULT_MAX_TOKENS_SOPORTE = 1024;
 
+// AUDIT F6A#6 (2026-05-27): caps server-side para evitar abuso.
+// El frontend puede pedir más tokens (ej. Lector Facturas pide 1500), pero
+// nunca por encima de estos caps que protegen contra cost-runaway si un
+// user manipula el body para pedir max_tokens=200000.
+//
+// El cap del proxy crudo (task='legacy', sin task definido) es el más
+// estricto porque ahí el body es libre. Las tasks armadas server-side
+// (soporte-chat / gastro-sensei) tienen sus propios defaults.
+const MAX_TOKENS_HARD_CAP = 4096;       // Cualquier task no puede pedir más.
+const MAX_TOKENS_LEGACY_CAP = 2000;     // Proxy crudo (Lector Facturas IA).
+
+// Rate limit best-effort en memoria del serverless function. Cada deploy/
+// invocación fría lo resetea, pero suficiente para frenar burst de abuso
+// dentro de una ventana de 5 min. Para rate limit persistente cross-deploys
+// requerimos tabla DB (sprint medio).
+const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;  // 5 min
+const RATE_LIMIT_MAX_CALLS = 30;             // 30 calls / 5 min / user
+const callCounts = new Map(); // user_id → [{at}]
+
+function rateLimitCheck(userId) {
+  const now = Date.now();
+  const arr = (callCounts.get(userId) || []).filter(t => now - t < RATE_LIMIT_WINDOW_MS);
+  if (arr.length >= RATE_LIMIT_MAX_CALLS) {
+    return { ok: false, count: arr.length, window_ms: RATE_LIMIT_WINDOW_MS };
+  }
+  arr.push(now);
+  callCounts.set(userId, arr);
+  return { ok: true, count: arr.length };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const auth = await checkUserAuth(req, res);
   if (!auth) return; // checkUserAuth ya envió 401/403/500
+
+  // AUDIT F6A#6: rate limit per-user (best-effort).
+  const rl = rateLimitCheck(auth.row.id);
+  if (!rl.ok) {
+    res.status(429).json({
+      error: 'RATE_LIMIT_EXCEEDED',
+      detail: `Excediste ${RATE_LIMIT_MAX_CALLS} llamadas a Claude en ${Math.round(RATE_LIMIT_WINDOW_MS / 60000)} min. Esperá un rato.`,
+      retry_after_seconds: Math.round(RATE_LIMIT_WINDOW_MS / 1000),
+    });
+    return;
+  }
 
   // Si el body trae un `task` conocido, armamos el payload server-side.
   // Caso contrario, comportamiento legacy: proxy crudo.
@@ -41,6 +82,14 @@ export default async function handler(req, res) {
     payload = buildGastroSenseiPayload(body, auth);
   } else {
     payload = body;
+  }
+
+  // AUDIT F6A#6: cap max_tokens server-side.
+  const isLegacy = !body.task;
+  const cap = isLegacy ? MAX_TOKENS_LEGACY_CAP : MAX_TOKENS_HARD_CAP;
+  if (payload.max_tokens && payload.max_tokens > cap) {
+    console.warn(`[claude proxy] user=${auth.row.id} pidió max_tokens=${payload.max_tokens}, capeado a ${cap}`);
+    payload.max_tokens = cap;
   }
 
   try {
