@@ -37,7 +37,7 @@ Pedido por Lucas, ejecutado en 9 fases.
 | F6🔧 | Fix sprint F6 críticos | ✅ Completa | **5 fixes aplicados + F2D#27 fase 2** ([FIXES.md](./FIXES.md)) — incluye drop columna IG plain. Deuda: prompt caching, /api/claude rate limit, multi-account OAuth, tests bot. |
 | 7 | 🧹 Deuda + overengineering | ✅ Completa | [07-deuda-tecnica.md](./07-deuda-tecnica.md) — **~40 findings, 10 críticos** (buckets públicos con DNIs, cero retention, @pase/shared vacío + 970 LOC duplicados, 96 SD funcs a triagear) |
 | F7🔧 | Fix sprint F7 críticos | ✅ Completa | **3 fixes aplicados + 1 tarea manual** ([FIXES.md](./FIXES.md)) — retention cron + dead code COMANDA. Lucas debe togglear buckets en panel Supabase manualmente. |
-| 8 | 📊 Consolidación ejecutiva | ⚪ Pendiente | — |
+| 8 | 📊 Consolidación ejecutiva | ✅ Completa | [08-consolidacion-ejecutiva.md](./08-consolidacion-ejecutiva.md) — **498 findings, 96 críticos, 69 fixes en 7 commits, 7 migrations en prod, 31 decisiones pendientes** |
 
 ## 🔧 Convenciones
 
