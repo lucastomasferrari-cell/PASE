@@ -1,5 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { tryReloadOnChunkError, isChunkLoadError } from "../lib/chunkLoadErrorHandler";
+import { db } from "../lib/supabase";
+import { getConsoleErrors } from "../lib/consoleCapture";
 
 /**
  * ErrorBoundary global — captura crashes de React y muestra una pantalla
@@ -47,6 +49,28 @@ export class ErrorBoundary extends Component<Props, State> {
     console.error("[ErrorBoundary] React crash:", error);
     console.error("[ErrorBoundary] Component stack:", errorInfo.componentStack);
     this.setState({ errorInfo });
+
+    // AUDIT F4C#9: persistir el error en DB via RPC fn_log_frontend_error
+    // para que Lucas pueda verlo desde admin-console (antes solo vivía en
+    // DevTools del browser del user → invisible).
+    // No-blocking: si la llamada falla, no nos preocupamos (el user ya está
+    // viendo la pantalla de error igual). Best effort.
+    // PostgrestFilterBuilder retorna thenable pero no Promise nativa;
+    // envolvemos en async IIFE para tener .catch real.
+    (async () => {
+      try {
+        await db.rpc('fn_log_frontend_error', {
+          p_message: error.message || 'unknown',
+          p_stack: error.stack || null,
+          p_url: typeof window !== 'undefined' ? window.location.href : null,
+          p_user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+          p_context: {
+            component_stack: errorInfo.componentStack,
+            recent_console_errors: getConsoleErrors().slice(-10),
+          },
+        });
+      } catch { /* ignore — no bloquear pantalla de error */ }
+    })();
 
     // Si es "Failed to fetch dynamically imported module" (típico después
     // de un deploy nuevo de Vercel), intentamos auto-reload. La función

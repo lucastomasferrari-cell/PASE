@@ -2,6 +2,7 @@ import { useState } from "react";
 import { db } from "../lib/supabase";
 import { PageHeader, EmptyState, LocalLockedChip, LocalSelectorObligatorio, DocumentIcon, FolderIcon, AlertIcon, CheckIcon } from "../components/ui";
 import { formatCurrency } from "../lib/format";
+import { moneyKey } from "../lib/money";
 import { exportCSV } from "../lib/exportCSV";
 import { parseExtractoMP, esExtractoMpCsv } from "../lib/mpExtractoParser";
 import type { Usuario, Local } from "../types";
@@ -234,9 +235,11 @@ Si el archivo no parece un extracto de MercadoPago, devolvé:
       .gte("fecha", desde)
       .lte("fecha", hasta)
       .eq("local_id", localImport);
+    // AUDIT F4C#8: usar moneyKey() en vez de toFixed(2) inline para que la
+    // dedup sea consistente con el resto del sistema (centavos integer).
     for (const r of existingRange ?? []) {
       const row = r as { id: string; fecha: string; monto: number };
-      const key = `${row.fecha?.slice(0, 10)}|${Number(row.monto).toFixed(2)}`;
+      const key = `${row.fecha?.slice(0, 10)}|${moneyKey(Number(row.monto))}`;
       existingByCombo.set(key, row.id);
     }
 
@@ -244,7 +247,7 @@ Si el archivo no parece un extracto de MercadoPago, devolvé:
       if (m.referencia_externa && existingByRef.has(m.referencia_externa)) {
         return { ...m, yaExiste: true, matchId: existingByRef.get(m.referencia_externa)! };
       }
-      const key = `${m.fecha}|${Number(m.monto).toFixed(2)}`;
+      const key = `${m.fecha}|${moneyKey(Number(m.monto))}`;
       if (existingByCombo.has(key)) {
         return { ...m, yaExiste: true, matchId: existingByCombo.get(key)! };
       }
