@@ -29,7 +29,30 @@ export const parseMonto = (v: unknown): number => {
 };
 
 export const toISO = (d: Date): string => d.toISOString().split("T")[0]!;
+
+/**
+ * AUDIT F4C #1: `today` queda capturado al primer import del módulo.
+ * Una pestaña abierta a las 23:55 AR sigue viendo el día anterior 18h después
+ * (bug confirmado: useBandejaEntrada usaba esto para filtrar facturas vencidas
+ * → la lista de "vencidas" no se actualizaba cruzado el día sin reload).
+ *
+ * **Para código nuevo usar `now()`** que devuelve un Date fresh cada llamada.
+ * Migración de los 20 callers de `today` es gradual (sprint dedicado).
+ *
+ * @deprecated Usar `now()` que retorna fecha actual sin caching.
+ */
 export const today = new Date();
+
+/** Devuelve un Date nuevo (sin caching). Usar en código nuevo. */
+export const now = (): Date => new Date();
+
+/** Devuelve la fecha de hoy formateada como YYYY-MM-DD en zona AR (UTC-3, sin DST). */
+export const todayAR_ISO = (): string => {
+  const d = new Date();
+  // Argentina = UTC-3 constante. Restamos 3 horas y leemos UTC parts.
+  const ar = new Date(d.getTime() - 3 * 60 * 60 * 1000);
+  return ar.toISOString().split("T")[0]!;
+};
 
 // Estado efectivo de una factura — deriva "vencida" al vuelo cuando el
 // estado guardado es "pendiente" y la fecha de vencimiento ya pasó.

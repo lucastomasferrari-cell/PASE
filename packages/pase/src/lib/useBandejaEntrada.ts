@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { db } from "./supabase";
 import { useRealtimeTable } from "./useRealtimeTable";
 import { tienePermiso } from "./auth";
+import { todayAR_ISO } from "./utils";
 import type { Usuario } from "../types";
 
 /**
@@ -136,7 +137,11 @@ async function fetchOverrides(user: Usuario): Promise<Notif[]> {
 }
 
 async function fetchFacturasVencidas(): Promise<Notif[]> {
-  const hoyIso = new Date().toISOString().slice(0, 10);
+  // AUDIT F4C #2: usar todayAR_ISO en vez de toISOString().slice(0,10).
+  // El último devuelve fecha UTC; entre 21:00-23:59 AR la "fecha de hoy"
+  // queda desplazada al día siguiente UTC → facturas que vencen hoy
+  // aparecen como "vencidas" falsamente, y al día siguiente desaparecen.
+  const hoyIso = todayAR_ISO();
   // eslint-disable-next-line pase-local/require-apply-local-scope -- bandeja de entrada: muestra resumen GLOBAL del user across los locales que ve. RLS ya scopea por tenant + auth_locales_visibles.
   const { data, error } = await db.from("facturas")
     .select("id, nro, total, venc")
@@ -229,9 +234,10 @@ async function fetchSolicitudesPendientes(user: Usuario): Promise<Notif[]> {
 }
 
 async function fetchFacturasPorVencer(): Promise<Notif[]> {
-  const hoy = new Date();
-  const hoyIso = hoy.toISOString().slice(0, 10);
-  const en7 = new Date(hoy.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  // AUDIT F4C #2: fecha de "hoy" en zona AR, fresh por cada call.
+  const hoyIso = todayAR_ISO();
+  const en7Date = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 - 3 * 60 * 60 * 1000);
+  const en7 = en7Date.toISOString().slice(0, 10);
   // eslint-disable-next-line pase-local/require-apply-local-scope -- bandeja de entrada: idem fetchFacturasVencidas, scope cross-local intencional.
   const { data, error } = await db.from("facturas")
     .select("id, total, venc")

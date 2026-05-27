@@ -174,18 +174,23 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
   // (El filtro RLS de defense-in-depth ya está en la vista server-side —
   // migration 202605211300.)
   const [empleadosVisibles, setEmpleadosVisibles] = useState<EmpleadoVisible[]>([]);
+  // AUDIT F4A#2: agregar guard isMounted + dep localActivo para refrescar
+  // al cambiar de local desde el sidebar (antes deps=[] no recargaba y la
+  // lista de empleados quedaba stale con los del local anterior).
   useEffect(() => {
+    let isMounted = true;
     (async () => {
       const { data } = await db.from('v_rrhh_empleados_visible')
         .select('id, nombre, local_principal_id, locales_ids')
         .eq('activo', true)
         .order('nombre');
-      // Joineamos con rrhh_empleados para traer apellido
+      if (!isMounted) return;
       if (data && data.length > 0) {
         const ids = data.map((e: { id: string }) => e.id);
         const { data: emps } = await db.from('rrhh_empleados')
           .select('id, apellido')
           .in('id', ids);
+        if (!isMounted) return;
         const apMap = new Map((emps ?? []).map((e: { id: string; apellido: string }) => [e.id, e.apellido]));
         setEmpleadosVisibles(data.map((e: { id: string; nombre: string; local_principal_id: number; locales_ids: number[] | null }) => ({
           ...e,
@@ -195,7 +200,8 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
         setEmpleadosVisibles([]);
       }
     })();
-  }, []);
+    return () => { isMounted = false; };
+  }, [localActivo]);
   const [form, setForm] = useState(emptyForm);
 
   const emptyPagoPlant = { monto: "", fecha: toISO(today), cuenta: "" };

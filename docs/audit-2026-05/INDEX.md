@@ -29,7 +29,8 @@ Pedido por Lucas, ejecutado en 9 fases.
 | F2🔧 | Fix sprint F2 críticos | ✅ Completa | **26 fixes aplicados** ([FIXES.md](./FIXES.md)) — 6 quedan (1 rediseño checkout + cleanup legacy SHA + drop col plana IG) |
 | 3 | ⚡ Performance | ✅ Completa | [03-performance.md](./03-performance.md) — **71 findings, 15 críticos/altos** (Realtime 7h CPU/día, COMANDA bundle 765KB, N+1, índices) |
 | F3🔧 | Fix sprint F3 críticos | ✅ Completa | **10 fixes aplicados** ([FIXES.md](./FIXES.md)) — 5 quedan (refactors arquitectónicos: Caja unificar, useBandejaEntrada, catálogos on-focus) |
-| 4 | 🎨 Frontend PASE | ⚪ Pendiente | — |
+| 4 | 🎨 Frontend PASE | ✅ Completa | [04-frontend-pase.md](./04-frontend-pase.md) — **~80 findings, 11 críticos** (`today` frozen, dead code 25KB, setInterval sin cleanup, modal 8% adoption, sin money helper) |
+| F4🔧 | Fix sprint F4 críticos | ✅ Completa | **5 fixes aplicados** ([FIXES.md](./FIXES.md)) — 6 quedan (refactors arquitectónicos: modal, toast, money helper, logError, race vacTomadas, permisos atómicos) |
 | 5 | 📱 COMANDA completo | ⚪ Pendiente | — |
 | 6 | 🤖 Bot IG + admin-console | ⚪ Pendiente | — |
 | 7 | 🧹 Deuda + overengineering | ⚪ Pendiente | — |

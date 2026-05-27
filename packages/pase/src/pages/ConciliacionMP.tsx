@@ -213,9 +213,23 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
   // segundo click sincrónicamente, antes de que el setState de `conciliando`
   // se aplique en el re-render.
   const conciliandoRef = useRef(false);
+  // AUDIT F4A#1: ref para el setInterval del countdown de sincronización,
+  // así podemos cancelarlo en unmount (antes quedaba corriendo y disparaba
+  // setState sobre componente desmontado).
+  const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Duración 5000ms (defaults a 3000) — los mensajes de conciliación pueden
   // ser largos (error de RPC con detalle). El toast es dismissible con click.
   const { toast, showToast, showError, dismiss } = useToast(5000);
+
+  // AUDIT F4A#1: cleanup en unmount.
+  useEffect(() => {
+    return () => {
+      if (syncIntervalRef.current) {
+        clearInterval(syncIntervalRef.current);
+        syncIntervalRef.current = null;
+      }
+    };
+  }, []);
   const [tab,setTab]=useState("egresos");
   // Filtro "solo sin justificar" del tab Egresos. Lo activa también el card
   // del header al click ("X egresos sin justificar" → tab Egresos + filtro).
@@ -410,13 +424,20 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
         return;
       }
 
-      // Paso 2: countdown de 2 minutos
+      // Paso 2: countdown de 2 minutos.
+      // AUDIT F4A#1: guardamos el interval en la ref para que el cleanup
+      // del useEffect en unmount lo pueda cancelar (antes seguía corriendo
+      // si el user navegaba afuera mientras sincronizaba).
       await new Promise<void>(resolve=>{
         let remaining=120;
-        const interval=setInterval(()=>{
+        if(syncIntervalRef.current)clearInterval(syncIntervalRef.current);
+        syncIntervalRef.current=setInterval(()=>{
           remaining--;
           setSyncCountdown(remaining);
-          if(remaining<=0){clearInterval(interval);resolve();}
+          if(remaining<=0){
+            if(syncIntervalRef.current){clearInterval(syncIntervalRef.current);syncIntervalRef.current=null;}
+            resolve();
+          }
         },1000);
       });
 

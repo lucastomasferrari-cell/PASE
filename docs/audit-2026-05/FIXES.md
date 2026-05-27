@@ -107,6 +107,30 @@ Una entrada por commit, con:
 - F3C#13 catálogos (`useCategorias`/`useMediosCobro`/`usePuestosRRHH`) on-focus invalidation + BroadcastChannel cross-tab (en vez de Realtime permanente 24×7).
 - Cache `pg_timezone_names` en JS const (580s CPU acumulada, fix de 30 min pero requiere identificar todos los date pickers).
 
+### 2026-05-27 — F4 sprint críticos frontend
+
+**Reporte fuente:** [04-frontend-pase.md](./04-frontend-pase.md) (sub-reportes 04a/04b/04c).
+
+5 fixes aplicados de los 11 críticos totales (los 6 restantes son refactors arquitectónicos):
+
+| # | Cambio |
+|---|---|
+| F4C#3 | DELETE 5 archivos dead code (~25 KB): `hooks/useFinanzas.ts`, `hooks/useNegocio.ts`, `lib/services/caja.service.ts` (tenía race condition C4-F11), `lib/services/rrhh.service.ts`, `lib/saldoMP.ts` + test. Removida carpeta `lib/services/` vacía. |
+| F4C#1 | `utils.ts`: agregado `now()` (Date fresh) + `todayAR_ISO()` (string YYYY-MM-DD en zona AR). `today` const queda con JSDoc `@deprecated` apuntando al bug TZ. |
+| F4C#1 (partial) | `useBandejaEntrada.ts`: `fetchFacturasVencidas` y `fetchFacturasPorVencer` migrados a `todayAR_ISO()`. Antes filtraban contra fecha UTC — entre 21:00-23:59 AR la lista mostraba el día siguiente. Migración del resto (~18 callers de `today`) queda gradual. |
+| F4A#1 | `ConciliacionMP.tsx`: `setInterval(1s)` del countdown sync ahora se guarda en `syncIntervalRef` y se limpia en unmount + al resolverse. Antes seguía corriendo si el user navegaba fuera mientras sincronizaba → setState sobre componente desmontado. |
+| F4A#2 | `Gastos.tsx`: `useEffect` de empleadosVisibles ahora con guard `isMounted` y `deps: [localActivo]`. Antes `deps=[]` no refrescaba al cambiar de local → empleados de locales anteriores quedaban en la lista (bug reportado 2026-05-20). |
+
+**No incluidos (sprints dedicados):**
+- F4C#2 migrar los 57 `.toISOString().slice(0,10)` UTC → AR (requiere análisis case-by-case).
+- F4A#3 `RRHHLegajo.tsx:175` race vacTomadas (necesita rediseño del flow modal).
+- F4A#4 `Usuarios.tsx:213` RPC atómica `sincronizar_permisos_usuario` (nueva RPC + refactor).
+- F4C#8 helper money math centralizado (decidir Big.js vs custom + migrar 16+8 callers).
+- F4C#9 `logError` backend + ErrorBoundary refactor (nuevo endpoint).
+- F4B#1 estandarizar pattern `<Modal>` (24 archivos con overlay manual).
+- F4B#2 migración 150 `alert/confirm/prompt` → toasts (rampa coordinada).
+- Bug TZ resto de 18 callers de `today` + grep de patrones `new Date().toISOString().slice(0,10)`.
+
 ---
 
 **Última actualización:** 2026-05-27
