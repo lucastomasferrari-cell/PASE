@@ -1,3 +1,7 @@
-// Utils compartidas (fechas, formatters, etc). Vacío hasta la extracción.
+// Utils compartidas — AUDIT F7A#1 primera ola.
+// Estrategia: re-exportar todo desde acá para que PASE/COMANDA/admin
+// importen con `from '@pase/shared/utils'`.
 
-export {};
+export * from './money';
+export * from './time';
+export * from './useDebouncedValue';

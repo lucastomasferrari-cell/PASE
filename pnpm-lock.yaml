@@ -280,6 +280,9 @@ importers:
       '@afipsdk/afip.js':
         specifier: ^1.2.3
         version: 1.2.3
+      '@pase/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@supabase/supabase-js':
         specifier: ^2.103.0
         version: 2.104.1
@@ -382,6 +385,12 @@ importers:
         specifier: ^2.103.0
         version: 2.104.1
     devDependencies:
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
+      react:
+        specifier: ^19.2.4
+        version: 19.2.5
       typescript:
         specifier: ~5.6.0
         version: 5.6.3

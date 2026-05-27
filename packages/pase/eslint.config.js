@@ -167,6 +167,45 @@ const noEagerPageImportApp = {
   },
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// C12 (audit F4B#1): preferir el componente <Modal> en vez de overlay
+// manual con className="overlay". El Modal compartido tiene focus trap,
+// Escape para cerrar, body-scroll lock, role="dialog" + aria-modal,
+// header consistente. Hoy 24 archivos dibujan overlay manual con 3
+// patterns distintos coexistiendo.
+// ─────────────────────────────────────────────────────────────────────
+const preferModalComponent = {
+  meta: {
+    type: 'suggestion',
+    docs: {
+      description: 'Usar <Modal> de components/ui en vez de overlay manual.',
+    },
+    messages: {
+      overlay: 'className="overlay" detectado — preferí <Modal> de components/ui que ya tiene focus trap, Escape, body-scroll lock y a11y (CLAUDE.md → C12 / F4B#1).',
+    },
+    schema: [],
+  },
+  create(context) {
+    return {
+      JSXAttribute(node) {
+        if (node.name?.name !== 'className') return
+        // Detecta className="overlay" o className="overlay ..." literal
+        const val = node.value
+        if (!val) return
+        let str = null
+        if (val.type === 'Literal' && typeof val.value === 'string') str = val.value
+        if (val.type === 'JSXExpressionContainer' && val.expression?.type === 'Literal' &&
+            typeof val.expression.value === 'string') str = val.expression.value
+        if (!str) return
+        const classes = str.split(/\s+/)
+        if (classes.includes('overlay')) {
+          context.report({ node, messageId: 'overlay' })
+        }
+      },
+    }
+  },
+}
+
 export default defineConfig([
   globalIgnores(['dist']),
   {
@@ -177,6 +216,7 @@ export default defineConfig([
           'no-direct-financiera-write': noDirectFinancieraWrite,
           'require-apply-local-scope': requireApplyLocalScope,
           'no-eager-page-import-app': noEagerPageImportApp,
+          'prefer-modal-component': preferModalComponent,
         },
       },
     },
@@ -207,6 +247,10 @@ export default defineConfig([
       'pase-local/no-direct-financiera-write': 'error',
       'pase-local/require-apply-local-scope': 'error',
       'pase-local/no-eager-page-import-app': 'error',
+      // C12 modal pattern: WARN (no error) durante el ramp-up.
+      // 24 archivos hoy dibujan overlay manual. Migrar gradual.
+      // Convertir a error cuando coverage llegue a >80%.
+      'pase-local/prefer-modal-component': 'warn',
     },
   },
   // Tests, scripts one-off, audits: el bypass de C4 es esperado (setup de
