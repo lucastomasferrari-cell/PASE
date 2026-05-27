@@ -23,7 +23,7 @@ Pedido por Lucas, ejecutado en 9 fases.
 | # | Fase | Estado | Reporte |
 |---|------|--------|---------|
 | 0 | Reconocimiento | ✅ Completa | [00-reconocimiento.md](./00-reconocimiento.md) |
-| 1 | 💰 Bugs financieros | ⚪ Pendiente | — |
+| 1 | 💰 Bugs financieros | ✅ Completa | [01-bugs-financieros.md](./01-bugs-financieros.md) — **52 findings, 15 CRÍTICOS** |
 | 2 | 🔐 Seguridad multi-tenant | ⚪ Pendiente | — |
 | 3 | ⚡ Performance | ⚪ Pendiente | — |
 | 4 | 🎨 Frontend PASE | ⚪ Pendiente | — |
