@@ -17,10 +17,9 @@
 //   OAUTH_REDIRECT_URI - URL completa de este endpoint (ej https://pase-instagram-bot.vercel.app/api/oauth-callback)
 //   PASE_BASE_URL     - URL de PASE para redirect post-conexión (ej https://pase-yndx.vercel.app)
 
-import { createClient } from '@supabase/supabase-js';
+// AUDIT F7A#4: usar helper centralizado _lib/db.js en vez de createClient inline.
+import { db } from './_lib/db.js';
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const IG_APP_ID = process.env.IG_APP_ID;
 // IG_APP_SECRET = "Clave secreta de la app de Instagram" de Meta.
 // En esta app es el MISMO valor que META_APP_SECRET (un solo secret para
@@ -30,14 +29,6 @@ const IG_APP_ID = process.env.IG_APP_ID;
 const IG_APP_SECRET = process.env.META_APP_SECRET || process.env.IG_APP_SECRET;
 const OAUTH_REDIRECT_URI = process.env.OAUTH_REDIRECT_URI || 'https://pase-instagram-bot.vercel.app/api/oauth-callback';
 const PASE_BASE_URL = process.env.PASE_BASE_URL || 'https://pase-yndx.vercel.app';
-
-if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-  throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY');
-}
-
-const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {

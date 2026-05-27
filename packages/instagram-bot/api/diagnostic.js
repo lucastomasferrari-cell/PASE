@@ -8,10 +8,8 @@
 // Auth: requiere JWT de un user dueño/admin de PASE en Authorization header.
 // Eso garantiza que solo el dueño puede llamar este endpoint.
 
-import { createClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+// AUDIT F7A#4: usar helper centralizado _lib/db.js.
+import { db } from './_lib/db.js';
 
 export default async function handler(req, res) {
   // CORS
@@ -27,14 +25,6 @@ export default async function handler(req, res) {
   }
   const token = authHeader.slice(7);
 
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-    return res.status(500).json({ ok: false, error: 'SUPABASE_NOT_CONFIGURED' });
-  }
-
-  const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-
   const { data: authUser } = await db.auth.getUser(token);
   if (!authUser?.user?.id) {
     return res.status(401).json({ ok: false, error: 'INVALID_TOKEN' });
@@ -48,8 +38,12 @@ export default async function handler(req, res) {
   if (!usuario || !usuario.activo) {
     return res.status(403).json({ ok: false, error: 'USER_NOT_AUTHORIZED' });
   }
-  if (!['dueno', 'admin', 'superadmin'].includes(usuario.rol)) {
-    return res.status(403).json({ ok: false, error: 'NOT_DUENO_OR_ADMIN' });
+
+  // AUDIT F2D MED: solo SUPERADMIN puede ver info diagnóstico. Antes cualquier
+  // dueno/admin de cualquier tenant veía first4+last4 de TODOS los secrets,
+  // lo que ayudaba a un atacante con candidato de credencial a confirmar.
+  if (usuario.rol !== 'superadmin') {
+    return res.status(403).json({ ok: false, error: 'NOT_SUPERADMIN' });
   }
 
   // ─── Helper para enmascarar valores ─────────────────────────────────

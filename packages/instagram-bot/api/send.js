@@ -13,15 +13,9 @@
 //
 // CORS abierto para que PASE pueda llamarlo desde el browser.
 
-import { createClient } from '@supabase/supabase-js';
+// AUDIT F7A#4: usar helper centralizado _lib/db.js.
+import { db } from './_lib/db.js';
 import { enviarMensaje } from './_lib/meta.js';
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
-
-if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-  throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY');
-}
 
 export default async function handler(req, res) {
   // CORS
@@ -41,10 +35,6 @@ export default async function handler(req, res) {
       return res.status(401).json({ ok: false, error: 'NO_TOKEN' });
     }
     const token = authHeader.slice(7);
-
-    const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
 
     const { data: authUser, error: authErr } = await db.auth.getUser(token);
     if (authErr || !authUser?.user?.id) {

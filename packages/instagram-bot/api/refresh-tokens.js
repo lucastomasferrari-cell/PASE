@@ -15,19 +15,10 @@
 // Autenticación: header X-Refresh-Secret con el valor de REFRESH_SECRET env var
 // (un string random que solo conoce el cron). Sin eso, 401.
 
-import { createClient } from '@supabase/supabase-js';
+// AUDIT F7A#4: usar helper centralizado _lib/db.js.
+import { db } from './_lib/db.js';
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const REFRESH_SECRET = process.env.REFRESH_SECRET;
-
-if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-  throw new Error('Missing SUPABASE config');
-}
-
-const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
 
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') {
