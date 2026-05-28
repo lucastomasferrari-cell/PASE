@@ -15,6 +15,10 @@ export default async function globalTeardown(config: FullConfig): Promise<void> 
   console.log("[globalTeardown] ── E2E full suite — cleanup final ──");
   const t0 = Date.now();
 
+  // E2E_FORCE_CLEANUP=true desactiva el guard de cleanupE2ETenant que
+  // normalmente lo hace NO-OP cuando hay shared-seed activo. Acá SÍ
+  // queremos borrar el tenant compartido al final de la suite.
+  process.env.E2E_FORCE_CLEANUP = "true";
   try {
     await cleanupE2ETenant();
   } catch (e) {
@@ -23,6 +27,7 @@ export default async function globalTeardown(config: FullConfig): Promise<void> 
     // propio globalSetup defensivo.
     console.warn("[globalTeardown] cleanupE2ETenant falló:", (e as Error).message);
   }
+  delete process.env.E2E_FORCE_CLEANUP;
 
   clearSharedSeed();
 

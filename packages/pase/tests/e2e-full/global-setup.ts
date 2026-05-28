@@ -35,12 +35,16 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
 
   // 1) Cleanup idempotente del tenant E2E previo (si quedó residuo de
   //    una corrida anterior). NO falla si no existe.
+  // E2E_FORCE_CLEANUP="true" sobrescribe el guard de cleanupE2ETenant
+  // que normalmente lo hace NO-OP cuando hay shared-seed activo.
   console.log("[globalSetup] 1/3 cleanup defensivo del tenant E2E previo…");
+  process.env.E2E_FORCE_CLEANUP = "true";
   try {
     await cleanupE2ETenant();
   } catch (e) {
     console.warn("[globalSetup] cleanup defensivo tiró:", (e as Error).message);
   }
+  delete process.env.E2E_FORCE_CLEANUP;
 
   // 2) Login como superadmin (UNA sola vez por toda la suite).
   console.log("[globalSetup] 2/3 login superadmin…");

@@ -444,6 +444,33 @@ export async function seedE2ETenant(opts: {
  *   - SUPERADMIN_PASSWORD (para borrar tenant)
  */
 export async function cleanupE2ETenant(): Promise<void> {
+  // GUARD (sprint 28-may): si hay un shared-seed activo (creado por
+  // globalSetup), los afterAll de specs NO deben borrar el tenant
+  // compartido — solo globalTeardown lo hace al final. Sin esto, cada
+  // spec borraba el tenant y el siguiente spec fallaba con FK violation
+  // en seedComandaPos (canales.tenant_id apuntando a tenant ya borrado).
+  //
+  // El guard se desactiva con E2E_FORCE_CLEANUP=true (globalSetup y
+  // globalTeardown lo setean antes de llamar).
+  if (process.env.E2E_FORCE_CLEANUP !== "true") {
+    try {
+      const fs = await import("node:fs");
+      const os = await import("node:os");
+      const path = await import("node:path");
+      const seedPath = path.join(os.tmpdir(), "pase-e2e-shared-seed.json");
+      if (fs.existsSync(seedPath)) {
+        const raw = fs.readFileSync(seedPath, "utf-8");
+        const seed = JSON.parse(raw);
+        if (seed && seed.tenantId) {
+          // Shared seed activo — no borrar
+          return;
+        }
+      }
+    } catch {
+      // Si el guard rompe por algún motivo, fallback a comportamiento viejo
+    }
+  }
+
   // 1. Login superadmin (requerido para eliminar_tenant_completo)
   const anonClient = createClient(SUPABASE_URL, loadAnonKey(), {
     auth: { persistSession: false, autoRefreshToken: false },
