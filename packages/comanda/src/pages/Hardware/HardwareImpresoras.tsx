@@ -144,7 +144,7 @@ export function HardwareImpresoras() {
     if (!form.nombre.trim()) { toast.error('Poné un nombre a la impresora'); return; }
 
     // Armar config según transporte
-    let config: Record<string, unknown> = { tipo: form.tipo, width: form.width };
+    const config: Record<string, unknown> = { tipo: form.tipo, width: form.width };
     if (form.transporte === 'usb') {
       if (form.vendor_id) config.vendor_id = form.vendor_id;
       if (form.product_id) config.product_id = form.product_id;

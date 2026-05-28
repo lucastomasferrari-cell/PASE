@@ -144,7 +144,7 @@ export function RiderPWA() {
             { enableHighAccuracy: true, timeout: 10_000 },
           );
         });
-      } catch (e) {
+      } catch {
         setError('No diste permiso de ubicación. Revisá los permisos del navegador.');
         return;
       }
