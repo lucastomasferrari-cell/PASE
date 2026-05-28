@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/Badge';
 import { formatARS } from '@/lib/format';
-import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { useDebouncedValue } from '@pase/shared/utils';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { MateriaPrimaEditorDialog } from '@/components/dialogs/MateriaPrimaEditorDialog';
 

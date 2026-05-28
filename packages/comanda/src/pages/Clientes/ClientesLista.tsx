@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { formatARS } from '@/lib/format';
 import { ClienteEditorDialog } from '@/components/dialogs/ClienteEditorDialog';
-import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { useDebouncedValue } from '@pase/shared/utils';
 import { cn } from '@/lib/utils';
 
 // F1.2 — Lista de clientes (CRM básico).

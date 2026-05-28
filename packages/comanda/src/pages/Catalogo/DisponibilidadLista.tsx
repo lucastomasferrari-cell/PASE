@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
-import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { useDebouncedValue } from '@pase/shared/utils';
 import { AgotarDialog } from './AgotarDialog';
 import { cn } from '@/lib/utils';
 

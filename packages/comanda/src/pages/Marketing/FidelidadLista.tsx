@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/Badge';
 import { Input } from '@/components/ui/input';
 import { formatARS } from '@/lib/format';
-import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { useDebouncedValue } from '@pase/shared/utils';
 import { cn } from '@/lib/utils';
 
 // Fidelidad básica — top clientes por total_gastado / total_pedidos.

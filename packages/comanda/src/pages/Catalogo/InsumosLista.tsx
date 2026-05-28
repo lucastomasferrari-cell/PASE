@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { formatARS } from '@/lib/format';
 import { InsumoEditorDialog } from '@/components/dialogs/InsumoEditorDialog';
-import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { useDebouncedValue } from '@pase/shared/utils';
 
 // F1.1b — Lista de insumos del tenant (paleta internal heredada de AdminLayout).
 // Base para construir recetas con cantidad + merma %.

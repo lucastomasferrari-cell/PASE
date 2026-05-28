@@ -19,7 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MoneyInput } from '@/components/MoneyInput';
 import { PROVINCIAS_AR, buscarLocalidades } from '@/services/direccionesService';
-import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { useDebouncedValue } from '@pase/shared/utils';
 import { featureFlags, setFeatureFlag } from '@/lib/featureFlags';
 
 const MODOS: { value: PosModo; label: string }[] = [

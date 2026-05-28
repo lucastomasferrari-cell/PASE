@@ -3,7 +3,7 @@ import { db } from "../lib/supabase";
 import { applyLocalScope, localesVisibles, tienePermiso } from "../lib/auth";
 import { useMediosCobro } from "../lib/useMediosCobro";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
-import { useDebouncedValue } from "../lib/useDebouncedValue";
+import { useDebouncedValue } from "@pase/shared/utils";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import ImportarMaxirest from "./ImportarMaxirest";

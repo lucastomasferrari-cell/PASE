@@ -5,7 +5,7 @@ import { Inbox, Clock, Pencil, Check, X, Plus, Bell, BellOff, BellRing, Search, 
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import { useNotifier } from '@/lib/useNotifier';
-import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { useDebouncedValue } from '@pase/shared/utils';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';

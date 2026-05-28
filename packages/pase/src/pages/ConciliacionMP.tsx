@@ -5,7 +5,7 @@ import { applyLocalScope, cuentasOperables as cuentasOperablesFn } from "../lib/
 import { CUENTAS } from "../lib/constants";
 import { useCategorias } from "../lib/useCategorias";
 import { toISO, today, fmt_d, fmt_$, fmt_dt_ar, toLocalISO } from '../lib/utils';
-import { useDebouncedValue } from "../lib/useDebouncedValue";
+import { useDebouncedValue } from "@pase/shared/utils";
 import { Combobox } from "../components/Combobox";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";

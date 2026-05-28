@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { formatARS, formatFechaAR, formatHoraAR } from '@/lib/format';
 import { useReportesCtx } from './ReportesLayout';
 import { downloadCSV } from '@/services/reportesService';
-import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { useDebouncedValue } from '@pase/shared/utils';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { cn } from '@/lib/utils';
 

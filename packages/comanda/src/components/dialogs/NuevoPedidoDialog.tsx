@@ -16,7 +16,7 @@ import { listCanales } from '@/services/canalesService';
 import { listClientes, createCliente } from '@/services/clientesService';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
-import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { useDebouncedValue } from '@pase/shared/utils';
 import type { Canal, Cliente, TipoEntrega } from '@/types/database';
 import { cn } from '@/lib/utils';
 

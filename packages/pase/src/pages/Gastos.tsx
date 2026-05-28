@@ -5,7 +5,7 @@ import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { CUENTAS } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
-import { useDebouncedValue } from "../lib/useDebouncedValue";
+import { useDebouncedValue } from "@pase/shared/utils";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import { Combobox } from "../components/Combobox";

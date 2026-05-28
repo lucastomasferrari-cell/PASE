@@ -5,7 +5,7 @@ import { applyLocalScope, cuentasVisibles as cuentasVisiblesFn, cuentasOperables
 import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { useRealtimeTable } from "../lib/useRealtimeTable";
-import { useDebouncedValue } from "../lib/useDebouncedValue";
+import { useDebouncedValue } from "@pase/shared/utils";
 import { CUENTAS, CUENTAS_OCULTAS_TEMPORAL } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, toLocalISO } from '../lib/utils';
 import { RightSubNav, type SubNavSection, PageHeader, EmptyState, LocalLockedChip } from "../components/ui";

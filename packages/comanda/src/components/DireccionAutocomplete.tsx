@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MapPin, Check, Loader2 } from 'lucide-react';
 import { buscarDirecciones, type DireccionSugerida } from '@/services/direccionesService';
-import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { useDebouncedValue } from '@pase/shared/utils';
 import { cn } from '@/lib/utils';
 
 interface Props {

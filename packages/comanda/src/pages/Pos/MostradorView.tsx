@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
-import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { useDebouncedValue } from '@pase/shared/utils';
 import { cn } from '@/lib/utils';
 
 export function MostradorView() {
