@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { db } from "../lib/supabase";
 import { translateRpcError } from "../lib/errors";
+import { Modal } from "./ui";
 
 /**
  * Modal de Manager Override — v2 sprint 27-may noche.
@@ -149,17 +150,40 @@ export function ManagerOverrideModal({
     onValidated(codigo);
   };
 
-  if (!open) return null;
-
+  // AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido.
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="modal" style={{ width: 460, maxWidth: "92vw" }} onClick={e => e.stopPropagation()}>
-        <div className="modal-hd">
-          <div className="modal-title">Autorización del dueño</div>
-          <button className="close-btn" onClick={onClose}>✕</button>
-        </div>
-
-        <div className="modal-body">
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      title="Autorización del dueño"
+      maxWidth={460}
+      preventCloseOnOverlay={creandoSolicitud || validando}
+      footer={
+        <>
+          <button className="btn btn-sec" onClick={onClose} disabled={creandoSolicitud || validando}>
+            {estado.tipo === "form" ? "Cancelar" : "Cerrar"}
+          </button>
+          {estado.tipo === "form" && tab === "solicitar" && (
+            <button
+              className="btn btn-acc"
+              onClick={() => void crearSolicitud()}
+              disabled={creandoSolicitud}
+            >
+              {creandoSolicitud ? "Enviando…" : "Pedir autorización"}
+            </button>
+          )}
+          {estado.tipo === "form" && tab === "codigo" && (
+            <button
+              className="btn btn-acc"
+              onClick={() => void validarCodigo()}
+              disabled={validando || codigo.length !== 6}
+            >
+              {validando ? "Validando…" : "Autorizar"}
+            </button>
+          )}
+        </>
+      }
+    >
           {descripcion && (
             <p style={{
               fontSize: "var(--pase-fs-sm)",
@@ -305,35 +329,7 @@ export function ManagerOverrideModal({
               </p>
             </>
           )}
-        </div>
-
-        <div className="modal-ft">
-          <button className="btn btn-sec" onClick={onClose} disabled={creandoSolicitud || validando}>
-            {estado.tipo === "form" ? "Cancelar" : "Cerrar"}
-          </button>
-
-          {estado.tipo === "form" && tab === "solicitar" && (
-            <button
-              className="btn btn-acc"
-              onClick={() => void crearSolicitud()}
-              disabled={creandoSolicitud}
-            >
-              {creandoSolicitud ? "Enviando…" : "Pedir autorización"}
-            </button>
-          )}
-
-          {estado.tipo === "form" && tab === "codigo" && (
-            <button
-              className="btn btn-acc"
-              onClick={() => void validarCodigo()}
-              disabled={validando || codigo.length !== 6}
-            >
-              {validando ? "Validando…" : "Autorizar"}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

@@ -247,10 +247,10 @@ export default defineConfig([
       'pase-local/no-direct-financiera-write': 'error',
       'pase-local/require-apply-local-scope': 'error',
       'pase-local/no-eager-page-import-app': 'error',
-      // C12 modal pattern: WARN (no error) durante el ramp-up.
-      // 24 archivos hoy dibujan overlay manual. Migrar gradual.
-      // Convertir a error cuando coverage llegue a >80%.
-      'pase-local/prefer-modal-component': 'warn',
+      // C12 modal pattern: ERROR (sprint #5 post-audit grande terminado
+      // 2026-05-28 — 100% de archivos migrados al <Modal> compartido).
+      // Cualquier overlay manual nuevo rompe CI.
+      'pase-local/prefer-modal-component': 'error',
       // React 19 nuevo: set-state-in-effect detecta `setX()` dentro de
       // un useEffect. Es bug-prone (cascading renders) pero la mayoría
       // de los ~28 casos en el codebase son legítimos (cargar data y

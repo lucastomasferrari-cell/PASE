@@ -1101,113 +1101,117 @@ function TabVacAgu({
         )}
       </div>
 
-      {/* Modal vacaciones */}
-      {vacModal && (() => {
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido. */}
+      {(() => {
         const totalPagado = vacLineas.reduce((s, l) => s + (parseFloat(l.monto) || 0), 0);
         const restante = plusVacacional - totalPagado;
         const esParcial = totalPagado > 0 && totalPagado < plusVacacional - 0.01;
         const puedeConfirmar = totalPagado > 0 && vacLineas.every((l) => parseFloat(l.monto) > 0 && !!l.cuenta);
         return (
-          <div className="overlay" onClick={() => setVacModal(false)}>
-            <div className="modal" style={{width:480}} onClick={e => e.stopPropagation()}>
-              <div className="modal-hd"><div className="modal-title">Pagar vacaciones</div><button className="close-btn" onClick={() => setVacModal(false)}>✕</button></div>
-              <div className="modal-body">
-                <div className="field"><label>Días a pagar</label>
-                  <input type="number" value={vacDias} onChange={e => setVacDias(e.target.value)} placeholder={vacAcumuladas.toFixed(1)} />
-                </div>
-                <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginBottom:12,borderBottom:"1px solid var(--bd)"}}>
-                  <span style={{fontSize:12,color:"var(--muted2)"}}>Plus vacacional recomendado</span>
-                  <span style={{fontSize:14,fontWeight:500,color:"var(--acc)"}}>{fmt_$(plusVacacional)}</span>
-                </div>
-                <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Formas de pago</div>
-                {/* Bug Caja-1 fix: cada línea tiene placeholder y la validación
-                    de "puedeConfirmar" exige cuenta != "". */}
-                {vacLineas.map((l, i) => (
-                  <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
-                    <select className="search" style={{flex:1}} value={l.cuenta}
-                      onChange={e => setVacLineas((prev) => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
-                      <option value="">Seleccioná una cuenta…</option>
-                      {cuentasUsables.map((c: string) => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                    <input type="number" className="search" style={{width:120}} placeholder="Monto" value={l.monto}
-                      onChange={e => setVacLineas((prev) => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
-                    {vacLineas.length > 1 && <button className="btn btn-danger btn-sm" onClick={() => setVacLineas((prev) => prev.filter((_, j) => j !== i))}>✕</button>}
-                  </div>
-                ))}
-                <button className="btn btn-ghost btn-sm" style={{marginBottom:12}}
-                  onClick={() => setVacLineas((prev) => [...prev, { cuenta: "", monto: restante > 0 ? String(Math.round(restante)) : "" }])}>
-                  + Agregar forma de pago
-                </button>
-                <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
-                  <span style={{fontSize:12,color: esParcial ? "var(--warn)" : "var(--muted2)"}}>
-                    {esParcial ? "Pago parcial — Restante" : "Restante"}
-                  </span>
-                  <span style={{fontSize:14,fontWeight:500,color: Math.abs(restante) < 0.5 ? "var(--success)" : "var(--warn)"}}>
-                    {fmt_$(Math.max(0, restante))}
-                  </span>
-                </div>
-              </div>
-              <div className="modal-ft">
+          <Modal
+            isOpen={vacModal}
+            onClose={() => setVacModal(false)}
+            title="Pagar vacaciones"
+            maxWidth={480}
+            footer={
+              <>
                 <button className="btn btn-sec" onClick={() => setVacModal(false)}>Cancelar</button>
                 <button className="btn btn-acc" onClick={pagarVacaciones} disabled={!puedeConfirmar}>
                   {esParcial ? "Registrar pago parcial" : "Confirmar pago"}
                 </button>
-              </div>
+              </>
+            }
+          >
+            <div className="field"><label>Días a pagar</label>
+              <input type="number" value={vacDias} onChange={e => setVacDias(e.target.value)} placeholder={vacAcumuladas.toFixed(1)} />
             </div>
-          </div>
+            <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginBottom:12,borderBottom:"1px solid var(--bd)"}}>
+              <span style={{fontSize:12,color:"var(--muted2)"}}>Plus vacacional recomendado</span>
+              <span style={{fontSize:14,fontWeight:500,color:"var(--acc)"}}>{fmt_$(plusVacacional)}</span>
+            </div>
+            <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Formas de pago</div>
+            {/* Bug Caja-1 fix: cada línea tiene placeholder y la validación
+                de "puedeConfirmar" exige cuenta != "". */}
+            {vacLineas.map((l, i) => (
+              <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
+                <select className="search" style={{flex:1}} value={l.cuenta}
+                  onChange={e => setVacLineas((prev) => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
+                  <option value="">Seleccioná una cuenta…</option>
+                  {cuentasUsables.map((c: string) => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <input type="number" className="search" style={{width:120}} placeholder="Monto" value={l.monto}
+                  onChange={e => setVacLineas((prev) => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
+                {vacLineas.length > 1 && <button className="btn btn-danger btn-sm" onClick={() => setVacLineas((prev) => prev.filter((_, j) => j !== i))}>✕</button>}
+              </div>
+            ))}
+            <button className="btn btn-ghost btn-sm" style={{marginBottom:12}}
+              onClick={() => setVacLineas((prev) => [...prev, { cuenta: "", monto: restante > 0 ? String(Math.round(restante)) : "" }])}>
+              + Agregar forma de pago
+            </button>
+            <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
+              <span style={{fontSize:12,color: esParcial ? "var(--warn)" : "var(--muted2)"}}>
+                {esParcial ? "Pago parcial — Restante" : "Restante"}
+              </span>
+              <span style={{fontSize:14,fontWeight:500,color: Math.abs(restante) < 0.5 ? "var(--success)" : "var(--warn)"}}>
+                {fmt_$(Math.max(0, restante))}
+              </span>
+            </div>
+          </Modal>
         );
       })()}
 
-      {/* Modal aguinaldo */}
-      {aguModal && (() => {
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido. */}
+      {(() => {
         const totalPagado = aguLineas.reduce((s, l) => s + (parseFloat(l.monto) || 0), 0);
         const restante = sacAcumulado - totalPagado;
         const esParcial = totalPagado > 0 && totalPagado < sacAcumulado - 0.01;
         const puedeConfirmar = totalPagado > 0 && aguLineas.every((l) => parseFloat(l.monto) > 0 && !!l.cuenta);
         return (
-          <div className="overlay" onClick={() => setAguModal(false)}>
-            <div className="modal" style={{width:480}} onClick={e => e.stopPropagation()}>
-              <div className="modal-hd"><div className="modal-title">Pagar aguinaldo</div><button className="close-btn" onClick={() => setAguModal(false)}>✕</button></div>
-              <div className="modal-body">
-                <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginBottom:8,borderBottom:"1px solid var(--bd)"}}>
-                  <span style={{fontSize:12,color:"var(--muted2)"}}>Acumulado proporcional</span>
-                  <span style={{fontSize:14,fontWeight:500,color:"var(--acc)"}}>{fmt_$(sacAcumulado)}</span>
-                </div>
-                <div style={{fontSize:10,color:"var(--muted2)",marginBottom:12}}>Teórico semestre completo: {fmt_$(sacTeorico)}</div>
-                <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Formas de pago</div>
-                {aguLineas.map((l, i) => (
-                  <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
-                    <select className="search" style={{flex:1}} value={l.cuenta}
-                      onChange={e => setAguLineas((prev) => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
-                      <option value="">Seleccioná una cuenta…</option>
-                      {cuentasUsables.map((c: string) => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                    <input type="number" className="search" style={{width:120}} placeholder="Monto" value={l.monto}
-                      onChange={e => setAguLineas((prev) => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
-                    {aguLineas.length > 1 && <button className="btn btn-danger btn-sm" onClick={() => setAguLineas((prev) => prev.filter((_, j) => j !== i))}>✕</button>}
-                  </div>
-                ))}
-                <button className="btn btn-ghost btn-sm" style={{marginBottom:12}}
-                  onClick={() => setAguLineas((prev) => [...prev, { cuenta: "", monto: restante > 0 ? String(Math.round(restante)) : "" }])}>
-                  + Agregar forma de pago
-                </button>
-                <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
-                  <span style={{fontSize:12,color: esParcial ? "var(--warn)" : "var(--muted2)"}}>
-                    {esParcial ? "Pago parcial — Restante" : "Restante"}
-                  </span>
-                  <span style={{fontSize:14,fontWeight:500,color: Math.abs(restante) < 0.5 ? "var(--success)" : "var(--warn)"}}>
-                    {fmt_$(Math.max(0, restante))}
-                  </span>
-                </div>
-              </div>
-              <div className="modal-ft">
+          <Modal
+            isOpen={aguModal}
+            onClose={() => setAguModal(false)}
+            title="Pagar aguinaldo"
+            maxWidth={480}
+            footer={
+              <>
                 <button className="btn btn-sec" onClick={() => setAguModal(false)}>Cancelar</button>
                 <button className="btn btn-acc" onClick={pagarAguinaldo} disabled={!puedeConfirmar}>
                   {esParcial ? "Registrar pago parcial" : "Confirmar pago"}
                 </button>
-              </div>
+              </>
+            }
+          >
+            <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginBottom:8,borderBottom:"1px solid var(--bd)"}}>
+              <span style={{fontSize:12,color:"var(--muted2)"}}>Acumulado proporcional</span>
+              <span style={{fontSize:14,fontWeight:500,color:"var(--acc)"}}>{fmt_$(sacAcumulado)}</span>
             </div>
-          </div>
+            <div style={{fontSize:10,color:"var(--muted2)",marginBottom:12}}>Teórico semestre completo: {fmt_$(sacTeorico)}</div>
+            <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Formas de pago</div>
+            {aguLineas.map((l, i) => (
+              <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
+                <select className="search" style={{flex:1}} value={l.cuenta}
+                  onChange={e => setAguLineas((prev) => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
+                  <option value="">Seleccioná una cuenta…</option>
+                  {cuentasUsables.map((c: string) => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <input type="number" className="search" style={{width:120}} placeholder="Monto" value={l.monto}
+                  onChange={e => setAguLineas((prev) => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
+                {aguLineas.length > 1 && <button className="btn btn-danger btn-sm" onClick={() => setAguLineas((prev) => prev.filter((_, j) => j !== i))}>✕</button>}
+              </div>
+            ))}
+            <button className="btn btn-ghost btn-sm" style={{marginBottom:12}}
+              onClick={() => setAguLineas((prev) => [...prev, { cuenta: "", monto: restante > 0 ? String(Math.round(restante)) : "" }])}>
+              + Agregar forma de pago
+            </button>
+            <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
+              <span style={{fontSize:12,color: esParcial ? "var(--warn)" : "var(--muted2)"}}>
+                {esParcial ? "Pago parcial — Restante" : "Restante"}
+              </span>
+              <span style={{fontSize:14,fontWeight:500,color: Math.abs(restante) < 0.5 ? "var(--success)" : "var(--warn)"}}>
+                {fmt_$(Math.max(0, restante))}
+              </span>
+            </div>
+          </Modal>
         );
       })()}
     </>
@@ -1257,34 +1261,33 @@ function TabDocumentos({
         )}
       </div>
 
-      {docModal && (
-        <div className="overlay" onClick={() => setDocModal(false)}>
-          <div className="modal" style={{width:480}} onClick={e => e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Subir documento</div><button className="close-btn" onClick={() => setDocModal(false)}>✕</button></div>
-            <div className="modal-body">
-              <div className="field"><label>Tipo de documento</label>
-                <select value={docForm.tipo} onChange={e => setDocForm({...docForm, tipo:e.target.value})}>
-                  {DOC_TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select></div>
-              <div className="form2">
-                <div className="field"><label>Mes (opcional)</label>
-                  <select value={docForm.mes} onChange={e => setDocForm({...docForm, mes:e.target.value})}>
-                    <option value="">—</option>{MESES.slice(1).map((m,i) => <option key={i+1} value={i+1}>{m}</option>)}
-                  </select></div>
-                <div className="field"><label>Año (opcional)</label>
-                  <input type="number" value={docForm.anio} onChange={e => setDocForm({...docForm, anio:e.target.value})} placeholder={String(today.getFullYear())} /></div>
-              </div>
-              <div className="field"><label>Archivo</label>
-                <input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                  onChange={e => e.target.files?.[0] && subirDoc(e.target.files[0])}
-                  style={{background:"var(--bg)",border:"1px solid var(--bd)",padding:8,borderRadius:"var(--r)",width:"100%",color:"var(--txt)",fontFamily:"'DM Mono',monospace",fontSize:12}} />
-              </div>
-              {uploading && <div className="loading">Subiendo...</div>}
-            </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setDocModal(false)}>Cerrar</button></div>
-          </div>
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido. */}
+      <Modal
+        isOpen={docModal}
+        onClose={() => setDocModal(false)}
+        title="Subir documento"
+        maxWidth={480}
+        footer={<button className="btn btn-sec" onClick={() => setDocModal(false)}>Cerrar</button>}
+      >
+        <div className="field"><label>Tipo de documento</label>
+          <select value={docForm.tipo} onChange={e => setDocForm({...docForm, tipo:e.target.value})}>
+            {DOC_TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select></div>
+        <div className="form2">
+          <div className="field"><label>Mes (opcional)</label>
+            <select value={docForm.mes} onChange={e => setDocForm({...docForm, mes:e.target.value})}>
+              <option value="">—</option>{MESES.slice(1).map((m,i) => <option key={i+1} value={i+1}>{m}</option>)}
+            </select></div>
+          <div className="field"><label>Año (opcional)</label>
+            <input type="number" value={docForm.anio} onChange={e => setDocForm({...docForm, anio:e.target.value})} placeholder={String(today.getFullYear())} /></div>
         </div>
-      )}
+        <div className="field"><label>Archivo</label>
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+            onChange={e => e.target.files?.[0] && subirDoc(e.target.files[0])}
+            style={{background:"var(--bg)",border:"1px solid var(--bd)",padding:8,borderRadius:"var(--r)",width:"100%",color:"var(--txt)",fontFamily:"'DM Mono',monospace",fontSize:12}} />
+        </div>
+        {uploading && <div className="loading">Subiendo...</div>}
+      </Modal>
     </>
   );
 }
