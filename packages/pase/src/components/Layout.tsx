@@ -112,8 +112,21 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
       <div className={`overlay-sb ${open ? "open" : ""}`} onClick={close}/>
       <div className={`sb ${open ? "open" : ""}`}>
         <div className="sb-logo">
-          <div className="brand">pase<span className="brand-dot">.</span></div>
-          <div className="brand-sub">aliado gastronómico</div>
+          <div className="brand">
+            pase<span className="brand-dot">.</span>
+            <span style={{
+              fontSize: '11px',
+              fontWeight: 700,
+              background: 'linear-gradient(135deg, #a78bfa, #60a5fa)',
+              color: '#0a0e14',
+              padding: '3px 8px',
+              borderRadius: '6px',
+              marginLeft: '8px',
+              verticalAlign: 'middle',
+              letterSpacing: '0.5px',
+            }}>V2 BETA</span>
+          </div>
+          <div className="brand-sub">aliado gastronómico · rediseño</div>
           {/* Multi-tenant badges (TASK 0.15). El nombre del tenant en
               régimen normal (no-superadmin) NO se muestra acá — es
               redundante con el dropdown de sucursales del propio sidebar.
