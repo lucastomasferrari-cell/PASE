@@ -1,0 +1,1738 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PASE+COMANDA · Rediseño 2026 · 8 specs</title>
+<style>
+  :root {
+    --bg: #0a0e14;
+    --bg2: #0f141c;
+    --bg3: #161c26;
+    --bd: #1f2937;
+    --bd2: #2a3441;
+    --txt: #e2e8f0;
+    --txt2: #94a3b8;
+    --txt3: #64748b;
+    --celeste: #60a5fa;
+    --celeste-dim: #1e3a5f;
+    --celeste-soft: rgba(96,165,250,0.1);
+    --gold: #fbbf24;
+    --success: #34d399;
+    --danger: #ef4444;
+    --warning: #fb923c;
+    --purple: #a78bfa;
+    --pink: #f472b6;
+    --r: 8px;
+    --r-lg: 12px;
+    --fs: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--txt);
+    font-size: var(--fs);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* === Sidebar === */
+  .sidebar {
+    position: fixed;
+    left: 0; top: 0;
+    width: 280px;
+    height: 100vh;
+    background: linear-gradient(180deg, var(--bg2) 0%, #0c1117 100%);
+    border-right: 1px solid var(--bd);
+    padding: 24px 0;
+    overflow-y: auto;
+    z-index: 100;
+  }
+  .sidebar-header {
+    padding: 0 24px 20px;
+    border-bottom: 1px solid var(--bd);
+  }
+  .logo {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--txt);
+    margin-bottom: 4px;
+    letter-spacing: -0.5px;
+  }
+  .logo span { color: var(--celeste); }
+  .logo-sub {
+    font-size: 11px;
+    color: var(--txt3);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .nav-section {
+    padding: 16px 24px 8px;
+    font-size: 10px;
+    color: var(--txt3);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 600;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 24px;
+    color: var(--txt2);
+    cursor: pointer;
+    transition: all 0.2s;
+    border-left: 3px solid transparent;
+    font-size: 13px;
+  }
+  .nav-item:hover {
+    background: var(--bg3);
+    color: var(--txt);
+    border-left-color: var(--bd2);
+  }
+  .nav-item.active {
+    background: var(--celeste-soft);
+    color: var(--celeste);
+    border-left-color: var(--celeste);
+    font-weight: 600;
+  }
+  .nav-num {
+    background: var(--bg3);
+    color: var(--txt3);
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .nav-item.active .nav-num {
+    background: var(--celeste);
+    color: var(--bg);
+  }
+  .nav-emoji { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
+
+  /* === Main content === */
+  .main {
+    margin-left: 280px;
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  .slide {
+    display: none;
+    min-height: 100vh;
+    padding: 40px 60px;
+    animation: fadeIn 0.3s;
+  }
+  .slide.active { display: block; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* === Hero === */
+  .hero {
+    margin-bottom: 40px;
+    padding-bottom: 32px;
+    border-bottom: 1px solid var(--bd);
+  }
+  .hero-num {
+    display: inline-block;
+    background: var(--celeste-dim);
+    color: var(--celeste);
+    padding: 4px 14px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .hero h1 {
+    font-size: 42px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, var(--txt) 0%, var(--celeste) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1.1;
+  }
+  .hero p.lead {
+    font-size: 17px;
+    color: var(--txt2);
+    max-width: 800px;
+    line-height: 1.6;
+  }
+
+  /* === Cards / panels === */
+  .grid {
+    display: grid;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--bd);
+    border-radius: var(--r-lg);
+    padding: 24px;
+    transition: all 0.2s;
+  }
+  .card:hover {
+    border-color: var(--bd2);
+    transform: translateY(-2px);
+  }
+  .card-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 100px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .tag-problem { background: rgba(239,68,68,0.15); color: var(--danger); }
+  .tag-solution { background: rgba(52,211,153,0.15); color: var(--success); }
+  .tag-info { background: rgba(96,165,250,0.15); color: var(--celeste); }
+  .tag-warn { background: rgba(251,146,60,0.15); color: var(--warning); }
+
+  .card h3 {
+    font-size: 18px;
+    margin-bottom: 12px;
+    color: var(--txt);
+    font-weight: 700;
+  }
+  .card p { color: var(--txt2); font-size: 14px; }
+  .card ul {
+    list-style: none;
+    color: var(--txt2);
+    font-size: 13px;
+  }
+  .card ul li {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--bd);
+    display: flex;
+    gap: 10px;
+    align-items: start;
+  }
+  .card ul li:last-child { border-bottom: none; }
+  .card ul li::before {
+    content: '•';
+    color: var(--celeste);
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  /* === KPI cards === */
+  .kpi {
+    background: linear-gradient(135deg, var(--bg2) 0%, var(--bg3) 100%);
+    border: 1px solid var(--bd);
+    border-radius: var(--r-lg);
+    padding: 20px;
+  }
+  .kpi-label {
+    font-size: 10px;
+    color: var(--txt3);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .kpi-value {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--txt);
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+  .kpi-value.success { color: var(--success); }
+  .kpi-value.warning { color: var(--warning); }
+  .kpi-value.celeste { color: var(--celeste); }
+  .kpi-value.gold { color: var(--gold); }
+  .kpi-sub { font-size: 11px; color: var(--txt3); }
+
+  /* === Section headers === */
+  .section {
+    margin-bottom: 40px;
+  }
+  .section-title {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    color: var(--txt);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .section-title .icon {
+    font-size: 24px;
+  }
+  .section-sub {
+    color: var(--txt2);
+    font-size: 14px;
+    margin-bottom: 20px;
+  }
+
+  /* === Before/After === */
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 60px 1fr;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 28px;
+  }
+  .compare-arrow {
+    text-align: center;
+    color: var(--celeste);
+    font-size: 32px;
+  }
+  .compare-card {
+    border-radius: var(--r-lg);
+    padding: 24px;
+    border: 1px solid var(--bd);
+  }
+  .compare-before {
+    background: rgba(239,68,68,0.05);
+    border-color: rgba(239,68,68,0.3);
+  }
+  .compare-after {
+    background: rgba(52,211,153,0.05);
+    border-color: rgba(52,211,153,0.3);
+  }
+  .compare-card h4 {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+  }
+  .compare-before h4 { color: var(--danger); }
+  .compare-after h4 { color: var(--success); }
+  .compare-card ul { font-size: 13px; }
+  .compare-card ul li { padding: 4px 0; border: none; }
+
+  /* === Schema diagram === */
+  .schema-box {
+    background: var(--bg);
+    border: 1px solid var(--bd);
+    border-radius: var(--r);
+    padding: 20px;
+    font-family: 'SF Mono', 'Cascadia Code', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--txt2);
+    overflow-x: auto;
+    margin-bottom: 20px;
+  }
+  .schema-box .h { color: var(--celeste); font-weight: 700; }
+  .schema-box .new { color: var(--success); }
+  .schema-box .changed { color: var(--warning); }
+  .schema-box .keep { color: var(--txt3); }
+
+  /* === Mockup === */
+  .mockup {
+    background: var(--bg);
+    border: 1px solid var(--bd);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .mockup-bar {
+    background: var(--bg3);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--bd);
+  }
+  .mockup-bar .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--bg2);
+  }
+  .mockup-bar .url {
+    margin-left: 12px;
+    font-size: 11px;
+    color: var(--txt3);
+    font-family: monospace;
+  }
+  .mockup-body {
+    padding: 24px;
+    background: var(--bg2);
+    font-family: monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--txt);
+    min-height: 200px;
+  }
+
+  /* === Phases === */
+  .phases {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    position: relative;
+  }
+  .phase {
+    background: var(--bg2);
+    border: 1px solid var(--bd);
+    border-radius: var(--r);
+    padding: 16px;
+    position: relative;
+  }
+  .phase:not(:last-child)::after {
+    content: '→';
+    position: absolute;
+    right: -14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--celeste);
+    font-size: 20px;
+    z-index: 1;
+  }
+  .phase-num {
+    font-size: 10px;
+    color: var(--celeste);
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .phase-title {
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--txt);
+  }
+  .phase-desc {
+    font-size: 12px;
+    color: var(--txt2);
+  }
+
+  /* === Stats bar === */
+  .stats-bar {
+    display: flex;
+    gap: 24px;
+    padding: 16px 24px;
+    background: var(--bg2);
+    border-radius: var(--r-lg);
+    border: 1px solid var(--bd);
+    margin-bottom: 28px;
+  }
+  .stat {
+    flex: 1;
+  }
+  .stat-label {
+    font-size: 10px;
+    color: var(--txt3);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .stat-value {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--celeste);
+  }
+
+  /* === Cover slide === */
+  .cover {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    min-height: 90vh;
+  }
+  .cover h1 {
+    font-size: 72px;
+    font-weight: 900;
+    letter-spacing: -2px;
+    line-height: 1;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, var(--txt) 0%, var(--celeste) 50%, var(--purple) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .cover .subtitle {
+    font-size: 22px;
+    color: var(--txt2);
+    margin-bottom: 40px;
+    max-width: 600px;
+    line-height: 1.5;
+  }
+  .cover .meta {
+    display: flex;
+    gap: 40px;
+    margin-bottom: 50px;
+  }
+  .cover .meta-item {
+    text-align: center;
+  }
+  .cover .meta-num {
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--celeste);
+    line-height: 1;
+  }
+  .cover .meta-label {
+    font-size: 11px;
+    color: var(--txt3);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 6px;
+  }
+  .cover .cta {
+    background: var(--celeste);
+    color: var(--bg);
+    padding: 14px 32px;
+    border-radius: 100px;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+  }
+  .cover .cta:hover {
+    background: #93c5fd;
+    transform: scale(1.05);
+  }
+
+  /* === Decision row === */
+  .decision {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 16px;
+    padding: 12px 16px;
+    background: var(--bg2);
+    border-radius: var(--r);
+    border: 1px solid var(--bd);
+    margin-bottom: 8px;
+    align-items: center;
+  }
+  .decision-name {
+    font-weight: 600;
+    color: var(--txt);
+  }
+  .decision-desc {
+    font-size: 12px;
+    color: var(--txt3);
+    margin-top: 2px;
+  }
+  .decision-value {
+    color: var(--success);
+    font-weight: 600;
+    font-size: 13px;
+    text-align: right;
+  }
+  .decision-ref {
+    color: var(--txt3);
+    font-size: 11px;
+    text-align: right;
+    font-style: italic;
+  }
+
+  /* === Navigation arrows === */
+  .nav-arrows {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    display: flex;
+    gap: 12px;
+    z-index: 50;
+  }
+  .nav-arrow {
+    background: var(--bg2);
+    border: 1px solid var(--bd2);
+    color: var(--txt);
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 20px;
+    transition: all 0.2s;
+  }
+  .nav-arrow:hover {
+    background: var(--celeste-dim);
+    border-color: var(--celeste);
+    color: var(--celeste);
+  }
+  .nav-arrow:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  /* === Progress bar === */
+  .progress {
+    position: fixed;
+    top: 0; left: 280px; right: 0;
+    height: 3px;
+    background: var(--bd);
+    z-index: 99;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--celeste), var(--purple));
+    transition: width 0.3s;
+  }
+
+  /* === Responsive === */
+  @media (max-width: 1024px) {
+    .sidebar { transform: translateX(-100%); }
+    .main { margin-left: 0; }
+    .progress { left: 0; }
+    .grid-3, .grid-4 { grid-template-columns: 1fr 1fr; }
+    .compare { grid-template-columns: 1fr; }
+    .compare-arrow { transform: rotate(90deg); }
+    .phases { grid-template-columns: 1fr 1fr; }
+    .cover h1 { font-size: 48px; }
+    .slide { padding: 24px; }
+  }
+
+  /* === Help hint === */
+  .help-hint {
+    position: fixed;
+    bottom: 30px;
+    left: 310px;
+    background: var(--bg2);
+    border: 1px solid var(--bd);
+    border-radius: var(--r);
+    padding: 8px 14px;
+    font-size: 11px;
+    color: var(--txt3);
+    z-index: 50;
+  }
+  .help-hint kbd {
+    background: var(--bg3);
+    border: 1px solid var(--bd2);
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-size: 10px;
+    color: var(--txt2);
+    margin: 0 2px;
+  }
+
+  /* === Tags === */
+  .tags { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .tag {
+    background: var(--bg3);
+    border: 1px solid var(--bd);
+    color: var(--txt2);
+    padding: 4px 10px;
+    border-radius: 100px;
+    font-size: 11px;
+  }
+  .tag.success { background: rgba(52,211,153,0.15); color: var(--success); border-color: var(--success); }
+  .tag.warning { background: rgba(251,146,60,0.15); color: var(--warning); border-color: var(--warning); }
+  .tag.danger { background: rgba(239,68,68,0.15); color: var(--danger); border-color: var(--danger); }
+  .tag.celeste { background: var(--celeste-soft); color: var(--celeste); border-color: var(--celeste); }
+
+  /* === Highlight box === */
+  .highlight {
+    background: linear-gradient(135deg, rgba(96,165,250,0.08) 0%, rgba(167,139,250,0.05) 100%);
+    border: 1px solid var(--celeste);
+    border-radius: var(--r-lg);
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .highlight h3 {
+    color: var(--celeste);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .small { font-size: 12px; color: var(--txt3); }
+
+  /* Color swatches */
+  .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: middle; margin-right: 6px; }
+</style>
+</head>
+<body>
+
+<div class="progress"><div class="progress-fill" id="progressFill" style="width: 0%"></div></div>
+
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="logo">pase<span>.</span></div>
+    <div class="logo-sub">rediseño 2026</div>
+  </div>
+
+  <div class="nav-section">Presentación</div>
+  <div class="nav-item active" data-slide="0">
+    <span class="nav-emoji">🏠</span>
+    <span>Inicio</span>
+  </div>
+
+  <div class="nav-section">8 Specs</div>
+  <div class="nav-item" data-slide="1">
+    <span class="nav-num">1</span>
+    <span>RRHH</span>
+  </div>
+  <div class="nav-item" data-slide="2">
+    <span class="nav-num">2</span>
+    <span>Catálogo + Recetas</span>
+  </div>
+  <div class="nav-item" data-slide="3">
+    <span class="nav-num">3</span>
+    <span>Stock + CMV + AvT ⭐</span>
+  </div>
+  <div class="nav-item" data-slide="4">
+    <span class="nav-num">4</span>
+    <span>Compras + AP</span>
+  </div>
+  <div class="nav-item" data-slide="5">
+    <span class="nav-num">5</span>
+    <span>Caja + Finanzas ⭐</span>
+  </div>
+  <div class="nav-item" data-slide="6">
+    <span class="nav-num">6</span>
+    <span>POS COMANDA</span>
+  </div>
+  <div class="nav-item" data-slide="7">
+    <span class="nav-num">7</span>
+    <span>Permisos</span>
+  </div>
+  <div class="nav-item" data-slide="8">
+    <span class="nav-num">8</span>
+    <span>Tienda + Delivery</span>
+  </div>
+
+  <div class="nav-section">Cierre</div>
+  <div class="nav-item" data-slide="9">
+    <span class="nav-emoji">📊</span>
+    <span>Resumen final</span>
+  </div>
+  <div class="nav-item" data-slide="10">
+    <span class="nav-emoji">🚀</span>
+    <span>Próximos pasos</span>
+  </div>
+</aside>
+
+<main class="main">
+
+  <!-- ========== SLIDE 0 — COVER ========== -->
+  <section class="slide active" id="slide-0">
+    <div class="cover">
+      <h1>Rediseño<br>PASE + COMANDA</h1>
+      <p class="subtitle">8 specs profesionales que rediseñan las áreas críticas del sistema para Neko y para vender a otros restaurantes</p>
+
+      <div class="meta">
+        <div class="meta-item">
+          <div class="meta-num">8</div>
+          <div class="meta-label">Specs</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-num">14</div>
+          <div class="meta-label">Sistemas benchmark</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-num">~80</div>
+          <div class="meta-label">Tablas DB</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-num">~60</div>
+          <div class="meta-label">RPCs nuevas</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-num">10</div>
+          <div class="meta-label">semanas estimadas</div>
+        </div>
+      </div>
+
+      <button class="cta" onclick="goSlide(1)">Empezar el recorrido →</button>
+
+      <p class="small" style="margin-top: 30px; max-width: 600px;">
+        Usá las <kbd>←</kbd> <kbd>→</kbd> del teclado para navegar, o el menú a la izquierda
+      </p>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 1 — RRHH ========== -->
+  <section class="slide" id="slide-1">
+    <div class="hero">
+      <span class="hero-num">Spec #1</span>
+      <h1>RRHH · Equipo</h1>
+      <p class="lead">Reemplaza el modelo de "novedades" por eventos discretos. Permite calendario diario para encargados y queda listo para fichero biométrico futuro.</p>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat"><div class="stat-label">LOC del spec</div><div class="stat-value">~600</div></div>
+      <div class="stat"><div class="stat-label">% Nuevo</div><div class="stat-value">30%</div></div>
+      <div class="stat"><div class="stat-label">% Refactor</div><div class="stat-value">50%</div></div>
+      <div class="stat"><div class="stat-label">% Sin tocar</div><div class="stat-value">20%</div></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">⚡</span> El cambio fundamental</div>
+      <div class="compare">
+        <div class="compare-card compare-before">
+          <h4>❌ Antes</h4>
+          <ul>
+            <li>Tabla mensual con "slot por empleado"</li>
+            <li>QUINCENAL = 2 slots con campos duplicados</li>
+            <li>SEMANAL = 4 slots — Anto carga 4× lo mismo</li>
+            <li>Anto decide manualmente qué slot lleva qué falta</li>
+            <li>Modelo único en Argentina — diferente al estándar mundial</li>
+          </ul>
+        </div>
+        <div class="compare-arrow">→</div>
+        <div class="compare-card compare-after">
+          <h4>✓ Después</h4>
+          <ul>
+            <li>Eventos discretos con fecha individual</li>
+            <li>"Luis faltó 24-may" se carga UNA vez</li>
+            <li>El sistema sabe a qué quincena/semana pertenece</li>
+            <li>Calendario diario para encargados (futuro)</li>
+            <li>Modelo Tango/Gusto/R365 — estándar mundial</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">🎯</span> Lo que resuelve</div>
+      <div class="grid grid-3">
+        <div class="card">
+          <span class="card-tag tag-info">Operativo</span>
+          <h3>4 modalidades coexisten</h3>
+          <p>Diario, semanal, quincenal, mensual — todas funcionan sin duplicar trabajo. Cada empleado tiene su calendario asignado.</p>
+        </div>
+        <div class="card">
+          <span class="card-tag tag-info">UX</span>
+          <h3>Dashboard "qué cerrar hoy"</h3>
+          <p>El sistema te dice "tenés 3 quincenas para cerrar hoy". No más buscar entre tabs.</p>
+        </div>
+        <div class="card">
+          <span class="card-tag tag-info">Futuro</span>
+          <h3>Listo para fichero biométrico</h3>
+          <p>Cuando compres el reloj, los eventos se llenan solos. Mismo modelo, distinto origen.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">🗃️</span> Schema</div>
+      <div class="schema-box">
+<span class="h">Tablas nuevas:</span>
+  <span class="new">+ rrhh_eventos</span>           ← reemplaza el modelo slot mensual
+  <span class="new">+ rrhh_pay_calendars</span>     ← frecuencias formalizadas
+  <span class="new">+ rrhh_liquidaciones_v2</span>  ← state machine ABIERTA→EN_REVISION→PAGADA
+
+<span class="h">Tablas modificadas:</span>
+  <span class="changed">~ rrhh_empleados</span>       ← agregar pay_calendar_id
+
+<span class="h">Tablas que NO se tocan:</span>
+  <span class="keep">  rrhh_empleados</span> (campos base)
+  <span class="keep">  rrhh_adelantos</span> (sigue igual)
+  <span class="keep">  rrhh_pagos_especiales</span> (SAC/vacaciones siguen aparte)
+  <span class="keep">  rrhh_historial_sueldos</span> (sin cambios)
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">🚀</span> Plan de despliegue</div>
+      <div class="phases">
+        <div class="phase">
+          <div class="phase-num">FASE 0</div>
+          <div class="phase-title">Schema</div>
+          <div class="phase-desc">Migrations + backfill calendarios. 1-2 días.</div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">FASE 1</div>
+          <div class="phase-title">UI nueva</div>
+          <div class="phase-desc">Feature flag. Lucas + Anto. 1-2 semanas.</div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">FASE 2</div>
+          <div class="phase-title">Cutover</div>
+          <div class="phase-desc">Todos los locales. 1 semana validación.</div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">FASE 3</div>
+          <div class="phase-title">Cleanup</div>
+          <div class="phase-desc">90 días — deprecar tablas viejas.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="highlight">
+      <h3>📍 Garantía no negociable</h3>
+      <p>La migration <strong>no pierde un solo peso</strong> de las liquidaciones históricas. Los pagos ya realizados quedan inmutables como histórico congelado.</p>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 2 — CATÁLOGO + RECETAS ========== -->
+  <section class="slide" id="slide-2">
+    <div class="hero">
+      <span class="hero-num">Spec #2</span>
+      <h1>Catálogo + Recetas + Insumos</h1>
+      <p class="lead">Mueve toda la administración del catálogo desde COMANDA a PASE. Introduce sub-recetas anidadas con yield % (modelo Toast/R365/Apicbase).</p>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat"><div class="stat-label">LOC del spec</div><div class="stat-value">~850</div></div>
+      <div class="stat"><div class="stat-label">% Nuevo</div><div class="stat-value">40%</div></div>
+      <div class="stat"><div class="stat-label">Pantallas movidas</div><div class="stat-value">11</div></div>
+      <div class="stat"><div class="stat-label">Decisiones doc.</div><div class="stat-value">22</div></div>
+    </div>
+
+    <div class="highlight">
+      <h3>🎯 El hallazgo más grande de la sesión</h3>
+      <p><strong>El catálogo, recetas e insumos en TODOS los sistemas profesionales del mundo viven en el back-office, no en el POS.</strong> Toast, Square, Lightspeed, R365, MarketMan — todos. PASE+COMANDA hoy lo tiene al revés.</p>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">🏗️</span> Modelo de recetas en 3 capas</div>
+      <p class="section-sub">Como lo hacen R365, Apicbase, MarketMan — el estándar profesional.</p>
+      <div class="schema-box">
+                  <span class="h">┌─────────────────────────────────────┐</span>
+                  <span class="h">│  MENU ITEMS (MI)</span>                     <span class="keep">← lo que sale al cliente</span>
+                  <span class="h">│  "Combinado 18 piezas $14.500"</span>
+                  <span class="h">└───────┬─────────────────────────────┘</span>
+                          ↓
+                  <span class="h">┌─────────────────────────────────────┐</span>
+                  <span class="h">│  PREP RECIPES (sub-recetas)</span>           <span class="keep">← reusables</span>
+                  <span class="h">│  "Salsa Teriyaki tanda 2L"</span>
+                  <span class="h">│  "Arroz cocido para sushi"</span>
+                  <span class="h">│  + Yield %</span>
+                  <span class="h">└───────┬─────────────────────────────┘</span>
+                          ↓
+                  <span class="h">┌─────────────────────────────────────┐</span>
+                  <span class="h">│  YIELD RECIPES (procesamiento)</span>        <span class="keep">← 1kg salmón → 600g fillet</span>
+                  <span class="h">│  "Salmón fileteado limpio"</span>
+                  <span class="h">│  + Yield % (típico 60%)</span>
+                  <span class="h">└───────┬─────────────────────────────┘</span>
+                          ↓
+                  <span class="h">┌─────────────────────────────────────┐</span>
+                  <span class="h">│  INSUMOS</span>                              <span class="keep">← lo que se trackea en stock</span>
+                  <span class="h">│  "Salmón", "Arroz", "Palta"</span>
+                  <span class="h">│  costo = avg ponderado MPs</span>
+                  <span class="h">└─────────────────────────────────────┘</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">💡</span> Decisiones clave (22 documentadas)</div>
+      <div class="decision">
+        <div>
+          <div class="decision-name">Sub-recetas anidadas con yield %</div>
+          <div class="decision-desc">Modelo 3 capas — sin esto el CMV es ficción</div>
+        </div>
+        <div class="decision-value">SÍ</div>
+        <div class="decision-ref">R365/Apicbase</div>
+      </div>
+      <div class="decision">
+        <div>
+          <div class="decision-name">Cocina central confirmada</div>
+          <div class="decision-desc">Maneki filetea pescado para los 4 locales — transferencias internas</div>
+        </div>
+        <div class="decision-value">SÍ</div>
+        <div class="decision-ref">R365 multi-unit</div>
+      </div>
+      <div class="decision">
+        <div>
+          <div class="decision-name">Modifier → ingredient mapping</div>
+          <div class="decision-desc">"extra queso" descuenta 30g de queso del stock</div>
+        </div>
+        <div class="decision-value">NO en v1</div>
+        <div class="decision-ref">Apicbase</div>
+      </div>
+      <div class="decision">
+        <div>
+          <div class="decision-name">Importador de recetas con IA</div>
+          <div class="decision-desc">Subís foto/PDF/Excel → Claude propone estructura</div>
+        </div>
+        <div class="decision-value">SÍ — killer</div>
+        <div class="decision-ref">MarginEdge</div>
+      </div>
+      <div class="decision">
+        <div>
+          <div class="decision-name">Cajero NO ve costos</div>
+          <div class="decision-desc">Permiso explícito catalogo.ver_costos</div>
+        </div>
+        <div class="decision-value">SÍ</div>
+        <div class="decision-ref">Toast/Square</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">🍣</span> Ejemplo Combinado 18 piezas (cómo se vería)</div>
+      <div class="mockup">
+        <div class="mockup-bar">
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+          <div class="url">pase.com.ar/catalogo/recetas/combinado-18p</div>
+        </div>
+        <div class="mockup-body">
+<strong>Editando receta: "Combinado 18 piezas"</strong>          [Tipo: MI · Yield: 100%]
+
+Ingredientes:
+▼ <span style="color:var(--celeste)">Arroz cocido para sushi</span> (PREP)        300g    $1.200
+▼ <span style="color:var(--celeste)">Pescado fileteado</span> (YIELD)             240g    $4.800
+▼ <span style="color:var(--celeste)">Teriyaki Neko</span> (PREP)                   30ml      $180
+• Palta (insumo directo)                       60g      $720
+• Wasabi (insumo directo)                      10g      $200
+─────────────────────────────────────────────────────────
+<strong>COSTO TOTAL:                                          $7.100</strong>
+<strong>PRECIO MADRE:                                       $14.500</strong>
+<strong>MARGEN BRUTO:                                  51% ($7.400)</strong>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 3 — STOCK + CMV + AvT ========== -->
+  <section class="slide" id="slide-3">
+    <div class="hero">
+      <span class="hero-num">Spec #3 ⭐</span>
+      <h1>Stock + CMV + AvT</h1>
+      <p class="lead">El más importante para tu ROI. Convierte el stock fantasma en un sistema confiable con auto-depleción al vender, conteo móvil y AvT como KPI estrella.</p>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat"><div class="stat-label">LOC del spec</div><div class="stat-value">~1030</div></div>
+      <div class="stat"><div class="stat-label">% Nuevo</div><div class="stat-value">70%</div></div>
+      <div class="stat"><div class="stat-label">Tablas nuevas</div><div class="stat-value">7</div></div>
+      <div class="stat"><div class="stat-label">RPCs nuevas</div><div class="stat-value">7</div></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">🧬</span> Patrón "Ledger + Cache"</div>
+      <p class="section-sub">Mismo que ya funciona en saldos_caja (deuda C4-F16 cerrada). Probado en producción.</p>
+      <div class="schema-box">
+<span class="h">┌────────────────────────────────────────┐</span>
+<span class="h">│  movimientos_stock</span>     <span class="keep">(LEDGER inmutable)</span>
+<span class="h">│  cada entrada es un hecho histórico</span>
+<span class="h">│  NUNCA se borra ni se modifica</span>
+<span class="h">│</span>
+<span class="h">│  COMPRA (+) · VENTA (-) · MERMA (-)</span>
+<span class="h">│  AJUSTE_CONTEO (±) · TRANSFERENCIA (±)</span>
+<span class="h">│  PRODUCCION_INPUT (-) · _OUTPUT (+)</span>
+<span class="h">└──────────────┬─────────────────────────┘</span>
+               │ trigger AFTER INSERT
+               ↓
+<span class="h">┌────────────────────────────────────────┐</span>
+<span class="h">│  stock_actual</span>          <span class="keep">(CACHE derivado)</span>
+<span class="h">│  (insumo_id, local_id) → cantidad</span>
+<span class="h">│  Recalculado por trigger</span>
+<span class="h">│  Se puede rebuild desde el ledger</span>
+<span class="h">└────────────────────────────────────────┘</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">📊</span> AvT — el KPI estrella</div>
+      <div class="grid grid-3">
+        <div class="kpi" style="border-color: var(--success)">
+          <div class="kpi-label">Excelente</div>
+          <div class="kpi-value success">&lt; 2%</div>
+          <div class="kpi-sub">Variance entre stock teórico y real</div>
+        </div>
+        <div class="kpi" style="border-color: var(--warning)">
+          <div class="kpi-label">Normal industria</div>
+          <div class="kpi-value warning">3-5%</div>
+          <div class="kpi-sub">Variance entre stock teórico y real</div>
+        </div>
+        <div class="kpi" style="border-color: var(--danger)">
+          <div class="kpi-label">Alarma</div>
+          <div class="kpi-value" style="color:var(--danger)">&gt; 5%</div>
+          <div class="kpi-sub">Variance entre stock teórico y real</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">🎯</span> Auto-depleción al vender</div>
+      <div class="card">
+        <p>Cuando cobrás un Combinado 18 piezas en COMANDA, el sistema resuelve recursivamente la receta y descuenta del stock cada insumo final:</p>
+        <ul style="margin-top:12px;">
+          <li><span style="color:var(--warning)">−120g arroz crudo</span> (del PREP "Arroz cocido", 300g × 40% = 120g crudo)</li>
+          <li><span style="color:var(--warning)">−400g salmón entero</span> (del YIELD "Pescado fileteado", 240g fillet × yield 60% = 400g entero)</li>
+          <li><span style="color:var(--warning)">−0.5ml salsa soja</span> (del PREP "Teriyaki Neko")</li>
+          <li><span style="color:var(--warning)">−60g palta</span> (insumo directo)</li>
+          <li><span style="color:var(--warning)">−10g wasabi</span> (insumo directo)</li>
+        </ul>
+        <p style="margin-top:12px; color: var(--celeste);">→ Estos descuentos se reflejan en el AvT del fin de mes vs el conteo físico real.</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">📲</span> Conteo móvil "shelf-to-sheet"</div>
+      <p class="section-sub">El manager camina con el celu por el depósito. Lista ordenada por estante físico.</p>
+      <div class="mockup">
+        <div class="mockup-bar">
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+          <div class="url">pase.com.ar/rentabilidad/conteo-movil</div>
+        </div>
+        <div class="mockup-body">
+Conteo Devoto — 27-may
+Modo: BLIND_PARTIAL (Carnes) · Progreso: 12/24 items
+
+<strong>Heladera 1 — estante superior</strong>
+✓ Salmón fillet               2.4 kg
+✓ Atún fillet                 1.8 kg
+▶ Langostino limpio          [____] kg
+○ Pollo deshuesado
+○ Carne picada
+
+  [Pausar]   [Cerrar conteo]
+        </div>
+      </div>
+    </div>
+
+    <div class="highlight">
+      <h3>💎 Por qué este spec vale ORO para Neko</h3>
+      <p>Hoy no sabés exactamente cuánto te están robando o se está mermando. Con AvT, vas a poder decir "Devoto tuvo 6% de variance este mes en carnes = $187k de fuga, hay que investigar". Es <strong>el reporte que un dueño de restaurante mira todos los lunes</strong>.</p>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 4 — COMPRAS ========== -->
+  <section class="slide" id="slide-4">
+    <div class="hero">
+      <span class="hero-num">Spec #4</span>
+      <h1>Compras + Proveedores + AP</h1>
+      <p class="lead">Cierra el loop compra → precio MP → costo receta → CMV → AvT. Workflow OC con 3-way match, lector IA integrado, auto-update de precios.</p>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat"><div class="stat-label">LOC del spec</div><div class="stat-value">~870</div></div>
+      <div class="stat"><div class="stat-label">% Nuevo</div><div class="stat-value">60%</div></div>
+      <div class="stat"><div class="stat-label">Estados de OC</div><div class="stat-value">7</div></div>
+      <div class="stat"><div class="stat-label">Métricas vendor</div><div class="stat-value">5</div></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">🔄</span> El workflow completo</div>
+      <div class="phases">
+        <div class="phase">
+          <div class="phase-num">PASO 1</div>
+          <div class="phase-title">Generás OC</div>
+          <div class="phase-desc">Basada en compras sugeridas o manual. Items + precios acordados.</div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">PASO 2</div>
+          <div class="phase-title">Recibís remito</div>
+          <div class="phase-desc">Marcás qué llegó (puede ser parcial). Stock se descuenta.</div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">PASO 3</div>
+          <div class="phase-title">Cargás factura</div>
+          <div class="phase-desc">Manual o IA. 3-way match automático.</div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">PASO 4</div>
+          <div class="phase-title">Pagás</div>
+          <div class="phase-desc">Total o parcial. Múltiples métodos. Batch posible.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">🎯</span> 3-way match — el filtro automático</div>
+      <div class="card">
+        <p>Cuando se carga una factura, el sistema compara automáticamente:</p>
+        <table style="width:100%; margin-top:12px; font-size:13px;">
+          <thead>
+            <tr style="border-bottom: 1px solid var(--bd); color: var(--txt3);">
+              <th style="text-align:left; padding:8px;">Campo</th>
+              <th style="text-align:left; padding:8px;">OC dice</th>
+              <th style="text-align:left; padding:8px;">Remito dice</th>
+              <th style="text-align:left; padding:8px;">Factura dice</th>
+              <th style="text-align:left; padding:8px;">Match</th>
+            </tr>
+          </thead>
+          <tbody style="color: var(--txt2);">
+            <tr><td style="padding:8px;">Item</td><td>10kg Salmón</td><td>9.5kg</td><td>9.5kg</td><td>✅</td></tr>
+            <tr><td style="padding:8px;">Precio</td><td>$15.000/kg</td><td>—</td><td>$15.500/kg</td><td>🟡 +3.3%</td></tr>
+            <tr><td style="padding:8px;">Total</td><td>$150.000</td><td>—</td><td>$147.250</td><td>🟡 diff</td></tr>
+          </tbody>
+        </table>
+        <p style="margin-top:12px; color: var(--celeste);">→ Si todo dentro de tolerancia + monto &lt; umbral → auto-aprueba. Si no → bandeja de revisión.</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">🤖</span> Lector IA integrado al flow</div>
+      <div class="card">
+        <p>El lector IA (que hoy vive en pantalla aparte) se integra al wizard de cargar factura:</p>
+        <ul style="margin-top:12px;">
+          <li>Subís foto / PDF de la factura</li>
+          <li>Claude extrae items + precios + total con confianza %</li>
+          <li>Sistema busca OC pendiente del proveedor → auto-match si encuentra (&gt;85% confianza)</li>
+          <li>Vos revisás → confirmás → flow normal</li>
+        </ul>
+        <p style="margin-top:12px;"><strong>Beneficio:</strong> el lector deja de ser un "shortcut paralelo" y se vuelve la forma estándar de cargar facturas.</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">🏆</span> Vendor Scorecard</div>
+      <div class="grid grid-3">
+        <div class="kpi">
+          <div class="kpi-label">Reliability</div>
+          <div class="kpi-value celeste">95%</div>
+          <div class="kpi-sub">OCs entregadas a tiempo</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Quality</div>
+          <div class="kpi-value celeste">92%</div>
+          <div class="kpi-sub">Items sin discrepancia</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Price stability</div>
+          <div class="kpi-value celeste">±2.1%</div>
+          <div class="kpi-sub">Desvío precio 6 meses</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Match accuracy</div>
+          <div class="kpi-value celeste">88%</div>
+          <div class="kpi-sub">Facturas con 3-way OK</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Spending share</div>
+          <div class="kpi-value celeste">34%</div>
+          <div class="kpi-sub">Del total compras</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Top vendor</div>
+          <div class="kpi-value gold">⭐</div>
+          <div class="kpi-sub">Pescadería X — Recomendado consolidar</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 5 — CAJA + FINANZAS + P&L ========== -->
+  <section class="slide" id="slide-5">
+    <div class="hero">
+      <span class="hero-num">Spec #5 ⭐</span>
+      <h1>Caja + Finanzas + P&L</h1>
+      <p class="lead">El consolidador final. P&L formato AAA restaurantero + Prime Cost dashboard + DSR + cash flow forecast + anomaly detection + menu engineering.</p>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat"><div class="stat-label">LOC del spec</div><div class="stat-value">~1090</div></div>
+      <div class="stat"><div class="stat-label">% Nuevo</div><div class="stat-value">75%</div></div>
+      <div class="stat"><div class="stat-label">Reportes nuevos</div><div class="stat-value">8</div></div>
+      <div class="stat"><div class="stat-label">RPCs nuevas</div><div class="stat-value">8</div></div>
+    </div>
+
+    <div class="highlight">
+      <h3>👑 Prime Cost — el KPI #1 de gastronomía</h3>
+      <p><strong>Prime Cost = (CMV + Mano de Obra) / Ventas</strong></p>
+      <p style="margin-top:10px;">Es el primer número que mira un dueño de restaurante cada mañana. Toast/R365/MarginEdge lo tratan como single-most-important.</p>
+      <div class="grid grid-3" style="margin-top: 16px;">
+        <div class="kpi" style="border-color: var(--success)">
+          <div class="kpi-label">Excelente</div>
+          <div class="kpi-value success">&lt; 55%</div>
+        </div>
+        <div class="kpi" style="border-color: var(--warning)">
+          <div class="kpi-label">Normal</div>
+          <div class="kpi-value warning">55-65%</div>
+        </div>
+        <div class="kpi" style="border-color: var(--danger)">
+          <div class="kpi-label">Alarma</div>
+          <div class="kpi-value" style="color: var(--danger)">&gt; 65%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">📊</span> Dashboard Finanzas</div>
+      <div class="mockup">
+        <div class="mockup-bar">
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+          <div class="url">pase.com.ar/finanzas</div>
+        </div>
+        <div class="mockup-body">
+<strong>PRIME COST DEL TENANT</strong>
+🟡 62.5%  (target &lt;60%)
+CMV: 33% + Labor: 29.5%
+
+<strong>POR LOCAL</strong>
+Belgrano  V.Crespo  Devoto    Maneki    Rene
+🟢 58%    🟡 63%    🔴 72%    🟢 56%    🔴 78%
+
+⚠️ <strong>ALERTAS DE LA SEMANA (4)</strong>
+• Pescadería X subió salmón +12%
+• Diferencia caja Devoto $1.500
+• Mermas anómalas Maneki ayer
+• Devoto AvT en rojo 6.2%
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">📈</span> Menu Engineering Matrix</div>
+      <p class="section-sub">Clasifica cada item del menú por popularidad × rentabilidad. Acción sugerida por cuadrante.</p>
+      <div class="grid grid-2">
+        <div class="card" style="border-color: var(--gold); background: rgba(251,191,36,0.05)">
+          <span class="card-tag tag-warn">⭐ STARS</span>
+          <h3>Popular + Rentable</h3>
+          <p style="font-size:13px;">Destacar visualmente. NO tocar precio. Ejemplo: Combinado 18p.</p>
+        </div>
+        <div class="card" style="border-color: var(--purple); background: rgba(167,139,250,0.05)">
+          <span class="card-tag tag-info">🧩 PUZZLES</span>
+          <h3>Rentable pero poco se pide</h3>
+          <p style="font-size:13px;">Promover con combos. Sugerencia del mozo.</p>
+        </div>
+        <div class="card" style="border-color: var(--warning); background: rgba(251,146,60,0.05)">
+          <span class="card-tag tag-warn">🐎 PLOWHORSE</span>
+          <h3>Popular pero poco margen</h3>
+          <p style="font-size:13px;">Subir precio cuidadoso o bajar costo (cambiar receta).</p>
+        </div>
+        <div class="card" style="border-color: var(--danger); background: rgba(239,68,68,0.05)">
+          <span class="card-tag tag-problem">🐕 DOGS</span>
+          <h3>Poco popular + poco margen</h3>
+          <p style="font-size:13px;">Considerar sacar del menú o re-formular.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">💰</span> Otros features clave</div>
+      <div class="grid grid-3">
+        <div class="card">
+          <span class="card-tag tag-solution">DSR</span>
+          <h3>Daily Sales Report</h3>
+          <p>Reporte diario que el manager firma al cerrar. Audit trail inmutable. Recordatorio 23:30.</p>
+        </div>
+        <div class="card">
+          <span class="card-tag tag-solution">Forecast</span>
+          <h3>Cash Flow 30 días</h3>
+          <p>Proyección con compras + sueldos + obligaciones. Alertas de mínimos.</p>
+        </div>
+        <div class="card">
+          <span class="card-tag tag-solution">AI</span>
+          <h3>Anomaly Detection</h3>
+          <p>8 reglas determinísticas. "Carne subió 30%" → notif push automática.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 6 — POS COMANDA ========== -->
+  <section class="slide" id="slide-6">
+    <div class="hero">
+      <span class="hero-num">Spec #6</span>
+      <h1>Ventas + POS COMANDA</h1>
+      <p class="lead">Refinement de COMANDA post-rediseño. Pierde 10 pantallas (movidas a PASE), queda focused en POS puro con offline-first y KDS coursing inteligente.</p>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat"><div class="stat-label">LOC del spec</div><div class="stat-value">~875</div></div>
+      <div class="stat"><div class="stat-label">% Nuevo</div><div class="stat-value">40%</div></div>
+      <div class="stat"><div class="stat-label">Pantallas eliminadas</div><div class="stat-value">10</div></div>
+      <div class="stat"><div class="stat-label">Tablas nuevas</div><div class="stat-value">5</div></div>
+    </div>
+
+    <div class="compare">
+      <div class="compare-card compare-before">
+        <h4>❌ COMANDA hoy</h4>
+        <ul>
+          <li>God-app: POS + catálogo + recetas + reportes + finanzas</li>
+          <li>90+ pantallas</li>
+          <li>Catálogo editable desde cajero</li>
+          <li>86 sin sync visible cross-app</li>
+          <li>Sin offline robusto</li>
+          <li>Sin coursing inteligente</li>
+        </ul>
+      </div>
+      <div class="compare-arrow">→</div>
+      <div class="compare-card compare-after">
+        <h4>✓ COMANDA después</h4>
+        <ul>
+          <li>POS puro focused (-10 pantallas)</li>
+          <li>Cache IndexedDB + offline >1h</li>
+          <li>86 sync real-time <2s a PASE</li>
+          <li>Open Item con bandeja review en PASE</li>
+          <li>KDS coursing inteligente</li>
+          <li>Manager Override remoto via push</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">🍳</span> KDS coursing inteligente</div>
+      <div class="card">
+        <p>Mozo carga pedido:</p>
+        <ul style="margin: 12px 0;">
+          <li><strong>Curso 1</strong>: 1 ceviche + 1 tartare (entradas)</li>
+          <li><strong>Curso 2</strong>: 1 combinado 18p + 1 pad thai</li>
+          <li><strong>Curso 3</strong>: 1 cheesecake + 1 helado</li>
+        </ul>
+        <p>KDS automáticamente:</p>
+        <ul style="margin-top: 12px;">
+          <li>Manda CURSO 1 a las estaciones correspondientes</li>
+          <li>CURSO 2 queda en queue NO visible</li>
+          <li>Cuando todos los items del curso 1 están "listos" → CURSO 2 aparece automáticamente</li>
+          <li>Idem curso 3</li>
+        </ul>
+        <p style="margin-top:12px; color: var(--celeste);">→ Cliente no recibe principal mientras come entrada.</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">📡</span> 86 sync real-time</div>
+      <div class="schema-box">
+Cajero ve "ya no hay salmón" → toca icono <span class="changed">🚫</span> en el item
+   ↓
+COMANDA → UPDATE items SET agotado=true
+   ↓
+Trigger emite evento Realtime
+   ↓
+Todos los COMANDAs del local lo reciben en <span class="new">&lt;2 segundos</span>
+Catálogo en PASE también lo refleja
+Tienda online deja de mostrarlo
+
+Auto-unset opcional:
+  • Al final del día calendario
+  • Cuando entra compra del insumo (Spec #3 lo sabe)
+  • Manual
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 7 — PERMISOS ========== -->
+  <section class="slide" id="slide-7">
+    <div class="hero">
+      <span class="hero-num">Spec #7</span>
+      <h1>Permisos unificados</h1>
+      <p class="lead">Single identity + dual permissions. Catálogo de slugs unificado + 10 roles predefinidos + sensibilidad (NORMAL/SENSIBLE/CRITICO) + audit log.</p>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat"><div class="stat-label">LOC del spec</div><div class="stat-value">~940</div></div>
+      <div class="stat"><div class="stat-label">Slugs catalogados</div><div class="stat-value">~50</div></div>
+      <div class="stat"><div class="stat-label">Roles templates</div><div class="stat-value">10</div></div>
+      <div class="stat"><div class="stat-label">Tablas nuevas</div><div class="stat-value">3</div></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">👥</span> Los 10 roles predefinidos</div>
+      <div class="grid grid-2">
+        <div class="card"><span class="card-tag tag-warn">PASE+COMANDA</span><h3>Dueño</h3><p>Todo permitido en ambas apps.</p></div>
+        <div class="card"><span class="card-tag tag-info">PASE</span><h3>Encargado PASE</h3><p>Operación + RRHH + Compras, NO finanzas sensibles.</p></div>
+        <div class="card"><span class="card-tag tag-info">PASE</span><h3>Contador</h3><p>Finanzas + EERR + lectura compras. Sin operación.</p></div>
+        <div class="card"><span class="card-tag tag-warn">PASE+COMANDA</span><h3>Manager Local</h3><p>COMANDA full + PASE lectura de su local.</p></div>
+        <div class="card"><span class="card-tag tag-solution">COMANDA</span><h3>Cajero</h3><p>Cobrar + 86 + open_item. NO descuentos grandes.</p></div>
+        <div class="card"><span class="card-tag tag-solution">COMANDA</span><h3>Mozo</h3><p>Cobrar + handheld + mesas. Sin caja.</p></div>
+        <div class="card"><span class="card-tag tag-solution">COMANDA</span><h3>Cocinero</h3><p>KDS + mermas. Sin ventas.</p></div>
+        <div class="card"><span class="card-tag tag-solution">COMANDA</span><h3>Bartender</h3><p>KDS bar + ventas bebidas. Sin descuentos.</p></div>
+        <div class="card"><span class="card-tag tag-solution">COMANDA</span><h3>Rider</h3><p>Solo RiderPWA.</p></div>
+        <div class="card"><span class="card-tag tag-info">PASE</span><h3>Solo lectura</h3><p>Read-only general. Auditor externo.</p></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">🔒</span> Sensibilidad de permisos</div>
+      <div class="grid grid-3">
+        <div class="card" style="border-color: var(--bd2)">
+          <span class="card-tag tag-info">NORMAL</span>
+          <h3>Checkbox simple</h3>
+          <p>Asignación directa sin restricciones. Ej: comanda.cobrar, comanda.marcar_86.</p>
+        </div>
+        <div class="card" style="border-color: var(--warning)">
+          <span class="card-tag tag-warn">SENSIBLE</span>
+          <h3>Checkbox con ⚠️</h3>
+          <p>Tooltip explicativo. Ej: catalogo.ver_costos, comanda.anular_venta.</p>
+        </div>
+        <div class="card" style="border-color: var(--danger)">
+          <span class="card-tag tag-problem">CRITICO</span>
+          <h3>Requiere 2FA del dueño</h3>
+          <p>Workflow approval. Ej: finanzas.ver_pl, comanda.manager_override.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 8 — TIENDA + DELIVERY ========== -->
+  <section class="slide" id="slide-8">
+    <div class="hero">
+      <span class="hero-num">Spec #8</span>
+      <h1>Tienda + Delivery + Marketplace</h1>
+      <p class="lead">Modelo unificado de pedidos. Una tabla, todos los canales (tienda propia, Rappi, PedidosYa, WhatsApp, MenuQR, teléfono). State machine única.</p>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat"><div class="stat-label">LOC del spec</div><div class="stat-value">~1080</div></div>
+      <div class="stat"><div class="stat-label">Canales unificados</div><div class="stat-value">7</div></div>
+      <div class="stat"><div class="stat-label">Estados pedido</div><div class="stat-value">8</div></div>
+      <div class="stat"><div class="stat-label">Tablas nuevas</div><div class="stat-value">10</div></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">🛒</span> Modelo unificado de pedidos</div>
+      <div class="schema-box">
+<span class="h">CANALES posibles:</span>
+  • tienda_propia (tu sitio web)
+  • menu_qr (cliente escanea QR en la mesa)
+  • rappi
+  • pedidosya
+  • whatsapp (bot)
+  • telefono (cargado manual)
+  • instagram_dm (futuro)
+                       ↓
+<span class="h">TABLA pedidos (UNIFICADA)</span>
+  • canal, cliente, items, total, modo_entrega
+  • estado (state machine)
+                       ↓
+<span class="new">VENTAS POS (cuando se cobra)</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">🔄</span> State machine única</div>
+      <div class="schema-box">
+                   <span class="h">┌─────────────┐</span>
+                   <span class="h">│  PENDIENTE  │</span> ← entrante cualquier canal
+                   <span class="h">└──────┬──────┘</span>
+                          ↓
+                   <span class="h">┌─────────────┐</span>
+                   <span class="h">│ CONFIRMADO  │</span> ← envía a cocina
+                   <span class="h">└──────┬──────┘</span>
+                          ↓
+                   <span class="h">┌─────────────┐</span>
+                   <span class="h">│  EN_COCINA  │</span> ← KDS lo recibe
+                   <span class="h">└──────┬──────┘</span>
+                          ↓
+                   <span class="h">┌─────────────┐</span>
+                   <span class="h">│    LISTO    │</span>
+                   <span class="h">└─┬─────────┬─┘</span>
+            DELIVERY │         │ PICKUP / EN_LOCAL
+                     ↓         ↓
+        <span class="h">┌──────────────────┐</span>  <span class="h">┌──────────────────┐</span>
+        <span class="h">│ ASIGNADO_RIDER   │</span>  <span class="h">│ NOTIFICAR CLIENTE│</span>
+        <span class="h">└────────┬─────────┘</span>  <span class="h">└────────┬─────────┘</span>
+                 ↓                     ↓
+        <span class="h">│   EN_CAMINO      │</span>  <span class="h">│   ENTREGADO      │</span>
+                 ↓
+        <span class="h">│   ENTREGADO      │</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">🚀</span> Features clave</div>
+      <div class="grid grid-3">
+        <div class="card"><h3>Tienda propia</h3><p>Páginas públicas, consumes catálogo PASE, MP Wallet integrado.</p></div>
+        <div class="card"><h3>Webhook handler genérico</h3><p>Rappi/PedidosYa con HMAC + mapping items partner → PASE.</p></div>
+        <div class="card"><h3>WhatsApp bot</h3><p>Reusa motor bot IG. Cliente charlea → bot toma pedido.</p></div>
+        <div class="card"><h3>Delivery propio</h3><p>RiderPWA + dispatch algorítmico (score = distancia + carga + zona).</p></div>
+        <div class="card"><h3>Pickup/take-away</h3><p>Alternativa simple a delivery. Notif cuando está listo.</p></div>
+        <div class="card"><h3>Fidelidad + reseñas</h3><p>Puntos por compra. Reseñas post-entrega afectan menu engineering.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 9 — RESUMEN ========== -->
+  <section class="slide" id="slide-9">
+    <div class="hero">
+      <span class="hero-num">Resumen</span>
+      <h1>Lo que tenés en 1 vista</h1>
+      <p class="lead">8 specs · 7.335 líneas de documentación · 14 sistemas benchmarked · ~80 tablas · ~60 RPCs · 10 semanas estimadas de implementación.</p>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">📋</span> Los 8 specs en 1 tabla</div>
+      <div class="grid">
+        <div class="card" style="padding: 0;">
+          <table style="width:100%; font-size:13px;">
+            <thead>
+              <tr style="background: var(--bg3); color: var(--txt3); text-transform: uppercase; font-size: 11px; letter-spacing: 1px;">
+                <th style="text-align:left; padding:12px;">#</th>
+                <th style="text-align:left; padding:12px;">Spec</th>
+                <th style="text-align:right; padding:12px;">LOC</th>
+                <th style="text-align:right; padding:12px;">% Nuevo</th>
+                <th style="text-align:right; padding:12px;">Effort</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom: 1px solid var(--bd);"><td style="padding:12px;">1</td><td style="padding:12px;">RRHH</td><td style="text-align:right; padding:12px;">600</td><td style="text-align:right; padding:12px;">30%</td><td style="text-align:right; padding:12px; color: var(--warning);">Medio</td></tr>
+              <tr style="border-bottom: 1px solid var(--bd);"><td style="padding:12px;">2</td><td style="padding:12px;">Catálogo + Recetas + Insumos</td><td style="text-align:right; padding:12px;">850</td><td style="text-align:right; padding:12px;">40%</td><td style="text-align:right; padding:12px; color: var(--warning);">Medio-Alto</td></tr>
+              <tr style="border-bottom: 1px solid var(--bd);"><td style="padding:12px;">3</td><td style="padding:12px;"><strong style="color: var(--gold);">⭐ Stock + CMV + AvT</strong></td><td style="text-align:right; padding:12px;">1030</td><td style="text-align:right; padding:12px;">70%</td><td style="text-align:right; padding:12px; color: var(--danger);">Alto</td></tr>
+              <tr style="border-bottom: 1px solid var(--bd);"><td style="padding:12px;">4</td><td style="padding:12px;">Compras + Proveedores + AP</td><td style="text-align:right; padding:12px;">870</td><td style="text-align:right; padding:12px;">60%</td><td style="text-align:right; padding:12px; color: var(--warning);">Medio-Alto</td></tr>
+              <tr style="border-bottom: 1px solid var(--bd);"><td style="padding:12px;">5</td><td style="padding:12px;"><strong style="color: var(--gold);">⭐ Caja + Finanzas + P&L</strong></td><td style="text-align:right; padding:12px;">1090</td><td style="text-align:right; padding:12px;">75%</td><td style="text-align:right; padding:12px; color: var(--danger);">Alto</td></tr>
+              <tr style="border-bottom: 1px solid var(--bd);"><td style="padding:12px;">6</td><td style="padding:12px;">Ventas + POS COMANDA</td><td style="text-align:right; padding:12px;">875</td><td style="text-align:right; padding:12px;">40%</td><td style="text-align:right; padding:12px; color: var(--success);">Medio-Bajo</td></tr>
+              <tr style="border-bottom: 1px solid var(--bd);"><td style="padding:12px;">7</td><td style="padding:12px;">Permisos unificados</td><td style="text-align:right; padding:12px;">940</td><td style="text-align:right; padding:12px;">50%</td><td style="text-align:right; padding:12px; color: var(--warning);">Medio</td></tr>
+              <tr style="border-bottom: 1px solid var(--bd);"><td style="padding:12px;">8</td><td style="padding:12px;">Tienda + Delivery</td><td style="text-align:right; padding:12px;">1080</td><td style="text-align:right; padding:12px;">50%</td><td style="text-align:right; padding:12px; color: var(--warning);">Medio</td></tr>
+              <tr style="background: var(--bg3);"><td style="padding:12px;"><strong>Σ</strong></td><td style="padding:12px;"><strong>TOTAL</strong></td><td style="text-align:right; padding:12px;"><strong>7.335</strong></td><td style="text-align:right; padding:12px;"><strong>~52%</strong></td><td style="text-align:right; padding:12px; color: var(--celeste);"><strong>~10 semanas</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">🎯</span> 4 patrones universales aplicados</div>
+      <div class="grid grid-2">
+        <div class="card">
+          <span class="card-tag tag-solution">Patrón #1</span>
+          <h3>Single source of truth en back-office</h3>
+          <p>PASE = source. COMANDA = consumer real-time.</p>
+        </div>
+        <div class="card">
+          <span class="card-tag tag-solution">Patrón #2</span>
+          <h3>Ledger + cache derivado</h3>
+          <p>saldos_caja ya, stock nuevo, liquidaciones nuevo.</p>
+        </div>
+        <div class="card">
+          <span class="card-tag tag-solution">Patrón #3</span>
+          <h3>Eventos discretos + período abierto</h3>
+          <p>RRHH novedades, stock movimientos, pedidos.</p>
+        </div>
+        <div class="card">
+          <span class="card-tag tag-solution">Patrón #4</span>
+          <h3>State machine explícito</h3>
+          <p>Liquidaciones, OCs, pedidos, conteos.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="highlight">
+      <h3>💪 El valor de tener esto documentado</h3>
+      <p><strong>Para Neko:</strong> visión completa antes de codear. Cero retrabajo.</p>
+      <p style="margin-top:10px;"><strong>Para vender:</strong> documentación que demuestra que el sistema se diseñó como los profesionales (Toast/R365/Square/MarketMan). Vendible a otros gastronómicos.</p>
+      <p style="margin-top:10px;"><strong>Para el dev:</strong> cuando vayas a implementar, cada spec es seed de un sprint. Plan holístico secuencia.</p>
+    </div>
+  </section>
+
+  <!-- ========== SLIDE 10 — PRÓXIMOS PASOS ========== -->
+  <section class="slide" id="slide-10">
+    <div class="hero">
+      <span class="hero-num">Cierre</span>
+      <h1>Próximos pasos</h1>
+      <p class="lead">Sin presión. Los specs son atemporales — sirven dentro de 6 meses igual. Cuando estés listo, retomamos.</p>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">📖</span> Tu turno: revisar</div>
+      <div class="grid grid-3">
+        <div class="card">
+          <span class="card-tag tag-info">Paso 1</span>
+          <h3>Lectura skim</h3>
+          <p>45-60 min los 8 specs. Andá por los <strong>⭐ Stock</strong> y <strong>⭐ Caja</strong> primero — son los de más valor.</p>
+        </div>
+        <div class="card">
+          <span class="card-tag tag-info">Paso 2</span>
+          <h3>Identificá qué cambia</h3>
+          <p>¿Algo que ME OLVIDÉ? ¿Alguna decisión que no te cierra? ¿Algún flow operativo no documentado?</p>
+        </div>
+        <div class="card">
+          <span class="card-tag tag-info">Paso 3</span>
+          <h3>Feedback</h3>
+          <p>Comments inline en los MD (prefijo "🔴 LUCAS:") o doc separado, o nueva conversación conmigo.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">🚀</span> Cuando termines la revisión</div>
+      <div class="phases">
+        <div class="phase">
+          <div class="phase-num">PASO A</div>
+          <div class="phase-title">Aplicar feedback</div>
+          <div class="phase-desc">Ajusto los specs con tus comentarios.</div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">PASO B</div>
+          <div class="phase-title">writing-plans</div>
+          <div class="phase-desc">Invoco skill con set completo. Sale plan holístico.</div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">PASO C</div>
+          <div class="phase-title">Sprints</div>
+          <div class="phase-desc">Implementación en fases (~10 semanas).</div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">PASO D</div>
+          <div class="phase-title">Validación</div>
+          <div class="phase-desc">Tests E2E + cutover gradual local por local.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="highlight" style="margin-top: 40px;">
+      <h3>📂 Dónde está todo</h3>
+      <p><strong>Specs:</strong> <code style="background: var(--bg3); padding: 2px 8px; border-radius: 4px;">docs/superpowers/specs/</code> + README índice</p>
+      <p style="margin-top: 8px;"><strong>Esta presentación:</strong> <code style="background: var(--bg3); padding: 2px 8px; border-radius: 4px;">presentacion-specs/index.html</code></p>
+      <p style="margin-top: 8px;"><strong>Prototipos navegables RRHH:</strong> <code style="background: var(--bg3); padding: 2px 8px; border-radius: 4px;">prototipo-rrhh/index.html</code> y <code style="background: var(--bg3); padding: 2px 8px; border-radius: 4px;">prototipo-rrhh/calendario.html</code></p>
+      <p style="margin-top: 8px;"><strong>Memoria:</strong> <code style="background: var(--bg3); padding: 2px 8px; border-radius: 4px;">~/.claude/projects/.../memory/project_pase_comanda_specs_rediseno_28_may.md</code></p>
+    </div>
+
+    <div style="text-align: center; margin-top: 60px; padding: 40px;">
+      <h2 style="font-size: 32px; margin-bottom: 16px; color: var(--celeste);">Tomate tu tiempo. Cuando estés listo, me decís.</h2>
+      <p style="color: var(--txt2);">🙌</p>
+    </div>
+  </section>
+
+</main>
+
+<div class="nav-arrows">
+  <button class="nav-arrow" id="arrowPrev" onclick="goPrev()" title="Anterior">←</button>
+  <button class="nav-arrow" id="arrowNext" onclick="goNext()" title="Siguiente">→</button>
+</div>
+
+<div class="help-hint">
+  Usá <kbd>←</kbd> <kbd>→</kbd> del teclado para navegar
+</div>
+
+<script>
+let currentSlide = 0;
+const totalSlides = 11;
+
+function goSlide(n) {
+  if (n < 0 || n >= totalSlides) return;
+  document.querySelectorAll('.slide').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  document.getElementById('slide-' + n).classList.add('active');
+  document.querySelectorAll('.nav-item')[n].classList.add('active');
+  currentSlide = n;
+  updateProgress();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function goNext() { goSlide(Math.min(currentSlide + 1, totalSlides - 1)); }
+function goPrev() { goSlide(Math.max(currentSlide - 1, 0)); }
+
+function updateProgress() {
+  const pct = (currentSlide / (totalSlides - 1)) * 100;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('arrowPrev').disabled = currentSlide === 0;
+  document.getElementById('arrowNext').disabled = currentSlide === totalSlides - 1;
+}
+
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const n = parseInt(item.dataset.slide);
+    goSlide(n);
+  });
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight') goNext();
+  if (e.key === 'ArrowLeft') goPrev();
+  if (e.key === 'Home') goSlide(0);
+  if (e.key === 'End') goSlide(totalSlides - 1);
+});
+
+updateProgress();
+</script>
+
+</body>
+</html>
