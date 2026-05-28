@@ -9,6 +9,7 @@ import { calcularSaldosPorProveedor } from "../lib/saldoProveedor";
 import type { Usuario, Local } from "../types/auth";
 import type { Proveedor, Factura } from "../types/finanzas";
 import { EstadoCuentaDrawer } from "./compras/EstadoCuentaDrawer";
+import { Modal } from "../components/ui";
 
 interface ProveedoresProps {
   user: Usuario;
@@ -170,28 +171,47 @@ export default function Proveedores({ user, localActivo, embedded = false, embed
           ))}</tbody></table>
         )}
       </div>
-      {modal&&(<div className="overlay" onClick={()=>setModal(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
-        <div className="modal-hd"><div className="modal-title">Nuevo Proveedor</div><button className="close-btn" onClick={()=>setModal(false)}>✕</button></div>
-        <div className="modal-body">
-          <div className="field"><label>Razón Social *</label><input value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})} placeholder="Empresa S.A."/></div>
-          <div className="form2">
-            <div className="field"><label>CUIT</label><input value={form.cuit} onChange={e=>setForm({...form,cuit:e.target.value})} placeholder="30-12345678-0"/></div>
-            <div className="field"><label>Categoría EERR</label><select value={form.cat} onChange={e=>setForm({...form,cat:e.target.value})}>{CATEGORIAS_COMPRA.map(c=><option key={c}>{c}</option>)}</select></div>
-          </div>
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido (focus trap, ESC, body-lock). */}
+      <Modal
+        isOpen={modal}
+        onClose={()=>setModal(false)}
+        title="Nuevo Proveedor"
+        preventCloseOnOverlay={guardando}
+        footer={
+          <>
+            <button className="btn btn-sec" onClick={()=>setModal(false)} disabled={guardando}>Cancelar</button>
+            <button className="btn btn-acc" onClick={guardar} disabled={guardando}>{guardando ? "Guardando…" : "Guardar"}</button>
+          </>
+        }
+      >
+        <div className="field"><label>Razón Social *</label><input value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})} placeholder="Empresa S.A."/></div>
+        <div className="form2">
+          <div className="field"><label>CUIT</label><input value={form.cuit} onChange={e=>setForm({...form,cuit:e.target.value})} placeholder="30-12345678-0"/></div>
+          <div className="field"><label>Categoría EERR</label><select value={form.cat} onChange={e=>setForm({...form,cat:e.target.value})}>{CATEGORIAS_COMPRA.map(c=><option key={c}>{c}</option>)}</select></div>
         </div>
-        <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModal(false)} disabled={guardando}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={guardando}>{guardando ? "Guardando…" : "Guardar"}</button></div>
-      </div></div>)}
-      {editModal&&(<div className="overlay" onClick={()=>setEditModal(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
-        <div className="modal-hd"><div className="modal-title">Editar Proveedor</div><button className="close-btn" onClick={()=>setEditModal(null)}>✕</button></div>
-        <div className="modal-body">
-          <div className="field"><label>Razón Social</label><input value={editModal.nombre} onChange={e=>setEditModal({...editModal,nombre:e.target.value})}/></div>
-          <div className="form2">
-            <div className="field"><label>CUIT</label><input value={editModal.cuit||""} onChange={e=>setEditModal({...editModal,cuit:e.target.value})}/></div>
-            <div className="field"><label>Categoría EERR</label><select value={editModal.cat||""} onChange={e=>setEditModal({...editModal,cat:e.target.value})}>{CATEGORIAS_COMPRA.map(c=><option key={c}>{c}</option>)}</select></div>
-          </div>
-        </div>
-        <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setEditModal(null)} disabled={guardandoEdit}>Cancelar</button><button className="btn btn-acc" onClick={guardarEdit} disabled={guardandoEdit}>{guardandoEdit ? "Guardando…" : "Guardar"}</button></div>
-      </div></div>)}
+      </Modal>
+      <Modal
+        isOpen={!!editModal}
+        onClose={()=>setEditModal(null)}
+        title="Editar Proveedor"
+        preventCloseOnOverlay={guardandoEdit}
+        footer={
+          <>
+            <button className="btn btn-sec" onClick={()=>setEditModal(null)} disabled={guardandoEdit}>Cancelar</button>
+            <button className="btn btn-acc" onClick={guardarEdit} disabled={guardandoEdit}>{guardandoEdit ? "Guardando…" : "Guardar"}</button>
+          </>
+        }
+      >
+        {editModal && (
+          <>
+            <div className="field"><label>Razón Social</label><input value={editModal.nombre} onChange={e=>setEditModal({...editModal,nombre:e.target.value})}/></div>
+            <div className="form2">
+              <div className="field"><label>CUIT</label><input value={editModal.cuit||""} onChange={e=>setEditModal({...editModal,cuit:e.target.value})}/></div>
+              <div className="field"><label>Categoría EERR</label><select value={editModal.cat||""} onChange={e=>setEditModal({...editModal,cat:e.target.value})}>{CATEGORIAS_COMPRA.map(c=><option key={c}>{c}</option>)}</select></div>
+            </div>
+          </>
+        )}
+      </Modal>
 
       {/* Drawer Estado de Cuenta (sprint mayo 2026 v2 Commit 4).
           Reemplaza el modal anterior con números 28-30px desbalanceados.

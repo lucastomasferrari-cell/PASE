@@ -2,7 +2,7 @@ import { useState, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Usuario, Local } from "../types";
 import { tienePermiso } from "../lib/auth";
-import { PageHeader, FolderIcon, DocumentIcon, AlertIcon, UploadIcon, KeyIcon, ReceiptIcon } from "../components/ui";
+import { Modal, PageHeader, FolderIcon, DocumentIcon, AlertIcon, UploadIcon, KeyIcon, ReceiptIcon } from "../components/ui";
 
 /**
  * Herramientas Hub — pantalla con cards de herramientas avanzadas.
@@ -205,52 +205,36 @@ export default function HerramientasHub({ user, locales, localActivo }: Props) {
         ))}
       </div>
 
-      {/* Modal grande con la herramienta embebida */}
-      {activeToolDef && (
-        <div
-          className="overlay"
-          onClick={() => setActiveTool(null)}
-          onKeyDown={e => { if (e.key === "Escape") setActiveTool(null); }}
-        >
-          <div
-            className="modal"
-            style={{
-              width: "min(1400px, 95vw)",
-              maxHeight: "92vh",
-              display: "flex",
-              flexDirection: "column",
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="modal-hd">
-              <div className="modal-title">{activeToolDef.label}</div>
-              <button className="close-btn" onClick={() => setActiveTool(null)} aria-label="Cerrar">✕</button>
-            </div>
-            <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
-              <Suspense fallback={<div style={{ padding: 40, color: "var(--pase-text-muted)" }}>Cargando…</div>}>
-                {activeToolDef.id === "importar" && (
-                  <Importar user={user} locales={locales} localActivo={localActivo} />
-                )}
-                {activeToolDef.id === "lector_mp" && (
-                  <LectorExtractoMP user={user} locales={locales} localActivo={localActivo} />
-                )}
-                {activeToolDef.id === "blindaje" && (
-                  <Blindaje user={user} locales={locales} localActivo={localActivo} />
-                )}
-                {activeToolDef.id === "ajustes_dashboards" && user.tenant_id && (
-                  <SettingsDashboards tenantId={user.tenant_id} />
-                )}
-                {activeToolDef.id === "codigos_manager" && (
-                  <CodigosManager user={user} />
-                )}
-                {activeToolDef.id === "contador_iva" && (
-                  <ContadorIVA user={user} locales={locales} localActivo={localActivo} />
-                )}
-              </Suspense>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modal grande con la herramienta embebida.
+          AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido (focus trap,
+          Escape, body-scroll lock, role=dialog automáticos). */}
+      <Modal
+        isOpen={!!activeToolDef}
+        onClose={() => setActiveTool(null)}
+        title={activeToolDef?.label || ""}
+        maxWidth={1400}
+      >
+        <Suspense fallback={<div style={{ padding: 40, color: "var(--pase-text-muted)" }}>Cargando…</div>}>
+          {activeToolDef?.id === "importar" && (
+            <Importar user={user} locales={locales} localActivo={localActivo} />
+          )}
+          {activeToolDef?.id === "lector_mp" && (
+            <LectorExtractoMP user={user} locales={locales} localActivo={localActivo} />
+          )}
+          {activeToolDef?.id === "blindaje" && (
+            <Blindaje user={user} locales={locales} localActivo={localActivo} />
+          )}
+          {activeToolDef?.id === "ajustes_dashboards" && user.tenant_id && (
+            <SettingsDashboards tenantId={user.tenant_id} />
+          )}
+          {activeToolDef?.id === "codigos_manager" && (
+            <CodigosManager user={user} />
+          )}
+          {activeToolDef?.id === "contador_iva" && (
+            <ContadorIVA user={user} locales={locales} localActivo={localActivo} />
+          )}
+        </Suspense>
+      </Modal>
     </div>
   );
 }
