@@ -1,13 +1,16 @@
 name: MP cron - weekly
 
 # Cron semanal domingos 08:00 UTC = 05:00 ART. Dispara secuencial:
-#   1. backup-tenants  → exporta cada tenant a JSON.gz en bucket
-#      tenant-backups (idempotente por path con fecha).
-#   2. backup-cleanup  → borra archivos >365 días del bucket.
+#   1. backup-tenants?action=export   → exporta cada tenant a JSON.gz en
+#      bucket tenant-backups (idempotente por path con fecha).
+#   2. backup-tenants?action=cleanup  → borra archivos >365 días del bucket.
+#
+# 2026-05-27 (sprint #11 post-audit grande): los dos endpoints separados
+# (backup-tenants + backup-cleanup) se consolidaron en uno solo con
+# dispatch por query param. Liberamos 1 función Vercel Hobby (12/12 → 11/12).
 #
 # Política decidida 2026-05-12: backup semanal con retención 1 año
-# = 52 snapshots por tenant. backup-tenants se movió desde
-# mp-cron-daily.yml. Storage estimado por tenant: ~250-500 MB.
+# = 52 snapshots por tenant. Storage estimado por tenant: ~250-500 MB.
 
 on:
   schedule:
@@ -27,10 +30,10 @@ jobs:
         run: |
           curl -sf -X POST \
             -H "Authorization: Bearer ${{ secrets.MP_CRON_BEARER }}" \
-            'https://pase-yndx.vercel.app/api/backup-tenants'
+            'https://pase-yndx.vercel.app/api/backup-tenants?action=export'
 
-      - name: backup-cleanup (delete >365d backups)
+      - name: backup-tenants (cleanup >365d)
         run: |
           curl -sf -X POST \
             -H "Authorization: Bearer ${{ secrets.MP_CRON_BEARER }}" \
-            'https://pase-yndx.vercel.app/api/backup-cleanup'
+            'https://pase-yndx.vercel.app/api/backup-tenants?action=cleanup'

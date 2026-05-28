@@ -183,7 +183,7 @@ export default function BackupsAdmin({ tenants }: BackupsAdminProps) {
             Sin backups aún para este tenant. El cron diario corre a las 04:00 ART (07:00 UTC).
             <br />
             <span style={{ fontSize: 11, color: "var(--muted2)" }}>
-              Para disparar uno manualmente: <code>GET /api/backup-tenants?cron_secret=...</code>
+              Para disparar uno manualmente: <code>GET /api/backup-tenants?action=export&amp;cron_secret=...</code>
             </span>
           </div>
         ) : (
