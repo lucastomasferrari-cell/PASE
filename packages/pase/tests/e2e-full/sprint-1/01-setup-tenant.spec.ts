@@ -46,7 +46,8 @@ test.describe.serial("E2E Sprint 1 — Setup tenant aislado", () => {
     }
   });
 
-  test("crea tenant E2E aislado + seed completo + verifica todo", async (_, testInfo) => {
+  // eslint-disable-next-line no-empty-pattern -- Playwright requiere destructuring del fixtures object aunque no usemos ninguno; testInfo es segundo arg
+  test("crea tenant E2E aislado + seed completo + verifica todo", async ({}, testInfo) => {
     // ── Limpieza idempotente PRIMERO: si quedó un tenant de un run previo ─
     // Esto hace su propio login superadmin internamente. Es importante
     // hacerlo ANTES de obtener nuestro token, porque Supabase puede invalidar
