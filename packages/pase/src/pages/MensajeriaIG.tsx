@@ -96,13 +96,11 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
   const [clienteEditId, setClienteEditId] = useState<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  if (!tienePermiso(user, 'mensajeria')) {
-    return (
-      <div className="empty">
-        Acceso denegado: necesitás permiso 'mensajeria' para entrar acá.
-      </div>
-    );
-  }
+  // PERMISSION CHECK: NO hacer early return acá — viola
+  // react-hooks/rules-of-hooks porque los useCallback/useEffect/useMemo
+  // de abajo no se llamarían en el render donde falta permiso. Movido
+  // al final del componente, después de todos los hooks.
+  const tienePermisoMensajeria = tienePermiso(user, 'mensajeria');
 
   // Cargar lista de conversaciones
   const loadConversaciones = useCallback(async () => {
@@ -251,6 +249,15 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
   };
 
   // ─── Render ───────────────────────────────────────────────────────
+  // Permission check tarde (post-hooks) — cumple rules-of-hooks.
+  if (!tienePermisoMensajeria) {
+    return (
+      <div className="empty">
+        Acceso denegado: necesitás permiso 'mensajeria' para entrar acá.
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Header */}

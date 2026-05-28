@@ -142,7 +142,7 @@ export function TabComprasSugeridas({ user, locales, localActivo }: Props) {
           cat: "INSUMOS COCINA",
         };
       });
-      // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F12: cargar remito debe ir por RPC crear_remito atómica. Hoy se respeta la convención de Compras.tsx (insert directo). Migrar todo junto.
+      // eslint-disable-next-line pase-local/no-direct-financiera-write, pase-local/require-apply-local-scope -- deuda C4-F12: cargar remito debe ir por RPC crear_remito atómica. Hoy se respeta la convención de Compras.tsx (insert directo). INSERT bulk: cada row trae local_id resuelto desde el forecast (no es lectura cross-local).
       const { error } = await db.from("remitos").insert(remitosACrear);
       if (error) throw new Error(error.message);
       alert(`✓ ${remitosACrear.length} remito(s) creado(s).\nVas a verlos en Compras → Remitos para editar/confirmar.`);

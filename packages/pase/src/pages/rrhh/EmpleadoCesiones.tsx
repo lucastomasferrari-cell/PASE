@@ -29,7 +29,7 @@ interface Props {
   onChange?: () => void;
 }
 
-export function EmpleadoCesiones({ empleadoId, localPrincipalId, locales, onChange }: Props) {
+export function EmpleadoCesiones({ empleadoId, localPrincipalId: _localPrincipalId, locales, onChange }: Props) {
   const [cesiones, setCesiones] = useState<CesionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [agregando, setAgregando] = useState(false);

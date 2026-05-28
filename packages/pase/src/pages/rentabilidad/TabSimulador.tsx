@@ -12,7 +12,7 @@
 // Persistencia: guarda escenarios en tabla `simulaciones`. Cada escenario
 // puede recalcularse con fn_simular_escenario.
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { db } from "../../lib/supabase";
 import { fmt_$, toISO, today } from "../../lib/utils";
 import { EmptyState, Modal } from "../../components/ui";

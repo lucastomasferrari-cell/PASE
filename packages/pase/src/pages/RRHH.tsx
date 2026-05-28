@@ -28,7 +28,7 @@ import type {
 } from "./rrhh/types";
 import {
   calcLiquidacion, calcularValorDoble, MESES_NOMBRE, CUENTAS_PAGO,
-  calcularCuotas, dividirEnCuotas, slotKey, cuotasParaModoPago,
+  calcularCuotas, slotKey, cuotasParaModoPago,
 } from "./rrhh/helpers";
 // Sub-componentes (split F6 del 2026-05-11).
 import { TabDashboard } from "./rrhh/TabDashboard";

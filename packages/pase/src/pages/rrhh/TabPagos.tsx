@@ -55,7 +55,15 @@ export function TabPagos({
   totalPagosPend, totalGeneral,
   pagoModal, setPagoModal, formasPago, setFormasPago,
   pagando, setPagando, loadPagos, loadEmpleados, showToast,
-  allEmps, adelModal, setAdelModal, adelForm, setAdelForm, guardarAdelanto, guardandoAdelanto,
+  // El modal de Adelanto vive ahora a nivel padre (RRHH.tsx) — el button "+
+  // Adelanto" en esta vista solo llama setAdelModal(true). Las otras props
+  // de adelanto (allEmps, adelForm, setAdelForm, guardarAdelanto,
+  // guardandoAdelanto) viajan inutilizadas por compat de signature. Marcadas
+  // con `_` para silenciar @typescript-eslint/no-unused-vars sin romper el
+  // contrato del padre.
+  allEmps: _allEmps, adelModal: _adelModal, setAdelModal,
+  adelForm: _adelForm, setAdelForm: _setAdelForm,
+  guardarAdelanto: _guardarAdelanto, guardandoAdelanto: _guardandoAdelanto,
   adelantosPendientes, setAdelantosPendientes, abrirPagoSueldo,
   cuentasUsables, idempKeyPagarSueldo,
   fechaPago, setFechaPago,

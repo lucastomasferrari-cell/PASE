@@ -15,7 +15,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { db } from "../lib/supabase";
-import { MODULOS, PERMISOS_EXTRAS, tienePermiso } from "../lib/auth";
+import { PERMISOS_EXTRAS, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";

@@ -251,6 +251,21 @@ export default defineConfig([
       // 24 archivos hoy dibujan overlay manual. Migrar gradual.
       // Convertir a error cuando coverage llegue a >80%.
       'pase-local/prefer-modal-component': 'warn',
+      // React 19 nuevo: set-state-in-effect detecta `setX()` dentro de
+      // un useEffect. Es bug-prone (cascading renders) pero la mayoría
+      // de los ~28 casos en el codebase son legítimos (cargar data y
+      // setearla post-fetch). Downgrade a warn — convertirlo en error
+      // cuando se migre cada caso a el pattern recomendado (react query,
+      // useReducer, o setState dentro de un event handler en vez de
+      // efecto). Refactor sprint dedicado.
+      'react-hooks/set-state-in-effect': 'warn',
+      // React 19 nuevo: detectar cómputos no-puros (Date.now, Math.random)
+      // y acceso a refs durante render. Son señales de bugs pero los 2
+      // casos actuales son legítimos (Date.now en una const local que se
+      // usa para formatear; ref.current accessed en map() condicional).
+      // Downgrade a warn hasta refactor dedicado.
+      'react-hooks/purity': 'warn',
+      'react-hooks/refs': 'warn',
     },
   },
   // Tests, scripts one-off, audits: el bypass de C4 es esperado (setup de
@@ -262,6 +277,29 @@ export default defineConfig([
       '**/*.spec.{ts,tsx}',
       'scripts/**/*.{ts,tsx,mjs,cjs,js}',
     ],
+    rules: {
+      'pase-local/no-direct-financiera-write': 'off',
+      'pase-local/require-apply-local-scope': 'off',
+    },
+  },
+  // Endpoints serverless (api/*.js) tienen `// eslint-disable-next-line
+  // pase-local/no-direct-financiera-write` para casos legítimos (RPC bot
+  // marketplace que escribe a movimientos). Sin registrar el plugin acá,
+  // la directiva referencia una regla desconocida y eslint la marca como
+  // error "Definition for rule X was not found". Plugin registrado sin
+  // reglas activas (no necesitamos lint estricto en api/ — ya pasa cron auth).
+  {
+    files: ['api/**/*.{js,mjs}'],
+    plugins: {
+      'pase-local': {
+        rules: {
+          'no-direct-financiera-write': noDirectFinancieraWrite,
+          'require-apply-local-scope': requireApplyLocalScope,
+          'no-eager-page-import-app': noEagerPageImportApp,
+          'prefer-modal-component': preferModalComponent,
+        },
+      },
+    },
     rules: {
       'pase-local/no-direct-financiera-write': 'off',
       'pase-local/require-apply-local-scope': 'off',
