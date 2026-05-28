@@ -33,6 +33,20 @@ const PIN_CAJERO = "1234";
 export async function seedComandaPos(seed: E2ETenantSeedResult): Promise<E2EComandaPosSeed> {
   const svc = createServiceClient();
 
+  // VALIDACIÓN (sprint 28-may): garantizar que seed.local1Id pertenezca a
+  // seed.tenantId. Si el JSON shared-seed quedó stale (mismatch), abortar
+  // con mensaje claro en vez de fallar con "LOCAL_NO_AUTORIZADO".
+  const { data: localCheck } = await svc.from("locales")
+    .select("tenant_id")
+    .eq("id", seed.local1Id)
+    .maybeSingle();
+  if (!localCheck) {
+    throw new Error(`[seedComandaPos] seed.local1Id=${seed.local1Id} no existe en DB (JSON shared-seed stale?). Borrá /tmp/pase-e2e-shared-seed.json y re-corré.`);
+  }
+  if (localCheck.tenant_id !== seed.tenantId) {
+    throw new Error(`[seedComandaPos] local1Id=${seed.local1Id} pertenece al tenant ${localCheck.tenant_id} pero seed.tenantId=${seed.tenantId} (JSON shared-seed cruzado entre tenants).`);
+  }
+
   // 1. Canales (modo_pos válido: salon|mostrador|pedidos)
   //
   // IDEMPOTENT (sprint 28-may): el tenant es compartido entre specs ahora,

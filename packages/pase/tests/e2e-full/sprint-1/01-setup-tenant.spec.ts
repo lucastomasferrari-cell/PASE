@@ -35,7 +35,11 @@ import {
 } from "../setup/seed-tenant";
 import { currentTotpCode } from "../helpers/totp";
 
-test.describe.serial("E2E Sprint 1 — Setup tenant aislado", () => {
+// Sprint 28-may: este test era el patrón ANTES del shared-seed. Hoy
+// globalSetup ya hace exactamente lo mismo (cleanup + crear-tenant + seed
+// completo). Re-correrlo entero falla con EMAIL_ALREADY_IN_AUTH porque
+// el dueño E2E ya existe. Skip — el verify lo hace globalSetup.
+test.describe.skip("E2E Sprint 1 — Setup tenant aislado (DEPRECATED por shared-seed)", () => {
   let seed: E2ETenantSeedResult | null = null;
 
   test.afterAll(async () => {
