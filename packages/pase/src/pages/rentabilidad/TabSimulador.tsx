@@ -15,7 +15,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { db } from "../../lib/supabase";
 import { fmt_$, toISO, today } from "../../lib/utils";
-import { EmptyState } from "../../components/ui";
+import { EmptyState, Modal } from "../../components/ui";
 import type { Usuario, Local } from "../../types";
 
 interface Props {
@@ -368,17 +368,16 @@ export function TabSimulador({ user, locales, localActivo }: Props) {
       )}
 
       {/* ─── Modal detalle ─── */}
-      {verResultado && verResultado.resultado && (
-        <div className="overlay" onClick={() => setVerResultado(null)}>
-          <div className="modal" style={{ width: 700 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-hd">
-              <div>
-                <div className="modal-title">{verResultado.nombre}</div>
-                <div style={{ fontSize: 11, color: "var(--muted2)", marginTop: 2 }}>{verResultado.descripcion}</div>
-              </div>
-              <button className="close-btn" onClick={() => setVerResultado(null)}>✕</button>
-            </div>
-            <div className="modal-body" style={{ padding: 20 }}>
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido. */}
+      <Modal
+        isOpen={!!(verResultado && verResultado.resultado)}
+        onClose={() => setVerResultado(null)}
+        title={verResultado?.nombre || ""}
+        subtitle={verResultado?.descripcion ?? undefined}
+        maxWidth={700}
+      >
+        {verResultado?.resultado && (
+          <>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
                 <div style={{ padding: 12, background: "var(--s2)", borderRadius: 8 }}>
                   <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 1 }}>Real</div>
@@ -440,10 +439,9 @@ export function TabSimulador({ user, locales, localActivo }: Props) {
                   Calculado: {new Date(verResultado.calculado_at).toLocaleString("es-AR")}
                 </div>
               )}
-            </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
     </div>
   );
 }

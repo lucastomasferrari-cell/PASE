@@ -3,6 +3,7 @@ import { db } from "../lib/supabase";
 import { fmt_d, fmt_$, genId, parseMonto } from "../lib/utils";
 import { useCategorias } from "../lib/useCategorias";
 import { localesVisibles } from "../lib/auth";
+import { Modal } from "../components/ui";
 import type { Usuario, Local } from "../types/auth";
 import type { Proveedor } from "../types/finanzas";
 
@@ -524,41 +525,44 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
         </div>
       </div>
 
-      {provModal && (
-        <div className="overlay" onClick={()=>setProvModal(null)}>
-          <div className="modal" style={{width:480}} onClick={e=>e.stopPropagation()}>
-            <div className="modal-hd">
-              <div className="modal-title">Nuevo proveedor</div>
-              <button className="close-btn" onClick={()=>setProvModal(null)}>✕</button>
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido. */}
+      <Modal
+        isOpen={!!provModal}
+        onClose={()=>setProvModal(null)}
+        title="Nuevo proveedor"
+        maxWidth={480}
+        preventCloseOnOverlay={provSaving}
+        footer={
+          <>
+            <button className="btn btn-sec" onClick={()=>setProvModal(null)}>Cancelar</button>
+            <button className="btn btn-acc" onClick={guardarProvInline} disabled={provSaving||!provModal?.nombre}>
+              {provSaving?"Guardando...":"Crear y seleccionar"}
+            </button>
+          </>
+        }
+      >
+        {provModal && (
+          <>
+            <div className="alert alert-info" style={{marginBottom:12,fontSize:11}}>Datos pre-cargados desde la factura. Podés editarlos antes de guardar.</div>
+            <div className="field">
+              <label>Razón Social *</label>
+              <input value={provModal.nombre} onChange={e=>setProvModal({...provModal,nombre:e.target.value})} placeholder="Empresa S.A."/>
             </div>
-            <div className="modal-body">
-              <div className="alert alert-info" style={{marginBottom:12,fontSize:11}}>Datos pre-cargados desde la factura. Podés editarlos antes de guardar.</div>
+            <div className="form2">
               <div className="field">
-                <label>Razón Social *</label>
-                <input value={provModal.nombre} onChange={e=>setProvModal({...provModal,nombre:e.target.value})} placeholder="Empresa S.A."/>
+                <label>CUIT</label>
+                <input value={provModal.cuit||""} onChange={e=>setProvModal({...provModal,cuit:e.target.value})} placeholder="30-12345678-0"/>
               </div>
-              <div className="form2">
-                <div className="field">
-                  <label>CUIT</label>
-                  <input value={provModal.cuit||""} onChange={e=>setProvModal({...provModal,cuit:e.target.value})} placeholder="30-12345678-0"/>
-                </div>
-                <div className="field">
-                  <label>Categoría EERR</label>
-                  <select value={provModal.cat} onChange={e=>setProvModal({...provModal,cat:e.target.value})}>
-                    {CATEGORIAS_COMPRA.map(c=><option key={c}>{c}</option>)}
-                  </select>
-                </div>
+              <div className="field">
+                <label>Categoría EERR</label>
+                <select value={provModal.cat} onChange={e=>setProvModal({...provModal,cat:e.target.value})}>
+                  {CATEGORIAS_COMPRA.map(c=><option key={c}>{c}</option>)}
+                </select>
               </div>
             </div>
-            <div className="modal-ft">
-              <button className="btn btn-sec" onClick={()=>setProvModal(null)}>Cancelar</button>
-              <button className="btn btn-acc" onClick={guardarProvInline} disabled={provSaving||!provModal.nombre}>
-                {provSaving?"Guardando...":"Crear y seleccionar"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
     </div>
   );
 }

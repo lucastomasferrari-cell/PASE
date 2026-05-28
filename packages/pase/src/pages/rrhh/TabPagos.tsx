@@ -1,6 +1,7 @@
 import { db } from "../../lib/supabase";
 import { translateRpcError } from "../../lib/errors";
 import { toISO, today, fmt_d, fmt_$, parseMonto } from "../../lib/utils";
+import { Modal } from "../../components/ui";
 import type { Local } from "../../types";
 import type {
   Empleado, Novedad, Liquidacion, Adelanto, LineaPago,
@@ -252,22 +253,39 @@ export function TabPagos({
           }
         };
 
+        // AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido.
+        const tituloModal = (liq.cuotas_total ?? 1) > 1
+          ? `Pagar — ${emp.apellido}, ${emp.nombre}`
+          : `Pagar — ${emp.apellido}, ${emp.nombre}`;
+        const subtituloModal = (liq.cuotas_total ?? 1) > 1
+          ? `Cuota ${liq.cuota_num}/${liq.cuotas_total}${liq.fecha_vencimiento ? ` · vence ${fmt_d(liq.fecha_vencimiento)}` : ''}`
+          : undefined;
         return (
-          <div className="overlay" onClick={cerrarModal}>
-            <div className="modal" style={{width:480}} onClick={e => e.stopPropagation()}>
-              <div className="modal-hd">
-                <div className="modal-title">
-                  Pagar — {emp.apellido}, {emp.nombre}
-                  {(liq.cuotas_total ?? 1) > 1 && (
-                    <span style={{fontSize:11,color:"var(--muted2)",fontWeight:400,marginLeft:8}}>
-                      · Cuota {liq.cuota_num}/{liq.cuotas_total}
-                      {liq.fecha_vencimiento && ` · vence ${fmt_d(liq.fecha_vencimiento)}`}
-                    </span>
-                  )}
-                </div>
-                <button className="close-btn" onClick={cerrarModal}>✕</button>
-              </div>
-              <div className="modal-body">
+          <Modal
+            isOpen={true}
+            onClose={cerrarModal}
+            title={tituloModal}
+            subtitle={subtituloModal}
+            maxWidth={480}
+            preventCloseOnOverlay={pagando}
+            footer={
+              <>
+                <button className="btn btn-sec" onClick={cerrarModal}>Cancelar</button>
+                <button
+                  className="btn btn-success"
+                  onClick={confirmarPago}
+                  disabled={!puedeConfirmar || pagando}
+                  title={motivoBloqueo ?? undefined}
+                >
+                  {pagando
+                    ? "Procesando..."
+                    : sobrepago > 1
+                      ? `Pagar con sobrepago (+${fmt_$(sobrepago)})`
+                      : completaPago ? "Confirmar pago" : "Registrar pago parcial"}
+                </button>
+              </>
+            }
+          >
                 <div className="field" style={{marginBottom:12}}>
                   <label>
                     <span>📅 Fecha del movimiento</span>
@@ -426,24 +444,7 @@ export function TabPagos({
                     ⚠ {motivoBloqueo}
                   </div>
                 )}
-              </div>
-              <div className="modal-ft">
-                <button className="btn btn-sec" onClick={cerrarModal}>Cancelar</button>
-                <button
-                  className="btn btn-success"
-                  onClick={confirmarPago}
-                  disabled={!puedeConfirmar || pagando}
-                  title={motivoBloqueo ?? undefined}
-                >
-                  {pagando
-                    ? "Procesando..."
-                    : sobrepago > 1
-                      ? `Pagar con sobrepago (+${fmt_$(sobrepago)})`
-                      : completaPago ? "Confirmar pago" : "Registrar pago parcial"}
-                </button>
-              </div>
-            </div>
-          </div>
+          </Modal>
         );
       })()}
 
