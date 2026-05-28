@@ -77,7 +77,7 @@ export function TabSimulador({ user, locales, localActivo }: Props) {
   const [modoCrear, setModoCrear] = useState<TipoTemplate | null>(null);
   const [calculando, setCalculando] = useState<number | null>(null);
   const [verResultado, setVerResultado] = useState<Simulacion | null>(null);
-  const { toast, showToast, showError } = useToast();
+  const { toast, showError } = useToast();
 
   // Form state para nueva simulación
   const [nuevo, setNuevo] = useState({

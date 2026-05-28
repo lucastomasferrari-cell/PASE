@@ -41,6 +41,14 @@ export function Modal({
   const dialogRef = useRef<HTMLDivElement>(null);
   const prevFocusRef = useRef<HTMLElement | null>(null);
 
+  // BUG FIX 2026-05-28 (Lucas): usar ref de onClose para que NO sea dependency
+  // del effect de abajo. Cada keystroke en un input del modal disparaba
+  // re-render del padre → nueva fn onClose → effect re-ejecutaba → enfocaba
+  // el primer focusable (el botón ✕) → input perdía foco entre dígitos.
+  // Con ref el effect solo corre cuando isOpen cambia.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -48,16 +56,19 @@ export function Modal({
     // para restaurarlo al cerrar. Sin esto el focus queda perdido en el body.
     prevFocusRef.current = document.activeElement as HTMLElement | null;
 
-    // Focus inicial: enfocar el primer elemento focuseable del modal.
-    // Si no hay ninguno, enfocar el dialog mismo.
+    // Focus inicial: enfocar el primer INPUT/textarea/select del modal (más útil
+    // que enfocar el botón ✕). Si no hay inputs editables, fallback al primer
+    // elemento focuseable (botón) y, si tampoco hay, al dialog mismo.
+    const inputSel = 'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([disabled]), textarea:not([disabled]), select:not([disabled])';
     const focusableSel = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    const firstInput = dialogRef.current?.querySelector<HTMLElement>(inputSel);
     const focusables = dialogRef.current?.querySelectorAll<HTMLElement>(focusableSel);
-    const first = focusables?.[0];
-    if (first) first.focus();
+    if (firstInput) firstInput.focus();
+    else if (focusables?.[0]) focusables[0].focus();
     else dialogRef.current?.focus();
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { onClose(); return; }
+      if (e.key === "Escape") { onCloseRef.current(); return; }
       // AUDIT F4B#1 a11y: focus trap. Tab desde el último → primer.
       // Shift+Tab desde el primero → último. Sin esto, Tab sale al body.
       if (e.key === "Tab" && focusables && focusables.length > 0) {
@@ -84,7 +95,8 @@ export function Modal({
       // Restaurar focus
       try { prevFocusRef.current?.focus(); } catch { /* ignore */ }
     };
-  }, [isOpen, onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onClose intencionalmente via ref para evitar re-render-induced focus steal (bug 2026-05-28)
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
