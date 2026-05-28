@@ -10,6 +10,8 @@ import type { Usuario, Local } from "../types/auth";
 import type { Proveedor, Factura } from "../types/finanzas";
 import { EstadoCuentaDrawer } from "./compras/EstadoCuentaDrawer";
 import { Modal } from "../components/ui";
+import { useToast } from "../hooks/useToast";
+import { ToastComponent } from "../components/Toast";
 
 interface ProveedoresProps {
   user: Usuario;
@@ -26,6 +28,8 @@ interface ProveedoresProps {
 // ─── PROVEEDORES ──────────────────────────────────────────────────────────────
 export default function Proveedores({ user, localActivo, embedded = false, embeddedFilter }: ProveedoresProps) {
   const { CATEGORIAS_COMPRA } = useCategorias();
+  // AUDIT F4B / sprint #6: toasts en vez de alert() — feedback inline no-bloqueante.
+  const { toast, showError } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [proveedores,setProveedores]=useState<Proveedor[]>([]);
   const [modal,setModal]=useState(false);
@@ -95,7 +99,7 @@ export default function Proveedores({ user, localActivo, embedded = false, embed
   const guardarHandler = useGuardedHandler(async () => {
     if(!form.nombre)return;
     const {error}=await db.from("proveedores").insert([{...form,saldo:0}]);
-    if(error){alert("Error creando proveedor: "+error.message);return;}
+    if(error){showError("Error creando proveedor: "+error.message);return;}
     setModal(false);setForm(emptyForm);
     await load();
   });
@@ -104,7 +108,7 @@ export default function Proveedores({ user, localActivo, embedded = false, embed
   const guardarEditHandler = useGuardedHandler(async () => {
     if(!editModal) return;
     const {error}=await db.from("proveedores").update({nombre:editModal.nombre,cuit:editModal.cuit,cat:editModal.cat,estado:editModal.estado}).eq("id",editModal.id);
-    if(error){alert("Error editando proveedor: "+error.message);return;}
+    if(error){showError("Error editando proveedor: "+error.message);return;}
     setEditModal(null);
     await load();
   });
@@ -112,7 +116,7 @@ export default function Proveedores({ user, localActivo, embedded = false, embed
   const guardandoEdit = guardarEditHandler.isPending;
   const toggleEstado=async(p: Proveedor)=>{
     const {error}=await db.from("proveedores").update({estado:p.estado==="Activo"?"Inactivo":"Activo"}).eq("id",p.id);
-    if(error){alert("Error: "+error.message);return;}
+    if(error){showError("Error: "+error.message);return;}
     await load();
   };
   const abrirCta=async(p: Proveedor)=>{
@@ -227,6 +231,9 @@ export default function Proveedores({ user, localActivo, embedded = false, embed
           onEditar={() => setEditModal(ctaModal)}
         />
       )}
+
+      {/* AUDIT F4B / sprint #6: toast no bloqueante en vez de alert() */}
+      <ToastComponent toast={toast} />
     </div>
   );
 }
