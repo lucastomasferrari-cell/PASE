@@ -9,6 +9,7 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { translateRpcError } from "../lib/errors";
+import { Modal } from "../components/ui";
 import type { Tenant } from "../types";
 
 interface BackupsAdminProps {
@@ -222,76 +223,80 @@ export default function BackupsAdmin({ tenants }: BackupsAdminProps) {
         )}
       </div>
 
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido. */}
       {/* Modal 1: warning */}
-      {restoreStep && restoreStep.step === 1 && tenant && (
-        <div className="overlay" onClick={cancelarRestore}>
-          <div className="modal" style={{ width: 520 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-hd">
-              <div className="modal-title">⚠ Restaurar backup</div>
-              <button className="close-btn" onClick={cancelarRestore}>✕</button>
-            </div>
-            <div className="modal-body">
-              <p>
-                Vas a <strong>BORRAR toda la data actual</strong> del tenant <strong>{tenant.nombre}</strong> y
-                reemplazarla por el backup del <strong>{restoreStep.file.fechaIso}</strong>.
-              </p>
-              <p style={{ color: "var(--danger)", fontSize: 13 }}>
-                Esta acción <strong>no se puede deshacer</strong>. El restore es atómico: si falla, queda rollback
-                automático. Si tiene éxito, los datos posteriores al backup se pierden.
-              </p>
-              <p style={{ fontSize: 12, color: "var(--muted2)" }}>
-                Los archivos del Storage (facturas, blindaje, rrhh-documentos) <strong>NO se restauran</strong>:
-                el restore solo cubre data relacional. Los binarios quedan como están.
-              </p>
-            </div>
-            <div className="modal-ft">
-              <button className="btn btn-sec" onClick={cancelarRestore}>Cancelar</button>
-              <button className="btn btn-danger" onClick={() => setRestoreStep({ ...restoreStep, step: 2 })}>
-                Continuar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        isOpen={!!(restoreStep && restoreStep.step === 1 && tenant)}
+        onClose={cancelarRestore}
+        title="⚠ Restaurar backup"
+        maxWidth={520}
+        footer={
+          <>
+            <button className="btn btn-sec" onClick={cancelarRestore}>Cancelar</button>
+            <button className="btn btn-danger" onClick={() => restoreStep && setRestoreStep({ ...restoreStep, step: 2 })}>
+              Continuar
+            </button>
+          </>
+        }
+      >
+        {restoreStep && tenant && (
+          <>
+            <p>
+              Vas a <strong>BORRAR toda la data actual</strong> del tenant <strong>{tenant.nombre}</strong> y
+              reemplazarla por el backup del <strong>{restoreStep.file.fechaIso}</strong>.
+            </p>
+            <p style={{ color: "var(--danger)", fontSize: 13 }}>
+              Esta acción <strong>no se puede deshacer</strong>. El restore es atómico: si falla, queda rollback
+              automático. Si tiene éxito, los datos posteriores al backup se pierden.
+            </p>
+            <p style={{ fontSize: 12, color: "var(--muted2)" }}>
+              Los archivos del Storage (facturas, blindaje, rrhh-documentos) <strong>NO se restauran</strong>:
+              el restore solo cubre data relacional. Los binarios quedan como están.
+            </p>
+          </>
+        )}
+      </Modal>
 
       {/* Modal 2: confirmación por texto */}
-      {restoreStep && restoreStep.step === 2 && tenant && (
-        <div className="overlay" onClick={restoring ? undefined : cancelarRestore}>
-          <div className="modal" style={{ width: 520 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-hd">
-              <div className="modal-title">Confirmación final</div>
-              {!restoring && <button className="close-btn" onClick={cancelarRestore}>✕</button>}
-            </div>
-            <div className="modal-body">
-              <p>Para confirmar, escribí el nombre exacto del tenant:</p>
-              <p className="mono" style={{ fontSize: 14, fontWeight: 500 }}>{tenant.nombre}</p>
-              <input
-                type="text"
-                value={restoreStep.confirmText}
-                onChange={e => setRestoreStep({ ...restoreStep, confirmText: e.target.value })}
-                disabled={restoring}
-                autoFocus
-                style={{ width: "100%", marginTop: 8 }}
-              />
-              {restoring && (
-                <div style={{ marginTop: 12, color: "var(--muted)", fontSize: 12 }}>
-                  Restaurando... esto puede tardar varios segundos según el tamaño.
-                </div>
-              )}
-            </div>
-            <div className="modal-ft">
-              <button className="btn btn-sec" onClick={cancelarRestore} disabled={restoring}>Cancelar</button>
-              <button
-                className="btn btn-danger"
-                onClick={ejecutarRestore}
-                disabled={restoring || restoreStep.confirmText !== tenant.nombre}
-              >
-                {restoring ? "Restaurando..." : "Restaurar (definitivo)"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        isOpen={!!(restoreStep && restoreStep.step === 2 && tenant)}
+        onClose={cancelarRestore}
+        title="Confirmación final"
+        maxWidth={520}
+        preventCloseOnOverlay={restoring}
+        footer={
+          <>
+            <button className="btn btn-sec" onClick={cancelarRestore} disabled={restoring}>Cancelar</button>
+            <button
+              className="btn btn-danger"
+              onClick={ejecutarRestore}
+              disabled={restoring || !tenant || restoreStep?.confirmText !== tenant.nombre}
+            >
+              {restoring ? "Restaurando..." : "Restaurar (definitivo)"}
+            </button>
+          </>
+        }
+      >
+        {restoreStep && tenant && (
+          <>
+            <p>Para confirmar, escribí el nombre exacto del tenant:</p>
+            <p className="mono" style={{ fontSize: 14, fontWeight: 500 }}>{tenant.nombre}</p>
+            <input
+              type="text"
+              value={restoreStep.confirmText}
+              onChange={e => setRestoreStep({ ...restoreStep, confirmText: e.target.value })}
+              disabled={restoring}
+              autoFocus
+              style={{ width: "100%", marginTop: 8 }}
+            />
+            {restoring && (
+              <div style={{ marginTop: 12, color: "var(--muted)", fontSize: 12 }}>
+                Restaurando... esto puede tardar varios segundos según el tamaño.
+              </div>
+            )}
+          </>
+        )}
+      </Modal>
     </div>
   );
 }
