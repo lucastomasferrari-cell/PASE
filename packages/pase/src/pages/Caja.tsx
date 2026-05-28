@@ -8,7 +8,7 @@ import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { useDebouncedValue } from "@pase/shared/utils";
 import { CUENTAS, CUENTAS_OCULTAS_TEMPORAL } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, toLocalISO } from '../lib/utils';
-import { RightSubNav, type SubNavSection, PageHeader, EmptyState, LocalLockedChip } from "../components/ui";
+import { RightSubNav, type SubNavSection, PageHeader, EmptyState, LocalLockedChip, Modal } from "../components/ui";
 import { ManagerOverrideModal } from "../components/ManagerOverrideModal";
 import { exportCSV } from "../lib/exportCSV";
 import { CajaCardsRow } from "./caja/CajaCardsRow";
@@ -832,212 +832,210 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         </>
       )}
 
-      {editMov && (
-        <div className="overlay" onClick={() => setEditMov(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-hd">
-              <div className="modal-title">Editar Movimiento</div>
-              <button className="close-btn" onClick={() => setEditMov(null)}>✕</button>
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal>. */}
+      <Modal
+        isOpen={editMov !== null}
+        onClose={() => setEditMov(null)}
+        title="Editar Movimiento"
+        maxWidth={600}
+        preventCloseOnOverlay={savingEdit}
+        footer={<>
+          <button className="btn btn-sec" onClick={() => setEditMov(null)}>Cancelar</button>
+          <button className="btn btn-acc" onClick={guardarEditMov} disabled={savingEdit}>{savingEdit ? "Guardando..." : "Guardar"}</button>
+        </>}
+      >
+        {editMov && <>
+          <div className="field"><label>Fecha</label>
+            <input type="date" value={editMov.fecha} onChange={e => setEditMov({...editMov, fecha: e.target.value})}/>
+          </div>
+          <div className="form2">
+            <div className="field"><label>Cuenta</label>
+              <select value={editMov.cuenta} onChange={e => setEditMov({...editMov, cuenta: e.target.value})}>
+                {cuentasOperablesList.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
             </div>
-            <div className="modal-body">
-              <div className="field"><label>Fecha</label>
-                <input type="date" value={editMov.fecha} onChange={e => setEditMov({...editMov, fecha: e.target.value})}/>
-              </div>
-              <div className="form2">
-                <div className="field"><label>Cuenta</label>
-                  <select value={editMov.cuenta} onChange={e => setEditMov({...editMov, cuenta: e.target.value})}>
-                    {cuentasOperablesList.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div className="field"><label>Importe $</label>
-                  <input type="number" value={editMov.importe}
-                    onChange={e => setEditMov({...editMov, importe: e.target.value})}/>
-                </div>
-              </div>
-              <div className="field"><label>Detalle</label>
-                <input value={editMov.detalle||""} onChange={e => setEditMov({...editMov, detalle: e.target.value})}/>
-              </div>
-              <div className="field"><label>Justificativo de la edición *</label>
-                <input value={editMov.justificativo||""}
-                  onChange={e => setEditMov({...editMov, justificativo: e.target.value})}
-                  placeholder="Motivo de la modificación..."/>
-              </div>
-            </div>
-            <div className="modal-ft">
-              <button className="btn btn-sec" onClick={() => setEditMov(null)}>Cancelar</button>
-              <button className="btn btn-acc" onClick={guardarEditMov} disabled={savingEdit}>{savingEdit ? "Guardando..." : "Guardar"}</button>
+            <div className="field"><label>Importe $</label>
+              <input type="number" value={editMov.importe}
+                onChange={e => setEditMov({...editMov, importe: e.target.value})}/>
             </div>
           </div>
-        </div>
-      )}
+          <div className="field"><label>Detalle</label>
+            <input value={editMov.detalle||""} onChange={e => setEditMov({...editMov, detalle: e.target.value})}/>
+          </div>
+          <div className="field"><label>Justificativo de la edición *</label>
+            <input value={editMov.justificativo||""}
+              onChange={e => setEditMov({...editMov, justificativo: e.target.value})}
+              placeholder="Motivo de la modificación..."/>
+          </div>
+        </>}
+      </Modal>
 
-      {detalleEdicion && (
-        <div className="overlay" onClick={() => setDetalleEdicion(null)}>
-          <div className="modal" style={{width:480}} onClick={e => e.stopPropagation()}>
-            <div className="modal-hd">
-              <div className="modal-title">Detalle de edición</div>
-              <button className="close-btn" onClick={() => setDetalleEdicion(null)}>✕</button>
-            </div>
-            <div className="modal-body">
-              {auditLog ? (<>
-                <div style={{marginBottom:12,fontSize:11,color:"var(--muted2)"}}>
-                  Justificativo: <strong style={{color:"var(--txt)"}}>{auditLog.justificativo || "—"}</strong>
-                </div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-                  <div>
-                    <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1,color:"var(--muted)",marginBottom:8}}>Antes</div>
-                    {auditLog.antes && Object.entries(auditLog.antes).map(([k, v]) => (
-                      <div key={k} style={{fontSize:11,marginBottom:4}}>
-                        <span style={{color:"var(--muted2)"}}>{k}:</span> <span style={{color:"var(--danger)"}}>{String(v??'—')}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div>
-                    <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1,color:"var(--muted)",marginBottom:8}}>Después</div>
-                    {auditLog.despues && Object.entries(auditLog.despues).map(([k, v]) => (
-                      <div key={k} style={{fontSize:11,marginBottom:4}}>
-                        <span style={{color:"var(--muted2)"}}>{k}:</span> <span style={{color:"var(--success)"}}>{String(v??'—')}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>) : (
-                <div className="empty">Sin detalle de auditoría disponible</div>
-              )}
-            </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setDetalleEdicion(null)}>Cerrar</button></div>
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal>. */}
+      <Modal
+        isOpen={detalleEdicion !== null}
+        onClose={() => setDetalleEdicion(null)}
+        title="Detalle de edición"
+        maxWidth={480}
+        footer={<button className="btn btn-sec" onClick={() => setDetalleEdicion(null)}>Cerrar</button>}
+      >
+        {auditLog ? (<>
+          <div style={{marginBottom:12,fontSize:11,color:"var(--muted2)"}}>
+            Justificativo: <strong style={{color:"var(--txt)"}}>{auditLog.justificativo || "—"}</strong>
           </div>
-        </div>
-      )}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <div>
+              <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1,color:"var(--muted)",marginBottom:8}}>Antes</div>
+              {auditLog.antes && Object.entries(auditLog.antes).map(([k, v]) => (
+                <div key={k} style={{fontSize:11,marginBottom:4}}>
+                  <span style={{color:"var(--muted2)"}}>{k}:</span> <span style={{color:"var(--danger)"}}>{String(v??'—')}</span>
+                </div>
+              ))}
+            </div>
+            <div>
+              <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1,color:"var(--muted)",marginBottom:8}}>Después</div>
+              {auditLog.despues && Object.entries(auditLog.despues).map(([k, v]) => (
+                <div key={k} style={{fontSize:11,marginBottom:4}}>
+                  <span style={{color:"var(--muted2)"}}>{k}:</span> <span style={{color:"var(--success)"}}>{String(v??'—')}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>) : (
+          <div className="empty">Sin detalle de auditoría disponible</div>
+        )}
+      </Modal>
 
-      {modal && (
-        <div className="overlay" onClick={()=>setModal(false)}>
-          <div className="modal" onClick={e=>e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Nuevo Movimiento</div><button className="close-btn" onClick={()=>setModal(false)}>✕</button></div>
-            <div className="modal-body">
-              {/* Local: 3 estados (acordado 2026-05-17):
-                  - lidImplicito !== null → sucursal locked por sidebar → chip 🔒.
-                  - lidImplicito null + locsDisp > 1 → selector obligatorio.
-                  - locsDisp === 1 → no se muestra (el único se usa implícito). */}
-              {lidImplicito !== null ? (
-                <div className="field">
-                  <label>Local</label>
-                  <div style={{ paddingTop: 4 }}>
-                    <LocalLockedChip nombre={locales.find((l: Local) => l.id === lidImplicito)?.nombre ?? "—"} />
-                  </div>
-                </div>
-              ) : necesitaSelectorLocal && (
-                <div className="field">
-                  <label>Local *</label>
-                  <select value={localFormId} onChange={e=>setLocalFormId(e.target.value)} required>
-                    <option value="">Seleccioná el local...</option>
-                    {locsDisp.map((l: Local)=><option key={l.id} value={l.id}>{l.nombre}</option>)}
-                  </select>
-                </div>
-              )}
-              <div className="form2">
-                <div className="field"><label>Cuenta *</label><select value={form.cuenta} onChange={e=>setForm({...form,cuenta:e.target.value})}><option value="">Seleccioná una cuenta…</option>{cuentasOperablesList.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
-                <div className="field"><label>Dirección</label><select value={form.esEgreso?"egreso":"ingreso"} onChange={e=>setForm({...form,esEgreso:e.target.value==="egreso"})}><option value="egreso">Egreso (sale plata)</option><option value="ingreso">Ingreso (entra plata)</option></select></div>
-              </div>
-              <div className="field"><label>Fecha</label><input type="date" value={form.fecha} onChange={e=>setForm({...form,fecha:e.target.value})}/></div>
-              <div className="field"><label>Importe $</label><input type="number" value={form.importe} onChange={e=>setForm({...form,importe:e.target.value})} placeholder="0"/></div>
-              <div className="field"><label>Detalle</label><input value={form.detalle} onChange={e=>setForm({...form,detalle:e.target.value})} placeholder="Descripción..."/></div>
-            </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={saving || !form.importe || !form.cuenta || (necesitaSelectorLocal && !localFormId)}>{saving ? "Guardando..." : "Guardar"}</button></div>
-          </div>
-        </div>
-      )}
-      {transfModal && (
-        <div className="overlay" onClick={()=>setTransfModal(false)}>
-          <div className="modal" onClick={e=>e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Transferir entre cuentas</div><button className="close-btn" onClick={()=>setTransfModal(false)}>✕</button></div>
-            <div className="modal-body">
-              {lidImplicito !== null ? (
-                <div className="field">
-                  <label>Local</label>
-                  <div style={{ paddingTop: 4 }}>
-                    <LocalLockedChip nombre={locales.find((l: Local) => l.id === lidImplicito)?.nombre ?? "—"} />
-                  </div>
-                </div>
-              ) : necesitaSelectorLocal && (
-                <div className="field">
-                  <label>Local *</label>
-                  <select value={localFormId} onChange={e=>setLocalFormId(e.target.value)} required>
-                    <option value="">Seleccioná el local...</option>
-                    {locsDisp.map((l: Local)=><option key={l.id} value={l.id}>{l.nombre}</option>)}
-                  </select>
-                </div>
-              )}
-              {/* Bloque CROSS-LOCAL: si hay más de un local visible, mostrar
-                  selector "Local destino" para permitir transferir entre
-                  cuentas de distintas sucursales (Lucas 22-may noche).
-                  Default: null = same local. */}
-              {locsDisp.length > 1 && (
-                <div className="field">
-                  <label>Local destino (opcional)</label>
-                  <select
-                    value={transfForm.local_destino_id ?? ""}
-                    onChange={e=>setTransfForm({...transfForm,local_destino_id: e.target.value ? Number(e.target.value) : null})}
-                  >
-                    <option value="">Mismo local (default)</option>
-                    {locsDisp.filter((l: Local)=> l.id !== (lidImplicito ?? parseInt(localFormId || "0"))).map((l: Local) => (
-                      <option key={l.id} value={l.id}>→ {l.nombre}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div className="form2">
-                <div className="field"><label>Cuenta origen</label><select value={transfForm.origen} onChange={e=>setTransfForm({...transfForm,origen:e.target.value})}><option value="">— elegí cuenta —</option>{cuentasOperablesList.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
-                <div className="field">
-                  <label>Cuenta destino</label>
-                  {/* Si es cross-local, NO filtramos por cuenta distinta (se permite
-                      misma cuenta en otro local, ej: Caja Efectivo VC → Caja Efectivo Belgrano). */}
-                  <select value={transfForm.destino} onChange={e=>setTransfForm({...transfForm,destino:e.target.value})}>
-                    <option value="">— elegí cuenta —</option>
-                    {(transfForm.local_destino_id != null
-                      ? cuentasOperablesList
-                      : cuentasOperablesList.filter(c=>c!==transfForm.origen)
-                    ).map(c=><option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="form2">
-                <div className="field"><label>Monto $</label><input type="number" value={transfForm.monto} onChange={e=>setTransfForm({...transfForm,monto:e.target.value})} placeholder="0"/></div>
-                <div className="field"><label>Fecha</label><input type="date" value={transfForm.fecha} onChange={e=>setTransfForm({...transfForm,fecha:e.target.value})}/></div>
-              </div>
-              <div className="field"><label>Detalle (opcional)</label><input value={transfForm.detalle} onChange={e=>setTransfForm({...transfForm,detalle:e.target.value})} placeholder="Motivo de la transferencia..."/></div>
-              <div style={{fontSize:11,color:"var(--muted)",marginTop:8}}>
-                {transfForm.local_destino_id != null ? (
-                  <>
-                    🔀 Transferencia <b>cross-local</b>: egresa <b>{transfForm.origen||"origen"}</b> del local actual
-                    e ingresa en <b>{transfForm.destino||"destino"}</b> de <b>{locales.find((l: Local) => l.id === transfForm.local_destino_id)?.nombre ?? "—"}</b>.
-                  </>
-                ) : (
-                  <>Genera 2 movimientos: egreso en <b>{transfForm.origen||"origen"}</b> e ingreso en <b>{transfForm.destino||"destino"}</b>. No afecta el saldo total.</>
-                )}
-              </div>
-            </div>
-            <div className="modal-ft">
-              <button className="btn btn-sec" onClick={()=>setTransfModal(false)} disabled={transfSaving}>Cancelar</button>
-              <button
-                className="btn btn-acc"
-                onClick={guardarTransferencia}
-                disabled={
-                  transfSaving ||
-                  !transfForm.origen ||
-                  !transfForm.destino ||
-                  // Same-local con misma cuenta = inválido. Cross-local con misma cuenta = válido.
-                  (transfForm.local_destino_id == null && transfForm.origen === transfForm.destino) ||
-                  !transfForm.monto ||
-                  (necesitaSelectorLocal && !localFormId)
-                }
-              >
-                {transfSaving?"Transfiriendo…":"Transferir"}
-              </button>
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal>. */}
+      <Modal
+        isOpen={modal}
+        onClose={() => setModal(false)}
+        title="Nuevo Movimiento"
+        maxWidth={600}
+        preventCloseOnOverlay={saving}
+        footer={<>
+          <button className="btn btn-sec" onClick={() => setModal(false)}>Cancelar</button>
+          <button className="btn btn-acc" onClick={guardar} disabled={saving || !form.importe || !form.cuenta || (necesitaSelectorLocal && !localFormId)}>{saving ? "Guardando..." : "Guardar"}</button>
+        </>}
+      >
+        {/* Local: 3 estados (acordado 2026-05-17):
+            - lidImplicito !== null → sucursal locked por sidebar → chip 🔒.
+            - lidImplicito null + locsDisp > 1 → selector obligatorio.
+            - locsDisp === 1 → no se muestra (el único se usa implícito). */}
+        {lidImplicito !== null ? (
+          <div className="field">
+            <label>Local</label>
+            <div style={{ paddingTop: 4 }}>
+              <LocalLockedChip nombre={locales.find((l: Local) => l.id === lidImplicito)?.nombre ?? "—"} />
             </div>
           </div>
+        ) : necesitaSelectorLocal && (
+          <div className="field">
+            <label>Local *</label>
+            <select value={localFormId} onChange={e=>setLocalFormId(e.target.value)} required>
+              <option value="">Seleccioná el local...</option>
+              {locsDisp.map((l: Local)=><option key={l.id} value={l.id}>{l.nombre}</option>)}
+            </select>
+          </div>
+        )}
+        <div className="form2">
+          <div className="field"><label>Cuenta *</label><select value={form.cuenta} onChange={e=>setForm({...form,cuenta:e.target.value})}><option value="">Seleccioná una cuenta…</option>{cuentasOperablesList.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+          <div className="field"><label>Dirección</label><select value={form.esEgreso?"egreso":"ingreso"} onChange={e=>setForm({...form,esEgreso:e.target.value==="egreso"})}><option value="egreso">Egreso (sale plata)</option><option value="ingreso">Ingreso (entra plata)</option></select></div>
         </div>
-      )}
+        <div className="field"><label>Fecha</label><input type="date" value={form.fecha} onChange={e=>setForm({...form,fecha:e.target.value})}/></div>
+        <div className="field"><label>Importe $</label><input type="number" value={form.importe} onChange={e=>setForm({...form,importe:e.target.value})} placeholder="0"/></div>
+        <div className="field"><label>Detalle</label><input value={form.detalle} onChange={e=>setForm({...form,detalle:e.target.value})} placeholder="Descripción..."/></div>
+      </Modal>
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal>. */}
+      <Modal
+        isOpen={transfModal}
+        onClose={() => setTransfModal(false)}
+        title="Transferir entre cuentas"
+        maxWidth={600}
+        preventCloseOnOverlay={transfSaving}
+        footer={<>
+          <button className="btn btn-sec" onClick={() => setTransfModal(false)} disabled={transfSaving}>Cancelar</button>
+          <button
+            className="btn btn-acc"
+            onClick={guardarTransferencia}
+            disabled={
+              transfSaving ||
+              !transfForm.origen ||
+              !transfForm.destino ||
+              // Same-local con misma cuenta = inválido. Cross-local con misma cuenta = válido.
+              (transfForm.local_destino_id == null && transfForm.origen === transfForm.destino) ||
+              !transfForm.monto ||
+              (necesitaSelectorLocal && !localFormId)
+            }
+          >
+            {transfSaving?"Transfiriendo…":"Transferir"}
+          </button>
+        </>}
+      >
+        {lidImplicito !== null ? (
+          <div className="field">
+            <label>Local</label>
+            <div style={{ paddingTop: 4 }}>
+              <LocalLockedChip nombre={locales.find((l: Local) => l.id === lidImplicito)?.nombre ?? "—"} />
+            </div>
+          </div>
+        ) : necesitaSelectorLocal && (
+          <div className="field">
+            <label>Local *</label>
+            <select value={localFormId} onChange={e=>setLocalFormId(e.target.value)} required>
+              <option value="">Seleccioná el local...</option>
+              {locsDisp.map((l: Local)=><option key={l.id} value={l.id}>{l.nombre}</option>)}
+            </select>
+          </div>
+        )}
+        {/* Bloque CROSS-LOCAL: si hay más de un local visible, mostrar
+            selector "Local destino" para permitir transferir entre
+            cuentas de distintas sucursales (Lucas 22-may noche).
+            Default: null = same local. */}
+        {locsDisp.length > 1 && (
+          <div className="field">
+            <label>Local destino (opcional)</label>
+            <select
+              value={transfForm.local_destino_id ?? ""}
+              onChange={e=>setTransfForm({...transfForm,local_destino_id: e.target.value ? Number(e.target.value) : null})}
+            >
+              <option value="">Mismo local (default)</option>
+              {locsDisp.filter((l: Local)=> l.id !== (lidImplicito ?? parseInt(localFormId || "0"))).map((l: Local) => (
+                <option key={l.id} value={l.id}>→ {l.nombre}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div className="form2">
+          <div className="field"><label>Cuenta origen</label><select value={transfForm.origen} onChange={e=>setTransfForm({...transfForm,origen:e.target.value})}><option value="">— elegí cuenta —</option>{cuentasOperablesList.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+          <div className="field">
+            <label>Cuenta destino</label>
+            {/* Si es cross-local, NO filtramos por cuenta distinta (se permite
+                misma cuenta en otro local, ej: Caja Efectivo VC → Caja Efectivo Belgrano). */}
+            <select value={transfForm.destino} onChange={e=>setTransfForm({...transfForm,destino:e.target.value})}>
+              <option value="">— elegí cuenta —</option>
+              {(transfForm.local_destino_id != null
+                ? cuentasOperablesList
+                : cuentasOperablesList.filter(c=>c!==transfForm.origen)
+              ).map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="form2">
+          <div className="field"><label>Monto $</label><input type="number" value={transfForm.monto} onChange={e=>setTransfForm({...transfForm,monto:e.target.value})} placeholder="0"/></div>
+          <div className="field"><label>Fecha</label><input type="date" value={transfForm.fecha} onChange={e=>setTransfForm({...transfForm,fecha:e.target.value})}/></div>
+        </div>
+        <div className="field"><label>Detalle (opcional)</label><input value={transfForm.detalle} onChange={e=>setTransfForm({...transfForm,detalle:e.target.value})} placeholder="Motivo de la transferencia..."/></div>
+        <div style={{fontSize:11,color:"var(--muted)",marginTop:8}}>
+          {transfForm.local_destino_id != null ? (
+            <>
+              Transferencia <b>cross-local</b>: egresa <b>{transfForm.origen||"origen"}</b> del local actual
+              e ingresa en <b>{transfForm.destino||"destino"}</b> de <b>{locales.find((l: Local) => l.id === transfForm.local_destino_id)?.nombre ?? "—"}</b>.
+            </>
+          ) : (
+            <>Genera 2 movimientos: egreso en <b>{transfForm.origen||"origen"}</b> e ingreso en <b>{transfForm.destino||"destino"}</b>. No afecta el saldo total.</>
+          )}
+        </div>
+      </Modal>
 
       {/* MODAL MANAGER OVERRIDE — para anular movimiento sin permiso compras_anular */}
       <ManagerOverrideModal

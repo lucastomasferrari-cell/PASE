@@ -9,7 +9,7 @@ import { useDebouncedValue } from "@pase/shared/utils";
 import { Combobox } from "../components/Combobox";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
-import { InfoTooltip } from "../components/ui";
+import { InfoTooltip, Modal } from "../components/ui";
 import type { Usuario, Local } from "../types";
 import type { Proveedor } from "../types/finanzas";
 
@@ -1251,7 +1251,55 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
         })()
       )}
 
-      {conciliarModal&&(<div className="overlay" onClick={()=>{ if(!conciliando) cerrarConciliar(); }}><div className="modal" style={{width:680,position:"relative"}} onClick={e=>e.stopPropagation()}>
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal>. */}
+      <Modal
+        isOpen={conciliarModal !== null}
+        onClose={cerrarConciliar}
+        title="Conciliar egreso MP"
+        maxWidth={680}
+        preventCloseOnOverlay={conciliando}
+        footer={
+          <div style={{display:"flex",flexDirection:"column",alignItems:"stretch",gap:8,width:"100%"}}>
+            {/* Fila opcional "Ignorar" — sobre los botones principales. El operador
+                puede marcar un egreso como ignorado en vez de conciliar (Lucas
+                2026-05-11) cuando es un reverso, duplicado de banco, etc. */}
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",fontSize:11,color:"var(--muted2)"}}>
+              <span style={{whiteSpace:"nowrap"}}>¿No querés conciliar?</span>
+              <input value={motivoIgnorar} onChange={e=>setMotivoIgnorar(e.target.value)}
+                placeholder="Motivo (opcional, ej: duplicado, reverso)..."
+                style={{flex:1,minWidth:180,padding:"5px 8px",background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--txt)",fontSize:11,borderRadius:"var(--r)"}}
+                disabled={conciliando}/>
+              <button className="btn btn-ghost btn-sm" onClick={ignorarMP} disabled={conciliando}>Ignorar egreso</button>
+            </div>
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+              <button className="btn btn-sec" onClick={cerrarConciliar} disabled={conciliando}>Cancelar</button>
+              {(()=>{
+                if(conciliarTab==="gasto"){
+                  if(vinculoSel==="__NUEVO__")
+                    return <button className="btn btn-acc" disabled={!nuevoGastoForm.categoria||conciliando} onClick={justificarConGastoNuevo}>Crear gasto y conciliar</button>;
+                  return <button className="btn btn-acc" disabled={!vinculoSel||conciliando} onClick={()=>justificarConExistente("gasto",vinculoSel)}>Vincular y conciliar</button>;
+                }
+                if(conciliarTab==="factura"){
+                  if(vinculoSel==="__NUEVO__")
+                    return <button className="btn btn-acc" disabled={!nuevaFacturaForm.prov_id||!nuevaFacturaForm.nro||conciliando} onClick={justificarConFacturaNueva}>Crear factura y conciliar</button>;
+                  if(vinculoSel==="__MULTI__"){
+                    const hayLineas=lineasMulti.some(l=>l.factura_id && parseFloat(l.monto)>0);
+                    return <button className="btn btn-acc" disabled={!hayLineas||conciliando} onClick={justificarConMultiplesFacturas}>Conciliar contra {lineasMulti.filter(l=>l.factura_id).length} factura{lineasMulti.filter(l=>l.factura_id).length===1?"":"s"}</button>;
+                  }
+                  return <button className="btn btn-acc" disabled={!vinculoSel||conciliando} onClick={()=>justificarConExistente("factura",vinculoSel)}>Vincular y conciliar</button>;
+                }
+                if(conciliarTab==="remito"){
+                  if(vinculoSel==="__NUEVO__")
+                    return <button className="btn btn-acc" disabled={!nuevoRemitoForm.prov_id||!nuevoRemitoForm.nro||conciliando} onClick={justificarConRemitoNuevo}>Crear remito y conciliar</button>;
+                  return <button className="btn btn-acc" disabled={!vinculoSel||conciliando} onClick={()=>justificarConExistente("remito",vinculoSel)}>Vincular y conciliar</button>;
+                }
+                return <button className="btn btn-acc" disabled={!movInternoForm.destino||conciliando} onClick={justificarConMovimientoInterno}>Registrar transferencia</button>;
+              })()}
+            </div>
+          </div>
+        }
+      >
+        {conciliarModal && <>
         {/* Overlay "Procesando..." — bloquea TODA interacción con el modal mientras
             la RPC corre. Antes solo cambiaba el label del botón y se confundía
             con un estado normal — Lucas terminaba clickeando 10 veces. */}
@@ -1264,8 +1312,6 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
             </div>
           </div>
         )}
-        <div className="modal-hd"><div className="modal-title">Conciliar egreso MP</div><button className="close-btn" onClick={cerrarConciliar}>✕</button></div>
-        <div className="modal-body">
           <div style={{padding:12,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)",marginBottom:12}}>
             <div style={{fontSize:10,color:"var(--muted2)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Movimiento a justificar</div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -1602,85 +1648,53 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
               <div className="field"><label>Detalle</label><input value={movInternoForm.detalle} onChange={e=>setMovInternoForm({...movInternoForm,detalle:e.target.value})} placeholder={`Transferencia MP → ${movInternoForm.destino||"…"}`}/></div>
             </div>
           )}
-        </div>
-        <div className="modal-ft" style={{flexDirection:"column",alignItems:"stretch",gap:8}}>
-          {/* Fila opcional "Ignorar" — sobre los botones principales. El operador
-              puede marcar un egreso como ignorado en vez de conciliar (Lucas
-              2026-05-11) cuando es un reverso, duplicado de banco, etc. */}
-          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",fontSize:11,color:"var(--muted2)"}}>
-            <span style={{whiteSpace:"nowrap"}}>¿No querés conciliar?</span>
-            <input value={motivoIgnorar} onChange={e=>setMotivoIgnorar(e.target.value)}
-              placeholder="Motivo (opcional, ej: duplicado, reverso)..."
-              style={{flex:1,minWidth:180,padding:"5px 8px",background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--txt)",fontSize:11,borderRadius:"var(--r)"}}
-              disabled={conciliando}/>
-            <button className="btn btn-ghost btn-sm" onClick={ignorarMP} disabled={conciliando}>Ignorar egreso</button>
-          </div>
-          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-            <button className="btn btn-sec" onClick={cerrarConciliar} disabled={conciliando}>Cancelar</button>
-            {(()=>{
-              if(conciliarTab==="gasto"){
-                if(vinculoSel==="__NUEVO__")
-                  return <button className="btn btn-acc" disabled={!nuevoGastoForm.categoria||conciliando} onClick={justificarConGastoNuevo}>Crear gasto y conciliar</button>;
-                return <button className="btn btn-acc" disabled={!vinculoSel||conciliando} onClick={()=>justificarConExistente("gasto",vinculoSel)}>Vincular y conciliar</button>;
-              }
-              if(conciliarTab==="factura"){
-                if(vinculoSel==="__NUEVO__")
-                  return <button className="btn btn-acc" disabled={!nuevaFacturaForm.prov_id||!nuevaFacturaForm.nro||conciliando} onClick={justificarConFacturaNueva}>Crear factura y conciliar</button>;
-                if(vinculoSel==="__MULTI__"){
-                  const hayLineas=lineasMulti.some(l=>l.factura_id && parseFloat(l.monto)>0);
-                  return <button className="btn btn-acc" disabled={!hayLineas||conciliando} onClick={justificarConMultiplesFacturas}>Conciliar contra {lineasMulti.filter(l=>l.factura_id).length} factura{lineasMulti.filter(l=>l.factura_id).length===1?"":"s"}</button>;
-                }
-                return <button className="btn btn-acc" disabled={!vinculoSel||conciliando} onClick={()=>justificarConExistente("factura",vinculoSel)}>Vincular y conciliar</button>;
-              }
-              if(conciliarTab==="remito"){
-                if(vinculoSel==="__NUEVO__")
-                  return <button className="btn btn-acc" disabled={!nuevoRemitoForm.prov_id||!nuevoRemitoForm.nro||conciliando} onClick={justificarConRemitoNuevo}>Crear remito y conciliar</button>;
-                return <button className="btn btn-acc" disabled={!vinculoSel||conciliando} onClick={()=>justificarConExistente("remito",vinculoSel)}>Vincular y conciliar</button>;
-              }
-              return <button className="btn btn-acc" disabled={!movInternoForm.destino||conciliando} onClick={justificarConMovimientoInterno}>Registrar transferencia</button>;
-            })()}
-          </div>
-        </div>
-      </div></div>)}
+        </>}
+      </Modal>
 
-      {configModal&&(<div className="overlay" onClick={()=>setConfigModal(false)}><div className="modal" style={{width:580}} onClick={e=>e.stopPropagation()}>
-        <div className="modal-hd"><div className="modal-title">⚙ Configurar Cuentas MP</div><button className="close-btn" onClick={()=>setConfigModal(false)}>✕</button></div>
-        <div className="modal-body">
-          {credenciales.length>0&&(
-            <div style={{marginBottom:16}}>
-              <div style={{fontSize:10,letterSpacing:2,textTransform:"uppercase",color:"var(--muted2)",marginBottom:8}}>Cuentas configuradas</div>
-              {credenciales.map(c=>(
-                <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:"var(--s2)",borderRadius:"var(--r)",marginBottom:6}}>
-                  <div>
-                    <span style={{fontWeight:500,fontSize:12}}>{c.locales?.nombre}</span>
-                    <span style={{fontSize:10,color:"var(--muted)",marginLeft:8}}>...{c.access_token_last8||"••••••••"}</span>
-                  </div>
-                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                    {c.ultima_sync&&<span style={{fontSize:10,color:"var(--success)"}}>✓ Sync {fmt_dt_ar(c.ultima_sync)}</span>}
-                    <span className={`badge ${c.activo?"b-success":"b-muted"}`}>{c.activo?"Activa":"Inactiva"}</span>
-                    <button className="btn btn-ghost btn-sm" style={{fontSize:9,padding:"2px 6px"}} disabled={sincronizando} onClick={()=>resetearLocal(c.local_id,c.locales?.nombre)}>↻ Reset datos</button>
-                  </div>
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal>. */}
+      <Modal
+        isOpen={configModal}
+        onClose={() => setConfigModal(false)}
+        title="Configurar Cuentas MP"
+        maxWidth={580}
+        footer={<>
+          <button className="btn btn-sec" onClick={() => setConfigModal(false)}>Cerrar</button>
+          <button className="btn btn-acc" onClick={guardarCredencial}>Guardar Credencial</button>
+        </>}
+      >
+        {credenciales.length>0&&(
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:10,letterSpacing:2,textTransform:"uppercase",color:"var(--muted2)",marginBottom:8}}>Cuentas configuradas</div>
+            {credenciales.map(c=>(
+              <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:"var(--s2)",borderRadius:"var(--r)",marginBottom:6}}>
+                <div>
+                  <span style={{fontWeight:500,fontSize:12}}>{c.locales?.nombre}</span>
+                  <span style={{fontSize:10,color:"var(--muted)",marginLeft:8}}>...{c.access_token_last8||"••••••••"}</span>
                 </div>
-              ))}
-            </div>
-          )}
-          <div style={{padding:16,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)"}}>
-            <div style={{fontSize:11,fontWeight:500,marginBottom:12}}>Agregar / actualizar cuenta</div>
-            <div className="field"><label>Local</label>
-              <select value={configForm.local_id} onChange={e=>setConfigForm({...configForm,local_id:e.target.value})}>
-                <option value="">Seleccioná el local...</option>
-                {locales.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}
-              </select>
-            </div>
-            <div className="field">
-              <label>Access Token de Producción</label>
-              <input value={configForm.access_token} onChange={e=>setConfigForm({...configForm,access_token:e.target.value})} placeholder="APP_USR-..."/>
-              <div style={{fontSize:10,color:"var(--muted)",marginTop:4}}>Mercado Pago → Tu negocio → Credenciales → Access Token de Producción</div>
-            </div>
+                <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                  {c.ultima_sync&&<span style={{fontSize:10,color:"var(--success)"}}>✓ Sync {fmt_dt_ar(c.ultima_sync)}</span>}
+                  <span className={`badge ${c.activo?"b-success":"b-muted"}`}>{c.activo?"Activa":"Inactiva"}</span>
+                  <button className="btn btn-ghost btn-sm" style={{fontSize:9,padding:"2px 6px"}} disabled={sincronizando} onClick={()=>resetearLocal(c.local_id,c.locales?.nombre)}>↻ Reset datos</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{padding:16,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)"}}>
+          <div style={{fontSize:11,fontWeight:500,marginBottom:12}}>Agregar / actualizar cuenta</div>
+          <div className="field"><label>Local</label>
+            <select value={configForm.local_id} onChange={e=>setConfigForm({...configForm,local_id:e.target.value})}>
+              <option value="">Seleccioná el local...</option>
+              {locales.map(l=><option key={l.id} value={l.id}>{l.nombre}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label>Access Token de Producción</label>
+            <input value={configForm.access_token} onChange={e=>setConfigForm({...configForm,access_token:e.target.value})} placeholder="APP_USR-..."/>
+            <div style={{fontSize:10,color:"var(--muted)",marginTop:4}}>Mercado Pago → Tu negocio → Credenciales → Access Token de Producción</div>
           </div>
         </div>
-        <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setConfigModal(false)}>Cerrar</button><button className="btn btn-acc" onClick={guardarCredencial}>Guardar Credencial</button></div>
-      </div></div>)}
+      </Modal>
     </div>
   );
 }

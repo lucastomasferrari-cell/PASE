@@ -9,7 +9,7 @@ import { useDebouncedValue } from "@pase/shared/utils";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import { Combobox } from "../components/Combobox";
-import { PageHeader, TipoPill, EmptyState, LocalLockedChip, LocalSelectorObligatorio } from "../components/ui";
+import { PageHeader, TipoPill, EmptyState, LocalLockedChip, LocalSelectorObligatorio, Modal } from "../components/ui";
 import { ManagerOverrideModal } from "../components/ManagerOverrideModal";
 import { exportCSV } from "../lib/exportCSV";
 import type { Usuario, Local } from "../types";
@@ -653,62 +653,81 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
       </div>
 
       {/* MODAL EDITAR GASTO */}
-      {editModal && (
-        <div className="overlay" onClick={() => setEditModal(null)}>
-          <div className="modal" style={{ width: 480 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-hd">
-              <div className="modal-title">Editar gasto</div>
-              <button className="close-btn" onClick={() => setEditModal(null)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <div className="alert alert-warn" style={{ marginBottom: 12 }}>
-                Cambiar cuenta o monto ajusta automáticamente los saldos en Tesorería (revierte el viejo + aplica el nuevo).
-              </div>
-              <div className="field"><label>Fecha</label>
-                <input type="date" value={editModal.fecha || ""} onChange={e => setEditModal({ ...editModal, fecha: e.target.value })} />
-              </div>
-              <div className="field"><label>Categoría</label>
-                <Combobox
-                  value={editModal.categoria || ""}
-                  onChange={v => setEditModal({ ...editModal, categoria: v })}
-                  options={ALL_CATS.map(c => ({ value: c, label: c }))}
-                  placeholder="Buscar..."
-                  clearable
-                />
-              </div>
-              <div className="field"><label>Monto</label>
-                <input type="number" step="0.01" value={editModal.monto || ""} onChange={e => setEditModal({ ...editModal, monto: parseFloat(e.target.value) || 0 })} />
-              </div>
-              <div className="field"><label>Cuenta de egreso</label>
-                <select value={editModal.cuenta || ""} onChange={e => setEditModal({ ...editModal, cuenta: e.target.value })}>
-                  <option value="" disabled>Seleccionar...</option>
-                  {cuentasUsables.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div className="field"><label>Detalle</label>
-                <input value={editModal.detalle || ""} onChange={e => setEditModal({ ...editModal, detalle: e.target.value })} />
-              </div>
-              <div className="field"><label>Motivo de la edición *</label>
-                <input value={editModal.justificativo} onChange={e => setEditModal({ ...editModal, justificativo: e.target.value })} placeholder="Por qué editás (queda en auditoría)..." />
-              </div>
-            </div>
-            <div className="modal-ft">
-              <button className="btn btn-sec" onClick={() => setEditModal(null)} disabled={savingEdit}>Cancelar</button>
-              <button className="btn btn-acc" onClick={guardarEdit} disabled={savingEdit}>{savingEdit ? "Guardando..." : "Guardar cambios"}</button>
-            </div>
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal>. */}
+      <Modal
+        isOpen={editModal !== null}
+        onClose={() => setEditModal(null)}
+        title="Editar gasto"
+        maxWidth={480}
+        preventCloseOnOverlay={savingEdit}
+        footer={<>
+          <button className="btn btn-sec" onClick={() => setEditModal(null)} disabled={savingEdit}>Cancelar</button>
+          <button className="btn btn-acc" onClick={guardarEdit} disabled={savingEdit}>{savingEdit ? "Guardando..." : "Guardar cambios"}</button>
+        </>}
+      >
+        {editModal && <>
+          <div className="alert alert-warn" style={{ marginBottom: 12 }}>
+            Cambiar cuenta o monto ajusta automáticamente los saldos en Tesorería (revierte el viejo + aplica el nuevo).
           </div>
-        </div>
-      )}
+          <div className="field"><label>Fecha</label>
+            <input type="date" value={editModal.fecha || ""} onChange={e => setEditModal({ ...editModal, fecha: e.target.value })} />
+          </div>
+          <div className="field"><label>Categoría</label>
+            <Combobox
+              value={editModal.categoria || ""}
+              onChange={v => setEditModal({ ...editModal, categoria: v })}
+              options={ALL_CATS.map(c => ({ value: c, label: c }))}
+              placeholder="Buscar..."
+              clearable
+            />
+          </div>
+          <div className="field"><label>Monto</label>
+            <input type="number" step="0.01" value={editModal.monto || ""} onChange={e => setEditModal({ ...editModal, monto: parseFloat(e.target.value) || 0 })} />
+          </div>
+          <div className="field"><label>Cuenta de egreso</label>
+            <select value={editModal.cuenta || ""} onChange={e => setEditModal({ ...editModal, cuenta: e.target.value })}>
+              <option value="" disabled>Seleccionar...</option>
+              {cuentasUsables.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="field"><label>Detalle</label>
+            <input value={editModal.detalle || ""} onChange={e => setEditModal({ ...editModal, detalle: e.target.value })} />
+          </div>
+          <div className="field"><label>Motivo de la edición *</label>
+            <input value={editModal.justificativo} onChange={e => setEditModal({ ...editModal, justificativo: e.target.value })} placeholder="Por qué editás (queda en auditoría)..." />
+          </div>
+        </>}
+      </Modal>
 
       <ToastComponent toast={toast} />
 
       {/* Modal cargar gasto manual */}
-      {modal && (
-        <div className="overlay" onClick={() => setModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Cargar Gasto</div><button className="close-btn" onClick={() => setModal(false)}>✕</button></div>
-            <div className="modal-body">
-              <div style={{fontSize:11,color:"var(--muted2)",padding:"8px 10px",background:"var(--s2)",borderRadius:"var(--r)",marginBottom:12,lineHeight:1.5}}>
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal>. */}
+      <Modal
+        isOpen={modal}
+        onClose={() => setModal(false)}
+        title="Cargar Gasto"
+        maxWidth={600}
+        preventCloseOnOverlay={saving}
+        footer={<>
+          <button className="btn btn-sec" onClick={() => setModal(false)}>Cancelar</button>
+          <button
+            className="btn btn-acc"
+            onClick={guardar}
+            disabled={(() => {
+              if (saving || !form.cuenta || !form.monto) return true;
+              if (locsDisp.length > 1 && localActivo === null && !form.local_id) return true;
+              const tEff = tipoFiltro === "todos" ? form.tipo : tipoFiltro;
+              if (tEff === 'empleado') {
+                return !form.empleado_id || !form.concepto;
+              }
+              return !form.categoria;
+            })()}
+          >{saving ? "Guardando..." : "Guardar"}</button>
+        </>}
+      >
+        <>
+          <div style={{fontSize:11,color:"var(--muted2)",padding:"8px 10px",background:"var(--s2)",borderRadius:"var(--r)",marginBottom:12,lineHeight:1.5}}>
                 Al cargar acá se registra el gasto <b>y</b> el movimiento de caja correspondiente. No lo cargues también desde Tesorería.
               </div>
               <div className="form2">
@@ -837,7 +856,6 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
               </div>
               <div className="field"><label>Monto $</label><input type="number" value={form.monto} onChange={e => setForm({ ...form, monto: e.target.value })} placeholder="0" /></div>
               <div className="field"><label>Detalle (opcional)</label><input value={form.detalle} onChange={e => setForm({ ...form, detalle: e.target.value })} placeholder="Descripción..." /></div>
-            </div>
             {/* Hint visible si el botón está disabled — Anto no entendía por qué
                 no respondía al tocar Guardar. Acordado 22-may noche con Lucas. */}
             {(() => {
@@ -873,101 +891,91 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                 </div>
               );
             })()}
-            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setModal(false)}>Cancelar</button><button
-              className="btn btn-acc"
-              onClick={guardar}
-              disabled={(() => {
-                if (saving || !form.cuenta || !form.monto) return true;
-                if (locsDisp.length > 1 && localActivo === null && !form.local_id) return true;
-                const tEff = tipoFiltro === "todos" ? form.tipo : tipoFiltro;
-                if (tEff === 'empleado') {
-                  return !form.empleado_id || !form.concepto;
-                }
-                return !form.categoria;
-              })()}
-            >{saving ? "Guardando..." : "Guardar"}</button></div>
-          </div>
-        </div>
-      )}
+        </>
+      </Modal>
 
       {/* Modal pagar recurrente */}
-      {pagarModal && (
-        <div className="overlay" onClick={() => setPagarModal(null)}>
-          <div className="modal" style={{ width: 460 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Pagar — {pagarModal.nombre}</div><button className="close-btn" onClick={() => setPagarModal(null)}>✕</button></div>
-            <div className="modal-body">
-              <div className="alert alert-info" style={{ marginBottom: 14 }}>
-                {pagarModal.categoria} · {pagarModal.tipo} · {pagarModal.local_id ? locales.find((l: Local) => l.id === pagarModal.local_id)?.nombre : "Todas las sucursales"}
-              </div>
-              <div className="form2">
-                <div className="field"><label>Monto $ *</label><input type="number" value={pagoPlantForm.monto} onChange={e => setPagoPlantForm({ ...pagoPlantForm, monto: e.target.value })} placeholder="0" /></div>
-                <div className="field"><label>Fecha</label><input type="date" value={pagoPlantForm.fecha} onChange={e => setPagoPlantForm({ ...pagoPlantForm, fecha: e.target.value })} /></div>
-              </div>
-              <div className="field"><label>Cuenta de egreso *</label>
-                <select value={pagoPlantForm.cuenta} onChange={e => setPagoPlantForm({ ...pagoPlantForm, cuenta: e.target.value })}>
-                  <option value="">Seleccioná una cuenta…</option>
-                  {cuentasUsables.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setPagarModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={confirmarPagoPlantilla} disabled={pagandoPlant || !pagoPlantForm.cuenta || !pagoPlantForm.monto}>{pagandoPlant ? "Procesando..." : "Confirmar pago"}</button></div>
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal>. */}
+      <Modal
+        isOpen={pagarModal !== null}
+        onClose={() => setPagarModal(null)}
+        title={pagarModal ? `Pagar — ${pagarModal.nombre}` : "Pagar"}
+        maxWidth={460}
+        preventCloseOnOverlay={pagandoPlant}
+        footer={<>
+          <button className="btn btn-sec" onClick={() => setPagarModal(null)}>Cancelar</button>
+          <button className="btn btn-acc" onClick={confirmarPagoPlantilla} disabled={pagandoPlant || !pagoPlantForm.cuenta || !pagoPlantForm.monto}>{pagandoPlant ? "Procesando..." : "Confirmar pago"}</button>
+        </>}
+      >
+        {pagarModal && <>
+          <div className="alert alert-info" style={{ marginBottom: 14 }}>
+            {pagarModal.categoria} · {pagarModal.tipo} · {pagarModal.local_id ? locales.find((l: Local) => l.id === pagarModal.local_id)?.nombre : "Todas las sucursales"}
           </div>
-        </div>
-      )}
+          <div className="form2">
+            <div className="field"><label>Monto $ *</label><input type="number" value={pagoPlantForm.monto} onChange={e => setPagoPlantForm({ ...pagoPlantForm, monto: e.target.value })} placeholder="0" /></div>
+            <div className="field"><label>Fecha</label><input type="date" value={pagoPlantForm.fecha} onChange={e => setPagoPlantForm({ ...pagoPlantForm, fecha: e.target.value })} /></div>
+          </div>
+          <div className="field"><label>Cuenta de egreso *</label>
+            <select value={pagoPlantForm.cuenta} onChange={e => setPagoPlantForm({ ...pagoPlantForm, cuenta: e.target.value })}>
+              <option value="">Seleccioná una cuenta…</option>
+              {cuentasUsables.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+        </>}
+      </Modal>
 
       {/* Modal gestionar recurrentes */}
-      {gestionarModal && (
-        <div className="overlay" onClick={() => setGestionarModal(false)}>
-          <div className="modal" style={{ width: 620 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Gestionar recurrentes</div><button className="close-btn" onClick={() => setGestionarModal(false)}>✕</button></div>
-            <div className="modal-body">
-              {plantillas.length > 0 && (
-                <table style={{ marginBottom: 16 }}>
-                  <thead><tr><th>Nombre</th><th>Tipo</th><th>Categoría</th><th>Local</th><th></th></tr></thead>
-                  <tbody>{plantillas.map(p => (
-                    <tr key={p.id}>
-                      <td style={{ fontSize: 12 }}>{p.nombre}</td>
-                      <td><TipoPill tipo={p.tipo} /></td>
-                      <td style={{ fontSize: 11, color: "var(--muted2)" }}>{p.categoria}</td>
-                      <td style={{ fontSize: 11, color: "var(--muted2)" }}>{locales.find((l: Local) => l.id === p.local_id)?.nombre || "Todos"}</td>
-                      <td><button className="btn btn-danger btn-sm" onClick={() => eliminarPlantilla(p.id)}>X</button></td>
-                    </tr>
-                  ))}</tbody>
-                </table>
-              )}
-              <div style={{ borderTop: "1px solid var(--bd)", paddingTop: 14 }}>
-                <div className="section-title" style={{ marginBottom: 10 }}>Nueva plantilla</div>
-                <div className="form2">
-                  <div className="field"><label>Nombre *</label><input value={plantForm.nombre} onChange={e => setPlantForm({ ...plantForm, nombre: e.target.value })} placeholder="Ej: Alquiler local" /></div>
-                  <div className="field"><label>Tipo *</label>
-                    <select value={plantForm.tipo} onChange={e => setPlantForm({ ...plantForm, tipo: e.target.value, categoria: "" })}>
-                      {TIPOS.filter(t => t.id !== "todos").map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="form2">
-                  <div className="field"><label>Categoría *</label>
-                    <select value={plantForm.categoria} onChange={e => setPlantForm({ ...plantForm, categoria: e.target.value })}>
-                      <option value="">Seleccioná...</option>
-                      {catsByTipo(plantForm.tipo).map(c => <option key={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <div className="field"><label>Local</label>
-                    <select value={plantForm.local_id} onChange={e => setPlantForm({ ...plantForm, local_id: e.target.value })}>
-                      <option value="">Todos</option>
-                      {locsDisp.map((l: Local) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <button className="btn btn-acc btn-sm" onClick={guardarPlantilla}>Agregar</button>
-                </div>
-              </div>
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal>. */}
+      <Modal
+        isOpen={gestionarModal}
+        onClose={() => setGestionarModal(false)}
+        title="Gestionar recurrentes"
+        maxWidth={620}
+        footer={<button className="btn btn-sec" onClick={() => setGestionarModal(false)}>Cerrar</button>}
+      >
+        {plantillas.length > 0 && (
+          <table style={{ marginBottom: 16 }}>
+            <thead><tr><th>Nombre</th><th>Tipo</th><th>Categoría</th><th>Local</th><th></th></tr></thead>
+            <tbody>{plantillas.map(p => (
+              <tr key={p.id}>
+                <td style={{ fontSize: 12 }}>{p.nombre}</td>
+                <td><TipoPill tipo={p.tipo} /></td>
+                <td style={{ fontSize: 11, color: "var(--muted2)" }}>{p.categoria}</td>
+                <td style={{ fontSize: 11, color: "var(--muted2)" }}>{locales.find((l: Local) => l.id === p.local_id)?.nombre || "Todos"}</td>
+                <td><button className="btn btn-danger btn-sm" onClick={() => eliminarPlantilla(p.id)}>X</button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        )}
+        <div style={{ borderTop: "1px solid var(--bd)", paddingTop: 14 }}>
+          <div className="section-title" style={{ marginBottom: 10 }}>Nueva plantilla</div>
+          <div className="form2">
+            <div className="field"><label>Nombre *</label><input value={plantForm.nombre} onChange={e => setPlantForm({ ...plantForm, nombre: e.target.value })} placeholder="Ej: Alquiler local" /></div>
+            <div className="field"><label>Tipo *</label>
+              <select value={plantForm.tipo} onChange={e => setPlantForm({ ...plantForm, tipo: e.target.value, categoria: "" })}>
+                {TIPOS.filter(t => t.id !== "todos").map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+              </select>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setGestionarModal(false)}>Cerrar</button></div>
+          </div>
+          <div className="form2">
+            <div className="field"><label>Categoría *</label>
+              <select value={plantForm.categoria} onChange={e => setPlantForm({ ...plantForm, categoria: e.target.value })}>
+                <option value="">Seleccioná...</option>
+                {catsByTipo(plantForm.tipo).map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="field"><label>Local</label>
+              <select value={plantForm.local_id} onChange={e => setPlantForm({ ...plantForm, local_id: e.target.value })}>
+                <option value="">Todos</option>
+                {locsDisp.map((l: Local) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button className="btn btn-acc btn-sm" onClick={guardarPlantilla}>Agregar</button>
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* MODAL MANAGER OVERRIDE — para anular gasto sin permiso compras_anular */}
       <ManagerOverrideModal
