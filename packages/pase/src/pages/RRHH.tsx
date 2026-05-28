@@ -1,4 +1,5 @@
 ﻿import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { Modal } from "../components/ui";
 import { db } from "../lib/supabase";
 import { localesVisibles, applyLocalScope, cuentasOperables, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
@@ -1029,32 +1030,19 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       )}
 
       {/* ═══ LEGAJO MODAL ═════════════════════════════════════════════════ */}
-      {legajoId && (
-        <div className="overlay" onClick={() => { setLegajoId(null); loadEmpleados(); }}>
-          <div
-            className="modal"
-            style={{
-              width: 1100,
-              maxHeight: "92vh",
-              display: "flex",
-              flexDirection: "column",
-              overflow: "hidden",
-              padding: 0,
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="modal-hd">
-              <div className="modal-title">Legajo</div>
-              <button className="close-btn" onClick={() => { setLegajoId(null); loadEmpleados(); }}>✕</button>
-            </div>
-            <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: 20, minWidth: 0 }}>
-              <Suspense fallback={<div style={{padding:24,color:"var(--muted)"}}>Cargando legajo…</div>}>
-                <RRHHLegajo empleadoId={legajoId} user={user} locales={locales} onClose={() => { setLegajoId(null); loadEmpleados(); }} onGoToPago={goToPagoFromLegajo} />
-              </Suspense>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido. */}
+      <Modal
+        isOpen={!!legajoId}
+        onClose={() => { setLegajoId(null); loadEmpleados(); }}
+        title="Legajo"
+        maxWidth={1100}
+      >
+        {legajoId && (
+          <Suspense fallback={<div style={{padding:24,color:"var(--muted)"}}>Cargando legajo…</div>}>
+            <RRHHLegajo empleadoId={legajoId} user={user} locales={locales} onClose={() => { setLegajoId(null); loadEmpleados(); }} onGoToPago={goToPagoFromLegajo} />
+          </Suspense>
+        )}
+      </Modal>
 
       {/* Modal de adelanto a nivel padre — accesible desde cualquier tab.
           Antes estaba dentro de TabPagos y no funcionaba desde Novedades. */}
