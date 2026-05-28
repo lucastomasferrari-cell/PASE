@@ -11,6 +11,7 @@ import { cuentasOperables } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
+import { Modal } from "../components/ui";
 import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
 import {
   diasVacacionesPorAnio,
@@ -629,19 +630,23 @@ function TabDatos({
         >Liquidación final{!vacTomadasLoaded ? " ⏳" : ""}</button>
       )}
 
-      {sueldoModal && (
-        <div className="overlay" onClick={() => setSueldoModal(false)}>
-          <div className="modal" style={{width:420}} onClick={e => e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Actualizar sueldo</div><button className="close-btn" onClick={() => setSueldoModal(false)}>✕</button></div>
-            <div className="modal-body">
-              <div className="alert alert-info">Sueldo actual: {fmt_$(emp.sueldo_mensual)}</div>
-              <div className="field"><label>Nuevo sueldo $</label><input type="number" value={sueldoForm.monto} onChange={e => setSueldoForm({...sueldoForm, monto:e.target.value})} /></div>
-              <div className="field"><label>Motivo</label><input value={sueldoForm.motivo} onChange={e => setSueldoForm({...sueldoForm, motivo:e.target.value})} placeholder="Aumento paritarias, promoción..." /></div>
-            </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setSueldoModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardarSueldo}>Guardar</button></div>
-          </div>
-        </div>
-      )}
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido. */}
+      <Modal
+        isOpen={sueldoModal}
+        onClose={() => setSueldoModal(false)}
+        title="Actualizar sueldo"
+        maxWidth={420}
+        footer={
+          <>
+            <button className="btn btn-sec" onClick={() => setSueldoModal(false)}>Cancelar</button>
+            <button className="btn btn-acc" onClick={guardarSueldo}>Guardar</button>
+          </>
+        }
+      >
+        <div className="alert alert-info">Sueldo actual: {fmt_$(emp.sueldo_mensual)}</div>
+        <div className="field"><label>Nuevo sueldo $</label><input type="number" value={sueldoForm.monto} onChange={e => setSueldoForm({...sueldoForm, monto:e.target.value})} /></div>
+        <div className="field"><label>Motivo</label><input value={sueldoForm.motivo} onChange={e => setSueldoForm({...sueldoForm, motivo:e.target.value})} placeholder="Aumento paritarias, promoción..." /></div>
+      </Modal>
 
       {liqFinalModal && (() => {
         const esDespidoSinCausa = liqFinalForm.motivo === "Despido sin causa";
@@ -697,57 +702,60 @@ function TabDatos({
         };
 
         return (
-          <div className="overlay" onClick={() => setLiqFinalModal(false)}>
-            <div className="modal" style={{width:580}} onClick={e => e.stopPropagation()}>
-              <div className="modal-hd"><div className="modal-title">Liquidación Final — {emp.apellido}, {emp.nombre}</div><button className="close-btn" onClick={() => setLiqFinalModal(false)}>✕</button></div>
-              <div className="modal-body">
-                <div className="form2" style={{marginBottom:16}}>
-                  <div className="field"><label>Fecha de egreso</label><input type="date" value={liqFinalForm.fecha_egreso} onChange={e => setLiqFinalForm({...liqFinalForm, fecha_egreso:e.target.value})} /></div>
-                  <div className="field"><label>Motivo</label>
-                    <select value={liqFinalForm.motivo} onChange={e => setLiqFinalForm({...liqFinalForm, motivo:e.target.value})}>
-                      <option value="Renuncia">Renuncia</option><option value="Despido sin causa">Despido sin causa</option><option value="Despido con causa">Despido con causa</option><option value="Acuerdo mutuo">Acuerdo mutuo</option>
-                    </select></div>
-                </div>
-                <div style={{background:"var(--s2)",borderRadius:"var(--r)",padding:16}}>
-                  <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>
-                    Conceptos{esAcuerdoMutuo && <span style={{color:"var(--warn)",marginLeft:8}}>(editables)</span>}
-                  </div>
-                  {conceptos.map(([key, label]) => {
-                    const calc = liqFinalData?.[key] || 0;
-                    const monto = getConceptoMonto(key, calc);
-                    return (
-                      <div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid var(--bd)",fontSize:12}}>
-                        <span>{label}</span>
-                        {esAcuerdoMutuo ? (
-                          <input
-                            type="number"
-                            value={liqFinalOverrides[key] ?? String(calc)}
-                            onChange={e => setLiqFinalOverrides((prev) => ({...prev, [key]: e.target.value}))}
-                            style={{width:130,background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--acc)",padding:"3px 6px",fontFamily:"'DM Mono',monospace",fontSize:11,textAlign:"right",borderRadius:"var(--r)"}}
-                          />
-                        ) : (
-                          <span className="num" style={{color:"var(--acc)"}}>{fmt_$(monto)}</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                  <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",fontSize:13,fontWeight:500}}>
-                    <span>TOTAL</span><span className="num" style={{color:"var(--success)",fontSize:15,fontWeight:500}}>{fmt_$(total)}</span>
-                  </div>
-                </div>
-                <div className="field" style={{marginTop:12}}><label>Cuenta de egreso *</label>
-                  <select value={liqFinalCuenta} onChange={e => setLiqFinalCuenta(e.target.value)}>
-                    <option value="">Seleccioná una cuenta…</option>
-                    {cuentasUsables.map((c: string) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="modal-ft">
+          <Modal
+            isOpen={true}
+            onClose={() => setLiqFinalModal(false)}
+            title={`Liquidación Final — ${emp.apellido}, ${emp.nombre}`}
+            maxWidth={580}
+            preventCloseOnOverlay={liqFinalLoading}
+            footer={
+              <>
                 <button className="btn btn-sec" onClick={() => setLiqFinalModal(false)}>Cancelar</button>
                 <button className="btn btn-danger" disabled={liqFinalLoading} onClick={confirmarLiqFinal}>{liqFinalLoading ? "Procesando..." : "Confirmar y pagar"}</button>
+              </>
+            }
+          >
+            <div className="form2" style={{marginBottom:16}}>
+              <div className="field"><label>Fecha de egreso</label><input type="date" value={liqFinalForm.fecha_egreso} onChange={e => setLiqFinalForm({...liqFinalForm, fecha_egreso:e.target.value})} /></div>
+              <div className="field"><label>Motivo</label>
+                <select value={liqFinalForm.motivo} onChange={e => setLiqFinalForm({...liqFinalForm, motivo:e.target.value})}>
+                  <option value="Renuncia">Renuncia</option><option value="Despido sin causa">Despido sin causa</option><option value="Despido con causa">Despido con causa</option><option value="Acuerdo mutuo">Acuerdo mutuo</option>
+                </select></div>
+            </div>
+            <div style={{background:"var(--s2)",borderRadius:"var(--r)",padding:16}}>
+              <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>
+                Conceptos{esAcuerdoMutuo && <span style={{color:"var(--warn)",marginLeft:8}}>(editables)</span>}
+              </div>
+              {conceptos.map(([key, label]) => {
+                const calc = liqFinalData?.[key] || 0;
+                const monto = getConceptoMonto(key, calc);
+                return (
+                  <div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid var(--bd)",fontSize:12}}>
+                    <span>{label}</span>
+                    {esAcuerdoMutuo ? (
+                      <input
+                        type="number"
+                        value={liqFinalOverrides[key] ?? String(calc)}
+                        onChange={e => setLiqFinalOverrides((prev) => ({...prev, [key]: e.target.value}))}
+                        style={{width:130,background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--acc)",padding:"3px 6px",fontFamily:"'DM Mono',monospace",fontSize:11,textAlign:"right",borderRadius:"var(--r)"}}
+                      />
+                    ) : (
+                      <span className="num" style={{color:"var(--acc)"}}>{fmt_$(monto)}</span>
+                    )}
+                  </div>
+                );
+              })}
+              <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",fontSize:13,fontWeight:500}}>
+                <span>TOTAL</span><span className="num" style={{color:"var(--success)",fontSize:15,fontWeight:500}}>{fmt_$(total)}</span>
               </div>
             </div>
-          </div>
+            <div className="field" style={{marginTop:12}}><label>Cuenta de egreso *</label>
+              <select value={liqFinalCuenta} onChange={e => setLiqFinalCuenta(e.target.value)}>
+                <option value="">Seleccioná una cuenta…</option>
+                {cuentasUsables.map((c: string) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </Modal>
         );
       })()}
     </>
