@@ -18,6 +18,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { db } from "../lib/supabase";
 import { tienePermiso } from "../lib/auth";
+import { useRealtimeRow } from "../lib/useRealtimeRow";
 import { fmt_$ } from "../lib/utils";
 import { EmptyState, InfoTooltip } from "../components/ui";
 import { useToast } from "../hooks/useToast";
@@ -145,20 +146,21 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
     }
   }, [mensajes.length]);
 
-  // Realtime: cuando llega un mensaje nuevo, recargar lista y thread si corresponde
-  useEffect(() => {
-    const channel = db.channel('ig_mensajes_changes')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ig_mensajes' },
-        async (payload) => {
-          const nuevo = payload.new as MensajeRow;
-          void loadConversaciones();
-          if (nuevo.conversacion_id === selectedId) {
-            setMensajes(prev => [...prev, nuevo]);
-          }
-        })
-      .subscribe();
-    return () => { void db.removeChannel(channel); };
-  }, [selectedId, loadConversaciones]);
+  // Realtime: cuando llega un mensaje nuevo, recargar lista y thread si corresponde.
+  // Sprint #10 (28-may): migrado de channel manual a `useRealtimeRow` — primer
+  // adopter del hook que viene desde F3C/F5B. Beneficios: pausa en
+  // document.hidden, fallback a polling si Realtime falla, typed payload.
+  useRealtimeRow<MensajeRow>({
+    table: 'ig_mensajes',
+    events: ['INSERT'],
+    onRow: (event, row) => {
+      void loadConversaciones();
+      if (row.conversacion_id === selectedId) {
+        setMensajes(prev => [...prev, row]);
+      }
+    },
+    onPollFallback: () => { void loadConversaciones(); },
+  });
 
   // Filtrado
   const conversacionesFiltradas = useMemo(() => {
