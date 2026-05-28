@@ -4,6 +4,8 @@ import { fmt_d, fmt_$, genId, parseMonto } from "../lib/utils";
 import { useCategorias } from "../lib/useCategorias";
 import { localesVisibles } from "../lib/auth";
 import { Modal } from "../components/ui";
+import { useToast } from "../hooks/useToast";
+import { ToastComponent } from "../components/Toast";
 import type { Usuario, Local } from "../types/auth";
 import type { Proveedor } from "../types/finanzas";
 
@@ -55,6 +57,7 @@ interface LectorFacturasIAProps {
 }
 
 export default function LectorFacturasIA({ user, locales, localActivo, onSaved }: LectorFacturasIAProps) {
+  const { toast, showToast, showError } = useToast();
   // Locales del dropdown — solo los autorizados (encargado/admin/dueño).
   const visLocs = localesVisibles(user);
   const localesDisp = visLocs === null ? locales : locales.filter((l: Local) => visLocs.includes(l.id));
@@ -254,7 +257,7 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
       }));
     }catch(err){
       const msg = err instanceof Error ? err.message : String(err);
-      alert("No se pudo leer la factura.\n\n" + msg + "\n\nSi el error persiste, copiá el detalle de la consola del navegador y mandáselo a Lucas.");
+      showError("No se pudo leer la factura. " + msg);
       console.error('[LectorFacturasIA] error en leerConIA:', err);
     }
     setLoading(false);
@@ -263,10 +266,10 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
   const guardandoRef = useRef(false);
   const guardar=async()=>{
     if(guardandoRef.current)return;
-    if(!form.prov_id&&!form.local_id){alert("⚠ Seleccioná el proveedor y el local antes de guardar.");return;}
-    if(!form.prov_id){alert("⚠ Seleccioná el proveedor antes de guardar.");return;}
-    if(!form.local_id){alert("⚠ Seleccioná el local antes de guardar.");return;}
-    if(!form.nro){alert("⚠ Completá el número de factura.");return;}
+    if(!form.prov_id&&!form.local_id){showError("Seleccioná el proveedor y el local antes de guardar.");return;}
+    if(!form.prov_id){showError("Seleccioná el proveedor antes de guardar.");return;}
+    if(!form.local_id){showError("Seleccioná el local antes de guardar.");return;}
+    if(!form.nro){showError("Completá el número de factura.");return;}
 
     // Warning de duplicados (bug #29): mismo flow que Compras.tsx. Prev fecha
     // y total del form detectado por IA + confirmado por usuario.
@@ -310,7 +313,7 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
         const path=`${tenantPath}/${id}.${ext}`;
         const {error:upErr}=await db.storage.from("facturas").upload(path,archivo,{contentType:archivo.type||"application/octet-stream",upsert:false});
         if(upErr){
-          alert("Error subiendo la imagen: "+upErr.message);
+          showError("Error subiendo la imagen: "+upErr.message);
           return;
         }
         imagen_url=path;
@@ -326,13 +329,13 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
       });
       if(insErr){
         if(imagen_url) await db.storage.from("facturas").remove([imagen_url]);
-        alert("Error guardando la factura: "+(insErr.message || insErr));
+        showError("Error guardando la factura: "+(insErr.message || insErr));
         return;
       }
 
       setArchivo(null);setPreview(null);setResultado(null);
       setForm({local_id:localActivo||"",prov_id:"",fecha:"",venc:"",nro:"",neto:0,iva21:0,iva105:0,iibb:0,total:0,cat:""});
-      alert("✓ Factura cargada correctamente");
+      showToast("Factura cargada correctamente");
       onSaved?.();
     } finally {
       guardandoRef.current = false;
@@ -357,7 +360,7 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
         }])
         .select()
         .single();
-      if (error) { alert("No se pudo crear el proveedor: " + error.message); return; }
+      if (error) { showError("No se pudo crear el proveedor: " + error.message); return; }
       if (data) {
         const nuevo = data as Proveedor;
         setProveedores(prev => [...prev, nuevo].sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "")));
@@ -563,6 +566,8 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
           </>
         )}
       </Modal>
+
+      <ToastComponent toast={toast} />
     </div>
   );
 }

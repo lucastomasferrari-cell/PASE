@@ -16,6 +16,8 @@ import { useState, useEffect } from "react";
 import { db } from "../../lib/supabase";
 import { fmt_$, toISO, today } from "../../lib/utils";
 import { EmptyState, Modal } from "../../components/ui";
+import { useToast } from "../../hooks/useToast";
+import { ToastComponent } from "../../components/Toast";
 import type { Usuario, Local } from "../../types";
 
 interface Props {
@@ -74,6 +76,7 @@ export function TabSimulador({ user, locales, localActivo }: Props) {
   const [modoCrear, setModoCrear] = useState<TipoTemplate | null>(null);
   const [calculando, setCalculando] = useState<number | null>(null);
   const [verResultado, setVerResultado] = useState<Simulacion | null>(null);
+  const { toast, showToast, showError } = useToast();
 
   // Form state para nueva simulación
   const [nuevo, setNuevo] = useState({
@@ -110,7 +113,7 @@ export function TabSimulador({ user, locales, localActivo }: Props) {
 
   // Crear simulación según template
   const crearSimulacion = async () => {
-    if (!nuevo.nombre.trim()) { alert("Falta nombre"); return; }
+    if (!nuevo.nombre.trim()) { showError("Falta nombre"); return; }
     if (!modoCrear) return;
 
     const factor = 1 + (nuevo.factor_pct / 100);
@@ -147,7 +150,7 @@ export function TabSimulador({ user, locales, localActivo }: Props) {
       elasticidad,
     }).select().single();
 
-    if (error) { alert("Error: " + error.message); return; }
+    if (error) { showError("Error: " + error.message); return; }
 
     const sim = data as Simulacion;
     setModoCrear(null);
@@ -162,7 +165,7 @@ export function TabSimulador({ user, locales, localActivo }: Props) {
     setCalculando(id);
     const { error } = await db.rpc("fn_simular_escenario", { p_simulacion_id: id });
     setCalculando(null);
-    if (error) { alert("Error: " + error.message); return; }
+    if (error) { showError("Error: " + error.message); return; }
     await load();
   };
 
@@ -367,6 +370,7 @@ export function TabSimulador({ user, locales, localActivo }: Props) {
         </div>
       )}
 
+      {toast && <ToastComponent toast={toast} />}
       {/* ─── Modal detalle ─── */}
       {/* AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido. */}
       <Modal

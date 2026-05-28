@@ -22,6 +22,8 @@ import { ModalCargarFactura } from "./compras/ModalCargarFactura";
 import { ModalCargarRemito } from "./compras/ModalCargarRemito";
 import { ModalVincularRemito } from "./compras/ModalVincularRemito";
 import { ModalPagarRemitoDirecto } from "./compras/ModalPagarRemitoDirecto";
+import { useToast } from "../hooks/useToast";
+import { ToastComponent } from "../components/Toast";
 
 // Sub-sección 'Proveedores' del módulo Compras (2026-05-13): la pantalla
 // suelta de Proveedores se integra acá. Lazy para no inflar el bundle de
@@ -87,6 +89,7 @@ interface ComprasProps {
 }
 
 export default function Compras({ user, locales, localActivo }: ComprasProps) {
+  const { toast, showToast, showError } = useToast();
   const { CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS, categoriaToBucket } = useCategorias();
   // Cuentas para el dropdown de "Cuenta de egreso" en el modal de pago.
   // Filtra por cuentas_operables (no por cuentas_visibles): un encargado
@@ -423,10 +426,10 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
 
   const guardar = async () => {
     if (saving) return;
-    if (!form.prov_id) { alert("Seleccioná un proveedor"); return; }
-    if (!form.nro) { alert("Ingresá el número de factura"); return; }
-    if (form.neto <= 0) { alert("Ingresá el neto gravado"); return; }
-    if (!form.local_id) { alert("Seleccioná un local"); return; }
+    if (!form.prov_id) { showError("Seleccioná un proveedor"); return; }
+    if (!form.nro) { showError("Ingresá el número de factura"); return; }
+    if (form.neto <= 0) { showError("Ingresá el neto gravado"); return; }
+    if (!form.local_id) { showError("Seleccioná un local"); return; }
     const isNC = form.tipo === "nota_credito";
     const totalAbs = calcTotal();
     const total = isNC ? -Math.abs(totalAbs) : totalAbs;
@@ -498,7 +501,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       setModal(false); setForm(emptyForm); setItems([]); load();
     } catch (err) {
       console.error("Error guardando factura:", err);
-      alert("Error al guardar: " + (err instanceof Error ? err.message : String(err)));
+      showError("Error al guardar: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setSaving(false);
     }
@@ -542,7 +545,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       const restanteAPagar = pagoForm.monto > 0 ? pagoForm.monto : Math.max(0, f.total - totalNcAplicado);
       if (restanteAPagar > 0) {
         if (!pagoForm.cuenta) {
-          alert("Elegí una cuenta de egreso para el saldo restante");
+          showError("Elegí una cuenta de egreso para el saldo restante");
           setPagando(false);
           return;
         }
@@ -557,7 +560,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
         if (error) throw error;
       } else if (totalNcAplicado === 0) {
         // Ni NCs ni plata → nada que hacer.
-        alert("Indicá un pago con plata o aplicá una NC");
+        showError("Indicá un pago con plata o aplicá una NC");
         setPagando(false);
         return;
       }
@@ -572,7 +575,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       load();
     } catch (err) {
       console.error("Error en pagar:", err);
-      alert(translateRpcError(err));
+      showError(translateRpcError(err));
     } finally {
       setPagando(false);
     }
@@ -589,7 +592,8 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       p_motivo: motivo,
       ...(overrideCode ? { p_override_code: overrideCode } : {}),
     });
-    if (error) { alert(translateRpcError(error)); return; }
+    if (error) { showError(translateRpcError(error)); return; }
+    showToast("Factura anulada");
     load();
   }
 
@@ -641,7 +645,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       p_factura_id: fid,
     });
     if (error) {
-      alert("Error al vincular: " + translateRpcError(error));
+      showError("Error al vincular: " + translateRpcError(error));
       return;
     }
     setVincModal(null); load();
@@ -649,7 +653,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
 
   const pagarRemito = async () => {
     if (pagandoRem || !pagarRemModal) return;
-    if (!remPagoForm.cuenta) { alert("Elegí una cuenta de egreso"); return; }
+    if (!remPagoForm.cuenta) { showError("Elegí una cuenta de egreso"); return; }
     setPagandoRem(true);
     try {
       const r = pagarRemModal;
@@ -665,7 +669,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       setPagarRemModal(null); load();
     } catch (err) {
       console.error("Error pagando remito:", err);
-      alert(translateRpcError(err));
+      showError(translateRpcError(err));
     } finally {
       setPagandoRem(false);
     }
@@ -680,7 +684,8 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       p_motivo: motivo,
       ...(overrideCode ? { p_override_code: overrideCode } : {}),
     });
-    if (error) { alert(translateRpcError(error)); return; }
+    if (error) { showError(translateRpcError(error)); return; }
+    showToast("Remito anulado");
     load();
   }
 
@@ -1210,6 +1215,8 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
           await ejecutarAnularRemito(remito, motivo, codigo);
         }}
       />
+
+      <ToastComponent toast={toast} />
     </div>
   );
 }

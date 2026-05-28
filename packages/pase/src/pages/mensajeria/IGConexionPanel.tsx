@@ -15,6 +15,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { db } from "../../lib/supabase";
+import { useToast } from "../../hooks/useToast";
+import { ToastComponent } from "../../components/Toast";
 
 // ID público de la app de Instagram "PASE Bot-IG" (no es secret — sale en URLs).
 // OJO: es el ID de la app de INSTAGRAM dentro del caso de uso, NO el de Meta
@@ -55,40 +57,37 @@ export function IGConexionPanel() {
   const [loading, setLoading] = useState(true);
   const [conectando, setConectando] = useState(false);
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
+  const { toast, showToast, showError } = useToast();
 
   // Diagnóstico: llamar al endpoint del bot que devuelve metadata enmascarada
   const runDiagnostic = async () => {
     const { data: { session } } = await db.auth.getSession();
     const token = session?.access_token;
-    if (!token) { alert('Sesión expirada'); return; }
+    if (!token) { showError('Sesión expirada'); return; }
     try {
       const r = await fetch(`${BOT_API_URL}/api/diagnostic`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
       const data = await r.json();
       if (!r.ok) {
-        alert('Error: ' + (data.error || `HTTP ${r.status}`));
+        showError('Error: ' + (data.error || `HTTP ${r.status}`));
         return;
       }
       // Mostrar el reporte formateado
-      const lines: string[] = ['=== Configuración del bot ==='];
+      const lines: string[] = ['Config bot:'];
       const rep = data.report;
-      lines.push(`IG_APP_ID: ${rep.IG_APP_ID}`);
-      lines.push(`OAUTH_REDIRECT_URI: ${rep.OAUTH_REDIRECT_URI}`);
-      lines.push(`PASE_BASE_URL: ${rep.PASE_BASE_URL}`);
-      lines.push('');
-      lines.push('--- Secretos (enmascarados) ---');
+      lines.push(`APP_ID: ${rep.IG_APP_ID}`);
+      lines.push(`REDIRECT: ${rep.OAUTH_REDIRECT_URI}`);
+      lines.push(`PASE: ${rep.PASE_BASE_URL}`);
       for (const [k, v] of Object.entries(rep)) {
         if (typeof v === 'object' && v !== null && 'set' in (v as object)) {
           const p = v as { set: boolean; length?: number; first4?: string; last4?: string };
-          lines.push(`${k}: ${p.set ? `[${p.length} chars] ${p.first4}...${p.last4}` : '(NO SET)'}`);
+          lines.push(`${k}: ${p.set ? `[${p.length}ch] ${p.first4}...${p.last4}` : '(NO SET)'}`);
         }
       }
-      lines.push('');
-      lines.push(`Timestamp: ${rep.timestamp}`);
-      alert(lines.join('\n'));
+      showToast(lines.join(' | '), 'info');
     } catch (e) {
-      alert('Error: ' + (e instanceof Error ? e.message : String(e)));
+      showError('Error: ' + (e instanceof Error ? e.message : String(e)));
     }
   };
 
@@ -138,7 +137,7 @@ export function IGConexionPanel() {
       const returnUrl = window.location.href.split('?')[0];
       const { data, error } = await db.rpc('fn_ig_oauth_iniciar', { p_return_url: returnUrl });
       if (error || !data || data.length === 0) {
-        alert('Error al iniciar conexión: ' + (error?.message || 'sin state'));
+        showError('Error al iniciar conexión: ' + (error?.message || 'sin state'));
         setConectando(false);
         return;
       }
@@ -157,7 +156,7 @@ export function IGConexionPanel() {
       // Redirigimos top-window (no popup) porque Meta a veces bloquea popups
       window.location.href = authUrl.toString();
     } catch (e) {
-      alert('Error: ' + (e instanceof Error ? e.message : String(e)));
+      showError('Error: ' + (e instanceof Error ? e.message : String(e)));
       setConectando(false);
     }
   };
@@ -172,7 +171,7 @@ export function IGConexionPanel() {
     await cargar();
   };
 
-  if (loading) return null;
+  if (loading) return <ToastComponent toast={toast} />;
 
   // ─── Banner de feedback post-OAuth ───
   const flashBanner = flash && (
@@ -192,6 +191,7 @@ export function IGConexionPanel() {
   if (!conexion || conexion.estado === 'desconectada') {
     return (
       <>
+        <ToastComponent toast={toast} />
         {flashBanner}
         <div style={{
           padding: "20px 24px",
@@ -247,6 +247,7 @@ export function IGConexionPanel() {
   if (conexion.estado === 'vencida') {
     return (
       <>
+        <ToastComponent toast={toast} />
         {flashBanner}
         <div style={{
           padding: "14px 18px",
@@ -279,6 +280,7 @@ export function IGConexionPanel() {
   if (conexion.estado === 'por_vencer') {
     return (
       <>
+        <ToastComponent toast={toast} />
         {flashBanner}
         <div style={{
           padding: "12px 18px",
@@ -310,6 +312,7 @@ export function IGConexionPanel() {
   // ─── Caso 4: conexión OK ───
   return (
     <>
+      <ToastComponent toast={toast} />
       {flashBanner}
       <div style={{
         padding: "10px 14px",

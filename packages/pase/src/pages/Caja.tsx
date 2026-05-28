@@ -9,6 +9,8 @@ import { useDebouncedValue } from "@pase/shared/utils";
 import { CUENTAS, CUENTAS_OCULTAS_TEMPORAL } from "../lib/constants";
 import { toISO, today, fmt_d, fmt_$, toLocalISO } from '../lib/utils';
 import { RightSubNav, type SubNavSection, PageHeader, EmptyState, LocalLockedChip, Modal } from "../components/ui";
+import { useToast } from "../hooks/useToast";
+import { ToastComponent } from "../components/Toast";
 import { ManagerOverrideModal } from "../components/ManagerOverrideModal";
 import { exportCSV } from "../lib/exportCSV";
 import { CajaCardsRow } from "./caja/CajaCardsRow";
@@ -78,6 +80,7 @@ interface AuditDetalle {
 
 // ─── TESORERÍA ────────────────────────────────────────────────────────────────
 export default function Caja({ user, locales = [], localActivo }: CajaProps) {
+  const { toast, showToast, showError } = useToast();
   // Sub-section del módulo madre Caja (2026-05-13). Switch entre la vista
   // Movimientos (default, todo el contenido actual) y Conciliación MP
   // (pantalla embebida). Sidebar ya no tiene 'mp' como top-level.
@@ -381,7 +384,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   const guardar = async () => {
     if (savingRef.current || saving) return;
     if(!form.importe) return;
-    if (!form.cuenta) { alert("Elegí una cuenta"); return; }
+    if (!form.cuenta) { showError("Elegí una cuenta"); return; }
     const lid = lidImplicito != null ? lidImplicito : parseInt(localFormId);
     if (!Number.isFinite(lid)) return;
     const importe = parseFloat(form.importe)*(form.esEgreso?-1:1);
@@ -398,7 +401,8 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         p_detalle: form.detalle || tipoEfectivo,
         p_local_id: lid,
       });
-      if (error) { alert(translateRpcError(error)); return; }
+      if (error) { showError(translateRpcError(error)); return; }
+      showToast("Movimiento registrado");
       setModal(false);
       setForm({...emptyForm, fecha: toISO(today)});
       load();
@@ -412,17 +416,17 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   const guardarTransferencia = async () => {
     if (transfSavingRef.current || transfSaving) return;
     const lid = lidImplicito != null ? lidImplicito : parseInt(localFormId);
-    if (!Number.isFinite(lid)) { alert("Elegí un local"); return; }
-    if (!transfForm.origen || !transfForm.destino) { alert("Elegí cuenta origen y destino"); return; }
+    if (!Number.isFinite(lid)) { showError("Elegí un local"); return; }
+    if (!transfForm.origen || !transfForm.destino) { showError("Elegí cuenta origen y destino"); return; }
     // Validación: si es same-local (destino null o igual al origen) y misma cuenta → error.
     // Si es cross-local, misma cuenta es OK (ej: Caja Efectivo VC → Caja Efectivo Belgrano).
     const localDst = transfForm.local_destino_id ?? lid;
     if (localDst === lid && transfForm.origen === transfForm.destino) {
-      alert("Las cuentas deben ser distintas dentro del mismo local");
+      showError("Las cuentas deben ser distintas dentro del mismo local");
       return;
     }
     const monto = parseFloat(transfForm.monto);
-    if (!Number.isFinite(monto) || monto <= 0) { alert("Monto inválido"); return; }
+    if (!Number.isFinite(monto) || monto <= 0) { showError("Monto inválido"); return; }
     transfSavingRef.current = true;
     setTransfSaving(true);
     try {
@@ -437,7 +441,8 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         // (el RPC interpreta NULL = same-local, backward compat).
         p_local_destino_id: localDst !== lid ? localDst : null,
       });
-      if (error) { alert(translateRpcError(error)); return; }
+      if (error) { showError(translateRpcError(error)); return; }
+      showToast("Transferencia registrada");
       setTransfModal(false);
       setTransfForm({fecha:toISO(today),origen:"",destino:"",monto:"",detalle:"",local_destino_id:null});
       load();
@@ -460,7 +465,8 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
       p_motivo: motivo,
       ...(overrideCode ? { p_override_code: overrideCode } : {}),
     });
-    if (error) { alert(translateRpcError(error)); return; }
+    if (error) { showError(translateRpcError(error)); return; }
+    showToast("Movimiento anulado");
     load();
   }
 
@@ -501,7 +507,8 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
       };
       if (overrideCode) args.p_override_code = overrideCode;
       const { error } = await db.rpc("editar_movimiento_caja", args);
-      if (error) { alert(translateRpcError(error)); return; }
+      if (error) { showError(translateRpcError(error)); return; }
+      showToast("Movimiento editado");
       setEditMov(null); load();
     } finally {
       setSavingEdit(false);
@@ -511,7 +518,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   const guardarEditMov = async () => {
     if (savingEdit) return;
     if (!editMov) return;
-    if (!editMov.justificativo?.trim()) { alert("El justificativo es obligatorio"); return; }
+    if (!editMov.justificativo?.trim()) { showError("El justificativo es obligatorio"); return; }
     // Lucas 2026-05-19: si NO tiene caja_anular, guardamos los args y
     // abrimos modal de Manager Override pidiendo código TOTP del dueño.
     // El handler del modal llama a ejecutarEditMov(em, codigo) cuando

@@ -540,11 +540,11 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
       if(d.ok){
         const resetInfo=(d.reset||[]).map((x: MpResetResultado)=>x.local_id+": "+(x.deleted??x.error)).join(", ");
         await load();
-        alert("Reset + sync completados\n"+resetInfo);
+        showToast("Reset + sync completados: "+resetInfo);
       }else{
-        alert("Error en reset: "+(d.error||"desconocido"));
+        showError("Error en reset: "+(d.error||"desconocido"));
       }
-    }catch(e: unknown){alert("Error al resetear: "+(e instanceof Error ? e.message : String(e)));}
+    }catch(e: unknown){showError("Error al resetear: "+(e instanceof Error ? e.message : String(e)));}
     setSincronizando(false);
   };
 

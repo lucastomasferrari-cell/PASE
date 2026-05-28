@@ -116,7 +116,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
   // 'ventas_historico' (típicamente cajero) que no ven la tabla del histórico
   // — sin feedback visual, parece que la venta "no se cargó" (incidente
   // reportado 2026-05-12).
-  const { toast, showToast } = useToast();
+  const { toast, showToast, showError, showWarn } = useToast();
 
   const guardar = async () => {
     if (!form.local_id || guardando) return;
@@ -135,9 +135,8 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
       const { data: dup } = await db.from('ventas').select('id')
         .eq('local_id', lid).eq('fecha', form.fecha).eq('turno', form.turno).limit(1);
       if (dup && dup.length > 0) {
-        alert(
-          `Ya existe un cierre del ${fmt_d(form.fecha)} turno ${form.turno} para este local.\n\n` +
-          `Si querés reemplazarlo, primero eliminalo desde la grilla de Ventas y volvé a cargar.`,
+        showWarn(
+          `Ya existe un cierre del ${fmt_d(form.fecha)} turno ${form.turno} para este local. Si querés reemplazarlo, primero eliminalo desde la grilla de Ventas y volvé a cargar.`,
         );
         setGuardando(false);
         return;
@@ -156,7 +155,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
         p_idempotency_key: idempKey,
       });
       if (error) {
-        alert("Error al guardar venta: " + error.message);
+        showError("Error al guardar venta: " + error.message);
         return;
       }
       const totalGuardado = lineasValidas.reduce((s, l) => s + l.monto, 0);
@@ -182,7 +181,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
     };
     if (overrideCode) args.p_override_code = overrideCode;
     const {error:rpcErr}=await db.rpc("editar_venta", args);
-    if(rpcErr){alert("Error al editar venta: "+(rpcErr.message||""));return;}
+    if(rpcErr){showError("Error al editar venta: "+(rpcErr.message||""));return;}
 
     // Otros campos (fecha, turno, medio, local_id) — update directo.
     // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4: editar_venta RPC solo cubre monto; cambiar fecha/turno/medio/local_id va por UPDATE directo. Necesita RPC editar_venta_completa para ser 100% atómico — F1 ya cerró la creación, esto es deuda residual del flow de edición.
@@ -205,7 +204,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
     if(!editModal)return;
     const nuevoMonto=parseFloat(String(editModal.monto));
     if(!Number.isFinite(nuevoMonto)||nuevoMonto<=0){
-      alert("El monto debe ser un número mayor a 0");return;
+      showError("El monto debe ser un número mayor a 0");return;
     }
     if (!tienePermiso(user, "ventas_anular")) {
       setPendingEditarVenta(editModal);
@@ -225,7 +224,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
     const args: { p_venta_id: string; p_override_code?: string } = { p_venta_id: id };
     if (overrideCode) args.p_override_code = overrideCode;
     const {error}=await db.rpc("eliminar_venta", args);
-    if(error){alert("Error al eliminar venta: "+(error.message||""));return;}
+    if(error){showError("Error al eliminar venta: "+(error.message||""));return;}
     if(detalleModal){
       const updated=detalleModal.items.filter(i=>i.id!==id);
       if(updated.length===0){setDetalleModal(null);}
@@ -251,9 +250,9 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
     };
     if (overrideCode) args.p_override_code = overrideCode;
     const {data,error}=await db.rpc("eliminar_cierre", args);
-    if(error){alert("Error eliminando cierre: "+(error.message||""));return;}
+    if(error){showError("Error eliminando cierre: "+(error.message||""));return;}
     if((data as { contiene_legacy?: boolean })?.contiene_legacy){
-      alert("Cierre borrado. Algunos movimientos antiguos en Caja Chica pueden requerir borrado manual (cierres pre-2026-04-27 sin link a sus ventas).");
+      showWarn("Cierre borrado. Algunos movimientos antiguos en Caja Chica pueden requerir borrado manual (cierres pre-2026-04-27 sin link a sus ventas).");
     }
     setDetalleModal(null);load();
   }

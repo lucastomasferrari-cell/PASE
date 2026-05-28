@@ -3,6 +3,8 @@ import { db } from "../../lib/supabase";
 import { applyLocalScope } from "../../lib/auth";
 import { toISO, today, fmt_d } from "../../lib/utils";
 import { PageHeader, Modal } from "../../components/ui";
+import { useToast } from "../../hooks/useToast";
+import { ToastComponent } from "../../components/Toast";
 import type { Usuario, Local } from "../../types";
 
 interface BlindajeTipo {
@@ -65,6 +67,7 @@ const getEstado = (venc: string | null): string => {
 
 export default function Blindaje({ user, locales, localActivo }: BlindajeProps) {
   const esAdmin = user?.rol === "dueno" || user?.rol === "admin";
+  const { toast, showError } = useToast();
   const [tipos, setTipos] = useState<BlindajeTipo[]>([]);
   const [documentos, setDocumentos] = useState<BlindajeDoc[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,9 +124,9 @@ export default function Blindaje({ user, locales, localActivo }: BlindajeProps) 
         : await db.from("blindaje_tipos_documento").insert([payload]);
       if (error) {
         if (error.code === "23505") {
-          alert(`Ya existe un tipo de documento con el nombre "${payload.nombre}".`);
+          showError(`Ya existe un tipo de documento con el nombre "${payload.nombre}".`);
         } else {
-          alert("No se pudo guardar: " + error.message);
+          showError("No se pudo guardar: " + error.message);
         }
         return;
       }
@@ -161,10 +164,10 @@ export default function Blindaje({ user, locales, localActivo }: BlindajeProps) 
         await db.storage.from("blindaje").remove(paths);
       }
       const { error: docErr } = await db.from("blindaje_documentos").delete().eq("tipo_id", t.id);
-      if (docErr) { alert("No se pudieron borrar los documentos: " + docErr.message); return; }
+      if (docErr) { showError("No se pudieron borrar los documentos: " + docErr.message); return; }
     }
     const { error } = await db.from("blindaje_tipos_documento").delete().eq("id", t.id);
-    if (error) { alert("No se pudo eliminar el tipo: " + error.message); return; }
+    if (error) { showError("No se pudo eliminar el tipo: " + error.message); return; }
     loadAll();
   };
 
@@ -201,7 +204,7 @@ export default function Blindaje({ user, locales, localActivo }: BlindajeProps) 
         upsert: true,
       });
       if (upErr) {
-        alert("Error subiendo archivo: " + upErr.message);
+        showError("Error subiendo archivo: " + upErr.message);
         setUploading(false);
         return;
       }
@@ -222,7 +225,7 @@ export default function Blindaje({ user, locales, localActivo }: BlindajeProps) 
     setUploading(false);
     guardandoDocRef.current = false;
     if (error) {
-      alert("No se pudo guardar el documento: " + error.message);
+      showError("No se pudo guardar el documento: " + error.message);
       return;
     }
     setDocModal(null);
@@ -243,6 +246,7 @@ export default function Blindaje({ user, locales, localActivo }: BlindajeProps) 
 
   return (
     <div>
+      <ToastComponent toast={toast} />
       <PageHeader
         title="Blindaje"
         info={<>

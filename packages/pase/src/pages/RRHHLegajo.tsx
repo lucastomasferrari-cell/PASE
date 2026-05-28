@@ -103,7 +103,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
   const [liqFinalOverrides, setLiqFinalOverrides] = useState<Record<string, string>>({});
   const [liqFinalLoading, setLiqFinalLoading] = useState(false);
 
-  const { toast, showToast } = useToast();
+  const { toast, showToast, showError } = useToast();
 
   // Defensive (Bug Caja-1): si cualquiera de los state values de cuenta queda
   // con un valor que no está en cuentasUsables (regression future, scope
@@ -273,7 +273,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
         p_motivo: sueldoForm.motivo || null,
         p_idempotency_key: crypto.randomUUID(),
       });
-      if (error) { alert(translateRpcError(error)); return; }
+      if (error) { showError(translateRpcError(error)); return; }
       setSueldoModal(false); setSueldoForm({ monto:"", motivo:"" });
       loadEmp(); loadHistSueldos();
       showToast("Sueldo actualizado");
@@ -692,7 +692,7 @@ function TabDatos({
               p_total: total,
               p_cuenta: liqFinalCuenta,
             });
-            if (error) { alert(translateRpcError(error)); return; }
+            if (error) { showToast("Error: " + translateRpcError(error)); return; }
             setLiqFinalModal(false);
             showToast("Liquidación final procesada");
             loadAll();
@@ -787,19 +787,20 @@ function AnularPagoBtn({
   onDone?: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
+  const { showToast, showError } = useToast();
   const handleClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (busy) return;
     const liqIds = (liqArr || []).map(l => l.id).filter(Boolean);
-    if (liqIds.length === 0) { alert("No hay liquidaciones para anular"); return; }
+    if (liqIds.length === 0) { showError("No hay liquidaciones para anular"); return; }
     // Buscar movs activos linkeados
     const { data: movs, error: movErr } = await db.from("movimientos")
       .select("id, importe, cuenta, fecha")
       .in("liquidacion_id", liqIds)
       .eq("anulado", false);
-    if (movErr) { alert(`Error: ${movErr.message}`); return; }
+    if (movErr) { showError(`Error: ${movErr.message}`); return; }
     if (!movs || movs.length === 0) {
-      alert("No hay pagos activos para anular en este mes.");
+      showError("No hay pagos activos para anular en este mes.");
       return;
     }
     const resumen = movs.map(m => `• ${fmt_d(m.fecha)} ${m.cuenta} ${fmt_$(m.importe)}`).join("\n");
@@ -820,10 +821,10 @@ function AnularPagoBtn({
         const primeraFalla = (res.detalles || []).find(d => !d.ok);
         throw new Error(`Mov ${primeraFalla?.mov_id} falló: ${primeraFalla?.error || "error desconocido"}`);
       }
-      alert(`✓ ${res?.anulados ?? movs.length} pago(s) anulados. La liquidación vuelve a pendiente.`);
+      showToast(`${res?.anulados ?? movs.length} pago(s) anulados. La liquidación vuelve a pendiente.`);
       if (onDone) await onDone();
     } catch (e) {
-      alert(`Error anulando: ${translateRpcError(e)}`);
+      showError(`Error anulando: ${translateRpcError(e)}`);
     } finally {
       setBusy(false);
     }

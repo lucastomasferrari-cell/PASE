@@ -157,6 +157,12 @@ export async function seedComandaPos(seed: E2ETenantSeedResult): Promise<E2EComa
   if (pinErr) throw new Error(`Asignar pin_pos: ${pinErr.message}`);
 
   // 4. Abrir turno_caja con ese cajero (IDEMPOTENT)
+  //
+  // Sprint 28-may: usar RPC `_e2e_abrir_turno_caja` en vez de INSERT directo.
+  // El INSERT directo dispara el trigger `trg_drenar_reversos_al_abrir_turno`
+  // → llama `fn_assert_local_autorizado` → fails con service_role (auth_tenant_id
+  // es NULL). La RPC SECURITY DEFINER deshabilita el trigger durante el
+  // INSERT y lo re-habilita.
   const { data: turnoExistente } = await svc.from("turnos_caja")
     .select("id")
     .eq("tenant_id", seed.tenantId)
@@ -167,16 +173,15 @@ export async function seedComandaPos(seed: E2ETenantSeedResult): Promise<E2EComa
   if (turnoExistente) {
     turno = turnoExistente as { id: number | string };
   } else {
-    const { data: nuevoTurno, error: turnoErr } = await svc.from("turnos_caja").insert({
-      tenant_id: seed.tenantId,
-      local_id: seed.local1Id,
-      numero: 1,
-      cajero_id: cajeroEmpleadoId,
-      monto_inicial: 0,
-      estado: "abierto",
-    }).select("id").single();
-    if (turnoErr) throw new Error(`Abrir turno_caja: ${turnoErr.message}`);
-    turno = nuevoTurno as { id: number | string };
+    const { data: turnoId, error: turnoErr } = await svc.rpc("_e2e_abrir_turno_caja", {
+      p_tenant_id: seed.tenantId,
+      p_local_id: seed.local1Id,
+      p_cajero_id: cajeroEmpleadoId,
+      p_numero: 1,
+      p_monto_inicial: 0,
+    });
+    if (turnoErr) throw new Error(`Abrir turno_caja (RPC): ${turnoErr.message}`);
+    turno = { id: turnoId as number };
   }
 
   return {

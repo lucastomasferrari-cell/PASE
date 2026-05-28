@@ -3,6 +3,8 @@ import { db } from "../lib/supabase";
 import { fmt_d, fmt_$, genId, toISO } from "../lib/utils";
 import { useMediosCobro } from "../lib/useMediosCobro";
 import { parseCierre, PARSER_VERSION, type ParseError, type ParsedCierre } from "../lib/maxirest/parser";
+import { useToast } from "../hooks/useToast";
+import { ToastComponent } from "../components/Toast";
 
 interface ImportarMaxirestProps {
   // Compat con App.tsx (no se usa pero se acepta para no romper).
@@ -33,6 +35,7 @@ export default function ImportarMaxirest({ localActivo, onImported, embedded = f
   const [errores, setErrores] = useState<ParseError[]>([]);
   const [loading, setLoading] = useState(false);
   const { mediosDisponibles } = useMediosCobro();
+  const { toast, showToast, showError } = useToast();
 
   function procesar() {
     if (!texto.trim()) return;
@@ -86,10 +89,9 @@ export default function ImportarMaxirest({ localActivo, onImported, embedded = f
       const { data: dup } = await db.from('ventas').select('id')
         .eq('fecha', fechaIso).eq('turno', turnoDB).eq('local_id', lid).limit(1);
       if (dup && dup.length > 0) {
-        alert(
-          `Ya existe un cierre del ${fmt_d(fechaIso)} turno ${turnoDB} para este local.\n\n` +
-          `Si el cierre anterior está mal y querés reemplazarlo, primero eliminalo desde Ventas y volvé a importar.\n\n` +
-          `(Antes el sistema te dejaba importar igual con un "confirmar"; eso generó duplicados de plata. Ahora está bloqueado.)`,
+        showError(
+          `Ya existe un cierre del ${fmt_d(fechaIso)} turno ${turnoDB} para este local. ` +
+          `Si el cierre anterior está mal y querés reemplazarlo, primero eliminalo desde Ventas y volvé a importar.`,
         );
         setLoading(false);
         return;
@@ -200,11 +202,11 @@ export default function ImportarMaxirest({ localActivo, onImported, embedded = f
       const detalle = cuentasImpactadas.length > 0
         ? ' · Impacto caja: ' + cuentasImpactadas.map(c => c + ' ' + fmt_$(impactoPorCuenta[c]!)).join(', ')
         : ' · ⚠️ NO impactó caja (ningún medio tiene cuenta_destino mapeada)';
-      alert('✓ Importado: ' + ins.length + ' filas · Total: ' + fmt_$(totalCierre) + detalle);
+      showToast('Importado: ' + ins.length + ' filas · Total: ' + fmt_$(totalCierre) + detalle);
       reset();
       onImported?.();
     } catch (e: unknown) {
-      alert('No se pudo importar: ' + (e instanceof Error ? e.message : String(e)));
+      showError('No se pudo importar: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setLoading(false);
     }
@@ -252,6 +254,7 @@ export default function ImportarMaxirest({ localActivo, onImported, embedded = f
           onImportar={importar}
         />
       )}
+      {toast && <ToastComponent toast={toast} />}
     </div>
   );
 }

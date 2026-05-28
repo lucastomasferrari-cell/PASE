@@ -121,7 +121,7 @@ export default function RolesPermisos({ user }: Props) {
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState<RolConPermisos | null>(null);
   const [creando, setCreando] = useState(false);
-  const { toast, showToast } = useToast();
+  const { toast, showToast, showError } = useToast();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -224,6 +224,7 @@ export default function RolesPermisos({ user }: Props) {
             onClose={() => setEditando(null)}
             onSaved={() => { setEditando(null); void load(); showToast("Rol actualizado"); }}
             onDeleted={() => { setEditando(null); void load(); showToast("Rol eliminado"); }}
+            showError={showError}
           />
         )}
         {creando && (
@@ -232,6 +233,7 @@ export default function RolesPermisos({ user }: Props) {
             onClose={() => setCreando(false)}
             onSaved={() => { setCreando(false); void load(); showToast("Rol creado"); }}
             onDeleted={() => {/* no aplica al crear */}}
+            showError={showError}
           />
         )}
       </div>
@@ -268,7 +270,7 @@ function RolCard({ rol, onEdit, editable = false }: { rol: RolConPermisos; onEdi
   );
 }
 
-function ModalEditarRol({ rol, onClose, onSaved, onDeleted }: { rol: RolConPermisos | null; onClose: () => void; onSaved: () => void; onDeleted: () => void }) {
+function ModalEditarRol({ rol, onClose, onSaved, onDeleted, showError }: { rol: RolConPermisos | null; onClose: () => void; onSaved: () => void; onDeleted: () => void; showError: (m: string) => void }) {
   const [nombre, setNombre] = useState(rol?.nombre ?? "");
   const [descripcion, setDescripcion] = useState(rol?.descripcion ?? "");
   const [permisos, setPermisos] = useState<Set<string>>(new Set(rol?.permisos ?? []));
@@ -294,7 +296,7 @@ function ModalEditarRol({ rol, onClose, onSaved, onDeleted }: { rol: RolConPermi
 
   async function guardar() {
     if (guardando) return;
-    if (!nombre.trim()) { alert("Falta el nombre"); return; }
+    if (!nombre.trim()) { showError("Falta el nombre"); return; }
     setGuardando(true);
     try {
       if (rol) {
@@ -317,7 +319,7 @@ function ModalEditarRol({ rol, onClose, onSaved, onDeleted }: { rol: RolConPermi
       }
       onSaved();
     } catch (e) {
-      alert("Error: " + translateRpcError(e as Parameters<typeof translateRpcError>[0]));
+      showError("Error: " + translateRpcError(e as Parameters<typeof translateRpcError>[0]));
     } finally {
       setGuardando(false);
     }
@@ -326,7 +328,7 @@ function ModalEditarRol({ rol, onClose, onSaved, onDeleted }: { rol: RolConPermi
   async function eliminar() {
     if (!rol || esSistema) return;
     if (rol.usuarios_count > 0) {
-      alert(`No se puede eliminar: hay ${rol.usuarios_count} usuario(s) con este rol. Reasignalos primero.`);
+      showError(`No se puede eliminar: hay ${rol.usuarios_count} usuario(s) con este rol. Reasignalos primero.`);
       return;
     }
     if (!confirm(`¿Eliminar el rol "${rol.nombre}"? Esta acción no se puede deshacer.`)) return;
@@ -335,7 +337,7 @@ function ModalEditarRol({ rol, onClose, onSaved, onDeleted }: { rol: RolConPermi
       if (error) throw error;
       onDeleted();
     } catch (e) {
-      alert("Error: " + translateRpcError(e as Parameters<typeof translateRpcError>[0]));
+      showError("Error: " + translateRpcError(e as Parameters<typeof translateRpcError>[0]));
     }
   }
 

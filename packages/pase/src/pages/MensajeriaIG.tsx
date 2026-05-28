@@ -20,6 +20,8 @@ import { db } from "../lib/supabase";
 import { tienePermiso } from "../lib/auth";
 import { fmt_$ } from "../lib/utils";
 import { EmptyState, InfoTooltip } from "../components/ui";
+import { useToast } from "../hooks/useToast";
+import { ToastComponent } from "../components/Toast";
 import { IGConfigModal } from "./mensajeria/IGConfigModal";
 import { IGClienteModal } from "./mensajeria/IGClienteModal";
 import { IGConexionPanel } from "./mensajeria/IGConexionPanel";
@@ -95,6 +97,7 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
   const [configOpen, setConfigOpen] = useState(false);
   const [clienteEditId, setClienteEditId] = useState<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const { toast, showError } = useToast();
 
   // PERMISSION CHECK: NO hacer early return acá — viola
   // react-hooks/rules-of-hooks porque los useCallback/useEffect/useMemo
@@ -217,7 +220,7 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
       const { data: { session } } = await db.auth.getSession();
       const token = session?.access_token;
       if (!token) {
-        alert('Sesión expirada. Volvé a entrar.');
+        showError('Sesión expirada. Volvé a entrar.');
         return;
       }
       const resp = await fetch(`${BOT_API_URL}/api/send`, {
@@ -233,7 +236,7 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
       });
       const data = await resp.json();
       if (!resp.ok || !data.ok) {
-        alert('Error enviando: ' + (data?.error || `HTTP ${resp.status}`));
+        showError('Error enviando: ' + (data?.error || `HTTP ${resp.status}`));
         return;
       }
       setRespuesta("");
@@ -242,7 +245,7 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
         await setEstado('humano');
       }
     } catch (e) {
-      alert('Error: ' + (e instanceof Error ? e.message : String(e)));
+      showError('Error: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setEnviando(false);
     }
@@ -588,6 +591,7 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
         onClose={() => setClienteEditId(null)}
         onSaved={loadConversaciones}
       />
+      {toast && <ToastComponent toast={toast} />}
     </div>
   );
 }

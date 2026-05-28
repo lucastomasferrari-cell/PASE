@@ -10,6 +10,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { db } from "../../lib/supabase";
 import { translateRpcError } from "../../lib/errors";
+import { useToast } from "../../hooks/useToast";
+import { ToastComponent } from "../../components/Toast";
 import type { Local } from "../../types/auth";
 
 interface CesionRow {
@@ -35,6 +37,7 @@ export function EmpleadoCesiones({ empleadoId, localPrincipalId: _localPrincipal
   const [agregando, setAgregando] = useState(false);
   const [nuevaLocalId, setNuevaLocalId] = useState<string>("");
   const [nuevoTipo, setNuevoTipo] = useState<string>("cesion_permanente");
+  const { toast, showError } = useToast();
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -62,7 +65,7 @@ export function EmpleadoCesiones({ empleadoId, localPrincipalId: _localPrincipal
       p_fecha_hasta: null,
       p_notas: null,
     });
-    if (error) { alert(translateRpcError(error)); return; }
+    if (error) { showError(translateRpcError(error)); return; }
     setAgregando(false);
     setNuevaLocalId("");
     await reload();
@@ -75,7 +78,7 @@ export function EmpleadoCesiones({ empleadoId, localPrincipalId: _localPrincipal
       p_empleado_id: empleadoId,
       p_local_id: localId,
     });
-    if (error) { alert(translateRpcError(error)); return; }
+    if (error) { showError(translateRpcError(error)); return; }
     await reload();
     onChange?.();
   }
@@ -186,6 +189,7 @@ export function EmpleadoCesiones({ empleadoId, localPrincipalId: _localPrincipal
       <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 8, lineHeight: 1.4 }}>
         ★ = local principal · ◆ = cesión. Si trabaja para varios locales, los encargados de cada uno lo verán en su lista.
       </div>
+      {toast && <ToastComponent toast={toast} />}
     </div>
   );
 }

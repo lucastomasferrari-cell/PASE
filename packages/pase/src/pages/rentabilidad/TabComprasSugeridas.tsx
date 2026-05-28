@@ -14,6 +14,8 @@ import { useState, useEffect, useMemo } from "react";
 import { db } from "../../lib/supabase";
 import { fmt_$, todayAR_ISO } from '../../lib/utils';
 import { EmptyState } from "../../components/ui";
+import { useToast } from "../../hooks/useToast";
+import { ToastComponent } from "../../components/Toast";
 import type { Usuario, Local } from "../../types";
 
 interface Props {
@@ -109,11 +111,12 @@ export function TabComprasSugeridas({ user, locales, localActivo }: Props) {
   }, [rows]);
 
   const [generandoRemitos, setGenerandoRemitos] = useState(false);
+  const { toast, showToast, showError } = useToast();
   async function generarRemitos() {
     if (!localFiltro || porProveedor.length === 0) return;
     const proveedoresValidos = porProveedor.filter(([key]) => key !== "sin_proveedor");
     if (proveedoresValidos.length === 0) {
-      alert("Ningún insumo sugerido tiene proveedor asignado. Definí proveedor preferido vía materias_primas primero.");
+      showError("Ningún insumo sugerido tiene proveedor asignado. Definí proveedor preferido vía materias_primas primero.");
       return;
     }
     const resumen = proveedoresValidos.map(([, p]) => `• ${p.nombre}: ${p.insumos.length} items · ${fmt_$(p.total)}`).join("\n");
@@ -145,10 +148,10 @@ export function TabComprasSugeridas({ user, locales, localActivo }: Props) {
       // eslint-disable-next-line pase-local/no-direct-financiera-write, pase-local/require-apply-local-scope -- deuda C4-F12: cargar remito debe ir por RPC crear_remito atómica. Hoy se respeta la convención de Compras.tsx (insert directo). INSERT bulk: cada row trae local_id resuelto desde el forecast (no es lectura cross-local).
       const { error } = await db.from("remitos").insert(remitosACrear);
       if (error) throw new Error(error.message);
-      alert(`✓ ${remitosACrear.length} remito(s) creado(s).\nVas a verlos en Compras → Remitos para editar/confirmar.`);
+      showToast(`${remitosACrear.length} remito(s) creado(s). Vas a verlos en Compras → Remitos para editar/confirmar.`);
       // Recargar el forecast (los datos no cambian, pero la UI siente refresco)
     } catch (e) {
-      alert(`Error generando remitos: ${e instanceof Error ? e.message : String(e)}`);
+      showError(`Error generando remitos: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setGenerandoRemitos(false);
     }
@@ -369,6 +372,7 @@ export function TabComprasSugeridas({ user, locales, localActivo }: Props) {
           </div>
         </>
       )}
+      {toast && <ToastComponent toast={toast} />}
     </div>
   );
 }

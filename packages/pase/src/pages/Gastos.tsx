@@ -128,7 +128,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
   // handlers (anularGasto / abrirEditar→guardar) abren el modal de Manager
   // Override TOTP.
   const puedeVerAnulados = tienePermiso(user, "ver_anulados");
-  const { toast, showToast } = useToast();
+  const { toast, showToast, showError } = useToast();
   const [plantillas, setPlantillas] = useState<GastoPlantilla[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
@@ -285,24 +285,24 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
     // si !form.categoria → para tipo='empleado' (que usa `concepto` y no
     // categoria) el botón quedaba muerto sin avisar nada al user.
     const tipo = getTipo();
-    if (!form.monto) { alert("Falta el monto"); return; }
+    if (!form.monto) { showError("Falta el monto"); return; }
     if (tipo === 'empleado') {
-      if (!form.empleado_id) { alert("Seleccioná el empleado"); return; }
-      if (!form.concepto) { alert("Seleccioná el concepto del pago"); return; }
+      if (!form.empleado_id) { showError("Seleccioná el empleado"); return; }
+      if (!form.concepto) { showError("Seleccioná el concepto del pago"); return; }
     } else {
-      if (!form.categoria) { alert("Seleccioná una categoría"); return; }
+      if (!form.categoria) { showError("Seleccioná una categoría"); return; }
     }
-    if (!form.cuenta) { alert("Elegí una cuenta de egreso"); return; }
+    if (!form.cuenta) { showError("Elegí una cuenta de egreso"); return; }
     setSaving(true);
     try {
       const lid = form.local_id ? parseInt(form.local_id) : null;
-      if (!lid) { alert("Seleccioná un local"); return; }
+      if (!lid) { showError("Seleccioná un local"); return; }
 
       // ─── Feature 1: tipo=empleado va por RPC dedicada que también escribe
       //     en rrhh_adelantos para que se descuente del sueldo. ──────────
       if (tipo === 'empleado') {
-        if (!form.empleado_id) { alert("Seleccioná el empleado"); return; }
-        if (!form.concepto) { alert("Seleccioná el concepto"); return; }
+        if (!form.empleado_id) { showError("Seleccioná el empleado"); return; }
+        if (!form.concepto) { showError("Seleccioná el concepto"); return; }
         const { error } = await db.rpc("crear_gasto_empleado", {
           p_local_id: lid,
           p_empleado_id: form.empleado_id,
@@ -333,7 +333,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
       setModal(false); setForm(emptyForm); load();
     } catch (err) {
       console.error("Error guardando gasto:", err);
-      alert(translateRpcError(err));
+      showError(translateRpcError(err));
     } finally {
       setSaving(false);
     }
@@ -361,7 +361,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
       p_idempotency_key: idempKeyEditGasto,
       ...(overrideCode ? { p_override_code: overrideCode } : {}),
     });
-    if (error) { alert(translateRpcError(error)); return; }
+    if (error) { showError(translateRpcError(error)); return; }
     showToast("Gasto editado · saldos actualizados");
     setEditModal(null);
     load();
@@ -369,9 +369,9 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
 
   const guardarEdit = async () => {
     if (savingEdit || !editModal) return;
-    if (!editModal.justificativo?.trim()) { alert("El motivo de la edición es obligatorio"); return; }
+    if (!editModal.justificativo?.trim()) { showError("El motivo de la edición es obligatorio"); return; }
     if (!editModal.cuenta || !editModal.categoria || !editModal.monto) {
-      alert("Cuenta, categoría y monto son obligatorios"); return;
+      showError("Cuenta, categoría y monto son obligatorios"); return;
     }
     setSavingEdit(true);
     try {
@@ -397,7 +397,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
       p_motivo: motivo,
       ...(overrideCode ? { p_override_code: overrideCode } : {}),
     });
-    if (error) { alert(translateRpcError(error)); return; }
+    if (error) { showError(translateRpcError(error)); return; }
     showToast("Gasto anulado · movimiento revertido");
     load();
   }
@@ -420,7 +420,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
 
   const confirmarPagoPlantilla = async () => {
     if (pagandoPlant || !pagarModal || !pagoPlantForm.monto) return;
-    if (!pagoPlantForm.cuenta) { alert("Elegí una cuenta de egreso"); return; }
+    if (!pagoPlantForm.cuenta) { showError("Elegí una cuenta de egreso"); return; }
     setPagandoPlant(true);
     try {
       const monto = parseFloat(pagoPlantForm.monto);
@@ -439,7 +439,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
       setPagarModal(null); setPagoPlantForm(emptyPagoPlant); load();
     } catch (err) {
       console.error("Error pago plantilla:", err);
-      alert(translateRpcError(err));
+      showError(translateRpcError(err));
     } finally {
       setPagandoPlant(false);
     }

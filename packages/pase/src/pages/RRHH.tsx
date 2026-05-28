@@ -56,7 +56,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const cuentasUsables = opCuentas === null ? CUENTAS_PAGO : CUENTAS_PAGO.filter(c => opCuentas.includes(c));
   const [tab, setTab] = useState("dashboard");
   const [legajoId, setLegajoId] = useState<string | null>(null);
-  const { toast, showToast } = useToast();
+  const { toast, showToast, showError } = useToast();
 
   const visLocs = localesVisibles(user);
   const locsDisp = visLocs === null ? locales : locales.filter((l: Local) => visLocs.includes(l.id));
@@ -685,7 +685,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     const otrosDesc = nov.otros_descuentos || 0;
     const otrosDescMotivo = (nov.otros_descuentos_motivo || "").trim();
     if (otrosDesc > 0 && !otrosDescMotivo) {
-      alert(`${emp.apellido} ${emp.nombre}: cargá el motivo del descuento de $${otrosDesc.toLocaleString('es-AR')}.`);
+      showError(`${emp.apellido} ${emp.nombre}: cargá el motivo del descuento de $${otrosDesc.toLocaleString('es-AR')}.`);
       return;
     }
     const { data: saved } = await db.from("rrhh_novedades").upsert({
@@ -787,7 +787,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       .eq("novedad_id", nov.id);
     const hayPagada = (liqs || []).some(l => Number(l.pagos_realizados || 0) > 0 || l.estado === "pagado");
     if (hayPagada) {
-      alert("Esta novedad tiene una liquidación con pagos registrados. Primero anulá el pago desde Pagos.");
+      showError("Esta novedad tiene una liquidación con pagos registrados. Primero anulá el pago desde Pagos.");
       return;
     }
     const cuotasTotal = nov.cuotas_total ?? 1;
@@ -882,7 +882,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       p_fecha: adelForm.fecha,
       p_detalle: adelForm.descripcion || null,
     });
-    if (error) { alert(translateRpcError(error)); return; }
+    if (error) { showError(translateRpcError(error)); return; }
 
     showToast(`Adelanto registrado — ${emp.apellido}`);
     setAdelModal(false);
