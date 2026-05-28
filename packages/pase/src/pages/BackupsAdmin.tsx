@@ -10,6 +10,8 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { translateRpcError } from "../lib/errors";
 import { Modal } from "../components/ui";
+import { useToast } from "../hooks/useToast";
+import { ToastComponent } from "../components/Toast";
 import type { Tenant } from "../types";
 
 interface BackupsAdminProps {
@@ -51,6 +53,7 @@ export default function BackupsAdmin({ tenants }: BackupsAdminProps) {
   const [flash, setFlash] = useState<string | null>(null);
   const [restoreStep, setRestoreStep] = useState<{ file: BackupFile; step: 1 | 2; confirmText: string } | null>(null);
   const [restoring, setRestoring] = useState(false);
+  const { toast, showError } = useToast();
 
   const tenant = tenants.find(t => t.id === tenantId) || null;
 
@@ -92,7 +95,7 @@ export default function BackupsAdmin({ tenants }: BackupsAdminProps) {
   const descargar = async (file: BackupFile) => {
     const { data, error } = await db.storage.from(BUCKET).createSignedUrl(file.path, 60);
     if (error || !data) {
-      alert("No se pudo generar URL de descarga: " + (error?.message || ""));
+      showError("No se pudo generar URL de descarga: " + (error?.message || ""));
       return;
     }
     // Forzar descarga vía link efímero. El browser respeta el filename del path.
@@ -140,7 +143,7 @@ export default function BackupsAdmin({ tenants }: BackupsAdminProps) {
       cancelarRestore();
       loadBackups();
     } catch (e) {
-      alert("Restore falló: " + translateRpcError(e));
+      showError("Restore falló: " + translateRpcError(e));
       setRestoring(false);
     }
   };
@@ -257,6 +260,7 @@ export default function BackupsAdmin({ tenants }: BackupsAdminProps) {
         )}
       </Modal>
 
+      {toast && <ToastComponent toast={toast} />}
       {/* Modal 2: confirmación por texto */}
       <Modal
         isOpen={!!(restoreStep && restoreStep.step === 2 && tenant)}

@@ -3,6 +3,8 @@ import { db } from "../lib/supabase";
 import { fmt_d } from "../lib/utils";
 import BackupsAdmin from "./BackupsAdmin";
 import { InfoTooltip } from "../components/ui";
+import { useToast } from "../hooks/useToast";
+import { ToastComponent } from "../components/Toast";
 import type { Tenant, Usuario } from "../types";
 
 // URL del Admin Console (deploy Vercel separado). Mover la creación de
@@ -32,6 +34,7 @@ export default function Tenants({ user }: TenantsProps) {
   const [loading, setLoading] = useState(true);
   const [flash] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("tenants");
+  const { toast, showError } = useToast();
 
   const load = async () => {
     setLoading(true);
@@ -77,7 +80,7 @@ export default function Tenants({ user }: TenantsProps) {
   const toggleActivo = async (t: Tenant) => {
     if (!confirm(`${t.activo ? "Desactivar" : "Activar"} tenant "${t.nombre}"?`)) return;
     const { error } = await db.from("tenants").update({ activo: !t.activo }).eq("id", t.id);
-    if (error) { alert("Error: " + error.message); return; }
+    if (error) { showError("Error: " + error.message); return; }
     load();
   };
 
@@ -160,6 +163,7 @@ export default function Tenants({ user }: TenantsProps) {
       )}
 
       {tab === "backups" && <BackupsAdmin tenants={tenants} />}
+      {toast && <ToastComponent toast={toast} />}
     </div>
   );
 }

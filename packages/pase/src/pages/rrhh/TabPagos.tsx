@@ -2,6 +2,8 @@ import { db } from "../../lib/supabase";
 import { translateRpcError } from "../../lib/errors";
 import { toISO, today, fmt_d, fmt_$, parseMonto } from "../../lib/utils";
 import { Modal } from "../../components/ui";
+import { useToast } from "../../hooks/useToast";
+import { ToastComponent } from "../../components/Toast";
 import type { Local } from "../../types";
 import type {
   Empleado, Novedad, Liquidacion, Adelanto, LineaPago,
@@ -68,6 +70,7 @@ export function TabPagos({
   cuentasUsables, idempKeyPagarSueldo,
   fechaPago, setFechaPago,
 }: TabPagosProps) {
+  const { toast, showError } = useToast();
   return (
     <>
       <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
@@ -255,7 +258,7 @@ export function TabPagos({
             await loadPagos();
             await loadEmpleados();
           } catch (err) {
-            alert(translateRpcError(err as Parameters<typeof translateRpcError>[0]));
+            showError(translateRpcError(err as Parameters<typeof translateRpcError>[0]));
           } finally {
             setPagando(false);
           }
@@ -458,6 +461,7 @@ export function TabPagos({
 
       {/* Modal de adelanto extraído a packages/pase/src/pages/rrhh/AdelantoModal.tsx
           y renderizado desde RRHH.tsx para que esté disponible en cualquier tab. */}
+      {toast && <ToastComponent toast={toast} />}
     </>
   );
 }

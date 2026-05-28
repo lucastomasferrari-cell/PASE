@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { Modal, InfoTooltip } from "../components/ui";
+import { useToast } from "../hooks/useToast";
+import { ToastComponent } from "../components/Toast";
 import { lanzarTour, resetTour } from "../lib/onboardingTours";
 import { getPermisos, tienePermiso } from "../lib/auth";
 import type { Usuario } from "../types";
@@ -104,6 +106,7 @@ interface AjustesProps {
 
 export default function Ajustes({ user }: AjustesProps = {}) {
   const navigate = useNavigate();
+  const { toast, showError } = useToast();
   const [loading, setLoading] = useState(true);
   const [categorias, setCategorias] = useState<CategoriaRow[]>([]);
   const [medios, setMedios] = useState<MedioCobroRow[]>([]);
@@ -236,7 +239,7 @@ export default function Ajustes({ user }: AjustesProps = {}) {
       } else if (nuevoModalGrupo === "puestos") {
         table = "rrhh_puestos";
       } else {
-        alert("Este grupo todavía no tiene CRUD configurado.");
+        showError("Este grupo todavía no tiene CRUD configurado.");
         setSaving(false);
         return;
       }
@@ -253,7 +256,7 @@ export default function Ajustes({ user }: AjustesProps = {}) {
         insertErr = error;
       }
       if (insertErr) {
-        alert("No se pudo crear: " + insertErr.message);
+        showError("No se pudo crear: " + insertErr.message);
         setSaving(false);
         return;
       }
@@ -280,7 +283,7 @@ export default function Ajustes({ user }: AjustesProps = {}) {
       .eq("nombre", cat.nombre)
       .eq("tipo", cat.tipo);
     if (error) {
-      alert("No se pudo cambiar el tipo: " + error.message);
+      showError("No se pudo cambiar el tipo: " + error.message);
       load();
     }
   };
@@ -354,7 +357,7 @@ export default function Ajustes({ user }: AjustesProps = {}) {
         err = r.error;
       }
       if (err) {
-        alert("No se pudo guardar: " + err.message);
+        showError("No se pudo guardar: " + err.message);
         return;
       }
       setEditTarget(null);
@@ -374,19 +377,19 @@ export default function Ajustes({ user }: AjustesProps = {}) {
       .update({ activo: false })
       .eq("tipo", row.tipo)
       .eq("nombre", row.nombre);
-    if (error) { alert("No se pudo eliminar: " + error.message); return; }
+    if (error) { showError("No se pudo eliminar: " + error.message); return; }
     await load();
   };
   const eliminarMedio = async (row: MedioCobroRow) => {
     if (!confirm(`¿Eliminar el medio de cobro "${row.nombre}"?\n\nNo se borra del historial, solo deja de aparecer en los dropdowns.`)) return;
     const { error } = await db.from("medios_cobro").update({ activo: false }).eq("id", row.id);
-    if (error) { alert("No se pudo eliminar: " + error.message); return; }
+    if (error) { showError("No se pudo eliminar: " + error.message); return; }
     await load();
   };
   const eliminarPuesto = async (row: PuestoRow) => {
     if (!confirm(`¿Eliminar el puesto "${row.nombre}"?\n\nNo se borra del historial, solo deja de aparecer en los dropdowns.`)) return;
     const { error } = await db.from("rrhh_puestos").update({ activo: false }).eq("id", row.id);
-    if (error) { alert("No se pudo eliminar: " + error.message); return; }
+    if (error) { showError("No se pudo eliminar: " + error.message); return; }
     await load();
   };
 
@@ -660,6 +663,8 @@ export default function Ajustes({ user }: AjustesProps = {}) {
           />
         </div>
       </Modal>
+
+      <ToastComponent toast={toast} />
     </div>
   );
 }

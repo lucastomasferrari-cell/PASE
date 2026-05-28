@@ -9,6 +9,8 @@
 import { useState, useEffect } from "react";
 import { db } from "../../lib/supabase";
 import { Modal } from "../../components/ui";
+import { useToast } from "../../hooks/useToast";
+import { ToastComponent } from "../../components/Toast";
 
 interface IGCliente {
   id: number;
@@ -35,6 +37,7 @@ export function IGClienteModal({ clienteId, onClose, onSaved }: Props) {
   const [cliente, setCliente] = useState<IGCliente | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const { toast, showError } = useToast();
 
   useEffect(() => {
     if (!clienteId) return;
@@ -64,7 +67,7 @@ export function IGClienteModal({ clienteId, onClose, onSaved }: Props) {
       .eq("id", cliente.id);
     setSaving(false);
     if (error) {
-      alert("Error al guardar: " + error.message);
+      showError("Error al guardar: " + error.message);
       return;
     }
     onSaved();
@@ -72,6 +75,8 @@ export function IGClienteModal({ clienteId, onClose, onSaved }: Props) {
   };
 
   return (
+    <>
+    {toast && <ToastComponent toast={toast} />}
     <Modal
       isOpen={clienteId !== null}
       onClose={onClose}
@@ -189,5 +194,6 @@ export function IGClienteModal({ clienteId, onClose, onSaved }: Props) {
         </div>
       )}
     </Modal>
+    </>
   );
 }

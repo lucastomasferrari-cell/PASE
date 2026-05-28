@@ -31,6 +31,8 @@ import {
   unsubscribeFromPush,
 } from "../lib/push";
 import type { Usuario } from "../types";
+import { useToast } from "../hooks/useToast";
+import { ToastComponent } from "../components/Toast";
 
 interface Props {
   user: Usuario;
@@ -48,6 +50,7 @@ export default function ConfiguracionNotificaciones({ user }: Props) {
   const [pushSubscribed, setPushSubscribed] = useState<boolean | null>(null);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushMsg, setPushMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const { toast, showError } = useToast();
 
   const perm = getPushPermissionStatus();
 
@@ -92,7 +95,7 @@ export default function ConfiguracionNotificaciones({ user }: Props) {
       if (error) {
         // Rollback
         setPrefs(prev => ({ ...prev, [typeId]: !value }));
-        alert(`No se pudo guardar: ${error.message}`);
+        showError(`No se pudo guardar: ${error.message}`);
       }
     } finally {
       setSavingType(null);
@@ -276,6 +279,7 @@ export default function ConfiguracionNotificaciones({ user }: Props) {
         cierre, escalada del bot, etc.), las preferencias guardadas acá ya funcionan
         sin que tengas que volver.
       </div>
+      {toast && <ToastComponent toast={toast} />}
     </div>
   );
 }

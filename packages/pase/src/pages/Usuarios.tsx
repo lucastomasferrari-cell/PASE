@@ -4,6 +4,8 @@ import { MODULOS, PERMISOS_EXTRAS } from "../lib/auth";
 import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { CUENTAS } from "../lib/constants";
 import { PageHeader, Modal } from "../components/ui";
+import { useToast } from "../hooks/useToast";
+import { ToastComponent } from "../components/Toast";
 import type { Usuario, Local } from "../types";
 
 interface UsuariosProps {
@@ -42,6 +44,7 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
   // se exponen en un dropdown dentro del form de usuario. Si el dueño
   // necesita un set custom, va a /usuarios/roles a crear uno.
   const [rolesDisponibles, setRolesDisponibles] = useState<Array<{ id: string; nombre: string; slug: string; es_sistema: boolean }>>([]);
+  const { toast, showError } = useToast();
 
   const load = async () => {
     setLoading(true);
@@ -243,7 +246,7 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
     // No permitir auto-desactivarse (queda sin acceso y solo otro admin/dueño
     // puede revertirlo).
     if (u.id === user.id) {
-      alert("No podés cambiar tu propio estado. Pedile a otro dueño o admin que lo haga.");
+      showError("No podés cambiar tu propio estado. Pedile a otro dueño o admin que lo haga.");
       return;
     }
     await db.from("usuarios").update({ activo: u.activo === false }).eq("id", u.id);
@@ -362,6 +365,7 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
         )}
       </div>
 
+      {toast && <ToastComponent toast={toast} />}
       {/* AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido. */}
       {modal && (
         <Modal

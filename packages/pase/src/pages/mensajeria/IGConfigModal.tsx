@@ -14,6 +14,8 @@
 import { useState, useEffect } from "react";
 import { db } from "../../lib/supabase";
 import { Modal } from "../../components/ui";
+import { useToast } from "../../hooks/useToast";
+import { ToastComponent } from "../../components/Toast";
 
 interface IGConfig {
   tenant_id: string;
@@ -66,6 +68,7 @@ export function IGConfigModal({ isOpen, onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<"prompt" | "ajustes">("prompt");
+  const { toast, showError } = useToast();
 
   useEffect(() => {
     if (!isOpen) return;
@@ -94,7 +97,7 @@ export function IGConfigModal({ isOpen, onClose }: Props) {
       .eq("ig_account_id", config.ig_account_id);
     setSaving(false);
     if (error) {
-      alert("Error al guardar: " + error.message);
+      showError("Error al guardar: " + error.message);
       return;
     }
     onClose();
@@ -103,6 +106,8 @@ export function IGConfigModal({ isOpen, onClose }: Props) {
   if (!isOpen) return null;
 
   return (
+    <>
+    {toast && <ToastComponent toast={toast} />}
     <Modal
       isOpen={isOpen}
       onClose={onClose}
@@ -262,5 +267,6 @@ export function IGConfigModal({ isOpen, onClose }: Props) {
         </div>
       )}
     </Modal>
+    </>
   );
 }

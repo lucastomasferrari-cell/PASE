@@ -1081,6 +1081,8 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
           await ejecutarEditMov(em, codigo);
         }}
       />
+
+      <ToastComponent toast={toast} />
     </div>
   );
 }
