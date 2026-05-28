@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { db } from "../lib/supabase";
-import { PageHeader, EmptyState, LocalLockedChip, LocalSelectorObligatorio, ShopIcon, CalendarIcon } from "../components/ui";
+import { Modal, PageHeader, EmptyState, LocalLockedChip, LocalSelectorObligatorio, ShopIcon, CalendarIcon } from "../components/ui";
 import { toISO, today, fmt_d } from "../lib/utils";
 import type { Usuario, Local } from "../types";
 
@@ -300,73 +300,74 @@ function ReservaModal({ modal, tenantId, localId, fechaDefault, createdBy, onClo
     onSaved();
   }
 
+  // AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido.
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="modal" style={{ width: 560 }} onClick={e => e.stopPropagation()}>
-        <div className="modal-hd">
-          <div className="modal-title">{editing ? "Editar reserva" : "Nueva reserva"}</div>
-          <button className="close-btn" onClick={onClose}>✕</button>
-        </div>
-        <div className="modal-body">
-          {err && <div className="alert alert-danger">{err}</div>}
-
-          <div className="form2">
-            <div className="field"><label>Fecha *</label>
-              <input type="date" value={form.fecha} onChange={e => setForm({ ...form, fecha: e.target.value })} />
-            </div>
-            <div className="field"><label>Hora <span style={{ color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-xs)" }}>(vacío = lista de espera)</span></label>
-              <input type="time" value={form.hora_inicio} onChange={e => setForm({ ...form, hora_inicio: e.target.value })} />
-            </div>
-          </div>
-
-          <div className="form2">
-            <div className="field"><label>Cliente *</label>
-              <input value={form.cliente_nombre} onChange={e => setForm({ ...form, cliente_nombre: e.target.value })} placeholder="Nombre y apellido" />
-            </div>
-            <div className="field"><label>Teléfono</label>
-              <input value={form.cliente_telefono} onChange={e => setForm({ ...form, cliente_telefono: e.target.value })} placeholder="11 1234-5678" />
-            </div>
-          </div>
-
-          <div className="form2">
-            <div className="field"><label>Email (opcional)</label>
-              <input type="email" value={form.cliente_email} onChange={e => setForm({ ...form, cliente_email: e.target.value })} />
-            </div>
-            <div className="field"><label>Cubiertos *</label>
-              <input type="number" min={1} max={50} value={form.covers} onChange={e => setForm({ ...form, covers: parseInt(e.target.value) || 1 })} />
-            </div>
-          </div>
-
-          <div className="form2">
-            <div className="field"><label>Origen</label>
-              <select value={form.origen} onChange={e => setForm({ ...form, origen: e.target.value })}>
-                <option value="manual">Teléfono / Manual</option>
-                <option value="whatsapp">WhatsApp</option>
-                <option value="instagram">Instagram</option>
-                <option value="web_publica">Web pública</option>
-                <option value="otro">Otro</option>
-              </select>
-            </div>
-            <div className="field"><label>Duración estimada (min)</label>
-              <input type="number" min={30} max={300} step={15} value={form.duracion_min} onChange={e => setForm({ ...form, duracion_min: parseInt(e.target.value) || 90 })} />
-            </div>
-          </div>
-
-          <div className="field"><label>Mesa asignada (opcional)</label>
-            <input value={form.mesa_asignada} onChange={e => setForm({ ...form, mesa_asignada: e.target.value })} placeholder="ej. Mesa 4 o Ventana" />
-          </div>
-
-          <div className="field"><label>Notas (alergias, cumpleaños, preferencias)</label>
-            <input value={form.notas} onChange={e => setForm({ ...form, notas: e.target.value })} placeholder="ej. cumpleaños cliente, alérgico al maní" maxLength={500} />
-          </div>
-        </div>
-        <div className="modal-ft">
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title={editing ? "Editar reserva" : "Nueva reserva"}
+      maxWidth={560}
+      preventCloseOnOverlay={saving}
+      footer={
+        <>
           <button className="btn btn-sec" onClick={onClose}>Cancelar</button>
           <button className="btn btn-acc" onClick={guardar} disabled={saving || !form.cliente_nombre.trim()}>
             {saving ? "Guardando…" : editing ? "Guardar cambios" : "Crear reserva"}
           </button>
+        </>
+      }
+    >
+      {err && <div className="alert alert-danger">{err}</div>}
+
+      <div className="form2">
+        <div className="field"><label>Fecha *</label>
+          <input type="date" value={form.fecha} onChange={e => setForm({ ...form, fecha: e.target.value })} />
+        </div>
+        <div className="field"><label>Hora <span style={{ color: "var(--pase-text-muted)", fontSize: "var(--pase-fs-xs)" }}>(vacío = lista de espera)</span></label>
+          <input type="time" value={form.hora_inicio} onChange={e => setForm({ ...form, hora_inicio: e.target.value })} />
         </div>
       </div>
-    </div>
+
+      <div className="form2">
+        <div className="field"><label>Cliente *</label>
+          <input value={form.cliente_nombre} onChange={e => setForm({ ...form, cliente_nombre: e.target.value })} placeholder="Nombre y apellido" />
+        </div>
+        <div className="field"><label>Teléfono</label>
+          <input value={form.cliente_telefono} onChange={e => setForm({ ...form, cliente_telefono: e.target.value })} placeholder="11 1234-5678" />
+        </div>
+      </div>
+
+      <div className="form2">
+        <div className="field"><label>Email (opcional)</label>
+          <input type="email" value={form.cliente_email} onChange={e => setForm({ ...form, cliente_email: e.target.value })} />
+        </div>
+        <div className="field"><label>Cubiertos *</label>
+          <input type="number" min={1} max={50} value={form.covers} onChange={e => setForm({ ...form, covers: parseInt(e.target.value) || 1 })} />
+        </div>
+      </div>
+
+      <div className="form2">
+        <div className="field"><label>Origen</label>
+          <select value={form.origen} onChange={e => setForm({ ...form, origen: e.target.value })}>
+            <option value="manual">Teléfono / Manual</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="instagram">Instagram</option>
+            <option value="web_publica">Web pública</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div className="field"><label>Duración estimada (min)</label>
+          <input type="number" min={30} max={300} step={15} value={form.duracion_min} onChange={e => setForm({ ...form, duracion_min: parseInt(e.target.value) || 90 })} />
+        </div>
+      </div>
+
+      <div className="field"><label>Mesa asignada (opcional)</label>
+        <input value={form.mesa_asignada} onChange={e => setForm({ ...form, mesa_asignada: e.target.value })} placeholder="ej. Mesa 4 o Ventana" />
+      </div>
+
+      <div className="field"><label>Notas (alergias, cumpleaños, preferencias)</label>
+        <input value={form.notas} onChange={e => setForm({ ...form, notas: e.target.value })} placeholder="ej. cumpleaños cliente, alérgico al maní" maxLength={500} />
+      </div>
+    </Modal>
   );
 }

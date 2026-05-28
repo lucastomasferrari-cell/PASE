@@ -19,6 +19,7 @@ import { MODULOS, PERMISOS_EXTRAS, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
+import { Modal } from "../components/ui";
 import type { Usuario } from "../types";
 
 interface Rol {
@@ -338,76 +339,17 @@ function ModalEditarRol({ rol, onClose, onSaved, onDeleted }: { rol: RolConPermi
     }
   }
 
+  // AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido (focus trap + ESC + body-lock).
+  const titulo = rol ? `${esSistema ? "Ver" : "Editar"} rol: ${rol.nombre}` : "Nuevo rol custom";
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="modal" style={{width:680,maxHeight:"90vh",display:"flex",flexDirection:"column"}} onClick={e => e.stopPropagation()}>
-        <div className="modal-hd">
-          <div className="modal-title">
-            {rol ? `${esSistema ? "Ver" : "Editar"} rol: ${rol.nombre}` : "Nuevo rol custom"}
-            {esSistema && <span className="badge b-info" style={{fontSize:8,marginLeft:8}}>Sistema</span>}
-          </div>
-          <button className="close-btn" onClick={onClose}>✕</button>
-        </div>
-        <div className="modal-body" style={{flex:1,overflowY:"auto"}}>
-          {esSistema && (
-            <div className="alert alert-info" style={{marginBottom:12,fontSize:11}}>
-              Los roles del sistema vienen pre-cargados y no se editan desde acá.
-              Si necesitás un set distinto, creá un rol custom (botón en la pantalla anterior).
-            </div>
-          )}
-          <div className="field" style={{marginBottom:12}}>
-            <label>Nombre</label>
-            <input value={nombre} onChange={e => setNombre(e.target.value)} disabled={!editable}
-              placeholder="Ej: Encargado con anular ventas" />
-          </div>
-          <div className="field" style={{marginBottom:18}}>
-            <label>Descripción (opcional)</label>
-            <input value={descripcion} onChange={e => setDescripcion(e.target.value)} disabled={!editable}
-              placeholder="Para qué sirve este rol" />
-          </div>
-
-          <div style={{fontSize:11,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>
-            Permisos ({permisos.size} marcados)
-          </div>
-
-          {CATEGORIAS_PERMISOS.map(cat => (
-            <div key={cat.titulo} style={{marginBottom:14,padding:10,background:"var(--s2)",borderRadius:"var(--r)"}}>
-              <div style={{fontSize:11,fontWeight:500,marginBottom:6,color:"var(--txt)"}}>{cat.titulo}</div>
-              {cat.perms.map(p => (
-                <label key={p.slug} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"4px 0",cursor:editable?"pointer":"default"}}>
-                  <input type="checkbox" checked={permisos.has(p.slug)}
-                    onChange={() => toggle(p.slug)} disabled={!editable}
-                    style={{marginTop:2}} />
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:12}}>{p.label}</div>
-                    {p.descripcion && (
-                      <div style={{fontSize:10,color:"var(--muted2)",marginTop:1,lineHeight:1.3}}>{p.descripcion}</div>
-                    )}
-                  </div>
-                </label>
-              ))}
-            </div>
-          ))}
-
-          {permisosHuerfanos.length > 0 && (
-            <div style={{marginBottom:14,padding:10,background:"var(--s2)",borderRadius:"var(--r)"}}>
-              <div style={{fontSize:11,fontWeight:500,marginBottom:6,color:"var(--warn)"}}>
-                Otros permisos legacy
-              </div>
-              <div style={{fontSize:10,color:"var(--muted2)",marginBottom:6}}>
-                Permisos que este rol tiene pero no están categorizados. Si los borrás se pierden.
-              </div>
-              {permisosHuerfanos.map(slug => (
-                <label key={slug} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0"}}>
-                  <input type="checkbox" checked={permisos.has(slug)}
-                    onChange={() => toggle(slug)} disabled={!editable} />
-                  <code style={{fontSize:11}}>{slug}</code>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="modal-ft" style={{display:"flex",gap:8,justifyContent:"space-between"}}>
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title={titulo}
+      maxWidth={680}
+      preventCloseOnOverlay={guardando}
+      footer={
+        <div style={{display:"flex",gap:8,justifyContent:"space-between",width:"100%"}}>
           <div>
             {rol && !esSistema && (
               <button className="btn btn-danger" onClick={eliminar}>Eliminar rol</button>
@@ -422,7 +364,65 @@ function ModalEditarRol({ rol, onClose, onSaved, onDeleted }: { rol: RolConPermi
             )}
           </div>
         </div>
+      }
+    >
+      {esSistema && (
+        <div className="alert alert-info" style={{marginBottom:12,fontSize:11}}>
+          Los roles del sistema vienen pre-cargados y no se editan desde acá.
+          Si necesitás un set distinto, creá un rol custom (botón en la pantalla anterior).
+        </div>
+      )}
+      <div className="field" style={{marginBottom:12}}>
+        <label>Nombre</label>
+        <input value={nombre} onChange={e => setNombre(e.target.value)} disabled={!editable}
+          placeholder="Ej: Encargado con anular ventas" />
       </div>
-    </div>
+      <div className="field" style={{marginBottom:18}}>
+        <label>Descripción (opcional)</label>
+        <input value={descripcion} onChange={e => setDescripcion(e.target.value)} disabled={!editable}
+          placeholder="Para qué sirve este rol" />
+      </div>
+
+      <div style={{fontSize:11,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>
+        Permisos ({permisos.size} marcados)
+      </div>
+
+      {CATEGORIAS_PERMISOS.map(cat => (
+        <div key={cat.titulo} style={{marginBottom:14,padding:10,background:"var(--s2)",borderRadius:"var(--r)"}}>
+          <div style={{fontSize:11,fontWeight:500,marginBottom:6,color:"var(--txt)"}}>{cat.titulo}</div>
+          {cat.perms.map(p => (
+            <label key={p.slug} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"4px 0",cursor:editable?"pointer":"default"}}>
+              <input type="checkbox" checked={permisos.has(p.slug)}
+                onChange={() => toggle(p.slug)} disabled={!editable}
+                style={{marginTop:2}} />
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12}}>{p.label}</div>
+                {p.descripcion && (
+                  <div style={{fontSize:10,color:"var(--muted2)",marginTop:1,lineHeight:1.3}}>{p.descripcion}</div>
+                )}
+              </div>
+            </label>
+          ))}
+        </div>
+      ))}
+
+      {permisosHuerfanos.length > 0 && (
+        <div style={{marginBottom:14,padding:10,background:"var(--s2)",borderRadius:"var(--r)"}}>
+          <div style={{fontSize:11,fontWeight:500,marginBottom:6,color:"var(--warn)"}}>
+            Otros permisos legacy
+          </div>
+          <div style={{fontSize:10,color:"var(--muted2)",marginBottom:6}}>
+            Permisos que este rol tiene pero no están categorizados. Si los borrás se pierden.
+          </div>
+          {permisosHuerfanos.map(slug => (
+            <label key={slug} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0"}}>
+              <input type="checkbox" checked={permisos.has(slug)}
+                onChange={() => toggle(slug)} disabled={!editable} />
+              <code style={{fontSize:11}}>{slug}</code>
+            </label>
+          ))}
+        </div>
+      )}
+    </Modal>
   );
 }
