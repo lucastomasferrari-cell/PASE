@@ -74,3 +74,14 @@ INSERT INTO ig_config (
 ```
 
 (Después armamos una UI en PASE para esto — sprint D)
+
+## CORS — nota de auditoría F6A#3
+
+`vercel.json` NO tiene el header CORS `*` global (eliminado en audit F6A#3, 27-may-2026).
+
+Racional: el bot solo recibe webhooks de Meta (no necesita CORS) y crons (tampoco).
+Los endpoints que sí pueden ser invocados desde browser (`api/send.js`, etc.) usan
+`_lib/cors.js` con allow-list explícita: `pase-yndx.vercel.app` y `admin-console`.
+
+Si necesitás agregar un dominio que pegue al bot desde browser, editá `_lib/cors.js` —
+NO restaurar el `*` global en vercel.json.
