@@ -25,6 +25,7 @@ import {
   createE2EDuenoClient,
   type E2ETenantSeedResult,
 } from "../setup/seed-tenant";
+import { loadSharedSeed } from "../setup/shared-seed";
 
 const SENTINEL = `T33_${Date.now()}`;
 

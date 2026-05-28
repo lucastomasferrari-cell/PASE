@@ -44,6 +44,7 @@ import {
   E2E_SENTINEL,
   type E2ETenantSeedResult,
 } from "../setup/seed-tenant";
+import { loadSharedSeed } from "../setup/shared-seed";
 import {
   seedComandaPos,
   type E2EComandaPosSeed,

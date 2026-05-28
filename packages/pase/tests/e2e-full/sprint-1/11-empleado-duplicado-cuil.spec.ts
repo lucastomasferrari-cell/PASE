@@ -11,6 +11,7 @@ import {
   type E2ETenantSeedResult,
   E2E_SENTINEL,
 } from "../setup/seed-tenant";
+import { loadSharedSeed } from "../setup/shared-seed";
 
 test.describe.serial("E2E Sprint 2 — Prevenir empleado duplicado CUIL", () => {
   let seed: E2ETenantSeedResult | null = null;

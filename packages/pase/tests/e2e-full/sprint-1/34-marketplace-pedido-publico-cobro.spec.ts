@@ -34,6 +34,7 @@ import {
   createE2EDuenoClient,
   type E2ETenantSeedResult,
 } from "../setup/seed-tenant";
+import { loadSharedSeed } from "../setup/shared-seed";
 
 const SENTINEL = `T34_${Date.now()}`;
 const SLUG_MARKETPLACE = `e2e-mkt-${Date.now()}`;

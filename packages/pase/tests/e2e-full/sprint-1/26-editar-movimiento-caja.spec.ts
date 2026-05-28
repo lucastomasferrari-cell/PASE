@@ -24,6 +24,7 @@ import {
   createE2EDuenoClient,
   type E2ETenantSeedResult,
 } from "../setup/seed-tenant";
+import { loadSharedSeed } from "../setup/shared-seed";
 
 test.describe.serial("E2E Test 26 — editar_movimiento_caja", () => {
   let seed: E2ETenantSeedResult | null = null;

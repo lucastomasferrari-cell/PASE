@@ -27,6 +27,7 @@ import {
   createE2EDuenoClient,
   type E2ETenantSeedResult,
 } from "../setup/seed-tenant";
+import { loadSharedSeed } from "../setup/shared-seed";
 
 test.describe.serial("E2E Test 30 — marcar_tarea_completada", () => {
   let seed: E2ETenantSeedResult | null = null;

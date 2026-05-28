@@ -21,6 +21,7 @@ import {
   createE2EDuenoClient,
   type E2ETenantSeedResult,
 } from "../setup/seed-tenant";
+import { loadSharedSeed } from "../setup/shared-seed";
 
 test.describe.serial("E2E Sprint 2 — Transferencia entre cuentas", () => {
   let seed: E2ETenantSeedResult | null = null;

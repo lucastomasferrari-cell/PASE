@@ -29,6 +29,7 @@ import {
   type E2ETenantSeedResult,
   E2E_DUENO_EMAIL,
 } from "../setup/seed-tenant";
+import { loadSharedSeed } from "../setup/shared-seed";
 
 test.describe.serial("E2E Test 31 — Sprint COMANDA Autónomo", () => {
   let seed: E2ETenantSeedResult | null = null;

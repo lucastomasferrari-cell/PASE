@@ -11,6 +11,7 @@ import {
   createE2EDuenoClient,
   type E2ETenantSeedResult,
 } from "../setup/seed-tenant";
+import { loadSharedSeed } from "../setup/shared-seed";
 
 test.describe.serial("E2E Sprint 2 — Anular factura con reverso", () => {
   let seed: E2ETenantSeedResult | null = null;

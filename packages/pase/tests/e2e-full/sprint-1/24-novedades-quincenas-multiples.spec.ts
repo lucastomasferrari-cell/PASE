@@ -15,6 +15,7 @@ import {
   createServiceClient,
   type E2ETenantSeedResult,
 } from "../setup/seed-tenant";
+import { loadSharedSeed } from "../setup/shared-seed";
 
 test.describe.serial("E2E Test 24 — Quincenas múltiples", () => {
   let seed: E2ETenantSeedResult | null = null;

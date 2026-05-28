@@ -10,6 +10,7 @@ import {
   createE2EDuenoClient,
   type E2ETenantSeedResult,
 } from "../setup/seed-tenant";
+import { loadSharedSeed } from "../setup/shared-seed";
 
 test.describe.serial("E2E Test 17 — Crear ticket soporte", () => {
   let seed: E2ETenantSeedResult | null = null;

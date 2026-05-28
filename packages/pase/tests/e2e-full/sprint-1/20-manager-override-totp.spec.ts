@@ -10,6 +10,7 @@ import {
   createE2EDuenoClient,
   type E2ETenantSeedResult,
 } from "../setup/seed-tenant";
+import { loadSharedSeed } from "../setup/shared-seed";
 import {
   currentTotpCode,
 } from "../helpers/totp";

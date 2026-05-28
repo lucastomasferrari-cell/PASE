@@ -36,6 +36,7 @@ import {
   createServiceClient,
   type E2ETenantSeedResult,
 } from "../setup/seed-tenant";
+import { loadSharedSeed } from "../setup/shared-seed";
 
 test.describe.serial("E2E Test 25 — Trigger sync saldos_caja", () => {
   let seed: E2ETenantSeedResult | null = null;

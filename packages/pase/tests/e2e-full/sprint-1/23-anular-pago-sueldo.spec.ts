@@ -20,6 +20,7 @@ import {
   createE2EDuenoClient,
   type E2ETenantSeedResult,
 } from "../setup/seed-tenant";
+import { loadSharedSeed } from "../setup/shared-seed";
 
 test.describe.serial("E2E Test 23 — Anular pago de sueldo", () => {
   let seed: E2ETenantSeedResult | null = null;
