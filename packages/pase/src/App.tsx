@@ -35,6 +35,10 @@ const RolesPermisos = lazy(() => import("./pages/RolesPermisos"));
 const Blindaje = lazy(() => import("./pages/herramientas/Blindaje"));
 const ConciliacionBancaria = lazy(() => import("./pages/ConciliacionBancaria").then(m => ({ default: m.ConciliacionBancaria })));
 const RRHHPage = lazy(() => import("./pages/RRHH"));
+// V2 — rediseño en paralelo (Strangler Fig). Solo accesible vía URL directa
+// /v2/equipo. NO está en el sidebar. El sistema viejo /equipo queda intacto.
+// Spec: docs/superpowers/specs/2026-05-28-rrhh-rediseno-design.md
+const EquipoV2 = lazy(() => import("./pages/v2/EquipoV2"));
 const Tenants = lazy(() => import("./pages/Tenants"));
 const DesignSystem = lazy(() => import("./pages/DesignSystem"));
 const Finanzas = lazy(() => import("./pages/Finanzas"));
@@ -524,6 +528,12 @@ function AppMain() {
 
               {/* Herramientas */}
               <Route path="/equipo" element={<RRHHPage {...props}/>} />
+
+              {/* === V2 — Pantallas del rediseño en paralelo ===
+                  Strangler Fig: ruta /v2/* coexiste con el sistema viejo
+                  durante la migración. Sin entry en sidebar — acceso
+                  por URL directa. */}
+              <Route path="/v2/equipo" element={<EquipoV2 />} />
               <Route path="/mensajeria" element={
                 user ? <MensajeriaIG user={user} /> : <Navigate to="/" replace/>
               } />

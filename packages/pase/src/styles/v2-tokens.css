@@ -1,0 +1,191 @@
+/* PASE V2 — Design tokens del rediseño (2026-05-28)
+ * ────────────────────────────────────────────────────────────
+ *
+ * REGLAS DURAS NO NEGOCIABLES:
+ *
+ * 1. PALETA ÚNICA: celeste + dorado + blanco + grises. NADA más.
+ *    Excepción: rojo único (#B85450) SOLO para errores bloqueantes reales.
+ *
+ * 2. CERO EMOJIS DECORATIVOS. Solo iconos SVG line (Lucide).
+ *
+ * 3. MAPEO FUNCIÓN → COLOR:
+ *    - Celeste: links, item activo, info, hover, badges informativos
+ *    - Dorado: KPI clave, plata destacada, CTA premium, alertas suaves
+ *    - Rojo único: errores bloqueantes reales (sin AFIP, conexión perdida)
+ *    - Blanco: texto principal (dark) / superficies (light)
+ *    - Grises: texto secundario, borders, backgrounds
+ *
+ * 4. ESTADOS SIN COLORES EXTRA:
+ *    - OK / completo → texto blanco + ✓ celeste
+ *    - Pendiente / atención suave → texto gris o dorado punto
+ *    - Error bloqueante → texto rojo único
+ *
+ * Usar prefijo --v2- para distinguir del sistema viejo (tokens.css).
+ * Coexisten durante la migration. Pantallas nuevas usan v2-, viejas usan
+ * los originales hasta que se migren.
+ * ────────────────────────────────────────────────────────────
+ */
+
+:root {
+  /* === PALETA ÚNICA AUTORIZADA === */
+
+  /* Celeste (bandera argentina) — primario */
+  --v2-celeste:       #6EB5FF;
+  --v2-celeste-deep:  #4A8FE0;
+  --v2-celeste-dim:   rgba(110, 181, 255, 0.08);   /* fondo sutil item activo */
+  --v2-celeste-glow:  rgba(110, 181, 255, 0.15);   /* hover, ring focus */
+  --v2-celeste-bg:    rgba(110, 181, 255, 0.04);   /* tinte muy sutil */
+
+  /* Dorado — destacado / valor */
+  --v2-dorado:        #D4AF37;
+  --v2-dorado-deep:   #B8941F;
+  --v2-dorado-dim:    rgba(212, 175, 55, 0.12);    /* fondo de chip "atención" */
+  --v2-dorado-glow:   rgba(212, 175, 55, 0.20);    /* hover */
+
+  /* Rojo único — SOLO errores reales bloqueantes */
+  --v2-rojo:          #B85450;
+  --v2-rojo-dim:      rgba(184, 84, 80, 0.12);
+
+  /* Backgrounds dark mode */
+  --v2-bg:            #0A0E14;     /* base */
+  --v2-bg-2:          #0F141C;     /* paneles, sidebar */
+  --v2-bg-3:          #161C26;     /* cards elevadas */
+  --v2-bg-4:          #1C2330;     /* hover sobre bg-3 */
+
+  /* Borders dark */
+  --v2-border:        #1F2937;
+  --v2-border-strong: #2A3441;
+  --v2-border-focus:  var(--v2-celeste);
+
+  /* Texto dark */
+  --v2-text:          #E2E8F0;     /* primario */
+  --v2-text-strong:   #FFFFFF;     /* énfasis fuerte (títulos) */
+  --v2-text-muted:    #94A3B8;     /* secundario */
+  --v2-text-subtle:   #64748B;     /* terciario, hints */
+  --v2-text-disabled: #475569;     /* deshabilitado */
+
+  /* === TIPOGRAFÍA === */
+
+  /* Body — Inter (multi-weight, performante) */
+  --v2-font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+
+  /* Display — Inter con tracking más cerrado para títulos grandes */
+  --v2-font-display: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+
+  /* Mono — JetBrains Mono para números y montos */
+  --v2-font-mono: 'JetBrains Mono', 'SF Mono', Consolas, 'Liberation Mono', monospace;
+
+  /* Escala tipográfica */
+  --v2-fs-xs:    11px;    /* labels, captions, microcopy */
+  --v2-fs-sm:    12px;    /* body chico, table cells densas */
+  --v2-fs-base:  13px;    /* body default */
+  --v2-fs-md:    14px;    /* énfasis sutil */
+  --v2-fs-lg:    16px;    /* subtítulos */
+  --v2-fs-xl:    20px;    /* títulos de página */
+  --v2-fs-2xl:   24px;    /* hero numerics */
+  --v2-fs-3xl:   32px;    /* KPI grandes */
+  --v2-fs-4xl:   40px;    /* KPI hero */
+
+  /* Pesos */
+  --v2-fw-regular:  400;
+  --v2-fw-medium:   500;
+  --v2-fw-semibold: 600;
+  --v2-fw-bold:     700;
+  --v2-fw-black:    800;
+
+  /* Line heights */
+  --v2-lh-tight:   1.2;
+  --v2-lh-normal:  1.5;
+  --v2-lh-relaxed: 1.7;
+
+  /* Letter spacing */
+  --v2-tracking-tight:  -0.4px;   /* títulos grandes */
+  --v2-tracking-normal:  0;
+  --v2-tracking-wide:    0.5px;   /* eyebrows / labels uppercase */
+  --v2-tracking-wider:   1px;     /* nav section labels */
+
+  /* === ESPACIADO (escala 4) === */
+  --v2-space-1:  4px;
+  --v2-space-2:  8px;
+  --v2-space-3:  12px;
+  --v2-space-4:  16px;
+  --v2-space-5:  20px;
+  --v2-space-6:  24px;
+  --v2-space-8:  32px;
+  --v2-space-10: 40px;
+  --v2-space-12: 48px;
+  --v2-space-16: 64px;
+
+  /* === RADIUS === */
+  --v2-radius-xs: 4px;     /* chips chicos, tags */
+  --v2-radius-sm: 6px;     /* buttons, inputs */
+  --v2-radius-md: 10px;    /* cards, modales */
+  --v2-radius-lg: 14px;    /* hero cards, panels grandes */
+  --v2-radius-pill: 9999px; /* badges */
+
+  /* === SOMBRAS (dark mode = casi sin sombras, light mode si fuera) === */
+  --v2-shadow-none: none;
+  --v2-shadow-ring: 0 0 0 3px var(--v2-celeste-glow);  /* focus ring */
+  --v2-shadow-card-light: 0 1px 3px rgba(0, 0, 0, 0.04);  /* light mode futuro */
+  --v2-shadow-hover-light: 0 4px 12px rgba(0, 0, 0, 0.08);
+
+  /* === TRANSICIONES === */
+  --v2-tr-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --v2-tr-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --v2-tr-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* === Z-INDEX === */
+  --v2-z-dropdown: 100;
+  --v2-z-sticky: 200;
+  --v2-z-overlay: 1000;
+  --v2-z-modal: 1100;
+  --v2-z-toast: 1200;
+}
+
+/* ────────────────────────────────────────────────────────────
+   UTILIDADES BASE V2 — aplicables con className="v2-*"
+   ──────────────────────────────────────────────────────────── */
+
+.v2 {
+  font-family: var(--v2-font-body);
+  font-size: var(--v2-fs-base);
+  color: var(--v2-text);
+  background: var(--v2-bg);
+  line-height: var(--v2-lh-normal);
+}
+
+.v2-mono { font-family: var(--v2-font-mono); font-variant-numeric: tabular-nums; }
+
+/* Headings */
+.v2-h1 {
+  font-size: var(--v2-fs-xl);
+  font-weight: var(--v2-fw-bold);
+  letter-spacing: var(--v2-tracking-tight);
+  color: var(--v2-text-strong);
+  line-height: var(--v2-lh-tight);
+}
+.v2-h2 {
+  font-size: var(--v2-fs-lg);
+  font-weight: var(--v2-fw-semibold);
+  color: var(--v2-text-strong);
+}
+
+/* Eyebrow / overline / label uppercase */
+.v2-eyebrow {
+  font-size: var(--v2-fs-xs);
+  font-weight: var(--v2-fw-semibold);
+  letter-spacing: var(--v2-tracking-wider);
+  text-transform: uppercase;
+  color: var(--v2-text-muted);
+}
+
+/* Text utilities */
+.v2-text-muted { color: var(--v2-text-muted); }
+.v2-text-subtle { color: var(--v2-text-subtle); }
+.v2-text-gold { color: var(--v2-dorado); }
+.v2-text-celeste { color: var(--v2-celeste); }
+.v2-text-error { color: var(--v2-rojo); }
+
+/* Surfaces */
+.v2-surface { background: var(--v2-bg-2); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-md); }
+.v2-surface-elevated { background: var(--v2-bg-3); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-md); }
