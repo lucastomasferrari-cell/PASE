@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import { Modal } from "../../components/ui";
 import type { Usuario, Local } from "../../types";
 
 // Lazy: LectorFacturasIA (~550 LOC) solo se carga cuando se abre el modal.
@@ -19,20 +20,19 @@ interface ModalLectorIAProps {
 // Wrapper de modal sobre LectorFacturasIA. Cierra solo con X o ESC,
 // no con click en backdrop (para no perder la factura subida).
 export function ModalLectorIA({ abierto, user, locales, localActivo, onClose, onSaved }: ModalLectorIAProps) {
-  if (!abierto) return null;
+  /* AUDIT F4B#1 / sprint #5: migrado a <Modal>. preventCloseOnOverlay siempre
+     activo — no cerramos con backdrop para no perder la factura subida. */
   return (
-    <div className="overlay">
-      <div className="modal" style={{ width: 720 }}>
-        <div className="modal-hd">
-          <div className="modal-title">Lector Facturas IA</div>
-          <button className="close-btn" onClick={onClose}>✕</button>
-        </div>
-        <div className="modal-body">
-          <Suspense fallback={<div style={{padding:24,color:"var(--muted)"}}>Cargando lector IA…</div>}>
-            <LectorFacturasIA user={user} locales={locales} localActivo={localActivo} onSaved={onSaved} />
-          </Suspense>
-        </div>
-      </div>
-    </div>
+    <Modal
+      isOpen={abierto}
+      onClose={onClose}
+      title="Lector Facturas IA"
+      maxWidth={720}
+      preventCloseOnOverlay
+    >
+      <Suspense fallback={<div style={{padding:24,color:"var(--muted)"}}>Cargando lector IA…</div>}>
+        <LectorFacturasIA user={user} locales={locales} localActivo={localActivo} onSaved={onSaved} />
+      </Suspense>
+    </Modal>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { CurrencyInput } from "../../components/CurrencyInput";
 import { Combobox } from "../../components/Combobox";
-import { LocalLockedChip, LocalSelectorObligatorio } from "../../components/ui";
+import { LocalLockedChip, LocalSelectorObligatorio, Modal } from "../../components/ui";
 import { fmt_$ } from "../../lib/utils";
 import { UNIDADES } from "../../lib/constants";
 import { db } from "../../lib/supabase";
@@ -143,11 +143,16 @@ export function ModalCargarFactura({
     }
     guardar();
   }
+  /* AUDIT F4B#1 / sprint #5: migrado a <Modal>. */
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="modal" style={{ width: 680 }} onClick={e => e.stopPropagation()}>
-        <div className="modal-hd"><div className="modal-title">{form.tipo === "nota_credito" ? "Cargar Nota de Crédito" : "Cargar Factura"}</div><button className="close-btn" onClick={onClose}>✕</button></div>
-        <div className="modal-body">
+    <Modal
+      isOpen={abierto}
+      onClose={onClose}
+      title={form.tipo === "nota_credito" ? "Cargar Nota de Crédito" : "Cargar Factura"}
+      maxWidth={680}
+      preventCloseOnOverlay={saving}
+      footer={<><button className="btn btn-sec" onClick={onClose}>Cancelar</button><button className="btn btn-acc" onClick={guardarConConfirmacion} disabled={saving || !form.local_id}>{saving ? "Guardando..." : "Guardar"}</button></>}
+    >
           <div className="form2">
             <div className="field"><label>Tipo de comprobante</label><select value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })}><option value="factura">Factura</option><option value="nota_credito">Nota de Crédito</option></select></div>
             <div className="field"><label>Local *</label>
@@ -281,9 +286,6 @@ export function ModalCargarFactura({
               </div>
             )}
           </div>
-        </div>
-        <div className="modal-ft"><button className="btn btn-sec" onClick={onClose}>Cancelar</button><button className="btn btn-acc" onClick={guardarConConfirmacion} disabled={saving || !form.local_id}>{saving ? "Guardando..." : "Guardar"}</button></div>
-      </div>
-    </div>
+    </Modal>
   );
 }
