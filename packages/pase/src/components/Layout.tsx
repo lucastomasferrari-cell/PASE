@@ -115,12 +115,13 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
           <div className="brand">
             pase<span className="brand-dot">.</span>
             <span style={{
-              fontSize: '11px',
+              fontSize: '10px',
               fontWeight: 700,
-              background: 'linear-gradient(135deg, #a78bfa, #60a5fa)',
-              color: '#0a0e14',
-              padding: '3px 8px',
-              borderRadius: '6px',
+              background: 'rgba(110, 181, 255, 0.12)',
+              color: '#6EB5FF',
+              border: '1px solid rgba(110, 181, 255, 0.30)',
+              padding: '2px 7px',
+              borderRadius: '4px',
               marginLeft: '8px',
               verticalAlign: 'middle',
               letterSpacing: '0.5px',

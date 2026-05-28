@@ -35,10 +35,21 @@ const RolesPermisos = lazy(() => import("./pages/RolesPermisos"));
 const Blindaje = lazy(() => import("./pages/herramientas/Blindaje"));
 const ConciliacionBancaria = lazy(() => import("./pages/ConciliacionBancaria").then(m => ({ default: m.ConciliacionBancaria })));
 const RRHHPage = lazy(() => import("./pages/RRHH"));
-// V2 — rediseño en paralelo (Strangler Fig). Solo accesible vía URL directa
-// /v2/equipo. NO está en el sidebar. El sistema viejo /equipo queda intacto.
-// Spec: docs/superpowers/specs/2026-05-28-rrhh-rediseno-design.md
+// V2 — rediseño en paralelo (Strangler Fig). Accesible vía URL /v2/*.
+// LayoutV2 envuelve todas las pantallas y trae su propio sidebar con
+// paleta argentina (celeste + dorado + blanco). El sistema viejo queda
+// intacto en sus rutas originales.
+// Specs: docs/superpowers/specs/2026-05-28-*.md
+const LayoutV2 = lazy(() => import("./components/v2/LayoutV2").then(m => ({ default: m.LayoutV2 })));
+const InicioV2 = lazy(() => import("./pages/v2/InicioV2"));
+const CajaV2 = lazy(() => import("./pages/v2/CajaV2"));
+const VentasV2 = lazy(() => import("./pages/v2/VentasV2"));
+const GastosV2 = lazy(() => import("./pages/v2/GastosV2"));
+const ComprasV2 = lazy(() => import("./pages/v2/ComprasV2"));
 const EquipoV2 = lazy(() => import("./pages/v2/EquipoV2"));
+const StockV2 = lazy(() => import("./pages/v2/StockV2"));
+const FinanzasV2 = lazy(() => import("./pages/v2/FinanzasV2"));
+const ReportesV2 = lazy(() => import("./pages/v2/ReportesV2"));
 const Tenants = lazy(() => import("./pages/Tenants"));
 const DesignSystem = lazy(() => import("./pages/DesignSystem"));
 const Finanzas = lazy(() => import("./pages/Finanzas"));
@@ -530,10 +541,55 @@ function AppMain() {
               <Route path="/equipo" element={<RRHHPage {...props}/>} />
 
               {/* === V2 — Pantallas del rediseño en paralelo ===
-                  Strangler Fig: ruta /v2/* coexiste con el sistema viejo
-                  durante la migración. Sin entry en sidebar — acceso
-                  por URL directa. */}
-              <Route path="/v2/equipo" element={<EquipoV2 />} />
+                  Strangler Fig: rutas /v2/* envueltas en LayoutV2 (sidebar
+                  propio + paleta argentina). El sistema viejo coexiste en
+                  sus rutas originales durante la migración. */}
+              <Route path="/v2" element={<Navigate to="/v2/inicio" replace />} />
+              <Route path="/v2/inicio" element={
+                <LayoutV2 locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo} tenant={tenant} onLogout={logout}>
+                  <InicioV2 localActivo={localActivo} />
+                </LayoutV2>
+              } />
+              <Route path="/v2/caja" element={
+                <LayoutV2 locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo} tenant={tenant} onLogout={logout}>
+                  <CajaV2 localActivo={localActivo} />
+                </LayoutV2>
+              } />
+              <Route path="/v2/ventas" element={
+                <LayoutV2 locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo} tenant={tenant} onLogout={logout}>
+                  <VentasV2 localActivo={localActivo} />
+                </LayoutV2>
+              } />
+              <Route path="/v2/gastos" element={
+                <LayoutV2 locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo} tenant={tenant} onLogout={logout}>
+                  <GastosV2 localActivo={localActivo} />
+                </LayoutV2>
+              } />
+              <Route path="/v2/compras" element={
+                <LayoutV2 locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo} tenant={tenant} onLogout={logout}>
+                  <ComprasV2 localActivo={localActivo} />
+                </LayoutV2>
+              } />
+              <Route path="/v2/equipo" element={
+                <LayoutV2 locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo} tenant={tenant} onLogout={logout}>
+                  <EquipoV2 localActivo={localActivo} />
+                </LayoutV2>
+              } />
+              <Route path="/v2/stock" element={
+                <LayoutV2 locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo} tenant={tenant} onLogout={logout}>
+                  <StockV2 localActivo={localActivo} />
+                </LayoutV2>
+              } />
+              <Route path="/v2/finanzas" element={
+                <LayoutV2 locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo} tenant={tenant} onLogout={logout}>
+                  <FinanzasV2 localActivo={localActivo} />
+                </LayoutV2>
+              } />
+              <Route path="/v2/reportes" element={
+                <LayoutV2 locales={locales} localActivo={localActivo} setLocalActivo={setLocalActivo} tenant={tenant} onLogout={logout}>
+                  <ReportesV2 localActivo={localActivo} />
+                </LayoutV2>
+              } />
               <Route path="/mensajeria" element={
                 user ? <MensajeriaIG user={user} /> : <Navigate to="/" replace/>
               } />

@@ -49,23 +49,29 @@ interface CerrarHoy {
   fecha_pago: string;
 }
 
-export default function EquipoV2() {
+interface Props {
+  localActivo?: number | null;
+}
+
+export default function EquipoV2({ localActivo = null }: Props) {
   const { user } = useAuth();
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [calendars, setCalendars] = useState<PayCalendar[]>([]);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!user?.tenant_id) return;
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.tenant_id]);
-
   async function load() {
     setLoading(true);
     try {
+      // Scope manual por local_id (defense-in-depth + evita TS2589 con applyLocalScope encadenado).
+      // eslint-disable-next-line pase-local/require-apply-local-scope -- scope manual ver bloque "visibles"
+      const visibles: number[] | null = (user?.rol === "dueno" || user?.rol === "admin" || user?.rol === "superadmin")
+        ? (localActivo != null ? [localActivo] : null)
+        : (user?._locales ?? user?.locales ?? []);
+      let empQ = db.from("rrhh_empleados")
+        .select("id, nombre, apellido, puesto, modo_pago, sueldo_mensual, local_id, activo")
+        .eq("activo", true);
+      if (visibles) empQ = empQ.in("local_id", visibles);
       const [empRes, calRes] = await Promise.all([
-        db.from("rrhh_empleados").select("id, nombre, apellido, puesto, modo_pago, sueldo_mensual, local_id, activo").eq("activo", true),
+        empQ,
         db.from("rrhh_pay_calendars").select("id, nombre, frecuencia").eq("activo", true),
       ]);
       setEmpleados((empRes.data ?? []) as Empleado[]);
@@ -74,6 +80,12 @@ export default function EquipoV2() {
       setLoading(false);
     }
   }
+useEffect(() => {
+    if (!user?.tenant_id) return;
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.tenant_id, localActivo]);
+
 
   // KPIs computados
   const nominaMes = empleados.reduce((sum, e) => sum + (e.sueldo_mensual ?? 0), 0);
@@ -317,21 +329,6 @@ export default function EquipoV2() {
         </table>
       </div>
 
-      {/* === FOOTER NOTE === */}
-      <div style={{
-        marginTop: "var(--v2-space-4)",
-        padding: "var(--v2-space-3) var(--v2-space-4)",
-        background: "var(--v2-celeste-bg)",
-        border: "1px solid var(--v2-celeste-glow)",
-        borderRadius: "var(--v2-radius-md)",
-        fontSize: "var(--v2-fs-xs)",
-        color: "var(--v2-text-muted)",
-      }}>
-        <strong style={{ color: "var(--v2-celeste)" }}>V2 BETA</strong> —
-        Esta es la primera pantalla del rediseño consumiendo el modelo nuevo (rrhh_eventos + rrhh_pay_calendars + rrhh_liquidaciones_v2).
-        Sin emojis, paleta argentina (celeste + dorado), componentes v2 limpios.
-        El sistema viejo en pase-yndx.vercel.app sigue intacto para Anto.
-      </div>
     </div>
   );
 }
