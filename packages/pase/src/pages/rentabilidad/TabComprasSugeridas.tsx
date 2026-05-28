@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { db } from "../../lib/supabase";
-import { fmt_$, todayAR_ISO } from '../../lib/utils';
+import { fmt_$, todayAR_ISO } from '@pase/shared/utils';
 import { EmptyState } from "../../components/ui";
 import { useToast } from "../../hooks/useToast";
 import { ToastComponent } from "../../components/Toast";

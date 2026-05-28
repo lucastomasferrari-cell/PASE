@@ -1,10 +1,11 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { applyLocalScope, cuentasOperables as cuentasOperablesFn } from "../lib/auth";
 import { CUENTAS } from "../lib/constants";
 import { useCategorias } from "../lib/useCategorias";
-import { toISO, today, fmt_d, fmt_$, fmt_dt_ar, toLocalISO } from '../lib/utils';
+import { toISO, fmt_d, fmt_$, fmt_dt_ar, toLocalISO } from '@pase/shared/utils';
+import { today } from '../lib/utils';
 import { useDebouncedValue } from "@pase/shared/utils";
 import { Combobox } from "../components/Combobox";
 import { useToast } from "../hooks/useToast";

@@ -1,4 +1,4 @@
-import { fmt_$ } from "../../lib/utils";
+import { fmt_$ } from "@pase/shared/utils";
 import { MESES_SEL } from "./helpers";
 import type { DashStats } from "./types";
 

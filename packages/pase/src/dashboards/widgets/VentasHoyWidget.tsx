@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { db } from "../../lib/supabase";
 import { formatCurrency } from "../../lib/format";
 import type { WidgetContext } from "../types";
-import { todayAR_ISO } from "../../lib/utils";
+import { todayAR_ISO } from "@pase/shared/utils";
 
 interface UltimaVenta {
   fecha: string;

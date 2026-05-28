@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import type { Proveedor, Factura, PagoFactura } from "../../types/finanzas";
-import { fmt_d, estadoFactura } from "../../lib/utils";
+import { fmt_d } from "@pase/shared/utils";
+import { estadoFactura } from "../../lib/utils";
 import { formatCurrency } from "../../lib/format";
 import styles from "./EstadoCuentaDrawer.module.css";
 

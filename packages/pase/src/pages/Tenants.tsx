@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
-import { fmt_d } from "../lib/utils";
+import { fmt_d } from "@pase/shared/utils";
 import BackupsAdmin from "./BackupsAdmin";
 import { InfoTooltip } from "../components/ui";
 import { useToast } from "../hooks/useToast";

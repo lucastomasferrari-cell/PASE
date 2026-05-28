@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { db } from "../lib/supabase";
-import { fmt_d, fmt_$, genId, toISO } from "../lib/utils";
+import { fmt_d, fmt_$, genId, toISO } from "@pase/shared/utils";
 import { useMediosCobro } from "../lib/useMediosCobro";
 import { parseCierre, PARSER_VERSION, type ParseError, type ParsedCierre } from "../lib/maxirest/parser";
 import { useToast } from "../hooks/useToast";

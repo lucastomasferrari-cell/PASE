@@ -1,8 +1,9 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { applyLocalScope, localesVisibles, tienePermiso } from "../lib/auth";
 import { useMediosCobro } from "../lib/useMediosCobro";
-import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
+import { toISO, fmt_d, fmt_$ } from "@pase/shared/utils";
+import { today } from "../lib/utils";
 import { useDebouncedValue } from "@pase/shared/utils";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";

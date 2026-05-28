@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { db } from "../../lib/supabase";
 import { useRealtimeTable } from "../../lib/useRealtimeTable";
-import { fmt_dt_ar } from "../../lib/utils";
+import { fmt_dt_ar } from "@pase/shared/utils";
 import { EmptyState, KeyIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
 

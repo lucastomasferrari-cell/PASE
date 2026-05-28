@@ -14,7 +14,7 @@
 import { useState, useEffect } from "react";
 import { db } from "../../lib/supabase";
 import { applyLocalScope } from "../../lib/auth";
-import { fmt_$, fmt_d } from "../../lib/utils";
+import { fmt_$, fmt_d } from "@pase/shared/utils";
 import { EmptyState } from "../../components/ui";
 import type { Usuario, Local } from "../../types";
 

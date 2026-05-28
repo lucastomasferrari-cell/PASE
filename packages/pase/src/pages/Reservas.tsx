@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { db } from "../lib/supabase";
 import { Modal, PageHeader, EmptyState, LocalLockedChip, LocalSelectorObligatorio, ShopIcon, CalendarIcon } from "../components/ui";
-import { toISO, today, fmt_d } from "../lib/utils";
+import { toISO, fmt_d } from "@pase/shared/utils";
+import { today } from "../lib/utils";
 import type { Usuario, Local } from "../types";
 
 /**

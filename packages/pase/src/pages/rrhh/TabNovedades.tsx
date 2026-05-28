@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { fmt_$ } from "../../lib/utils";
+import { fmt_$ } from "@pase/shared/utils";
 import type { Local } from "../../types";
 import type { Empleado } from "../../types/rrhh";
 import type { NovedadEditable } from "./types";

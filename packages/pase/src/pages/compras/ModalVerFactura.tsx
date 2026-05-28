@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { db } from "../../lib/supabase";
-import { fmt_d, fmt_$ } from "../../lib/utils";
+import { fmt_d, fmt_$ } from "@pase/shared/utils";
 import type { Local } from "../../types";
 import type { Proveedor, Factura, PagoFactura } from "../../types/finanzas";
 import { Modal } from "../../components/ui";

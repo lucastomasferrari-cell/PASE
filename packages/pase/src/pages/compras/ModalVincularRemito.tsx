@@ -1,4 +1,4 @@
-import { fmt_d, fmt_$ } from "../../lib/utils";
+import { fmt_d, fmt_$ } from "@pase/shared/utils";
 import type { Factura } from "../../types/finanzas";
 import type { Remito } from "./types";
 import { Modal } from "../../components/ui";

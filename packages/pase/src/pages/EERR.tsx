@@ -1,4 +1,4 @@
-﻿/* eslint-disable react-hooks/static-components --
+/* eslint-disable react-hooks/static-components --
  * ERow y ESection son componentes inner (definidos dentro de EERR) que
  * capturan `pct` por closure. `pct` depende de `totalVentas` (state-derivado),
  * por lo que mover los componentes afuera requiere pasarlo como prop —
@@ -18,7 +18,8 @@ import { applyLocalScope } from "../lib/auth";
 import { useCategorias } from "../lib/useCategorias";
 import { useMediosCobro } from "../lib/useMediosCobro";
 import { InfoTooltip } from "../components/ui";
-import { toISO, today, fmt_$ } from "../lib/utils";
+import { toISO, fmt_$ } from "@pase/shared/utils";
+import { today } from "../lib/utils";
 import { exportCSV } from "../lib/exportCSV";
 
 // Recharts pesa ~250KB. Se code-splittea aparte para que el chunk inicial

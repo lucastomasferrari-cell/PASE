@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { CurrencyInput } from "../../components/CurrencyInput";
 import { Combobox } from "../../components/Combobox";
 import { LocalLockedChip, LocalSelectorObligatorio, Modal } from "../../components/ui";
-import { fmt_$ } from "../../lib/utils";
+import { fmt_$ } from "@pase/shared/utils";
 import { UNIDADES } from "../../lib/constants";
 import { db } from "../../lib/supabase";
 import type { Local } from "../../types";

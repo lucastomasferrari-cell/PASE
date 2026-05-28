@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fmt_$ } from "../../lib/utils";
+import { fmt_$ } from "@pase/shared/utils";
 import { calcularVacaciones } from "../../lib/calculos/rrhh";
 import { LocalLockedChip, LocalSelectorObligatorio, Modal } from "../../components/ui";
 import type { Local } from "../../types";

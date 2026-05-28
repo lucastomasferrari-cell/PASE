@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "../../lib/supabase";
 import { applyLocalScope } from "../../lib/auth";
-import { toISO, today, fmt_d } from "../../lib/utils";
+import { toISO, fmt_d } from "@pase/shared/utils";
+import { today } from "../../lib/utils";
 import { PageHeader, Modal } from "../../components/ui";
 import { useToast } from "../../hooks/useToast";
 import { ToastComponent } from "../../components/Toast";

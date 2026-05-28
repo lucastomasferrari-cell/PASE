@@ -3,7 +3,7 @@ import { db } from "../../lib/supabase";
 import { formatCurrency, formatCurrencyCompact } from "../../lib/format";
 import { EmptyState, TrendUpIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
-import { now, todayAR_ISO, toLocalISO } from '../../lib/utils';
+import { now, todayAR_ISO, toLocalISO } from '@pase/shared/utils';
 
 interface DiaVenta {
   fecha: string;     // YYYY-MM-DD

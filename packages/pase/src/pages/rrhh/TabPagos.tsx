@@ -1,6 +1,7 @@
 import { db } from "../../lib/supabase";
 import { translateRpcError } from "../../lib/errors";
-import { toISO, today, fmt_d, fmt_$, parseMonto } from "../../lib/utils";
+import { toISO, fmt_d, fmt_$, parseMonto } from "@pase/shared/utils";
+import { today } from "../../lib/utils";
 import { Modal } from "../../components/ui";
 import { useToast } from "../../hooks/useToast";
 import { ToastComponent } from "../../components/Toast";

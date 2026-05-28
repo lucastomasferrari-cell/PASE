@@ -2,7 +2,7 @@ import { useState } from "react";
 import { db } from "../lib/supabase";
 import { PageHeader, EmptyState, LocalLockedChip, LocalSelectorObligatorio, DocumentIcon, FolderIcon, AlertIcon, CheckIcon } from "../components/ui";
 import { formatCurrency } from "../lib/format";
-import { moneyKey } from "../lib/money";
+import { moneyKey } from "@pase/shared/utils";
 import { exportCSV } from "../lib/exportCSV";
 import { parseExtractoMP, esExtractoMpCsv } from "../lib/mpExtractoParser";
 import type { Usuario, Local } from "../types";

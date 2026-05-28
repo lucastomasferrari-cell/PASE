@@ -1,5 +1,5 @@
 import { CurrencyInput } from "../../components/CurrencyInput";
-import { fmt_$ } from "../../lib/utils";
+import { fmt_$ } from "@pase/shared/utils";
 import type { Remito, FormPagoRemito } from "./types";
 import { Modal } from "../../components/ui";
 

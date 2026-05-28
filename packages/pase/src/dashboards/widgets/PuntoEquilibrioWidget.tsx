@@ -4,7 +4,7 @@ import { db } from "../../lib/supabase";
 import { formatCurrency } from "../../lib/format";
 import { EmptyState, ScaleIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
-import { now, todayAR_ISO, toLocalISO } from '../../lib/utils';
+import { now, todayAR_ISO, toLocalISO } from '@pase/shared/utils';
 
 interface BepData {
   costos_fijos_mes: number;

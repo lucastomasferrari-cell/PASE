@@ -1,4 +1,4 @@
-﻿import { fmt_d, fmt_$ } from "../../lib/utils";
+import { fmt_d, fmt_$ } from "@pase/shared/utils";
 import { CurrencyInput } from "../../components/CurrencyInput";
 import { aplicacionesPorNc, saldoNcRestante } from "../../lib/saldoProveedor";
 import type { Factura, PagoFactura } from "../../types/finanzas";

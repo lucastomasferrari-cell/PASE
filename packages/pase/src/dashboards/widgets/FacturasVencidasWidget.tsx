@@ -4,7 +4,7 @@ import { db } from "../../lib/supabase";
 import { formatCurrency } from "../../lib/format";
 import { CheckIcon } from "../../components/ui";
 import type { WidgetContext } from "../types";
-import { todayAR_ISO } from "../../lib/utils";
+import { todayAR_ISO } from "@pase/shared/utils";
 
 interface FacturaVencida {
   id: number;

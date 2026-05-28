@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, type ReactElement } from "react";
 import { useNavigate } from "react-router-dom";
 import { useBandejaEntrada, type Notif, type NotifSource } from "../lib/useBandejaEntrada";
-import { fmt_dt_ar } from "../lib/utils";
+import { fmt_dt_ar } from "@pase/shared/utils";
 import { PinIcon, KeyIcon, AlertIcon, CalendarIcon, BellIcon, WalletIcon } from "./ui";
 import type { Usuario } from "../types";
 

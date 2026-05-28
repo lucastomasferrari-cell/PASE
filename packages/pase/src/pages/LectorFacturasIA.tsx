@@ -1,6 +1,6 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
-import { fmt_d, fmt_$, genId, parseMonto } from "../lib/utils";
+import { fmt_d, fmt_$, genId, parseMonto } from "@pase/shared/utils";
 import { useCategorias } from "../lib/useCategorias";
 import { localesVisibles } from "../lib/auth";
 import { Modal } from "../components/ui";

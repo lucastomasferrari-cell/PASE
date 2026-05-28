@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { Modal } from "../components/ui";
 import { db } from "../lib/supabase";
 import { localesVisibles, applyLocalScope, cuentasOperables, tienePermiso } from "../lib/auth";
@@ -7,7 +7,8 @@ import { usePuestosRRHH } from "../lib/usePuestosRRHH";
 import { useGuardedHandler } from "../lib/useGuardedHandler";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
-import { toISO, today, toLocalISO } from '../lib/utils';
+import { toISO, toLocalISO } from '@pase/shared/utils';
+import { today } from '../lib/utils';
 import {
   calcularSACProporcional,
 } from "../lib/calculos/rrhh";

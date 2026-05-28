@@ -1,4 +1,4 @@
-﻿// El legajo abre con empleado_id de la URL (click desde el listado RRHH ya
+// El legajo abre con empleado_id de la URL (click desde el listado RRHH ya
 // scoped por applyLocalScope). Todas las queries acá usan `.eq("id", emp.id)`
 // o `.eq("empleado_id", emp.id)` — RLS server-side filtra por local del
 // caller, así que un empleado_id de otra sucursal devuelve null. Las pocas
@@ -12,7 +12,8 @@ import { translateRpcError } from "../lib/errors";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import { Modal } from "../components/ui";
-import { toISO, today, fmt_d, fmt_$ } from "../lib/utils";
+import { toISO, fmt_d, fmt_$ } from "@pase/shared/utils";
+import { today } from "../lib/utils";
 import {
   diasVacacionesPorAnio,
   calcularVacaciones,

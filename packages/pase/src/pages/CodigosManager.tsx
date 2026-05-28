@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { db } from "../lib/supabase";
 import { PageHeader, InfoTooltip } from "../components/ui";
 import { translateRpcError } from "../lib/errors";
-import { fmt_dt_ar } from "../lib/utils";
+import { fmt_dt_ar } from "@pase/shared/utils";
 import { SolicitudesContent } from "./Solicitudes";
 import type { Usuario } from "../types";
 

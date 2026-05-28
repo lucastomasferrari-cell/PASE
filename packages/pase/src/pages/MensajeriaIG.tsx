@@ -19,7 +19,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { db } from "../lib/supabase";
 import { tienePermiso } from "../lib/auth";
 import { useRealtimeRow } from "../lib/useRealtimeRow";
-import { fmt_$ } from "../lib/utils";
+import { fmt_$ } from "@pase/shared/utils";
 import { EmptyState, InfoTooltip } from "../components/ui";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";

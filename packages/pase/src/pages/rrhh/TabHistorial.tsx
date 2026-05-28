@@ -1,4 +1,4 @@
-import { fmt_d, fmt_$ } from "../../lib/utils";
+import { fmt_d, fmt_$ } from "@pase/shared/utils";
 import { Modal } from "../../components/ui";
 import type { Local } from "../../types";
 import type { HistRow } from "./types";

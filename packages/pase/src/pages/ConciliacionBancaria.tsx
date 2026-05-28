@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { db } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
-import { fmt_$ } from '../lib/utils';
+import { fmt_$ } from '@pase/shared/utils';
 
 // Iconos: PASE no usa lucide. Defino inline SVGs simples para los pocos
 // que necesito acá (Upload, Check, Alert, Search, Trash, File).

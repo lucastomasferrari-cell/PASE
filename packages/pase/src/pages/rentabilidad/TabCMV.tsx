@@ -9,7 +9,8 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { db } from "../../lib/supabase";
-import { fmt_$, toISO, today } from "../../lib/utils";
+import { fmt_$, toISO } from "@pase/shared/utils";
+import { today } from "../../lib/utils";
 import { EmptyState } from "../../components/ui";
 import type { Usuario, Local } from "../../types";
 

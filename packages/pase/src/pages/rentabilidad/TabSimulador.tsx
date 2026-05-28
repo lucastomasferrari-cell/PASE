@@ -14,7 +14,8 @@
 
 import { useState, useEffect } from "react";
 import { db } from "../../lib/supabase";
-import { fmt_$, toISO, today } from "../../lib/utils";
+import { fmt_$, toISO } from "@pase/shared/utils";
+import { today } from "../../lib/utils";
 import { EmptyState, Modal } from "../../components/ui";
 import { useToast } from "../../hooks/useToast";
 import { ToastComponent } from "../../components/Toast";

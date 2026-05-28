@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { db } from "../../lib/supabase";
 import { applyLocalScope } from "../../lib/auth";
-import { toISO, today, fmt_d, fmt_$ } from "../../lib/utils";
+import { toISO, fmt_d, fmt_$ } from "@pase/shared/utils";
+import { today } from "../../lib/utils";
 import { InfoTooltip } from "../../components/ui";
 import type { Usuario, Local } from "../../types/auth";
 import type { Factura, Venta } from "../../types/finanzas";
