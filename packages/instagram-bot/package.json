@@ -6,11 +6,16 @@
   "description": "Bot de Instagram para PASE — Claude + memoria + tools",
   "scripts": {
     "dev": "node --watch api/webhook.js",
-    "build": "echo 'Vercel deploys api/ as functions, no build step needed'"
+    "build": "echo 'Vercel deploys api/ as functions, no build step needed'",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@supabase/supabase-js": "^2.103.0",
     "web-push": "^3.6.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.4"
   }
 }
