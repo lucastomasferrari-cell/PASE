@@ -376,69 +376,80 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
       </div>
       )}
 
+      {/* AUDIT F4B#1 / sprint #5: 3 modales migrados a <Modal>. */}
       {/* DETALLE MODAL */}
-      {detalleModal&&(
-        <div className="overlay" onClick={()=>setDetalleModal(null)}>
-          <div className="modal" style={{width:640}} onClick={e=>e.stopPropagation()}>
-            <div className="modal-hd">
-              <div>
-                <div className="modal-title">{fmt_d(detalleModal.fecha)} · {detalleModal.turno}</div>
-                <div style={{fontSize:11,color:"var(--muted2)",marginTop:2}}>{locales.find((l: Local)=>l.id===detalleModal.local_id)?.nombre} · Total: <span style={{color:"var(--success)",fontFamily:"'Inter',sans-serif",fontWeight:500}}>{fmt_$(detalleModal.total)}</span></div>
-              </div>
-              <div style={{display:"flex",gap:6}}>
-                <button className="btn btn-danger btn-sm" onClick={()=>eliminarBloque(detalleModal)}>Eliminar cierre</button>
-                <button className="close-btn" onClick={()=>setDetalleModal(null)}>✕</button>
-              </div>
-            </div>
-            <div className="modal-body" style={{padding:0}}>
-              <table>
-                <thead><tr><th>Forma de Cobro</th><th>Monto</th><th>% del total</th><th></th></tr></thead>
-                <tbody>{detalleModal.items.sort((a: Venta,b: Venta)=>b.monto-a.monto).map((v: Venta)=>(
-                  <tr key={v.id}>
-                    <td style={{fontWeight:500}}>{v.medio}{v.origen==="maxirest"&&<span className="badge b-muted" style={{marginLeft:6,fontSize:8}}>Maxirest</span>}</td>
-                    <td><span className="num kpi-success">{fmt_$(v.monto)}</span></td>
-                    <td style={{fontSize:11,color:"var(--muted2)"}}>{detalleModal.total>0?((v.monto/detalleModal.total)*100).toFixed(1):0}%</td>
-                    <td><div style={{display:"flex",gap:4}}>
-                      {v.origen!=="maxirest"&&<button className="btn btn-ghost btn-sm" onClick={()=>setEditModal({...v})}>Editar</button>}
-                      <button className="btn btn-danger btn-sm" onClick={()=>eliminarLinea(v.id)}>✕</button>
-                    </div></td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        isOpen={!!detalleModal}
+        onClose={()=>setDetalleModal(null)}
+        title={detalleModal ? `${fmt_d(detalleModal.fecha)} · ${detalleModal.turno}` : ""}
+        subtitle={detalleModal ? `${locales.find((l: Local)=>l.id===detalleModal.local_id)?.nombre} · Total: ${fmt_$(detalleModal.total)}` : undefined}
+        maxWidth={640}
+        footer={detalleModal ? (
+          <button className="btn btn-danger btn-sm" onClick={()=>eliminarBloque(detalleModal)}>Eliminar cierre</button>
+        ) : undefined}
+      >
+        {detalleModal && (
+          <table>
+            <thead><tr><th>Forma de Cobro</th><th>Monto</th><th>% del total</th><th></th></tr></thead>
+            <tbody>{detalleModal.items.sort((a: Venta,b: Venta)=>b.monto-a.monto).map((v: Venta)=>(
+              <tr key={v.id}>
+                <td style={{fontWeight:500}}>{v.medio}{v.origen==="maxirest"&&<span className="badge b-muted" style={{marginLeft:6,fontSize:8}}>Maxirest</span>}</td>
+                <td><span className="num kpi-success">{fmt_$(v.monto)}</span></td>
+                <td style={{fontSize:11,color:"var(--muted2)"}}>{detalleModal.total>0?((v.monto/detalleModal.total)*100).toFixed(1):0}%</td>
+                <td><div style={{display:"flex",gap:4}}>
+                  {v.origen!=="maxirest"&&<button className="btn btn-ghost btn-sm" onClick={()=>setEditModal({...v})}>Editar</button>}
+                  <button className="btn btn-danger btn-sm" onClick={()=>eliminarLinea(v.id)}>✕</button>
+                </div></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        )}
+      </Modal>
 
       {/* EDIT MODAL */}
-      {editModal&&(
-        <div className="overlay" onClick={()=>setEditModal(null)}>
-          <div className="modal" style={{width:440}} onClick={e=>e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Editar Venta</div><button className="close-btn" onClick={()=>setEditModal(null)}>✕</button></div>
-            <div className="modal-body">
-              <div className="form2">
-                <div className="field"><label>Fecha</label><input type="date" value={editModal.fecha} onChange={e=>setEditModal({...editModal,fecha:e.target.value})}/></div>
-                <div className="field"><label>Turno</label><select value={editModal.turno} onChange={e=>setEditModal({...editModal,turno:e.target.value})}><option>Mediodía</option><option>Noche</option></select></div>
-              </div>
-              <div className="field"><label>Forma de Cobro</label><select value={editModal.medio} onChange={e=>setEditModal({...editModal,medio:e.target.value})}>
-                {/* Si el medio actual no está en el catálogo (medio legacy o
-                    desactivado), lo agregamos como opción para no perder el valor. */}
-                {!mediosEdit.some(m=>m.nombre===editModal.medio) && editModal.medio && <option key="legacy" value={editModal.medio}>{String(editModal.medio)} (legacy)</option>}
-                {mediosEdit.map(m=><option key={m.id} value={m.nombre}>{m.nombre}</option>)}
-              </select></div>
-              <div className="field"><label>Monto $</label><input type="number" value={editModal.monto} onChange={e=>setEditModal({...editModal,monto:e.target.value})}/></div>
+      <Modal
+        isOpen={!!editModal}
+        onClose={()=>setEditModal(null)}
+        title="Editar Venta"
+        maxWidth={440}
+        footer={
+          <>
+            <button className="btn btn-sec" onClick={()=>setEditModal(null)}>Cancelar</button>
+            <button className="btn btn-acc" onClick={guardarEdit}>Guardar</button>
+          </>
+        }
+      >
+        {editModal && (
+          <>
+            <div className="form2">
+              <div className="field"><label>Fecha</label><input type="date" value={editModal.fecha} onChange={e=>setEditModal({...editModal,fecha:e.target.value})}/></div>
+              <div className="field"><label>Turno</label><select value={editModal.turno} onChange={e=>setEditModal({...editModal,turno:e.target.value})}><option>Mediodía</option><option>Noche</option></select></div>
             </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setEditModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={guardarEdit}>Guardar</button></div>
-          </div>
-        </div>
-      )}
+            <div className="field"><label>Forma de Cobro</label><select value={editModal.medio} onChange={e=>setEditModal({...editModal,medio:e.target.value})}>
+              {/* Si el medio actual no está en el catálogo (medio legacy o
+                  desactivado), lo agregamos como opción para no perder el valor. */}
+              {!mediosEdit.some(m=>m.nombre===editModal.medio) && editModal.medio && <option key="legacy" value={editModal.medio}>{String(editModal.medio)} (legacy)</option>}
+              {mediosEdit.map(m=><option key={m.id} value={m.nombre}>{m.nombre}</option>)}
+            </select></div>
+            <div className="field"><label>Monto $</label><input type="number" value={editModal.monto} onChange={e=>setEditModal({...editModal,monto:e.target.value})}/></div>
+          </>
+        )}
+      </Modal>
 
       {/* NUEVO MODAL */}
-      {modalNuevo&&(
-        <div className="overlay" onClick={()=>setModalNuevo(false)}>
-          <div className="modal" style={{width:520}} onClick={e=>e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">Nueva Venta</div><button className="close-btn" onClick={()=>setModalNuevo(false)}>✕</button></div>
-            <div className="modal-body">
+      <Modal
+        isOpen={modalNuevo}
+        onClose={()=>setModalNuevo(false)}
+        title="Nueva Venta"
+        maxWidth={520}
+        preventCloseOnOverlay={guardando}
+        footer={
+          <>
+            <button className="btn btn-sec" onClick={()=>setModalNuevo(false)}>Cancelar</button>
+            <button className="btn btn-acc" onClick={guardar} disabled={guardando || !form.local_id}>Guardar</button>
+          </>
+        }
+      >
               <div className="form2">
                 <div className="field"><label>Local *</label>
                   {localActivo !== null ? (
@@ -476,11 +487,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
                 <span style={{color:"var(--muted2)"}}>Total</span>
                 <span style={{fontWeight:500,color:"var(--success)"}}>{fmt_$(lineas.reduce((s,l)=>s+(parseFloat(l.monto)||0),0))}</span>
               </div>
-            </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModalNuevo(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={guardando || !form.local_id}>Guardar</button></div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Manager Override modals (acciones destructivas sin permiso ventas_anular) */}
       <ManagerOverrideModal
