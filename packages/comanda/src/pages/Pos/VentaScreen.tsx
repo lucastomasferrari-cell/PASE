@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -6,12 +6,11 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
-import { listItems, type ItemConGrupo } from '../../services/itemsService';
-import { listGrupos } from '../../services/gruposService';
+import { type ItemConGrupo } from '../../services/itemsService';
 import {
-  getVenta, listVentasItems, agregarItem, modificarItem, mandarCurso, mandarItemIndividual, toggleItemStay, updateVentaMeta,
+  agregarItem, modificarItem, mandarCurso, mandarItemIndividual, toggleItemStay, updateVentaMeta,
 } from '../../services/ventasService';
-import type { VentaPos, VentaPosItem, ItemGrupo } from '../../types/database';
+import type { VentaPosItem, ItemGrupo } from '../../types/database';
 import { Badge } from '../../components/Badge';
 import { SearchInput } from '../../components/SearchInput';
 import { Stepper } from '../../components/Stepper';
@@ -28,7 +27,7 @@ import { TransferMesaDialog } from '@/components/dialogs/TransferMesaDialog';
 import { MergeMesasDialog } from '@/components/dialogs/MergeMesasDialog';
 import { SplitCheckDialog } from '@/components/dialogs/SplitCheckDialog';
 import { ManagerOverrideDialog } from '@/components/dialogs/ManagerOverrideDialog';
-import { anularVenta, anularItem, modificarPrecioItem, cortesiaItem, listVentaOverrides, type VentaOverrideHistoria } from '@/services/overridesService';
+import { anularVenta, anularItem, modificarPrecioItem, cortesiaItem } from '@/services/overridesService';
 import { marcarDisponible } from '@/services/itemsService';
 import { AgotarDialog } from '@/pages/Catalogo/AgotarDialog';
 import { MoneyInput } from '@/components/MoneyInput';
@@ -36,10 +35,11 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { db } from '@/lib/supabase';
-import { useRealtimeTable } from '@/lib/useRealtimeTable';
-import { listenReconcile } from '@/lib/sync/idReconciliation';
 import { EstadoVentaBadge } from '@/components/EstadoBadge';
 import { cn } from '@/lib/utils';
+import { useVentaData } from './hooks/useVentaData';
+import { useVentaCursos } from './hooks/useVentaCursos';
+import { useVentaOverrides } from './hooks/useVentaOverrides';
 
 const CURSO_COLORS: Record<number, string> = {
   1: 'bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100 border-amber-200 dark:border-amber-800',
@@ -54,14 +54,12 @@ export function VentaScreen() {
   const { empleado, toggleFavorito } = useAuthPos();
   const navigate = useNavigate();
 
-  const [venta, setVenta] = useState<VentaPos | null>(null);
-  const [items, setItems] = useState<VentaPosItem[]>([]);
-  const [catalogo, setCatalogo] = useState<ItemConGrupo[]>([]);
-  const [grupos, setGrupos] = useState<ItemGrupo[]>([]);
+  // Hook #1: carga + reload de los 4 datasets primarios + realtime + reconcile
+  const { venta, items, catalogo, grupos, loading, reloadVenta } = useVentaData(ventaId);
+
   // 'favoritos' = filtra solo los Quick Items del empleado; null = todos; N = grupo_id
   const [grupoSel, setGrupoSel] = useState<number | 'favoritos' | null>(null);
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
   const [cursoActivo, setCursoActivo] = useState<number>(1);
 
   // Dialogs
@@ -96,106 +94,27 @@ export function VentaScreen() {
     return () => clearTimeout(t);
   }, [lastAddedRowId]);
 
-  // Sprint optim egress 2026-05-16 (sesión 2): separar reload full vs light.
-  // - reloadFull: trae venta + items + catálogo (200 items × 30cols) + grupos.
-  //   Solo al MOUNT — ~150-250KB de data.
-  // - reloadVenta: solo la venta + sus items. Trigger desde Realtime cuando
-  //   cocina marca listo o manager edita. Mucho más liviano (~10-20KB).
-  //   Esto reduce 90% el egress de VentaScreen abierta todo el turno.
-
-  const reloadFull = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [vRes, iRes, cRes, gRes] = await Promise.all([
-        getVenta(ventaId),
-        listVentasItems(ventaId),
-        listItems({ tenantId: user?.tenant_id ?? null }),
-        listGrupos(user?.tenant_id ?? null),
-      ]);
-      if (vRes.error) toast.error(vRes.error);
-      setVenta(vRes.data);
-      setItems(iRes.data);
-      setCatalogo(cRes.data);
-      setGrupos(gRes.data);
-    } catch (err) {
-      toast.error('Error cargando datos: ' + (err instanceof Error ? err.message : 'desconocido'));
-    } finally {
-      setLoading(false);
-    }
-  }, [ventaId, user?.tenant_id]);
-
-  // Light: solo refresca la venta y sus items. NO recarga el catálogo
-  // (que cambia muy poco) ni los grupos. Usado por Realtime + acciones
-  // internas que solo afectan la venta actual (agregar item, cobrar, etc).
-  const reloadVenta = useCallback(async () => {
-    try {
-      const [vRes, iRes] = await Promise.all([
-        getVenta(ventaId),
-        listVentasItems(ventaId),
-      ]);
-      if (vRes.error) toast.error(vRes.error);
-      setVenta(vRes.data);
-      setItems(iRes.data);
-    } catch (err) {
-      toast.error('Error cargando venta: ' + (err instanceof Error ? err.message : 'desconocido'));
-    }
-  }, [ventaId]);
-
   // Alias para mantener compat con código existente que llama reload()
   const reload = reloadVenta;
-
-  useEffect(() => { reloadFull(); }, [reloadFull]);
-
-  // Fase 4.3: si la venta abierta era tempId (negativo) y el sync confirma,
-  // navegamos al id real para que la URL no quede con un valor negativo
-  // (que ya no existe en local porque fue movido).
-  useEffect(() => {
-    return listenReconcile((ev) => {
-      if (ev.kind === 'venta' && ev.tempId === ventaId) {
-        navigate(`/pos/venta/${ev.realId}`, { replace: true });
-      }
-    });
-  }, [ventaId, navigate]);
-
-  // Realtime: cocina marca listo o manager anula → solo refresca la venta
-  // (no el catálogo que ya tenemos)
-  useRealtimeTable({
-    table: 'ventas_pos',
-    onChange: () => reloadVenta(),
-    extraFilter: Number.isFinite(ventaId) && ventaId > 0 ? `id=eq.${ventaId}` : undefined,
-    enabled: Number.isFinite(ventaId) && ventaId > 0,
-  });
-  useRealtimeTable({
-    table: 'ventas_pos_items',
-    onChange: () => reloadVenta(),
-    extraFilter: Number.isFinite(ventaId) && ventaId > 0 ? `venta_id=eq.${ventaId}` : undefined,
-    enabled: Number.isFinite(ventaId) && ventaId > 0,
-  });
 
   // Notas globales de la venta (editable inline)
   const [editandoNotas, setEditandoNotas] = useState(false);
   const [notasDraft, setNotasDraft] = useState('');
 
-  // Historial overrides (auditoría visible desde UI)
-  const [historialOpen, setHistorialOpen] = useState(false);
-  const [historial, setHistorial] = useState<VentaOverrideHistoria[]>([]);
-
-  // Cargar historial cuando se abre
-  useEffect(() => {
-    if (!historialOpen || !Number.isFinite(ventaId)) return;
-    listVentaOverrides(ventaId).then((r) => setHistorial(r.data));
-  }, [historialOpen, ventaId]);
+  // Hook #3: state + actions del flow de overrides manager
+  const {
+    historial,
+    historialOpen, setHistorialOpen,
+    anularItemTarget, setAnularItemTarget,
+    cortesiaItemTarget, setCortesiaItemTarget,
+    precioItemTarget, setPrecioItemTarget,
+    precioNuevo, setPrecioNuevo,
+    precioMotivo, setPrecioMotivo,
+    showPrecioMgr, setShowPrecioMgr,
+  } = useVentaOverrides(ventaId);
 
   // Item seleccionado para agotar (abre AgotarDialog)
   const [agotarItem, setAgotarItem] = useState<ItemConGrupo | null>(null);
-
-  // Acciones manager-override sobre item del check
-  const [anularItemTarget, setAnularItemTarget] = useState<VentaPosItem | null>(null);
-  const [cortesiaItemTarget, setCortesiaItemTarget] = useState<VentaPosItem | null>(null);
-  const [precioItemTarget, setPrecioItemTarget] = useState<VentaPosItem | null>(null);
-  const [precioNuevo, setPrecioNuevo] = useState<number>(0);
-  const [precioMotivo, setPrecioMotivo] = useState('');
-  const [showPrecioMgr, setShowPrecioMgr] = useState(false);
 
   // Cache: qué items tienen modifiers asignados.
   // Sprint 7 HIGH #3: cleanup con `cancelled` flag para evitar setState
@@ -234,43 +153,8 @@ export function VentaScreen() {
     });
   }, [catalogo, grupoSel, search, favoritosSet]);
 
-  // Items agrupados por curso
-  const itemsPorCurso = useMemo(() => {
-    const map = new Map<number, VentaPosItem[]>();
-    for (const it of items) {
-      const c = it.curso ?? 1;
-      if (!map.has(c)) map.set(c, []);
-      map.get(c)!.push(it);
-    }
-    return new Map([...map.entries()].sort((a, b) => a[0] - b[0]));
-  }, [items]);
-
-  // Tiempo estimado de la mesa: del catálogo, sumar tiempo_prep_min de cada
-  // item en hold/enviada. Por curso tomamos el MAX (cocina trabaja paralelo
-  // dentro de un curso) y sumamos cursos (cursos son seriales). Debe ir
-  // ANTES de cualquier early return por regla react-hooks/rules-of-hooks.
-  const tiempoEstimadoMin = useMemo(() => {
-    if (items.length === 0) return 0;
-    const porCurso = new Map<number, number>();
-    for (const it of items) {
-      if (it.estado === 'anulado' || it.estado === 'listo' || it.estado === 'entregado') continue;
-      const cat = catalogo.find((c) => c.id === it.item_id);
-      const prep = cat?.tiempo_prep_min ?? 0;
-      const c = it.curso ?? 1;
-      porCurso.set(c, Math.max(porCurso.get(c) ?? 0, prep));
-    }
-    return Array.from(porCurso.values()).reduce((s, v) => s + v, 0);
-  }, [items, catalogo]);
-
-  // Hold count por curso (para badge "EN HOLD")
-  // Devuelve solo los que SI se enviarían — los en stay_until_release no
-  // cuentan porque no salen con "mandar curso".
-  function holdCount(curso: number): number {
-    return (itemsPorCurso.get(curso) ?? []).filter((i) => i.estado === 'hold' && !i.stay_until_release).length;
-  }
-  function stayCount(curso: number): number {
-    return (itemsPorCurso.get(curso) ?? []).filter((i) => i.estado === 'hold' && i.stay_until_release).length;
-  }
+  // Hook #2: derivar agrupaciones por curso (puro, useMemo)
+  const { itemsPorCurso, tiempoEstimadoMin, holdCount, stayCount } = useVentaCursos(items, catalogo);
 
   if (loading) return <div className="py-12 text-center text-muted-foreground">Cargando…</div>;
   if (!venta) return <div className="py-12 text-center text-destructive">Venta no encontrada</div>;
