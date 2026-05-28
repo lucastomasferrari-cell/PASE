@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>PASE · RRHH rediseño — Prototipo navegable</title>
+<style>
+  /* === PASE design tokens === */
+  :root {
+    --bg: #0a0e14;
+    --bg2: #0f141c;
+    --bg3: #161c26;
+    --bd: #1f2937;
+    --bd2: #2a3441;
+    --txt: #e2e8f0;
+    --txt2: #94a3b8;
+    --txt3: #64748b;
+    --celeste: #60a5fa;
+    --celeste-dim: #1e3a5f;
+    --gold: #fbbf24;
+    --success: #34d399;
+    --danger: #ef4444;
+    --warning: #fb923c;
+    --r: 6px;
+    --fs: 13px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--txt);
+    font-size: var(--fs);
+    line-height: 1.5;
+  }
+  .app { display: flex; min-height: 100vh; }
+
+  /* === Sidebar === */
+  .sidebar {
+    width: 220px;
+    background: var(--bg2);
+    border-right: 1px solid var(--bd);
+    padding: 20px 12px;
+    flex-shrink: 0;
+  }
+  .logo { font-size: 24px; font-weight: 700; color: var(--txt); margin-bottom: 4px; }
+  .logo-sub { font-size: 11px; color: var(--txt3); margin-bottom: 28px; }
+  .nav-section { font-size: 10px; color: var(--txt3); text-transform: uppercase; letter-spacing: 1px; margin: 16px 8px 8px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px;
+    border-radius: var(--r);
+    color: var(--txt2);
+    cursor: pointer;
+    margin-bottom: 2px;
+    transition: background 0.15s;
+  }
+  .nav-item:hover { background: var(--bg3); color: var(--txt); }
+  .nav-item.active { background: var(--celeste-dim); color: var(--celeste); }
+  .nav-icon { width: 16px; text-align: center; }
+
+  /* === Main === */
+  .main { flex: 1; padding: 24px 32px; overflow-x: auto; }
+  .header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 20px; }
+  .h1 { font-size: 22px; font-weight: 600; margin: 0; }
+  .h1-sub { font-size: 12px; color: var(--txt3); margin-top: 2px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--bg3);
+    padding: 4px 10px;
+    border-radius: 100px;
+    font-size: 11px;
+    color: var(--txt2);
+  }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+  .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+
+  /* === Cards / panels === */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--bd);
+    border-radius: var(--r);
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .card-tit { font-size: 11px; color: var(--txt3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .card-val { font-size: 22px; font-weight: 600; color: var(--txt); }
+  .card-sub { font-size: 11px; color: var(--txt3); margin-top: 4px; }
+  .grid { display: grid; gap: 12px; }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+
+  /* === Liquidación-row === */
+  .liq-row {
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--bg2);
+    border: 1px solid var(--bd);
+    border-left: 3px solid var(--celeste);
+    border-radius: var(--r);
+    padding: 14px 18px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.15s;
+  }
+  .liq-row:hover { background: var(--bg3); transform: translateX(2px); }
+  .liq-row.urgente { border-left-color: var(--warning); }
+  .liq-row.proximo { border-left-color: var(--txt3); opacity: 0.7; }
+  .liq-label { font-weight: 600; font-size: 14px; }
+  .liq-meta { color: var(--txt3); font-size: 12px; margin-top: 2px; }
+  .liq-amount { font-size: 18px; font-weight: 600; color: var(--success); }
+  .liq-action { color: var(--celeste); font-size: 12px; margin-top: 4px; }
+
+  /* === Buttons === */
+  .btn {
+    background: var(--celeste-dim);
+    color: var(--celeste);
+    border: 1px solid transparent;
+    padding: 8px 16px;
+    border-radius: var(--r);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn:hover { background: #2d5285; }
+  .btn-ghost { background: transparent; border-color: var(--bd2); color: var(--txt2); }
+  .btn-ghost:hover { background: var(--bg3); color: var(--txt); }
+  .btn-primary {
+    background: var(--celeste); color: #0a0e14; font-weight: 600;
+  }
+  .btn-primary:hover { background: #93c5fd; }
+  .btn-danger { background: #2a1218; color: var(--danger); }
+
+  /* === Tables (spreadsheet) === */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th {
+    text-align: left;
+    color: var(--txt3);
+    font-weight: 500;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--bd);
+  }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--bd);
+  }
+  tr:hover td { background: var(--bg3); }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .num-pos { color: var(--success); }
+  .num-neg { color: var(--danger); }
+  .row-warn td { background: rgba(251,146,60,0.05); }
+
+  /* === Flags === */
+  .flag {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-size: 10px;
+    font-weight: 500;
+  }
+  .flag-warn { background: rgba(251,146,60,0.15); color: var(--warning); }
+  .flag-ok { background: rgba(52,211,153,0.15); color: var(--success); }
+  .flag-info { background: rgba(96,165,250,0.15); color: var(--celeste); }
+  .flag-dim { background: var(--bg3); color: var(--txt3); }
+
+  /* === Checklist === */
+  .checklist {
+    background: var(--bg3);
+    border-radius: var(--r);
+    padding: 14px 16px;
+    margin-bottom: 16px;
+  }
+  .check-it { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 6px; }
+  .check-it:last-child { margin-bottom: 0; }
+  .check-icon { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; margin-top: 1px; }
+  .check-ok { background: rgba(52,211,153,0.15); color: var(--success); }
+  .check-warn { background: rgba(251,146,60,0.15); color: var(--warning); }
+
+  /* === Calendar === */
+  .calendar {
+    background: var(--bg2);
+    border: 1px solid var(--bd);
+    border-radius: var(--r);
+    padding: 20px;
+  }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  .cal-head { color: var(--txt3); font-size: 10px; text-align: center; padding: 8px 0; text-transform: uppercase; }
+  .cal-day {
+    min-height: 88px;
+    background: var(--bg);
+    border: 1px solid var(--bd);
+    border-radius: 4px;
+    padding: 6px;
+    cursor: pointer;
+    position: relative;
+    font-size: 11px;
+  }
+  .cal-day:hover { border-color: var(--celeste); }
+  .cal-day.today { border-color: var(--celeste); background: var(--celeste-dim); }
+  .cal-day.outside { opacity: 0.3; cursor: default; }
+  .cal-day .day-num { font-weight: 600; color: var(--txt); margin-bottom: 4px; }
+  .cal-day .day-events { display: flex; flex-direction: column; gap: 2px; }
+  .ev {
+    font-size: 9px;
+    padding: 2px 5px;
+    border-radius: 3px;
+    background: var(--bg3);
+    color: var(--txt2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ev-ausencia { background: rgba(239,68,68,0.2); color: #fca5a5; }
+  .ev-doble { background: rgba(251,191,36,0.2); color: #fcd34d; }
+  .ev-feriado { background: rgba(96,165,250,0.2); color: #93c5fd; }
+  .ev-vacacion { background: rgba(167,139,250,0.2); color: #c4b5fd; }
+
+  /* === Modal === */
+  .modal-bg {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .modal-bg.open { display: flex; }
+  .modal {
+    background: var(--bg2);
+    border: 1px solid var(--bd);
+    border-radius: var(--r);
+    padding: 24px;
+    max-width: 480px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal h2 { margin: 0 0 16px; font-size: 18px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 11px; color: var(--txt3); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .field input, .field select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--bd);
+    color: var(--txt);
+    padding: 8px 10px;
+    border-radius: var(--r);
+    font-size: 13px;
+  }
+  .radio-group { display: flex; gap: 8px; }
+  .radio-opt {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid var(--bd);
+    border-radius: var(--r);
+    text-align: center;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .radio-opt.active { background: var(--celeste-dim); border-color: var(--celeste); color: var(--celeste); }
+
+  /* === Receipt === */
+  .receipt {
+    background: linear-gradient(180deg, var(--bg3), var(--bg2));
+    border: 1px solid var(--success);
+    border-radius: var(--r);
+    padding: 20px;
+    text-align: center;
+  }
+  .receipt .check { font-size: 48px; color: var(--success); margin-bottom: 12px; }
+
+  /* === Banner === */
+  .banner {
+    background: linear-gradient(90deg, rgba(251,146,60,0.1), rgba(251,191,36,0.05));
+    border: 1px solid rgba(251,146,60,0.3);
+    border-radius: var(--r);
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .banner-icon { font-size: 20px; }
+  .banner-text { flex: 1; font-size: 13px; }
+  .banner-text strong { color: var(--warning); }
+
+  /* === Demo bar === */
+  .demobar {
+    position: fixed; bottom: 0; right: 0;
+    background: var(--bg2);
+    border: 1px solid var(--bd);
+    border-bottom: none;
+    border-right: none;
+    border-radius: var(--r) 0 0 0;
+    padding: 8px 16px;
+    font-size: 11px;
+    color: var(--txt3);
+    z-index: 99;
+  }
+  .demobar strong { color: var(--gold); }
+  .step {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 8px;
+    background: var(--celeste-dim);
+    color: var(--celeste);
+    border-radius: 100px;
+    font-weight: 500;
+  }
+  .hint {
+    background: linear-gradient(90deg, rgba(96,165,250,0.05), transparent);
+    border-left: 2px solid var(--celeste);
+    padding: 8px 14px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    color: var(--txt2);
+  }
+  .hint strong { color: var(--celeste); }
+  .hidden { display: none !important; }
+
+  /* === Vista de carga rápida === */
+  .quick-add {
+    background: var(--bg2);
+    border: 1px solid var(--bd);
+    border-radius: var(--r);
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .qa-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .qa-row select, .qa-row input {
+    background: var(--bg);
+    border: 1px solid var(--bd);
+    color: var(--txt);
+    padding: 6px 10px;
+    border-radius: var(--r);
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<div class="modal-bg" id="modal">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">pase.</div>
+    <div class="logo-sub">aliado gastronómico</div>
+
+    <div class="nav-section">Operación</div>
+    <div class="nav-item"><span class="nav-icon">🏠</span>Inicio</div>
+    <div class="nav-item"><span class="nav-icon">💼</span>Caja</div>
+    <div class="nav-item"><span class="nav-icon">🛒</span>Compras</div>
+    <div class="nav-item"><span class="nav-icon">💰</span>Ventas</div>
+    <div class="nav-item"><span class="nav-icon">📤</span>Gastos</div>
+    <div class="nav-item active"><span class="nav-icon">👥</span>Equipo</div>
+
+    <div class="nav-section">Dirección</div>
+    <div class="nav-item"><span class="nav-icon">🏪</span>Negocio</div>
+    <div class="nav-item"><span class="nav-icon">📊</span>Finanzas</div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main" id="main">
+    <!-- Content injected by JS -->
+  </main>
+</div>
+
+<div class="demobar">
+  <strong>🎬 DEMO</strong> · Hoy es <strong>lunes 16-jun-2026</strong>
+  <span class="step" id="stepIndicator">Paso 1: Dashboard</span>
+</div>
+
+<script>
+// ============ DATA ============
+const HOY = new Date('2026-06-16');
+
+const LOCALES = [
+  { id: 1, nombre: 'Neko Belgrano' },
+  { id: 2, nombre: 'Neko Villa Crespo' },
+  { id: 3, nombre: 'Neko Devoto' },
+  { id: 4, nombre: 'Neko Palermo Maneki' },
+  { id: 5, nombre: 'Rene Cantina' },
+];
+
+const EMPLEADOS = [
+  // BELGRANO
+  { id: 1, nombre: 'Camilo Argañaraz', puesto: 'Cocinero', local_id: 1, modo_pago: 'MENSUAL', sueldo: 850000, alias_mp: 'camilo.mp' },
+  { id: 2, nombre: 'Luis Mendoza',     puesto: 'Mozo',     local_id: 1, modo_pago: 'QUINCENAL', sueldo: 720000, alias_mp: 'luis.mp' },
+  { id: 3, nombre: 'Pedro Salinas',    puesto: 'Bachero',  local_id: 1, modo_pago: 'SEMANAL', sueldo: 720000, alias_mp: null },
+  { id: 4, nombre: 'Camila Vázquez',   puesto: 'Cocina aux', local_id: 1, modo_pago: 'DIARIO', sueldo: 750000, alias_mp: null },
+
+  // VILLA CRESPO
+  { id: 5, nombre: 'Marcelo Fernández', puesto: 'Cocinero', local_id: 2, modo_pago: 'MENSUAL', sueldo: 900000, alias_mp: 'marcelo.mp' },
+  { id: 6, nombre: 'Sofía García',      puesto: 'Cajera',   local_id: 2, modo_pago: 'QUINCENAL', sueldo: 650000, alias_mp: 'sofia.mp' },
+  { id: 7, nombre: 'Tomás Ríos',        puesto: 'Bachero',  local_id: 2, modo_pago: 'SEMANAL', sueldo: 680000, alias_mp: null },
+
+  // DEVOTO
+  { id: 8, nombre: 'Marina López',      puesto: 'Mozo',     local_id: 3, modo_pago: 'MENSUAL', sueldo: 700000, alias_mp: 'marina.mp' },
+  { id: 9, nombre: 'Diego Pérez',       puesto: 'Cocinero', local_id: 3, modo_pago: 'MENSUAL', sueldo: 850000, alias_mp: 'diego.mp' },
+
+  // PALERMO MANEKI
+  { id: 10, nombre: 'Joaquín Méndez',   puesto: 'Cocinero', local_id: 4, modo_pago: 'MENSUAL', sueldo: 880000, alias_mp: 'joaquin.mp' },
+  { id: 11, nombre: 'Valentina Cruz',   puesto: 'Cajera',   local_id: 4, modo_pago: 'QUINCENAL', sueldo: 680000, alias_mp: null }, // sin CBU
+];
+
+// Eventos cargados durante el período (lo que reemplaza "novedades")
+let EVENTOS = [
+  // Junio 2026
+  { id: 1, empleado_id: 2, fecha: '2026-06-07', tipo: 'AUSENCIA', cantidad: 1, comentario: 'Aviso por WhatsApp, gripe' },
+  { id: 2, empleado_id: 5, fecha: '2026-05-12', tipo: 'DOBLE', cantidad: 1, comentario: 'Cubrió a Diego' },
+  { id: 3, empleado_id: 5, fecha: '2026-05-19', tipo: 'DOBLE', cantidad: 1, comentario: '' },
+  { id: 4, empleado_id: 3, fecha: '2026-06-10', tipo: 'FERIADO', cantidad: 1, comentario: '20-jun trasladado' },
+  { id: 5, empleado_id: 6, fecha: '2026-06-08', tipo: 'AUSENCIA', cantidad: 1, comentario: '' },
+  { id: 6, empleado_id: 7, fecha: '2026-06-13', tipo: 'DOBLE', cantidad: 1, comentario: '' },
+  // Adelantos pendientes
+  { id: 7, empleado_id: 2, fecha: '2026-06-05', tipo: 'ADELANTO', cantidad: 50000, comentario: 'Necesitó plata para mudanza' },
+];
+
+// Liquidaciones generadas
+let LIQUIDACIONES = [];
+
+// ============ HELPERS ============
+const fmt$ = (n) => '$' + Math.round(n).toLocaleString('es-AR');
+const fmtFecha = (d) => {
+  const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const dt = new Date(d);
+  return `${dias[dt.getDay()]} ${dt.getDate()}-${meses[dt.getMonth()]}-${dt.getFullYear()}`;
+};
+
+const setStep = (txt) => document.getElementById('stepIndicator').textContent = txt;
+
+// Determina las liquidaciones que VENCEN HOY (16-jun) o están próximas
+function calcLiquidacionesHoy() {
+  const liqs = [];
+
+  // QUINCENAL: hoy 16-jun = pagar 1ra Q junio (1-15 jun, cerrada ayer)
+  EMPLEADOS.filter(e => e.modo_pago === 'QUINCENAL').forEach(emp => {
+    const eventos = EVENTOS.filter(ev => ev.empleado_id === emp.id &&
+      ev.fecha >= '2026-06-01' && ev.fecha <= '2026-06-15');
+    const calc = calcLiquidacion(emp, eventos, 'QUINCENAL', '2026-06-01', '2026-06-15');
+    liqs.push({
+      id: `q1-${emp.id}`,
+      tipo: 'QUINCENAL',
+      label: '1ra Quincena de Junio',
+      periodo_inicio: '2026-06-01', periodo_fin: '2026-06-15',
+      pagar_el: '2026-06-16',
+      emp, eventos, calc,
+      estado: 'pendiente_hoy'
+    });
+  });
+
+  // SEMANAL: hoy 16-jun = pagar semana 9-15 jun
+  EMPLEADOS.filter(e => e.modo_pago === 'SEMANAL').forEach(emp => {
+    const eventos = EVENTOS.filter(ev => ev.empleado_id === emp.id &&
+      ev.fecha >= '2026-06-09' && ev.fecha <= '2026-06-15');
+    const calc = calcLiquidacion(emp, eventos, 'SEMANAL', '2026-06-09', '2026-06-15');
+    liqs.push({
+      id: `s-${emp.id}`,
+      tipo: 'SEMANAL',
+      label: 'Semana 9-15 Junio',
+      periodo_inicio: '2026-06-09', periodo_fin: '2026-06-15',
+      pagar_el: '2026-06-16',
+      emp, eventos, calc,
+      estado: 'pendiente_hoy'
+    });
+  });
+
+  // DIARIO: hoy 16-jun = pagar día 15-jun (último día trabajado)
+  EMPLEADOS.filter(e => e.modo_pago === 'DIARIO').forEach(emp => {
+    const eventos = EVENTOS.filter(ev => ev.empleado_id === emp.id && ev.fecha === '2026-06-15');
+    const calc = calcLiquidacion(emp, eventos, 'DIARIO', '2026-06-15', '2026-06-15');
+    liqs.push({
+      id: `d-${emp.id}`,
+      tipo: 'DIARIO',
+      label: 'Día 15-jun',
+      periodo_inicio: '2026-06-15', periodo_fin: '2026-06-15',
+      pagar_el: '2026-06-16',
+      emp, eventos, calc,
+      estado: 'pendiente_hoy'
+    });
+  });
+
+  // MENSUAL: hoy NO va — ya se pagó del 1 al 5 jun. Lo mostramos como "próximas"
+  // Mostraremos mayo (ya pagada) y el próximo cierre (mes junio cierra 30-jun, pago 1-5 jul)
+
+  return liqs;
+}
+
+function calcLiquidacionesProximas() {
+  const liqs = [];
+
+  // Próxima quincenal: cierra 30-jun, paga 1-jul
+  EMPLEADOS.filter(e => e.modo_pago === 'QUINCENAL').forEach(emp => {
+    liqs.push({
+      id: `q2-${emp.id}`,
+      tipo: 'QUINCENAL',
+      label: '2da Quincena de Junio',
+      periodo_inicio: '2026-06-16', periodo_fin: '2026-06-30',
+      pagar_el: '2026-07-01',
+      emp, eventos: [], calc: null,
+      estado: 'futuro'
+    });
+  });
+
+  // Próxima mensual: cierra 30-jun, paga 1-5 jul
+  EMPLEADOS.filter(e => e.modo_pago === 'MENSUAL').forEach(emp => {
+    liqs.push({
+      id: `m-${emp.id}`,
+      tipo: 'MENSUAL',
+      label: 'Sueldo Junio 2026',
+      periodo_inicio: '2026-06-01', periodo_fin: '2026-06-30',
+      pagar_el: '2026-07-01',
+      emp, eventos: [], calc: null,
+      estado: 'futuro'
+    });
+  });
+
+  return liqs;
+}
+
+// CÁLCULO REAL — réplica de la fórmula del módulo actual
+function calcLiquidacion(emp, eventos, modo, periodo_inicio, periodo_fin) {
+  const sueldo_mensual = emp.sueldo;
+  const valor_dia = sueldo_mensual / 30;
+  const valor_hora = valor_dia / 8;
+
+  // Base según modo
+  let sueldo_base;
+  if (modo === 'MENSUAL') sueldo_base = sueldo_mensual;
+  else if (modo === 'QUINCENAL') sueldo_base = sueldo_mensual / 2;
+  else if (modo === 'SEMANAL') sueldo_base = sueldo_mensual / 4;
+  else if (modo === 'DIARIO') sueldo_base = valor_dia;
+
+  let descuento_ausencias = 0, plus_dobles = 0, plus_feriados = 0, plus_horas_extras = 0, plus_vacaciones = 0;
+  let adelantos = 0;
+
+  eventos.forEach(ev => {
+    if (ev.tipo === 'AUSENCIA') descuento_ausencias += ev.cantidad * valor_dia;
+    if (ev.tipo === 'DOBLE') plus_dobles += ev.cantidad * valor_dia; // pago 1 día extra
+    if (ev.tipo === 'FERIADO') plus_feriados += ev.cantidad * valor_dia;
+    if (ev.tipo === 'HORAS_EXTRA') plus_horas_extras += ev.cantidad * valor_hora;
+    if (ev.tipo === 'VACACION_DIA') plus_vacaciones += ev.cantidad * (sueldo_mensual / 25);
+    if (ev.tipo === 'ADELANTO') adelantos += ev.cantidad;
+  });
+
+  const subtotal = sueldo_base - descuento_ausencias + plus_dobles + plus_feriados + plus_horas_extras + plus_vacaciones;
+  const presentismo = subtotal * 0.05; // CCT gastronómico
+  const total_bruto = subtotal + presentismo;
+  const total_neto = total_bruto - adelantos;
+
+  return {
+    sueldo_base, descuento_ausencias, plus_dobles, plus_feriados, plus_horas_extras, plus_vacaciones,
+    subtotal, presentismo, adelantos, total_bruto, total_neto,
+    eventos_count: eventos.length
+  };
+}
+
+// ============ VISTAS ============
+
+function viewDashboard() {
+  setStep('Paso 1: Dashboard — lo que tenés que cerrar HOY');
+  const hoy = calcLiquidacionesHoy();
+  const proximas = calcLiquidacionesProximas();
+  const totalHoy = hoy.reduce((s, l) => s + l.calc.total_neto, 0);
+  const empleadosHoy = new Set(hoy.map(l => l.emp.id)).size;
+
+  document.getElementById('main').innerHTML = `
+    <div class="header">
+      <div>
+        <h1 class="h1">Equipo</h1>
+        <div class="h1-sub">Lo que tenés que cerrar hoy + próximas liquidaciones</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-ghost" onclick="viewCalendario()">📅 Vista calendario</button>
+        <button class="btn btn-ghost" onclick="viewEmpleados()">👥 Empleados</button>
+      </div>
+    </div>
+
+    <div class="hint">
+      <strong>💡 Concepto nuevo:</strong> el sistema te muestra QUÉ tenés que cerrar HOY automáticamente. No tenés que buscar nada, no hay "ir a Novedades → volver → ir a Pagos". Todo arranca acá.
+    </div>
+
+    <div class="grid grid-3">
+      <div class="card">
+        <div class="card-tit">Para cerrar HOY</div>
+        <div class="card-val" style="color:var(--warning)">${hoy.length}</div>
+        <div class="card-sub">${empleadosHoy} empleados · ${fmt$(totalHoy)}</div>
+      </div>
+      <div class="card">
+        <div class="card-tit">Eventos del mes</div>
+        <div class="card-val">${EVENTOS.length}</div>
+        <div class="card-sub">cargados manualmente por Anto · <a href="#" onclick="viewCalendario();return false" style="color:var(--celeste)">ver calendario →</a></div>
+      </div>
+      <div class="card">
+        <div class="card-tit">Próximo SAC</div>
+        <div class="card-val">14 días</div>
+        <div class="card-sub">Fecha estimada: 30-jun-2026</div>
+      </div>
+    </div>
+
+    <h3 style="margin-top:24px;font-size:14px;color:var(--txt2);text-transform:uppercase;letter-spacing:1px">⚠️ Para pagar hoy lunes 16-jun</h3>
+    <div id="liqHoy"></div>
+
+    <h3 style="margin-top:24px;font-size:14px;color:var(--txt2);text-transform:uppercase;letter-spacing:1px">📅 Próximas (no urgentes)</h3>
+    <div id="liqProx"></div>
+  `;
+
+  const liqHoyHTML = hoy.map(liq => `
+    <div class="liq-row urgente" onclick="viewPayRun('${liq.id}')">
+      <div>
+        <div class="liq-label">${liq.emp.nombre} · ${liq.label}</div>
+        <div class="liq-meta">
+          ${liq.tipo} · ${LOCALES.find(l=>l.id===liq.emp.local_id).nombre} · ${liq.eventos.length} evento${liq.eventos.length===1?'':'s'} en el período
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div class="liq-amount">${fmt$(liq.calc.total_neto)}</div>
+        <div class="liq-action">Cerrar y pagar →</div>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('liqHoy').innerHTML = liqHoyHTML || '<div class="card">Nada pendiente para hoy.</div>';
+
+  const proxHTML = proximas.slice(0, 5).map(liq => `
+    <div class="liq-row proximo">
+      <div>
+        <div class="liq-label">${liq.emp.nombre} · ${liq.label}</div>
+        <div class="liq-meta">${liq.tipo} · cierra ${fmtFecha(liq.periodo_fin)} · paga ${fmtFecha(liq.pagar_el)}</div>
+      </div>
+      <div style="text-align:right;color:var(--txt3);font-size:12px">en ${Math.round((new Date(liq.pagar_el) - HOY) / 86400000)} días</div>
+    </div>
+  `).join('');
+  document.getElementById('liqProx').innerHTML = proxHTML;
+}
+
+function viewPayRun(liqId) {
+  setStep('Paso 2: Pay Run — revisar y pagar');
+  const hoy = calcLiquidacionesHoy();
+  const liq = hoy.find(l => l.id === liqId);
+  if (!liq) return;
+
+  const calc = liq.calc;
+  const flags = [];
+  if (calc.descuento_ausencias > 0) flags.push({ tipo: 'warn', txt: `${liq.eventos.filter(e=>e.tipo==='AUSENCIA').length} ausencia(s) — descuento ${fmt$(calc.descuento_ausencias)}` });
+  if (calc.plus_dobles > 0) flags.push({ tipo: 'info', txt: `${liq.eventos.filter(e=>e.tipo==='DOBLE').length} doble(s) — plus ${fmt$(calc.plus_dobles)}` });
+  if (calc.adelantos > 0) flags.push({ tipo: 'warn', txt: `Adelanto pendiente de descontar: ${fmt$(calc.adelantos)}` });
+  if (!liq.emp.alias_mp) flags.push({ tipo: 'warn', txt: `Sin alias MP — pago será EN EFECTIVO obligatorio` });
+
+  document.getElementById('main').innerHTML = `
+    <div class="header">
+      <div>
+        <button class="btn btn-ghost" onclick="viewDashboard()">← Volver</button>
+        <h1 class="h1" style="margin-top:8px">${liq.emp.nombre} · ${liq.label}</h1>
+        <div class="h1-sub">${liq.tipo} · ${LOCALES.find(l=>l.id===liq.emp.local_id).nombre} · período ${fmtFecha(liq.periodo_inicio)} → ${fmtFecha(liq.periodo_fin)} · pago hoy</div>
+      </div>
+    </div>
+
+    <div class="hint">
+      <strong>💡 Cambio clave:</strong> esta pantalla <strong>NO te pide cargar nada</strong>. El sistema ya consolidó los eventos del período. Vos solo REVISÁS y confirmás. La carga de eventos sucede aparte (en el calendario o cuando Anto entra a la quincena).
+    </div>
+
+    <div class="checklist">
+      <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Pre-flight checklist</div>
+      ${flags.map(f => `
+        <div class="check-it">
+          <div class="check-icon check-${f.tipo === 'warn' ? 'warn' : 'ok'}">${f.tipo === 'warn' ? '⚠' : '✓'}</div>
+          <div>${f.txt}</div>
+        </div>
+      `).join('')}
+      ${flags.length === 0 ? '<div class="check-it"><div class="check-icon check-ok">✓</div><div>Todo listo, sin alertas</div></div>' : ''}
+    </div>
+
+    <div class="card">
+      <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">Desglose de la liquidación</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Concepto</th>
+            <th class="num">Cálculo</th>
+            <th class="num">Importe</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Sueldo base</strong></td>
+            <td class="num" style="color:var(--txt3);font-size:11px">${liq.tipo === 'QUINCENAL' ? 'sueldo/2' : liq.tipo === 'SEMANAL' ? 'sueldo/4' : liq.tipo === 'DIARIO' ? 'sueldo/30' : 'sueldo'}</td>
+            <td class="num num-pos">${fmt$(calc.sueldo_base)}</td>
+          </tr>
+          ${calc.descuento_ausencias > 0 ? `
+          <tr class="row-warn">
+            <td>– Ausencias <span class="flag flag-warn">${liq.eventos.filter(e=>e.tipo==='AUSENCIA').length}</span></td>
+            <td class="num" style="color:var(--txt3);font-size:11px">× ${fmt$(liq.emp.sueldo / 30)}/día</td>
+            <td class="num num-neg">– ${fmt$(calc.descuento_ausencias)}</td>
+          </tr>
+          ` : ''}
+          ${calc.plus_dobles > 0 ? `
+          <tr>
+            <td>+ Dobles <span class="flag flag-info">${liq.eventos.filter(e=>e.tipo==='DOBLE').length}</span></td>
+            <td class="num" style="color:var(--txt3);font-size:11px">× ${fmt$(liq.emp.sueldo / 30)}/día</td>
+            <td class="num num-pos">+ ${fmt$(calc.plus_dobles)}</td>
+          </tr>
+          ` : ''}
+          ${calc.plus_feriados > 0 ? `
+          <tr>
+            <td>+ Feriados <span class="flag flag-info">${liq.eventos.filter(e=>e.tipo==='FERIADO').length}</span></td>
+            <td class="num" style="color:var(--txt3);font-size:11px">× ${fmt$(liq.emp.sueldo / 30)}/día</td>
+            <td class="num num-pos">+ ${fmt$(calc.plus_feriados)}</td>
+          </tr>
+          ` : ''}
+          <tr style="border-top:1px solid var(--bd2)">
+            <td><strong>Subtotal</strong></td>
+            <td></td>
+            <td class="num"><strong>${fmt$(calc.subtotal)}</strong></td>
+          </tr>
+          <tr>
+            <td>+ Presentismo CCT (5%)</td>
+            <td class="num" style="color:var(--txt3);font-size:11px">subtotal × 0.05</td>
+            <td class="num num-pos">+ ${fmt$(calc.presentismo)}</td>
+          </tr>
+          <tr style="border-top:1px solid var(--bd2)">
+            <td><strong>Bruto</strong></td>
+            <td></td>
+            <td class="num"><strong>${fmt$(calc.total_bruto)}</strong></td>
+          </tr>
+          ${calc.adelantos > 0 ? `
+          <tr class="row-warn">
+            <td>– Adelantos a descontar</td>
+            <td class="num" style="color:var(--txt3);font-size:11px">cargado 05-jun</td>
+            <td class="num num-neg">– ${fmt$(calc.adelantos)}</td>
+          </tr>
+          ` : ''}
+          <tr style="border-top:2px solid var(--bd2);background:rgba(52,211,153,0.05)">
+            <td style="font-size:14px"><strong>TOTAL A PAGAR</strong></td>
+            <td></td>
+            <td class="num" style="font-size:18px"><strong style="color:var(--success)">${fmt$(calc.total_neto)}</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    ${liq.eventos.length > 0 ? `
+    <div class="card">
+      <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">Eventos consolidados (${liq.eventos.length})</div>
+      <table>
+        <thead><tr><th>Fecha</th><th>Tipo</th><th>Cantidad</th><th>Comentario</th></tr></thead>
+        <tbody>
+          ${liq.eventos.map(ev => `
+            <tr>
+              <td>${fmtFecha(ev.fecha)}</td>
+              <td><span class="flag flag-${ev.tipo === 'AUSENCIA' ? 'warn' : 'info'}">${ev.tipo}</span></td>
+              <td>${ev.cantidad}</td>
+              <td style="color:var(--txt3)">${ev.comentario || '—'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      <div style="margin-top:10px;font-size:11px;color:var(--txt3)">
+        💡 Para corregir un evento: ir al calendario o cargar uno nuevo desde "Carga rápida".
+      </div>
+    </div>
+    ` : ''}
+
+    <div class="card">
+      <div style="display:flex;gap:8px;justify-content:flex-end;align-items:center">
+        <button class="btn btn-ghost" onclick="viewCalendario()">Editar eventos</button>
+        <button class="btn btn-ghost" onclick="viewDashboard()">Cancelar</button>
+        <button class="btn btn-primary" onclick="abrirModalPago('${liq.id}')">Pagar ${fmt$(calc.total_neto)} →</button>
+      </div>
+    </div>
+  `;
+}
+
+function abrirModalPago(liqId) {
+  setStep('Paso 3: Confirmar pago');
+  const hoy = calcLiquidacionesHoy();
+  const liq = hoy.find(l => l.id === liqId);
+  if (!liq) return;
+
+  const cuentas = ['Caja Efectivo', 'Caja Chica', 'Caja Mayor', 'MercadoPago', 'Banco'];
+  const defaultPago = liq.emp.alias_mp ? 'transferencia' : 'efectivo';
+
+  document.getElementById('modalContent').innerHTML = `
+    <h2>Confirmar pago a ${liq.emp.nombre}</h2>
+    <div style="background:var(--bg3);padding:12px;border-radius:var(--r);margin-bottom:16px">
+      <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Total a pagar</div>
+      <div style="font-size:24px;font-weight:600;color:var(--success)">${fmt$(liq.calc.total_neto)}</div>
+      <div style="font-size:11px;color:var(--txt3);margin-top:4px">${liq.label}</div>
+    </div>
+
+    <div class="field">
+      <label>Forma de pago</label>
+      <div class="radio-group">
+        <div class="radio-opt ${defaultPago==='efectivo'?'active':''}" id="paymentEfectivo" onclick="setPayment('efectivo')">💵 Efectivo</div>
+        <div class="radio-opt ${defaultPago==='transferencia'?'active':''}" id="paymentTransfer" onclick="setPayment('transferencia')">💳 Transferencia MP</div>
+      </div>
+      ${!liq.emp.alias_mp ? '<div style="font-size:11px;color:var(--warning);margin-top:6px">⚠️ Empleado sin alias MP → solo efectivo disponible</div>' : ''}
+    </div>
+
+    <div class="field">
+      <label>Cuenta de caja</label>
+      <select>
+        ${cuentas.map(c => `<option>${c}</option>`).join('')}
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Notificar al empleado por WhatsApp</label>
+      <div class="radio-group">
+        <div class="radio-opt active">✅ Sí, mandar WhatsApp</div>
+        <div class="radio-opt">❌ No notificar</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px">
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarPago('${liqId}')">Confirmar pago</button>
+    </div>
+  `;
+  document.getElementById('modal').classList.add('open');
+}
+
+function setPayment(tipo) {
+  document.getElementById('paymentEfectivo').classList.toggle('active', tipo === 'efectivo');
+  document.getElementById('paymentTransfer').classList.toggle('active', tipo === 'transferencia');
+}
+
+function cerrarModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+function confirmarPago(liqId) {
+  const hoy = calcLiquidacionesHoy();
+  const liq = hoy.find(l => l.id === liqId);
+  if (!liq) return;
+
+  document.getElementById('modalContent').innerHTML = `
+    <div class="receipt">
+      <div class="check">✓</div>
+      <div style="font-size:18px;font-weight:600;margin-bottom:8px">Pago confirmado</div>
+      <div style="color:var(--txt2);font-size:13px;margin-bottom:16px">${fmt$(liq.calc.total_neto)} a ${liq.emp.nombre}</div>
+      <div style="text-align:left;background:var(--bg);padding:14px;border-radius:var(--r);font-size:12px;color:var(--txt2)">
+        ✓ Movimiento creado en Caja Mayor (${LOCALES.find(l=>l.id===liq.emp.local_id).nombre})<br>
+        ✓ Liquidación marcada como PAGADA<br>
+        ✓ Recibo PDF generado y guardado en legajo<br>
+        ${liq.emp.alias_mp ? '✓ WhatsApp enviado al empleado' : '⚠️ WhatsApp no se envió (sin teléfono)'}<br>
+        ${liq.calc.adelantos > 0 ? `✓ Adelanto de ${fmt$(liq.calc.adelantos)} marcado como descontado` : ''}
+      </div>
+      <div style="margin-top:16px;display:flex;gap:8px;justify-content:center">
+        <button class="btn btn-ghost" onclick="cerrarModal()">Cerrar</button>
+        <button class="btn btn-primary" onclick="cerrarModal();viewDashboard()">Volver al Dashboard</button>
+      </div>
+    </div>
+  `;
+}
+
+function viewCalendario() {
+  setStep('Vista alternativa: calendario diario');
+  const mes = 5; // junio (0-indexed)
+  const año = 2026;
+  const primerDia = new Date(año, mes, 1);
+  const ultimoDia = new Date(año, mes + 1, 0);
+  const diasMes = ultimoDia.getDate();
+  const diaSemanaIni = primerDia.getDay(); // 0=domingo
+
+  // Crear celdas
+  let celdas = [];
+  for (let i = 0; i < diaSemanaIni; i++) celdas.push(null);
+  for (let d = 1; d <= diasMes; d++) celdas.push(d);
+
+  const eventsByDay = {};
+  EVENTOS.filter(ev => ev.fecha.startsWith('2026-06')).forEach(ev => {
+    const day = parseInt(ev.fecha.split('-')[2]);
+    if (!eventsByDay[day]) eventsByDay[day] = [];
+    eventsByDay[day].push(ev);
+  });
+
+  document.getElementById('main').innerHTML = `
+    <div class="header">
+      <div>
+        <button class="btn btn-ghost" onclick="viewDashboard()">← Volver</button>
+        <h1 class="h1" style="margin-top:8px">Calendario diario — Junio 2026</h1>
+        <div class="h1-sub">Vista para encargados / cajeros del local · cargá eventos del día con un click</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select style="background:var(--bg);border:1px solid var(--bd);color:var(--txt);padding:8px;border-radius:var(--r);font-size:12px">
+          ${LOCALES.map(l => `<option>${l.nombre}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+
+    <div class="hint">
+      <strong>💡 Concepto:</strong> esta vista NO existe hoy. Es para que el ENCARGADO del local entre al cierre del turno y cargue eventos del día (Luis faltó, Pedro hizo doble) en 30 segundos. Mientras tanto Anto sigue usando la vista batch (carga rápida) durante su quincena. <strong>Ambas alimentan la misma tabla rrhh_eventos.</strong>
+    </div>
+
+    <div class="quick-add">
+      <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">⚡ Carga rápida (Anto usa esta vista durante la quincena)</div>
+      <div class="qa-row">
+        <select id="qaEmp">
+          ${EMPLEADOS.map(e => `<option value="${e.id}">${e.nombre}</option>`).join('')}
+        </select>
+        <select id="qaTipo">
+          <option value="AUSENCIA">Faltó</option>
+          <option value="DOBLE">Hizo doble</option>
+          <option value="FERIADO">Feriado pagado</option>
+          <option value="HORAS_EXTRA">Horas extras</option>
+          <option value="VACACION_DIA">Día vacación</option>
+          <option value="ADELANTO">Adelanto $</option>
+        </select>
+        <input type="date" id="qaFecha" value="2026-06-15">
+        <input type="number" id="qaCant" value="1" style="width:80px" placeholder="Cant">
+        <input type="text" id="qaCom" placeholder="Comentario opcional" style="flex:1;min-width:200px">
+        <button class="btn btn-primary" onclick="agregarEvento()">+ Agregar</button>
+      </div>
+    </div>
+
+    <div class="calendar">
+      <div class="cal-grid" style="margin-bottom:8px">
+        ${['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'].map(d => `<div class="cal-head">${d}</div>`).join('')}
+      </div>
+      <div class="cal-grid">
+        ${celdas.map(d => {
+          if (d === null) return `<div class="cal-day outside"></div>`;
+          const isToday = d === 16;
+          const isFuture = d > 16;
+          const evs = eventsByDay[d] || [];
+          return `
+            <div class="cal-day ${isToday ? 'today' : ''} ${isFuture ? 'outside' : ''}" onclick="${isFuture?'':`detalleDia(${d})`}">
+              <div class="day-num">${d}${isToday ? ' · hoy' : ''}</div>
+              <div class="day-events">
+                ${evs.slice(0,4).map(ev => {
+                  const emp = EMPLEADOS.find(e => e.id === ev.empleado_id);
+                  const cls = `ev-${ev.tipo.toLowerCase().split('_')[0]}`;
+                  const label = ev.tipo === 'AUSENCIA' ? '❌' : ev.tipo === 'DOBLE' ? '⭐' : ev.tipo === 'FERIADO' ? '🎉' : ev.tipo === 'ADELANTO' ? '💵' : '•';
+                  return `<div class="ev ${cls}" title="${ev.tipo}">${label} ${emp ? emp.nombre.split(' ')[0] : '?'}</div>`;
+                }).join('')}
+                ${evs.length > 4 ? `<div class="ev">+${evs.length - 4} más</div>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">📋 Todos los eventos del mes (${EVENTOS.filter(ev=>ev.fecha.startsWith('2026-06')).length})</div>
+      <table>
+        <thead><tr><th>Fecha</th><th>Empleado</th><th>Tipo</th><th>Cant</th><th>Comentario</th><th></th></tr></thead>
+        <tbody>
+          ${EVENTOS.filter(ev=>ev.fecha.startsWith('2026-06')).sort((a,b) => a.fecha.localeCompare(b.fecha)).map(ev => {
+            const emp = EMPLEADOS.find(e => e.id === ev.empleado_id);
+            return `<tr>
+              <td>${ev.fecha}</td>
+              <td>${emp ? emp.nombre : '?'}</td>
+              <td><span class="flag flag-${ev.tipo === 'AUSENCIA' ? 'warn' : 'info'}">${ev.tipo}</span></td>
+              <td>${ev.cantidad}</td>
+              <td style="color:var(--txt3)">${ev.comentario || '—'}</td>
+              <td><button class="btn btn-ghost" style="padding:4px 8px;font-size:10px" onclick="borrarEvento(${ev.id})">×</button></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function detalleDia(d) {
+  const fecha = `2026-06-${String(d).padStart(2,'0')}`;
+  const evs = EVENTOS.filter(ev => ev.fecha === fecha);
+  alert(`Eventos del ${fmtFecha(fecha)}:\n\n${evs.length === 0 ? '(sin eventos)' : evs.map(e => {
+    const emp = EMPLEADOS.find(em => em.id === e.empleado_id);
+    return `${emp?.nombre || '?'}: ${e.tipo} x${e.cantidad} ${e.comentario || ''}`;
+  }).join('\n')}\n\nClick en "Carga rápida" arriba para agregar uno nuevo en este día.`);
+}
+
+function agregarEvento() {
+  const ev = {
+    id: Math.max(...EVENTOS.map(e=>e.id)) + 1,
+    empleado_id: parseInt(document.getElementById('qaEmp').value),
+    fecha: document.getElementById('qaFecha').value,
+    tipo: document.getElementById('qaTipo').value,
+    cantidad: parseInt(document.getElementById('qaCant').value),
+    comentario: document.getElementById('qaCom').value
+  };
+  EVENTOS.push(ev);
+  document.getElementById('qaCom').value = '';
+  viewCalendario();
+}
+
+function borrarEvento(id) {
+  EVENTOS = EVENTOS.filter(e => e.id !== id);
+  viewCalendario();
+}
+
+function viewEmpleados() {
+  setStep('Vista empleados');
+  document.getElementById('main').innerHTML = `
+    <div class="header">
+      <div>
+        <button class="btn btn-ghost" onclick="viewDashboard()">← Volver</button>
+        <h1 class="h1" style="margin-top:8px">Empleados</h1>
+        <div class="h1-sub">${EMPLEADOS.length} empleados activos en ${LOCALES.length} locales</div>
+      </div>
+      <button class="btn btn-primary">+ Nuevo empleado</button>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Puesto</th>
+            <th>Local</th>
+            <th>Modo pago</th>
+            <th class="num">Sueldo</th>
+            <th>MP</th>
+            <th class="num">Eventos jun</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${EMPLEADOS.map(e => {
+            const evs = EVENTOS.filter(ev => ev.empleado_id === e.id && ev.fecha.startsWith('2026-06')).length;
+            return `<tr>
+              <td><strong>${e.nombre}</strong></td>
+              <td style="color:var(--txt2)">${e.puesto}</td>
+              <td style="color:var(--txt2)">${LOCALES.find(l=>l.id===e.local_id).nombre}</td>
+              <td><span class="flag flag-info">${e.modo_pago}</span></td>
+              <td class="num">${fmt$(e.sueldo)}${e.modo_pago === 'DIARIO' ? '/día calc' : e.modo_pago === 'SEMANAL' ? '/sem calc' : '/mes'}</td>
+              <td>${e.alias_mp ? '<span class="flag flag-ok">✓</span>' : '<span class="flag flag-warn">faltante</span>'}</td>
+              <td class="num">${evs}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// ============ INIT ============
+viewDashboard();
+</script>
+
+</body>
+</html>

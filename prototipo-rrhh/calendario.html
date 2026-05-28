@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PASE · Calendario RRHH — Prototipo</title>
+<style>
+  :root {
+    --bg: #0a0e14;
+    --bg2: #0f141c;
+    --bg3: #161c26;
+    --bd: #1f2937;
+    --bd2: #2a3441;
+    --txt: #e2e8f0;
+    --txt2: #94a3b8;
+    --txt3: #64748b;
+    --celeste: #60a5fa;
+    --celeste-dim: #1e3a5f;
+    --gold: #fbbf24;
+    --success: #34d399;
+    --danger: #ef4444;
+    --warning: #fb923c;
+    --purple: #a78bfa;
+    --r: 6px;
+    --fs: 13px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--txt);
+    font-size: var(--fs);
+    line-height: 1.5;
+  }
+  .header-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--bd);
+  }
+  .header-bar .logo { font-size: 18px; font-weight: 700; }
+  .header-bar .logo span { color: var(--celeste); }
+  .toggle {
+    display: inline-flex;
+    background: var(--bg3);
+    border-radius: var(--r);
+    padding: 3px;
+    gap: 2px;
+  }
+  .toggle button {
+    background: transparent;
+    border: none;
+    color: var(--txt3);
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .toggle button.active { background: var(--celeste-dim); color: var(--celeste); }
+
+  .container { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    background: var(--bg2);
+    border: 1px solid var(--bd);
+    border-radius: var(--r);
+    padding: 12px 14px;
+  }
+  .controls select, .controls input {
+    background: var(--bg);
+    border: 1px solid var(--bd);
+    color: var(--txt);
+    padding: 6px 10px;
+    border-radius: var(--r);
+    font-size: 12px;
+  }
+  .controls .arrow {
+    width: 32px; height: 32px;
+    background: var(--bg3);
+    border: 1px solid var(--bd);
+    border-radius: var(--r);
+    color: var(--txt2);
+    font-size: 16px;
+    cursor: pointer;
+  }
+  .controls .arrow:hover { background: var(--celeste-dim); color: var(--celeste); }
+  .controls .mes-actual { font-weight: 600; font-size: 16px; margin: 0 8px; min-width: 140px; text-align: center; }
+
+  /* === Vista mensual web === */
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-head { color: var(--txt3); font-size: 10px; text-align: center; padding: 6px 0; text-transform: uppercase; font-weight: 600; letter-spacing: 1px; }
+  .cal-day {
+    min-height: 110px;
+    background: var(--bg2);
+    border: 1px solid var(--bd);
+    border-radius: 4px;
+    padding: 6px;
+    cursor: pointer;
+    position: relative;
+    font-size: 11px;
+    transition: all 0.15s;
+  }
+  .cal-day:hover { border-color: var(--celeste); transform: scale(1.02); z-index: 1; }
+  .cal-day.today { border: 2px solid var(--celeste); background: var(--celeste-dim); }
+  .cal-day.outside { opacity: 0.25; cursor: default; }
+  .cal-day.fin-de-semana { background: var(--bg); }
+  .cal-day.futuro { opacity: 0.55; }
+  .cal-day .day-num { font-weight: 700; color: var(--txt); margin-bottom: 6px; font-size: 13px; }
+  .cal-day .day-num small { color: var(--txt3); font-weight: 400; font-size: 9px; }
+  .cal-day.feriado-dia .day-num small { color: var(--celeste); font-weight: 600; }
+  .day-events { display: flex; flex-direction: column; gap: 2px; }
+  .ev {
+    font-size: 9px;
+    padding: 2px 5px;
+    border-radius: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.3;
+    border-left: 2px solid;
+  }
+  .ev-AUSENCIA { background: rgba(239,68,68,0.18); color: #fca5a5; border-color: var(--danger); }
+  .ev-DOBLE { background: rgba(251,191,36,0.18); color: #fcd34d; border-color: var(--gold); }
+  .ev-FERIADO { background: rgba(96,165,250,0.18); color: #93c5fd; border-color: var(--celeste); }
+  .ev-HORAS_EXTRA { background: rgba(167,139,250,0.18); color: #c4b5fd; border-color: var(--purple); }
+  .ev-VACACION_DIA { background: rgba(52,211,153,0.18); color: #86efac; border-color: var(--success); }
+  .ev-ADELANTO { background: rgba(251,146,60,0.18); color: #fdba74; border-color: var(--warning); }
+  .day-count { position: absolute; top: 6px; right: 8px; font-size: 9px; color: var(--txt3); }
+
+  /* === Stats === */
+  .stats-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 16px; }
+  .stat {
+    background: var(--bg2);
+    border: 1px solid var(--bd);
+    border-radius: var(--r);
+    padding: 10px 14px;
+  }
+  .stat-label { font-size: 9px; color: var(--txt3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .stat-val { font-size: 20px; font-weight: 700; }
+  .stat-sub { font-size: 10px; color: var(--txt3); margin-top: 2px; }
+
+  /* === Modal === */
+  .modal-bg {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .modal-bg.open { display: flex; }
+  .modal {
+    background: var(--bg2);
+    border: 1px solid var(--bd);
+    border-radius: var(--r);
+    padding: 0;
+    max-width: 540px;
+    width: 100%;
+    max-height: 92vh;
+    overflow-y: auto;
+  }
+  .modal-head { padding: 18px 20px; border-bottom: 1px solid var(--bd); display: flex; justify-content: space-between; align-items: center; }
+  .modal-head h2 { margin: 0; font-size: 17px; }
+  .modal-head .close { background: transparent; border: none; color: var(--txt3); font-size: 22px; cursor: pointer; }
+  .modal-body { padding: 16px 20px; }
+  .modal-foot { padding: 12px 20px; border-top: 1px solid var(--bd); display: flex; gap: 8px; justify-content: flex-end; background: var(--bg); }
+
+  .btn {
+    background: var(--celeste-dim);
+    color: var(--celeste);
+    border: 1px solid transparent;
+    padding: 7px 14px;
+    border-radius: var(--r);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn:hover { background: #2d5285; }
+  .btn-ghost { background: transparent; border-color: var(--bd2); color: var(--txt2); }
+  .btn-ghost:hover { background: var(--bg3); color: var(--txt); }
+  .btn-primary { background: var(--celeste); color: #0a0e14; font-weight: 600; }
+  .btn-primary:hover { background: #93c5fd; }
+  .btn-sm { padding: 4px 10px; font-size: 11px; }
+
+  /* === Empleados list en modal === */
+  .emp-list { display: flex; flex-direction: column; gap: 6px; }
+  .emp-row {
+    background: var(--bg);
+    border: 1px solid var(--bd);
+    border-radius: var(--r);
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .emp-name { flex: 1; font-size: 13px; font-weight: 500; }
+  .emp-puesto { font-size: 10px; color: var(--txt3); }
+  .emp-acciones { display: flex; gap: 4px; }
+  .emp-acciones button {
+    background: var(--bg3);
+    border: 1px solid var(--bd);
+    color: var(--txt2);
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .emp-acciones button:hover { border-color: var(--celeste); color: var(--celeste); }
+  .emp-acciones button.active-AUSENCIA { background: rgba(239,68,68,0.25); color: var(--danger); border-color: var(--danger); }
+  .emp-acciones button.active-DOBLE { background: rgba(251,191,36,0.25); color: var(--gold); border-color: var(--gold); }
+  .emp-acciones button.active-FERIADO { background: rgba(96,165,250,0.25); color: var(--celeste); border-color: var(--celeste); }
+  .emp-acciones button.active-VACACION_DIA { background: rgba(52,211,153,0.25); color: var(--success); border-color: var(--success); }
+
+  /* === Vista mobile / hoy === */
+  .mobile-hoy {
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .mobile-hoy h1 {
+    font-size: 28px;
+    margin: 16px 0 4px;
+  }
+  .mobile-hoy .sub {
+    color: var(--txt3);
+    margin-bottom: 20px;
+  }
+  .mobile-emp {
+    background: var(--bg2);
+    border: 1px solid var(--bd);
+    border-radius: var(--r);
+    margin-bottom: 8px;
+    padding: 12px 14px;
+  }
+  .mobile-emp-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .mobile-emp-nombre { font-size: 15px; font-weight: 600; }
+  .mobile-emp-puesto { font-size: 11px; color: var(--txt3); }
+  .mobile-acciones { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .mobile-acciones button {
+    background: var(--bg3);
+    border: 1px solid var(--bd);
+    color: var(--txt2);
+    padding: 12px 4px;
+    border-radius: var(--r);
+    font-size: 11px;
+    cursor: pointer;
+    text-align: center;
+  }
+  .mobile-acciones button .emoji { display: block; font-size: 22px; margin-bottom: 2px; }
+  .mobile-acciones button.active-AUSENCIA { background: rgba(239,68,68,0.25); color: var(--danger); border-color: var(--danger); }
+  .mobile-acciones button.active-DOBLE { background: rgba(251,191,36,0.25); color: var(--gold); border-color: var(--gold); }
+  .mobile-acciones button.active-VACACION_DIA { background: rgba(52,211,153,0.25); color: var(--success); border-color: var(--success); }
+  .mobile-acciones button.active-PRESENTE { background: rgba(52,211,153,0.25); color: var(--success); border-color: var(--success); }
+
+  /* === Filters / chips === */
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    background: var(--bg3);
+    border: 1px solid var(--bd);
+    color: var(--txt2);
+    padding: 4px 10px;
+    border-radius: 100px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .chip.active { background: var(--celeste-dim); border-color: var(--celeste); color: var(--celeste); }
+
+  /* === Legend === */
+  .legend {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-size: 11px;
+    color: var(--txt3);
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--bd);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .legend .sw { width: 12px; height: 12px; border-radius: 3px; }
+
+  /* === Hint === */
+  .hint {
+    background: linear-gradient(90deg, rgba(96,165,250,0.08), transparent);
+    border-left: 3px solid var(--celeste);
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    color: var(--txt2);
+  }
+  .hint strong { color: var(--celeste); }
+
+  .hidden { display: none !important; }
+
+  /* === View toggle === */
+  .view-week, .view-month, .view-employee, .view-mobile { display: none; }
+  .view-week.active, .view-month.active, .view-employee.active, .view-mobile.active { display: block; }
+
+  /* === Vista por empleado === */
+  .emp-grid-container { overflow-x: auto; background: var(--bg2); border: 1px solid var(--bd); border-radius: var(--r); }
+  .emp-grid {
+    display: grid;
+    min-width: 1000px;
+  }
+  .emp-grid-row {
+    display: grid;
+    grid-template-columns: 180px repeat(30, 32px);
+    border-bottom: 1px solid var(--bd);
+  }
+  .emp-grid-row.head {
+    background: var(--bg);
+    color: var(--txt3);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: sticky;
+    top: 0;
+  }
+  .emp-grid-cell {
+    padding: 10px 8px;
+    border-right: 1px solid var(--bd);
+    text-align: center;
+    font-size: 11px;
+    cursor: pointer;
+    position: relative;
+    min-height: 38px;
+  }
+  .emp-grid-cell:first-child { text-align: left; cursor: default; }
+  .emp-grid-cell.weekend { background: var(--bg); }
+  .emp-grid-cell.today-col { background: var(--celeste-dim); }
+  .emp-grid-cell:hover:not(:first-child) { background: var(--bg3); }
+  .emp-grid-cell .ev-dot {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+
+  /* === Mobile responsive === */
+  @media (max-width: 768px) {
+    .stats-row { grid-template-columns: repeat(3, 1fr); }
+    .cal-day { min-height: 60px; padding: 4px; }
+    .cal-day .day-num { font-size: 11px; }
+    .ev { font-size: 8px; padding: 1px 3px; }
+    .day-count { font-size: 8px; top: 2px; right: 4px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header-bar">
+  <div class="logo">pase. <span>· Calendario RRHH</span></div>
+  <div class="toggle">
+    <button class="active" onclick="setView('month')">📅 Mes</button>
+    <button onclick="setView('employee')">👥 Por empleado</button>
+    <button onclick="setView('mobile')">📱 Hoy (mobile)</button>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="hint">
+    <strong>💡 Concepto del prototipo:</strong> tres vistas alternativas del MISMO modelo de eventos (<code style="background:var(--bg3);padding:2px 6px;border-radius:3px;color:var(--gold)">rrhh_eventos</code>). Cambiá entre Mes (vista web del manager), Por empleado (planilla horizontal estilo timesheet) y Hoy mobile (lo que el encargado ve en el celu al cerrar turno).
+  </div>
+
+  <!-- ===== STATS ===== -->
+  <div class="stats-row" id="stats"></div>
+
+  <!-- ===== CONTROLS ===== -->
+  <div class="controls">
+    <button class="arrow" onclick="cambiarMes(-1)">←</button>
+    <div class="mes-actual" id="mesActual">Junio 2026</div>
+    <button class="arrow" onclick="cambiarMes(1)">→</button>
+    <select id="selLocal" onchange="render()">
+      <option value="all">Todos los locales</option>
+    </select>
+    <select id="selTipo" onchange="render()">
+      <option value="all">Todos los tipos</option>
+      <option value="AUSENCIA">Ausencias</option>
+      <option value="DOBLE">Dobles</option>
+      <option value="FERIADO">Feriados</option>
+      <option value="HORAS_EXTRA">Horas extras</option>
+      <option value="VACACION_DIA">Vacaciones</option>
+      <option value="ADELANTO">Adelantos</option>
+    </select>
+    <button class="btn btn-primary" onclick="abrirCargaRapida()">+ Cargar evento</button>
+    <button class="btn btn-ghost" onclick="copiarDelMesAnterior()" title="Copia los eventos del mismo día de la semana del mes anterior">📋 Copiar mes anterior</button>
+  </div>
+
+  <!-- ===== VISTA MES ===== -->
+  <div class="view-month active" id="viewMonth">
+    <div class="cal-grid" style="margin-bottom: 4px">
+      <div class="cal-head">Dom</div>
+      <div class="cal-head">Lun</div>
+      <div class="cal-head">Mar</div>
+      <div class="cal-head">Mié</div>
+      <div class="cal-head">Jue</div>
+      <div class="cal-head">Vie</div>
+      <div class="cal-head">Sáb</div>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+
+    <div class="legend">
+      <span><span class="sw" style="background:#fca5a5"></span> Ausencia</span>
+      <span><span class="sw" style="background:#fcd34d"></span> Doble turno</span>
+      <span><span class="sw" style="background:#93c5fd"></span> Feriado pagado</span>
+      <span><span class="sw" style="background:#c4b5fd"></span> Horas extras</span>
+      <span><span class="sw" style="background:#86efac"></span> Día de vacación</span>
+      <span><span class="sw" style="background:#fdba74"></span> Adelanto $</span>
+      <span style="margin-left:auto">Click en cualquier día para editar eventos</span>
+    </div>
+  </div>
+
+  <!-- ===== VISTA POR EMPLEADO ===== -->
+  <div class="view-employee" id="viewEmployee">
+    <div class="emp-grid-container">
+      <div class="emp-grid" id="empGrid"></div>
+    </div>
+    <div class="legend">
+      <span>Click en una celda para agregar evento</span>
+      <span style="margin-left:auto">Scroll horizontal si el mes es largo →</span>
+    </div>
+  </div>
+
+  <!-- ===== VISTA MOBILE / HOY ===== -->
+  <div class="view-mobile" id="viewMobile">
+    <div class="mobile-hoy">
+      <h1>📱 Hoy</h1>
+      <div class="sub" id="mobileFecha">Lunes 16-jun-2026 · 23:14 hs</div>
+
+      <div class="chips" style="margin-bottom: 16px" id="mobileLocales"></div>
+
+      <div class="hint" style="margin-bottom: 14px">
+        <strong>👀 Para el encargado:</strong> entrá al cerrar el turno, marcá lo del día en 30 segundos. Si todos vinieron, click "Cerrar día sin novedades" arriba.
+      </div>
+
+      <button class="btn btn-primary" style="width:100%;padding:14px;font-size:14px;margin-bottom:16px" onclick="cerrarDiaSinNovedades()">
+        ✅ Cerrar día sin novedades — todos vinieron OK
+      </button>
+
+      <div id="mobileEmpList"></div>
+
+      <button class="btn btn-ghost" style="width:100%;margin-top:16px;padding:12px" onclick="abrirCargaRapida()">+ Cargar otro evento (adelanto, hora extra, etc)</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===== MODAL ===== -->
+<div class="modal-bg" id="modal" onclick="if(event.target===this)cerrarModal()">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<script>
+// ============ DATA ============
+const LOCALES = [
+  { id: 1, nombre: 'Neko Belgrano' },
+  { id: 2, nombre: 'Neko Villa Crespo' },
+  { id: 3, nombre: 'Neko Devoto' },
+  { id: 4, nombre: 'Neko Palermo Maneki' },
+  { id: 5, nombre: 'Rene Cantina' },
+];
+
+const EMPLEADOS = [
+  { id: 1, nombre: 'Camilo Argañaraz', puesto: 'Cocinero', local_id: 1, modo_pago: 'MENSUAL' },
+  { id: 2, nombre: 'Luis Mendoza',     puesto: 'Mozo',     local_id: 1, modo_pago: 'QUINCENAL' },
+  { id: 3, nombre: 'Pedro Salinas',    puesto: 'Bachero',  local_id: 1, modo_pago: 'SEMANAL' },
+  { id: 4, nombre: 'Camila Vázquez',   puesto: 'Cocina aux', local_id: 1, modo_pago: 'DIARIO' },
+  { id: 5, nombre: 'Marcelo Fernández', puesto: 'Cocinero', local_id: 2, modo_pago: 'MENSUAL' },
+  { id: 6, nombre: 'Sofía García',      puesto: 'Cajera',   local_id: 2, modo_pago: 'QUINCENAL' },
+  { id: 7, nombre: 'Tomás Ríos',        puesto: 'Bachero',  local_id: 2, modo_pago: 'SEMANAL' },
+  { id: 8, nombre: 'Marina López',      puesto: 'Mozo',     local_id: 3, modo_pago: 'MENSUAL' },
+  { id: 9, nombre: 'Diego Pérez',       puesto: 'Cocinero', local_id: 3, modo_pago: 'MENSUAL' },
+  { id: 10, nombre: 'Joaquín Méndez',   puesto: 'Cocinero', local_id: 4, modo_pago: 'MENSUAL' },
+  { id: 11, nombre: 'Valentina Cruz',   puesto: 'Cajera',   local_id: 4, modo_pago: 'QUINCENAL' },
+  { id: 12, nombre: 'Roxana Pereyra',   puesto: 'Cocinera', local_id: 5, modo_pago: 'MENSUAL' },
+  { id: 13, nombre: 'Hernán Vidal',     puesto: 'Mozo',     local_id: 5, modo_pago: 'QUINCENAL' },
+];
+
+const FERIADOS_2026 = {
+  '2026-01-01': 'Año Nuevo',
+  '2026-02-16': 'Carnaval',
+  '2026-02-17': 'Carnaval',
+  '2026-03-24': 'Día Memoria',
+  '2026-04-03': 'Viernes Santo',
+  '2026-05-01': 'Día Trabajador',
+  '2026-05-25': 'Revolución Mayo',
+  '2026-06-15': 'Güemes (trasl)',
+  '2026-06-20': 'Belgrano',
+  '2026-07-09': 'Independencia',
+  '2026-08-17': 'San Martín',
+  '2026-10-12': 'Diversidad',
+  '2026-11-23': 'Soberanía',
+  '2026-12-08': 'Inmaculada',
+  '2026-12-25': 'Navidad',
+};
+
+// Eventos cargados (mock data realista)
+let EVENTOS = JSON.parse(localStorage.getItem('pase_eventos') || 'null') || [
+  { id: 1, empleado_id: 2, fecha: '2026-06-07', tipo: 'AUSENCIA', cantidad: 1, comentario: 'Gripe, avisó por WhatsApp' },
+  { id: 2, empleado_id: 5, fecha: '2026-05-12', tipo: 'DOBLE', cantidad: 1, comentario: 'Cubrió a Diego' },
+  { id: 3, empleado_id: 5, fecha: '2026-05-19', tipo: 'DOBLE', cantidad: 1, comentario: '' },
+  { id: 4, empleado_id: 3, fecha: '2026-06-15', tipo: 'FERIADO', cantidad: 1, comentario: 'Trabajó el 15 (Güemes trasl)' },
+  { id: 5, empleado_id: 6, fecha: '2026-06-08', tipo: 'AUSENCIA', cantidad: 1, comentario: '' },
+  { id: 6, empleado_id: 7, fecha: '2026-06-13', tipo: 'DOBLE', cantidad: 1, comentario: '' },
+  { id: 7, empleado_id: 2, fecha: '2026-06-05', tipo: 'ADELANTO', cantidad: 50000, comentario: 'Mudanza' },
+  { id: 8, empleado_id: 1, fecha: '2026-06-09', tipo: 'HORAS_EXTRA', cantidad: 3, comentario: 'Evento privado de noche' },
+  { id: 9, empleado_id: 8, fecha: '2026-06-02', tipo: 'VACACION_DIA', cantidad: 1, comentario: '' },
+  { id: 10, empleado_id: 8, fecha: '2026-06-03', tipo: 'VACACION_DIA', cantidad: 1, comentario: '' },
+  { id: 11, empleado_id: 8, fecha: '2026-06-04', tipo: 'VACACION_DIA', cantidad: 1, comentario: '' },
+  { id: 12, empleado_id: 8, fecha: '2026-06-05', tipo: 'VACACION_DIA', cantidad: 1, comentario: '' },
+  { id: 13, empleado_id: 8, fecha: '2026-06-06', tipo: 'VACACION_DIA', cantidad: 1, comentario: '' },
+  { id: 14, empleado_id: 11, fecha: '2026-06-10', tipo: 'AUSENCIA', cantidad: 1, comentario: 'Llegó pero se fue mal' },
+];
+
+let HOY = new Date('2026-06-16'); // Simulado
+let mesActual = 5; // junio (0-indexed)
+let añoActual = 2026;
+
+const TIPOS = ['AUSENCIA', 'DOBLE', 'FERIADO', 'HORAS_EXTRA', 'VACACION_DIA', 'ADELANTO'];
+const TIPO_LABEL = {
+  AUSENCIA: '❌ Falta',
+  DOBLE: '⭐ Doble',
+  FERIADO: '🎉 Feriado',
+  HORAS_EXTRA: '⏰ Horas extras',
+  VACACION_DIA: '🏖️ Vacación',
+  ADELANTO: '💵 Adelanto'
+};
+const TIPO_ICON = {
+  AUSENCIA: '❌', DOBLE: '⭐', FERIADO: '🎉', HORAS_EXTRA: '⏰', VACACION_DIA: '🏖️', ADELANTO: '💵'
+};
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const DIAS_SEMANA = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+
+// ============ HELPERS ============
+function persistir() {
+  localStorage.setItem('pase_eventos', JSON.stringify(EVENTOS));
+}
+function fmtFecha(d) {
+  const dt = new Date(d + 'T12:00:00');
+  return dt.toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
+}
+function fmt$(n) { return '$' + Math.round(n).toLocaleString('es-AR'); }
+function setView(v) {
+  document.querySelectorAll('.view-month, .view-employee, .view-mobile').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.toggle button').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.toggle button')[v === 'month' ? 0 : v === 'employee' ? 1 : 2].classList.add('active');
+  document.getElementById('view' + v.charAt(0).toUpperCase() + v.slice(1)).classList.add('active');
+  if (v === 'mobile') renderMobile();
+  if (v === 'employee') renderEmpleado();
+  if (v === 'month') render();
+}
+function cambiarMes(delta) {
+  mesActual += delta;
+  if (mesActual < 0) { mesActual = 11; añoActual--; }
+  if (mesActual > 11) { mesActual = 0; añoActual++; }
+  render();
+}
+
+// ============ STATS ============
+function calcStats() {
+  const empFiltrados = empleadosFiltrados();
+  const empIds = new Set(empFiltrados.map(e => e.id));
+  const eventosDelMes = EVENTOS.filter(ev => {
+    const dt = new Date(ev.fecha);
+    return dt.getMonth() === mesActual && dt.getFullYear() === añoActual && empIds.has(ev.empleado_id);
+  });
+  const tipoFilter = document.getElementById('selTipo')?.value || 'all';
+  const filt = tipoFilter === 'all' ? eventosDelMes : eventosDelMes.filter(ev => ev.tipo === tipoFilter);
+
+  const cont = {};
+  TIPOS.forEach(t => cont[t] = filt.filter(ev => ev.tipo === t).reduce((s, ev) => s + ev.cantidad, 0));
+
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="stat-label">Ausencias</div><div class="stat-val" style="color:var(--danger)">${cont.AUSENCIA}</div><div class="stat-sub">días no trabajados</div></div>
+    <div class="stat"><div class="stat-label">Dobles</div><div class="stat-val" style="color:var(--gold)">${cont.DOBLE}</div><div class="stat-sub">turnos extras</div></div>
+    <div class="stat"><div class="stat-label">Feriados</div><div class="stat-val" style="color:var(--celeste)">${cont.FERIADO}</div><div class="stat-sub">trabajados</div></div>
+    <div class="stat"><div class="stat-label">Hs extras</div><div class="stat-val" style="color:var(--purple)">${cont.HORAS_EXTRA}</div><div class="stat-sub">horas</div></div>
+    <div class="stat"><div class="stat-label">Vacaciones</div><div class="stat-val" style="color:var(--success)">${cont.VACACION_DIA}</div><div class="stat-sub">días tomados</div></div>
+    <div class="stat"><div class="stat-label">Adelantos $</div><div class="stat-val" style="color:var(--warning)">${fmt$(cont.ADELANTO)}</div><div class="stat-sub">pendientes</div></div>
+  `;
+}
+
+function empleadosFiltrados() {
+  const localFilter = document.getElementById('selLocal')?.value || 'all';
+  if (localFilter === 'all') return EMPLEADOS;
+  return EMPLEADOS.filter(e => e.local_id === parseInt(localFilter));
+}
+
+function eventosFiltrados() {
+  const empIds = new Set(empleadosFiltrados().map(e => e.id));
+  const tipoFilter = document.getElementById('selTipo')?.value || 'all';
+  let evs = EVENTOS.filter(ev => empIds.has(ev.empleado_id));
+  if (tipoFilter !== 'all') evs = evs.filter(ev => ev.tipo === tipoFilter);
+  return evs;
+}
+
+// ============ VISTA MES ============
+function render() {
+  document.getElementById('mesActual').textContent = MESES[mesActual] + ' ' + añoActual;
+  document.getElementById('selLocal').innerHTML = '<option value="all">Todos los locales</option>' +
+    LOCALES.map(l => `<option value="${l.id}">${l.nombre}</option>`).join('');
+
+  const primerDia = new Date(añoActual, mesActual, 1);
+  const ultimoDia = new Date(añoActual, mesActual + 1, 0);
+  const diasMes = ultimoDia.getDate();
+  const diaSemanaIni = primerDia.getDay();
+
+  const evs = eventosFiltrados();
+  const eventsByDay = {};
+  evs.filter(ev => {
+    const dt = new Date(ev.fecha);
+    return dt.getMonth() === mesActual && dt.getFullYear() === añoActual;
+  }).forEach(ev => {
+    const day = parseInt(ev.fecha.split('-')[2]);
+    if (!eventsByDay[day]) eventsByDay[day] = [];
+    eventsByDay[day].push(ev);
+  });
+
+  let celdas = [];
+  for (let i = 0; i < diaSemanaIni; i++) celdas.push(null);
+  for (let d = 1; d <= diasMes; d++) celdas.push(d);
+  while (celdas.length % 7 !== 0) celdas.push(null);
+
+  const html = celdas.map(d => {
+    if (d === null) return `<div class="cal-day outside"></div>`;
+    const fechaStr = `${añoActual}-${String(mesActual+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dt = new Date(fechaStr + 'T12:00:00');
+    const isToday = dt.getTime() === HOY.getTime();
+    const isFuture = dt > HOY;
+    const isWeekend = dt.getDay() === 0 || dt.getDay() === 6;
+    const feriado = FERIADOS_2026[fechaStr];
+    const evs = eventsByDay[d] || [];
+
+    let cls = 'cal-day';
+    if (isToday) cls += ' today';
+    if (isFuture) cls += ' futuro';
+    if (isWeekend) cls += ' fin-de-semana';
+    if (feriado) cls += ' feriado-dia';
+
+    const evChips = evs.slice(0, 4).map(ev => {
+      const emp = EMPLEADOS.find(e => e.id === ev.empleado_id);
+      const nom = emp ? emp.nombre.split(' ')[0] : '?';
+      const cant = ev.tipo === 'ADELANTO' ? '$' + (ev.cantidad/1000).toFixed(0) + 'k' : (ev.cantidad > 1 ? 'x' + ev.cantidad : '');
+      return `<div class="ev ev-${ev.tipo}" title="${TIPO_LABEL[ev.tipo]} · ${emp?.nombre || '?'}">${TIPO_ICON[ev.tipo]} ${nom} ${cant}</div>`;
+    }).join('');
+
+    return `
+      <div class="${cls}" onclick="abrirDia('${fechaStr}')">
+        <div class="day-num">${d}${isToday ? ' · hoy' : ''} ${feriado ? `<br><small>🎉 ${feriado}</small>` : ''}</div>
+        ${evs.length > 0 ? `<span class="day-count">${evs.length} ev</span>` : ''}
+        <div class="day-events">${evChips}${evs.length > 4 ? `<div class="ev" style="text-align:center;color:var(--txt3)">+${evs.length-4}</div>` : ''}</div>
+      </div>
+    `;
+  }).join('');
+
+  document.getElementById('calGrid').innerHTML = html;
+  calcStats();
+}
+
+// ============ MODAL DEL DÍA ============
+function abrirDia(fechaStr) {
+  const empFiltrados = empleadosFiltrados();
+  const evsDelDia = EVENTOS.filter(ev => ev.fecha === fechaStr);
+  const feriado = FERIADOS_2026[fechaStr];
+
+  // Empleado-evento map: para cada empleado del local, qué tipo cargó hoy
+  const empEvento = {};
+  evsDelDia.forEach(ev => {
+    if (!empEvento[ev.empleado_id]) empEvento[ev.empleado_id] = [];
+    empEvento[ev.empleado_id].push(ev);
+  });
+
+  document.getElementById('modalContent').innerHTML = `
+    <div class="modal-head">
+      <div>
+        <h2>${fmtFecha(fechaStr)}</h2>
+        <div style="font-size:11px;color:var(--txt3);margin-top:4px">${feriado ? '🎉 ' + feriado + ' · ' : ''}${empFiltrados.length} empleados visibles</div>
+      </div>
+      <button class="close" onclick="cerrarModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:14px;display:flex;gap:6px;flex-wrap:wrap">
+        ${feriado ? `<button class="btn btn-sm" onclick="marcarTodosFeriado('${fechaStr}')">🎉 Marcar feriado a TODOS los del local</button>` : ''}
+        <button class="btn btn-sm btn-ghost" onclick="quitarTodosDelDia('${fechaStr}')">🗑 Limpiar eventos del día</button>
+      </div>
+
+      <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Empleados del local</div>
+      <div class="emp-list">
+        ${empFiltrados.map(emp => {
+          const evs = empEvento[emp.id] || [];
+          const tiposCargados = new Set(evs.map(e => e.tipo));
+          return `
+            <div class="emp-row">
+              <div>
+                <div class="emp-name">${emp.nombre}</div>
+                <div class="emp-puesto">${emp.puesto} · ${LOCALES.find(l=>l.id===emp.local_id).nombre}</div>
+              </div>
+              <div class="emp-acciones">
+                <button onclick="toggleEvento(${emp.id}, '${fechaStr}', 'AUSENCIA')" class="${tiposCargados.has('AUSENCIA')?'active-AUSENCIA':''}">❌</button>
+                <button onclick="toggleEvento(${emp.id}, '${fechaStr}', 'DOBLE')" class="${tiposCargados.has('DOBLE')?'active-DOBLE':''}">⭐</button>
+                <button onclick="toggleEvento(${emp.id}, '${fechaStr}', 'FERIADO')" class="${tiposCargados.has('FERIADO')?'active-FERIADO':''}">🎉</button>
+                <button onclick="toggleEvento(${emp.id}, '${fechaStr}', 'VACACION_DIA')" class="${tiposCargados.has('VACACION_DIA')?'active-VACACION_DIA':''}">🏖️</button>
+                <button onclick="cargarEventoCustom(${emp.id}, '${fechaStr}')">＋</button>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+
+      ${evsDelDia.length > 0 ? `
+        <div style="margin-top:20px">
+          <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Eventos cargados hoy (${evsDelDia.length})</div>
+          ${evsDelDia.map(ev => {
+            const emp = EMPLEADOS.find(e => e.id === ev.empleado_id);
+            return `
+              <div style="background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);padding:8px 12px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center">
+                <div>
+                  <span class="ev ev-${ev.tipo}" style="font-size:10px;display:inline-block;padding:3px 8px">${TIPO_LABEL[ev.tipo]}</span>
+                  <span style="margin-left:8px">${emp?.nombre || '?'}</span>
+                  ${ev.cantidad > 1 ? `<span style="color:var(--txt3);margin-left:6px">× ${ev.cantidad}</span>` : ''}
+                  ${ev.tipo === 'ADELANTO' ? `<span style="color:var(--gold);margin-left:6px">${fmt$(ev.cantidad)}</span>` : ''}
+                  ${ev.comentario ? `<div style="font-size:10px;color:var(--txt3);margin-top:2px">${ev.comentario}</div>` : ''}
+                </div>
+                <button class="btn btn-sm btn-ghost" onclick="borrarEvento(${ev.id})">×</button>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      ` : ''}
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cerrar</button>
+      <button class="btn btn-primary" onclick="cerrarModal()">Listo</button>
+    </div>
+  `;
+  document.getElementById('modal').classList.add('open');
+}
+
+function toggleEvento(empId, fecha, tipo) {
+  const existente = EVENTOS.find(ev => ev.empleado_id === empId && ev.fecha === fecha && ev.tipo === tipo);
+  if (existente) {
+    EVENTOS = EVENTOS.filter(ev => ev.id !== existente.id);
+  } else {
+    EVENTOS.push({
+      id: Math.max(0, ...EVENTOS.map(e=>e.id)) + 1,
+      empleado_id: empId,
+      fecha,
+      tipo,
+      cantidad: 1,
+      comentario: ''
+    });
+  }
+  persistir();
+  abrirDia(fecha);
+  render();
+}
+
+function cargarEventoCustom(empId, fecha) {
+  const emp = EMPLEADOS.find(e => e.id === empId);
+  document.getElementById('modalContent').innerHTML = `
+    <div class="modal-head">
+      <h2>Cargar evento custom</h2>
+      <button class="close" onclick="abrirDia('${fecha}')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:14px;padding:10px;background:var(--bg);border-radius:var(--r);font-size:12px">
+        <strong>${emp.nombre}</strong> · ${emp.puesto}<br>
+        <span style="color:var(--txt3)">Fecha: ${fmtFecha(fecha)}</span>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:11px;color:var(--txt3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Tipo</label>
+        <select id="cTipo" style="width:100%;background:var(--bg);border:1px solid var(--bd);color:var(--txt);padding:8px;border-radius:var(--r)">
+          <option value="HORAS_EXTRA">⏰ Horas extras</option>
+          <option value="ADELANTO">💵 Adelanto en plata</option>
+          <option value="AUSENCIA">❌ Ausencia</option>
+          <option value="DOBLE">⭐ Doble turno</option>
+          <option value="FERIADO">🎉 Feriado trabajado</option>
+          <option value="VACACION_DIA">🏖️ Día de vacación</option>
+        </select>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:11px;color:var(--txt3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Cantidad (horas/días) o $</label>
+        <input type="number" id="cCant" value="1" style="width:100%;background:var(--bg);border:1px solid var(--bd);color:var(--txt);padding:8px;border-radius:var(--r)">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:11px;color:var(--txt3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Comentario (opcional)</label>
+        <input type="text" id="cCom" placeholder="ej: Cubrió a Diego, evento privado, etc" style="width:100%;background:var(--bg);border:1px solid var(--bd);color:var(--txt);padding:8px;border-radius:var(--r)">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="abrirDia('${fecha}')">← Volver</button>
+      <button class="btn btn-primary" onclick="guardarEventoCustom(${empId}, '${fecha}')">+ Agregar</button>
+    </div>
+  `;
+}
+
+function guardarEventoCustom(empId, fecha) {
+  const tipo = document.getElementById('cTipo').value;
+  const cantidad = parseFloat(document.getElementById('cCant').value) || 1;
+  const comentario = document.getElementById('cCom').value || '';
+  EVENTOS.push({
+    id: Math.max(0, ...EVENTOS.map(e=>e.id)) + 1,
+    empleado_id: empId, fecha, tipo, cantidad, comentario
+  });
+  persistir();
+  abrirDia(fecha);
+  render();
+}
+
+function borrarEvento(id) {
+  const ev = EVENTOS.find(e => e.id === id);
+  EVENTOS = EVENTOS.filter(e => e.id !== id);
+  persistir();
+  if (ev) abrirDia(ev.fecha);
+  render();
+}
+
+function marcarTodosFeriado(fecha) {
+  const empFiltrados = empleadosFiltrados();
+  empFiltrados.forEach(emp => {
+    if (!EVENTOS.find(ev => ev.empleado_id === emp.id && ev.fecha === fecha && ev.tipo === 'FERIADO')) {
+      EVENTOS.push({
+        id: Math.max(0, ...EVENTOS.map(e=>e.id)) + 1,
+        empleado_id: emp.id, fecha, tipo: 'FERIADO', cantidad: 1, comentario: 'Marcado masivo'
+      });
+    }
+  });
+  persistir();
+  abrirDia(fecha);
+  render();
+}
+
+function quitarTodosDelDia(fecha) {
+  if (!confirm('¿Borrar TODOS los eventos del ' + fmtFecha(fecha) + '?')) return;
+  EVENTOS = EVENTOS.filter(ev => ev.fecha !== fecha);
+  persistir();
+  abrirDia(fecha);
+  render();
+}
+
+function cerrarModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+function abrirCargaRapida() {
+  document.getElementById('modalContent').innerHTML = `
+    <div class="modal-head">
+      <h2>+ Carga rápida</h2>
+      <button class="close" onclick="cerrarModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:11px;color:var(--txt3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Empleado</label>
+        <select id="qrEmp" style="width:100%;background:var(--bg);border:1px solid var(--bd);color:var(--txt);padding:8px;border-radius:var(--r)">
+          ${empleadosFiltrados().map(e => `<option value="${e.id}">${e.nombre} · ${LOCALES.find(l=>l.id===e.local_id).nombre}</option>`).join('')}
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <div>
+          <label style="display:block;font-size:11px;color:var(--txt3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Fecha</label>
+          <input type="date" id="qrFecha" value="${HOY.toISOString().split('T')[0]}" style="width:100%;background:var(--bg);border:1px solid var(--bd);color:var(--txt);padding:8px;border-radius:var(--r)">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;color:var(--txt3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Tipo</label>
+          <select id="qrTipo" style="width:100%;background:var(--bg);border:1px solid var(--bd);color:var(--txt);padding:8px;border-radius:var(--r)">
+            <option value="AUSENCIA">❌ Falta</option>
+            <option value="DOBLE">⭐ Doble</option>
+            <option value="FERIADO">🎉 Feriado</option>
+            <option value="HORAS_EXTRA">⏰ Horas extras</option>
+            <option value="VACACION_DIA">🏖️ Vacación</option>
+            <option value="ADELANTO">💵 Adelanto</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:120px 1fr;gap:8px;margin-bottom:12px">
+        <div>
+          <label style="display:block;font-size:11px;color:var(--txt3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Cantidad</label>
+          <input type="number" id="qrCant" value="1" style="width:100%;background:var(--bg);border:1px solid var(--bd);color:var(--txt);padding:8px;border-radius:var(--r)">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;color:var(--txt3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Comentario</label>
+          <input type="text" id="qrCom" placeholder="Opcional" style="width:100%;background:var(--bg);border:1px solid var(--bd);color:var(--txt);padding:8px;border-radius:var(--r)">
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarCargaRapida()">+ Agregar evento</button>
+    </div>
+  `;
+  document.getElementById('modal').classList.add('open');
+}
+
+function guardarCargaRapida() {
+  EVENTOS.push({
+    id: Math.max(0, ...EVENTOS.map(e=>e.id)) + 1,
+    empleado_id: parseInt(document.getElementById('qrEmp').value),
+    fecha: document.getElementById('qrFecha').value,
+    tipo: document.getElementById('qrTipo').value,
+    cantidad: parseFloat(document.getElementById('qrCant').value) || 1,
+    comentario: document.getElementById('qrCom').value || ''
+  });
+  persistir();
+  cerrarModal();
+  render();
+}
+
+function copiarDelMesAnterior() {
+  alert('💡 Esta acción copiaría todos los eventos del mismo día de la semana del mes anterior.\n\nEjemplo: si en mayo Luis faltó los lunes 5, 12, 19, 26 → se copiarían a los lunes de junio.\n\nEn el sistema real esto sirve para los empleados que toman vacaciones programadas, capacitaciones recurrentes, etc.\n\n(Demo: no se aplica nada en este prototipo).');
+}
+
+// ============ VISTA POR EMPLEADO ============
+function renderEmpleado() {
+  const empFiltrados = empleadosFiltrados();
+  const diasMes = new Date(añoActual, mesActual + 1, 0).getDate();
+
+  // Header con números de día
+  const days = [];
+  for (let d = 1; d <= diasMes; d++) {
+    const dt = new Date(añoActual, mesActual, d);
+    const isWeekend = dt.getDay() === 0 || dt.getDay() === 6;
+    const isToday = dt.getTime() === HOY.getTime();
+    days.push({ d, isWeekend, isToday, dt });
+  }
+
+  let html = `<div class="emp-grid-row head" style="grid-template-columns:180px repeat(${diasMes}, 32px)">
+    <div class="emp-grid-cell">Empleado</div>
+    ${days.map(d => `<div class="emp-grid-cell ${d.isWeekend?'weekend':''} ${d.isToday?'today-col':''}">${d.d}</div>`).join('')}
+  </div>`;
+
+  empFiltrados.forEach(emp => {
+    const evsEmp = EVENTOS.filter(ev => ev.empleado_id === emp.id);
+    const evByDay = {};
+    evsEmp.forEach(ev => {
+      const dt = new Date(ev.fecha);
+      if (dt.getMonth() === mesActual && dt.getFullYear() === añoActual) {
+        const d = parseInt(ev.fecha.split('-')[2]);
+        if (!evByDay[d]) evByDay[d] = [];
+        evByDay[d].push(ev);
+      }
+    });
+
+    html += `<div class="emp-grid-row" style="grid-template-columns:180px repeat(${diasMes}, 32px)">
+      <div class="emp-grid-cell">
+        <div style="font-weight:600;font-size:12px">${emp.nombre}</div>
+        <div style="font-size:10px;color:var(--txt3)">${emp.puesto}</div>
+      </div>
+      ${days.map(d => {
+        const evs = evByDay[d.d] || [];
+        const cell = evs.length > 0 ? evs.map(e => TIPO_ICON[e.tipo]).join('') : '';
+        const fechaStr = `${añoActual}-${String(mesActual+1).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+        return `<div class="emp-grid-cell ${d.isWeekend?'weekend':''} ${d.isToday?'today-col':''}" onclick="abrirCargaRapidaCelda(${emp.id}, '${fechaStr}')" title="${evs.map(e=>TIPO_LABEL[e.tipo]).join(', ')}">${cell}</div>`;
+      }).join('')}
+    </div>`;
+  });
+
+  document.getElementById('empGrid').innerHTML = html;
+  document.getElementById('mesActual').textContent = MESES[mesActual] + ' ' + añoActual;
+  calcStats();
+}
+
+function abrirCargaRapidaCelda(empId, fecha) {
+  abrirCargaRapida();
+  setTimeout(() => {
+    document.getElementById('qrEmp').value = empId;
+    document.getElementById('qrFecha').value = fecha;
+  }, 50);
+}
+
+// ============ VISTA MOBILE / HOY ============
+function renderMobile() {
+  // Selector de local en chips
+  document.getElementById('mobileLocales').innerHTML = LOCALES.map(l =>
+    `<span class="chip ${l.id === 1 ? 'active' : ''}" onclick="filtrarMobileLocal(${l.id})" data-local="${l.id}">${l.nombre}</span>`
+  ).join('');
+
+  filtrarMobileLocal(1);
+}
+
+function filtrarMobileLocal(localId) {
+  document.querySelectorAll('#mobileLocales .chip').forEach(c => {
+    c.classList.toggle('active', parseInt(c.dataset.local) === localId);
+  });
+
+  const empDelLocal = EMPLEADOS.filter(e => e.local_id === localId);
+  const hoyStr = HOY.toISOString().split('T')[0];
+
+  document.getElementById('mobileEmpList').innerHTML = empDelLocal.map(emp => {
+    const evsHoy = EVENTOS.filter(ev => ev.empleado_id === emp.id && ev.fecha === hoyStr);
+    const tipos = new Set(evsHoy.map(e => e.tipo));
+    const presente = evsHoy.length === 0;
+
+    return `
+      <div class="mobile-emp">
+        <div class="mobile-emp-head">
+          <div>
+            <div class="mobile-emp-nombre">${emp.nombre}</div>
+            <div class="mobile-emp-puesto">${emp.puesto} · ${emp.modo_pago}</div>
+          </div>
+          ${evsHoy.length > 0 ? `<span class="ev ev-${evsHoy[0].tipo}" style="padding:4px 10px">${TIPO_LABEL[evsHoy[0].tipo]}</span>` : ''}
+        </div>
+        <div class="mobile-acciones">
+          <button class="${presente?'active-PRESENTE':''}" onclick="marcarPresenteMobile(${emp.id}, '${hoyStr}')">
+            <span class="emoji">✓</span>Vino OK
+          </button>
+          <button class="${tipos.has('AUSENCIA')?'active-AUSENCIA':''}" onclick="toggleEventoMobile(${emp.id}, '${hoyStr}', 'AUSENCIA')">
+            <span class="emoji">❌</span>Faltó
+          </button>
+          <button class="${tipos.has('DOBLE')?'active-DOBLE':''}" onclick="toggleEventoMobile(${emp.id}, '${hoyStr}', 'DOBLE')">
+            <span class="emoji">⭐</span>Hizo doble
+          </button>
+          <button class="${tipos.has('VACACION_DIA')?'active-VACACION_DIA':''}" onclick="toggleEventoMobile(${emp.id}, '${hoyStr}', 'VACACION_DIA')">
+            <span class="emoji">🏖️</span>Vacación
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  document.getElementById('mobileFecha').innerHTML = `${fmtFecha(hoyStr)} · 23:14 hs (cierre de turno)`;
+  window._mobileLocalActivo = localId;
+}
+
+function marcarPresenteMobile(empId, fecha) {
+  // "Presente" = borrar todos los eventos del día (es el default)
+  EVENTOS = EVENTOS.filter(ev => !(ev.empleado_id === empId && ev.fecha === fecha));
+  persistir();
+  filtrarMobileLocal(window._mobileLocalActivo || 1);
+}
+
+function toggleEventoMobile(empId, fecha, tipo) {
+  // Borrar otros tipos del mismo día (mobile UX simplificado: 1 estado por empleado-día)
+  EVENTOS = EVENTOS.filter(ev => !(ev.empleado_id === empId && ev.fecha === fecha));
+  EVENTOS.push({
+    id: Math.max(0, ...EVENTOS.map(e=>e.id)) + 1,
+    empleado_id: empId, fecha, tipo, cantidad: 1, comentario: ''
+  });
+  persistir();
+  filtrarMobileLocal(window._mobileLocalActivo || 1);
+}
+
+function cerrarDiaSinNovedades() {
+  if (!confirm('¿Confirmar que TODOS los empleados del local vinieron OK hoy?\n(Se borrarán los eventos del día si los hubo)')) return;
+  const hoyStr = HOY.toISOString().split('T')[0];
+  const localId = window._mobileLocalActivo || 1;
+  const empIds = EMPLEADOS.filter(e => e.local_id === localId).map(e => e.id);
+  EVENTOS = EVENTOS.filter(ev => !(empIds.includes(ev.empleado_id) && ev.fecha === hoyStr));
+  persistir();
+  filtrarMobileLocal(localId);
+  alert('✅ Día cerrado sin novedades. Buen trabajo!');
+}
+
+// ============ INIT ============
+render();
+</script>
+
+</body>
+</html>

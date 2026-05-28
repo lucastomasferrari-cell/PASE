@@ -50,3 +50,6 @@ packages/pase/scripts/verify_*.cjs
 agent-output.json
 agent.log
 
+
+.env*
+.superpowers/
