@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { db } from "../../lib/supabase";
 import { applyLocalScope } from "../../lib/auth";
 import { toISO, today, fmt_d } from "../../lib/utils";
-import { PageHeader } from "../../components/ui";
+import { PageHeader, Modal } from "../../components/ui";
 import type { Usuario, Local } from "../../types";
 
 interface BlindajeTipo {
@@ -307,66 +307,64 @@ export default function Blindaje({ user, locales, localActivo }: BlindajeProps) 
         </div>
       )}
 
-      {/* Modal tipo */}
-      {tipoModal && (
-        <div className="overlay" onClick={() => setTipoModal(null)}>
-          <div className="modal" style={{ width: 440 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-hd">
-              <div className="modal-title">{tipoModal === "new" ? "Nuevo tipo de documento" : "Editar tipo"}</div>
-              <button className="close-btn" onClick={() => setTipoModal(null)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <div className="field"><label>Nombre *</label>
-                <input value={tipoForm.nombre} onChange={e => setTipoForm({ ...tipoForm, nombre: e.target.value })} placeholder="Ej: Habilitación Municipal" />
-              </div>
-              <div className="field"><label>Descripción</label>
-                <input value={tipoForm.descripcion} onChange={e => setTipoForm({ ...tipoForm, descripcion: e.target.value })} placeholder="Opcional" />
-              </div>
-              <div className="field"><label>Orden</label>
-                <input type="number" value={tipoForm.orden} onChange={e => setTipoForm({ ...tipoForm, orden: parseInt(e.target.value) || 0 })} />
-              </div>
-            </div>
-            <div className="modal-ft">
-              <button className="btn btn-sec" onClick={() => setTipoModal(null)}>Cancelar</button>
-              <button className="btn btn-acc" onClick={guardarTipo} disabled={!tipoForm.nombre.trim()}>Guardar</button>
-            </div>
-          </div>
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido. */}
+      <Modal
+        isOpen={!!tipoModal}
+        onClose={() => setTipoModal(null)}
+        title={tipoModal === "new" ? "Nuevo tipo de documento" : "Editar tipo"}
+        maxWidth={440}
+        footer={
+          <>
+            <button className="btn btn-sec" onClick={() => setTipoModal(null)}>Cancelar</button>
+            <button className="btn btn-acc" onClick={guardarTipo} disabled={!tipoForm.nombre.trim()}>Guardar</button>
+          </>
+        }
+      >
+        <div className="field"><label>Nombre *</label>
+          <input value={tipoForm.nombre} onChange={e => setTipoForm({ ...tipoForm, nombre: e.target.value })} placeholder="Ej: Habilitación Municipal" />
         </div>
-      )}
+        <div className="field"><label>Descripción</label>
+          <input value={tipoForm.descripcion} onChange={e => setTipoForm({ ...tipoForm, descripcion: e.target.value })} placeholder="Opcional" />
+        </div>
+        <div className="field"><label>Orden</label>
+          <input type="number" value={tipoForm.orden} onChange={e => setTipoForm({ ...tipoForm, orden: parseInt(e.target.value) || 0 })} />
+        </div>
+      </Modal>
 
-      {/* Modal documento */}
-      {docModal && (
-        <div className="overlay" onClick={() => setDocModal(null)}>
-          <div className="modal" style={{ width: 480 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-hd">
-              <div className="modal-title">{docModal.tipo.nombre}</div>
-              <button className="close-btn" onClick={() => setDocModal(null)}>✕</button>
+      <Modal
+        isOpen={!!docModal}
+        onClose={() => setDocModal(null)}
+        title={docModal ? docModal.tipo.nombre : ""}
+        maxWidth={480}
+        preventCloseOnOverlay={uploading}
+        footer={
+          <>
+            <button className="btn btn-sec" onClick={() => setDocModal(null)}>Cancelar</button>
+            <button className="btn btn-acc" onClick={guardarDoc} disabled={uploading}>
+              {uploading ? "Subiendo..." : "Guardar"}
+            </button>
+          </>
+        }
+      >
+        {docModal && (
+          <>
+            <div className="field"><label>Fecha de vencimiento</label>
+              <input type="date" value={docForm.vencimiento} onChange={e => setDocForm({ ...docForm, vencimiento: e.target.value })} />
             </div>
-            <div className="modal-body">
-              <div className="field"><label>Fecha de vencimiento</label>
-                <input type="date" value={docForm.vencimiento} onChange={e => setDocForm({ ...docForm, vencimiento: e.target.value })} />
-              </div>
-              <div className="field"><label>Archivo (opcional si ya tenés uno cargado)</label>
-                <input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                  onChange={e => setArchivo(e.target.files?.[0] || null)}
-                  style={{ background: "var(--bg)", border: "1px solid var(--bd)", padding: 8, borderRadius: "var(--r)", width: "100%", color: "var(--txt)", fontFamily: "'DM Mono',monospace", fontSize: 12 }} />
-                {docModal.doc?.archivo_url && !archivo && (
-                  <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 4 }}>Ya hay un archivo cargado. Subí uno nuevo para reemplazarlo.</div>
-                )}
-              </div>
-              <div className="field"><label>Notas</label>
-                <input value={docForm.notas} onChange={e => setDocForm({ ...docForm, notas: e.target.value })} placeholder="Opcional" />
-              </div>
+            <div className="field"><label>Archivo (opcional si ya tenés uno cargado)</label>
+              <input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                onChange={e => setArchivo(e.target.files?.[0] || null)}
+                style={{ background: "var(--bg)", border: "1px solid var(--bd)", padding: 8, borderRadius: "var(--r)", width: "100%", color: "var(--txt)", fontFamily: "'DM Mono',monospace", fontSize: 12 }} />
+              {docModal.doc?.archivo_url && !archivo && (
+                <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 4 }}>Ya hay un archivo cargado. Subí uno nuevo para reemplazarlo.</div>
+              )}
             </div>
-            <div className="modal-ft">
-              <button className="btn btn-sec" onClick={() => setDocModal(null)}>Cancelar</button>
-              <button className="btn btn-acc" onClick={guardarDoc} disabled={uploading}>
-                {uploading ? "Subiendo..." : "Guardar"}
-              </button>
+            <div className="field"><label>Notas</label>
+              <input value={docForm.notas} onChange={e => setDocForm({ ...docForm, notas: e.target.value })} placeholder="Opcional" />
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
     </div>
   );
 }

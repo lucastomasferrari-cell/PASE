@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
 import { ROLES } from "../lib/auth";
+import { Modal } from "../components/ui";
 import type { Local, UsuarioRow } from "../types";
 
 // AUDIT F2D #29: SHA-256 client-side eliminado. Antes este archivo escribía
@@ -95,25 +96,37 @@ export default function Config(_props: ConfigProps) {
           <tbody>{usuarios.map(u=><tr key={u.id}><td style={{fontWeight:500}}>{u.nombre}</td><td className="mono" style={{color:"var(--muted2)"}}>{u.email}</td><td><span className="badge" style={{background:ROLES[u.rol]?.color+"22",color:ROLES[u.rol]?.color}}>{ROLES[u.rol]?.label}</span></td><td style={{fontSize:10,color:u.auth_id?"var(--ok)":"var(--muted)"}}>{u.auth_id?"Migrado":"Legacy"}</td><td><button className="btn btn-ghost btn-sm" onClick={()=>{setEditModal({id:u.id,nombre:u.nombre,auth_id:u.auth_id,password:""});setFormErr("");}}>Cambiar clave</button></td></tr>)}</tbody>
         </table>)}
       </div>
-      {modal&&(<div className="overlay" onClick={()=>setModal(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
-        <div className="modal-hd"><div className="modal-title">Nuevo Usuario</div><button className="close-btn" onClick={()=>setModal(false)}>✕</button></div>
-        <div className="modal-body">
-          {formErr&&<div className="alert alert-danger">{formErr}</div>}
-          <div className="field"><label>Nombre</label><input value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})}/></div>
-          <div className="form2"><div className="field"><label>Usuario</label><input autoComplete="off" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} placeholder="nombre (se agrega @pase.local)"/></div><div className="field"><label>Contraseña</label><input type="password" autoComplete="new-password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></div></div>
-          <div className="field"><label>Rol</label><select value={form.rol} onChange={e=>setForm({...form,rol:e.target.value})}>{Object.entries(ROLES).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select></div>
-        </div>
-        <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={saving}>{saving?"Creando...":"Crear"}</button></div>
-      </div></div>)}
-      {editModal&&(<div className="overlay" onClick={()=>setEditModal(null)}><div className="modal" style={{width:380}} onClick={e=>e.stopPropagation()}>
-        <div className="modal-hd"><div className="modal-title">Cambiar Contraseña</div><button className="close-btn" onClick={()=>setEditModal(null)}>✕</button></div>
-        <div className="modal-body">
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido. */}
+      <Modal
+        isOpen={modal}
+        onClose={()=>setModal(false)}
+        title="Nuevo Usuario"
+        preventCloseOnOverlay={saving}
+        footer={
+          <><button className="btn btn-sec" onClick={()=>setModal(false)}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={saving}>{saving?"Creando...":"Crear"}</button></>
+        }
+      >
+        {formErr&&<div className="alert alert-danger">{formErr}</div>}
+        <div className="field"><label>Nombre</label><input value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})}/></div>
+        <div className="form2"><div className="field"><label>Usuario</label><input autoComplete="off" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} placeholder="nombre (se agrega @pase.local)"/></div><div className="field"><label>Contraseña</label><input type="password" autoComplete="new-password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></div></div>
+        <div className="field"><label>Rol</label><select value={form.rol} onChange={e=>setForm({...form,rol:e.target.value})}>{Object.entries(ROLES).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select></div>
+      </Modal>
+      <Modal
+        isOpen={!!editModal}
+        onClose={()=>setEditModal(null)}
+        title="Cambiar Contraseña"
+        maxWidth={380}
+        preventCloseOnOverlay={saving}
+        footer={
+          <><button className="btn btn-sec" onClick={()=>setEditModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={guardarEdit} disabled={saving}>{saving?"Guardando...":"Guardar"}</button></>
+        }
+      >
+        {editModal && (<>
           {formErr&&<div className="alert alert-danger">{formErr}</div>}
           <div className="alert alert-info">{editModal.nombre}</div>
           <div className="field"><label>Nueva contraseña</label><input type="password" autoComplete="new-password" placeholder="Nueva contraseña" value={editModal.password} onChange={e=>setEditModal({...editModal,password:e.target.value})}/></div>
-        </div>
-        <div className="modal-ft"><button className="btn btn-sec" onClick={()=>setEditModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={guardarEdit} disabled={saving}>{saving?"Guardando...":"Guardar"}</button></div>
-      </div></div>)}
+        </>)}
+      </Modal>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { fmt_$ } from "../../lib/utils";
 import { calcularVacaciones } from "../../lib/calculos/rrhh";
-import { LocalLockedChip, LocalSelectorObligatorio } from "../../components/ui";
+import { LocalLockedChip, LocalSelectorObligatorio, Modal } from "../../components/ui";
 import type { Local } from "../../types";
 import type { Empleado } from "../../types/rrhh";
 import type { EmpForm, EmpModalState } from "./types";
@@ -143,94 +143,98 @@ export function TabEmpleados({
         )}
       </div>
 
-      {empModal && (
-        <div className="overlay" onClick={() => setEmpModal(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-hd"><div className="modal-title">{empModal === "new" ? "Nuevo Empleado" : "Editar Empleado"}</div><button className="close-btn" onClick={() => setEmpModal(null)}>✕</button></div>
-            <div className="modal-body">
-              <div className="form2">
-                <div className="field"><label>Apellido *</label><input value={empForm.apellido} onChange={e => setEmpForm({...empForm, apellido:e.target.value})} /></div>
-                <div className="field"><label>Nombre *</label><input value={empForm.nombre} onChange={e => setEmpForm({...empForm, nombre:e.target.value})} /></div>
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido. */}
+      <Modal
+        isOpen={!!empModal}
+        onClose={() => setEmpModal(null)}
+        title={empModal === "new" ? "Nuevo Empleado" : "Editar Empleado"}
+        preventCloseOnOverlay={guardandoEmp}
+        footer={
+          <>
+            <button className="btn btn-sec" onClick={() => setEmpModal(null)} disabled={guardandoEmp}>Cancelar</button>
+            <button className="btn btn-acc" onClick={guardarEmp} disabled={guardandoEmp || !empForm.apellido || !empForm.nombre || !empForm.local_id || !empForm.puesto || !empForm.sueldo_mensual || !empForm.fecha_inicio}>{guardandoEmp ? "Guardando…" : "Guardar"}</button>
+          </>
+        }
+      >
+        <div className="form2">
+          <div className="field"><label>Apellido *</label><input value={empForm.apellido} onChange={e => setEmpForm({...empForm, apellido:e.target.value})} /></div>
+          <div className="field"><label>Nombre *</label><input value={empForm.nombre} onChange={e => setEmpForm({...empForm, nombre:e.target.value})} /></div>
+        </div>
+        <div className="form2">
+          <div className="field"><label>Local *</label>
+            {localActivo !== null ? (
+              <div style={{ paddingTop: 4 }}>
+                <LocalLockedChip nombre={locales.find(l => l.id === localActivo)?.nombre ?? "—"} />
               </div>
-              <div className="form2">
-                <div className="field"><label>Local *</label>
-                  {localActivo !== null ? (
-                    <div style={{ paddingTop: 4 }}>
-                      <LocalLockedChip nombre={locales.find(l => l.id === localActivo)?.nombre ?? "—"} />
-                    </div>
-                  ) : locsDisp.length === 1 ? (
-                    <input type="text" value={locsDisp[0]!.nombre} disabled readOnly />
-                  ) : (
-                    <LocalSelectorObligatorio
-                      value={empForm.local_id ? Number(empForm.local_id) : null}
-                      onChange={id => setEmpForm({ ...empForm, local_id: id !== null ? String(id) : "" })}
-                      locales={locsDisp}
-                    />
-                  )}
-                </div>
-                <div className="field"><label>CUIL</label><input value={empForm.cuil} onChange={e => setEmpForm({...empForm, cuil:e.target.value})} placeholder="XX-XXXXXXXX-X" /></div>
-              </div>
-              <div className="field"><label>Puesto *</label>
-                <select
-                  value={usandoOtroPuesto ? "__otro" : empForm.puesto}
-                  onChange={e => {
-                    if (e.target.value === "__otro") {
-                      setUsandoOtroPuesto(true);
-                      setEmpForm({ ...empForm, puesto: "" });
-                    } else {
-                      setUsandoOtroPuesto(false);
-                      setEmpForm({ ...empForm, puesto: e.target.value });
-                    }
-                  }}
-                >
-                  <option value="">Seleccionar...</option>
-                  {puestos.map(p => <option key={p} value={p}>{p}</option>)}
-                  <option value="__otro">-- Otro (escribir nuevo) --</option>
-                </select>
-                {usandoOtroPuesto && (
-                  <input
-                    style={{ marginTop: 4 }}
-                    placeholder="Escribir puesto nuevo..."
-                    value={empForm.puesto}
-                    onChange={e => setEmpForm({ ...empForm, puesto: e.target.value })}
-                    autoFocus
-                  />
-                )}
-              </div>
-              <div className="form3">
-                <div className="field"><label>Sueldo mensual *</label><input type="number" value={empForm.sueldo_mensual} onChange={e => setEmpForm({...empForm, sueldo_mensual:e.target.value})} placeholder="0" /></div>
-                <div className="field"><label>CBU / Alias</label><input value={empForm.alias_mp} onChange={e => setEmpForm({...empForm, alias_mp:e.target.value})} /></div>
-                <div className="field"><label>Fecha inicio *</label><input type="date" required value={empForm.fecha_inicio} onChange={e => setEmpForm({...empForm, fecha_inicio:e.target.value})} /></div>
-              </div>
-              <div className="form3">
-                <div className="field">
-                  <label title="Cada cuántos días se le paga. Cambia cuántas cuotas se generan al confirmar la novedad mensual: Mensual=1, Quincenal=2, Semanal=4. El sueldo mensual no cambia.">Forma de pago *</label>
-                  <select value={empForm.modo_pago} onChange={e => setEmpForm({...empForm, modo_pago: e.target.value as "MENSUAL" | "QUINCENAL" | "SEMANAL"})}>
-                    <option value="MENSUAL">Mensual (1 pago/mes)</option>
-                    <option value="QUINCENAL">Quincenal (2 pagos/mes)</option>
-                    <option value="SEMANAL">Semanal (4 pagos/mes)</option>
-                  </select>
-                </div>
-              </div>
-              <div className="form3">
-                <div className="field"><label>Activo</label><select value={empForm.activo ? "1" : "0"} onChange={e => setEmpForm({...empForm, activo:e.target.value === "1"})}><option value="1">Si</option><option value="0">No</option></select></div>
-                <div className="field">
-                  <label title="TRUE si está en nómina formal AFIP. Sirve para identificar empleados 'en blanco' vs 'en negro'.">Registrado (AFIP)</label>
-                  <select value={empForm.registrado ? "1" : "0"} onChange={e => setEmpForm({...empForm, registrado: e.target.value === "1"})}>
-                    <option value="0">No</option>
-                    <option value="1">Sí</option>
-                  </select>
-                </div>
-                <div className="field">
-                  <label title="Días de vacaciones que ya consumió ANTES de cargarlo en PASE. Se restan al cálculo automático por antigüedad.">Vacaciones ya tomadas (al alta)</label>
-                  <input type="number" min={0} value={empForm.dias_vacaciones_ya_tomados_al_alta} onChange={e => setEmpForm({...empForm, dias_vacaciones_ya_tomados_al_alta: e.target.value})} placeholder="0" />
-                </div>
-              </div>
-            </div>
-            <div className="modal-ft"><button className="btn btn-sec" onClick={() => setEmpModal(null)} disabled={guardandoEmp}>Cancelar</button><button className="btn btn-acc" onClick={guardarEmp} disabled={guardandoEmp || !empForm.apellido || !empForm.nombre || !empForm.local_id || !empForm.puesto || !empForm.sueldo_mensual || !empForm.fecha_inicio}>{guardandoEmp ? "Guardando…" : "Guardar"}</button></div>
+            ) : locsDisp.length === 1 ? (
+              <input type="text" value={locsDisp[0]!.nombre} disabled readOnly />
+            ) : (
+              <LocalSelectorObligatorio
+                value={empForm.local_id ? Number(empForm.local_id) : null}
+                onChange={id => setEmpForm({ ...empForm, local_id: id !== null ? String(id) : "" })}
+                locales={locsDisp}
+              />
+            )}
+          </div>
+          <div className="field"><label>CUIL</label><input value={empForm.cuil} onChange={e => setEmpForm({...empForm, cuil:e.target.value})} placeholder="XX-XXXXXXXX-X" /></div>
+        </div>
+        <div className="field"><label>Puesto *</label>
+          <select
+            value={usandoOtroPuesto ? "__otro" : empForm.puesto}
+            onChange={e => {
+              if (e.target.value === "__otro") {
+                setUsandoOtroPuesto(true);
+                setEmpForm({ ...empForm, puesto: "" });
+              } else {
+                setUsandoOtroPuesto(false);
+                setEmpForm({ ...empForm, puesto: e.target.value });
+              }
+            }}
+          >
+            <option value="">Seleccionar...</option>
+            {puestos.map(p => <option key={p} value={p}>{p}</option>)}
+            <option value="__otro">-- Otro (escribir nuevo) --</option>
+          </select>
+          {usandoOtroPuesto && (
+            <input
+              style={{ marginTop: 4 }}
+              placeholder="Escribir puesto nuevo..."
+              value={empForm.puesto}
+              onChange={e => setEmpForm({ ...empForm, puesto: e.target.value })}
+              autoFocus
+            />
+          )}
+        </div>
+        <div className="form3">
+          <div className="field"><label>Sueldo mensual *</label><input type="number" value={empForm.sueldo_mensual} onChange={e => setEmpForm({...empForm, sueldo_mensual:e.target.value})} placeholder="0" /></div>
+          <div className="field"><label>CBU / Alias</label><input value={empForm.alias_mp} onChange={e => setEmpForm({...empForm, alias_mp:e.target.value})} /></div>
+          <div className="field"><label>Fecha inicio *</label><input type="date" required value={empForm.fecha_inicio} onChange={e => setEmpForm({...empForm, fecha_inicio:e.target.value})} /></div>
+        </div>
+        <div className="form3">
+          <div className="field">
+            <label title="Cada cuántos días se le paga. Cambia cuántas cuotas se generan al confirmar la novedad mensual: Mensual=1, Quincenal=2, Semanal=4. El sueldo mensual no cambia.">Forma de pago *</label>
+            <select value={empForm.modo_pago} onChange={e => setEmpForm({...empForm, modo_pago: e.target.value as "MENSUAL" | "QUINCENAL" | "SEMANAL"})}>
+              <option value="MENSUAL">Mensual (1 pago/mes)</option>
+              <option value="QUINCENAL">Quincenal (2 pagos/mes)</option>
+              <option value="SEMANAL">Semanal (4 pagos/mes)</option>
+            </select>
           </div>
         </div>
-      )}
+        <div className="form3">
+          <div className="field"><label>Activo</label><select value={empForm.activo ? "1" : "0"} onChange={e => setEmpForm({...empForm, activo:e.target.value === "1"})}><option value="1">Si</option><option value="0">No</option></select></div>
+          <div className="field">
+            <label title="TRUE si está en nómina formal AFIP. Sirve para identificar empleados 'en blanco' vs 'en negro'.">Registrado (AFIP)</label>
+            <select value={empForm.registrado ? "1" : "0"} onChange={e => setEmpForm({...empForm, registrado: e.target.value === "1"})}>
+              <option value="0">No</option>
+              <option value="1">Sí</option>
+            </select>
+          </div>
+          <div className="field">
+            <label title="Días de vacaciones que ya consumió ANTES de cargarlo en PASE. Se restan al cálculo automático por antigüedad.">Vacaciones ya tomadas (al alta)</label>
+            <input type="number" min={0} value={empForm.dias_vacaciones_ya_tomados_al_alta} onChange={e => setEmpForm({...empForm, dias_vacaciones_ya_tomados_al_alta: e.target.value})} placeholder="0" />
+          </div>
+        </div>
+      </Modal>
     </>
   );
 }

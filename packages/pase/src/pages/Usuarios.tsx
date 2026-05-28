@@ -3,7 +3,7 @@ import { db } from "../lib/supabase";
 import { MODULOS, PERMISOS_EXTRAS } from "../lib/auth";
 import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { CUENTAS } from "../lib/constants";
-import { PageHeader } from "../components/ui";
+import { PageHeader, Modal } from "../components/ui";
 import type { Usuario, Local } from "../types";
 
 interface UsuariosProps {
@@ -362,35 +362,19 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
         )}
       </div>
 
+      {/* AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido. */}
       {modal && (
-        <div className="overlay" onClick={() => setModal(null)}>
-          <div className="modal" style={{ width:780 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-hd">
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{
-                  width: 38, height: 38, borderRadius: "50%",
-                  background: "var(--pase-celeste-100)",
-                  border: "0.5px solid var(--pase-celeste-300)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: "var(--pase-fs-md)", fontWeight: 500,
-                  color: "var(--pase-celeste)", flexShrink: 0,
-                }}>
-                  {form.nombre ? form.nombre[0]!.toUpperCase() : "+"}
-                </div>
-                <div>
-                  <div className="modal-title" style={{ marginBottom: 0 }}>
-                    {modal === "new" ? "Nuevo usuario" : form.nombre || "Editar usuario"}
-                  </div>
-                  {modal !== "new" && form.email && (
-                    <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", marginTop: 2 }}>
-                      {form.email}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <button className="close-btn" onClick={() => setModal(null)}>✕</button>
-            </div>
-            <div className="modal-body">
+        <Modal
+          isOpen={!!modal}
+          onClose={() => setModal(null)}
+          title={modal === "new" ? "Nuevo usuario" : form.nombre || "Editar usuario"}
+          subtitle={modal !== "new" && form.email ? form.email : undefined}
+          maxWidth={780}
+          preventCloseOnOverlay={saving}
+          footer={
+            <><button className="btn btn-sec" onClick={() => setModal(null)}>Cancelar</button><button className="btn btn-acc" onClick={guardar} disabled={saving}>{saving ? "Guardando..." : "Guardar"}</button></>
+          }
+        >
               {err && <div className="alert alert-danger">{err}</div>}
 
               {/* ─── Datos básicos ────────────────────────────────────── */}
@@ -607,13 +591,7 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                   )}
                 </>);
               })()}
-            </div>
-            <div className="modal-ft">
-              <button className="btn btn-sec" onClick={() => setModal(null)}>Cancelar</button>
-              <button className="btn btn-acc" onClick={guardar} disabled={saving}>{saving ? "Guardando..." : "Guardar"}</button>
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
