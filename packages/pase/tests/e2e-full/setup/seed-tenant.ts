@@ -266,6 +266,16 @@ export async function seedE2ETenant(opts: {
     .single();
   const duenoAuthId = duenoRow!.auth_id as string;
 
+  // 5.5. Desactivar password_temporal del dueño E2E
+  //
+  // Sprint 28-may: el endpoint /api/crear-tenant setea password_temporal=true
+  // por default (force-change-on-first-login en prod). Eso bloquea las API
+  // calls del dueño durante los tests por el fix F2D#28 de _user-auth.js.
+  // Para E2E necesitamos que el dueño pueda operar APIs inmediatamente.
+  await svc.from("usuarios")
+    .update({ password_temporal: false })
+    .eq("id", duenoUsuarioId);
+
   // 5b. Sprint COMANDA Autónomo Fase 4 (24-may noche): crear espejo del
   // dueño en comanda_usuarios con rol_pos='admin' (bypass total POS).
   // Esto es necesario porque fn_check_perm_comanda ahora lee de

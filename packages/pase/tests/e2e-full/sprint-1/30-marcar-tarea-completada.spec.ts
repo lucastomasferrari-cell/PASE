@@ -49,11 +49,11 @@ test.describe.serial("E2E Test 30 — marcar_tarea_completada", () => {
     // ── A) Crear tarea pineada para el dueño + marcar completada ──────
     const { data: tarea, error: insErr } = await svc.from("dashboard_pinned_notes").insert({
       tenant_id: seed.tenantId,
-      contenido: "E2E test tarea para marcar",
+      titulo: "E2E test tarea para marcar",
       es_tarea: true,
       target_usuario_id: seed.duenoUsuarioId,
       target_rol: null,
-      autor_id: seed.duenoUsuarioId,
+      created_by: seed.duenoUsuarioId,
     }).select("id").single();
     if (insErr) throw new Error(`insert tarea: ${insErr.message}`);
 
@@ -72,11 +72,11 @@ test.describe.serial("E2E Test 30 — marcar_tarea_completada", () => {
     // ── C) Marcar NOTA que no es tarea → error NO_ES_TAREA ────────────
     const { data: nota } = await svc.from("dashboard_pinned_notes").insert({
       tenant_id: seed.tenantId,
-      contenido: "E2E nota informativa, no es tarea",
+      titulo: "E2E nota informativa, no es tarea",
       es_tarea: false,
       target_usuario_id: seed.duenoUsuarioId,
       target_rol: null,
-      autor_id: seed.duenoUsuarioId,
+      created_by: seed.duenoUsuarioId,
     }).select("id").single();
 
     const { error: notErr } = await duenoDb.rpc("marcar_tarea_completada", { p_nota_id: nota!.id });

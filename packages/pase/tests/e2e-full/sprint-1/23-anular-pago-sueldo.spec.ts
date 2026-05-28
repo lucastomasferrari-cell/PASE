@@ -39,22 +39,34 @@ test.describe.serial("E2E Test 23 — Anular pago de sueldo", () => {
     const duenoDb = await createE2EDuenoClient();
 
     // 1. Crear novedad confirmada + liquidación $100K
+    // Sprint 28-may: tenant shared entre specs → usar mes/año único
+    // (futuro lejano) para evitar colisión con novedades de tests previos.
     const empleado = seed.empleados.mensual;
     const fecha = new Date();
-    const { data: nov } = await svc.from("rrhh_novedades").insert({
+    const mesUnico = 7; // julio = test #23
+    const anioUnico = 2099;
+    // Limpieza preventiva por si quedó residuo de runs previos
+    await svc.from("rrhh_novedades")
+      .delete()
+      .eq("tenant_id", seed.tenantId)
+      .eq("empleado_id", empleado.id)
+      .eq("mes", mesUnico)
+      .eq("anio", anioUnico);
+    const { data: nov, error: novErr } = await svc.from("rrhh_novedades").insert({
       tenant_id: seed.tenantId,
       empleado_id: empleado.id,
-      mes: fecha.getMonth() + 1,
-      anio: fecha.getFullYear(),
+      mes: mesUnico,
+      anio: anioUnico,
       inasistencias: 0,
       presentismo: "MANTIENE",
       dias_trabajados: 30,
       horas_extras: 0, dobles: 0, feriados: 0,
       adelantos: 0, vacaciones_dias: 0,
       estado: "confirmado",
-      fecha_inicio_mes: `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-01`,
+      fecha_inicio_mes: `${anioUnico}-${String(mesUnico).padStart(2, "0")}-01`,
       cuota_num: 1, cuotas_total: 1,
     }).select("id").single();
+    if (novErr || !nov) throw new Error(`insert novedad falló: ${novErr?.message || "data null"}`);
 
     const { data: liq } = await svc.from("rrhh_liquidaciones").insert({
       tenant_id: seed.tenantId, novedad_id: nov!.id,
