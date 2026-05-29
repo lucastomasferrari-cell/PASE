@@ -14,8 +14,6 @@ import { loadSharedSeed } from "../setup/shared-seed";
 
 test.describe.serial("E2E Test 21 — Stock merma", () => {
   let seed: E2ETenantSeedResult | null = null;
-  const insumoId: number = 0;
-  const motivoMermaId: number = 0;
 
   test.beforeAll(async () => {
     // Lee el seed compartido creado por globalSetup (UN tenant E2E para toda
@@ -29,6 +27,14 @@ test.describe.serial("E2E Test 21 — Stock merma", () => {
     if (!seed) { test.skip(true, "Seed falló"); return; }
     const svc = createServiceClient();
     const duenoDb = await createE2EDuenoClient();
+
+    // 29-may fix: usar IDs del seed (antes eran 0 hardcoded → INSUMO_NO_ENCONTRADO).
+    const insumoId = seed.insumoId;
+    const motivoMermaId = seed.mermaMotivoId;
+
+    // Stock inicial del insumo (configurado en seed = 20kg para "Arroz")
+    const { data: insAntes } = await svc.from("insumos").select("stock_actual").eq("id", insumoId).single();
+    const stockAntes = Number(insAntes!.stock_actual ?? 0);
 
     const { data: movId, error } = await duenoDb.rpc("fn_registrar_merma", {
       p_insumo_id: insumoId,
@@ -50,8 +56,7 @@ test.describe.serial("E2E Test 21 — Stock merma", () => {
 
     // Stock del insumo bajó (trigger sobre insumo_movimientos)
     const { data: ins } = await svc.from("insumos").select("stock_actual").eq("id", insumoId).single();
-    // Si el trigger fn_trg_insumo_mov_update_stock corre, stock = 10 - 2 = 8
-    expect(Number(ins!.stock_actual)).toBe(8);
+    expect(Number(ins!.stock_actual)).toBe(stockAntes - 2);
 
     await duenoDb.auth.signOut();
   });

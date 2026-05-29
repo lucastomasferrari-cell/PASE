@@ -191,6 +191,13 @@ export interface E2ETenantSeedResult {
   items: { id: number; nombre: string; precio: number }[];
   // Proveedores (INTEGER)
   proveedorId: number;
+  // Insumos (BIGINT) — 5 ingredientes con stock inicial para tests de
+  // ajuste/merma/conteo. Expone el primer ID para conveniencia.
+  insumoId: number;
+  insumos: { id: number; nombre: string; unidad: string; costo: number }[];
+  // Mermas motivos (BIGINT) — id del motivo "Vencimiento" para usar en
+  // tests que prueban fn_registrar_merma.
+  mermaMotivoId: number;
   // TOTP secret (para que tests puedan generar códigos válidos)
   totpSecret: string;
 }
@@ -281,7 +288,9 @@ export async function seedE2ETenant(opts: {
   // Esto es necesario porque fn_check_perm_comanda ahora lee de
   // comanda_usuario_permisos — sin perfil COMANDA, el dueño no puede
   // operar las RPCs POS (fn_cobrar_venta_comanda, etc.).
-  const { error: cuErr } = await svc.from("comanda_usuarios").insert({
+  // 29-may fix: usar upsert para idempotency (si el cleanup anterior no
+  // borró comanda_usuarios, no falla por el constraint UNIQUE(tenant_id,email)).
+  const { error: cuErr } = await svc.from("comanda_usuarios").upsert({
     tenant_id: tenantId,
     auth_id: duenoAuthId,
     nombre: E2E_DUENO_NOMBRE,
@@ -289,7 +298,7 @@ export async function seedE2ETenant(opts: {
     rol_pos: "admin",
     locales: null, // todos los locales
     activo: true,
-  });
+  }, { onConflict: "tenant_id,email" });
   if (cuErr) throw new Error(`Seed comanda_usuario dueño: ${cuErr.message}`);
 
   // 6. Seed catálogos
@@ -400,6 +409,48 @@ export async function seedE2ETenant(opts: {
   const { error: saldosErr } = await svc.from("saldos_caja").insert(saldosData);
   if (saldosErr) throw new Error(`Seed saldos_caja: ${saldosErr.message}`);
 
+  // 10b. Seed mermas_motivos del tenant E2E. La RPC fn_registrar_merma
+  // exige un motivo_id existente con tenant_id match. Sin esto, los tests
+  // de mermas/conteo explotan con "MOTIVO_NO_ENCONTRADO".
+  const { data: motivos, error: motErr } = await svc.from("mermas_motivos").insert([
+    { tenant_id: tenantId, nombre: "Vencimiento",          tipo_movimiento: "merma",     orden: 10, activo: true },
+    { tenant_id: tenantId, nombre: "Desperdicio técnico",  tipo_movimiento: "merma",     orden: 20, activo: true },
+    { tenant_id: tenantId, nombre: "Error de cocina",      tipo_movimiento: "merma",     orden: 30, activo: true },
+    { tenant_id: tenantId, nombre: "Cortesía",             tipo_movimiento: "donacion",  orden: 40, activo: true },
+    { tenant_id: tenantId, nombre: "Consumo personal",     tipo_movimiento: "donacion",  orden: 50, activo: true },
+    { tenant_id: tenantId, nombre: "Ajuste manual",        tipo_movimiento: "ajuste",    orden: 60, activo: true },
+    { tenant_id: tenantId, nombre: "Robo sospechado",      tipo_movimiento: "robo",      orden: 70, activo: true },
+  ]).select("id, nombre");
+  if (motErr) throw new Error(`Seed mermas_motivos: ${motErr.message}`);
+  const mermaMotivoId = motivos!.find(m => m.nombre === "Vencimiento")!.id as number;
+
+  // 10c. Seed insumos del tenant E2E. La RPC fn_ajustar_stock_insumo, los
+  // conteos y las mermas requieren insumos con tenant_id match.
+  const insumosData = [
+    { nombre: `${E2E_SENTINEL} Arroz`,    unidad: "kg", costo: 2500, stock: 20 },
+    { nombre: `${E2E_SENTINEL} Salmón`,   unidad: "kg", costo: 18000, stock: 5 },
+    { nombre: `${E2E_SENTINEL} Palta`,    unidad: "kg", costo: 3200, stock: 8 },
+    { nombre: `${E2E_SENTINEL} Alga`,     unidad: "un", costo: 150, stock: 100 },
+    { nombre: `${E2E_SENTINEL} Aceite`,   unidad: "L",  costo: 4500, stock: 12 },
+  ];
+  const { data: insumosRes, error: insErr } = await svc.from("insumos").insert(
+    insumosData.map(i => ({
+      tenant_id: tenantId,
+      local_id: local1Id,
+      nombre: i.nombre,
+      unidad: i.unidad,
+      costo_actual: i.costo,
+      costo_actualizado_at: new Date().toISOString(),
+      stock_actual: i.stock,
+      stock_minimo: i.stock / 4,
+      activo: true,
+      es_comprado: true,
+      stock_disponible: true,
+    }))
+  ).select("id, nombre, unidad, costo_actual");
+  if (insErr) throw new Error(`Seed insumos: ${insErr.message}`);
+  const insumoId = insumosRes![0]!.id as number;
+
   // 11. Generar TOTP secret del tenant (para tests de manager override).
   // Schema real: `tenant_totp_secret.secret BYTEA` con CHECK octet_length=20.
   // Insertamos 20 bytes random y guardamos también en formato hex string
@@ -429,6 +480,9 @@ export async function seedE2ETenant(opts: {
     },
     items: items!.map(i => ({ id: i.id as number, nombre: i.nombre, precio: i.precio_madre as number })),
     proveedorId: proveedor!.id as number,
+    insumoId,
+    insumos: insumosRes!.map(i => ({ id: i.id as number, nombre: i.nombre, unidad: i.unidad, costo: Number(i.costo_actual ?? 0) })),
+    mermaMotivoId,
     totpSecret,
   };
 }
