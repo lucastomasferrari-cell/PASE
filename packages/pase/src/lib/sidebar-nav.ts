@@ -59,6 +59,13 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   { path: "/negocio",                    slug: "negocio",       label: "Negocio",         sec: "Dirección" },
   { path: "/finanzas",                   slug: "finanzas",      label: "Finanzas",        sec: "Dirección" },
   { path: "/rentabilidad",               slug: "rentabilidad",  label: "Rentabilidad",    sec: "Dirección" },
+  // Catálogo de insumos + recetas que alimentan CMV teórico y stock.
+  // 28-may-2026: agregados como entry directo del sidebar para que Lucas/Anto
+  // puedan cargar las 34 recetas faltantes (de 39 items totales). El slug
+  // 'rentabilidad' cubre todo el módulo Stock+Insumos+Recetas (granularidad
+  // fina pendiente — sumar slugs 'insumos' y 'recetas' al MODULOS si se pide).
+  { path: "/insumos",                    slug: "rentabilidad",  label: "Insumos",         sec: "Dirección" },
+  { path: "/recetas",                    slug: "rentabilidad",  label: "Recetas",         sec: "Dirección" },
   { path: "/objetivos",                  slug: "objetivos",     label: "Objetivos",       sec: "Dirección" },
   { path: "/reportes",                   slug: "eerr",          label: "Reportes",        sec: "Dirección" },
 
