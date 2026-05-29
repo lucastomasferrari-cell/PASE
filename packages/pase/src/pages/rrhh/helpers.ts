@@ -171,3 +171,34 @@ export const PRESENTISMO_OPTS = [
 export const CUENTAS_PAGO = ["Caja Efectivo","Caja Chica","Caja Mayor","MercadoPago","Banco"];
 
 export const inp: CSSProperties = { padding:"3px 5px", background:"var(--bg)", border:"1px solid var(--bd)", color:"var(--txt)", fontFamily:"'DM Mono',monospace", fontSize:10, borderRadius:"var(--r)", textAlign:"center" };
+
+/**
+ * Calcula el último día (ISO yyyy-mm-dd) del período que cubre una liquidación.
+ *
+ * Bug detectado 29-may por Anto: el modal de pago de sueldo descontaba
+ * TODOS los adelantos pendientes del empleado sin filtrar por fecha, lo
+ * que incluía adelantos FUTUROS. Ej.: pagar 2da quincena de abril restaba
+ * un adelanto del 28-mayo que pertenece a 2da quincena de mayo.
+ *
+ * Reglas:
+ *  - MENSUAL  → último día del mes (ej. 30/abril)
+ *  - QUINCENAL cuota 1 → día 15 del mes
+ *  - QUINCENAL cuota 2 → último día del mes
+ *  - SEMANAL  → no hay semanales hoy en Neko; tratado como mensual.
+ *               Si en el futuro hay semanales, hay que pasar la semana
+ *                 específica (fecha_inicio_semana en la novedad).
+ *
+ * Devuelve string yyyy-mm-dd para usar directo en filtros de Supabase.
+ */
+export function fechaFinPeriodoLiquidacion(
+  nov: { mes: number; anio: number; cuota_num?: number | null },
+  modoPago: "MENSUAL" | "QUINCENAL" | "SEMANAL" | null | undefined,
+): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  if (modoPago === "QUINCENAL" && nov.cuota_num === 1) {
+    return `${nov.anio}-${pad(nov.mes)}-15`;
+  }
+  // MENSUAL, QUINCENAL cuota 2, SEMANAL → último día del mes
+  const ultimo = new Date(nov.anio, nov.mes, 0).getDate(); // truco JS: día 0 = último del mes anterior
+  return `${nov.anio}-${pad(nov.mes)}-${pad(ultimo)}`;
+}

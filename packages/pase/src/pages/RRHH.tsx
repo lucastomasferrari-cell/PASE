@@ -29,7 +29,7 @@ import type {
 } from "./rrhh/types";
 import {
   calcLiquidacion, calcularValorDoble, MESES_NOMBRE, CUENTAS_PAGO,
-  calcularCuotas, slotKey, cuotasParaModoPago,
+  calcularCuotas, slotKey, cuotasParaModoPago, fechaFinPeriodoLiquidacion,
 } from "./rrhh/helpers";
 // Sub-componentes (split F6 del 2026-05-11).
 import { TabDashboard } from "./rrhh/TabDashboard";
@@ -874,10 +874,19 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   }, [pagoData, pendingPagoEmpId]);
 
   const abrirPagoSueldo = async (emp: Empleado, nov: Novedad, liq: LiquidacionConGenerated) => {
+    // BUG FIX 29-may (Anto): antes traíamos TODOS los adelantos
+    // descontado=false del empleado, incluyendo adelantos FUTUROS. Ej.:
+    // pagar 2da quincena de abril restaba un adelanto del 28-mayo que
+    // pertenece a 2da quincena de mayo. Ahora filtramos por fecha:
+    // solo adelantos hasta el fin del período liquidado. Atrasos
+    // (adelantos viejos no descontados) siguen apareciendo porque
+    // cumplen fecha <= fin_periodo.
+    const fechaFin = fechaFinPeriodoLiquidacion(nov, emp.modo_pago);
     const { data: adelantos } = await db.from("rrhh_adelantos")
       .select("*")
       .eq("empleado_id", emp.id)
       .eq("descontado", false)
+      .lte("fecha", fechaFin)
       .order("fecha");
     const pendientes = (adelantos as Adelanto[]) || [];
     const totalAdelantos = pendientes.reduce((s, a) => s + Number(a.monto), 0);
