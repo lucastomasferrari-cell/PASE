@@ -19,6 +19,7 @@
 // directos sobre recetas + receta_insumos. Soft delete con deleted_at.
 
 import { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { tienePermiso } from "../lib/auth";
 import { useGuardedHandler } from "../lib/useGuardedHandler";
@@ -77,10 +78,14 @@ interface RecetasProps {
   user: Usuario;
   locales?: Local[];
   localActivo: number | null;
+  /** Cuando true, omite el ph-row del header (lo dispara el módulo madre
+   * Recetario). "Nueva receta" via URL query ?action=nueva-receta. */
+  embedded?: boolean;
 }
 
-export default function Recetas({ user }: RecetasProps) {
+export default function Recetas({ user, embedded = false }: RecetasProps) {
   const { toast, showError, showToast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<Item[]>([]);
   const [recetas, setRecetas] = useState<Receta[]>([]);
   const [insumos, setInsumos] = useState<Insumo[]>([]);
@@ -94,6 +99,9 @@ export default function Recetas({ user }: RecetasProps) {
   const [drawerInsumos, setDrawerInsumos] = useState<RecetaInsumo[]>([]);
   const [drawerRendimiento, setDrawerRendimiento] = useState<string>("1");
   const [drawerNotas, setDrawerNotas] = useState<string>("");
+
+  // Selector "Nueva receta" — modal con lista de items sin receta.
+  const [selectorOpen, setSelectorOpen] = useState(false);
 
   const puedeEditar = tienePermiso(user, "rentabilidad") || user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin";
 
@@ -340,17 +348,47 @@ export default function Recetas({ user }: RecetasProps) {
     await load();
   });
 
+  // Trigger "Nueva receta" desde el padre Recetario via ?action=nueva-receta.
+  useEffect(() => {
+    if (!embedded) return;
+    if (searchParams.get("action") === "nueva-receta") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectorOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("action");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, embedded]);
+
+  // Items sin receta — alimentan el selector "Nueva receta".
+  const itemsSinReceta = items.filter(it => !recetaByItemId.has(it.id));
+
   return (
     <div>
       <ToastComponent toast={toast} />
-      <div className="ph-row">
-        <div>
-          <div className="ph-title">Recetas</div>
-          <div style={{ color: "var(--muted2)", fontSize: 12, marginTop: 2 }}>
-            {totalItems} items totales · {conReceta} con receta · {sinReceta} sin receta · {cobertura}% cobertura
+      {!embedded && (
+        <div className="ph-row">
+          <div>
+            <div className="ph-title">Recetas</div>
+            <div style={{ color: "var(--muted2)", fontSize: 12, marginTop: 2 }}>
+              {totalItems} items totales · {conReceta} con receta · {sinReceta} sin receta · {cobertura}% cobertura
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {puedeEditar && (
+              <button
+                className="btn btn-acc"
+                onClick={() => setSelectorOpen(true)}
+                disabled={itemsSinReceta.length === 0}
+                title={itemsSinReceta.length === 0 ? "Todos los items ya tienen receta" : ""}
+              >
+                + Nueva receta
+              </button>
+            )}
           </div>
         </div>
-      </div>
+      )}
 
       {/* KPIs en banner si hay items sin receta */}
       {sinReceta > 0 && (
@@ -606,6 +644,60 @@ export default function Recetas({ user }: RecetasProps) {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Modal selector "Nueva receta" — elegir un item sin receta y abrir el editor */}
+      <Modal
+        isOpen={selectorOpen}
+        onClose={() => setSelectorOpen(false)}
+        title="Nueva receta"
+        maxWidth={520}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ fontSize: 12, color: "var(--muted2)" }}>
+            Elegí el item al que querés cargarle la receta. Solo se muestran los que aún no tienen una.
+          </div>
+          {itemsSinReceta.length === 0 ? (
+            <div className="empty" style={{ padding: 24 }}>
+              Todos los items ya tienen receta cargada.
+            </div>
+          ) : (
+            <div style={{ maxHeight: 400, overflowY: "auto", border: "1px solid var(--bd)", borderRadius: 6 }}>
+              {itemsSinReceta.map(it => (
+                <button
+                  key={it.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectorOpen(false);
+                    void abrirDrawer(it);
+                  }}
+                  style={{
+                    display: "flex",
+                    width: "100%",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "10px 12px",
+                    background: "transparent",
+                    border: "none",
+                    borderBottom: "1px solid var(--bd)",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    color: "var(--text)",
+                    fontSize: 13,
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--s2)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <span style={{ fontSize: 18, width: 26 }}>{it.emoji ?? "—"}</span>
+                  <span style={{ flex: 1 }}>{it.nombre}</span>
+                  <span className="mono" style={{ color: "var(--muted2)", fontSize: 11 }}>
+                    {it.precio_madre ? `$${Number(it.precio_madre).toLocaleString("es-AR")}` : "—"}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </Modal>
     </div>
   );

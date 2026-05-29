@@ -42,8 +42,11 @@ const Rentabilidad = lazy(() => import("./pages/Rentabilidad"));
 // Insumos + Recetas (sprint 28-may noche): gestión de catálogo de materia
 // prima y vinculación con platos (CMV teórico, margen, alertas). Las acciones
 // operativas (conteo, mermas, transferencias) viven en COMANDA.
-const Insumos = lazy(() => import("./pages/Insumos"));
-const Recetas = lazy(() => import("./pages/Recetas"));
+// 28-may noche: agrupadas en /recetario (hub estilo Compras con sub-nav
+// lateral). Las rutas /insumos y /recetas standalone redireccionan al hub.
+// Los componentes Insumos/Recetas se importan dentro del hub (lazy interno),
+// no acá — por eso solo Recetario tiene su lazy en App.
+const Recetario = lazy(() => import("./pages/Recetario"));
 const MensajeriaIG = lazy(() => import("./pages/MensajeriaIG"));
 const Negocio = lazy(() => import("./pages/Negocio"));
 const Objetivos = lazy(() => import("./pages/Objetivos"));
@@ -522,12 +525,15 @@ function AppMain() {
               <Route path="/rentabilidad" element={
                 user ? <Rentabilidad user={user} locales={locales} localActivo={localActivo}/> : <Navigate to="/" replace/>
               } />
-              <Route path="/insumos" element={
-                user && tienePermiso(user, "rentabilidad") ? <Insumos user={user} locales={locales} localActivo={localActivo}/> : <Navigate to="/inicio" replace/>
+              {/* Hub Recetario: agrupa Insumos + Recetas con sub-nav lateral
+                  (estilo Compras). Las rutas /insumos y /recetas standalone
+                  redirigen al hub con la sub-sección preseleccionada para que
+                  bookmarks viejos no se rompan. */}
+              <Route path="/recetario" element={
+                user && tienePermiso(user, "rentabilidad") ? <Recetario user={user} locales={locales} localActivo={localActivo}/> : <Navigate to="/inicio" replace/>
               } />
-              <Route path="/recetas" element={
-                user && tienePermiso(user, "rentabilidad") ? <Recetas user={user} locales={locales} localActivo={localActivo}/> : <Navigate to="/inicio" replace/>
-              } />
+              <Route path="/insumos" element={<Navigate to="/recetario?sec=insumos" replace />} />
+              <Route path="/recetas" element={<Navigate to="/recetario?sec=recetas" replace />} />
               <Route path="/objetivos" element={
                 user?.tenant_id ? <Objetivos locales={locales} tenantId={user.tenant_id} localActivo={localActivo}/> : <Navigate to="/" replace/>
               } />

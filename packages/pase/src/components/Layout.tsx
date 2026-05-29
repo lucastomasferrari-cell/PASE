@@ -77,6 +77,9 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
     {slug:"gastos",path:"/gastos",label:"Gastos",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="6" r="4.5"/><path d="M7 4v4M5 6.5l2 2 2-2"/></svg>`},
     // Equipo MOVIDO de Herramientas → Operación 2026-05-18 (Lucas).
     {slug:"rrhh",path:"/equipo",label:"Equipo",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="5" r="2.5"/><path d="M1 13c0-2.5 2-4 4-4s4 1.5 4 4"/><circle cx="10" cy="5" r="2"/><path d="M13 13c0-2 -1-3.5-3-3.5"/></svg>`},
+    // Recetario (28-may noche): hub Insumos+Recetas. Reemplaza los 2 entries
+    // que estaban sueltos en Dirección. Slug 'rentabilidad' por permisos.
+    {slug:"rentabilidad",path:"/recetario",label:"Recetario",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2h6l2 2v8.5a.5.5 0 0 1-.5.5H3.5a.5.5 0 0 1-.5-.5z"/><path d="M5 5h4M5 7.5h4M5 10h3"/></svg>`},
     // Reservas OCULTADO 2026-05-18 (Lucas: "no sirve, vive en COMANDA").
     // Item comentado para reactivar fácil si se decide reintroducir.
     // {slug:"reservas",path:"/reservas",label:"Reservas",sec:"Operación",icon:`<svg...`},
@@ -91,13 +94,7 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
     {slug:"finanzas",path:"/finanzas",label:"Finanzas",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h9a1 1 0 0 1 1 1V11a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h7.5"/><circle cx="9.5" cy="8" r="0.9"/></svg>`},
     {slug:"objetivos",path:"/objetivos",label:"Objetivos",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5.5"/><circle cx="7" cy="7" r="3"/><circle cx="7" cy="7" r="0.5" fill="currentColor"/></svg>`},
     {slug:"eerr",path:"/reportes",label:"Reportes",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,11 5,7 8,9 13,3"/><polyline points="10,3 13,3 13,6"/></svg>`},
-    // Catálogo de insumos + recetas que alimentan CMV teórico y stock (28-may
-    // noche). Slug 'rentabilidad' como puerta de acceso por permisos. La
-    // pantalla /rentabilidad existe en el código pero no estaba en el sidebar
-    // — la sumamos ahora para visibilidad junto con los CRUDs nuevos.
     {slug:"rentabilidad",path:"/rentabilidad",label:"Rentabilidad",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 11V5l3 4 3-6 4 8"/></svg>`},
-    {slug:"rentabilidad",path:"/insumos",label:"Insumos",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h8l-.5 7H3.5z"/><path d="M5 5V3.5a2 2 0 0 1 4 0V5"/></svg>`},
-    {slug:"rentabilidad",path:"/recetas",label:"Recetas",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2h6l2 2v8H3z"/><path d="M5 5h4M5 7h4M5 9h3"/></svg>`},
 
     // === HERRAMIENTAS (1) ===
     // Consolidación 2026-05-18 (Lucas: "herramientas concentrá todo al final").

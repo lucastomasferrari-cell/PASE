@@ -17,6 +17,7 @@
 // INSERT/UPDATE/DELETE directo. Soft delete con `deleted_at` (audit trail).
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
 import { tienePermiso } from "../lib/auth";
 import { useGuardedHandler } from "../lib/useGuardedHandler";
@@ -107,10 +108,14 @@ interface InsumosProps {
   user: Usuario;
   locales?: Local[];
   localActivo: number | null;
+  /** Cuando true, omite el ph-row con título + botones (lo dispara el módulo
+   * madre Recetario). Triggering "nuevo insumo" via URL query ?action=nuevo. */
+  embedded?: boolean;
 }
 
-export default function Insumos({ user, locales = [] }: InsumosProps) {
+export default function Insumos({ user, locales = [], embedded = false }: InsumosProps) {
   const { toast, showError, showToast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [insumos, setInsumos] = useState<Insumo[]>([]);
   const [search, setSearch] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState<string>("__all");
@@ -120,6 +125,20 @@ export default function Insumos({ user, locales = [] }: InsumosProps) {
   const [modalNew, setModalNew] = useState(false);
   const [modalEdit, setModalEdit] = useState<Insumo | null>(null);
   const [form, setForm] = useState<FormInsumo>(emptyForm);
+
+  // En modo embedded, el padre Recetario dispara "Nuevo insumo" via query
+  // param ?action=nuevo (mismo patrón que Proveedores embebido en Compras).
+  useEffect(() => {
+    if (!embedded) return;
+    if (searchParams.get("action") === "nuevo-insumo") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setModalNew(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("action");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, embedded]);
 
   // Slug "rentabilidad" cubre todo el módulo Stock+Insumos+Recetas en el sistema
   // de permisos (auth.ts MODULOS). Si en el futuro queremos granularidad fina,
@@ -287,22 +306,24 @@ export default function Insumos({ user, locales = [] }: InsumosProps) {
   return (
     <div>
       <ToastComponent toast={toast} />
-      <div className="ph-row">
-        <div>
-          <div className="ph-title">Insumos</div>
-          <div style={{ color: "var(--muted2)", fontSize: 12, marginTop: 2 }}>
-            Catálogo de ingredientes · {total} activos
-            {sinCosto > 0 && <> · <span style={{ color: "var(--warn)" }}>{sinCosto} sin costo</span></>}
-            {sinCategoria > 0 && <> · <span style={{ color: "var(--warn)" }}>{sinCategoria} sin categoría</span></>}
-            {enQuiebre > 0 && <> · <span style={{ color: "var(--danger)" }}>{enQuiebre} en quiebre</span></>}
+      {!embedded && (
+        <div className="ph-row">
+          <div>
+            <div className="ph-title">Insumos</div>
+            <div style={{ color: "var(--muted2)", fontSize: 12, marginTop: 2 }}>
+              Catálogo de ingredientes · {total} activos
+              {sinCosto > 0 && <> · <span style={{ color: "var(--warn)" }}>{sinCosto} sin costo</span></>}
+              {sinCategoria > 0 && <> · <span style={{ color: "var(--warn)" }}>{sinCategoria} sin categoría</span></>}
+              {enQuiebre > 0 && <> · <span style={{ color: "var(--danger)" }}>{enQuiebre} en quiebre</span></>}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {puedeEditar && (
+              <button className="btn btn-acc" onClick={abrirNuevo}>+ Nuevo insumo</button>
+            )}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          {puedeEditar && (
-            <button className="btn btn-acc" onClick={abrirNuevo}>+ Nuevo insumo</button>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* Filtros */}
       <div className="panel" style={{ marginBottom: 8 }}>
