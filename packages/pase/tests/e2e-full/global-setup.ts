@@ -24,10 +24,33 @@ import { saveSharedSeed } from "./setup/shared-seed";
 
 export default async function globalSetup(config: FullConfig): Promise<void> {
   // Skip si no se va a correr el project e2e-full.
-  // Playwright filtra `config.projects` según --project en la CLI.
+  // Playwright filtra `config.projects` según --project en la CLI desde 1.59,
+  // pero NO siempre — depende del modo de invocación. Por las dudas también
+  // chequeamos argv (cuando el user corrió `--project=mutante` puro).
   const haceFalta = config.projects.some((p) => p.name === "e2e-full");
-  if (!haceFalta) {
-    return;
+  if (!haceFalta) return;
+
+  // Skip silencioso si no hay SUPERADMIN_PASSWORD — significa que el dev
+  // está corriendo localmente sin el secret (típico al correr mutantes/smoke
+  // sin tener acceso al password superadmin). El user e2e-full real va a
+  // fallar en el primer test con un mensaje claro de skip por seed=null.
+  // No falla aquí para no bloquear las otras suites.
+  if (!process.env.SUPERADMIN_PASSWORD) {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const envPath = path.resolve(here, "..", "..", ".env.local");
+    try {
+      const raw = fs.readFileSync(envPath, "utf-8");
+      if (!/^SUPERADMIN_PASSWORD=/m.test(raw)) {
+        console.warn("[globalSetup] ⚠ SUPERADMIN_PASSWORD no seteado — skip seed E2E (mutantes/smoke siguen funcionando).");
+        return;
+      }
+    } catch {
+      console.warn("[globalSetup] ⚠ no se pudo leer .env.local — skip seed E2E.");
+      return;
+    }
   }
 
   console.log("[globalSetup] ── E2E full suite — preparando tenant compartido ──");
