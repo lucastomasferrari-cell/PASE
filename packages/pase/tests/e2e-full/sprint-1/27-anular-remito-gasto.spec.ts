@@ -45,16 +45,20 @@ test.describe.serial("E2E Test 27 — anular_remito + anular_gasto", () => {
 
     // Crear remito pendiente via service_role (más simple que armar el flow
     // de crear_remito + items con todos sus params).
+    // 29-may fix: el schema real tiene prov_id (no proveedor_id) + monto
+    // (no total). El insert anterior silenciosamente fallaba → remito
+    // inexistente → REMITO_NO_ENCONTRADO en anular_remito.
     const remitoId = `REM-T27-${Date.now()}`;
-    await svc.from("remitos").insert({
+    const { error: insErr } = await svc.from("remitos").insert({
       id: remitoId,
       tenant_id: seed.tenantId,
       local_id: seed.local1Id,
-      proveedor_id: seed.proveedorId,
+      prov_id: seed.proveedorId,
       fecha: new Date().toISOString().slice(0, 10),
-      total: 25000,
+      monto: 25000,
       estado: "pendiente",
     });
+    if (insErr) throw new Error(`Insert remito: ${insErr.message}`);
 
     // Pagar el remito para que tenga un mov ligado
     await duenoDb.rpc("pagar_remito", {

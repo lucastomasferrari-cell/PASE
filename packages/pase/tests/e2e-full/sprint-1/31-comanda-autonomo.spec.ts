@@ -40,6 +40,18 @@ test.describe.serial("E2E Test 31 — Sprint COMANDA Autónomo", () => {
     // Lee el seed compartido creado por globalSetup (UN tenant E2E para toda
     // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
     seed = loadSharedSeed();
+
+    // 29-may fix: el seed creó comanda_usuario para el dueño con rol_pos='admin'.
+    // Este test prueba CREARLO desde cero (test A+B) — entonces hay que borrar
+    // primero el del seed para que el insert no choque con UNIQUE(tenant_id,email).
+    // También borrar sus permisos para asegurar estado limpio.
+    const svc = createServiceClient();
+    const { data: existing } = await svc.from("comanda_usuarios")
+      .select("id").eq("email", E2E_DUENO_EMAIL).eq("tenant_id", seed.tenantId).maybeSingle();
+    if (existing) {
+      await svc.from("comanda_usuario_permisos").delete().eq("comanda_usuario_id", existing.id);
+      await svc.from("comanda_usuarios").delete().eq("id", existing.id);
+    }
   });
 
   test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });
