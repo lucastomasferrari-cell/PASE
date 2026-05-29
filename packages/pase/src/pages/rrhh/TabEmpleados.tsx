@@ -53,6 +53,7 @@ export function TabEmpleados({
   // Si el modal abre con un empleado cuyo puesto NO está en el catálogo
   // (puesto legacy o creado ad-hoc antes), arrancamos en modo "Otro" con
   // el valor pre-cargado para que el cajero pueda editarlo.
+  /* eslint-disable react-hooks/set-state-in-effect -- intencional: hidratar el modo "Otro" cuando el modal abre con un empleado cuyo puesto no está en el catálogo. Es un sync de fuente externa (empModal cambia desde la tabla), no un efecto en cascada. */
   useEffect(() => {
     if (empModal === null) {
       setUsandoOtroPuesto(false);
@@ -63,6 +64,7 @@ export function TabEmpleados({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empModal]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return (
     <>

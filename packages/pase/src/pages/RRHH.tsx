@@ -141,6 +141,19 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adelForm.cuenta, cuentasUsables.join("|")]);
 
+  // Dashboard
+  const [dashLoading, setDashLoading] = useState(true);
+  const [dashStats, setDashStats] = useState<DashStats | Record<string, never>>({});
+
+  // Historial — declarado ANTES del useEffect de SYNC para que el TDZ-check
+  // del linter no flagee `histLocal` (lint react-hooks/immutability).
+  const [histLocal, setHistLocal] = useState(defaultLocal);
+  const [histMes, setHistMes] = useState(today.getMonth() + 1);
+  const [histAnio, setHistAnio] = useState(today.getFullYear());
+  const [histData, setHistData] = useState<HistRow[]>([]);
+  const [histLoading, setHistLoading] = useState(false);
+  const [histDetalle, setHistDetalle] = useState<HistRow | null>(null);
+
   // ─── SYNC LOCAL ACTIVO ────────────────────────────────────────────────────
   // Bug reportado 29-may (Lucas): cambiaba el local activo en el sidebar pero
   // /equipo seguía mostrando empleados del local viejo. La causa:
@@ -170,18 +183,6 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- solo queremos correr al cambiar localActivo
   }, [localActivo]);
-
-  // Dashboard
-  const [dashLoading, setDashLoading] = useState(true);
-  const [dashStats, setDashStats] = useState<DashStats | Record<string, never>>({});
-
-  // Historial
-  const [histLocal, setHistLocal] = useState(defaultLocal);
-  const [histMes, setHistMes] = useState(today.getMonth() + 1);
-  const [histAnio, setHistAnio] = useState(today.getFullYear());
-  const [histData, setHistData] = useState<HistRow[]>([]);
-  const [histLoading, setHistLoading] = useState(false);
-  const [histDetalle, setHistDetalle] = useState<HistRow | null>(null);
 
   // ─── LOAD FUNCTIONS ────────────────────────────────────────────────────────
 

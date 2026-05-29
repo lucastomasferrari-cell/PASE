@@ -105,6 +105,12 @@ export default function MateriasPrimas({ user, embedded = false }: MateriasPrima
   const [modalEdit, setModalEdit] = useState<MateriaPrima | null>(null);
   const [form, setForm] = useState<Form>(emptyForm);
 
+  // Quick-create insumo inline (automatización 29-may): cuando el user está
+  // creando una MP y el insumo no existe, abre mini-modal para crearlo sin
+  // salir del flow.
+  const [quickInsumoOpen, setQuickInsumoOpen] = useState(false);
+  const [quickInsumoForm, setQuickInsumoForm] = useState({ nombre: "", unidad: "kg" });
+
   const puedeEditar = tienePermiso(user, "rentabilidad") || user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin";
 
   const load = async () => {
@@ -271,6 +277,31 @@ export default function MateriasPrimas({ user, embedded = false }: MateriasPrima
     await load();
   });
 
+  // Quick-create insumo inline. Crea el insumo, refresca lista, lo
+  // selecciona en el form de la MP, cierra el mini-modal.
+  const { run: crearInsumoQuick, isPending: creandoInsumo } = useGuardedHandler(async () => {
+    if (!quickInsumoForm.nombre.trim()) { showError("Ponele un nombre al insumo"); return; }
+    const { data, error } = await db.from("insumos").insert([{
+      tenant_id: user.tenant_id,
+      created_by: user.id,
+      nombre: quickInsumoForm.nombre.trim(),
+      unidad: quickInsumoForm.unidad,
+      activo: true,
+      es_comprado: true,
+      stock_disponible: true,
+    }]).select("id").single();
+    if (error || !data) { showError("No se pudo crear el insumo: " + (error?.message ?? "vacío")); return; }
+    showToast("Insumo creado");
+    // Re-cargar insumos y seleccionar el nuevo en el form de la MP
+    const { data: nuevos } = await db.from("insumos")
+      .select("id, nombre, unidad")
+      .eq("activo", true).is("deleted_at", null).order("nombre");
+    setInsumos((nuevos || []) as Insumo[]);
+    setForm({ ...form, insumo_id: String(data.id) });
+    setQuickInsumoOpen(false);
+    setQuickInsumoForm({ nombre: "", unidad: "kg" });
+  });
+
   // Cálculo de costo por unidad del insumo (vista útil al usuario)
   const calcPrecioPorUnidadInsumo = (precio: string | number, factor: string | number) => {
     const p = Number(precio);
@@ -430,7 +461,7 @@ export default function MateriasPrimas({ user, embedded = false }: MateriasPrima
           </>
         }
       >
-        <FormFields form={form} setForm={setForm} proveedores={proveedores} insumos={insumos} />
+        <FormFields form={form} setForm={setForm} proveedores={proveedores} insumos={insumos} onCreateInsumo={() => setQuickInsumoOpen(true)} />
       </Modal>
 
       {/* Modal Edición */}
@@ -451,12 +482,65 @@ export default function MateriasPrimas({ user, embedded = false }: MateriasPrima
           </>
         }
       >
-        <FormFields form={form} setForm={setForm} proveedores={proveedores} insumos={insumos} />
+        <FormFields form={form} setForm={setForm} proveedores={proveedores} insumos={insumos} onCreateInsumo={() => setQuickInsumoOpen(true)} />
         {modalEdit && modalEdit.precio_actualizado_at && (
           <div style={{ marginTop: 12, padding: 8, background: "var(--s2)", borderRadius: 4, fontSize: 11, color: "var(--muted2)" }}>
             Último cambio de precio: {new Date(modalEdit.precio_actualizado_at).toLocaleDateString("es-AR")}
           </div>
         )}
+      </Modal>
+
+      {/* Mini-Modal: crear insumo rápido sin salir del flow de MP */}
+      <Modal
+        isOpen={quickInsumoOpen}
+        onClose={() => setQuickInsumoOpen(false)}
+        title="Crear insumo rápido"
+        maxWidth={420}
+        footer={
+          <>
+            <button className="btn btn-sec" onClick={() => setQuickInsumoOpen(false)} disabled={creandoInsumo}>Cancelar</button>
+            <button className="btn btn-acc" onClick={() => crearInsumoQuick()} disabled={creandoInsumo}>
+              {creandoInsumo ? "Creando…" : "Crear"}
+            </button>
+          </>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 11, color: "var(--muted2)" }}>
+            El insumo es la <strong>materia base</strong> (ej: "Salmón", "Coca-Cola 500ml"). Después podés cargarle el detalle completo desde Stock → Insumos.
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: "var(--muted2)" }}>Nombre *</label>
+            <input
+              type="text"
+              value={quickInsumoForm.nombre}
+              onChange={e => setQuickInsumoForm({ ...quickInsumoForm, nombre: e.target.value })}
+              placeholder="Ej: Salmón / Coca-Cola"
+              className="search"
+              style={{ width: "100%" }}
+              autoFocus
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: "var(--muted2)" }}>Unidad base *</label>
+            <select
+              value={quickInsumoForm.unidad}
+              onChange={e => setQuickInsumoForm({ ...quickInsumoForm, unidad: e.target.value })}
+              className="search"
+              style={{ width: "100%" }}
+            >
+              <option value="kg">kg</option>
+              <option value="g">g</option>
+              <option value="L">L</option>
+              <option value="ml">ml</option>
+              <option value="un">un</option>
+              <option value="docena">docena</option>
+            </select>
+            <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 2 }}>
+              Unidad en la que medís el stock (no la unidad de compra del proveedor).
+            </div>
+          </div>
+        </div>
       </Modal>
     </div>
   );
@@ -464,12 +548,13 @@ export default function MateriasPrimas({ user, embedded = false }: MateriasPrima
 
 // ─── FormFields (compartido entre Nuevo + Editar) ────────────────────────────
 function FormFields({
-  form, setForm, proveedores, insumos,
+  form, setForm, proveedores, insumos, onCreateInsumo,
 }: {
   form: Form;
   setForm: (f: Form) => void;
   proveedores: Proveedor[];
   insumos: Insumo[];
+  onCreateInsumo?: () => void;
 }) {
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm({ ...form, [k]: v });
   const insumoSel = insumos.find(i => String(i.id) === form.insumo_id);
@@ -504,7 +589,18 @@ function FormFields({
           </select>
         </div>
         <div>
-          <label style={{ fontSize: 11, color: "var(--muted2)" }}>Insumo vinculado *</label>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <label style={{ fontSize: 11, color: "var(--muted2)" }}>Insumo vinculado *</label>
+            {onCreateInsumo && (
+              <button
+                type="button"
+                onClick={onCreateInsumo}
+                style={{ fontSize: 10, color: "var(--acc)", background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" }}
+              >
+                + Crear insumo
+              </button>
+            )}
+          </div>
           <select value={form.insumo_id} onChange={e => set("insumo_id", e.target.value)} className="search" style={{ width: "100%" }}>
             <option value="">Seleccionar insumo</option>
             {insumos.map(i => <option key={i.id} value={String(i.id)}>{i.nombre} ({i.unidad})</option>)}

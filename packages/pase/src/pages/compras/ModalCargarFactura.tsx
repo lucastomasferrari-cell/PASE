@@ -5,7 +5,11 @@ import { LocalLockedChip, LocalSelectorObligatorio, Modal } from "../../componen
 import { fmt_$ } from "@pase/shared/utils";
 import { UNIDADES } from "../../lib/constants";
 import { db } from "../../lib/supabase";
+import { useGuardedHandler } from "../../lib/useGuardedHandler";
+import { useToast } from "../../hooks/useToast";
+import { ToastComponent } from "../../components/Toast";
 import type { Local } from "../../types";
+import type { Usuario } from "../../types/auth";
 import type { Proveedor } from "../../types/finanzas";
 import type { FormFactura, ItemFactura } from "./types";
 
@@ -32,6 +36,8 @@ export interface CategoriasBundle {
 interface ModalCargarFacturaProps {
   abierto: boolean;
   onClose: () => void;
+  /** User para insert con tenant_id + created_by en quick-create MP/insumo. */
+  user: Usuario;
   form: FormFactura;
   setForm: React.Dispatch<React.SetStateAction<FormFactura>>;
   proveedores: Proveedor[];
@@ -49,15 +55,30 @@ interface ModalCargarFacturaProps {
   saving: boolean;
 }
 
+// Insumo light para el dropdown del mini-modal de quick-create MP
+interface InsumoOpcion { id: number; nombre: string; unidad: string }
+
 // Modal "Cargar Factura / Nota de Crédito" — input manual con todas las
 // percepciones argentinas (IVA 21/10.5, IIBB, perc. IVA), detalle de
 // insumos opcional y total auto-calculado. Cubre el flujo cuando NO se
 // usa el Lector IA.
 export function ModalCargarFactura({
-  abierto, onClose, form, setForm, proveedores, localesDisp, localActivo, categorias,
+  abierto, onClose, user, form, setForm, proveedores, localesDisp, localActivo, categorias,
   onProvChange, calcTotal, items, addItem, updateItem, removeItem, guardar, saving,
 }: ModalCargarFacturaProps) {
+  const { toast, showError, showToast } = useToast();
   const [materiasPrimas, setMateriasPrimas] = useState<MateriaPrimaOpcion[]>([]);
+  const [insumosOpts, setInsumosOpts] = useState<InsumoOpcion[]>([]);
+
+  // Quick-create MP inline (automatización 29-may): fila del detalle → "+ Crear MP"
+  // abre mini-modal pre-llenado con nombre/unidad/precio del row.
+  const [quickMpRowIdx, setQuickMpRowIdx] = useState<number | null>(null);
+  const [quickMpForm, setQuickMpForm] = useState({
+    nombre: "", insumo_id: "", unidad_compra: "un", factor_conversion: "1", merma_pct: "0", precio_actual: "",
+  });
+  // Quick-create insumo nested (desde el mini-modal de MP, si el insumo tampoco existe)
+  const [quickInsumoOpen, setQuickInsumoOpen] = useState(false);
+  const [quickInsumoForm, setQuickInsumoForm] = useState({ nombre: "", unidad: "kg" });
 
   // Cargar catálogo de materias primas al abrir. Filtra por proveedor del form
   // si está seteado (sugerencia: si elegís Pescadería X, sólo te ofrece MPs
@@ -84,7 +105,86 @@ export function ModalCargarFactura({
         });
         setMateriasPrimas(mapped);
       });
+    // Cargar insumos para el dropdown del mini-modal de MP
+    void db.from('insumos')
+      .select('id, nombre, unidad')
+      .eq('activo', true).is('deleted_at', null).order('nombre').limit(500)
+      .then(({ data }) => setInsumosOpts((data ?? []) as InsumoOpcion[]));
   }, [abierto]);
+
+  // Abrir el mini-modal de MP, pre-llenando con datos de la fila
+  function abrirQuickMp(rowIdx: number) {
+    const it = items[rowIdx];
+    if (!it) return;
+    setQuickMpForm({
+      nombre: it.producto.trim(),
+      insumo_id: "",
+      unidad_compra: it.unidad || "un",
+      factor_conversion: "1",
+      merma_pct: "0",
+      precio_actual: String(it.precio_unitario || ""),
+    });
+    setQuickMpRowIdx(rowIdx);
+  }
+
+  // Crear MP inline: INSERT + refresh + auto-vincular a la fila
+  const { run: crearMpQuick, isPending: creandoMp } = useGuardedHandler(async () => {
+    if (!quickMpForm.nombre.trim()) { showError("Ponele un nombre a la materia prima"); return; }
+    if (!quickMpForm.insumo_id) { showError("Tenés que elegir o crear un insumo"); return; }
+    const factor = parseFloat(quickMpForm.factor_conversion);
+    if (!factor || factor <= 0) { showError("El factor debe ser > 0"); return; }
+    const payload = {
+      tenant_id: user.tenant_id,
+      created_by: user.id,
+      nombre: quickMpForm.nombre.trim(),
+      insumo_id: parseInt(quickMpForm.insumo_id),
+      proveedor_id: form.prov_id ? parseInt(form.prov_id) : null,
+      unidad_compra: quickMpForm.unidad_compra,
+      factor_conversion: factor,
+      merma_pct: parseFloat(quickMpForm.merma_pct) || 0,
+      precio_actual: quickMpForm.precio_actual ? parseFloat(quickMpForm.precio_actual) : null,
+      activa: true,
+    };
+    const { data, error } = await db.from('materias_primas').insert([payload]).select('id, nombre, proveedor_id, insumo:insumos(nombre)').single();
+    if (error || !data) { showError("No se pudo crear la MP: " + (error?.message ?? "vacío")); return; }
+    // Mapear y agregar a la lista local sin re-fetch completo
+    const row = data as { id: number; nombre: string; proveedor_id: number | null;
+      insumo?: { nombre: string | null } | { nombre: string | null }[] | null };
+    const insumo = Array.isArray(row.insumo) ? row.insumo[0] : row.insumo;
+    const nuevaMp: MateriaPrimaOpcion = {
+      id: row.id, nombre: row.nombre,
+      insumo_nombre: insumo?.nombre ?? null,
+      proveedor_id: row.proveedor_id,
+    };
+    setMateriasPrimas([...materiasPrimas, nuevaMp].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+    // Auto-vincular a la fila que disparó el create
+    if (quickMpRowIdx !== null) {
+      updateItem(quickMpRowIdx, 'materia_prima_id' as keyof ItemFactura, row.id);
+    }
+    showToast("Materia prima creada y vinculada");
+    setQuickMpRowIdx(null);
+  });
+
+  // Crear insumo inline (nested desde el mini-modal de MP)
+  const { run: crearInsumoQuick, isPending: creandoInsumo } = useGuardedHandler(async () => {
+    if (!quickInsumoForm.nombre.trim()) { showError("Ponele un nombre al insumo"); return; }
+    const { data, error } = await db.from('insumos').insert([{
+      tenant_id: user.tenant_id,
+      created_by: user.id,
+      nombre: quickInsumoForm.nombre.trim(),
+      unidad: quickInsumoForm.unidad,
+      activo: true,
+      es_comprado: true,
+      stock_disponible: true,
+    }]).select('id, nombre, unidad').single();
+    if (error || !data) { showError("No se pudo crear el insumo: " + (error?.message ?? "vacío")); return; }
+    const nuevo = data as InsumoOpcion;
+    setInsumosOpts([...insumosOpts, nuevo].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+    setQuickMpForm({ ...quickMpForm, insumo_id: String(nuevo.id) });
+    showToast("Insumo creado");
+    setQuickInsumoOpen(false);
+    setQuickInsumoForm({ nombre: "", unidad: "kg" });
+  });
 
   if (!abierto) return null;
   const { compra, fijos, variables, publicidad, comisiones, impuestos, bucketMap } = categorias;
@@ -241,26 +341,38 @@ export function ModalCargarFactura({
                     <td><input type="number" step="0.01" style={{ width: 90, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.precio_unitario} onChange={e => updateItem(i, "precio_unitario", e.target.value)} /></td>
                     <td style={{ color: "var(--acc)", fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 500 }}>{fmt_$(it.subtotal)}</td>
                     <td>
-                      <select
-                        style={{
-                          width: "100%",
-                          background: necesitaVincular ? "rgba(217, 119, 6, 0.12)" : "var(--bg)",
-                          border: necesitaVincular ? "1px solid #d97706" : "1px solid var(--bd)",
-                          color: "var(--txt)", padding: "4px 6px", fontSize: 11, borderRadius: "var(--r)",
-                        }}
-                        value={it.materia_prima_id ?? ""}
-                        onChange={e => updateItem(i, "materia_prima_id" as keyof ItemFactura, e.target.value ? Number(e.target.value) : 0)}
-                        title={necesitaVincular
-                          ? "⚠ Sin vincular — el costo del insumo NO se actualizará"
-                          : "Vincular a una materia prima del catálogo"}
-                      >
-                        <option value="">{necesitaVincular ? "⚠ Sin vincular" : "— sin vincular —"}</option>
-                        {materiasFiltradas.map((mp) => (
-                          <option key={mp.id} value={mp.id}>
-                            {mp.nombre}{mp.insumo_nombre ? ` → ${mp.insumo_nombre}` : ""}
-                          </option>
-                        ))}
-                      </select>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                        <select
+                          style={{
+                            width: "100%",
+                            background: necesitaVincular ? "rgba(217, 119, 6, 0.12)" : "var(--bg)",
+                            border: necesitaVincular ? "1px solid #d97706" : "1px solid var(--bd)",
+                            color: "var(--txt)", padding: "4px 6px", fontSize: 11, borderRadius: "var(--r)",
+                          }}
+                          value={it.materia_prima_id ?? ""}
+                          onChange={e => updateItem(i, "materia_prima_id" as keyof ItemFactura, e.target.value ? Number(e.target.value) : 0)}
+                          title={necesitaVincular
+                            ? "⚠ Sin vincular — el costo del insumo NO se actualizará"
+                            : "Vincular a una materia prima del catálogo"}
+                        >
+                          <option value="">{necesitaVincular ? "⚠ Sin vincular" : "— sin vincular —"}</option>
+                          {materiasFiltradas.map((mp) => (
+                            <option key={mp.id} value={mp.id}>
+                              {mp.nombre}{mp.insumo_nombre ? ` → ${mp.insumo_nombre}` : ""}
+                            </option>
+                          ))}
+                        </select>
+                        {it.producto.trim().length > 0 && !it.materia_prima_id && (
+                          <button
+                            type="button"
+                            onClick={() => abrirQuickMp(i)}
+                            style={{ fontSize: 10, color: "var(--acc)", background: "none", border: "none", padding: "0 0 0 2px", cursor: "pointer", textDecoration: "underline", textAlign: "left" }}
+                            title="Crear esta materia prima en el catálogo y vincularla a este ítem"
+                          >
+                            + Crear MP nueva
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td><button className="btn btn-danger btn-sm" onClick={() => removeItem(i)}>✕</button></td>
                   </tr>
@@ -286,6 +398,122 @@ export function ModalCargarFactura({
               </div>
             )}
           </div>
+
+          {/* Mini-Modal: crear MP rápido desde una fila de la factura.
+              Pre-llena nombre/unidad/precio de la fila, deja al user elegir/crear el insumo. */}
+          <Modal
+            isOpen={quickMpRowIdx !== null}
+            onClose={() => setQuickMpRowIdx(null)}
+            title="Crear materia prima"
+            maxWidth={500}
+            footer={
+              <>
+                <button className="btn btn-sec" onClick={() => setQuickMpRowIdx(null)} disabled={creandoMp}>Cancelar</button>
+                <button className="btn btn-acc" onClick={() => crearMpQuick()} disabled={creandoMp}>
+                  {creandoMp ? "Creando…" : "Crear y vincular"}
+                </button>
+              </>
+            }
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ fontSize: 11, color: "var(--muted2)" }}>
+                La MP es <strong>cómo te vende el proveedor</strong> (ej: "Bolsa salmón 5kg"). El insumo es <strong>la materia base</strong> (ej: "Salmón"). Una MP apunta a un insumo.
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: "var(--muted2)" }}>Nombre MP *</label>
+                <input type="text" value={quickMpForm.nombre} onChange={e => setQuickMpForm({ ...quickMpForm, nombre: e.target.value })}
+                  placeholder="Ej: Bolsa salmón 5kg" className="search" style={{ width: "100%" }} autoFocus />
+              </div>
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <label style={{ fontSize: 11, color: "var(--muted2)" }}>Insumo *</label>
+                  <button type="button" onClick={() => setQuickInsumoOpen(true)}
+                    style={{ fontSize: 10, color: "var(--acc)", background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" }}>
+                    + Crear insumo
+                  </button>
+                </div>
+                <select value={quickMpForm.insumo_id} onChange={e => setQuickMpForm({ ...quickMpForm, insumo_id: e.target.value })}
+                  className="search" style={{ width: "100%" }}>
+                  <option value="">Seleccionar insumo</option>
+                  {insumosOpts.map(i => <option key={i.id} value={String(i.id)}>{i.nombre} ({i.unidad})</option>)}
+                </select>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                <div>
+                  <label style={{ fontSize: 11, color: "var(--muted2)" }}>Unidad compra *</label>
+                  <input type="text" value={quickMpForm.unidad_compra} onChange={e => setQuickMpForm({ ...quickMpForm, unidad_compra: e.target.value })}
+                    className="search" style={{ width: "100%" }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: "var(--muted2)" }}>Factor *</label>
+                  <input type="number" step="0.01" min="0.01" value={quickMpForm.factor_conversion}
+                    onChange={e => setQuickMpForm({ ...quickMpForm, factor_conversion: e.target.value })}
+                    className="search" style={{ width: "100%" }} />
+                  <div style={{ fontSize: 9, color: "var(--muted2)", marginTop: 2 }}>
+                    {(() => {
+                      const ins = insumosOpts.find(i => String(i.id) === quickMpForm.insumo_id);
+                      return ins ? `${ins.unidad} por ${quickMpForm.unidad_compra || "unidad"}` : "Cantidad por unidad de compra";
+                    })()}
+                  </div>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: "var(--muted2)" }}>Merma %</label>
+                  <input type="number" step="0.01" min="0" value={quickMpForm.merma_pct}
+                    onChange={e => setQuickMpForm({ ...quickMpForm, merma_pct: e.target.value })}
+                    className="search" style={{ width: "100%" }} />
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: "var(--muted2)" }}>Precio actual (opcional)</label>
+                <input type="number" step="0.01" min="0" value={quickMpForm.precio_actual}
+                  onChange={e => setQuickMpForm({ ...quickMpForm, precio_actual: e.target.value })}
+                  className="search" style={{ width: "100%" }} />
+                <div style={{ fontSize: 9, color: "var(--muted2)", marginTop: 2 }}>
+                  Si cargás esta factura el trigger lo actualiza automático con el precio_unitario del ítem.
+                </div>
+              </div>
+            </div>
+          </Modal>
+
+          {/* Mini-mini-modal: crear insumo desde dentro del mini-modal de MP */}
+          <Modal
+            isOpen={quickInsumoOpen}
+            onClose={() => setQuickInsumoOpen(false)}
+            title="Crear insumo rápido"
+            maxWidth={400}
+            footer={
+              <>
+                <button className="btn btn-sec" onClick={() => setQuickInsumoOpen(false)} disabled={creandoInsumo}>Cancelar</button>
+                <button className="btn btn-acc" onClick={() => crearInsumoQuick()} disabled={creandoInsumo}>
+                  {creandoInsumo ? "Creando…" : "Crear"}
+                </button>
+              </>
+            }
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div>
+                <label style={{ fontSize: 11, color: "var(--muted2)" }}>Nombre *</label>
+                <input type="text" value={quickInsumoForm.nombre}
+                  onChange={e => setQuickInsumoForm({ ...quickInsumoForm, nombre: e.target.value })}
+                  placeholder="Ej: Salmón" className="search" style={{ width: "100%" }} autoFocus />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: "var(--muted2)" }}>Unidad base *</label>
+                <select value={quickInsumoForm.unidad}
+                  onChange={e => setQuickInsumoForm({ ...quickInsumoForm, unidad: e.target.value })}
+                  className="search" style={{ width: "100%" }}>
+                  <option value="kg">kg</option>
+                  <option value="g">g</option>
+                  <option value="L">L</option>
+                  <option value="ml">ml</option>
+                  <option value="un">un</option>
+                  <option value="docena">docena</option>
+                </select>
+              </div>
+            </div>
+          </Modal>
+
+          {toast && <ToastComponent toast={toast} />}
     </Modal>
   );
 }

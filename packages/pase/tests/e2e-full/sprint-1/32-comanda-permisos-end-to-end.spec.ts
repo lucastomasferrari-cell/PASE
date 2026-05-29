@@ -27,7 +27,6 @@ import {
   createClient,
 } from "@supabase/supabase-js";
 import {
-  cleanupE2ETenant,
   createServiceClient,
   createE2EDuenoClient,
   type E2ETenantSeedResult,

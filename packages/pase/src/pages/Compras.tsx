@@ -1125,6 +1125,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       {/* MODAL CARGAR FACTURA */}
       <ModalCargarFactura
         abierto={modal} onClose={() => setModal(false)}
+        user={user}
         form={form} setForm={setForm}
         proveedores={proveedores} localesDisp={localesDisp} localActivo={localActivo}
         categorias={{

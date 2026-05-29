@@ -6,7 +6,6 @@ import {
   expect,
 } from "@playwright/test";
 import {
-  cleanupE2ETenant,
   createServiceClient,
   type E2ETenantSeedResult,
   E2E_SENTINEL,

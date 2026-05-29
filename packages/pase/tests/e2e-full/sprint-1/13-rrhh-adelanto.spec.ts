@@ -5,7 +5,6 @@ import {
   expect,
 } from "@playwright/test";
 import {
-  cleanupE2ETenant,
   createServiceClient,
   createE2EDuenoClient,
   type E2ETenantSeedResult,

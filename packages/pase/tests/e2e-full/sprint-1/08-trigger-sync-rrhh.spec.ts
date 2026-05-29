@@ -27,7 +27,6 @@ import {
   expect,
 } from "@playwright/test";
 import {
-  cleanupE2ETenant,
   createServiceClient,
   type E2ETenantSeedResult,
 } from "../setup/seed-tenant";
