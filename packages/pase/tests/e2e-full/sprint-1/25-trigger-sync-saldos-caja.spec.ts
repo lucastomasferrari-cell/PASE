@@ -107,7 +107,7 @@ test.describe.serial("E2E Test 25 — Trigger sync saldos_caja", () => {
   });
 
   test("C) UPDATE de cuenta sincroniza AMBAS (Caja Efectivo → Caja Chica)", async () => {
-    if (!seed) { test.skip(true, "Seed falló"); return; }
+    if (!seed || !movIdA) { test.skip(true, "Skip: no hay movIdA"); return; }
     const svc = createServiceClient();
 
     // Cache antes de mover (no asumimos valor absoluto — patrón delta 29-may)
@@ -118,10 +118,8 @@ test.describe.serial("E2E Test 25 — Trigger sync saldos_caja", () => {
       .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id)
       .eq("cuenta", "Caja Chica").maybeSingle();
 
-    // Mover el mov a Caja Chica
-    const { data: mov } = await svc.from("movimientos")
-      .select("id").like("id", "MOV-E2E-T25A-%").single();
-    await svc.from("movimientos").update({ cuenta: "Caja Chica" }).eq("id", mov!.id);
+    // Mover el mov (usar movIdA del state, no like+single que falla)
+    await svc.from("movimientos").update({ cuenta: "Caja Chica" }).eq("id", movIdA);
 
     // Caja Efectivo debe haber bajado (el mov salió de ahí)
     // Caja Chica debe haber subido en +250000
@@ -137,7 +135,7 @@ test.describe.serial("E2E Test 25 — Trigger sync saldos_caja", () => {
   });
 
   test("D) DELETE sincroniza cache", async () => {
-    if (!seed) { test.skip(true, "Seed falló"); return; }
+    if (!seed || !movIdA) { test.skip(true, "Skip: no hay movIdA"); return; }
     const svc = createServiceClient();
 
     const { data: chAntes } = await svc.from("saldos_caja").select("saldo")
@@ -145,10 +143,10 @@ test.describe.serial("E2E Test 25 — Trigger sync saldos_caja", () => {
       .eq("cuenta", "Caja Chica").single();
 
     const { data: mov } = await svc.from("movimientos")
-      .select("id, importe").like("id", "MOV-E2E-T25A-%").single();
+      .select("id, importe").eq("id", movIdA).single();
     const importeMov = Number(mov!.importe);
 
-    await svc.from("movimientos").delete().eq("id", mov!.id);
+    await svc.from("movimientos").delete().eq("id", movIdA);
 
     const { data: chDespues } = await svc.from("saldos_caja").select("saldo")
       .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id)

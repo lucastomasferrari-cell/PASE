@@ -244,8 +244,10 @@ test.describe.serial("E2E Test 29 — POS: mesas (transferir / unir / partir)", 
     expect(Number(vNuevaAfter!.total)).toBe(3500); // solo bebida
     expect(vNuevaAfter!.estado).toBe("abierta");
 
+    // Override 'split_check' va en la venta NUEVA (no la original) —
+    // así lo crea fn_partir_cuenta_comanda.
     const { data: ovs } = await svc.from("ventas_pos_overrides")
-      .select("accion").eq("venta_id", vOrig);
+      .select("accion").eq("venta_id", ventaNuevaId);
     expect(ovs!.some(o => o.accion === "split_check")).toBe(true);
     await duenoDb.auth.signOut();
   });
