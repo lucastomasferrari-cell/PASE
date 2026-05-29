@@ -23,9 +23,6 @@ test.describe.serial("E2E Test 20 — Manager Override TOTP", () => {
     // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
     seed = loadSharedSeed();
   });
-
-  test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });
-
   test("dueño puede anular factura sin código + uso TOTP válido / inválido", async () => {
     if (!seed) { test.skip(true, "Seed falló"); return; }
     const svc = createServiceClient();

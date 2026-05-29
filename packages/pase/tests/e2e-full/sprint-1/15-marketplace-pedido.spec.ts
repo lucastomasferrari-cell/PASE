@@ -49,9 +49,6 @@ test.describe.serial("E2E Test 15 — Marketplace pedido online", () => {
     seed = loadSharedSeed();
     pos = await seedComandaPos(seed);
   });
-
-  test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });
-
   test("configurar tienda + pedido online + pago MP + cambios de estado", async () => {
     if (!seed || !pos) { test.skip(true, "Seed falló"); return; }
     const svc = createServiceClient();

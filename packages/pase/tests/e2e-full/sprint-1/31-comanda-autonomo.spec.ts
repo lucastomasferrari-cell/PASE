@@ -53,9 +53,6 @@ test.describe.serial("E2E Test 31 — Sprint COMANDA Autónomo", () => {
       await svc.from("comanda_usuarios").delete().eq("id", existing.id);
     }
   });
-
-  test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });
-
   test("A+B) crear comanda_usuario para user PASE existente → reusa auth_id + permisos OK", async () => {
     if (!seed) { test.skip(true, "Seed falló"); return; }
     const svc = createServiceClient();

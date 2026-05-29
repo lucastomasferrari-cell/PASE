@@ -21,9 +21,6 @@ test.describe.serial("E2E Test 19 — Pagos RRHH especiales", () => {
     // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
     seed = loadSharedSeed();
   });
-
-  test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });
-
   test("pagar aguinaldo $750K → mov + pago especial registrado", async () => {
     if (!seed) { test.skip(true, "Seed falló"); return; }
     const svc = createServiceClient();

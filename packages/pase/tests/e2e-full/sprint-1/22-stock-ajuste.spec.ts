@@ -23,9 +23,6 @@ test.describe.serial("E2E Test 22 — Stock ajuste manual", () => {
     // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
     seed = loadSharedSeed();
   });
-
-  test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });
-
   test("ajuste +3kg (entrada) → stock sube a 8kg", async () => {
     if (!seed) { test.skip(true, "Seed falló"); return; }
     const svc = createServiceClient();

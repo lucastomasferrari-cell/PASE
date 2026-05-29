@@ -30,9 +30,6 @@ test.describe.serial("E2E Test 23 — Anular pago de sueldo", () => {
     // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
     seed = loadSharedSeed();
   });
-
-  test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });
-
   test("crear novedad + liq + pagar + anular movs → saldo + liq vuelven al estado pre-pago", async () => {
     if (!seed) { test.skip(true, "Seed falló"); return; }
     const svc = createServiceClient();

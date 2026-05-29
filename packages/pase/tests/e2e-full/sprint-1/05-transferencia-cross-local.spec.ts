@@ -31,14 +31,6 @@ test.describe.serial("E2E Sprint 2 — Transferencia entre cuentas", () => {
     // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
     seed = loadSharedSeed();
   });
-
-  test.afterAll(async () => {
-    try { await cleanupE2ETenant(); } catch (e) {
-
-      console.error("[afterAll]", e);
-    }
-  });
-
   test("same-local: Caja Efectivo → Caja Mayor crea 2 movs balanceados", async () => {
     if (!seed) { test.skip(true, "Seed falló"); return; }
     const svc = createServiceClient();

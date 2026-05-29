@@ -25,9 +25,6 @@ test.describe.serial("E2E Test 24 — Quincenas múltiples", () => {
     // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
     seed = loadSharedSeed();
   });
-
-  test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });
-
   test("empleado QUINCENAL → 2 novedades por mes + 2 liquidaciones independientes", async () => {
     if (!seed) { test.skip(true, "Seed falló"); return; }
     const svc = createServiceClient();

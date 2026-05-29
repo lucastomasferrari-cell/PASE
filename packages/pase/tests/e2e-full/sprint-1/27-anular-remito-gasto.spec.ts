@@ -35,9 +35,6 @@ test.describe.serial("E2E Test 27 — anular_remito + anular_gasto", () => {
     // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
     seed = loadSharedSeed();
   });
-
-  test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });
-
   test("A+B) anular_remito → estado anulado + ya anulado falla", async () => {
     if (!seed) { test.skip(true, "Seed falló"); return; }
     const svc = createServiceClient();

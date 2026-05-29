@@ -46,11 +46,6 @@ test.describe.serial("E2E Test 25 — Trigger sync saldos_caja", () => {
     // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
     seed = loadSharedSeed();
   });
-
-  test.afterAll(async () => {
-    try { await cleanupE2ETenant(); } catch (e) { console.error(e); }
-  });
-
   test("A) INSERT directo a movimientos sincroniza cache", async () => {
     if (!seed) { test.skip(true, "Seed falló"); return; }
     const svc = createServiceClient();

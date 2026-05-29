@@ -57,9 +57,6 @@ test.describe.serial("E2E Test 29 — POS: mesas (transferir / unir / partir)", 
     if (idx < 4) return pos!.mesas[idx]!.id;
     return mesasExtra[idx - 4]!.id;
   }
-
-  test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });
-
   async function abrirVentaEn(duenoDb: Awaited<ReturnType<typeof createE2EDuenoClient>>, mesaIdx: number) {
     if (!seed || !pos) throw new Error("seed null");
     const { data: vRes, error } = await duenoDb.rpc("fn_abrir_venta_comanda", {

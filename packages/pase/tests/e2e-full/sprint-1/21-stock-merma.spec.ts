@@ -20,9 +20,6 @@ test.describe.serial("E2E Test 21 — Stock merma", () => {
     // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
     seed = loadSharedSeed();
   });
-
-  test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });
-
   test("registrar merma 2kg → insumo_movimientos NEGATIVO + stock baja", async () => {
     if (!seed) { test.skip(true, "Seed falló"); return; }
     const svc = createServiceClient();

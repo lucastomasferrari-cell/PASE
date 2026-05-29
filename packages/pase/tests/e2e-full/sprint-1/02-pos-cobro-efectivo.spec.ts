@@ -46,14 +46,6 @@ test.describe.serial("E2E Sprint 2 — POS cobro efectivo (DB-only)", () => {
     seed = loadSharedSeed();
     pos = await seedComandaPos(seed);
   });
-
-  test.afterAll(async () => {
-    try { await cleanupE2ETenant(); } catch (e) {
-
-      console.error("[afterAll] cleanupE2ETenant falló:", e);
-    }
-  });
-
   test("abrir mesa → agregar items → cobrar efectivo → saldo sube", async () => {
     if (!seed || !pos) {
       test.skip(true, "Seed inicial falló");

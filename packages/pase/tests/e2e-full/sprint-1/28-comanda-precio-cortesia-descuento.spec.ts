@@ -50,9 +50,6 @@ test.describe.serial("E2E Test 28 — POS: modificar precio / cortesía / descue
     // 29-may fix: usar el QUINCENAL promovido a manager por seedComandaPos.
     managerId = pos.managerEmpleadoId;
   });
-
-  test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });
-
   // Helper: abre una venta nueva con 2 items y devuelve { ventaId, item1Id, item2Id }
   async function abrirVentaConItems(duenoDb: Awaited<ReturnType<typeof createE2EDuenoClient>>): Promise<{
     ventaId: number; item1Id: number; item2Id: number; totalEsperado: number;

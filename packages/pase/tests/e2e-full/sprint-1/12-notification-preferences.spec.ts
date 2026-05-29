@@ -20,9 +20,6 @@ test.describe.serial("E2E Sprint 2 — Notification preferences", () => {
     // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
     seed = loadSharedSeed();
   });
-
-  test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });
-
   test("default ON (sin fila) + OFF cuando enabled=false + ON cuando enabled=true", async () => {
     if (!seed) { test.skip(true, "Seed falló"); return; }
     const svc = createServiceClient();

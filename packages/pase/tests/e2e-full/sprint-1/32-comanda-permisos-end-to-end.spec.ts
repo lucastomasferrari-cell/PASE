@@ -56,9 +56,6 @@ test.describe.serial("E2E Test 32 — COMANDA permisos end-to-end", () => {
     seed = loadSharedSeed();
     pos = await seedComandaPos(seed);
   });
-
-  test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });
-
   test("1+2) Crear cajero LIMITADO via API (solo permiso abrir mesa) + login real", async () => {
     if (!seed) { test.skip(true, "Seed falló"); return; }
     const duenoDb = await createE2EDuenoClient();

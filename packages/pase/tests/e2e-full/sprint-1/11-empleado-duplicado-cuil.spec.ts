@@ -21,9 +21,6 @@ test.describe.serial("E2E Sprint 2 — Prevenir empleado duplicado CUIL", () => 
     // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
     seed = loadSharedSeed();
   });
-
-  test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });
-
   test("intentar crear empleado con CUIL ya existente debe fallar/bloquearse", async () => {
     if (!seed) { test.skip(true, "Seed falló"); return; }
     const svc = createServiceClient();

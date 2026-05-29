@@ -60,9 +60,6 @@ test.describe.serial("E2E Test 14 — Menú desde cero + POS + stock baja", () =
     seed = loadSharedSeed();
     pos = await seedComandaPos(seed);
   });
-
-  test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });
-
   test("crear insumos + receta + modificador + item + comandar + cobrar + stock baja", async () => {
     if (!seed || !pos) { test.skip(true, "Seed falló"); return; }
     const svc = createServiceClient();

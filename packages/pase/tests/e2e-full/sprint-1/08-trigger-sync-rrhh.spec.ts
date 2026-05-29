@@ -41,14 +41,6 @@ test.describe.serial("E2E Sprint 3 — Trigger sync RRHH (C4-F15)", () => {
     // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
     seed = loadSharedSeed();
   });
-
-  test.afterAll(async () => {
-    try { await cleanupE2ETenant(); } catch (e) {
-
-      console.error("[afterAll]", e);
-    }
-  });
-
   test("INSERT/UPDATE/DELETE movimiento → liq.pagos_realizados auto-sync", async () => {
     if (!seed) { test.skip(true, "Seed falló"); return; }
     const svc = createServiceClient();

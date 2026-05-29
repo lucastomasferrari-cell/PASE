@@ -31,14 +31,6 @@ test.describe.serial("E2E Sprint 2 — Movimiento manual Caja (PASE)", () => {
     // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
     seed = loadSharedSeed();
   });
-
-  test.afterAll(async () => {
-    try { await cleanupE2ETenant(); } catch (e) {
-
-      console.error("[afterAll]", e);
-    }
-  });
-
   test("ingreso + egreso + anular ingreso → saldo coherente al final", async () => {
     if (!seed) { test.skip(true, "Seed falló"); return; }
     const svc = createServiceClient();
