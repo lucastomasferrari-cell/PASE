@@ -121,7 +121,7 @@ test.describe.serial("E2E Test 27 — anular_remito + anular_gasto", () => {
     const duenoDb = await createE2EDuenoClient();
 
     // Crear gasto via RPC crear_gasto
-    const { data: gasto } = await duenoDb.rpc("crear_gasto", {
+    const { data: gasto, error: gastoErr } = await duenoDb.rpc("crear_gasto", {
       p_fecha: new Date().toISOString().slice(0, 10),
       p_categoria: "Limpieza",
       p_monto: 18000,
@@ -129,7 +129,10 @@ test.describe.serial("E2E Test 27 — anular_remito + anular_gasto", () => {
       p_local_id: seed.local1Id,
       p_detalle: "T27 gasto para anular",
     });
+    if (gastoErr) throw new Error(`crear_gasto: ${gastoErr.message}`);
+    if (!gasto) throw new Error(`crear_gasto: retornó null sin error`);
     const gastoId = (gasto as { gasto_id: string }).gasto_id;
+    if (!gastoId) throw new Error(`crear_gasto: respuesta sin gasto_id: ${JSON.stringify(gasto)}`);
 
     const { data: sAntes } = await svc.from("saldos_caja").select("saldo")
       .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id)
@@ -169,7 +172,7 @@ test.describe.serial("E2E Test 27 — anular_remito + anular_gasto", () => {
 
     // (E) Motivo vacío → MOTIVO_REQUERIDO
     // Creamos un gasto nuevo no anulado para probar el error.
-    const { data: g2 } = await duenoDb.rpc("crear_gasto", {
+    const { data: g2, error: g2Err } = await duenoDb.rpc("crear_gasto", {
       p_fecha: new Date().toISOString().slice(0, 10),
       p_categoria: "Limpieza",
       p_monto: 1000,
@@ -177,6 +180,7 @@ test.describe.serial("E2E Test 27 — anular_remito + anular_gasto", () => {
       p_local_id: seed.local1Id,
       p_detalle: "T27 gasto para test motivo vacío",
     });
+    if (g2Err || !g2) throw new Error(`crear_gasto E: ${g2Err?.message ?? "null"}`);
     const { error: motErr } = await duenoDb.rpc("anular_gasto", {
       p_gasto_id: (g2 as { gasto_id: string }).gasto_id, p_motivo: "",
     });
