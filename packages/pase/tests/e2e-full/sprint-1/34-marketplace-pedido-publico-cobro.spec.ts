@@ -170,7 +170,7 @@ test.describe.serial("E2E Test 34 — marketplace end-to-end", () => {
     // (un local solo puede tener 1 turno abierto a la vez — constraint del
     // producto. Otros tests pueden haber dejado uno).
     await svc.from("turnos_caja")
-      .update({ estado: "cerrado", monto_final: 0, cerrado_at: new Date().toISOString() })
+      .update({ estado: "cerrado", monto_final_declarado: 0, cerrado_at: new Date().toISOString() })
       .eq("local_id", seed.local1Id).eq("estado", "abierto");
 
     const { data: maxN } = await svc.from("turnos_caja")

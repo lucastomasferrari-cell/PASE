@@ -139,7 +139,7 @@ test.describe.serial("E2E Test 32 — COMANDA permisos end-to-end", () => {
     const { error: itErr } = await svc.from("ventas_pos_items").insert({
       tenant_id: seed.tenantId, venta_id: ventaId, local_id: seed.local1Id,
       item_id: item.id, cantidad: 1, precio_unitario: 12000,
-      subtotal: 12000, estado: "pendiente",
+      subtotal: 12000, estado: "hold",  // default state — válidos: hold/enviado/listo/entregado/anulado
     });
     if (itErr) throw new Error(`Insert item via svc: ${itErr.message}`);
     const { error: recErr } = await svc.rpc("fn_recalcular_totales_venta_comanda", { p_venta_id: ventaId });
