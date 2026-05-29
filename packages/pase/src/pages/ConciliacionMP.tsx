@@ -299,12 +299,17 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
       // mp_movimientos: trae filas cuya fecha cae en el rango. La pantalla
       // ya no muestra "Ingresos al saldo" → no necesitamos el OR con
       // money_release_date.
+      // Egress fix 2026-05-28: SELECT * con limit 5000 era top culpable
+      // de exceso de egress (vimos cuota Free agotada). Proyectamos solo
+      // columnas usadas por la UI y bajamos limit a 1500 (suficiente para
+      // 30-60 días de operación; si el rango es mayor, la UI lo refleja
+      // y el usuario puede ajustar filtros).
       let movQ=db.from("mp_movimientos")
-        .select("*")
+        .select("id,fecha,monto,monto_bruto,tipo,descripcion,local_id,estado,conciliado,referencia_id,medio_pago,vinculo_tipo,vinculo_id,money_release_date,money_release_status,mp_status,justificativo_tipo,justificativo_id,ignorado,ignorado_motivo,anulado")
         .gte("fecha",desdeTs)
         .lt("fecha",hastaTs)
         .order("fecha",{ascending:false})
-        .limit(5000);
+        .limit(1500);
       movQ=applyLocalScope(movQ,user,localActivo);
       let facQ=db.from("facturas").select("id,nro,fecha,total,local_id,prov_id,cat,estado").gte("fecha",desde).lte("fecha",hasta).order("fecha",{ascending:false});
       facQ=applyLocalScope(facQ,user,localActivo);
@@ -318,15 +323,22 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
       const hastaAmpl=new Date(`${hasta}T00:00:00-03:00`);hastaAmpl.setUTCDate(hastaAmpl.getUTCDate()+15);
       const desdeGas=toLocalISO(desdeAmpl);
       const hastaGas=toLocalISO(hastaAmpl);
-      let gasQ=db.from("gastos").select("id,fecha,categoria,subcategoria,detalle,monto,local_id,cuenta").gte("fecha",desdeGas).lte("fecha",hastaGas).order("fecha",{ascending:false}).limit(2000);
+      // Egress fix: limit 2000 → 500. Para vincular, raras veces necesitás más
+      // de 500 gastos en una ventana de ±15d. Si hace falta, el dropdown filtra
+      // por texto y la UI permite expandir manualmente.
+      let gasQ=db.from("gastos").select("id,fecha,categoria,subcategoria,detalle,monto,local_id,cuenta").gte("fecha",desdeGas).lte("fecha",hastaGas).order("fecha",{ascending:false}).limit(500);
       gasQ=applyLocalScope(gasQ,user,localActivo);
       // mp_movimientos ya vinculados a un gasto/factura/remito — para excluirlos
       // del dropdown del modal y prevenir doble linkeo.
+      // Egress fix: limit 20000 → 5000. Esta query trae TODOS los justificativos
+      // históricos (sin filtro fecha) para que el dropdown del modal vincular
+      // pueda excluir IDs ya usados. Con 5K cubrimos 1+ año de actividad y
+      // bajamos el payload del listado de set-difference.
       let mpJustifQ=db.from("mp_movimientos")
         .select("justificativo_tipo,justificativo_id")
         .in("justificativo_tipo",["gasto","factura","remito"])
         .not("justificativo_id","is",null)
-        .limit(20000);
+        .limit(5000);
       mpJustifQ=applyLocalScope(mpJustifQ,user,localActivo);
       const [credRes,movRes,facRes,remRes,gasRes,mpJustifRes,provRes]=await Promise.all([
         db.from("mp_credenciales").select("id, local_id, tenant_id, activo, ultima_sync, access_token_last8, saldo_inicial, saldo_inicial_at, saldo_disponible, por_acreditar, balance_at, locales(nombre)"),

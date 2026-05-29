@@ -23,9 +23,11 @@ export default function Contador({ user, locales, localActivo }: ContadorProps) 
     const load=async()=>{
       setLoading(true);
       const [cyr,cmo]=mes.split("-").map(Number) as [number, number]; const desde=mes+"-01",hasta=mes+"-"+String(new Date(cyr,cmo,0).getDate()).padStart(2,"0");
-      let fq = db.from("facturas").select("*").gte("fecha",desde).lte("fecha",hasta).neq("estado","anulada");
+      // Egress fix 2026-05-28: SELECT * → columnas específicas. Esta pantalla
+      // solo necesita los componentes de IVA para el resumen mensual.
+      let fq = db.from("facturas").select("id, fecha, iva21, iva105, neto, total, estado, local_id").gte("fecha",desde).lte("fecha",hasta).neq("estado","anulada");
       fq = applyLocalScope(fq, user, localActivo);
-      let vq = db.from("ventas").select("*").gte("fecha",desde).lte("fecha",hasta);
+      let vq = db.from("ventas").select("id, fecha, monto, local_id").gte("fecha",desde).lte("fecha",hasta);
       vq = applyLocalScope(vq, user, localActivo);
       const [{data:f},{data:v}]=await Promise.all([fq, vq]);
       setFacturas((f as Factura[]) || []);
