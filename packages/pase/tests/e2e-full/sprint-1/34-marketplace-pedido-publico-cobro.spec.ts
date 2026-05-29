@@ -156,13 +156,14 @@ test.describe.serial("E2E Test 34 — marketplace end-to-end", () => {
       cantidad: 0.1, orden: 1,
     });
 
-    // [2] Marketplace settings con slug único — UPSERT por unique(local_id)
-    // (29-may fix: el seed crea un settings default por local; usar upsert
-    // para no chocar con uniq_cls_local).
-    const { error: cls } = await svc.from("comanda_local_settings").upsert({
+    // [2] Marketplace settings con slug único. uniq_cls_local es PARCIAL
+    // (WHERE deleted_at IS NULL) entonces ON CONFLICT no aplica. Delete
+    // existing + insert.
+    await svc.from("comanda_local_settings").delete().eq("local_id", seed.local1Id);
+    const { error: cls } = await svc.from("comanda_local_settings").insert({
       tenant_id: seed.tenantId, local_id: seed.local1Id,
       slug: SLUG_MARKETPLACE, tienda_activa: true, acepta_delivery: true,
-    }, { onConflict: "local_id" });
+    });
     expect(cls).toBeNull();
 
     // [3] Turno de caja abierto (cajero = empleado mensual del seed)

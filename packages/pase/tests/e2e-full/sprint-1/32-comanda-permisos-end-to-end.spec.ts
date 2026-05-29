@@ -131,11 +131,19 @@ test.describe.serial("E2E Test 32 — COMANDA permisos end-to-end", () => {
     const ventaId = ventaIdRes as unknown as number;
     expect(ventaId).toBeGreaterThan(0);
 
-    // Agregar 1 item para tener algo que cobrar
+    // Agregar 1 item con service_role (bypassa el chequeo de permiso del
+    // cajero limitado). Necesitamos que la venta tenga subtotal > 0 para
+    // que el descuento llegue al chequeo de permiso (sino falla antes con
+    // DESCUENTO_INVALIDO por subtotal=0).
+    const svc = createServiceClient();
     const item = seed.items.find(i => i.nombre.includes("Sushi"))!;
-    await cajeroDb.rpc("fn_agregar_item_comanda", {
-      p_venta_id: ventaId, p_item_id: item.id, p_cantidad: 1,
+    await svc.from("ventas_pos_items").insert({
+      tenant_id: seed.tenantId, venta_id: ventaId, local_id: seed.local1Id,
+      item_id: item.id, cantidad: 1, precio_unitario: 12000,
+      subtotal: 12000, estado: "pendiente",
     });
+    // Recalcular totales de la venta para que el subtotal cuente
+    await svc.rpc("fn_recalcular_totales_venta_comanda", { p_venta_id: ventaId });
 
     // ── COBRAR: NO tiene permiso `comanda.ventas.cobrar` → debe FALLAR
     const { error: cobrarErr } = await cajeroDb.rpc("fn_cobrar_venta_comanda", {
