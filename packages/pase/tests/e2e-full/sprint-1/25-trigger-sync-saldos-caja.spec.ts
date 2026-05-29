@@ -39,10 +39,12 @@ import { loadSharedSeed } from "../setup/shared-seed";
 
 test.describe.serial("E2E Test 25 — Trigger sync saldos_caja", () => {
   let seed: E2ETenantSeedResult | null = null;
+  // Fix 29-may: el ID del mov insertado en A se comparte con B y C
+  // (antes B usaba `.like(...).single()` que fallaba si había runs viejos
+  // del tenant zombie con el mismo prefijo o si el .single() encontraba 0).
+  let movIdA: string | null = null;
 
   test.beforeAll(async () => {
-    // Lee el seed compartido creado por globalSetup (UN tenant E2E para toda
-    // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
     seed = loadSharedSeed();
   });
   test("A) INSERT directo a movimientos sincroniza cache", async () => {
@@ -57,9 +59,9 @@ test.describe.serial("E2E Test 25 — Trigger sync saldos_caja", () => {
 
     // INSERT directo (bypaseando crear_movimiento_caja RPC) — esto antes
     // NO actualizaba el cache porque _actualizar_saldo_caja no se llamaba.
-    const movId = `MOV-E2E-T25A-${Date.now()}`;
-    await svc.from("movimientos").insert({
-      id: movId,
+    movIdA = `MOV-E2E-T25A-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const { error: insErr } = await svc.from("movimientos").insert({
+      id: movIdA,
       tenant_id: seed.tenantId,
       local_id: seed.local1Id,
       fecha: new Date().toISOString().slice(0, 10),
@@ -69,6 +71,7 @@ test.describe.serial("E2E Test 25 — Trigger sync saldos_caja", () => {
       detalle: "T25-A insert directo",
       anulado: false,
     });
+    if (insErr) throw new Error(`T25-A insert: ${insErr.message}`);
 
     // El trigger debe haber sincronizado el cache automáticamente
     const { data: despues } = await svc.from("saldos_caja").select("saldo")
@@ -78,12 +81,12 @@ test.describe.serial("E2E Test 25 — Trigger sync saldos_caja", () => {
   });
 
   test("B) UPDATE del importe sincroniza cache", async () => {
-    if (!seed) { test.skip(true, "Seed falló"); return; }
+    if (!seed || !movIdA) { test.skip(true, "Test A falló — no hay movIdA"); return; }
     const svc = createServiceClient();
 
-    // Buscar el mov del test A
+    // Buscar el mov del test A por su ID exacto (compartido via state)
     const { data: mov } = await svc.from("movimientos")
-      .select("id, importe").like("id", "MOV-E2E-T25A-%").single();
+      .select("id, importe").eq("id", movIdA).single();
     expect(mov).not.toBeNull();
 
     // Snapshot cache antes del UPDATE (tiene el importe viejo del mov T25A = 100000)

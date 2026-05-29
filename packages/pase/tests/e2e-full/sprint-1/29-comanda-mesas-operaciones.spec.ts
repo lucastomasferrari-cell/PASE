@@ -62,6 +62,21 @@ test.describe.serial("E2E Test 29 — POS: mesas (transferir / unir / partir)", 
         estado: "libre",
       }).select("id").single();
       mesaLocal2Id = mesaL2!.id as number;
+
+      // 29-may fix #2: tests C, D, E, F necesitan mesas índices 4-7 del local1
+      // (el seed solo crea 4 mesas, índices 0-3 — pos.mesas). mesasExtra estaba
+      // declarado pero nunca se llenaba → mesaAt(4..7) → undefined.id crash.
+      const baseTs = Date.now();
+      for (let i = 0; i < 4; i++) {
+        const { data: m } = await svc.from("mesas").insert({
+          tenant_id: seed.tenantId,
+          local_id: seed.local1Id,
+          numero: `L1-T29-Extra-${baseTs}-${i}`,
+          capacidad: 4,
+          estado: "libre",
+        }).select("id, numero").single();
+        if (m) mesasExtra.push({ id: m.id as number, numero: m.numero as string });
+      }
     }
   });
 

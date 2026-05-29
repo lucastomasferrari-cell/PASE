@@ -46,7 +46,10 @@ test.describe.serial("E2E Test 27 — anular_remito + anular_gasto", () => {
     // inexistente → REMITO_NO_ENCONTRADO en anular_remito.
     // Agregar randomness para evitar colisión si el test corre 2 veces en el mismo ms
     const remitoId = `REM-T27-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const { error: insErr } = await svc.from("remitos").insert({
+    // 29-may fix: agregar .select() para verificar que el INSERT realmente
+    // creó la fila (antes el INSERT podía dar éxito pero un trigger silencioso
+    // borraba la fila → SELECT posterior daba null).
+    const { data: remInserted, error: insErr } = await svc.from("remitos").insert({
       id: remitoId,
       tenant_id: seed.tenantId,
       local_id: seed.local1Id,
@@ -54,8 +57,9 @@ test.describe.serial("E2E Test 27 — anular_remito + anular_gasto", () => {
       fecha: new Date().toISOString().slice(0, 10),
       monto: 25000,
       estado: "sin_factura",  // estados válidos: sin_factura | pagado | facturado | anulado
-    });
+    }).select("id").single();
     if (insErr) throw new Error(`Insert remito: ${insErr.message}`);
+    if (!remInserted) throw new Error(`Insert remito: no devolvió row (silently lost)`);
 
     // Pagar el remito para que tenga un mov ligado
     await duenoDb.rpc("pagar_remito", {
