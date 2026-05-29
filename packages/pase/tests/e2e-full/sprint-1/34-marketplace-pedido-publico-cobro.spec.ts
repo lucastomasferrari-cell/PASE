@@ -166,6 +166,19 @@ test.describe.serial("E2E Test 34 — marketplace end-to-end", () => {
     });
     expect(cls).toBeNull();
 
+    // [2.5] Canal "tienda-propia" obligatorio para fn_crear_pedido_publico_comanda
+    // (sino tira CANAL_TIENDA_NO_CONFIGURADO). Upsert por idempotencia.
+    const { data: canalExistente } = await svc.from("canales")
+      .select("id").eq("tenant_id", seed.tenantId).eq("slug", "tienda-propia")
+      .is("deleted_at", null).maybeSingle();
+    if (!canalExistente) {
+      const { error: canalErr } = await svc.from("canales").insert({
+        tenant_id: seed.tenantId, local_id: seed.local1Id,
+        slug: "tienda-propia", nombre: "Tienda Online", activo: true,
+      });
+      if (canalErr) throw new Error(`Insert canal tienda-propia: ${canalErr.message}`);
+    }
+
     // [3] Turno de caja abierto. Primero cerrar turnos abiertos previos
     // (un local solo puede tener 1 turno abierto a la vez).
     await svc.from("turnos_caja")
