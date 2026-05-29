@@ -56,7 +56,7 @@ test.describe.serial("E2E Test 27 — anular_remito + anular_gasto", () => {
       prov_id: seed.proveedorId,
       fecha: new Date().toISOString().slice(0, 10),
       monto: 25000,
-      estado: "pendiente",
+      estado: "sin_factura",  // estados válidos: sin_factura | pagado | facturado | anulado
     });
     if (insErr) throw new Error(`Insert remito: ${insErr.message}`);
 
