@@ -533,6 +533,7 @@ function AppMain() {
                 user && tienePermiso(user, "rentabilidad") ? <Recetario user={user} locales={locales} localActivo={localActivo}/> : <Navigate to="/inicio" replace/>
               } />
               <Route path="/insumos" element={<Navigate to="/recetario?sec=insumos" replace />} />
+              <Route path="/materias-primas" element={<Navigate to="/recetario?sec=materias-primas" replace />} />
               <Route path="/recetas" element={<Navigate to="/recetario?sec=recetas" replace />} />
               <Route path="/objetivos" element={
                 user?.tenant_id ? <Objetivos locales={locales} tenantId={user.tenant_id} localActivo={localActivo}/> : <Navigate to="/" replace/>
