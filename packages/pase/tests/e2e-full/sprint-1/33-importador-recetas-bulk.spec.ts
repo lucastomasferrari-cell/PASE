@@ -52,7 +52,8 @@ test.describe.serial("E2E Test 33 — importador recetas bulk", () => {
       await svc.from("insumos").delete().eq("tenant_id", seed.tenantId).like("nombre", `${SENTINEL}%`);
       await svc.from("idempotency_keys").delete().like("key", `${SENTINEL}%`);
     }
-    try { await cleanupE2ETenant(); } catch (e) { console.error(e); }
+    // Nota 29-may: cleanup del tenant compartido vive en globalTeardown,
+    // NO acá. Borrarlo desde afterAll de cada spec rompía la shared-seed.
   });
 
   const CSV_VALIDO = [

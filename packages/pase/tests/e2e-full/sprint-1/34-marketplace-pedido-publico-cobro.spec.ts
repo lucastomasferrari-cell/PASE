@@ -85,7 +85,8 @@ test.describe.serial("E2E Test 34 — marketplace end-to-end", () => {
       await svc.from("comanda_local_settings").delete().eq("slug", SLUG_MARKETPLACE);
       await svc.from("idempotency_keys").delete().like("key", `${SENTINEL}%`);
     }
-    try { await cleanupE2ETenant(); } catch (e) { console.error(e); }
+    // Nota 29-may: cleanup del tenant compartido vive en globalTeardown,
+    // NO acá. Borrarlo desde afterAll de cada spec rompía la shared-seed.
   });
 
   test("[1-3] Setup: stock + receta + marketplace settings + turno abierto", async () => {
