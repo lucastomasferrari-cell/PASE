@@ -31,7 +31,11 @@ export interface NavCategory {
   subItems: NavSubItem[];
 }
 
-export const ADMIN_NAVIGATION: NavCategory[] = [
+// Decisión 28-may noche (Lucas): los items con badge='soon' NO aparecen en
+// sidebar hasta implementarse. Limpia visual y evita confusión.
+// La fuente completa (incluidos soon) queda en ADMIN_NAVIGATION_FULL por
+// si en el futuro queremos una pantalla "Roadmap" o un toggle "ver stubs".
+const ADMIN_NAVIGATION_FULL: NavCategory[] = [
   {
     slug: 'reportes',
     label: 'Reportes',
@@ -229,6 +233,31 @@ export const ADMIN_NAVIGATION: NavCategory[] = [
     ],
   },
 ];
+
+// Filtra items con badge='soon'. Si una categoría queda sin sub-items
+// después del filtro, también se oculta (no tiene sentido un acordeón
+// vacío). Si su href apuntaba a un sub-item soon, se reemplaza por el
+// primer sub-item visible.
+function filterSoon(nav: NavCategory[]): NavCategory[] {
+  return nav
+    .map((cat) => {
+      const visibleSubs = cat.subItems.filter((s) => s.badge !== 'soon');
+      if (visibleSubs.length === 0) return null;
+      const wasSoonHref = cat.subItems.find((s) => s.href === cat.href)?.badge === 'soon';
+      return {
+        ...cat,
+        subItems: visibleSubs,
+        href: wasSoonHref ? visibleSubs[0]!.href : cat.href,
+      };
+    })
+    .filter((c): c is NavCategory => c !== null);
+}
+
+/** Sidebar visible para el usuario — sin items "Próximamente". */
+export const ADMIN_NAVIGATION: NavCategory[] = filterSoon(ADMIN_NAVIGATION_FULL);
+
+/** Catálogo completo incluyendo stubs (badge='soon'). Útil para roadmap/debug. */
+export { ADMIN_NAVIGATION_FULL };
 
 // Encontrar la categoría / sub-item activo según pathname.
 export function findActiveCategory(pathname: string): NavCategory | null {
