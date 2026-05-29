@@ -38,14 +38,15 @@ test.describe.serial("E2E Sprint 2 — Movimiento manual Caja (PASE)", () => {
     const cuenta = "Caja Efectivo";
     const local = seed.local1Id;
 
-    // Snapshot saldo inicial (debe ser 0 — el seed deja todo en 0)
+    // Patrón delta (29-may): bajo shared-seed no podemos asumir saldo inicial 0.
+    // Tomamos snapshot ANTES y verificamos deltas relativos.
     const saldoOf = async () => {
       const { data } = await svc.from("saldos_caja")
         .select("saldo")
         .eq("tenant_id", seed!.tenantId).eq("local_id", local).eq("cuenta", cuenta).single();
       return Number(data?.saldo || 0);
     };
-    expect(await saldoOf()).toBe(0);
+    const saldoBase = await saldoOf();
 
     // (a) Ingreso $20.000
     const { data: ingRes, error: ingErr } = await duenoDb.rpc("crear_movimiento_caja", {
@@ -60,7 +61,7 @@ test.describe.serial("E2E Sprint 2 — Movimiento manual Caja (PASE)", () => {
     if (ingErr) throw new Error(`crear_movimiento_caja ingreso: ${ingErr.message}`);
     const ingresoId = (ingRes as { mov_id?: string })?.mov_id;
     expect(ingresoId).toBeTruthy();
-    expect(await saldoOf()).toBe(20000);
+    expect(await saldoOf()).toBe(saldoBase + 20000);
 
     // (b) Egreso $7.500
     const { error: egrErr } = await duenoDb.rpc("crear_movimiento_caja", {
@@ -73,21 +74,22 @@ test.describe.serial("E2E Sprint 2 — Movimiento manual Caja (PASE)", () => {
       p_local_id: local,
     });
     if (egrErr) throw new Error(`crear_movimiento_caja egreso: ${egrErr.message}`);
-    expect(await saldoOf()).toBe(12500);
+    expect(await saldoOf()).toBe(saldoBase + 12500);
 
-    // (c) Anular el ingreso (a) → saldo final debería ser -7500
+    // (c) Anular el ingreso (a) → saldo final = saldoBase + (-7500)
     const { error: anuErr } = await duenoDb.rpc("anular_movimiento", {
       p_mov_id: ingresoId,
       p_motivo: "E2E test anular ingreso",
     });
     if (anuErr) throw new Error(`anular_movimiento: ${anuErr.message}`);
-    expect(await saldoOf()).toBe(-7500);
+    expect(await saldoOf()).toBe(saldoBase - 7500);
 
-    // Verificar: hay 2 movs activos (egreso) + 1 anulado (ingreso)
+    // Verificar: los 2 movs de ESTE test (filtrados por detalle sentinel)
+    // → 1 activo (egreso) + 1 anulado (ingreso)
     const { data: movs } = await svc.from("movimientos")
-      .select("importe, anulado")
-      .eq("tenant_id", seed.tenantId).eq("local_id", local).eq("cuenta", cuenta);
-    expect(movs).toHaveLength(2);
+      .select("importe, anulado, detalle")
+      .eq("tenant_id", seed.tenantId).eq("local_id", local).eq("cuenta", cuenta)
+      .in("detalle", ["E2E ingreso de prueba", "E2E egreso de prueba"]);
     const activos = movs!.filter(m => !m.anulado);
     const anulados = movs!.filter(m => m.anulado);
     expect(activos).toHaveLength(1);

@@ -44,7 +44,8 @@ test.describe.serial("E2E Test 27 — anular_remito + anular_gasto", () => {
     // 29-may fix: el schema real tiene prov_id (no proveedor_id) + monto
     // (no total). El insert anterior silenciosamente fallaba → remito
     // inexistente → REMITO_NO_ENCONTRADO en anular_remito.
-    const remitoId = `REM-T27-${Date.now()}`;
+    // Agregar randomness para evitar colisión si el test corre 2 veces en el mismo ms
+    const remitoId = `REM-T27-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const { error: insErr } = await svc.from("remitos").insert({
       id: remitoId,
       tenant_id: seed.tenantId,

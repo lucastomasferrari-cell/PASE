@@ -34,6 +34,11 @@ test.describe.serial("E2E Sprint 2 — Remito pagar", () => {
     });
     if (insErr) throw new Error(`Insert remito: ${insErr.message}`);
 
+    // Patrón delta (29-may): snapshot saldo ANTES del pago
+    const { data: saldoAntesData } = await svc.from("saldos_caja").select("saldo")
+      .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id).eq("cuenta", "Caja Efectivo").single();
+    const saldoBase = Number(saldoAntesData?.saldo ?? 0);
+
     await duenoDb.rpc("pagar_remito", {
       p_remito_id: remId, p_monto: monto, p_cuenta: "Caja Efectivo",
       p_fecha: new Date().toISOString().slice(0, 10),
@@ -49,7 +54,8 @@ test.describe.serial("E2E Sprint 2 — Remito pagar", () => {
 
     const { data: saldo } = await svc.from("saldos_caja").select("saldo")
       .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id).eq("cuenta", "Caja Efectivo").single();
-    expect(Number(saldo!.saldo)).toBe(30000 - monto);
+    // Patrón delta (29-may): el saldo ya estaba capturado antes del pago (saldoBase)
+    expect(Number(saldo!.saldo)).toBe(saldoBase - monto);
 
     await duenoDb.auth.signOut();
   });

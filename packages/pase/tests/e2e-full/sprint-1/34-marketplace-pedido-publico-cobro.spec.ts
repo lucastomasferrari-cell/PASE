@@ -117,11 +117,15 @@ test.describe.serial("E2E Test 34 — marketplace end-to-end", () => {
       cat: "INSUMOS COCINA", estado: "pendiente", tipo: "A",
     });
 
-    const { data: mp } = await svc.from("materias_primas").insert({
-      tenant_id: seed.tenantId, nombre: `${SENTINEL}_MP`,
+    // 29-may fix: agregar randomness extra al nombre para evitar cualquier
+    // colisión si el insumo ya tiene una MP con nombre similar de run previo.
+    const mpNombre = `${SENTINEL}_MP_${Math.random().toString(36).slice(2, 8)}`;
+    const { data: mp, error: mpErr } = await svc.from("materias_primas").insert({
+      tenant_id: seed.tenantId, nombre: mpNombre,
       insumo_id: insumoId, proveedor_id: proveedorId,
       unidad_compra: "kg", precio_actual: 2000, factor_conversion: 1, activa: true,
     }).select("id").single();
+    if (mpErr) throw new Error(`Insert materia_prima: ${mpErr.message}`);
     materiaPrimaId = mp!.id as number;
 
     await svc.from("factura_items").insert({

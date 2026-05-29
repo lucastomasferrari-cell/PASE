@@ -36,6 +36,15 @@ test.describe.serial("E2E Sprint 2 — Transferencia entre cuentas", () => {
     const duenoDb = await createE2EDuenoClient();
     const monto = 10000;
 
+    // Patrón delta (29-may): snapshot saldos ANTES de la transferencia
+    const { data: saldosAntes } = await svc.from("saldos_caja")
+      .select("cuenta, saldo")
+      .eq("tenant_id", seed.tenantId)
+      .eq("local_id", seed.local1Id)
+      .in("cuenta", ["Caja Efectivo", "Caja Mayor"]);
+    const saldoEfAntes = Number(saldosAntes?.find(s => s.cuenta === "Caja Efectivo")?.saldo ?? 0);
+    const saldoMayorAntes = Number(saldosAntes?.find(s => s.cuenta === "Caja Mayor")?.saldo ?? 0);
+
     const { error } = await duenoDb.rpc("transferencia_cuentas", {
       p_local_id: seed.local1Id,
       p_cuenta_origen: "Caja Efectivo",
@@ -47,15 +56,14 @@ test.describe.serial("E2E Sprint 2 — Transferencia entre cuentas", () => {
     if (error) throw new Error(`transferencia_cuentas same-local: ${error.message}`);
 
     // Verificar 2 movs creados con el mismo transferencia_id.
-    // Filtramos ajuste_inicial porque el opening balance del seed también es mov.
+    // Filtramos SOLO los movs de esta transferencia por detalle sentinel.
     const { data: movs } = await svc.from("movimientos")
       .select("cuenta, importe, transferencia_id, tipo")
       .eq("tenant_id", seed.tenantId)
       .eq("local_id", seed.local1Id)
       .in("cuenta", ["Caja Efectivo", "Caja Mayor"])
       .eq("anulado", false)
-      .neq("tipo", "ajuste_inicial")
-      .order("cuenta");
+      .eq("detalle", "E2E same-local transfer");
     expect(movs).toHaveLength(2);
     expect(movs![0]!.transferencia_id).toBe(movs![1]!.transferencia_id);
     // Caja Efectivo: salida (-10000); Caja Mayor: entrada (+10000)
@@ -64,15 +72,15 @@ test.describe.serial("E2E Sprint 2 — Transferencia entre cuentas", () => {
     expect(Number(efectivoMov.importe)).toBe(-monto);
     expect(Number(mayorMov.importe)).toBe(monto);
 
-    // Saldos: Caja Efectivo $40K, Caja Mayor $10K
+    // Saldos: delta esperado respecto al snapshot
     const { data: saldos } = await svc.from("saldos_caja")
       .select("cuenta, saldo")
       .eq("tenant_id", seed.tenantId)
       .eq("local_id", seed.local1Id)
       .in("cuenta", ["Caja Efectivo", "Caja Mayor"]);
     const sBy = (cuenta: string) => Number(saldos!.find(s => s.cuenta === cuenta)!.saldo);
-    expect(sBy("Caja Efectivo")).toBe(40000);
-    expect(sBy("Caja Mayor")).toBe(10000);
+    expect(sBy("Caja Efectivo")).toBe(saldoEfAntes - monto);
+    expect(sBy("Caja Mayor")).toBe(saldoMayorAntes + monto);
 
     await duenoDb.auth.signOut();
   });
@@ -83,7 +91,17 @@ test.describe.serial("E2E Sprint 2 — Transferencia entre cuentas", () => {
     const duenoDb = await createE2EDuenoClient();
     const monto = 3000;
 
-    // Pre: Caja Mayor L1 tiene $10K (del test anterior). Banco L2 = $0.
+    // Patrón delta (29-may): snapshot saldos ANTES de la transferencia
+    const { data: mayorL1Antes } = await svc.from("saldos_caja")
+      .select("saldo").eq("tenant_id", seed.tenantId)
+      .eq("local_id", seed.local1Id).eq("cuenta", "Caja Mayor").single();
+    const saldoMayorL1Antes = Number(mayorL1Antes?.saldo ?? 0);
+
+    const { data: bancoL2Antes } = await svc.from("saldos_caja")
+      .select("saldo").eq("tenant_id", seed.tenantId)
+      .eq("local_id", seed.local2Id).eq("cuenta", "Banco").maybeSingle();
+    const saldoBancoL2Antes = Number(bancoL2Antes?.saldo ?? 0);
+
     const { error } = await duenoDb.rpc("transferencia_cuentas", {
       p_local_id: seed.local1Id,
       p_cuenta_origen: "Caja Mayor",
@@ -95,17 +113,17 @@ test.describe.serial("E2E Sprint 2 — Transferencia entre cuentas", () => {
     });
     if (error) throw new Error(`transferencia_cuentas cross-local: ${error.message}`);
 
-    // Caja Mayor L1: $10K - $3K = $7K
+    // Caja Mayor L1: saldoAntes - $3K
     const { data: mayorL1 } = await svc.from("saldos_caja")
       .select("saldo").eq("tenant_id", seed.tenantId)
       .eq("local_id", seed.local1Id).eq("cuenta", "Caja Mayor").single();
-    expect(Number(mayorL1!.saldo)).toBe(7000);
+    expect(Number(mayorL1!.saldo)).toBe(saldoMayorL1Antes - monto);
 
-    // Banco L2: $0 + $3K = $3K
+    // Banco L2: saldoAntes + $3K
     const { data: bancoL2 } = await svc.from("saldos_caja")
       .select("saldo").eq("tenant_id", seed.tenantId)
       .eq("local_id", seed.local2Id).eq("cuenta", "Banco").single();
-    expect(Number(bancoL2!.saldo)).toBe(3000);
+    expect(Number(bancoL2!.saldo)).toBe(saldoBancoL2Antes + monto);
 
     // Verificar 2 movs cross-local con mismo transferencia_id (buscamos por
     // las 2 cuentas/locales involucradas en esta tx específica).

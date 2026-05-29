@@ -86,29 +86,34 @@ test.describe.serial("E2E Test 25 — Trigger sync saldos_caja", () => {
       .select("id, importe").like("id", "MOV-E2E-T25A-%").single();
     expect(mov).not.toBeNull();
 
+    // Snapshot cache antes del UPDATE (tiene el importe viejo del mov T25A = 100000)
+    const { data: antes } = await svc.from("saldos_caja").select("saldo")
+      .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id)
+      .eq("cuenta", "Caja Efectivo").single();
+    const saldoAntesB = Number(antes!.saldo);
+    const importeViejo = Number(mov!.importe);
+
     // Cambiar importe de 100000 → 250000 (delta +150000)
     await svc.from("movimientos").update({ importe: 250000 }).eq("id", mov!.id);
 
-    // Cache debe reflejar el nuevo importe (no el viejo)
+    // Cache debe reflejar el nuevo importe (no el viejo): delta = 250000 - importeViejo
     const { data: despues } = await svc.from("saldos_caja").select("saldo")
       .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id)
       .eq("cuenta", "Caja Efectivo").single();
-    expect(Number(despues!.saldo)).toBe(250000);
+    expect(Number(despues!.saldo)).toBe(saldoAntesB - importeViejo + 250000);
   });
 
   test("C) UPDATE de cuenta sincroniza AMBAS (Caja Efectivo → Caja Chica)", async () => {
     if (!seed) { test.skip(true, "Seed falló"); return; }
     const svc = createServiceClient();
 
-    // Cache antes de mover
+    // Cache antes de mover (no asumimos valor absoluto — patrón delta 29-may)
     const { data: efAntes } = await svc.from("saldos_caja").select("saldo")
       .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id)
       .eq("cuenta", "Caja Efectivo").single();
     const { data: chAntes } = await svc.from("saldos_caja").select("saldo")
       .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id)
       .eq("cuenta", "Caja Chica").maybeSingle();
-
-    expect(Number(efAntes!.saldo)).toBe(250000);
 
     // Mover el mov a Caja Chica
     const { data: mov } = await svc.from("movimientos")

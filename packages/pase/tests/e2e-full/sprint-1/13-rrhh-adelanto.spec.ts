@@ -25,6 +25,18 @@ test.describe.serial("E2E Sprint 3 — Adelanto RRHH", () => {
     const duenoDb = await createE2EDuenoClient();
     const monto = 25000;
 
+    // Patrón delta (29-may): bajo shared-seed no podemos asumir saldos
+    // absolutos ni asumir 0 adelantos previos. Guardamos baseline y verificamos.
+    const { data: saldoAntes } = await svc.from("saldos_caja").select("saldo")
+      .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id)
+      .eq("cuenta", "Caja Efectivo").single();
+    const saldoBase = Number(saldoAntes?.saldo ?? 0);
+
+    const { data: adelsAntes } = await svc.from("rrhh_adelantos")
+      .select("id").eq("tenant_id", seed.tenantId)
+      .eq("empleado_id", seed.empleados.mensual.id);
+    const idsAntes = new Set((adelsAntes ?? []).map(a => a.id));
+
     const { error } = await duenoDb.rpc("registrar_adelanto", {
       p_empleado_id: seed.empleados.mensual.id,
       p_monto: monto,
@@ -34,27 +46,29 @@ test.describe.serial("E2E Sprint 3 — Adelanto RRHH", () => {
     });
     if (error) throw new Error(`registrar_adelanto: ${error.message}`);
 
-    // Adelanto creado
-    const { data: adels } = await svc.from("rrhh_adelantos")
-      .select("monto, empleado_id, cuenta")
+    // Adelanto NUEVO creado (filtrado por id no presente antes)
+    const { data: adelsDespues } = await svc.from("rrhh_adelantos")
+      .select("id, monto, empleado_id, cuenta")
       .eq("tenant_id", seed.tenantId)
       .eq("empleado_id", seed.empleados.mensual.id);
-    expect(adels).toHaveLength(1);
-    expect(Number(adels![0]!.monto)).toBe(monto);
+    const nuevos = (adelsDespues ?? []).filter(a => !idsAntes.has(a.id));
+    expect(nuevos).toHaveLength(1);
+    expect(Number(nuevos[0]!.monto)).toBe(monto);
+    const adelantoIdNuevo = nuevos[0]!.id;
 
-    // Movimiento negativo
+    // Movimiento ligado al adelanto NUEVO
     const { data: movs } = await svc.from("movimientos")
       .select("importe, tipo, adelanto_id_ref")
       .eq("tenant_id", seed.tenantId)
       .eq("anulado", false)
-      .not("adelanto_id_ref", "is", null);
+      .eq("adelanto_id_ref", adelantoIdNuevo);
     expect(movs).toHaveLength(1);
     expect(Number(movs![0]!.importe)).toBe(-monto);
 
-    // Saldo bajó
-    const { data: saldo } = await svc.from("saldos_caja").select("saldo")
+    // Saldo bajó exactamente -monto (delta)
+    const { data: saldoDespues } = await svc.from("saldos_caja").select("saldo")
       .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id).eq("cuenta", "Caja Efectivo").single();
-    expect(Number(saldo!.saldo)).toBe(100000 - monto);
+    expect(Number(saldoDespues!.saldo)).toBe(saldoBase - monto);
 
     await duenoDb.auth.signOut();
   });

@@ -63,7 +63,11 @@ test.describe.serial("E2E Sprint 2 — Cargar + pagar factura", () => {
     });
     if (facErr) throw new Error(`Insert factura: ${facErr.message}`);
 
-    const saldoAntes = 100000;
+    // Patrón delta (29-may): leer saldo REAL antes del pago (no hardcodear 100000)
+    const { data: saldoAntesData } = await svc.from("saldos_caja")
+      .select("saldo")
+      .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id).eq("cuenta", "Caja Efectivo").single();
+    const saldoAntes = Number(saldoAntesData?.saldo ?? 0);
 
     // Pagar via RPC
     const { error: payErr } = await duenoDb.rpc("pagar_factura", {

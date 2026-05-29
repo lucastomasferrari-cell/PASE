@@ -48,6 +48,21 @@ test.describe.serial("E2E Test 29 — POS: mesas (transferir / unir / partir)", 
     pos = await seedComandaPos(seed);
     // 29-may fix: usar el QUINCENAL promovido a manager por seedComandaPos.
     managerId = pos.managerEmpleadoId;
+
+    // 29-may fix: crear mesa en local2 para test cross-local (B).
+    // mesaLocal2Id era undefined → fn_transferir_mesa_comanda tiraba error
+    // distinto a MESA_DESTINO_CROSS_LOCAL.
+    if (seed) {
+      const svc = createServiceClient();
+      const { data: mesaL2 } = await svc.from("mesas").insert({
+        tenant_id: seed.tenantId,
+        local_id: seed.local2Id,
+        numero: `L2-T29-${Date.now()}`,
+        capacidad: 4,
+        estado: "libre",
+      }).select("id").single();
+      mesaLocal2Id = mesaL2!.id as number;
+    }
   });
 
   // Helper: combina mesas del seed (0-3) + extras (4-7).

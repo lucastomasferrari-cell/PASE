@@ -73,6 +73,11 @@ test.describe.serial("E2E Test 23 — Anular pago de sueldo", () => {
       efectivo: 100000, transferencia: 0, estado: "pendiente",
     }).select("id").single();
 
+    // Patrón delta (29-may): snapshot saldo ANTES del movimiento del pago
+    const { data: saldoPrePagoData } = await svc.from("saldos_caja")
+      .select("saldo").eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id).eq("cuenta", "Caja Efectivo").single();
+    const saldoPrePago = Number(saldoPrePagoData?.saldo ?? 0);
+
     // 2. Insertar movimiento del pago $100K linkeado a la liq
     // (simulando que pagar_sueldo lo creó)
     const movId = `MOV-E2E-T23-${Date.now()}`;
@@ -116,10 +121,10 @@ test.describe.serial("E2E Test 23 — Anular pago de sueldo", () => {
     expect(movAfter?.anulado).toBe(true);
     expect(movAfter?.anulado_motivo).toContain("E2E");
 
-    // (b) Saldo restituido (volvió a $200K original)
+    // (b) Saldo restituido: volvió al saldo que había antes de insertar el mov del pago
     const { data: saldoAfter } = await svc.from("saldos_caja")
       .select("saldo").eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id).eq("cuenta", "Caja Efectivo").single();
-    expect(Number(saldoAfter!.saldo)).toBe(200000);
+    expect(Number(saldoAfter!.saldo)).toBe(saldoPrePago);
 
     // (c) Liquidación vuelve a pendiente + pagos_realizados=0 + anulado=true
     const { data: liqAfter2 } = await svc.from("rrhh_liquidaciones")

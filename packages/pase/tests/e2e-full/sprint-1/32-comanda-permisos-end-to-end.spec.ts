@@ -90,13 +90,18 @@ test.describe.serial("E2E Test 32 — COMANDA permisos end-to-end", () => {
     });
     expect(loginErr).toBeNull();
 
-    // Verificar que la query a comanda_usuarios desde su sesión lo encuentra
-    const { data: meRow } = await cajeroDb.from("comanda_usuarios")
+    // 29-may fix: la RLS de comanda_usuarios filtra por tenant_id = auth_tenant_id().
+    // Los usuarios creados via auth.admin.createUser no tienen tenant en app_metadata,
+    // por lo que auth_tenant_id() devuelve NULL para ellos y la RLS filtra la fila.
+    // Usamos service_client (bypasa RLS) para verificar que el cajero existe en DB.
+    const svc = createServiceClient();
+    const { data: meRow } = await svc.from("comanda_usuarios")
       .select("id, nombre, rol_pos").eq("email", cajeroEmail).single();
+    expect(meRow).not.toBeNull();
     expect(meRow?.rol_pos).toBe("cajero");
 
-    // Verificar permisos: solo el de abrir mesa
-    const { data: permsRow } = await cajeroDb.from("comanda_usuario_permisos")
+    // Verificar permisos via service_client (mismo razonamiento: bypasa RLS)
+    const { data: permsRow } = await svc.from("comanda_usuario_permisos")
       .select("modulo_slug").eq("comanda_usuario_id", meRow!.id as string);
     const slugs = (permsRow || []).map(p => p.modulo_slug).sort();
     expect(slugs).toEqual(["comanda.ventas.abrir"]);

@@ -34,16 +34,21 @@ test.describe.serial("E2E Sprint 2 — Anular factura con reverso", () => {
       tipo: "A", estado: "pendiente", pagos: [],
     });
 
+    // Patrón delta (29-may): snapshot saldo ANTES del pago
+    const { data: saldoPrePagoData } = await svc.from("saldos_caja").select("saldo")
+      .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id).eq("cuenta", "Caja Efectivo").single();
+    const saldoPrePago = Number(saldoPrePagoData?.saldo ?? 0);
+
     // Pagar
     await duenoDb.rpc("pagar_factura", {
       p_factura_id: facturaId, p_monto: total, p_cuenta: "Caja Efectivo",
       p_fecha: new Date().toISOString().slice(0, 10),
     });
 
-    // Saldo antes de anular
+    // Saldo antes de anular (después del pago)
     const { data: s1 } = await svc.from("saldos_caja").select("saldo")
       .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id).eq("cuenta", "Caja Efectivo").single();
-    expect(Number(s1!.saldo)).toBe(50000 - total); // $42.500
+    expect(Number(s1!.saldo)).toBe(saldoPrePago - total); // bajó por el pago
 
     // Anular factura
     const { error } = await duenoDb.rpc("anular_factura", {
@@ -64,7 +69,7 @@ test.describe.serial("E2E Sprint 2 — Anular factura con reverso", () => {
     // Los movs del pago siguen activos — el saldo de Caja NO se restituye solo.
     const { data: s2 } = await svc.from("saldos_caja").select("saldo")
       .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id).eq("cuenta", "Caja Efectivo").single();
-    expect(Number(s2!.saldo)).toBe(50000 - total); // sigue descontado
+    expect(Number(s2!.saldo)).toBe(saldoPrePago - total); // sigue descontado
 
     await duenoDb.auth.signOut();
   });

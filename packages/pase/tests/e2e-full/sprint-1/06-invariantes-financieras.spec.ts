@@ -44,6 +44,14 @@ test.describe.serial("E2E Sprint 4 — Invariantes financieras (SQL)", () => {
     const svc = createServiceClient();
     const duenoDb = await createE2EDuenoClient();
 
+    // Patrón delta (29-may): snapshot saldo de Caja Efectivo ANTES de operar
+    const { data: cajaEfAntes } = await svc.from("saldos_caja")
+      .select("saldo")
+      .eq("tenant_id", seed.tenantId)
+      .eq("local_id", seed.local1Id)
+      .eq("cuenta", "Caja Efectivo").single();
+    const saldoEfBase = Number(cajaEfAntes?.saldo ?? 0);
+
     // ── Generar actividad: 5 movs en distintas cuentas ──────────────────
     const fecha = new Date().toISOString().slice(0, 10);
     const ops = [
@@ -130,8 +138,9 @@ test.describe.serial("E2E Sprint 4 — Invariantes financieras (SQL)", () => {
       .eq("tenant_id", seed.tenantId)
       .eq("local_id", seed.local1Id)
       .eq("cuenta", "Caja Efectivo").single();
-    // Caja Efectivo: +50000 -10000 +2000(anulado, no cuenta) -5000(transfer out) = 35000
-    expect(Number(cajaEfSaldo!.saldo)).toBe(35000);
+    // Caja Efectivo delta: +50000 -10000 +2000(anulado, no cuenta) -5000(transfer out) = +35000
+    // Con shared-seed el saldo base no es 0, así que verificamos el delta relativo.
+    expect(Number(cajaEfSaldo!.saldo)).toBe(saldoEfBase + 35000);
 
     await duenoDb.auth.signOut();
   });

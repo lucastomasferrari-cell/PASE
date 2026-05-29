@@ -28,25 +28,52 @@ import { loadSharedSeed } from "../setup/shared-seed";
 test.describe.serial("E2E Test 26 — editar_movimiento_caja", () => {
   let seed: E2ETenantSeedResult | null = null;
   let movId: string;
+  // Patrón delta (29-may): snapshot saldo antes de crear el mov de prueba
+  let saldoBaseT26 = 0;
 
-   
   test.beforeAll(async () => {
     // Lee el seed compartido creado por globalSetup (UN tenant E2E para toda
     // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
     seed = loadSharedSeed();
-  });
-  test("A) editar importe → cache ajusta diferencia", async () => {
-    if (!seed) { test.skip(true, "Seed falló"); return; }
+    if (!seed) return;
+
+    // Crear el mov de prueba que los sub-tests A-D van a editar/anular.
+    // Con shared-seed no podemos asumir que ningún mov previo tenga importe=100K.
+    // Tomamos snapshot ANTES y creamos un mov de 100K para el test.
     const svc = createServiceClient();
     const duenoDb = await createE2EDuenoClient();
 
-    // Cache antes = 100000
+    const { data: saldoData } = await svc.from("saldos_caja").select("saldo")
+      .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id)
+      .eq("cuenta", "Caja Efectivo").single();
+    saldoBaseT26 = Number(saldoData?.saldo ?? 0);
+
+    const { data: movRes, error: movErr } = await duenoDb.rpc("crear_movimiento_caja", {
+      p_fecha: new Date().toISOString().slice(0, 10),
+      p_cuenta: "Caja Efectivo",
+      p_tipo: "Ingreso Manual",
+      p_cat: null,
+      p_importe: 100000,
+      p_detalle: "T26 mov base para editar",
+      p_local_id: seed.local1Id,
+    });
+    if (movErr) throw new Error(`crear mov T26: ${movErr.message}`);
+    movId = (movRes as { mov_id: string }).mov_id;
+    await duenoDb.auth.signOut();
+  });
+
+  test("A) editar importe → cache ajusta diferencia", async () => {
+    if (!seed || !movId) { test.skip(true, "Seed o movId falló"); return; }
+    const svc = createServiceClient();
+    const duenoDb = await createE2EDuenoClient();
+
+    // Cache antes del edit: saldoBase + 100000 (el mov que creamos en beforeAll)
     const { data: antes } = await svc.from("saldos_caja").select("saldo")
       .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id)
       .eq("cuenta", "Caja Efectivo").single();
-    expect(Number(antes!.saldo)).toBe(100000);
+    expect(Number(antes!.saldo)).toBe(saldoBaseT26 + 100000);
 
-    // Editar importe a 250000 (delta +150000)
+    // Editar importe a 250000 (delta +150000 sobre el saldoBase original)
     const { error } = await duenoDb.rpc("editar_movimiento_caja", {
       p_mov_id: movId,
       p_fecha: new Date().toISOString().slice(0, 10),
@@ -62,7 +89,7 @@ test.describe.serial("E2E Test 26 — editar_movimiento_caja", () => {
     const { data: despues } = await svc.from("saldos_caja").select("saldo")
       .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id)
       .eq("cuenta", "Caja Efectivo").single();
-    expect(Number(despues!.saldo)).toBe(250000);
+    expect(Number(despues!.saldo)).toBe(saldoBaseT26 + 250000);
 
     // Mov queda con editado=true + motivo
     const { data: mov } = await svc.from("movimientos")
@@ -75,11 +102,21 @@ test.describe.serial("E2E Test 26 — editar_movimiento_caja", () => {
   });
 
   test("B) editar cuenta → AMBAS cuentas se sincronizan", async () => {
-    if (!seed) { test.skip(true, "Seed falló"); return; }
+    if (!seed || !movId) { test.skip(true, "Seed o movId falló"); return; }
     const svc = createServiceClient();
     const duenoDb = await createE2EDuenoClient();
 
-    // Mover el mov a Caja Mayor (saldo Mayor antes = 0, Efectivo = 250K)
+    // Patrón delta (29-may): snapshot saldos ANTES del cambio de cuenta
+    const { data: efAntesData } = await svc.from("saldos_caja").select("saldo")
+      .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id)
+      .eq("cuenta", "Caja Efectivo").single();
+    const { data: mayorAntesData } = await svc.from("saldos_caja").select("saldo")
+      .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id)
+      .eq("cuenta", "Caja Mayor").maybeSingle();
+    const efAntes = Number(efAntesData?.saldo ?? 0);
+    const mayorAntes = Number(mayorAntesData?.saldo ?? 0);
+
+    // Mover el mov de Caja Efectivo a Caja Mayor (importe actual del mov = 250000)
     const { error } = await duenoDb.rpc("editar_movimiento_caja", {
       p_mov_id: movId,
       p_fecha: new Date().toISOString().slice(0, 10),
@@ -98,16 +135,24 @@ test.describe.serial("E2E Test 26 — editar_movimiento_caja", () => {
     const { data: mayor } = await svc.from("saldos_caja").select("saldo")
       .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id)
       .eq("cuenta", "Caja Mayor").single();
-    expect(Number(ef!.saldo)).toBe(0);       // Efectivo vacío
-    expect(Number(mayor!.saldo)).toBe(250000); // Mayor con todo
+    // Efectivo: bajó en 250000 (el mov salió)
+    expect(Number(ef!.saldo)).toBe(efAntes - 250000);
+    // Mayor: subió en 250000 (el mov entró)
+    expect(Number(mayor!.saldo)).toBe(mayorAntes + 250000);
 
     await duenoDb.auth.signOut();
   });
 
   test("C) editar SOLO fecha/detalle → cache NO cambia", async () => {
-    if (!seed) { test.skip(true, "Seed falló"); return; }
+    if (!seed || !movId) { test.skip(true, "Seed o movId falló"); return; }
     const svc = createServiceClient();
     const duenoDb = await createE2EDuenoClient();
+
+    // Patrón delta (29-may): snapshot ANTES del edit sin cambio de importe/cuenta
+    const { data: mayorAntesC } = await svc.from("saldos_caja").select("saldo")
+      .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id)
+      .eq("cuenta", "Caja Mayor").single();
+    const saldoMayorAntesC = Number(mayorAntesC!.saldo);
 
     const { error } = await duenoDb.rpc("editar_movimiento_caja", {
       p_mov_id: movId,
@@ -124,13 +169,13 @@ test.describe.serial("E2E Test 26 — editar_movimiento_caja", () => {
     const { data: mayor } = await svc.from("saldos_caja").select("saldo")
       .eq("tenant_id", seed.tenantId).eq("local_id", seed.local1Id)
       .eq("cuenta", "Caja Mayor").single();
-    expect(Number(mayor!.saldo)).toBe(250000); // sin cambio
+    expect(Number(mayor!.saldo)).toBe(saldoMayorAntesC); // sin cambio
 
     await duenoDb.auth.signOut();
   });
 
   test("D) Editar mov ANULADO → falla con MOVIMIENTO_YA_ANULADO", async () => {
-    if (!seed) { test.skip(true, "Seed falló"); return; }
+    if (!seed || !movId) { test.skip(true, "Seed o movId falló"); return; }
     const duenoDb = await createE2EDuenoClient();
 
     // Anular primero
