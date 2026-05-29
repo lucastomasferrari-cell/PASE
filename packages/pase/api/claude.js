@@ -18,6 +18,53 @@
 import { checkUserAuth } from './_user-auth.js';
 import { SOPORTE_SYSTEM_PROMPT } from './_soporte-prompt.js';
 import { GASTRO_SENSEI_SYSTEM_PROMPT } from './_gastro-sensei-prompt.js';
+import { createClient } from '@supabase/supabase-js';
+
+// Pricing por modelo (USD por 1M tokens, según Anthropic public pricing 2026).
+// Si Anthropic cambia el pricing, hay que actualizar acá.
+const MODEL_PRICING = {
+  'claude-opus-4-7':   { in: 15.00, out: 75.00 },
+  'claude-sonnet-4-6': {  in: 3.00, out: 15.00 },
+  'claude-sonnet-4-5': {  in: 3.00, out: 15.00 },
+  'claude-haiku-4':    {  in: 0.80, out:  4.00 },
+};
+
+function calcCost(model, tokensIn, tokensOut) {
+  const p = MODEL_PRICING[model];
+  if (!p) return 0; // modelo desconocido — no cobramos
+  return (tokensIn * p.in + tokensOut * p.out) / 1_000_000;
+}
+
+// Cliente service_role para insertar en llm_usage_log (bypassa RLS).
+// Lazy: si no hay env vars, el tracking se skipea silenciosamente.
+let _trackingClient = null;
+function getTrackingClient() {
+  if (_trackingClient) return _trackingClient;
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_KEY;
+  if (!url || !key) return null;
+  _trackingClient = createClient(url, key, { auth: { persistSession: false } });
+  return _trackingClient;
+}
+
+// Guardar tracking en DB. Fire-and-forget (no bloquea response al user).
+function trackUsage({ tenantId, usuarioId, task, model, tokensIn, tokensOut }) {
+  const client = getTrackingClient();
+  if (!client) return;
+  const cost = calcCost(model, tokensIn, tokensOut);
+  void client.from('llm_usage_log').insert({
+    tenant_id: tenantId,
+    usuario_id: usuarioId,
+    task: task || 'legacy',
+    model,
+    tokens_in: tokensIn,
+    tokens_out: tokensOut,
+    cost_usd: cost,
+    source: 'pase-api',
+  }).then(({ error }) => {
+    if (error) console.warn('[claude] trackUsage falló (no crítico):', error.message);
+  });
+}
 
 // Sonnet 4.6 — 5x más barato que Opus 4.7 ($3/$15 vs $15/$75 per M tokens).
 // Para chat de soporte tipo "¿cómo cargo un adelanto?" alcanza perfecto.
@@ -103,6 +150,19 @@ export default async function handler(req, res) {
       body: JSON.stringify(payload),
     });
     const data = await response.json();
+
+    // Track usage (fire-and-forget, no bloquea response).
+    if (response.ok && data.usage) {
+      trackUsage({
+        tenantId: auth.row.tenant_id ?? null,
+        usuarioId: auth.row.id ?? null,
+        task: body.task,
+        model: payload.model || 'unknown',
+        tokensIn: data.usage.input_tokens || 0,
+        tokensOut: data.usage.output_tokens || 0,
+      });
+    }
+
     res.status(response.status).json(data);
   } catch (e) {
     res.status(502).json({ error: 'ANTHROPIC_FETCH_FAILED', detail: String(e?.message || e) });
