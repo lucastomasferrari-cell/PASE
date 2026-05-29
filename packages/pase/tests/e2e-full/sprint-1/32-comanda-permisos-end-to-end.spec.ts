@@ -131,20 +131,19 @@ test.describe.serial("E2E Test 32 — COMANDA permisos end-to-end", () => {
     const ventaId = ventaIdRes as unknown as number;
     expect(ventaId).toBeGreaterThan(0);
 
-    // Agregar 1 item con service_role + verificar el subtotal queda > 0.
-    // Si el INSERT o el recalculate fallan silenciosos, el descuento del
-    // paso siguiente tira DESCUENTO_INVALIDO en lugar del check de permiso.
-    const svc = createServiceClient();
+    // Agregar 1 item via duenoDb (tiene permisos completos). Si usáramos
+    // svc (service_role) la RPC fn_recalcular_totales tiraría
+    // LOCAL_NO_AUTORIZADO porque auth_tenant_id() es NULL para service_role.
+    // El dueño SÍ tiene tenant y pasa los chequeos.
     const item = seed.items.find(i => i.nombre.includes("Sushi"))!;
-    const { error: itErr } = await svc.from("ventas_pos_items").insert({
-      tenant_id: seed.tenantId, venta_id: ventaId, local_id: seed.local1Id,
-      item_id: item.id, cantidad: 1, precio_unitario: 12000,
-      subtotal: 12000, estado: "hold",  // default state — válidos: hold/enviado/listo/entregado/anulado
+    const duenoSvc = await createE2EDuenoClient();
+    const { error: itErr } = await duenoSvc.rpc("fn_agregar_item_comanda", {
+      p_venta_id: ventaId, p_item_id: item.id, p_cantidad: 1,
     });
-    if (itErr) throw new Error(`Insert item via svc: ${itErr.message}`);
-    const { error: recErr } = await svc.rpc("fn_recalcular_totales_venta_comanda", { p_venta_id: ventaId });
-    if (recErr) throw new Error(`fn_recalcular_totales: ${recErr.message}`);
+    if (itErr) throw new Error(`Agregar item via duenoSvc: ${itErr.message}`);
+    await duenoSvc.auth.signOut();
     // Verificar que el subtotal quedó > 0 antes de seguir
+    const svc = createServiceClient();
     const { data: vCheck } = await svc.from("ventas_pos")
       .select("subtotal, total").eq("id", ventaId).single();
     if (Number(vCheck?.subtotal ?? 0) <= 0) {

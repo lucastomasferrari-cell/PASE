@@ -167,24 +167,23 @@ test.describe.serial("E2E Test 34 — marketplace end-to-end", () => {
     expect(cls).toBeNull();
 
     // [3] Turno de caja abierto. Primero cerrar turnos abiertos previos
-    // (un local solo puede tener 1 turno abierto a la vez — constraint del
-    // producto. Otros tests pueden haber dejado uno).
+    // (un local solo puede tener 1 turno abierto a la vez).
     await svc.from("turnos_caja")
       .update({ estado: "cerrado", monto_final_declarado: 0, cerrado_at: new Date().toISOString() })
       .eq("local_id", seed.local1Id).eq("estado", "abierto");
 
-    const { data: maxN } = await svc.from("turnos_caja")
-      .select("numero").eq("local_id", seed.local1Id).order("numero", { ascending: false }).limit(1);
-    const numero = ((maxN?.[0]?.numero ?? 0) as number) + 1;
-    const { data: t, error: tErr } = await svc.from("turnos_caja").insert({
-      tenant_id: seed.tenantId, local_id: seed.local1Id,
-      numero, cajero_id: seed.empleados.mensual.id,
-      estado: "abierto", monto_inicial: 0,
-      notas: `Test marketplace ${SENTINEL}`,
-    }).select("id").single();
-    if (tErr) throw new Error(`Insert turno: ${tErr.message}`);
-    if (!t) throw new Error(`Insert turno: retornó null`);
-    turnoId = t.id as number;
+    // Abrir turno via RPC desde duenoDb (tiene tenant en JWT, pasa
+    // fn_assert_local_autorizado que con svc/service_role falla por NULL).
+    const duenoSvc = await createE2EDuenoClient();
+    const { data: turnoIdRes, error: tErr } = await duenoSvc.rpc("fn_abrir_turno_caja_comanda", {
+      p_local_id: seed.local1Id,
+      p_cajero_id: seed.empleados.mensual.id,
+      p_monto_inicial: 0,
+      p_notas: `Test marketplace ${SENTINEL}`,
+    });
+    if (tErr) throw new Error(`fn_abrir_turno_caja_comanda: ${tErr.message}`);
+    await duenoSvc.auth.signOut();
+    turnoId = turnoIdRes as unknown as number;
   });
 
   test("[4-5] Crear pedido público + idempotency", async () => {
