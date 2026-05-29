@@ -8,21 +8,35 @@ import {
   writeEmpleadoToStorage,
 } from './authPos';
 import { verificarPin, getEmpleado } from '../services/empleadosService';
+import { getLocalSettings } from '../services/localSettingsService';
 
-const DEFAULT_AUTOLOCK_MIN = 3;
+// Default cambiado de 3 → 60 min (29-may, queja Lucas): los cajeros de
+// restaurant se quejaban de tener que re-poner PIN cada vez que iban a
+// atender una mesa. 60 min cubre un turno completo de servicio sin
+// fricciones. Si el dueño quiere más estricto, lo baja en
+// Settings → Local → "Auto-lock POS (min)". Si quiere DESACTIVAR, pone 0.
+const DEFAULT_AUTOLOCK_MIN = 60;
 
 interface Props {
   children: ReactNode;
-  // Override del autolock (default 3 min). Settings del local lo configura.
+  // Override del autolock. Si no se pasa, intenta leer
+  // `comanda_local_settings.autolock_minutos` del local activo después del
+  // loginPin. Si no se puede leer, usa DEFAULT_AUTOLOCK_MIN.
+  // Pasar 0 = desactivar auto-lock (cajero queda logueado hasta que cierre
+  // pestaña o se desloguee manualmente).
   autolockMin?: number;
 }
 
 export function AuthPosProvider({ children, autolockMin }: Props) {
   const [empleado, setEmpleado] = useState<EmpleadoActivoPos | null>(null);
   const [loading, setLoading] = useState(true);
+  // Auto-lock dinámico: lo leemos del setting del local DESPUÉS del login
+  // (cuando ya sabemos qué local es). Se actualiza si Settings cambia.
+  const [lockMinDinamico, setLockMinDinamico] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const lockMinutes = autolockMin ?? DEFAULT_AUTOLOCK_MIN;
+  // Prioridad: prop explícito > setting del local > default
+  const lockMinutes = autolockMin ?? lockMinDinamico ?? DEFAULT_AUTOLOCK_MIN;
 
   // Hidratar de sessionStorage al montar
   useEffect(() => {
@@ -31,10 +45,25 @@ export function AuthPosProvider({ children, autolockMin }: Props) {
     setLoading(false);
   }, []);
 
-  // Auto-lock timer
+  // Cargar setting de auto-lock del local activo (después del login).
+  // Si el setting es null o 0, deshabilita auto-lock (lockMinutes = 0).
+  useEffect(() => {
+    if (!empleado) { setLockMinDinamico(null); return; }
+    let cancelled = false;
+    void getLocalSettings(empleado.local_id).then(({ data }) => {
+      if (cancelled) return;
+      if (data && typeof data.autolock_minutos === 'number') {
+        setLockMinDinamico(data.autolock_minutos);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [empleado]);
+
+  // Auto-lock timer. Si lockMinutes <= 0, no arma timer (auto-lock OFF).
   const armTimer = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     if (!empleado) return;
+    if (lockMinutes <= 0) return; // 0 = sin auto-lock
     timerRef.current = setTimeout(() => {
       writeEmpleadoToStorage(null);
       setEmpleado(null);

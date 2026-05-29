@@ -310,8 +310,11 @@ export function SettingsLocal() {
                 onChange={(e) => setField('tiempo_delivery_min', Number(e.target.value))} className="h-11" />
             </Field>
             <Field label="Auto-lock POS (min)">
-              <Input type="number" min={1} max={60} value={merged.autolock_minutos ?? 3}
+              <Input type="number" min={0} max={240} value={merged.autolock_minutos ?? 60}
                 onChange={(e) => setField('autolock_minutos', Number(e.target.value))} className="h-11" />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Min sin tocar el POS antes de pedir PIN otra vez. <strong>0 = nunca</strong> (recomendado para servicio).
+              </p>
             </Field>
           </div>
           <div className="space-y-2">
