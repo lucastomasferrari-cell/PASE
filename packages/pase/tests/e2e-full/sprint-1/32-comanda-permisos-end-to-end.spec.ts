@@ -118,6 +118,24 @@ test.describe.serial("E2E Test 32 — COMANDA permisos end-to-end", () => {
     });
     await cajeroDb.auth.signInWithPassword({ email: cajeroEmail, password: cajeroPassword });
 
+    // Diagnóstico 29-may: el cajero recién logueado, verificar que sus
+    // permisos están bien persistidos en DB ANTES de operar. Si esto falla
+    // el bug es del API auth-admin (no del test ni de la RPC).
+    const svcDiag = createServiceClient();
+    const { data: cajeroRow } = await svcDiag.from("comanda_usuarios")
+      .select("id, tenant_id, rol_pos, locales, activo")
+      .eq("email", cajeroEmail).maybeSingle();
+    if (!cajeroRow) throw new Error(`Diag: cajero ${cajeroEmail} NO existe en comanda_usuarios`);
+    if (cajeroRow.tenant_id !== seed.tenantId) {
+      throw new Error(`Diag: cajero tiene tenant_id=${cajeroRow.tenant_id} pero seed.tenantId=${seed.tenantId}`);
+    }
+    const { data: perms } = await svcDiag.from("comanda_usuario_permisos")
+      .select("modulo_slug").eq("comanda_usuario_id", cajeroRow.id as string);
+    const slugsBD = (perms ?? []).map(p => p.modulo_slug);
+    if (!slugsBD.includes("comanda.ventas.abrir")) {
+      throw new Error(`Diag: cajero NO tiene 'comanda.ventas.abrir' en DB. Permisos: ${JSON.stringify(slugsBD)}`);
+    }
+
     // ── ABRIR mesa: tiene permiso → OK
     const { data: ventaIdRes, error: abrirErr } = await cajeroDb.rpc("fn_abrir_venta_comanda", {
       p_local_id: seed.local1Id,
@@ -127,7 +145,7 @@ test.describe.serial("E2E Test 32 — COMANDA permisos end-to-end", () => {
       p_cajero_id: pos.cajeroEmpleadoId,
       p_covers: 2, p_origen: "pos", p_estado: "abierta",
     });
-    if (abrirErr) throw new Error(`abrir mesa cajero limitado: ${abrirErr.message}`);
+    if (abrirErr) throw new Error(`abrir mesa cajero limitado (cajero tenant=${cajeroRow.tenant_id}, locales=${JSON.stringify(cajeroRow.locales)}, perms=${JSON.stringify(slugsBD)}): ${abrirErr.message}`);
     const ventaId = ventaIdRes as unknown as number;
     expect(ventaId).toBeGreaterThan(0);
 

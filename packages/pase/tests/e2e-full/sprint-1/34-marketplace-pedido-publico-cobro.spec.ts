@@ -175,6 +175,7 @@ test.describe.serial("E2E Test 34 — marketplace end-to-end", () => {
       const { error: canalErr } = await svc.from("canales").insert({
         tenant_id: seed.tenantId, local_id: seed.local1Id,
         slug: "tienda-propia", nombre: "Tienda Online", activo: true,
+        modo_pos: "pedidos",  // NOT NULL — valores comunes: salon, pedidos, mostrador
       });
       if (canalErr) throw new Error(`Insert canal tienda-propia: ${canalErr.message}`);
     }
