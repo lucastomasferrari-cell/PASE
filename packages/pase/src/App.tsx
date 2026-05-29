@@ -54,6 +54,11 @@ const Tenants = lazy(() => import("./pages/Tenants"));
 const DesignSystem = lazy(() => import("./pages/DesignSystem"));
 const Finanzas = lazy(() => import("./pages/Finanzas"));
 const Rentabilidad = lazy(() => import("./pages/Rentabilidad"));
+// Insumos + Recetas (sprint 28-may noche): gestión de catálogo de materia
+// prima y vinculación con platos (CMV teórico, margen, alertas). Las acciones
+// operativas (conteo, mermas, transferencias) viven en COMANDA.
+const Insumos = lazy(() => import("./pages/Insumos"));
+const Recetas = lazy(() => import("./pages/Recetas"));
 const MensajeriaIG = lazy(() => import("./pages/MensajeriaIG"));
 const Negocio = lazy(() => import("./pages/Negocio"));
 const Objetivos = lazy(() => import("./pages/Objetivos"));
@@ -531,6 +536,12 @@ function AppMain() {
               <Route path="/finanzas" element={<Finanzas user={user || undefined} locales={locales} localActivo={localActivo}/>} />
               <Route path="/rentabilidad" element={
                 user ? <Rentabilidad user={user} locales={locales} localActivo={localActivo}/> : <Navigate to="/" replace/>
+              } />
+              <Route path="/insumos" element={
+                user && tienePermiso(user, "rentabilidad") ? <Insumos user={user} locales={locales} localActivo={localActivo}/> : <Navigate to="/inicio" replace/>
+              } />
+              <Route path="/recetas" element={
+                user && tienePermiso(user, "rentabilidad") ? <Recetas user={user} locales={locales} localActivo={localActivo}/> : <Navigate to="/inicio" replace/>
               } />
               <Route path="/objetivos" element={
                 user?.tenant_id ? <Objetivos locales={locales} tenantId={user.tenant_id} localActivo={localActivo}/> : <Navigate to="/" replace/>
