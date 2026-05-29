@@ -39,14 +39,16 @@ test.describe.serial("E2E Test 29 — POS: mesas (transferir / unir / partir)", 
   let pos: E2EComandaPosSeed | null = null;
   const mesasExtra: { id: number; numero: string }[] = [];  // mesas 5-8 del local1
   let mesaLocal2Id: number;
-  let managerId: string;
+  let managerId: string = "";
 
-   
+
   test.beforeAll(async () => {
     // Lee el seed compartido creado por globalSetup (UN tenant E2E para toda
     // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
     seed = loadSharedSeed();
     pos = await seedComandaPos(seed);
+    // 29-may fix: usar el QUINCENAL promovido a manager por seedComandaPos.
+    managerId = pos.managerEmpleadoId;
   });
 
   // Helper: combina mesas del seed (0-3) + extras (4-7).

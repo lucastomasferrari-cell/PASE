@@ -39,14 +39,16 @@ import {
 test.describe.serial("E2E Test 28 — POS: modificar precio / cortesía / descuento", () => {
   let seed: E2ETenantSeedResult | null = null;
   let pos: E2EComandaPosSeed | null = null;
-  let managerId: string;  // empleado activo con rol_pos='manager'
+  let managerId: string = "";  // empleado activo con rol_pos='manager' (inicializado en beforeAll)
 
-   
+
   test.beforeAll(async () => {
     // Lee el seed compartido creado por globalSetup (UN tenant E2E para toda
     // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
     seed = loadSharedSeed();
     pos = await seedComandaPos(seed);
+    // 29-may fix: usar el QUINCENAL promovido a manager por seedComandaPos.
+    managerId = pos.managerEmpleadoId;
   });
 
   test.afterAll(async () => { try { await cleanupE2ETenant(); } catch (e) { console.error(e); } });

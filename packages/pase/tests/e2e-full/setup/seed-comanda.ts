@@ -26,6 +26,7 @@ export interface E2EComandaPosSeed {
   turnoCajaId: number;                      // turno abierto
   cajeroEmpleadoId: string;                  // UUID del cajero con pin asignado
   cajeroPin: string;                         // pin de 4 dígitos
+  managerEmpleadoId: string;                 // UUID empleado QUINCENAL promovido a manager POS (para overrides)
 }
 
 const PIN_CAJERO = "1234";
@@ -156,6 +157,21 @@ export async function seedComandaPos(seed: E2ETenantSeedResult): Promise<E2EComa
     .eq("id", cajeroEmpleadoId);
   if (pinErr) throw new Error(`Asignar pin_pos: ${pinErr.message}`);
 
+  // 3b. Promover empleado QUINCENAL a manager POS (29-may fix). Necesario
+  // para los tests 28 (modificar precio + descuento grande + cortesía) y 29
+  // (transferir mesa). Las RPCs exigen manager_id con rol_pos in ('manager',
+  // 'dueno') y pos_activo=true.
+  const managerEmpleadoId = seed.empleados.quincenal.id;
+  const { error: mgrErr } = await svc.from("rrhh_empleados")
+    .update({
+      rol_pos: "manager",
+      pos_activo: true,
+      pin_pos: "9999",
+      pin_actualizado_at: new Date().toISOString(),
+    })
+    .eq("id", managerEmpleadoId);
+  if (mgrErr) throw new Error(`Promover a manager POS: ${mgrErr.message}`);
+
   // 4. Abrir turno_caja con ese cajero (IDEMPOTENT)
   //
   // Sprint 28-may: usar RPC `_e2e_abrir_turno_caja` en vez de INSERT directo.
@@ -192,5 +208,6 @@ export async function seedComandaPos(seed: E2ETenantSeedResult): Promise<E2EComa
     turnoCajaId: turno.id as number,
     cajeroEmpleadoId,
     cajeroPin: PIN_CAJERO,
+    managerEmpleadoId,
   };
 }
