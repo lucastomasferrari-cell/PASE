@@ -418,7 +418,7 @@ export async function seedE2ETenant(opts: {
     { tenant_id: tenantId, nombre: "Error de cocina",      tipo_movimiento: "merma",     orden: 30, activo: true },
     { tenant_id: tenantId, nombre: "Cortesía",             tipo_movimiento: "donacion",  orden: 40, activo: true },
     { tenant_id: tenantId, nombre: "Consumo personal",     tipo_movimiento: "donacion",  orden: 50, activo: true },
-    { tenant_id: tenantId, nombre: "Ajuste manual",        tipo_movimiento: "ajuste",    orden: 60, activo: true },
+    { tenant_id: tenantId, nombre: "Ajuste manual",        tipo_movimiento: "salida_ajuste", orden: 60, activo: true },
     { tenant_id: tenantId, nombre: "Robo sospechado",      tipo_movimiento: "robo",      orden: 70, activo: true },
   ]).select("id, nombre");
   if (motErr) throw new Error(`Seed mermas_motivos: ${motErr.message}`);
