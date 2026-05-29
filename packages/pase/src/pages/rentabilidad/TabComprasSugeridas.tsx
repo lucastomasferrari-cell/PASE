@@ -59,6 +59,11 @@ export function TabComprasSugeridas({ user, locales, localActivo }: Props) {
   const [safetyStock, setSafetyStock] = useState(20);
   const [diasHistoria, setDiasHistoria] = useState(28);
   const [localFiltro, setLocalFiltro] = useState<number | null>(localActivo);
+  // Sync con sidebar (bug fix 29-may, cache stale del localActivo).
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLocalFiltro(localActivo);
+  }, [localActivo]);
   const [rows, setRows] = useState<ForecastRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [filtroEstado, setFiltroEstado] = useState<string>("");

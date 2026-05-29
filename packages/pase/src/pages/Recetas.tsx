@@ -42,6 +42,11 @@ interface Item {
   grupo_id: number | null;
 }
 
+interface ItemGrupo {
+  id: number;
+  nombre: string;
+}
+
 interface Receta {
   id: number;
   item_id: number;
@@ -87,10 +92,12 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
   const { toast, showError, showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<Item[]>([]);
+  const [grupos, setGrupos] = useState<ItemGrupo[]>([]);
   const [recetas, setRecetas] = useState<Receta[]>([]);
   const [insumos, setInsumos] = useState<Insumo[]>([]);
   const [search, setSearch] = useState("");
   const [filtro, setFiltro] = useState<"todos" | "con_receta" | "sin_receta">("todos");
+  const [filtroGrupo, setFiltroGrupo] = useState<string>("__all");
   const [loading, setLoading] = useState(true);
 
   // Drawer de edición/creación de receta
@@ -107,9 +114,9 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
 
   const load = async () => {
     setLoading(true);
-    // Cargar items, recetas activas e insumos en paralelo.
-    // - Items: solo disponibles, no prep (los preps se manejan distinto), no open-item.
-    const [itemsRes, recetasRes, insumosRes] = await Promise.all([
+    // Cargar items, recetas activas, insumos y grupos en paralelo.
+    // Items: solo disponibles, no open-item. Grupos: categorías (Rolls, Bebidas, etc.)
+    const [itemsRes, recetasRes, insumosRes, gruposRes] = await Promise.all([
       db.from("items")
         .select("id, nombre, emoji, precio_madre, costo_actual, estado, es_combo, es_prep_item, receta_id_vigente, grupo_id")
         .eq("estado", "disponible")
@@ -125,15 +132,18 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
         .eq("activo", true)
         .is("deleted_at", null)
         .order("nombre"),
+      db.from("item_grupos").select("id, nombre").order("nombre"),
     ]);
 
     if (itemsRes.error) { showError("No se pudieron cargar items: " + itemsRes.error.message); setLoading(false); return; }
     if (recetasRes.error) { showError("No se pudieron cargar recetas: " + recetasRes.error.message); setLoading(false); return; }
     if (insumosRes.error) { showError("No se pudieron cargar insumos: " + insumosRes.error.message); setLoading(false); return; }
+    if (gruposRes.error) { console.warn("[Recetas] No se pudieron cargar item_grupos:", gruposRes.error.message); }
 
     setItems((itemsRes.data || []) as Item[]);
     setRecetas((recetasRes.data || []) as Receta[]);
     setInsumos((insumosRes.data || []) as Insumo[]);
+    setGrupos((gruposRes.data || []) as ItemGrupo[]);
     setLoading(false);
   };
 
@@ -146,12 +156,33 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
     return m;
   }, [recetas]);
 
+  // Map grupo_id → nombre del grupo (para mostrar categoría)
+  const grupoById = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const g of grupos) m.set(g.id, g.nombre);
+    return m;
+  }, [grupos]);
+
+  // Grupos que están EN USO (tienen al menos 1 item activo) — para dropdown limpio
+  const gruposEnUso = useMemo(() => {
+    const set = new Set<number>();
+    for (const it of items) if (it.grupo_id) set.add(it.grupo_id);
+    return grupos.filter(g => set.has(g.id));
+  }, [grupos, items]);
+
   // Filtrar items.
   const visible = items.filter(it => {
     if (search && !it.nombre.toLowerCase().includes(search.toLowerCase())) return false;
     const tiene = recetaByItemId.has(it.id);
     if (filtro === "con_receta" && !tiene) return false;
     if (filtro === "sin_receta" && tiene) return false;
+    if (filtroGrupo !== "__all") {
+      if (filtroGrupo === "__sin") {
+        if (it.grupo_id) return false;
+      } else if (String(it.grupo_id ?? "") !== filtroGrupo) {
+        return false;
+      }
+    }
     return true;
   });
 
@@ -421,6 +452,11 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
             <option value="con_receta">Con receta</option>
             <option value="sin_receta">Sin receta</option>
           </select>
+          <select value={filtroGrupo} onChange={e => setFiltroGrupo(e.target.value)} className="search" style={{ width: 200 }}>
+            <option value="__all">Todas las categorías</option>
+            {gruposEnUso.map(g => <option key={g.id} value={String(g.id)}>{g.nombre}</option>)}
+            <option value="__sin">Sin categoría</option>
+          </select>
         </div>
       </div>
 
@@ -438,6 +474,7 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
               <tr>
                 <th></th>
                 <th>Item</th>
+                <th>Categoría</th>
                 <th style={{ textAlign: "right" }}>Precio venta</th>
                 <th>Receta</th>
                 <th style={{ textAlign: "center" }}>Estado</th>
@@ -447,6 +484,7 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
             <tbody>
               {visible.map(it => {
                 const r = recetaByItemId.get(it.id);
+                const categoria = it.grupo_id ? grupoById.get(it.grupo_id) : null;
                 return (
                   <tr key={it.id}>
                     <td style={{ width: 30, fontSize: 18 }}>{it.emoji ?? "—"}</td>
@@ -454,6 +492,13 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
                       <div style={{ fontWeight: 500 }}>{it.nombre}</div>
                       {it.es_combo && <span className="badge b-muted" style={{ fontSize: 9, marginRight: 4 }}>combo</span>}
                       {it.es_prep_item && <span className="badge b-info" style={{ fontSize: 9 }}>prep</span>}
+                    </td>
+                    <td>
+                      {categoria ? (
+                        <span className="badge b-muted" style={{ fontSize: 10 }}>{categoria}</span>
+                      ) : (
+                        <span className="badge b-warn" style={{ fontSize: 10 }}>Sin cat.</span>
+                      )}
                     </td>
                     <td className="mono" style={{ textAlign: "right" }}>
                       {it.precio_madre ? fmt_$(Number(it.precio_madre)) : <span style={{ color: "var(--muted2)" }}>—</span>}

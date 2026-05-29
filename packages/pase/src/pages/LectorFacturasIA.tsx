@@ -69,6 +69,14 @@ export default function LectorFacturasIA({ user, locales, localActivo, onSaved }
   const [proveedores,setProveedores]=useState<Proveedor[]>([]);
   const [guardando,setGuardando]=useState(false);
   const [form,setForm]=useState<{local_id: string|number, prov_id: string, fecha: string, venc: string, nro: string, neto: number|string, iva21: number|string, iva105: number|string, iibb: number|string, total: number|string, cat: string}>({local_id:localActivo||"",prov_id:"",fecha:"",venc:"",nro:"",neto:0,iva21:0,iva105:0,iibb:0,total:0,cat:""});
+  // Sync form.local_id con sidebar (bug fix 29-may, cache stale del localActivo).
+  // Solo update si el user NO tocó el campo manualmente Y aún no procesó factura.
+  useEffect(() => {
+    if (localActivo == null) return;
+    if (resultado) return; // si ya hay factura procesada, no pisar la elección
+    setForm(f => f.local_id === localActivo ? f : { ...f, local_id: localActivo });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localActivo]);
   // Modal inline para crear un proveedor nuevo cuando el emisor detectado
   // por IA no matchea con ninguno existente.
   const [provModal,setProvModal]=useState<ProvModalForm | null>(null);

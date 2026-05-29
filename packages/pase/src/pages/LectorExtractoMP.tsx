@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { PageHeader, EmptyState, LocalLockedChip, LocalSelectorObligatorio, DocumentIcon, FolderIcon, AlertIcon, CheckIcon } from "../components/ui";
 import { formatCurrency } from "../lib/format";
@@ -54,6 +54,11 @@ interface Props {
 export default function LectorExtractoMP({ user, locales, localActivo }: Props) {
   const [archivo, setArchivo] = useState<File | null>(null);
   const [localImport, setLocalImport] = useState<number | null>(localActivo);
+  // Sync con sidebar (bug fix 29-may).
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLocalImport(localActivo);
+  }, [localActivo]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultado, setResultado] = useState<{

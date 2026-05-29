@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { PageHeader, EmptyState, InfoTooltip, LocalLockedChip, LocalSelectorObligatorio, FolderIcon, CheckIcon, AlertIcon } from "../components/ui";
 import { parseCSV, downloadCSVTemplate } from "../lib/parseCSV";
@@ -249,6 +249,11 @@ function TabEmpleados({ user, locales, localActivo }: { user: Usuario; locales: 
   // el sidebar tiene una activa, usamos esa; si está en "Todas" (que ya no
   // existe — pero por defensa), el usuario debe elegir.
   const [localImport, setLocalImport] = useState<number | null>(localActivo);
+  // Sync con sidebar (bug fix 29-may).
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLocalImport(localActivo);
+  }, [localActivo]);
 
   const headers = ["apellido", "nombre", "cuil", "puesto", "sueldo_mensual", "fecha_inicio", "alias_mp"];
   const ejemplo = { apellido: "Pérez", nombre: "Juan", cuil: "20-12345678-9", puesto: "Mozo", sueldo_mensual: "650000", fecha_inicio: "2024-03-15", alias_mp: "juan.perez.mp" };
@@ -448,6 +453,11 @@ function TabConceptos({ user }: { user: Usuario }) {
 
 function TabSaldos({ user, locales, localActivo }: { user: Usuario; locales: Local[]; localActivo: number | null }) {
   const [localImport, setLocalImport] = useState<number | null>(localActivo);
+  // Sync con sidebar (bug fix 29-may).
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLocalImport(localActivo);
+  }, [localActivo]);
   // Las 5 cuentas. Si el usuario no concilia Banco/MP, deja los campos
   // vacíos y no se hace upsert para esas cuentas (filtro abajo skipea
   // valStr.trim() === "").

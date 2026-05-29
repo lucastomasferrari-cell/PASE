@@ -60,6 +60,13 @@ export function TabCMV({ user, locales, localActivo }: Props) {
   });
   const [hasta, setHasta] = useState(toISO(today));
   const [localFiltro, setLocalFiltro] = useState<number | null>(localActivo);
+  // Sync con el sidebar: cuando cambia localActivo afuera, actualizar
+  // localFiltro. Bug fix 29-may: sin esto el tab quedaba mostrando data del
+  // local viejo aunque el sidebar dijera otro.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync UI con prop externa
+    setLocalFiltro(localActivo);
+  }, [localActivo]);
   const [resumen, setResumen] = useState<ResumenCMV | null>(null);
   const [detalle, setDetalle] = useState<DetalleInsumo[]>([]);
   const [loading, setLoading] = useState(false);

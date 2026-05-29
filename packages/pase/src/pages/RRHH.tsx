@@ -141,6 +141,36 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adelForm.cuenta, cuentasUsables.join("|")]);
 
+  // ─── SYNC LOCAL ACTIVO ────────────────────────────────────────────────────
+  // Bug reportado 29-may (Lucas): cambiaba el local activo en el sidebar pero
+  // /equipo seguía mostrando empleados del local viejo. La causa:
+  // `novLocal` y `pagoLocal` se inicializan UNA vez al mount con `defaultLocal`
+  // (que mira el `localActivo` del prop). Cuando el user cambia el local en
+  // el sidebar, esos state quedan stale.
+  //
+  // Fix: cuando localActivo cambia y el user NO eligió manualmente otro local
+  // (novLocalTouched / pagoLocalTouched = false), sincronizar los tabs con
+  // el nuevo local activo.
+  useEffect(() => {
+    if (localActivo == null) return;
+    if (!novLocalTouched && String(novLocal) !== String(localActivo)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setNovLocal(localActivo);
+    }
+    if (!pagoLocalTouched && String(pagoLocal) !== String(localActivo)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPagoLocal(localActivo);
+    }
+    // Historial: sin "touched" flag, sincronizamos siempre. Es tab de lectura
+    // (no se opera nada desde acá), el filtro propio si el user lo cambia se
+    // mantiene hasta el siguiente cambio de localActivo en sidebar.
+    if (String(histLocal) !== String(localActivo)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setHistLocal(localActivo);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo queremos correr al cambiar localActivo
+  }, [localActivo]);
+
   // Dashboard
   const [dashLoading, setDashLoading] = useState(true);
   const [dashStats, setDashStats] = useState<DashStats | Record<string, never>>({});
