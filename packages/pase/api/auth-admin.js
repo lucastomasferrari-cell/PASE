@@ -75,7 +75,13 @@ export default async function handler(req, res) {
         return res.status(403).json({ ok: false, error: 'cannot_create_role_higher_or_equal' });
       }
 
-      // 1. Intentar crear en Supabase Auth (no bloquea si falla)
+      // 1. Resolver tenant_id ANTES de crear el auth user (lo necesitamos
+      // para setearlo en app_metadata del JWT — fix 29-may para que las RPCs
+      // que usan `auth.jwt() ->> 'tenant_id'` o `auth_tenant_id()` lo vean).
+      // tenant_id forzado al del caller si NO es superadmin (defensa cross-tenant).
+      const tenantId = await resolveTenantId(db, payloadTenantId, auth.row);
+
+      // 2. Intentar crear en Supabase Auth (no bloquea si falla)
       let newAuthId = null;
       try {
         const authEmail = usuario.includes('@') ? usuario : usuario + '@pase.local';
@@ -84,6 +90,9 @@ export default async function handler(req, res) {
           password,
           email_confirm: true,
           user_metadata: { nombre, rol: requestedRol },
+          // app_metadata sí se incluye en el JWT del user — defense-in-depth
+          // para futuras políticas RLS que usen `auth.jwt() ->> 'tenant_id'`.
+          app_metadata: tenantId ? { tenant_id: tenantId, rol: requestedRol } : undefined,
         });
         if (authErr) {
           console.warn('[auth-admin] Supabase Auth falló (continuando sin auth):', authErr.message);
@@ -94,13 +103,11 @@ export default async function handler(req, res) {
         console.warn('[auth-admin] Supabase Auth exception (continuando sin auth):', authCatchErr.message);
       }
 
-      // 2. Hash SHA-256 de la contraseña
+      // 3. Hash SHA-256 de la contraseña
       const { createHash } = await import('crypto');
       const hashPassword = createHash('sha256').update(password).digest('hex');
 
-      // 3. INSERT en tabla usuarios.
-      // tenant_id forzado al del caller si NO es superadmin (defensa cross-tenant).
-      const tenantId = await resolveTenantId(db, payloadTenantId, auth.row);
+      // 4. INSERT en tabla usuarios.
       const userRow = {
         nombre,
         email: usuario,
@@ -203,11 +210,31 @@ export default async function handler(req, res) {
           password,
           email_confirm: true,
           user_metadata: { nombre, rol_pos },
+          // app_metadata.tenant_id (fix 29-may) — defense-in-depth para que
+          // `auth.jwt() ->> 'tenant_id'` lo vea desde el JWT. auth_tenant_id()
+          // ya tiene fallback a comanda_usuarios pero esto es más estándar.
+          app_metadata: { tenant_id: tenantId, rol_pos },
         });
         if (authErr) {
           return res.status(500).json({ ok: false, error: 'auth_create_failed: ' + authErr.message });
         }
         authIdToUse = newAuth.user.id;
+      } else {
+        // 2b. Si auth_id ya existía (user reusado de PASE u otro comanda_usuarios)
+        // y NO tiene tenant_id en app_metadata, agregarlo. Idempotente: si
+        // ya está, no pisa. Necesario para users viejos creados antes del
+        // fix de 29-may.
+        try {
+          const { data: existing } = await db.auth.admin.getUserById(authIdToUse);
+          const currentMeta = existing?.user?.app_metadata ?? {};
+          if (!currentMeta.tenant_id) {
+            await db.auth.admin.updateUserById(authIdToUse, {
+              app_metadata: { ...currentMeta, tenant_id: tenantId, rol_pos },
+            });
+          }
+        } catch (metaErr) {
+          console.warn('[auth-admin] update app_metadata falló (no crítico):', metaErr.message);
+        }
       }
 
       // 3. Insert comanda_usuario
