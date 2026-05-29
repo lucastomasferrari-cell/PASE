@@ -166,17 +166,25 @@ test.describe.serial("E2E Test 34 — marketplace end-to-end", () => {
     });
     expect(cls).toBeNull();
 
-    // [3] Turno de caja abierto (cajero = empleado mensual del seed)
+    // [3] Turno de caja abierto. Primero cerrar turnos abiertos previos
+    // (un local solo puede tener 1 turno abierto a la vez — constraint del
+    // producto. Otros tests pueden haber dejado uno).
+    await svc.from("turnos_caja")
+      .update({ estado: "cerrado", monto_final: 0, cerrado_at: new Date().toISOString() })
+      .eq("local_id", seed.local1Id).eq("estado", "abierto");
+
     const { data: maxN } = await svc.from("turnos_caja")
       .select("numero").eq("local_id", seed.local1Id).order("numero", { ascending: false }).limit(1);
     const numero = ((maxN?.[0]?.numero ?? 0) as number) + 1;
-    const { data: t } = await svc.from("turnos_caja").insert({
+    const { data: t, error: tErr } = await svc.from("turnos_caja").insert({
       tenant_id: seed.tenantId, local_id: seed.local1Id,
       numero, cajero_id: seed.empleados.mensual.id,
       estado: "abierto", monto_inicial: 0,
       notas: `Test marketplace ${SENTINEL}`,
     }).select("id").single();
-    turnoId = t!.id as number;
+    if (tErr) throw new Error(`Insert turno: ${tErr.message}`);
+    if (!t) throw new Error(`Insert turno: retornó null`);
+    turnoId = t.id as number;
   });
 
   test("[4-5] Crear pedido público + idempotency", async () => {

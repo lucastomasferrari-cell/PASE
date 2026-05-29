@@ -131,19 +131,25 @@ test.describe.serial("E2E Test 32 — COMANDA permisos end-to-end", () => {
     const ventaId = ventaIdRes as unknown as number;
     expect(ventaId).toBeGreaterThan(0);
 
-    // Agregar 1 item con service_role (bypassa el chequeo de permiso del
-    // cajero limitado). Necesitamos que la venta tenga subtotal > 0 para
-    // que el descuento llegue al chequeo de permiso (sino falla antes con
-    // DESCUENTO_INVALIDO por subtotal=0).
+    // Agregar 1 item con service_role + verificar el subtotal queda > 0.
+    // Si el INSERT o el recalculate fallan silenciosos, el descuento del
+    // paso siguiente tira DESCUENTO_INVALIDO en lugar del check de permiso.
     const svc = createServiceClient();
     const item = seed.items.find(i => i.nombre.includes("Sushi"))!;
-    await svc.from("ventas_pos_items").insert({
+    const { error: itErr } = await svc.from("ventas_pos_items").insert({
       tenant_id: seed.tenantId, venta_id: ventaId, local_id: seed.local1Id,
       item_id: item.id, cantidad: 1, precio_unitario: 12000,
       subtotal: 12000, estado: "pendiente",
     });
-    // Recalcular totales de la venta para que el subtotal cuente
-    await svc.rpc("fn_recalcular_totales_venta_comanda", { p_venta_id: ventaId });
+    if (itErr) throw new Error(`Insert item via svc: ${itErr.message}`);
+    const { error: recErr } = await svc.rpc("fn_recalcular_totales_venta_comanda", { p_venta_id: ventaId });
+    if (recErr) throw new Error(`fn_recalcular_totales: ${recErr.message}`);
+    // Verificar que el subtotal quedó > 0 antes de seguir
+    const { data: vCheck } = await svc.from("ventas_pos")
+      .select("subtotal, total").eq("id", ventaId).single();
+    if (Number(vCheck?.subtotal ?? 0) <= 0) {
+      throw new Error(`Venta tiene subtotal=${vCheck?.subtotal}, no se agregó el item correctamente`);
+    }
 
     // ── COBRAR: NO tiene permiso `comanda.ventas.cobrar` → debe FALLAR
     const { error: cobrarErr } = await cajeroDb.rpc("fn_cobrar_venta_comanda", {
