@@ -271,8 +271,8 @@ export function ModalCargarFactura({
             {tieneItems && esCMVCategoria && itemsSinMP > 0 && (
               <div style={{ fontSize: 11, color: '#92400e', marginTop: 6, padding: "8px 10px", background: 'rgba(255, 200, 0, 0.12)', border: '1px solid rgba(217, 119, 6, 0.4)', borderRadius: 4 }}>
                 <strong>⚠ Atención:</strong> {itemsSinMP} {itemsSinMP === 1 ? 'ítem' : 'ítems'} sin vincular a materia prima.
-                El costo del insumo NO se actualizará y NO va a aparecer en el reporte CMV.
-                Vinculalos arriba o creá las MP faltantes en COMANDA → Menú → Materias primas.
+                Sin vincular, el stock del insumo NO se va a sumar y NO va a aparecer en el reporte CMV.
+                Vinculalos arriba con el dropdown, o creá las materias primas faltantes en Recetario → Materias primas.
               </div>
             )}
             {tieneItems && esCMVCategoria && itemsSinMP === 0 && (
