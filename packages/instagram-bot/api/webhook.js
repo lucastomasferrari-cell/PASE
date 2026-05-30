@@ -186,6 +186,28 @@ async function procesarPayload(payload) {
       // se manda algo. Filtrar.
       if (sender_igsid === ig_account_id) continue;
 
+      // Fix 30-may: ANTI-LOOP BOT↔BOT. Si el remitente es OTRA de nuestras
+      // cuentas IG (ej Neko le escribe a Maneki o viceversa), NO procesar.
+      // Sin esto: cuando un tenant tiene 2+ cuentas con bot y una le escribe
+      // a la otra (típico al probar), el bot A responde → llega al inbox de B
+      // → bot B responde → vuelve a A → loop infinito que quema créditos de
+      // Anthropic. Verificamos si el sender es un ig_account_id registrado.
+      const { data: senderEsCuentaNuestra } = await db
+        .from('ig_config')
+        .select('id')
+        .eq('ig_account_id', sender_igsid)
+        .limit(1);
+      if (senderEsCuentaNuestra && senderEsCuentaNuestra.length > 0) {
+        console.log(`[webhook] sender ${sender_igsid} es una cuenta propia — anti-loop, ignorado`);
+        await db.from('ig_eventos').insert({
+          tenant_id: cfg.tenant_id,
+          tipo: 'anti_loop_bot',
+          error_message: `Mensaje de cuenta propia ${sender_igsid} ignorado (anti bot-loop)`,
+          payload: { sender: sender_igsid, recipient: ig_account_id },
+        }).then(() => {}, () => {});
+        continue;
+      }
+
       try {
         await procesarMensajeEntrante({ cfg, event, sender_igsid });
       } catch (e) {
