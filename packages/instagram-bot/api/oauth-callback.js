@@ -116,24 +116,52 @@ export default async function handler(req, res) {
     const userId = shortData.user_id; // Instagram-scoped User ID
 
     // ─── 3. Intercambiar short-lived por long-lived (60 días) ─────────────
-    // Fix 30-may: Meta cambió el endpoint y ahora REQUIERE POST.
-    // Antes funcionaba con GET (URL params). Error: "IGApiException — Unsupported
-    // request - method type: get". Detectado al intentar conectar 2da cuenta IG
-    // (multi-cuenta). El refresh diario también puede haber estado fallando
-    // silenciosamente desde el cambio de Meta — verificar después.
-    const longTokenResp = await fetch('https://graph.instagram.com/access_token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'ig_exchange_token',
-        client_secret: IG_APP_SECRET,
-        access_token: shortToken,
-      }).toString(),
+    // Fix 30-may v2: probamos GET primero (doc oficial de Meta sigue diciendo
+    // GET con query params para ig_exchange_token). Si Meta responde 4xx con
+    // error "method not supported", fallback a POST. Loggeamos qué método
+    // terminó funcionando para diagnóstico.
+    //
+    // Historia: 30-may v1 cambié a POST hardcodeado tras ver "Unsupported
+    // request - method type: get" en refresh_access_token, pero asumí mal que
+    // aplicaba a TODOS los endpoints — ig_exchange_token sigue siendo GET en
+    // la doc actual de Meta.
+    const longUrl = `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${encodeURIComponent(IG_APP_SECRET)}&access_token=${encodeURIComponent(shortToken)}`;
+    let longTokenResp = await fetch(longUrl);
+    let longData = await longTokenResp.json();
+    let metodoUsado = 'GET';
+    // Si GET falla con error de método, retry con POST.
+    const errMsg1 = longData?.error?.message || longData?.error_message || '';
+    if (!longTokenResp.ok && /method type|unsupported|method not supported/i.test(errMsg1)) {
+      metodoUsado = 'POST-fallback';
+      longTokenResp = await fetch('https://graph.instagram.com/access_token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'ig_exchange_token',
+          client_secret: IG_APP_SECRET,
+          access_token: shortToken,
+        }).toString(),
+      });
+      longData = await longTokenResp.json();
+    }
+    await logEvent('oauth_debug', stateRow.tenant_id, null, null, {
+      stage: 'long_token_exchange',
+      metodo: metodoUsado,
+      status: longTokenResp.status,
+      ok: longTokenResp.ok,
+      response: longData,
     });
-    const longData = await longTokenResp.json();
     if (!longTokenResp.ok || !longData.access_token) {
-      await logEvent('error', stateRow.tenant_id, null, `exchange_long_token failed: ${JSON.stringify(longData)}`);
-      return redirectToPase(res, { ok: false, error: 'LONG_TOKEN_FAILED', detail: longData?.error_message || 'unknown' });
+      // Extraer mensaje de Meta — puede venir en varios formatos. Cubrir todos.
+      const detail =
+        longData?.error?.error_user_msg ||
+        longData?.error?.message ||
+        longData?.error_message ||
+        longData?.error_user_msg ||
+        (typeof longData?.error === 'string' ? longData.error : '') ||
+        `HTTP ${longTokenResp.status}: ${JSON.stringify(longData).slice(0, 200)}`;
+      await logEvent('error', stateRow.tenant_id, null, `exchange_long_token failed [${metodoUsado}]: ${JSON.stringify(longData)}`);
+      return redirectToPase(res, { ok: false, error: 'LONG_TOKEN_FAILED', detail });
     }
     const longToken = longData.access_token;
     const expiresIn = longData.expires_in || 5184000; // 60 días en segundos

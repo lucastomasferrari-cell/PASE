@@ -60,18 +60,24 @@ export default async function handler(req, res) {
         continue;
       }
 
-      // Fix 30-may: Meta cambió API — refresh_access_token ahora REQUIERE POST.
-      // El cron de los domingos probablemente venía fallando silenciosamente
-      // desde el cambio. Verificar último refresh exitoso en ig_eventos.
-      const refreshResp = await fetch('https://graph.instagram.com/refresh_access_token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'ig_refresh_token',
-          access_token: tokenActual,
-        }).toString(),
-      });
-      const refreshData = await refreshResp.json();
+      // Fix 30-may v2: probar GET primero (doc oficial), fallback a POST.
+      // Same patrón que oauth-callback.js — mi cambio anterior asumió mal
+      // que el cambio de Meta aplicaba a todos los endpoints.
+      const refreshUrl = `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${encodeURIComponent(tokenActual)}`;
+      let refreshResp = await fetch(refreshUrl);
+      let refreshData = await refreshResp.json();
+      const errMsg = refreshData?.error?.message || refreshData?.error_message || '';
+      if (!refreshResp.ok && /method type|unsupported|method not supported/i.test(errMsg)) {
+        refreshResp = await fetch('https://graph.instagram.com/refresh_access_token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'ig_refresh_token',
+            access_token: tokenActual,
+          }).toString(),
+        });
+        refreshData = await refreshResp.json();
+      }
 
       if (!refreshResp.ok || !refreshData.access_token) {
         const motivo = refreshData?.error?.message || `HTTP ${refreshResp.status}`;
