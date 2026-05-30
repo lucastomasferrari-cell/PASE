@@ -225,24 +225,23 @@ async function procesarMensajeEntrante({ cfg, event, sender_igsid }) {
   // con 'bot' por default; si existe respetamos su estado actual.
   let conv;
   {
+    // Fix 30-may (BUG multi-cuenta): la búsqueda incluye ig_config_id.
+    // ANTES buscaba solo por (tenant_id, cliente_id) → si una persona le
+    // escribía a DOS cuentas del mismo tenant (ej @nekosushi Y @maneki),
+    // el 2do mensaje reusaba la conversación de la 1ra cuenta → el DM a
+    // Maneki se procesaba como Neko (prompt de Neko, hilo de Neko) y Maneki
+    // quedaba con 0 conversaciones. Por eso "Maneki no responde": SÍ
+    // respondía, pero en el hilo equivocado con la personalidad equivocada.
+    // Cada cuenta IG tiene que tener su propio hilo con el mismo cliente.
     const { data: existing } = await db
       .from('ig_conversaciones')
       .select('*')
       .eq('tenant_id', cfg.tenant_id)
       .eq('cliente_id', cliente.id)
+      .eq('ig_config_id', cfg.id)
       .maybeSingle();
     if (existing) {
       conv = existing;
-      // Fix 29-may multi-cuenta: si la conversación existente NO tiene
-      // ig_config_id (fue creada antes del refactor) y ahora sí sabemos
-      // a qué cuenta pertenece, lo backfilleamos sin tocar el resto del
-      // estado. Idempotente.
-      if (!existing.ig_config_id) {
-        await db.from('ig_conversaciones')
-          .update({ ig_config_id: cfg.id })
-          .eq('id', existing.id);
-        conv.ig_config_id = cfg.id;
-      }
     } else {
       const { data: nueva } = await db
         .from('ig_conversaciones')
