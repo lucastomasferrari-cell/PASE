@@ -129,7 +129,9 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const [adelantosPendientes, setAdelantosPendientes] = useState<Adelanto[]>([]);
   const [adelModal, setAdelModal] = useState(false);
   // Bug Caja-1: default vacío en cuenta fuerza elección consciente del user.
-  const [adelForm, setAdelForm] = useState<AdelantoForm>({ empleado_id:"", monto:"", cuenta:"", fecha:toISO(today), descripcion:"" });
+  // Saldo flexible (30-may): auto_aplicar default TRUE = comportamiento histórico
+  // (se descuenta al próximo pago). Anto puede destildar para dejar como saldo.
+  const [adelForm, setAdelForm] = useState<AdelantoForm>({ empleado_id:"", monto:"", cuenta:"", fecha:toISO(today), descripcion:"", auto_aplicar: true });
 
   // Defensive: resetea adelForm.cuenta a "" si queda fuera de cuentasUsables.
   // NO borrar — previene regresión del bug Caja-1.
@@ -916,7 +918,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     if (!monto || monto <= 0 || !adelForm.empleado_id || !adelForm.cuenta) return;
     const emp = allEmps.find(e => e.id === adelForm.empleado_id);
     if (!emp) return;
-    const { error } = await db.rpc("registrar_adelanto", {
+    const { data, error } = await db.rpc("registrar_adelanto", {
       p_empleado_id: adelForm.empleado_id,
       p_monto: monto,
       p_cuenta: adelForm.cuenta,
@@ -925,9 +927,33 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     });
     if (error) { showError(translateRpcError(error)); return; }
 
-    showToast(`Adelanto registrado — ${emp.apellido}`);
+    // Saldo flexible (30-may): si el toggle está OFF, marcamos el adelanto
+    // recién creado como auto_aplicar=false. La RPC devuelve el id del
+    // adelanto creado (campo "adelanto_id" según la convención usada en
+    // los RPCs RRHH). Si no lo devolviera, hacemos lookup por (empleado, fecha,
+    // monto, descontado=false, auto_aplicar=true por default — el más reciente).
+    if (adelForm.auto_aplicar === false) {
+      const adelId = (data && typeof data === "object" && "adelanto_id" in data)
+        ? (data as { adelanto_id?: string }).adelanto_id
+        : null;
+      if (adelId) {
+        await db.from("rrhh_adelantos").update({ auto_aplicar: false }).eq("id", adelId);
+      } else {
+        // Fallback: la fila más reciente del empleado con esos valores.
+        await db.from("rrhh_adelantos")
+          .update({ auto_aplicar: false })
+          .eq("empleado_id", adelForm.empleado_id)
+          .eq("monto", monto)
+          .eq("fecha", adelForm.fecha)
+          .eq("descontado", false)
+          .order("created_at", { ascending: false })
+          .limit(1);
+      }
+    }
+
+    showToast(`Adelanto registrado — ${emp.apellido}${adelForm.auto_aplicar === false ? " (saldo pendiente)" : ""}`);
     setAdelModal(false);
-    setAdelForm({ empleado_id:"", monto:"", cuenta:"", fecha:toISO(today), descripcion:"" });
+    setAdelForm({ empleado_id:"", monto:"", cuenta:"", fecha:toISO(today), descripcion:"", auto_aplicar: true });
     if (tab === "pagos") await loadPagos();
   });
 

@@ -158,7 +158,31 @@ export function AdelantoModal({
           placeholder="Ej: Adelanto solicitado por urgencia..."
         />
       </div>
-      <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 4 }}>
+      {/* Saldo flexible (Lucas 2026-05-30): si destildado, el adelanto queda
+          como "saldo a favor del empleador" y NO se descuenta automáticamente
+          en el próximo pago. Sirve para casos como: el empleado pide $X a fin
+          de mes, pero queremos descontarlo en la próxima quincena (no en
+          la actual que ya está cerrando). En el modal de pago aparece
+          como un checkbox extra que Anto puede tildar manualmente. */}
+      <div className="field" style={{ marginTop: 6 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}>
+          <input
+            type="checkbox"
+            checked={adelForm.auto_aplicar !== false}
+            onChange={(e) => setAdelForm({ ...adelForm, auto_aplicar: e.target.checked })}
+            style={{ cursor: "pointer" }}
+          />
+          <span style={{ fontSize: 12 }}>
+            Descontar automáticamente en el próximo sueldo
+          </span>
+        </label>
+        <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 4, paddingLeft: 24 }}>
+          {adelForm.auto_aplicar !== false
+            ? "Default: viene pre-tildado en el modal de pago para descontarlo."
+            : "Quedará como saldo pendiente — solo se descuenta si lo tildás manualmente al pagar."}
+        </div>
+      </div>
+      <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 8 }}>
         Se registra como movimiento (cat SUELDOS), afecta saldos de caja y queda como adelanto descontable a futuro.
       </div>
     </Modal>

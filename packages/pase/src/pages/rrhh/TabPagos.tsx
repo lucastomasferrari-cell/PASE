@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { db } from "../../lib/supabase";
 import { translateRpcError } from "../../lib/errors";
 import { toISO, fmt_d, fmt_$, parseMonto } from "@pase/shared/utils";
@@ -72,6 +73,27 @@ export function TabPagos({
   fechaPago, setFechaPago,
 }: TabPagosProps) {
   const { toast, showError } = useToast();
+  // Fix 30-may "saldo flexible adelantos" (Lucas): el dueño elige cuáles
+  // adelantos descontar en este pago via checkboxes. Default: los que
+  // tienen auto_aplicar !== false (TRUE por default en DB). Los destildados
+  // quedan como saldo flotante hasta el próximo pago.
+  const [adelantosIdsSel, setAdelantosIdsSel] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    // Cada vez que cambia la lista de adelantos pendientes (al abrir un pago
+    // de sueldo nuevo), recalculamos los pre-seleccionados.
+    const pre = new Set<string>();
+    for (const a of adelantosPendientes || []) {
+      if (a.auto_aplicar !== false) pre.add(String(a.id));
+    }
+    setAdelantosIdsSel(pre);
+  }, [adelantosPendientes]);
+  const toggleAdelanto = (id: string) => {
+    setAdelantosIdsSel(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
   return (
     <>
       <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
@@ -162,7 +184,15 @@ export function TabPagos({
         const total = Math.round(Number(liq.total_a_pagar || 0));
         const yaPagado = Math.round(Number(liq.pagos_realizados || 0));
         const pendiente = Math.max(0, total - yaPagado);
-        const totalAdelantos = Math.round((adelantosPendientes || []).reduce((s, a) => s + Number(a.monto), 0));
+        // Fix 30-may saldo flexible: el total a descontar se calcula sobre
+        // los adelantos SELECCIONADOS (state al top del componente). Los
+        // pre-seleccionados son los que tienen auto_aplicar !== false (default
+        // true). Anto puede destildar uno para "dejarlo para el próximo pago".
+        const totalAdelantos = Math.round(
+          (adelantosPendientes || [])
+            .filter(a => adelantosIdsSel.has(String(a.id)))
+            .reduce((s, a) => s + Number(a.monto), 0)
+        );
         const asignadoCash = Math.round(formasPago.reduce((s, f) => s + parseMonto(f.monto), 0));
         const asignadoTotal = asignadoCash + totalAdelantos;
         const restanteTrasEste = pendiente - asignadoTotal;
@@ -215,7 +245,12 @@ export function TabPagos({
                 if (fp.local_id != null) base.local_id = fp.local_id;
                 return base;
               });
-            const adelIds = (adelantosPendientes || []).map(a => a.id);
+            // Fix 30-may saldo flexible: solo descontamos los adelantos que
+            // el usuario tildó en los checkboxes. Los destildados quedan
+            // descontado=false hasta el próximo pago.
+            const adelIds = (adelantosPendientes || [])
+              .filter(a => adelantosIdsSel.has(String(a.id)))
+              .map(a => a.id);
 
             // Si la liq vino _generated (frontend la armó sin persistir),
             // la RPC la crea on-the-fly con p_crear_liq + p_calc.
@@ -325,21 +360,50 @@ export function TabPagos({
                   </div>
                 )}
 
-                {totalAdelantos > 0 && (
+                {(adelantosPendientes || []).length > 0 && (
                   <div style={{background:"var(--s2)",borderRadius:"var(--r)",padding:12,marginBottom:12}}>
-                    <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Adelantos a descontar</div>
-                    {adelantosPendientes.map(a => (
-                      <div key={a.id} style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:4}}>
-                        <span style={{color:"var(--muted2)"}}>{fmt_d(a.fecha)} · {a.cuenta || "—"}</span>
-                        <span style={{color:"var(--danger)"}}>−{fmt_$(a.monto)}</span>
-                      </div>
-                    ))}
+                    <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span>Adelantos disponibles</span>
+                      <span style={{textTransform:"none",letterSpacing:0,fontSize:10,color:"var(--muted2)",fontWeight:400}}>
+                        Destildá para dejar el saldo pendiente
+                      </span>
+                    </div>
+                    {adelantosPendientes.map(a => {
+                      const tildado = adelantosIdsSel.has(String(a.id));
+                      return (
+                        <label key={a.id} style={{
+                          display:"flex",alignItems:"center",gap:10,fontSize:11,
+                          marginBottom:4,padding:"4px 6px",borderRadius:4,
+                          cursor:"pointer",userSelect:"none",
+                          background: tildado ? "transparent" : "rgba(255,255,255,0.02)",
+                          opacity: tildado ? 1 : 0.55,
+                        }}>
+                          <input
+                            type="checkbox"
+                            checked={tildado}
+                            onChange={() => toggleAdelanto(String(a.id))}
+                            style={{cursor:"pointer"}}
+                          />
+                          <span style={{color:"var(--muted2)",flex:1}}>
+                            {fmt_d(a.fecha)} · {a.cuenta || "—"}
+                            {a.auto_aplicar === false && (
+                              <span style={{marginLeft:6,fontSize:9,padding:"1px 5px",borderRadius:3,background:"rgba(245,158,11,0.15)",color:"var(--warn)"}}>
+                                saldo
+                              </span>
+                            )}
+                          </span>
+                          <span style={{color: tildado ? "var(--danger)" : "var(--muted2)"}}>
+                            {tildado ? "−" : ""}{fmt_$(a.monto)}
+                          </span>
+                        </label>
+                      );
+                    })}
                     <div style={{display:"flex",justifyContent:"space-between",marginTop:6,paddingTop:8,borderTop:"1px solid var(--bd)",fontSize:12,fontWeight:500}}>
-                      <span>Total adelantos</span>
+                      <span>A descontar en este pago</span>
                       <span style={{color:"var(--danger)"}}>−{fmt_$(totalAdelantos)}</span>
                     </div>
                     <div style={{fontSize:10,color:"var(--muted2)",marginTop:4}}>
-                      Ya salieron de caja al registrarse. Se marcarán como descontados al confirmar.
+                      Los adelantos ya salieron de caja al registrarse. Solo se marcan como descontados los tildados; los demás quedan como saldo a aplicar en pagos futuros.
                     </div>
                   </div>
                 )}

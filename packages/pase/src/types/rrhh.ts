@@ -146,6 +146,11 @@ export interface Adelanto {
   monto: number;
   cuenta: string | null;
   descontado: boolean;
+  /** Si TRUE (default), el adelanto se pre-tilda en el modal de pago de
+   *  sueldo cuando cae en el período. Si FALSE, queda como saldo flotante
+   *  y solo se descuenta si Anto lo tilda explícitamente. Diseño "saldo
+   *  flexible" (Lucas 2026-05-30). */
+  auto_aplicar?: boolean;
 }
 
 // Documento del legajo (rrhh_documentos).

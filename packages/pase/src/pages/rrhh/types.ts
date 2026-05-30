@@ -65,6 +65,11 @@ export interface AdelantoForm {
   cuenta: string;
   fecha: string;
   descripcion: string;
+  /** Si true (default), el adelanto se descuenta automáticamente en el
+   *  próximo pago de sueldo del empleado. Si false, queda como "saldo a
+   *  favor del empleador" y solo se descuenta cuando Anto lo tilde
+   *  explícitamente en el modal de pago. */
+  auto_aplicar?: boolean;
 }
 
 // Stats del Dashboard (calculadas en loadDashboard).
