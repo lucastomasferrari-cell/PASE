@@ -54,7 +54,13 @@ export default async function handler(req, res) {
   for (const cfg of configs || []) {
     try {
       // AUDIT F2D #27: obtener token vía RPC encrypted.
-      const { data: tokenActual, error: tokErr } = await db.rpc('get_ig_token', { p_tenant_id: cfg.tenant_id });
+      // Fix 30-may multi-cuenta: pasar ig_account_id para refrescar el token
+      // de ESTA cuenta específica (sin esto, con 2+ cuentas en el tenant se
+      // refrescaba un token arbitrario y se pisaba el de otra cuenta).
+      const { data: tokenActual, error: tokErr } = await db.rpc('get_ig_token', {
+        p_tenant_id: cfg.tenant_id,
+        p_ig_account_id: cfg.ig_account_id,
+      });
       if (tokErr || !tokenActual) {
         resultados.push({ tenant_id: cfg.tenant_id, ig_username: cfg.ig_username, ok: false, error: 'NO_PUDIMOS_LEER_TOKEN' });
         continue;

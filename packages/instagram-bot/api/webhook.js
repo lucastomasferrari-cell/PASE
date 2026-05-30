@@ -328,9 +328,51 @@ async function procesarMensajeEntrante({ cfg, event, sender_igsid }) {
   if (!cfg.bot_activo) return;
   if (conv.estado !== 'bot') return;
 
+  // Fix 30-may: ANTI-LOOP BOT↔BOT por CONTENIDO. La detección por
+  // ig_account_id no alcanza porque cuando una cuenta nuestra le escribe a
+  // otra, Instagram usa un IGSID scoped distinto al ig_account_id guardado
+  // (mismo fenómeno OAuth-vs-webhook). Pero hay una señal infalible: si el
+  // texto entrante es IDÉNTICO a una respuesta que NUESTRO bot generó en los
+  // últimos 2 minutos (en cualquier conversación del tenant), entonces es
+  // nuestro propio bot hablándole a otro de nuestros bots. Cortamos el loop.
+  if (texto) {
+    const dosMin = new Date(Date.now() - 2 * 60_000).toISOString();
+    const { data: ecoBot } = await db.from('ig_mensajes')
+      .select('id')
+      .eq('tenant_id', cfg.tenant_id)
+      .eq('direccion', 'out')
+      .eq('origen', 'bot')
+      .eq('texto', texto)
+      .gte('created_at', dosMin)
+      .limit(1);
+    if (ecoBot && ecoBot.length > 0) {
+      console.log('[webhook] texto idéntico a respuesta reciente del bot — anti-loop bot↔bot, no respondo');
+      try {
+        await db.from('ig_eventos').insert({
+          tenant_id: cfg.tenant_id,
+          conversacion_id: conv.id,
+          tipo: 'anti_loop_bot',
+          error_message: 'Mensaje entrante idéntico a respuesta reciente del bot (loop bot↔bot cortado)',
+          payload: { texto: texto.slice(0, 120) },
+        });
+      } catch { /* no crítico */ }
+      return;
+    }
+  }
+
   // AUDIT F2D #27 fase 2: la columna page_access_token plana fue droppeada
   // en F6 sprint. get_ig_token RPC es la única fuente del token IG ahora.
-  const { data: tokenIG } = await db.rpc('get_ig_token', { p_tenant_id: cfg.tenant_id });
+  //
+  // BUG RAÍZ 30-may (multi-cuenta): get_ig_token buscaba SOLO por tenant_id.
+  // Con 2 cuentas en el mismo tenant (Neko + Maneki) devolvía un token
+  // arbitrario → el bot de Maneki intentaba ENVIAR su respuesta con el token
+  // de Neko → Meta lo rechazaba → Maneki "no respondía" (generaba el texto
+  // pero el envío fallaba). Ahora pasamos cfg.ig_account_id para que devuelva
+  // el token de ESTA cuenta específica.
+  const { data: tokenIG } = await db.rpc('get_ig_token', {
+    p_tenant_id: cfg.tenant_id,
+    p_ig_account_id: cfg.ig_account_id,
+  });
   const pageAccessToken = tokenIG;
   if (!pageAccessToken) {
     console.warn('[webhook] no hay token IG para tenant', cfg.tenant_id);
