@@ -121,7 +121,14 @@ export interface AdelantoConEmpleado extends Adelanto {
 // (sueldo, especial, adelanto) con sus campos comunes + detalle.
 export interface HistRow {
   tipo: string;
+  /** Fecha del PAGO (pagado_at de liq/especial, fecha de adelanto). Es la
+   *  fecha que el dueño seleccionó al cargar el pago. Cuando paga atrasado,
+   *  esto refleja la fecha real del pago, no el momento de la carga. */
   fecha: string | null | undefined;
+  /** Fecha+hora en la que se REGISTRÓ el pago en el sistema (created_at).
+   *  Útil para auditoría: "cargó este pago hoy aunque la fecha real es vieja".
+   *  Toggle de orden en TabHistorial (Anto 2026-05-30). */
+  fecha_carga?: string | null;
   emp: EmpleadoMin | null;
   nov?: NovedadHist | null;
   liq?: LiquidacionConNovedadHist;

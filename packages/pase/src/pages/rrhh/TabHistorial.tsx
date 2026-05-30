@@ -1,3 +1,4 @@
+import { useState, useMemo } from "react";
 import { fmt_d, fmt_$ } from "@pase/shared/utils";
 import { Modal } from "../../components/ui";
 import type { Local } from "../../types";
@@ -23,6 +24,20 @@ export function TabHistorial({
   histMes, setHistMes, histAnio, setHistAnio, histLocal, setHistLocal,
   locsDisp, esEnc, histLoading, histData, histDetalle, setHistDetalle,
 }: TabHistorialProps) {
+  // Toggle Anto 30-may: cuando carga pagos atrasados ("ponerse al día"),
+  // la fecha que ella eligió es la del pago real (vieja) pero la fila se
+  // muestra con su fecha de carga (hoy). Este toggle permite ordenar por
+  // fecha real del pago (default) o por fecha de carga (auditoría).
+  const [ordenarPor, setOrdenarPor] = useState<"fecha_pago" | "fecha_carga">("fecha_pago");
+  const histOrdenado = useMemo(() => {
+    const arr = [...histData];
+    if (ordenarPor === "fecha_pago") {
+      arr.sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+    } else {
+      arr.sort((a, b) => (b.fecha_carga || "").localeCompare(a.fecha_carga || ""));
+    }
+    return arr;
+  }, [histData, ordenarPor]);
   return (
     <>
       <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
@@ -34,21 +49,54 @@ export function TabHistorial({
           {!esEnc && <option value="">Todas las sucursales</option>}
           {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
         </select>
+        <div style={{flex:1}} />
+        <span style={{fontSize:11, color:"var(--muted2)"}}>Ordenar por:</span>
+        <select
+          className="search"
+          style={{width:160, fontSize:11}}
+          value={ordenarPor}
+          onChange={e => setOrdenarPor(e.target.value as "fecha_pago" | "fecha_carga")}
+          title="'Fecha del pago' usa la fecha que elegiste al cargar (la real). 'Fecha de carga' usa el momento en que se registró en el sistema."
+        >
+          <option value="fecha_pago">Fecha del pago</option>
+          <option value="fecha_carga">Fecha de carga</option>
+        </select>
       </div>
       {histLoading ? <div className="loading">Cargando...</div> : histData.length === 0 ? <div className="empty">Sin pagos en este período</div> : (
         <div className="panel">
           <table>
-            <thead><tr><th>Fecha</th><th>Empleado</th><th>Puesto</th><th>Tipo</th><th style={{textAlign:"right"}}>Monto</th><th></th></tr></thead>
-            <tbody>{histData.map((h, i) => (
-              <tr key={i}>
-                <td className="mono" style={{fontSize:11}}>{fmt_d(h.fecha)}</td>
-                <td style={{fontWeight:500,fontSize:12}}>{h.emp?.apellido}, {h.emp?.nombre}</td>
-                <td><span className="badge b-muted" style={{fontSize:8}}>{h.emp?.puesto}</span></td>
-                <td><span className="badge b-info" style={{fontSize:9}}>{h.label}</span></td>
-                <td style={{textAlign:"right"}}><span className="num kpi-success">{fmt_$(h.monto)}</span></td>
-                <td><button className="btn btn-ghost btn-sm" onClick={() => setHistDetalle(h)}>Ver</button></td>
+            <thead>
+              <tr>
+                <th>{ordenarPor === "fecha_pago" ? "Fecha pago" : "Fecha carga"}</th>
+                <th>Empleado</th>
+                <th>Puesto</th>
+                <th>Tipo</th>
+                <th style={{textAlign:"right"}}>Monto</th>
+                <th></th>
               </tr>
-            ))}</tbody>
+            </thead>
+            <tbody>{histOrdenado.map((h, i) => {
+              const fechaPrincipal = ordenarPor === "fecha_pago" ? h.fecha : (h.fecha_carga?.split("T")[0] || h.fecha);
+              const fechaSecundaria = ordenarPor === "fecha_pago" ? h.fecha_carga?.split("T")[0] : h.fecha;
+              const distintas = fechaPrincipal && fechaSecundaria && fechaPrincipal !== fechaSecundaria;
+              return (
+                <tr key={i}>
+                  <td className="mono" style={{fontSize:11}}>
+                    {fmt_d(fechaPrincipal)}
+                    {distintas && (
+                      <div style={{fontSize:9, color:"var(--muted2)", marginTop:2}}>
+                        {ordenarPor === "fecha_pago" ? "cargado " : "pago "}{fmt_d(fechaSecundaria)}
+                      </div>
+                    )}
+                  </td>
+                  <td style={{fontWeight:500,fontSize:12}}>{h.emp?.apellido}, {h.emp?.nombre}</td>
+                  <td><span className="badge b-muted" style={{fontSize:8}}>{h.emp?.puesto}</span></td>
+                  <td><span className="badge b-info" style={{fontSize:9}}>{h.label}</span></td>
+                  <td style={{textAlign:"right"}}><span className="num kpi-success">{fmt_$(h.monto)}</span></td>
+                  <td><button className="btn btn-ghost btn-sm" onClick={() => setHistDetalle(h)}>Ver</button></td>
+                </tr>
+              );
+            })}</tbody>
           </table>
         </div>
       )}

@@ -459,6 +459,9 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     const sueldos: HistRow[] = liqRows.map(l => ({
       tipo: "sueldo",
       fecha: l.pagado_at?.split("T")[0],
+      // Toggle Anto 30-may: incluimos fecha de carga para ordenar por
+      // fecha_pago vs fecha_carga sin perder dato.
+      fecha_carga: (l as { created_at?: string }).created_at ?? null,
       emp: l.rrhh_novedades?.rrhh_empleados ?? null,
       nov: l.rrhh_novedades,
       liq: l,
@@ -469,6 +472,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     const esp: HistRow[] = espRows.map(e => ({
       tipo: e.tipo,
       fecha: e.pagado_at?.split("T")[0],
+      fecha_carga: (e as { created_at?: string }).created_at ?? null,
       emp: e.rrhh_empleados,
       monto: Number(e.monto_pagado) > 0 ? Number(e.monto_pagado) : Number(e.monto),
       label: (e.tipo === "vacaciones" ? "Vacaciones" : e.tipo === "aguinaldo" ? "Aguinaldo" : "Liquidación final") + (e.pendiente ? " (parcial)" : ""),
@@ -478,12 +482,15 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     const adel: HistRow[] = adelRows.map(a => ({
       tipo: "adelanto",
       fecha: a.fecha,
+      fecha_carga: (a as { created_at?: string }).created_at ?? null,
       emp: a.rrhh_empleados,
       monto: a.monto,
       label: "Adelanto",
       detalle: a,
     }));
 
+    // Ordenamiento default: por fecha de pago descendente. TabHistorial tiene
+    // un toggle que permite reordenar por fecha de carga sin volver a fetchear.
     const todos = [...sueldos, ...esp, ...adel]
       .filter(h => !histLocal || String(h.emp?.local_id) === String(histLocal))
       .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
