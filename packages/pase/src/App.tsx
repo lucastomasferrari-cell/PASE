@@ -263,15 +263,38 @@ function AppMain() {
           // sigue devolviendo "ok" con tokens stale → user queda atrapado
           // en ForcePasswordChange aunque cierre y refresque la pestaña.
           // getUser() SÍ hace HTTP al server y rechaza tokens inválidos.
+          //
+          // Fix 2026-05-30 (queja Lucas recurrente: "recargo y se desloguea
+          // sola en el 2do reload"): antes ANY error de getUser() →
+          // signOut(). Eso deslogeaba ante errores transitorios (red flaky
+          // post-deploy, timeout, 5xx). Ahora solo deslogeamos si el server
+          // explícitamente rechaza el token (401/403 con código auth claro).
+          // Errores de red / 5xx → conservar sesión y dejar que las queries
+          // siguientes reintenten. Si el token está realmente invalido, las
+          // queries Supabase tirarán 401 y el handler de signOut se
+          // disparará por otro lado.
           const { data: serverUser, error: getUserErr } = await db.auth.getUser();
-          if (getUserErr || !serverUser?.user) {
-            // Tokens revocados / vencidos / inválidos → signOut limpio.
+          const errAny = getUserErr as { status?: number; code?: string; name?: string; message?: string } | null;
+          const isHardAuthFail =
+            errAny?.status === 401 ||
+            errAny?.status === 403 ||
+            errAny?.code === 'PGRST301' || // JWT expired
+            (typeof errAny?.message === 'string' && /jwt|token|invalid|revoked|expired|unauthor/i.test(errAny.message));
+          if (isHardAuthFail || (getUserErr === null && !serverUser?.user)) {
+            // Token confirmadamente inválido → signOut limpio.
             // eslint-disable-next-line no-console
-            console.warn("[App] getUser() rechazó tokens stale, forzando signOut:", getUserErr?.message);
+            console.warn("[App] getUser() rechazó tokens (hard fail), signOut:", errAny?.message);
             await db.auth.signOut().catch(() => { /* idem */ });
             try { sessionStorage.removeItem("pase_user"); } catch { /* idem */ }
             setAuthLoading(false);
             return;
+          }
+          if (getUserErr) {
+            // Error transitorio (red, 5xx). NO deslogeamos — conservamos la
+            // sesión local. Las queries siguientes van a reintentar y si el
+            // token está realmente inválido, fallarán con 401 explícito.
+            // eslint-disable-next-line no-console
+            console.warn("[App] getUser() error transitorio, conservando sesión:", errAny?.message);
           }
           const { data: perfil } = await db.from("usuarios").select("id, auth_id, email, nombre, rol, activo, password_temporal, locales, cuentas_visibles, cuentas_operables, tenant_id").eq("auth_id", session.user.id).single();
           if (perfil && perfil.activo !== false) {
