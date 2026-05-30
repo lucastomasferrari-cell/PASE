@@ -64,6 +64,12 @@ export function TabNovedades({
   abrirModalAdelanto, esDueno,
 }: TabNovedadesProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // Filtros nuevos (Anto 2026-05-30): reducir ruido en quincenales y separar
+  // confirmados de borrador. "filtroEstado" puede ser todos/pendientes/
+  // confirmados. "filtroQuincena" para QUINCENAL: ver Q1 o Q2 por separado,
+  // o las dos juntas (default). No afecta a empleados mensuales.
+  const [filtroEstado, setFiltroEstado] = useState<"todos" | "pendientes" | "confirmados">("todos");
+  const [filtroQuincena, setFiltroQuincena] = useState<"ambas" | "1" | "2">("ambas");
   const toggleExpanded = (key: string) => {
     setExpanded(prev => {
       const next = new Set(prev);
@@ -85,6 +91,19 @@ export function TabNovedades({
   const totalEmps = novSlots.length;
   const confirmadas = novSlots.filter(s => novMap[slotKey(s.emp.id, s.cuota_num)]?.estado === "confirmado").length;
   const pendientes = totalEmps - confirmadas;
+
+  // Aplicamos los filtros: estado + quincena.
+  const slotsFiltrados = novSlots.filter(s => {
+    const estado = novMap[slotKey(s.emp.id, s.cuota_num)]?.estado;
+    if (filtroEstado === "confirmados" && estado !== "confirmado") return false;
+    if (filtroEstado === "pendientes" && estado === "confirmado") return false;
+    // Filtro quincena: solo afecta a slots de empleados quincenales (cuotas_total > 1).
+    if (filtroQuincena !== "ambas" && s.cuotas_total > 1) {
+      if (String(s.cuota_num) !== filtroQuincena) return false;
+    }
+    return true;
+  });
+  const tieneQuincenales = novSlots.some(s => s.cuotas_total > 1);
 
   return (
     <>
@@ -187,12 +206,57 @@ export function TabNovedades({
         )}
       </div>
 
+      {/* Filtros de visualización (Anto 30-may): reducen ruido al cargar
+          novedades. Estado = ver solo pendientes/confirmados/todos. Quincena =
+          ver solo Q1, Q2 o ambas (solo aparece si hay quincenales). */}
+      {novLocal && totalEmps > 0 && (
+        <div style={{
+          display:"flex", gap:8, alignItems:"center", flexWrap:"wrap",
+          marginBottom:12, fontSize:11,
+        }}>
+          <span style={{color:"var(--muted2)"}}>Ver:</span>
+          {(["todos","pendientes","confirmados"] as const).map(opt => (
+            <button
+              key={opt}
+              type="button"
+              className={`btn btn-sm ${filtroEstado === opt ? "btn-acc" : "btn-ghost"}`}
+              onClick={() => setFiltroEstado(opt)}
+              style={{padding:"3px 10px", fontSize:11}}
+            >
+              {opt === "todos" ? "Todos" : opt === "pendientes" ? `Pendientes (${pendientes})` : `Confirmados (${confirmadas})`}
+            </button>
+          ))}
+          {tieneQuincenales && (
+            <>
+              <span style={{color:"var(--muted2)", marginLeft:8}}>Quincena:</span>
+              {(["ambas","1","2"] as const).map(opt => (
+                <button
+                  key={opt}
+                  type="button"
+                  className={`btn btn-sm ${filtroQuincena === opt ? "btn-acc" : "btn-ghost"}`}
+                  onClick={() => setFiltroQuincena(opt)}
+                  style={{padding:"3px 10px", fontSize:11}}
+                >
+                  {opt === "ambas" ? "Ambas" : `Q${opt}`}
+                </button>
+              ))}
+            </>
+          )}
+          {slotsFiltrados.length !== totalEmps && (
+            <span style={{marginLeft:8, color:"var(--muted2)"}}>
+              Mostrando {slotsFiltrados.length} de {totalEmps}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Cuerpo */}
       {!novLocal ? <div className="alert alert-info">Seleccioná un local para cargar novedades</div> :
        novLoading ? <div className="loading">Cargando...</div> :
-       novSlots.length === 0 ? <div className="empty">Sin empleados activos en este local</div> : (
+       novSlots.length === 0 ? <div className="empty">Sin empleados activos en este local</div> :
+       slotsFiltrados.length === 0 ? <div className="empty">Ningún empleado coincide con estos filtros</div> : (
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {novSlots.map(slot => {
+          {slotsFiltrados.map(slot => {
             const key = slotKey(slot.emp.id, slot.cuota_num);
             return (
               <EmpleadoCard
