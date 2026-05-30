@@ -121,11 +121,20 @@ async function procesarPayload(payload) {
     const ig_account_id = entry.id;  // viene como string numérico
 
     // Buscar config del tenant que posee esta cuenta IG
-    const { data: cfg, error: cfgErr } = await db
+    // Fix 30-may: usar maybeSingle con order+limit en vez de .single().
+    // BUG REAL encontrado: por falta del UNIQUE (tenant_id, ig_account_id)
+    // hubo 27 filas duplicadas de @maneki con el mismo ig_account_id. Con
+    // duplicados, .single() TIRA ERROR (espera exactamente 1 fila) → el bot
+    // nunca procesaba los mensajes de esa cuenta. Ya se limpió la data +
+    // se creó el constraint, pero dejamos el webhook defensivo: tomamos la
+    // fila más reciente (mayor id) y nunca rompemos por duplicados futuros.
+    const { data: cfgRows, error: cfgErr } = await db
       .from('ig_config')
       .select('*')
       .eq('ig_account_id', ig_account_id)
-      .single();
+      .order('id', { ascending: false })
+      .limit(1);
+    const cfg = cfgRows?.[0] || null;
 
     if (cfgErr || !cfg) {
       console.warn(`[webhook] ig_account_id ${ig_account_id} no tiene config registrada`);
