@@ -120,14 +120,9 @@ async function procesarPayload(payload) {
   for (const entry of payload.entry || []) {
     const ig_account_id = entry.id;  // viene como string numérico
 
-    // Buscar config del tenant que posee esta cuenta IG
-    // Fix 30-may: usar maybeSingle con order+limit en vez de .single().
-    // BUG REAL encontrado: por falta del UNIQUE (tenant_id, ig_account_id)
-    // hubo 27 filas duplicadas de @maneki con el mismo ig_account_id. Con
-    // duplicados, .single() TIRA ERROR (espera exactamente 1 fila) → el bot
-    // nunca procesaba los mensajes de esa cuenta. Ya se limpió la data +
-    // se creó el constraint, pero dejamos el webhook defensivo: tomamos la
-    // fila más reciente (mayor id) y nunca rompemos por duplicados futuros.
+    // Buscar config del tenant que posee esta cuenta IG.
+    // Defensa 30-may: order+limit en vez de .single() para no romper nunca
+    // si por algún motivo hubiera más de una fila con el mismo ig_account_id.
     const { data: cfgRows, error: cfgErr } = await db
       .from('ig_config')
       .select('*')
@@ -169,11 +164,18 @@ async function procesarPayload(payload) {
           : event.referral ? 'referral'
           : 'desconocido';
         // Log opcional pero NO insert en ig_mensajes.
-        await db.from('ig_eventos').insert({
-          tenant_id: cfg.tenant_id,
-          tipo: `meta_${otroTipo}`,
-          payload: event,
-        }).catch(() => { /* no crítico */ });
+        // Fix 30-may: el query builder de supabase-js NO es una Promise con
+        // .catch() — es un "thenable" que se resuelve al await. Llamar
+        // .catch() directo tira "db.from(...).insert(...).catch is not a
+        // function" y CRASHEA el procesamiento del entry (visto en prod:
+        // cada read receipt rompía). Usamos try/catch sobre el await.
+        try {
+          await db.from('ig_eventos').insert({
+            tenant_id: cfg.tenant_id,
+            tipo: `meta_${otroTipo}`,
+            payload: event,
+          });
+        } catch { /* no crítico */ }
         continue;
       }
 
@@ -329,14 +331,18 @@ async function procesarMensajeEntrante({ cfg, event, sender_igsid }) {
       .gte('created_at', cutoff);
     if ((count ?? 0) >= rateMaxMsgs) {
       console.warn(`[webhook] rate limit hit tenant=${cfg.tenant_id} (${count}/${rateMaxMsgs} en ${rateWindowMin}min). Skip respuesta.`);
-      // Loguear evento para que el dueño lo vea en Mensajería
-      await db.from('ig_eventos').insert({
-        tenant_id: cfg.tenant_id,
-        conversacion_id: conv.id,
-        tipo: 'rate_limit_hit',
-        error_message: `${count} respuestas del bot en ${rateWindowMin}min (limite ${rateMaxMsgs})`,
-        payload: { igsid: sender_igsid, ig_username: cliente.ig_username || null },
-      }).catch(() => { /* no crítico */ });
+      // Loguear evento para que el dueño lo vea en Mensajería.
+      // Fix 30-may: try/catch en vez de .catch() (ver nota arriba — el query
+      // builder no expone .catch, tira "is not a function" y rompe el flujo).
+      try {
+        await db.from('ig_eventos').insert({
+          tenant_id: cfg.tenant_id,
+          conversacion_id: conv.id,
+          tipo: 'rate_limit_hit',
+          error_message: `${count} respuestas del bot en ${rateWindowMin}min (limite ${rateMaxMsgs})`,
+          payload: { igsid: sender_igsid, ig_username: cliente.ig_username || null },
+        });
+      } catch { /* no crítico */ }
       return;
     }
   }

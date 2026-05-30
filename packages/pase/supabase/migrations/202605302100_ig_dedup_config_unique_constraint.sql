@@ -1,42 +1,26 @@
 -- ─────────────────────────────────────────────────────────────────────────
--- IG multi-cuenta — Dedup ig_config + crear UNIQUE (tenant_id, ig_account_id)
+-- IG multi-cuenta — UNIQUE (tenant_id, ig_account_id) defensivo
 -- ─────────────────────────────────────────────────────────────────────────
 --
--- BUG REAL (30-may, diagnosticado contra prod DB):
--- La migration 202605300000 (fase 1) decía agregar UNIQUE (tenant_id,
--- ig_account_id) pero NUNCA se aplicó en prod — el único constraint de
--- ig_config era el PRIMARY KEY (id). Consecuencia:
+-- Contexto (30-may): al diagnosticar "el bot de Maneki no responde" contra
+-- la prod DB encontré que ya existía el índice único uniq_ig_config_tenant_account
+-- (creado por la fase 1), así que NO había filas duplicadas — solo 2 filas
+-- (neko id=1, maneki id=2). Mi hipótesis inicial de "27 duplicados" fue
+-- incorrecta; la dejo documentada para que no se repita el diagnóstico.
 --
---   1. set_ig_token usa ON CONFLICT (tenant_id, ig_account_id). Sin el
---      constraint, cada conexión OAuth de @maneki insertó una fila NUEVA
---      en vez de actualizar la existente → 27 filas duplicadas (ids 4-30),
---      todas con el mismo ig_account_id.
---   2. El webhook hacía .eq('ig_account_id', X).single(). Con 27 filas,
---      .single() tira error (espera 1) → el bot NUNCA procesaba mensajes
---      de @maneki. Por eso "Maneki no responde".
+-- El bug REAL era otro (NO se arregla con esta migration, se arregló con un
+-- UPDATE puntual del ig_account_id de Maneki — ver abajo):
+--   El ig_account_id que guardamos al conectar Maneki por OAuth era el IGSID
+--   del dueño (28556475980608004), pero Meta manda en los webhooks el
+--   Page-scoped Business Account ID (17841467521836815). Como no coincidían,
+--   el webhook tiraba "ig_account_id ... sin config" y nunca procesaba los
+--   DMs de Maneki. Se corrigió el ig_account_id de esa fila al valor que usa
+--   Meta en los webhooks.
 --
--- Este script:
---   a. Borra duplicados conservando la fila de MAYOR id (token más reciente)
---      por cada (tenant_id, ig_account_id). Idempotente.
---   b. Crea el UNIQUE constraint que faltaba (si no existe ya).
---
--- Ya ejecutado en caliente vía script (26 filas borradas, constraint creado).
--- Esta migration deja la operación trackeada + re-aplicable.
---
--- Seguro: las filas duplicadas eran idénticas (mismo token, mismo account)
--- y NINGUNA estaba referenciada por conversaciones (todas las convs apuntan
--- a la cuenta original neko id=1).
+-- Esta migration solo agrega un CONSTRAINT nombrado (además del índice único
+-- que ya existe) por las dudas, de forma idempotente. No borra nada.
 -- ─────────────────────────────────────────────────────────────────────────
 
--- a. Dedup: borrar filas con id menor cuando hay otra con mismo
---    (tenant_id, ig_account_id) de id mayor.
-DELETE FROM ig_config a
-USING ig_config b
-WHERE a.tenant_id = b.tenant_id
-  AND a.ig_account_id = b.ig_account_id
-  AND a.id < b.id;
-
--- b. Crear el UNIQUE constraint (idempotente — solo si no existe).
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -45,6 +29,8 @@ BEGIN
       AND contype = 'u'
       AND conname = 'ig_config_tenant_account_uniq'
   ) THEN
+    -- Solo si no hay duplicados (no debería haberlos). Si los hubiera,
+    -- esta sentencia falla y avisa en vez de borrar datos silenciosamente.
     ALTER TABLE ig_config
       ADD CONSTRAINT ig_config_tenant_account_uniq UNIQUE (tenant_id, ig_account_id);
   END IF;
