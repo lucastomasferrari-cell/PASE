@@ -119,17 +119,43 @@ export function IGConexionPanel() {
 
   const cargar = useCallback(async () => {
     setLoading(true);
-    const [{ data: cuentasData }, { data: localesData }] = await Promise.all([
+    // Fix 2026-05-30 (queja Lucas: "veo 'Conecta tu Instagram' pero @nekosushi.ar
+    // está conectada"): antes ignorábamos errores → fallback a [] → onboarding
+    // engañoso. Ahora: 1) logueamos cualquier error y 2) si el join a `locales`
+    // falla (RLS/FK), reintentamos sin join para que al menos las cuentas se vean.
+    const [cuentasResp, localesResp] = await Promise.all([
       db.from('ig_config')
         .select('id, ig_account_id, ig_username, local_id, bot_activo, token_expira_at, locales(id, nombre)')
         .is('desconectado_at', null)
         .order('id'),
       db.from('locales').select('id, nombre').order('nombre'),
     ]);
-    setCuentas((cuentasData as CuentaIG[]) || []);
-    setLocales((localesData as Local[]) || []);
+
+    let cuentasData = cuentasResp.data as CuentaIG[] | null;
+    if (cuentasResp.error) {
+      // eslint-disable-next-line no-console
+      console.warn('[IGConexionPanel] error cargando ig_config con join, reintento sin join:', cuentasResp.error);
+      // Reintentar sin el join a `locales` — capaz hay un RLS gate ahí.
+      const r2 = await db.from('ig_config')
+        .select('id, ig_account_id, ig_username, local_id, bot_activo, token_expira_at')
+        .is('desconectado_at', null)
+        .order('id');
+      if (r2.error) {
+        // eslint-disable-next-line no-console
+        console.error('[IGConexionPanel] ig_config inalcanzable incluso sin join:', r2.error);
+        showError('No pudimos cargar las cuentas IG. Recargá la página.');
+      } else {
+        cuentasData = (r2.data || []).map(c => ({ ...c, locales: null })) as CuentaIG[];
+      }
+    }
+    if (localesResp.error) {
+      // eslint-disable-next-line no-console
+      console.warn('[IGConexionPanel] error cargando locales:', localesResp.error);
+    }
+    setCuentas(cuentasData || []);
+    setLocales((localesResp.data as Local[]) || []);
     setLoading(false);
-  }, []);
+  }, [showError]);
 
   useEffect(() => { void cargar(); }, [cargar]);
 

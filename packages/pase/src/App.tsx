@@ -198,8 +198,33 @@ function AppMain() {
     // Optimización egress 2026-05-17: proyectar solo lo que se renderiza.
     // Locales puede tener columnas pesadas (slug marketplace, fotos, JSON
     // de horarios). El sidebar y picker solo necesitan id+nombre+tenant_id.
-    const { data } = await db.from("locales").select("id, nombre, tenant_id, provincia, localidad").order("id");
-    const nuevos = data || [];
+    //
+    // Fix 2026-05-30 (queja Lucas recurrente: "se me desaparece el selector
+    // del sidebar después de cada deploy"): antes ignorábamos el error y
+    // dejábamos `locales = []` silenciosamente — esto ocultaba el dropdown
+    // del sidebar (condicional `localesDisp.length > 1` en Layout.tsx).
+    // Causa raíz típica: token JWT refrescado por Supabase justo cuando
+    // disparamos el fetch (post-deploy con SW actualizado) → la query falla
+    // con 401/403 transitorio, retry-able. Ahora reintentamos hasta 3 veces
+    // con backoff exponencial. Si TODAS fallan, NO sobreescribimos el state
+    // viejo (conservamos los locales previos en vez de quedarnos en blanco).
+    let data: Array<{ id: number; nombre: string; tenant_id: string; provincia: string | null; localidad: string | null; }> | null = null;
+    let lastError: unknown = null;
+    for (let intento = 0; intento < 3; intento++) {
+      const resp = await db.from("locales").select("id, nombre, tenant_id, provincia, localidad").order("id");
+      if (!resp.error && resp.data) { data = resp.data; lastError = null; break; }
+      lastError = resp.error;
+      // Backoff exponencial: 200ms, 400ms, 800ms.
+      await new Promise(r => setTimeout(r, 200 * Math.pow(2, intento)));
+    }
+    if (!data) {
+      // Conservar locales viejos para no romper el sidebar. Loggear para que
+      // sea diagnosticable si vuelve a pasar.
+      // eslint-disable-next-line no-console
+      console.warn("[refetchLocales] falló 3 intentos, conservando locales previos", lastError);
+      return;
+    }
+    const nuevos = data;
     setLocales(nuevos);
     // Decisión Lucas 2026-05-17: ya no existe modo "Todas las sucursales".
     // El sidebar siempre tiene UNA activa. Si localActivo es null acá, lo
