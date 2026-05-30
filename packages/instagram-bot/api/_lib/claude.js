@@ -41,12 +41,32 @@ export const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
  * @param {number} opts.maxTokens - default 1024
  * @returns {Promise<{texto: string, tokens_in: number, tokens_out: number, cache_read: number, cache_write: number, costo_usd: number, stop_reason: string}>}
  */
+// Modelos válidos conocidos. Si ig_config.modelo tiene un valor que NO está
+// acá (típico: 'claude-haiku-4-6' que da 404 desde 2026-05-21, o cualquier
+// nombre viejo/mal tipeado), caemos a sonnet en vez de matar la conversación
+// con un 404. Bug real 30-may: @maneki tenía 'claude-haiku-4-6' guardado y
+// el bot tiraba "Claude API: 404 model: claude-haiku-4-6" en cada DM →
+// nunca respondía. Esta defensa hace que un modelo mal configurado degrade
+// elegantemente en vez de romper.
+const MODELOS_VALIDOS = new Set([
+  'claude-sonnet-4-6',
+  'claude-sonnet-4-5',
+  'claude-opus-4-7',
+  'claude-haiku-4',
+]);
+const MODELO_FALLBACK = 'claude-sonnet-4-6';
+
 export async function llamarClaude({
   systemPrompt,
   messages,
   modelo = 'claude-sonnet-4-6',
   maxTokens = 1024,
 }) {
+  // Normalizar el modelo: si no es uno conocido válido, usar el fallback.
+  if (!MODELOS_VALIDOS.has(modelo)) {
+    console.warn(`[claude] modelo '${modelo}' no es válido, usando ${MODELO_FALLBACK}`);
+    modelo = MODELO_FALLBACK;
+  }
   // AUDIT F6A#5: el system prompt va como array con cache_control para
   // que Anthropic lo cachee 5 min. Solo cachea si pesa ≥ 1024 tokens
   // (Sonnet) — más cortos siguen siendo full price (no rompe nada).
