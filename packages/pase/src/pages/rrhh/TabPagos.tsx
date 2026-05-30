@@ -94,6 +94,17 @@ export function TabPagos({
       return next;
     });
   };
+  // Total efectivo a separar (Anto 30-may): suma de lo que FALTA pagar en
+  // este período (total - ya pagado por cada liq, sin contar las que ya
+  // están pagadas). Se muestra como chip discreto. No discrimina cuenta
+  // porque al momento de cargar el período el dueño aún no sabe cómo va a
+  // pagar cada uno — sirve para saber cuánta plata tiene que separar.
+  const totalAPagarPendiente = pagoData.reduce((s, r) => {
+    if (!r.liq || r.liq.estado === "pagado") return s;
+    const t = Math.round(Number(r.liq.total_a_pagar || 0));
+    const ya = Math.round(Number(r.liq.pagos_realizados || 0));
+    return s + Math.max(0, t - ya);
+  }, 0);
   return (
     <>
       <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
@@ -106,7 +117,26 @@ export function TabPagos({
           {locsDisp.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
         </select>
         <div style={{flex:1}} />
-        {totalPagosPend > 0 && <span style={{fontSize:11,color:"var(--muted2)"}}>{totalPagosPend} pendiente{totalPagosPend > 1 ? "s" : ""}</span>}
+        {totalPagosPend > 0 && (
+          <>
+            <span style={{fontSize:11,color:"var(--muted2)"}}>
+              {totalPagosPend} pendiente{totalPagosPend > 1 ? "s" : ""}
+            </span>
+            {totalAPagarPendiente > 0 && (
+              <span
+                style={{
+                  fontSize:11, padding:"3px 9px", borderRadius:6,
+                  background:"rgba(34,197,94,0.10)",
+                  border:"1px solid rgba(34,197,94,0.25)",
+                  color:"var(--success)", fontWeight:500,
+                }}
+                title="Suma del total que aún no se pagó este período. Sirve para saber cuánta plata separar (efectivo + lo que vas a transferir)."
+              >
+                A separar: {fmt_$(totalAPagarPendiente)}
+              </span>
+            )}
+          </>
+        )}
         {esDueno && <button className="btn btn-sec btn-sm" onClick={() => setAdelModal(true)}>+ Adelanto</button>}
       </div>
 
