@@ -297,6 +297,40 @@ function AppMain() {
             console.warn("[App] getUser() error transitorio, conservando sesión:", errAny?.message);
           }
           const { data: perfil } = await db.from("usuarios").select("id, auth_id, email, nombre, rol, activo, password_temporal, locales, cuentas_visibles, cuentas_operables, tenant_id").eq("auth_id", session.user.id).single();
+
+          // CRÍTICO (fix 2026-05-30 — "veo Conecta tu Instagram con todo
+          // conectado" + "sidebar sin selector de local"): si el JWT en
+          // localStorage es VIEJO y no tiene app_metadata.tenant_id, las
+          // RLS policies devuelven 0 rows en TODAS las queries con tenant
+          // scope (locales, ig_config, etc.). Las queries no fallan — dan
+          // 0 rows silenciosamente. El user ve "todo vacío". Si refresca
+          // 2 veces, Supabase auto-refresca el JWT y vuelve a andar.
+          //
+          // Fix: si el perfil tiene tenant_id pero el JWT no, forzar
+          // refreshSession() para que el server re-emita el JWT con el
+          // app_metadata actualizado (commit 68310df setea app_metadata
+          // al crear/reusar users, pero users viejos tenían JWT sin eso).
+          const jwtTenantId = (session.user.app_metadata as { tenant_id?: string } | undefined)?.tenant_id;
+          if (perfil?.tenant_id && !jwtTenantId) {
+            // eslint-disable-next-line no-console
+            console.warn("[App] JWT sin app_metadata.tenant_id pero perfil tiene tenant_id, forzando refresh");
+            const refreshResp = await db.auth.refreshSession();
+            const newJwtTenantId = (refreshResp.data.session?.user.app_metadata as { tenant_id?: string } | undefined)?.tenant_id;
+            if (!newJwtTenantId) {
+              // Refresh no fue suficiente — significa que el server-side
+              // tampoco tiene app_metadata.tenant_id para este user. Hay
+              // que fixearlo en DB. Mientras tanto, signOut para que el
+              // próximo login fresco lo regenere (Supabase re-emite el
+              // JWT con metadata fresca al loguear).
+              // eslint-disable-next-line no-console
+              console.error("[App] Tras refresh sigue sin tenant_id en JWT. Forzando signOut para login fresco.");
+              await db.auth.signOut().catch(() => { /* idem */ });
+              try { sessionStorage.removeItem("pase_user"); } catch { /* idem */ }
+              setAuthLoading(false);
+              return;
+            }
+          }
+
           if (perfil && perfil.activo !== false) {
             // eslint-disable-next-line react-hooks/immutability
             await applyLogin(perfil);
