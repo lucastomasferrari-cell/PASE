@@ -116,7 +116,20 @@ export default async function handler(req, res) {
     const userId = shortData.user_id; // Instagram-scoped User ID
 
     // ─── 3. Intercambiar short-lived por long-lived (60 días) ─────────────
-    const longTokenResp = await fetch(`https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${encodeURIComponent(IG_APP_SECRET)}&access_token=${encodeURIComponent(shortToken)}`);
+    // Fix 30-may: Meta cambió el endpoint y ahora REQUIERE POST.
+    // Antes funcionaba con GET (URL params). Error: "IGApiException — Unsupported
+    // request - method type: get". Detectado al intentar conectar 2da cuenta IG
+    // (multi-cuenta). El refresh diario también puede haber estado fallando
+    // silenciosamente desde el cambio de Meta — verificar después.
+    const longTokenResp = await fetch('https://graph.instagram.com/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'ig_exchange_token',
+        client_secret: IG_APP_SECRET,
+        access_token: shortToken,
+      }).toString(),
+    });
     const longData = await longTokenResp.json();
     if (!longTokenResp.ok || !longData.access_token) {
       await logEvent('error', stateRow.tenant_id, null, `exchange_long_token failed: ${JSON.stringify(longData)}`);
