@@ -222,10 +222,25 @@ async function procesarMensajeEntrante({ cfg, event, sender_igsid }) {
       .maybeSingle();
     if (existing) {
       conv = existing;
+      // Fix 29-may multi-cuenta: si la conversación existente NO tiene
+      // ig_config_id (fue creada antes del refactor) y ahora sí sabemos
+      // a qué cuenta pertenece, lo backfilleamos sin tocar el resto del
+      // estado. Idempotente.
+      if (!existing.ig_config_id) {
+        await db.from('ig_conversaciones')
+          .update({ ig_config_id: cfg.id })
+          .eq('id', existing.id);
+        conv.ig_config_id = cfg.id;
+      }
     } else {
       const { data: nueva } = await db
         .from('ig_conversaciones')
-        .insert({ tenant_id: cfg.tenant_id, cliente_id: cliente.id, estado: 'bot' })
+        .insert({
+          tenant_id: cfg.tenant_id,
+          cliente_id: cliente.id,
+          estado: 'bot',
+          ig_config_id: cfg.id,  // multi-cuenta (29-may): saber a qué cuenta IG pertenece
+        })
         .select('*')
         .single();
       conv = nueva;

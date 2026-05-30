@@ -1,13 +1,16 @@
-// Panel de "Conexión Instagram" — se muestra arriba de Mensajería.
+// Panel de "Conexión Instagram" — lista de cuentas conectadas (multi-cuenta).
 //
-// 3 estados visuales:
-//   - Sin config → pantalla grande "Conectá tu Instagram en 1 click"
-//   - Conectada OK → mini-card con estado + días para vencer
-//   - Por vencer / vencida → alerta amarilla/roja con botón "Renovar"
+// Comportamiento:
+//   - Muestra una tabla/lista de todas las cuentas IG activas del tenant.
+//   - Botón "+ Conectar otra cuenta" arriba.
+//     · Si el tenant tiene >1 local → abre modal para elegir local destino.
+//     · Si tiene 1 local → salta el modal y pasa el local directo.
+//   - "Desconectar" sobre una cuenta específica: soft-delete solo de esa fila.
+//   - Si no hay ninguna cuenta → pantalla grande de onboarding (backward compat).
 //
 // El flow OAuth funciona así:
-//   1. Click "Conectar" → RPC fn_ig_oauth_iniciar() devuelve state
-//   2. Abrimos popup con la URL de autorización de Instagram + ese state
+//   1. Click "Conectar" → RPC fn_ig_oauth_iniciar(p_return_url, p_local_id) devuelve state
+//   2. Redirigimos a la URL de autorización de Instagram con ese state
 //   3. User autoriza → Instagram redirige al bot /api/oauth-callback
 //   4. Bot procesa y redirige a PASE con ?ig_oauth=success
 //   5. Esta pantalla detecta el query param + recarga
@@ -17,68 +20,162 @@ import { useSearchParams } from "react-router-dom";
 import { db } from "../../lib/supabase";
 import { useToast } from "../../hooks/useToast";
 import { ToastComponent } from "../../components/Toast";
+import type { Local } from "../../types";
 
-// ID público de la app de Instagram "PASE Bot-IG" (no es secret — sale en URLs).
-// OJO: es el ID de la app de INSTAGRAM dentro del caso de uso, NO el de Meta
-// (esa es 1357691826231040). Para OAuth de Instagram Login usamos el de IG.
-// Configurable por env por si en el futuro hay multiples apps por entorno.
 const IG_APP_ID = import.meta.env.VITE_IG_APP_ID || "28110839805172593";
 
-// URL del callback (debe coincidir con OAUTH_REDIRECT_URI configurado en el bot)
 const OAUTH_REDIRECT_URI = import.meta.env.VITE_IG_OAUTH_REDIRECT
   || "https://pase-instagram-bot.vercel.app/api/oauth-callback";
 
-// Scopes que pedimos a Instagram
 const SCOPES = [
   "instagram_business_basic",
   "instagram_business_manage_messages",
 ].join(",");
 
-interface EstadoConexion {
-  ig_account_id: string;
-  ig_username: string | null;
-  bot_activo: boolean;
-  conectado_at: string;
-  desconectado_at: string | null;
-  token_creado_at: string | null;
-  token_expira_at: string | null;
-  connected_by_nombre: string | null;
-  dias_para_vencer: number | null;
-  estado: 'conectada' | 'desconectada' | 'vencida' | 'por_vencer' | 'desconocido';
-}
-
-// URL del bot (la usamos para llamar /api/diagnostic además de /api/send)
 const BOT_API_URL = (import.meta.env.VITE_IG_BOT_URL as string | undefined)
   || "https://pase-instagram-bot.vercel.app";
 
+interface CuentaIG {
+  id: number;
+  ig_account_id: string;
+  ig_username: string | null;
+  local_id: number | null;
+  bot_activo: boolean;
+  token_expira_at: string | null;
+  // Supabase devuelve el join one-to-many como array; tomamos [0] para el nombre.
+  locales: { id: number; nombre: string }[] | null;
+}
+
+function diasParaVencer(tokenExpiresAt: string | null): number | null {
+  if (!tokenExpiresAt) return null;
+  const diff = new Date(tokenExpiresAt).getTime() - Date.now();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
+// ── Modal selector de local ────────────────────────────────────────────────
+interface ModalLocalProps {
+  locales: Local[];
+  onConfirm: (localId: number | null) => void;
+  onCancel: () => void;
+}
+
+function ModalElegirLocal({ locales, onConfirm, onCancel }: ModalLocalProps) {
+  const [sel, setSel] = useState<string>("null");
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 1000,
+      background: "rgba(0,0,0,0.5)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+    }}>
+      <div style={{
+        background: "var(--bg)", border: "1px solid var(--bd)",
+        borderRadius: 12, padding: "24px 28px", width: 340, maxWidth: "90vw",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+      }}>
+        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>
+          Conectar cuenta IG
+        </div>
+        <div style={{ fontSize: 13, color: "var(--muted2)", marginBottom: 16, lineHeight: 1.5 }}>
+          Asocia esta cuenta a un local, o elegí "Todos los locales" si va a manejar todo el tenant.
+        </div>
+        <select
+          value={sel}
+          onChange={e => setSel(e.target.value)}
+          style={{
+            width: "100%", padding: "8px 10px", borderRadius: 6,
+            border: "1px solid var(--bd)", background: "var(--s2)",
+            fontSize: 13, marginBottom: 20, fontFamily: "inherit",
+          }}
+        >
+          <option value="null">Todos los locales (cuenta global)</option>
+          {locales.map(l => (
+            <option key={l.id} value={String(l.id)}>{l.nombre}</option>
+          ))}
+        </select>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button className="btn btn-ghost" onClick={onCancel}>Cancelar</button>
+          <button
+            className="btn btn-acc"
+            onClick={() => onConfirm(sel === "null" ? null : Number(sel))}
+          >
+            Continuar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Componente principal ────────────────────────────────────────────────────
 export function IGConexionPanel() {
   const [params, setParams] = useSearchParams();
-  const [conexion, setConexion] = useState<EstadoConexion | null>(null);
+  const [cuentas, setCuentas] = useState<CuentaIG[]>([]);
+  const [locales, setLocales] = useState<Local[]>([]);
   const [loading, setLoading] = useState(true);
   const [conectando, setConectando] = useState(false);
+  const [modalLocalOpen, setModalLocalOpen] = useState(false);
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
   const { toast, showToast, showError } = useToast();
 
-  // Diagnóstico: llamar al endpoint del bot que devuelve metadata enmascarada
+  const cargar = useCallback(async () => {
+    setLoading(true);
+    const [{ data: cuentasData }, { data: localesData }] = await Promise.all([
+      db.from('ig_config')
+        .select('id, ig_account_id, ig_username, local_id, bot_activo, token_expira_at, locales(id, nombre)')
+        .is('desconectado_at', null)
+        .order('id'),
+      db.from('locales').select('id, nombre').order('nombre'),
+    ]);
+    setCuentas((cuentasData as CuentaIG[]) || []);
+    setLocales((localesData as Local[]) || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { void cargar(); }, [cargar]);
+
+  // Procesar callback OAuth
+  useEffect(() => {
+    const oauthStatus = params.get('ig_oauth');
+    if (!oauthStatus) return;
+
+    if (oauthStatus === 'success') {
+      const username = params.get('username');
+      setFlash({ kind: 'ok', msg: `Conectado a @${username}. El bot ya esta atendiendo.` });
+      void cargar();
+    } else {
+      const errCode = params.get('error');
+      const errDetail = params.get('detail');
+      setFlash({ kind: 'err', msg: `Error al conectar: ${errCode}${errDetail ? ` — ${errDetail}` : ''}` });
+    }
+
+    params.delete('ig_oauth');
+    params.delete('username');
+    params.delete('error');
+    params.delete('detail');
+    params.delete('account_id');
+    params.delete('expires_in_days');
+    params.delete('ok');
+    setParams(params, { replace: true });
+
+    const t = setTimeout(() => setFlash(null), 8000);
+    return () => clearTimeout(t);
+  }, [params, setParams, cargar]);
+
+  // Diagnóstico
   const runDiagnostic = async () => {
     const { data: { session } } = await db.auth.getSession();
     const token = session?.access_token;
-    if (!token) { showError('Sesión expirada'); return; }
+    if (!token) { showError('Sesion expirada'); return; }
     try {
       const r = await fetch(`${BOT_API_URL}/api/diagnostic`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
       const data = await r.json();
-      if (!r.ok) {
-        showError('Error: ' + (data.error || `HTTP ${r.status}`));
-        return;
-      }
-      // Mostrar el reporte formateado
+      if (!r.ok) { showError('Error: ' + (data.error || `HTTP ${r.status}`)); return; }
       const lines: string[] = ['Config bot:'];
       const rep = data.report;
       lines.push(`APP_ID: ${rep.IG_APP_ID}`);
       lines.push(`REDIRECT: ${rep.OAUTH_REDIRECT_URI}`);
-      lines.push(`PASE: ${rep.PASE_BASE_URL}`);
       for (const [k, v] of Object.entries(rep)) {
         if (typeof v === 'object' && v !== null && 'set' in (v as object)) {
           const p = v as { set: boolean; length?: number; first4?: string; last4?: string };
@@ -91,69 +188,26 @@ export function IGConexionPanel() {
     }
   };
 
-  const cargar = useCallback(async () => {
-    setLoading(true);
-    const { data } = await db.from('v_ig_conexion_estado').select('*').limit(1).single();
-    setConexion(data as EstadoConexion | null);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { void cargar(); }, [cargar]);
-
-  // Procesar el callback de OAuth que llega via query params
-  useEffect(() => {
-    const oauthStatus = params.get('ig_oauth');
-    if (!oauthStatus) return;
-
-    if (oauthStatus === 'success') {
-      const username = params.get('username');
-      setFlash({ kind: 'ok', msg: `✅ Conectado a @${username}. El bot ya está atendiendo.` });
-      void cargar();
-    } else {
-      const errCode = params.get('error');
-      const errDetail = params.get('detail');
-      setFlash({ kind: 'err', msg: `❌ Error al conectar: ${errCode}${errDetail ? ` — ${errDetail}` : ''}` });
-    }
-
-    // Limpiar query params para que no aparezca el banner al refrescar
-    params.delete('ig_oauth');
-    params.delete('username');
-    params.delete('error');
-    params.delete('detail');
-    params.delete('account_id');
-    params.delete('expires_in_days');
-    params.delete('ok');
-    setParams(params, { replace: true });
-
-    // Auto-dismiss del banner en 8s
-    const t = setTimeout(() => setFlash(null), 8000);
-    return () => clearTimeout(t);
-  }, [params, setParams, cargar]);
-
-  const iniciarOAuth = async () => {
+  // Lanza el flow OAuth con el local elegido (null = global)
+  const iniciarOAuth = async (localId: number | null) => {
     setConectando(true);
     try {
-      // 1. Generar state via RPC
       const returnUrl = window.location.href.split('?')[0];
-      const { data, error } = await db.rpc('fn_ig_oauth_iniciar', { p_return_url: returnUrl });
-      if (error || !data || data.length === 0) {
-        showError('Error al iniciar conexión: ' + (error?.message || 'sin state'));
+      const rpcArgs: Record<string, unknown> = { p_return_url: returnUrl };
+      if (localId !== null) rpcArgs.p_local_id = localId;
+      const { data, error } = await db.rpc('fn_ig_oauth_iniciar', rpcArgs);
+      if (error || !data || (data as Array<{ state: string }>).length === 0) {
+        showError('Error al iniciar conexion: ' + (error?.message || 'sin state'));
         setConectando(false);
         return;
       }
       const state = (data as Array<{ state: string }>)[0]!.state;
-
-      // 2. Armar URL de autorización de Instagram + redirigir el browser
-      // URLSearchParams codifica ambos lados (frontend y backend usan
-      // URLSearchParams.toString()) → match garantizado.
       const authUrl = new URL('https://www.instagram.com/oauth/authorize');
       authUrl.searchParams.set('client_id', IG_APP_ID);
       authUrl.searchParams.set('redirect_uri', OAUTH_REDIRECT_URI);
       authUrl.searchParams.set('scope', SCOPES);
       authUrl.searchParams.set('response_type', 'code');
       authUrl.searchParams.set('state', state);
-
-      // Redirigimos top-window (no popup) porque Meta a veces bloquea popups
       window.location.href = authUrl.toString();
     } catch (e) {
       showError('Error: ' + (e instanceof Error ? e.message : String(e)));
@@ -161,13 +215,23 @@ export function IGConexionPanel() {
     }
   };
 
-  const desconectar = async () => {
-    if (!conexion) return;
-    if (!confirm('¿Desconectar Instagram? El bot va a dejar de responder los DMs. Lo podés volver a conectar después.')) return;
-    await db.from('ig_config').update({
-      bot_activo: false,
-      desconectado_at: new Date().toISOString(),
-    }).eq('ig_account_id', conexion.ig_account_id);
+  // Click en "+ Conectar otra cuenta"
+  const handleConectar = () => {
+    if (locales.length <= 1) {
+      // 0 o 1 local: saltar modal
+      void iniciarOAuth(locales[0]?.id ?? null);
+    } else {
+      setModalLocalOpen(true);
+    }
+  };
+
+  // Desconectar UNA cuenta específica
+  const desconectarCuenta = async (cuenta: CuentaIG) => {
+    const label = cuenta.ig_username ? `@${cuenta.ig_username}` : cuenta.ig_account_id;
+    if (!confirm(`¿Desconectar ${label}? El bot va a dejar de responder esos DMs. Podés volver a conectarla despues.`)) return;
+    await db.from('ig_config')
+      .update({ bot_activo: false, desconectado_at: new Date().toISOString() })
+      .eq('id', cuenta.id);
     await cargar();
   };
 
@@ -176,19 +240,16 @@ export function IGConexionPanel() {
   // ─── Banner de feedback post-OAuth ───
   const flashBanner = flash && (
     <div style={{
-      padding: "12px 16px",
-      borderRadius: 8,
-      marginBottom: 12,
+      padding: "12px 16px", borderRadius: 8, marginBottom: 12,
       background: flash.kind === 'ok' ? 'rgba(34,197,94,0.1)' : 'rgba(220,38,38,0.1)',
       border: `1px solid ${flash.kind === 'ok' ? 'rgba(34,197,94,0.3)' : 'rgba(220,38,38,0.3)'}`,
       color: flash.kind === 'ok' ? 'var(--success)' : 'var(--danger)',
-      fontSize: 13,
-      fontWeight: 500,
+      fontSize: 13, fontWeight: 500,
     }}>{flash.msg}</div>
   );
 
-  // ─── Caso 1: sin conexión ───
-  if (!conexion || conexion.estado === 'desconectada') {
+  // ─── Sin ninguna cuenta: pantalla de onboarding (backward compat) ───
+  if (cuentas.length === 0) {
     return (
       <>
         <ToastComponent toast={toast} />
@@ -197,150 +258,152 @@ export function IGConexionPanel() {
           padding: "20px 24px",
           background: "linear-gradient(135deg, rgba(225,48,108,0.06), rgba(193,53,132,0.04))",
           border: "1px solid rgba(225,48,108,0.2)",
-          borderRadius: 12,
-          marginBottom: 16,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 16,
-          flexWrap: "wrap",
+          borderRadius: 12, marginBottom: 16,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          gap: 16, flexWrap: "wrap",
         }}>
           <div style={{ flex: 1, minWidth: 240 }}>
             <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 4 }}>
-              📷 Conectá tu Instagram
+              Conecta tu Instagram
             </div>
             <div style={{ fontSize: 13, color: "var(--muted2)", lineHeight: 1.5 }}>
-              El bot va a atender los DMs de tu cuenta de Instagram Business automáticamente,
-              con memoria total + integrado al menú/horarios/reservas. Onboarding en 1 click.
+              El bot va a atender los DMs de tu cuenta de Instagram Business automaticamente,
+              con memoria total + integrado al menu/horarios/reservas. Onboarding en 1 click.
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "stretch" }}>
             <button
               className="btn btn-acc"
-              onClick={iniciarOAuth}
+              onClick={handleConectar}
               disabled={conectando}
               style={{ padding: "10px 20px", fontSize: 14 }}
             >
-              {conectando ? "Conectando..." : "📷 Conectar Instagram"}
+              {conectando ? "Conectando..." : "Conectar Instagram"}
             </button>
             <button
-              type="button"
-              onClick={runDiagnostic}
-              style={{
-                fontSize: 10,
-                color: "var(--muted2)",
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                textDecoration: "underline",
-              }}
+              type="button" onClick={runDiagnostic}
+              style={{ fontSize: 10, color: "var(--muted2)", background: "transparent", border: "none", cursor: "pointer", textDecoration: "underline" }}
             >
-              🔧 Verificar configuración del bot
+              Verificar configuracion del bot
             </button>
           </div>
         </div>
+        {modalLocalOpen && (
+          <ModalElegirLocal
+            locales={locales}
+            onConfirm={localId => { setModalLocalOpen(false); void iniciarOAuth(localId); }}
+            onCancel={() => { setModalLocalOpen(false); setConectando(false); }}
+          />
+        )}
       </>
     );
   }
 
-  // ─── Caso 2: conexión vencida ───
-  if (conexion.estado === 'vencida') {
-    return (
-      <>
-        <ToastComponent toast={toast} />
-        {flashBanner}
-        <div style={{
-          padding: "14px 18px",
-          background: "rgba(220,38,38,0.08)",
-          border: "1px solid rgba(220,38,38,0.3)",
-          borderRadius: 8,
-          marginBottom: 12,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-        }}>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 14, color: "var(--danger)" }}>
-              ⚠ Conexión vencida con @{conexion.ig_username}
-            </div>
-            <div style={{ fontSize: 12, color: "var(--muted2)", marginTop: 2 }}>
-              El token expiró. El bot dejó de responder. Reconectá para volver a operar.
-            </div>
-          </div>
-          <button className="btn btn-acc" onClick={iniciarOAuth} disabled={conectando}>
-            🔄 Reconectar
-          </button>
-        </div>
-      </>
-    );
-  }
-
-  // ─── Caso 3: por vencer ───
-  if (conexion.estado === 'por_vencer') {
-    return (
-      <>
-        <ToastComponent toast={toast} />
-        {flashBanner}
-        <div style={{
-          padding: "12px 18px",
-          background: "rgba(245,158,11,0.08)",
-          border: "1px solid rgba(245,158,11,0.3)",
-          borderRadius: 8,
-          marginBottom: 12,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-        }}>
-          <div>
-            <div style={{ fontWeight: 500, fontSize: 13 }}>
-              ⚠ Conexión vence en {conexion.dias_para_vencer} día{conexion.dias_para_vencer !== 1 ? 's' : ''}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--muted2)" }}>
-              @{conexion.ig_username} · se renueva automáticamente, pero podés forzarlo
-            </div>
-          </div>
-          <button className="btn btn-sec btn-sm" onClick={iniciarOAuth} disabled={conectando}>
-            Renovar ahora
-          </button>
-        </div>
-      </>
-    );
-  }
-
-  // ─── Caso 4: conexión OK ───
+  // ─── Lista de cuentas conectadas ───
   return (
     <>
       <ToastComponent toast={toast} />
       {flashBanner}
       <div style={{
-        padding: "10px 14px",
-        background: "var(--s2)",
-        border: "1px solid var(--bd)",
-        borderRadius: 8,
-        marginBottom: 12,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 12,
-        fontSize: 12,
+        border: "1px solid var(--bd)", borderRadius: 10,
+        marginBottom: 16, overflow: "hidden",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ color: "var(--success)", fontSize: 14 }}>●</span>
-          <span>
-            <strong>@{conexion.ig_username}</strong>
-            <span style={{ color: "var(--muted2)" }}> · conectada · renueva en {conexion.dias_para_vencer}d</span>
+        {/* Header con botón Conectar */}
+        <div style={{
+          padding: "10px 14px", borderBottom: "1px solid var(--bd)",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          background: "var(--s2)",
+        }}>
+          <span style={{ fontSize: 13, fontWeight: 500 }}>
+            Cuentas de Instagram conectadas ({cuentas.length})
           </span>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button
+              type="button" onClick={runDiagnostic}
+              style={{ fontSize: 10, color: "var(--muted2)", background: "transparent", border: "none", cursor: "pointer", textDecoration: "underline" }}
+            >
+              Verificar bot
+            </button>
+            <button
+              className="btn btn-acc btn-sm"
+              onClick={handleConectar}
+              disabled={conectando}
+              style={{ fontSize: 12 }}
+            >
+              {conectando ? "Conectando..." : "+ Conectar otra cuenta"}
+            </button>
+          </div>
         </div>
-        <button
-          className="btn btn-ghost btn-sm"
-          onClick={desconectar}
-          title="Desconectar la cuenta de Instagram"
-        >
-          Desconectar
-        </button>
+
+        {/* Filas por cuenta */}
+        {cuentas.map((cuenta, idx) => {
+          const dias = diasParaVencer(cuenta.token_expira_at);
+          const vencida = dias !== null && dias <= 0;
+          const porVencer = dias !== null && dias > 0 && dias <= 7;
+          const localNombre = cuenta.locales?.[0]?.nombre ?? null;
+
+          return (
+            <div key={cuenta.id} style={{
+              padding: "10px 14px",
+              borderBottom: idx < cuentas.length - 1 ? "1px solid var(--bd)" : undefined,
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              gap: 12, flexWrap: "wrap",
+            }}>
+              {/* Identidad */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+                <span style={{
+                  color: vencida ? "var(--danger)" : cuenta.bot_activo ? "var(--success)" : "var(--muted2)",
+                  fontSize: 14, flexShrink: 0,
+                }}>
+                  {vencida ? "!" : "●"}
+                </span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>
+                    @{cuenta.ig_username ?? cuenta.ig_account_id}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--muted2)" }}>
+                    {localNombre ?? "Todos los locales"}
+                    {dias !== null && (
+                      <span style={{ marginLeft: 8, color: vencida ? "var(--danger)" : porVencer ? "var(--warn)" : "var(--muted)" }}>
+                        · {vencida ? "token vencido" : `renueva en ${dias}d`}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Badges de estado */}
+              <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+                {vencida && (
+                  <span className="badge b-danger" style={{ fontSize: 10 }}>Vencida</span>
+                )}
+                {porVencer && !vencida && (
+                  <span className="badge b-warn" style={{ fontSize: 10 }}>Por vencer</span>
+                )}
+                {!vencida && cuenta.bot_activo && (
+                  <span className="badge b-success" style={{ fontSize: 10 }}>Activa</span>
+                )}
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => desconectarCuenta(cuenta)}
+                  style={{ fontSize: 11 }}
+                >
+                  Desconectar
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
+
+      {/* Modal selector de local */}
+      {modalLocalOpen && (
+        <ModalElegirLocal
+          locales={locales}
+          onConfirm={localId => { setModalLocalOpen(false); void iniciarOAuth(localId); }}
+          onCancel={() => { setModalLocalOpen(false); setConectando(false); }}
+        />
+      )}
     </>
   );
 }

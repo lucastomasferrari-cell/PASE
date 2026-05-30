@@ -150,51 +150,42 @@ export default async function handler(req, res) {
     //     page-scoped cuando llegue el primer webhook.
     const ig_account_id_fallback = String(meData.id);
 
-    // ─── 6. Insert/Update ig_config (preservando ig_account_id si existe) ─
-    // AUDIT F6A#7: chequear si el ig_account_id del NUEVO token coincide
-    // con el guardado. Si NO coincide, significa que el dueño está intentando
-    // vincular una SEGUNDA cuenta IG sobre el mismo tenant. La estructura
-    // actual de ig_config (1 fila por tenant) no soporta esto — el guardado
-    // pisaría el token de la cuenta vieja y el ig_account_id quedaría con
-    // mismatch. Hasta que el schema soporte multi-account, abortar con
-    // mensaje claro al dueño.
-    const { data: existingConfig } = await db.from('ig_config')
-      .select('ig_account_id, ig_username')
-      .eq('tenant_id', stateRow.tenant_id)
-      .maybeSingle();
-
-    if (existingConfig?.ig_account_id && existingConfig.ig_account_id !== ig_account_id_fallback) {
-      await logEvent('error', stateRow.tenant_id, null,
-        `multi-account NO soportado: existente=${existingConfig.ig_username || existingConfig.ig_account_id}, nueva=${meData.username || ig_account_id_fallback}`);
-      return redirectToPase(res, {
-        ok: false,
-        error: 'MULTI_ACCOUNT_NO_SOPORTADO',
-        detail: `Ya tenés vinculada la cuenta IG "${existingConfig.ig_username || existingConfig.ig_account_id}". Para vincular otra cuenta primero desconectá la actual desde Configuración → Bot IG.`,
-      });
-    }
-
-    const finalAccountId = existingConfig?.ig_account_id || ig_account_id_fallback;
+    // ─── 6. Insert/Update ig_config (multi-cuenta 29-may) ──────────────
+    // Antes: si el ig_account_id del NUEVO token NO coincidía con el guardado,
+    // abortaba con MULTI_ACCOUNT_NO_SOPORTADO. Refactor 29-may permite N
+    // cuentas IG por tenant — la RPC set_ig_token ahora usa UNIQUE
+    // (tenant_id, ig_account_id), por lo que conectar cuenta NUEVA crea
+    // fila nueva en lugar de pisar la existente. Re-conectar la MISMA
+    // cuenta (mismo ig_account_id) refresca el token de esa fila.
+    //
+    // local_id viene del state.local_id si el frontend lo pasó al iniciar
+    // OAuth (significa "asociar esta cuenta IG al local X"); sino NULL =
+    // cuenta global del tenant (compat con flujo viejo).
+    const targetLocalId = stateRow.local_id || null;
 
     // AUDIT F2D #27: token va encrypted vía RPC set_ig_token (vault + pgcrypto).
-    // Antes se escribía page_access_token plano en la columna TEXT — dump
-    // de Postgres exponía tokens IG long-lived de 60d.
-    const { error: setTokErr } = await db.rpc('set_ig_token', {
+    const { data: configId, error: setTokErr } = await db.rpc('set_ig_token', {
       p_tenant_id: stateRow.tenant_id,
       p_token: longToken,
-      p_ig_account_id: finalAccountId,
+      p_ig_account_id: ig_account_id_fallback,
       p_ig_username: meData.username,
       p_token_creado_at: new Date().toISOString(),
       p_token_expira_at: tokenExpiraAt,
+      p_local_id: targetLocalId,
     });
     if (setTokErr) {
       console.error('[oauth-callback] set_ig_token failed:', setTokErr.message);
       return res.status(500).json({ error: 'no_pudimos_guardar_token', detail: setTokErr.message });
     }
 
-    // Actualizar campos que set_ig_token no toca (bot_activo, connected_by).
+    const finalAccountId = ig_account_id_fallback;
+
+    // Actualizar campos que set_ig_token no toca, sobre la fila específica
+    // (tenant_id, ig_account_id) en lugar de "todas las del tenant".
     const { error: upsertErr } = await db.from('ig_config')
       .update({ bot_activo: true, connected_by: stateRow.usuario_id })
-      .eq('tenant_id', stateRow.tenant_id);
+      .eq('tenant_id', stateRow.tenant_id)
+      .eq('ig_account_id', finalAccountId);
 
     if (upsertErr) {
       await logEvent('error', stateRow.tenant_id, null, `upsert ig_config failed: ${upsertErr.message}`);

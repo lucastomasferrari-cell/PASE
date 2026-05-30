@@ -35,11 +35,21 @@ const BOT_API_URL = (import.meta.env.VITE_IG_BOT_URL as string | undefined)
 
 interface MensajeriaProps {
   user: Usuario;
+  /** Local activo del sidebar. NULL = dueño viendo "Todos los locales". */
+  localActivo: number | null;
+}
+
+/** Cuenta IG del tenant, con el local al que pertenece (null = global). */
+interface CuentaIGInfo {
+  id: number;
+  ig_username: string | null;
+  local_id: number | null;
 }
 
 interface ConversacionRow {
   id: number;
   tenant_id: string;
+  ig_config_id: number | null;
   estado: 'bot' | 'humano' | 'escalada' | 'cerrada' | 'spam';
   tomada_por: number | null;
   tomada_at: string | null;
@@ -86,7 +96,7 @@ const ESTADO_BADGE: Record<ConversacionRow['estado'], { label: string; cls: stri
   spam:      { label: 'Spam',      cls: 'b-muted',    icon: '🚫' },
 };
 
-export default function MensajeriaIG({ user }: MensajeriaProps) {
+export default function MensajeriaIG({ user, localActivo }: MensajeriaProps) {
   const [conversaciones, setConversaciones] = useState<ConversacionRow[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [mensajes, setMensajes] = useState<MensajeRow[]>([]);
@@ -97,6 +107,10 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
   const [accionLoading, setAccionLoading] = useState<string | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
   const [clienteEditId, setClienteEditId] = useState<number | null>(null);
+  /** Cuentas IG activas del tenant (para filtros multi-cuenta). */
+  const [cuentasIG, setCuentasIG] = useState<CuentaIGInfo[]>([]);
+  /** En modo "todos los locales", chip de la cuenta seleccionada. NULL = todas. */
+  const [filtroCuentaId, setFiltroCuentaId] = useState<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const { toast, showError } = useToast();
 
@@ -106,16 +120,54 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
   // al final del componente, después de todos los hooks.
   const tienePermisoMensajeria = tienePermiso(user, 'mensajeria');
 
-  // Cargar lista de conversaciones
+  // Cargar cuentas IG del tenant (para filtros y mensajes de estado).
+  // Se carga una vez y no depende de localActivo — se usa para mostrar
+  // chips de filtro cuando el dueño está en "Todos los locales".
+  useEffect(() => {
+    db.from('ig_config')
+      .select('id, ig_username, local_id')
+      .is('desconectado_at', null)
+      .order('id')
+      .then(({ data }) => setCuentasIG((data as CuentaIGInfo[]) || []));
+  }, []);
+
+  // Cargar lista de conversaciones, filtrando por localActivo si aplica.
   const loadConversaciones = useCallback(async () => {
     setLoading(true);
-    const { data } = await db.from('v_ig_conversaciones_admin')
-      .select('*')
-      .order('ultimo_mensaje_at', { ascending: false })
-      .limit(100);
-    setConversaciones((data as ConversacionRow[]) || []);
+
+    if (localActivo !== null) {
+      // Encargado con local fijo o dueño que eligió uno:
+      // traer conversaciones de cuentas asignadas a ese local O cuentas globales.
+      const { data: igConfigs } = await db.from('ig_config')
+        .select('id')
+        .is('desconectado_at', null)
+        .or(`local_id.eq.${localActivo},local_id.is.null`);
+
+      const configIds = ((igConfigs ?? []) as { id: number }[]).map(r => r.id);
+
+      if (configIds.length === 0) {
+        setConversaciones([]);
+        setLoading(false);
+        return;
+      }
+
+      const { data } = await db.from('v_ig_conversaciones_admin')
+        .select('*')
+        .in('ig_config_id', configIds)
+        .order('ultimo_mensaje_at', { ascending: false })
+        .limit(100);
+      setConversaciones((data as ConversacionRow[]) || []);
+    } else {
+      // Dueño viendo "Todos los locales": sin filtro por local.
+      const { data } = await db.from('v_ig_conversaciones_admin')
+        .select('*')
+        .order('ultimo_mensaje_at', { ascending: false })
+        .limit(100);
+      setConversaciones((data as ConversacionRow[]) || []);
+    }
+
     setLoading(false);
-  }, []);
+  }, [localActivo]);
 
   useEffect(() => { void loadConversaciones(); }, [loadConversaciones]);
 
@@ -162,16 +214,26 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
     onPollFallback: () => { void loadConversaciones(); },
   });
 
-  // Filtrado
+  // Cuentas IG que aplican al local activo (para el banner de estado).
+  const cuentasDelLocal = useMemo(() => {
+    if (localActivo === null) return cuentasIG; // todas
+    return cuentasIG.filter(c => c.local_id === localActivo || c.local_id === null);
+  }, [cuentasIG, localActivo]);
+
+  // Filtrado: tab + chip de cuenta (solo en modo "todos los locales")
   const conversacionesFiltradas = useMemo(() => {
     return conversaciones.filter(c => {
+      // Filtro por cuenta (chip multi-cuenta, solo en modo "todos los locales")
+      if (localActivo === null && filtroCuentaId !== null) {
+        if (c.ig_config_id !== filtroCuentaId) return false;
+      }
       if (filtroTab === 'no_leidas') return c.no_leidos_admin > 0;
       if (filtroTab === 'escaladas') return c.estado === 'escalada';
       if (filtroTab === 'humano') return c.estado === 'humano';
       if (filtroTab === 'bloqueadas') return c.estado === 'spam' || c.bloqueado;
       return true;
     });
-  }, [conversaciones, filtroTab]);
+  }, [conversaciones, filtroTab, localActivo, filtroCuentaId]);
 
   const selectedConv = conversaciones.find(c => c.id === selectedId);
 
@@ -283,12 +345,65 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
         </div>
       </div>
 
-      {/* Panel de conexión Instagram (botón si no conectado / estado si conectado) */}
+      {/* Panel de conexión Instagram (botón si no conectado / lista si conectado) */}
       <IGConexionPanel />
 
-      {/* Toggle de notificaciones push (visible para cualquier user que llegó
-          a Mensajería — el gate de permiso `mensajeria` ya filtró antes). */}
+      {/* Toggle de notificaciones push */}
       <NotificacionesPushToggle />
+
+      {/* Banner de contexto: qué cuenta(s) se están mostrando */}
+      {localActivo !== null && cuentasDelLocal.length > 0 && (
+        <div style={{
+          padding: "8px 12px", marginBottom: 10, borderRadius: 7,
+          background: "var(--s2)", border: "1px solid var(--bd)",
+          fontSize: 12, color: "var(--muted2)", display: "flex",
+          alignItems: "center", gap: 6, flexWrap: "wrap",
+        }}>
+          <span style={{ color: "var(--success)", fontSize: 13 }}>●</span>
+          <span>Mostrando:</span>
+          {cuentasDelLocal.map(c => (
+            <span key={c.id} style={{ fontWeight: 500, color: "var(--fg)" }}>
+              @{c.ig_username ?? c.id}
+              {c.local_id === null ? " (todos los locales)" : ""}
+            </span>
+          ))}
+        </div>
+      )}
+      {localActivo !== null && cuentasDelLocal.length === 0 && !loading && (
+        <div style={{
+          padding: "10px 14px", marginBottom: 10, borderRadius: 7,
+          background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)",
+          fontSize: 13, color: "var(--warn)",
+        }}>
+          Este local no tiene cuenta IG asignada. Asigna una en Mensajeria → Configurar bot.
+        </div>
+      )}
+      {/* Chips multi-cuenta: solo en modo "Todos los locales" con >1 cuenta */}
+      {localActivo === null && cuentasIG.length > 1 && (
+        <div style={{
+          display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap",
+          alignItems: "center",
+        }}>
+          <span style={{ fontSize: 12, color: "var(--muted2)" }}>Cuenta:</span>
+          <button
+            onClick={() => setFiltroCuentaId(null)}
+            className={`btn btn-sm ${filtroCuentaId === null ? 'btn-acc' : 'btn-ghost'}`}
+            style={{ fontSize: 11, padding: "3px 10px" }}
+          >
+            Todas
+          </button>
+          {cuentasIG.map(c => (
+            <button
+              key={c.id}
+              onClick={() => setFiltroCuentaId(prev => prev === c.id ? null : c.id)}
+              className={`btn btn-sm ${filtroCuentaId === c.id ? 'btn-acc' : 'btn-ghost'}`}
+              style={{ fontSize: 11, padding: "3px 10px" }}
+            >
+              @{c.ig_username ?? c.id}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid4" style={{ marginBottom: 16 }}>

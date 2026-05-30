@@ -543,7 +543,7 @@ function AppMain() {
               {/* Herramientas */}
               <Route path="/equipo" element={<RRHHPage {...props}/>} />
               <Route path="/mensajeria" element={
-                user ? <MensajeriaIG user={user} /> : <Navigate to="/" replace/>
+                user ? <MensajeriaIG user={user} localActivo={localActivo} /> : <Navigate to="/" replace/>
               } />
               <Route path="/herramientas/contador-iva" element={<Contador {...props}/>} />
               <Route path="/herramientas/blindaje" element={<Blindaje {...props}/>} />
