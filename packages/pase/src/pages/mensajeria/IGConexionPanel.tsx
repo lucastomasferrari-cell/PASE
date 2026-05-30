@@ -121,10 +121,25 @@ export function IGConexionPanel() {
 
   const cargar = useCallback(async () => {
     setLoading(true);
-    // Fix 2026-05-30 (queja Lucas: "veo 'Conecta tu Instagram' pero @nekosushi.ar
-    // está conectada"): antes ignorábamos errores → fallback a [] → onboarding
-    // engañoso. Ahora: 1) logueamos cualquier error y 2) si el join a `locales`
-    // falla (RLS/FK), reintentamos sin join para que al menos las cuentas se vean.
+    // Fix 2026-05-30 v2 (CAUSA RAÍZ del "Conecta tu Instagram" falso al
+    // recargar): es un RACE CONDITION. Al recargar la página, este useEffect
+    // dispara la query a ig_config ANTES de que el cliente de Supabase termine
+    // de hidratar la sesión desde localStorage. Sin sesión, la query corre como
+    // anónima → la RLS (tenant_id = auth_tenant_id()) devuelve 0 filas SIN
+    // error → cuentas=[] → onboarding engañoso. Por eso era intermitente.
+    //
+    // getSession() resuelve recién cuando el cliente auth terminó de
+    // inicializar. Esperarlo acá garantiza que la query lleve el token y
+    // RLS resuelva con el tenant correcto. Si tras esperar NO hay sesión,
+    // es un estado inválido (no debería pasar dentro de Mensajería) → no
+    // mostramos el empty state; dejamos loading y salimos para reintentar.
+    const { data: { session } } = await db.auth.getSession();
+    if (!session) {
+      // eslint-disable-next-line no-console
+      console.warn('[IGConexionPanel] sin sesión al cargar, reintento en 400ms');
+      setTimeout(() => { void cargar(); }, 400);
+      return;
+    }
     const [cuentasResp, localesResp] = await Promise.all([
       db.from('ig_config')
         .select('id, ig_account_id, ig_username, local_id, bot_activo, token_expira_at, locales(id, nombre)')
