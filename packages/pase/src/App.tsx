@@ -199,22 +199,30 @@ function AppMain() {
     // Locales puede tener columnas pesadas (slug marketplace, fotos, JSON
     // de horarios). El sidebar y picker solo necesitan id+nombre+tenant_id.
     //
-    // Fix 2026-05-30 (queja Lucas recurrente: "se me desaparece el selector
-    // del sidebar después de cada deploy"): antes ignorábamos el error y
-    // dejábamos `locales = []` silenciosamente — esto ocultaba el dropdown
-    // del sidebar (condicional `localesDisp.length > 1` en Layout.tsx).
-    // Causa raíz típica: token JWT refrescado por Supabase justo cuando
-    // disparamos el fetch (post-deploy con SW actualizado) → la query falla
-    // con 401/403 transitorio, retry-able. Ahora reintentamos hasta 3 veces
-    // con backoff exponencial. Si TODAS fallan, NO sobreescribimos el state
-    // viejo (conservamos los locales previos en vez de quedarnos en blanco).
+    // Fix 2026-05-30 v2 (queja Lucas recurrente: "queda sin sidebar al costado
+    // y tengo que refrescar nuevamente"). CAUSA RAÍZ confirmada contra prod DB:
+    // race condition. Al recargar, este fetch puede correr ANTES de que el
+    // cliente de Supabase termine de hidratar la sesión desde localStorage.
+    // Sin sesión, auth.uid() es NULL → la RLS de `locales` (tenant scope)
+    // devuelve 0 filas SIN ERROR. El retry-por-error NO ayudaba porque 0 filas
+    // no es error. Resultado: locales=[] → localesDisp.length=0 → Layout oculta
+    // el selector. Por eso "refresco de nuevo y aparece".
+    //
+    // Fix: 1) await getSession() (resuelve recién con la sesión hidratada),
+    // 2) reintentar si devuelve 0 filas en los primeros intentos (la sesión
+    // todavía no propagó a PostgREST); aceptar 0 recién en el último intento
+    // (tenant legítimamente sin locales). 3) Nunca pisar el state con vacío.
+    await db.auth.getSession();
     let data: Array<{ id: number; nombre: string; tenant_id: string; provincia: string | null; localidad: string | null; }> | null = null;
     let lastError: unknown = null;
-    for (let intento = 0; intento < 3; intento++) {
+    for (let intento = 0; intento < 4; intento++) {
       const resp = await db.from("locales").select("id, nombre, tenant_id, provincia, localidad").order("id");
-      if (!resp.error && resp.data) { data = resp.data; lastError = null; break; }
+      if (!resp.error && resp.data && resp.data.length > 0) { data = resp.data; lastError = null; break; }
+      // 0 filas sin error en intentos tempranos = sesión no propagada → reintentar.
+      // En el último intento aceptamos el resultado vacío (tenant sin locales real).
+      if (!resp.error && resp.data && intento === 3) { data = resp.data; lastError = null; break; }
       lastError = resp.error;
-      // Backoff exponencial: 200ms, 400ms, 800ms.
+      // Backoff exponencial: 200ms, 400ms, 800ms, 1600ms.
       await new Promise(r => setTimeout(r, 200 * Math.pow(2, intento)));
     }
     if (!data) {
