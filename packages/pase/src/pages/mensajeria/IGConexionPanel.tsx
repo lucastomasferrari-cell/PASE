@@ -115,6 +115,8 @@ export function IGConexionPanel() {
   const [conectando, setConectando] = useState(false);
   const [modalLocalOpen, setModalLocalOpen] = useState(false);
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
+  const [logsModalOpen, setLogsModalOpen] = useState(false);
+  const [logs, setLogs] = useState<Array<{ tipo: string; error_message: string | null; payload: unknown; created_at: string }>>([]);
   const { toast, showToast, showError } = useToast();
 
   const cargar = useCallback(async () => {
@@ -186,6 +188,20 @@ export function IGConexionPanel() {
     const t = setTimeout(() => setFlash(null), 8000);
     return () => clearTimeout(t);
   }, [params, setParams, cargar]);
+
+  // Ver últimos eventos del bot (OAuth debugs + errores). RLS limita a tenant
+  // propio. Sirve para debuggear "por qué no me deja conectar @maneki" sin
+  // tener que abrir Supabase Studio.
+  const verUltimosErrores = async () => {
+    const { data, error } = await db.from('ig_eventos')
+      .select('tipo, error_message, payload, created_at')
+      .in('tipo', ['error', 'oauth_debug', 'oauth_conectado', 'token_refresh_failed'])
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (error) { showError('No pude leer los logs: ' + error.message); return; }
+    setLogs(data || []);
+    setLogsModalOpen(true);
+  };
 
   // Diagnóstico
   const runDiagnostic = async () => {
@@ -312,6 +328,12 @@ export function IGConexionPanel() {
             >
               Verificar configuracion del bot
             </button>
+            <button
+              type="button" onClick={verUltimosErrores}
+              style={{ fontSize: 10, color: "var(--muted2)", background: "transparent", border: "none", cursor: "pointer", textDecoration: "underline" }}
+            >
+              Ver ultimos errores
+            </button>
           </div>
         </div>
         {modalLocalOpen && (
@@ -321,6 +343,7 @@ export function IGConexionPanel() {
             onCancel={() => { setModalLocalOpen(false); setConectando(false); }}
           />
         )}
+        {logsModalOpen && <LogsModal logs={logs} onClose={() => setLogsModalOpen(false)} />}
       </>
     );
   }
@@ -349,6 +372,12 @@ export function IGConexionPanel() {
               style={{ fontSize: 10, color: "var(--muted2)", background: "transparent", border: "none", cursor: "pointer", textDecoration: "underline" }}
             >
               Verificar bot
+            </button>
+            <button
+              type="button" onClick={verUltimosErrores}
+              style={{ fontSize: 10, color: "var(--muted2)", background: "transparent", border: "none", cursor: "pointer", textDecoration: "underline" }}
+            >
+              Ver ultimos errores
             </button>
             <button
               className="btn btn-acc btn-sm"
@@ -430,6 +459,97 @@ export function IGConexionPanel() {
           onCancel={() => { setModalLocalOpen(false); setConectando(false); }}
         />
       )}
+
+      {/* Modal últimos errores Meta — diagnóstico de OAuth y refresh */}
+      {logsModalOpen && <LogsModal logs={logs} onClose={() => setLogsModalOpen(false)} />}
     </>
+  );
+}
+
+// ── Modal: lista de últimos eventos del bot IG ──────────────────────────────
+// Muestra logs de ig_eventos en formato legible. Útil para diagnosticar:
+//   - Por qué falla OAuth (errores de Meta tipo LONG_TOKEN_FAILED)
+//   - Por qué el refresh diario falla
+//   - Si una cuenta nueva (ej @maneki) no tiene permisos en la app de Meta
+interface LogEntry {
+  tipo: string;
+  error_message: string | null;
+  payload: unknown;
+  created_at: string;
+}
+
+function LogsModal({ logs, onClose }: { logs: LogEntry[]; onClose: () => void }) {
+  const colorPorTipo = (t: string) => {
+    if (t === 'error' || t.includes('failed')) return 'var(--danger)';
+    if (t === 'oauth_conectado') return 'var(--success)';
+    return 'var(--muted2)';
+  };
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 1000,
+      background: 'rgba(0,0,0,0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }}>
+      <div style={{
+        background: 'var(--bg)', border: '1px solid var(--bd)',
+        borderRadius: 12, width: 720, maxWidth: '95vw', maxHeight: '85vh',
+        display: 'flex', flexDirection: 'column',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+      }}>
+        <div style={{
+          padding: '14px 18px', borderBottom: '1px solid var(--bd)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>Últimos eventos del bot IG</div>
+            <div style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 2 }}>
+              {logs.length} eventos · solo los últimos 20 (debug, errores, conexiones)
+            </div>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Cerrar</button>
+        </div>
+        <div style={{ overflow: 'auto', padding: '8px 14px', flex: 1 }}>
+          {logs.length === 0 ? (
+            <div style={{ color: 'var(--muted2)', fontSize: 13, padding: '20px 4px', textAlign: 'center' }}>
+              No hay eventos registrados todavía.
+            </div>
+          ) : logs.map((log, i) => (
+            <div key={i} style={{
+              padding: '10px 12px',
+              borderBottom: i < logs.length - 1 ? '1px solid var(--bd)' : undefined,
+              fontSize: 12,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <span style={{ color: colorPorTipo(log.tipo), fontWeight: 600 }}>
+                  {log.tipo}
+                </span>
+                <span style={{ color: 'var(--muted2)', fontSize: 11 }}>
+                  {new Date(log.created_at).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'medium' })}
+                </span>
+              </div>
+              {log.error_message && (
+                <div style={{
+                  fontFamily: 'monospace', fontSize: 11, color: 'var(--danger)',
+                  background: 'rgba(220,38,38,0.06)', padding: '6px 8px', borderRadius: 4,
+                  marginBottom: 4, wordBreak: 'break-word',
+                }}>
+                  {log.error_message}
+                </div>
+              )}
+              {log.payload !== null && log.payload !== undefined && (
+                <details style={{ fontSize: 11, color: 'var(--muted2)' }}>
+                  <summary style={{ cursor: 'pointer', userSelect: 'none' }}>payload</summary>
+                  <pre style={{
+                    fontFamily: 'monospace', fontSize: 10,
+                    background: 'var(--s2)', padding: '6px 8px', borderRadius: 4,
+                    marginTop: 4, overflow: 'auto', maxHeight: 200,
+                  }}>{JSON.stringify(log.payload, null, 2)}</pre>
+                </details>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
