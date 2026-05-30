@@ -431,7 +431,7 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
             ) : conversacionesFiltradas.length === 0 ? (
               <EmptyState icon="📭" title="Sin conversaciones" description={
                 filtroTab === 'todas'
-                  ? "Cuando alguien escriba al Instagram de Neko, va a aparecer acá."
+                  ? "Cuando alguien escriba al Instagram conectado, va a aparecer acá."
                   : "Nada en este filtro."
               } />
             ) : (
