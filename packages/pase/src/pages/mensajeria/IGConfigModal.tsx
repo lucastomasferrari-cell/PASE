@@ -10,6 +10,14 @@
 // El system_prompt es lo más importante. Es texto libre — Lucas le carga
 // lo que quiera (tono, locales, menú, horarios, links, reglas de derivación).
 // Mientras más detalle, mejor responde el bot.
+//
+// Multi-cuenta (30-may): cada cuenta IG tiene su propia fila en ig_config
+// (UNIQUE tenant_id+ig_account_id). Antes el modal hacía .limit(1).single()
+// y editaba "la primera" sin selector → con 2+ cuentas no se podía elegir
+// cuál editar y cualquier cambio iba a una sola sin que el user supiera.
+// Ahora cargamos TODAS las cuentas y mostramos selector arriba. Cada cuenta
+// tiene su prompt independiente — Neko vende sushi con su tono, Maneki
+// con el suyo, etc.
 
 import { useState, useEffect } from "react";
 import { db } from "../../lib/supabase";
@@ -64,24 +72,49 @@ REGLAS CRÍTICAS
 Mientras más detallado, mejor responde el bot.`;
 
 export function IGConfigModal({ isOpen, onClose }: Props) {
-  const [config, setConfig] = useState<IGConfig | null>(null);
+  const [cuentas, setCuentas] = useState<IGConfig[]>([]);
+  const [seleccionada, setSeleccionada] = useState<string | null>(null); // ig_account_id activo
+  const [edits, setEdits] = useState<Record<string, IGConfig>>({}); // cambios por cuenta (no se guardan hasta hacer click)
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<"prompt" | "ajustes">("prompt");
-  const { toast, showError } = useToast();
+  const { toast, showError, showToast } = useToast();
 
   useEffect(() => {
     if (!isOpen) return;
     (async () => {
       setLoading(true);
-      const { data } = await db.from("ig_config")
-        .select("*")
-        .limit(1)
-        .single();
-      setConfig(data as IGConfig);
+      // Cargamos TODAS las cuentas IG del tenant (multi-cuenta 30-may).
+      // RLS filtra automáticamente por tenant_id = auth_tenant_id().
+      const { data, error } = await db.from("ig_config")
+        .select("tenant_id, ig_account_id, ig_username, bot_activo, system_prompt, modelo, max_tokens, contexto_mensajes")
+        .is("desconectado_at", null)
+        .order("id");
+      if (error) {
+        showError("No pude cargar las cuentas: " + error.message);
+        setLoading(false);
+        return;
+      }
+      const lista = (data || []) as IGConfig[];
+      setCuentas(lista);
+      // Copiamos a edits para poder editarlas localmente sin tocar la lista original.
+      const edsInit: Record<string, IGConfig> = {};
+      for (const c of lista) edsInit[c.ig_account_id] = { ...c };
+      setEdits(edsInit);
+      // Default: primera cuenta. Si solo hay 1, no se ve el selector.
+      setSeleccionada(lista[0]?.ig_account_id ?? null);
       setLoading(false);
     })();
-  }, [isOpen]);
+  }, [isOpen, showError]);
+
+  // Config actual = la que está siendo editada
+  const config = seleccionada ? edits[seleccionada] : null;
+
+  // Setter helper — actualiza solo la cuenta seleccionada
+  const setConfig = (next: IGConfig) => {
+    if (!seleccionada) return;
+    setEdits(prev => ({ ...prev, [seleccionada]: next }));
+  };
 
   const guardar = async () => {
     if (!config) return;
@@ -100,6 +133,7 @@ export function IGConfigModal({ isOpen, onClose }: Props) {
       showError("Error al guardar: " + error.message);
       return;
     }
+    showToast(`Configuración de @${config.ig_username ?? config.ig_account_id} guardada`, "success");
     onClose();
   };
 
@@ -123,18 +157,45 @@ export function IGConfigModal({ isOpen, onClose }: Props) {
         </>
       }
     >
-      {loading || !config ? (
+      {loading ? (
         <div className="loading">Cargando configuración...</div>
-      ) : (
+      ) : cuentas.length === 0 ? (
+        <div style={{ padding: 24, textAlign: "center", color: "var(--muted2)" }}>
+          No hay ninguna cuenta de Instagram conectada todavía.<br />
+          Conectá una desde el panel principal y volvé acá para configurarla.
+        </div>
+      ) : !config ? null : (
         <div>
-          {/* ─── Header con info de la cuenta ─── */}
+          {/* ─── Selector de cuenta + Toggle bot activo ─── */}
           <div style={{
             padding: 12, background: "var(--s2)", borderRadius: 8, marginBottom: 16,
-            display: "flex", justifyContent: "space-between", alignItems: "center"
+            display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap",
           }}>
-            <div>
-              <div style={{ fontSize: 12, color: "var(--muted2)" }}>Cuenta de Instagram</div>
-              <div style={{ fontWeight: 500 }}>@{config.ig_username || config.ig_account_id}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 240 }}>
+              <div>
+                <div style={{ fontSize: 12, color: "var(--muted2)" }}>
+                  {cuentas.length > 1 ? "Editando cuenta" : "Cuenta de Instagram"}
+                </div>
+                {cuentas.length > 1 ? (
+                  <select
+                    value={seleccionada ?? ""}
+                    onChange={e => setSeleccionada(e.target.value)}
+                    style={{
+                      marginTop: 4, padding: "6px 10px", background: "var(--bg)",
+                      border: "1px solid var(--bd)", borderRadius: 6, fontSize: 14,
+                      fontWeight: 500, color: "var(--text)", cursor: "pointer",
+                    }}
+                  >
+                    {cuentas.map(c => (
+                      <option key={c.ig_account_id} value={c.ig_account_id}>
+                        @{c.ig_username ?? c.ig_account_id}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div style={{ fontWeight: 500 }}>@{config.ig_username || config.ig_account_id}</div>
+                )}
+              </div>
             </div>
             <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
               <span style={{ fontSize: 12 }}>
@@ -148,6 +209,17 @@ export function IGConfigModal({ isOpen, onClose }: Props) {
               />
             </label>
           </div>
+
+          {cuentas.length > 1 && (
+            <div style={{
+              padding: "8px 12px", marginBottom: 12, fontSize: 11, color: "var(--muted2)",
+              background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.15)",
+              borderRadius: 6, lineHeight: 1.5,
+            }}>
+              💡 Cada cuenta tiene su propio prompt, modelo y ajustes. Cambiando la cuenta arriba
+              editás esa específicamente. Los cambios no se guardan hasta tocar "Guardar cambios".
+            </div>
+          )}
 
           {/* ─── Tabs ─── */}
           <div className="tabs" style={{ marginBottom: 16 }}>
