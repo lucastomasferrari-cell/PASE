@@ -35,8 +35,11 @@ const BOT_API_URL = (import.meta.env.VITE_IG_BOT_URL as string | undefined)
 
 interface MensajeriaProps {
   user: Usuario;
-  /** Local activo del sidebar. NULL = dueño viendo "Todos los locales". */
-  localActivo: number | null;
+  // Nota 30-may: Mensajería NO usa localActivo del sidebar. Decisión
+  // arquitectural Lucas: las cuentas IG son por marca/cuenta, no por
+  // local (@nekosushi.ar atiende los 3 Neko). Forzar filtro por local
+  // creaba confusión cognitiva. Si hay N cuentas IG conectadas, el
+  // selector está dentro de esta pantalla (chips arriba).
 }
 
 /** Cuenta IG del tenant, con el local al que pertenece (null = global). */
@@ -96,7 +99,7 @@ const ESTADO_BADGE: Record<ConversacionRow['estado'], { label: string; cls: stri
   spam:      { label: 'Spam',      cls: 'b-muted',    icon: '🚫' },
 };
 
-export default function MensajeriaIG({ user, localActivo }: MensajeriaProps) {
+export default function MensajeriaIG({ user }: MensajeriaProps) {
   const [conversaciones, setConversaciones] = useState<ConversacionRow[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [mensajes, setMensajes] = useState<MensajeRow[]>([]);
@@ -131,43 +134,17 @@ export default function MensajeriaIG({ user, localActivo }: MensajeriaProps) {
       .then(({ data }) => setCuentasIG((data as CuentaIGInfo[]) || []));
   }, []);
 
-  // Cargar lista de conversaciones, filtrando por localActivo si aplica.
+  // Cargar TODAS las conversaciones del tenant (sin filtrar por local).
+  // El filtro por cuenta IG vive en los chips arriba (selector visual).
   const loadConversaciones = useCallback(async () => {
     setLoading(true);
-
-    if (localActivo !== null) {
-      // Encargado con local fijo o dueño que eligió uno:
-      // traer conversaciones de cuentas asignadas a ese local O cuentas globales.
-      const { data: igConfigs } = await db.from('ig_config')
-        .select('id')
-        .is('desconectado_at', null)
-        .or(`local_id.eq.${localActivo},local_id.is.null`);
-
-      const configIds = ((igConfigs ?? []) as { id: number }[]).map(r => r.id);
-
-      if (configIds.length === 0) {
-        setConversaciones([]);
-        setLoading(false);
-        return;
-      }
-
-      const { data } = await db.from('v_ig_conversaciones_admin')
-        .select('*')
-        .in('ig_config_id', configIds)
-        .order('ultimo_mensaje_at', { ascending: false })
-        .limit(100);
-      setConversaciones((data as ConversacionRow[]) || []);
-    } else {
-      // Dueño viendo "Todos los locales": sin filtro por local.
-      const { data } = await db.from('v_ig_conversaciones_admin')
-        .select('*')
-        .order('ultimo_mensaje_at', { ascending: false })
-        .limit(100);
-      setConversaciones((data as ConversacionRow[]) || []);
-    }
-
+    const { data } = await db.from('v_ig_conversaciones_admin')
+      .select('*')
+      .order('ultimo_mensaje_at', { ascending: false })
+      .limit(100);
+    setConversaciones((data as ConversacionRow[]) || []);
     setLoading(false);
-  }, [localActivo]);
+  }, []);
 
   useEffect(() => { void loadConversaciones(); }, [loadConversaciones]);
 
@@ -214,26 +191,18 @@ export default function MensajeriaIG({ user, localActivo }: MensajeriaProps) {
     onPollFallback: () => { void loadConversaciones(); },
   });
 
-  // Cuentas IG que aplican al local activo (para el banner de estado).
-  const cuentasDelLocal = useMemo(() => {
-    if (localActivo === null) return cuentasIG; // todas
-    return cuentasIG.filter(c => c.local_id === localActivo || c.local_id === null);
-  }, [cuentasIG, localActivo]);
-
-  // Filtrado: tab + chip de cuenta (solo en modo "todos los locales")
+  // Filtrado: tab + chip de cuenta (independiente del sidebar)
   const conversacionesFiltradas = useMemo(() => {
     return conversaciones.filter(c => {
-      // Filtro por cuenta (chip multi-cuenta, solo en modo "todos los locales")
-      if (localActivo === null && filtroCuentaId !== null) {
-        if (c.ig_config_id !== filtroCuentaId) return false;
-      }
+      // Filtro por cuenta (chip — visible si hay >1 cuenta IG conectada)
+      if (filtroCuentaId !== null && c.ig_config_id !== filtroCuentaId) return false;
       if (filtroTab === 'no_leidas') return c.no_leidos_admin > 0;
       if (filtroTab === 'escaladas') return c.estado === 'escalada';
       if (filtroTab === 'humano') return c.estado === 'humano';
       if (filtroTab === 'bloqueadas') return c.estado === 'spam' || c.bloqueado;
       return true;
     });
-  }, [conversaciones, filtroTab, localActivo, filtroCuentaId]);
+  }, [conversaciones, filtroTab, filtroCuentaId]);
 
   const selectedConv = conversaciones.find(c => c.id === selectedId);
 
@@ -351,35 +320,10 @@ export default function MensajeriaIG({ user, localActivo }: MensajeriaProps) {
       {/* Toggle de notificaciones push */}
       <NotificacionesPushToggle />
 
-      {/* Banner de contexto: qué cuenta(s) se están mostrando */}
-      {localActivo !== null && cuentasDelLocal.length > 0 && (
-        <div style={{
-          padding: "8px 12px", marginBottom: 10, borderRadius: 7,
-          background: "var(--s2)", border: "1px solid var(--bd)",
-          fontSize: 12, color: "var(--muted2)", display: "flex",
-          alignItems: "center", gap: 6, flexWrap: "wrap",
-        }}>
-          <span style={{ color: "var(--success)", fontSize: 13 }}>●</span>
-          <span>Mostrando:</span>
-          {cuentasDelLocal.map(c => (
-            <span key={c.id} style={{ fontWeight: 500, color: "var(--fg)" }}>
-              @{c.ig_username ?? c.id}
-              {c.local_id === null ? " (todos los locales)" : ""}
-            </span>
-          ))}
-        </div>
-      )}
-      {localActivo !== null && cuentasDelLocal.length === 0 && !loading && (
-        <div style={{
-          padding: "10px 14px", marginBottom: 10, borderRadius: 7,
-          background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)",
-          fontSize: 13, color: "var(--warn)",
-        }}>
-          Este local no tiene cuenta IG asignada. Asigna una en Mensajeria → Configurar bot.
-        </div>
-      )}
-      {/* Chips multi-cuenta: solo en modo "Todos los locales" con >1 cuenta */}
-      {localActivo === null && cuentasIG.length > 1 && (
+      {/* Chips multi-cuenta: si hay >1 cuenta IG conectada, permite filtrar.
+          Mensajería NO depende del local activo del sidebar (decisión Lucas 30-may):
+          las cuentas IG son por marca/cuenta, no por local. */}
+      {cuentasIG.length > 1 && (
         <div style={{
           display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap",
           alignItems: "center",
