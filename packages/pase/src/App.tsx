@@ -2,6 +2,7 @@ import { useState, useEffect, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { db } from "./lib/supabase";
 import { initConsoleCapture } from "./lib/consoleCapture";
+import { useVersionPolling } from "./lib/versionCheck";
 // Capturar errores de consola desde el boot, ANTES de cualquier otro código.
 // Los errores capturados se incluyen en tickets de soporte para que el agent
 // auto-fix tenga contexto del browser cuando diagnostica.
@@ -180,6 +181,11 @@ function DefaultRedirect({ user }: { user: Usuario | null }) {
 }
 
 function AppMain() {
+  // Detección post-deploy: cada 5min + on focus fetchea /version.json y
+  // compara con la versión embebida en el bundle. Si difieren → signOut
+  // + reload (fuerza JWT/bundle frescos para todos los users después de
+  // cada deploy). Pedido Lucas 31-may.
+  useVersionPolling();
   const [user, setUser] = useState<Usuario | null>(null);
   const [locales, setLocales] = useState<Local[]>([]);
   const [localActivo, setLocalActivo] = useState<number | null>(null);
