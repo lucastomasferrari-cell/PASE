@@ -121,7 +121,14 @@ export default function SueldosPreview() {
   const now = new Date();
   const [mes, setMes] = useState(now.getMonth() + 1);
   const [anio, setAnio] = useState(now.getFullYear());
-  const [localId, setLocalId] = useState<number | null>(null);
+  // Respetar el local activo del sidebar (App.tsx lo guarda en sessionStorage).
+  // Sin esto, el mockup arranca con el primer local alfabéticamente (puede ser
+  // "Local Prueba" con 2 empleados) en vez del que el user está mirando.
+  const sidebarLocalRaw = typeof sessionStorage !== "undefined"
+    ? sessionStorage.getItem("pase_local_activo")
+    : null;
+  const sidebarLocalId = sidebarLocalRaw ? parseInt(sidebarLocalRaw) : null;
+  const [localId, setLocalId] = useState<number | null>(sidebarLocalId);
   const [filtroEstado, setFiltroEstado] = useState<"todos" | "pendientes" | "pagados">("pendientes");
 
   // Data real desde DB
