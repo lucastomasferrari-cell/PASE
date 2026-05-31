@@ -152,22 +152,38 @@ interface DesgloseCalculo {
   totalAdelantos: number;
   total: number;
 }
-function calcularDesglose(emp: Emp, nov: NovEdit, cuotasTotal: number, adelantosATildar: number): DesgloseCalculo {
+function calcularDesglose(emp: Emp, nov: NovEdit, cuotasTotal: number, cuotaNum: number, adelantosATildar: number): DesgloseCalculo {
   const baseCuota = emp.sueldo_mensual / cuotasTotal;
   const diasMes = 30;
-  const valorDia = emp.sueldo_mensual / diasMes / cuotasTotal;
+  // Cambio Lucas 31-may noche: faltas/feriados/dobles/extras se calculan
+  // SIEMPRE sobre el sueldo MENSUAL completo, NUNCA dividido por la quincena.
+  // Antes: valorDia = sueldo / 30 / cuotasTotal → para quincenales daba la
+  // MITAD del valor real, y una falta en Q1 descontaba la mitad de lo que
+  // realmente vale el día. Por eso Bernal Q1 mayo daba $347K en vez de
+  // los $226K realmente pagados (las 7 faltas se calculaban a $14K en vez
+  // de $28K cada una).
+  const valorDia = emp.sueldo_mensual / diasMes;
   const valorHora = valorDia / 8;
   const valorDoble = valorDia * 1.5;
   const descInas = nov.inasistencias * valorDia;
   const ingrExtras = nov.horas_extras * valorHora * 1.5;
   const ingrDobles = nov.dobles * valorDoble;
   const ingrFeriados = nov.feriados * valorDia * 2;
-  // Cambio Lucas 31-may: el presentismo es SIEMPRE sobre el sueldo base
-  // (no sobre el subtotal con extras/feriados/faltas). Antes calculaba sobre
-  // subtotal1 = base - faltas + extras + dobles + feriados, lo que inflaba
-  // el presentismo cuando había mucho extra y lo achicaba cuando había
-  // faltas. Ahora es siempre el 5% del baseCuota fijo.
-  const presentismo = nov.presentismo_mantiene ? baseCuota * 0.05 : 0;
+  // Presentismo:
+  //  - Mensuales (cuotasTotal=1): 5% del sueldo mensual (igual que antes).
+  //  - Quincenales: NO se paga en Q1 — se paga UNA sola vez a fin de mes
+  //    cuando ya se sabe si se perdió o no. En Q2: 5% del sueldo MENSUAL
+  //    completo (no de la quincena), porque el presentismo se calcula
+  //    sobre el sueldo base completo.
+  // Pedido Lucas 31-may noche. Antes el código aplicaba 5% del baseCuota
+  // en TODA quincena, lo que daba la mitad del presentismo real y aplicaba
+  // doble (en Q1 y Q2).
+  let presentismo = 0;
+  if (nov.presentismo_mantiene) {
+    if (cuotasTotal === 1) presentismo = emp.sueldo_mensual * 0.05;
+    else if (cuotaNum === 2) presentismo = emp.sueldo_mensual * 0.05;
+    // cuotaNum === 1 && cuotasTotal === 2 → presentismo = 0
+  }
   const subtotal = baseCuota - descInas + ingrExtras + ingrDobles + ingrFeriados + presentismo;
   const total = Math.max(0, Math.round(subtotal - nov.otros_desc - adelantosATildar));
   return {
@@ -183,8 +199,8 @@ function calcularDesglose(emp: Emp, nov: NovEdit, cuotasTotal: number, adelantos
   };
 }
 // Wrapper backward-compat (los callers viejos solo quieren el total).
-function calcularTotal(emp: Emp, nov: NovEdit, cuotasTotal: number, adelantosATildar: number): number {
-  return calcularDesglose(emp, nov, cuotasTotal, adelantosATildar).total;
+function calcularTotal(emp: Emp, nov: NovEdit, cuotasTotal: number, cuotaNum: number, adelantosATildar: number): number {
+  return calcularDesglose(emp, nov, cuotasTotal, cuotaNum, adelantosATildar).total;
 }
 
 // ── Props ──────────────────────────────────────────────────────────────────
@@ -509,7 +525,7 @@ export function TabSueldos({
       const adels = adelantosDelSlot(slot.emp.id, slot.cuota, slot.cuotasTotal);
       const tildSet = tildados[slot.key] || new Set();
       const sumaAdel = adels.filter(a => tildSet.has(a.id)).reduce((sum, a) => sum + Number(a.monto), 0);
-      return s + calcularTotal(slot.emp, nov, slot.cuotasTotal, sumaAdel);
+      return s + calcularTotal(slot.emp, nov, slot.cuotasTotal, slot.cuota, sumaAdel);
     }, 0), 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empleadosVisibles, novEdits, tildados, adelantos]);
@@ -576,7 +592,7 @@ export function TabSueldos({
     const adels = adelantosDelSlot(s.emp.id, s.cuota, s.cuotasTotal);
     const tildSet = tildados[slotKey] || new Set();
     const sumaAdel = adels.filter(a => tildSet.has(a.id)).reduce((sum, a) => sum + Number(a.monto), 0);
-    const total = calcularTotal(s.emp, nov, s.cuotasTotal, sumaAdel);
+    const total = calcularTotal(s.emp, nov, s.cuotasTotal, s.cuota, sumaAdel);
     setPagoLineas([{ cuenta: cuentasUsables[0] || "", monto: String(total), local_id: s.emp.local_id }]);
     setFechaPago(toISO(today));
     setIdempKey(crypto.randomUUID());
@@ -591,7 +607,7 @@ export function TabSueldos({
     const adels = adelantosDelSlot(s.emp.id, s.cuota, s.cuotasTotal);
     const tildSet = tildados[pagoSlot] || new Set();
     const sumaAdel = adels.filter(a => tildSet.has(a.id)).reduce((sum, a) => sum + Number(a.monto), 0);
-    const total = calcularTotal(s.emp, nov, s.cuotasTotal, sumaAdel);
+    const total = calcularTotal(s.emp, nov, s.cuotasTotal, s.cuota, sumaAdel);
     const adelIds = adels.filter(a => tildSet.has(a.id)).map(a => a.id);
     const formasValidas = pagoLineas
       .filter(fp => parseMonto(fp.monto) > 0 && !!fp.cuenta)
@@ -616,18 +632,15 @@ export function TabSueldos({
 
     setPagando(true);
     try {
-      // Sueldo base por cuota
-      const baseCuota = s.emp.sueldo_mensual / s.cuotasTotal;
-      const valorDia = s.emp.sueldo_mensual / 30 / s.cuotasTotal;
-      const valorHora = valorDia / 8;
-      const valorDoble = valorDia * 1.5;
-      const descInas = nov.inasistencias * valorDia;
-      const ingrExtras = nov.horas_extras * valorHora * 1.5;
-      const ingrDobles = nov.dobles * valorDoble;
-      const ingrFeriados = nov.feriados * valorDia * 2;
-      const subtotal1 = baseCuota - descInas + ingrExtras + ingrDobles + ingrFeriados;
-      const presentismo = nov.presentismo_mantiene ? subtotal1 * 0.05 : 0;
-      const subtotal2 = subtotal1 + presentismo;
+      // Cálculo unificado con calcularDesglose (mismo que muestra la pantalla
+      // en vivo). Antes acá había una fórmula PARALELA hardcoded con bugs:
+      //  - valorDia / cuotasTotal (faltas calculadas a la mitad)
+      //  - presentismo sobre subtotal1 (no sobre sueldo mensual base)
+      //  - presentismo sumado en Q1 quincenal (doble cobro)
+      // Fix Lucas 31-may noche.
+      const d = calcularDesglose(s.emp, nov, s.cuotasTotal, s.cuota, sumaAdel);
+      const subtotal1 = d.baseCuota - d.descInas + d.ingrExtras + d.ingrDobles + d.ingrFeriados;
+      const subtotal2 = subtotal1 + d.presentismo;
 
       const { data, error } = await db.rpc("pagar_sueldo", {
         p_nov_id: novDB.id,
@@ -638,16 +651,16 @@ export function TabSueldos({
         p_anio: anio,
         p_crear_liq: true,
         p_calc: {
-          sueldo_base: baseCuota,
-          descuento_ausencias: Math.round(descInas),
-          total_horas_extras: Math.round(ingrExtras),
-          total_dobles: Math.round(ingrDobles),
-          total_feriados: Math.round(ingrFeriados),
+          sueldo_base: d.baseCuota,
+          descuento_ausencias: d.descInas,
+          total_horas_extras: d.ingrExtras,
+          total_dobles: d.ingrDobles,
+          total_feriados: d.ingrFeriados,
           subtotal1: Math.round(subtotal1),
-          monto_presentismo: Math.round(presentismo),
+          monto_presentismo: d.presentismo,
           subtotal2: Math.round(subtotal2),
-          adelantos: Math.round(sumaAdel),
-          otros_descuentos: Math.round(nov.otros_desc),
+          adelantos: d.totalAdelantos,
+          otros_descuentos: d.otrosDesc,
           total_a_pagar: total,
           cuota_num: s.cuota,
           cuotas_total: s.cuotasTotal,
@@ -676,7 +689,7 @@ export function TabSueldos({
     const adels = adelantosDelSlot(slotPago.emp.id, slotPago.cuota, slotPago.cuotasTotal);
     const tildSet = tildados[pagoSlot!] || new Set();
     const sumaAdel = adels.filter(a => tildSet.has(a.id)).reduce((sum, a) => sum + Number(a.monto), 0);
-    return calcularTotal(slotPago.emp, nov, slotPago.cuotasTotal, sumaAdel);
+    return calcularTotal(slotPago.emp, nov, slotPago.cuotasTotal, slotPago.cuota, sumaAdel);
   })();
 
   return (
@@ -748,7 +761,7 @@ export function TabSueldos({
               const adels = adelantosDelSlot(s.emp.id, s.cuota, s.cuotasTotal);
               const tildSet = tildados[s.key] || new Set();
               const sumaAdel = adels.filter(a => tildSet.has(a.id)).reduce((sum, a) => sum + Number(a.monto), 0);
-              const total = calcularTotal(s.emp, nov, s.cuotasTotal, sumaAdel);
+              const total = calcularTotal(s.emp, nov, s.cuotasTotal, s.cuota, sumaAdel);
               const estado = estadoSlot(s.emp.id, s.cuota);
               const venceFecha = fechaFinPeriodo(anio, mes, s.cuota, s.cuotasTotal);
               return { slot: s, nov, adels, tildSet, sumaAdel, total, estado, venceFecha };
@@ -1027,7 +1040,7 @@ export function TabSueldos({
                           {/* Desglose con MONTOS reales de cada item (Lucas 31-may):
                               antes solo mostraba labels sin $. */}
                           {(() => {
-                            const d = calcularDesglose(s.emp, nov, s.cuotasTotal, sumaAdel);
+                            const d = calcularDesglose(s.emp, nov, s.cuotasTotal, s.cuota, sumaAdel);
                             return (
                               <div style={{ background: "var(--s2)", borderRadius: 8, padding: 14, fontSize: 12 }}>
                                 <DesgloseRow label="Sueldo base" value={fmt_$(d.baseCuota)} />
@@ -1035,7 +1048,8 @@ export function TabSueldos({
                                 {nov.dobles > 0 && <DesgloseRow label={`+ ${nov.dobles} dobles`} value={`+${fmt_$(d.ingrDobles)}`} tone="success" />}
                                 {nov.feriados > 0 && <DesgloseRow label={`+ ${nov.feriados} feriados`} value={`+${fmt_$(d.ingrFeriados)}`} tone="success" />}
                                 {nov.inasistencias > 0 && <DesgloseRow label={`− ${nov.inasistencias} faltas`} value={`−${fmt_$(d.descInas)}`} tone="danger" />}
-                                {nov.presentismo_mantiene && <DesgloseRow label="+ Presentismo 5% (sobre base)" value={`+${fmt_$(d.presentismo)}`} tone="success" />}
+                                {nov.presentismo_mantiene && d.presentismo > 0 && <DesgloseRow label="+ Presentismo 5% (sobre sueldo mensual)" value={`+${fmt_$(d.presentismo)}`} tone="success" />}
+                                {nov.presentismo_mantiene && d.presentismo === 0 && s.cuotasTotal === 2 && s.cuota === 1 && <DesgloseRow label="Presentismo: se paga en Q2" value="—" />}
                                 {nov.otros_desc > 0 && <DesgloseRow label="− Otros desc." value={`−${fmt_$(d.otrosDesc)}`} tone="danger" />}
                                 {sumaAdel > 0 && <DesgloseRow label={`− Adelantos (${tildSet.size})`} value={`−${fmt_$(d.totalAdelantos)}`} tone="danger" />}
                                 <div style={{

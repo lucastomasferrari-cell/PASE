@@ -18,6 +18,12 @@ export interface LiquidacionParams {
   pagos_dobles_realizados: number;
   /** Descuentos manuales arbitrarios (préstamos, daños, faltantes). */
   otros_descuentos?: number;
+  /** Número de cuota cuando es quincenal (1 o 2). Solo se usa para presentismo
+   *  — en Q1 quincenal NO se paga (se difiere a Q2 cuando ya se sabe si lo
+   *  perdió o no). Pedido Lucas 31-may. */
+  cuota_num?: number;
+  /** Total de cuotas del período (1 mensual / 2 quincenal). */
+  cuotas_total?: number;
 }
 
 export interface LiquidacionResult {
@@ -232,6 +238,7 @@ export function calcularTotalLiquidacion(params: LiquidacionParams): Liquidacion
     dobles, valor_doble, feriados, vacaciones_dias,
     presentismo_mantiene, adelantos, pagos_dobles_realizados,
     otros_descuentos = 0,
+    cuota_num, cuotas_total,
   } = params;
 
   const sueldo_base = calcularSueldoBase(sueldo_mensual, modo_pago);
@@ -252,7 +259,13 @@ export function calcularTotalLiquidacion(params: LiquidacionParams): Liquidacion
   const subtotal1 =
     sueldo_base - descuento_ausencias + total_horas_extras +
     total_dobles + total_feriados + total_vacaciones;
-  const monto_presentismo = calcularPresentismo(sueldo_mensual, presentismo_mantiene);
+  // Presentismo: si es Q1 quincenal NO se paga — se difiere a Q2 cuando ya
+  // se sabe si lo perdió o no. En mensual o Q2 quincenal se paga el 5% del
+  // sueldo MENSUAL completo. Pedido Lucas 31-may.
+  const presentismo_aplica = !(cuotas_total === 2 && cuota_num === 1);
+  const monto_presentismo = presentismo_aplica
+    ? calcularPresentismo(sueldo_mensual, presentismo_mantiene)
+    : 0;
   const subtotal2 = subtotal1 + monto_presentismo;
   const descuentos_extra = Math.max(0, otros_descuentos);
   const total_a_pagar = Math.round(
