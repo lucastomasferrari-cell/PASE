@@ -35,6 +35,10 @@ const RolesPermisos = lazy(() => import("./pages/RolesPermisos"));
 const Blindaje = lazy(() => import("./pages/herramientas/Blindaje"));
 const ConciliacionBancaria = lazy(() => import("./pages/ConciliacionBancaria").then(m => ({ default: m.ConciliacionBancaria })));
 const RRHHPage = lazy(() => import("./pages/RRHH"));
+// Mockup interactivo del rediseño RRHH (Lucas 30-may): /sueldos-preview
+// Read-only de la DB real (Maneki), interacciones cliente-only. NO afecta
+// datos. Sirve para validar UX antes de portar a /equipo real.
+const SueldosPreview = lazy(() => import("./pages/SueldosPreview"));
 const Tenants = lazy(() => import("./pages/Tenants"));
 const DesignSystem = lazy(() => import("./pages/DesignSystem"));
 const Finanzas = lazy(() => import("./pages/Finanzas"));
@@ -632,6 +636,7 @@ function AppMain() {
 
               {/* Herramientas */}
               <Route path="/equipo" element={<RRHHPage {...props}/>} />
+              <Route path="/sueldos-preview" element={<SueldosPreview />} />
               <Route path="/mensajeria" element={
                 user ? <MensajeriaIG user={user} /> : <Navigate to="/" replace/>
               } />
