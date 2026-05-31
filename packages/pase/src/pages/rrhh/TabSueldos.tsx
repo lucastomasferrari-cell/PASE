@@ -808,42 +808,55 @@ export function TabSueldos({
                   </div>
                 </div>
 
-                {/* Sub-filas Q1/Q2 (o solo 1 si mensual) */}
+                {/* Sub-filas Q1/Q2 (o solo 1 si mensual).
+                    Si es quincenal Y el card está expandido, son CLICKEABLES
+                    para cambiar entre Q1 y Q2 (reemplaza los tabs duplicados
+                    que había antes en el body — pedido Lucas 31-may). */}
                 <div onClick={e => e.stopPropagation()}>
-                  {cuotasInfo.map((c) => (
-                    <div key={c.slot.key} style={{
-                      display: "grid", gridTemplateColumns: "60px 1fr 130px 110px 110px",
-                      gap: 12, padding: "10px 16px 10px 38px", alignItems: "center",
-                      borderTop: "1px solid var(--bd)",
-                      background: c.estado === "pagado" ? "rgba(34,197,94,0.04)" : "transparent",
-                    }}>
-                      <span style={{ fontSize: 11, fontWeight: 500, color: "var(--acc)" }}>
-                        {labelSlot(c.slot.cuota, c.slot.cuotasTotal)}
-                      </span>
-                      <span style={{ fontSize: 11, color: "var(--muted2)" }}>
-                        vence {fmt_d(c.venceFecha)}
-                      </span>
-                      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--acc)" }}>
-                        {fmt_$(c.total)}
+                  {cuotasInfo.map((c, idx) => {
+                    const esActivaEnExpand = isExp && cuotasTotal > 1 && cuotaActivaIdx === idx;
+                    const subFilaCliqueable = isExp && cuotasTotal > 1;
+                    return (
+                      <div key={c.slot.key}
+                        onClick={subFilaCliqueable ? () => setCuotaTabPorEmp(prev => ({ ...prev, [emp.id]: idx })) : undefined}
+                        style={{
+                          display: "grid", gridTemplateColumns: "60px 1fr 130px 110px 110px",
+                          gap: 12, padding: "10px 16px 10px 38px", alignItems: "center",
+                          borderTop: "1px solid var(--bd)",
+                          borderLeft: esActivaEnExpand ? "3px solid var(--acc)" : "3px solid transparent",
+                          background: esActivaEnExpand
+                            ? "rgba(34,127,255,0.06)"
+                            : c.estado === "pagado" ? "rgba(34,197,94,0.04)" : "transparent",
+                          cursor: subFilaCliqueable ? "pointer" : "default",
+                        }}>
+                        <span style={{ fontSize: 11, fontWeight: esActivaEnExpand ? 600 : 500, color: "var(--acc)" }}>
+                          {labelSlot(c.slot.cuota, c.slot.cuotasTotal)}
+                        </span>
+                        <span style={{ fontSize: 11, color: "var(--muted2)" }}>
+                          vence {fmt_d(c.venceFecha)}
+                        </span>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--acc)" }}>
+                          {fmt_$(c.total)}
+                        </div>
+                        <div>
+                          {c.estado === "pagado"
+                            ? <span className="badge b-success" style={{ fontSize: 9 }}>Pagado</span>
+                            : <span className="badge b-warn" style={{ fontSize: 9 }}>Pendiente</span>}
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          {c.estado === "pendiente" && esDueno && (
+                            <button
+                              className="btn btn-acc btn-sm"
+                              onClick={e => { e.stopPropagation(); abrirPago(c.slot.key); }}
+                              style={{ padding: "4px 12px", fontSize: 11 }}
+                            >
+                              Pagar →
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        {c.estado === "pagado"
-                          ? <span className="badge b-success" style={{ fontSize: 9 }}>Pagado</span>
-                          : <span className="badge b-warn" style={{ fontSize: 9 }}>Pendiente</span>}
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        {c.estado === "pendiente" && esDueno && (
-                          <button
-                            className="btn btn-acc btn-sm"
-                            onClick={() => abrirPago(c.slot.key)}
-                            style={{ padding: "4px 12px", fontSize: 11 }}
-                          >
-                            Pagar →
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {/* Body expandido — refactor compact (Lucas 31-may):
@@ -867,28 +880,17 @@ export function TabSueldos({
                   const d = calcularDesglose(s.emp, nov, s.cuotasTotal, s.cuota, sumaAdel);
                   return (
                     <div style={{ borderTop: "1px solid var(--bd)", padding: "10px 16px 14px" }}>
-                      {/* Tabs Q1/Q2 + banner pagado en una sola línea cuando se puede */}
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
-                        {cuotasTotal > 1 ? (
-                          <div style={{ display: "flex", gap: 3 }}>
-                            {cuotasInfo.map((c, idx) => (
-                              <button
-                                key={c.slot.key}
-                                onClick={() => setCuotaTabPorEmp(prev => ({ ...prev, [emp.id]: idx }))}
-                                className={`btn btn-sm ${cuotaActivaIdx === idx ? "btn-acc" : "btn-ghost"}`}
-                                style={{ padding: "3px 10px", fontSize: 10 }}
-                              >
-                                {labelSlot(c.slot.cuota, c.slot.cuotasTotal)}{c.estado === "pagado" && " ✓"}
-                              </button>
-                            ))}
-                          </div>
-                        ) : <div />}
-                        {!isPagado && (
+                      {/* Indicador autosave (solo si no está pagado).
+                          Antes acá había tabs Q1/Q2 — se quitaron por duplicidad
+                          con las sub-filas (Lucas 31-may). Ahora las sub-filas
+                          son clickeables para cambiar la cuota activa. */}
+                      {!isPagado && (
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
                           <span style={{ fontSize: 10, color: hasError ? "var(--danger)" : isSaving ? "var(--muted2)" : lastSaved ? "var(--success)" : "var(--muted2)" }}>
                             {hasError ? "⚠ sin guardar" : isSaving ? "guardando…" : lastSaved ? `✓ guardado${savedAgoSec! > 5 ? ` hace ${savedAgoSec}s` : ""}` : ""}
                           </span>
-                        )}
-                      </div>
+                        </div>
+                      )}
 
                       {/* Banner pagado: una línea compacta con todo */}
                       {isPagado && liqInfo && (
@@ -956,7 +958,7 @@ export function TabSueldos({
                             </div>
                           ) : (
                             <div>
-                              <div style={SECT_HD}>Novedades de {labelSlot(s.cuota, s.cuotasTotal)}</div>
+                              <div style={SECT_HD}>Novedades</div>
                               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
                                 <NovInput label="Faltas" value={nov.inasistencias} onChange={v => updateNov(s.key, "inasistencias", v)} />
                                 <NovInput label="Hs extras" value={nov.horas_extras} onChange={v => updateNov(s.key, "horas_extras", v)} />
