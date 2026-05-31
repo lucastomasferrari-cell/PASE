@@ -15,7 +15,7 @@
 //   4. Bot procesa y redirige a PASE con ?ig_oauth=success
 //   5. Esta pantalla detecta el query param + recarga
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { db } from "../../lib/supabase";
 import { useToast } from "../../hooks/useToast";
@@ -119,6 +119,10 @@ export function IGConexionPanel() {
   const [logs, setLogs] = useState<Array<{ tipo: string; error_message: string | null; payload: unknown; created_at: string }>>([]);
   const { toast, showToast, showError } = useToast();
 
+  // Ref para permitir recursión interna en cargar() sin disparar el lint
+  // "Cannot access variable before declared" (cargar se referencia a sí mismo
+  // en el setTimeout del fallback de sin-sesión).
+  const cargarRef = useRef<(() => Promise<void>) | null>(null);
   const cargar = useCallback(async () => {
     setLoading(true);
     // Fix 2026-05-30 v2 (CAUSA RAÍZ del "Conecta tu Instagram" falso al
@@ -137,7 +141,7 @@ export function IGConexionPanel() {
     if (!session) {
       // eslint-disable-next-line no-console
       console.warn('[IGConexionPanel] sin sesión al cargar, reintento en 400ms');
-      setTimeout(() => { void cargar(); }, 400);
+      setTimeout(() => { void cargarRef.current?.(); }, 400);
       return;
     }
     const [cuentasResp, localesResp] = await Promise.all([
@@ -174,7 +178,7 @@ export function IGConexionPanel() {
     setLoading(false);
   }, [showError]);
 
-  useEffect(() => { void cargar(); }, [cargar]);
+  useEffect(() => { cargarRef.current = cargar; void cargar(); }, [cargar]);
 
   // Procesar callback OAuth
   useEffect(() => {

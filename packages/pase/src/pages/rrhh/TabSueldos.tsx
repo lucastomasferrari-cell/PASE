@@ -75,6 +75,21 @@ interface LiqEstado {
   cuota_num: number;
   cuotas_total: number;
   estado: "pendiente" | "pagado";
+  // Extendido 31-may: para vista de pagado necesitamos saber el id de liq,
+  // total pagado y poder cargar movimientos asociados.
+  liq_id: string | null;
+  total_a_pagar: number;
+  pagos_realizados: number;
+}
+// Movimiento de pago asociado a una liquidación (para mostrar medios+fechas en
+// la vista de "pagado").
+interface MovPago {
+  id: string;
+  liquidacion_id: string;
+  cuenta: string;
+  importe: number;
+  fecha: string;
+  anulado: boolean;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -234,21 +249,27 @@ export function TabSueldos({
       setAdelantos((ads || []) as Adel[]);
 
       // Novedades existentes del mes (para inicializar el form).
+      // Extendido 31-may: traer id+total+pagado de la liquidación para mostrar
+      // el resumen de pago cuando la cuota está pagada (sin re-query).
       const { data: novs } = await db.from("rrhh_novedades")
-        .select("id, empleado_id, mes, anio, cuota_num, cuotas_total, inasistencias, presentismo, horas_extras, dobles, feriados, otros_descuentos, otros_descuentos_motivo, observaciones, estado, rrhh_liquidaciones(estado)")
+        .select("id, empleado_id, mes, anio, cuota_num, cuotas_total, inasistencias, presentismo, horas_extras, dobles, feriados, otros_descuentos, otros_descuentos_motivo, observaciones, estado, rrhh_liquidaciones(id, estado, total_a_pagar, pagos_realizados)")
         .in("empleado_id", empIds)
         .eq("mes", mes).eq("anio", anio);
-      type NovRow = NovDB & { rrhh_liquidaciones: { estado: string }[] | null };
+      type NovRow = NovDB & { rrhh_liquidaciones: { id: string; estado: string; total_a_pagar: number; pagos_realizados: number }[] | null };
       const novRows = (novs || []) as NovRow[];
       setNovedadesDB(novRows.map(({ rrhh_liquidaciones: _, ...n }) => n));
       const liqsArr: LiqEstado[] = novRows.map(n => {
         const ls = n.rrhh_liquidaciones || [];
-        const pagado = ls.some(l => l.estado === "pagado");
+        const liqPagada = ls.find(l => l.estado === "pagado");
+        const liqAny = liqPagada ?? ls[0];
         return {
           empleado_id: n.empleado_id,
           cuota_num: n.cuota_num ?? 1,
           cuotas_total: n.cuotas_total ?? 1,
-          estado: pagado ? "pagado" : "pendiente",
+          estado: liqPagada ? "pagado" : "pendiente",
+          liq_id: liqAny?.id ?? null,
+          total_a_pagar: Number(liqAny?.total_a_pagar ?? 0),
+          pagos_realizados: Number(liqAny?.pagos_realizados ?? 0),
         };
       });
       setLiqs(liqsArr);
@@ -403,6 +424,56 @@ export function TabSueldos({
     const liq = liqs.find(l => l.empleado_id === empId && l.cuota_num === cuota);
     return liq?.estado === "pagado" ? "pagado" : "pendiente";
   }
+  function liqDelSlot(empId: string, cuota: number): LiqEstado | undefined {
+    return liqs.find(l => l.empleado_id === empId && l.cuota_num === cuota);
+  }
+
+  // ── Movimientos de pago (cargados cuando se expande una cuota pagada) ───
+  // Mapa liq_id → array de movimientos. Lazy load: solo se fetchea cuando se
+  // abre el card. Pedido Lucas 31-may: vista resumen de pago debe mostrar
+  // fecha + medios + montos por cuenta.
+  const [movsPorLiq, setMovsPorLiq] = useState<Record<string, MovPago[]>>({});
+  const cargarMovsLiq = useCallback(async (liqId: string) => {
+    if (movsPorLiq[liqId]) return;  // ya cargado
+    const { data } = await db.from("movimientos")
+      .select("id, liquidacion_id, cuenta, importe, fecha, anulado")
+      .eq("liquidacion_id", liqId)
+      .eq("anulado", false)
+      .order("fecha", { ascending: true });
+    setMovsPorLiq(prev => ({ ...prev, [liqId]: (data || []) as MovPago[] }));
+  }, [movsPorLiq]);
+
+  // ── Modal confirmación anular pago ──────────────────────────────────────
+  const [anulModal, setAnulModal] = useState<{ liqId: string; empNom: string; total: number; movs: MovPago[]; modoEdit: boolean } | null>(null);
+  const [anulando, setAnulando] = useState(false);
+  const ejecutarAnular = async () => {
+    if (!anulModal) return;
+    setAnulando(true);
+    try {
+      // Anular cada movimiento de la liq (no anulado) vía RPC anular_movimiento,
+      // que es la pieza atómica que revierte adelantos consumidos, aguinaldo,
+      // y maneja partial-pay (último mov de la liq → revierte todo, otros →
+      // solo resta importe de pagos_realizados). Ver migration
+      // 202605141800_anular_pago_sueldo_revierte_todo.sql.
+      for (const m of anulModal.movs) {
+        const { error } = await db.rpc("anular_movimiento", {
+          p_movimiento_id: m.id,
+          p_motivo: anulModal.modoEdit
+            ? `Anulado para editar sueldo (Anto cargó mal)`
+            : `Anulado por dueño desde Sueldos`,
+        });
+        if (error) {
+          showError(`Error anulando movimiento: ${translateRpcError(error)}`);
+          return;
+        }
+      }
+      showToast(anulModal.modoEdit ? "Pago anulado — ya podés editar" : "Pago anulado, plata devuelta a caja");
+      setAnulModal(null);
+      await recargar();
+    } finally {
+      setAnulando(false);
+    }
+  };
 
   // Empleados visibles (agrupados — 1 card por empleado)
   const empleadosVisibles = useMemo(() => {
@@ -777,6 +848,14 @@ export function TabSueldos({
                   const hasError = errorKeys.has(s.key);
                   const lastSaved = savedAt[s.key];
                   const savedAgoSec = lastSaved ? Math.floor((Date.now() - lastSaved) / 1000) : null;
+                  // 31-may: vista pagada — read-only + info de pago + acciones
+                  const liqInfo = liqDelSlot(s.emp.id, s.cuota);
+                  const isPagado = cuotaActiva.estado === "pagado";
+                  const movsLiq = liqInfo?.liq_id ? (movsPorLiq[liqInfo.liq_id] ?? []) : [];
+                  // Cargar movs lazy cuando se expande una pagada
+                  if (isPagado && liqInfo?.liq_id && !movsPorLiq[liqInfo.liq_id]) {
+                    void cargarMovsLiq(liqInfo.liq_id);
+                  }
                   return (
                     <div style={{ borderTop: "1px solid var(--bd)", padding: "16px 20px" }}>
                       {cuotasTotal > 1 && (
@@ -794,38 +873,103 @@ export function TabSueldos({
                           ))}
                         </div>
                       )}
+                      {/* Banda info de pago (solo cuando está pagado) */}
+                      {isPagado && liqInfo && (
+                        <div style={{
+                          background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.3)",
+                          borderRadius: 8, padding: "10px 14px", marginBottom: 14,
+                          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap",
+                        }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                            <span className="badge b-success" style={{ fontSize: 10 }}>SUELDO PAGADO</span>
+                            <span style={{ fontSize: 11, color: "var(--muted2)" }}>
+                              {labelSlot(s.cuota, s.cuotasTotal)} de {nombreMes(mes)} {anio} · Total <strong style={{ color: "var(--text)" }}>{fmt_$(liqInfo.pagos_realizados)}</strong>
+                            </span>
+                            {movsLiq.length > 0 && (
+                              <span style={{ fontSize: 11, color: "var(--muted2)" }}>
+                                · Pagado el <strong style={{ color: "var(--text)" }}>{fmt_d(movsLiq[0]!.fecha)}</strong>
+                              </span>
+                            )}
+                          </div>
+                          {esDueno && liqInfo.liq_id && (
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <button
+                                className="btn btn-ghost btn-sm"
+                                style={{ padding: "4px 12px", fontSize: 11 }}
+                                onClick={() => setAnulModal({
+                                  liqId: liqInfo.liq_id!, empNom: `${emp.apellido} ${emp.nombre}`,
+                                  total: liqInfo.pagos_realizados, movs: movsLiq, modoEdit: true,
+                                })}
+                              >
+                                Editar
+                              </button>
+                              <button
+                                className="btn btn-sec btn-sm"
+                                style={{ padding: "4px 12px", fontSize: 11, color: "var(--danger)", borderColor: "var(--danger)" }}
+                                onClick={() => setAnulModal({
+                                  liqId: liqInfo.liq_id!, empNom: `${emp.apellido} ${emp.nombre}`,
+                                  total: liqInfo.pagos_realizados, movs: movsLiq, modoEdit: false,
+                                })}
+                              >
+                                Anular pago
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 28 }}>
                         <div>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                             <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>
-                              Novedades de {labelSlot(s.cuota, s.cuotasTotal)}
+                              {isPagado ? "Novedades (read-only)" : `Novedades de ${labelSlot(s.cuota, s.cuotasTotal)}`}
                             </div>
-                            {/* Indicador autosave */}
-                            <span style={{ fontSize: 10, color: hasError ? "var(--danger)" : isSaving ? "var(--muted2)" : "var(--success)" }}>
-                              {hasError ? "⚠ sin guardar" : isSaving ? "guardando…" : lastSaved ? `✓ guardado${savedAgoSec! > 5 ? ` hace ${savedAgoSec}s` : ""}` : ""}
-                            </span>
+                            {/* Indicador autosave (solo si no está pagado) */}
+                            {!isPagado && (
+                              <span style={{ fontSize: 10, color: hasError ? "var(--danger)" : isSaving ? "var(--muted2)" : "var(--success)" }}>
+                                {hasError ? "⚠ sin guardar" : isSaving ? "guardando…" : lastSaved ? `✓ guardado${savedAgoSec! > 5 ? ` hace ${savedAgoSec}s` : ""}` : ""}
+                              </span>
+                            )}
                           </div>
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
-                            <NovInput label="Faltas (días)" value={nov.inasistencias} onChange={v => updateNov(s.key, "inasistencias", v)} />
-                            <NovInput label="Horas extras" value={nov.horas_extras} onChange={v => updateNov(s.key, "horas_extras", v)} />
-                            <NovInput label="Turnos dobles" value={nov.dobles} onChange={v => updateNov(s.key, "dobles", v)} />
-                            <NovInput label="Feriados trab." value={nov.feriados} onChange={v => updateNov(s.key, "feriados", v)} />
-                            <NovInput label="Otros desc. ($)" value={nov.otros_desc} onChange={v => updateNov(s.key, "otros_desc", v)} />
-                            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, paddingTop: 18 }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16, opacity: isPagado ? 0.6 : 1, pointerEvents: isPagado ? "none" : "auto" }}>
+                            <NovInput label="Faltas (días)" value={nov.inasistencias} onChange={v => updateNov(s.key, "inasistencias", v)} disabled={isPagado} />
+                            <NovInput label="Horas extras" value={nov.horas_extras} onChange={v => updateNov(s.key, "horas_extras", v)} disabled={isPagado} />
+                            <NovInput label="Turnos dobles" value={nov.dobles} onChange={v => updateNov(s.key, "dobles", v)} disabled={isPagado} />
+                            <NovInput label="Feriados trab." value={nov.feriados} onChange={v => updateNov(s.key, "feriados", v)} disabled={isPagado} />
+                            <NovInput label="Otros desc. ($)" value={nov.otros_desc} onChange={v => updateNov(s.key, "otros_desc", v)} disabled={isPagado} />
+                            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: isPagado ? "not-allowed" : "pointer", fontSize: 12, paddingTop: 18 }}>
                               <input
                                 type="checkbox"
                                 checked={nov.presentismo_mantiene}
                                 onChange={e => updateNov(s.key, "presentismo_mantiene", e.target.checked)}
+                                disabled={isPagado}
                               />
                               Presentismo (+5%)
                             </label>
                           </div>
 
+                          {/* Medios de pago (solo si pagado) */}
+                          {isPagado && movsLiq.length > 0 && (
+                            <div style={{ marginBottom: 16 }}>
+                              <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+                                Pagado en
+                              </div>
+                              <div style={{ background: "var(--s2)", borderRadius: 8, padding: 10 }}>
+                                {movsLiq.map(m => (
+                                  <div key={m.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "3px 0" }}>
+                                    <span style={{ color: "var(--muted2)" }}>{m.cuenta} · {fmt_d(m.fecha)}</span>
+                                    <span style={{ color: "var(--text)", fontWeight: 500 }}>{fmt_$(Math.abs(Number(m.importe)))}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                             <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>
                               Adelantos
                             </div>
-                            {esDueno && (
+                            {esDueno && !isPagado && (
                               <button
                                 className="btn btn-ghost btn-sm"
                                 onClick={() => setAdelModalSlot(s.key)}
@@ -847,12 +991,13 @@ export function TabSueldos({
                                   <label key={a.id} style={{
                                     display: "flex", alignItems: "center", gap: 10,
                                     fontSize: 11, padding: "6px 6px", borderRadius: 4,
-                                    cursor: "pointer", opacity: tildado ? 1 : 0.55,
+                                    cursor: isPagado ? "default" : "pointer", opacity: tildado ? 1 : 0.55,
                                   }}>
                                     <input
                                       type="checkbox"
                                       checked={tildado}
                                       onChange={() => toggleAdelanto(s.key, a.id)}
+                                      disabled={isPagado}
                                     />
                                     <span style={{ color: "var(--muted2)", flex: 1 }}>
                                       {fmt_d(a.fecha)} · {a.cuenta || "—"}
@@ -1094,12 +1239,69 @@ export function TabSueldos({
           </>
         )}
       </Modal>
+
+      {/* Modal Editar/Anular pago — pedido Lucas 31-may.
+          Cuando el sueldo está pagado, los inputs están deshabilitados. Para
+          modificarlo el dueño tiene que pasar primero por este modal que
+          anula el/los movimientos en caja (devuelve plata) vía RPC
+          anular_movimiento, que también revierte adelantos consumidos y
+          aguinaldo. En "modo Editar" el flujo sigue con los inputs ya
+          habilitados; en "modo Anular" simplemente queda pendiente. */}
+      <Modal
+        isOpen={!!anulModal}
+        onClose={() => !anulando && setAnulModal(null)}
+        title={anulModal?.modoEdit ? `Editar sueldo pagado — ${anulModal.empNom}` : `Anular pago — ${anulModal?.empNom}`}
+        maxWidth={500}
+        preventCloseOnOverlay={anulando}
+        footer={
+          <>
+            <button className="btn btn-sec" onClick={() => setAnulModal(null)} disabled={anulando}>Cancelar</button>
+            <button
+              className="btn"
+              style={{ background: "var(--danger)", color: "white", borderColor: "var(--danger)" }}
+              onClick={ejecutarAnular}
+              disabled={anulando}
+            >
+              {anulando ? "Anulando…" : anulModal?.modoEdit ? "Anular pago y editar" : "Sí, anular pago"}
+            </button>
+          </>
+        }
+      >
+        {anulModal && (
+          <>
+            <div style={{
+              padding: "12px 14px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)",
+              borderRadius: 8, marginBottom: 14, fontSize: 12, lineHeight: 1.5, color: "var(--text)",
+            }}>
+              {anulModal.modoEdit ? (
+                <>⚠ <strong>Esto va a anular el pago en caja</strong> y devolver <strong>{fmt_$(anulModal.total)}</strong> a las cuentas de abajo. Después vas a poder editar las novedades y volver a pagarlo con el monto corregido.</>
+              ) : (
+                <>⚠ <strong>Esto va a devolver {fmt_$(anulModal.total)} a caja</strong> y dejar el sueldo en estado pendiente. Vas a tener que pagarlo de nuevo cuando quieras.</>
+              )}
+            </div>
+            <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", marginBottom: 6 }}>
+              Movimientos que se van a anular ({anulModal.movs.length})
+            </div>
+            <div style={{ background: "var(--s2)", borderRadius: 8, padding: 10 }}>
+              {anulModal.movs.map(m => (
+                <div key={m.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "4px 0" }}>
+                  <span style={{ color: "var(--muted2)" }}>{m.cuenta} · {fmt_d(m.fecha)}</span>
+                  <span style={{ color: "var(--text)" }}>+{fmt_$(Math.abs(Number(m.importe)))}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 8, lineHeight: 1.5 }}>
+              También se revierten adelantos consumidos por este pago y, si era el último pago del mes, el aguinaldo acumulado.
+            </div>
+          </>
+        )}
+      </Modal>
     </div>
   );
 }
 
 // ── Sub-componentes ─────────────────────────────────────────────────────────
-function NovInput({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+function NovInput({ label, value, onChange, disabled }: { label: string; value: number; onChange: (v: number) => void; disabled?: boolean }) {
   return (
     <div className="field">
       <label style={{ fontSize: 10 }}>{label}</label>
@@ -1107,6 +1309,7 @@ function NovInput({ label, value, onChange }: { label: string; value: number; on
         type="number"
         value={value}
         onChange={e => onChange(parseFloat(e.target.value) || 0)}
+        disabled={disabled}
         style={{ fontSize: 13 }}
       />
     </div>
