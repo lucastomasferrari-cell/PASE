@@ -348,7 +348,7 @@ export default function SueldosPreview() {
       cuenta: adelForm.cuenta || null,
       descontado: false,
       auto_aplicar: adelForm.auto_aplicar,
-      detalle: adelForm.motivo,
+      concepto: adelForm.motivo,
     };
     setAdelantosNuevos(prev => [...prev, nuevo]);
     setAdelModalSlot(null);
