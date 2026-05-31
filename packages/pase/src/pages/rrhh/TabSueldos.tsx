@@ -153,7 +153,9 @@ interface TabSueldosProps {
 
 // ── Componente principal ───────────────────────────────────────────────────
 export function TabSueldos({
-  user, esDueno, esEnc, locsDisp, localActivo, cuentasUsables,
+  // user: prop reservada para futuro (auth check, default fields, etc.).
+  // Por ahora no la usamos directo — RLS protege.
+  user: _user, esDueno, esEnc, locsDisp, localActivo, cuentasUsables,
 }: TabSueldosProps) {
   // Filtros
   const now = new Date();
@@ -162,6 +164,7 @@ export function TabSueldos({
   // Encargado solo ve su local activo; dueño puede cambiar local desde el
   // dropdown propio (default: el del sidebar)
   const [localId, setLocalId] = useState<number | null>(localActivo);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- sync prop → state intencional
   useEffect(() => { if (localActivo != null) setLocalId(localActivo); }, [localActivo]);
   const [filtroEstado, setFiltroEstado] = useState<"todos" | "pendientes" | "pagados">("pendientes");
 
@@ -224,6 +227,7 @@ export function TabSueldos({
     setLoading(false);
   }, [localId, mes, anio]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on mount/change, patrón estándar
   useEffect(() => { void recargar(); }, [recargar]);
 
   // Slots (1 por cuota: mensual=1, quincenal=2)
@@ -256,6 +260,7 @@ export function TabSueldos({
       );
       next[s.key] = novDBaEdit(n);
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- inicializar form al cargar/recargar novedades
     setNovEdits(next);
   }, [novedadesDB, slots]);
 
@@ -347,6 +352,7 @@ export function TabSueldos({
       }
       next[s.key] = set;
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- inicializar set de tildados al recargar adelantos
     setTildados(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slots.length, adelantos.length, mes, anio]);
@@ -429,14 +435,19 @@ export function TabSueldos({
       });
       if (error) { showError(translateRpcError(error)); return; }
       // Si NO se aplica automáticamente, marcar auto_aplicar=false en la fila creada.
+      // C4: UPDATE de campo BOOLEAN UI (no plata). El INSERT real del adelanto +
+      // movimiento ya pasó por la RPC atómica registrar_adelanto arriba; acá solo
+      // toggleamos un flag de comportamiento del frontend (Lucas 2026-05-30).
       if (adelForm.auto_aplicar === false) {
         const adelId = (data && typeof data === "object" && "adelanto_id" in data)
           ? (data as { adelanto_id?: string }).adelanto_id
           : null;
         if (adelId) {
+          // eslint-disable-next-line pase-local/no-direct-financiera-write -- C4: flag UI auto_aplicar, no toca plata
           await db.from("rrhh_adelantos").update({ auto_aplicar: false }).eq("id", adelId);
         } else {
           // Fallback: la más reciente sin descontar de ese empleado/monto/fecha
+          // eslint-disable-next-line pase-local/no-direct-financiera-write -- C4: flag UI auto_aplicar, no toca plata
           await db.from("rrhh_adelantos")
             .update({ auto_aplicar: false })
             .eq("empleado_id", empId)
@@ -637,6 +648,7 @@ export function TabSueldos({
         <div className="empty">No hay empleados que coincidan con el filtro</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {/* eslint-disable-next-line react-hooks/refs -- debounceTimers.current solo se accede en event handlers (onChange/onClick), no durante render */}
           {empleadosVisibles.map(grupo => {
             const emp = grupo.emp;
             const cuotasTotal = grupo.slots[0]?.cuotasTotal ?? 1;

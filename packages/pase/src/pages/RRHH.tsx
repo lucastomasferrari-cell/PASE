@@ -34,9 +34,10 @@ import {
 // Sub-componentes (split F6 del 2026-05-11).
 import { TabDashboard } from "./rrhh/TabDashboard";
 import { TabEmpleados } from "./rrhh/TabEmpleados";
-import { TabNovedades } from "./rrhh/TabNovedades";
-import { TabPagos } from "./rrhh/TabPagos";
-import { TabHistorial } from "./rrhh/TabHistorial";
+import { TabSueldos } from "./rrhh/TabSueldos";
+// TabNovedades, TabPagos, TabHistorial: reemplazados por TabSueldos (cutover
+// 31-may, decisión Lucas 4b). Los archivos viejos quedan en disk para git
+// history; se pueden borrar después de validar 1 semana en prod.
 import { AdelantoModal } from "./rrhh/AdelantoModal";
 
 interface RRHHProps {
@@ -85,25 +86,21 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const empEmpty: EmpForm = { local_id:"", apellido:"", nombre:"", cuil:"", puesto:"", sueldo_mensual:"", alias_mp:"", fecha_inicio:"", activo:true, dias_vacaciones_ya_tomados_al_alta:"0", registrado:false, modo_pago:"MENSUAL" };
   const [empForm, setEmpForm] = useState<EmpForm>(empEmpty);
 
+  // NOTA: los state/loads de Novedades/Pagos/Historial quedaron aquí post-rediseño
+  // (31-may, decisión Lucas 4b: cutover directo). Funcionalmente reemplazados
+  // por TabSueldos. Vars prefijadas con _ porque ya no se renderizan pero las
+  // funciones que las setean siguen ejecutándose silenciosamente (no rompen, solo
+  // hacen queries de más). Cleanup profundo programado en commit aparte.
   // Novedades
-  const [novMes, setNovMes] = useState(today.getMonth() + 1);
-  const [novAnio, setNovAnio] = useState(today.getFullYear());
+  const [novMes, _setNovMes] = useState(today.getMonth() + 1);
+  const [novAnio, _setNovAnio] = useState(today.getFullYear());
   const [novLocal, setNovLocal] = useState(defaultLocal);
   const [novLocalTouched, setNovLocalTouched] = useState(false);
   const [novEmps, setNovEmps] = useState<Empleado[]>([]);
-  // Slots de novedades: para cada empleado generamos N filas según modo_pago.
-  // MENSUAL=1 slot, QUINCENAL=2 slots (Primera/Segunda Quincena), SEMANAL=4 slots.
-  // Cada slot es una novedad independiente con cuota_num + cuotas_total.
-  // Key del map: `${emp.id}__${cuota_num}` (acordado Lucas 21-may noche).
   const [novSlots, setNovSlots] = useState<Array<{ emp: Empleado; cuota_num: number; cuotas_total: number }>>([]);
   const [novMap, setNovMap] = useState<Record<string, NovedadEditable>>({});
-  // Adelantos pendientes (descontado=false) del mes seleccionado, agrupados
-  // por empleado_id. Reemplaza el viejo input editable "Adel.$" en la novedad
-  // (que era un número libre sin link a la tabla real rrhh_adelantos —
-  // bug "adelanto fantasma" detectado 2026-05-14). Ahora el cálculo de la
-  // liquidación se hace contra el monto real persistido en rrhh_adelantos.
   const [novAdelantosPorEmp, setNovAdelantosPorEmp] = useState<Record<string, number>>({});
-  const [novLoading, setNovLoading] = useState(false);
+  const [_novLoading, setNovLoading] = useState(false);
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   // Pagos
@@ -112,21 +109,14 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const [pagoLocal, setPagoLocal] = useState(defaultLocal);
   const [pagoLocalTouched, setPagoLocalTouched] = useState(false);
   const [pagoData, setPagoData] = useState<PagoDataRow[]>([]);
-  // Si se dispara "Pagar" desde el legajo, guardamos el emp.id acá para abrir
-  // el modal automáticamente cuando loadPagos termine y la fila esté en pagoData.
   const [pendingPagoEmpId, setPendingPagoEmpId] = useState<string | null>(null);
-  const [pagoLoading, setPagoLoading] = useState(false);
-  const [pagando, setPagando] = useState(false);
-  const [pagoModal, setPagoModal] = useState<PagoDataRow | null>(null);
-  // Idempotency key (convención C1) anti doble-click al confirmar pago de
-  // sueldo. Se regenera al abrir el modal (línea ~711).
-  const [idempKeyPagarSueldo, setIdempKeyPagarSueldo] = useState<string>(() => crypto.randomUUID());
-  const [formasPago, setFormasPago] = useState<LineaPago[]>([]);
-  // Fecha del pago — editable en el modal de pago de sueldo. Default today
-  // pero Anto puede atrasarla cuando paga un sueldo de un mes anterior y
-  // quiere que el movimiento quede registrado con la fecha real.
-  const [fechaPago, setFechaPago] = useState<string>(toISO(today));
-  const [adelantosPendientes, setAdelantosPendientes] = useState<Adelanto[]>([]);
+  const [_pagoLoading, setPagoLoading] = useState(false);
+  const [_pagando, _setPagando] = useState(false);
+  const [_pagoModal, setPagoModal] = useState<PagoDataRow | null>(null);
+  const [_idempKeyPagarSueldo, setIdempKeyPagarSueldo] = useState<string>(() => crypto.randomUUID());
+  const [_formasPago, setFormasPago] = useState<LineaPago[]>([]);
+  const [_fechaPago, setFechaPago] = useState<string>(toISO(today));
+  const [_adelantosPendientes, setAdelantosPendientes] = useState<Adelanto[]>([]);
   const [adelModal, setAdelModal] = useState(false);
   // Bug Caja-1: default vacío en cuenta fuerza elección consciente del user.
   // Saldo flexible (30-may): auto_aplicar default TRUE = comportamiento histórico
@@ -150,11 +140,11 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   // Historial — declarado ANTES del useEffect de SYNC para que el TDZ-check
   // del linter no flagee `histLocal` (lint react-hooks/immutability).
   const [histLocal, setHistLocal] = useState(defaultLocal);
-  const [histMes, setHistMes] = useState(today.getMonth() + 1);
-  const [histAnio, setHistAnio] = useState(today.getFullYear());
-  const [histData, setHistData] = useState<HistRow[]>([]);
-  const [histLoading, setHistLoading] = useState(false);
-  const [histDetalle, setHistDetalle] = useState<HistRow | null>(null);
+  const [histMes, _setHistMes] = useState(today.getMonth() + 1);
+  const [histAnio, _setHistAnio] = useState(today.getFullYear());
+  const [_histData, setHistData] = useState<HistRow[]>([]);
+  const [_histLoading, setHistLoading] = useState(false);
+  const [_histDetalle, _setHistDetalle] = useState<HistRow | null>(null);
 
   // ─── SYNC LOCAL ACTIVO ────────────────────────────────────────────────────
   // Bug reportado 29-may (Lucas): cambiaba el local activo en el sidebar pero
@@ -173,14 +163,12 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       setNovLocal(localActivo);
     }
     if (!pagoLocalTouched && String(pagoLocal) !== String(localActivo)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPagoLocal(localActivo);
     }
     // Historial: sin "touched" flag, sincronizamos siempre. Es tab de lectura
     // (no se opera nada desde acá), el filtro propio si el user lo cambia se
     // mantiene hasta el siguiente cambio de localActivo en sidebar.
     if (String(histLocal) !== String(localActivo)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setHistLocal(localActivo);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- solo queremos correr al cambiar localActivo
@@ -277,7 +265,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   // Cambia al tab Pagos pre-cargando los filtros con los mismos valores que
   // el usuario tenía en Novedades. UX: confirmás la novedad → un click te
   // lleva a pagar con el contexto ya seteado.
-  const irAPagosDesdeNovedades = () => {
+  const _irAPagosDesdeNovedades = () => {
     setPagoMes(novMes);
     setPagoAnio(novAnio);
     setPagoLocal(novLocal);
@@ -567,8 +555,8 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localActivo, locsDisp.length, locsDisp[0]?.id]);
-  const handleNovLocalChange = (v: string) => { setNovLocal(v); setNovLocalTouched(true); };
-  const handlePagoLocalChange = (v: string) => { setPagoLocal(v); setPagoLocalTouched(true); };
+  const _handleNovLocalChange = (v: string) => { setNovLocal(v); setNovLocalTouched(true); };
+  const _handlePagoLocalChange = (v: string) => { setPagoLocal(v); setPagoLocalTouched(true); };
 
   // Puente legajo → tab Pagos: al hacer click en "Pagar" desde la tabla de
   // movimientos del legajo, cerramos el modal, cambiamos al tab Pagos y
@@ -691,7 +679,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   // Las funciones de abajo reciben `key` = slotKey(empId, cuota_num).
   // Para empleados MENSUAL, cuota_num=1 (key = `${empId}__1`).
   // Para QUINCENAL hay 2 slots (cuota_num=1 y 2). SEMANAL: 4.
-  const updateNov = (key: string, field: keyof NovedadEditable, value: string | number) => {
+  const _updateNov = (key: string, field: keyof NovedadEditable, value: string | number) => {
     setNovMap(prev => {
       const nextNov: NovedadEditable = { ...prev[key], [field]: value };
       const updated = { ...prev, [key]: nextNov };
@@ -794,7 +782,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     loadNovedades();
   };
 
-  const editarNov = async (key: string) => {
+  const _editarNov = async (key: string) => {
     const nov = novMap[key];
     if (!nov?.id) return;
     // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F14: rollback novedad→borrador debe pasar por RPC editar_novedad que borre liq + cambie estado atómicamente.
@@ -810,7 +798,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   // Bloqueos:
   //   - Si la liquidación está pagada (pagos_realizados > 0): NO permite borrar.
   //     Hay que anular el pago primero desde Pagos. (Trazabilidad financiera.)
-  const eliminarNov = async (key: string) => {
+  const _eliminarNov = async (key: string) => {
     const nov = novMap[key];
     if (!nov?.id) {
       // No existe en DB todavía — solo limpiamos el slot del mapa.
@@ -848,7 +836,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   // BUG 4: bulk-confirmar todos los empleados en borrador. Cierra de un tirón
   // las novedades del mes y crea las liquidaciones (estado "pendiente"), que
   // es el equivalente a "listo para pago".
-  const confirmarTodas = async () => {
+  const _confirmarTodas = async () => {
     // En el modelo nuevo (quincenas: 21-may noche) iteramos slots, no empleados.
     // Cada slot es una novedad independiente con su cuota_num + cuotas_total.
     const enBorrador = novSlots.filter(s => {
@@ -944,9 +932,11 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
         ? (data as { adelanto_id?: string }).adelanto_id
         : null;
       if (adelId) {
+        // eslint-disable-next-line pase-local/no-direct-financiera-write -- C4: flag UI auto_aplicar, no toca plata
         await db.from("rrhh_adelantos").update({ auto_aplicar: false }).eq("id", adelId);
       } else {
         // Fallback: la fila más reciente del empleado con esos valores.
+        // eslint-disable-next-line pase-local/no-direct-financiera-write -- C4: flag UI auto_aplicar, no toca plata
         await db.from("rrhh_adelantos")
           .update({ auto_aplicar: false })
           .eq("empleado_id", adelForm.empleado_id)
@@ -965,15 +955,15 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   });
 
   // ─── DERIVED ───────────────────────────────────────────────────────────────
-  const totalPagosPend = pagoData.filter(r => r.liq && r.liq.estado !== "pagado").length;
-  const totalGeneral = pagoData.reduce((s, r) => s + (r.liq ? Number(r.liq.total_a_pagar || 0) : 0), 0);
+  const _totalPagosPend = pagoData.filter(r => r.liq && r.liq.estado !== "pagado").length;
+  const _totalGeneral = pagoData.reduce((s, r) => s + (r.liq ? Number(r.liq.total_a_pagar || 0) : 0), 0);
 
+  // Rediseño 31-may: 3 tabs (antes eran 5). Novedades + Pagos + Historial
+  // → unificados en "Sueldos". Empleados y Dashboard quedan igual.
   const tabs = [
     { id:"dashboard", label:"Dashboard" },
     { id:"empleados", label:"Empleados" },
-    { id:"novedades", label:"Novedades" },
-    { id:"pagos", label:"Pagos" },
-    { id:"historial", label:"Historial" },
+    { id:"sueldos", label:"Sueldos" },
   ];
 
   return (
@@ -1016,90 +1006,14 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
         />
       )}
 
-      {tab === "novedades" && (
-        <TabNovedades
-          novMes={novMes}
-          setNovMes={setNovMes}
-          novAnio={novAnio}
-          setNovAnio={setNovAnio}
-          novLocal={novLocal}
-          setNovLocal={handleNovLocalChange}
-          locsDisp={locsDisp}
-          novLoading={novLoading}
-          novSlots={novSlots}
-          novMap={novMap}
-          novAdelantosPorEmp={novAdelantosPorEmp}
-          updateNov={updateNov}
-          confirmarUno={confirmarUno}
-          confirmarTodas={confirmarTodas}
-          editarNov={editarNov}
-          eliminarNov={eliminarNov}
-          irAPagos={irAPagosDesdeNovedades}
-          abrirModalAdelanto={(empId: string) => {
-            // Pre-cargar el empleado en el form + abrir modal (que vive
-            // en TabPagos pero el state está acá → funciona en cualquier tab).
-            setAdelForm(a => ({ ...a, empleado_id: empId }));
-            setAdelModal(true);
-          }}
+      {tab === "sueldos" && (
+        <TabSueldos
+          user={user}
           esDueno={esDueno}
-        />
-      )}
-
-      {tab === "pagos" && (
-        <TabPagos
-          pagoMes={pagoMes}
-          setPagoMes={setPagoMes}
-          pagoAnio={pagoAnio}
-          setPagoAnio={setPagoAnio}
-          pagoLocal={pagoLocal}
-          setPagoLocal={handlePagoLocalChange}
-          locsDisp={locsDisp}
           esEnc={esEnc}
-          esDueno={esDueno}
-          pagoLoading={pagoLoading}
-          pagoData={pagoData}
-          totalPagosPend={totalPagosPend}
-          totalGeneral={totalGeneral}
-          pagoModal={pagoModal}
-          setPagoModal={setPagoModal}
-          formasPago={formasPago}
-          setFormasPago={setFormasPago}
-          pagando={pagando}
-          setPagando={setPagando}
-          loadPagos={loadPagos}
-          loadEmpleados={loadEmpleados}
-          showToast={showToast}
-          allEmps={allEmps}
-          adelModal={adelModal}
-          setAdelModal={setAdelModal}
-          adelForm={adelForm}
-          setAdelForm={setAdelForm}
-          guardarAdelanto={guardarAdelanto}
-          guardandoAdelanto={guardandoAdelanto}
-          adelantosPendientes={adelantosPendientes}
-          setAdelantosPendientes={setAdelantosPendientes}
-          abrirPagoSueldo={abrirPagoSueldo}
+          locsDisp={locsDisp}
+          localActivo={localActivo}
           cuentasUsables={cuentasUsables}
-          idempKeyPagarSueldo={idempKeyPagarSueldo}
-          fechaPago={fechaPago}
-          setFechaPago={setFechaPago}
-        />
-      )}
-
-      {tab === "historial" && (
-        <TabHistorial
-          histMes={histMes}
-          setHistMes={setHistMes}
-          histAnio={histAnio}
-          setHistAnio={setHistAnio}
-          histLocal={histLocal}
-          setHistLocal={setHistLocal}
-          locsDisp={locsDisp}
-          esEnc={esEnc}
-          histLoading={histLoading}
-          histData={histData}
-          histDetalle={histDetalle}
-          setHistDetalle={setHistDetalle}
         />
       )}
 
