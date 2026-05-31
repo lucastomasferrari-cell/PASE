@@ -43,8 +43,11 @@ interface Adel {
   cuenta: string | null;
   descontado: boolean;
   auto_aplicar?: boolean;
-  detalle?: string | null;
+  concepto?: string | null;
 }
+// En el sistema real: rrhh_liquidaciones se vincula a rrhh_novedades por
+// novedad_id. mes/anio/cuota_num/cuotas_total viven en rrhh_novedades.
+// Para el mockup unimos los datos abajo en la carga.
 interface Liq {
   empleado_id: string;
   cuota_num: number;
@@ -198,8 +201,9 @@ export default function SueldosPreview() {
         const desde = `${anio}-${String(mes).padStart(2, "0")}-01`;
         const hastaMes = new Date(anio, mes, 0).getDate();
         const hasta = `${anio}-${String(mes).padStart(2, "0")}-${hastaMes}`;
+        // Campo `concepto` (NO `detalle` — esa columna no existe en prod).
         const { data: ads } = await db.from("rrhh_adelantos")
-          .select("id, empleado_id, fecha, monto, cuenta, descontado, auto_aplicar, detalle")
+          .select("id, empleado_id, fecha, monto, cuenta, descontado, auto_aplicar, concepto")
           .in("empleado_id", empIds)
           .eq("descontado", false)
           .gte("fecha", desde)
@@ -209,11 +213,25 @@ export default function SueldosPreview() {
         setAdelantos([]);
       }
 
-      // Liqs (pagado_at del período) — para saber qué ya está pagado
-      const { data: ls } = await db.from("rrhh_liquidaciones")
-        .select("empleado_id, cuota_num, cuotas_total, estado, mes, anio")
+      // Estado de pago: mes/anio/cuota viven en rrhh_novedades, estado en
+      // rrhh_liquidaciones (vinculado por novedad_id). Cargamos novedades del
+      // período con su liquidación nested y derivamos el estado por slot.
+      const { data: ns } = await db.from("rrhh_novedades")
+        .select("empleado_id, cuota_num, cuotas_total, rrhh_liquidaciones(estado)")
         .eq("mes", mes).eq("anio", anio);
-      setLiqs((ls || []) as Liq[]);
+      type NovRow = { empleado_id: string; cuota_num: number | null; cuotas_total: number | null;
+        rrhh_liquidaciones: { estado: string }[] | null };
+      const liqsArr: Liq[] = ((ns || []) as NovRow[]).map(n => {
+        const liqs = n.rrhh_liquidaciones || [];
+        const pagado = liqs.some(l => l.estado === "pagado");
+        return {
+          empleado_id: n.empleado_id,
+          cuota_num: n.cuota_num ?? 1,
+          cuotas_total: n.cuotas_total ?? 1,
+          estado: pagado ? "pagado" : "pendiente",
+        };
+      });
+      setLiqs(liqsArr);
 
       setLoading(false);
     })();
