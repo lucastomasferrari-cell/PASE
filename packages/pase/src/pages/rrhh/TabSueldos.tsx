@@ -164,11 +164,16 @@ function calcularDesglose(emp: Emp, nov: NovEdit, cuotasTotal: number, cuotaNum:
   // de $28K cada una).
   const valorDia = emp.sueldo_mensual / diasMes;
   const valorHora = valorDia / 8;
-  const valorDoble = valorDia * 1.5;
   const descInas = nov.inasistencias * valorDia;
   const ingrExtras = nov.horas_extras * valorHora * 1.5;
-  const ingrDobles = nov.dobles * valorDoble;
-  const ingrFeriados = nov.feriados * valorDia * 2;
+  // Cambio Lucas 31-may noche v2: tanto feriados como dobles se pagan como
+  // 1 DÍA EXTRA (sueldo/30), no como día doble ni 1.5×. El día trabajado
+  // ya está cubierto por el sueldo base — solo se suma el extra.
+  // Antes (mal): feriados × 2 (= 2 días extras), dobles × 1.5.
+  // Coincide con helpers.ts:calcularValorDoble y con calcularTotalLiquidacion
+  // que ya tenían "feriados × valor_dia" sin multiplicar.
+  const ingrDobles = nov.dobles * valorDia;
+  const ingrFeriados = nov.feriados * valorDia;
   // Presentismo:
   //  - Mensuales (cuotasTotal=1): 5% del sueldo mensual (igual que antes).
   //  - Quincenales: NO se paga en Q1 — se paga UNA sola vez a fin de mes
