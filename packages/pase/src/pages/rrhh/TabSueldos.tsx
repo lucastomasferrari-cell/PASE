@@ -124,7 +124,20 @@ function novDBaEdit(n: NovDB | undefined): NovEdit {
   };
 }
 
-function calcularTotal(emp: Emp, nov: NovEdit, cuotasTotal: number, adelantosATildar: number): number {
+// Desglose del cálculo de un slot. Devuelve todos los componentes para
+// poder mostrarlos en vivo en el panel derecho, no solo el total final.
+interface DesgloseCalculo {
+  baseCuota: number;
+  descInas: number;        // descuento por inasistencias
+  ingrExtras: number;      // ingreso por horas extras
+  ingrDobles: number;      // ingreso por turnos dobles
+  ingrFeriados: number;    // ingreso por feriados trabajados
+  presentismo: number;     // 5% del sueldo BASE (cambio Lucas 31-may)
+  otrosDesc: number;
+  totalAdelantos: number;
+  total: number;
+}
+function calcularDesglose(emp: Emp, nov: NovEdit, cuotasTotal: number, adelantosATildar: number): DesgloseCalculo {
   const baseCuota = emp.sueldo_mensual / cuotasTotal;
   const diasMes = 30;
   const valorDia = emp.sueldo_mensual / diasMes / cuotasTotal;
@@ -134,11 +147,29 @@ function calcularTotal(emp: Emp, nov: NovEdit, cuotasTotal: number, adelantosATi
   const ingrExtras = nov.horas_extras * valorHora * 1.5;
   const ingrDobles = nov.dobles * valorDoble;
   const ingrFeriados = nov.feriados * valorDia * 2;
-  const subtotal1 = baseCuota - descInas + ingrExtras + ingrDobles + ingrFeriados;
-  const presentismo = nov.presentismo_mantiene ? subtotal1 * 0.05 : 0;
-  const subtotal2 = subtotal1 + presentismo;
-  const total = subtotal2 - nov.otros_desc - adelantosATildar;
-  return Math.max(0, Math.round(total));
+  // Cambio Lucas 31-may: el presentismo es SIEMPRE sobre el sueldo base
+  // (no sobre el subtotal con extras/feriados/faltas). Antes calculaba sobre
+  // subtotal1 = base - faltas + extras + dobles + feriados, lo que inflaba
+  // el presentismo cuando había mucho extra y lo achicaba cuando había
+  // faltas. Ahora es siempre el 5% del baseCuota fijo.
+  const presentismo = nov.presentismo_mantiene ? baseCuota * 0.05 : 0;
+  const subtotal = baseCuota - descInas + ingrExtras + ingrDobles + ingrFeriados + presentismo;
+  const total = Math.max(0, Math.round(subtotal - nov.otros_desc - adelantosATildar));
+  return {
+    baseCuota: Math.round(baseCuota),
+    descInas: Math.round(descInas),
+    ingrExtras: Math.round(ingrExtras),
+    ingrDobles: Math.round(ingrDobles),
+    ingrFeriados: Math.round(ingrFeriados),
+    presentismo: Math.round(presentismo),
+    otrosDesc: Math.round(nov.otros_desc),
+    totalAdelantos: Math.round(adelantosATildar),
+    total,
+  };
+}
+// Wrapper backward-compat (los callers viejos solo quieren el total).
+function calcularTotal(emp: Emp, nov: NovEdit, cuotasTotal: number, adelantosATildar: number): number {
+  return calcularDesglose(emp, nov, cuotasTotal, adelantosATildar).total;
 }
 
 // ── Props ──────────────────────────────────────────────────────────────────
@@ -189,17 +220,17 @@ export function TabSueldos({
 
     const empIds = ((emps || []) as Emp[]).map(e => e.id);
     if (empIds.length > 0) {
-      // Adelantos del mes seleccionado (todos pendientes — saldo flexible
-      // permite descontarlos cuando el dueño quiera).
-      const desde = `${anio}-${String(mes).padStart(2, "0")}-01`;
-      const hastaMes = new Date(anio, mes, 0).getDate();
-      const hasta = `${anio}-${String(mes).padStart(2, "0")}-${hastaMes}`;
+      // Cambio Lucas 31-may: traer TODOS los adelantos pendientes del
+      // empleado, sin filtro de fecha. Antes filtraba por mes activo →
+      // un adelanto de hace 3 meses no aparecía. Ahora aparecen todos los
+      // descontado=false ordenados por fecha (más viejo primero, así Anto
+      // ve "Carlos tiene un saldo pendiente del 5/feb" aunque esté pagando
+      // su sueldo de mayo).
       const { data: ads } = await db.from("rrhh_adelantos")
         .select("id, empleado_id, fecha, monto, cuenta, descontado, auto_aplicar, concepto")
         .in("empleado_id", empIds)
         .eq("descontado", false)
-        .gte("fecha", desde)
-        .lte("fecha", hasta);
+        .order("fecha", { ascending: true });
       setAdelantos((ads || []) as Adel[]);
 
       // Novedades existentes del mes (para inicializar el form).
@@ -741,7 +772,7 @@ export function TabSueldos({
                   const adels = cuotaActiva.adels;
                   const tildSet = cuotaActiva.tildSet;
                   const sumaAdel = cuotaActiva.sumaAdel;
-                  const total = cuotaActiva.total;
+                  // total ya no se usa acá (lo calcula el desglose interno).
                   const isSaving = savingKeys.has(s.key);
                   const hasError = errorKeys.has(s.key);
                   const lastSaved = savedAt[s.key];
@@ -848,23 +879,30 @@ export function TabSueldos({
                           <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
                             Cálculo en vivo
                           </div>
-                          <div style={{ background: "var(--s2)", borderRadius: 8, padding: 14, fontSize: 12 }}>
-                            <DesgloseRow label="Sueldo base" value={fmt_$(s.emp.sueldo_mensual / s.cuotasTotal)} />
-                            {nov.horas_extras > 0 && <DesgloseRow label={`+ ${nov.horas_extras} hs extra`} value="auto" />}
-                            {nov.dobles > 0 && <DesgloseRow label={`+ ${nov.dobles} dobles`} value="auto" />}
-                            {nov.feriados > 0 && <DesgloseRow label={`+ ${nov.feriados} feriados`} value="auto" />}
-                            {nov.inasistencias > 0 && <DesgloseRow label={`− ${nov.inasistencias} faltas`} value="auto" tone="danger" />}
-                            {nov.presentismo_mantiene && <DesgloseRow label="+ Presentismo 5%" value="auto" tone="success" />}
-                            {nov.otros_desc > 0 && <DesgloseRow label="− Otros desc." value={`−${fmt_$(nov.otros_desc)}`} tone="danger" />}
-                            {sumaAdel > 0 && <DesgloseRow label={`− Adelantos (${tildSet.size})`} value={`−${fmt_$(sumaAdel)}`} tone="danger" />}
-                            <div style={{
-                              marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--bd)",
-                              display: "flex", justifyContent: "space-between", alignItems: "baseline",
-                            }}>
-                              <span style={{ fontWeight: 500 }}>Total</span>
-                              <span style={{ fontSize: 18, fontWeight: 500, color: "var(--acc)" }}>{fmt_$(total)}</span>
-                            </div>
-                          </div>
+                          {/* Desglose con MONTOS reales de cada item (Lucas 31-may):
+                              antes solo mostraba labels sin $. */}
+                          {(() => {
+                            const d = calcularDesglose(s.emp, nov, s.cuotasTotal, sumaAdel);
+                            return (
+                              <div style={{ background: "var(--s2)", borderRadius: 8, padding: 14, fontSize: 12 }}>
+                                <DesgloseRow label="Sueldo base" value={fmt_$(d.baseCuota)} />
+                                {nov.horas_extras > 0 && <DesgloseRow label={`+ ${nov.horas_extras} hs extra`} value={`+${fmt_$(d.ingrExtras)}`} tone="success" />}
+                                {nov.dobles > 0 && <DesgloseRow label={`+ ${nov.dobles} dobles`} value={`+${fmt_$(d.ingrDobles)}`} tone="success" />}
+                                {nov.feriados > 0 && <DesgloseRow label={`+ ${nov.feriados} feriados`} value={`+${fmt_$(d.ingrFeriados)}`} tone="success" />}
+                                {nov.inasistencias > 0 && <DesgloseRow label={`− ${nov.inasistencias} faltas`} value={`−${fmt_$(d.descInas)}`} tone="danger" />}
+                                {nov.presentismo_mantiene && <DesgloseRow label="+ Presentismo 5% (sobre base)" value={`+${fmt_$(d.presentismo)}`} tone="success" />}
+                                {nov.otros_desc > 0 && <DesgloseRow label="− Otros desc." value={`−${fmt_$(d.otrosDesc)}`} tone="danger" />}
+                                {sumaAdel > 0 && <DesgloseRow label={`− Adelantos (${tildSet.size})`} value={`−${fmt_$(d.totalAdelantos)}`} tone="danger" />}
+                                <div style={{
+                                  marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--bd)",
+                                  display: "flex", justifyContent: "space-between", alignItems: "baseline",
+                                }}>
+                                  <span style={{ fontWeight: 500 }}>Total</span>
+                                  <span style={{ fontSize: 18, fontWeight: 500, color: "var(--acc)" }}>{fmt_$(d.total)}</span>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>
