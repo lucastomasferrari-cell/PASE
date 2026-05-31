@@ -136,16 +136,31 @@ export default function SueldosPreview() {
   const [liqsLocal, setLiqsLocal] = useState<Record<string, "pendiente" | "pagado">>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
+  const [authError, setAuthError] = useState<string | null>(null);
   // Cargar locales + cuentas
   // Fix race condition: en /sueldos-preview cargado en frío, la query corre
   // antes de hidratar la sesión → RLS devuelve 0 sin error. Esperamos getSession
   // primero y reintentamos si vuelve vacío (mismo patrón que App.tsx).
+  // Detección de JWT roto: si la query devuelve 401/403/406, mostrar
+  // mensaje claro para que el user se relogee (no quedar colgado).
   useEffect(() => {
     (async () => {
       await db.auth.getSession();
       let locArr: Local[] = [];
+      let lastErr: { code?: string; message?: string } | null = null;
       for (let intento = 0; intento < 4; intento++) {
-        const { data: locs } = await db.from("locales").select("id, nombre").order("nombre");
+        const { data: locs, error } = await db.from("locales").select("id, nombre").order("nombre");
+        if (error) {
+          lastErr = error as { code?: string; message?: string };
+          // Detectar errores de autorización irrecuperables sin re-login
+          const code = error.code || "";
+          const msg = (error.message || "").toLowerCase();
+          if (code === "PGRST116" || msg.includes("jwt") || msg.includes("unauthor") || msg.includes("permission")) {
+            setAuthError(`${code || "AUTH"}: ${error.message || "tu sesión está vencida"}`);
+            setLoading(false);
+            return;
+          }
+        }
         locArr = (locs || []) as Local[];
         if (locArr.length > 0) break;
         await new Promise(r => setTimeout(r, 200 * Math.pow(2, intento)));
@@ -154,7 +169,9 @@ export default function SueldosPreview() {
       if (locArr.length > 0 && !localId && locArr[0]) {
         setLocalId(locArr[0].id);
       } else if (locArr.length === 0) {
-        // Sin locales tras retry → cortar el loading para no quedar colgado
+        if (lastErr) {
+          setAuthError(`Sin locales y query falló: ${lastErr.message || "sesión inválida"}`);
+        }
         setLoading(false);
       }
       // Cuentas: hardcoded en el sistema real (CUENTAS_PAGO en lib/cuentas).
@@ -438,7 +455,25 @@ export default function SueldosPreview() {
       </div>
 
       {/* Lista de slots */}
-      {!localId && locales.length === 0 ? (
+      {authError ? (
+        <div className="alert alert-danger" style={{ lineHeight: 1.5 }}>
+          <strong>Tu sesión está vencida o inválida.</strong>
+          <div style={{ fontSize: 11, color: "var(--muted2)", marginTop: 4 }}>
+            Detalle técnico: {authError}
+          </div>
+          <div style={{ marginTop: 10, fontSize: 13 }}>
+            <strong>Solución:</strong> Andá al sidebar abajo a la izquierda → <strong>Cerrar sesión →</strong>,
+            volvé a loguearte y entrá de nuevo a esta pantalla.
+          </div>
+          <button
+            className="btn btn-acc btn-sm"
+            style={{ marginTop: 12 }}
+            onClick={async () => { await db.auth.signOut(); window.location.href = "/"; }}
+          >
+            Cerrar sesión ahora
+          </button>
+        </div>
+      ) : !localId && locales.length === 0 ? (
         <div className="alert alert-warn">
           No pude cargar tus locales. Refrescá la página (sesión todavía hidratando).
         </div>
