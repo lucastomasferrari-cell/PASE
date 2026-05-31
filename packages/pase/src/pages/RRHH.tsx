@@ -497,8 +497,11 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   // cuando montó la pantalla).
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { loadEmpleados(); }, [localActivo]);
+  // Fix Lucas 31-may: agregar localActivo a deps. Sin esto, cuando el user
+  // estaba en el dashboard y cambiaba el local en el sidebar, los KPIs (próximo
+  // pago, nómina, próximo SAC) quedaban con los datos del local anterior.
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
-  useEffect(() => { if (tab === "dashboard") loadDashboard(); }, [tab]);
+  useEffect(() => { if (tab === "dashboard") loadDashboard(); }, [tab, localActivo]);
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { if (tab === "novedades" && novLocal) loadNovedades(); }, [tab, novLocal, novMes, novAnio]);
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
