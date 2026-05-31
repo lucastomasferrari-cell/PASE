@@ -12,6 +12,12 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
+  /* El sidebar de la app es position:fixed left:0 width:200px (Layout.tsx:271).
+     Sin este padding-left, modales anchos quedan visualmente cortados por
+     el sidebar a pesar de tener z-index mayor. Mismo patrón que el modal
+     viejo del Layout.tsx:463. Pedido Lucas 31-may: legajo del empleado
+     aparecía con el header cortado ("ORO, SOLANA" en vez de "ALESSANDRO"). */
+  padding-left: 220px;
   opacity: 0;
   animation: fadeIn 0.18s ease forwards;
 }
@@ -98,6 +104,13 @@
 }
 
 .footer > * { flex: 1; }
+
+/* A ≤1024px el sidebar pasa a translateX(-100%) (drawer toggleable, no
+   fixed permanente) — Layout.tsx:614. A partir de ahí el modal debe usar
+   ancho completo sin el offset del sidebar. */
+@media (max-width: 1024px) {
+  .overlay { padding-left: 20px; }
+}
 
 @media (max-width: 540px) {
   .overlay { padding: 12px; }
