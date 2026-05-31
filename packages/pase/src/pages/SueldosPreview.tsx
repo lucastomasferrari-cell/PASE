@@ -292,7 +292,8 @@ export default function SueldosPreview() {
     return liq?.estado === "pagado" ? "pagado" : "pendiente";
   }
 
-  // Slots filtrados
+  // Slots filtrados (legacy, lo dejo por si alguien lo usa). Filtro real
+  // de visualización: empleadosVisibles abajo (agrupa slots por empleado).
   const slotsFiltrados = useMemo(() => {
     return slots.filter(s => {
       const est = estadoSlot(s.emp.id, s.cuota);
@@ -302,6 +303,25 @@ export default function SueldosPreview() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slots, filtroEstado, liqsLocal, liqs]);
+
+  // Agrupar por empleado para mostrar UNA card unificada (Q1+Q2 juntas).
+  // Filtro: el empleado aparece si AL MENOS UNA cuota matchea el filtro.
+  const empleadosVisibles = useMemo(() => {
+    type Grupo = { emp: Emp; slots: typeof slots };
+    const map = new Map<string, Grupo>();
+    for (const s of slots) {
+      const est = estadoSlot(s.emp.id, s.cuota);
+      if (filtroEstado === "pendientes" && est !== "pendiente") continue;
+      if (filtroEstado === "pagados" && est !== "pagado") continue;
+      if (!map.has(s.emp.id)) map.set(s.emp.id, { emp: s.emp, slots: [] });
+      map.get(s.emp.id)!.slots.push(s);
+    }
+    return Array.from(map.values());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slots, filtroEstado, liqsLocal, liqs]);
+
+  // Tab activo (Q1/Q2) por empleado cuando se expande
+  const [cuotaTabPorEmp, setCuotaTabPorEmp] = useState<Record<string, number>>({});
 
   // Total a separar (suma de pendientes con su total estimado)
   const totalASeparar = useMemo(() => {
@@ -462,7 +482,7 @@ export default function SueldosPreview() {
         background: "var(--s2)", borderRadius: 8,
         display: "flex", gap: 20, alignItems: "center", flexWrap: "wrap", fontSize: 12,
       }}>
-        <span><strong>{slotsFiltrados.length}</strong> empleado{slotsFiltrados.length !== 1 ? "s" : ""}{filtroEstado !== "todos" ? ` ${filtroEstado}` : ""}</span>
+        <span><strong>{empleadosVisibles.length}</strong> empleado{empleadosVisibles.length !== 1 ? "s" : ""}{filtroEstado !== "todos" ? ` con ${filtroEstado}` : ""}</span>
         {filtroEstado !== "pagados" && totalASeparar > 0 && (
           <span style={{
             padding: "3px 10px", borderRadius: 6,
@@ -506,201 +526,252 @@ export default function SueldosPreview() {
         <div className="alert alert-info">Elegí un local arriba.</div>
       ) : loading ? (
         <div className="loading">Cargando datos reales…</div>
-      ) : slotsFiltrados.length === 0 ? (
+      ) : empleadosVisibles.length === 0 ? (
         <div className="empty">No hay empleados que coincidan con el filtro</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {slotsFiltrados.map(s => {
-            const nov = novEdits[s.key] || NOV_VACIA;
-            const adels = adelantosDelSlot(s.emp.id, s.cuota, s.cuotasTotal);
-            const tildSet = tildados[s.key] || new Set();
-            const sumaAdel = adels.filter(a => tildSet.has(a.id)).reduce((sum, a) => sum + Number(a.monto), 0);
-            const total = calcularTotal(s.emp, nov, s.cuotasTotal, sumaAdel);
-            const estado = estadoSlot(s.emp.id, s.cuota);
-            const isExp = expanded.has(s.key);
-            const venceFecha = fechaFinPeriodo(anio, mes, s.cuota, s.cuotasTotal);
+          {empleadosVisibles.map(grupo => {
+            const emp = grupo.emp;
+            const cuotasTotal = grupo.slots[0]?.cuotasTotal ?? 1;
+            const isExp = expanded.has(emp.id);
+            // Estados de cada cuota
+            const cuotasInfo = grupo.slots.map(s => {
+              const nov = novEdits[s.key] || NOV_VACIA;
+              const adels = adelantosDelSlot(s.emp.id, s.cuota, s.cuotasTotal);
+              const tildSet = tildados[s.key] || new Set();
+              const sumaAdel = adels.filter(a => tildSet.has(a.id)).reduce((sum, a) => sum + Number(a.monto), 0);
+              const total = calcularTotal(s.emp, nov, s.cuotasTotal, sumaAdel);
+              const estado = estadoSlot(s.emp.id, s.cuota);
+              const venceFecha = fechaFinPeriodo(anio, mes, s.cuota, s.cuotasTotal);
+              return { slot: s, nov, adels, tildSet, sumaAdel, total, estado, venceFecha };
+            });
+            const todasPagas = cuotasInfo.every(c => c.estado === "pagado");
+            const cuotaActivaIdx = cuotaTabPorEmp[emp.id] ?? 0;
+            const cuotaActiva = cuotasInfo[cuotaActivaIdx] ?? cuotasInfo[0];
+            if (!cuotaActiva) return null;
 
             return (
-              <div key={s.key} className="panel" style={{
+              <div key={emp.id} className="panel" style={{
                 padding: 0, overflow: "hidden",
-                opacity: estado === "pagado" ? 0.7 : 1,
+                opacity: todasPagas ? 0.7 : 1,
               }}>
-                {/* Header card (siempre visible) */}
+                {/* Header card: nombre + puesto + chip modo */}
                 <div
-                  onClick={() => toggleExpand(s.key)}
+                  onClick={() => toggleExpand(emp.id)}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "22px 1.6fr 100px 1fr 130px 120px",
+                    gridTemplateColumns: "22px 1fr 130px",
                     gap: 12, padding: "12px 16px", cursor: "pointer",
                     alignItems: "center",
-                    background: estado === "pagado" ? "rgba(34,197,94,0.06)" : "transparent",
+                    background: todasPagas ? "rgba(34,197,94,0.06)" : "transparent",
                   }}
                 >
                   <span style={{ fontSize: 11, color: "var(--muted)" }}>{isExp ? "▾" : "▸"}</span>
                   <div>
                     <div style={{ fontWeight: 500, fontSize: 13 }}>
-                      {s.emp.apellido}, {s.emp.nombre}
+                      {emp.apellido}, {emp.nombre}
                       <span style={{
                         marginLeft: 8, fontSize: 10, padding: "2px 7px", borderRadius: 4,
                         background: "var(--pase-celeste-100)", color: "var(--acc)", fontWeight: 400,
-                      }}>{labelSlot(s.cuota, s.cuotasTotal)} {nombreMes(mes).toLowerCase()}</span>
+                      }}>
+                        {cuotasTotal === 1 ? "Mensual" : "Quincenal"} · {nombreMes(mes).toLowerCase()}
+                      </span>
                     </div>
-                    <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 2 }}>{s.emp.puesto}</div>
+                    <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 2 }}>{emp.puesto}</div>
                   </div>
-                  <div style={{ fontSize: 11, color: "var(--muted2)" }}>
-                    vence {fmt_d(venceFecha)}
-                  </div>
-                  <div style={{ fontSize: 11 }}>
-                    <div style={{ color: "var(--muted)", fontSize: 9, textTransform: "uppercase", letterSpacing: 0.5 }}>Total estimado</div>
-                    <div style={{ fontSize: 14, fontWeight: 500, color: "var(--acc)" }}>{fmt_$(total)}</div>
-                  </div>
-                  <div>
-                    {estado === "pagado" ? (
-                      <span className="badge b-success">Pagado</span>
+                  <div style={{ textAlign: "right", fontSize: 11 }}>
+                    {todasPagas ? (
+                      <span className="badge b-success" style={{ fontSize: 10 }}>
+                        {cuotasTotal === 1 ? "Mes pagado ✓" : "Mes completo ✓"}
+                      </span>
                     ) : (
-                      <span className="badge b-warn">Pendiente</span>
-                    )}
-                  </div>
-                  <div onClick={e => e.stopPropagation()} style={{ textAlign: "right" }}>
-                    {estado === "pendiente" && (
-                      <button
-                        className="btn btn-acc btn-sm"
-                        onClick={() => abrirPago(s.key)}
-                        style={{ padding: "5px 14px", fontSize: 12 }}
-                      >
-                        Pagar →
-                      </button>
+                      <span style={{ color: "var(--muted2)" }}>
+                        {cuotasInfo.filter(c => c.estado === "pagado").length}/{cuotasInfo.length} pagada{cuotasInfo.length !== 1 ? "s" : ""}
+                      </span>
                     )}
                   </div>
                 </div>
 
-                {/* Body expandido */}
-                {isExp && (
-                  <div style={{
-                    borderTop: "1px solid var(--bd)",
-                    padding: "16px 20px",
-                    display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 28,
-                  }}>
-                    {/* Col izquierda: novedades + adelantos */}
-                    <div>
-                      {/* Novedades */}
-                      <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
-                        Novedades del período
+                {/* Sub-filas: una por cuota (con su estado y botón Pagar) */}
+                <div onClick={e => e.stopPropagation()}>
+                  {cuotasInfo.map((c) => (
+                    <div key={c.slot.key} style={{
+                      display: "grid",
+                      gridTemplateColumns: "60px 1fr 130px 110px 110px",
+                      gap: 12, padding: "10px 16px 10px 38px",
+                      alignItems: "center",
+                      borderTop: "1px solid var(--bd)",
+                      background: c.estado === "pagado" ? "rgba(34,197,94,0.04)" : "transparent",
+                    }}>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: "var(--acc)" }}>
+                        {labelSlot(c.slot.cuota, c.slot.cuotasTotal)}
+                      </span>
+                      <span style={{ fontSize: 11, color: "var(--muted2)" }}>
+                        vence {fmt_d(c.venceFecha)}
+                      </span>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--acc)" }}>
+                        {fmt_$(c.total)}
                       </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
-                        <NovInput label="Faltas (días)" value={nov.inasistencias} onChange={v => updateNov(s.key, "inasistencias", v)} />
-                        <NovInput label="Horas extras" value={nov.horas_extras} onChange={v => updateNov(s.key, "horas_extras", v)} />
-                        <NovInput label="Turnos dobles" value={nov.dobles} onChange={v => updateNov(s.key, "dobles", v)} />
-                        <NovInput label="Feriados trab." value={nov.feriados} onChange={v => updateNov(s.key, "feriados", v)} />
-                        <NovInput label="Otros desc. ($)" value={nov.otros_desc} onChange={v => updateNov(s.key, "otros_desc", v)} />
-                        <label style={{
-                          display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
-                          fontSize: 12, paddingTop: 18,
-                        }}>
-                          <input
-                            type="checkbox"
-                            checked={nov.presentismo_mantiene}
-                            onChange={e => updateNov(s.key, "presentismo_mantiene", e.target.checked)}
-                          />
-                          Presentismo (+5%)
-                        </label>
+                      <div>
+                        {c.estado === "pagado" ? (
+                          <span className="badge b-success" style={{ fontSize: 9 }}>Pagado</span>
+                        ) : (
+                          <span className="badge b-warn" style={{ fontSize: 9 }}>Pendiente</span>
+                        )}
                       </div>
+                      <div style={{ textAlign: "right" }}>
+                        {c.estado === "pendiente" && (
+                          <button
+                            className="btn btn-acc btn-sm"
+                            onClick={() => abrirPago(c.slot.key)}
+                            style={{ padding: "4px 12px", fontSize: 11 }}
+                          >
+                            Pagar →
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
 
-                      {/* Adelantos */}
-                      <div style={{
-                        display: "flex", justifyContent: "space-between", alignItems: "center",
-                        marginBottom: 8,
-                      }}>
-                        <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>
-                          Adelantos
-                        </div>
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          onClick={() => setAdelModalSlot(s.key)}
-                          style={{ padding: "3px 10px", fontSize: 11 }}
-                        >
-                          + Adelanto
-                        </button>
-                      </div>
-                      {adels.length === 0 ? (
-                        <div style={{ fontSize: 11, color: "var(--muted2)", padding: "8px 0" }}>
-                          Sin adelantos. Toca <strong>+ Adelanto</strong> para cargar uno.
-                        </div>
-                      ) : (
-                        <div style={{ background: "var(--s2)", borderRadius: 8, padding: 10 }}>
-                          {adels.map(a => {
-                            const tildado = tildSet.has(a.id);
-                            return (
-                              <label key={a.id} style={{
-                                display: "flex", alignItems: "center", gap: 10,
-                                fontSize: 11, padding: "6px 6px", borderRadius: 4,
-                                cursor: "pointer", opacity: tildado ? 1 : 0.55,
-                              }}>
-                                <input
-                                  type="checkbox"
-                                  checked={tildado}
-                                  onChange={() => toggleAdelanto(s.key, a.id)}
-                                />
-                                <span style={{ color: "var(--muted2)", flex: 1 }}>
-                                  {fmt_d(a.fecha)} · {a.cuenta || "—"}
-                                  {!a._entraPeriodo && (
-                                    <span style={{
-                                      marginLeft: 6, fontSize: 9, padding: "1px 5px", borderRadius: 3,
-                                      background: "rgba(245,158,11,0.15)", color: "var(--warn)",
-                                    }}>
-                                      futuro
-                                    </span>
-                                  )}
-                                  {a.auto_aplicar === false && (
-                                    <span style={{
-                                      marginLeft: 6, fontSize: 9, padding: "1px 5px", borderRadius: 3,
-                                      background: "rgba(59,130,246,0.15)", color: "var(--info)",
-                                    }}>
-                                      saldo
-                                    </span>
-                                  )}
-                                </span>
-                                <span style={{ color: tildado ? "var(--danger)" : "var(--muted2)" }}>
-                                  {tildado ? "−" : ""}{fmt_$(a.monto)}
-                                </span>
-                              </label>
-                            );
-                          })}
+                {/* Body expandido */}
+                {isExp && (() => {
+                  const s = cuotaActiva.slot;
+                  const nov = cuotaActiva.nov;
+                  const adels = cuotaActiva.adels;
+                  const tildSet = cuotaActiva.tildSet;
+                  const sumaAdel = cuotaActiva.sumaAdel;
+                  const total = cuotaActiva.total;
+                  return (
+                    <div style={{ borderTop: "1px solid var(--bd)", padding: "16px 20px" }}>
+                      {/* Tabs Q1/Q2 si tiene 2 cuotas */}
+                      {cuotasTotal > 1 && (
+                        <div style={{ display: "flex", gap: 4, marginBottom: 14 }}>
+                          {cuotasInfo.map((c, idx) => (
+                            <button
+                              key={c.slot.key}
+                              onClick={() => setCuotaTabPorEmp(prev => ({ ...prev, [emp.id]: idx }))}
+                              className={`btn btn-sm ${cuotaActivaIdx === idx ? "btn-acc" : "btn-ghost"}`}
+                              style={{ padding: "4px 14px", fontSize: 11 }}
+                            >
+                              Editar {labelSlot(c.slot.cuota, c.slot.cuotasTotal)}
+                              {c.estado === "pagado" && " ✓"}
+                            </button>
+                          ))}
                         </div>
                       )}
-                    </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 28 }}>
+                        {/* Col izq: novedades + adelantos */}
+                        <div>
+                          <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+                            Novedades de {labelSlot(s.cuota, s.cuotasTotal)}
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
+                            <NovInput label="Faltas (días)" value={nov.inasistencias} onChange={v => updateNov(s.key, "inasistencias", v)} />
+                            <NovInput label="Horas extras" value={nov.horas_extras} onChange={v => updateNov(s.key, "horas_extras", v)} />
+                            <NovInput label="Turnos dobles" value={nov.dobles} onChange={v => updateNov(s.key, "dobles", v)} />
+                            <NovInput label="Feriados trab." value={nov.feriados} onChange={v => updateNov(s.key, "feriados", v)} />
+                            <NovInput label="Otros desc. ($)" value={nov.otros_desc} onChange={v => updateNov(s.key, "otros_desc", v)} />
+                            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, paddingTop: 18 }}>
+                              <input
+                                type="checkbox"
+                                checked={nov.presentismo_mantiene}
+                                onChange={e => updateNov(s.key, "presentismo_mantiene", e.target.checked)}
+                              />
+                              Presentismo (+5%)
+                            </label>
+                          </div>
 
-                    {/* Col derecha: desglose en vivo */}
-                    <div>
-                      <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
-                        Cálculo en vivo
-                      </div>
-                      <div style={{
-                        background: "var(--s2)", borderRadius: 8, padding: 14, fontSize: 12,
-                      }}>
-                        <DesgloseRow label="Sueldo base" value={fmt_$(s.emp.sueldo_mensual / s.cuotasTotal)} />
-                        {nov.horas_extras > 0 && <DesgloseRow label={`+ ${nov.horas_extras} hs extra`} value="auto" />}
-                        {nov.dobles > 0 && <DesgloseRow label={`+ ${nov.dobles} dobles`} value="auto" />}
-                        {nov.feriados > 0 && <DesgloseRow label={`+ ${nov.feriados} feriados`} value="auto" />}
-                        {nov.inasistencias > 0 && <DesgloseRow label={`− ${nov.inasistencias} faltas`} value="auto" tone="danger" />}
-                        {nov.presentismo_mantiene && <DesgloseRow label="+ Presentismo 5%" value="auto" tone="success" />}
-                        {nov.otros_desc > 0 && <DesgloseRow label="− Otros desc." value={`−${fmt_$(nov.otros_desc)}`} tone="danger" />}
-                        {sumaAdel > 0 && <DesgloseRow label={`− Adelantos (${tildSet.size})`} value={`−${fmt_$(sumaAdel)}`} tone="danger" />}
-                        <div style={{
-                          marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--bd)",
-                          display: "flex", justifyContent: "space-between", alignItems: "baseline",
-                        }}>
-                          <span style={{ fontWeight: 500 }}>Total</span>
-                          <span style={{ fontSize: 18, fontWeight: 500, color: "var(--acc)" }}>{fmt_$(total)}</span>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                            <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                              Adelantos
+                            </div>
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => setAdelModalSlot(s.key)}
+                              style={{ padding: "3px 10px", fontSize: 11 }}
+                            >
+                              + Adelanto
+                            </button>
+                          </div>
+                          {adels.length === 0 ? (
+                            <div style={{ fontSize: 11, color: "var(--muted2)", padding: "8px 0" }}>
+                              Sin adelantos. Toca <strong>+ Adelanto</strong> para cargar uno.
+                            </div>
+                          ) : (
+                            <div style={{ background: "var(--s2)", borderRadius: 8, padding: 10 }}>
+                              {adels.map(a => {
+                                const tildado = tildSet.has(a.id);
+                                return (
+                                  <label key={a.id} style={{
+                                    display: "flex", alignItems: "center", gap: 10,
+                                    fontSize: 11, padding: "6px 6px", borderRadius: 4,
+                                    cursor: "pointer", opacity: tildado ? 1 : 0.55,
+                                  }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={tildado}
+                                      onChange={() => toggleAdelanto(s.key, a.id)}
+                                    />
+                                    <span style={{ color: "var(--muted2)", flex: 1 }}>
+                                      {fmt_d(a.fecha)} · {a.cuenta || "—"}
+                                      {!a._entraPeriodo && (
+                                        <span style={{
+                                          marginLeft: 6, fontSize: 9, padding: "1px 5px", borderRadius: 3,
+                                          background: "rgba(245,158,11,0.15)", color: "var(--warn)",
+                                        }}>
+                                          futuro
+                                        </span>
+                                      )}
+                                      {a.auto_aplicar === false && (
+                                        <span style={{
+                                          marginLeft: 6, fontSize: 9, padding: "1px 5px", borderRadius: 3,
+                                          background: "rgba(59,130,246,0.15)", color: "var(--info)",
+                                        }}>
+                                          saldo
+                                        </span>
+                                      )}
+                                    </span>
+                                    <span style={{ color: tildado ? "var(--danger)" : "var(--muted2)" }}>
+                                      {tildado ? "−" : ""}{fmt_$(a.monto)}
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Col der: desglose en vivo */}
+                        <div>
+                          <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+                            Cálculo en vivo
+                          </div>
+                          <div style={{ background: "var(--s2)", borderRadius: 8, padding: 14, fontSize: 12 }}>
+                            <DesgloseRow label="Sueldo base" value={fmt_$(s.emp.sueldo_mensual / s.cuotasTotal)} />
+                            {nov.horas_extras > 0 && <DesgloseRow label={`+ ${nov.horas_extras} hs extra`} value="auto" />}
+                            {nov.dobles > 0 && <DesgloseRow label={`+ ${nov.dobles} dobles`} value="auto" />}
+                            {nov.feriados > 0 && <DesgloseRow label={`+ ${nov.feriados} feriados`} value="auto" />}
+                            {nov.inasistencias > 0 && <DesgloseRow label={`− ${nov.inasistencias} faltas`} value="auto" tone="danger" />}
+                            {nov.presentismo_mantiene && <DesgloseRow label="+ Presentismo 5%" value="auto" tone="success" />}
+                            {nov.otros_desc > 0 && <DesgloseRow label="− Otros desc." value={`−${fmt_$(nov.otros_desc)}`} tone="danger" />}
+                            {sumaAdel > 0 && <DesgloseRow label={`− Adelantos (${tildSet.size})`} value={`−${fmt_$(sumaAdel)}`} tone="danger" />}
+                            <div style={{
+                              marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--bd)",
+                              display: "flex", justifyContent: "space-between", alignItems: "baseline",
+                            }}>
+                              <span style={{ fontWeight: 500 }}>Total</span>
+                              <span style={{ fontSize: 18, fontWeight: 500, color: "var(--acc)" }}>{fmt_$(total)}</span>
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 8, lineHeight: 1.5 }}>
+                            Los cambios se guardarían en vivo. Sin pasos "confirmar" — vas directo a <strong>Pagar</strong>.
+                          </div>
                         </div>
                       </div>
-                      <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 8, lineHeight: 1.5 }}>
-                        Los cambios se guardarían en vivo (en este mockup solo viven en memoria).
-                        Sin pasos "confirmar" — vas directo a <strong>Pagar</strong>.
-                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             );
           })}
