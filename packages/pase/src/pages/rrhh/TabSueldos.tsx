@@ -345,12 +345,15 @@ export function TabSueldos({
   useEffect(() => {
     const next: Record<string, Set<string>> = {};
     for (const s of slots) {
-      const adels = adelantosDelSlot(s.emp.id, s.cuota, s.cuotasTotal);
-      const set = new Set<string>();
-      for (const a of adels) {
-        if (a._entraPeriodo && (a.auto_aplicar !== false)) set.add(a.id);
-      }
-      next[s.key] = set;
+      // Cambio Lucas 31-may noche: los adelantos NUNCA se pre-tildan
+      // automáticamente. El user los tilda manual desde la card o el modal
+      // de pago. Esto elimina el comportamiento "auto_aplicar" y deja todos
+      // los adelantos como saldo flotante hasta que el dueño decida cuándo
+      // aplicarlos. La columna `auto_aplicar` queda en DB sin uso desde el
+      // frontend (no se elimina por compat con historial viejo).
+      const _adels = adelantosDelSlot(s.emp.id, s.cuota, s.cuotasTotal);
+      void _adels;
+      next[s.key] = new Set<string>();
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect -- inicializar set de tildados al recargar adelantos
     setTildados(next);
@@ -415,7 +418,9 @@ export function TabSueldos({
 
   // ── Modal "+ Adelanto" (real — RPC registrar_adelanto) ───────────────────
   const [adelModalSlot, setAdelModalSlot] = useState<string | null>(null);
-  const [adelForm, setAdelForm] = useState({ monto: "", fecha: toISO(today), cuenta: "", motivo: "", auto_aplicar: true });
+  // auto_aplicar: ya no se usa desde frontend (Lucas 31-may: adelantos siempre
+  // manuales). Lo mantengo en el state por compat de tipos, siempre false.
+  const [adelForm, setAdelForm] = useState({ monto: "", fecha: toISO(today), cuenta: "", motivo: "" });
   const [guardandoAdel, setGuardandoAdel] = useState(false);
   const guardarAdelanto = async () => {
     if (!adelModalSlot) return;
@@ -434,31 +439,14 @@ export function TabSueldos({
         p_detalle: adelForm.motivo || null,
       });
       if (error) { showError(translateRpcError(error)); return; }
-      // Si NO se aplica automáticamente, marcar auto_aplicar=false en la fila creada.
-      // C4: UPDATE de campo BOOLEAN UI (no plata). El INSERT real del adelanto +
-      // movimiento ya pasó por la RPC atómica registrar_adelanto arriba; acá solo
-      // toggleamos un flag de comportamiento del frontend (Lucas 2026-05-30).
-      if (adelForm.auto_aplicar === false) {
-        const adelId = (data && typeof data === "object" && "adelanto_id" in data)
-          ? (data as { adelanto_id?: string }).adelanto_id
-          : null;
-        if (adelId) {
-          // eslint-disable-next-line pase-local/no-direct-financiera-write -- C4: flag UI auto_aplicar, no toca plata
-          await db.from("rrhh_adelantos").update({ auto_aplicar: false }).eq("id", adelId);
-        } else {
-          // Fallback: la más reciente sin descontar de ese empleado/monto/fecha
-          // eslint-disable-next-line pase-local/no-direct-financiera-write -- C4: flag UI auto_aplicar, no toca plata
-          await db.from("rrhh_adelantos")
-            .update({ auto_aplicar: false })
-            .eq("empleado_id", empId)
-            .eq("monto", monto)
-            .eq("fecha", adelForm.fecha)
-            .eq("descontado", false);
-        }
-      }
-      showToast(`Adelanto registrado${adelForm.auto_aplicar === false ? " (saldo pendiente)" : ""}`);
+      // Cambio Lucas 31-may noche: ya no se diferencia entre adelantos
+      // "auto" y "manual". TODOS son manuales (saldo flotante). El INSERT
+      // queda como vino del RPC; el flag auto_aplicar pierde sentido desde
+      // el frontend.
+      void data;
+      showToast(`Adelanto registrado`);
       setAdelModalSlot(null);
-      setAdelForm({ monto: "", fecha: toISO(today), cuenta: "", motivo: "", auto_aplicar: true });
+      setAdelForm({ monto: "", fecha: toISO(today), cuenta: "", motivo: "" });
       await recargar();
     } finally {
       setGuardandoAdel(false);
@@ -842,15 +830,7 @@ export function TabSueldos({
                                           marginLeft: 6, fontSize: 9, padding: "1px 5px", borderRadius: 3,
                                           background: "rgba(245,158,11,0.15)", color: "var(--warn)",
                                         }}>
-                                          futuro
-                                        </span>
-                                      )}
-                                      {a.auto_aplicar === false && (
-                                        <span style={{
-                                          marginLeft: 6, fontSize: 9, padding: "1px 5px", borderRadius: 3,
-                                          background: "rgba(59,130,246,0.15)", color: "var(--info)",
-                                        }}>
-                                          saldo
+                                          fuera del período
                                         </span>
                                       )}
                                     </span>
@@ -937,20 +917,13 @@ export function TabSueldos({
           <label>Motivo (opcional)</label>
           <input value={adelForm.motivo} onChange={e => setAdelForm({ ...adelForm, motivo: e.target.value })} placeholder="Ej: urgencia personal…" />
         </div>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginTop: 8 }}>
-          <input
-            type="checkbox"
-            checked={adelForm.auto_aplicar}
-            onChange={e => setAdelForm({ ...adelForm, auto_aplicar: e.target.checked })}
-          />
-          <span style={{ fontSize: 12 }}>
-            Descontar automáticamente en el próximo sueldo
-          </span>
-        </label>
-        <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 4, paddingLeft: 24 }}>
-          {adelForm.auto_aplicar
-            ? "Va a venir tildado en el próximo pago. Lo podés destildar ahí también."
-            : "Queda como saldo. Solo se descuenta si lo tildás manual al pagar."}
+        <div style={{
+          fontSize: 11, color: "var(--muted2)", marginTop: 10, padding: "8px 12px",
+          background: "var(--s2)", borderRadius: 6, lineHeight: 1.5,
+        }}>
+          ℹ️ El adelanto queda como <strong>saldo del empleado</strong>.
+          Cuando vayas a pagar el sueldo, lo vas a ver con su fecha y monto —
+          tildalo manualmente si querés descontarlo de ese pago.
         </div>
       </Modal>
 
@@ -1010,7 +983,7 @@ export function TabSueldos({
                           />
                           <span style={{ flex: 1, color: "var(--muted2)" }}>
                             {fmt_d(a.fecha)} · {a.cuenta || "—"}
-                            {!a._entraPeriodo && <span style={{ marginLeft: 6, fontSize: 9, padding: "1px 5px", borderRadius: 3, background: "rgba(245,158,11,0.15)", color: "var(--warn)" }}>futuro</span>}
+                            {!a._entraPeriodo && <span style={{ marginLeft: 6, fontSize: 9, padding: "1px 5px", borderRadius: 3, background: "rgba(245,158,11,0.15)", color: "var(--warn)" }}>fuera del período</span>}
                           </span>
                           <span style={{ color: tildado ? "var(--danger)" : "var(--muted2)" }}>
                             {tildado ? "−" : ""}{fmt_$(a.monto)}
