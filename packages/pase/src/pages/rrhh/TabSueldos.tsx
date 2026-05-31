@@ -26,6 +26,7 @@ import { fmt_$, fmt_d, toISO, parseMonto } from "@pase/shared/utils";
 import { today } from "../../lib/utils";
 import { Modal } from "../../components/ui";
 import { translateRpcError } from "../../lib/errors";
+import { calcularTotalLiquidacion } from "../../lib/calculos/rrhh";
 import { useToast } from "../../hooks/useToast";
 import { ToastComponent } from "../../components/Toast";
 import type { Local } from "../../types";
@@ -65,6 +66,7 @@ interface NovDB {
   horas_extras: number;
   dobles: number;
   feriados: number;
+  vacaciones_dias: number | null;
   otros_descuentos: number | null;
   otros_descuentos_motivo: string | null;
   observaciones: string | null;
@@ -118,12 +120,13 @@ interface NovEdit {
   horas_extras: number;
   dobles: number;
   feriados: number;
+  vacaciones_dias: number;
   presentismo_mantiene: boolean;
   otros_desc: number;
   obs: string;
 }
 const NOV_VACIA: NovEdit = {
-  inasistencias: 0, horas_extras: 0, dobles: 0, feriados: 0,
+  inasistencias: 0, horas_extras: 0, dobles: 0, feriados: 0, vacaciones_dias: 0,
   presentismo_mantiene: true, otros_desc: 0, obs: "",
 };
 function novDBaEdit(n: NovDB | undefined): NovEdit {
@@ -133,6 +136,7 @@ function novDBaEdit(n: NovDB | undefined): NovEdit {
     horas_extras: Number(n.horas_extras || 0),
     dobles: Number(n.dobles || 0),
     feriados: Number(n.feriados || 0),
+    vacaciones_dias: Number(n.vacaciones_dias || 0),
     presentismo_mantiene: n.presentismo !== "NO_MANTIENE",
     otros_desc: Number(n.otros_descuentos || 0),
     obs: n.observaciones || "",
@@ -141,66 +145,52 @@ function novDBaEdit(n: NovDB | undefined): NovEdit {
 
 // Desglose del cálculo de un slot. Devuelve todos los componentes para
 // poder mostrarlos en vivo en el panel derecho, no solo el total final.
+// Refactor Lucas 31-may noche v3: delegamos en calcularTotalLiquidacion
+// (la fórmula histórica completa). No duplicar lógica. Incluye plus
+// vacacional, presentismo, todo.
 interface DesgloseCalculo {
   baseCuota: number;
-  descInas: number;        // descuento por inasistencias
-  ingrExtras: number;      // ingreso por horas extras
-  ingrDobles: number;      // ingreso por turnos dobles
-  ingrFeriados: number;    // ingreso por feriados trabajados
-  presentismo: number;     // 5% del sueldo BASE (cambio Lucas 31-may)
+  descInas: number;
+  ingrExtras: number;
+  ingrDobles: number;
+  ingrFeriados: number;
+  plusVacacional: number;  // NUEVO: plus por días de vacaciones tomados
+  presentismo: number;
   otrosDesc: number;
   totalAdelantos: number;
   total: number;
 }
 function calcularDesglose(emp: Emp, nov: NovEdit, cuotasTotal: number, cuotaNum: number, adelantosATildar: number): DesgloseCalculo {
-  const baseCuota = emp.sueldo_mensual / cuotasTotal;
-  const diasMes = 30;
-  // Cambio Lucas 31-may noche: faltas/feriados/dobles/extras se calculan
-  // SIEMPRE sobre el sueldo MENSUAL completo, NUNCA dividido por la quincena.
-  // Antes: valorDia = sueldo / 30 / cuotasTotal → para quincenales daba la
-  // MITAD del valor real, y una falta en Q1 descontaba la mitad de lo que
-  // realmente vale el día. Por eso Bernal Q1 mayo daba $347K en vez de
-  // los $226K realmente pagados (las 7 faltas se calculaban a $14K en vez
-  // de $28K cada una).
-  const valorDia = emp.sueldo_mensual / diasMes;
-  const valorHora = valorDia / 8;
-  const descInas = nov.inasistencias * valorDia;
-  const ingrExtras = nov.horas_extras * valorHora * 1.5;
-  // Cambio Lucas 31-may noche v2: tanto feriados como dobles se pagan como
-  // 1 DÍA EXTRA (sueldo/30), no como día doble ni 1.5×. El día trabajado
-  // ya está cubierto por el sueldo base — solo se suma el extra.
-  // Antes (mal): feriados × 2 (= 2 días extras), dobles × 1.5.
-  // Coincide con helpers.ts:calcularValorDoble y con calcularTotalLiquidacion
-  // que ya tenían "feriados × valor_dia" sin multiplicar.
-  const ingrDobles = nov.dobles * valorDia;
-  const ingrFeriados = nov.feriados * valorDia;
-  // Presentismo:
-  //  - Mensuales (cuotasTotal=1): 5% del sueldo mensual (igual que antes).
-  //  - Quincenales: NO se paga en Q1 — se paga UNA sola vez a fin de mes
-  //    cuando ya se sabe si se perdió o no. En Q2: 5% del sueldo MENSUAL
-  //    completo (no de la quincena), porque el presentismo se calcula
-  //    sobre el sueldo base completo.
-  // Pedido Lucas 31-may noche. Antes el código aplicaba 5% del baseCuota
-  // en TODA quincena, lo que daba la mitad del presentismo real y aplicaba
-  // doble (en Q1 y Q2).
-  let presentismo = 0;
-  if (nov.presentismo_mantiene) {
-    if (cuotasTotal === 1) presentismo = emp.sueldo_mensual * 0.05;
-    else if (cuotaNum === 2) presentismo = emp.sueldo_mensual * 0.05;
-    // cuotaNum === 1 && cuotasTotal === 2 → presentismo = 0
-  }
-  const subtotal = baseCuota - descInas + ingrExtras + ingrDobles + ingrFeriados + presentismo;
-  const total = Math.max(0, Math.round(subtotal - nov.otros_desc - adelantosATildar));
+  const modo_pago: "MENSUAL" | "QUINCENAL" = cuotasTotal === 2 ? "QUINCENAL" : "MENSUAL";
+  // valor_doble = 1 día extra (sueldo/30). Coincide con helpers.ts:calcularValorDoble.
+  const valor_doble = emp.sueldo_mensual / 30;
+  const r = calcularTotalLiquidacion({
+    sueldo_mensual: emp.sueldo_mensual,
+    modo_pago,
+    inasistencias: nov.inasistencias,
+    horas_extras: nov.horas_extras,
+    dobles: nov.dobles,
+    valor_doble,
+    feriados: nov.feriados,
+    vacaciones_dias: nov.vacaciones_dias,
+    presentismo_mantiene: nov.presentismo_mantiene,
+    adelantos: adelantosATildar,
+    pagos_dobles_realizados: 0,
+    otros_descuentos: nov.otros_desc,
+    cuota_num: cuotaNum,
+    cuotas_total: cuotasTotal,
+  });
   return {
-    baseCuota: Math.round(baseCuota),
-    descInas: Math.round(descInas),
-    ingrExtras: Math.round(ingrExtras),
-    ingrDobles: Math.round(ingrDobles),
-    ingrFeriados: Math.round(ingrFeriados),
-    presentismo: Math.round(presentismo),
+    baseCuota: Math.round(r.sueldo_base),
+    descInas: Math.round(r.descuento_ausencias),
+    ingrExtras: Math.round(r.total_horas_extras),
+    ingrDobles: Math.round(r.total_dobles),
+    ingrFeriados: Math.round(r.total_feriados),
+    plusVacacional: Math.round(r.total_vacaciones),
+    presentismo: Math.round(r.monto_presentismo),
     otrosDesc: Math.round(nov.otros_desc),
     totalAdelantos: Math.round(adelantosATildar),
-    total,
+    total: Math.max(0, r.total_a_pagar),
   };
 }
 // Wrapper backward-compat (los callers viejos solo quieren el total).
@@ -273,7 +263,7 @@ export function TabSueldos({
       // Extendido 31-may: traer id+total+pagado de la liquidación para mostrar
       // el resumen de pago cuando la cuota está pagada (sin re-query).
       const { data: novs } = await db.from("rrhh_novedades")
-        .select("id, empleado_id, mes, anio, cuota_num, cuotas_total, inasistencias, presentismo, horas_extras, dobles, feriados, otros_descuentos, otros_descuentos_motivo, observaciones, estado, rrhh_liquidaciones(id, estado, total_a_pagar, pagos_realizados)")
+        .select("id, empleado_id, mes, anio, cuota_num, cuotas_total, inasistencias, presentismo, horas_extras, dobles, feriados, vacaciones_dias, otros_descuentos, otros_descuentos_motivo, observaciones, estado, rrhh_liquidaciones(id, estado, total_a_pagar, pagos_realizados)")
         .in("empleado_id", empIds)
         .eq("mes", mes).eq("anio", anio);
       type NovRow = NovDB & { rrhh_liquidaciones: { id: string; estado: string; total_a_pagar: number; pagos_realizados: number }[] | null };
@@ -366,6 +356,7 @@ export function TabSueldos({
         horas_extras: nov.horas_extras,
         dobles: nov.dobles,
         feriados: nov.feriados,
+        vacaciones_dias: nov.vacaciones_dias,
         otros_descuentos: nov.otros_desc,
         observaciones: nov.obs || null,
         // Si ya existe, no tocamos el estado (puede estar confirmado tras pago).
@@ -387,7 +378,7 @@ export function TabSueldos({
         setSavedAt(prev => ({ ...prev, [key]: Date.now() }));
         // Refrescar novedadesDB para que el próximo UPSERT use el id correcto.
         const { data: ns } = await db.from("rrhh_novedades")
-          .select("id, empleado_id, mes, anio, cuota_num, cuotas_total, inasistencias, presentismo, horas_extras, dobles, feriados, otros_descuentos, otros_descuentos_motivo, observaciones, estado")
+          .select("id, empleado_id, mes, anio, cuota_num, cuotas_total, inasistencias, presentismo, horas_extras, dobles, feriados, vacaciones_dias, otros_descuentos, otros_descuentos_motivo, observaciones, estado")
           .eq("empleado_id", slot.emp.id).eq("mes", mes).eq("anio", anio);
         setNovedadesDB(prev => {
           const otros = prev.filter(n => !(n.empleado_id === slot.emp.id && n.mes === mes && n.anio === anio));
@@ -644,7 +635,7 @@ export function TabSueldos({
       //  - presentismo sumado en Q1 quincenal (doble cobro)
       // Fix Lucas 31-may noche.
       const d = calcularDesglose(s.emp, nov, s.cuotasTotal, s.cuota, sumaAdel);
-      const subtotal1 = d.baseCuota - d.descInas + d.ingrExtras + d.ingrDobles + d.ingrFeriados;
+      const subtotal1 = d.baseCuota - d.descInas + d.ingrExtras + d.ingrDobles + d.ingrFeriados + d.plusVacacional;
       const subtotal2 = subtotal1 + d.presentismo;
 
       const { data, error } = await db.rpc("pagar_sueldo", {
@@ -661,6 +652,7 @@ export function TabSueldos({
           total_horas_extras: d.ingrExtras,
           total_dobles: d.ingrDobles,
           total_feriados: d.ingrFeriados,
+          total_vacaciones: d.plusVacacional,
           subtotal1: Math.round(subtotal1),
           monto_presentismo: d.presentismo,
           subtotal2: Math.round(subtotal2),
@@ -954,9 +946,10 @@ export function TabSueldos({
                                 {nov.horas_extras !== 0 && <Pill label="Hs extras" value={nov.horas_extras} tone="success" />}
                                 {nov.dobles > 0 && <Pill label="Dobles" value={nov.dobles} tone="success" />}
                                 {nov.feriados > 0 && <Pill label="Feriados" value={nov.feriados} tone="success" />}
+                                {nov.vacaciones_dias > 0 && <Pill label="Vacaciones" value={`${nov.vacaciones_dias} días`} tone="success" />}
                                 {nov.otros_desc > 0 && <Pill label="Otros desc" value={fmt_$(nov.otros_desc)} tone="danger" />}
                                 <Pill label="Presentismo" value={nov.presentismo_mantiene ? "sí" : "no"} tone={nov.presentismo_mantiene ? "success" : undefined} />
-                                {nov.inasistencias === 0 && nov.horas_extras === 0 && nov.dobles === 0 && nov.feriados === 0 && nov.otros_desc === 0 && (
+                                {nov.inasistencias === 0 && nov.horas_extras === 0 && nov.dobles === 0 && nov.feriados === 0 && nov.vacaciones_dias === 0 && nov.otros_desc === 0 && (
                                   <span style={{ fontSize: 10, color: "var(--muted2)" }}>Sin novedades extras</span>
                                 )}
                               </div>
@@ -969,8 +962,9 @@ export function TabSueldos({
                                 <NovInput label="Hs extras" value={nov.horas_extras} onChange={v => updateNov(s.key, "horas_extras", v)} />
                                 <NovInput label="Dobles" value={nov.dobles} onChange={v => updateNov(s.key, "dobles", v)} />
                                 <NovInput label="Feriados" value={nov.feriados} onChange={v => updateNov(s.key, "feriados", v)} />
+                                <NovInput label="Vacaciones (días)" value={nov.vacaciones_dias} onChange={v => updateNov(s.key, "vacaciones_dias", v)} />
                                 <NovInput label="Otros desc. $" value={nov.otros_desc} onChange={v => updateNov(s.key, "otros_desc", v)} />
-                                <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, paddingTop: 12 }}>
+                                <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, paddingTop: 12, gridColumn: "1 / -1" }}>
                                   <input
                                     type="checkbox"
                                     checked={nov.presentismo_mantiene}
@@ -1045,6 +1039,7 @@ export function TabSueldos({
                             {nov.horas_extras > 0 && <DesgloseRow label={`+ ${nov.horas_extras} hs extra`} value={`+${fmt_$(d.ingrExtras)}`} tone="success" />}
                             {nov.dobles > 0 && <DesgloseRow label={`+ ${nov.dobles} dobles`} value={`+${fmt_$(d.ingrDobles)}`} tone="success" />}
                             {nov.feriados > 0 && <DesgloseRow label={`+ ${nov.feriados} feriados`} value={`+${fmt_$(d.ingrFeriados)}`} tone="success" />}
+                            {nov.vacaciones_dias > 0 && <DesgloseRow label={`+ ${nov.vacaciones_dias} días vacaciones (plus)`} value={`+${fmt_$(d.plusVacacional)}`} tone="success" />}
                             {nov.inasistencias > 0 && <DesgloseRow label={`− ${nov.inasistencias} faltas`} value={`−${fmt_$(d.descInas)}`} tone="danger" />}
                             {nov.presentismo_mantiene && d.presentismo > 0 && <DesgloseRow label="+ Presentismo 5%" value={`+${fmt_$(d.presentismo)}`} tone="success" />}
                             {nov.presentismo_mantiene && d.presentismo === 0 && s.cuotasTotal === 2 && s.cuota === 1 && <DesgloseRow label="Presentismo: se paga en Q2" value="—" />}
