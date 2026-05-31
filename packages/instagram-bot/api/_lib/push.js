@@ -74,11 +74,19 @@ export async function notificarDMNuevo({ db, cfg, cliente, texto, conv }) {
     return { sent: 0, skipped: 0, reason: 'no_subs' };
   }
 
-  const clienteNombre = cliente?.nombre || `@${cliente?.ig_username || 'cliente'}`;
+  // Pedido Lucas 31-may: en el celu se cortaba el title y no se veía quién
+  // mandaba. Cambio a formato más compacto:
+  //   title: "@username → Cuenta" (el "→ Cuenta" se cae si hay solo una cuenta)
+  //   body: "💬 Texto del mensaje" (emoji en body, no en title, así no roba espacio)
+  // Multi-cuenta: agrego nombre de la cuenta IG receptora para distinguir
+  // (Maneki vs Neko cuando ambas reciben).
+  const clienteUser = cliente?.ig_username ? `@${cliente.ig_username}` : 'cliente';
+  const clienteNombre = cliente?.nombre || clienteUser;
+  const cuentaReceptora = cfg?.ig_username ? ` → @${cfg.ig_username}` : '';
   const textoTruncado = (texto || '[adjunto]').substring(0, 140);
   const payload = JSON.stringify({
-    title: `📩 DM de ${clienteNombre}`,
-    body: textoTruncado,
+    title: `${clienteNombre}${cuentaReceptora}`,
+    body: `💬 ${textoTruncado}`,
     url: `/mensajeria?conv=${conv.id}`,
     priority: 'normal',
     tag: `ig-conv-${conv.id}`, // mismo tag → reemplaza notif anterior
