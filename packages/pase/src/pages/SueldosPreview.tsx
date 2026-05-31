@@ -137,12 +137,26 @@ export default function SueldosPreview() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   // Cargar locales + cuentas
+  // Fix race condition: en /sueldos-preview cargado en frío, la query corre
+  // antes de hidratar la sesión → RLS devuelve 0 sin error. Esperamos getSession
+  // primero y reintentamos si vuelve vacío (mismo patrón que App.tsx).
   useEffect(() => {
     (async () => {
-      const { data: locs } = await db.from("locales").select("id, nombre").order("nombre");
-      const locArr = (locs || []) as Local[];
+      await db.auth.getSession();
+      let locArr: Local[] = [];
+      for (let intento = 0; intento < 4; intento++) {
+        const { data: locs } = await db.from("locales").select("id, nombre").order("nombre");
+        locArr = (locs || []) as Local[];
+        if (locArr.length > 0) break;
+        await new Promise(r => setTimeout(r, 200 * Math.pow(2, intento)));
+      }
       setLocales(locArr);
-      if (locArr.length > 0 && !localId && locArr[0]) setLocalId(locArr[0].id);
+      if (locArr.length > 0 && !localId && locArr[0]) {
+        setLocalId(locArr[0].id);
+      } else if (locArr.length === 0) {
+        // Sin locales tras retry → cortar el loading para no quedar colgado
+        setLoading(false);
+      }
       // Cuentas: hardcoded en el sistema real (CUENTAS_PAGO en lib/cuentas).
       // En el mockup uso las mismas para que se vean iguales.
       setCuentas(["Caja Efectivo", "Banco", "MercadoPago", "Caja Chica", "Caja Mayor"]);
@@ -424,8 +438,14 @@ export default function SueldosPreview() {
       </div>
 
       {/* Lista de slots */}
-      {loading ? (
-        <div className="loading">Cargando datos reales de Maneki…</div>
+      {!localId && locales.length === 0 ? (
+        <div className="alert alert-warn">
+          No pude cargar tus locales. Refrescá la página (sesión todavía hidratando).
+        </div>
+      ) : !localId ? (
+        <div className="alert alert-info">Elegí un local arriba.</div>
+      ) : loading ? (
+        <div className="loading">Cargando datos reales…</div>
       ) : slotsFiltrados.length === 0 ? (
         <div className="empty">No hay empleados que coincidan con el filtro</div>
       ) : (
