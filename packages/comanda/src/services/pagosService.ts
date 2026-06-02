@@ -26,6 +26,42 @@ export async function cobrar(
   idempotencyKey?: string,
 ): Promise<{ totalCobrado: number; error: string | null }> {
   if (!pagos.length) return { totalCobrado: 0, error: 'No hay pagos para registrar' };
+
+  // Sprint offline-first cierre (2026-06-02): si el flag está ON, encolar
+  // el cobro localmente. La venta se marca cobrada inmediato en idb, el
+  // sync push lo procesa cuando hay internet usando fn_cobrar_venta_comanda_offline
+  // (que resuelve venta_id desde idempotency_uuid si la venta es local-only).
+  // Resuelve el bug "La venta no existe" al cobrar venta offline.
+  const { featureFlags } = await import('../lib/featureFlags');
+  if (featureFlags.offlineFirstVentas) {
+    const { cobrarVentaOffline } = await import('./offline/pagosOfflineService');
+    const { ventasRepo } = await import('@/lib/db/repositories/ventasRepo');
+    const venta = await ventasRepo.getById(ventaId);
+    if (!venta) return { totalCobrado: 0, error: 'VENTA_NO_ENCONTRADA' };
+    try {
+      const r = await cobrarVentaOffline({
+        ventaId,
+        pagos: pagos.map((p) => ({
+          metodo: p.metodo,
+          monto: p.monto,
+          vuelto: p.vuelto ?? 0,
+          propina_incluida: p.propina_incluida ?? 0,
+        })),
+        propina,
+        cobradoPor,
+        tenantId: venta.tenant_id,
+        localId: venta.local_id,
+      });
+      return { totalCobrado: r.totalCobrado, error: null };
+    } catch (err) {
+      return {
+        totalCobrado: 0,
+        error: err instanceof Error ? err.message : 'Error cobrando offline',
+      };
+    }
+  }
+
+  // Flujo legacy online-only
   const { data, error } = await db.rpc('fn_cobrar_venta_comanda', {
     p_venta_id: ventaId,
     p_pagos: pagos,

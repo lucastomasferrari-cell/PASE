@@ -528,6 +528,26 @@ export async function anularVenta(
   ventaId: number, managerId: string, motivo: string,
   idempotencyKey?: string,
 ): Promise<{ error: string | null }> {
+  // Sprint offline-first cierre (2026-06-02): si el flag está ON, encolar
+  // la anulación localmente. Mismo patrón que cobrar (pagosService.cobrar).
+  const { featureFlags } = await import('../lib/featureFlags');
+  if (featureFlags.offlineFirstVentas) {
+    const { anularVentaOffline } = await import('./offline/overridesOfflineService');
+    try {
+      await anularVentaOffline({ ventaId, managerId, motivo });
+      // Notif partner sólo si la venta tiene id real positivo (sincronizada).
+      // Si es temp negativa, el partner notification es N/A (la venta no
+      // existe en el partner externo todavía).
+      if (ventaId > 0) {
+        void notifyPartnerStatusChange(ventaId, 'cancel', { reason: motivo || 'OTHER' });
+      }
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : 'Error anulando offline' };
+    }
+  }
+
+  // Flujo legacy online-only
   const { error } = await db.rpc('fn_anular_venta_comanda', {
     p_venta_id: ventaId,
     p_manager_id: managerId,
@@ -535,7 +555,6 @@ export async function anularVenta(
     p_idempotency_key: idempotencyKey ?? null,
   });
   if (error) return { error: error.message };
-  // Si la venta vino de un partner externo, cancelar también allá.
   void notifyPartnerStatusChange(ventaId, 'cancel', { reason: motivo || 'OTHER' });
   return { error: null };
 }

@@ -2,6 +2,9 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { initConsoleCapture } from './lib/consoleCapture';
+// Side-effect: expone window.__comandaCleanupOffline + Nuclear para debugging
+// del state offline (ventas zombies, pending_ops trabadas). Sprint cierre 2-jun.
+import './lib/db/cleanup';
 // Capturar errores de consola desde el boot, ANTES de cualquier otro código.
 // Los errores se incluyen en tickets de soporte para que el agent auto-fix
 // tenga contexto del browser al diagnosticar.
