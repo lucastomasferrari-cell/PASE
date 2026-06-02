@@ -86,7 +86,14 @@ export function useVentaData(ventaId: number): UseVentaDataResult {
     });
   }, [ventaId, navigate]);
 
-  // Realtime: cocina marca listo o manager anula → solo refresca la venta
+  // Realtime: cocina marca listo o manager anula → solo refresca la venta.
+  //
+  // NOTA offline-first (2026-06-02): si ventaId < 0 la venta es local-only
+  // (todavía no sincronizada). No tiene sentido suscribirse a Supabase
+  // Realtime con ese id — no existe en server. El sync engine eventualmente
+  // hace push y emite evento `comanda:reconcile-id`, que ya escuchamos
+  // arriba para navegar al id real. Una vez navegado, este hook se re-monta
+  // con el id positivo y la subscription Realtime arranca normal.
   useRealtimeTable({
     table: 'ventas_pos',
     onChange: () => reloadVenta(),

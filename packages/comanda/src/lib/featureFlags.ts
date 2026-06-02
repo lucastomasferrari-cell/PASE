@@ -27,20 +27,21 @@ function getFlag(key: string, envKey: string, defaultValue: boolean): boolean {
 export const featureFlags = {
   // Sprint A2 (2026-05-19): offline-first encendido por default.
   //
-  // BUG FIX 2026-06-02 (Anto/Lucas): el flag estaba ON pero la pantalla
-  // /pos/venta/:id NO sabe leer del repo local. abrirVentaOffline devuelve
-  // tempVentaId negativo (-1000000000) y la pantalla query a Supabase con
-  // ese id → "Cannot coerce the result to a single JSON object" + "Venta
-  // no encontrada". O sea, "Nueva orden" en Mostrador/Salón/Pedidos NUNCA
-  // funcionó desde el 19-may.
+  // Historia:
+  //  - 19-may: encendido en Sprint A2 pero VentaScreen no soportaba ids
+  //    negativos → bug "Cannot coerce" al tocar Nueva orden.
+  //  - 2026-06-02 mañana: apagado por default (fix urgente).
+  //  - 2026-06-02 tarde: RE-encendido tras completar el read del repo
+  //    local en getVenta()/listVentasItems() + merge en listVentas().
+  //    Ahora cuando se crea venta offline con tempId < 0, todas las
+  //    pantallas (VentaScreen, Mostrador/Salón/Pedidos listings) leen
+  //    del idb local. El sync corre en background y reconcilia el id
+  //    cuando hay internet (idReconciliation.ts emite evento, useVentaData
+  //    escucha y navega al id real).
   //
-  // Default = false hasta que se implemente el read del repo local en
-  // VentaView/PedidoDetalle cuando el id es negativo. Deuda registrada
-  // en memoria.md como "pendientes post Sprint A2".
-  //
-  // Para reactivar manualmente: localStorage.setItem('comanda.ff.offline_first_ventas', '1')
+  // Para apagar manualmente: localStorage.setItem('comanda.ff.offline_first_ventas', '0')
   get offlineFirstVentas(): boolean {
-    return getFlag('offline_first_ventas', 'VITE_FF_OFFLINE_FIRST_VENTAS', false);
+    return getFlag('offline_first_ventas', 'VITE_FF_OFFLINE_FIRST_VENTAS', true);
   },
 };
 

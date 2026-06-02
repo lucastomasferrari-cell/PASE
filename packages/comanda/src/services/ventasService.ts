@@ -136,7 +136,17 @@ export async function abrirVenta(args: AbrirVentaArgs): Promise<{ ventaId: numbe
   return { ventaId: data as number, error: null };
 }
 
+// Routing offline-first: si el id es negativo, la venta vive SOLO en idb
+// local (creada offline o aún no sincronizada). Bug Anto 2026-06-02: hasta
+// hoy esto rompía con "Cannot coerce" porque Supabase no tenía esa fila.
+// Fix: leer del repo local cuando id < 0.
 export async function getVenta(ventaId: number): Promise<{ data: VentaPos | null; error: string | null }> {
+  if (ventaId < 0) {
+    const { ventasRepo } = await import('@/lib/db/repositories/ventasRepo');
+    const local = await ventasRepo.getById(ventaId);
+    if (!local) return { data: null, error: 'VENTA_LOCAL_NO_ENCONTRADA' };
+    return { data: local as unknown as VentaPos, error: null };
+  }
   const { data, error } = await db
     .from('ventas_pos')
     .select('*')
@@ -149,6 +159,19 @@ export async function getVenta(ventaId: number): Promise<{ data: VentaPos | null
 }
 
 export async function listVentasItems(ventaId: number): Promise<{ data: VentaPosItem[]; error: string | null }> {
+  // Mismo patrón: venta_id negativo → leer items del repo local
+  if (ventaId < 0) {
+    const { ventasItemsRepo } = await import('@/lib/db/repositories/ventasRepo');
+    const items = await ventasItemsRepo.listByVenta(ventaId);
+    // Sort: curso ASC (nulls last) → id ASC (mismo orden que la query remote)
+    const sorted = [...items].sort((a, b) => {
+      const ca = a.curso ?? Number.MAX_SAFE_INTEGER;
+      const cb = b.curso ?? Number.MAX_SAFE_INTEGER;
+      if (ca !== cb) return ca - cb;
+      return a.id - b.id;
+    });
+    return { data: sorted as unknown as VentaPosItem[], error: null };
+  }
   const { data, error } = await db
     .from('ventas_pos_items')
     .select('*')
@@ -203,7 +226,54 @@ export async function listVentas(f: ListVentasFilter): Promise<{ data: VentaPos[
   q = q.order('abierta_at', { ascending: false }).limit(200);
   const { data, error } = await q;
   if (error) return { data: [], error: translateError(error) };
-  return { data: (data ?? []) as unknown as VentaPos[], error: null };
+  const remotas = (data ?? []) as unknown as VentaPos[];
+
+  // Offline-first merge (Anto 2026-06-02): si hay ventas locales no
+  // sincronizadas (id < 0) en este local, agregarlas al listado para que
+  // aparezcan en Mostrador/Salón/Pedidos. Dedup por idempotency_uuid si
+  // ya están en remotas (caso edge: sincronizó pero el cliente todavía
+  // no recibió el evento reconcile).
+  try {
+    const { featureFlags } = await import('../lib/featureFlags');
+    if (!featureFlags.offlineFirstVentas) return { data: remotas, error: null };
+
+    const { ventasRepo } = await import('@/lib/db/repositories/ventasRepo');
+    const locales = await ventasRepo.listByLocal(f.localId);
+    if (locales.length === 0) return { data: remotas, error: null };
+
+    // Filtros equivalentes a los aplicados al servidor (modos, estados, origenes, fecha)
+    const cutoff = (() => {
+      const dias = f.desdeUltimosDias === undefined ? 30 : f.desdeUltimosDias;
+      if (dias === null || dias <= 0) return null;
+      const d = new Date();
+      d.setDate(d.getDate() - dias);
+      return d.toISOString();
+    })();
+    const localesPendientes = locales.filter((v) => {
+      // Solo las que NO están en remotas (todavía no sincronizadas)
+      const yaSync = remotas.some((r) => {
+        const ruuid = (r as { idempotency_uuid?: string | null }).idempotency_uuid;
+        const luuid = (v as { idempotency_uuid?: string | null }).idempotency_uuid;
+        return luuid && ruuid && luuid === ruuid;
+      });
+      if (yaSync) return false;
+      // Aplicar mismos filtros que server-side
+      if (f.modos && f.modos.length && !f.modos.includes(v.modo)) return false;
+      if (f.estados && f.estados.length && !f.estados.includes(v.estado)) return false;
+      if (f.origenes && f.origenes.length && v.origen && !f.origenes.includes(v.origen)) return false;
+      if (cutoff && v.abierta_at && v.abierta_at < cutoff) return false;
+      return true;
+    });
+
+    const merged = [...localesPendientes as unknown as VentaPos[], ...remotas]
+      .sort((a, b) => (b.abierta_at ?? '').localeCompare(a.abierta_at ?? ''))
+      .slice(0, 200);
+
+    return { data: merged, error: null };
+  } catch {
+    // Si el merge falla por cualquier motivo, devolvemos al menos las remotas
+    return { data: remotas, error: null };
+  }
 }
 
 export interface AgregarItemArgs {
