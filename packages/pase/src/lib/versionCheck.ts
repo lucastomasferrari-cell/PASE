@@ -3,34 +3,28 @@
 // ─────────────────────────────────────────────────────────────────────────
 //
 // Problema: cuando deployamos, los users que tienen la app abierta siguen
-// con el bundle viejo en memoria. Esto genera errores tipo "Failed to fetch
-// dynamically imported module" cuando intentan abrir una pantalla nueva.
+// con el bundle viejo en memoria + JWT que puede quedar stale. Síntoma
+// recurrente: refrescan y el sidebar pierde el selector de sucursales
+// (RLS devuelve 0 sin error porque el JWT no tiene tenant_id).
 //
 // Solución: en cada build, vite genera `dist/version.json` con el hash del
 // commit Y embebe ese hash en el bundle vía `__BUILD_VERSION__`. El hook
 // abajo fetchea `version.json` cada 5 minutos (con cache-bust) y al volver
-// a foco. Si la versión del server difiere de la del bundle → reload.
+// a foco. Si la versión del server difiere de la del bundle → signOut +
+// reload. Esto fuerza JWT fresh + bundle fresh sin que el user tenga que
+// hacer nada.
 //
-// HISTORIA — pedido vs realidad:
-//   - 31-may (Lucas): "después de un deployment nuevo tenés que desconectar
-//     obligatoriamente a todos los usuarios". Razón: bug del JWT stale sin
-//     app_metadata.tenant_id (users viejos quedaban con sidebar vacío).
-//     Implementamos signOut + reload.
-//   - 2-jun (Lucas, queja recurrente): "la sesión se cierra muy rápido".
-//     Causa: con ~25 deploys en 1 día (sesión maratónica), cada deploy
-//     deslogueaba a Lucas/Anto. Frustrante.
-//   - Fix: hacer SOLO reload, sin signOut. El bug viejo del JWT sin
-//     tenant_id ya está fixeado en App.tsx:319-350 (refreshSession +
-//     signOut fallback solo si refresh tampoco sirve). Para users nuevos
-//     y todos los existentes saneados, el JWT sigue siendo válido post-
-//     deploy — solo cambiar el bundle es suficiente.
+// Pedido Lucas 31-may: "después de un deployment nuevo tenés que desconectar
+// obligatoriamente a todos los usuarios".
 //
-// Si en el futuro vuelve a aparecer el bug "sidebar vacío post-deploy"
-// (que sería muy raro porque está cerrado), el handler de App.tsx
-// detecta la falta de tenant_id en JWT y dispara refreshSession() solo.
+// EXCEPCIÓN — flag "Mantener sesión abierta" (Lucas 2-jun):
+// Si el user marcó el checkbox en login, persiste `pase_remember_me=true`
+// en localStorage. En ese caso post-deploy hacemos SOLO reload (sin signOut).
+// El user controla con el toggle si quiere logout automático o no.
 // ─────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useRef } from "react";
+import { db } from "./supabase";
 
 // Hash del commit embebido en build (ver vite.config.ts → `define`).
 // En dev queda como `dev-<timestamp>` y nunca matchea version.json, pero
@@ -57,21 +51,46 @@ async function fetchServerVersion(): Promise<string | null> {
   }
 }
 
-let _yaForzandoReload = false;
+let _yaForzandoLogout = false;
 
-async function forzarReloadConservandoSesion(motivo: string) {
-  if (_yaForzandoReload) return;
-  _yaForzandoReload = true;
-  console.warn(`[versionCheck] ${motivo} — reload (sesión conservada)`);
-  // NO hacemos signOut. El JWT sigue siendo válido — solo cambia el bundle.
-  // El listener onAuthStateChange en App.tsx detecta INITIAL_SESSION al
-  // recargar y re-hidrata user/perfil/locales sin pedir password.
-  //
-  // OJO: NO limpiar sessionStorage 'pase_user' acá tampoco. Es cache de
-  // perfil que App.tsx invalida solo via TOKEN_REFRESHED y SIGNED_OUT.
-  // Si lo borráramos, la próxima vista podría parpadear hasta que el
-  // listener corra de nuevo.
-  //
+// Flag persistido por el checkbox "Mantener sesión abierta" en Login.tsx.
+// Si está en `true`, post-deploy hacemos SOLO reload (no signOut).
+// Si está en `false` o no existe, se mantiene el comportamiento legacy
+// (signOut + reload) — pedido original de Lucas 31-may.
+const REMEMBER_ME_KEY = "pase_remember_me";
+
+function isRememberMeActive(): boolean {
+  try {
+    return localStorage.getItem(REMEMBER_ME_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+async function handleDeployDetectado(motivo: string) {
+  if (_yaForzandoLogout) return;
+  _yaForzandoLogout = true;
+
+  if (isRememberMeActive()) {
+    console.warn(`[versionCheck] ${motivo} — reload (sesión conservada por 'Mantener sesión')`);
+    // Solo reload — el JWT sigue siendo válido, el listener onAuthStateChange
+    // en App.tsx re-hidrata el perfil al detectar INITIAL_SESSION.
+    window.location.reload();
+    return;
+  }
+
+  console.warn(`[versionCheck] ${motivo} — signOut + reload`);
+  try {
+    await db.auth.signOut();
+  } catch {
+    // Aún si signOut falla (no había sesión), seguimos al reload.
+  }
+  // Limpiar cualquier cache local de perfil/local que App.tsx haya guardado.
+  try {
+    sessionStorage.removeItem("pase_user");
+    sessionStorage.removeItem("pase_local_activo");
+    localStorage.removeItem("pase_uid");
+  } catch { /* idem */ }
   // Reload con cache busting (Vercel sirve index.html con no-cache, así
   // que `location.reload()` ya pide el HTML nuevo y el HTML linkea los
   // bundles con hash nuevo).
@@ -101,7 +120,7 @@ export function useVersionPolling(): void {
       if (cancelado) return;
       if (!serverVersion) return;
       if (serverVersion !== localVersion.current) {
-        await forzarReloadConservandoSesion(
+        await handleDeployDetectado(
           `Versión nueva detectada (server=${serverVersion}, local=${localVersion.current})`,
         );
       }
