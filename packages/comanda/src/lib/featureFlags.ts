@@ -25,13 +25,22 @@ function getFlag(key: string, envKey: string, defaultValue: boolean): boolean {
 }
 
 export const featureFlags = {
-  // Sprint A2 (2026-05-19): offline-first encendido por default. Único
-  // usuario activo es Lucas, no hay clientes externos. Si rompe algo, el
-  // user puede apagarlo desde Hardware o con un localStorage.setItem.
-  // Cuando entren más usuarios reales, evaluar si dejarlo ON o gating
-  // por tenant.
+  // Sprint A2 (2026-05-19): offline-first encendido por default.
+  //
+  // BUG FIX 2026-06-02 (Anto/Lucas): el flag estaba ON pero la pantalla
+  // /pos/venta/:id NO sabe leer del repo local. abrirVentaOffline devuelve
+  // tempVentaId negativo (-1000000000) y la pantalla query a Supabase con
+  // ese id → "Cannot coerce the result to a single JSON object" + "Venta
+  // no encontrada". O sea, "Nueva orden" en Mostrador/Salón/Pedidos NUNCA
+  // funcionó desde el 19-may.
+  //
+  // Default = false hasta que se implemente el read del repo local en
+  // VentaView/PedidoDetalle cuando el id es negativo. Deuda registrada
+  // en memoria.md como "pendientes post Sprint A2".
+  //
+  // Para reactivar manualmente: localStorage.setItem('comanda.ff.offline_first_ventas', '1')
   get offlineFirstVentas(): boolean {
-    return getFlag('offline_first_ventas', 'VITE_FF_OFFLINE_FIRST_VENTAS', true);
+    return getFlag('offline_first_ventas', 'VITE_FF_OFFLINE_FIRST_VENTAS', false);
   },
 };
 
