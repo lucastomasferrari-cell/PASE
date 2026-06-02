@@ -41,14 +41,22 @@ export const featureFlags = {
   //
   // El POS funciona perfecto ONLINE — apagar este flag NO rompe nada.
   //
-  // Para reactivar DESPUÉS de pegar el SQL en Supabase:
-  //   localStorage.setItem('comanda.ff.offline_first_ventas', '1')
-  //   location.reload()
+  // 2026-06-02 noche (4ta vez, hopefully última):
+  //   Lucas pegó TODAS las migrations server (offline RPCs + numero_local
+  //   fix + cupones + crons + cleanup). Test E2E mutante backend
+  //   (offline_first_mutante.spec.ts) verde en CI confirma que las RPCs
+  //   _offline funcionan end-to-end. Re-encendido por default.
   //
-  // Helper para limpiar ops zombies si hay basura en cola:
-  //   window.__comandaCleanupOffline()
+  // Si Lucas/Anto reportan algo raro:
+  //   1. Verificar que sea offline-first (no otra cosa) con:
+  //      const dbReq = indexedDB.open('comanda-offline-db');
+  //      → ver si hay zombies en pending_ops
+  //   2. Apagar manual: localStorage.setItem('comanda.ff.offline_first_ventas', '0')
+  //   3. Limpiar zombies: await __comandaCleanupOffline()
+  //
+  // Test que protege: packages/pase/tests/offline_first_mutante.spec.ts
   get offlineFirstVentas(): boolean {
-    return getFlag('offline_first_ventas', 'VITE_FF_OFFLINE_FIRST_VENTAS', false);
+    return getFlag('offline_first_ventas', 'VITE_FF_OFFLINE_FIRST_VENTAS', true);
   },
 };
 
