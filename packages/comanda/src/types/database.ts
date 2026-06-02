@@ -187,7 +187,8 @@ export type RolPos = 'cajero' | 'encargado' | 'manager' | 'dueno' | 'bartender';
 export type ModoVenta = 'salon' | 'mostrador' | 'pedidos';
 export type EstadoVenta =
   | 'abierta' | 'enviada' | 'lista' | 'entregada' | 'cobrada' | 'anulada'
-  | 'necesita_aprobacion' | 'programada';
+  | 'necesita_aprobacion' | 'programada'
+  | 'en_camino';  // Plan Fase 1 Brainstorm #8 (2026-06-01) — delivery con rider afuera
 export type EstadoVentaItem = 'hold' | 'enviado' | 'listo' | 'entregado' | 'anulado';
 export type EstadoMesa = 'libre' | 'ocupada' | 'hold' | 'inactiva';
 export type FormaMesa = 'cuadrado' | 'redondo' | 'rectangular';
@@ -305,6 +306,12 @@ export interface VentaPos {
   // creados offline antes que se sincronice la venta padre puedan
   // referenciarla por uuid en lugar de bigint.
   idempotency_uuid?: string | null;
+  // Plan Fase 1 Brainstorm #8 (2026-06-01) — timeline visual de pedidos
+  listo_at?: string | null;
+  entregada_at?: string | null;
+  asignado_rider_at?: string | null;
+  en_camino_at?: string | null;
+  rider_id?: number | null;
 }
 
 export interface VentaPosItemModificador {

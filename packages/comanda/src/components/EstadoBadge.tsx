@@ -12,6 +12,7 @@ const VENTA: Record<EstadoVenta, { label: string; variant: Variant }> = {
   anulada:             { label: 'Anulada',   variant: 'red' },
   necesita_aprobacion: { label: 'Por aprobar', variant: 'amber' },
   programada:          { label: 'Programada', variant: 'violet' },
+  en_camino:           { label: 'En camino', variant: 'blue' },  // Plan Fase 1 Brainstorm #8
 };
 const ITEM: Record<EstadoVentaItem, { label: string; variant: Variant }> = {
   hold:      { label: 'Hold',      variant: 'gray' },
