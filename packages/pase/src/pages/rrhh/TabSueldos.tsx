@@ -62,7 +62,7 @@ interface NovDB {
   cuota_num: number | null;
   cuotas_total: number | null;
   inasistencias: number;
-  presentismo: "MANTIENE" | "NO_MANTIENE" | null;
+  presentismo: "MANTIENE" | "PIERDE" | null;
   horas_extras: number;
   dobles: number;
   feriados: number;
@@ -137,7 +137,11 @@ function novDBaEdit(n: NovDB | undefined): NovEdit {
     dobles: Number(n.dobles || 0),
     feriados: Number(n.feriados || 0),
     vacaciones_dias: Number(n.vacaciones_dias || 0),
-    presentismo_mantiene: n.presentismo !== "NO_MANTIENE",
+    // BUG FIX 2026-06-01: el valor DB es 'PIERDE' (constraint migración
+    // 202605142200). Antes leíamos != "NO_MANTIENE" → tratábamos 'PIERDE'
+    // como MANTIENE → re-tildaba el checkbox después de uncheck. Ahora
+    // explícito: solo false si DB tiene 'PIERDE', true en cualquier otro caso.
+    presentismo_mantiene: n.presentismo !== "PIERDE",
     otros_desc: Number(n.otros_descuentos || 0),
     obs: n.observaciones || "",
   };
@@ -372,7 +376,11 @@ export function TabSueldos({
         cuota_num: slot.cuota,
         cuotas_total: slot.cuotasTotal,
         inasistencias: nov.inasistencias,
-        presentismo: nov.presentismo_mantiene ? "MANTIENE" : "NO_MANTIENE",
+        // BUG FIX 2026-06-01: constraint DB (migración 202605142200)
+        // acepta solo 'MANTIENE' o 'PIERDE'. Mandar 'NO_MANTIENE' fallaba
+        // el UPDATE silencioso → useEffect post-fail pisaba el state con
+        // valor stale del DB → checkbox re-tildaba solo.
+        presentismo: nov.presentismo_mantiene ? "MANTIENE" : "PIERDE",
         horas_extras: nov.horas_extras,
         dobles: nov.dobles,
         feriados: nov.feriados,
