@@ -28,7 +28,19 @@ export interface Cupon {
   activo: boolean;
   usos_actuales: number;
   created_at: string;
+  // F5 Chunk B (2026-06-02): restringir cupón a items + canales específicos
+  items_aplicables_ids?: number[] | null;  // NULL = todos los items
+  canales_aplicables?: CanalCupon[] | null;  // NULL = todos los canales
 }
+
+export type CanalCupon =
+  | 'tienda_online'
+  | 'marketplace'
+  | 'pos'
+  | 'whatsapp'
+  | 'rappi'
+  | 'pedidosya'
+  | 'menu_qr';
 
 export interface CuponInput {
   localId?: number;
@@ -43,6 +55,8 @@ export interface CuponInput {
   maxUsos?: number;
   maxUsosPorCliente?: number;
   soloPrimeraCompra?: boolean;
+  itemsAplicablesIds?: number[];      // F5 Chunk B
+  canalesAplicables?: CanalCupon[];   // F5 Chunk B
 }
 
 export interface ValidacionCupon {
@@ -59,12 +73,17 @@ export async function validarCupon(args: {
   code: string;
   montoCompra: number;
   clienteTelefono?: string;
+  // F5 Chunk B (2026-06-02): pasar items + canal para validar restricciones
+  itemsIds?: number[];
+  canal?: CanalCupon;
 }): Promise<{ data: ValidacionCupon | null; error: string | null }> {
   const { data, error } = await dbAnon.rpc('fn_validar_cupon', {
     p_local_slug: args.slug,
     p_code: args.code,
     p_monto_compra: args.montoCompra,
     p_cliente_telefono: args.clienteTelefono ?? null,
+    p_items_ids: args.itemsIds ?? null,
+    p_canal: args.canal ?? null,
   });
   if (error) return { data: null, error: translateError(error) };
   const arr = data as ValidacionCupon[] | null;
@@ -103,6 +122,9 @@ export async function crearCupon(input: CuponInput): Promise<{ data: Cupon | nul
     max_usos: input.maxUsos ?? null,
     max_usos_por_cliente: input.maxUsosPorCliente ?? null,
     solo_primera_compra: !!input.soloPrimeraCompra,
+    // F5 Chunk B (2026-06-02): restricciones items + canales
+    items_aplicables_ids: input.itemsAplicablesIds?.length ? input.itemsAplicablesIds : null,
+    canales_aplicables: input.canalesAplicables?.length ? input.canalesAplicables : null,
   }).select().single();
   if (error) return { data: null, error: translateError(error) };
   return { data: data as Cupon, error: null };

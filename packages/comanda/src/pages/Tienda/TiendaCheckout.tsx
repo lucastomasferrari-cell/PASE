@@ -25,6 +25,9 @@ const MOTIVO_CUPON_LABELS: Record<string, string> = {
   CUPON_AGOTADO: 'Ese cupón se agotó',
   YA_USASTE_ESTE_CUPON: 'Ya usaste este cupón',
   SOLO_PRIMERA_COMPRA: 'Este cupón es solo para clientes nuevos',
+  // F5 Chunk B (2026-06-02)
+  CANAL_NO_APLICA: 'Este cupón no aplica para pedidos en la tienda',
+  ITEMS_NO_APLICAN: 'Este cupón no aplica a los productos de tu carrito',
 };
 
 export function TiendaCheckout() {
@@ -118,11 +121,20 @@ export function TiendaCheckout() {
     setCuponValidando(true);
     setCuponMotivo(null);
     const { validarCupon } = await import('@/services/cuponesService');
+    // F5 Chunk B (2026-06-02): pasar items + canal para validar restricciones
+    // del cupón (ej. NEKO20 solo aplica a items específicos, RAPPI10 solo
+    // en canal=rappi, etc.). El canal tienda online se identifica con
+    // 'tienda_online' (alineado con canales_aplicables en cupones).
+    const itemsIds = carrito.items
+      .map((it) => it.item_id)
+      .filter((id): id is number => typeof id === 'number');
     const { data, error } = await validarCupon({
       slug: local.slug,
       code: cuponCode.trim(),
       montoCompra: subtotal + costoEnvio,
       clienteTelefono: telefono || undefined,
+      itemsIds: itemsIds.length > 0 ? itemsIds : undefined,
+      canal: 'tienda_online',
     });
     setCuponValidando(false);
     if (error || !data) {
