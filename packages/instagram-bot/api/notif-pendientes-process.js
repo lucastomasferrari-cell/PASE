@@ -93,44 +93,133 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'FETCH_PENDIENTES_FAILED', detail: pendErr.message });
   }
 
-  if (!pendientes || pendientes.length === 0) {
-    return res.status(200).json({ ok: true, procesadas: 0 });
-  }
-
   const resultado = { ok: true, procesadas: 0, fallidas: 0, sin_subs: 0, sin_pref: 0 };
 
-  for (const notif of pendientes) {
-    try {
-      const r = await procesarNotif(db, notif);
-      if (r.ok) {
+  if (pendientes && pendientes.length > 0) {
+    for (const notif of pendientes) {
+      try {
+        const r = await procesarNotif(db, notif);
+        if (r.ok) {
+          await db.from('notificaciones_pendientes')
+            .update({ enviado_at: new Date().toISOString(), enviado_count: r.sent ?? 0 })
+            .eq('id', notif.id);
+          resultado.procesadas++;
+          if (r.sent === 0) resultado.sin_subs++;
+        } else if (r.skipped_by_pref) {
+          await db.from('notificaciones_pendientes')
+            .update({ enviado_at: new Date().toISOString(), enviado_count: 0, error_msg: 'skipped_by_user_pref' })
+            .eq('id', notif.id);
+          resultado.sin_pref++;
+        } else {
+          await db.from('notificaciones_pendientes')
+            .update({ intentos: notif.intentos + 1, error_msg: r.error ?? 'unknown' })
+            .eq('id', notif.id);
+          resultado.fallidas++;
+        }
+      } catch (e) {
         await db.from('notificaciones_pendientes')
-          .update({ enviado_at: new Date().toISOString(), enviado_count: r.sent ?? 0 })
-          .eq('id', notif.id);
-        resultado.procesadas++;
-        if (r.sent === 0) resultado.sin_subs++;
-      } else if (r.skipped_by_pref) {
-        // Todos los users del tenant tienen el tipo desactivado → marcar
-        // enviada (no reintentar). No es error, es decisión explícita.
-        await db.from('notificaciones_pendientes')
-          .update({ enviado_at: new Date().toISOString(), enviado_count: 0, error_msg: 'skipped_by_user_pref' })
-          .eq('id', notif.id);
-        resultado.sin_pref++;
-      } else {
-        // Falló por error transitorio (network, etc.) → incrementar intentos
-        await db.from('notificaciones_pendientes')
-          .update({ intentos: notif.intentos + 1, error_msg: r.error ?? 'unknown' })
+          .update({ intentos: notif.intentos + 1, error_msg: String(e?.message || e) })
           .eq('id', notif.id);
         resultado.fallidas++;
       }
-    } catch (e) {
-      await db.from('notificaciones_pendientes')
-        .update({ intentos: notif.intentos + 1, error_msg: String(e?.message || e) })
-        .eq('id', notif.id);
-      resultado.fallidas++;
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // F5 Chunk E (2026-06-02): wrapper de crons F5.
+  //
+  // Las 3 RPCs server (fn_cron_*) consumen filas que matchean su ventana
+  // de tiempo + marcan timestamp idempotente + retornan lista. Acá tomamos
+  // la lista y disparamos email/push según el caso.
+  //
+  // Importante: no programar estas RPCs con pg_cron — si pg_cron las llama
+  // antes que el wrapper, marca las filas pero no manda email. Sólo este
+  // wrapper debe llamarlas (idempotencia natural por timestamp).
+  // ═══════════════════════════════════════════════════════════════════════════
+  resultado.f5_crons = { recordatorios: 0, resenas: 0, cumples: 0 };
+
+  // 1. Recordatorio reservas 1h antes → push a admins del tenant
+  try {
+    const { data: reservas } = await db.rpc('fn_cron_recordatorio_reservas');
+    for (const r of (reservas || [])) {
+      await mandarPushAdminsTenant(db, r.tenant_id, {
+        title: `🍽️ Reserva en 1h`,
+        body: `${r.cliente_nombre} · ${r.personas} personas · ${formatHora(r.fecha_hora)}`,
+        url: `/reservas?focus=${r.reserva_id}`,
+        tag: `reserva-${r.reserva_id}`,
+      });
+      resultado.f5_crons.recordatorios++;
+    }
+  } catch (e) {
+    console.warn('[f5-recordatorios] fail:', e?.message);
+  }
+
+  // 2. Solicitar reseñas post-entrega → SKIP por ahora.
+  //    La RPC marca el timestamp al consumir las filas. Si la llamamos sin
+  //    tener canal email funcionando, las filas quedan marcadas pero el
+  //    cliente nunca recibe el link. Mejor no llamarla hasta que email
+  //    esté wireado en este endpoint (sub-deuda — necesita SMTP / Resend /
+  //    similar configurado en env vars del bot Vercel).
+  resultado.f5_crons.resenas = 'SKIPPED — email no configurado en este endpoint';
+
+  // 3. Cupón cumpleaños diario → cupón se crea en DB. El cliente lo verá
+  //    al entrar al checkout próximo (la UI consulta cupones activos para
+  //    el cliente). Email proactivo es sub-deuda — sin email también
+  //    funciona porque el cliente eventualmente entra al menos al menú.
+  try {
+    const { data: cupones } = await db.rpc('fn_cron_emitir_cupones_cumple');
+    resultado.f5_crons.cumples = (cupones || []).length;
+  } catch (e) {
+    console.warn('[f5-cumples] fail:', e?.message);
+  }
+
   return res.status(200).json(resultado);
+}
+
+// Helper: formatea hora corta AR (HH:mm) desde ISO timestamptz
+function formatHora(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' });
+  } catch {
+    return '';
+  }
+}
+
+// Helper: manda push web a TODOS los admins suscriptos de un tenant.
+// Reusa el patrón de procesarPosibleFuga (filtra por preferencia desactivada,
+// limpia subs muertas).
+async function mandarPushAdminsTenant(db, tenantId, { title, body, url, tag }) {
+  const { data: subs } = await db.from('admin_push_subscriptions')
+    .select('endpoint, p256dh, auth, user_id, usuarios!inner(tenant_id, rol)')
+    .or(`tenant_id.eq.${tenantId},tenant_id.is.null`, { foreignTable: 'usuarios' });
+
+  if (!subs || subs.length === 0) return { sent: 0 };
+
+  const subsAdmins = subs.filter(s =>
+    s.usuarios && ['dueno', 'admin', 'superadmin', 'encargado'].includes(s.usuarios.rol),
+  );
+  if (subsAdmins.length === 0) return { sent: 0 };
+
+  const payload = JSON.stringify({ title, body, url, priority: 'normal', tag });
+  let sent = 0;
+  const toDelete = [];
+  for (const sub of subsAdmins) {
+    try {
+      await webpush.sendNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        payload,
+      );
+      sent++;
+    } catch (e) {
+      if (e.statusCode === 410 || e.statusCode === 404) toDelete.push(sub.endpoint);
+    }
+  }
+  if (toDelete.length > 0) {
+    await db.from('admin_push_subscriptions').delete().in('endpoint', toDelete);
+  }
+  return { sent };
 }
 
 /**
