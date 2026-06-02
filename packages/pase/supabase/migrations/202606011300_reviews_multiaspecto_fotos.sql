@@ -129,6 +129,9 @@ REVOKE ALL ON FUNCTION fn_crear_review_publica(BIGINT, TEXT, SMALLINT, TEXT, TEX
 GRANT EXECUTE ON FUNCTION fn_crear_review_publica(BIGINT, TEXT, SMALLINT, TEXT, TEXT, SMALLINT, SMALLINT, SMALLINT, TEXT) TO anon, authenticated;
 
 -- ─── 4. Modificar fn_listar_reviews_publicas para devolver nuevos campos ─────
+-- DROP requerido porque cambia la signature del RETURNS TABLE (4 cols nuevas).
+-- CREATE OR REPLACE no permite cambio de return type (error 42P13).
+DROP FUNCTION IF EXISTS fn_listar_reviews_publicas(TEXT);
 CREATE OR REPLACE FUNCTION fn_listar_reviews_publicas(p_local_slug TEXT)
 RETURNS TABLE (
   review_id UUID,
@@ -186,5 +189,7 @@ BEGIN
   LIMIT 50;
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION fn_listar_reviews_publicas(TEXT) TO anon, authenticated;
 
 NOTIFY pgrst, 'reload schema';
