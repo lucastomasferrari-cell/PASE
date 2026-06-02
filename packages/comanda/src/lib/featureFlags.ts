@@ -27,28 +27,28 @@ function getFlag(key: string, envKey: string, defaultValue: boolean): boolean {
 export const featureFlags = {
   // Sprint A2 (2026-05-19): offline-first encendido por default.
   //
-  // Historia:
+  // Historia (cronológica):
   //  - 19-may: encendido sin soporte UI → bug "Cannot coerce".
   //  - 2026-06-02 mañana: apagado urgente.
-  //  - 2026-06-02 tarde: rondas iterativas hasta cerrar todos los gaps:
-  //    (a) Routing local en getVenta/listVentasItems/listVentas (541cd85).
-  //    (b) Migration 202606021200: fix fn_abrir_venta_comanda_offline
-  //        para calcular numero_local manualmente (sin trigger inexistente).
-  //    (c) pagosService.cobrar wirea cobrarVentaOffline cuando el flag está ON.
-  //    (d) ventasService.anularVenta wirea anularVentaOffline.
-  //    Las RPCs server _offline ya existían desde 202605161500 (fn_cobrar,
-  //    fn_anular, fn_aplicar_descuento, fn_anular_item, fn_cortesia,
-  //    fn_modificar_precio, fn_transferir_mesa, fn_unir_mesas,
-  //    fn_partir_cuenta) — solo faltaba el wiring frontend.
+  //  - 2026-06-02 tarde: re-encendido tras cerrar wiring frontend (commits
+  //    541cd85 + fe5a29c). PERO descubrimos que el server le faltaban
+  //    RPCs (migration 202605161400 nunca se aplicó en prod) + bug en
+  //    pushQueue routing (a3bdc2e fix).
+  //  - 2026-06-02 noche: re-apagado por default. Lucas vio 11 pendientes
+  //    (3+8 fallidas) en la UI porque las RPCs server no existen todavía.
+  //    Pegar el SQL grande del mensaje a Lucas (sprint cierre completo)
+  //    es prerequisito para reactivar el flag.
   //
-  // Re-encendido por default (2da vez): ahora SÍ todo el flow está cerrado
-  // server + client. Si algo rompe, apagar manual con:
-  //   localStorage.setItem('comanda.ff.offline_first_ventas', '0')
+  // El POS funciona perfecto ONLINE — apagar este flag NO rompe nada.
   //
-  // Helper de cleanup de zombies (si hay ventas trabadas en cola):
-  //   window.__comandaCleanupOffline()  // expuesto en src/lib/db/cleanup.ts
+  // Para reactivar DESPUÉS de pegar el SQL en Supabase:
+  //   localStorage.setItem('comanda.ff.offline_first_ventas', '1')
+  //   location.reload()
+  //
+  // Helper para limpiar ops zombies si hay basura en cola:
+  //   window.__comandaCleanupOffline()
   get offlineFirstVentas(): boolean {
-    return getFlag('offline_first_ventas', 'VITE_FF_OFFLINE_FIRST_VENTAS', true);
+    return getFlag('offline_first_ventas', 'VITE_FF_OFFLINE_FIRST_VENTAS', false);
   },
 };
 
