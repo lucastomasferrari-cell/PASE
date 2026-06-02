@@ -160,3 +160,37 @@ export async function cambiarEstadoReserva(args: {
   if (error) return { error: translateError(error) };
   return { error: null };
 }
+
+// F5 Chunk D (2026-06-02): asignar mesa a reserva. Valida que la mesa
+// pertenezca al mismo local que la reserva + que la reserva esté en
+// estado pendiente/confirmada (cancelada/cumplida/no_show no se reasignan).
+export async function asignarMesaReserva(args: {
+  reservaId: number;
+  mesaId: number;
+}): Promise<{ error: string | null }> {
+  const { error } = await db.rpc('fn_asignar_mesa_reserva', {
+    p_reserva_id: args.reservaId,
+    p_mesa_id: args.mesaId,
+  });
+  if (error) return { error: translateError(error) };
+  return { error: null };
+}
+
+// Lista de mesas activas del local — para el dropdown de asignación.
+export interface MesaSimple {
+  id: number;
+  numero: string | number;
+  zona: string | null;
+  capacidad: number | null;
+}
+export async function listMesasDelLocal(localId: number): Promise<{ data: MesaSimple[]; error: string | null }> {
+  // eslint-disable-next-line pase-local/require-apply-local-scope -- filtro explícito por local_id
+  const { data, error } = await db.from('mesas')
+    .select('id, numero, zona, capacidad')
+    .eq('local_id', localId)
+    .is('deleted_at', null)
+    .order('zona', { ascending: true, nullsFirst: false })
+    .order('id', { ascending: true });
+  if (error) return { data: [], error: translateError(error) };
+  return { data: (data ?? []) as MesaSimple[], error: null };
+}

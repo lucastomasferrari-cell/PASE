@@ -24,7 +24,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import {
-  listReservas, cambiarEstadoReserva, type Reserva, type EstadoReserva,
+  listReservas, cambiarEstadoReserva, asignarMesaReserva, listMesasDelLocal,
+  type Reserva, type EstadoReserva, type MesaSimple,
 } from '@/services/reservasService';
 import { whatsAppUrl, mensajeGenericoCliente } from '@/lib/whatsapp';
 
@@ -56,6 +57,7 @@ export function ReservasAdmin() {
   const { user } = useAuth();
   const [localActivo] = useLocalActivo(user);
   const [reservas, setReservas] = useState<Reserva[]>([]);
+  const [mesas, setMesas] = useState<MesaSimple[]>([]);  // F5 Chunk D
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState<number | null>(null);
@@ -79,6 +81,28 @@ export function ReservasAdmin() {
     const t = setInterval(() => { void reload(); }, 60_000);
     return () => clearInterval(t);
   }, [reload]);
+
+  // F5 Chunk D: cargar mesas del local para el dropdown de asignación.
+  // Se recargan cuando cambia el local — no tienen polling porque las
+  // mesas son master data que no cambia frecuente.
+  useEffect(() => {
+    if (!localActivo) return;
+    void (async () => {
+      const { data } = await listMesasDelLocal(localActivo);
+      setMesas(data);
+    })();
+  }, [localActivo]);
+
+  async function handleAsignarMesa(r: Reserva, mesaId: number) {
+    setBusy(r.id);
+    const { error } = await asignarMesaReserva({ reservaId: r.id, mesaId });
+    setBusy(null);
+    if (error) toast.error(error);
+    else {
+      toast.success(`Mesa asignada a #${r.id}`);
+      void reload();
+    }
+  }
 
   const now = Date.now();
   const grupos = useMemo(() => {
@@ -163,8 +187,10 @@ export function ReservasAdmin() {
             </Card>
           ) : grupos.pendientes.map((r) => (
             <ReservaRow key={r.id} reserva={r} busy={busy === r.id}
+                        mesas={mesas}
                         onConfirmar={() => handleConfirmar(r)}
-                        onCancelar={() => handleCancelar(r)} />
+                        onCancelar={() => handleCancelar(r)}
+                        onAsignarMesa={(mesaId) => handleAsignarMesa(r, mesaId)} />
           ))}
         </TabsContent>
 
@@ -177,15 +203,17 @@ export function ReservasAdmin() {
             </Card>
           ) : grupos.proximas.map((r) => (
             <ReservaRow key={r.id} reserva={r} busy={busy === r.id}
+                        mesas={mesas}
                         onCumplida={() => handleCumplida(r)}
                         onNoShow={() => handleNoShow(r)}
-                        onCancelar={() => handleCancelar(r)} />
+                        onCancelar={() => handleCancelar(r)}
+                        onAsignarMesa={(mesaId) => handleAsignarMesa(r, mesaId)} />
           ))}
         </TabsContent>
 
         <TabsContent value="historico" className="mt-4 space-y-2">
           {grupos.historico.map((r) => (
-            <ReservaRow key={r.id} reserva={r} readOnly />
+            <ReservaRow key={r.id} reserva={r} mesas={mesas} readOnly />
           ))}
         </TabsContent>
       </Tabs>
@@ -194,17 +222,24 @@ export function ReservasAdmin() {
 }
 
 function ReservaRow({
-  reserva: r, busy, onConfirmar, onCumplida, onNoShow, onCancelar, readOnly,
+  reserva: r, busy, mesas, onConfirmar, onCumplida, onNoShow, onCancelar, onAsignarMesa, readOnly,
 }: {
   reserva: Reserva;
   busy?: boolean;
+  mesas?: MesaSimple[];
   onConfirmar?: () => void;
   onCumplida?: () => void;
   onNoShow?: () => void;
   onCancelar?: () => void;
+  onAsignarMesa?: (mesaId: number) => void;
   readOnly?: boolean;
 }) {
   const wpUrl = whatsAppUrl(r.cliente_telefono, mensajeGenericoCliente(r.cliente_nombre, r.id));
+  // F5 Chunk D: nombre legible de la mesa asignada (si la hay)
+  const mesaAsignada = mesas?.find((m) => m.id === r.mesa_id);
+  const mesaLabel = mesaAsignada
+    ? `Mesa ${mesaAsignada.numero}${mesaAsignada.zona ? ` (${mesaAsignada.zona})` : ''}`
+    : null;
   return (
     <Card>
       <CardContent className="p-3">
@@ -216,6 +251,11 @@ function ReservaRow({
                 {ESTADO_LABELS[r.estado]}
               </span>
               <span className="text-xs text-foreground/60">#{r.id}</span>
+              {mesaLabel && (
+                <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 font-medium">
+                  📍 {mesaLabel}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-3 text-sm text-foreground/70 mt-1">
               <span className="flex items-center gap-1">
@@ -237,6 +277,30 @@ function ReservaRow({
             </div>
             {r.notas && <p className="text-xs text-foreground/60 mt-1 italic">"{r.notas}"</p>}
             {r.motivo_cancelacion && <p className="text-xs text-red-700 mt-1">Cancelada: {r.motivo_cancelacion}</p>}
+            {/* F5 Chunk D: dropdown asignar mesa (solo si pendiente/confirmada) */}
+            {!readOnly && onAsignarMesa && mesas && mesas.length > 0 && (
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-xs text-foreground/60">
+                  {mesaAsignada ? 'Cambiar mesa:' : 'Asignar mesa:'}
+                </span>
+                <select
+                  className="text-xs px-2 py-1 rounded border border-border bg-background"
+                  value={r.mesa_id ?? ''}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (Number.isFinite(v) && v !== r.mesa_id) onAsignarMesa(v);
+                  }}
+                  disabled={busy}
+                >
+                  <option value="">— sin asignar —</option>
+                  {mesas.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      Mesa {m.numero}{m.zona ? ` · ${m.zona}` : ''}{m.capacidad ? ` · ${m.capacidad}p` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {!readOnly && (
