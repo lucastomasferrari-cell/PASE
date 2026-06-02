@@ -28,20 +28,25 @@ export const featureFlags = {
   // Sprint A2 (2026-05-19): offline-first encendido por default.
   //
   // Historia:
-  //  - 19-may: encendido en Sprint A2 pero VentaScreen no soportaba ids
-  //    negativos → bug "Cannot coerce" al tocar Nueva orden.
-  //  - 2026-06-02 mañana: apagado por default (fix urgente).
-  //  - 2026-06-02 tarde: RE-encendido tras completar el read del repo
-  //    local en getVenta()/listVentasItems() + merge en listVentas().
-  //    Ahora cuando se crea venta offline con tempId < 0, todas las
-  //    pantallas (VentaScreen, Mostrador/Salón/Pedidos listings) leen
-  //    del idb local. El sync corre en background y reconcilia el id
-  //    cuando hay internet (idReconciliation.ts emite evento, useVentaData
-  //    escucha y navega al id real).
+  //  - 19-may: encendido sin soporte UI → bug "Cannot coerce".
+  //  - 2026-06-02 mañana: apagado urgente.
+  //  - 2026-06-02 tarde: re-encendido tras agregar routing local en
+  //    getVenta/listVentasItems/listVentas. PERO descubrimos que:
+  //    (a) fn_abrir_venta_comanda_offline server-side fallaba con 400
+  //        (numero_local NOT NULL violation — fix en migration
+  //        202606021200, no aplicado todavía en prod cuando Lucas probó),
+  //    (b) cobrar venta offline NO está implementado — no existe RPC
+  //        fn_cobrar_venta_comanda_offline.
+  //    Resultado: 11 ops pendientes en cola, "La venta no existe" al cobrar.
+  //  - 2026-06-02 tarde (después): APAGADO de nuevo. Offline-first es
+  //    un sprint completo que falta cerrar (RPC cobro + anular + tests
+  //    E2E + cleanup ventas zombies).
   //
-  // Para apagar manualmente: localStorage.setItem('comanda.ff.offline_first_ventas', '0')
+  // El POS funciona perfecto online — apagar este flag NO rompe nada.
+  //
+  // Para reactivar (riesgoso hoy): localStorage.setItem('comanda.ff.offline_first_ventas', '1')
   get offlineFirstVentas(): boolean {
-    return getFlag('offline_first_ventas', 'VITE_FF_OFFLINE_FIRST_VENTAS', true);
+    return getFlag('offline_first_ventas', 'VITE_FF_OFFLINE_FIRST_VENTAS', false);
   },
 };
 
