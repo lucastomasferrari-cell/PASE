@@ -41,10 +41,21 @@ async function processOp(op: PendingOp): Promise<ProcessResult> {
         //
         // Mapeo de RPCs offline-aware: las RPCs creadas en migration
         // 202605161400_idempotency_uuid_ventas.sql usan suffix `_offline`
-        // y aceptan p_idempotency_uuid. Si el payload tiene esa key,
-        // automáticamente apuntamos a la variante _offline.
+        // y aceptan p_idempotency_uuid / p_venta_idempotency_uuid /
+        // p_item_idempotency_uuid (varios kinds según la RPC).
+        //
+        // BUG FIX 2026-06-02 noche: la condición vieja solo miraba
+        // p_idempotency_uuid. mandarCursoOffline + agregarItemOffline
+        // pasan p_venta_idempotency_uuid pero no p_idempotency_uuid →
+        // el push no agregaba sufijo → 404 contra fn_mandar_curso_comanda
+        // (no existe) y fn_agregar_item_comanda (no es offline-aware).
+        //
+        // Fix: detectar CUALQUIER key que contenga 'idempotency_uuid' en
+        // el payload. Eso captura todas las variantes.
         const payload = op.payload as Record<string, unknown>;
-        const usesIdempotencyUuid = payload?.p_idempotency_uuid != null;
+        const usesIdempotencyUuid = payload && Object.keys(payload).some(
+          (k) => k.toLowerCase().includes('idempotency_uuid') && payload[k] != null,
+        );
         const targetRpc = usesIdempotencyUuid && !op.target.endsWith('_offline')
           ? `${op.target}_offline`
           : op.target;
