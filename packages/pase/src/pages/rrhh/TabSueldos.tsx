@@ -312,20 +312,40 @@ export function TabSueldos({
   const [savingKeys, setSavingKeys] = useState<Set<string>>(new Set());
   const [errorKeys, setErrorKeys] = useState<Set<string>>(new Set());
 
-  // Inicializar novEdits desde novedades de DB (cuando se recarga)
+  // Inicializar novEdits desde novedades de DB (cuando se recarga).
+  //
+  // BUG FIX 2026-06-01 (Anto): el useEffect pisaba el state local con valor
+  // stale del DB cada vez que se ejecutaba el autosave de cualquier slot.
+  // Escenarios reportados:
+  //   1. "Se borra el número": user tipea "111" → debounce 800ms guarda →
+  //      SELECT vuelve → mientras vuelve el user tipea "1111" → useEffect
+  //      pisa el "1111" con el "111" stale del DB.
+  //   2. "Sacar presentismo Q2 baja faltas Q1": SELECT trae AMBAS cuotas
+  //      del empleado/mes/anio (Q1 stale + Q2 nuevo) → useEffect re-aplica
+  //      ambas → Q1 que el user había editado pero no guardado se pisa con DB.
+  //
+  // Fix: SKIP slots que tienen debounce pending (user todavía tipeando) o
+  // se están guardando ahora mismo. Solo refrescamos slots quiescentes.
   useEffect(() => {
-    const next: Record<string, NovEdit> = {};
-    for (const s of slots) {
-      const n = novedadesDB.find(x =>
-        x.empleado_id === s.emp.id &&
-        (x.cuota_num ?? 1) === s.cuota &&
-        (x.cuotas_total ?? 1) === s.cuotasTotal
-      );
-      next[s.key] = novDBaEdit(n);
-    }
+    setNovEdits(prev => {
+      const next: Record<string, NovEdit> = { ...prev };
+      for (const s of slots) {
+        // Skip si el user está editando activamente este slot
+        const hayDebouncePending = !!debounceTimers.current[s.key];
+        const seEstaGuardando = savingKeys.has(s.key);
+        if (hayDebouncePending || seEstaGuardando) continue;
+
+        const n = novedadesDB.find(x =>
+          x.empleado_id === s.emp.id &&
+          (x.cuota_num ?? 1) === s.cuota &&
+          (x.cuotas_total ?? 1) === s.cuotasTotal
+        );
+        next[s.key] = novDBaEdit(n);
+      }
+      return next;
+    });
     // eslint-disable-next-line react-hooks/set-state-in-effect -- inicializar form al cargar/recargar novedades
-    setNovEdits(next);
-  }, [novedadesDB, slots]);
+  }, [novedadesDB, slots, savingKeys]);
 
   // Debounce: guardar 800ms después del último tecleo por slot
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -394,7 +414,15 @@ export function TabSueldos({
     setNovEdits(prev => ({ ...prev, [key]: { ...(prev[key] || NOV_VACIA), [field]: value } }));
     // Re-arm debounce
     if (debounceTimers.current[key]) clearTimeout(debounceTimers.current[key]);
-    debounceTimers.current[key] = setTimeout(() => { void guardarNovedad(key); }, 800);
+    debounceTimers.current[key] = setTimeout(() => {
+      // BUG FIX 2026-06-01: limpiar el ref ANTES de guardar para que el
+      // useEffect de refresh (que skipea slots con debounce pending) sepa
+      // que ya no hay tipeo pendiente — solo hay save in-flight (que detecta
+      // via savingKeys). Sin este delete, el ref quedaba siempre poblado
+      // post-fire y el useEffect nunca refrescaba ese slot.
+      delete debounceTimers.current[key];
+      void guardarNovedad(key);
+    }, 800);
   };
 
   // ── Adelantos: tildados por slot ─────────────────────────────────────────
