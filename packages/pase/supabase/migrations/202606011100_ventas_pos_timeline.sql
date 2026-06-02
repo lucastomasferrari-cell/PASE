@@ -30,17 +30,13 @@ ALTER TABLE ventas_pos ADD COLUMN IF NOT EXISTS asignado_rider_at TIMESTAMPTZ NU
 ALTER TABLE ventas_pos ADD COLUMN IF NOT EXISTS en_camino_at     TIMESTAMPTZ NULL;
 ALTER TABLE ventas_pos ADD COLUMN IF NOT EXISTS rider_id         BIGINT NULL REFERENCES delivery_riders(id);
 
--- Backfill timestamps para ventas históricas que YA están en estado lista/entregada/cobrada
--- (para que el timeline las muestre correctas — usamos updated_at como proxy).
-UPDATE ventas_pos
-   SET listo_at     = updated_at
- WHERE listo_at     IS NULL
-   AND estado IN ('lista','entregada','cobrada');
-
-UPDATE ventas_pos
-   SET entregada_at = updated_at
- WHERE entregada_at IS NULL
-   AND estado IN ('entregada','cobrada');
+-- BACKFILL OMITIDO 2026-06-01: el UPDATE retroactivo de timestamps falló
+-- contra prod por rows huérfanos en ventas_pos con tenant_id de tenants
+-- ya eliminados (FK ventas_pos_tenant_id_fkey violado al revalidar en UPDATE).
+-- Deuda separada: cleanup de huérfanos con `UPDATE ventas_pos SET deleted_at=NOW()
+-- WHERE tenant_id NOT IN (SELECT id FROM tenants)`.
+-- El timeline funciona sin backfill — ventas históricas muestran solo las
+-- etapas con timestamp explícito (created_at, enviada_at, cobrada_at).
 
 CREATE INDEX IF NOT EXISTS idx_vp_rider
   ON ventas_pos(local_id, rider_id) WHERE rider_id IS NOT NULL AND deleted_at IS NULL;
