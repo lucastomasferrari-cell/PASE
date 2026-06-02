@@ -13,12 +13,54 @@ interface State {
   error: Error | null;
 }
 
-// ErrorBoundary classico de React. Envuelve rutas críticas para que un
+// Detecta errores de chunk load fallido (build viejo en memoria del browser
+// después de un deploy nuevo). Vite y otros bundlers generan hashes nuevos
+// en cada deploy → el browser intenta cargar el chunk viejo que ya no existe
+// en CDN → "Failed to fetch dynamically imported module" o similar.
+//
+// Bug Lucas 2026-06-02: tocó "Pedidos" en COMANDA después de varios deploys
+// y vio "Failed to fetch dynamically imported module: PedidosHub-zi80tq1L.js"
+// porque ese hash ya no existía. La solución es recargar la página — el
+// nuevo index.html trae los hashes actuales.
+//
+// Patrón: detectar el error en getDerivedStateFromError + auto-reload con
+// flag en sessionStorage para evitar loop infinito si el error persiste por
+// otra razón (debería ser raro pero importante).
+const CHUNK_LOAD_ERROR_PATTERNS = [
+  /Failed to fetch dynamically imported module/i,
+  /Loading chunk \d+ failed/i,
+  /Loading CSS chunk \d+ failed/i,
+  /ChunkLoadError/i,
+  /Importing a module script failed/i,
+];
+
+function isChunkLoadError(error: Error): boolean {
+  const msg = error.message || '';
+  return CHUNK_LOAD_ERROR_PATTERNS.some((re) => re.test(msg));
+}
+
+// ErrorBoundary clásico de React. Envuelve rutas críticas para que un
 // error no rompa toda la app — muestra fallback amigable + botón Reintentar.
+// Si detecta chunk load error, auto-recarga UNA vez (sin loop).
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null };
 
   static getDerivedStateFromError(error: Error): State {
+    // Auto-reload UNA VEZ si es chunk load error (build viejo en cache).
+    // Flag en sessionStorage para evitar loop infinito.
+    if (typeof window !== 'undefined' && isChunkLoadError(error)) {
+      const alreadyReloaded = sessionStorage.getItem('comanda:chunk-reload-attempted');
+      if (!alreadyReloaded) {
+        sessionStorage.setItem('comanda:chunk-reload-attempted', String(Date.now()));
+        // Reload sincrónico antes de que React monte el fallback
+        window.location.reload();
+        // El reload tarda, mostramos pantalla blanca por ~200ms — mejor que el error
+        return { error: null };
+      }
+      // Ya intentamos reload y volvió a fallar — limpiar flag para próxima sesión
+      // y mostrar fallback al user
+      sessionStorage.removeItem('comanda:chunk-reload-attempted');
+    }
     return { error };
   }
 
