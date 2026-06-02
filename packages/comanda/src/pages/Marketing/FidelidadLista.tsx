@@ -29,7 +29,24 @@ interface ClienteFidelidad {
   total_gastado: number;
   ultimo_pedido_at: string | null;
   zona: string | null;
+  // Brainstorm #8 F5 (2026-06-01)
+  nivel?: 'bronze' | 'silver' | 'gold' | 'platinum';
+  puntos_disponibles?: number;
 }
+
+// Colores y labels de nivel (espejo de fidelidadService.ts)
+const NIVEL_LABEL: Record<NonNullable<ClienteFidelidad['nivel']>, string> = {
+  bronze: 'Bronze',
+  silver: 'Silver',
+  gold: 'Gold',
+  platinum: 'Platinum',
+};
+const NIVEL_COLOR: Record<NonNullable<ClienteFidelidad['nivel']>, string> = {
+  bronze: 'bg-orange-100 text-orange-800 border-orange-200',
+  silver: 'bg-slate-100 text-slate-700 border-slate-300',
+  gold: 'bg-amber-100 text-amber-800 border-amber-300',
+  platinum: 'bg-cyan-100 text-cyan-800 border-cyan-300',
+};
 
 type Orden = 'gastado' | 'pedidos' | 'reciente';
 
@@ -46,7 +63,7 @@ export function FidelidadLista() {
     if (!user?.tenant_id) return;
     setLoading(true);
     let q = db.from('clientes')
-      .select('id, nombre, apellido, telefono, email, vip, total_pedidos, total_gastado, ultimo_pedido_at, zona')
+      .select('id, nombre, apellido, telefono, email, vip, total_pedidos, total_gastado, ultimo_pedido_at, zona, nivel, puntos_disponibles')
       .eq('tenant_id', user.tenant_id)
       .is('deleted_at', null);
 
@@ -166,34 +183,50 @@ export function FidelidadLista() {
                 <tr>
                   <th className="text-left px-4 py-2">#</th>
                   <th className="text-left px-4 py-2">Cliente</th>
+                  <th className="text-left px-4 py-2">Nivel</th>
                   <th className="text-left px-4 py-2">Contacto</th>
+                  <th className="text-right px-4 py-2">Puntos</th>
                   <th className="text-right px-4 py-2">Pedidos</th>
                   <th className="text-right px-4 py-2">Total gastado</th>
                   <th className="text-left px-4 py-2">Último</th>
                 </tr>
               </thead>
               <tbody>
-                {clientes.map((c, idx) => (
-                  <tr key={c.id} className="border-t border-border hover:bg-muted/30">
-                    <td className="px-4 py-3 text-muted-foreground tabular-nums">{idx + 1}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        {c.vip && <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />}
-                        <span className="font-medium">{[c.nombre, c.apellido].filter(Boolean).join(' ') || '(sin nombre)'}</span>
-                      </div>
-                      {c.zona && <Badge variant="gray">{c.zona}</Badge>}
-                    </td>
-                    <td className="px-4 py-3 text-xs">
-                      <div className="flex items-center gap-1"><Phone className="h-3 w-3 text-muted-foreground" />{c.telefono}</div>
-                      {c.email && <div className="flex items-center gap-1 text-muted-foreground mt-0.5"><Mail className="h-3 w-3" />{c.email}</div>}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">{c.total_pedidos}</td>
-                    <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatARS(c.total_gastado)}</td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">
-                      {c.ultimo_pedido_at ? new Date(c.ultimo_pedido_at).toLocaleDateString('es-AR') : '—'}
-                    </td>
-                  </tr>
-                ))}
+                {clientes.map((c, idx) => {
+                  const nivel = c.nivel || 'bronze';
+                  return (
+                    <tr key={c.id} className="border-t border-border hover:bg-muted/30">
+                      <td className="px-4 py-3 text-muted-foreground tabular-nums">{idx + 1}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          {c.vip && <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />}
+                          <span className="font-medium">{[c.nombre, c.apellido].filter(Boolean).join(' ') || '(sin nombre)'}</span>
+                        </div>
+                        {c.zona && <Badge variant="gray">{c.zona}</Badge>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={cn(
+                          'inline-flex items-center px-2 py-0.5 rounded-md border text-xs font-medium',
+                          NIVEL_COLOR[nivel],
+                        )}>
+                          {NIVEL_LABEL[nivel]}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        <div className="flex items-center gap-1"><Phone className="h-3 w-3 text-muted-foreground" />{c.telefono}</div>
+                        {c.email && <div className="flex items-center gap-1 text-muted-foreground mt-0.5"><Mail className="h-3 w-3" />{c.email}</div>}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-amber-700 font-medium">
+                        {Math.floor(c.puntos_disponibles || 0)}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums">{c.total_pedidos}</td>
+                      <td className="px-4 py-3 text-right tabular-nums font-semibold">{formatARS(c.total_gastado)}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        {c.ultimo_pedido_at ? new Date(c.ultimo_pedido_at).toLocaleDateString('es-AR') : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}

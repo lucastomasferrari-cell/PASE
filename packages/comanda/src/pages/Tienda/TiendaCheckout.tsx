@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { crearPedidoPublico, notificarPedidoRecibido, calcularETALocal, type ETACalculado } from '@/services/tiendaService';
 import { setPedidoGeo, precisarConGoogle } from '@/services/direccionesService';
+import { consultarPuntosPublico, canjearPuntosPublico, type PuntosInfo, labelNivel, colorNivel } from '@/services/fidelidadService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -83,7 +84,34 @@ export function TiendaCheckout() {
   const [cuponValidando, setCuponValidando] = useState(false);
   const [cuponMotivo, setCuponMotivo] = useState<string | null>(null);
 
-  const total = subtotal + costoEnvio - cuponDescuento;
+  // Fidelidad — Brainstorm #8 F5 Chunk A (2026-06-01)
+  // Cliente ingresa teléfono → fetch puntos disponibles + nivel. Si tiene
+  // puntos y fidelidad activa, mostramos UI canje. El canje se aplica
+  // DESPUÉS de crear el pedido (idempotent server-side).
+  const [puntosInfo, setPuntosInfo] = useState<PuntosInfo | null>(null);
+  const [puntosACanjear, setPuntosACanjear] = useState<number>(0);
+
+  useEffect(() => {
+    // Debounce 500ms — esperamos a que el user termine de tipear teléfono
+    const tel = telefono.trim();
+    if (tel.length < 8) {
+      setPuntosInfo(null);
+      setPuntosACanjear(0);
+      return;
+    }
+    const t = setTimeout(async () => {
+      const { data } = await consultarPuntosPublico(local.slug, tel);
+      setPuntosInfo(data);
+      setPuntosACanjear(0); // reset cuando cambia el cliente
+    }, 500);
+    return () => clearTimeout(t);
+  }, [telefono, local.slug]);
+
+  const descuentoPuntos = puntosInfo && puntosACanjear > 0
+    ? puntosACanjear * puntosInfo.pesos_por_punto
+    : 0;
+
+  const total = Math.max(0, subtotal + costoEnvio - cuponDescuento - descuentoPuntos);
 
   async function validarCuponLocal() {
     if (!cuponCode.trim()) return;
@@ -223,6 +251,26 @@ export function TiendaCheckout() {
       return;
     }
     sessionStorage.setItem(`comanda-tel-${ventaId}`, telefono.trim());
+
+    // Canje de puntos — Brainstorm #8 F5 (2026-06-01).
+    // Se ejecuta después de crear el pedido. Idempotent server-side (si falla
+    // y el user reintenta, no duplica el canje). Si falla, no bloqueamos el
+    // pedido — toast warn al user; el admin puede aplicar manual.
+    if (puntosACanjear > 0 && puntosInfo?.fidelidad_activa) {
+      const r = await canjearPuntosPublico({
+        slug: local.slug,
+        telefono: telefono.trim(),
+        ventaId,
+        puntos: puntosACanjear,
+      });
+      if (r.error) {
+        toast.warning('No se pudieron canjear los puntos', {
+          description: `${r.error}. Tu pedido ya fue creado sin el descuento — avisá al local.`,
+        });
+      } else {
+        toast.success(`Canjeaste ${puntosACanjear} puntos · −${formatARS(r.descuento)}`);
+      }
+    }
 
     // Fase B item 3 — Email "Recibimos tu pedido". Solo se manda si el
     // cliente puso email. Idempotente server-side: si se reintenta, no
@@ -512,6 +560,68 @@ export function TiendaCheckout() {
         )}
       </Section>
 
+      {/* Puntos fidelidad — Brainstorm #8 F5 (2026-06-01)
+          Aparece solo si el cliente tiene saldo > 0 y fidelidad está activa. */}
+      {puntosInfo?.fidelidad_activa && puntosInfo.puntos_disponibles > 0 && (
+        <Section titulo="Tus puntos">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-2.5 bg-amber-50 border border-amber-200 rounded-md">
+              <div className="text-sm">
+                <div className="font-medium text-amber-900">
+                  {Math.floor(puntosInfo.puntos_disponibles)} puntos disponibles
+                </div>
+                <div className="text-xs text-amber-700">
+                  Equivalen a {formatARS(puntosInfo.puntos_disponibles * puntosInfo.pesos_por_punto)}
+                  {' · '}
+                  <span
+                    style={{ color: colorNivel(puntosInfo.nivel) }}
+                    className="font-medium"
+                  >
+                    Nivel {labelNivel(puntosInfo.nivel)}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="puntos-input" className="text-xs">
+                ¿Cuántos canjeás? (1 punto = {formatARS(puntosInfo.pesos_por_punto)})
+              </Label>
+              <div className="flex gap-2 items-center mt-1">
+                <Input
+                  id="puntos-input"
+                  type="number"
+                  min={0}
+                  max={Math.floor(puntosInfo.puntos_disponibles)}
+                  step={1}
+                  value={puntosACanjear || ''}
+                  onChange={(e) => {
+                    const n = Math.max(0, Math.min(
+                      Math.floor(puntosInfo.puntos_disponibles),
+                      Math.floor(parseFloat(e.target.value) || 0),
+                    ));
+                    setPuntosACanjear(n);
+                  }}
+                  placeholder="0"
+                  className="h-10 w-32"
+                />
+                <button
+                  type="button"
+                  onClick={() => setPuntosACanjear(Math.floor(puntosInfo.puntos_disponibles))}
+                  className="text-xs underline text-primary"
+                >
+                  Usar todos
+                </button>
+                {puntosACanjear > 0 && (
+                  <span className="text-sm text-green-700 ml-auto">
+                    Descuento {formatARS(descuentoPuntos)}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </Section>
+      )}
+
       {/* Resumen */}
       <Section titulo="Resumen">
         <div className="space-y-1.5 text-sm">
@@ -526,6 +636,12 @@ export function TiendaCheckout() {
           {cuponDescuento > 0 && (
             <div className="flex justify-between text-green-700">
               <span>Cupón {cuponCode.toUpperCase()}</span><span>−{formatARS(cuponDescuento)}</span>
+            </div>
+          )}
+          {descuentoPuntos > 0 && (
+            <div className="flex justify-between text-amber-700">
+              <span>{puntosACanjear} puntos canjeados</span>
+              <span>−{formatARS(descuentoPuntos)}</span>
             </div>
           )}
           <div className="flex justify-between text-base font-medium pt-2.5 border-t border-gray-200">
