@@ -1352,13 +1352,46 @@ const SECT_HD: import("react").CSSProperties = {
 
 // ── Sub-componentes ─────────────────────────────────────────────────────────
 function NovInput({ label, value, onChange, disabled }: { label: string; value: number; onChange: (v: number) => void; disabled?: boolean }) {
+  // BUG FIX 2026-06-01 (Anto): el input se "borraba a 0" al tipear porque
+  // `value={number}` re-renderizaba con cada cambio y `parseFloat || 0`
+  // forzaba 0 ante CUALQUIER valor falsy (vacío, "1e", "-", ".", etc).
+  // Pattern draft string: el input mantiene su propio estado visual mientras
+  // está focused — solo sincroniza con el padre cuando pierde foco o cuando
+  // el padre cambia y el user NO está editando (ej: cambio de slot).
+  const [draft, setDraft] = useState<string>(value === 0 ? "" : String(value));
+  const focusedRef = useRef(false);
+  useEffect(() => {
+    // Solo sync desde el padre si el user no está editando este input
+    if (!focusedRef.current) {
+      setDraft(value === 0 ? "" : String(value));
+    }
+  }, [value]);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <label style={{ fontSize: 9, color: "var(--muted2)", letterSpacing: 0.3 }}>{label}</label>
       <input
         type="number"
-        value={value}
-        onChange={e => onChange(parseFloat(e.target.value) || 0)}
+        value={draft}
+        placeholder="0"
+        onFocus={() => { focusedRef.current = true; }}
+        onBlur={() => {
+          focusedRef.current = false;
+          // Al perder foco, normalizamos y propagamos
+          const n = parseFloat(draft);
+          const final = isNaN(n) ? 0 : n;
+          setDraft(final === 0 ? "" : String(final));
+          if (final !== value) onChange(final);
+        }}
+        onChange={e => {
+          const raw = e.target.value;
+          setDraft(raw);
+          // Propagar al padre solo si es parseable o vacío (para autosave)
+          // No tocamos el padre con intermediate states tipo "1e" o "-"
+          const n = parseFloat(raw);
+          if (raw === "") onChange(0);
+          else if (!isNaN(n) && isFinite(n)) onChange(n);
+          // else: NaN/Infinity — esperamos al blur para normalizar
+        }}
         disabled={disabled}
         style={{
           fontSize: 12, padding: "4px 6px", textAlign: "right",
