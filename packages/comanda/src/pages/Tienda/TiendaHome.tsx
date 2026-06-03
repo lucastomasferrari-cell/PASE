@@ -14,6 +14,7 @@ import { tiendaCarritoBadge } from './tiendaCarritoBadge';
 import { DireccionAutocomplete } from '@/components/DireccionAutocomplete';
 import { StarRating } from '@/components/StarRating';
 import { listarReviewsPublicas, type ReviewsResumen } from '@/services/reviewsService';
+import { JsonLd, buildRestaurantSchema } from '@/components/JsonLd';
 
 const POPULARES_DIAS = 30;
 const POPULARES_LIMIT = 8;
@@ -50,6 +51,12 @@ export function TiendaHome() {
   const [items, setItems] = useState<CatalogoPublicoItem[]>([]);
   const [populares, setPopulares] = useState<PopularItem[]>([]);
   const [loading, setLoading] = useState(true);
+  // F6 SEO — resumen rating para Schema.org Restaurant. Se carga aparte
+  // del que ya consume RatingResumen para no perforar el componente.
+  const [reviewsResumen, setReviewsResumen] = useState<ReviewsResumen | null>(null);
+  useEffect(() => {
+    void listarReviewsPublicas(local.slug).then((r) => setReviewsResumen(r.data));
+  }, [local.slug]);
   const [seccionActiva, setSeccionActiva] = useState<string | number | null>(null);
   const [carritoOpen, setCarritoOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -277,6 +284,24 @@ export function TiendaHome() {
 
   return (
     <div className="flex relative">
+      {/* F6 SEO — Schema.org Restaurant para rich results en Google. */}
+      <JsonLd
+        keyId={`restaurant-${local.slug}`}
+        data={buildRestaurantSchema({
+          name: local.nombre,
+          url: `${window.location.origin}/tienda/${local.slug}`,
+          telephone: local.telefono ?? null,
+          street: local.direccion ?? null,
+          city: local.localidad ?? null,
+          province: local.provincia ?? null,
+          priceRange: '$$',
+          aggregateRating: reviewsResumen && reviewsResumen.rating_promedio != null && reviewsResumen.total_reviews > 0
+            ? { ratingValue: reviewsResumen.rating_promedio, reviewCount: reviewsResumen.total_reviews }
+            : null,
+          acceptsReservations: local.features_pos_modos?.includes('reservas') ?? false,
+        })}
+      />
+
       <CategoriaSidebar
         categorias={categorias}
         activa={seccionActiva}

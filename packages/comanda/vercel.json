@@ -6,7 +6,11 @@
       "destination": "https://pase-yndx.vercel.app/api/:path*"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/sitemap.xml",
+      "destination": "https://pase-yndx.vercel.app/api/sitemap"
+    },
+    {
+      "source": "/((?!api/|sitemap\\.xml$).*)",
       "destination": "/index.html"
     }
   ],

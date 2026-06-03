@@ -41,6 +41,7 @@ import { carritoStore, type CarritoItem } from './carritoStore';
 import type { TiendaCtx } from './TiendaLayout';
 import { formatARS } from '@/lib/format';
 import { Skeleton } from '@/components/ui/skeleton';
+import { JsonLd, buildMenuItemSchema } from '@/components/JsonLd';
 
 export function TiendaItemDetalle() {
   const { localSlug, itemId } = useParams<{ localSlug: string; itemId: string }>();
@@ -279,6 +280,18 @@ export function TiendaItemDetalle() {
 
   return (
     <div className="max-w-3xl mx-auto pb-40">
+      {/* F6 SEO — Schema.org MenuItem (rich result tipo Producto en Google) */}
+      <JsonLd
+        keyId={`menuItem-${item.item_id}`}
+        data={buildMenuItemSchema({
+          name: item.nombre,
+          description: item.descripcion,
+          image: item.foto_url,
+          price: Number(item.precio) || 0,
+          url: `${window.location.origin}/tienda/${localSlug}/item/${item.item_id}`,
+        })}
+      />
+
       {/* Back */}
       <button
         type="button"

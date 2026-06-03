@@ -1,0 +1,47 @@
+# F6 Brainstorm #8 — chunk SEO (2026-06-02).
+# Permite a crawlers indexar la tienda y el marketplace.
+# Bloquea rutas internas (admin, POS, KDS, etc.) para que no aparezcan en
+# resultados de búsqueda — son privadas con auth.
+
+User-agent: *
+
+# Bloquear todo lo que requiere auth o no aporta SEO
+Disallow: /login
+Disallow: /pos/
+Disallow: /caja/
+Disallow: /kds/
+Disallow: /menu/
+Disallow: /r/
+Disallow: /catalogo/
+Disallow: /inventario/
+Disallow: /salon/
+Disallow: /empleados/
+Disallow: /clientes/
+Disallow: /usuarios/
+Disallow: /settings/
+Disallow: /configuracion/
+Disallow: /reportes/
+Disallow: /integraciones/
+Disallow: /hardware/
+Disallow: /marketing/
+Disallow: /admin-stubs/
+
+# Permitir todo lo público (tienda + marketplace + menú QR público)
+Allow: /tienda/
+Allow: /marketplace
+Allow: /
+
+# Crawlers de IA — permitimos (queremos aparecer en ChatGPT/Perplexity/etc.)
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+Sitemap: https://pase-comanda.vercel.app/sitemap.xml
