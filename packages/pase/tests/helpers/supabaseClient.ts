@@ -18,7 +18,9 @@ function loadAnonKey(): string {
   const raw = readFileSync(envPath, "utf-8");
   const m = raw.match(/^VITE_SUPABASE_ANON_KEY=(.+)$/m);
   if (!m || !m[1]) throw new Error(`VITE_SUPABASE_ANON_KEY no encontrada en ${envPath}`);
-  return m[1].trim();
+  // Vercel CLI desde v54 envuelve los valores en comillas dobles. Stripping
+  // defensivo para retro-compat con .env.local viejos sin comillas.
+  return m[1].trim().replace(/^"(.*)"$/, "$1");
 }
 
 /**
