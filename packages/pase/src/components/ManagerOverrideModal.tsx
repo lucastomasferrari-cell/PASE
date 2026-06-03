@@ -116,7 +116,7 @@ export function ManagerOverrideModal({
     } else if (row.estado === "rechazada") {
       setEstado({ tipo: "rechazada", motivo: row.rechazo_motivo });
     } else if (row.estado === "expirada") {
-      setErr("La solicitud expiró (15 min). Probá de nuevo.");
+      setErr("La solicitud expiró (1 hora). Probá de nuevo.");
       setEstado({ tipo: "form" });
     }
   }, [onValidated]);
@@ -235,7 +235,7 @@ export function ManagerOverrideModal({
               <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
               <p style={{ margin: "16px 0 0", fontSize: 11, color: "var(--pase-text-muted)" }}>
                 Si tardás mucho, podés cerrar y volver a intentar después.<br />
-                La solicitud expira en 15 min.
+                La solicitud expira en 1 hora.
               </p>
             </div>
           )}

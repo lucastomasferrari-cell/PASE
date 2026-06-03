@@ -1330,10 +1330,9 @@ export function TabSueldos({
                       </div>
 
                       {/* Plan de pago + Confirmar / Modificar
-                          (pedido Anto/Lucas 02-jun). Anto carga ANTES de pagar
-                          cuánto va en efectivo y cuánto en MP. La suma debe
-                          coincidir con el Total (sino "Confirmar" disabled).
-                          El botón "Pagar →" sigue arriba en cada sub-fila. */}
+                          (pedido Anto/Lucas 02-jun, refactor visual 03-jun).
+                          Anto carga ANTES de pagar cuánto va en efectivo y
+                          cuánto en MP. Suma debe coincidir con Total. */}
                       {!isPagado && esDueno && (() => {
                         const plan = planEdits[s.key] ?? { efectivo: "", mp: "" };
                         const cargado = planTotalCargado(s.key);
@@ -1341,14 +1340,34 @@ export function TabSueldos({
                         const dif = total - cargado;
                         const matchea = Math.abs(dif) < 0.01;
                         const confirmado = isConfirmado(s.key);
+                        const inputStyle: React.CSSProperties = {
+                          width: 140, padding: "7px 10px", fontSize: 13,
+                          background: confirmado ? "var(--s2)" : "var(--bg, #0e1a2a)",
+                          color: "var(--text, #e6ecf3)",
+                          border: "1px solid var(--bd, #1e2d3f)",
+                          borderRadius: 6,
+                          textAlign: "right",
+                          fontVariantNumeric: "tabular-nums",
+                          fontWeight: 500,
+                          cursor: confirmado ? "not-allowed" : "text",
+                          outline: "none",
+                        };
                         return (
                           <div style={{
-                            marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--bd)",
+                            marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--bd)",
                           }}>
-                            {/* Inputs plan de pago */}
-                            <div style={{ display: "flex", alignItems: "flex-end", gap: 14, flexWrap: "wrap" }}>
-                              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                                <label style={{ fontSize: 10, color: "var(--muted2)", fontWeight: 500 }}>💵 Efectivo</label>
+                            <div style={{
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              gap: 18, flexWrap: "wrap",
+                              padding: "10px 12px",
+                              background: "var(--s2)",
+                              borderRadius: 8,
+                            }}>
+                              {/* Efectivo */}
+                              <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
+                                <label style={{ fontSize: 11, color: "var(--muted2)", fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}>
+                                  <span>💵</span> Efectivo
+                                </label>
                                 <input
                                   type="number"
                                   inputMode="decimal"
@@ -1356,17 +1375,15 @@ export function TabSueldos({
                                   onChange={e => updatePlan(s.key, "efectivo", e.target.value)}
                                   disabled={confirmado || togglingConfirm.has(s.key)}
                                   placeholder="0"
-                                  style={{
-                                    width: 130, padding: "5px 8px", fontSize: 12,
-                                    background: confirmado ? "var(--s2)" : "var(--bg)",
-                                    border: "1px solid var(--bd)", borderRadius: 4,
-                                    textAlign: "right", fontVariantNumeric: "tabular-nums",
-                                    cursor: confirmado ? "not-allowed" : "text",
-                                  }}
+                                  style={inputStyle}
                                 />
                               </div>
-                              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                                <label style={{ fontSize: 10, color: "var(--muted2)", fontWeight: 500 }}>🏦 Mercado Pago</label>
+
+                              {/* MP */}
+                              <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
+                                <label style={{ fontSize: 11, color: "var(--muted2)", fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}>
+                                  <span>🏦</span> Mercado Pago
+                                </label>
                                 <input
                                   type="number"
                                   inputMode="decimal"
@@ -1374,33 +1391,41 @@ export function TabSueldos({
                                   onChange={e => updatePlan(s.key, "mp", e.target.value)}
                                   disabled={confirmado || togglingConfirm.has(s.key)}
                                   placeholder="0"
-                                  style={{
-                                    width: 130, padding: "5px 8px", fontSize: 12,
-                                    background: confirmado ? "var(--s2)" : "var(--bg)",
-                                    border: "1px solid var(--bd)", borderRadius: 4,
-                                    textAlign: "right", fontVariantNumeric: "tabular-nums",
-                                    cursor: confirmado ? "not-allowed" : "text",
-                                  }}
+                                  style={inputStyle}
                                 />
                               </div>
-                              {/* Status suma vs total */}
-                              <div style={{
-                                fontSize: 10, color: matchea ? "var(--success)" : "var(--warn)",
-                                fontWeight: 500, paddingBottom: 4,
-                              }}>
-                                {matchea
-                                  ? <>✓ Suma OK ({fmt_$(cargado)})</>
-                                  : <>Falta {fmt_$(Math.abs(dif))} {dif < 0 ? "(excede)" : ""}</>}
+
+                              {/* Divider vertical */}
+                              <div style={{ width: 1, height: 36, background: "var(--bd)" }} />
+
+                              {/* Status compacto */}
+                              <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-start", minWidth: 130 }}>
+                                <span style={{ fontSize: 10, color: "var(--muted2)", textTransform: "uppercase", letterSpacing: 0.4 }}>
+                                  Cargado / Total
+                                </span>
+                                <span style={{ fontSize: 13, fontWeight: 600, color: matchea ? "var(--success)" : "var(--warn)", fontVariantNumeric: "tabular-nums" }}>
+                                  {matchea
+                                    ? <>✓ {fmt_$(cargado)}</>
+                                    : <>{fmt_$(cargado)} <span style={{ opacity: 0.6, fontWeight: 400 }}>/ {fmt_$(total)}</span></>}
+                                </span>
+                                {!matchea && (
+                                  <span style={{ fontSize: 10, color: "var(--warn)", fontWeight: 500 }}>
+                                    {dif > 0 ? `Falta ${fmt_$(Math.abs(dif))}` : `Excede en ${fmt_$(Math.abs(dif))}`}
+                                  </span>
+                                )}
                               </div>
-                              <div style={{ flex: 1 }} />
+
+                              {/* Acción */}
                               {confirmado ? (
-                                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                                  <span style={{ fontSize: 11, color: "var(--success)" }}>✓ Confirmado · listo para pagar</span>
+                                <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" }}>
+                                  <span style={{ fontSize: 11, color: "var(--success)", fontWeight: 500, whiteSpace: "nowrap" }}>
+                                    ✓ Listo para pagar
+                                  </span>
                                   <button
                                     className="btn btn-sec btn-sm"
                                     onClick={() => void desconfirmarSlot(s.key)}
                                     disabled={togglingConfirm.has(s.key)}
-                                    style={{ padding: "4px 14px", fontSize: 11 }}
+                                    style={{ padding: "6px 16px", fontSize: 12 }}
                                   >
                                     {togglingConfirm.has(s.key) ? "..." : "Modificar"}
                                   </button>
@@ -1412,8 +1437,8 @@ export function TabSueldos({
                                   disabled={togglingConfirm.has(s.key) || isSaving || !matchea}
                                   title={!matchea
                                     ? "La suma de Efectivo + MP debe ser igual al Total."
-                                    : "Bloquea los campos para que no se modifiquen accidentalmente. Después se puede pagar."}
-                                  style={{ padding: "4px 14px", fontSize: 11 }}
+                                    : "Bloquea los campos para evitar modificaciones accidentales."}
+                                  style={{ padding: "6px 20px", fontSize: 12, marginLeft: "auto" }}
                                 >
                                   {togglingConfirm.has(s.key) ? "Confirmando..." : "Confirmar"}
                                 </button>

@@ -178,7 +178,7 @@ export default function AprobarSolicitud({ user }: Props) {
             Esta solicitud ya no está disponible
           </p>
           <p style={{ margin: 0, fontSize: 13, color: "var(--pase-text-muted)" }}>
-            Puede que ya la hayas aprobado/rechazado o que haya expirado (15 min).
+            Puede que ya la hayas aprobado/rechazado o que haya expirado (1 hora).
           </p>
         </div>
         <button
