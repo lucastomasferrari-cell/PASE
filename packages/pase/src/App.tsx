@@ -249,16 +249,31 @@ function AppMain() {
     // El sidebar siempre tiene UNA activa. Si localActivo es null acá, lo
     // default-eamos al primer local visible para el user. Sin esto algunas
     // pantallas se renderizarían en modo consolidado que ya no es válido.
-    if (localActivo == null && nuevos.length > 0 && user) {
+    //
+    // BUG FIX 2026-06-03 (Agos): cuando el JWT se refresca (~1h) el
+    // handler de TOKEN_REFRESHED en onAuthStateChange llamaba
+    // refetchLocales() con el closure del primer render — `localActivo`
+    // era `null` ahí. La condición `localActivo == null` evaluaba TRUE
+    // aunque el state actual tuviera un local elegido → pisaba con el
+    // default (Villa Crespo). Agos cambiaba a Rene Cantina, pasaba 1h,
+    // y volvía solo al primero.
+    // Fix: usar functional update — `setLocalActivo(curr => ...)` lee
+    // el valor actual del state, no del closure. Si ya hay uno, se respeta.
+    if (nuevos.length > 0 && user) {
       const visibles = (user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin")
         ? nuevos
         : nuevos.filter(l => (user._locales || user.locales || []).includes(l.id));
       if (visibles.length > 0) {
-        // Intentar restaurar el último seleccionado en sessionStorage.
-        const stored = sessionStorage.getItem("pase_local_activo");
-        const storedId = stored ? parseInt(stored) : NaN;
-        const pre = !isNaN(storedId) && visibles.some(l => l.id === storedId) ? storedId : visibles[0]!.id;
-        setLocalActivo(pre);
+        setLocalActivo(curr => {
+          // Si ya hay uno elegido Y sigue siendo visible para este user, NO pisar.
+          if (curr != null && visibles.some(l => l.id === curr)) return curr;
+          // Sino, default: último de sessionStorage si está disponible, o primero visible.
+          const stored = sessionStorage.getItem("pase_local_activo");
+          const storedId = stored ? parseInt(stored) : NaN;
+          return !isNaN(storedId) && visibles.some(l => l.id === storedId)
+            ? storedId
+            : visibles[0]!.id;
+        });
       }
     }
   };
