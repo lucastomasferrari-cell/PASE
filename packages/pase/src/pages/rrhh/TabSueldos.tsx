@@ -433,6 +433,92 @@ export function TabSueldos({
     }, 800);
   };
 
+  // ── Confirmar / Modificar novedad (pedido Anto/Lucas 02-jun) ────────────
+  // Anto carga novedades + adelantos a tildar y cuando termina toca
+  // "Confirmar" para bloquear la card. Esto:
+  //   1. Evita modificaciones accidentales después de revisar.
+  //   2. Marca que ese sueldo está LISTO para pagar (Anto puede pagarlo
+  //      el mismo día o más adelante).
+  //   3. Permite que un futuro resumen pre-pago sume sólo los confirmados.
+  // El estado 'confirmado' ya existía en `rrhh_novedades` (migration
+  // 20260414) — sólo lo wireamos en la UI. Cuando se PAGA, queda
+  // 'confirmado' igual y ahora el pago manda. Si se desconfirma post-pago,
+  // no rompe nada (los movimientos siguen ahí).
+
+  function isConfirmado(slotKey: string): boolean {
+    const slot = slots.find(s => s.key === slotKey);
+    if (!slot) return false;
+    const nov = novedadesDB.find(n =>
+      n.empleado_id === slot.emp.id &&
+      n.mes === mes && n.anio === anio &&
+      (n.cuota_num ?? 1) === slot.cuota
+    );
+    return nov?.estado === "confirmado";
+  }
+
+  const [togglingConfirm, setTogglingConfirm] = useState<Set<string>>(new Set());
+
+  const confirmarSlot = useCallback(async (key: string) => {
+    const slot = slots.find(s => s.key === key);
+    if (!slot) return;
+    setTogglingConfirm(prev => new Set(prev).add(key));
+    try {
+      // Si hay debounce pending, primero esperamos al autosave (sino la
+      // versión confirmada quedaría con valores stale).
+      if (debounceTimers.current[key]) {
+        clearTimeout(debounceTimers.current[key]);
+        delete debounceTimers.current[key];
+        await guardarNovedad(key);
+      }
+      // Re-fetch para obtener el id de la novedad recién upserteada.
+      const { data: ns } = await db.from("rrhh_novedades")
+        .select("id, empleado_id, mes, anio, cuota_num, cuotas_total, inasistencias, presentismo, horas_extras, dobles, feriados, vacaciones_dias, otros_descuentos, otros_descuentos_motivo, observaciones, estado")
+        .eq("empleado_id", slot.emp.id).eq("mes", mes).eq("anio", anio)
+        .eq("cuota_num", slot.cuota);
+      const existente = (ns ?? []).find(n => (n.cuota_num ?? 1) === slot.cuota);
+      if (!existente) {
+        // No había nada cargado — crear novedad vacía + confirmar en una sola op.
+        const { error } = await db.from("rrhh_novedades").insert({
+          empleado_id: slot.emp.id, mes, anio,
+          cuota_num: slot.cuota, cuotas_total: slot.cuotasTotal,
+          inasistencias: 0, presentismo: "MANTIENE",
+          horas_extras: 0, dobles: 0, feriados: 0,
+          vacaciones_dias: 0, otros_descuentos: 0,
+          estado: "confirmado",
+        });
+        if (error) { showError("No se pudo confirmar: " + translateRpcError(error)); return; }
+      } else {
+        const { error } = await db.from("rrhh_novedades")
+          .update({ estado: "confirmado" }).eq("id", existente.id);
+        if (error) { showError("No se pudo confirmar: " + translateRpcError(error)); return; }
+      }
+      // Recargar para que isConfirmado() refleje el nuevo estado.
+      await recargar();
+    } finally {
+      setTogglingConfirm(prev => { const n = new Set(prev); n.delete(key); return n; });
+    }
+  }, [slots, mes, anio, guardarNovedad, recargar, showError]);
+
+  const desconfirmarSlot = useCallback(async (key: string) => {
+    const slot = slots.find(s => s.key === key);
+    if (!slot) return;
+    const existente = novedadesDB.find(n =>
+      n.empleado_id === slot.emp.id &&
+      n.mes === mes && n.anio === anio &&
+      (n.cuota_num ?? 1) === slot.cuota
+    );
+    if (!existente) return;
+    setTogglingConfirm(prev => new Set(prev).add(key));
+    try {
+      const { error } = await db.from("rrhh_novedades")
+        .update({ estado: "borrador" }).eq("id", existente.id);
+      if (error) { showError("No se pudo modificar: " + translateRpcError(error)); return; }
+      await recargar();
+    } finally {
+      setTogglingConfirm(prev => { const n = new Set(prev); n.delete(key); return n; });
+    }
+  }, [slots, mes, anio, novedadesDB, recargar, showError]);
+
   // ── Adelantos: tildados por slot ─────────────────────────────────────────
   function adelantosDelSlot(empId: string, cuota: number, cuotasTotal: number) {
     const fin = fechaFinPeriodo(anio, mes, cuota, cuotasTotal);
@@ -994,19 +1080,20 @@ export function TabSueldos({
                             </div>
                           ) : (
                             <div>
-                              <div style={SECT_HD}>Novedades</div>
-                              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
-                                <NovInput label="Faltas" value={nov.inasistencias} onChange={v => updateNov(s.key, "inasistencias", v)} />
-                                <NovInput label="Hs extras" value={nov.horas_extras} onChange={v => updateNov(s.key, "horas_extras", v)} />
-                                <NovInput label="Dobles" value={nov.dobles} onChange={v => updateNov(s.key, "dobles", v)} />
-                                <NovInput label="Feriados" value={nov.feriados} onChange={v => updateNov(s.key, "feriados", v)} />
-                                <NovInput label="Vacaciones (días)" value={nov.vacaciones_dias} onChange={v => updateNov(s.key, "vacaciones_dias", v)} />
-                                <NovInput label="Otros desc. $" value={nov.otros_desc} onChange={v => updateNov(s.key, "otros_desc", v)} />
-                                <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, paddingTop: 12, gridColumn: "1 / -1" }}>
+                              <div style={SECT_HD}>Novedades {isConfirmado(s.key) && <span style={{ marginLeft: 6, fontSize: 9, padding: "1px 6px", background: "rgba(34,197,94,0.15)", color: "var(--success)", borderRadius: 3, fontWeight: 600, letterSpacing: 0.3 }}>CONFIRMADAS</span>}</div>
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, opacity: isConfirmado(s.key) ? 0.65 : 1 }}>
+                                <NovInput label="Faltas" value={nov.inasistencias} onChange={v => updateNov(s.key, "inasistencias", v)} disabled={isConfirmado(s.key)} />
+                                <NovInput label="Hs extras" value={nov.horas_extras} onChange={v => updateNov(s.key, "horas_extras", v)} disabled={isConfirmado(s.key)} />
+                                <NovInput label="Dobles" value={nov.dobles} onChange={v => updateNov(s.key, "dobles", v)} disabled={isConfirmado(s.key)} />
+                                <NovInput label="Feriados" value={nov.feriados} onChange={v => updateNov(s.key, "feriados", v)} disabled={isConfirmado(s.key)} />
+                                <NovInput label="Vacaciones (días)" value={nov.vacaciones_dias} onChange={v => updateNov(s.key, "vacaciones_dias", v)} disabled={isConfirmado(s.key)} />
+                                <NovInput label="Otros desc. $" value={nov.otros_desc} onChange={v => updateNov(s.key, "otros_desc", v)} disabled={isConfirmado(s.key)} />
+                                <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: isConfirmado(s.key) ? "not-allowed" : "pointer", fontSize: 11, paddingTop: 12, gridColumn: "1 / -1" }}>
                                   <input
                                     type="checkbox"
                                     checked={nov.presentismo_mantiene}
                                     onChange={e => updateNov(s.key, "presentismo_mantiene", e.target.checked)}
+                                    disabled={isConfirmado(s.key)}
                                   />
                                   Presentismo
                                 </label>
@@ -1018,7 +1105,7 @@ export function TabSueldos({
                           <div>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                               <div style={SECT_HD}>Adelantos</div>
-                              {esDueno && !isPagado && (
+                              {esDueno && !isPagado && !isConfirmado(s.key) && (
                                 <button
                                   className="btn btn-ghost btn-sm"
                                   onClick={() => setAdelModalSlot(s.key)}
@@ -1034,17 +1121,18 @@ export function TabSueldos({
                               <div style={{ background: "var(--s2)", borderRadius: 6, padding: "4px 6px" }}>
                                 {adels.map(a => {
                                   const tildado = tildSet.has(a.id);
+                                  const bloqueadoAdel = isPagado || isConfirmado(s.key);
                                   return (
                                     <label key={a.id} style={{
                                       display: "flex", alignItems: "center", gap: 7,
                                       fontSize: 10.5, padding: "3px 4px", borderRadius: 3,
-                                      cursor: isPagado ? "default" : "pointer", opacity: tildado ? 1 : 0.55,
+                                      cursor: bloqueadoAdel ? "default" : "pointer", opacity: tildado ? 1 : 0.55,
                                     }}>
                                       <input
                                         type="checkbox"
                                         checked={tildado}
                                         onChange={() => toggleAdelanto(s.key, a.id)}
-                                        disabled={isPagado}
+                                        disabled={bloqueadoAdel}
                                         style={{ width: 12, height: 12 }}
                                       />
                                       <span style={{ color: "var(--muted2)", flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -1102,6 +1190,44 @@ export function TabSueldos({
                           )}
                         </div>
                       </div>
+
+                      {/* Footer: Confirmar / Modificar (pedido Anto/Lucas 02-jun).
+                          Solo aparece si NO está pagado (cuando ya se pagó, el
+                          confirmado se asume y no tiene sentido modificarlo).
+                          El botón "Pagar →" sigue en la sub-fila arriba — Lucas
+                          dijo que puede quedar ahí. */}
+                      {!isPagado && esDueno && (
+                        <div style={{
+                          marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--bd)",
+                          display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center",
+                        }}>
+                          {isConfirmado(s.key) ? (
+                            <>
+                              <span style={{ fontSize: 11, color: "var(--success)", marginRight: 4 }}>
+                                ✓ Confirmado · listo para pagar
+                              </span>
+                              <button
+                                className="btn btn-sec btn-sm"
+                                onClick={() => void desconfirmarSlot(s.key)}
+                                disabled={togglingConfirm.has(s.key)}
+                                style={{ padding: "4px 14px", fontSize: 11 }}
+                              >
+                                {togglingConfirm.has(s.key) ? "..." : "Modificar"}
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              className="btn btn-acc btn-sm"
+                              onClick={() => void confirmarSlot(s.key)}
+                              disabled={togglingConfirm.has(s.key) || isSaving}
+                              title="Bloquea los campos para que no se modifiquen accidentalmente. Después se puede pagar."
+                              style={{ padding: "4px 14px", fontSize: 11 }}
+                            >
+                              {togglingConfirm.has(s.key) ? "Confirmando..." : "Confirmar"}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
