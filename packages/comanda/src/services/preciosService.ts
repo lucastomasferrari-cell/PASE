@@ -89,6 +89,52 @@ export async function aumentoMasivo(args: AumentoMasivoArgs): Promise<{ data: Au
   };
 }
 
+// F6 chunk Pricing canal (2026-06-02). Aumento sólo en UN canal específico.
+// Caso típico: Rappi me saca 25% de comisión, le subo 25% solo a Rappi.
+// NO toca precio_madre. Si el item no tiene row en ese canal, lo crea
+// (derivado del madre + ajuste del canal + porcentaje pedido).
+export interface AumentoCanalArgs {
+  tenantId: string;
+  canalId: number;
+  localId: number | null;
+  grupoId: number | null;
+  porcentaje: number;
+  redondeoA: number;
+}
+
+export interface AumentoCanalResult {
+  itemsAfectados: number;
+  preciosActualizados: number;
+  preciosCreados: number;
+}
+
+export async function aumentoMasivoPorCanal(args: AumentoCanalArgs): Promise<{ data: AumentoCanalResult | null; error: string | null }> {
+  const { data, error } = await db.rpc('fn_aumento_canal_precios', {
+    p_tenant_id: args.tenantId,
+    p_canal_id: args.canalId,
+    p_local_id: args.localId,
+    p_grupo_id: args.grupoId,
+    p_porcentaje: args.porcentaje,
+    p_redondeo_a: args.redondeoA,
+  });
+  if (error) return { data: null, error: translateError(error) };
+  const arr = data as Array<{
+    items_afectados: number;
+    precios_actualizados: number;
+    precios_creados: number;
+  }> | null;
+  const row = arr?.[0];
+  if (!row) return { data: { itemsAfectados: 0, preciosActualizados: 0, preciosCreados: 0 }, error: null };
+  return {
+    data: {
+      itemsAfectados: row.items_afectados,
+      preciosActualizados: row.precios_actualizados,
+      preciosCreados: row.precios_creados,
+    },
+    error: null,
+  };
+}
+
 // Cuando cambia precio_madre de un item, recalcular sus precios en canales atados.
 // Pisa edicion_manual con animación (la flag se devuelve en false).
 export async function recalcularAtadosDeItem(itemId: number): Promise<{ error: string | null }> {

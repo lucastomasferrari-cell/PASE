@@ -27,9 +27,15 @@ export function ListaPreciosTab({ user }: Props) {
   const [precios, setPrecios] = useState<ItemPrecioCanal[]>([]);
   const [search, setSearch] = useState('');
   const [grupoFilter, setGrupoFilter] = useState<string>('todos');
+  // F6 Pricing canal (2026-06-02): filtro foco. 'todos' muestra grid completo,
+  // un id específico oculta el resto de canales (UI más limpia + abre
+  // dialog "aumento solo este canal" pre-cargado).
+  const [canalFilter, setCanalFilter] = useState<string>('todos');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAumento, setShowAumento] = useState(false);
+  // Si está seteado, el dialog abre en modo "solo canal" con este id.
+  const [canalIdPreseleccionado, setCanalIdPreseleccionado] = useState<number | null>(null);
   const [lastChange, setLastChange] = useState<string | null>(null);
 
   const puedeEditar = tienePermiso(user, 'comanda.precios.editar');
@@ -69,6 +75,14 @@ export function ListaPreciosTab({ user }: Props) {
     });
   }, [items, search, grupoFilter]);
 
+  // F6 Pricing canal: si el filtro es 'todos' mostramos todos, sino solo
+  // el canal elegido. Foco visual + permite abrir el dialog "solo este canal".
+  const canalesVisibles = useMemo(() => {
+    if (canalFilter === 'todos') return canales;
+    const id = Number(canalFilter);
+    return canales.filter((c) => c.id === id);
+  }, [canales, canalFilter]);
+
   const precioMap = useMemo(() => {
     const m = new Map<string, ItemPrecioCanal>();
     for (const p of precios) m.set(`${p.item_id}-${p.canal_id}`, p);
@@ -94,10 +108,29 @@ export function ListaPreciosTab({ user }: Props) {
           </p>
         </div>
         {puedeAumento && (
-          <Button onClick={() => setShowAumento(true)}>
-            <TrendingUp className="h-4 w-4 mr-1.5" />
-            Aumento masivo
-          </Button>
+          <div className="flex items-center gap-2">
+            {canalFilter !== 'todos' && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setCanalIdPreseleccionado(Number(canalFilter));
+                  setShowAumento(true);
+                }}
+              >
+                <TrendingUp className="h-4 w-4 mr-1.5" />
+                Aumento solo este canal
+              </Button>
+            )}
+            <Button
+              onClick={() => {
+                setCanalIdPreseleccionado(null);
+                setShowAumento(true);
+              }}
+            >
+              <TrendingUp className="h-4 w-4 mr-1.5" />
+              Aumento masivo
+            </Button>
+          </div>
         )}
       </header>
 
@@ -113,6 +146,17 @@ export function ListaPreciosTab({ user }: Props) {
             <SelectItem value="todos">Todos los grupos</SelectItem>
             {grupos.map((g) => (
               <SelectItem key={g.id} value={String(g.id)}>{g.emoji ?? ''} {g.nombre}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={canalFilter} onValueChange={setCanalFilter}>
+          <SelectTrigger className="w-[200px] h-11">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos los canales</SelectItem>
+            {canales.map((c) => (
+              <SelectItem key={c.id} value={String(c.id)}>{c.emoji ?? ''} {c.nombre}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -135,7 +179,7 @@ export function ListaPreciosTab({ user }: Props) {
                   Madre
                 </div>
               </th>
-              {canales.map((c) => (
+              {canalesVisibles.map((c) => (
                 <th key={c.id} className="text-right px-3 py-2 min-w-[110px] font-semibold text-xs text-muted-foreground border-b border-border">
                   <div className="text-foreground">{c.emoji ?? ''} {c.nombre}</div>
                   <div className="text-[10px] font-normal text-muted-foreground">
@@ -158,14 +202,14 @@ export function ListaPreciosTab({ user }: Props) {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={2 + canales.length} className="py-12 text-center text-muted-foreground">
+                <td colSpan={2 + canalesVisibles.length} className="py-12 text-center text-muted-foreground">
                   Cargando…
                 </td>
               </tr>
             )}
             {!loading && itemsFiltrados.length === 0 && (
               <tr>
-                <td colSpan={2 + canales.length} className="py-12 text-center text-muted-foreground">
+                <td colSpan={2 + canalesVisibles.length} className="py-12 text-center text-muted-foreground">
                   Sin items.
                 </td>
               </tr>
@@ -179,7 +223,7 @@ export function ListaPreciosTab({ user }: Props) {
                 <td className="px-3 py-2 text-right tabular-nums font-semibold bg-primary/5 border-l-2 border-primary/30">
                   {formatARS(it.precio_madre)}
                 </td>
-                {canales.map((c) => {
+                {canalesVisibles.map((c) => {
                   const ef = precioEfectivo(it, c);
                   return (
                     <PrecioCell
@@ -214,10 +258,13 @@ export function ListaPreciosTab({ user }: Props) {
         <AumentoMasivoDialog
           user={user}
           grupos={grupos}
+          canales={canales}
+          canalIdPreseleccionado={canalIdPreseleccionado}
           totalItems={items.length}
-          onClose={() => setShowAumento(false)}
+          onClose={() => { setShowAumento(false); setCanalIdPreseleccionado(null); }}
           onDone={(r) => {
             setShowAumento(false);
+            setCanalIdPreseleccionado(null);
             setLastChange(new Date().toISOString());
             reload();
             setError(null);
@@ -275,6 +322,15 @@ function PrecioCell({ item, canal, precio, manual, editable, tenantId, onSaved }
   }
 
   const isEdited = manual;
+  // F6 Pricing canal (2026-06-02): delta % vs precio madre. Útil para ver
+  // de un vistazo si Rappi está +25% o si quedó a la par del madre.
+  const precioMadre = Number(item.precio_madre) || 0;
+  const deltaPct = precioMadre > 0 ? ((precio - precioMadre) / precioMadre) * 100 : 0;
+  const deltaLabel = deltaPct === 0
+    ? '='
+    : `${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(0)}%`;
+  const deltaColor = deltaPct > 0 ? 'text-warning' : deltaPct < 0 ? 'text-info' : 'text-muted-foreground';
+
   return (
     <td
       className={cn(
@@ -283,20 +339,24 @@ function PrecioCell({ item, canal, precio, manual, editable, tenantId, onSaved }
         editable ? 'cursor-pointer' : 'cursor-default',
       )}
       onClick={() => editable && setEditing(true)}
-      title={isEdited ? `${formatARS(precio)} · manual` : `${formatARS(precio)} · atado`}
+      title={isEdited
+        ? `${formatARS(precio)} · ${deltaLabel} vs madre · manual`
+        : `${formatARS(precio)} · ${deltaLabel} vs madre · atado`}
     >
       {saving ? '…' : formatARS(precio)}
-      <div className="text-[9px] mt-0.5 inline-flex items-center justify-end w-full gap-0.5">
+      <div className="text-[9px] mt-0.5 flex items-center justify-end w-full gap-1.5">
+        <span className={cn('font-mono', deltaColor)}>{deltaLabel}</span>
+        <span className="text-muted-foreground">·</span>
         {isEdited ? (
-          <>
+          <span className="inline-flex items-center gap-0.5">
             <Pencil className="h-2.5 w-2.5 text-success" />
             <span className="text-success">manual</span>
-          </>
+          </span>
         ) : (
-          <>
+          <span className="inline-flex items-center gap-0.5">
             <Link2 className="h-2.5 w-2.5 text-muted-foreground" />
             <span className="text-muted-foreground">atado</span>
-          </>
+          </span>
         )}
       </div>
     </td>
