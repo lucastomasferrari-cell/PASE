@@ -16,8 +16,37 @@ export interface CatalogoPublicoItem {
   grupo_id: number | null;
   grupo_nombre: string | null;
   grupo_emoji: string | null;
+  grupo_color_ramp: string | null;
   local_id: number;
   local_slug: string;
+  /** F6 chunk item-detalle (2026-06-02): si TRUE el frontend abre pantalla
+   *  /tienda/:slug/item/:id en vez de agregar +1 directo al carrito. */
+  tiene_modificadores: boolean;
+}
+
+// ─── Modificadores públicos (Fase 6 chunk detalle) ───────────────────────
+//
+// El backend (`fn_get_modificadores_publico`) devuelve filas flat por
+// (group, modifier). Acá las agrupamos en una estructura anidada para
+// que la UI itere directo. Cada group con sus modifiers ordenados.
+
+export interface ModifierPublico {
+  modifier_id: number;
+  nombre: string;
+  precio_extra: number;
+  orden: number;
+}
+
+export interface ModifierGroupPublico {
+  modifier_group_id: number;
+  nombre: string;
+  descripcion: string | null;
+  tipo: 'opcion' | 'extra' | 'aclaracion' | 'sin_con';
+  requerido: boolean;
+  min_seleccion: number;
+  max_seleccion: number | null;
+  orden: number;
+  modifiers: ModifierPublico[];
 }
 
 export interface LocalPublico {
@@ -65,6 +94,82 @@ export async function getCatalogoPorSlug(slug: string): Promise<{ data: Catalogo
     .order('nombre', { ascending: true });
   if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as CatalogoPublicoItem[], error: null };
+}
+
+// Busca un ítem específico del catálogo público (para pantalla detalle).
+// Reutiliza la misma vista: si retorna nada, el item no es público en ese
+// slug (puede no existir, estar agotado, estar oculto, etc).
+export async function getItemPublico(
+  slug: string,
+  itemId: number,
+): Promise<{ data: CatalogoPublicoItem | null; error: string | null }> {
+  const { data, error } = await dbAnon
+    .from('v_catalogo_publico')
+    .select('*')
+    .eq('local_slug', slug)
+    .eq('item_id', itemId)
+    .limit(1);
+  if (error) return { data: null, error: translateError(error) };
+  return { data: (data?.[0] as CatalogoPublicoItem | undefined) ?? null, error: null };
+}
+
+// Trae modifier_groups + modifiers asignados al ítem. Si el item no es
+// visible en la tienda del slug, la RPC retorna [] (anti-enumeration).
+// Agrupa los rows flat del server en una estructura nested.
+export async function getModificadoresPublico(
+  slug: string,
+  itemId: number,
+): Promise<{ data: ModifierGroupPublico[]; error: string | null }> {
+  const { data, error } = await dbAnon.rpc('fn_get_modificadores_publico', {
+    p_item_id: itemId,
+    p_local_slug: slug,
+  });
+  if (error) return { data: [], error: translateError(error) };
+
+  const rows = (data ?? []) as Array<{
+    modifier_group_id: number;
+    group_nombre: string;
+    group_descripcion: string | null;
+    group_tipo: 'opcion' | 'extra' | 'aclaracion' | 'sin_con';
+    requerido: boolean;
+    min_seleccion: number;
+    max_seleccion: number | null;
+    group_orden: number;
+    modifier_id: number | null;
+    modifier_nombre: string | null;
+    modifier_precio_extra: string | number | null;
+    modifier_orden: number | null;
+  }>;
+
+  const map = new Map<number, ModifierGroupPublico>();
+  for (const r of rows) {
+    let g = map.get(r.modifier_group_id);
+    if (!g) {
+      g = {
+        modifier_group_id: r.modifier_group_id,
+        nombre: r.group_nombre,
+        descripcion: r.group_descripcion,
+        tipo: r.group_tipo,
+        requerido: r.requerido,
+        min_seleccion: r.min_seleccion,
+        max_seleccion: r.max_seleccion,
+        orden: r.group_orden,
+        modifiers: [],
+      };
+      map.set(r.modifier_group_id, g);
+    }
+    // LEFT JOIN: si el group no tiene modifiers activos vienen NULL.
+    if (r.modifier_id != null) {
+      g.modifiers.push({
+        modifier_id: r.modifier_id,
+        nombre: r.modifier_nombre ?? '',
+        precio_extra: Number(r.modifier_precio_extra) || 0,
+        orden: r.modifier_orden ?? 0,
+      });
+    }
+  }
+
+  return { data: Array.from(map.values()), error: null };
 }
 
 // ETA dinámico — recalcula tiempo de espera según cola actual del local.

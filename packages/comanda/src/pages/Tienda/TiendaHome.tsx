@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getCatalogoPorSlug, getPopulares, type CatalogoPublicoItem, type PopularItem } from '@/services/tiendaService';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -20,8 +20,7 @@ const POPULARES_LIMIT = 8;
 const POPULARES_KEY = 'popular';
 
 // Mapea CatalogoPublicoItem (vista pública) a ProductCardItem (genérico).
-// La vista todavía no expone color_ramp del grupo — TODO migración futura
-// para v_catalogo_publico. Por ahora siempre 'gray' como fallback en cards.
+// La vista expone color_ramp del grupo desde 2026-06-02 (chunk item-detalle F6).
 function toCardItem(it: CatalogoPublicoItem | PopularItem): ProductCardItem {
   if ('precio_canal' in it) {
     return {
@@ -41,12 +40,13 @@ function toCardItem(it: CatalogoPublicoItem | PopularItem): ProductCardItem {
     emoji: it.emoji,
     foto_url: it.foto_url,
     precio: Number(it.precio) || 0,
-    grupo_color_ramp: null,
+    grupo_color_ramp: it.grupo_color_ramp ?? null,
   };
 }
 
 export function TiendaHome() {
   const { local } = useOutletContext<TiendaCtx>();
+  const navigate = useNavigate();
   const [items, setItems] = useState<CatalogoPublicoItem[]>([]);
   const [populares, setPopulares] = useState<PopularItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -171,6 +171,15 @@ export function TiendaHome() {
   }
 
   function agregar(card: ProductCardItem) {
+    // F6 chunk item-detalle (2026-06-02): si el item tiene modificadores
+    // navegamos a la pantalla detalle en vez de agregar +1 directo. Sin
+    // esto items con tamaño/extras se pedirían sin elegir → bloqueante.
+    // El flag viene en `tiene_modificadores` de v_catalogo_publico.
+    const original = items.find((x) => x.item_id === card.item_id);
+    if (original?.tiene_modificadores) {
+      navigate(`/tienda/${local.slug}/item/${card.item_id}`);
+      return;
+    }
     const next = { ...carrito };
     const idx = next.items.findIndex(
       (x) => x.item_id === card.item_id && x.modificadores.length === 0 && !x.notas,

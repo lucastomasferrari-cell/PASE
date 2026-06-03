@@ -63,6 +63,7 @@ const HandheldView = lazy(() => import('./pages/Pos/HandheldView').then(m => ({ 
 const TiendaLayout = lazy(() => import('./pages/Tienda/TiendaLayout').then(m => ({ default: m.TiendaLayout })));
 const MarketplaceHome = lazy(() => import('./pages/Marketplace/MarketplaceHome').then(m => ({ default: m.MarketplaceHome })));
 const TiendaHome = lazy(() => import('./pages/Tienda/TiendaHome').then(m => ({ default: m.TiendaHome })));
+const TiendaItemDetalle = lazy(() => import('./pages/Tienda/TiendaItemDetalle').then(m => ({ default: m.TiendaItemDetalle })));
 const TiendaCheckout = lazy(() => import('./pages/Tienda/TiendaCheckout').then(m => ({ default: m.TiendaCheckout })));
 const TiendaConfirmacion = lazy(() => import('./pages/Tienda/TiendaConfirmacion').then(m => ({ default: m.TiendaConfirmacion })));
 const TiendaSeguimiento = lazy(() => import('./pages/Tienda/TiendaSeguimiento').then(m => ({ default: m.TiendaSeguimiento })));
@@ -218,6 +219,7 @@ export default function App() {
                 <Route path="/marketplace" element={<MarketplaceHome />} />
                 <Route path="/tienda/:localSlug" element={<TiendaLayout />}>
                   <Route index element={<TiendaHome />} />
+                  <Route path="item/:itemId" element={<TiendaItemDetalle />} />
                   <Route path="checkout" element={<TiendaCheckout />} />
                   <Route path="confirmacion/:ventaId" element={<TiendaConfirmacion />} />
                   <Route path="seguimiento" element={<TiendaSeguimiento />} />
