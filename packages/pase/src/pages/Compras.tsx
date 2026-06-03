@@ -832,17 +832,40 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                 className="btn btn-ghost btn-sm"
                 onClick={() => {
                   if (subSection === "facturas") {
-                    const headers = ["Fecha", "Nº Factura", "Proveedor", "Local", "Categoría", "Total", "Vencimiento", "Estado"];
-                    const rows = fFilt.map(f => [
-                      f.fecha?.slice(0, 10) || "",
-                      f.nro || "",
-                      proveedores.find(p => p.id === f.prov_id)?.nombre || "",
-                      locales.find(l => l.id === f.local_id)?.nombre || "",
-                      f.cat || "",
-                      Number(f.total ?? 0),
-                      f.venc?.slice(0, 10) || "",
-                      estadoFactura(f),
-                    ]);
+                    // Pedido Carolina 02-jun: el contador necesita el
+                    // desglose completo de la factura (libro IVA Compras
+                    // estándar AR), no solo el total. Columnas en orden
+                    // que usa la mayoría de los contadores AR para cargar
+                    // en su software (Tango, Bejerman, Holistor).
+                    const headers = [
+                      "Fecha", "Tipo", "Nº Comprobante", "CUIT Proveedor", "Razón Social",
+                      "Local", "Categoría",
+                      "Neto Gravado", "IVA 21%", "IVA 10,5%",
+                      "Percep. IVA", "Percep. IIBB", "Otros Cargos", "Descuentos",
+                      "Total", "Vencimiento", "Estado de Pago",
+                    ];
+                    const rows = fFilt.map(f => {
+                      const prov = proveedores.find(p => p.id === f.prov_id);
+                      return [
+                        f.fecha?.slice(0, 10) || "",
+                        f.tipo || "factura",
+                        f.nro || "",
+                        prov?.cuit || "",
+                        prov?.nombre || "",
+                        locales.find(l => l.id === f.local_id)?.nombre || "",
+                        f.cat || "",
+                        Number(f.neto ?? 0),
+                        Number(f.iva21 ?? 0),
+                        Number(f.iva105 ?? 0),
+                        Number(f.perc_iva ?? 0),
+                        Number(f.iibb ?? 0),
+                        Number(f.otros_cargos ?? 0),
+                        Number(f.descuentos ?? 0),
+                        Number(f.total ?? 0),
+                        f.venc?.slice(0, 10) || "",
+                        estadoFactura(f),
+                      ];
+                    });
                     exportCSV(`facturas_${desde}_${hasta}.csv`, headers, rows);
                   } else {
                     const headers = ["Fecha", "Nº Remito", "Proveedor", "Local", "Categoría", "Monto", "Detalle", "Estado"];
