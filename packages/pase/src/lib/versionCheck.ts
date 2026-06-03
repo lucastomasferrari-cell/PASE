@@ -25,6 +25,7 @@
 
 import { useEffect, useRef } from "react";
 import { db } from "./supabase";
+import { skipAutoSignOut } from "./rememberMe";
 
 // Hash del commit embebido en build (ver vite.config.ts → `define`).
 // En dev queda como `dev-<timestamp>` y nunca matchea version.json, pero
@@ -53,26 +54,11 @@ async function fetchServerVersion(): Promise<string | null> {
 
 let _yaForzandoLogout = false;
 
-// Flag persistido por el checkbox "Mantener sesión abierta" en Login.tsx.
-// Si está en `true`, post-deploy hacemos SOLO reload (no signOut).
-// Si está en `false` o no existe, se mantiene el comportamiento legacy
-// (signOut + reload) — pedido original de Lucas 31-may.
-const REMEMBER_ME_KEY = "pase_remember_me";
-
-function isRememberMeActive(): boolean {
-  try {
-    return localStorage.getItem(REMEMBER_ME_KEY) === "true";
-  } catch {
-    return false;
-  }
-}
-
 async function handleDeployDetectado(motivo: string) {
   if (_yaForzandoLogout) return;
   _yaForzandoLogout = true;
 
-  if (isRememberMeActive()) {
-    console.warn(`[versionCheck] ${motivo} — reload (sesión conservada por 'Mantener sesión')`);
+  if (skipAutoSignOut(`versionCheck: ${motivo}`)) {
     // Solo reload — el JWT sigue siendo válido, el listener onAuthStateChange
     // en App.tsx re-hidrata el perfil al detectar INITIAL_SESSION.
     window.location.reload();

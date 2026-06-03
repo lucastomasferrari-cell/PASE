@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { db } from "./lib/supabase";
 import { initConsoleCapture } from "./lib/consoleCapture";
 import { useVersionPolling } from "./lib/versionCheck";
+import { skipAutoSignOut } from "./lib/rememberMe";
 // Capturar errores de consola desde el boot, ANTES de cualquier otro código.
 // Los errores capturados se incluyen en tickets de soporte para que el agent
 // auto-fix tenga contexto del browser cuando diagnostica.
@@ -299,7 +300,30 @@ function AppMain() {
             errAny?.code === 'PGRST301' || // JWT expired
             (typeof errAny?.message === 'string' && /jwt|token|invalid|revoked|expired|unauthor/i.test(errAny.message));
           if (isHardAuthFail || (getUserErr === null && !serverUser?.user)) {
-            // Token confirmadamente inválido → signOut limpio.
+            // Token confirmadamente inválido. Si el user pidió "Mantener
+            // sesión abierta", intentamos sobrevivir: refresh session +
+            // restaurar perfil desde el cache local. Si todo eso falla,
+            // SÍ desloguea — no hay alternativa razonable.
+            // (Fix Lucas 02-jun noche: F5 lo expulsaba aunque tildara el
+            // checkbox — éste era uno de los 3 paths que ignoraban el flag.)
+            if (skipAutoSignOut(`getUser() hard fail: ${errAny?.message ?? 'rechazo'}`)) {
+              try { await db.auth.refreshSession(); } catch { /* idem */ }
+              // Intentar restaurar perfil desde sessionStorage para no
+              // mostrar Login pantalla en blanco.
+              try {
+                const cached = sessionStorage.getItem("pase_user");
+                if (cached) {
+                  const perfilCache = JSON.parse(cached) as Usuario;
+                  if (perfilCache?.id && perfilCache?.activo !== false) {
+                    setUser(perfilCache);
+                    setAuthLoading(false);
+                    return;
+                  }
+                }
+              } catch { /* idem */ }
+              // Sin cache disponible — no podemos mantener la UI. Caemos
+              // al signOut igual (raro: F5 generalmente conserva sessionStorage).
+            }
             // eslint-disable-next-line no-console
             console.warn("[App] getUser() rechazó tokens (hard fail), signOut:", errAny?.message);
             await db.auth.signOut().catch(() => { /* idem */ });
@@ -340,6 +364,19 @@ function AppMain() {
               // que fixearlo en DB. Mientras tanto, signOut para que el
               // próximo login fresco lo regenere (Supabase re-emite el
               // JWT con metadata fresca al loguear).
+              //
+              // EXCEPT: si el user pidió "Mantener sesión abierta", NO
+              // desloguear automático. Hacemos applyLogin con el perfil
+              // que ya leímos — las queries con tenant scope van a
+              // devolver 0 filas pero el user permanece logueado y puede
+              // operar partes que no requieren tenant. Fix Lucas 02-jun.
+              if (skipAutoSignOut('refreshSession sin tenant_id en JWT')) {
+                if (perfil && perfil.activo !== false) {
+                  await applyLogin(perfil);
+                }
+                setAuthLoading(false);
+                return;
+              }
               // eslint-disable-next-line no-console
               console.error("[App] Tras refresh sigue sin tenant_id en JWT. Forzando signOut para login fresco.");
               await db.auth.signOut().catch(() => { /* idem */ });
