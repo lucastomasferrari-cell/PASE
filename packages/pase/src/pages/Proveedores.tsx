@@ -9,7 +9,7 @@ import { today } from "../lib/utils";
 import { calcularSaldosPorProveedor } from "../lib/saldoProveedor";
 import type { Usuario, Local } from "../types/auth";
 import type { Proveedor, Factura } from "../types/finanzas";
-import { EstadoCuentaDrawer } from "./compras/EstadoCuentaDrawer";
+import { EstadoCuentaDrawer, type SaldoMov } from "./compras/EstadoCuentaDrawer";
 import { Modal } from "../components/ui";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
@@ -52,6 +52,7 @@ export default function Proveedores({ user, localActivo, embedded = false, embed
   const [editModal,setEditModal]=useState<Proveedor | null>(null);
   const [ctaModal,setCtaModal]=useState<Proveedor | null>(null);
   const [ctaFacts,setCtaFacts]=useState<Factura[]>([]);
+  const [ctaSaldoMovs,setCtaSaldoMovs]=useState<SaldoMov[]>([]);
   const [ctaLoading,setCtaLoading]=useState(false);
   const [ctaMes,setCtaMes]=useState(toISO(today).slice(0,7));
   const [search,setSearch]=useState("");
@@ -122,14 +123,31 @@ export default function Proveedores({ user, localActivo, embedded = false, embed
   };
   const abrirCta=async(p: Proveedor)=>{
     setCtaFacts([]);
+    setCtaSaldoMovs([]);
     setCtaMes(toISO(today).slice(0,7));
     setCtaModal(p);
     setCtaLoading(true);
     let q=db.from("facturas").select("*").eq("prov_id",p.id).neq("estado","anulada").order("fecha",{ascending:false});
     q=applyLocalScope(q,user,localActivo);
-    const {data,error}=await q;
-    if(error)console.error("Error cargando estado de cuenta:",error);
-    setCtaFacts((data as Factura[]) || []);setCtaLoading(false);
+    const [facRes, movsRes] = await Promise.all([
+      q,
+      // Ledger de saldo a favor / en contra. Tolera tabla inexistente
+      // (si la migration 202606031400 aún no se aplicó, queda en []).
+      db.from("proveedor_saldo_movimientos")
+        .select("id, fecha, tipo, monto, motivo, factura_id, movimiento_id, created_at")
+        .eq("proveedor_id", p.id)
+        .is("deleted_at", null)
+        .order("fecha", { ascending: false }),
+    ]);
+    if(facRes.error)console.error("Error cargando estado de cuenta:",facRes.error);
+    setCtaFacts((facRes.data as Factura[]) || []);
+    // Si la tabla no existe (relation does not exist), dejamos array vacío
+    // sin loguear nada — es esperado mientras la migration no se aplique.
+    if (movsRes.error && !/relation.*does not exist|table.*does not exist/i.test(movsRes.error.message)) {
+      console.error("Error cargando saldo movimientos:", movsRes.error);
+    }
+    setCtaSaldoMovs((movsRes.data as SaldoMov[]) || []);
+    setCtaLoading(false);
   };
   return (
     <div>
@@ -225,6 +243,7 @@ export default function Proveedores({ user, localActivo, embedded = false, embed
         <EstadoCuentaDrawer
           proveedor={ctaModal}
           facturas={ctaFacts}
+          saldoMovimientos={ctaSaldoMovs}
           loading={ctaLoading}
           mes={ctaMes}
           onMesChange={setCtaMes}

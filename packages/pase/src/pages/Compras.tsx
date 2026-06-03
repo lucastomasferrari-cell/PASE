@@ -316,15 +316,31 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       .limit(1000);
     rq = applyLocalScope(rq, user, localActivo);
     const naq = db.from("nc_aplicaciones").select("nc_id, monto");
-    const [{ data: f }, { data: r }, { data: p }, { data: na }] = await Promise.all([
+    // Fix 2026-06-03: query proveedores con fallback. Si la migration
+    // 202606031400 (saldo_a_favor) no está aplicada todavía, el SELECT
+    // tira error y la pantalla queda con proveedores=[] (bug reportado
+    // por Lucas: "Proveedores 0" + lista vacía). Intentamos con la
+    // columna nueva; si falla por columna inexistente, fallback sin ella.
+    const pqFull = db.from("proveedores")
+      .select("id, nombre, cuit, cat, saldo, saldo_a_favor, estado")
+      .eq("estado", "Activo").order("nombre");
+    const [{ data: f }, { data: r }, pRes, { data: na }] = await Promise.all([
       fq,
       rq,
-      db.from("proveedores").select("id, nombre, cuit, cat, saldo, saldo_a_favor, estado").eq("estado", "Activo").order("nombre"),
+      pqFull,
       naq,
     ]);
+    let pData: Proveedor[] | null = (pRes.data as Proveedor[] | null);
+    if (pRes.error && /saldo_a_favor|column.*does not exist/i.test(pRes.error.message)) {
+      // Migration no aplicada — fallback al SELECT viejo (sin saldo_a_favor).
+      const pFallback = await db.from("proveedores")
+        .select("id, nombre, cuit, cat, saldo, estado")
+        .eq("estado", "Activo").order("nombre");
+      pData = (pFallback.data as Proveedor[] | null);
+    }
     setFacturas((f as Factura[]) || []);
     setRemitos((r as Remito[]) || []);
-    setProveedores((p as Proveedor[]) || []);
+    setProveedores(pData || []);
     setNcAplicaciones((na as Array<{ nc_id: string; monto: number | string }>) || []);
     setLoading(false);
   };
