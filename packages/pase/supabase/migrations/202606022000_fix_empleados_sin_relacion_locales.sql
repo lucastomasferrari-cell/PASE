@@ -26,6 +26,11 @@
 -- ─── 1. BACKFILL ──────────────────────────────────────────────────────────
 -- Reusa el patrón del backfill original (migration 202605204100) pero
 -- aplica a empleados creados entre 20-may y ahora.
+--
+-- IMPORTANTE: filtramos por JOIN locales — si un empleado tiene
+-- local_id apuntando a un local borrado/huérfano, el INSERT romperia
+-- por FK violation. Esos empleados quedan sin relación (igual que
+-- antes) y se reportan al final con NOTICE para que Lucas decida.
 INSERT INTO rrhh_empleado_locales (
   tenant_id, empleado_id, local_id, es_principal, tipo, fecha_desde
 )
@@ -33,6 +38,7 @@ SELECT
   e.tenant_id, e.id, e.local_id, TRUE, 'asignado',
   COALESCE(e.fecha_inicio, CURRENT_DATE - INTERVAL '1 year')::DATE
 FROM rrhh_empleados e
+INNER JOIN locales l ON l.id = e.local_id
 WHERE e.local_id IS NOT NULL
   AND NOT EXISTS (
     SELECT 1 FROM rrhh_empleado_locales rel
@@ -121,9 +127,12 @@ CREATE TRIGGER trg_empleado_sync_locales_update
   EXECUTE FUNCTION fn_trg_empleado_sync_locales_update();
 
 -- ─── Verificación del backfill ────────────────────────────────────────────
+-- Si quedan huérfanos, listamos los primeros 20 con su nombre + local_id
+-- huérfano para que Lucas decida (cambiar local o desactivar empleado).
 DO $$
 DECLARE
   v_huerfanos INTEGER;
+  v_row RECORD;
 BEGIN
   SELECT COUNT(*) INTO v_huerfanos
     FROM rrhh_empleados e
@@ -134,9 +143,28 @@ BEGIN
          AND rel.deleted_at IS NULL
      );
   IF v_huerfanos > 0 THEN
-    RAISE NOTICE 'AVISO: % empleados quedaron sin relación en rrhh_empleado_locales (probable local_id apunta a local borrado).', v_huerfanos;
+    RAISE NOTICE '⚠ HUÉRFANOS: % empleados quedaron SIN relación porque su local_id apunta a un local borrado o inexistente.', v_huerfanos;
+    RAISE NOTICE 'Detalle (primeros 20):';
+    FOR v_row IN
+      SELECT e.id, e.apellido, e.nombre, e.local_id, e.activo, e.tenant_id
+        FROM rrhh_empleados e
+        LEFT JOIN locales l ON l.id = e.local_id
+       WHERE e.local_id IS NOT NULL
+         AND l.id IS NULL  -- huérfano: local_id apunta a local que no existe
+         AND NOT EXISTS (
+           SELECT 1 FROM rrhh_empleado_locales rel
+           WHERE rel.empleado_id = e.id AND rel.deleted_at IS NULL
+         )
+       ORDER BY e.apellido, e.nombre
+       LIMIT 20
+    LOOP
+      RAISE NOTICE '  - % % (id=%, local_id huérfano=%, activo=%)',
+        v_row.apellido, v_row.nombre, v_row.id, v_row.local_id, v_row.activo;
+    END LOOP;
+    RAISE NOTICE 'Para investigar: SELECT e.id, e.apellido, e.nombre, e.local_id, e.activo FROM rrhh_empleados e LEFT JOIN locales l ON l.id = e.local_id WHERE l.id IS NULL AND e.local_id IS NOT NULL;';
+    RAISE NOTICE 'Solución: UPDATE rrhh_empleados SET local_id = <local_correcto> WHERE id = <empleado_id>;';
   ELSE
-    RAISE NOTICE 'OK: todos los empleados con local_id NOT NULL tienen relación.';
+    RAISE NOTICE '✓ OK: todos los empleados con local_id NOT NULL tienen relación.';
   END IF;
 END $$;
 
