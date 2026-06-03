@@ -562,41 +562,6 @@ export function TabSueldos({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empleadosVisibles, novEdits, tildados, adelantos]);
 
-  // ── Pedido Anto/Lucas 02-jun: split del total entre Efectivo y Banco
-  // antes de pagar. Anto físicamente tiene que separar billetes vs hacer
-  // transferencias por local; necesita ver los 2 números por adelantado.
-  //
-  // Heurística para decidir si un empleado se paga por banco o efectivo:
-  // SI tiene `alias_mp` cargado → asumimos transferencia/banco.
-  // SI NO tiene `alias_mp` → asumimos efectivo (caso default).
-  //
-  // El método real se elige recién al abrir el modal de pago, así que esto
-  // es solo una proyección — Anto puede mover gente al momento de pagar.
-  // Mejor estimación posible sin migration; si en el futuro se agrega un
-  // campo explícito `forma_pago_preferida` en rrhh_empleados, swappear acá.
-  const { totalEfectivo, totalBanco, cantEfectivo, cantBanco } = useMemo(() => {
-    let efe = 0, ban = 0, cEfe = 0, cBan = 0;
-    for (const g of empleadosVisibles) {
-      let totalEmp = 0;
-      let hayPendiente = false;
-      for (const slot of g.slots) {
-        if (estadoSlot(slot.emp.id, slot.cuota) !== "pendiente") continue;
-        hayPendiente = true;
-        const nov = novEdits[slot.key] || NOV_VACIA;
-        const adels = adelantosDelSlot(slot.emp.id, slot.cuota, slot.cuotasTotal);
-        const tildSet = tildados[slot.key] || new Set();
-        const sumaAdel = adels.filter(a => tildSet.has(a.id)).reduce((sum, a) => sum + Number(a.monto), 0);
-        totalEmp += calcularTotal(slot.emp, nov, slot.cuotasTotal, slot.cuota, sumaAdel);
-      }
-      if (!hayPendiente) continue;
-      const esBanco = !!(g.emp.alias_mp && g.emp.alias_mp.trim().length > 0);
-      if (esBanco) { ban += totalEmp; cBan++; }
-      else { efe += totalEmp; cEfe++; }
-    }
-    return { totalEfectivo: efe, totalBanco: ban, cantEfectivo: cEfe, cantBanco: cBan };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empleadosVisibles, novEdits, tildados, adelantos]);
-
   // Navegación mes
   const goPrevMes = () => { if (mes === 1) { setMes(12); setAnio(anio - 1); } else setMes(mes - 1); };
   const goNextMes = () => { if (mes === 12) { setMes(1); setAnio(anio + 1); } else setMes(mes + 1); };
@@ -795,44 +760,14 @@ export function TabSueldos({
       }}>
         <span><strong>{empleadosVisibles.length}</strong> empleado{empleadosVisibles.length !== 1 ? "s" : ""}{filtroEstado !== "todos" ? ` con ${filtroEstado}` : ""}</span>
         {filtroEstado !== "pagados" && totalASeparar > 0 && (
-          <>
-            <span style={{
-              padding: "3px 10px", borderRadius: 6,
-              background: "rgba(34,197,94,0.10)",
-              border: "1px solid rgba(34,197,94,0.25)",
-              color: "var(--success)", fontWeight: 500,
-            }}>
-              A separar: {fmt_$(totalASeparar)}
-            </span>
-            {/* Split efectivo vs banco — pedido Anto 02-jun. Heurística:
-                empleado con alias_mp = banco; sin alias = efectivo. */}
-            {totalEfectivo > 0 && (
-              <span
-                title={`${cantEfectivo} empleado${cantEfectivo !== 1 ? "s" : ""} sin alias MP cargado`}
-                style={{
-                  padding: "3px 10px", borderRadius: 6,
-                  background: "rgba(245,158,11,0.10)",
-                  border: "1px solid rgba(245,158,11,0.30)",
-                  color: "#d97706", fontWeight: 500,
-                }}
-              >
-                💵 Efectivo: {fmt_$(totalEfectivo)} <span style={{ opacity: 0.7, fontWeight: 400 }}>({cantEfectivo})</span>
-              </span>
-            )}
-            {totalBanco > 0 && (
-              <span
-                title={`${cantBanco} empleado${cantBanco !== 1 ? "s" : ""} con alias MP cargado`}
-                style={{
-                  padding: "3px 10px", borderRadius: 6,
-                  background: "rgba(59,130,246,0.10)",
-                  border: "1px solid rgba(59,130,246,0.30)",
-                  color: "#2563eb", fontWeight: 500,
-                }}
-              >
-                🏦 Banco: {fmt_$(totalBanco)} <span style={{ opacity: 0.7, fontWeight: 400 }}>({cantBanco})</span>
-              </span>
-            )}
-          </>
+          <span style={{
+            padding: "3px 10px", borderRadius: 6,
+            background: "rgba(34,197,94,0.10)",
+            border: "1px solid rgba(34,197,94,0.25)",
+            color: "var(--success)", fontWeight: 500,
+          }}>
+            A separar: {fmt_$(totalASeparar)}
+          </span>
         )}
         <div style={{ flex: 1 }} />
         <span style={{ color: "var(--muted2)" }}>
