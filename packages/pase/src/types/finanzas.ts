@@ -110,6 +110,11 @@ export interface Proveedor {
   cuit: string | null;
   cat: string | null;
   saldo: number;
+  /** Saldo a favor del cliente sobre este proveedor. Positivo = el proveedor
+   *  nos debe (lo podemos usar como crédito). Negativo = le debemos aparte.
+   *  NO incluye NC/ND oficiales — esas son fiscales y van al contador.
+   *  Cache derivado de proveedor_saldo_movimientos (Lucas 03-jun). */
+  saldo_a_favor?: number;
   estado: string;
 }
 

@@ -22,6 +22,10 @@ interface ModalPagarFacturaProps {
   setGenerarSaldo: React.Dispatch<React.SetStateAction<boolean>>;
   cerrarFactura: boolean;
   setCerrarFactura: React.Dispatch<React.SetStateAction<boolean>>;
+  // F03-jun paso 2: usar saldo a favor como crédito.
+  saldoAFavorProveedor: number;
+  aplicarSaldoFavor: number;
+  setAplicarSaldoFavor: React.Dispatch<React.SetStateAction<number>>;
   cuentasUsables: string[];
   pagar: () => Promise<void>;
   pagando: boolean;
@@ -34,6 +38,7 @@ interface ModalPagarFacturaProps {
 export function ModalPagarFactura({
   pagarModal, setPagarModal, facturas, ncAplicaciones, ncsAplicar, setNcsAplicar,
   pagoForm, setPagoForm, generarSaldo, setGenerarSaldo, cerrarFactura, setCerrarFactura,
+  saldoAFavorProveedor, aplicarSaldoFavor, setAplicarSaldoFavor,
   cuentasUsables, pagar, pagando,
 }: ModalPagarFacturaProps) {
   if (!pagarModal) return null;
@@ -55,8 +60,11 @@ export function ModalPagarFactura({
     .map(x => ({ nc: x, saldoNc: saldoNcRestante(x, aplicMap) }))
     .filter(x => x.saldoNc > 0);
   const totalNcAplicado = Object.values(ncsAplicar).reduce((s, m) => s + (Number(m) || 0), 0);
-  const restanteAPagar = Math.max(0, saldoFactura - totalNcAplicado);
-  const cerrar = () => { setPagarModal(null); setNcsAplicar({}); };
+  // F03-jun paso 2: saldo a favor también descuenta del restanteAPagar.
+  const saldoFavorEfectivo = Math.max(0, Number(aplicarSaldoFavor) || 0);
+  const restanteAPagar = Math.max(0, saldoFactura - totalNcAplicado - saldoFavorEfectivo);
+  const maxSaldoFavorAplicable = Math.min(saldoAFavorProveedor, Math.max(0, saldoFactura - totalNcAplicado));
+  const cerrar = () => { setPagarModal(null); setNcsAplicar({}); setAplicarSaldoFavor(0); };
 
   /* AUDIT F4B#1 / sprint #5: migrado a <Modal>. */
   return (
@@ -127,6 +135,51 @@ export function ModalPagarFactura({
         </div>
       )}
 
+      {/* Saldo a favor del proveedor disponible (F03-jun paso 2).
+          Lo mostramos siempre que el proveedor tenga > 0, así Anto sabe
+          que existe sin tener que ir a la pantalla de proveedores. */}
+      {saldoAFavorProveedor > 0 && (
+        <div style={{
+          marginBottom: 12, padding: 12,
+          background: "rgba(34,197,94,0.08)",
+          border: "1px solid rgba(34,197,94,0.30)",
+          borderRadius: "var(--r)",
+        }}>
+          <div style={{ fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "var(--success)", marginBottom: 6, fontWeight: 500 }}>
+            💰 Saldo a favor disponible
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={aplicarSaldoFavor > 0}
+                onChange={e => setAplicarSaldoFavor(e.target.checked ? maxSaldoFavorAplicable : 0)}
+                style={{ accentColor: "var(--success)" }}
+                disabled={maxSaldoFavorAplicable <= 0}
+              />
+              <span>
+                Aplicar crédito ({fmt_$(saldoAFavorProveedor)} disponible{saldoAFavorProveedor !== maxSaldoFavorAplicable ? `, máx ${fmt_$(maxSaldoFavorAplicable)}` : ""})
+              </span>
+            </label>
+            {aplicarSaldoFavor > 0 && (
+              <div style={{ width: 140 }}>
+                <CurrencyInput
+                  value={aplicarSaldoFavor}
+                  onChange={v => {
+                    const clamped = Math.min(Math.max(0, v), maxSaldoFavorAplicable);
+                    setAplicarSaldoFavor(clamped);
+                  }}
+                  aria-label="Monto del saldo a favor a aplicar"
+                />
+              </div>
+            )}
+          </div>
+          <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 6 }}>
+            No mueve plata — solo consume el crédito que tenías acumulado.
+          </div>
+        </div>
+      )}
+
       {restanteAPagar > 0 ? (
         <>
           <div style={{ fontSize: 11, color: "var(--muted2)", marginBottom: 8 }}>
@@ -187,9 +240,13 @@ export function ModalPagarFactura({
             );
           })()}
         </>
-      ) : totalNcAplicado > 0 ? (
+      ) : (totalNcAplicado > 0 || saldoFavorEfectivo > 0) ? (
         <div className="alert" style={{ background: "rgba(34,197,94,0.1)", border: "1px solid var(--success)", color: "var(--success)", fontSize: 11, padding: "10px 12px", marginBottom: 12 }}>
-          Las NCs cubren el total de la factura. No hace falta pago en plata.
+          {totalNcAplicado > 0 && saldoFavorEfectivo > 0
+            ? "Las NCs + saldo a favor cubren el total de la factura. No hace falta pago en plata."
+            : totalNcAplicado > 0
+              ? "Las NCs cubren el total de la factura. No hace falta pago en plata."
+              : "El saldo a favor cubre el total de la factura. No hace falta pago en plata."}
         </div>
       ) : null}
       <div className="field"><label>Fecha</label><input type="date" value={pagoForm.fecha} onChange={e => setPagoForm({ ...pagoForm, fecha: e.target.value })} /></div>

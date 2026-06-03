@@ -274,6 +274,8 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   // F03-jun: saldo a favor/en contra cuando pago != saldo factura.
   const [generarSaldo, setGenerarSaldo] = useState(false);
   const [cerrarFactura, setCerrarFactura] = useState(false);
+  // F03-jun paso 2: monto del saldo a favor a aplicar como crédito.
+  const [aplicarSaldoFavor, setAplicarSaldoFavor] = useState(0);
 
   // Defensive: si form.cuenta queda con un valor que no está en
   // cuentasUsables (regression future, scope change), reseteamos a ""
@@ -317,7 +319,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     const [{ data: f }, { data: r }, { data: p }, { data: na }] = await Promise.all([
       fq,
       rq,
-      db.from("proveedores").select("id, nombre, cuit, cat, saldo, estado").eq("estado", "Activo").order("nombre"),
+      db.from("proveedores").select("id, nombre, cuit, cat, saldo, saldo_a_favor, estado").eq("estado", "Activo").order("nombre"),
       naq,
     ]);
     setFacturas((f as Factura[]) || []);
@@ -519,6 +521,19 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       const prov = proveedores.find(p => String(p.id) === String(f.prov_id));
       const detalle = `Pago ${prov?.nombre || ""} - Fact ${f.nro}`;
 
+      // 0) Aplicar saldo a favor del proveedor si el user lo eligió (F03-jun
+      //    paso 2). No mueve plata — solo consume crédito acumulado.
+      //    Se hace ANTES de NCs y pago para que el saldo factura quede al día.
+      if (aplicarSaldoFavor > 0) {
+        const { error: sfErr } = await db.rpc("aplicar_saldo_a_favor_proveedor", {
+          p_factura_id: f.id,
+          p_monto: aplicarSaldoFavor,
+          p_fecha: pagoForm.fecha,
+          p_idempotency_key: idempKeyPagarFac + "-sf",
+        });
+        if (sfErr) throw sfErr;
+      }
+
       // 1) Aplicar NCs seleccionadas. AUDIT F3A#7: 1 RPC batch (antes había
       //    un loop con for+await que generaba N round-trips secuenciales).
       //    La batch es atómica por NC adentro (cada aplicación es su propia
@@ -545,8 +560,10 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       }
 
       // 2) Pagar el resto con plata si queda saldo. Si solo se aplicaron NCs
-      //    y la factura ya queda saldada, se omite pagar_factura.
-      const restanteAPagar = pagoForm.monto > 0 ? pagoForm.monto : Math.max(0, f.total - totalNcAplicado);
+      //    + saldo a favor y la factura ya queda saldada, se omite pagar_factura.
+      const restanteAPagar = pagoForm.monto > 0
+        ? pagoForm.monto
+        : Math.max(0, f.total - totalNcAplicado - aplicarSaldoFavor);
       if (restanteAPagar > 0) {
         if (!pagoForm.cuenta) {
           showError("Elegí una cuenta de egreso para el saldo restante");
@@ -580,6 +597,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       setNcsAplicar({});
       setGenerarSaldo(false);
       setCerrarFactura(false);
+      setAplicarSaldoFavor(0);
       load();
     } catch (err) {
       console.error("Error en pagar:", err);
@@ -1183,6 +1201,10 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
         pagoForm={pagoForm} setPagoForm={setPagoForm}
         generarSaldo={generarSaldo} setGenerarSaldo={setGenerarSaldo}
         cerrarFactura={cerrarFactura} setCerrarFactura={setCerrarFactura}
+        saldoAFavorProveedor={Number(
+          proveedores.find(p => String(p.id) === String(pagarModal?.prov_id))?.saldo_a_favor ?? 0
+        )}
+        aplicarSaldoFavor={aplicarSaldoFavor} setAplicarSaldoFavor={setAplicarSaldoFavor}
         cuentasUsables={cuentasUsables} pagar={pagar} pagando={pagando}
       />
 
