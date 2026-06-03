@@ -71,6 +71,9 @@ interface NovDB {
   otros_descuentos_motivo: string | null;
   observaciones: string | null;
   estado: string;
+  // F6 02-jun: plan de pago. NULL si no se cargó.
+  monto_efectivo: number | null;
+  monto_mp: number | null;
 }
 interface LiqEstado {
   empleado_id: string;
@@ -267,7 +270,7 @@ export function TabSueldos({
       // Extendido 31-may: traer id+total+pagado de la liquidación para mostrar
       // el resumen de pago cuando la cuota está pagada (sin re-query).
       const { data: novs } = await db.from("rrhh_novedades")
-        .select("id, empleado_id, mes, anio, cuota_num, cuotas_total, inasistencias, presentismo, horas_extras, dobles, feriados, vacaciones_dias, otros_descuentos, otros_descuentos_motivo, observaciones, estado, rrhh_liquidaciones(id, estado, total_a_pagar, pagos_realizados)")
+        .select("id, empleado_id, mes, anio, cuota_num, cuotas_total, inasistencias, presentismo, horas_extras, dobles, feriados, vacaciones_dias, otros_descuentos, otros_descuentos_motivo, observaciones, estado, monto_efectivo, monto_mp, rrhh_liquidaciones(id, estado, total_a_pagar, pagos_realizados)")
         .in("empleado_id", empIds)
         .eq("mes", mes).eq("anio", anio);
       type NovRow = NovDB & { rrhh_liquidaciones: { id: string; estado: string; total_a_pagar: number; pagos_realizados: number }[] | null };
@@ -406,7 +409,7 @@ export function TabSueldos({
         setSavedAt(prev => ({ ...prev, [key]: Date.now() }));
         // Refrescar novedadesDB para que el próximo UPSERT use el id correcto.
         const { data: ns } = await db.from("rrhh_novedades")
-          .select("id, empleado_id, mes, anio, cuota_num, cuotas_total, inasistencias, presentismo, horas_extras, dobles, feriados, vacaciones_dias, otros_descuentos, otros_descuentos_motivo, observaciones, estado")
+          .select("id, empleado_id, mes, anio, cuota_num, cuotas_total, inasistencias, presentismo, horas_extras, dobles, feriados, vacaciones_dias, otros_descuentos, otros_descuentos_motivo, observaciones, estado, monto_efectivo, monto_mp")
           .eq("empleado_id", slot.emp.id).eq("mes", mes).eq("anio", anio);
         setNovedadesDB(prev => {
           const otros = prev.filter(n => !(n.empleado_id === slot.emp.id && n.mes === mes && n.anio === anio));
@@ -458,6 +461,51 @@ export function TabSueldos({
 
   const [togglingConfirm, setTogglingConfirm] = useState<Set<string>>(new Set());
 
+  // ── Plan de pago por slot (Anto carga ANTES de confirmar) ───────────────
+  // Estructura: { [slotKey]: { efectivo: string, mp: string } }
+  // Se mantienen como string para que el input controlado no rompa al
+  // borrar todo (sino quedaría "0" pegajoso). El parseo a número se hace
+  // al confirmar y al sumar.
+  const [planEdits, setPlanEdits] = useState<Record<string, { efectivo: string; mp: string }>>({});
+
+  // Inicializar planEdits desde novedadesDB cuando carga.
+  useEffect(() => {
+    setPlanEdits(prev => {
+      const next: Record<string, { efectivo: string; mp: string }> = { ...prev };
+      for (const s of slots) {
+        if (next[s.key]) continue; // ya hay edit en curso, no pisar
+        const n = novedadesDB.find(x =>
+          x.empleado_id === s.emp.id &&
+          (x.cuota_num ?? 1) === s.cuota &&
+          (x.cuotas_total ?? 1) === s.cuotasTotal
+        );
+        if (n && (n.monto_efectivo != null || n.monto_mp != null)) {
+          next[s.key] = {
+            efectivo: n.monto_efectivo != null ? String(Number(n.monto_efectivo)) : "",
+            mp: n.monto_mp != null ? String(Number(n.monto_mp)) : "",
+          };
+        } else if (!next[s.key]) {
+          next[s.key] = { efectivo: "", mp: "" };
+        }
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- inicializar form al cargar/recargar
+  }, [novedadesDB, slots]);
+
+  function updatePlan(key: string, campo: "efectivo" | "mp", valor: string) {
+    setPlanEdits(prev => ({
+      ...prev,
+      [key]: { ...(prev[key] ?? { efectivo: "", mp: "" }), [campo]: valor },
+    }));
+  }
+
+  function planTotalCargado(key: string): number {
+    const p = planEdits[key];
+    if (!p) return 0;
+    return (parseFloat(p.efectivo) || 0) + (parseFloat(p.mp) || 0);
+  }
+
   const confirmarSlot = useCallback(async (key: string) => {
     const slot = slots.find(s => s.key === key);
     if (!slot) return;
@@ -470,26 +518,36 @@ export function TabSueldos({
         delete debounceTimers.current[key];
         await guardarNovedad(key);
       }
+      // Leer plan a guardar (puede ser 0 + 0 si no cargaron — válido).
+      const plan = planEdits[key] ?? { efectivo: "", mp: "" };
+      const efectivoNum = parseFloat(plan.efectivo) || 0;
+      const mpNum = parseFloat(plan.mp) || 0;
       // Re-fetch para obtener el id de la novedad recién upserteada.
       const { data: ns } = await db.from("rrhh_novedades")
-        .select("id, empleado_id, mes, anio, cuota_num, cuotas_total, inasistencias, presentismo, horas_extras, dobles, feriados, vacaciones_dias, otros_descuentos, otros_descuentos_motivo, observaciones, estado")
+        .select("id, empleado_id, mes, anio, cuota_num, cuotas_total, inasistencias, presentismo, horas_extras, dobles, feriados, vacaciones_dias, otros_descuentos, otros_descuentos_motivo, observaciones, estado, monto_efectivo, monto_mp")
         .eq("empleado_id", slot.emp.id).eq("mes", mes).eq("anio", anio)
         .eq("cuota_num", slot.cuota);
       const existente = (ns ?? []).find(n => (n.cuota_num ?? 1) === slot.cuota);
       if (!existente) {
-        // No había nada cargado — crear novedad vacía + confirmar en una sola op.
+        // No había nada cargado — crear novedad vacía + plan + confirmar en una sola op.
         const { error } = await db.from("rrhh_novedades").insert({
           empleado_id: slot.emp.id, mes, anio,
           cuota_num: slot.cuota, cuotas_total: slot.cuotasTotal,
           inasistencias: 0, presentismo: "MANTIENE",
           horas_extras: 0, dobles: 0, feriados: 0,
           vacaciones_dias: 0, otros_descuentos: 0,
+          monto_efectivo: efectivoNum, monto_mp: mpNum,
           estado: "confirmado",
         });
         if (error) { showError("No se pudo confirmar: " + translateRpcError(error)); return; }
       } else {
         const { error } = await db.from("rrhh_novedades")
-          .update({ estado: "confirmado" }).eq("id", existente.id);
+          .update({
+            estado: "confirmado",
+            monto_efectivo: efectivoNum,
+            monto_mp: mpNum,
+          })
+          .eq("id", existente.id);
         if (error) { showError("No se pudo confirmar: " + translateRpcError(error)); return; }
       }
       // Recargar para que isConfirmado() refleje el nuevo estado.
@@ -497,7 +555,7 @@ export function TabSueldos({
     } finally {
       setTogglingConfirm(prev => { const n = new Set(prev); n.delete(key); return n; });
     }
-  }, [slots, mes, anio, guardarNovedad, recargar, showError]);
+  }, [slots, mes, anio, planEdits, guardarNovedad, recargar, showError]);
 
   const desconfirmarSlot = useCallback(async (key: string) => {
     const slot = slots.find(s => s.key === key);
@@ -648,6 +706,29 @@ export function TabSueldos({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empleadosVisibles, novEdits, tildados, adelantos]);
 
+  // Totales de slots CONFIRMADOS (con plan de pago cargado) — pedido Anto/Lucas 02-jun.
+  // Suma efectivo de todos los confirmados pendientes de pago + idem MP.
+  // Esto le permite a Anto ver cuánto efectivo separar y cuánta transferencia
+  // hacer ANTES de tocar Pagar.
+  const { totalConfirmadoEfectivo, totalConfirmadoMP, countConfirmados } = useMemo(() => {
+    let efe = 0, mp = 0, count = 0;
+    for (const g of empleadosVisibles) {
+      for (const slot of g.slots) {
+        if (estadoSlot(slot.emp.id, slot.cuota) !== "pendiente") continue;
+        const nov = novedadesDB.find(n =>
+          n.empleado_id === slot.emp.id &&
+          n.mes === mes && n.anio === anio &&
+          (n.cuota_num ?? 1) === slot.cuota
+        );
+        if (nov?.estado !== "confirmado") continue;
+        efe += Number(nov.monto_efectivo ?? 0);
+        mp += Number(nov.monto_mp ?? 0);
+        count++;
+      }
+    }
+    return { totalConfirmadoEfectivo: efe, totalConfirmadoMP: mp, countConfirmados: count };
+  }, [empleadosVisibles, novedadesDB, mes, anio]);
+
   // Navegación mes
   const goPrevMes = () => { if (mes === 1) { setMes(12); setAnio(anio - 1); } else setMes(mes - 1); };
   const goNextMes = () => { if (mes === 12) { setMes(1); setAnio(anio + 1); } else setMes(mes + 1); };
@@ -711,7 +792,30 @@ export function TabSueldos({
     const tildSet = tildados[slotKey] || new Set();
     const sumaAdel = adels.filter(a => tildSet.has(a.id)).reduce((sum, a) => sum + Number(a.monto), 0);
     const total = calcularTotal(s.emp, nov, s.cuotasTotal, s.cuota, sumaAdel);
-    setPagoLineas([{ cuenta: cuentasUsables[0] || "", monto: String(total), local_id: s.emp.local_id }]);
+
+    // Pre-llenar con el plan confirmado si Anto cargó split efectivo/MP
+    // antes (Lucas 02-jun). Si no hay plan, fallback al comportamiento
+    // legacy: 1 línea con el total y la primera cuenta usable.
+    const novDB = novedadesDB.find(n =>
+      n.empleado_id === s.emp.id && n.mes === mes && n.anio === anio &&
+      (n.cuota_num ?? 1) === s.cuota
+    );
+    const planEfe = novDB?.monto_efectivo != null ? Number(novDB.monto_efectivo) : 0;
+    const planMp = novDB?.monto_mp != null ? Number(novDB.monto_mp) : 0;
+    const hayPlan = (planEfe + planMp) > 0;
+
+    if (hayPlan) {
+      // Heurística para preseleccionar cuenta: buscar entre cuentasUsables
+      // una que matchee el método. Si no encuentra, cae a primera disponible.
+      const cuentaEfectivo = cuentasUsables.find(c => /efect/i.test(c)) ?? cuentasUsables[0] ?? "";
+      const cuentaMP = cuentasUsables.find(c => /mp|mercado/i.test(c)) ?? cuentasUsables[1] ?? cuentasUsables[0] ?? "";
+      const lineas: { cuenta: string; monto: string; local_id?: number | null }[] = [];
+      if (planEfe > 0) lineas.push({ cuenta: cuentaEfectivo, monto: String(planEfe), local_id: s.emp.local_id });
+      if (planMp > 0) lineas.push({ cuenta: cuentaMP, monto: String(planMp), local_id: s.emp.local_id });
+      setPagoLineas(lineas);
+    } else {
+      setPagoLineas([{ cuenta: cuentasUsables[0] || "", monto: String(total), local_id: s.emp.local_id }]);
+    }
     setFechaPago(toISO(today));
     setIdempKey(crypto.randomUUID());
     setPagoSlot(slotKey);
@@ -854,6 +958,40 @@ export function TabSueldos({
           }}>
             A separar: {fmt_$(totalASeparar)}
           </span>
+        )}
+        {/* Plan confirmado: efectivo + MP a separar antes de pagar */}
+        {filtroEstado !== "pagados" && countConfirmados > 0 && (
+          <>
+            <span style={{ color: "var(--muted2)", fontSize: 11 }}>
+              ✓ {countConfirmados} confirmado{countConfirmados !== 1 ? "s" : ""}:
+            </span>
+            {totalConfirmadoEfectivo > 0 && (
+              <span
+                title={`Efectivo a separar de los ${countConfirmados} confirmados`}
+                style={{
+                  padding: "3px 10px", borderRadius: 6,
+                  background: "rgba(245,158,11,0.10)",
+                  border: "1px solid rgba(245,158,11,0.30)",
+                  color: "#d97706", fontWeight: 500,
+                }}
+              >
+                💵 {fmt_$(totalConfirmadoEfectivo)}
+              </span>
+            )}
+            {totalConfirmadoMP > 0 && (
+              <span
+                title={`Mercado Pago a transferir de los ${countConfirmados} confirmados`}
+                style={{
+                  padding: "3px 10px", borderRadius: 6,
+                  background: "rgba(59,130,246,0.10)",
+                  border: "1px solid rgba(59,130,246,0.30)",
+                  color: "#2563eb", fontWeight: 500,
+                }}
+              >
+                🏦 {fmt_$(totalConfirmadoMP)}
+              </span>
+            )}
+          </>
         )}
         <div style={{ flex: 1 }} />
         <span style={{ color: "var(--muted2)" }}>
@@ -1191,43 +1329,99 @@ export function TabSueldos({
                         </div>
                       </div>
 
-                      {/* Footer: Confirmar / Modificar (pedido Anto/Lucas 02-jun).
-                          Solo aparece si NO está pagado (cuando ya se pagó, el
-                          confirmado se asume y no tiene sentido modificarlo).
-                          El botón "Pagar →" sigue en la sub-fila arriba — Lucas
-                          dijo que puede quedar ahí. */}
-                      {!isPagado && esDueno && (
-                        <div style={{
-                          marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--bd)",
-                          display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center",
-                        }}>
-                          {isConfirmado(s.key) ? (
-                            <>
-                              <span style={{ fontSize: 11, color: "var(--success)", marginRight: 4 }}>
-                                ✓ Confirmado · listo para pagar
-                              </span>
-                              <button
-                                className="btn btn-sec btn-sm"
-                                onClick={() => void desconfirmarSlot(s.key)}
-                                disabled={togglingConfirm.has(s.key)}
-                                style={{ padding: "4px 14px", fontSize: 11 }}
-                              >
-                                {togglingConfirm.has(s.key) ? "..." : "Modificar"}
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              className="btn btn-acc btn-sm"
-                              onClick={() => void confirmarSlot(s.key)}
-                              disabled={togglingConfirm.has(s.key) || isSaving}
-                              title="Bloquea los campos para que no se modifiquen accidentalmente. Después se puede pagar."
-                              style={{ padding: "4px 14px", fontSize: 11 }}
-                            >
-                              {togglingConfirm.has(s.key) ? "Confirmando..." : "Confirmar"}
-                            </button>
-                          )}
-                        </div>
-                      )}
+                      {/* Plan de pago + Confirmar / Modificar
+                          (pedido Anto/Lucas 02-jun). Anto carga ANTES de pagar
+                          cuánto va en efectivo y cuánto en MP. La suma debe
+                          coincidir con el Total (sino "Confirmar" disabled).
+                          El botón "Pagar →" sigue arriba en cada sub-fila. */}
+                      {!isPagado && esDueno && (() => {
+                        const plan = planEdits[s.key] ?? { efectivo: "", mp: "" };
+                        const cargado = planTotalCargado(s.key);
+                        const total = d.total;
+                        const dif = total - cargado;
+                        const matchea = Math.abs(dif) < 0.01;
+                        const confirmado = isConfirmado(s.key);
+                        return (
+                          <div style={{
+                            marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--bd)",
+                          }}>
+                            {/* Inputs plan de pago */}
+                            <div style={{ display: "flex", alignItems: "flex-end", gap: 14, flexWrap: "wrap" }}>
+                              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                                <label style={{ fontSize: 10, color: "var(--muted2)", fontWeight: 500 }}>💵 Efectivo</label>
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  value={plan.efectivo}
+                                  onChange={e => updatePlan(s.key, "efectivo", e.target.value)}
+                                  disabled={confirmado || togglingConfirm.has(s.key)}
+                                  placeholder="0"
+                                  style={{
+                                    width: 130, padding: "5px 8px", fontSize: 12,
+                                    background: confirmado ? "var(--s2)" : "var(--bg)",
+                                    border: "1px solid var(--bd)", borderRadius: 4,
+                                    textAlign: "right", fontVariantNumeric: "tabular-nums",
+                                    cursor: confirmado ? "not-allowed" : "text",
+                                  }}
+                                />
+                              </div>
+                              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                                <label style={{ fontSize: 10, color: "var(--muted2)", fontWeight: 500 }}>🏦 Mercado Pago</label>
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  value={plan.mp}
+                                  onChange={e => updatePlan(s.key, "mp", e.target.value)}
+                                  disabled={confirmado || togglingConfirm.has(s.key)}
+                                  placeholder="0"
+                                  style={{
+                                    width: 130, padding: "5px 8px", fontSize: 12,
+                                    background: confirmado ? "var(--s2)" : "var(--bg)",
+                                    border: "1px solid var(--bd)", borderRadius: 4,
+                                    textAlign: "right", fontVariantNumeric: "tabular-nums",
+                                    cursor: confirmado ? "not-allowed" : "text",
+                                  }}
+                                />
+                              </div>
+                              {/* Status suma vs total */}
+                              <div style={{
+                                fontSize: 10, color: matchea ? "var(--success)" : "var(--warn)",
+                                fontWeight: 500, paddingBottom: 4,
+                              }}>
+                                {matchea
+                                  ? <>✓ Suma OK ({fmt_$(cargado)})</>
+                                  : <>Falta {fmt_$(Math.abs(dif))} {dif < 0 ? "(excede)" : ""}</>}
+                              </div>
+                              <div style={{ flex: 1 }} />
+                              {confirmado ? (
+                                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                  <span style={{ fontSize: 11, color: "var(--success)" }}>✓ Confirmado · listo para pagar</span>
+                                  <button
+                                    className="btn btn-sec btn-sm"
+                                    onClick={() => void desconfirmarSlot(s.key)}
+                                    disabled={togglingConfirm.has(s.key)}
+                                    style={{ padding: "4px 14px", fontSize: 11 }}
+                                  >
+                                    {togglingConfirm.has(s.key) ? "..." : "Modificar"}
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  className="btn btn-acc btn-sm"
+                                  onClick={() => void confirmarSlot(s.key)}
+                                  disabled={togglingConfirm.has(s.key) || isSaving || !matchea}
+                                  title={!matchea
+                                    ? "La suma de Efectivo + MP debe ser igual al Total."
+                                    : "Bloquea los campos para que no se modifiquen accidentalmente. Después se puede pagar."}
+                                  style={{ padding: "4px 14px", fontSize: 11 }}
+                                >
+                                  {togglingConfirm.has(s.key) ? "Confirmando..." : "Confirmar"}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })()}
