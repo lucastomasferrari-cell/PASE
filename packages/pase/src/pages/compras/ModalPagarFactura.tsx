@@ -17,6 +17,11 @@ interface ModalPagarFacturaProps {
   setNcsAplicar: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   pagoForm: { cuenta: string; monto: number; fecha: string };
   setPagoForm: React.Dispatch<React.SetStateAction<{ cuenta: string; monto: number; fecha: string }>>;
+  // F03-jun: saldo a favor/en contra cuando pago != saldo factura.
+  generarSaldo: boolean;
+  setGenerarSaldo: React.Dispatch<React.SetStateAction<boolean>>;
+  cerrarFactura: boolean;
+  setCerrarFactura: React.Dispatch<React.SetStateAction<boolean>>;
   cuentasUsables: string[];
   pagar: () => Promise<void>;
   pagando: boolean;
@@ -28,7 +33,8 @@ interface ModalPagarFacturaProps {
 // (2026-05-11).
 export function ModalPagarFactura({
   pagarModal, setPagarModal, facturas, ncAplicaciones, ncsAplicar, setNcsAplicar,
-  pagoForm, setPagoForm, cuentasUsables, pagar, pagando,
+  pagoForm, setPagoForm, generarSaldo, setGenerarSaldo, cerrarFactura, setCerrarFactura,
+  cuentasUsables, pagar, pagando,
 }: ModalPagarFacturaProps) {
   if (!pagarModal) return null;
   const f = pagarModal;
@@ -128,6 +134,58 @@ export function ModalPagarFactura({
           </div>
           <div className="field"><label>Cuenta de egreso *</label><select value={pagoForm.cuenta} onChange={e => setPagoForm({ ...pagoForm, cuenta: e.target.value })}><option value="">Seleccioná una cuenta…</option>{cuentasUsables.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
           <div className="field"><label>Monto a pagar</label><CurrencyInput value={pagoForm.monto || restanteAPagar} onChange={v => setPagoForm({ ...pagoForm, monto: v })} aria-label="Monto del pago" /></div>
+
+          {/* Saldo a favor / en contra del proveedor (Lucas 03-jun) */}
+          {(() => {
+            const montoCargado = pagoForm.monto || restanteAPagar;
+            const dif = montoCargado - restanteAPagar;
+            if (Math.abs(dif) < 0.01) return null;
+            const esMas = dif > 0;
+            const colorBg = esMas ? "rgba(34,197,94,0.10)" : "rgba(245,158,11,0.10)";
+            const colorBorder = esMas ? "var(--success)" : "var(--warn)";
+            const colorText = esMas ? "var(--success)" : "var(--warn)";
+            return (
+              <div style={{
+                marginTop: 10, padding: "10px 12px",
+                background: colorBg,
+                border: `1px solid ${colorBorder}`,
+                borderRadius: "var(--r)",
+                fontSize: 11,
+              }}>
+                <div style={{ fontWeight: 600, color: colorText, marginBottom: 6 }}>
+                  {esMas
+                    ? <>⚠ Pago de MÁS por {fmt_$(Math.abs(dif))}</>
+                    : <>⚠ Pago de MENOS por {fmt_$(Math.abs(dif))}</>}
+                </div>
+                <div style={{ color: "var(--muted2)", marginBottom: 8 }}>
+                  {esMas
+                    ? <>Si confirmás así, la factura queda <strong>pagada</strong> y el extra ({fmt_$(Math.abs(dif))}) queda como <strong>saldo a favor</strong> del proveedor (lo usás después como crédito).</>
+                    : <>Por default la factura queda <strong>pagada_parcial</strong> con saldo pendiente. Si querés cerrarla ya y dejar el faltante como deuda, tildá la opción.</>}
+                </div>
+                {!esMas && (
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", marginBottom: 6 }}>
+                    <input
+                      type="checkbox"
+                      checked={cerrarFactura}
+                      onChange={e => setCerrarFactura(e.target.checked)}
+                    />
+                    <span>Cerrar factura ahora (faltante queda como saldo en contra)</span>
+                  </label>
+                )}
+                <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={generarSaldo}
+                    onChange={e => setGenerarSaldo(e.target.checked)}
+                    disabled={!esMas && !cerrarFactura}
+                  />
+                  <span>
+                    Registrar {esMas ? "saldo a favor" : "saldo en contra"} del proveedor por {fmt_$(Math.abs(dif))}
+                  </span>
+                </label>
+              </div>
+            );
+          })()}
         </>
       ) : totalNcAplicado > 0 ? (
         <div className="alert" style={{ background: "rgba(34,197,94,0.1)", border: "1px solid var(--success)", color: "var(--success)", fontSize: 11, padding: "10px 12px", marginBottom: 12 }}>

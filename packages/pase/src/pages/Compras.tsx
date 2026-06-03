@@ -271,6 +271,9 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   // usuario cuando MP no estaba en cuentasUsables (encargados con cuentas
   // restringidas). Default vacío fuerza la elección consciente.
   const [pagoForm, setPagoForm] = useState<{ cuenta: string; monto: number; fecha: string }>({ cuenta: "", monto: 0, fecha: toISO(today) });
+  // F03-jun: saldo a favor/en contra cuando pago != saldo factura.
+  const [generarSaldo, setGenerarSaldo] = useState(false);
+  const [cerrarFactura, setCerrarFactura] = useState(false);
 
   // Defensive: si form.cuenta queda con un valor que no está en
   // cuentasUsables (regression future, scope change), reseteamos a ""
@@ -557,6 +560,8 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
           p_fecha: pagoForm.fecha,
           p_detalle: detalle,
           p_idempotency_key: idempKeyPagarFac,
+          p_generar_saldo: generarSaldo,
+          p_cerrar_factura: cerrarFactura,
         });
         if (error) throw error;
       } else if (totalNcAplicado === 0) {
@@ -573,6 +578,8 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
 
       setPagarModal(null);
       setNcsAplicar({});
+      setGenerarSaldo(false);
+      setCerrarFactura(false);
       load();
     } catch (err) {
       console.error("Error en pagar:", err);
@@ -1174,6 +1181,8 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
         ncAplicaciones={ncAplicaciones}
         ncsAplicar={ncsAplicar} setNcsAplicar={setNcsAplicar}
         pagoForm={pagoForm} setPagoForm={setPagoForm}
+        generarSaldo={generarSaldo} setGenerarSaldo={setGenerarSaldo}
+        cerrarFactura={cerrarFactura} setCerrarFactura={setCerrarFactura}
         cuentasUsables={cuentasUsables} pagar={pagar} pagando={pagando}
       />
 
