@@ -778,10 +778,21 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                         // Si hay local seleccionado, mostrar solo empleados que trabajan
                         // en ese local (principal o cesión). Si no hay local (caso
                         // "Todos"), mostrar todos los visibles.
+                        //
+                        // Fix bug 2026-06-02: `locales_ids` puede venir `[]` para
+                        // empleados creados entre 20-may y 02-jun que no tenían
+                        // backfill en `rrhh_empleado_locales` (la migration
+                        // 202606022000 lo corrige, pero el frontend igual queda
+                        // defensivo). En esos casos caemos al `local_principal_id`
+                        // — el `??` no servía porque solo dispara para null/undefined,
+                        // no para array vacío.
                         const empsFiltrados = localEff != null
-                          ? empleadosVisibles.filter(emp =>
-                              (emp.locales_ids ?? [emp.local_principal_id]).includes(localEff),
-                            )
+                          ? empleadosVisibles.filter(emp => {
+                              const ids = emp.locales_ids && emp.locales_ids.length > 0
+                                ? emp.locales_ids
+                                : [emp.local_principal_id];
+                              return ids.includes(localEff);
+                            })
                           : empleadosVisibles;
                         return (
                           <>
