@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { Modal } from "../components/ui";
 import { db } from "../lib/supabase";
 import { localesVisibles, applyLocalScope, cuentasOperables, tienePermiso } from "../lib/auth";
@@ -97,11 +97,10 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const [novLocal, setNovLocal] = useState(defaultLocal);
   const [novLocalTouched, setNovLocalTouched] = useState(false);
   const [novEmps, setNovEmps] = useState<Empleado[]>([]);
-  const [novSlots, setNovSlots] = useState<Array<{ emp: Empleado; cuota_num: number; cuotas_total: number }>>([]);
+  const [_novSlots, setNovSlots] = useState<Array<{ emp: Empleado; cuota_num: number; cuotas_total: number }>>([]);
   const [novMap, setNovMap] = useState<Record<string, NovedadEditable>>({});
   const [novAdelantosPorEmp, setNovAdelantosPorEmp] = useState<Record<string, number>>({});
   const [_novLoading, setNovLoading] = useState(false);
-  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   // Pagos
   const [pagoMes, setPagoMes] = useState(today.getMonth() + 1);
@@ -260,17 +259,6 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     setNovMap(map);
     setNovAdelantosPorEmp(adelMap);
     setNovLoading(false);
-  };
-
-  // Cambia al tab Pagos pre-cargando los filtros con los mismos valores que
-  // el usuario tenía en Novedades. UX: confirmás la novedad → un click te
-  // lleva a pagar con el contexto ya seteado.
-  const _irAPagosDesdeNovedades = () => {
-    setPagoMes(novMes);
-    setPagoAnio(novAnio);
-    setPagoLocal(novLocal);
-    setPagoLocalTouched(true);
-    setTab("pagos");
   };
 
   const loadPagos = async () => {
@@ -558,9 +546,6 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localActivo, locsDisp.length, locsDisp[0]?.id]);
-  const _handleNovLocalChange = (v: string) => { setNovLocal(v); setNovLocalTouched(true); };
-  const _handlePagoLocalChange = (v: string) => { setPagoLocal(v); setPagoLocalTouched(true); };
-
   // Puente legajo → tab Pagos: al hacer click en "Pagar" desde la tabla de
   // movimientos del legajo, cerramos el modal, cambiamos al tab Pagos y
   // prefiltramos local/mes/anio. El useEffect de abajo abre el modal de pago
@@ -682,34 +667,13 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   // Las funciones de abajo reciben `key` = slotKey(empId, cuota_num).
   // Para empleados MENSUAL, cuota_num=1 (key = `${empId}__1`).
   // Para QUINCENAL hay 2 slots (cuota_num=1 y 2). SEMANAL: 4.
-  const _updateNov = (key: string, field: keyof NovedadEditable, value: string | number) => {
-    setNovMap(prev => {
-      const nextNov: NovedadEditable = { ...prev[key], [field]: value };
-      const updated = { ...prev, [key]: nextNov };
-      if (saveTimers.current[key]) clearTimeout(saveTimers.current[key]);
-      saveTimers.current[key] = setTimeout(() => saveNovedad(key, nextNov), 800);
-      return updated;
-    });
-  };
-
-  const saveNovedad = async (key: string, nov: NovedadEditable) => {
-    const empId = key.split("__")[0]!;
-    const cuotaNum = nov.cuota_num ?? Number(key.split("__")[1] ?? 1);
-    const cuotasTotal = nov.cuotas_total ?? 1;
-    const { id, estado, vacaciones_dias: _vac, ...rest } = nov;
-    await db.from("rrhh_novedades").upsert({
-      ...(id ? { id } : {}),
-      empleado_id: empId,
-      mes: novMes, anio: novAnio,
-      cuota_num: cuotaNum, cuotas_total: cuotasTotal,
-      ...rest,
-      estado: estado || "borrador",
-      cargado_por: user?.id,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "empleado_id,mes,anio,cuota_num" });
-  };
-
-  const confirmarUno = async (emp: Empleado, cuotaNum: number, cuotasTotal: number) => {
+  // _confirmarUno: queda como referencia para el módulo deprecado de Novedades
+  // post-rediseño 31-may. Lo invocaba _confirmarTodas (también borrada).
+  // Mantenemos prefijo _ para no perder la lógica histórica de cálculo de
+  // liquidación + vencimientos por cuota — TabSueldos ya hace su propia
+  // versión, pero por las dudas (si revertimos el rediseño) la dejamos.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _confirmarUno = async (emp: Empleado, cuotaNum: number, cuotasTotal: number) => {
     const key = slotKey(emp.id, cuotaNum);
     const nov = novMap[key];
     if (!nov) return;
@@ -783,76 +747,6 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     const label = cuotasTotal > 1 ? ` (${cuotaNum}/${cuotasTotal})` : "";
     showToast(`${emp.apellido}${label} confirmado`);
     loadNovedades();
-  };
-
-  const _editarNov = async (key: string) => {
-    const nov = novMap[key];
-    if (!nov?.id) return;
-    // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F14: rollback novedad→borrador debe pasar por RPC editar_novedad que borre liq + cambie estado atómicamente.
-    await db.from("rrhh_liquidaciones").delete().eq("novedad_id", nov.id);
-    await db.from("rrhh_novedades").update({ estado: "borrador" }).eq("id", nov.id);
-    setNovMap(prev => ({ ...prev, [key]: { ...prev[key], estado: "borrador" } }));
-  };
-
-  // Eliminar novedad completa. Usos:
-  //   1. Convertir mensual existente a quincenal (Lucas 21-may noche):
-  //      borrar la mensual, recargar Novedades, aparecen 2 slots vacíos Q1+Q2.
-  //   2. Limpiar novedad cargada por error.
-  // Bloqueos:
-  //   - Si la liquidación está pagada (pagos_realizados > 0): NO permite borrar.
-  //     Hay que anular el pago primero desde Pagos. (Trazabilidad financiera.)
-  const _eliminarNov = async (key: string) => {
-    const nov = novMap[key];
-    if (!nov?.id) {
-      // No existe en DB todavía — solo limpiamos el slot del mapa.
-      setNovMap(prev => ({ ...prev, [key]: {
-        inasistencias: 0, presentismo: "MANTIENE", horas_extras: 0, dobles: 0,
-        feriados: 0, adelantos: 0, vacaciones_dias: 0, fecha_inicio_mes: null,
-        observaciones: "", estado: "borrador",
-        cuota_num: prev[key]?.cuota_num, cuotas_total: prev[key]?.cuotas_total,
-      } }));
-      return;
-    }
-    // Chequear si hay liquidaciones pagadas.
-    const { data: liqs } = await db.from("rrhh_liquidaciones")
-      .select("id, pagos_realizados, estado")
-      .eq("novedad_id", nov.id);
-    const hayPagada = (liqs || []).some(l => Number(l.pagos_realizados || 0) > 0 || l.estado === "pagado");
-    if (hayPagada) {
-      showError("Esta novedad tiene una liquidación con pagos registrados. Primero anulá el pago desde Pagos.");
-      return;
-    }
-    const cuotasTotal = nov.cuotas_total ?? 1;
-    const motivo = cuotasTotal === 1
-      ? "Eliminar la novedad de este mes? Si el empleado tiene modo_pago QUINCENAL/SEMANAL, al recargar Novedades vas a ver los slots vacíos por quincena/semana."
-      : "Eliminar esta novedad? Se borra del mes y queda en blanco para volver a cargar.";
-    if (!confirm(motivo)) return;
-
-    // Borrar liquidaciones pendientes + novedad.
-    // eslint-disable-next-line pase-local/no-direct-financiera-write -- deuda C4-F14: borrado de novedad debe ir por RPC eliminar_novedad atómica.
-    await db.from("rrhh_liquidaciones").delete().eq("novedad_id", nov.id);
-    await db.from("rrhh_novedades").delete().eq("id", nov.id);
-    showToast("Novedad eliminada");
-    loadNovedades();
-  };
-
-  // BUG 4: bulk-confirmar todos los empleados en borrador. Cierra de un tirón
-  // las novedades del mes y crea las liquidaciones (estado "pendiente"), que
-  // es el equivalente a "listo para pago".
-  const _confirmarTodas = async () => {
-    // En el modelo nuevo (quincenas: 21-may noche) iteramos slots, no empleados.
-    // Cada slot es una novedad independiente con su cuota_num + cuotas_total.
-    const enBorrador = novSlots.filter(s => {
-      const nov = novMap[slotKey(s.emp.id, s.cuota_num)];
-      return (nov?.estado ?? "borrador") !== "confirmado";
-    });
-    if (enBorrador.length === 0) { showToast("Todas ya están confirmadas"); return; }
-    if (!confirm(`Confirmar ${enBorrador.length} novedad${enBorrador.length > 1 ? "es" : ""} pendiente${enBorrador.length > 1 ? "s" : ""}? Pasan a estado "listo para pago".`)) return;
-    Object.values(saveTimers.current).forEach(t => clearTimeout(t));
-    for (const slot of enBorrador) {
-      await confirmarUno(slot.emp, slot.cuota_num, slot.cuotas_total);
-    }
-    showToast(`${enBorrador.length} novedad${enBorrador.length > 1 ? "es" : ""} confirmada${enBorrador.length > 1 ? "s" : ""} → listo para pago`);
   };
 
   // ─── ADELANTOS ─────────────────────────────────────────────────────────────
@@ -956,10 +850,6 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     setAdelForm({ empleado_id:"", monto:"", cuenta:"", fecha:toISO(today), descripcion:"", auto_aplicar: true });
     if (tab === "pagos") await loadPagos();
   });
-
-  // ─── DERIVED ───────────────────────────────────────────────────────────────
-  const _totalPagosPend = pagoData.filter(r => r.liq && r.liq.estado !== "pagado").length;
-  const _totalGeneral = pagoData.reduce((s, r) => s + (r.liq ? Number(r.liq.total_a_pagar || 0) : 0), 0);
 
   // Rediseño 31-may: 3 tabs (antes eran 5). Novedades + Pagos + Historial
   // → unificados en "Sueldos". Empleados y Dashboard quedan igual.
