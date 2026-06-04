@@ -477,6 +477,14 @@ describe("calcularTotalLiquidacion", () => {
     expect(r.total_a_pagar).toBeCloseTo(600000 + heVal + 30000, 0);
   });
 
+  it("con horas extras NEGATIVAS → descuenta del total (ajuste de horas, Lucas 04-jun)", () => {
+    const r = calcularTotalLiquidacion({ ...base, horas_extras: -3 });
+    const heVal = -3 * (600000 / 30 / 8);
+    expect(r.total_horas_extras).toBeCloseTo(heVal, 0); // negativo
+    expect(heVal).toBeLessThan(0);
+    expect(r.total_a_pagar).toBeCloseTo(600000 + heVal + 30000, 0); // menor que sin negativas
+  });
+
   it("con dobles → suma dobles × valor_doble", () => {
     const r = calcularTotalLiquidacion({ ...base, dobles: 3, valor_doble: 5000 });
     expect(r.total_dobles).toBe(15000);

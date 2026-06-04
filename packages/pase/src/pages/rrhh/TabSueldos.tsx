@@ -388,7 +388,9 @@ export function TabSueldos({
       // dudas), lo forzamos a 0 acá antes de persistir.
       inasistencias: Math.max(0, nov.inasistencias || 0),
       presentismo: nov.presentismo_mantiene ? "MANTIENE" : "PIERDE",
-      horas_extras: Math.max(0, nov.horas_extras || 0),
+      // Hs extras SÍ admite negativos (ajuste/descuento de horas — pedido
+      // Lucas 04-jun). El resto de columnas siguen clampeadas a >= 0.
+      horas_extras: nov.horas_extras || 0,
       dobles: Math.max(0, nov.dobles || 0),
       feriados: Math.max(0, nov.feriados || 0),
       vacaciones_dias: Math.max(0, nov.vacaciones_dias || 0),
@@ -1158,7 +1160,7 @@ export function TabSueldos({
                               <div style={SECT_HD}>Novedades cargadas</div>
                               <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                                 {nov.inasistencias > 0 && <Pill label="Faltas" value={nov.inasistencias} tone="danger" />}
-                                {nov.horas_extras !== 0 && <Pill label="Hs extras" value={nov.horas_extras} tone="success" />}
+                                {nov.horas_extras !== 0 && <Pill label="Hs extras" value={nov.horas_extras} tone={nov.horas_extras > 0 ? "success" : "danger"} />}
                                 {nov.dobles > 0 && <Pill label="Dobles" value={nov.dobles} tone="success" />}
                                 {nov.feriados > 0 && <Pill label="Feriados" value={nov.feriados} tone="success" />}
                                 {nov.vacaciones_dias > 0 && <Pill label="Vacaciones" value={`${nov.vacaciones_dias} días`} tone="success" />}
@@ -1174,7 +1176,7 @@ export function TabSueldos({
                               <div style={SECT_HD}>Novedades {isConfirmado(s.key) && <span style={{ marginLeft: 6, fontSize: 9, padding: "1px 6px", background: "rgba(34,197,94,0.15)", color: "var(--success)", borderRadius: 3, fontWeight: 600, letterSpacing: 0.3 }}>CONFIRMADAS</span>}</div>
                               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, opacity: isConfirmado(s.key) ? 0.65 : 1 }}>
                                 <NovInput label="Faltas" value={nov.inasistencias} onChange={v => updateNov(s.key, "inasistencias", v)} disabled={isConfirmado(s.key)} />
-                                <NovInput label="Hs extras" value={nov.horas_extras} onChange={v => updateNov(s.key, "horas_extras", v)} disabled={isConfirmado(s.key)} />
+                                <NovInput label="Hs extras" value={nov.horas_extras} onChange={v => updateNov(s.key, "horas_extras", v)} disabled={isConfirmado(s.key)} allowNegative />
                                 <NovInput label="Dobles" value={nov.dobles} onChange={v => updateNov(s.key, "dobles", v)} disabled={isConfirmado(s.key)} />
                                 <NovInput label="Feriados" value={nov.feriados} onChange={v => updateNov(s.key, "feriados", v)} disabled={isConfirmado(s.key)} />
                                 <NovInput label="Vacaciones (días)" value={nov.vacaciones_dias} onChange={v => updateNov(s.key, "vacaciones_dias", v)} disabled={isConfirmado(s.key)} />
@@ -1253,7 +1255,7 @@ export function TabSueldos({
                           <div style={SECT_HD}>{isPagado ? "Cálculo según novedades actuales" : "Cálculo en vivo"}</div>
                           <div style={{ background: "var(--s2)", borderRadius: 6, padding: "8px 10px", fontSize: 11 }}>
                             <DesgloseRow label="Sueldo base" value={fmt_$(d.baseCuota)} />
-                            {nov.horas_extras > 0 && <DesgloseRow label={`+ ${nov.horas_extras} hs extra`} value={`+${fmt_$(d.ingrExtras)}`} tone="success" />}
+                            {nov.horas_extras !== 0 && <DesgloseRow label={`${nov.horas_extras > 0 ? "+" : "−"} ${Math.abs(nov.horas_extras)} hs extra`} value={`${nov.horas_extras > 0 ? "+" : "−"}${fmt_$(Math.abs(d.ingrExtras))}`} tone={nov.horas_extras > 0 ? "success" : "danger"} />}
                             {nov.dobles > 0 && <DesgloseRow label={`+ ${nov.dobles} dobles`} value={`+${fmt_$(d.ingrDobles)}`} tone="success" />}
                             {nov.feriados > 0 && <DesgloseRow label={`+ ${nov.feriados} feriados`} value={`+${fmt_$(d.ingrFeriados)}`} tone="success" />}
                             {nov.vacaciones_dias > 0 && <DesgloseRow label={`+ ${nov.vacaciones_dias} días vacaciones (plus)`} value={`+${fmt_$(d.plusVacacional)}`} tone="success" />}
@@ -1291,7 +1293,12 @@ export function TabSueldos({
                         const cargado = planTotalCargado(s.key);
                         const total = d.total;
                         const dif = total - cargado;
-                        const matchea = Math.abs(dif) < 0.01;
+                        // Pagar de MÁS está permitido (redondeo para arriba —
+                        // en Argentina ya casi no hay billetes chicos). Pagar
+                        // de MENOS sigue bloqueado. Pedido Lucas 04-jun.
+                        const falta = dif > 0.01;        // cargado < total → bloquea Confirmar
+                        const sobrepago = dif < -0.01;   // cargado > total → permite + warning
+                        const exacto = !falta && !sobrepago;
                         const confirmado = isConfirmado(s.key);
                         const inputStyle: React.CSSProperties = {
                           width: 140, padding: "7px 10px", fontSize: 13,
@@ -1356,14 +1363,19 @@ export function TabSueldos({
                                 <span style={{ fontSize: 10, color: "var(--muted2)", textTransform: "uppercase", letterSpacing: 0.4 }}>
                                   Cargado / Total
                                 </span>
-                                <span style={{ fontSize: 13, fontWeight: 600, color: matchea ? "var(--success)" : "var(--warn)", fontVariantNumeric: "tabular-nums" }}>
-                                  {matchea
+                                <span style={{ fontSize: 13, fontWeight: 600, color: exacto ? "var(--success)" : "var(--warn)", fontVariantNumeric: "tabular-nums" }}>
+                                  {exacto
                                     ? <>✓ {fmt_$(cargado)}</>
                                     : <>{fmt_$(cargado)} <span style={{ opacity: 0.6, fontWeight: 400 }}>/ {fmt_$(total)}</span></>}
                                 </span>
-                                {!matchea && (
+                                {falta && (
                                   <span style={{ fontSize: 10, color: "var(--warn)", fontWeight: 500 }}>
-                                    {dif > 0 ? `Falta ${fmt_$(Math.abs(dif))}` : `Excede en ${fmt_$(Math.abs(dif))}`}
+                                    Falta {fmt_$(Math.abs(dif))}
+                                  </span>
+                                )}
+                                {sobrepago && (
+                                  <span style={{ fontSize: 10, color: "var(--warn)", fontWeight: 500 }}>
+                                    ⚠ Pagás {fmt_$(Math.abs(dif))} de más
                                   </span>
                                 )}
                               </div>
@@ -1387,10 +1399,12 @@ export function TabSueldos({
                                 <button
                                   className="btn btn-acc btn-sm"
                                   onClick={() => void confirmarSlot(s.key)}
-                                  disabled={togglingConfirm.has(s.key) || !matchea}
-                                  title={!matchea
-                                    ? "La suma de Efectivo + MP debe ser igual al Total."
-                                    : "Bloquea los campos para evitar modificaciones accidentales."}
+                                  disabled={togglingConfirm.has(s.key) || falta}
+                                  title={falta
+                                    ? "La suma de Efectivo + MP no puede ser menor al Total."
+                                    : sobrepago
+                                      ? "Vas a confirmar pagando de más (redondeo). El extra sale de la caja."
+                                      : "Bloquea los campos para evitar modificaciones accidentales."}
                                   style={{ padding: "6px 20px", fontSize: 12, marginLeft: "auto" }}
                                 >
                                   {togglingConfirm.has(s.key) ? "Confirmando..." : "Confirmar"}
@@ -1583,7 +1597,12 @@ export function TabSueldos({
             }}>
               <span style={{ color: "var(--muted2)" }}>Asignado en formas de pago</span>
               <span style={{ color: sumaLineasPago === totalPago ? "var(--success)" : "var(--warn)", fontWeight: 500 }}>
-                {fmt_$(sumaLineasPago)} {sumaLineasPago === totalPago ? "✓" : `(faltan ${fmt_$(Math.max(0, totalPago - sumaLineasPago))})`}
+                {fmt_$(sumaLineasPago)}{" "}
+                {sumaLineasPago === totalPago
+                  ? "✓"
+                  : sumaLineasPago > totalPago
+                    ? `⚠ ${fmt_$(sumaLineasPago - totalPago)} de más`
+                    : `(faltan ${fmt_$(totalPago - sumaLineasPago)})`}
               </span>
             </div>
           </>
@@ -1657,7 +1676,7 @@ const SECT_HD: import("react").CSSProperties = {
 };
 
 // ── Sub-componentes ─────────────────────────────────────────────────────────
-function NovInput({ label, value, onChange, disabled }: { label: string; value: number; onChange: (v: number) => void; disabled?: boolean }) {
+function NovInput({ label, value, onChange, disabled, allowNegative }: { label: string; value: number; onChange: (v: number) => void; disabled?: boolean; allowNegative?: boolean }) {
   // REWRITE 2026-06-04 (Lucas): el bug reportado era cálculo en vivo desfasado
   // del input (input mostraba 0, cálculo decía "-1 faltas / -$33.333").
   //
@@ -1675,6 +1694,56 @@ function NovInput({ label, value, onChange, disabled }: { label: string; value: 
   // (faltas, horas, dobles, feriados, días vacaciones). El único decimal
   // posible es "Otros desc. $", y para tipear "1.5" no hay problema: cada
   // tecleo parsea como número válido y se muestra correctamente.
+  const styleInput: import("react").CSSProperties = {
+    fontSize: 12, padding: "4px 6px", textAlign: "right",
+    background: "var(--bg)", border: "1px solid var(--bd)",
+    color: "var(--text)", borderRadius: 4, width: "100%", boxSizing: "border-box",
+  };
+
+  // ── Modo negativo permitido (solo "Hs extras", pedido Lucas 04-jun) ──────
+  // Un type=number controlado borra el "−" intermedio (el browser lo reporta
+  // como "" hasta que hay un dígito, y al re-renderizar con value="" se pierde).
+  // Por eso este caso usa type=text + un draft local mínimo. Es seguro: el
+  // autosave ya no existe (eliminado 04-jun), así que el draft NO puede
+  // reproducir el bug de desync — no hay SELECT que pise el state del padre.
+  // El padre recibe el número parseado en cada tecleo válido.
+  const [draft, setDraft] = useState<string>(value === 0 ? "" : String(value));
+  const focusedRef = useRef(false);
+  useEffect(() => {
+    // Sincronizar desde el padre solo cuando el input NO está enfocado
+    // (ej: confirmarSlot limpia novEdits, cambio de mes/local). Durante el
+    // tipeo el padre ya está en sync con el draft, así que no pisamos.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync controlado padre→draft fuera de foco
+    if (allowNegative && !focusedRef.current) setDraft(value === 0 ? "" : String(value));
+  }, [value, allowNegative]);
+
+  if (allowNegative) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <label style={{ fontSize: 9, color: "var(--muted2)", letterSpacing: 0.3 }}>{label}</label>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={draft}
+          placeholder="0"
+          onFocus={() => { focusedRef.current = true; }}
+          onBlur={() => { focusedRef.current = false; setDraft(value === 0 ? "" : String(value)); }}
+          onChange={e => {
+            const raw = e.target.value;
+            // Solo permitimos dígitos, un "-" inicial y un "." decimal.
+            if (raw !== "" && !/^-?\d*\.?\d*$/.test(raw)) return;
+            setDraft(raw);
+            if (raw === "" || raw === "-" || raw === "." || raw === "-.") { onChange(0); return; }
+            const n = parseFloat(raw);
+            if (!isNaN(n) && isFinite(n)) onChange(n);
+          }}
+          disabled={disabled}
+          style={styleInput}
+        />
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <label style={{ fontSize: 9, color: "var(--muted2)", letterSpacing: 0.3 }}>{label}</label>
@@ -1700,11 +1769,7 @@ function NovInput({ label, value, onChange, disabled }: { label: string; value: 
           }
         }}
         disabled={disabled}
-        style={{
-          fontSize: 12, padding: "4px 6px", textAlign: "right",
-          background: "var(--bg)", border: "1px solid var(--bd)",
-          color: "var(--text)", borderRadius: 4, width: "100%", boxSizing: "border-box",
-        }}
+        style={styleInput}
       />
     </div>
   );
