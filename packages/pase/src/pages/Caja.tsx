@@ -261,17 +261,20 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     // (saca payload ~40% vs SELECT *). Movimientos puede tener tenant_id,
     // created_at, otros campos que la tabla NO necesita renderizar.
     let q = db.from("movimientos")
-      .select("id, fecha, cuenta, tipo, cat, importe, detalle, local_id, fact_id, remito_id_ref, liquidacion_id, adelanto_id_ref, pago_especial_id_ref, gasto_id_ref, anulado, anulado_motivo, editado, editado_motivo, editado_at");
+      .select("id, fecha, cuenta, tipo, cat, importe, detalle, local_id, fact_id, remito_id_ref, liquidacion_id, adelanto_id_ref, pago_especial_id_ref, gasto_id_ref, anulado, anulado_motivo, editado, editado_motivo, editado_at, created_at");
     // Filtro de fecha SOLO si el usuario lo aplicó (campos no vacíos).
     if (debDesde) q = q.gte("fecha", debDesde);
     if (debHasta) q = q.lte("fecha", debHasta);
     if (ordenPor === "carga") {
-      // Orden por id (timestamp de creación). DESC trae los cargados más
-      // recientemente primero — útil cuando alguien cargó hoy un mov con
-      // fecha vieja y descuadra el saldo.
-      q = q.order("id", { ascending: false });
+      // Orden por timestamp real de inserción. Bug fix 2026-06-04 (Lucas):
+      // antes se ordenaba por `id` lexicográfico, pero los ids de ajustes
+      // tienen formato "MOV-AJUSTE-..." que es alfabéticamente mayor que
+      // "MOV-1780...", entonces los AJUSTE quedaban siempre arriba aunque
+      // fueran viejos. La columna `created_at` (migration 202606040900)
+      // es timestamptz real → orden correcto.
+      q = q.order("created_at", { ascending: false });
     } else {
-      q = q.order("fecha", { ascending: false }).order("id", { ascending: false });
+      q = q.order("fecha", { ascending: false }).order("created_at", { ascending: false });
     }
     q = q.range(offset, offset + limit - 1);
     q = applyLocalScope(q, user, localActivo);
@@ -728,7 +731,13 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
             <th>Cuenta</th><th>Tipo</th><th>Categoría</th><th>Detalle</th><th className="num-right">Importe</th><th></th>
           </tr></thead>
           <tbody>{mFilt.map(m=>{
-            const fCarga = fechaCargaFromId(m.id);
+            // Bug fix 2026-06-04: usar created_at si está disponible
+            // (movimientos.created_at agregado migration 202606040900).
+            // Fallback al parser legacy fechaCargaFromId solo si por
+            // algún motivo el campo viene null (caso edge transitorio).
+            const fCarga = m.created_at
+              ? new Date(m.created_at as unknown as string)
+              : fechaCargaFromId(m.id);
             const fMovISO = m.fecha?.slice(0,10) || "";
             const fCargaISO = fCarga ? toLocalISO(fCarga) : "";
             // Si la fecha de carga difiere de la fecha del mov, lo destacamos

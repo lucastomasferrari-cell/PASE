@@ -22,6 +22,11 @@ export interface Movimiento {
   editado: boolean;
   editado_motivo: string | null;
   editado_at: string | null;
+  /** Timestamp real de inserción (migration 202606040900). Permite ordenar
+   *  por "fecha de carga" sin depender del parseo lexicográfico del id, que
+   *  rompía el orden cuando había ids con formato distinto (ej. ajustes
+   *  iniciales que ponían "AJUSTE" en el prefijo). */
+  created_at?: string | null;
 }
 
 // Helper: devuelve el badge "vía X" según qué referencia esté poblada.
