@@ -50,6 +50,7 @@ const MAP: Record<string, string> = {
   // Movimientos
   MOVIMIENTO_NO_ENCONTRADO: "El movimiento no existe",
   MOVIMIENTO_YA_ANULADO: "El movimiento ya estaba anulado",
+  MOVIMIENTO_LIGADO_NO_EDITABLE: "Este movimiento viene de una factura, remito, sueldo o transferencia. Para cambiar el importe, editá o anulá el documento original.",
 
   // Ventas / cierres
   VENTA_ANULADA: "La venta está anulada",

@@ -304,4 +304,84 @@ test.describe.serial("E2E Test 26 — editar_movimiento_caja", () => {
     });
     expect(algunaConTodo).toBe(true);
   });
+
+  // ── H/I: fix 04-jun (bug adelanto Ciro) ─────────────────────────────────
+  // editar_movimiento_caja ahora sincroniza el registro ORIGEN (gasto/adelanto)
+  // y BLOQUEA editar el importe de movimientos de documentos complejos.
+  test("H) editar mov de un gasto → gasto.monto se sincroniza (cascada)", async () => {
+    if (!seed) { test.skip(true, "Seed falló"); return; }
+    const svc = createServiceClient();
+    const duenoDb = await createE2EDuenoClient();
+
+    const { data: g, error: ge } = await duenoDb.rpc("crear_gasto", {
+      p_fecha: new Date().toISOString().slice(0, 10),
+      p_local_id: seed.local1Id,
+      p_categoria: "INSUMOS COCINA",
+      p_tipo: "variable",
+      p_monto: 80000,
+      p_detalle: "T26-H cascade gasto",
+      p_cuenta: "Caja Efectivo",
+      p_plantilla_id: null,
+    });
+    if (ge) throw new Error(`crear_gasto H: ${ge.message}`);
+    const gId = (g as { gasto_id: string }).gasto_id;
+    const mId = (g as { mov_id: string }).mov_id;
+
+    const { error: ee } = await duenoDb.rpc("editar_movimiento_caja", {
+      p_mov_id: mId,
+      p_fecha: new Date().toISOString().slice(0, 10),
+      p_detalle: "T26-H editado",
+      p_cat: "INSUMOS COCINA",
+      p_importe: -55000,
+      p_cuenta: "Caja Efectivo",
+      p_tipo: "Gasto variable",
+      p_justificativo: "cascade test",
+    });
+    if (ee) throw new Error(`editar H: ${ee.message}`);
+
+    // El gasto origen siguió al nuevo monto (antes del fix quedaba en 80000).
+    const { data: gAfter } = await svc.from("gastos").select("monto").eq("id", gId).single();
+    expect(Number(gAfter!.monto)).toBe(55000);
+
+    await duenoDb.auth.signOut();
+  });
+
+  test("I) editar importe de un mov ligado a transferencia → MOVIMIENTO_LIGADO_NO_EDITABLE", async () => {
+    if (!seed) { test.skip(true, "Seed falló"); return; }
+    const svc = createServiceClient();
+    const duenoDb = await createE2EDuenoClient();
+
+    const { error: te } = await duenoDb.rpc("transferencia_cuentas", {
+      p_local_id: seed.local1Id,
+      p_cuenta_origen: "Caja Efectivo",
+      p_cuenta_destino: "Caja Mayor",
+      p_monto: 12345,
+      p_fecha: new Date().toISOString().slice(0, 10),
+    });
+    if (te) throw new Error(`transferencia: ${te.message}`);
+
+    // Tomar el mov más reciente con transferencia_id (uno de los 2 recién creados).
+    const { data: movs } = await svc.from("movimientos")
+      .select("id, transferencia_id, created_at")
+      .eq("tenant_id", seed.tenantId)
+      .not("transferencia_id", "is", null)
+      .order("created_at", { ascending: false }).limit(1);
+    expect(movs!.length).toBe(1);
+    const target = movs![0]!.id;
+
+    const { error: ee } = await duenoDb.rpc("editar_movimiento_caja", {
+      p_mov_id: target,
+      p_fecha: new Date().toISOString().slice(0, 10),
+      p_detalle: "intentar editar transferencia",
+      p_cat: null,
+      p_importe: 999,
+      p_cuenta: "Caja Efectivo",
+      p_tipo: "Transferencia",
+      p_justificativo: "no debería permitirse",
+    });
+    expect(ee).not.toBeNull();
+    expect(ee!.message).toContain("MOVIMIENTO_LIGADO_NO_EDITABLE");
+
+    await duenoDb.auth.signOut();
+  });
 });
