@@ -404,7 +404,28 @@ function AppMain() {
           if (perfil && perfil.activo !== false) {
             // eslint-disable-next-line react-hooks/immutability
             await applyLogin(perfil);
+          } else if (!perfil) {
+            // Query del perfil falló (network/RLS transitorio). Si el user
+            // pidió "Mantener sesión", intentamos restaurar del cache antes
+            // de desloguear. Fix Lucas 03-jun: este path no se gateaba y
+            // expulsaba a users con remember_me en errores transitorios.
+            if (skipAutoSignOut("perfil query devolvió null (network/RLS?)")) {
+              try {
+                const cached = sessionStorage.getItem("pase_user");
+                if (cached) {
+                  const perfilCache = JSON.parse(cached) as Usuario;
+                  if (perfilCache?.id && perfilCache?.activo !== false) {
+                    setUser(perfilCache);
+                    setAuthLoading(false);
+                    return;
+                  }
+                }
+              } catch { /* idem */ }
+            }
+            await db.auth.signOut();
           } else {
+            // perfil.activo === false: admin desactivó al user. Acá SÍ
+            // desloguea aunque tenga remember_me — es decisión del admin.
             await db.auth.signOut();
           }
         }
@@ -415,6 +436,20 @@ function AppMain() {
 
     const { data: { subscription } } = db.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_OUT") {
+        // Fix Lucas 03-jun: este evento se dispara también cuando Supabase
+        // Auth refresca el token y el server lo rechaza (refresh_token
+        // expired, network blip post-visibility-change, etc.) — NO solo en
+        // logout manual. Eso borraba `pase_local_activo` y al volver
+        // caía al default (Villa Crespo). Si el user pidió "Mantener
+        // sesión", preservamos el state local y dejamos que las queries
+        // fallen visibles (en vez de expulsarlo silenciosamente).
+        if (skipAutoSignOut("evento SIGNED_OUT (Auth server)")) {
+          // NO limpiamos user/locales/sessionStorage. El user ve la
+          // pantalla intacta. Si necesita operar, las queries van a
+          // fallar con 401 y verá el error en consola. Puede re-loguear
+          // manual desde el botón "Cerrar sesión" del sidebar.
+          return;
+        }
         setUser(null);
         setLocalActivo(null);
         setShowLocalModal(false);
