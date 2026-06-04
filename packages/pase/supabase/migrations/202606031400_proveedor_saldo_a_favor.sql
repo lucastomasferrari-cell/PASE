@@ -20,7 +20,7 @@
 CREATE TABLE IF NOT EXISTS proveedor_saldo_movimientos (
   id            BIGSERIAL PRIMARY KEY,
   tenant_id     UUID NOT NULL DEFAULT auth_tenant_id() REFERENCES tenants(id),
-  proveedor_id  TEXT NOT NULL REFERENCES proveedores(id),
+  proveedor_id  INTEGER NOT NULL REFERENCES proveedores(id),
   fecha         DATE NOT NULL DEFAULT CURRENT_DATE,
   -- 'a_favor' = el proveedor nos debe (pagamos de más).
   -- 'en_contra' = le debemos al proveedor (pagamos de menos cerrando factura).
@@ -72,7 +72,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_proveedor_id TEXT;
+  v_proveedor_id INTEGER;
 BEGIN
   v_proveedor_id := COALESCE(NEW.proveedor_id, OLD.proveedor_id);
   IF v_proveedor_id IS NULL THEN RETURN COALESCE(NEW, OLD); END IF;
