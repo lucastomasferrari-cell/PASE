@@ -21,6 +21,11 @@ ALTER TABLE movimientos
   ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 -- Backfill: parsear el timestamp del id (soporta los 3 formatos).
+-- IMPORTANTE: skipea filas con tenant_id huérfano (apunta a tenant
+-- borrado). El trigger fn_trg_sync_saldos_caja se dispara en cada
+-- UPDATE y tira FK violation si el tenant no existe en tenants.
+-- Los huérfanos quedan con created_at = NOW() (default) pero como
+-- son de un tenant borrado, nadie los va a ver.
 UPDATE movimientos
    SET created_at = CASE
      -- Formato 1: "MOV-AJUSTE-{ms}-{rand}" (13 dígitos = ms)
@@ -36,8 +41,8 @@ UPDATE movimientos
      -- distinto). Fallback: usar fecha del movimiento.
      ELSE fecha::timestamptz
    END
- WHERE created_at = NOW()  -- solo los recién agregados que tomaron el DEFAULT
-   AND id IS NOT NULL;
+ WHERE id IS NOT NULL
+   AND tenant_id IN (SELECT id FROM tenants);
 
 -- Index para que el ORDER BY created_at DESC sea eficiente.
 CREATE INDEX IF NOT EXISTS idx_movimientos_created_at_desc
