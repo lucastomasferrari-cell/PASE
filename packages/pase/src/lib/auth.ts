@@ -197,6 +197,28 @@ export function necesitaElegirLocal(
   return { action: "showModal" };
 }
 
+/**
+ * Nunca reemplazar una lista de locales NO vacía con una vacía.
+ * Un fetch de `locales` que vuelve vacío casi siempre es un race de sesión/JWT
+ * (RLS sin auth.uid() devuelve 0 filas SIN error), no un tenant realmente sin
+ * locales. Bug recurrente "queda sin local / tengo que refrescar" (Lucas;
+ * fixes parciales 30-may + 03-jun, completado 04-jun).
+ */
+export function mergeLocales<T>(prev: T[], fetched: T[]): T[] {
+  return fetched.length === 0 && prev.length > 0 ? prev : fetched;
+}
+
+/**
+ * ¿Reintentar el fetch de locales? Sí si volvió vacío PERO hay sesión y no
+ * superamos el tope. El tenant real tiene locales → vacío = la sesión todavía
+ * no propagó. Bounded para no loopear en un tenant genuinamente sin locales.
+ */
+export function debeReintentarLocales(
+  fetchedLen: number, haySesion: boolean, depth: number, max = 6,
+): boolean {
+  return fetchedLen === 0 && haySesion && depth < max;
+}
+
 /** null = todos los locales (dueno/admin). number[] para encargado. */
 export function localesVisibles(user: MaybeUser): number[] | null {
   if (!user) return [];

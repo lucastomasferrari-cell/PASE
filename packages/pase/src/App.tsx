@@ -8,7 +8,7 @@ import { skipAutoSignOut } from "./lib/rememberMe";
 // Los errores capturados se incluyen en tickets de soporte para que el agent
 // auto-fix tenga contexto del browser cuando diagnostica.
 initConsoleCapture();
-import { AuthProvider, necesitaElegirLocal, getPermisos, tienePermiso } from "./lib/auth";
+import { AuthProvider, necesitaElegirLocal, getPermisos, tienePermiso, mergeLocales, debeReintentarLocales } from "./lib/auth";
 import { getDefaultRoute, LEGACY_REDIRECTS } from "./lib/sidebar-nav";
 import type { Usuario, UsuarioRow, Local, Tenant } from "./types";
 import { Sidebar, css } from "./components/Layout";
@@ -255,7 +255,7 @@ function AppMain() {
     }
   }, [localActivo]);
 
-  const refetchLocales = async () => {
+  const refetchLocales = async (retryDepth = 0) => {
     // Optimización egress 2026-05-17: proyectar solo lo que se renderiza.
     // Locales puede tener columnas pesadas (slug marketplace, fotos, JSON
     // de horarios). El sidebar y picker solo necesitan id+nombre+tenant_id.
@@ -294,7 +294,23 @@ function AppMain() {
       return;
     }
     const nuevos = data;
-    setLocales(nuevos);
+    // SELF-HEAL del bug recurrente "queda sin local / tengo que refrescar":
+    // si el fetch volvió vacío PERO hay sesión, es un race (la sesión/JWT
+    // todavía no propagó a PostgREST). En vez de comprometernos con vacío
+    // (lo que dejaba al dueño sin local activo), reintentamos con backoff
+    // hasta que la sesión esté lista. Bounded para tenants realmente sin locales.
+    if (nuevos.length === 0) {
+      const { data: { session } } = await db.auth.getSession();
+      if (debeReintentarLocales(nuevos.length, !!session, retryDepth)) {
+        // eslint-disable-next-line no-console
+        console.warn(`[refetchLocales] 0 filas con sesión activa — reintento ${retryDepth + 1} en 1.2s (race de sesión)`);
+        setTimeout(() => { void refetchLocales(retryDepth + 1); }, 1200);
+        return;
+      }
+    }
+    // Nunca pisar una lista NO vacía con vacío (functional update para leer el
+    // state actual aunque el closure sea viejo, ej. la auth-subscription).
+    setLocales(prev => mergeLocales(prev, nuevos));
     // Decisión Lucas 2026-05-17: ya no existe modo "Todas las sucursales".
     // El sidebar siempre tiene UNA activa. Si localActivo es null acá, lo
     // default-eamos al primer local visible para el user. Sin esto algunas

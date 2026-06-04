@@ -3,8 +3,37 @@ import {
   scopeLocales, applyLocalScope, tienePermiso, getPermisos,
   cuentasVisibles, cuentasOperables, cuentasVisiblesParaListados,
   puedeVerCuenta, puedeOperarCuenta, puedeVerMovimientosDeCuenta,
+  mergeLocales, debeReintentarLocales,
 } from "./auth";
 import type { Usuario } from "../types";
+
+describe("mergeLocales (nunca pisar locales con vacío)", () => {
+  it("fetch vacío + había locales → conserva los previos", () => {
+    expect(mergeLocales([{ id: 1 }, { id: 2 }], [])).toEqual([{ id: 1 }, { id: 2 }]);
+  });
+  it("fetch con datos → usa los nuevos", () => {
+    expect(mergeLocales([{ id: 1 }], [{ id: 9 }])).toEqual([{ id: 9 }]);
+  });
+  it("ambos vacíos → vacío", () => {
+    expect(mergeLocales<{ id: number }>([], [])).toEqual([]);
+  });
+});
+
+describe("debeReintentarLocales", () => {
+  it("vacío + hay sesión + bajo el tope → reintenta", () => {
+    expect(debeReintentarLocales(0, true, 0)).toBe(true);
+    expect(debeReintentarLocales(0, true, 5)).toBe(true);
+  });
+  it("vacío sin sesión → NO reintenta (genuino)", () => {
+    expect(debeReintentarLocales(0, false, 0)).toBe(false);
+  });
+  it("llegaron locales → NO reintenta", () => {
+    expect(debeReintentarLocales(3, true, 0)).toBe(false);
+  });
+  it("supera el tope → NO reintenta (tenant sin locales real)", () => {
+    expect(debeReintentarLocales(0, true, 6)).toBe(false);
+  });
+});
 
 describe("scopeLocales", () => {
   const dueno = { rol: "dueno" };
