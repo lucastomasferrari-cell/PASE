@@ -25,6 +25,8 @@ import {
 } from "../lib/calculos/rrhh";
 import type { Usuario, Local } from "../types/auth";
 import { EmpleadoCesiones } from "./rrhh/EmpleadoCesiones";
+import { PrintRecibos } from "../components/recibos/PrintRecibos";
+import { construirReciboFinal, type ReciboSueldoModel, type ReciboConcepto } from "../lib/recibos";
 import type {
   Empleado, Novedad, PagoEspecial, HistorialSueldo,
   Adelanto, DocumentoLegajo, NovedadConLiquidaciones, LineaPago,
@@ -570,6 +572,7 @@ function TabDatos({
   cuentasUsables, showToast, loadAll,
   vacTomadasLoaded, loadVacTomadas,
 }: TabDatosProps) {
+  const [reciboFinalPrint, setReciboFinalPrint] = useState<ReciboSueldoModel[] | null>(null);
   // Refactor 2026-05-23 (Lucas: "cuadros muy grandes con poco texto adentro").
   // Antes cada dato era un .kpi con padding 14×16 → mucha caja para 1 línea.
   // Ahora 5 datos en una sola card de 2 columnas con filas label/valor.
@@ -704,6 +707,35 @@ function TabDatos({
           }
         };
 
+        const imprimirReciboFinal = async () => {
+          const rc: ReciboConcepto[] = conceptos
+            .map(([k, label]): ReciboConcepto => ({ label, monto: getConceptoMonto(k, liqFinalData?.[k] || 0), signo: "+" }))
+            .filter(c => c.monto !== 0);
+          let localNombre = "";
+          let cfg: { razon_social: string | null; cuit: string | null; direccion: string | null } | null = null;
+          if (emp.local_id != null) {
+            const { data: locRow } = await db.from("locales").select("nombre").eq("id", emp.local_id).maybeSingle();
+            localNombre = (locRow?.nombre as string | undefined) ?? "";
+            const { data: cfgRow } = await db.from("rrhh_recibo_config").select("razon_social, cuit, direccion").eq("local_id", emp.local_id).maybeSingle();
+            cfg = (cfgRow as { razon_social: string | null; cuit: string | null; direccion: string | null } | null) ?? null;
+          }
+          const model = construirReciboFinal({
+            conceptos: rc,
+            total,
+            movs: liqFinalCuenta ? [{ cuenta: liqFinalCuenta, importe: -total }] : [],
+            empleado: { nombre: `${emp.apellido}, ${emp.nombre}`, cuil: emp.cuil ?? null, puesto: emp.puesto ?? null, ingreso: emp.fecha_inicio ?? null },
+            negocio: {
+              razonSocial: cfg?.razon_social || localNombre || "—",
+              cuit: cfg?.cuit ?? null,
+              direccion: cfg?.direccion ?? null,
+              sucursal: localNombre || null,
+            },
+            motivo: liqFinalForm.motivo,
+            fechaEgreso: liqFinalForm.fecha_egreso,
+          });
+          setReciboFinalPrint([model]);
+        };
+
         return (
           <Modal
             isOpen={true}
@@ -714,6 +746,7 @@ function TabDatos({
             footer={
               <>
                 <button className="btn btn-sec" onClick={() => setLiqFinalModal(false)}>Cancelar</button>
+                <button className="btn btn-ghost" onClick={() => void imprimirReciboFinal()} title="Imprimir recibo de la liquidación final">🖨 Recibo</button>
                 <button className="btn btn-danger" disabled={liqFinalLoading} onClick={confirmarLiqFinal}>{liqFinalLoading ? "Procesando..." : "Confirmar y pagar"}</button>
               </>
             }
@@ -776,6 +809,11 @@ function TabDatos({
           </Modal>
         );
       })()}
+
+      {/* Vista de impresión del recibo de liquidación final (Lucas 04-jun) */}
+      {reciboFinalPrint && (
+        <PrintRecibos recibos={reciboFinalPrint} onClose={() => setReciboFinalPrint(null)} />
+      )}
     </>
   );
 }
