@@ -35,6 +35,7 @@ import {
 import { TabDashboard } from "./rrhh/TabDashboard";
 import { TabEmpleados } from "./rrhh/TabEmpleados";
 import { TabSueldos } from "./rrhh/TabSueldos";
+import { TabSueldosBase } from "./rrhh/TabSueldosBase";
 // TabNovedades, TabPagos, TabHistorial: reemplazados por TabSueldos (cutover
 // 31-may, decisión Lucas 4b). Los archivos viejos quedan en disk para git
 // history; se pueden borrar después de validar 1 semana en prod.
@@ -857,6 +858,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     { id:"dashboard", label:"Dashboard" },
     { id:"empleados", label:"Empleados" },
     { id:"sueldos", label:"Sueldos" },
+    { id:"sueldos_base", label:"Sueldos base" },
   ];
 
   return (
@@ -907,6 +909,15 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
           locsDisp={locsDisp}
           localActivo={localActivo}
           cuentasUsables={cuentasUsables}
+        />
+      )}
+
+      {tab === "sueldos_base" && (
+        <TabSueldosBase
+          user={user}
+          esEnc={esEnc}
+          locsDisp={locsDisp}
+          localActivo={localActivo}
         />
       )}
 

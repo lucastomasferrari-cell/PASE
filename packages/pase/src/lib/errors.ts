@@ -67,6 +67,7 @@ const MAP: Record<string, string> = {
 
   // RRHH
   EMPLEADO_NO_ENCONTRADO: "El empleado no existe",
+  SIN_CAMBIOS: "No hay cambios para aplicar",
   LIQUIDACION_NO_ENCONTRADA: "No hay liquidación para esa novedad",
   LIQUIDACION_ANULADA: "La liquidación está anulada",
   LIQUIDACION_YA_PAGADA: "Esta liquidación ya está pagada",

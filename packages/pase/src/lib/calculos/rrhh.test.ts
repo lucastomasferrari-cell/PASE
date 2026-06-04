@@ -13,6 +13,7 @@ import {
   calcularPresentismo,
   calcularTotalLiquidacion,
   calcularLiquidacionFinal,
+  aplicarAumento,
 } from "./rrhh";
 
 // ─── diasVacacionesPorAnio ───────────────────────────────────────────────────
@@ -667,5 +668,36 @@ describe("calcularLiquidacionFinal", () => {
       r.proporcional_mes + r.vacaciones_dinero + r.sac_proporcional +
       r.indemnizacion + r.preaviso + r.integracion_mes;
     expect(r.total).toBeCloseTo(sumaManual, 0);
+  });
+});
+
+// ─── aplicarAumento (planilla de sueldos + aumentos masivos, Lucas 04-jun) ────
+
+describe("aplicarAumento", () => {
+  it("% sin redondeo (a entero) → actual × (1 + v/100)", () => {
+    expect(aplicarAumento(1000000, { tipo: "pct", valor: 30, redondeo: null })).toBe(1300000);
+  });
+
+  it("% con redondeo a $100", () => {
+    // 1.070.000 × 1.30 = 1.391.000 (ya múltiplo de 100)
+    expect(aplicarAumento(1070000, { tipo: "pct", valor: 30, redondeo: 100 })).toBe(1391000);
+    // 1.234.567 × 1.10 = 1.358.023,7 → redondeo $100 = 1.358.000
+    expect(aplicarAumento(1234567, { tipo: "pct", valor: 10, redondeo: 100 })).toBe(1358000);
+  });
+
+  it("monto fijo → actual + valor", () => {
+    expect(aplicarAumento(800000, { tipo: "fijo", valor: 50000, redondeo: 100 })).toBe(850000);
+  });
+
+  it("monto fijo negativo que pasaría de 0 → clamp a 0", () => {
+    expect(aplicarAumento(30000, { tipo: "fijo", valor: -50000, redondeo: 100 })).toBe(0);
+  });
+
+  it("base 0 con % → 0", () => {
+    expect(aplicarAumento(0, { tipo: "pct", valor: 30, redondeo: 100 })).toBe(0);
+  });
+
+  it("redondeo a $1.000 también funciona (múltiplo configurable)", () => {
+    expect(aplicarAumento(1234567, { tipo: "pct", valor: 0, redondeo: 1000 })).toBe(1235000);
   });
 });

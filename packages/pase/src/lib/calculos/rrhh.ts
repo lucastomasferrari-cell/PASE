@@ -289,6 +289,38 @@ export function calcularTotalLiquidacion(params: LiquidacionParams): Liquidacion
   };
 }
 
+// ─── AUMENTOS DE SUELDO ──────────────────────────────────────────────────────
+
+export type TipoAumento = "pct" | "fijo";
+export interface OpcionesAumento {
+  tipo: TipoAumento;
+  /** Para 'pct': porcentaje (30 = +30%). Para 'fijo': monto a sumar ($). */
+  valor: number;
+  /** Múltiplo al que redondear el resultado (100 = a $100). null/0 = sin redondeo. */
+  redondeo?: number | null;
+}
+
+/**
+ * Aplica un aumento a un sueldo base. Pedido Lucas 04-jun (planilla de sueldos
+ * + aumentos masivos). Devuelve el sueldo nuevo, opcionalmente redondeado.
+ *
+ * - 'pct': nuevo = actual * (1 + valor/100)
+ * - 'fijo': nuevo = actual + valor
+ *
+ * El redondeo es al múltiplo más cercano (Math.round). Nunca devuelve negativo
+ * (clamp a 0 — la RPC igual rechaza <= 0, esto es para el preview).
+ */
+export function aplicarAumento(actual: number, opts: OpcionesAumento): number {
+  const base = Number.isFinite(actual) ? actual : 0;
+  const v = Number.isFinite(opts.valor) ? opts.valor : 0;
+  let nuevo = opts.tipo === "pct" ? base * (1 + v / 100) : base + v;
+  if (nuevo < 0) nuevo = 0;
+  const r = opts.redondeo ?? null;
+  if (r && r > 0) nuevo = Math.round(nuevo / r) * r;
+  else nuevo = Math.round(nuevo); // sin múltiplo: a entero (los sueldos no llevan centavos)
+  return nuevo;
+}
+
 // ─── LIQUIDACIÓN FINAL ───────────────────────────────────────────────────────
 
 /** Calcula liquidación final al egreso del empleado */
