@@ -188,6 +188,52 @@ function AppMain() {
   // cada deploy). Pedido Lucas 31-may.
   useVersionPolling();
   const [user, setUser] = useState<Usuario | null>(null);
+
+  // Realtime: subscribe a la fila del user logueado para invalidar el
+  // cache de perfil apenas un admin cambie sus permisos/cuentas.
+  //
+  // Bug fix 2026-06-04 (Sabrina): hasta hoy, si un admin cambiaba
+  // `cuentas_operables` desde /usuarios, el user logueado seguía con el
+  // perfil viejo en sessionStorage hasta que cerrara/abriera sesión.
+  // Caso real: a Sabrina le agregaron MercadoPago y Banco a
+  // `cuentas_operables` pero seguía sin verlos en el dropdown de pago.
+  //
+  // Fix: subscribe a `usuarios` filtrado por auth_id del logueado.
+  // Cuando dispara UPDATE → re-fetch perfil completo + actualizar
+  // sessionStorage cache + setUser (que dispara re-render). Sabrina ve
+  // los cambios al instante, sin tener que hacer nada.
+  useEffect(() => {
+    if (!user?.auth_id) return;
+    const authId = user.auth_id;
+    const channel = db.channel(`user-profile-${authId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "usuarios", filter: `auth_id=eq.${authId}` },
+        async () => {
+          // Re-fetch perfil completo de DB (no usar `payload.new` porque
+          // las RLS pueden filtrar columnas y `payload.new` no incluye
+          // _permisos ni _locales — los necesitamos enriquecidos).
+          const { data: perfil } = await db.from("usuarios")
+            .select("id, auth_id, email, nombre, rol, activo, password_temporal, locales, cuentas_visibles, cuentas_operables, tenant_id")
+            .eq("auth_id", authId).single();
+          if (!perfil) return;
+          // Si el admin desactivó al user mientras estaba operando, signOut.
+          if (perfil.activo === false) {
+            // eslint-disable-next-line no-console
+            console.warn("[realtime] tu cuenta fue desactivada por un admin, cerrando sesión");
+            await db.auth.signOut();
+            return;
+          }
+          // eslint-disable-next-line no-console
+          console.log("[realtime] perfil actualizado desde DB — re-hidratando permisos/cuentas");
+          // Re-enriquecer permisos + locales con applyLogin (idem que login fresh).
+          await applyLogin(perfil);
+        },
+      )
+      .subscribe();
+    return () => { void db.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyLogin se redefine cada render pero solo queremos re-subscribir si cambia el user logueado.
+  }, [user?.auth_id]);
   const [locales, setLocales] = useState<Local[]>([]);
   const [localActivo, setLocalActivo] = useState<number | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
