@@ -312,36 +312,35 @@ export function TabSueldos({
     return out;
   }, [empleados]);
 
-  // ── State editable + autosave ────────────────────────────────────────────
+  // ── State editable (SIN autosave) ────────────────────────────────────────
+  // REWRITE 2026-06-04 (Lucas): eliminamos autosave entero. Cada keystroke
+  // disparaba un UPSERT + SELECT que pisaba el state local del user mientras
+  // seguía tipeando. Resultado: bugs imposibles de matar (el número volvía
+  // al valor anterior, el -1 quedaba persistido, etc).
+  //
+  // Modelo nuevo (Lucas 04-jun): "esto solo se tiene que guardar cuando
+  // pongo confirmar". Las novedades editadas viven SOLO en state local
+  // (novEdits) hasta que el user toca **Confirmar** o **Pagar**. Recién
+  // ahí se hace el UPSERT a DB. Si recarga la página sin confirmar, los
+  // valores se pierden — eso es el comportamiento deseado.
+  //
+  // Esto elimina TODA la complejidad de:
+  //   - Debounce timers
+  //   - Saving keys / error keys / saved-at indicators
+  //   - useEffect con guards anti-race
+  //   - "✓ guardado" indicator
+  //   - SELECT post-save que traía stale data
   const [novEdits, setNovEdits] = useState<Record<string, NovEdit>>({});
-  // Mapa slotKey → estado de autosave
-  const [savedAt, setSavedAt] = useState<Record<string, number>>({});
-  const [savingKeys, setSavingKeys] = useState<Set<string>>(new Set());
-  const [errorKeys, setErrorKeys] = useState<Set<string>>(new Set());
 
-  // Inicializar novEdits desde novedades de DB (cuando se recarga).
-  //
-  // BUG FIX 2026-06-01 (Anto): el useEffect pisaba el state local con valor
-  // stale del DB cada vez que se ejecutaba el autosave de cualquier slot.
-  // Escenarios reportados:
-  //   1. "Se borra el número": user tipea "111" → debounce 800ms guarda →
-  //      SELECT vuelve → mientras vuelve el user tipea "1111" → useEffect
-  //      pisa el "1111" con el "111" stale del DB.
-  //   2. "Sacar presentismo Q2 baja faltas Q1": SELECT trae AMBAS cuotas
-  //      del empleado/mes/anio (Q1 stale + Q2 nuevo) → useEffect re-aplica
-  //      ambas → Q1 que el user había editado pero no guardado se pisa con DB.
-  //
-  // Fix: SKIP slots que tienen debounce pending (user todavía tipeando) o
-  // se están guardando ahora mismo. Solo refrescamos slots quiescentes.
+  // Inicializar novEdits desde novedades de DB.
+  // Solo init slots que NO tienen entry todavía. Si el user editó algo,
+  // su edit se preserva hasta que cambie de mes/local (lo cual cambia
+  // slots y genera keys nuevas).
   useEffect(() => {
     setNovEdits(prev => {
       const next: Record<string, NovEdit> = { ...prev };
       for (const s of slots) {
-        // Skip si el user está editando activamente este slot
-        const hayDebouncePending = !!debounceTimers.current[s.key];
-        const seEstaGuardando = savingKeys.has(s.key);
-        if (hayDebouncePending || seEstaGuardando) continue;
-
+        if (next[s.key]) continue; // preservar edits en curso
         const n = novedadesDB.find(x =>
           x.empleado_id === s.emp.id &&
           (x.cuota_num ?? 1) === s.cuota &&
@@ -351,89 +350,71 @@ export function TabSueldos({
       }
       return next;
     });
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- inicializar form al cargar/recargar novedades
-  }, [novedadesDB, slots, savingKeys]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- inicializar form al cargar
+  }, [novedadesDB, slots]);
 
-  // Debounce: guardar 800ms después del último tecleo por slot
-  const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-
-  const guardarNovedad = useCallback(async (key: string) => {
+  /**
+   * Persiste el state local de una slot a DB.
+   * Se invoca SOLO desde confirmarSlot() y abrirPago(). Nunca automáticamente.
+   *
+   * @param key slotKey
+   * @param opts.estadoFinal estado a forzar (por defecto: respeta el actual si
+   *   existe, sino 'borrador'). Confirmar fuerza 'confirmado'.
+   * @returns id de la fila persistida, o null si error.
+   */
+  const persistirNovedad = useCallback(async (
+    key: string,
+    opts: { estadoFinal?: "borrador" | "confirmado" } = {},
+  ): Promise<string | null> => {
     const slot = slots.find(s => s.key === key);
-    if (!slot) return;
+    if (!slot) return null;
     const nov = novEdits[key];
-    if (!nov) return;
-    setSavingKeys(prev => new Set(prev).add(key));
-    setErrorKeys(prev => { const n = new Set(prev); n.delete(key); return n; });
-    try {
-      // UPSERT por (empleado_id, mes, anio, cuota_num).
-      // Estado='borrador' si no existía. Si ya estaba 'confirmado' (porque se
-      // pagó), respetamos eso para no romper el resto del sistema.
-      const existente = novedadesDB.find(n =>
-        n.empleado_id === slot.emp.id &&
-        n.mes === mes && n.anio === anio &&
-        (n.cuota_num ?? 1) === slot.cuota
-      );
-      const payload = {
-        empleado_id: slot.emp.id,
-        mes, anio,
-        cuota_num: slot.cuota,
-        cuotas_total: slot.cuotasTotal,
-        inasistencias: nov.inasistencias,
-        // BUG FIX 2026-06-01: constraint DB (migración 202605142200)
-        // acepta solo 'MANTIENE' o 'PIERDE'. Mandar 'NO_MANTIENE' fallaba
-        // el UPDATE silencioso → useEffect post-fail pisaba el state con
-        // valor stale del DB → checkbox re-tildaba solo.
-        presentismo: nov.presentismo_mantiene ? "MANTIENE" : "PIERDE",
-        horas_extras: nov.horas_extras,
-        dobles: nov.dobles,
-        feriados: nov.feriados,
-        vacaciones_dias: nov.vacaciones_dias,
-        otros_descuentos: nov.otros_desc,
-        observaciones: nov.obs || null,
-        // Si ya existe, no tocamos el estado (puede estar confirmado tras pago).
-        // Si es nuevo, queda borrador.
-        ...(existente ? {} : { estado: "borrador" }),
-      };
-      let error;
-      if (existente) {
-        const r = await db.from("rrhh_novedades").update(payload).eq("id", existente.id);
-        error = r.error;
-      } else {
-        const r = await db.from("rrhh_novedades").insert(payload);
-        error = r.error;
-      }
-      if (error) {
-        setErrorKeys(prev => new Set(prev).add(key));
-        showError("Autosave falló: " + translateRpcError(error));
-      } else {
-        setSavedAt(prev => ({ ...prev, [key]: Date.now() }));
-        // Refrescar novedadesDB para que el próximo UPSERT use el id correcto.
-        const { data: ns } = await db.from("rrhh_novedades")
-          .select("id, empleado_id, mes, anio, cuota_num, cuotas_total, inasistencias, presentismo, horas_extras, dobles, feriados, vacaciones_dias, otros_descuentos, otros_descuentos_motivo, observaciones, estado, monto_efectivo, monto_mp")
-          .eq("empleado_id", slot.emp.id).eq("mes", mes).eq("anio", anio);
-        setNovedadesDB(prev => {
-          const otros = prev.filter(n => !(n.empleado_id === slot.emp.id && n.mes === mes && n.anio === anio));
-          return [...otros, ...((ns || []) as NovDB[])];
-        });
-      }
-    } finally {
-      setSavingKeys(prev => { const n = new Set(prev); n.delete(key); return n; });
+    if (!nov) return null;
+    const existente = novedadesDB.find(n =>
+      n.empleado_id === slot.emp.id &&
+      n.mes === mes && n.anio === anio &&
+      (n.cuota_num ?? 1) === slot.cuota
+    );
+    const estadoFinal = opts.estadoFinal
+      ?? (existente?.estado as ("borrador" | "confirmado") | undefined)
+      ?? "borrador";
+    const payload = {
+      empleado_id: slot.emp.id,
+      mes, anio,
+      cuota_num: slot.cuota,
+      cuotas_total: slot.cuotasTotal,
+      // Sanitización: las novedades no pueden ser negativas. Si el user
+      // escribió -1 (no debería poder con min=0 en el input, pero por las
+      // dudas), lo forzamos a 0 acá antes de persistir.
+      inasistencias: Math.max(0, nov.inasistencias || 0),
+      presentismo: nov.presentismo_mantiene ? "MANTIENE" : "PIERDE",
+      horas_extras: Math.max(0, nov.horas_extras || 0),
+      dobles: Math.max(0, nov.dobles || 0),
+      feriados: Math.max(0, nov.feriados || 0),
+      vacaciones_dias: Math.max(0, nov.vacaciones_dias || 0),
+      otros_descuentos: Math.max(0, nov.otros_desc || 0),
+      observaciones: nov.obs || null,
+      estado: estadoFinal,
+    };
+    if (existente) {
+      const { error } = await db.from("rrhh_novedades").update(payload).eq("id", existente.id);
+      if (error) { showError("No se pudo guardar: " + translateRpcError(error)); return null; }
+      return existente.id;
     }
+    const { data, error } = await db.from("rrhh_novedades").insert(payload).select().single();
+    if (error) { showError("No se pudo guardar: " + translateRpcError(error)); return null; }
+    const nuevaFila = data as NovDB | null;
+    if (nuevaFila) {
+      // Agregar al state local de DB para que el próximo persist lo detecte como existente.
+      setNovedadesDB(prev => [...prev, nuevaFila]);
+      return nuevaFila.id;
+    }
+    return null;
   }, [slots, novEdits, novedadesDB, mes, anio, showError]);
 
   const updateNov = (key: string, field: keyof NovEdit, value: number | boolean | string) => {
+    // SOLO state local. NO toca DB. La persistencia es al Confirmar/Pagar.
     setNovEdits(prev => ({ ...prev, [key]: { ...(prev[key] || NOV_VACIA), [field]: value } }));
-    // Re-arm debounce
-    if (debounceTimers.current[key]) clearTimeout(debounceTimers.current[key]);
-    debounceTimers.current[key] = setTimeout(() => {
-      // BUG FIX 2026-06-01: limpiar el ref ANTES de guardar para que el
-      // useEffect de refresh (que skipea slots con debounce pending) sepa
-      // que ya no hay tipeo pendiente — solo hay save in-flight (que detecta
-      // via savingKeys). Sin este delete, el ref quedaba siempre poblado
-      // post-fire y el useEffect nunca refrescaba ese slot.
-      delete debounceTimers.current[key];
-      void guardarNovedad(key);
-    }, 800);
   };
 
   // ── Confirmar / Modificar novedad (pedido Anto/Lucas 02-jun) ────────────
@@ -511,51 +492,37 @@ export function TabSueldos({
     if (!slot) return;
     setTogglingConfirm(prev => new Set(prev).add(key));
     try {
-      // Si hay debounce pending, primero esperamos al autosave (sino la
-      // versión confirmada quedaría con valores stale).
-      if (debounceTimers.current[key]) {
-        clearTimeout(debounceTimers.current[key]);
-        delete debounceTimers.current[key];
-        await guardarNovedad(key);
-      }
-      // Leer plan a guardar (puede ser 0 + 0 si no cargaron — válido).
+      // Persistir el state local actual con estado="confirmado".
+      // Esto guarda TODOS los campos (faltas, hs extras, etc) + estado en
+      // una sola operación. Reemplaza el flow viejo (autosave + UPDATE
+      // estado = "confirmado" separado).
+      const novId = await persistirNovedad(key, { estadoFinal: "confirmado" });
+      if (!novId) return; // showError ya se mostró desde persistirNovedad
+
+      // Plan de pago (split efectivo/MP). Si no cargaron nada, 0+0 es válido.
       const plan = planEdits[key] ?? { efectivo: "", mp: "" };
       const efectivoNum = parseFloat(plan.efectivo) || 0;
       const mpNum = parseFloat(plan.mp) || 0;
-      // Re-fetch para obtener el id de la novedad recién upserteada.
-      const { data: ns } = await db.from("rrhh_novedades")
-        .select("id, empleado_id, mes, anio, cuota_num, cuotas_total, inasistencias, presentismo, horas_extras, dobles, feriados, vacaciones_dias, otros_descuentos, otros_descuentos_motivo, observaciones, estado, monto_efectivo, monto_mp")
-        .eq("empleado_id", slot.emp.id).eq("mes", mes).eq("anio", anio)
-        .eq("cuota_num", slot.cuota);
-      const existente = (ns ?? []).find(n => (n.cuota_num ?? 1) === slot.cuota);
-      if (!existente) {
-        // No había nada cargado — crear novedad vacía + plan + confirmar en una sola op.
-        const { error } = await db.from("rrhh_novedades").insert({
-          empleado_id: slot.emp.id, mes, anio,
-          cuota_num: slot.cuota, cuotas_total: slot.cuotasTotal,
-          inasistencias: 0, presentismo: "MANTIENE",
-          horas_extras: 0, dobles: 0, feriados: 0,
-          vacaciones_dias: 0, otros_descuentos: 0,
-          monto_efectivo: efectivoNum, monto_mp: mpNum,
-          estado: "confirmado",
-        });
-        if (error) { showError("No se pudo confirmar: " + translateRpcError(error)); return; }
-      } else {
-        const { error } = await db.from("rrhh_novedades")
-          .update({
-            estado: "confirmado",
-            monto_efectivo: efectivoNum,
-            monto_mp: mpNum,
-          })
-          .eq("id", existente.id);
-        if (error) { showError("No se pudo confirmar: " + translateRpcError(error)); return; }
-      }
+      const { error: errPlan } = await db.from("rrhh_novedades")
+        .update({ monto_efectivo: efectivoNum, monto_mp: mpNum })
+        .eq("id", novId);
+      if (errPlan) { showError("No se pudo guardar plan de pago: " + translateRpcError(errPlan)); return; }
+
+      // Limpiar el entry local de novEdits para que el useEffect lo
+      // re-inicialice desde DB (con los valores recién guardados +
+      // estado=confirmado).
+      setNovEdits(prev => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+
       // Recargar para que isConfirmado() refleje el nuevo estado.
       await recargar();
     } finally {
       setTogglingConfirm(prev => { const n = new Set(prev); n.delete(key); return n; });
     }
-  }, [slots, mes, anio, planEdits, guardarNovedad, recargar, showError]);
+  }, [slots, planEdits, persistirNovedad, recargar, showError]);
 
   const desconfirmarSlot = useCallback(async (key: string) => {
     const slot = slots.find(s => s.key === key);
@@ -780,13 +747,11 @@ export function TabSueldos({
   const abrirPago = async (slotKey: string) => {
     const s = slots.find(x => x.key === slotKey);
     if (!s) return;
-    // Antes de abrir el modal, forzamos un autosave pendiente si lo hay
-    // (por si el user toca Pagar antes de los 800ms del debounce).
-    if (debounceTimers.current[slotKey]) {
-      clearTimeout(debounceTimers.current[slotKey]);
-      delete debounceTimers.current[slotKey];
-      await guardarNovedad(slotKey);
-    }
+    // Persistir el state local actual antes de abrir el modal de pago.
+    // Sin esto, los cambios visibles en pantalla (faltas, hs extras, etc)
+    // no se incluyen en el cálculo del pago. NO cambia el estado de la
+    // novedad — respeta lo que ya tenía (borrador o confirmado).
+    await persistirNovedad(slotKey);
     const nov = novEdits[slotKey] || NOV_VACIA;
     const adels = adelantosDelSlot(s.emp.id, s.cuota, s.cuotasTotal);
     const tildSet = tildados[slotKey] || new Set();
@@ -1127,10 +1092,6 @@ export function TabSueldos({
                   const adels = cuotaActiva.adels;
                   const tildSet = cuotaActiva.tildSet;
                   const sumaAdel = cuotaActiva.sumaAdel;
-                  const isSaving = savingKeys.has(s.key);
-                  const hasError = errorKeys.has(s.key);
-                  const lastSaved = savedAt[s.key];
-                  const savedAgoSec = lastSaved ? Math.floor((Date.now() - lastSaved) / 1000) : null;
                   const liqInfo = liqDelSlot(s.emp.id, s.cuota);
                   const isPagado = cuotaActiva.estado === "pagado";
                   const movsLiq = liqInfo?.liq_id ? (movsPorLiq[liqInfo.liq_id] ?? []) : [];
@@ -1138,19 +1099,11 @@ export function TabSueldos({
                     void cargarMovsLiq(liqInfo.liq_id);
                   }
                   const d = calcularDesglose(s.emp, nov, s.cuotasTotal, s.cuota, sumaAdel);
+                  // Indicador "guardando/✓ guardado" eliminado 2026-06-04
+                  // junto con autosave entero. Ahora la novedad se persiste
+                  // solo al tocar Confirmar/Pagar — sin estado intermedio.
                   return (
                     <div style={{ borderTop: "1px solid var(--bd)", padding: "10px 16px 14px" }}>
-                      {/* Indicador autosave (solo si no está pagado).
-                          Antes acá había tabs Q1/Q2 — se quitaron por duplicidad
-                          con las sub-filas (Lucas 31-may). Ahora las sub-filas
-                          son clickeables para cambiar la cuota activa. */}
-                      {!isPagado && (
-                        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
-                          <span style={{ fontSize: 10, color: hasError ? "var(--danger)" : isSaving ? "var(--muted2)" : lastSaved ? "var(--success)" : "var(--muted2)" }}>
-                            {hasError ? "⚠ sin guardar" : isSaving ? "guardando…" : lastSaved ? `✓ guardado${savedAgoSec! > 5 ? ` hace ${savedAgoSec}s` : ""}` : ""}
-                          </span>
-                        </div>
-                      )}
 
                       {/* Banner pagado: una línea compacta con todo */}
                       {isPagado && liqInfo && (
@@ -1434,7 +1387,7 @@ export function TabSueldos({
                                 <button
                                   className="btn btn-acc btn-sm"
                                   onClick={() => void confirmarSlot(s.key)}
-                                  disabled={togglingConfirm.has(s.key) || isSaving || !matchea}
+                                  disabled={togglingConfirm.has(s.key) || !matchea}
                                   title={!matchea
                                     ? "La suma de Efectivo + MP debe ser igual al Total."
                                     : "Bloquea los campos para evitar modificaciones accidentales."}
@@ -1727,6 +1680,7 @@ function NovInput({ label, value, onChange, disabled }: { label: string; value: 
       <label style={{ fontSize: 9, color: "var(--muted2)", letterSpacing: 0.3 }}>{label}</label>
       <input
         type="number"
+        min={0}
         value={value === 0 ? "" : String(value)}
         placeholder="0"
         onChange={e => {
@@ -1736,10 +1690,13 @@ function NovInput({ label, value, onChange, disabled }: { label: string; value: 
             onChange(0);
           } else {
             const n = parseFloat(raw);
-            if (!isNaN(n) && isFinite(n)) onChange(n);
-            // Si no parsea (ej: "e", "-", ".") ignoramos. El input
-            // <type=number> ya filtra la mayoría de los caracteres no
-            // numéricos a nivel browser.
+            // Bloquea negativos: si el user escribe -1, lo forzamos a 0.
+            // Esto + min={0} previenen el bug del 04-jun: -1 en faltas
+            // generaba descuento negativo (= sumar dinero) en el cálculo.
+            if (!isNaN(n) && isFinite(n) && n >= 0) onChange(n);
+            else if (!isNaN(n) && n < 0) onChange(0);
+            // Si no parsea (ej: "e", "."), ignoramos. Type=number filtra
+            // la mayoría a nivel browser.
           }
         }}
         disabled={disabled}
