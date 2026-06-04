@@ -85,4 +85,26 @@ test.describe("cambiar_sueldos_masivo — mutante", () => {
       .select("id").eq("empleado_id", empId).eq("sueldo_nuevo", nuevoSueldo);
     expect(hist2!.length).toBe(1); // sigue siendo 1, no se duplicó
   });
+
+  // Regresión: cambiar_sueldo_empleado (single) declaraba p_emp_id INTEGER pero
+  // rrhh_empleados.id es UUID → el cambio desde el Legajo fallaba. Fix
+  // 202606042400 lo pasó a uuid. Este test verifica que acepta el uuid y aplica.
+  test("cambiar_sueldo_empleado (single) acepta uuid → cambia + historial", async () => {
+    const { data: r, error } = await db.rpc("cambiar_sueldo_empleado", {
+      p_emp_id: empId,                 // UUID
+      p_nuevo_sueldo: nuevoSueldo,
+      p_motivo: MOTIVO,
+      p_idempotency_key: `t-single-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    });
+    expect(error).toBeNull();
+    expect((r as { ok: boolean }).ok).toBe(true);
+
+    const { data: emp } = await db.from("rrhh_empleados").select("sueldo_mensual").eq("id", empId).single();
+    expect(Number(emp!.sueldo_mensual)).toBe(nuevoSueldo);
+
+    const { data: hist } = await db.from("rrhh_historial_sueldos")
+      .select("sueldo_anterior").eq("empleado_id", empId).eq("sueldo_nuevo", nuevoSueldo);
+    expect(hist!.length).toBe(1);
+    expect(Number(hist![0]!.sueldo_anterior)).toBe(sueldoOriginal);
+  });
 });
