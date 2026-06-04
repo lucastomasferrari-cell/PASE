@@ -29,6 +29,8 @@ import { translateRpcError } from "../../lib/errors";
 import { calcularTotalLiquidacion } from "../../lib/calculos/rrhh";
 import { useToast } from "../../hooks/useToast";
 import { ToastComponent } from "../../components/Toast";
+import { PrintRecibos } from "../../components/recibos/PrintRecibos";
+import { construirReciboMensual, type ReciboSueldoModel, type MovParaRecibo, type ReciboNegocio, type LiqParaRecibo } from "../../lib/recibos";
 import type { Local } from "../../types";
 import type { Usuario } from "../../types/auth";
 
@@ -43,6 +45,8 @@ interface Emp {
   local_id: number | null;
   activo: boolean;
   alias_mp?: string | null;
+  cuil?: string | null;
+  fecha_inicio?: string | null;
 }
 interface Adel {
   id: string;
@@ -240,16 +244,28 @@ export function TabSueldos({
   const [loading, setLoading] = useState(true);
   const { toast, showToast, showError } = useToast();
 
+  // ── Recibos imprimibles (Lucas 04-jun) ──────────────────────────────────
+  const [reciboNegocioCfg, setReciboNegocioCfg] = useState<{ razon_social: string | null; cuit: string | null; direccion: string | null } | null>(null);
+  const [reciboPrint, setReciboPrint] = useState<ReciboSueldoModel[] | null>(null);
+  const [negocioModal, setNegocioModal] = useState(false);
+  const [negocioForm, setNegocioForm] = useState({ razon_social: "", cuit: "", direccion: "" });
+  const [imprimiendo, setImprimiendo] = useState(false);
+
   // Recargar todo (después de cualquier mutación)
   const recargar = useCallback(async () => {
     if (!localId) return;
     setLoading(true);
     const { data: emps } = await db.from("rrhh_empleados")
-      .select("id, nombre, apellido, puesto, sueldo_mensual, modo_pago, local_id, activo, alias_mp")
+      .select("id, nombre, apellido, puesto, sueldo_mensual, modo_pago, local_id, activo, alias_mp, cuil, fecha_inicio")
       .eq("activo", true)
       .eq("local_id", localId)
       .order("apellido");
     setEmpleados((emps || []) as Emp[]);
+
+    // Datos del negocio para los recibos (rrhh_recibo_config por local).
+    const { data: cfg } = await db.from("rrhh_recibo_config")
+      .select("razon_social, cuit, direccion").eq("local_id", localId).maybeSingle();
+    setReciboNegocioCfg(cfg as { razon_social: string | null; cuit: string | null; direccion: string | null } | null);
 
     const empIds = ((emps || []) as Emp[]).map(e => e.id);
     if (empIds.length > 0) {
@@ -299,6 +315,93 @@ export function TabSueldos({
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on mount/change, patrón estándar
   useEffect(() => { void recargar(); }, [recargar]);
+
+  // ── Recibos imprimibles (Lucas 04-jun) ──────────────────────────────────
+  const negocioParaRecibo = (): ReciboNegocio => {
+    const localNombre = locsDisp.find(l => l.id === localId)?.nombre ?? "";
+    return {
+      razonSocial: reciboNegocioCfg?.razon_social || localNombre || "—",
+      cuit: reciboNegocioCfg?.cuit ?? null,
+      direccion: reciboNegocioCfg?.direccion ?? null,
+      sucursal: localNombre || null,
+    };
+  };
+
+  const construirRecibosDeLiqs = async (liqIds: string[]): Promise<ReciboSueldoModel[]> => {
+    if (liqIds.length === 0) return [];
+    const { data: liqRows } = await db.from("rrhh_liquidaciones")
+      .select("id, sueldo_base, total_horas_extras, total_dobles, total_feriados, total_vacaciones, monto_presentismo, descuento_ausencias, otros_descuentos, adelantos, total_a_pagar, pagos_realizados, cuota_num, cuotas_total, pagado_at, rrhh_novedades(empleado_id, mes, anio)")
+      .in("id", liqIds);
+    const { data: movs } = await db.from("movimientos")
+      .select("liquidacion_id, cuenta, importe").in("liquidacion_id", liqIds).eq("anulado", false);
+    const movsPorLiq = new Map<string, MovParaRecibo[]>();
+    for (const m of (movs || []) as { liquidacion_id: string; cuenta: string; importe: number }[]) {
+      const arr = movsPorLiq.get(m.liquidacion_id) ?? [];
+      arr.push({ cuenta: m.cuenta, importe: Number(m.importe) });
+      movsPorLiq.set(m.liquidacion_id, arr);
+    }
+    const negocio = negocioParaRecibo();
+    interface NovMin { empleado_id: string; mes: number; anio: number }
+    type LiqRow = LiqParaRecibo & { id: string; pagado_at: string | null; rrhh_novedades: NovMin | NovMin[] | null };
+    const out: ReciboSueldoModel[] = [];
+    for (const row of (liqRows || []) as LiqRow[]) {
+      const nov = Array.isArray(row.rrhh_novedades) ? row.rrhh_novedades[0] : row.rrhh_novedades;
+      if (!nov) continue;
+      const emp = empleados.find(e => e.id === nov.empleado_id);
+      if (!emp) continue;
+      out.push(construirReciboMensual({
+        liq: row,
+        movs: movsPorLiq.get(row.id) ?? [],
+        empleado: { nombre: `${emp.apellido}, ${emp.nombre}`, cuil: emp.cuil ?? null, puesto: emp.puesto ?? null, ingreso: emp.fecha_inicio ?? null },
+        negocio,
+        mes: nov.mes, anio: nov.anio,
+        modo: emp.modo_pago === "QUINCENAL" ? "Quincenal" : emp.modo_pago === "SEMANAL" ? "Semanal" : "Mensual",
+        fechaPago: row.pagado_at,
+      }));
+    }
+    return out;
+  };
+
+  const imprimirReciboLiq = async (liqId: string) => {
+    setImprimiendo(true);
+    try {
+      const recibos = await construirRecibosDeLiqs([liqId]);
+      if (recibos.length === 0) { showError("No se pudo armar el recibo."); return; }
+      setReciboPrint(recibos);
+    } finally { setImprimiendo(false); }
+  };
+
+  const imprimirTodosDelMes = async () => {
+    const liqIds = liqs.filter(l => l.estado === "pagado" && l.liq_id).map(l => l.liq_id as string);
+    if (liqIds.length === 0) { showError("No hay sueldos pagados este mes para imprimir."); return; }
+    setImprimiendo(true);
+    try { setReciboPrint(await construirRecibosDeLiqs(liqIds)); }
+    finally { setImprimiendo(false); }
+  };
+
+  const abrirNegocioModal = () => {
+    setNegocioForm({
+      razon_social: reciboNegocioCfg?.razon_social ?? "",
+      cuit: reciboNegocioCfg?.cuit ?? "",
+      direccion: reciboNegocioCfg?.direccion ?? "",
+    });
+    setNegocioModal(true);
+  };
+  const guardarNegocio = async () => {
+    if (!localId) return;
+    const { error } = await db.from("rrhh_recibo_config").upsert({
+      local_id: localId,
+      razon_social: negocioForm.razon_social.trim() || null,
+      cuit: negocioForm.cuit.trim() || null,
+      direccion: negocioForm.direccion.trim() || null,
+      tenant_id: _user.tenant_id,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "local_id" });
+    if (error) { showError("No se pudo guardar: " + translateRpcError(error)); return; }
+    showToast("Datos del negocio guardados");
+    setNegocioModal(false);
+    await recargar();
+  };
 
   // Slots (1 por cuota: mensual=1, quincenal=2)
   const slots = useMemo(() => {
@@ -908,6 +1011,25 @@ export function TabSueldos({
             {opt === "pendientes" ? "Pendientes" : opt === "pagados" ? "Pagados" : "Todos"}
           </button>
         ))}
+        <div style={{ width: 1, height: 24, background: "var(--bd)", margin: "0 4px" }} />
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => void imprimirTodosDelMes()}
+          disabled={imprimiendo || !localId}
+          style={{ padding: "4px 12px", fontSize: 11 }}
+          title="Imprimir un recibo por cada sueldo pagado este mes"
+        >
+          🖨 Recibos del mes
+        </button>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={abrirNegocioModal}
+          disabled={!localId}
+          style={{ padding: "4px 10px", fontSize: 11 }}
+          title="Datos del negocio que salen en el recibo (razón social, CUIT, dirección)"
+        >
+          🏢 Datos
+        </button>
       </div>
 
       {/* Strip resumen */}
@@ -1123,28 +1245,41 @@ export function TabSueldos({
                               {movsLiq.map(m => `${m.cuenta} ${fmt_$(Math.abs(Number(m.importe)))}`).join(" + ")}
                             </span>
                           </div>
-                          {esDueno && liqInfo.liq_id && (
+                          {liqInfo.liq_id && (
                             <div style={{ display: "flex", gap: 4 }}>
                               <button
                                 className="btn btn-ghost btn-sm"
                                 style={{ padding: "2px 9px", fontSize: 10 }}
-                                onClick={() => setAnulModal({
-                                  liqId: liqInfo.liq_id!, empNom: `${emp.apellido} ${emp.nombre}`,
-                                  total: liqInfo.pagos_realizados, movs: movsLiq, modoEdit: true,
-                                })}
+                                disabled={imprimiendo}
+                                onClick={() => void imprimirReciboLiq(liqInfo.liq_id!)}
+                                title="Imprimir recibo de sueldo"
                               >
-                                Editar
+                                🖨 Recibo
                               </button>
-                              <button
-                                className="btn btn-sec btn-sm"
-                                style={{ padding: "2px 9px", fontSize: 10, color: "var(--danger)", borderColor: "var(--danger)" }}
-                                onClick={() => setAnulModal({
-                                  liqId: liqInfo.liq_id!, empNom: `${emp.apellido} ${emp.nombre}`,
-                                  total: liqInfo.pagos_realizados, movs: movsLiq, modoEdit: false,
-                                })}
-                              >
-                                Anular
-                              </button>
+                              {esDueno && (
+                                <>
+                                  <button
+                                    className="btn btn-ghost btn-sm"
+                                    style={{ padding: "2px 9px", fontSize: 10 }}
+                                    onClick={() => setAnulModal({
+                                      liqId: liqInfo.liq_id!, empNom: `${emp.apellido} ${emp.nombre}`,
+                                      total: liqInfo.pagos_realizados, movs: movsLiq, modoEdit: true,
+                                    })}
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
+                                    className="btn btn-sec btn-sm"
+                                    style={{ padding: "2px 9px", fontSize: 10, color: "var(--danger)", borderColor: "var(--danger)" }}
+                                    onClick={() => setAnulModal({
+                                      liqId: liqInfo.liq_id!, empNom: `${emp.apellido} ${emp.nombre}`,
+                                      total: liqInfo.pagos_realizados, movs: movsLiq, modoEdit: false,
+                                    })}
+                                  >
+                                    Anular
+                                  </button>
+                                </>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1664,6 +1799,32 @@ export function TabSueldos({
             </div>
           </>
         )}
+      </Modal>
+
+      {/* Vista de impresión de recibos (Lucas 04-jun) */}
+      {reciboPrint && (
+        <PrintRecibos recibos={reciboPrint} onClose={() => setReciboPrint(null)} />
+      )}
+
+      {/* Modal datos del negocio (recibos) */}
+      <Modal
+        isOpen={negocioModal}
+        onClose={() => setNegocioModal(false)}
+        title="Datos del negocio (recibos)"
+        maxWidth={460}
+        footer={
+          <>
+            <button className="btn btn-sec" onClick={() => setNegocioModal(false)}>Cancelar</button>
+            <button className="btn btn-acc" onClick={guardarNegocio}>Guardar</button>
+          </>
+        }
+      >
+        <div style={{ fontSize: 12, color: "var(--muted2)", marginBottom: 12 }}>
+          Estos datos salen en el encabezado de los recibos de sueldo. Si los dejás vacíos, se usa el nombre del local.
+        </div>
+        <div className="field"><label>Razón social</label><input value={negocioForm.razon_social} onChange={e => setNegocioForm({ ...negocioForm, razon_social: e.target.value })} placeholder="Ej: Neko Sushi S.A." /></div>
+        <div className="field"><label>CUIT</label><input value={negocioForm.cuit} onChange={e => setNegocioForm({ ...negocioForm, cuit: e.target.value })} placeholder="30-XXXXXXXX-X" /></div>
+        <div className="field"><label>Dirección</label><input value={negocioForm.direccion} onChange={e => setNegocioForm({ ...negocioForm, direccion: e.target.value })} placeholder="Av. Corrientes 1234, CABA" /></div>
       </Modal>
     </div>
   );
