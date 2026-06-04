@@ -227,6 +227,10 @@ function AppMain() {
           // eslint-disable-next-line no-console
           console.log("[realtime] perfil actualizado desde DB — re-hidratando permisos/cuentas");
           // Re-enriquecer permisos + locales con applyLogin (idem que login fresh).
+          // applyLogin se define más abajo (const, línea ~538); este callback
+          // async corre mucho después del mount, así que en runtime ya está
+          // definido. La regla del React Compiler lo marca igual (TDZ estático).
+          // eslint-disable-next-line react-hooks/immutability -- async closure: applyLogin ya está definido cuando esto corre
           await applyLogin(perfil);
         },
       )
