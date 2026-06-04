@@ -48,6 +48,9 @@ export interface LiquidacionFinalParams {
   fecha_egreso: string;
   vacaciones_acumuladas: number; // días disponibles (ya neto de tomadas)
   motivo: "Renuncia" | "Despido sin causa" | "Despido con causa" | "Acuerdo mutuo";
+  // Control manual (Lucas 04-jun) — solo aplican en despido sin causa.
+  incluir_preaviso?: boolean;      // default true. false → preaviso = 0.
+  indemnizacion_mult?: 1 | 2;      // default 1. 2 → doble indemnización (decreto).
 }
 
 export interface LiquidacionFinalResult {
@@ -352,8 +355,12 @@ export function calcularLiquidacionFinal(params: LiquidacionFinalParams): Liquid
   const antiguedadMs = fechaEg.getTime() - fi.getTime();
   const antiguedadAnios = Math.max(1, Math.floor(antiguedadMs / (365.25 * 24 * 60 * 60 * 1000)));
 
-  const indemnizacion = esDespido ? sueldo_mensual * antiguedadAnios : 0;
-  const preaviso = esDespido ? (antiguedadAnios < 5 ? valorDia * 15 : sueldo_mensual) : 0;
+  // Control manual (Lucas 04-jun): multiplicador de indemnización (1x/2x) y
+  // toggle de preaviso. Solo relevantes en despido sin causa.
+  const indemMult = params.indemnizacion_mult ?? 1;
+  const incluirPreaviso = params.incluir_preaviso ?? true;
+  const indemnizacion = esDespido ? sueldo_mensual * antiguedadAnios * indemMult : 0;
+  const preaviso = esDespido && incluirPreaviso ? (antiguedadAnios < 5 ? valorDia * 15 : sueldo_mensual) : 0;
 
   // Integración mes de despido
   const diasRestantesMes = new Date(fechaEg.getFullYear(), fechaEg.getMonth() + 1, 0).getDate() - diaDelMes;

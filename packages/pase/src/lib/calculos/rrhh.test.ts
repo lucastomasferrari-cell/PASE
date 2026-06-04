@@ -627,6 +627,28 @@ describe("calcularLiquidacionFinal", () => {
     expect(r.integracion_mes).toBeCloseTo(valorDia * 15, 0);
   });
 
+  // Control manual (Lucas 04-jun)
+  it("despido sin causa con incluir_preaviso=false → preaviso 0", () => {
+    const base = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido sin causa" });
+    const sinPre = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido sin causa", incluir_preaviso: false });
+    expect(base.preaviso).toBeGreaterThan(0);
+    expect(sinPre.preaviso).toBe(0);
+    expect(sinPre.total).toBeCloseTo(base.total - base.preaviso, 0);
+  });
+
+  it("despido sin causa con indemnizacion_mult=2 → indemnización ×2", () => {
+    const x1 = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido sin causa", indemnizacion_mult: 1 });
+    const x2 = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido sin causa", indemnizacion_mult: 2 });
+    expect(x2.indemnizacion).toBeCloseTo(x1.indemnizacion * 2, 0);
+    expect(x2.total).toBeCloseTo(x1.total + x1.indemnizacion, 0);
+  });
+
+  it("renuncia ignora incluir_preaviso / indemnizacion_mult (no hay indemnización)", () => {
+    const r = calcularLiquidacionFinal({ ...baseFinal, motivo: "Renuncia", incluir_preaviso: false, indemnizacion_mult: 2 });
+    expect(r.indemnizacion).toBe(0);
+    expect(r.preaviso).toBe(0);
+  });
+
   it("despido con causa → sin indemnización", () => {
     const r = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido con causa" });
     expect(r.indemnizacion).toBe(0);

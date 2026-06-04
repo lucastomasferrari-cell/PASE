@@ -31,7 +31,7 @@ import type {
 } from "../types/rrhh";
 
 // Forma del state liqFinalForm — únicamente usado en este archivo.
-interface LiqFinalForm { fecha_egreso: string; motivo: string }
+interface LiqFinalForm { fecha_egreso: string; motivo: string; incluir_preaviso?: boolean; indemnizacion_mult?: 1 | 2 }
 
 const MESES = ["","Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const DOC_TIPOS = [
@@ -98,7 +98,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
 
   // Liquidación final
   const [liqFinalModal, setLiqFinalModal] = useState(false);
-  const [liqFinalForm, setLiqFinalForm] = useState<LiqFinalForm>({ fecha_egreso: toISO(today), motivo: "Renuncia" });
+  const [liqFinalForm, setLiqFinalForm] = useState<LiqFinalForm>({ fecha_egreso: toISO(today), motivo: "Renuncia", incluir_preaviso: true, indemnizacion_mult: 1 });
   const [liqFinalData, setLiqFinalData] = useState<LiquidacionFinalResult | null>(null);
   const [liqFinalCuenta, setLiqFinalCuenta] = useState("");
   const [liqFinalOverrides, setLiqFinalOverrides] = useState<Record<string, string>>({});
@@ -195,13 +195,15 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
       fecha_egreso: liqFinalForm.fecha_egreso,
       vacaciones_acumuladas: vacAcum,
       motivo,
+      incluir_preaviso: liqFinalForm.incluir_preaviso ?? true,
+      indemnizacion_mult: liqFinalForm.indemnizacion_mult ?? 1,
     });
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLiqFinalData(lf);
   // emp.sueldo_mensual y emp.fecha_inicio ya están en deps explícitamente;
   // el linter pide el emp completo pero esos son los únicos campos usados.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liqFinalModal, liqFinalForm.fecha_egreso, liqFinalForm.motivo, emp?.sueldo_mensual, emp?.fecha_inicio, vacTomadas]);
+  }, [liqFinalModal, liqFinalForm.fecha_egreso, liqFinalForm.motivo, liqFinalForm.incluir_preaviso, liqFinalForm.indemnizacion_mult, emp?.sueldo_mensual, emp?.fecha_inicio, vacTomadas]);
 
   // Reset overrides al cambiar motivo
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -723,6 +725,21 @@ function TabDatos({
                   <option value="Renuncia">Renuncia</option><option value="Despido sin causa">Despido sin causa</option><option value="Despido con causa">Despido con causa</option><option value="Acuerdo mutuo">Acuerdo mutuo</option>
                 </select></div>
             </div>
+            {esDespidoSinCausa && (
+              <div style={{display:"flex",gap:18,alignItems:"center",flexWrap:"wrap",marginBottom:12,padding:"8px 12px",background:"var(--s2)",borderRadius:"var(--r)"}}>
+                <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,cursor:"pointer"}}>
+                  <input type="checkbox" checked={liqFinalForm.incluir_preaviso ?? true} onChange={e => setLiqFinalForm({...liqFinalForm, incluir_preaviso:e.target.checked})} />
+                  Con preaviso
+                </label>
+                <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12}}>
+                  Indemnización
+                  <select value={String(liqFinalForm.indemnizacion_mult ?? 1)} onChange={e => setLiqFinalForm({...liqFinalForm, indemnizacion_mult: (parseInt(e.target.value) === 2 ? 2 : 1)})} style={{padding:"2px 6px"}}>
+                    <option value="1">1 sueldo × año (normal)</option>
+                    <option value="2">2× (doble indemnización)</option>
+                  </select>
+                </label>
+              </div>
+            )}
             <div style={{background:"var(--s2)",borderRadius:"var(--r)",padding:16}}>
               <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>
                 Conceptos{esAcuerdoMutuo && <span style={{color:"var(--warn)",marginLeft:8}}>(editables)</span>}
