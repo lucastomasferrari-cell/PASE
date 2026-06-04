@@ -154,6 +154,33 @@ function novDBaEdit(n: NovDB | undefined): NovEdit {
   };
 }
 
+// ── Reconciliación novEdits ↔ DB (fix data-loss 2026-06-04) ─────────────────
+// Re-sincroniza cada slot desde novedadesDB, EXCEPTO los que el usuario está
+// editando activamente (touched). Esto evita que un slot quede "pegado" en 0
+// (NOV_VACIA) cuando el init corrió con la DB todavía no cargada: los slots
+// que el user no tocó SIEMPRE reflejan la base, así nunca se persisten 0s
+// encima de la data real. Pura y testeable.
+interface SlotKeyMin { key: string; empId: string; cuota: number; cuotasTotal: number }
+// eslint-disable-next-line react-refresh/only-export-components -- helper puro exportado para testear; no es un componente
+export function reconciliarNovEdits(
+  prev: Record<string, NovEdit>,
+  novedadesDB: NovDB[],
+  slots: SlotKeyMin[],
+  touched: ReadonlySet<string>,
+): Record<string, NovEdit> {
+  const next: Record<string, NovEdit> = { ...prev };
+  for (const s of slots) {
+    if (touched.has(s.key)) continue; // el user lo está editando → no pisar
+    const n = novedadesDB.find(x =>
+      x.empleado_id === s.empId &&
+      (x.cuota_num ?? 1) === s.cuota &&
+      (x.cuotas_total ?? 1) === s.cuotasTotal
+    );
+    next[s.key] = novDBaEdit(n); // re-sync SIEMPRE desde la DB (aunque ya exista)
+  }
+  return next;
+}
+
 // Desglose del cálculo de un slot. Devuelve todos los componentes para
 // poder mostrarlos en vivo en el panel derecho, no solo el total final.
 // Refactor Lucas 31-may noche v3: delegamos en calcularTotalLiquidacion
@@ -252,6 +279,19 @@ export function TabSueldos({
   const [imprimiendo, setImprimiendo] = useState(false);
 
   // Recargar todo (después de cualquier mutación)
+  //
+  // ⚠️ FIX DATA-LOSS 2026-06-04 (Lucas: "cargo, confirmo, vuelvo y me borra").
+  // ANTES: setEmpleados corría ACÁ ARRIBA y setNovedadesDB MÁS ABAJO (después
+  // de varios `await`). Como React NO batchea a través de un await, el render
+  // intermedio tenía `slots` poblado pero `novedadesDB` viejo/vacío → el
+  // useEffect de init inicializaba novEdits en 0 (NOV_VACIA) y el guard
+  // `if (next[s.key]) continue` ya nunca re-sincronizaba con la DB real →
+  // los inputs quedaban en 0 aunque la base tuviera los valores. Peor: si
+  // sobre ese slot-en-0 se tocaba Pagar/Confirmar, persistirNovedad escribía
+  // los 0 ENCIMA de la data real (pérdida de datos).
+  // AHORA: hacemos TODOS los fetch primero y recién al final TODOS los
+  // setState juntos (sin await en el medio) → un solo render con empleados +
+  // novedadesDB consistentes → el init corre una vez con la data buena.
   const recargar = useCallback(async () => {
     if (!localId) return;
     setLoading(true);
@@ -260,39 +300,35 @@ export function TabSueldos({
       .eq("activo", true)
       .eq("local_id", localId)
       .order("apellido");
-    setEmpleados((emps || []) as Emp[]);
+    const empList = (emps || []) as Emp[];
+    const empIds = empList.map(e => e.id);
 
     // Datos del negocio para los recibos (rrhh_recibo_config por local).
     const { data: cfg } = await db.from("rrhh_recibo_config")
       .select("razon_social, cuit, direccion").eq("local_id", localId).maybeSingle();
-    setReciboNegocioCfg(cfg as { razon_social: string | null; cuit: string | null; direccion: string | null } | null);
 
-    const empIds = ((emps || []) as Emp[]).map(e => e.id);
+    let ads: Adel[] = [];
+    let novDB: NovDB[] = [];
+    let liqsArr: LiqEstado[] = [];
     if (empIds.length > 0) {
-      // Cambio Lucas 31-may: traer TODOS los adelantos pendientes del
-      // empleado, sin filtro de fecha. Antes filtraba por mes activo →
-      // un adelanto de hace 3 meses no aparecía. Ahora aparecen todos los
-      // descontado=false ordenados por fecha (más viejo primero, así Anto
-      // ve "Carlos tiene un saldo pendiente del 5/feb" aunque esté pagando
-      // su sueldo de mayo).
-      const { data: ads } = await db.from("rrhh_adelantos")
+      // Cambio Lucas 31-may: traer TODOS los adelantos pendientes del empleado,
+      // sin filtro de fecha (descontado=false ordenados por fecha).
+      const { data: adsData } = await db.from("rrhh_adelantos")
         .select("id, empleado_id, fecha, monto, cuenta, descontado, auto_aplicar, concepto")
         .in("empleado_id", empIds)
         .eq("descontado", false)
         .order("fecha", { ascending: true });
-      setAdelantos((ads || []) as Adel[]);
+      ads = (adsData || []) as Adel[];
 
-      // Novedades existentes del mes (para inicializar el form).
-      // Extendido 31-may: traer id+total+pagado de la liquidación para mostrar
-      // el resumen de pago cuando la cuota está pagada (sin re-query).
+      // Novedades existentes del mes (+ liquidación para el resumen de pago).
       const { data: novs } = await db.from("rrhh_novedades")
         .select("id, empleado_id, mes, anio, cuota_num, cuotas_total, inasistencias, presentismo, horas_extras, dobles, feriados, vacaciones_dias, otros_descuentos, otros_descuentos_motivo, observaciones, estado, monto_efectivo, monto_mp, rrhh_liquidaciones(id, estado, total_a_pagar, pagos_realizados)")
         .in("empleado_id", empIds)
         .eq("mes", mes).eq("anio", anio);
       type NovRow = NovDB & { rrhh_liquidaciones: { id: string; estado: string; total_a_pagar: number; pagos_realizados: number }[] | null };
       const novRows = (novs || []) as NovRow[];
-      setNovedadesDB(novRows.map(({ rrhh_liquidaciones: _, ...n }) => n));
-      const liqsArr: LiqEstado[] = novRows.map(n => {
+      novDB = novRows.map(({ rrhh_liquidaciones: _, ...n }) => n);
+      liqsArr = novRows.map(n => {
         const ls = n.rrhh_liquidaciones || [];
         const liqPagada = ls.find(l => l.estado === "pagado");
         const liqAny = liqPagada ?? ls[0];
@@ -304,12 +340,16 @@ export function TabSueldos({
           liq_id: liqAny?.id ?? null,
           total_a_pagar: Number(liqAny?.total_a_pagar ?? 0),
           pagos_realizados: Number(liqAny?.pagos_realizados ?? 0),
-        };
+        } as LiqEstado;
       });
-      setLiqs(liqsArr);
-    } else {
-      setAdelantos([]); setNovedadesDB([]); setLiqs([]);
     }
+
+    // ── Set TODO junto (sin await en el medio) → batched → init consistente ──
+    setEmpleados(empList);
+    setReciboNegocioCfg(cfg as { razon_social: string | null; cuit: string | null; direccion: string | null } | null);
+    setAdelantos(ads);
+    setNovedadesDB(novDB);
+    setLiqs(liqsArr);
     setLoading(false);
   }, [localId, mes, anio]);
 
@@ -434,26 +474,22 @@ export function TabSueldos({
   //   - "✓ guardado" indicator
   //   - SELECT post-save que traía stale data
   const [novEdits, setNovEdits] = useState<Record<string, NovEdit>>({});
+  // Slots que el usuario está editando en esta sesión. Los demás se
+  // re-sincronizan SIEMPRE desde la DB (fix data-loss 04-jun) — ver
+  // reconciliarNovEdits. Se limpian al Confirmar (para reflejar lo guardado)
+  // y al cambiar mes/local (keys nuevas). Es un ref: no dispara renders.
+  const touchedRef = useRef<Set<string>>(new Set());
 
-  // Inicializar novEdits desde novedades de DB.
-  // Solo init slots que NO tienen entry todavía. Si el user editó algo,
-  // su edit se preserva hasta que cambie de mes/local (lo cual cambia
-  // slots y genera keys nuevas).
+  // Sincronizar novEdits con la DB. Los slots NO editados por el user reflejan
+  // siempre novedadesDB; los que está editando se preservan. Esto impide que
+  // un slot quede "pegado" en 0 cuando el init corre con la DB no cargada.
   useEffect(() => {
-    setNovEdits(prev => {
-      const next: Record<string, NovEdit> = { ...prev };
-      for (const s of slots) {
-        if (next[s.key]) continue; // preservar edits en curso
-        const n = novedadesDB.find(x =>
-          x.empleado_id === s.emp.id &&
-          (x.cuota_num ?? 1) === s.cuota &&
-          (x.cuotas_total ?? 1) === s.cuotasTotal
-        );
-        next[s.key] = novDBaEdit(n);
-      }
-      return next;
-    });
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- inicializar form al cargar
+    setNovEdits(prev => reconciliarNovEdits(
+      prev, novedadesDB,
+      slots.map(s => ({ key: s.key, empId: s.emp.id, cuota: s.cuota, cuotasTotal: s.cuotasTotal })),
+      touchedRef.current,
+    ));
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync form ↔ DB
   }, [novedadesDB, slots]);
 
   /**
@@ -519,6 +555,9 @@ export function TabSueldos({
 
   const updateNov = (key: string, field: keyof NovEdit, value: number | boolean | string) => {
     // SOLO state local. NO toca DB. La persistencia es al Confirmar/Pagar.
+    // Marcar el slot como "tocado" para que reconciliarNovEdits NO lo pise con
+    // la DB mientras el user lo edita.
+    touchedRef.current.add(key);
     setNovEdits(prev => ({ ...prev, [key]: { ...(prev[key] || NOV_VACIA), [field]: value } }));
   };
 
@@ -613,9 +652,11 @@ export function TabSueldos({
         .eq("id", novId);
       if (errPlan) { showError("No se pudo guardar plan de pago: " + translateRpcError(errPlan)); return; }
 
-      // Limpiar el entry local de novEdits para que el useEffect lo
-      // re-inicialice desde DB (con los valores recién guardados +
-      // estado=confirmado).
+      // Limpiar el entry local de novEdits + el "tocado" para que el useEffect
+      // lo re-sincronice desde DB (con los valores recién guardados +
+      // estado=confirmado). Sin destildar touched, el slot quedaría preservado
+      // con el state viejo y no reflejaría lo confirmado.
+      touchedRef.current.delete(key);
       setNovEdits(prev => {
         const next = { ...prev };
         delete next[key];
@@ -643,6 +684,9 @@ export function TabSueldos({
       const { error } = await db.from("rrhh_novedades")
         .update({ estado: "borrador" }).eq("id", existente.id);
       if (error) { showError("No se pudo modificar: " + translateRpcError(error)); return; }
+      // Re-sincronizar desde DB al modificar: el user arranca a editar desde
+      // los valores guardados, no desde un state viejo.
+      touchedRef.current.delete(key);
       await recargar();
     } finally {
       setTogglingConfirm(prev => { const n = new Set(prev); n.delete(key); return n; });
