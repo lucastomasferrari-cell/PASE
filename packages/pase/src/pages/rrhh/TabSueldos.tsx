@@ -1736,11 +1736,29 @@ export function TabSueldos({
             <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", marginBottom: 6 }}>
               Formas de pago
             </div>
+            {locsDisp.length > 1 && (
+              <div style={{ fontSize: 10, color: "var(--muted2)", marginBottom: 6 }}>
+                Elegí de qué local sale cada parte (para repartir el pago entre sucursales).
+              </div>
+            )}
             {pagoLineas.map((l, i) => (
-              <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <div key={i} style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                {/* Selector de local por línea — pago repartido entre sucursales.
+                    Solo se muestra si el user tiene más de un local (dueño). */}
+                {locsDisp.length > 1 && (
+                  <select
+                    className="search"
+                    style={{ flex: 1, minWidth: 0 }}
+                    value={l.local_id ?? ""}
+                    onChange={e => setPagoLineas(prev => prev.map((x, j) => j === i ? { ...x, local_id: e.target.value ? parseInt(e.target.value) : null } : x))}
+                    title="Local del que sale este pago"
+                  >
+                    {locsDisp.map(loc => <option key={loc.id} value={loc.id}>{loc.nombre}</option>)}
+                  </select>
+                )}
                 <select
                   className="search"
-                  style={{ flex: 1 }}
+                  style={{ flex: 1, minWidth: 0 }}
                   value={l.cuenta}
                   onChange={e => setPagoLineas(prev => prev.map((x, j) => j === i ? { ...x, cuenta: e.target.value } : x))}
                 >
@@ -1750,7 +1768,7 @@ export function TabSueldos({
                 <input
                   type="number"
                   className="search"
-                  style={{ width: 130 }}
+                  style={{ width: 110 }}
                   value={l.monto}
                   onChange={e => setPagoLineas(prev => prev.map((x, j) => j === i ? { ...x, monto: e.target.value } : x))}
                 />
