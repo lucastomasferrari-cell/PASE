@@ -765,7 +765,7 @@ export function TabSueldos({
       // 202605141800_anular_pago_sueldo_revierte_todo.sql.
       for (const m of anulModal.movs) {
         const { error } = await db.rpc("anular_movimiento", {
-          p_movimiento_id: m.id,
+          p_mov_id: m.id,
           p_motivo: anulModal.modoEdit
             ? `Anulado para editar sueldo (Anto cargó mal)`
             : `Anulado por dueño desde Sueldos`,
