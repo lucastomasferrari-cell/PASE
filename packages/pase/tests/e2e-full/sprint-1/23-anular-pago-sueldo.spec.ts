@@ -29,7 +29,7 @@ test.describe.serial("E2E Test 23 — Anular pago de sueldo", () => {
     // la suite). Sprint 27-may: refactor para eliminar cascada de SLUG_DUPLICATED.
     seed = loadSharedSeed();
   });
-  test("crear novedad + liq + pagar + anular movs → saldo + liq vuelven al estado pre-pago", async () => {
+  test("crear novedad + liq + pagar + anular movs → saldo + liq vuelven al estado pre-pago; luego re-pagar revive la liq anulada", async () => {
     if (!seed) { test.skip(true, "Seed falló"); return; }
     const svc = createServiceClient();
     const duenoDb = await createE2EDuenoClient();
@@ -135,6 +135,41 @@ test.describe.serial("E2E Test 23 — Anular pago de sueldo", () => {
     expect(liqAfter2?.anulado).toBe(true);
     expect(liqAfter2?.estado).toBe("pendiente");
     expect(Number(liqAfter2!.pagos_realizados)).toBe(0);
+
+    // 5. [BUG 05-jun, caso DIAZ] Re-pagar la MISMA quincena tras anular.
+    // La liquidación quedó anulado=true; el constraint UNIQUE(novedad_id,
+    // cuota_num) impide insertar otra. Antes pagar_sueldo cortaba con
+    // LIQUIDACION_ANULADA → quincena trabada. Migración 202606051200 hace que
+    // la liquidación anulada se REVIVA (reset + valores nuevos del p_calc).
+    const calc = {
+      sueldo_base: 100000, descuento_ausencias: 0, total_horas_extras: 0, total_dobles: 0,
+      total_feriados: 0, total_vacaciones: 0, subtotal1: 100000, monto_presentismo: 0,
+      subtotal2: 100000, adelantos: 0, total_a_pagar: 100000, efectivo: 100000, transferencia: 0,
+    };
+    const { data: repago, error: repagoErr } = await duenoDb.rpc("pagar_sueldo", {
+      p_nov_id: nov!.id,
+      p_formas_pago: [{ cuenta: "Caja Efectivo", monto: 100000 }],
+      p_adelantos_ids: null,
+      p_fecha: fecha.toISOString().slice(0, 10),
+      p_mes: mesUnico, p_anio: anioUnico,
+      p_crear_liq: true, p_calc: calc, p_idempotency_key: null,
+    });
+    if (repagoErr) throw new Error(`re-pago tras anular falló: ${repagoErr.message}`);
+    expect((repago as { completa: boolean }).completa).toBe(true);
+    // Reusó la MISMA fila (la revivió), no creó otra liquidación.
+    expect((repago as { liquidacion_id: string }).liquidacion_id).toBe(liq!.id);
+
+    const { data: liqRevived } = await svc.from("rrhh_liquidaciones")
+      .select("anulado, estado, pagos_realizados").eq("id", liq!.id).single();
+    expect(liqRevived?.anulado).toBe(false);
+    expect(liqRevived?.estado).toBe("pagado");
+    expect(Number(liqRevived!.pagos_realizados)).toBe(100000);
+
+    // Cleanup: anular el nuevo mov para devolver el tenant E2E al saldo previo
+    // (no dejar plata movida que rompa invariantes de tests posteriores).
+    for (const m of ((repago as { mov_ids: string[] }).mov_ids) || []) {
+      await duenoDb.rpc("anular_movimiento", { p_mov_id: m, p_motivo: "E2E cleanup re-pago" });
+    }
 
     await duenoDb.auth.signOut();
   });
