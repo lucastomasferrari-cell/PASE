@@ -25,6 +25,7 @@ import {
 } from "@playwright/test";
 import {
   createClient,
+  type SupabaseClient,
 } from "@supabase/supabase-js";
 import {
   createServiceClient,
@@ -85,10 +86,7 @@ test.describe.serial("E2E Test 32 — COMANDA permisos end-to-end", () => {
     const cajeroDb = createClient(SUPABASE_URL, anonKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { error: loginErr } = await cajeroDb.auth.signInWithPassword({
-      email: cajeroEmail, password: cajeroPassword,
-    });
-    expect(loginErr).toBeNull();
+    await signInReliable(cajeroDb, cajeroEmail, cajeroPassword);
 
     // 29-may fix: la RLS de comanda_usuarios filtra por tenant_id = auth_tenant_id().
     // Los usuarios creados via auth.admin.createUser no tienen tenant en app_metadata,
@@ -116,7 +114,7 @@ test.describe.serial("E2E Test 32 — COMANDA permisos end-to-end", () => {
     const cajeroDb = createClient(SUPABASE_URL, anonKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    await cajeroDb.auth.signInWithPassword({ email: cajeroEmail, password: cajeroPassword });
+    await signInReliable(cajeroDb, cajeroEmail, cajeroPassword);
 
     // Diagnóstico 29-may: el cajero recién logueado, verificar que sus
     // permisos están bien persistidos en DB ANTES de operar. Si esto falla
@@ -206,7 +204,7 @@ test.describe.serial("E2E Test 32 — COMANDA permisos end-to-end", () => {
     const cajeroDb = createClient(SUPABASE_URL, anonKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    await cajeroDb.auth.signInWithPassword({ email: cajeroEmail, password: cajeroPassword });
+    await signInReliable(cajeroDb, cajeroEmail, cajeroPassword);
 
     // Verificar permisos actualizados
     const { data: permsAct } = await cajeroDb.from("comanda_usuario_permisos")
@@ -278,7 +276,7 @@ test.describe.serial("E2E Test 32 — COMANDA permisos end-to-end", () => {
     const sinCdb = createClient(SUPABASE_URL, anonKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    await sinCdb.auth.signInWithPassword({ email: sinComandaEmail, password: sinComandaPass });
+    await signInReliable(sinCdb, sinComandaEmail, sinComandaPass);
 
     // Intentar abrir una mesa → debe FALLAR (no tiene perfil COMANDA →
     // comanda_auth_tiene_permiso devuelve false → fn_check_perm_comanda
@@ -298,6 +296,29 @@ test.describe.serial("E2E Test 32 — COMANDA permisos end-to-end", () => {
     await duenoDb.auth.signOut();
   });
 });
+
+// Login confiable: reintenta el signInWithPassword y CONFIRMA que la sesión
+// quedó activa antes de seguir. Causa raíz del flaky histórico del test 32:
+// el login transitorio fallaba (throttle de auth / blip de red) sin chequearse,
+// el RPC siguiente corría sin sesión → auth.uid() NULL →
+// comanda_auth_tiene_permiso devolvía false → SIN_PERMISO_VENTAS. "Pasaba al
+// reintentar" justamente porque el segundo login funcionaba. NO es bug del
+// producto: un cajero que loguea OK opera OK.
+async function signInReliable(db: SupabaseClient, email: string, password: string): Promise<void> {
+  let lastErr = "desconocido";
+  for (let intento = 0; intento < 4; intento++) {
+    const { data, error } = await db.auth.signInWithPassword({ email, password });
+    if (!error && data.session?.access_token) {
+      const { data: s } = await db.auth.getSession();
+      if (s.session?.access_token) return; // sesión confirmada
+      lastErr = "sesión no persistió tras login OK";
+    } else {
+      lastErr = error?.message ?? "login sin sesión";
+    }
+    await new Promise(r => setTimeout(r, 400 * (intento + 1)));
+  }
+  throw new Error(`login falló tras 4 intentos (${email}): ${lastErr}`);
+}
 
 async function getAnonKey(): Promise<string> {
   // Lee del .env.local — el seed-tenant lo hace igual.
