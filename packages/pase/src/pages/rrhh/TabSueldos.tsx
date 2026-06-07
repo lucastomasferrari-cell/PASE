@@ -507,13 +507,17 @@ export function TabSueldos({
   ): Promise<string | null> => {
     const slot = slots.find(s => s.key === key);
     if (!slot) return null;
-    const nov = novEdits[key];
-    if (!nov) return null;
     const existente = novedadesDB.find(n =>
       n.empleado_id === slot.emp.id &&
       n.mes === mes && n.anio === anio &&
       (n.cuota_num ?? 1) === slot.cuota
     );
+    // Estado a guardar: lo que el user tiene en pantalla (novEdits). Si por la
+    // mecánica de recargar/reconciliar ya se limpió (era undefined), NO fallar
+    // en silencio — reconstruir desde la novedad de la DB (si existe) o vacío.
+    // Antes: `if (!nov) return null` hacía que Confirmar/Pagar no guardaran
+    // NADA sin avisar (bug Anto 07-jun: novedades que no se guardaban).
+    const nov = novEdits[key] ?? (existente ? novDBaEdit(existente) : NOV_VACIA);
     const estadoFinal = opts.estadoFinal
       ?? (existente?.estado as ("borrador" | "confirmado") | undefined)
       ?? "borrador";
@@ -956,14 +960,23 @@ export function TabSueldos({
       });
     if (formasValidas.length === 0) { showError("Tenés que asignar al menos una forma de pago."); return; }
 
-    // Buscar la novedad y su liquidación correspondiente
-    const novDB = novedadesDB.find(n =>
-      n.empleado_id === s.emp.id && n.mes === mes && n.anio === anio &&
-      (n.cuota_num ?? 1) === s.cuota
-    );
-    if (!novDB) {
-      showError("No encuentro la novedad. Cargá algún dato primero (faltas, extras o presentismo) y volvé a intentar.");
-      return;
+    // Persistir la novedad ANTES de pagar y usar el id que devuelve. NO buscar
+    // en novedadesDB (estado local que puede estar desactualizado y hacía que
+    // el pago no encontrara la novedad o apuntara mal). Fix Anto 07-jun.
+    const novId = await persistirNovedad(pagoSlot);
+    if (!novId) { showError("No se pudo guardar la novedad antes de pagar. Reintentá."); return; }
+
+    // Aviso de pago parcial: si lo asignado (formas de pago + adelantos) es
+    // menor al total, confirmar explícitamente. Antes se registraba un pago
+    // parcial en silencio y el empleado quedaba pendiente sin que nadie se
+    // enterara (caso Dunstan 07-jun: faltó la línea de Caja).
+    const totalAsignado = formasValidas.reduce((acc, f) => acc + f.monto, 0) + sumaAdel;
+    if (totalAsignado < Math.round(total) - 1) {
+      const ok = window.confirm(
+        `Vas a pagar ${fmt_$(totalAsignado)} de ${fmt_$(Math.round(total))} total de ${s.emp.apellido} ${s.emp.nombre}.\n\n` +
+        `Quedaría PENDIENTE ${fmt_$(Math.round(total) - totalAsignado)}.\n\n¿Seguro que querés pagar parcial?`
+      );
+      if (!ok) return;
     }
 
     setPagando(true);
@@ -979,7 +992,7 @@ export function TabSueldos({
       const subtotal2 = subtotal1 + d.presentismo;
 
       const { data, error } = await db.rpc("pagar_sueldo", {
-        p_nov_id: novDB.id,
+        p_nov_id: novId,
         p_formas_pago: formasValidas,
         p_adelantos_ids: adelIds,
         p_fecha: fechaPago,
