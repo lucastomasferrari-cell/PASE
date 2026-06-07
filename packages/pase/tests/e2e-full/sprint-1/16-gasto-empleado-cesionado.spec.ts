@@ -182,4 +182,45 @@ test.describe.serial("E2E Test 16 — Gasto empleado cesionado", () => {
 
     await duenoDb.auth.signOut();
   });
+
+  // ─── Cambio 07-jun: TODOS los conceptos quedan como "YA PAGADO" tildable ──
+  // Un gasto a empleado con concepto != 'adelanto' (acá 'comida') ahora crea
+  // un registro en rrhh_adelantos (descontado=FALSE) para poder descontarlo
+  // manualmente del sueldo. Antes (fix 25-may) solo 'adelanto' lo hacía.
+  test("gasto a empleado concepto='comida' queda como YA PAGADO (rrhh_adelantos)", async () => {
+    if (!seed) { test.skip(true, "Seed falló"); return; }
+    const svc = createServiceClient();
+    const duenoDb = await createE2EDuenoClient();
+    const empleado = seed.empleados.mensual;
+    const MONTO = 9100;
+
+    const { data: result, error } = await duenoDb.rpc("crear_gasto_empleado", {
+      p_local_id: seed.local1Id,
+      p_empleado_id: empleado.id,
+      p_concepto: "comida",
+      p_monto: MONTO,
+      p_cuenta: "Caja Efectivo",
+      p_fecha: new Date().toISOString().slice(0, 10),
+      p_detalle: "E2E comida YA PAGADO",
+    });
+    if (error) throw new Error(`crear_gasto_empleado comida: ${error.message}`);
+    const row = (result as Array<{ gasto_id: string; adelanto_id: string }>)[0]!;
+    // Aunque NO es 'adelanto', devuelve adelanto_id (queda como YA PAGADO).
+    expect(row.adelanto_id).toBeTruthy();
+
+    const { data: adel } = await svc.from("rrhh_adelantos")
+      .select("monto, concepto, descontado, empleado_id")
+      .eq("id", row.adelanto_id).single();
+    expect(Number(adel!.monto)).toBe(MONTO);
+    expect(adel!.concepto).toBe("comida");
+    expect(adel!.descontado).toBe(false);
+    expect(adel!.empleado_id).toBe(empleado.id);
+
+    const { data: mov } = await svc.from("movimientos")
+      .select("importe, cat").eq("adelanto_id_ref", row.adelanto_id).single();
+    expect(Number(mov!.importe)).toBe(-MONTO);
+    expect(mov!.cat).toBe("Comida");
+
+    await duenoDb.auth.signOut();
+  });
 });

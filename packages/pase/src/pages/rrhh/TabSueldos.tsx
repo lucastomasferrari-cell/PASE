@@ -120,6 +120,20 @@ function labelSlot(cuotaNum: number, cuotasTotal: number): string {
 function nombreMes(m: number): string {
   return ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][m - 1] || "";
 }
+// Etiqueta legible del concepto de un registro "YA PAGADO" (rrhh_adelantos).
+// Cubre los conceptos que carga `crear_gasto_empleado` (Cargar Gasto → Empleados).
+function conceptoLabel(c?: string | null): string {
+  switch (c) {
+    case "adelanto": return "Adelanto";
+    case "dia_doble": return "Día doble";
+    case "horas_extras": return "Horas extra";
+    case "feriado": return "Feriado";
+    case "comida": return "Comida";
+    case "viatico": return "Viático";
+    case "otros": return "Otros";
+    default: return "Adelanto"; // registros viejos sin concepto
+  }
+}
 
 // State editable por slot (cuotaKey = `${empId}__${cuota}`)
 interface NovEdit {
@@ -1386,10 +1400,10 @@ export function TabSueldos({
                             </div>
                           )}
 
-                          {/* Adelantos */}
+                          {/* Ya pagado (adelantos + gastos a empleado de cualquier concepto) */}
                           <div>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                              <div style={SECT_HD}>Adelantos</div>
+                              <div style={SECT_HD}>Ya pagado</div>
                               {esDueno && !isPagado && !isConfirmado(s.key) && (
                                 <button
                                   className="btn btn-ghost btn-sm"
@@ -1401,7 +1415,7 @@ export function TabSueldos({
                               )}
                             </div>
                             {adels.length === 0 ? (
-                              <div style={{ fontSize: 10, color: "var(--muted2)" }}>Sin adelantos.</div>
+                              <div style={{ fontSize: 10, color: "var(--muted2)" }}>Sin pagos previos.</div>
                             ) : (
                               <div style={{ background: "var(--s2)", borderRadius: 6, padding: "4px 6px" }}>
                                 {adels.map(a => {
@@ -1421,7 +1435,7 @@ export function TabSueldos({
                                         style={{ width: 12, height: 12 }}
                                       />
                                       <span style={{ color: "var(--muted2)", flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                        {fmt_d(a.fecha)} · {a.cuenta || "—"}
+                                        <strong style={{ color: "var(--text)" }}>{conceptoLabel(a.concepto)}</strong> · {fmt_d(a.fecha)} · {a.cuenta || "—"}
                                         {!a._entraPeriodo && (
                                           <span style={{
                                             marginLeft: 5, fontSize: 8, padding: "1px 4px", borderRadius: 2,
@@ -1455,7 +1469,7 @@ export function TabSueldos({
                             {nov.presentismo_mantiene && d.presentismo > 0 && <DesgloseRow label="+ Presentismo 5%" value={`+${fmt_$(d.presentismo)}`} tone="success" />}
                             {nov.presentismo_mantiene && d.presentismo === 0 && s.cuotasTotal === 2 && s.cuota === 1 && <DesgloseRow label="Presentismo: se paga en Q2" value="—" />}
                             {nov.otros_desc > 0 && <DesgloseRow label="− Otros desc." value={`−${fmt_$(d.otrosDesc)}`} tone="danger" />}
-                            {sumaAdel > 0 && <DesgloseRow label={`− Adelantos (${tildSet.size})`} value={`−${fmt_$(d.totalAdelantos)}`} tone="danger" />}
+                            {sumaAdel > 0 && <DesgloseRow label={`− Ya pagado (${tildSet.size})`} value={`−${fmt_$(d.totalAdelantos)}`} tone="danger" />}
                             <div style={{
                               marginTop: 6, paddingTop: 6, borderTop: "1px solid var(--bd)",
                               display: "flex", justifyContent: "space-between", alignItems: "baseline",
@@ -1704,7 +1718,7 @@ export function TabSueldos({
               return (
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", marginBottom: 6 }}>
-                    Adelantos a descontar
+                    Ya pagado — tildá para descontar
                   </div>
                   <div style={{ background: "var(--s2)", borderRadius: 8, padding: 10 }}>
                     {adels.map(a => {
@@ -1721,7 +1735,7 @@ export function TabSueldos({
                             onChange={() => toggleAdelanto(pagoSlot!, a.id)}
                           />
                           <span style={{ flex: 1, color: "var(--muted2)" }}>
-                            {fmt_d(a.fecha)} · {a.cuenta || "—"}
+                            <strong style={{ color: "var(--text)" }}>{conceptoLabel(a.concepto)}</strong> · {fmt_d(a.fecha)} · {a.cuenta || "—"}
                             {!a._entraPeriodo && <span style={{ marginLeft: 6, fontSize: 9, padding: "1px 5px", borderRadius: 3, background: "rgba(245,158,11,0.15)", color: "var(--warn)" }}>fuera del período</span>}
                           </span>
                           <span style={{ color: tildado ? "var(--danger)" : "var(--muted2)" }}>
