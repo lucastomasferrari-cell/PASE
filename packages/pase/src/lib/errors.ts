@@ -87,6 +87,11 @@ const MAP: Record<string, string> = {
   NO_AUTORIZADO_PARA_TAREA: "No podés completar esta tarea — está asignada a otro usuario o rol",
   NO_AUTH: "Sesión inválida — volvé a entrar",
 
+  // Bandeja conciliadora Compras→Insumos (fn_conciliar_producto / fn_descartar_renglon)
+  PRODUCTO_INVALIDO: "El nombre del producto está vacío o es inválido",
+  MATERIA_PRIMA_NO_ENCONTRADA: "La materia prima no existe o es de otro local/tenant",
+  RENGLON_NO_ENCONTRADO: "No se encontró el renglón de la factura",
+
   // Manager Override TOTP (validar_manager_override + generar_tenant_totp_secret)
   CODIGO_INVALIDO: "El código debe ser de 6 dígitos numéricos",
   CODIGO_NO_VALIDO: "Código incorrecto. Pedile al dueño un código nuevo (cambian cada 30s).",
