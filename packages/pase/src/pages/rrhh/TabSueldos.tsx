@@ -963,15 +963,22 @@ export function TabSueldos({
     const sumaAdel = adels.filter(a => tildSet.has(a.id)).reduce((sum, a) => sum + Number(a.monto), 0);
     const total = calcularTotal(s.emp, nov, s.cuotasTotal, s.cuota, sumaAdel);
     const adelIds = adels.filter(a => tildSet.has(a.id)).map(a => a.id);
-    const formasValidas = pagoLineas
-      .filter(fp => parseMonto(fp.monto) > 0 && !!fp.cuenta)
-      .map(fp => {
-        const base: { cuenta: string; monto: number; local_id?: number } = {
-          cuenta: fp.cuenta, monto: parseMonto(fp.monto),
-        };
-        if (fp.local_id != null) base.local_id = fp.local_id;
-        return base;
-      });
+    // BUG Esteban 07-jun: una línea con monto > 0 pero SIN cuenta seleccionada
+    // se descartaba en silencio acá (filtro `!!fp.cuenta`), y el pago salía
+    // parcial sin que nadie se enterara (el efectivo "se evaporaba"). Ahora
+    // frenamos con un error claro en vez de descartarla.
+    const lineasConMonto = pagoLineas.filter(fp => parseMonto(fp.monto) > 0);
+    if (lineasConMonto.some(fp => !fp.cuenta)) {
+      showError("Hay una línea de pago con monto pero sin cuenta seleccionada. Elegí la cuenta (o borrá la línea) antes de pagar.");
+      return;
+    }
+    const formasValidas = lineasConMonto.map(fp => {
+      const base: { cuenta: string; monto: number; local_id?: number } = {
+        cuenta: fp.cuenta, monto: parseMonto(fp.monto),
+      };
+      if (fp.local_id != null) base.local_id = fp.local_id;
+      return base;
+    });
     if (formasValidas.length === 0) { showError("Tenés que asignar al menos una forma de pago."); return; }
 
     // Persistir la novedad ANTES de pagar y usar el id que devuelve. NO buscar
