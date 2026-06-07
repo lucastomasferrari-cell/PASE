@@ -25,8 +25,9 @@ import { RightSubNav, type SubNavSection, PageHeader } from "../components/ui";
 const Insumos = lazy(() => import("./Insumos"));
 const Recetas = lazy(() => import("./Recetas"));
 const MateriasPrimas = lazy(() => import("./MateriasPrimas"));
+const Conciliacion = lazy(() => import("./Conciliacion"));
 
-type SubSection = "insumos" | "materias-primas" | "recetas";
+type SubSection = "insumos" | "materias-primas" | "recetas" | "conciliacion";
 
 interface RecetarioProps {
   user: Usuario;
@@ -39,14 +40,15 @@ export default function Recetario({ user, locales = [], localActivo }: Recetario
   const subSection: SubSection = (searchParams.get("sec") as SubSection) || "insumos";
 
   // Contadores live para el RightSubNav
-  const [counts, setCounts] = useState({ insumos: 0, recetas: 0, items: 0, sinReceta: 0, mps: 0 });
+  const [counts, setCounts] = useState({ insumos: 0, recetas: 0, items: 0, sinReceta: 0, mps: 0, pendientes: 0 });
 
   const { run: loadCounts } = useGuardedHandler(async () => {
-    const [iRes, rRes, itRes, mpRes] = await Promise.all([
+    const [iRes, rRes, itRes, mpRes, pRes] = await Promise.all([
       db.from("insumos").select("id", { count: "exact", head: true }).eq("activo", true).is("deleted_at", null),
       db.from("recetas").select("id", { count: "exact", head: true }).eq("activa", true).is("deleted_at", null),
       db.from("items").select("id", { count: "exact", head: true }).eq("estado", "disponible").eq("es_open_item", false).is("deleted_at", null),
       db.from("materias_primas").select("id", { count: "exact", head: true }).eq("activa", true).is("deleted_at", null),
+      db.from("v_bandeja_conciliacion").select("factura_item_id", { count: "exact", head: true }).eq("grupo_categoria", "CMV"),
     ]);
     setCounts({
       insumos: iRes.count ?? 0,
@@ -54,6 +56,7 @@ export default function Recetario({ user, locales = [], localActivo }: Recetario
       items: itRes.count ?? 0,
       sinReceta: (itRes.count ?? 0) - (rRes.count ?? 0),
       mps: mpRes.count ?? 0,
+      pendientes: pRes.count ?? 0,
     });
   });
 
@@ -80,6 +83,7 @@ export default function Recetario({ user, locales = [], localActivo }: Recetario
     insumos: "insumos",
     "materias-primas": "materias primas",
     recetas: "recetas",
+    conciliacion: "conciliación",
   };
   const sub = subTitle[subSection];
 
@@ -87,6 +91,7 @@ export default function Recetario({ user, locales = [], localActivo }: Recetario
     insumos: "Catálogo de materia prima usado por recetas, stock y mermas.",
     "materias-primas": "Catálogo de \"qué te vende cada proveedor\" — vincula proveedor → unidad de compra → insumo. Necesario para que las facturas sumen stock automático.",
     recetas: "Vinculá items vendibles con sus ingredientes para calcular CMV y descontar stock al vender.",
+    conciliacion: "Productos de facturas (manual + IA) sin vincular a una materia prima. Resolvelos una vez y el sistema lo recuerda.",
   };
 
   return (
@@ -139,6 +144,9 @@ export default function Recetario({ user, locales = [], localActivo }: Recetario
             {subSection === "recetas" && (
               <Recetas user={user} locales={locales} localActivo={localActivo} embedded />
             )}
+            {subSection === "conciliacion" && (
+              <Conciliacion user={user} locales={locales} localActivo={localActivo} embedded />
+            )}
           </Suspense>
         </div>
 
@@ -179,6 +187,16 @@ export default function Recetario({ user, locales = [], localActivo }: Recetario
                     <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M3 2h6l2 2v8H3z" />
                       <path d="M5 5h4M5 7h4M5 9h3" />
+                    </svg>
+                  ),
+                },
+                {
+                  id: "conciliacion",
+                  label: "Conciliación",
+                  count: counts.pendientes,
+                  icon: (
+                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M2 7h4l1.5 4 2-8L11 7h1" />
                     </svg>
                   ),
                 },
