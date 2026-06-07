@@ -45,7 +45,7 @@ interface AlertaMargen {
 interface ConteoConBrecha {
   id: number;
   local_id: number;
-  fecha_cierre: string;
+  finalizado_at: string;
   valor_diferencia: number;
   cant_insumos: number;
   estado: string;
@@ -101,9 +101,9 @@ export function TabAlertas({ user, locales, localActivo }: Props) {
 
     // 2. Conteos cerrados con brecha negativa significativa (>$1000 o equivalente)
     let qConteos = db.from("stock_conteos")
-      .select("id, local_id, fecha_cierre, valor_diferencia, estado")
+      .select("id, local_id, finalizado_at, valor_diferencia, estado")
       .eq("estado", "finalizado")
-      .order("fecha_cierre", { ascending: false })
+      .order("finalizado_at", { ascending: false })
       .limit(20);
     qConteos = applyLocalScope(qConteos, user, localActivo);
     const { data: conteos } = await qConteos;
@@ -243,7 +243,7 @@ export function TabAlertas({ user, locales, localActivo }: Props) {
                     {conteosConBrecha.map(c => (
                       <tr key={c.id}>
                         <td>{localNombre(c.local_id)}</td>
-                        <td className="mono" style={{ fontSize: 11 }}>{fmt_d(c.fecha_cierre?.slice(0, 10) || "")}</td>
+                        <td className="mono" style={{ fontSize: 11 }}>{fmt_d(c.finalizado_at?.slice(0, 10) || "")}</td>
                         <td className="num-right mono" style={{ color: "var(--danger)", fontWeight: 500 }}>
                           {fmt_$(c.valor_diferencia)}
                         </td>

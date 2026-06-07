@@ -68,10 +68,9 @@ const ADMIN_NAVIGATION_FULL: NavCategory[] = [
       { slug: 'canales',        label: 'Canales',         href: '/menu/canales' },
       { slug: 'lista-precios',  label: 'Lista de precios', href: '/menu/lista-precios' },
       { slug: 'disponibilidad', label: 'Disponibilidad',  href: '/menu/disponibilidad' },
-      // F1.1b CMV: insumos + recetas + materias primas (proveedor-específicas).
-      { slug: 'insumos',         label: 'Insumos',         href: '/menu/insumos' },
-      { slug: 'materias-primas', label: 'Materias primas', href: '/menu/materias-primas' },
-      { slug: 'recetas',         label: 'Recetas',         href: '/menu/recetas' },
+      // Mudanza 07-jun (Pieza E): insumos / materias primas / recetas se crean
+      // y administran en PASE (Recetario), COMANDA solo consume. Sacados del nav
+      // (las rutas siguen existiendo pero sin link). El CMV/alertas también en PASE.
       { slug: 'alertas-margen',  label: 'Alertas margen',  href: '/menu/alertas-margen' },
       { slug: 'revision',        label: 'Items por revisar', href: '/menu/revision' },
     ],
