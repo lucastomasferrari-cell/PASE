@@ -114,7 +114,7 @@ Lector IA lee factura     ─┴─► crear_factura_completa (guarda factura + 
 ## 6. Qué pasa al resolver
 
 1. Se setea `materia_prima_id` en el/los `factura_items`.
-2. El trigger existente suma stock al insumo: `cantidad_insumo = cantidad_compra × factor_conversion × (1 − merma_pct/100)`. **Acción técnica**: verificar/ajustar que el trigger aplique `merma_pct` (hoy aplica `factor_conversion`; confirmar el rendimiento).
+2. El trigger existente suma stock al insumo aplicando **`factor_conversion`** (empaque: caja→kg). **El rendimiento (`merma_pct`) NO se aplica en esta pieza**: que la merma vaya al entrar (stock = fileteada) o al consumir (stock = entera) es la misma decisión de "dónde se cuenta el stock físico" que está diferida a la **Pieza C**. Para la Pieza A el trigger queda como está (solo empaque).
 3. El **costo** del insumo se actualiza (promedio ponderado de sus materias primas activas; `materias_primas.precio_actual` = último precio de factura).
 4. El movimiento de stock se fecha con la **fecha de la factura** (retroactivo) para que el histórico/AvT quede bien.
 5. Se escribe `compras_mapeo` (memoria).
@@ -176,7 +176,7 @@ Códigos de error UPPER_SNAKE mapeados en `errors.ts`.
 
 ## 11. Plan de fases
 
-- **Fase 0 — Schema** (chico): `compras_mapeo` + columna `descartado_conciliacion` + RLS. Verificar/ajustar que el trigger aplique `merma_pct`.
+- **Fase 0 — Schema** (chico): `compras_mapeo` + columna `descartado_conciliacion` + RLS. (El trigger NO se toca — la merma es de Pieza C.)
 - **Fase 1 — Backend**: `fn_compras_automatch`, `fn_conciliar_producto`, `fn_descartar_renglon`, vista `v_bandeja_conciliacion`.
 - **Fase 2 — Frontend**: pantalla Conciliación (dos vistas + tabla + panel), badge en menú, wiring con el modal manual y el Lector IA.
 - **Fase 3 — Pulido**: aprendizaje de alias fuzzy + filtro descartados + contadores.
@@ -196,7 +196,7 @@ Cada fase con su commit + verificación. Neko sigue operando (la bandeja no romp
 
 ## 13. Diferido / open questions
 
-1. **Dónde se cuenta el stock físico** (raw vs prepped, flag stockeable) → **Pieza C (Stock)**. No bloquea.
+1. **Dónde se cuenta el stock físico** (raw vs prepped, flag stockeable) → **Pieza C (Stock)**. Incluye **cuándo se aplica el rendimiento (`merma_pct`)**: al entrar la compra (stock = fileteada) o al consumir en la venta (stock = entera). No bloquea la Pieza A.
 2. **Costo del insumo**: promedio ponderado de materias primas activas, ventana de últimas N compras → afinar en Pieza B/C. Default: promedio simple de MPs activas.
 3. **Match global vs por proveedor**: `compras_mapeo` soporta ambos (proveedor_id NULL = global). Default: por proveedor; permitir marcar "este mapeo vale para cualquier proveedor".
 4. **Mermas de almacenamiento** (no de procesamiento) → Pieza C.
