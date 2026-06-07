@@ -109,6 +109,10 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
 
   // Selector "Nueva receta" — modal con lista de items sin receta.
   const [selectorOpen, setSelectorOpen] = useState(false);
+  // Crear item / sub-receta nuevo desde PASE (antes solo se podía en COMANDA).
+  const [nuevoNombre, setNuevoNombre] = useState("");
+  const [nuevoPrecio, setNuevoPrecio] = useState("");
+  const [nuevoEsPrep, setNuevoEsPrep] = useState(false);
 
   const puedeEditar = tienePermiso(user, "rentabilidad") || user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin";
 
@@ -155,6 +159,18 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
     for (const r of recetas) m.set(r.item_id, r);
     return m;
   }, [recetas]);
+
+  // Sub-recetas disponibles como ingrediente = prep-items que YA tienen receta.
+  // Su costo (item.costo_actual) lo mantiene al día la cascada del backend.
+  const subRecetas = useMemo(
+    () => items.filter(i => i.es_prep_item && recetaByItemId.has(i.id)),
+    [items, recetaByItemId],
+  );
+  const prepById = useMemo(() => {
+    const m = new Map<number, Item>();
+    for (const p of subRecetas) m.set(p.id, p);
+    return m;
+  }, [subRecetas]);
 
   // Map grupo_id → nombre del grupo (para mostrar categoría)
   const grupoById = useMemo(() => {
@@ -212,11 +228,13 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
       type LineaRaw = RecetaInsumo & { insumos?: { nombre: string; unidad: string; costo_actual: number | null }[] | { nombre: string; unidad: string; costo_actual: number | null } | null };
       const populated: RecetaInsumo[] = ((lineas || []) as unknown as LineaRaw[]).map(l => {
         const ins = Array.isArray(l.insumos) ? l.insumos[0] : l.insumos;
+        const prep = l.prep_item_id ? prepById.get(l.prep_item_id) : null;
         return {
           ...l,
           insumo_nombre: ins?.nombre,
           insumo_unidad: ins?.unidad,
           insumo_costo: ins?.costo_actual,
+          prep_nombre: prep?.nombre,
         };
       });
       setDrawerInsumos(populated);
@@ -237,17 +255,26 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
     setDrawerNotas("");
   };
 
-  // === Cálculos CMV en vivo (local, sin RPC) ===
+  // Costo unitario de una línea: insumo crudo (insumo.costo_actual) o
+  // sub-receta (item.costo_actual del prep, que la cascada del backend mantiene
+  // al día — Pieza B Fase 1).
+  const costoUnitLinea = (l: RecetaInsumo): number =>
+    l.prep_item_id
+      ? Number(prepById.get(l.prep_item_id)?.costo_actual ?? 0)
+      : Number(l.insumo_costo ?? 0);
+
+  // === Cálculos CMV en vivo (local) — incluye sub-recetas anidadas ===
   // Suma: cantidad × costo_unitario × (1 + merma_pct/100)
-  // Por ahora ignoramos sub-recetas (prep_item_id) — para v1, solo costo directo.
   const cmvDrawer = useMemo(() => {
     return drawerInsumos.reduce((sum, l) => {
       const cantidad = Number(l.cantidad ?? 0);
-      const costo = Number(l.insumo_costo ?? 0);
+      const costo = l.prep_item_id
+        ? Number(prepById.get(l.prep_item_id)?.costo_actual ?? 0)
+        : Number(l.insumo_costo ?? 0);
       const merma = Number(l.merma_pct ?? 0) / 100;
       return sum + (cantidad * costo * (1 + merma));
     }, 0);
-  }, [drawerInsumos]);
+  }, [drawerInsumos, prepById]);
 
   const cmvPorPorcion = useMemo(() => {
     const r = parseFloat(drawerRendimiento) || 1;
@@ -360,6 +387,10 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
       console.warn("[Recetas] No se pudo actualizar receta_id_vigente en items:", itErr.message);
     }
 
+    // Recalcular costo del item desde la receta + cascada hacia arriba (Pieza B Fase 1).
+    const { error: recErr } = await db.rpc("fn_recalc_costo_item", { p_item_id: drawer.id, p_depth: 0 });
+    if (recErr) console.warn("[Recetas] No se pudo recalcular costo:", recErr.message);
+
     showToast(drawerReceta ? "Receta actualizada" : "Receta creada");
     cerrarDrawer();
     await load();
@@ -377,6 +408,33 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
     showToast("Receta borrada");
     cerrarDrawer();
     await load();
+  });
+
+  // Crear un item vendible o una sub-receta (prep-item) desde PASE, y abrir su
+  // editor de receta. Antes los items solo se creaban en COMANDA (ahora todo el
+  // catálogo se arma en PASE — directiva Lucas 07-jun).
+  const { run: crearItemNuevo, isPending: creandoItem } = useGuardedHandler(async () => {
+    if (!nuevoNombre.trim()) { showError("Ponele un nombre"); return; }
+    const precio = nuevoEsPrep ? 0 : (parseFloat(nuevoPrecio) || 0);
+    const { data, error } = await db.from("items").insert([{
+      tenant_id: user.tenant_id,
+      created_by: user.id,
+      nombre: nuevoNombre.trim(),
+      es_prep_item: nuevoEsPrep,
+      precio_madre: precio,
+      estado: "disponible",
+      // Las sub-recetas no se venden: no visibles en POS/QR/Tienda.
+      visible_pos: !nuevoEsPrep,
+      visible_qr: !nuevoEsPrep,
+      visible_tienda: !nuevoEsPrep,
+    }]).select("id, nombre, emoji, precio_madre, costo_actual, estado, es_combo, es_prep_item, receta_id_vigente, grupo_id").single();
+    if (error || !data) { showError("No se pudo crear: " + (error?.message ?? "vacío")); return; }
+    const esPrep = nuevoEsPrep;
+    setNuevoNombre(""); setNuevoPrecio(""); setNuevoEsPrep(false);
+    setSelectorOpen(false);
+    await load();
+    showToast(esPrep ? "Sub-receta creada — cargale los ingredientes" : "Item creado — cargale la receta");
+    void abrirDrawer(data as Item);
   });
 
   // Trigger "Nueva receta" desde el padre Recetario via ?action=nueva-receta.
@@ -411,10 +469,8 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
               <button
                 className="btn btn-acc"
                 onClick={() => setSelectorOpen(true)}
-                disabled={itemsSinReceta.length === 0}
-                title={itemsSinReceta.length === 0 ? "Todos los items ya tienen receta" : ""}
               >
-                + Nueva receta
+                + Nueva receta / item
               </button>
             )}
           </div>
@@ -605,14 +661,14 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <div style={{ fontSize: 12, fontWeight: 500 }}>Ingredientes ({drawerInsumos.length})</div>
                 {puedeEditar && (
-                  <button className="btn btn-ghost btn-sm" onClick={agregarLinea} disabled={insumos.length === 0}>
+                  <button className="btn btn-ghost btn-sm" onClick={agregarLinea} disabled={insumos.length === 0 && subRecetas.length === 0}>
                     + Agregar ingrediente
                   </button>
                 )}
               </div>
-              {insumos.length === 0 ? (
+              {insumos.length === 0 && subRecetas.length === 0 ? (
                 <div style={{ padding: 16, textAlign: "center", color: "var(--warn)", fontSize: 12, background: "var(--s2)", borderRadius: 4 }}>
-                  No hay insumos cargados. Andá a Insumos y agregá los ingredientes primero.
+                  No hay insumos ni sub-recetas cargados. Andá a Insumos y agregá los ingredientes primero.
                 </div>
               ) : drawerInsumos.length === 0 ? (
                 <div style={{ padding: 16, textAlign: "center", color: "var(--muted2)", fontSize: 12, background: "var(--s2)", borderRadius: 4 }}>
@@ -632,18 +688,36 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
                   </thead>
                   <tbody>
                     {drawerInsumos.map((l, idx) => {
-                      const costoLinea = Number(l.cantidad ?? 0) * Number(l.insumo_costo ?? 0) * (1 + Number(l.merma_pct ?? 0) / 100);
+                      const costoLinea = Number(l.cantidad ?? 0) * costoUnitLinea(l) * (1 + Number(l.merma_pct ?? 0) / 100);
                       return (
                         <tr key={`${l.id}-${idx}`}>
                           <td>
                             <select
-                              value={l.insumo_id ?? ""}
-                              onChange={e => updateLinea(idx, { insumo_id: e.target.value ? parseInt(e.target.value) : null })}
+                              value={l.prep_item_id ? `prep:${l.prep_item_id}` : (l.insumo_id ? `ins:${l.insumo_id}` : "")}
+                              onChange={e => {
+                                const v = e.target.value;
+                                if (v.startsWith("prep:")) {
+                                  const pid = parseInt(v.slice(5));
+                                  updateLinea(idx, { prep_item_id: pid, insumo_id: null, prep_nombre: prepById.get(pid)?.nombre });
+                                } else if (v.startsWith("ins:")) {
+                                  updateLinea(idx, { insumo_id: parseInt(v.slice(4)), prep_item_id: null, prep_nombre: undefined });
+                                }
+                              }}
                               className="search"
                               style={{ width: "100%" }}
                               disabled={!puedeEditar}
                             >
-                              {insumos.map(i => <option key={i.id} value={i.id}>{i.nombre} ({fmt_$(Number(i.costo_actual ?? 0))}/{i.unidad})</option>)}
+                              <option value="">Seleccionar…</option>
+                              <optgroup label="Insumos">
+                                {insumos.map(i => <option key={`ins-${i.id}`} value={`ins:${i.id}`}>{i.nombre} ({fmt_$(Number(i.costo_actual ?? 0))}/{i.unidad})</option>)}
+                              </optgroup>
+                              {subRecetas.filter(p => p.id !== drawer?.id).length > 0 && (
+                                <optgroup label="Sub-recetas">
+                                  {subRecetas.filter(p => p.id !== drawer?.id).map(p => (
+                                    <option key={`prep-${p.id}`} value={`prep:${p.id}`}>{p.nombre} ({fmt_$(Number(p.costo_actual ?? 0))}/porción)</option>
+                                  ))}
+                                </optgroup>
+                              )}
                             </select>
                           </td>
                           <td>
@@ -658,7 +732,7 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
                               disabled={!puedeEditar}
                             />
                           </td>
-                          <td className="mono" style={{ fontSize: 11, color: "var(--muted2)" }}>{l.insumo_unidad}</td>
+                          <td className="mono" style={{ fontSize: 11, color: "var(--muted2)" }}>{l.prep_item_id ? "porción" : l.insumo_unidad}</td>
                           <td>
                             <input
                               type="number"
@@ -699,9 +773,34 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
         maxWidth={520}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ fontSize: 12, color: "var(--muted2)" }}>
-            Elegí el item al que querés cargarle la receta. Solo se muestran los que aún no tienen una.
-          </div>
+          {/* Crear item / sub-receta nuevo desde PASE (todo el catálogo en PASE) */}
+          {puedeEditar && (
+            <div style={{ padding: 10, background: "var(--s2)", borderRadius: 6, display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 600 }}>Crear nuevo en PASE</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <input
+                  type="text"
+                  value={nuevoNombre}
+                  onChange={e => setNuevoNombre(e.target.value)}
+                  placeholder={nuevoEsPrep ? "Nombre de la sub-receta (ej: Shari)" : "Nombre del item (ej: Roll Philadelphia)"}
+                  className="search"
+                  style={{ flex: 1 }}
+                />
+                {!nuevoEsPrep && (
+                  <input type="number" value={nuevoPrecio} onChange={e => setNuevoPrecio(e.target.value)} placeholder="Precio" className="search" style={{ width: 90 }} />
+                )}
+              </div>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--muted2)" }}>
+                <input type="checkbox" checked={nuevoEsPrep} onChange={e => setNuevoEsPrep(e.target.checked)} />
+                Es una sub-receta (se usa dentro de otras recetas, no se vende)
+              </label>
+              <button className="btn btn-acc btn-sm" onClick={() => crearItemNuevo()} disabled={creandoItem || !nuevoNombre.trim()}>
+                {creandoItem ? "Creando…" : nuevoEsPrep ? "Crear sub-receta + cargar ingredientes" : "Crear item + cargar receta"}
+              </button>
+            </div>
+          )}
+
+          <div style={{ fontSize: 11, color: "var(--muted2)", textAlign: "center" }}>— o cargale la receta a un item existente —</div>
           {itemsSinReceta.length === 0 ? (
             <div className="empty" style={{ padding: 24 }}>
               Todos los items ya tienen receta cargada.

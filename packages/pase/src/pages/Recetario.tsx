@@ -121,10 +121,8 @@ export default function Recetario({ user, locales = [], localActivo }: Recetario
               <button
                 className="btn btn-acc"
                 onClick={() => triggerAction("nueva-receta")}
-                disabled={counts.sinReceta <= 0}
-                title={counts.sinReceta <= 0 ? "Todos los items ya tienen receta" : ""}
               >
-                + Nueva receta
+                + Nueva receta / item
               </button>
             )}
           </>
