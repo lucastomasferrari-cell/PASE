@@ -111,6 +111,7 @@ export interface LiqParaRecibo {
   monto_presentismo?: number | null;
   descuento_ausencias?: number | null;
   otros_descuentos?: number | null;
+  bono?: number | null;
   adelantos?: number | null;
   total_a_pagar?: number | null;
   pagos_realizados?: number | null;
@@ -166,6 +167,7 @@ export function construirReciboMensual(args: {
   if (num(liq.total_feriados) > 0) conceptos.push({ label: "Feriados", monto: num(liq.total_feriados), signo: "+" });
   if (num(liq.total_vacaciones) > 0) conceptos.push({ label: "Plus vacacional", monto: num(liq.total_vacaciones), signo: "+" });
   if (num(liq.monto_presentismo) > 0) conceptos.push({ label: "Presentismo", monto: num(liq.monto_presentismo), signo: "+" });
+  if (num(liq.bono) > 0) conceptos.push({ label: "Bono", monto: num(liq.bono), signo: "+" });
   if (num(liq.descuento_ausencias) > 0) conceptos.push({ label: "Faltas", monto: num(liq.descuento_ausencias), signo: "-" });
   if (num(liq.otros_descuentos) > 0) conceptos.push({ label: "Otros descuentos", monto: num(liq.otros_descuentos), signo: "-" });
   if (num(liq.adelantos) > 0) conceptos.push({ label: "Adelantos", monto: num(liq.adelantos), signo: "-" });

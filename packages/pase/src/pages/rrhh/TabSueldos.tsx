@@ -73,6 +73,8 @@ interface NovDB {
   vacaciones_dias: number | null;
   otros_descuentos: number | null;
   otros_descuentos_motivo: string | null;
+  bono: number | null;
+  bono_motivo: string | null;
   observaciones: string | null;
   estado: string;
   // F6 02-jun: plan de pago. NULL si no se cargó.
@@ -144,11 +146,12 @@ interface NovEdit {
   vacaciones_dias: number;
   presentismo_mantiene: boolean;
   otros_desc: number;
+  bono: number;
   obs: string;
 }
 const NOV_VACIA: NovEdit = {
   inasistencias: 0, horas_extras: 0, dobles: 0, feriados: 0, vacaciones_dias: 0,
-  presentismo_mantiene: true, otros_desc: 0, obs: "",
+  presentismo_mantiene: true, otros_desc: 0, bono: 0, obs: "",
 };
 function novDBaEdit(n: NovDB | undefined): NovEdit {
   if (!n) return { ...NOV_VACIA };
@@ -164,6 +167,7 @@ function novDBaEdit(n: NovDB | undefined): NovEdit {
     // explícito: solo false si DB tiene 'PIERDE', true en cualquier otro caso.
     presentismo_mantiene: n.presentismo !== "PIERDE",
     otros_desc: Number(n.otros_descuentos || 0),
+    bono: Number(n.bono || 0),
     obs: n.observaciones || "",
   };
 }
@@ -209,6 +213,7 @@ interface DesgloseCalculo {
   plusVacacional: number;  // NUEVO: plus por días de vacaciones tomados
   presentismo: number;
   otrosDesc: number;
+  ingrBono: number;
   totalAdelantos: number;
   total: number;
 }
@@ -229,6 +234,7 @@ function calcularDesglose(emp: Emp, nov: NovEdit, cuotasTotal: number, cuotaNum:
     adelantos: adelantosATildar,
     pagos_dobles_realizados: 0,
     otros_descuentos: nov.otros_desc,
+    bono: nov.bono,
     cuota_num: cuotaNum,
     cuotas_total: cuotasTotal,
   });
@@ -241,6 +247,7 @@ function calcularDesglose(emp: Emp, nov: NovEdit, cuotasTotal: number, cuotaNum:
     plusVacacional: Math.round(r.total_vacaciones),
     presentismo: Math.round(r.monto_presentismo),
     otrosDesc: Math.round(nov.otros_desc),
+    ingrBono: Math.round(nov.bono),
     totalAdelantos: Math.round(adelantosATildar),
     total: Math.max(0, r.total_a_pagar),
   };
@@ -336,7 +343,7 @@ export function TabSueldos({
 
       // Novedades existentes del mes (+ liquidación para el resumen de pago).
       const { data: novs } = await db.from("rrhh_novedades")
-        .select("id, empleado_id, mes, anio, cuota_num, cuotas_total, inasistencias, presentismo, horas_extras, dobles, feriados, vacaciones_dias, otros_descuentos, otros_descuentos_motivo, observaciones, estado, monto_efectivo, monto_mp, rrhh_liquidaciones(id, estado, total_a_pagar, pagos_realizados)")
+        .select("id, empleado_id, mes, anio, cuota_num, cuotas_total, inasistencias, presentismo, horas_extras, dobles, feriados, vacaciones_dias, otros_descuentos, otros_descuentos_motivo, bono, bono_motivo, observaciones, estado, monto_efectivo, monto_mp, rrhh_liquidaciones(id, estado, total_a_pagar, pagos_realizados)")
         .in("empleado_id", empIds)
         .eq("mes", mes).eq("anio", anio);
       type NovRow = NovDB & { rrhh_liquidaciones: { id: string; estado: string; total_a_pagar: number; pagos_realizados: number }[] | null };
@@ -384,7 +391,7 @@ export function TabSueldos({
   const construirRecibosDeLiqs = async (liqIds: string[]): Promise<ReciboSueldoModel[]> => {
     if (liqIds.length === 0) return [];
     const { data: liqRows } = await db.from("rrhh_liquidaciones")
-      .select("id, sueldo_base, total_horas_extras, total_dobles, total_feriados, total_vacaciones, monto_presentismo, descuento_ausencias, otros_descuentos, adelantos, total_a_pagar, pagos_realizados, cuota_num, cuotas_total, pagado_at, rrhh_novedades(empleado_id, mes, anio)")
+      .select("id, sueldo_base, total_horas_extras, total_dobles, total_feriados, total_vacaciones, monto_presentismo, descuento_ausencias, otros_descuentos, bono, adelantos, total_a_pagar, pagos_realizados, cuota_num, cuotas_total, pagado_at, rrhh_novedades(empleado_id, mes, anio)")
       .in("id", liqIds);
     const { data: movs } = await db.from("movimientos")
       .select("liquidacion_id, cuenta, importe").in("liquidacion_id", liqIds).eq("anulado", false);
@@ -552,6 +559,7 @@ export function TabSueldos({
       feriados: Math.max(0, nov.feriados || 0),
       vacaciones_dias: Math.max(0, nov.vacaciones_dias || 0),
       otros_descuentos: Math.max(0, nov.otros_desc || 0),
+      bono: Math.max(0, nov.bono || 0),
       observaciones: nov.obs || null,
       estado: estadoFinal,
     };
@@ -1032,6 +1040,7 @@ export function TabSueldos({
           subtotal2: Math.round(subtotal2),
           adelantos: d.totalAdelantos,
           otros_descuentos: d.otrosDesc,
+          bono: d.ingrBono,
           total_a_pagar: total,
           cuota_num: s.cuota,
           cuotas_total: s.cuotasTotal,
@@ -1378,8 +1387,9 @@ export function TabSueldos({
                                 {nov.feriados > 0 && <Pill label="Feriados" value={nov.feriados} tone="success" />}
                                 {nov.vacaciones_dias > 0 && <Pill label="Vacaciones" value={`${nov.vacaciones_dias} días`} tone="success" />}
                                 {nov.otros_desc > 0 && <Pill label="Otros desc" value={fmt_$(nov.otros_desc)} tone="danger" />}
+                                {nov.bono > 0 && <Pill label="Bono" value={fmt_$(nov.bono)} tone="success" />}
                                 <Pill label="Presentismo" value={nov.presentismo_mantiene ? "sí" : "no"} tone={nov.presentismo_mantiene ? "success" : undefined} />
-                                {nov.inasistencias === 0 && nov.horas_extras === 0 && nov.dobles === 0 && nov.feriados === 0 && nov.vacaciones_dias === 0 && nov.otros_desc === 0 && (
+                                {nov.inasistencias === 0 && nov.horas_extras === 0 && nov.dobles === 0 && nov.feriados === 0 && nov.vacaciones_dias === 0 && nov.otros_desc === 0 && nov.bono === 0 && (
                                   <span style={{ fontSize: 10, color: "var(--muted2)" }}>Sin novedades extras</span>
                                 )}
                               </div>
@@ -1394,6 +1404,7 @@ export function TabSueldos({
                                 <NovInput label="Feriados" value={nov.feriados} onChange={v => updateNov(s.key, "feriados", v)} disabled={isConfirmado(s.key)} />
                                 <NovInput label="Vacaciones (días)" value={nov.vacaciones_dias} onChange={v => updateNov(s.key, "vacaciones_dias", v)} disabled={isConfirmado(s.key)} />
                                 <NovInput label="Otros desc. $" value={nov.otros_desc} onChange={v => updateNov(s.key, "otros_desc", v)} disabled={isConfirmado(s.key)} />
+                                <NovInput label="Bonos $" value={nov.bono} onChange={v => updateNov(s.key, "bono", v)} disabled={isConfirmado(s.key)} />
                                 <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: isConfirmado(s.key) ? "not-allowed" : "pointer", fontSize: 11, paddingTop: 12, gridColumn: "1 / -1" }}>
                                   <input
                                     type="checkbox"
@@ -1475,6 +1486,7 @@ export function TabSueldos({
                             {nov.inasistencias > 0 && <DesgloseRow label={`− ${nov.inasistencias} faltas`} value={`−${fmt_$(d.descInas)}`} tone="danger" />}
                             {nov.presentismo_mantiene && d.presentismo > 0 && <DesgloseRow label="+ Presentismo 5%" value={`+${fmt_$(d.presentismo)}`} tone="success" />}
                             {nov.presentismo_mantiene && d.presentismo === 0 && s.cuotasTotal === 2 && s.cuota === 1 && <DesgloseRow label="Presentismo: se paga en Q2" value="—" />}
+                            {nov.bono > 0 && <DesgloseRow label="+ Bono" value={`+${fmt_$(d.ingrBono)}`} tone="success" />}
                             {nov.otros_desc > 0 && <DesgloseRow label="− Otros desc." value={`−${fmt_$(d.otrosDesc)}`} tone="danger" />}
                             {sumaAdel > 0 && <DesgloseRow label={`− Ya pagado (${tildSet.size})`} value={`−${fmt_$(d.totalAdelantos)}`} tone="danger" />}
                             <div style={{

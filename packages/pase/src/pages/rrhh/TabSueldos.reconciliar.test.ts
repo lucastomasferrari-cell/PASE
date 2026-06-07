@@ -12,7 +12,7 @@ function dbRow(over: Record<string, unknown> = {}) {
   };
 }
 const slot = { key: "E1__1", empId: "E1", cuota: 1, cuotasTotal: 1 };
-const NOV0 = { inasistencias: 0, horas_extras: 0, dobles: 0, feriados: 0, vacaciones_dias: 0, presentismo_mantiene: true, otros_desc: 0, obs: "" };
+const NOV0 = { inasistencias: 0, horas_extras: 0, dobles: 0, feriados: 0, vacaciones_dias: 0, presentismo_mantiene: true, otros_desc: 0, bono: 0, obs: "" };
 
 describe("reconciliarNovEdits (fix data-loss sueldos 04-jun)", () => {
   it("slot NO tocado con prev en 0 pero la DB tiene datos → re-sincroniza desde la DB", () => {

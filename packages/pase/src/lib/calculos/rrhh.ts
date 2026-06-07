@@ -18,6 +18,8 @@ export interface LiquidacionParams {
   pagos_dobles_realizados: number;
   /** Descuentos manuales arbitrarios (préstamos, daños, faltantes). */
   otros_descuentos?: number;
+  /** Bonos / premios manuales que SUMAN al sueldo (productividad, etc.). */
+  bono?: number;
   /** Número de cuota cuando es quincenal (1 o 2). Solo se usa para presentismo
    *  — en Q1 quincenal NO se paga (se difiere a Q2 cuando ya se sabe si lo
    *  perdió o no). Pedido Lucas 31-may. */
@@ -38,6 +40,7 @@ export interface LiquidacionResult {
   subtotal2: number;
   adelantos: number;
   otros_descuentos: number;
+  bono: number;
   pagos_realizados: number;
   total_a_pagar: number;
 }
@@ -241,6 +244,7 @@ export function calcularTotalLiquidacion(params: LiquidacionParams): Liquidacion
     dobles, valor_doble, feriados, vacaciones_dias,
     presentismo_mantiene, adelantos, pagos_dobles_realizados,
     otros_descuentos = 0,
+    bono = 0,
     cuota_num, cuotas_total,
   } = params;
 
@@ -271,8 +275,9 @@ export function calcularTotalLiquidacion(params: LiquidacionParams): Liquidacion
     : 0;
   const subtotal2 = subtotal1 + monto_presentismo;
   const descuentos_extra = Math.max(0, otros_descuentos);
+  const bono_extra = Math.max(0, bono);
   const total_a_pagar = Math.round(
-    subtotal2 - Math.max(0, adelantos) - Math.max(0, pagos_dobles_realizados) - descuentos_extra,
+    subtotal2 + bono_extra - Math.max(0, adelantos) - Math.max(0, pagos_dobles_realizados) - descuentos_extra,
   );
 
   return {
@@ -287,6 +292,7 @@ export function calcularTotalLiquidacion(params: LiquidacionParams): Liquidacion
     subtotal2,
     adelantos: Math.max(0, adelantos),
     otros_descuentos: descuentos_extra,
+    bono: bono_extra,
     pagos_realizados: Math.max(0, pagos_dobles_realizados),
     total_a_pagar,
   };

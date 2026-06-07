@@ -517,6 +517,24 @@ describe("calcularTotalLiquidacion", () => {
     expect(r.total_a_pagar).toBeCloseTo(600000 + 30000 - 20000, 0);
   });
 
+  it("con bono → SUMA al total (espejo de otros desc.)", () => {
+    const r = calcularTotalLiquidacion({ ...base, bono: 45000 });
+    expect(r.bono).toBe(45000);
+    expect(r.total_a_pagar).toBe(600000 + 30000 + 45000); // 675.000
+  });
+
+  it("bono + otros desc. + adelanto combinados", () => {
+    const r = calcularTotalLiquidacion({ ...base, bono: 50000, otros_descuentos: 20000, adelantos: 30000 });
+    // 600k base + 30k presentismo + 50k bono − 20k otros − 30k adelanto
+    expect(r.total_a_pagar).toBe(600000 + 30000 + 50000 - 20000 - 30000); // 630.000
+  });
+
+  it("bono negativo se clampa a 0 (no resta)", () => {
+    const r = calcularTotalLiquidacion({ ...base, bono: -10000 });
+    expect(r.bono).toBe(0);
+    expect(r.total_a_pagar).toBe(630000);
+  });
+
   it("todo combinado → resultado correcto", () => {
     const r = calcularTotalLiquidacion({
       ...base,
