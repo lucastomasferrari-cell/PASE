@@ -198,4 +198,30 @@ test.describe("Sueldo — pagar de más (sobrepago) mutante", () => {
     // Y NO el que incluiría el sobrepago:
     expect(delta).not.toBeCloseTo((SENTINEL + EXTRA) / 12, 2);
   });
+
+  // Freno 08-jun (caso Alexia): sobrepago GRANDE (> $5000) se rechaza, porque
+  // casi siempre es plata de otro mes cayendo en el mes equivocado.
+  test("sobrepago grande (> $5000) se RECHAZA con SOBREPAGO_EXCESIVO", async () => {
+    const pagado = SENTINEL + 10000; // 10k de más → supera el tope de 5k
+    const pCalc = {
+      sueldo_base: SENTINEL, descuento_ausencias: 0, total_horas_extras: 0,
+      total_dobles: 0, total_feriados: 0, total_vacaciones: 0,
+      subtotal1: SENTINEL, monto_presentismo: 0, subtotal2: SENTINEL,
+      adelantos: 0, total_a_pagar: SENTINEL, efectivo: pagado, transferencia: 0,
+    };
+    const { error: e } = await db.rpc("pagar_sueldo", {
+      p_nov_id: novId,
+      p_formas_pago: [{ cuenta: CUENTA, monto: pagado }],
+      p_adelantos_ids: [],
+      p_fecha: new Date().toISOString().slice(0, 10),
+      p_mes: MES, p_anio: ANIO,
+      p_crear_liq: true, p_calc: pCalc, p_idempotency_key: null,
+    });
+    expect(e).not.toBeNull();
+    expect(e!.message).toContain("SOBREPAGO_EXCESIVO");
+
+    // Rollback atómico: no quedó liquidación ni movimiento.
+    const { data: liqs } = await db.from("rrhh_liquidaciones").select("id").eq("novedad_id", novId);
+    expect(liqs?.length ?? 0).toBe(0);
+  });
 });

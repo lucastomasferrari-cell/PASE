@@ -1017,6 +1017,22 @@ export function TabSueldos({
     const totalSueldoPago = yaPagadoPrev > 0 && liqYa ? Math.round(Number(liqYa.total_a_pagar)) : Math.round(total);
     const faltaPagarAhora = Math.max(0, totalSueldoPago - yaPagadoPrev);
     const totalAsignado = formasValidas.reduce((acc, f) => acc + f.monto, 0) + sumaAdel;
+
+    // BLOQUEO de sobrepago grande (Lucas 08-jun, caso Alexia): pagás el mes
+    // donde estás parado, por lo que ese mes debe. Un sobrepago chico (redondeo
+    // para arriba) se permite, pero pagar MUCHO más de lo que falta casi siempre
+    // es plata de OTRO MES cayendo en el mes equivocado, o un aumento no cargado.
+    // Se frena para que no se repita lo de Alexia ($908k de junio pagados en mayo).
+    const TOPE_SOBREPAGO = 5000;
+    if (totalAsignado > faltaPagarAhora + TOPE_SOBREPAGO) {
+      showError(
+        `Estás pagando ${fmt_$(totalAsignado - faltaPagarAhora)} MÁS de lo que falta de ${s.emp.apellido} (falta ${fmt_$(faltaPagarAhora)}). ` +
+        `Si esa plata es de OTRO MES, cambiá a ese mes y pagá ahí. ` +
+        `Si tuvo un aumento, actualizá el sueldo para que el total dé bien.`
+      );
+      return;
+    }
+
     if (totalAsignado < faltaPagarAhora - 1) {
       const ok = window.confirm(
         `Vas a pagar ${fmt_$(totalAsignado)} de ${fmt_$(faltaPagarAhora)} que falta de ${s.emp.apellido} ${s.emp.nombre}` +
