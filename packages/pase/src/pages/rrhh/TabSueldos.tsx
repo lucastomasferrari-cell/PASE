@@ -944,17 +944,29 @@ export function TabSueldos({
     const planMp = novDB?.monto_mp != null ? Number(novDB.monto_mp) : 0;
     const hayPlan = (planEfe + planMp) > 0;
 
-    if (hayPlan) {
+    // Si ya hubo un pago parcial (liquidación pendiente con pagos_realizados),
+    // el default del pago es SOLO lo que falta — no el total entero. Evita el
+    // doble pago (caso Alexia/Esteban: se volvía a pagar el sueldo completo).
+    const liqExist = liqDelSlot(s.emp.id, s.cuota);
+    const yaPagado = Math.round(Number(liqExist?.pagos_realizados ?? 0));
+    const faltaPagar = yaPagado > 0 && liqExist
+      ? Math.max(0, Math.round(Number(liqExist.total_a_pagar)) - yaPagado)
+      : Math.round(total);
+    const cuentaEfectivo = cuentasUsables.find(c => /efect/i.test(c)) ?? cuentasUsables[0] ?? "";
+    const cuentaMP = cuentasUsables.find(c => /mp|mercado/i.test(c)) ?? cuentasUsables[1] ?? cuentasUsables[0] ?? "";
+
+    if (yaPagado > 0) {
+      // Pago parcial previo → una línea con lo que falta.
+      setPagoLineas([{ cuenta: cuentaEfectivo, monto: String(faltaPagar), local_id: s.emp.local_id }]);
+    } else if (hayPlan) {
       // Heurística para preseleccionar cuenta: buscar entre cuentasUsables
       // una que matchee el método. Si no encuentra, cae a primera disponible.
-      const cuentaEfectivo = cuentasUsables.find(c => /efect/i.test(c)) ?? cuentasUsables[0] ?? "";
-      const cuentaMP = cuentasUsables.find(c => /mp|mercado/i.test(c)) ?? cuentasUsables[1] ?? cuentasUsables[0] ?? "";
       const lineas: { cuenta: string; monto: string; local_id?: number | null }[] = [];
       if (planEfe > 0) lineas.push({ cuenta: cuentaEfectivo, monto: String(planEfe), local_id: s.emp.local_id });
       if (planMp > 0) lineas.push({ cuenta: cuentaMP, monto: String(planMp), local_id: s.emp.local_id });
       setPagoLineas(lineas);
     } else {
-      setPagoLineas([{ cuenta: cuentasUsables[0] || "", monto: String(total), local_id: s.emp.local_id }]);
+      setPagoLineas([{ cuenta: cuentasUsables[0] || "", monto: String(faltaPagar), local_id: s.emp.local_id }]);
     }
     setFechaPago(toISO(today));
     setIdempKey(crypto.randomUUID());
@@ -996,14 +1008,20 @@ export function TabSueldos({
     if (!novId) { showError("No se pudo guardar la novedad antes de pagar. Reintentá."); return; }
 
     // Aviso de pago parcial: si lo asignado (formas de pago + adelantos) es
-    // menor al total, confirmar explícitamente. Antes se registraba un pago
-    // parcial en silencio y el empleado quedaba pendiente sin que nadie se
-    // enterara (caso Dunstan 07-jun: faltó la línea de Caja).
+    // menor a lo que FALTA, confirmar explícitamente. Antes se registraba un
+    // pago parcial en silencio y el empleado quedaba pendiente sin que nadie se
+    // enterara (caso Dunstan/Alexia 07/08-jun). Se descuenta lo ya pagado para
+    // que en un 2º pago el aviso compare contra el puchito pendiente, no el total.
+    const liqYa = liqDelSlot(s.emp.id, s.cuota);
+    const yaPagadoPrev = Math.round(Number(liqYa?.pagos_realizados ?? 0));
+    const totalSueldoPago = yaPagadoPrev > 0 && liqYa ? Math.round(Number(liqYa.total_a_pagar)) : Math.round(total);
+    const faltaPagarAhora = Math.max(0, totalSueldoPago - yaPagadoPrev);
     const totalAsignado = formasValidas.reduce((acc, f) => acc + f.monto, 0) + sumaAdel;
-    if (totalAsignado < Math.round(total) - 1) {
+    if (totalAsignado < faltaPagarAhora - 1) {
       const ok = window.confirm(
-        `Vas a pagar ${fmt_$(totalAsignado)} de ${fmt_$(Math.round(total))} total de ${s.emp.apellido} ${s.emp.nombre}.\n\n` +
-        `Quedaría PENDIENTE ${fmt_$(Math.round(total) - totalAsignado)}.\n\n¿Seguro que querés pagar parcial?`
+        `Vas a pagar ${fmt_$(totalAsignado)} de ${fmt_$(faltaPagarAhora)} que falta de ${s.emp.apellido} ${s.emp.nombre}` +
+        (yaPagadoPrev > 0 ? ` (ya se había pagado ${fmt_$(yaPagadoPrev)})` : "") + `.\n\n` +
+        `Quedaría PENDIENTE ${fmt_$(faltaPagarAhora - totalAsignado)}.\n\n¿Seguro que querés pagar parcial?`
       );
       if (!ok) return;
     }
@@ -1516,7 +1534,13 @@ export function TabSueldos({
                       {!isPagado && esDueno && (() => {
                         const plan = planEdits[s.key] ?? { efectivo: "", mp: "" };
                         const cargado = planTotalCargado(s.key);
-                        const total = d.total;
+                        // Si quedó un pago parcial, el "target" a cubrir es lo que
+                        // FALTA (total del sueldo − ya pagado), no el total entero.
+                        // Así se ve claro el puchito pendiente (pedido Anto 08-jun).
+                        const liqSlot = liqDelSlot(s.emp.id, s.cuota);
+                        const yaPagadoSlot = Math.round(Number(liqSlot?.pagos_realizados ?? 0));
+                        const totalSueldo = yaPagadoSlot > 0 && liqSlot ? Math.round(Number(liqSlot.total_a_pagar)) : Math.round(d.total);
+                        const total = Math.max(0, totalSueldo - yaPagadoSlot);
                         const dif = total - cargado;
                         // Pagar de MÁS está permitido (redondeo para arriba —
                         // en Argentina ya casi no hay billetes chicos). Pagar
@@ -1541,6 +1565,16 @@ export function TabSueldos({
                           <div style={{
                             marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--bd)",
                           }}>
+                            {yaPagadoSlot > 0 && (
+                              <div style={{
+                                marginBottom: 10, padding: "7px 12px", borderRadius: 6,
+                                background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)",
+                                fontSize: 11.5, color: "var(--warn)", textAlign: "center",
+                              }}>
+                                ⚠ Pago parcial: ya se pagó <strong>{fmt_$(yaPagadoSlot)}</strong> de {fmt_$(totalSueldo)} ·
+                                {" "}<strong>falta {fmt_$(total)}</strong> de este sueldo
+                              </div>
+                            )}
                             <div style={{
                               display: "flex", alignItems: "center", justifyContent: "center",
                               gap: 18, flexWrap: "wrap",
