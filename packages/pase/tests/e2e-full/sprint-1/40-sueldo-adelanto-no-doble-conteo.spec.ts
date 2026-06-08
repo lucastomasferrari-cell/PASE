@@ -46,6 +46,11 @@ test.describe.serial("E2E Test 40 — adelanto sin doble conteo", () => {
       await svc.from("rrhh_novedades").delete()
         .eq("tenant_id", seed.tenantId).eq("empleado_id", empleado.id).eq("mes", mes).eq("anio", anio);
 
+      // Snapshot aguinaldo ANTES (para verificar que acumula sobre el BRUTO).
+      const { data: empPre } = await svc.from("rrhh_empleados")
+        .select("aguinaldo_acumulado").eq("id", empleado.id).single();
+      const aguinaldoPre = Number(empPre?.aguinaldo_acumulado ?? 0);
+
       // 1. Adelanto pendiente (descontado=false).
       const { data: adel, error: adelErr } = await svc.from("rrhh_adelantos").insert({
         tenant_id: seed.tenantId, empleado_id: empleado.id,
@@ -111,6 +116,13 @@ test.describe.serial("E2E Test 40 — adelanto sin doble conteo", () => {
       movIds.push(...(res2.mov_ids || []));
       expect(res2.completa).toBe(true);
       expect(Number(res2.pagos_realizados)).toBe(NETO); // 70.000, no 100.000
+
+      // ★ Aguinaldo (07-jun): acumula sobre el BRUTO (subtotal2 = 100.000),
+      // NO sobre el neto (70.000). delta = 100.000/12 ≈ 8.333,33.
+      const { data: empPost } = await svc.from("rrhh_empleados")
+        .select("aguinaldo_acumulado").eq("id", empleado.id).single();
+      const deltaAguinaldo = Number(empPost!.aguinaldo_acumulado) - aguinaldoPre;
+      expect(deltaAguinaldo).toBeCloseTo(BRUTO / 12, 1); // 8.333,33 (no 5.833,33 del neto)
     } finally {
       // Cleanup: anular movs de pago (revierte saldo + libera adelanto), borrar filas.
       for (const m of movIds) {
