@@ -341,6 +341,20 @@ export async function modificarItem(
   return { error: error?.message ?? null };
 }
 
+/**
+ * Order-by-seat: asigna un ítem a un comensal (seat). `comensal=0` lo vuelve a
+ * compartido (sin asignar). No toca cocina ni totales — solo agrupa la cuenta.
+ */
+export async function asignarComensalItem(
+  itemId: number, comensal: number,
+): Promise<{ error: string | null }> {
+  const { error } = await db.rpc('fn_asignar_comensal_item', {
+    p_item_id: itemId,
+    p_comensal: comensal,
+  });
+  return { error: error?.message ?? null };
+}
+
 export async function anularItem(
   itemId: number, managerId: string, motivo: string,
   idempotencyKey?: string,

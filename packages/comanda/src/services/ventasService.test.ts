@@ -18,7 +18,7 @@ vi.mock('../lib/featureFlags', () => ({
 }));
 
 import {
-  abrirVenta, agregarItem, mandarCurso, anularItem, modificarItem,
+  abrirVenta, agregarItem, mandarCurso, anularItem, modificarItem, asignarComensalItem,
 } from './ventasService';
 
 beforeEach(() => mockRpc.mockReset());
@@ -87,6 +87,23 @@ describe('modificarItem maneja null para no-cambios', () => {
     await modificarItem(1, { cantidad: 3 });
     expect(mockRpc).toHaveBeenCalledWith('fn_modificar_item_comanda', {
       p_item_id: 1, p_cantidad: 3, p_curso: null, p_notas: null,
+    });
+  });
+});
+
+describe('asignarComensalItem (order-by-seat)', () => {
+  it('pasa item + comensal al RPC', async () => {
+    mockRpc.mockResolvedValue({ data: null, error: null });
+    await asignarComensalItem(42, 3);
+    expect(mockRpc).toHaveBeenCalledWith('fn_asignar_comensal_item', {
+      p_item_id: 42, p_comensal: 3,
+    });
+  });
+  it('comensal=0 (volver a compartido) pasa 0', async () => {
+    mockRpc.mockResolvedValue({ data: null, error: null });
+    await asignarComensalItem(42, 0);
+    expect(mockRpc).toHaveBeenCalledWith('fn_asignar_comensal_item', {
+      p_item_id: 42, p_comensal: 0,
     });
   });
 });

@@ -270,6 +270,8 @@ export interface VentaPos {
   canal_id: number;
   turno_caja_id: number | null;
   mesa_id: number | null;
+  /** Order-by-seat: cantidad de comensales en la mesa. NULL = no se usa. */
+  comensales: number | null;
   mozo_id: string | null;
   cajero_id: string | null;
   cliente_nombre: string | null;
@@ -332,6 +334,8 @@ export interface VentaPosItem {
   descuento: number;
   modificadores: VentaPosItemModificador[] | null;
   curso: number | null;
+  /** Order-by-seat: nro de comensal/asiento al que se asignó el ítem. NULL = compartido / sin asignar. */
+  comensal: number | null;
   combo_padre_id: number | null;
   es_combo_padre: boolean;
   estado: EstadoVentaItem;
