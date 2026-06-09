@@ -17,6 +17,7 @@ import { DiscountDialog } from '@/components/dialogs/DiscountDialog';
 import { TransferMesaDialog } from '@/components/dialogs/TransferMesaDialog';
 import { MergeMesasDialog } from '@/components/dialogs/MergeMesasDialog';
 import { SplitCheckDialog } from '@/components/dialogs/SplitCheckDialog';
+import { ComensalSplitDialog } from '@/components/dialogs/ComensalSplitDialog';
 import { ManagerOverrideDialog } from '@/components/dialogs/ManagerOverrideDialog';
 import { anularVenta, anularItem, modificarPrecioItem, cortesiaItem } from '@/services/overridesService';
 import { marcarDisponible } from '@/services/itemsService';
@@ -73,6 +74,7 @@ export function VentaScreen() {
   const [showTransfer, setShowTransfer] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
   const [showSplit, setShowSplit] = useState(false);
+  const [showComensalSplit, setShowComensalSplit] = useState(false);
   const [showAnular, setShowAnular] = useState(false);
   const [pendingModifiers, setPendingModifiers] = useState<ItemConGrupo | null>(null);
 
@@ -377,6 +379,7 @@ export function VentaScreen() {
           onTransfer={() => setShowTransfer(true)}
           onMerge={() => setShowMerge(true)}
           onSplit={() => setShowSplit(true)}
+          onDividirComensal={() => setShowComensalSplit(true)}
           onAnular={() => setShowAnular(true)}
           onOpenHistorial={() => setHistorialOpen(true)}
           tiempoEstimadoMin={tiempoEstimadoMin}
@@ -497,6 +500,19 @@ export function VentaScreen() {
           onPartida={(nueva) => {
             toast.success(`Cuenta partida — venta nueva #${nueva}`);
             reload();
+          }}
+        />
+      )}
+
+      {showComensalSplit && (
+        <ComensalSplitDialog
+          open={showComensalSplit}
+          onOpenChange={setShowComensalSplit}
+          venta={venta}
+          empleadoId={empleado.id}
+          onCobrado={() => {
+            reload();
+            setShowEmitirFactura(true);
           }}
         />
       )}

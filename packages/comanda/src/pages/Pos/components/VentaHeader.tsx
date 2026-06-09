@@ -21,6 +21,7 @@ export interface VentaHeaderProps {
   onTransfer: () => void;
   onMerge: () => void;
   onSplit: () => void;
+  onDividirComensal: () => void;
   onAnular: () => void;
   onOpenHistorial: () => void;
   tiempoEstimadoMin: number;
@@ -41,6 +42,7 @@ export const VentaHeader = React.memo(function VentaHeader({
   onTransfer,
   onMerge,
   onSplit,
+  onDividirComensal,
   onAnular,
   onOpenHistorial,
   tiempoEstimadoMin,
@@ -144,6 +146,9 @@ export const VentaHeader = React.memo(function VentaHeader({
             )}
             <DropdownMenuItem onClick={onSplit}>
               Partir cuenta
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onDividirComensal}>
+              Dividir por comensal
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onOpenHistorial}>
               Ver historial de cambios
