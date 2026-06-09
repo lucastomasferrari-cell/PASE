@@ -80,6 +80,7 @@ test.describe('F1.7 — reversos pendientes drain (mutante)', () => {
       tenant_id: tenantId, local_id: localId,
       numero_local: 99_960_000 + Math.floor(Math.random() * 1000),
       modo: 'mostrador', canal_id: canalId, turno_caja_id: turnoIdA,
+      cajero_id: empleadoId, // necesario: el reverso hereda el empleado del cajero
       estado: 'abierta', origen: 'pos', subtotal: 3000, total: 3000,
     }).select('id').single();
     ventaId = vIns!.id as number;
@@ -137,14 +138,12 @@ test.describe('F1.7 — reversos pendientes drain (mutante)', () => {
     try { await db.auth.signOut(); } catch { /* idempotente */ }
   });
 
-  // ⚠️ GAP CONOCIDO (09-jun, descubierto al armar el ensayo general):
-  // fn_anular_venta_comanda sobre una venta COBRADA con el turno CERRADO la
-  // marca 'anulada' PERO deja el ingreso en movimientos_caja SIN compensar y
-  // NO encola un reverso_pendiente → la caja queda sobrestimada. El mecanismo
-  // de reversos no dispara en este caso. Marcado test.fixme (visible, no
-  // falso-verde) hasta decidir el comportamiento correcto + revisar el trigger
-  // fn_trg_revertir_movimientos_al_anular_venta. Ver tareas pendientes.
-  test.fixme('anular sin turno encola, abrir turno drena automático', async () => {
+  // Bug arreglado 09-jun (migración 202606091510): la función
+  // fn_trg_revertir_movimientos_al_anular_venta existía pero NO estaba conectada
+  // como trigger en ventas_pos → al anular una venta cobrada no se compensaba la
+  // caja ni se encolaba el reverso. Fix: (re)crear el trigger trg_revertir_
+  // movimientos_anular_venta.
+  test('anular sin turno encola, abrir turno drena automático', async () => {
     // ── 4. Anular venta con turno A CERRADO → debe encolar en reversos_pendientes
     const { error: errAnular } = await db.rpc('fn_anular_venta_comanda', {
       p_venta_id: ventaId!,

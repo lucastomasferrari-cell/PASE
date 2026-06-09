@@ -65,15 +65,11 @@ test.describe('F1.6b — fn_movimiento_caja_comanda mutante', () => {
     try { await db.auth.signOut(); } catch { /* idempotente */ }
   });
 
-  // ⚠️ BUG CONOCIDO (09-jun, descubierto al armar el ensayo general):
-  // fn_movimiento_caja_comanda, al registrar el manager override de un retiro
-  // grande (>umbral), inserta en ventas_pos_overrides con venta_id=NULL, pero
-  // esa columna es NOT NULL → el retiro grande FALLA en producción ("null value
-  // in column venta_id"). Un NOT NULL se agregó sin actualizar esta RPC (misma
-  // clase que el idempotency_key por pago). FIX requiere migración (venta_id
-  // nullable para overrides de caja, o CHECK por accion). Marcado test.fixme
-  // hasta aplicar el fix de backend. Ver tareas pendientes.
-  test.fixme('depósito + retiro chico OK + retiro grande requiere manager', async () => {
+  // Bug arreglado 09-jun (migración 202606091500): el override del retiro grande
+  // insertaba ventas_pos_overrides con venta_id=NULL/accion='retiro_caja' que
+  // violaba NOT NULL + el CHECK de accion → el retiro grande con manager fallaba.
+  // Fix: venta_id nullable + 'retiro_caja' en el CHECK.
+  test('depósito + retiro chico OK + retiro grande requiere manager', async () => {
     // 1. Depósito $1000 sin manager → OK
     const { data: dep, error: errDep } = await db.rpc('fn_movimiento_caja_comanda', {
       p_local_id: localId,
