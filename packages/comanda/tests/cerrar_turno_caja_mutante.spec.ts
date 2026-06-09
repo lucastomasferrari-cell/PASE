@@ -26,7 +26,6 @@ import { createDuenoClient } from './helpers/supabaseClient';
 // porque trabaja solo con el sentinel id que abrió este test.
 
 const LOCAL = 'Local Prueba 2';
-const SENTINEL_NUMERO = 99_920_000 + Math.floor(Math.random() * 1000);
 
 test.describe('F1.6 — cerrar turno caja (mutante)', () => {
   let db: SupabaseClient;
@@ -62,7 +61,19 @@ test.describe('F1.6 — cerrar turno caja (mutante)', () => {
     if (!items || items.length === 0) throw new Error('Sin items en Neko');
     itemId = items[0]!.id as number;
 
-    // Abrir turno sentinel (siempre uno fresh para este test).
+    // PRE: cerrar cualquier turno abierto con el RPC real (NO UPDATE directo:
+    // turnos_caja_history tiene RLS que bloquea el trigger en escrituras
+    // directas del cliente). Así este test arranca con su PROPIO turno limpio,
+    // sin movimientos de otros tests que ensucien el cálculo de cierre.
+    const { data: abiertosPrev } = await db.from('turnos_caja').select('id')
+      .eq('local_id', localId).eq('estado', 'abierto');
+    for (const t of (abiertosPrev ?? []) as Array<{ id: number }>) {
+      await db.rpc('fn_cerrar_turno_caja_comanda', {
+        p_turno_id: t.id, p_cerrado_por: empleadoId, p_monto_final_declarado: 0,
+        p_notas: 'pre-close e2e', p_idempotency_key: `e2e-f16-preclose-${t.id}-${Date.now()}`,
+      });
+    }
+    // Abrir turno sentinel fresco para este test.
     const idemAbrir = `e2e-f16-abrir-${Date.now()}`;
     const { data: turnoIdData, error: turnoErr } = await db.rpc('fn_abrir_turno_caja_comanda', {
       p_local_id: localId,
@@ -71,25 +82,13 @@ test.describe('F1.6 — cerrar turno caja (mutante)', () => {
       p_notas: 'e2e f1.6 mutante',
       p_idempotency_key: idemAbrir,
     });
-    if (turnoErr) {
-      // Si ya hay un turno abierto (race con otro test), usar ese.
-      if (turnoErr.message.includes('TURNO_YA_ABIERTO')) {
-        const { data: t } = await db.from('turnos_caja').select('id')
-          .eq('local_id', localId).eq('estado', 'abierto')
-          .order('id', { ascending: false }).limit(1);
-        if (!t || t.length === 0) throw new Error('TURNO_YA_ABIERTO pero no encuentro el id');
-        turnoId = t[0]!.id as number;
-      } else {
-        throw new Error(`Error abriendo turno: ${turnoErr.message}`);
-      }
-    } else {
-      turnoId = Number(turnoIdData);
-    }
+    if (turnoErr) throw new Error(`Error abriendo turno: ${turnoErr.message}`);
+    turnoId = Number(turnoIdData);
 
     // Crear venta + item + cobrar para tener movimiento efectivo en el turno.
     const { data: ventaIns, error: vErr } = await db.from('ventas_pos').insert({
       tenant_id: tenantId, local_id: localId,
-      numero_local: SENTINEL_NUMERO,
+      numero_local: 99_920_000 + Math.floor(Math.random() * 100_000), // único por test (la unique cuenta soft-deleted)
       modo: 'mostrador', canal_id: canalId, turno_caja_id: turnoId,
       estado: 'abierta', origen: 'pos', subtotal: 1500, total: 1500,
     }).select('id').single();
@@ -106,7 +105,7 @@ test.describe('F1.6 — cerrar turno caja (mutante)', () => {
     // Cobrar para que entre el movimiento de venta efectivo
     const { error: cErr } = await db.rpc('fn_cobrar_venta_comanda', {
       p_venta_id: ventaId,
-      p_pagos: [{ metodo: 'efectivo', monto: 1500 }],
+      p_pagos: [{ metodo: 'efectivo', monto: 1500, idempotency_key: `e2e-pago-${ventaId}` }],
       p_propina: 0,
       p_cobrado_por: null,
       p_idempotency_key: `e2e-f16-cobro-${ventaId}-${Date.now()}`,
@@ -115,24 +114,15 @@ test.describe('F1.6 — cerrar turno caja (mutante)', () => {
   });
 
   test.afterEach(async () => {
-    // Reabrir el turno sentinel y limpiar movimientos de cierre que metió este test
+    // Limpiar los movimientos de cierre que metió este test. NO reabrimos el
+    // turno con UPDATE directo (la RLS de turnos_caja_history lo bloquea y
+    // dejaría el turno cerrado igual): lo dejamos cerrado y cada test abre su
+    // propio turno limpio en el beforeEach (PRE-close + abrir).
     if (turnoId) {
       try {
         await db.from('movimientos_caja').delete()
           .eq('turno_caja_id', turnoId).eq('tipo', 'cierre');
       } catch (e) { console.error('[cleanup cierre mov]', e); }
-      try {
-        // Reabrir SOLO si nosotros lo cerramos.
-        await db.from('turnos_caja').update({
-          estado: 'abierto',
-          cerrado_at: null,
-          cerrado_por: null,
-          monto_final_declarado: null,
-          monto_final_calculado: null,
-          diferencia: null,
-          cerrar_idempotency_key: null,
-        }).eq('id', turnoId);
-      } catch (e) { console.error('[cleanup reabrir turno]', e); }
     }
     if (ventaId) {
       try {

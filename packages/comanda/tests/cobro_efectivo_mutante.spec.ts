@@ -106,9 +106,12 @@ test.describe('Cobro efectivo — mutante', () => {
   test('cobro efectivo cubierto + idempotency + no re-cobra ya cobrada', async () => {
     // ── 1. Cobrar venta con pago efectivo ─────────────────────────────────
     const idempotencyKey = `e2e-cobro-${ventaId}-${Date.now()}`;
+    // Cada pago de p_pagos requiere su propio idempotency_key (contrato real:
+    // PagoInput lo incluye; la columna ventas_pos_pagos.idempotency_key es NOT NULL).
+    const pagoKey = `e2e-cobro-pago-${ventaId}`;
     const { data: cobro1, error: errCobro } = await db.rpc('fn_cobrar_venta_comanda', {
       p_venta_id: ventaId!,
-      p_pagos: [{ metodo: 'efectivo', monto: 1000 }],
+      p_pagos: [{ metodo: 'efectivo', monto: 1000, idempotency_key: pagoKey }],
       p_propina: 0,
       p_cobrado_por: null,
       p_idempotency_key: idempotencyKey,
@@ -142,7 +145,7 @@ test.describe('Cobro efectivo — mutante', () => {
     // ── 2. Idempotency: 2do call con misma key → mismo resultado ─────────
     const { data: cobro2, error: errCobro2 } = await db.rpc('fn_cobrar_venta_comanda', {
       p_venta_id: ventaId!,
-      p_pagos: [{ metodo: 'efectivo', monto: 1000 }],
+      p_pagos: [{ metodo: 'efectivo', monto: 1000, idempotency_key: pagoKey }],
       p_propina: 0,
       p_cobrado_por: null,
       p_idempotency_key: idempotencyKey,
@@ -161,7 +164,7 @@ test.describe('Cobro efectivo — mutante', () => {
     // ── 3. 3er call con OTRA key → falla (venta ya cobrada) ──────────────
     const { error: err3 } = await db.rpc('fn_cobrar_venta_comanda', {
       p_venta_id: ventaId!,
-      p_pagos: [{ metodo: 'efectivo', monto: 1000 }],
+      p_pagos: [{ metodo: 'efectivo', monto: 1000, idempotency_key: `${pagoKey}-3` }],
       p_propina: 0,
       p_cobrado_por: null,
       p_idempotency_key: `e2e-cobro-${ventaId}-otra-key-${Date.now()}`,

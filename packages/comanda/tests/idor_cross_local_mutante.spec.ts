@@ -139,7 +139,7 @@ test.describe('F1.5 — IDOR cross-local (mutante)', () => {
     //     refund con manager del otro local.
     const { error: errCobro } = await db.rpc('fn_cobrar_venta_comanda', {
       p_venta_id: ventaId!,
-      p_pagos: [{ metodo: 'efectivo', monto: 5000 }],
+      p_pagos: [{ metodo: 'efectivo', monto: 5000, idempotency_key: `e2e-pago-${ventaId}` }],
       p_propina: 0,
       p_cobrado_por: null,
       p_idempotency_key: `e2e-idor-cobro-${ventaId}-${Date.now()}`,

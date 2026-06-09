@@ -191,7 +191,7 @@ test.describe('Sprint 7 — anular venta + refund (mutante)', () => {
 
     const { error: errCobro } = await db.rpc('fn_cobrar_venta_comanda', {
       p_venta_id: ventaId,
-      p_pagos: [{ metodo: 'efectivo', monto: 2500 }],
+      p_pagos: [{ metodo: 'efectivo', monto: 2500, idempotency_key: `e2e-pago-${ventaId}` }],
       p_propina: 0,
       p_cobrado_por: null,
       p_idempotency_key: `e2e-refund-cobro-${ventaId}-${Date.now()}`,

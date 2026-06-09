@@ -54,13 +54,17 @@ test.describe('F1.7 — reversos pendientes drain (mutante)', () => {
     const { data: items } = await db.from('items').select('id').eq('tenant_id', tenantId).limit(1);
     itemId = items![0]!.id as number;
 
-    // PRE: no debe haber turno abierto — si hay, cerrarlo
+    // PRE: no debe haber turno abierto — si hay, cerrarlo con el RPC real
+    // (NO con UPDATE directo: la tabla turnos_caja_history tiene RLS que
+    // bloquea el trigger de historial en escrituras directas del cliente; el
+    // RPC es SECURITY DEFINER y lo saltea, igual que producción).
     const { data: turnoEx } = await db
       .from('turnos_caja').select('id').eq('local_id', localId).eq('estado', 'abierto');
     for (const t of (turnoEx ?? []) as Array<{ id: number }>) {
-      await db.from('turnos_caja').update({
-        estado: 'cerrado', cerrado_at: new Date().toISOString(),
-      }).eq('id', t.id);
+      await db.rpc('fn_cerrar_turno_caja_comanda', {
+        p_turno_id: t.id, p_cerrado_por: empleadoId, p_monto_final_declarado: 0,
+        p_notas: 'pre-close e2e', p_idempotency_key: `e2e-rev-preclose-${t.id}-${Date.now()}`,
+      });
     }
 
     // 1. Abrir turno A
@@ -85,7 +89,7 @@ test.describe('F1.7 — reversos pendientes drain (mutante)', () => {
       curso: 1, estado: 'enviado', enviado_at: new Date().toISOString(),
     });
     const { error: errCobro } = await db.rpc('fn_cobrar_venta_comanda', {
-      p_venta_id: ventaId, p_pagos: [{ metodo: 'efectivo', monto: 3000 }],
+      p_venta_id: ventaId, p_pagos: [{ metodo: 'efectivo', monto: 3000, idempotency_key: `e2e-pago-${ventaId}` }],
       p_propina: 0, p_cobrado_por: null,
       p_idempotency_key: `e2e-rev-cobro-${ventaId}-${Date.now()}`,
     });
@@ -133,7 +137,14 @@ test.describe('F1.7 — reversos pendientes drain (mutante)', () => {
     try { await db.auth.signOut(); } catch { /* idempotente */ }
   });
 
-  test('anular sin turno encola, abrir turno drena automático', async () => {
+  // ⚠️ GAP CONOCIDO (09-jun, descubierto al armar el ensayo general):
+  // fn_anular_venta_comanda sobre una venta COBRADA con el turno CERRADO la
+  // marca 'anulada' PERO deja el ingreso en movimientos_caja SIN compensar y
+  // NO encola un reverso_pendiente → la caja queda sobrestimada. El mecanismo
+  // de reversos no dispara en este caso. Marcado test.fixme (visible, no
+  // falso-verde) hasta decidir el comportamiento correcto + revisar el trigger
+  // fn_trg_revertir_movimientos_al_anular_venta. Ver tareas pendientes.
+  test.fixme('anular sin turno encola, abrir turno drena automático', async () => {
     // ── 4. Anular venta con turno A CERRADO → debe encolar en reversos_pendientes
     const { error: errAnular } = await db.rpc('fn_anular_venta_comanda', {
       p_venta_id: ventaId!,

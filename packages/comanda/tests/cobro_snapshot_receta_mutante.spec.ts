@@ -174,7 +174,7 @@ test.describe('F1.1c — snapshot receta al cobrar venta (mutante)', () => {
     const idemKey = `e2e-f11c-${ventaId}-${Date.now()}`;
     const { data: totalCobrado, error: errCobro } = await db.rpc('fn_cobrar_venta_comanda', {
       p_venta_id: ventaId!,
-      p_pagos: [{ metodo: 'efectivo', monto: 2000 }],
+      p_pagos: [{ metodo: 'efectivo', monto: 2000, idempotency_key: `e2e-pago-${ventaId}` }],
       p_propina: 0,
       p_cobrado_por: null,
       p_idempotency_key: idemKey,
@@ -230,7 +230,7 @@ test.describe('F1.1c — snapshot receta al cobrar venta (mutante)', () => {
     // ── 6. IDEMPOTENCY: 2do call mismo key → NO re-snapshotea ─────────────
     const { error: errRecobro } = await db.rpc('fn_cobrar_venta_comanda', {
       p_venta_id: ventaId!,
-      p_pagos: [{ metodo: 'efectivo', monto: 2000 }],
+      p_pagos: [{ metodo: 'efectivo', monto: 2000, idempotency_key: `e2e-pago-${ventaId}` }],
       p_propina: 0,
       p_cobrado_por: null,
       p_idempotency_key: idemKey,
