@@ -5,6 +5,20 @@ html, body, #root {
   min-height: 100vh;
 }
 
+/* Ocultar los spinners (flechitas ▲▼) de los <input type="number"> en TODO el
+   sistema — pedido Lucas 08-jun ("queda antiestético, que solo se escriba").
+   El input sigue siendo numérico; solo se saca el control de subir/bajar. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 #root {
   display: block;
 }
