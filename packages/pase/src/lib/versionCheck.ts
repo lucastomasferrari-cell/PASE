@@ -30,7 +30,6 @@
 
 import { useEffect, useRef } from "react";
 import { db } from "./supabase";
-import { skipAutoSignOut } from "./rememberMe";
 
 // Hash del commit embebido en build (ver vite.config.ts → `define`).
 // En dev queda como `dev-<timestamp>` y nunca matchea version.json, pero
@@ -63,14 +62,13 @@ async function handleDeployDetectado(motivo: string) {
   if (_yaForzandoLogout) return;
   _yaForzandoLogout = true;
 
-  if (skipAutoSignOut(`versionCheck: ${motivo}`)) {
-    // Solo reload — el JWT sigue siendo válido, el listener onAuthStateChange
-    // en App.tsx re-hidrata el perfil al detectar INITIAL_SESSION.
-    window.location.reload();
-    return;
-  }
-
-  console.warn(`[versionCheck] ${motivo} — signOut + reload`);
+  // Pedido Lucas 08-jun: tras un deploy, LOGOUT a TODOS los usuarios → login,
+  // SIN excepción de "Mantener sesión". Antes, con remember_me ON, se hacía
+  // reload-only conservando la sesión vieja → eso era JUSTO lo que producía la
+  // "pantalla fantasma" (sidebar sin locales) entre el deploy y el logout. Al
+  // desloguear siempre, la próxima carga arranca en Login limpio (tokens +
+  // bundle frescos) y nunca se renderiza el dashboard a medio cargar.
+  console.warn(`[versionCheck] ${motivo} — signOut + reload (logout-all post-deploy)`);
   try {
     await db.auth.signOut();
   } catch {
@@ -86,6 +84,21 @@ async function handleDeployDetectado(motivo: string) {
   // que `location.reload()` ya pide el HTML nuevo y el HTML linkea los
   // bundles con hash nuevo).
   window.location.reload();
+}
+
+/**
+ * Chequeo INMEDIATO de versión (no espera al polling). Lo llama App.tsx apenas
+ * detecta el estado "logueado pero sin locales": si el bundle quedó viejo, es
+ * post-deploy → logout a login al instante (no muestra ghost). Devuelve true si
+ * detectó deploy y disparó el logout.
+ */
+export async function checkVersionNow(): Promise<boolean> {
+  const local = typeof __BUILD_VERSION__ !== "undefined" ? __BUILD_VERSION__ : "";
+  if (!local || local.startsWith("dev-")) return false;
+  const server = await fetchServerVersion();
+  if (!server || server === local) return false;
+  await handleDeployDetectado(`Deploy detectado (check inmediato: server=${server}, local=${local})`);
+  return true;
 }
 
 /**

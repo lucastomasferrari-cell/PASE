@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { db } from "./lib/supabase";
 import { initConsoleCapture } from "./lib/consoleCapture";
-import { useVersionPolling } from "./lib/versionCheck";
+import { useVersionPolling, checkVersionNow } from "./lib/versionCheck";
 import { skipAutoSignOut } from "./lib/rememberMe";
 // Capturar errores de consola desde el boot, ANTES de cualquier otro código.
 // Los errores capturados se incluyen en tickets de soporte para que el agent
@@ -128,6 +128,74 @@ const FullPageLoader = () => (
     `}</style>
   </div>
 );
+// Pantalla "Reconectando…" — se muestra en lugar del dashboard cuando el user
+// está logueado pero `locales` quedó vacío (carrera de sesión / post-deploy).
+// Evita que se renderice la "pantalla fantasma" (sidebar sin locales). Mientras
+// se ve esto, App chequea si fue un deploy (→ logout a login) y reintenta los
+// fetches; si nada recupera, el watchdog recarga. El botón deja salir ya.
+const ReconectandoScreen = ({ onLogout }: { onLogout: () => void }) => {
+  // Los primeros 1.5s se ve IGUAL que el loader normal (brand + barra) para que
+  // una recarga rápida sea seamless (no flashea "reconectando"). Si sigue
+  // trabada, revela el mensaje + botón de escape.
+  const [mostrarMensaje, setMostrarMensaje] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setMostrarMensaje(true), 1500);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <div className="pase-loader-fullpage">
+      <div className="pase-loader-brand">pase<span style={{color:"var(--pase-gold)"}}>.</span></div>
+      <div className="pase-loader-sub">{mostrarMensaje ? "reconectando…" : "aliado gastronómico"}</div>
+      <div className="pase-loader-bar"><div className="pase-loader-bar-fill"/></div>
+      {mostrarMensaje && (
+        <>
+          <div style={{
+            fontSize: 12, color: "var(--pase-text-muted, #93A8C2)", maxWidth: 320,
+            textAlign: "center", marginTop: 14, marginBottom: 16, lineHeight: 1.5,
+          }}>
+            Estamos restableciendo tu sesión. Si acaba de salir una actualización,
+            en unos segundos te llevamos al login.
+          </div>
+          <button
+            onClick={onLogout}
+            style={{
+              fontSize: 12, padding: "7px 16px", borderRadius: 8, cursor: "pointer",
+              color: "var(--pase-text, #F0F4F8)", background: "transparent",
+              border: "0.5px solid rgba(117,170,219,0.4)", fontFamily: "inherit",
+            }}
+          >Ir al login ahora</button>
+        </>
+      )}
+      <style>{`
+        .pase-loader-fullpage {
+          position: fixed; inset: 0;
+          background: var(--pase-bg, #0E1726);
+          display: flex; flex-direction: column;
+          align-items: center; justify-content: center; gap: 8px;
+          z-index: 9999; font-family: "Inter", system-ui, sans-serif;
+        }
+        .pase-loader-brand {
+          font-size: 38px; font-weight: 500;
+          color: var(--pase-text, #F0F4F8); letter-spacing: -0.035em; line-height: 1;
+        }
+        .pase-loader-sub {
+          font-size: 11px; color: var(--pase-text-muted, #93A8C2); letter-spacing: 0.04em;
+          margin-bottom: 16px;
+        }
+        .pase-loader-bar {
+          width: 180px; height: 2px; background: rgba(117, 170, 219, 0.15);
+          border-radius: 999px; overflow: hidden; position: relative;
+        }
+        .pase-loader-bar-fill {
+          position: absolute; top: 0; left: -40%; width: 40%; height: 100%;
+          background: var(--pase-celeste, #75AADB); border-radius: 999px;
+          animation: pase-loader-slide 1.2s ease-in-out infinite;
+        }
+        @keyframes pase-loader-slide { 0% { left: -40%; } 100% { left: 100%; } }
+      `}</style>
+    </div>
+  );
+};
 // Loader inline para cambio de ruta — sidebar ya está montada, solo
 // se carga el área principal. Usa el mismo brand pero más compacto.
 const PageLoader = () => (
@@ -242,9 +310,11 @@ function AppMain() {
   const [localActivo, setLocalActivo] = useState<number | null>(null);
   // Capturado en el PRIMER render (antes de que el effect de persistencia borre
   // pase_local_activo al montar): ¿el user ya tenía un local elegido antes del
-  // reload? Lo usa el watchdog anti-fantasma para no recargar a tenants nuevos.
-  const teniaLocalAlMontarRef = useRef<boolean>(
-    typeof window !== "undefined" && !!sessionStorage.getItem("pase_local_activo"),
+  // reload? Lo usan el gate y el watchdog anti-fantasma para no afectar a
+  // tenants nuevos. useState con init lazy → render-safe (a diferencia de un ref
+  // leído en render) y el valor se congela en el primer render.
+  const [teniaLocalAlMontar] = useState<boolean>(
+    () => typeof window !== "undefined" && !!sessionStorage.getItem("pase_local_activo"),
   );
   const [authLoading, setAuthLoading] = useState(true);
   const [tenant, setTenant] = useState<Tenant | null>(null);
@@ -283,9 +353,19 @@ function AppMain() {
     // (teniaLocalAlMontarRef) porque el effect de persistencia de localActivo
     // borra `pase_local_activo` al montar (localActivo arranca null). Un tenant
     // nuevo en onboarding (0 locales legítimo) nunca lo tuvo → NO recargamos.
-    if (!teniaLocalAlMontarRef.current) return;
+    if (!teniaLocalAlMontar) return;
+    let cancel = false;
+    // (1) CHEQUEO INMEDIATO DE DEPLOY: si el bundle quedó viejo (post-deploy),
+    // checkVersionNow hace logout a login al instante. Mientras tanto el render
+    // muestra "Reconectando…" (gate más abajo), nunca el dashboard fantasma.
+    // Es lo que pidió Lucas: tras un deploy, logout directo, sin ghost.
+    void checkVersionNow().catch(() => { /* sin red / dev → ignorar */ });
+    // (2) BACKSTOP para la carrera transitoria (NO deploy): si la query de
+    // locales salió anónima por timing y sigue vacía a los 6s, recargar una vez
+    // (recupera la sesión válida; si el token está muerto, restore() cae a
+    // login). Tope anti-loop: máx 2 recargas en 30s.
     const timer = setTimeout(async () => {
-      if (locales.length > 0) return; // se recuperó solo, no hace falta
+      if (cancel || locales.length > 0) return;
       const { data: { session } } = await db.auth.getSession();
       if (!session) return; // sin sesión = logout real, no es ghost
       const KEY = "pase_ghost_reloads";
@@ -301,10 +381,10 @@ function AppMain() {
       stamps.push(ahora);
       sessionStorage.setItem(KEY, JSON.stringify(stamps));
       // eslint-disable-next-line no-console
-      console.warn("[ghost-watchdog] logueado pero sin locales (sesión anónima/zombie) — recargando para recuperar");
+      console.warn("[ghost-watchdog] logueado pero sin locales (carrera de sesión) — recargando para recuperar");
       window.location.reload();
-    }, 7000);
-    return () => clearTimeout(timer);
+    }, 6000);
+    return () => { cancel = true; clearTimeout(timer); };
   }, [authLoading, user, locales.length]);
 
   const refetchLocales = async (retryDepth = 0) => {
@@ -712,6 +792,15 @@ function AppMain() {
     setLocalActivo(id);
     setShowLocalModal(false);
   }}/></Suspense></>;
+
+  // GATE anti "pantalla fantasma": si está logueado pero `locales` quedó vacío
+  // (y ya tenía un local antes → debería tenerlos), NO renderizamos el dashboard
+  // sin sidebar. Mostramos "Reconectando…" mientras el watchdog chequea deploy
+  // (→ logout a login) y reintenta los fetches. Un tenant nuevo (0 locales real)
+  // no entra acá porque teniaLocalAlMontarRef es false.
+  if (locales.length === 0 && teniaLocalAlMontar) {
+    return <><style>{css}</style><ReconectandoScreen onLogout={() => { void db.auth.signOut().finally(() => window.location.reload()); }} /></>;
+  }
 
   return (
     <AuthProvider value={user}>
