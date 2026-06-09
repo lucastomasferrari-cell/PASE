@@ -23,6 +23,7 @@ import { FacturasPorVencerWidget } from "./FacturasPorVencerWidget";
 import { VentasHoyWidget } from "./VentasHoyWidget";
 import { VentasSemanaWidget } from "./VentasSemanaWidget";
 import { ComparativaSucursalesWidget } from "./ComparativaSucursalesWidget";
+import { EfectivoConsolidadoWidget } from "./EfectivoConsolidadoWidget";
 import { ObjetivosMesWidget } from "./ObjetivosMesWidget";
 import { PuntoEquilibrioWidget } from "./PuntoEquilibrioWidget";
 import { UltimosOverridesWidget } from "./UltimosOverridesWidget";
@@ -111,6 +112,14 @@ export const WIDGETS: WidgetDefinition[] = [
     permisosRequeridos: ["negocio", "finanzas"],
     size: "md",
     render: (ctx) => <ComparativaSucursalesWidget ctx={ctx} />,
+  },
+  {
+    id: "efectivo_consolidado",
+    title: "Efectivo total (todos los locales)",
+    description: "Suma del efectivo (Caja Efectivo) de todos los locales, con desglose por sucursal. Solo dueño/admin.",
+    permisosRequeridos: ["finanzas"],
+    size: "sm",
+    render: (ctx) => <EfectivoConsolidadoWidget ctx={ctx} />,
   },
 
   // ─── Seguridad (admin only) ─────────────────────────────────────────────

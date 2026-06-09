@@ -84,6 +84,7 @@ export const DEFAULT_WIDGETS_POR_ROL: Record<RolPase, string[]> = {
   superadmin: ["tareas_pineadas", "ventas_semana", "objetivos_mes"],
   dueno: [
     "tareas_pineadas",
+    "efectivo_consolidado",
     "ventas_semana",
     "objetivos_mes",
     "punto_equilibrio",
@@ -94,6 +95,7 @@ export const DEFAULT_WIDGETS_POR_ROL: Record<RolPase, string[]> = {
   ],
   admin: [
     "tareas_pineadas",
+    "efectivo_consolidado",
     "ventas_semana",
     "objetivos_mes",
     "punto_equilibrio",
