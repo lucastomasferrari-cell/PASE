@@ -29,6 +29,10 @@ interface Ctx {
   managerId: string;
   turnoId: number;
   metodos: string[];
+  mesas: number[];        // ids de mesas libres del local (para transferir/unir)
+  insumoId: number;       // insumo sembrado (para probar descuento de stock)
+  recetaId: number;       // receta sembrada que liga itemIds[0] → insumoId
+  recetaInsumoId: number; // fila receta_insumos
 }
 
 const ventasCreadas: number[] = [];
@@ -115,7 +119,31 @@ test.describe('Servicio completo — ensayo general', () => {
     const metodos = (mets || []).map(m => m.slug as string);
     if (!metodos.includes('efectivo')) metodos.unshift('efectivo');
 
-    ctx = { db, localId, tenantId, canalId, itemIds, cajeroId, managerId, turnoId, metodos };
+    // Mesas libres del local (para transferir/unir). Puede haber 0.
+    const { data: mesasData } = await db.from('mesas').select('id').eq('local_id', localId).eq('estado', 'libre').limit(2);
+    const mesas = (mesasData || []).map(m => m.id as number);
+
+    // SEED de stock: insumo + receta que liga itemIds[0] → insumo, para que
+    // cobrar ese ítem dispare el descuento de stock (insumo_movimientos).
+    // Local Prueba 2 no tiene recetas wired, por eso lo sembramos acá.
+    const sufijo = `${SENTINEL}`;
+    const { data: ins } = await db.from('insumos').insert({
+      tenant_id: tenantId, local_id: localId,
+      nombre: `E2E Insumo ${sufijo}`, unidad: 'kg', costo_actual: 1000, es_comprado: true,
+    }).select('id').single();
+    const insumoId = ins!.id as number;
+    const { data: rec } = await db.from('recetas').insert({
+      tenant_id: tenantId, local_id: localId,
+      item_id: itemIds[0], nombre: `E2E Receta ${sufijo}`, rendimiento: 1, activa: true,
+    }).select('id').single();
+    const recetaId = rec!.id as number;
+    const { data: ri } = await db.from('receta_insumos').insert({
+      tenant_id: tenantId, receta_id: recetaId, insumo_id: insumoId,
+      cantidad: 0.5, merma_pct: 0, orden: 1,
+    }).select('id').single();
+    const recetaInsumoId = ri!.id as number;
+
+    ctx = { db, localId, tenantId, canalId, itemIds, cajeroId, managerId, turnoId, metodos, mesas, insumoId, recetaId, recetaInsumoId };
   });
 
   test.afterAll(async () => {
@@ -127,6 +155,16 @@ test.describe('Servicio completo — ensayo general', () => {
       try { await db.from('ventas_pos_pagos').update({ deleted_at: now }).eq('venta_id', vId); } catch (e) { console.error('[cleanup pagos]', e); }
       try { await db.from('movimientos_caja').delete().eq('venta_id', vId); } catch (e) { console.error('[cleanup movs]', e); }
       try { await db.from('ventas_pos').update({ deleted_at: now, estado: 'anulada' }).eq('id', vId); } catch (e) { console.error('[cleanup venta]', e); }
+    }
+    // Cleanup de movimientos de caja + overrides de prueba (por sentinel).
+    try { await db.from('movimientos_caja').delete().like('idempotency_key', `%${SENTINEL}%`); } catch (e) { console.error('[cleanup movs caja]', e); }
+    try { await db.from('ventas_pos_overrides').delete().like('idempotency_key', `%${SENTINEL}%`); } catch (e) { console.error('[cleanup overrides]', e); }
+    // Cleanup del SEED de stock (receta/insumo + sus movimientos).
+    if (ctx?.insumoId) {
+      try { await db.from('insumo_movimientos').delete().eq('insumo_id', ctx.insumoId); } catch (e) { console.error('[cleanup insumo_movs]', e); }
+      try { await db.from('receta_insumos').delete().eq('id', ctx.recetaInsumoId); } catch (e) { console.error('[cleanup receta_insumo]', e); }
+      try { await db.from('recetas').delete().eq('id', ctx.recetaId); } catch (e) { console.error('[cleanup receta]', e); }
+      try { await db.from('insumos').delete().eq('id', ctx.insumoId); } catch (e) { console.error('[cleanup insumo]', e); }
     }
     // Cerrar el turno SOLO si lo abrimos nosotros (con el RPC real, no UPDATE
     // directo — la RLS de turnos_caja_history bloquea las escrituras directas).
@@ -280,6 +318,121 @@ test.describe('Servicio completo — ensayo general', () => {
       const { data: pg } = await db.from('ventas_pos_pagos').select('monto, estado').eq('venta_id', vId).is('deleted_at', null);
       const suma = (pg || []).reduce((s, p) => s + Number(p.monto), 0);
       expect(suma).toBeCloseTo(Number(v.total), 1);
+    }
+  });
+
+  // ── STOCK / CMV: cobrar un ítem con receta descuenta el insumo (insumo_movimientos)
+  //    y anular la venta revierte el stock (neto = 0). itemIds[0] tiene la receta sembrada.
+  test('stock: cobrar ítem con receta descuenta insumo y anular lo revierte', async () => {
+    const { db } = ctx;
+    const sumStock = async () => {
+      const { data } = await db.from('insumo_movimientos').select('cantidad').eq('insumo_id', ctx.insumoId).is('deleted_at', null);
+      return (data || []).reduce((s, m) => s + Number(m.cantidad), 0);
+    };
+    const antes = await sumStock();
+    const vs = await abrirVenta(db, ctx);
+    await agregarItem(db, vs, ctx.itemIds[0]!, 2, 1);
+    const venta = await getVenta(db, vs);
+    await db.rpc('fn_cobrar_venta_comanda', {
+      p_venta_id: vs, p_pagos: [{ metodo: 'efectivo', monto: Number(venta.total), idempotency_key: idem('cobro-stock-p1') }],
+      p_propina: 0, p_cobrado_por: ctx.cajeroId, p_idempotency_key: idem('cobro-stock'),
+    });
+    const trasCobro = await sumStock();
+    expect(trasCobro).not.toBeCloseTo(antes, 2); // se consumió stock
+    await db.rpc('fn_anular_venta_comanda', {
+      p_venta_id: vs, p_manager_id: ctx.managerId, p_motivo: 'e2e: revertir stock', p_idempotency_key: idem('anular-stock'),
+    });
+    const trasAnular = await sumStock();
+    expect(trasAnular).toBeCloseTo(antes, 2); // anular revierte el stock al neto previo
+  });
+
+  // ── REFUND: cobrar y reembolsar deja los pagos en 'reembolsado'. ──
+  test('refund: cobrar y reembolsar deja los pagos reembolsados', async () => {
+    const { db } = ctx;
+    const vr = await abrirVenta(db, ctx);
+    await agregarItem(db, vr, ctx.itemIds[1]!, 1, 1); // sin receta (no toca stock)
+    const venta = await getVenta(db, vr);
+    await db.rpc('fn_cobrar_venta_comanda', {
+      p_venta_id: vr, p_pagos: [{ metodo: 'efectivo', monto: Number(venta.total), idempotency_key: idem('cobro-refund-p1') }],
+      p_propina: 0, p_cobrado_por: ctx.cajeroId, p_idempotency_key: idem('cobro-refund'),
+    });
+    expect((await getVenta(db, vr)).estado).toBe('cobrada');
+    const { error: er } = await db.rpc('fn_refund_venta_comanda', {
+      p_venta_id: vr, p_manager_id: ctx.managerId, p_motivo: 'e2e: reembolso al cliente', p_idempotency_key: idem('refund'),
+    });
+    expect(er).toBeNull();
+    const { data: pagos } = await db.from('ventas_pos_pagos').select('estado').eq('venta_id', vr).is('deleted_at', null);
+    expect((pagos || []).length).toBeGreaterThan(0);
+    expect((pagos || []).every(p => p.estado === 'reembolsado')).toBe(true);
+  });
+
+  // ── OVERRIDES: cortesía (ítem gratis) baja el total; cambio de precio ajusta el total. ──
+  test('overrides: cortesía baja el total y cambio de precio ajusta el total', async () => {
+    const { db } = ctx;
+    const vo = await abrirVenta(db, ctx);
+    const ic = await agregarItem(db, vo, ctx.itemIds[1]!, 1, 1);
+    const ip = await agregarItem(db, vo, ctx.itemIds[1]!, 1, 1);
+    const pre = await getVenta(db, vo);
+    const { error: ecor } = await db.rpc('fn_cortesia_item_comanda', {
+      p_item_id: ic, p_manager_id: ctx.managerId, p_motivo: 'e2e: cortesía a cliente fiel', p_idempotency_key: idem('cortesia'),
+    });
+    expect(ecor).toBeNull();
+    const postCor = await getVenta(db, vo);
+    expect(Number(postCor.total)).toBeLessThan(Number(pre.total));
+    const { error: eprc } = await db.rpc('fn_modificar_precio_item_comanda', {
+      p_item_id: ip, p_nuevo_precio: 123, p_manager_id: ctx.managerId, p_motivo: 'e2e: precio especial', p_idempotency_key: idem('precio'),
+    });
+    expect(eprc).toBeNull();
+    const post = await getVenta(db, vo);
+    expect(Number(post.total)).toBeCloseTo(Number(post.subtotal) - Number(post.descuento_total), 1);
+    // limpiar
+    await db.rpc('fn_anular_venta_comanda', { p_venta_id: vo, p_manager_id: ctx.managerId, p_motivo: 'e2e cleanup', p_idempotency_key: idem('anular-vo') });
+  });
+
+  // ── CAJA: depósito + retiro chico (sin manager) + retiro grande (con manager, bug fixed)
+  //    + retiro grande SIN manager debe ser rechazado. ──
+  test('caja: depósito, retiro chico y retiro grande con/sin manager', async () => {
+    const { db } = ctx;
+    const { error: ed, data: md } = await db.rpc('fn_movimiento_caja_comanda', {
+      p_local_id: ctx.localId, p_empleado_id: ctx.cajeroId, p_tipo: 'deposito', p_monto: 1000,
+      p_metodo: 'efectivo', p_motivo: 'e2e deposito de prueba', p_idempotency_key: idem('mov-dep'), p_manager_id: null,
+    });
+    expect(ed).toBeNull(); expect(Number(md)).toBeGreaterThan(0);
+    const { error: erc } = await db.rpc('fn_movimiento_caja_comanda', {
+      p_local_id: ctx.localId, p_empleado_id: ctx.cajeroId, p_tipo: 'retiro', p_monto: 500,
+      p_metodo: 'efectivo', p_motivo: 'e2e retiro chico', p_idempotency_key: idem('mov-ret-chico'), p_manager_id: null,
+    });
+    expect(erc).toBeNull();
+    // retiro grande > $5000 con manager → OK (este era el bug arreglado 09-jun)
+    const { error: erg } = await db.rpc('fn_movimiento_caja_comanda', {
+      p_local_id: ctx.localId, p_empleado_id: ctx.cajeroId, p_tipo: 'retiro', p_monto: 10000,
+      p_metodo: 'efectivo', p_motivo: 'e2e retiro grande con manager autorizado', p_idempotency_key: idem('mov-ret-grande'), p_manager_id: ctx.managerId,
+    });
+    expect(erg).toBeNull();
+    // retiro grande SIN manager → debe rechazar
+    const { error: ergFail } = await db.rpc('fn_movimiento_caja_comanda', {
+      p_local_id: ctx.localId, p_empleado_id: ctx.cajeroId, p_tipo: 'retiro', p_monto: 12000,
+      p_metodo: 'efectivo', p_motivo: 'e2e retiro grande sin manager', p_idempotency_key: idem('mov-ret-grande-fail'), p_manager_id: null,
+    });
+    expect(ergFail).not.toBeNull();
+  });
+
+  // ── REPORTES / ESTADÍSTICAS: los 6 RPCs de reporte responden sin error. ──
+  test('reportes: los 6 RPCs de reporte/estadísticas responden sin error', async () => {
+    const { db } = ctx;
+    const desde = '2026-01-01', hasta = '2026-12-31';
+    const base = { p_local_id: ctx.localId, p_desde: desde, p_hasta: hasta };
+    const reportes: Array<[string, Record<string, unknown>]> = [
+      ['fn_reporte_ventas_por_canal_comanda', base],
+      ['fn_reporte_top_productos_comanda', { ...base, p_limit: 10 }],
+      ['fn_reporte_tiempos_comanda', base],
+      ['fn_reporte_kpis_periodo_comanda', base],
+      ['fn_reporte_menu_engineering_comanda', base],
+      ['fn_reporte_performance_empleados_comanda', base],
+    ];
+    for (const [fn, params] of reportes) {
+      const { error } = await db.rpc(fn, params);
+      expect(error, `reporte ${fn} falló: ${error?.message}`).toBeNull();
     }
   });
 });
