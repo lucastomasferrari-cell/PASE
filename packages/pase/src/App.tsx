@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { db } from "./lib/supabase";
 import { initConsoleCapture } from "./lib/consoleCapture";
@@ -240,6 +240,12 @@ function AppMain() {
   }, [user?.auth_id]);
   const [locales, setLocales] = useState<Local[]>([]);
   const [localActivo, setLocalActivo] = useState<number | null>(null);
+  // Capturado en el PRIMER render (antes de que el effect de persistencia borre
+  // pase_local_activo al montar): ¿el user ya tenía un local elegido antes del
+  // reload? Lo usa el watchdog anti-fantasma para no recargar a tenants nuevos.
+  const teniaLocalAlMontarRef = useRef<boolean>(
+    typeof window !== "undefined" && !!sessionStorage.getItem("pase_local_activo"),
+  );
   const [authLoading, setAuthLoading] = useState(true);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [tenantOverride, setTenantOverride] = useState<string | null>(null);
@@ -254,6 +260,52 @@ function AppMain() {
       sessionStorage.removeItem("pase_local_activo");
     }
   }, [localActivo]);
+
+  // ─── WATCHDOG ANTI "PANTALLA FANTASMA" ──────────────────────────────────────
+  // Causa raíz (análisis 08-jun): la RLS resuelve el tenant desde la tabla
+  // `usuarios` por auth.uid(), NO desde el JWT. Entonces `locales` queda vacío
+  // SOLO cuando la query salió ANÓNIMA (sin token adjunto) — típico tras el
+  // reload que dispara useVersionPolling post-deploy, cuando el cliente Supabase
+  // arranca un instante sin sesión, o cuando un SIGNED_OUT transitorio dejó la
+  // sesión zombie. Reintentar la query no recupera un cliente zombie; recargar
+  // la página SÍ (re-lee la sesión de localStorage en frío) — es lo que Lucas
+  // hace a mano y siempre funciona.
+  //
+  // Watchdog: si estás logueado pero `locales` sigue vacío tras 7s (y ya habías
+  // elegido un local antes = señal de que SÍ tenés locales), forzamos UNA
+  // recarga controlada. Tope anti-loop: máx 2 recargas en 30s; si tras eso
+  // sigue vacío, no recarga más (evita loop infinito en un tenant real sin
+  // locales o un caso irrecuperable).
+  useEffect(() => {
+    if (authLoading || !user || locales.length > 0) return;
+    // ¿Hay evidencia de que este user SÍ debería ver locales? Solo si ya había
+    // un local elegido ANTES del reload. Se captura en el primer render
+    // (teniaLocalAlMontarRef) porque el effect de persistencia de localActivo
+    // borra `pase_local_activo` al montar (localActivo arranca null). Un tenant
+    // nuevo en onboarding (0 locales legítimo) nunca lo tuvo → NO recargamos.
+    if (!teniaLocalAlMontarRef.current) return;
+    const timer = setTimeout(async () => {
+      if (locales.length > 0) return; // se recuperó solo, no hace falta
+      const { data: { session } } = await db.auth.getSession();
+      if (!session) return; // sin sesión = logout real, no es ghost
+      const KEY = "pase_ghost_reloads";
+      let stamps: number[] = [];
+      try { stamps = JSON.parse(sessionStorage.getItem(KEY) || "[]") as number[]; } catch { stamps = []; }
+      const ahora = Date.now();
+      stamps = stamps.filter(ts => ahora - ts < 30_000);
+      if (stamps.length >= 2) {
+        // eslint-disable-next-line no-console
+        console.error("[ghost-watchdog] locales vacío tras 2 recargas en 30s — no recargo más (evito loop)");
+        return;
+      }
+      stamps.push(ahora);
+      sessionStorage.setItem(KEY, JSON.stringify(stamps));
+      // eslint-disable-next-line no-console
+      console.warn("[ghost-watchdog] logueado pero sin locales (sesión anónima/zombie) — recargando para recuperar");
+      window.location.reload();
+    }, 7000);
+    return () => clearTimeout(timer);
+  }, [authLoading, user, locales.length]);
 
   const refetchLocales = async (retryDepth = 0) => {
     // Optimización egress 2026-05-17: proyectar solo lo que se renderiza.
@@ -301,12 +353,14 @@ function AppMain() {
     if (fetchVacioOError) {
       const { data: { session } } = await db.auth.getSession();
       if (session && debeReintentarLocales(0, true, retryDepth)) {
-        // refreshSession solo en el 1er reintento: re-emite el JWT con
-        // app_metadata fresco. Los reintentos siguientes solo esperan a que
-        // propague (no hace falta refrescar de nuevo).
-        if (retryDepth === 0) { try { await db.auth.refreshSession(); } catch { /* idem */ } }
+        // OJO: NO llamar refreshSession() acá. En un cliente recién recargado
+        // puede disparar un SIGNED_OUT que —con "Mantener sesión" ON— App se
+        // traga y deja la sesión ZOMBIE (UI logueada, cliente sin token) →
+        // ghost permanente. Acá solo reintentamos la query: el header de auth
+        // suele adjuntarse en ms. Si tras los reintentos sigue vacío, el
+        // watchdog anti-fantasma (más abajo) recarga la página para recuperar.
         // eslint-disable-next-line no-console
-        console.warn(`[refetchLocales] ${data ? "0 filas" : "error"} con sesión activa — reintento ${retryDepth + 1} en 1s`, lastError);
+        console.warn(`[refetchLocales] ${data ? "0 filas" : "error"} con sesión — reintento ${retryDepth + 1} en 1s`, lastError);
         setTimeout(() => { void refetchLocales(retryDepth + 1); }, 1000);
         return;
       }
