@@ -407,6 +407,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
     { id:"movimientos", label:"Movimientos" },
     { id:"vacagu", label:"Vacaciones / Aguinaldo" },
     { id:"documentos", label:"Documentos" },
+    ...(esDueno ? [{ id:"liquidacion", label:"Liquidación final" }] : []),
   ];
 
   return (
@@ -435,8 +436,9 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
         {tabs.map(t => <div key={t.id} className={`tab ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)}>{t.label}</div>)}
       </div>
 
-      {tab === "datos" && (
+      {(tab === "datos" || tab === "liquidacion") && (
         <TabDatos
+          liqTab={tab === "liquidacion"}
           emp={emp}
           histSueldos={histSueldos}
           antiguedadAnios={antiguedadAnios}
@@ -534,6 +536,8 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
 // ─── SUB-COMPONENTES ─────────────────────────────────────────────────────────
 
 interface TabDatosProps {
+  /** true → renderiza el panel de Liquidación final en vez de los datos. */
+  liqTab: boolean;
   emp: Empleado;
   histSueldos: HistorialSueldo[];
   antiguedadAnios: number;
@@ -564,6 +568,7 @@ interface TabDatosProps {
 }
 
 function TabDatos({
+  liqTab,
   emp, histSueldos, antiguedadAnios, vacAcumuladas, esDueno,
   sueldoModal, setSueldoModal, sueldoForm, setSueldoForm, guardarSueldo, toggleActivo,
   liqFinalModal, setLiqFinalModal, liqFinalForm, setLiqFinalForm, liqFinalData,
@@ -584,6 +589,8 @@ function TabDatos({
   );
   return (
     <>
+      {!liqTab && (
+      <>
       <div className="panel" style={{padding:"4px 14px",marginBottom:16,display:"grid",gridTemplateColumns:"1fr 1fr",columnGap:24}}>
         <div>
           {dataRow("CUIL", emp.cuil || "—")}
@@ -621,19 +628,33 @@ function TabDatos({
           ))}</tbody></table>
         )}
       </div>
+      </>
+      )}
 
-      {esDueno && emp.activo && (
-        <button
-          className="btn btn-danger btn-sm"
-          style={{marginTop:12}}
-          disabled={!vacTomadasLoaded}
-          title={!vacTomadasLoaded ? "Cargando vacaciones tomadas..." : "Liquidación final"}
-          onClick={() => {
-            // AUDIT F4A#3: refresh vacTomadas justo antes de abrir el modal por
-            // si pasaron pagos de vacaciones entre el primer load y ahora.
-            void loadVacTomadas().then(() => setLiqFinalModal(true));
-          }}
-        >Liquidación final{!vacTomadasLoaded ? " ⏳" : ""}</button>
+      {liqTab && (
+        <div className="panel" style={{padding:20}}>
+          <div style={{fontFamily:"var(--pase-font)",fontSize:15,fontWeight:500,marginBottom:6}}>Liquidación final</div>
+          <div style={{fontSize:12,color:"var(--muted2)",lineHeight:1.5,marginBottom:16,maxWidth:560}}>
+            Genera la liquidación al egreso del empleado (despido con o sin preaviso, renuncia o
+            acuerdo mutuo). Calcula automáticamente días trabajados, SAC, vacaciones no gozadas e
+            indemnizaciones según la ley vigente. Podés ajustar cualquier monto antes de confirmar.
+            Al confirmar, el empleado pasa a <strong>inactivo</strong> y se registra el pago.
+          </div>
+          {!emp.activo ? (
+            <div className="alert alert-info">Este empleado ya está inactivo (la liquidación final ya se hizo o se dio de baja).</div>
+          ) : (
+            <button
+              className="btn btn-danger"
+              disabled={!vacTomadasLoaded}
+              title={!vacTomadasLoaded ? "Cargando vacaciones tomadas..." : "Generar liquidación final"}
+              onClick={() => {
+                // AUDIT F4A#3: refresh vacTomadas justo antes de abrir el modal por
+                // si pasaron pagos de vacaciones entre el primer load y ahora.
+                void loadVacTomadas().then(() => setLiqFinalModal(true));
+              }}
+            >Generar liquidación final{!vacTomadasLoaded ? " ⏳" : ""}</button>
+          )}
+        </div>
       )}
 
       {/* AUDIT F4B#1 / sprint #5: migrado a <Modal> compartido. */}
