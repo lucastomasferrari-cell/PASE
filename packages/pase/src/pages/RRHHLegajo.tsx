@@ -103,7 +103,10 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
   const [liqFinalModal, setLiqFinalModal] = useState(false);
   const [liqFinalForm, setLiqFinalForm] = useState<LiqFinalForm>({ fecha_egreso: toISO(today), motivo: "Renuncia", indemnizacion_mult: 1 });
   const [liqFinalData, setLiqFinalData] = useState<LiquidacionFinalResult | null>(null);
-  const [liqFinalCuenta, setLiqFinalCuenta] = useState("");
+  // Formas de pago de la liquidación final (Lucas 09-jun): se puede pagar
+  // partida (ej. una parte en efectivo, otra en transferencia). Por default una
+  // sola línea; el monto se pre-carga con el total al abrir el modal.
+  const [liqFinalLineas, setLiqFinalLineas] = useState<LineaPago[]>([{ cuenta: "", monto: "" }]);
   const [liqFinalOverrides, setLiqFinalOverrides] = useState<Record<string, string>>({});
   const [liqFinalLoading, setLiqFinalLoading] = useState(false);
 
@@ -114,9 +117,9 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
   // change), reseteamos a "" para que el placeholder del <select> aparezca.
   // NO borrar — previene regresión del bug.
   useEffect(() => {
-    if (liqFinalCuenta && !cuentasUsables.includes(liqFinalCuenta)) {
+    if (liqFinalLineas.some(l => l.cuenta && !cuentasUsables.includes(l.cuenta))) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setLiqFinalCuenta("");
+      setLiqFinalLineas(prev => prev.map(l => l.cuenta && !cuentasUsables.includes(l.cuenta) ? { ...l, cuenta: "" } : l));
     }
     if (vacLineas.some(l => l.cuenta && !cuentasUsables.includes(l.cuenta))) {
       setVacLineas(prev => prev.map(l => l.cuenta && !cuentasUsables.includes(l.cuenta) ? { ...l, cuenta: "" } : l));
@@ -125,7 +128,18 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
       setAguLineas(prev => prev.map(l => l.cuenta && !cuentasUsables.includes(l.cuenta) ? { ...l, cuenta: "" } : l));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liqFinalCuenta, vacLineas, aguLineas, cuentasKey]);
+  }, [liqFinalLineas, vacLineas, aguLineas, cuentasKey]);
+
+  // Pre-cargar la primera (y única) forma de pago con el total al abrir el modal
+  // de liquidación final, así el caso de un solo pago es elegir cuenta y listo.
+  useEffect(() => {
+    const sola = liqFinalLineas.length === 1 ? liqFinalLineas[0] : null;
+    if (liqFinalModal && liqFinalData && sola && !sola.cuenta && !sola.monto) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLiqFinalLineas([{ cuenta: "", monto: String(Math.round(liqFinalData.total)) }]);
+    }
+  }, [liqFinalModal, liqFinalData, liqFinalLineas]);
+
   const esDueno = user?.rol === "dueno" || user?.rol === "admin";
 
   // ─── LOAD ──────────────────────────────────────────────────────────────────
@@ -455,8 +469,8 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
           liqFinalForm={liqFinalForm}
           setLiqFinalForm={setLiqFinalForm}
           liqFinalData={liqFinalData}
-          liqFinalCuenta={liqFinalCuenta}
-          setLiqFinalCuenta={setLiqFinalCuenta}
+          liqFinalLineas={liqFinalLineas}
+          setLiqFinalLineas={setLiqFinalLineas}
           liqFinalOverrides={liqFinalOverrides}
           setLiqFinalOverrides={setLiqFinalOverrides}
           liqFinalLoading={liqFinalLoading}
@@ -554,8 +568,8 @@ interface TabDatosProps {
   liqFinalForm: LiqFinalForm;
   setLiqFinalForm: React.Dispatch<React.SetStateAction<LiqFinalForm>>;
   liqFinalData: LiquidacionFinalResult | null;
-  liqFinalCuenta: string;
-  setLiqFinalCuenta: React.Dispatch<React.SetStateAction<string>>;
+  liqFinalLineas: LineaPago[];
+  setLiqFinalLineas: React.Dispatch<React.SetStateAction<LineaPago[]>>;
   liqFinalOverrides: Record<string, string>;
   setLiqFinalOverrides: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   liqFinalLoading: boolean;
@@ -572,7 +586,7 @@ function TabDatos({
   emp, histSueldos, antiguedadAnios, vacAcumuladas, esDueno,
   sueldoModal, setSueldoModal, sueldoForm, setSueldoForm, guardarSueldo, toggleActivo,
   liqFinalModal, setLiqFinalModal, liqFinalForm, setLiqFinalForm, liqFinalData,
-  liqFinalCuenta, setLiqFinalCuenta, liqFinalOverrides, setLiqFinalOverrides,
+  liqFinalLineas, setLiqFinalLineas, liqFinalOverrides, setLiqFinalOverrides,
   liqFinalLoading, setLiqFinalLoading,
   cuentasUsables, showToast, loadAll,
   vacTomadasLoaded, loadVacTomadas,
@@ -650,6 +664,7 @@ function TabDatos({
               onClick={() => {
                 // AUDIT F4A#3: refresh vacTomadas justo antes de abrir el modal por
                 // si pasaron pagos de vacaciones entre el primer load y ahora.
+                setLiqFinalLineas([{ cuenta: "", monto: "" }]); // reset; el efecto lo pre-carga con el total
                 void loadVacTomadas().then(() => setLiqFinalModal(true));
               }}
             >Generar liquidación final{!vacTomadasLoaded ? " ⏳" : ""}</button>
@@ -719,9 +734,23 @@ function TabDatos({
           return s + getConceptoMonto(k, calc);
         }, 0);
 
+        const liqFinalPagado = liqFinalLineas.reduce((s, l) => s + (parseFloat(l.monto) || 0), 0);
+        const liqFinalRestante = total - liqFinalPagado;
+        const liqFinalPuedeConfirmar = liqFinalPagado > 0
+          && liqFinalLineas.every(l => parseFloat(l.monto) > 0 && !!l.cuenta)
+          && Math.abs(liqFinalRestante) < 1;
+
         const confirmarLiqFinal = async () => {
           if (!liqFinalData || liqFinalLoading) return;
-          if (!liqFinalCuenta) { showToast("Elegí una cuenta de egreso"); return; }
+          const lineas = liqFinalLineas
+            .filter(l => l.cuenta && (parseFloat(l.monto) || 0) > 0)
+            .map(l => ({ cuenta: l.cuenta, monto: Math.round(parseFloat(l.monto)) }));
+          if (lineas.length === 0) { showToast("Cargá al menos una forma de pago"); return; }
+          const sumaPagos = lineas.reduce((s, l) => s + l.monto, 0);
+          if (Math.abs(sumaPagos - total) > 1) {
+            showToast(`Las formas de pago suman ${fmt_$(sumaPagos)} pero el total es ${fmt_$(total)}`);
+            return;
+          }
           setLiqFinalLoading(true);
           try {
             const { error } = await db.rpc("liquidacion_final_empleado", {
@@ -729,7 +758,7 @@ function TabDatos({
               p_fecha_egreso: liqFinalForm.fecha_egreso,
               p_motivo: liqFinalForm.motivo,
               p_total: total,
-              p_cuenta: liqFinalCuenta,
+              p_pagos: lineas,
             });
             if (error) { showToast("Error: " + translateRpcError(error)); return; }
             setLiqFinalModal(false);
@@ -755,7 +784,7 @@ function TabDatos({
           const model = construirReciboFinal({
             conceptos: rc,
             total,
-            movs: liqFinalCuenta ? [{ cuenta: liqFinalCuenta, importe: -total }] : [],
+            movs: liqFinalLineas.filter(l => l.cuenta && (parseFloat(l.monto) || 0) > 0).map(l => ({ cuenta: l.cuenta, importe: -(parseFloat(l.monto) || 0) })),
             empleado: { nombre: `${emp.apellido}, ${emp.nombre}`, cuil: emp.cuil ?? null, puesto: emp.puesto ?? null, ingreso: emp.fecha_inicio ?? null },
             negocio: {
               razonSocial: cfg?.razon_social || localNombre || "—",
@@ -780,7 +809,7 @@ function TabDatos({
               <>
                 <button className="btn btn-sec" onClick={() => setLiqFinalModal(false)}>Cancelar</button>
                 <button className="btn btn-ghost" onClick={() => void imprimirReciboFinal()} title="Imprimir recibo de la liquidación final">🖨 Recibo</button>
-                <button className="btn btn-danger" disabled={liqFinalLoading} onClick={confirmarLiqFinal}>{liqFinalLoading ? "Procesando..." : "Confirmar y pagar"}</button>
+                <button className="btn btn-danger" disabled={liqFinalLoading || !liqFinalPuedeConfirmar} onClick={confirmarLiqFinal}>{liqFinalLoading ? "Procesando..." : "Confirmar y pagar"}</button>
               </>
             }
           >
@@ -831,11 +860,32 @@ function TabDatos({
                 <span>TOTAL</span><span className="num" style={{color:"var(--success)",fontSize:15,fontWeight:500}}>{fmt_$(total)}</span>
               </div>
             </div>
-            <div className="field" style={{marginTop:12}}><label>Cuenta de egreso *</label>
-              <select value={liqFinalCuenta} onChange={e => setLiqFinalCuenta(e.target.value)}>
-                <option value="">Seleccioná una cuenta…</option>
-                {cuentasUsables.map((c: string) => <option key={c} value={c}>{c}</option>)}
-              </select>
+            <div style={{marginTop:12}}>
+              <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Formas de pago *</div>
+              {liqFinalLineas.map((l, i) => (
+                <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
+                  <select className="search" style={{flex:1}} value={l.cuenta}
+                    onChange={e => setLiqFinalLineas((prev) => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
+                    <option value="">Seleccioná una cuenta…</option>
+                    {cuentasUsables.map((c: string) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <input type="number" className="search" style={{width:130}} placeholder="Monto" value={l.monto}
+                    onChange={e => setLiqFinalLineas((prev) => prev.map((f, j) => j === i ? { ...f, monto: e.target.value } : f))} />
+                  {liqFinalLineas.length > 1 && <button className="btn btn-danger btn-sm" onClick={() => setLiqFinalLineas((prev) => prev.filter((_, j) => j !== i))}>✕</button>}
+                </div>
+              ))}
+              <button className="btn btn-ghost btn-sm" style={{marginBottom:8}}
+                onClick={() => setLiqFinalLineas((prev) => [...prev, { cuenta: "", monto: liqFinalRestante > 0 ? String(Math.round(liqFinalRestante)) : "" }])}>
+                + Agregar forma de pago
+              </button>
+              <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
+                <span style={{fontSize:12,color: Math.abs(liqFinalRestante) < 0.5 ? "var(--muted2)" : "var(--warn)"}}>
+                  {Math.abs(liqFinalRestante) < 0.5 ? "Asignado completo" : liqFinalRestante > 0 ? "Falta asignar" : "Te pasaste por"}
+                </span>
+                <span className="num" style={{fontSize:14,fontWeight:500,color: Math.abs(liqFinalRestante) < 0.5 ? "var(--success)" : "var(--warn)"}}>
+                  {fmt_$(Math.abs(liqFinalRestante))}
+                </span>
+              </div>
             </div>
           </Modal>
         );

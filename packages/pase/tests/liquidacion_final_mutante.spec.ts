@@ -177,4 +177,75 @@ test.describe("liquidacion_final_empleado — mutante DB-only", () => {
     expect(dupErr).toBeTruthy();
     expect(dupErr?.message).toContain("LIQ_FINAL_YA_EXISTE");
   });
+
+  // Multi-cuenta (Lucas 09-jun): pagar la liquidación final partida en varias
+  // formas de pago crea UN movimiento por cuenta, todos linkeados al mismo pago.
+  test("multi-cuenta → un movimiento por forma de pago, ambos linkeados al pago", async () => {
+    if (!empId) throw new Error("beforeEach no creó empleado");
+    const tsResult = calcularLiquidacionFinal({
+      sueldo_mensual: SUELDO, fecha_inicio: FECHA_INICIO, fecha_egreso: FECHA_EGRESO,
+      vacaciones_acumuladas: VAC_ACUM, motivo: MOTIVO,
+    });
+    const total = Math.round(tsResult.total);
+    const parte1 = Math.round(total / 3);
+    const parte2 = total - parte1; // suma exacta = total
+
+    const snap = async (cuenta: string) => {
+      const { data } = await db.from("saldos_caja").select("saldo")
+        .eq("cuenta", cuenta).eq("local_id", localId).maybeSingle();
+      return Number(data?.saldo ?? 0);
+    };
+    const efAntes = await snap("Caja Efectivo");
+    const bancoAntes = await snap("Banco");
+
+    const { data: res, error } = await db.rpc("liquidacion_final_empleado", {
+      p_empleado_id: empId,
+      p_fecha_egreso: FECHA_EGRESO,
+      p_motivo: MOTIVO,
+      p_total: total,
+      p_pagos: [
+        { cuenta: "Caja Efectivo", monto: parte1 },
+        { cuenta: "Banco", monto: parte2 },
+      ],
+    });
+    expect(error).toBeNull();
+    const { pago_id: pagoId, mov_ids: movIds } = res as { pago_id: string; mov_ids: string[] };
+    expect(pagoId).toBeTruthy();
+    expect(movIds).toHaveLength(2);
+
+    // Un movimiento por cuenta, ambos linkeados al mismo pago_especial.
+    const { data: movs } = await db.from("movimientos")
+      .select("cuenta, importe, pago_especial_id_ref, anulado").in("id", movIds);
+    expect(movs).toHaveLength(2);
+    expect(movs!.every(m => m.pago_especial_id_ref === pagoId)).toBe(true);
+    expect(movs!.every(m => m.anulado === false)).toBe(true);
+    expect(Number(movs!.find(m => m.cuenta === "Caja Efectivo")!.importe)).toBe(-parte1);
+    expect(Number(movs!.find(m => m.cuenta === "Banco")!.importe)).toBe(-parte2);
+
+    // Cada cuenta bajó por su parte.
+    expect(await snap("Caja Efectivo")).toBe(efAntes - parte1);
+    expect(await snap("Banco")).toBe(bancoAntes - parte2);
+  });
+
+  // Las formas de pago deben sumar el total: si no, la RPC rechaza.
+  test("multi-cuenta → si las partes NO suman el total, falla PAGOS_NO_SUMAN_TOTAL", async () => {
+    if (!empId) throw new Error("beforeEach no creó empleado");
+    const tsResult = calcularLiquidacionFinal({
+      sueldo_mensual: SUELDO, fecha_inicio: FECHA_INICIO, fecha_egreso: FECHA_EGRESO,
+      vacaciones_acumuladas: VAC_ACUM, motivo: MOTIVO,
+    });
+    const total = Math.round(tsResult.total);
+    const { error } = await db.rpc("liquidacion_final_empleado", {
+      p_empleado_id: empId,
+      p_fecha_egreso: FECHA_EGRESO,
+      p_motivo: MOTIVO,
+      p_total: total,
+      p_pagos: [
+        { cuenta: "Caja Efectivo", monto: Math.round(total / 2) },
+        // falta la otra mitad → no suma el total
+      ],
+    });
+    expect(error).toBeTruthy();
+    expect(error?.message).toContain("PAGOS_NO_SUMAN_TOTAL");
+  });
 });
