@@ -286,28 +286,39 @@ function AppMain() {
       // Backoff exponencial: 200ms, 400ms, 800ms, 1600ms.
       await new Promise(r => setTimeout(r, 200 * Math.pow(2, intento)));
     }
-    if (!data) {
-      // Conservar locales viejos para no romper el sidebar. Loggear para que
-      // sea diagnosticable si vuelve a pasar.
-      // eslint-disable-next-line no-console
-      console.warn("[refetchLocales] falló 3 intentos, conservando locales previos", lastError);
-      return;
-    }
-    const nuevos = data;
-    // SELF-HEAL del bug recurrente "queda sin local / tengo que refrescar":
-    // si el fetch volvió vacío PERO hay sesión, es un race (la sesión/JWT
-    // todavía no propagó a PostgREST). En vez de comprometernos con vacío
-    // (lo que dejaba al dueño sin local activo), reintentamos con backoff
-    // hasta que la sesión esté lista. Bounded para tenants realmente sin locales.
-    if (nuevos.length === 0) {
+    // SELF-HEAL del bug "pantalla fantasma" (queja Lucas recurrente, sobre
+    // todo POST-DEPLOY): el primer fetch de locales suele venir VACÍO (0 filas)
+    // o con ERROR 401 porque el JWT todavía no propagó a PostgREST / quedó
+    // viejo tras el deploy. Antes el path de ERROR daba `return` sin reintentar
+    // → el sidebar quedaba sin selector de locales hasta recargar a mano (el
+    // retry-por-vacío solo cubría 0-filas-sin-error, NO el 401).
+    //
+    // Ahora ambos casos (vacío Y error) reintentan; y en el reintento forzamos
+    // un refreshSession() que re-emite el JWT con app_metadata.tenant_id
+    // fresco — eso ataca la raíz del caso post-deploy. Bounded por
+    // debeReintentarLocales (tope 6) para no loopear en un tenant real sin locales.
+    const fetchVacioOError = !data || data.length === 0;
+    if (fetchVacioOError) {
       const { data: { session } } = await db.auth.getSession();
-      if (debeReintentarLocales(nuevos.length, !!session, retryDepth)) {
+      if (session && debeReintentarLocales(0, true, retryDepth)) {
+        // refreshSession solo en el 1er reintento: re-emite el JWT con
+        // app_metadata fresco. Los reintentos siguientes solo esperan a que
+        // propague (no hace falta refrescar de nuevo).
+        if (retryDepth === 0) { try { await db.auth.refreshSession(); } catch { /* idem */ } }
         // eslint-disable-next-line no-console
-        console.warn(`[refetchLocales] 0 filas con sesión activa — reintento ${retryDepth + 1} en 1.2s (race de sesión)`);
-        setTimeout(() => { void refetchLocales(retryDepth + 1); }, 1200);
+        console.warn(`[refetchLocales] ${data ? "0 filas" : "error"} con sesión activa — reintento ${retryDepth + 1} en 1s`, lastError);
+        setTimeout(() => { void refetchLocales(retryDepth + 1); }, 1000);
         return;
       }
     }
+    if (!data) {
+      // Agotados los reintentos y sin data (solo errores). Conservar lo previo
+      // para no romper el sidebar; loggear para diagnóstico.
+      // eslint-disable-next-line no-console
+      console.warn("[refetchLocales] sin data tras reintentos, conservando locales previos", lastError);
+      return;
+    }
+    const nuevos = data;
     // Nunca pisar una lista NO vacía con vacío (functional update para leer el
     // state actual aunque el closure sea viejo, ej. la auth-subscription).
     setLocales(prev => mergeLocales(prev, nuevos));
