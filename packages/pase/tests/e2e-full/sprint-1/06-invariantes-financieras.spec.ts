@@ -18,6 +18,10 @@
 //
 // INV3: cada movimiento con `anulado=true` NO debe estar incluido en el saldo.
 //       (Si lo está, el cache no procesó la anulación correctamente.)
+//
+// INV4: ningún movimiento VIVO (anulado=false) puede colgar de un padre
+//       borrado/anulado (liquidación/adelanto inexistente, factura anulada).
+//       Red de seguridad del sprint anti-huérfanos (09-jun) — caza fantasmas.
 // ─────────────────────────────────────────────────────────────────────────
 
 import {
@@ -141,6 +145,39 @@ test.describe.serial("E2E Sprint 4 — Invariantes financieras (SQL)", () => {
     // Caja Efectivo delta: +50000 -10000 +2000(anulado, no cuenta) -5000(transfer out) = +35000
     // Con shared-seed el saldo base no es 0, así que verificamos el delta relativo.
     expect(Number(cajaEfSaldo!.saldo)).toBe(saldoEfBase + 35000);
+
+    // ── INV4 (sprint anti-huérfanos 09-jun): ningún movimiento VIVO puede ──
+    // colgar de un padre borrado/anulado. Si el guard o las cascadas fallan,
+    // este invariante caza el huérfano. (Causa raíz de los 8 fantasmas de Neko.)
+    const { data: liveMovs } = await svc.from("movimientos")
+      .select("id, liquidacion_id, adelanto_id_ref, fact_id")
+      .eq("tenant_id", seed.tenantId).eq("anulado", false);
+    const uniq = (arr: (string | null)[]) => [...new Set(arr.filter((x): x is string => !!x))];
+
+    const liqIds = uniq((liveMovs ?? []).map(m => m.liquidacion_id as string | null));
+    if (liqIds.length) {
+      const { data: liqExist } = await svc.from("rrhh_liquidaciones").select("id").in("id", liqIds);
+      const set = new Set((liqExist ?? []).map(l => l.id));
+      for (const m of (liveMovs ?? []).filter(m => m.liquidacion_id)) {
+        expect(set.has(m.liquidacion_id), `INV4: mov ${m.id} cuelga de liquidación inexistente ${m.liquidacion_id}`).toBe(true);
+      }
+    }
+    const adIds = uniq((liveMovs ?? []).map(m => m.adelanto_id_ref as string | null));
+    if (adIds.length) {
+      const { data: adExist } = await svc.from("rrhh_adelantos").select("id").in("id", adIds);
+      const set = new Set((adExist ?? []).map(a => a.id));
+      for (const m of (liveMovs ?? []).filter(m => m.adelanto_id_ref)) {
+        expect(set.has(m.adelanto_id_ref), `INV4: mov ${m.id} cuelga de adelanto inexistente ${m.adelanto_id_ref}`).toBe(true);
+      }
+    }
+    const factIds = uniq((liveMovs ?? []).map(m => m.fact_id as string | null));
+    if (factIds.length) {
+      const { data: facAnul } = await svc.from("facturas").select("id").in("id", factIds).eq("estado", "anulada");
+      const anulSet = new Set((facAnul ?? []).map(f => f.id));
+      for (const m of (liveMovs ?? []).filter(m => m.fact_id)) {
+        expect(anulSet.has(m.fact_id), `INV4: mov ${m.id} (pago) cuelga de factura ANULADA ${m.fact_id}`).toBe(false);
+      }
+    }
 
     await duenoDb.auth.signOut();
   });

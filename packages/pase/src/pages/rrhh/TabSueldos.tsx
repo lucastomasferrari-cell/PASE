@@ -696,6 +696,12 @@ export function TabSueldos({
     }
   }, [slots, planEdits, persistirNovedad, recargar, showError]);
 
+  // ── Modal confirmación anular pago ──────────────────────────────────────
+  // Declarado acá (antes de desconfirmarSlot) porque ese callback lo usa para
+  // frenar la edición de un sueldo ya pagado y ofrecer anular primero.
+  const [anulModal, setAnulModal] = useState<{ liqId: string; empNom: string; total: number; movs: MovPago[]; modoEdit: boolean; desconfirmarTras?: string } | null>(null);
+  const [anulando, setAnulando] = useState(false);
+
   const desconfirmarSlot = useCallback(async (key: string) => {
     const slot = slots.find(s => s.key === key);
     if (!slot) return;
@@ -705,6 +711,29 @@ export function TabSueldos({
       (n.cuota_num ?? 1) === slot.cuota
     );
     if (!existente) return;
+    // ★ Sprint anti-huérfanos (09-jun, pedido Lucas): si este sueldo YA tiene un
+    // pago hecho, NO desbloquear a editar sin más. Frenar y ofrecer anular el
+    // pago primero (modal "hay un pago realizado, ¿anularlo?"). Así nunca se
+    // recalcula un sueldo pagado dejando movimientos colgados. El guard de la
+    // base lo bloquea igual, pero acá lo resolvemos con UX en un solo paso.
+    const liqInfo = liqs.find(l => l.empleado_id === slot.emp.id && l.cuota_num === slot.cuota);
+    const estaPagado = liqInfo?.estado === "pagado" || Number(liqInfo?.pagos_realizados ?? 0) > 0;
+    if (estaPagado && liqInfo?.liq_id) {
+      const { data: movs } = await db.from("movimientos")
+        .select("id, liquidacion_id, cuenta, importe, fecha, anulado")
+        .eq("liquidacion_id", liqInfo.liq_id)
+        .eq("anulado", false)
+        .order("fecha", { ascending: true });
+      setAnulModal({
+        liqId: liqInfo.liq_id,
+        empNom: `${slot.emp.apellido} ${slot.emp.nombre}`,
+        total: liqInfo.pagos_realizados,
+        movs: (movs || []) as MovPago[],
+        modoEdit: true,
+        desconfirmarTras: key,
+      });
+      return;
+    }
     setTogglingConfirm(prev => new Set(prev).add(key));
     try {
       const { error } = await db.from("rrhh_novedades")
@@ -717,7 +746,7 @@ export function TabSueldos({
     } finally {
       setTogglingConfirm(prev => { const n = new Set(prev); n.delete(key); return n; });
     }
-  }, [slots, mes, anio, novedadesDB, recargar, showError]);
+  }, [slots, mes, anio, novedadesDB, liqs, recargar, showError]);
 
   // ── Adelantos: tildados por slot ─────────────────────────────────────────
   function adelantosDelSlot(empId: string, cuota: number, cuotasTotal: number) {
@@ -777,9 +806,6 @@ export function TabSueldos({
     setMovsPorLiq(prev => ({ ...prev, [liqId]: (data || []) as MovPago[] }));
   }, [movsPorLiq]);
 
-  // ── Modal confirmación anular pago ──────────────────────────────────────
-  const [anulModal, setAnulModal] = useState<{ liqId: string; empNom: string; total: number; movs: MovPago[]; modoEdit: boolean } | null>(null);
-  const [anulando, setAnulando] = useState(false);
   const ejecutarAnular = async () => {
     if (!anulModal) return;
     setAnulando(true);
@@ -802,7 +828,21 @@ export function TabSueldos({
         }
       }
       showToast(anulModal.modoEdit ? "Pago anulado — ya podés editar" : "Pago anulado, plata devuelta a caja");
+      // Si esto vino del botón "Modificar" sobre un sueldo pagado, dejar la
+      // novedad en borrador para que la card quede editable de una.
+      const desconfKey = anulModal.desconfirmarTras;
       setAnulModal(null);
+      if (desconfKey) {
+        const slot = slots.find(s => s.key === desconfKey);
+        const existente = slot && novedadesDB.find(n =>
+          n.empleado_id === slot.emp.id && n.mes === mes && n.anio === anio &&
+          (n.cuota_num ?? 1) === slot.cuota
+        );
+        if (existente) {
+          await db.from("rrhh_novedades").update({ estado: "borrador" }).eq("id", existente.id);
+          touchedRef.current.delete(desconfKey);
+        }
+      }
       await recargar();
     } finally {
       setAnulando(false);

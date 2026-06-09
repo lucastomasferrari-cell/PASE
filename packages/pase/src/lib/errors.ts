@@ -17,6 +17,7 @@ const MAP: Record<string, string> = {
   SALDO_INSUFICIENTE: "Saldo insuficiente en la cuenta seleccionada",
   CATEGORIA_REQUERIDA: "La categoría es obligatoria",
   MOTIVO_REQUERIDO: "El motivo es obligatorio",
+  PADRE_CON_MOVIMIENTOS_VIVOS: "No se puede borrar/recalcular: ya tiene un pago hecho en caja. Anulá el pago primero (botón Anular o Editar) y después recalculá.",
 
   // Facturas
   FACTURA_NO_ENCONTRADA: "La factura no existe",
