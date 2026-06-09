@@ -116,6 +116,25 @@ export function calcularVacaciones(
   return Math.max(0, acumulados - diasTomados);
 }
 
+/**
+ * ¿El empleado está en período de prueba? LCT Art 92 bis: los primeros 6 meses
+ * desde la fecha de ingreso. Devuelve false si no hay fecha, si la fecha es
+ * inválida, si el ingreso es futuro, o si ya pasaron los 6 meses.
+ * @param ahora - fecha de referencia (default hoy) — inyectable para tests.
+ */
+export function enPeriodoPrueba(
+  fechaInicio: string | null | undefined,
+  ahora: Date = new Date(),
+): boolean {
+  if (!fechaInicio) return false;
+  const inicio = new Date(fechaInicio + "T12:00:00");
+  if (isNaN(inicio.getTime())) return false;
+  if (inicio.getTime() > ahora.getTime()) return false; // ingreso futuro
+  const finPrueba = new Date(inicio);
+  finPrueba.setMonth(finPrueba.getMonth() + 6);
+  return ahora.getTime() < finPrueba.getTime();
+}
+
 // ─── SAC / AGUINALDO ─────────────────────────────────────────────────────────
 
 /** SAC teórico del semestre completo = sueldo / 2 */

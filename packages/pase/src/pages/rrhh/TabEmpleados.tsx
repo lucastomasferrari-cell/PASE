@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { fmt_$ } from "@pase/shared/utils";
-import { calcularVacaciones } from "../../lib/calculos/rrhh";
+import { calcularVacaciones, enPeriodoPrueba } from "../../lib/calculos/rrhh";
 import { LocalLockedChip, LocalSelectorObligatorio, Modal } from "../../components/ui";
 import type { Local } from "../../types";
 import type { Empleado } from "../../types/rrhh";
@@ -112,11 +112,28 @@ export function TabEmpleados({
             if (!e.sueldo_mensual || e.sueldo_mensual <= 0) alertas.push("Sin sueldo");
             if (!e.puesto) alertas.push("Sin puesto");
             const reg = Boolean((e as { registrado?: boolean }).registrado);
+            const enPrueba = enPeriodoPrueba(e.fecha_inicio);
             return (
               <tr key={e.id} style={{opacity: e.activo === false ? 0.4 : 1}}>
                 <td style={{fontWeight:500,fontSize:12}}>{e.apellido}, {e.nombre}</td>
                 <td style={{fontSize:11}}>{locales.find(l => String(l.id) === String(e.local_id))?.nombre || "—"}</td>
-                <td><span className="badge b-muted" style={{fontSize:8}}>{e.puesto}</span></td>
+                <td>
+                  <span className="badge b-muted" style={{fontSize:8}}>{e.puesto}</span>
+                  {enPrueba && (
+                    <div style={{marginTop:3}}>
+                      <span
+                        title="En período de prueba — primeros 6 meses desde el ingreso (LCT Art. 92 bis)"
+                        style={{
+                          display:"inline-flex",alignItems:"center",gap:4,
+                          padding:"2px 7px",borderRadius:999,
+                          background:"rgba(37,99,235,0.12)",
+                          border:"0.5px solid rgba(37,99,235,0.35)",
+                          color:"#2563EB",fontSize:9,fontWeight:500,
+                        }}
+                      >🧪 En prueba</span>
+                    </div>
+                  )}
+                </td>
                 <td style={{textAlign:"right"}}><span className="num kpi-acc">{fmt_$(e.sueldo_mensual)}</span></td>
                 <td style={{fontSize:11,color:vacColor}} title={yaTomadosAlta > 0 ? `Incluye ${yaTomadosAlta}d ya tomados antes del alta` : undefined}>{vac >= 14 && "🌴 "}{vac.toFixed(1)}d</td>
                 <td>

@@ -16,8 +16,33 @@ import {
   mesesAntiguedadCompletos,
   aniosIndemnizatorios,
   calcularPreaviso,
+  enPeriodoPrueba,
   aplicarAumento,
 } from "./rrhh";
+
+describe("enPeriodoPrueba (LCT Art 92 bis — 6 meses)", () => {
+  const hoy = new Date("2026-06-08T12:00:00");
+  it("ingreso hace 2 meses → en prueba", () => {
+    expect(enPeriodoPrueba("2026-04-08", hoy)).toBe(true);
+  });
+  it("ingreso hace 5 meses → en prueba", () => {
+    expect(enPeriodoPrueba("2026-01-08", hoy)).toBe(true);
+  });
+  it("ingreso hace exactamente 6 meses → ya NO está en prueba", () => {
+    expect(enPeriodoPrueba("2025-12-08", hoy)).toBe(false);
+  });
+  it("ingreso hace 8 meses → NO está en prueba", () => {
+    expect(enPeriodoPrueba("2025-10-08", hoy)).toBe(false);
+  });
+  it("sin fecha / fecha inválida → false", () => {
+    expect(enPeriodoPrueba(null, hoy)).toBe(false);
+    expect(enPeriodoPrueba("", hoy)).toBe(false);
+    expect(enPeriodoPrueba("no-es-fecha", hoy)).toBe(false);
+  });
+  it("ingreso futuro → false", () => {
+    expect(enPeriodoPrueba("2026-08-01", hoy)).toBe(false);
+  });
+});
 
 // ─── diasVacacionesPorAnio ───────────────────────────────────────────────────
 
