@@ -1069,7 +1069,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                     </td>
                     <td style={{ textAlign: "right" }}><span className="num kpi-warn">{fmt_$(r.monto)}</span></td>
                     <td>
-                      {r.estado === "sin_factura" && <span className="badge b-warn">Sin Factura</span>}
+                      {r.estado === "sin_factura" && <span className="badge b-warn" title="Mercadería recibida, pendiente de pago (sin factura cargada)">Pendiente</span>}
                       {(r.estado === "facturado" || r.estado === "vinculado") && <span className="badge b-success">Vinculado</span>}
                       {r.estado === "pagado" && <span className="badge b-info">Pagado</span>}
                       {r.estado === "anulado" && <span className="badge b-anulada">Anulado</span>}

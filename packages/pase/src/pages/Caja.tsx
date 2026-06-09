@@ -292,10 +292,15 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   // para banner que avisa al usuario que existen movimientos "ocultos".
   // Caso típico: pagos de sueldo con fecha fin de mes futura.
   const [movsFueraRango, setMovsFueraRango] = useState(0);
+  // Cuántos movimientos hay cargados (incluye los traídos con "Ver más"). Lo usa
+  // la recarga por realtime para NO resetear a la primera página (queja Anto
+  // 09-jun: "vuelvo de otra pestaña y el historial se va al principio de todo").
+  const cargadosRef = useRef(TESORERIA_PAGE_SIZE);
 
-  const load = async () => {
+  const load = async (preservarPaginas = false) => {
     setLoading(true);
-    const mQ = queryMovimientos(0, TESORERIA_PAGE_SIZE);
+    const cantidad = preservarPaginas ? Math.max(TESORERIA_PAGE_SIZE, cargadosRef.current) : TESORERIA_PAGE_SIZE;
+    const mQ = queryMovimientos(0, cantidad);
     let sq = db.from("saldos_caja").select("cuenta, saldo, local_id");
     sq = applyLocalScope(sq, user, localActivo);
     if (vis !== null) {
@@ -322,7 +327,8 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     const [{data:m},{data:s}] = await Promise.all([mQ, sq]);
     const movs = (m as Movimiento[]) || [];
     setMovimientos(movs);
-    setHasMore(movs.length === TESORERIA_PAGE_SIZE);
+    cargadosRef.current = movs.length;
+    setHasMore(movs.length === cantidad);
     setMovsFueraRango(futurosCount);
     const obj: Record<string, number> = {};
     (s||[]).forEach(x=> { obj[x.cuenta] = (obj[x.cuenta]||0) + (x.saldo||0); });
@@ -337,7 +343,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     setLoadingMore(true);
     const { data: m } = await queryMovimientos(movimientos.length, TESORERIA_PAGE_SIZE);
     const nuevos = (m as Movimiento[]) || [];
-    setMovimientos(prev => [...prev, ...nuevos]);
+    setMovimientos(prev => { const all = [...prev, ...nuevos]; cargadosRef.current = all.length; return all; });
     setHasMore(nuevos.length === TESORERIA_PAGE_SIZE);
     setLoadingMore(false);
   };
