@@ -119,6 +119,11 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
   const [hasta, setHasta] = useState(toISO(today));
   const [tipoFiltro, setTipoFiltro] = useState("todos");
   const [gastos, setGastos] = useState<GastoExt[]>([]);
+  // Mapa gasto_id → "APELLIDO, NOMBRE" para gastos tipo='empleado'. El gasto no
+  // guarda empleado_id directo; se liga via rrhh_adelantos.gasto_id. Sirve para
+  // mostrar el nombre del empleado como etiqueta adelante del detalle (pedido
+  // Lucas 08-jun: el detalle puede ser texto libre y ocultar de quién es).
+  const [empPorGasto, setEmpPorGasto] = useState<Record<string, string>>({});
   const [mostrarAnulados, setMostrarAnulados] = useState(false);
   // Modal de editar gasto
   const [editModal, setEditModal] = useState<(GastoExt & { justificativo: string }) | null>(null);
@@ -244,8 +249,33 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
       .order("nombre");
     pq = applyLocalScope(pq, user, localActivo);
     const { data: p } = await pq;
-    setGastos(((g as GastoExt[]) || []).filter(g => g.categoria !== "SUELDOS"));
+    const gastosList = ((g as GastoExt[]) || []).filter(g => g.categoria !== "SUELDOS");
+    setGastos(gastosList);
     setPlantillas((p as GastoPlantilla[]) || []);
+
+    // Nombre del empleado para los gastos tipo='empleado' (via rrhh_adelantos).
+    const empGastoIds = gastosList.filter(x => x.tipo === "empleado").map(x => x.id);
+    if (empGastoIds.length) {
+      const { data: adel } = await db.from("rrhh_adelantos")
+        .select("gasto_id, empleado_id").in("gasto_id", empGastoIds);
+      const empIds = [...new Set((adel || []).map(a => a.empleado_id).filter(Boolean))];
+      if (empIds.length) {
+        const { data: emps } = await db.from("rrhh_empleados")
+          .select("id, apellido, nombre").in("id", empIds);
+        const nombrePorEmp: Record<string, string> = {};
+        (emps || []).forEach(e => { nombrePorEmp[e.id] = `${e.apellido}, ${e.nombre}`; });
+        const map: Record<string, string> = {};
+        (adel || []).forEach(a => {
+          const nm = nombrePorEmp[a.empleado_id];
+          if (a.gasto_id && nm) map[a.gasto_id] = nm;
+        });
+        setEmpPorGasto(map);
+      } else {
+        setEmpPorGasto({});
+      }
+    } else {
+      setEmpPorGasto({});
+    }
     setLoading(false);
   };
   // Debounce de date pickers (C6) — evita fetches en cada tecla al editar.
@@ -630,7 +660,27 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                     )}
                   </td>
                   <td style={{ fontSize: 11 }}>{g.categoria}</td>
-                  <td style={{ fontSize: 11, color: "var(--muted2)" }}>{g.detalle || "—"}</td>
+                  <td style={{ fontSize: 11, color: "var(--muted2)" }}>
+                    {g.tipo === "empleado" && empPorGasto[g.id] && (
+                      <span
+                        title="Empleado del gasto"
+                        style={{
+                          marginRight: 6,
+                          fontSize: 9,
+                          padding: "1px 6px",
+                          borderRadius: 3,
+                          color: "var(--acc)",
+                          border: "0.5px solid var(--acc)",
+                          background: "transparent",
+                          fontWeight: 500,
+                          whiteSpace: "nowrap",
+                          textTransform: "uppercase",
+                          letterSpacing: 0.3,
+                        }}
+                      >{empPorGasto[g.id]}</span>
+                    )}
+                    {g.detalle || "—"}
+                  </td>
                   <td style={{ fontSize: 11, color: "var(--muted2)" }}>{locales.find((l: Local) => String(l.id) === String(g.local_id))?.nombre || "Todos"}</td>
                   <td style={{ fontSize: 11, color: "var(--muted2)" }}>{g.cuenta || "—"}</td>
                   <td className="num-right">{fmt_$(g.monto)}</td>
