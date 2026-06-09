@@ -414,10 +414,20 @@ export function calcularLiquidacionFinal(params: LiquidacionFinalParams): Liquid
   const proporcional_mes = valorDia * diaDelMes;
 
   // SAC proporcional del semestre en curso.
+  // Cuenta los días EFECTIVAMENTE trabajados dentro del semestre: desde el más
+  // tarde entre (inicio del semestre) y (fecha de ingreso del empleado), hasta
+  // la fecha de egreso del cuadro, contando AMBAS puntas (inclusive).
+  // Fix 09-jun (Lucas): antes arrancaba SIEMPRE el 1-ene/1-jul ignorando el
+  // ingreso → inflaba el SAC de quien entró a mitad de semestre (Estrada:
+  // ingreso 19-mar, egreso 31-may → contaba 159 días en vez de 74). La fecha de
+  // egreso del cuadro es la que manda; los días del mes de egreso SÍ cuentan.
   const inicioSem = fechaEg.getMonth() < 6
     ? new Date(fechaEg.getFullYear(), 0, 1)
     : new Date(fechaEg.getFullYear(), 6, 1);
-  const diasEnSem = Math.max(0, Math.ceil((fechaEg.getTime() - inicioSem.getTime()) / 86400000));
+  const fechaIni = fecha_inicio ? new Date(fecha_inicio + "T12:00:00") : inicioSem;
+  const arranqueSem = fechaIni.getTime() > inicioSem.getTime() ? fechaIni : inicioSem;
+  const aDiaUTC = (d: Date) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  const diasEnSem = Math.max(0, Math.floor((aDiaUTC(fechaEg) - aDiaUTC(arranqueSem)) / 86400000) + 1);
   const sac_proporcional = (sueldo_mensual / 2) * (diasEnSem / 180);
 
   // Vacaciones no gozadas en dinero (LCT Art 155: sueldo/25) + su SAC.

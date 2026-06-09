@@ -663,6 +663,33 @@ describe("calcularLiquidacionFinal", () => {
     expect(r.sac_proporcional).toBeCloseTo(sacEsperado, 0);
   });
 
+  it("SAC cuenta desde el INGRESO si entró a mitad de semestre (caso Estrada, fix 09-jun)", () => {
+    // Ingreso 19-mar-2026, egreso 31-may-2026, sueldo 850k.
+    // Días en semestre = 19-mar→31-may inclusive = 13(mar) + 30(abr) + 31(may) = 74.
+    // SAC = (850000/2) × (74/180) = 174.722,22 — coincide con el excel de Anto.
+    // Bug previo: contaba desde el 1-ene (159 días) → $377.778 (el doble).
+    const r = calcularLiquidacionFinal({
+      sueldo_mensual: 850000,
+      fecha_inicio: "2026-03-19",
+      fecha_egreso: "2026-05-31",
+      vacaciones_acumuladas: 0,
+      motivo: "Renuncia" as const,
+    });
+    expect(r.sac_proporcional).toBeCloseTo((850000 / 2) * (74 / 180), 2); // 174722.22
+  });
+
+  it("SAC con ingreso PREVIO al semestre cuenta desde el inicio del semestre", () => {
+    // Ingreso 2025 (antes), egreso 30-jun-2026 → 1-ene→30-jun inclusive = 181 días.
+    const r = calcularLiquidacionFinal({
+      sueldo_mensual: 600000,
+      fecha_inicio: "2025-01-01",
+      fecha_egreso: "2026-06-30",
+      vacaciones_acumuladas: 0,
+      motivo: "Renuncia" as const,
+    });
+    expect(r.sac_proporcional).toBeCloseTo((600000 / 2) * (181 / 180), 0);
+  });
+
   it("renuncia → sin indemnización, preaviso ni integración", () => {
     const r = calcularLiquidacionFinal(baseFinal);
     expect(r.indemnizacion).toBe(0);
