@@ -453,22 +453,39 @@ function AppMain() {
             // (Fix Lucas 02-jun noche: F5 lo expulsaba aunque tildara el
             // checkbox — éste era uno de los 3 paths que ignoraban el flag.)
             if (skipAutoSignOut(`getUser() hard fail: ${errAny?.message ?? 'rechazo'}`)) {
-              try { await db.auth.refreshSession(); } catch { /* idem */ }
-              // Intentar restaurar perfil desde sessionStorage para no
-              // mostrar Login pantalla en blanco.
+              // Intentar recuperar la sesión con el refresh token y VERIFICAR
+              // que realmente funcionó.
+              //
+              // BUG RAÍZ (análisis 08-jun, consola de Lucas: 403 en
+              // auth/v1/user + 406 en usuarios/tenants + 401 en RPCs): antes
+              // refrescábamos a ciegas (`try { refreshSession() } catch {}`) y
+              // restaurábamos el perfil DESDE EL CACHE aunque el refresh hubiera
+              // fallado → quedaba una sesión ZOMBIE: UI logueada pero token
+              // muerto, TODAS las queries 403/406/401, sidebar sin locales, 0
+              // datos, y NO se recuperaba ni recargando (el reload caía en el
+              // mismo token muerto). Esto es lo que Lucas veía como "pantalla
+              // fantasma" persistente.
+              //
+              // Fix: refrescar, chequear el resultado, y SOLO si la sesión
+              // quedó viva re-fetchear el perfil FRESCO (con el token bueno) y
+              // applyLogin. Si el refresh no recupera (refresh token muerto),
+              // NO mostramos el cache zombie: caemos al signOut limpio para que
+              // el user re-loguee y obtenga tokens frescos (es la única forma
+              // de poder operar — sin token válido no hay nada que hacer).
               try {
-                const cached = sessionStorage.getItem("pase_user");
-                if (cached) {
-                  const perfilCache = JSON.parse(cached) as Usuario;
-                  if (perfilCache?.id && perfilCache?.activo !== false) {
-                    setUser(perfilCache);
+                const { data: refData, error: refErr } = await db.auth.refreshSession();
+                if (!refErr && refData?.session?.user) {
+                  const { data: perfilFresh } = await db.from("usuarios")
+                    .select("id, auth_id, email, nombre, rol, activo, password_temporal, locales, cuentas_visibles, cuentas_operables, tenant_id")
+                    .eq("auth_id", refData.session.user.id).single();
+                  if (perfilFresh && perfilFresh.activo !== false) {
+                    // eslint-disable-next-line react-hooks/immutability
+                    await applyLogin(perfilFresh);
                     setAuthLoading(false);
                     return;
                   }
                 }
-              } catch { /* idem */ }
-              // Sin cache disponible — no podemos mantener la UI. Caemos
-              // al signOut igual (raro: F5 generalmente conserva sessionStorage).
+              } catch { /* refresh falló — caemos al signOut limpio */ }
             }
             // eslint-disable-next-line no-console
             console.warn("[App] getUser() rechazó tokens (hard fail), signOut:", errAny?.message);
