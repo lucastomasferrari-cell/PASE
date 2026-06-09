@@ -3,7 +3,7 @@ import {
   scopeLocales, applyLocalScope, tienePermiso, getPermisos,
   cuentasVisibles, cuentasOperables, cuentasVisiblesParaListados,
   puedeVerCuenta, puedeOperarCuenta, puedeVerMovimientosDeCuenta,
-  mergeLocales, debeReintentarLocales,
+  mergeLocales, debeReintentarLocales, debeReintentarCargaVacia,
 } from "./auth";
 import type { Usuario } from "../types";
 
@@ -32,6 +32,22 @@ describe("debeReintentarLocales", () => {
   });
   it("supera el tope → NO reintenta (tenant sin locales real)", () => {
     expect(debeReintentarLocales(0, true, 6)).toBe(false);
+  });
+});
+
+describe("debeReintentarCargaVacia (genérico — usado en loadEmpleados)", () => {
+  it("0 filas + sesión + bajo el tope → reintenta", () => {
+    expect(debeReintentarCargaVacia(0, true, 0, 3)).toBe(true);
+    expect(debeReintentarCargaVacia(0, true, 2, 3)).toBe(true);
+  });
+  it("0 filas sin sesión → NO reintenta", () => {
+    expect(debeReintentarCargaVacia(0, false, 0, 3)).toBe(false);
+  });
+  it("llegaron filas → NO reintenta", () => {
+    expect(debeReintentarCargaVacia(5, true, 0, 3)).toBe(false);
+  });
+  it("alcanzó el tope → NO reintenta (dataset realmente vacío)", () => {
+    expect(debeReintentarCargaVacia(0, true, 3, 3)).toBe(false);
   });
 });
 

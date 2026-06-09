@@ -209,14 +209,26 @@ export function mergeLocales<T>(prev: T[], fetched: T[]): T[] {
 }
 
 /**
- * ¿Reintentar el fetch de locales? Sí si volvió vacío PERO hay sesión y no
- * superamos el tope. El tenant real tiene locales → vacío = la sesión todavía
- * no propagó. Bounded para no loopear en un tenant genuinamente sin locales.
+ * ¿Reintentar una carga que volvió vacía por race de sesión? Sí si volvió 0
+ * filas PERO hay sesión activa y no superamos el tope. Patrón genérico: cuando
+ * el JWT todavía no propagó a PostgREST, la RLS filtra TODO y devuelve 0 filas
+ * SIN error → un fetch vacío con sesión activa casi siempre es ese race, no un
+ * resultado real. Bounded para no loopear en datasets genuinamente vacíos.
+ */
+export function debeReintentarCargaVacia(
+  fetchedLen: number, haySesion: boolean, depth: number, max = 6,
+): boolean {
+  return fetchedLen === 0 && haySesion && depth < max;
+}
+
+/**
+ * ¿Reintentar el fetch de locales? Caso particular de debeReintentarCargaVacia
+ * (se mantiene el nombre por compat con App.tsx + tests existentes).
  */
 export function debeReintentarLocales(
   fetchedLen: number, haySesion: boolean, depth: number, max = 6,
 ): boolean {
-  return fetchedLen === 0 && haySesion && depth < max;
+  return debeReintentarCargaVacia(fetchedLen, haySesion, depth, max);
 }
 
 /** null = todos los locales (dueno/admin). number[] para encargado. */

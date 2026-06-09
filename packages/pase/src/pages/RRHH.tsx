@@ -1,7 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { Modal } from "../components/ui";
 import { db } from "../lib/supabase";
-import { localesVisibles, applyLocalScope, cuentasOperables, tienePermiso } from "../lib/auth";
+import { localesVisibles, applyLocalScope, cuentasOperables, tienePermiso, debeReintentarCargaVacia } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { usePuestosRRHH } from "../lib/usePuestosRRHH";
 import { useGuardedHandler } from "../lib/useGuardedHandler";
@@ -176,11 +176,26 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
 
   // ─── LOAD FUNCTIONS ────────────────────────────────────────────────────────
 
-  const loadEmpleados = async () => {
+  const loadEmpleados = async (retryDepth = 0) => {
+    // Esperar a que la sesión esté hidratada antes de pegarle a la RLS.
+    await db.auth.getSession();
     let q = db.from("rrhh_empleados").select("*").order("apellido");
     q = applyLocalScope(q, user, localActivo);
-    const { data } = await q;
+    const { data, error } = await q;
     const emps = (data as Empleado[]) || [];
+    // SELF-HEAL del bug "Sin empleados" intermitente al loguearse (mismo race
+    // que refetchLocales en App.tsx): si volvió 0 filas SIN error pero hay
+    // sesión activa, el JWT casi seguro no propagó todavía a PostgREST y la RLS
+    // filtró todo. Reintentar con backoff (400/800/1600ms) en vez de mostrar
+    // "Sin empleados". Bounded: un local genuinamente sin empleados muestra
+    // vacío recién tras agotar los reintentos.
+    if (emps.length === 0 && !error) {
+      const { data: { session } } = await db.auth.getSession();
+      if (debeReintentarCargaVacia(emps.length, !!session, retryDepth, 3)) {
+        setTimeout(() => { void loadEmpleados(retryDepth + 1); }, 400 * Math.pow(2, retryDepth));
+        return;
+      }
+    }
     setAllEmps(emps);
     // Cargar días de vacaciones tomadas (novedades confirmadas)
     const empIds = emps.map(e => e.id);
