@@ -22,6 +22,7 @@ import {
   mesesTrabajadosEnSemestre,
   calcularLiquidacionFinal,
   type LiquidacionFinalResult,
+  type MotivoEgreso,
 } from "../lib/calculos/rrhh";
 import type { Usuario, Local } from "../types/auth";
 import { EmpleadoCesiones } from "./rrhh/EmpleadoCesiones";
@@ -33,7 +34,7 @@ import type {
 } from "../types/rrhh";
 
 // Forma del state liqFinalForm — únicamente usado en este archivo.
-interface LiqFinalForm { fecha_egreso: string; motivo: string; incluir_preaviso?: boolean; indemnizacion_mult?: 1 | 2 }
+interface LiqFinalForm { fecha_egreso: string; motivo: string; indemnizacion_mult?: 1 | 2 }
 
 const MESES = ["","Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const DOC_TIPOS = [
@@ -100,7 +101,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
 
   // Liquidación final
   const [liqFinalModal, setLiqFinalModal] = useState(false);
-  const [liqFinalForm, setLiqFinalForm] = useState<LiqFinalForm>({ fecha_egreso: toISO(today), motivo: "Renuncia", incluir_preaviso: true, indemnizacion_mult: 1 });
+  const [liqFinalForm, setLiqFinalForm] = useState<LiqFinalForm>({ fecha_egreso: toISO(today), motivo: "Renuncia", indemnizacion_mult: 1 });
   const [liqFinalData, setLiqFinalData] = useState<LiquidacionFinalResult | null>(null);
   const [liqFinalCuenta, setLiqFinalCuenta] = useState("");
   const [liqFinalOverrides, setLiqFinalOverrides] = useState<Record<string, string>>({});
@@ -190,14 +191,13 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
     const vacAcum = calcularVacaciones(emp.fecha_inicio, vacTomadas);
     // El select del UI sólo permite estos 4 motivos — el cast estrecha el tipo
     // string del state al union literal que espera calcularLiquidacionFinal.
-    const motivo = liqFinalForm.motivo as "Renuncia" | "Despido sin causa" | "Despido con causa" | "Acuerdo mutuo";
+    const motivo = liqFinalForm.motivo as MotivoEgreso;
     const lf = calcularLiquidacionFinal({
       sueldo_mensual: Number(emp.sueldo_mensual),
       fecha_inicio: emp.fecha_inicio,
       fecha_egreso: liqFinalForm.fecha_egreso,
       vacaciones_acumuladas: vacAcum,
       motivo,
-      incluir_preaviso: liqFinalForm.incluir_preaviso ?? true,
       indemnizacion_mult: liqFinalForm.indemnizacion_mult ?? 1,
     });
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -205,7 +205,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
   // emp.sueldo_mensual y emp.fecha_inicio ya están en deps explícitamente;
   // el linter pide el emp completo pero esos son los únicos campos usados.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liqFinalModal, liqFinalForm.fecha_egreso, liqFinalForm.motivo, liqFinalForm.incluir_preaviso, liqFinalForm.indemnizacion_mult, emp?.sueldo_mensual, emp?.fecha_inicio, vacTomadas]);
+  }, [liqFinalModal, liqFinalForm.fecha_egreso, liqFinalForm.motivo, liqFinalForm.indemnizacion_mult, emp?.sueldo_mensual, emp?.fecha_inicio, vacTomadas]);
 
   // Reset overrides al cambiar motivo
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -655,30 +655,42 @@ function TabDatos({
       </Modal>
 
       {liqFinalModal && (() => {
-        const esDespidoSinCausa = liqFinalForm.motivo === "Despido sin causa";
+        const esDespido = liqFinalForm.motivo === "Despido sin preaviso" || liqFinalForm.motivo === "Despido con preaviso";
+        const esSinPreaviso = liqFinalForm.motivo === "Despido sin preaviso";
         const esAcuerdoMutuo = liqFinalForm.motivo === "Acuerdo mutuo";
-        const antAnios = Math.max(1, Math.floor(antiguedadAnios));
+        const antAnios = liqFinalData?.antiguedad_anios ?? Math.max(1, Math.floor(antiguedadAnios));
 
         // Las keys del array conceptos son CAMPOS de LiquidacionFinalResult.
         // Tipar como keyof permite acceder liqFinalData?.[k] sin error de
         // index signature.
         type ConceptoKey = keyof LiquidacionFinalResult;
         const conceptos: [ConceptoKey, string][] = [
-          ["proporcional_mes", "Proporcional mes"],
-          ["vacaciones_dinero", "Vacaciones (" + vacAcumuladas.toFixed(1) + " días)"],
+          ["proporcional_mes", "Días trabajados del mes"],
           ["sac_proporcional", "SAC proporcional"],
-          ...(esDespidoSinCausa ? ([
-            ["indemnizacion", "Indemnización (" + antAnios + " año" + (antAnios > 1 ? "s" : "") + ")"],
+          ["vacaciones_dinero", "Vacaciones no gozadas (" + vacAcumuladas.toFixed(1) + " días)"],
+          ["sac_vacaciones", "SAC s/ vacaciones"],
+          ...(esDespido ? ([
+            ["indemnizacion", "Indemnización antigüedad (" + antAnios + " año" + (antAnios > 1 ? "s" : "") + ")"],
+          ] as [ConceptoKey, string][]) : []),
+          ...(esSinPreaviso ? ([
             ["preaviso", "Preaviso"],
+            ["sac_preaviso", "SAC s/ preaviso"],
             ["integracion_mes", "Integración mes despido"],
+            ["sac_integracion", "SAC s/ integración"],
+          ] as [ConceptoKey, string][]) : []),
+          ...(esAcuerdoMutuo ? ([
+            ["gratificacion", "Gratificación acuerdo"],
           ] as [ConceptoKey, string][]) : []),
         ];
 
+        // Todo editable (decisión Lucas 08-jun): cualquier línea admite override
+        // manual; el cálculo automático es el punto de partida.
         const getConceptoMonto = (key: ConceptoKey, calculado: number) => {
-          if (esAcuerdoMutuo && liqFinalOverrides[key] !== undefined) {
-            return parseFloat(liqFinalOverrides[key]) || 0;
-          }
-          return calculado;
+          const ov = liqFinalOverrides[key];
+          if (ov !== undefined && ov !== "") return parseFloat(ov) || 0;
+          // Redondeo a peso entero para que el TOTAL coincida exacto con lo que
+          // se ve en cada línea (los sueldos no llevan centavos).
+          return Math.round(calculado);
         };
 
         const total = conceptos.reduce((s, [k]) => {
@@ -755,15 +767,14 @@ function TabDatos({
               <div className="field"><label>Fecha de egreso</label><input type="date" value={liqFinalForm.fecha_egreso} onChange={e => setLiqFinalForm({...liqFinalForm, fecha_egreso:e.target.value})} /></div>
               <div className="field"><label>Motivo</label>
                 <select value={liqFinalForm.motivo} onChange={e => setLiqFinalForm({...liqFinalForm, motivo:e.target.value})}>
-                  <option value="Renuncia">Renuncia</option><option value="Despido sin causa">Despido sin causa</option><option value="Despido con causa">Despido con causa</option><option value="Acuerdo mutuo">Acuerdo mutuo</option>
+                  <option value="Despido sin preaviso">Despido sin preaviso</option>
+                  <option value="Despido con preaviso">Despido con preaviso</option>
+                  <option value="Renuncia">Renuncia</option>
+                  <option value="Acuerdo mutuo">Acuerdo mutuo</option>
                 </select></div>
             </div>
-            {esDespidoSinCausa && (
+            {esDespido && (
               <div style={{display:"flex",gap:18,alignItems:"center",flexWrap:"wrap",marginBottom:12,padding:"8px 12px",background:"var(--s2)",borderRadius:"var(--r)"}}>
-                <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,cursor:"pointer"}}>
-                  <input type="checkbox" checked={liqFinalForm.incluir_preaviso ?? true} onChange={e => setLiqFinalForm({...liqFinalForm, incluir_preaviso:e.target.checked})} />
-                  Con preaviso
-                </label>
                 <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12}}>
                   Indemnización
                   <select value={String(liqFinalForm.indemnizacion_mult ?? 1)} onChange={e => setLiqFinalForm({...liqFinalForm, indemnizacion_mult: (parseInt(e.target.value) === 2 ? 2 : 1)})} style={{padding:"2px 6px"}}>
@@ -771,28 +782,27 @@ function TabDatos({
                     <option value="2">2× (doble indemnización)</option>
                   </select>
                 </label>
+                {esSinPreaviso && (
+                  <span style={{fontSize:11,color:"var(--muted)"}}>Incluye preaviso + integración del mes (Art. 232/233).</span>
+                )}
               </div>
             )}
             <div style={{background:"var(--s2)",borderRadius:"var(--r)",padding:16}}>
               <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>
-                Conceptos{esAcuerdoMutuo && <span style={{color:"var(--warn)",marginLeft:8}}>(editables)</span>}
+                Conceptos <span style={{color:"var(--warn)",marginLeft:8,textTransform:"none",letterSpacing:0}}>(todos editables — el cálculo es el punto de partida)</span>
               </div>
               {conceptos.map(([key, label]) => {
                 const calc = liqFinalData?.[key] || 0;
-                const monto = getConceptoMonto(key, calc);
+                const editado = liqFinalOverrides[key] !== undefined && liqFinalOverrides[key] !== "";
                 return (
                   <div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid var(--bd)",fontSize:12}}>
-                    <span>{label}</span>
-                    {esAcuerdoMutuo ? (
-                      <input
-                        type="number"
-                        value={liqFinalOverrides[key] ?? String(calc)}
-                        onChange={e => setLiqFinalOverrides((prev) => ({...prev, [key]: e.target.value}))}
-                        style={{width:130,background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--acc)",padding:"3px 6px",fontFamily:"'DM Mono',monospace",fontSize:11,textAlign:"right",borderRadius:"var(--r)"}}
-                      />
-                    ) : (
-                      <span className="num" style={{color:"var(--acc)"}}>{fmt_$(monto)}</span>
-                    )}
+                    <span>{label}{editado && <span style={{color:"var(--warn)",marginLeft:6,fontSize:10}}>✎</span>}</span>
+                    <input
+                      type="number"
+                      value={liqFinalOverrides[key] ?? String(Math.round(calc))}
+                      onChange={e => setLiqFinalOverrides((prev) => ({...prev, [key]: e.target.value}))}
+                      style={{width:130,background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--acc)",padding:"3px 6px",fontFamily:"'DM Mono',monospace",fontSize:11,textAlign:"right",borderRadius:"var(--r)"}}
+                    />
                   </div>
                 );
               })}

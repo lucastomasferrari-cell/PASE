@@ -45,25 +45,41 @@ export interface LiquidacionResult {
   total_a_pagar: number;
 }
 
+// Taxonomía pedida por Lucas (08-jun). Reemplaza el viejo "Despido sin/con
+// causa": ahora la distinción operativa es si HUBO o NO preaviso, que es lo
+// que cambia los conceptos a pagar.
+export type MotivoEgreso =
+  | "Despido sin preaviso"
+  | "Despido con preaviso"
+  | "Renuncia"
+  | "Acuerdo mutuo";
+
 export interface LiquidacionFinalParams {
-  sueldo_mensual: number;
+  sueldo_mensual: number;          // base indemnizatoria (mejor rem. normal y habitual)
   fecha_inicio: string;
   fecha_egreso: string;
-  vacaciones_acumuladas: number; // días disponibles (ya neto de tomadas)
-  motivo: "Renuncia" | "Despido sin causa" | "Despido con causa" | "Acuerdo mutuo";
-  // Control manual (Lucas 04-jun) — solo aplican en despido sin causa.
-  incluir_preaviso?: boolean;      // default true. false → preaviso = 0.
-  indemnizacion_mult?: 1 | 2;      // default 1. 2 → doble indemnización (decreto).
+  vacaciones_acumuladas: number;   // días disponibles (ya neto de tomadas)
+  motivo: MotivoEgreso;
+  /** Doble indemnización (decreto de emergencia). Default 1. Aplica a las
+   *  indemnizaciones del despido (antigüedad, preaviso, integración). */
+  indemnizacion_mult?: 1 | 2;
+  /** Gratificación / extra manual ($). Default 0. Caso típico: acuerdo mutuo. */
+  gratificacion?: number;
 }
 
 export interface LiquidacionFinalResult {
-  proporcional_mes: number;
-  vacaciones_dinero: number;
-  sac_proporcional: number;
-  indemnizacion: number;
-  preaviso: number;
-  integracion_mes: number;
+  proporcional_mes: number;   // días trabajados del mes
+  sac_proporcional: number;   // SAC del semestre en curso
+  vacaciones_dinero: number;  // vacaciones no gozadas (Art 155)
+  sac_vacaciones: number;     // SAC sobre vacaciones no gozadas
+  indemnizacion: number;      // antigüedad (Art 245)
+  preaviso: number;           // sustitutiva de preaviso (Art 232)
+  sac_preaviso: number;       // SAC sobre preaviso
+  integracion_mes: number;    // integración mes de despido (Art 233)
+  sac_integracion: number;    // SAC sobre integración
+  gratificacion: number;      // extra manual (acuerdo, etc.)
   total: number;
+  antiguedad_anios: number;   // años computados para Art 245 (con fracción > 3m)
 }
 
 // ─── VACACIONES ──────────────────────────────────────────────────────────────
@@ -332,7 +348,41 @@ export function aplicarAumento(actual: number, opts: OpcionesAumento): number {
 
 // ─── LIQUIDACIÓN FINAL ───────────────────────────────────────────────────────
 
-/** Calcula liquidación final al egreso del empleado */
+/** Meses completos de antigüedad entre ingreso y egreso. */
+export function mesesAntiguedadCompletos(fechaInicio: string, fechaEgreso: string): number {
+  const fi = new Date(fechaInicio + "T12:00:00");
+  const fe = new Date(fechaEgreso + "T12:00:00");
+  if (isNaN(fi.getTime()) || isNaN(fe.getTime())) return 0;
+  let m = (fe.getFullYear() - fi.getFullYear()) * 12 + (fe.getMonth() - fi.getMonth());
+  if (fe.getDate() < fi.getDate()) m -= 1; // mes incompleto no cuenta
+  return Math.max(0, m);
+}
+
+/**
+ * Años computables para indemnización por antigüedad (LCT Art 245): cada año
+ * de servicio O FRACCIÓN MAYOR A 3 MESES se computa como año entero. Mínimo 1.
+ */
+export function aniosIndemnizatorios(fechaInicio: string, fechaEgreso: string): number {
+  const meses = mesesAntiguedadCompletos(fechaInicio, fechaEgreso);
+  const aniosCompletos = Math.floor(meses / 12);
+  const mesesResto = meses % 12;
+  return Math.max(1, aniosCompletos + (mesesResto > 3 ? 1 : 0));
+}
+
+/**
+ * Preaviso sustitutivo (LCT Art 232), en pesos:
+ *   - antigüedad < 3 meses (período de prueba) → 15 días (sueldo/30 × 15)
+ *   - de 3 meses a 5 años                       → 1 mes
+ *   - más de 5 años                             → 2 meses
+ */
+export function calcularPreaviso(sueldoMensual: number, mesesAntiguedad: number): number {
+  if (sueldoMensual <= 0) return 0;
+  if (mesesAntiguedad < 3) return (sueldoMensual / 30) * 15;
+  if (mesesAntiguedad <= 60) return sueldoMensual;
+  return sueldoMensual * 2;
+}
+
+/** Calcula liquidación final al egreso del empleado (LCT vigente). */
 export function calcularLiquidacionFinal(params: LiquidacionFinalParams): LiquidacionFinalResult {
   const { sueldo_mensual, fecha_inicio, fecha_egreso, vacaciones_acumuladas, motivo } = params;
 
@@ -340,50 +390,62 @@ export function calcularLiquidacionFinal(params: LiquidacionFinalParams): Liquid
   const fechaEg = new Date(fecha_egreso + "T12:00:00");
   const diaDelMes = fechaEg.getDate();
 
-  // Proporcional del mes trabajado
+  // ── Conceptos que se pagan SIEMPRE (cualquier motivo) ─────────────────────
+  // Proporcional del mes trabajado.
   const proporcional_mes = valorDia * diaDelMes;
 
-  // Vacaciones no tomadas en dinero (LCT Art 155: sueldo/25)
-  const valor_dia_vacacional = sueldo_mensual / 25;
-  const vacaciones_dinero = Math.max(0, vacaciones_acumuladas) * valor_dia_vacacional;
-
-  // SAC proporcional del semestre
+  // SAC proporcional del semestre en curso.
   const inicioSem = fechaEg.getMonth() < 6
     ? new Date(fechaEg.getFullYear(), 0, 1)
     : new Date(fechaEg.getFullYear(), 6, 1);
   const diasEnSem = Math.max(0, Math.ceil((fechaEg.getTime() - inicioSem.getTime()) / 86400000));
   const sac_proporcional = (sueldo_mensual / 2) * (diasEnSem / 180);
 
-  // Indemnización y preaviso solo para despido sin causa
-  const esDespido = motivo === "Despido sin causa";
+  // Vacaciones no gozadas en dinero (LCT Art 155: sueldo/25) + su SAC.
+  const valor_dia_vacacional = sueldo_mensual / 25;
+  const vacaciones_dinero = Math.max(0, vacaciones_acumuladas) * valor_dia_vacacional;
+  const sac_vacaciones = vacaciones_dinero / 12;
 
-  const fi = new Date(fecha_inicio + "T12:00:00");
-  const antiguedadMs = fechaEg.getTime() - fi.getTime();
-  const antiguedadAnios = Math.max(1, Math.floor(antiguedadMs / (365.25 * 24 * 60 * 60 * 1000)));
+  // ── Conceptos según el motivo ─────────────────────────────────────────────
+  const esDespido = motivo === "Despido sin preaviso" || motivo === "Despido con preaviso";
+  const sinPreaviso = motivo === "Despido sin preaviso";
+  const mult = params.indemnizacion_mult ?? 1;
+  const meses = mesesAntiguedadCompletos(fecha_inicio, fecha_egreso);
+  const antiguedad_anios = aniosIndemnizatorios(fecha_inicio, fecha_egreso);
 
-  // Control manual (Lucas 04-jun): multiplicador de indemnización (1x/2x) y
-  // toggle de preaviso. Solo relevantes en despido sin causa.
-  const indemMult = params.indemnizacion_mult ?? 1;
-  const incluirPreaviso = params.incluir_preaviso ?? true;
-  const indemnizacion = esDespido ? sueldo_mensual * antiguedadAnios * indemMult : 0;
-  const preaviso = esDespido && incluirPreaviso ? (antiguedadAnios < 5 ? valorDia * 15 : sueldo_mensual) : 0;
+  // Indemnización por antigüedad (Art 245) — todo despido.
+  const indemnizacion = esDespido ? sueldo_mensual * antiguedad_anios * mult : 0;
 
-  // Integración mes de despido
+  // Preaviso (Art 232) + SAC — solo despido SIN preaviso.
+  const preaviso = sinPreaviso ? calcularPreaviso(sueldo_mensual, meses) * mult : 0;
+  const sac_preaviso = preaviso / 12;
+
+  // Integración mes de despido (Art 233) + SAC — solo despido SIN preaviso.
   const diasRestantesMes = new Date(fechaEg.getFullYear(), fechaEg.getMonth() + 1, 0).getDate() - diaDelMes;
-  const integracion_mes = esDespido ? valorDia * diasRestantesMes : 0;
+  const integracion_mes = sinPreaviso ? valorDia * diasRestantesMes * mult : 0;
+  const sac_integracion = integracion_mes / 12;
+
+  // Gratificación / extra manual (acuerdo mutuo, ajustes).
+  const gratificacion = Math.max(0, params.gratificacion ?? 0);
 
   const total = Math.max(0,
-    proporcional_mes + vacaciones_dinero + sac_proporcional +
-    indemnizacion + preaviso + integracion_mes,
+    proporcional_mes + sac_proporcional + vacaciones_dinero + sac_vacaciones +
+    indemnizacion + preaviso + sac_preaviso + integracion_mes + sac_integracion +
+    gratificacion,
   );
 
   return {
     proporcional_mes,
-    vacaciones_dinero,
     sac_proporcional,
+    vacaciones_dinero,
+    sac_vacaciones,
     indemnizacion,
     preaviso,
+    sac_preaviso,
     integracion_mes,
+    sac_integracion,
+    gratificacion,
     total,
+    antiguedad_anios,
   };
 }

@@ -13,6 +13,9 @@ import {
   calcularPresentismo,
   calcularTotalLiquidacion,
   calcularLiquidacionFinal,
+  mesesAntiguedadCompletos,
+  aniosIndemnizatorios,
+  calcularPreaviso,
   aplicarAumento,
 } from "./rrhh";
 
@@ -578,6 +581,32 @@ describe("calcularTotalLiquidacion", () => {
 
 // ─── calcularLiquidacionFinal ────────────────────────────────────────────────
 
+describe("mesesAntiguedadCompletos / aniosIndemnizatorios / calcularPreaviso", () => {
+  it("meses completos: día de egreso anterior al de ingreso no cuenta ese mes", () => {
+    // ingreso 15/03/2023, egreso 10/04/2026 → 36 meses + 26 días = 36 (el mes corto no cuenta)
+    expect(mesesAntiguedadCompletos("2023-03-15", "2026-04-10")).toBe(36);
+    // egreso 20/04 → mes completo → 37
+    expect(mesesAntiguedadCompletos("2023-03-15", "2026-04-20")).toBe(37);
+  });
+
+  it("Art 245: fracción > 3 meses cuenta como año entero", () => {
+    expect(aniosIndemnizatorios("2023-01-01", "2026-01-01")).toBe(3);   // 36m exactos
+    expect(aniosIndemnizatorios("2023-01-01", "2026-05-15")).toBe(4);   // 40m → resto 4m >3 → 4
+    expect(aniosIndemnizatorios("2023-01-01", "2026-04-15")).toBe(3);   // 39m → resto 3m ≤3 → 3
+  });
+
+  it("Art 245: mínimo 1 año aunque la antigüedad sea menor", () => {
+    expect(aniosIndemnizatorios("2026-01-01", "2026-03-01")).toBe(1);
+  });
+
+  it("Art 232: tramos de preaviso", () => {
+    expect(calcularPreaviso(600000, 2)).toBeCloseTo((600000 / 30) * 15, 0); // <3m → 15 días
+    expect(calcularPreaviso(600000, 3)).toBe(600000);                       // 3m → 1 mes
+    expect(calcularPreaviso(600000, 60)).toBe(600000);                      // 5 años → 1 mes
+    expect(calcularPreaviso(600000, 61)).toBe(1200000);                     // >5 años → 2 meses
+  });
+});
+
 describe("calcularLiquidacionFinal", () => {
   const baseFinal = {
     sueldo_mensual: 600000,
@@ -590,20 +619,18 @@ describe("calcularLiquidacionFinal", () => {
 
   it("proporcional del mes → valorDia × día del mes", () => {
     const r = calcularLiquidacionFinal(baseFinal);
-    // egreso día 15 → 15 × valorDia
     expect(r.proporcional_mes).toBeCloseTo(valorDia * 15, 0);
   });
 
-  it("vacaciones no tomadas en dinero → días × (sueldo/25) (LCT Art 155)", () => {
+  it("vacaciones no tomadas en dinero → días × (sueldo/25) (LCT Art 155) + su SAC", () => {
     const r = calcularLiquidacionFinal(baseFinal);
     const valorDiaVacacional = 600000 / 25; // 24000
     expect(r.vacaciones_dinero).toBeCloseTo(10 * valorDiaVacacional, 0);
+    expect(r.sac_vacaciones).toBeCloseTo(r.vacaciones_dinero / 12, 0);
   });
 
   it("SAC proporcional al semestre", () => {
     const r = calcularLiquidacionFinal(baseFinal);
-    // Egreso 15/04: semestre 1, desde 01/01 al 15/04
-    // Días en semestre ≈ 105
     const inicioSem = new Date(2026, 0, 1);
     const fechaEg = new Date("2026-04-15T12:00:00");
     const diasEnSem = Math.ceil((fechaEg.getTime() - inicioSem.getTime()) / 86400000);
@@ -618,83 +645,78 @@ describe("calcularLiquidacionFinal", () => {
     expect(r.integracion_mes).toBe(0);
   });
 
-  it("despido sin causa → indemnización = sueldo × años", () => {
-    const r = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido sin causa" });
-    // Antigüedad: 2023-03 a 2026-04 ≈ 3 años
+  it("despido sin preaviso → indemnización Art 245 (fracción >3m → 4 años)", () => {
+    const r = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido sin preaviso" });
+    // 2023-03 a 2026-04 = 3a 1m+ ... el 15/04 vs 01/03 → 37m → 3a 1m → fracción 1m ≤3 → 3 años
+    expect(r.antiguedad_anios).toBe(3);
     expect(r.indemnizacion).toBe(600000 * 3);
   });
 
-  it("despido sin causa < 5 años → preaviso = 15 días", () => {
-    const r = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido sin causa" });
-    expect(r.preaviso).toBeCloseTo(valorDia * 15, 0);
-  });
-
-  it("despido sin causa >= 5 años → preaviso = 1 sueldo", () => {
-    const r = calcularLiquidacionFinal({
-      ...baseFinal,
-      fecha_inicio: "2020-01-01",
-      motivo: "Despido sin causa",
-    });
-    // Antigüedad: 2020-01 a 2026-04 = 6 años
+  it("despido sin preaviso < 5 años → preaviso = 1 mes + SAC (3m–5a)", () => {
+    const r = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido sin preaviso" });
     expect(r.preaviso).toBe(600000);
+    expect(r.sac_preaviso).toBeCloseTo(600000 / 12, 0);
   });
 
-  it("despido sin causa → integración = días restantes del mes × valorDia", () => {
-    const r = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido sin causa" });
-    // Abril tiene 30 días, egreso día 15 → 15 restantes
+  it("despido sin preaviso > 5 años → preaviso = 2 meses", () => {
+    const r = calcularLiquidacionFinal({
+      ...baseFinal, fecha_inicio: "2020-01-01", motivo: "Despido sin preaviso",
+    });
+    expect(r.preaviso).toBe(1200000);
+  });
+
+  it("despido sin preaviso → integración = días restantes del mes × valorDia + SAC", () => {
+    const r = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido sin preaviso" });
+    // Abril 30 días, egreso día 15 → 15 restantes
     expect(r.integracion_mes).toBeCloseTo(valorDia * 15, 0);
+    expect(r.sac_integracion).toBeCloseTo(r.integracion_mes / 12, 0);
   });
 
-  // Control manual (Lucas 04-jun)
-  it("despido sin causa con incluir_preaviso=false → preaviso 0", () => {
-    const base = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido sin causa" });
-    const sinPre = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido sin causa", incluir_preaviso: false });
-    expect(base.preaviso).toBeGreaterThan(0);
-    expect(sinPre.preaviso).toBe(0);
-    expect(sinPre.total).toBeCloseTo(base.total - base.preaviso, 0);
-  });
-
-  it("despido sin causa con indemnizacion_mult=2 → indemnización ×2", () => {
-    const x1 = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido sin causa", indemnizacion_mult: 1 });
-    const x2 = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido sin causa", indemnizacion_mult: 2 });
-    expect(x2.indemnizacion).toBeCloseTo(x1.indemnizacion * 2, 0);
-    expect(x2.total).toBeCloseTo(x1.total + x1.indemnizacion, 0);
-  });
-
-  it("renuncia ignora incluir_preaviso / indemnizacion_mult (no hay indemnización)", () => {
-    const r = calcularLiquidacionFinal({ ...baseFinal, motivo: "Renuncia", incluir_preaviso: false, indemnizacion_mult: 2 });
-    expect(r.indemnizacion).toBe(0);
+  it("despido CON preaviso → indemnización SÍ, pero preaviso e integración = 0", () => {
+    const r = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido con preaviso" });
+    expect(r.indemnizacion).toBe(600000 * 3);
     expect(r.preaviso).toBe(0);
-  });
-
-  it("despido con causa → sin indemnización", () => {
-    const r = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido con causa" });
-    expect(r.indemnizacion).toBe(0);
-    expect(r.preaviso).toBe(0);
+    expect(r.sac_preaviso).toBe(0);
     expect(r.integracion_mes).toBe(0);
+    expect(r.sac_integracion).toBe(0);
+  });
+
+  it("indemnizacion_mult=2 → duplica indemnización, preaviso e integración", () => {
+    const x1 = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido sin preaviso", indemnizacion_mult: 1 });
+    const x2 = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido sin preaviso", indemnizacion_mult: 2 });
+    expect(x2.indemnizacion).toBeCloseTo(x1.indemnizacion * 2, 0);
+    expect(x2.preaviso).toBeCloseTo(x1.preaviso * 2, 0);
+    expect(x2.integracion_mes).toBeCloseTo(x1.integracion_mes * 2, 0);
+  });
+
+  it("acuerdo mutuo → solo proporcional + gratificación manual (sin indemnización)", () => {
+    const sinGrat = calcularLiquidacionFinal({ ...baseFinal, motivo: "Acuerdo mutuo" });
+    expect(sinGrat.indemnizacion).toBe(0);
+    expect(sinGrat.preaviso).toBe(0);
+    const conGrat = calcularLiquidacionFinal({ ...baseFinal, motivo: "Acuerdo mutuo", gratificacion: 500000 });
+    expect(conGrat.gratificacion).toBe(500000);
+    expect(conGrat.total).toBeCloseTo(sinGrat.total + 500000, 0);
+  });
+
+  it("renuncia ignora indemnizacion_mult (no hay indemnización)", () => {
+    const r = calcularLiquidacionFinal({ ...baseFinal, motivo: "Renuncia", indemnizacion_mult: 2 });
+    expect(r.indemnizacion).toBe(0);
+    expect(r.preaviso).toBe(0);
   });
 
   it("total nunca negativo", () => {
-    const r = calcularLiquidacionFinal({
-      ...baseFinal,
-      vacaciones_acumuladas: 0,
-    });
+    const r = calcularLiquidacionFinal({ ...baseFinal, vacaciones_acumuladas: 0 });
     expect(r.total).toBeGreaterThanOrEqual(0);
   });
 
   it("vacaciones_acumuladas negativas → se clampea a 0", () => {
-    const r = calcularLiquidacionFinal({
-      ...baseFinal,
-      vacaciones_acumuladas: -5,
-    });
+    const r = calcularLiquidacionFinal({ ...baseFinal, vacaciones_acumuladas: -5 });
     expect(r.vacaciones_dinero).toBe(0);
+    expect(r.sac_vacaciones).toBe(0);
   });
 
   it("egreso en semestre 2 → SAC calcula desde julio", () => {
-    const r = calcularLiquidacionFinal({
-      ...baseFinal,
-      fecha_egreso: "2026-09-15",
-    });
+    const r = calcularLiquidacionFinal({ ...baseFinal, fecha_egreso: "2026-09-15" });
     const inicioSem = new Date(2026, 6, 1); // julio
     const fechaEg = new Date("2026-09-15T12:00:00");
     const diasEnSem = Math.ceil((fechaEg.getTime() - inicioSem.getTime()) / 86400000);
@@ -703,10 +725,11 @@ describe("calcularLiquidacionFinal", () => {
   });
 
   it("total suma todos los conceptos correctamente", () => {
-    const r = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido sin causa" });
+    const r = calcularLiquidacionFinal({ ...baseFinal, motivo: "Despido sin preaviso", gratificacion: 1000 });
     const sumaManual =
-      r.proporcional_mes + r.vacaciones_dinero + r.sac_proporcional +
-      r.indemnizacion + r.preaviso + r.integracion_mes;
+      r.proporcional_mes + r.sac_proporcional + r.vacaciones_dinero + r.sac_vacaciones +
+      r.indemnizacion + r.preaviso + r.sac_preaviso + r.integracion_mes + r.sac_integracion +
+      r.gratificacion;
     expect(r.total).toBeCloseTo(sumaManual, 0);
   });
 });
