@@ -2,6 +2,11 @@
 // Detección automática de versión nueva post-deploy
 // ─────────────────────────────────────────────────────────────────────────
 //
+// NOTA (08-jun): el reload post-deploy puede caer en "pantalla fantasma" (la
+// query de locales sale anónima durante el cold-start). El watchdog en App.tsx
+// lo recupera con una recarga controlada si `locales` queda vacío >7s. Ver
+// project_pase_features_08_jun.md sección 2c.
+//
 // Problema: cuando deployamos, los users que tienen la app abierta siguen
 // con el bundle viejo en memoria + JWT que puede quedar stale. Síntoma
 // recurrente: refrescan y el sidebar pierde el selector de sucursales
