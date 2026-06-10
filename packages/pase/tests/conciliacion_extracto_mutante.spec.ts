@@ -112,7 +112,7 @@ test.describe("Conciliación extracto MP — fn_cruzar_extracto_mp mutante", () 
         p_cuenta: "MercadoPago",
         p_tipo: "Egreso Manual",
         p_cat: null,
-        p_importe: SENTINEL_MATCH - 1,  // distinto al del verde para no interferir (más negativo)
+        p_importe: SENTINEL_MATCH - 50,  // distinto al del verde para no interferir (más negativo)
         p_detalle: `TEST-CONCIL-AMARILLO-${fecha}`,
         p_local_id: localId,
       });
@@ -131,7 +131,7 @@ test.describe("Conciliación extracto MP — fn_cruzar_extracto_mp mutante", () 
       p_periodo_desde: PERIODO_DESDE,
       p_periodo_hasta: PERIODO_HASTA,
       p_movs_extracto: [
-        { fecha: "2099-04-15", monto: SENTINEL_MATCH - 1, descripcion: "test amarillo", referencia_externa: null },
+        { fecha: "2099-04-15", monto: SENTINEL_MATCH - 50, descripcion: "test amarillo", referencia_externa: null },
       ],
     });
     if (error) throw new Error(`RPC falló: ${error.message}`);

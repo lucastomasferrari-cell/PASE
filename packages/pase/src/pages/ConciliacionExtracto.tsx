@@ -56,16 +56,27 @@ interface Combinacion {
   movs: MovEnCombinacion[];
 }
 
+interface BloqueProveedor {
+  proveedor: string;
+  n_transferencias: number;
+  suma_extracto: number;
+  n_pagos: number;
+  suma_pase: number | null;
+  dif: number;
+  movs: MovEnCombinacion[];
+}
+
 interface FilaExtracto {
   idx: number;
   fecha: string;
   monto: number;
   descripcion: string;
   referencia_externa: string | null;
-  estado: "verde" | "amarillo" | "verde_agrupado" | "amarillo_agrupado" | "rojo_falta";
+  estado: "verde" | "amarillo" | "verde_agrupado" | "amarillo_agrupado" | "verde_bloque" | "bloque_diferencia" | "rojo_falta";
   num_candidatos: number;
   candidatos: CandidatoPase[];
   combinaciones: Combinacion[];
+  bloque: BloqueProveedor | null;
 }
 
 interface Sobrante {
@@ -73,6 +84,7 @@ interface Sobrante {
   fecha: string;
   importe: number;
   detalle: string;
+  bloque_prov?: string | null;
 }
 
 // Fila histórica de conciliaciones ya cerradas (de conciliacion_corridas).
@@ -96,6 +108,8 @@ interface Totales {
   amarillos: number;
   verdes_agrupados: number;
   amarillos_agrupados: number;
+  verdes_bloque: number;
+  bloques_diferencia: number;
   rojos_falta: number;
   rojos_sobra: number;
 }
@@ -181,21 +195,12 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     // (corridaCerrada.id sirve como token de invalidación).
   }, [localActivo, corridaCerrada?.id]);
 
-  // Si no hay local activo, pedir que elija desde el sidebar.
-  if (localActivo == null) {
-    return (
-      <PageContainer>
-        <PageHeader title="Conciliación · extracto MP" />
-        <EmptyState
-          icon="🏪"
-          title="Elegí una sucursal"
-          description="La conciliación de extracto MP se hace local por local. Elegí la sucursal en el selector del sidebar y volvé."
-        />
-      </PageContainer>
-    );
-  }
-
-  const localNombre = locales.find(l => l.id === localActivo)?.nombre ?? `Local ${localActivo}`;
+  // localNombre se calcula SIEMPRE (default "—" si no hay local).
+  // Se usa antes del early-return solo en sub-componentes que se renderizan
+  // si localActivo != null (el early return de abajo nos protege).
+  const localNombre = localActivo != null
+    ? (locales.find(l => l.id === localActivo)?.nombre ?? `Local ${localActivo}`)
+    : "—";
 
   // ─── Cargar archivo ──────────────────────────────────────────────────────
   async function onArchivoSeleccionado(file: File) {
@@ -343,7 +348,8 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   // ─── KPIs en vivo ────────────────────────────────────────────────────────
   const stats = useMemo(() => {
     if (!cruce) return null;
-    let verdes = 0, amarillos = 0, verdesAgrupados = 0, amarillosAgrupados = 0, rojos_falta = 0, rojos_sobra = 0;
+    let verdes = 0, amarillos = 0, verdesAgrupados = 0, amarillosAgrupados = 0,
+      verdesBloque = 0, bloquesDif = 0, rojos_falta = 0, rojos_sobra = 0;
     let resueltos_count = 0;
     for (const fila of cruce.extracto) {
       const r = resueltos[`ext:${fila.idx}`];
@@ -355,6 +361,8 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
       else if (fila.estado === "amarillo") amarillos++;
       else if (fila.estado === "verde_agrupado") verdesAgrupados++;
       else if (fila.estado === "amarillo_agrupado") amarillosAgrupados++;
+      else if (fila.estado === "verde_bloque") verdesBloque++;
+      else if (fila.estado === "bloque_diferencia") bloquesDif++;
       else if (fila.estado === "rojo_falta") rojos_falta++;
     }
     for (const sob of cruce.sobrantes) {
@@ -363,12 +371,45 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
       rojos_sobra++;
     }
     return {
-      verdes, amarillos, verdesAgrupados, amarillosAgrupados, rojos_falta, rojos_sobra,
-      // verdes (individuales + agrupados) NO son pendientes — son auto-OK
+      verdes, amarillos, verdesAgrupados, amarillosAgrupados,
+      verdesBloque, bloquesDif, rojos_falta, rojos_sobra,
+      // verdes (individuales + agrupados + bloque OK) NO son pendientes.
+      // bloques_diferencia tampoco bloquean el cierre: son informativos
+      // (la acción es cargar los pagos faltantes y re-conciliar).
       total_pendientes: amarillos + amarillosAgrupados + rojos_falta + rojos_sobra,
       resueltos_count,
     };
   }, [cruce, resueltos]);
+
+  // Agrupar filas bloque_diferencia por proveedor para la sección naranja.
+  const bloquesPorProveedor = useMemo(() => {
+    if (!cruce) return [];
+    const map = new Map<string, { bloque: BloqueProveedor; filas: FilaExtracto[] }>();
+    for (const fila of cruce.extracto) {
+      if (fila.estado !== "bloque_diferencia" || !fila.bloque) continue;
+      if (resueltos[`ext:${fila.idx}`]) continue;
+      const key = fila.bloque.proveedor;
+      if (!map.has(key)) map.set(key, { bloque: fila.bloque, filas: [] });
+      map.get(key)!.filas.push(fila);
+    }
+    return [...map.values()];
+  }, [cruce, resueltos]);
+
+  // ─── EARLY RETURN: tiene que ir DESPUÉS de TODOS los hooks ──────────────
+  // React error #310 si los hooks se ejecutan en distinto orden entre
+  // renders. Por eso este return va acá y no arriba del componente.
+  if (localActivo == null) {
+    return (
+      <PageContainer>
+        <PageHeader title="Conciliación · extracto MP" />
+        <EmptyState
+          icon="🏪"
+          title="Elegí una sucursal"
+          description="La conciliación de extracto MP se hace local por local. Elegí la sucursal en el selector del sidebar y volvé."
+        />
+      </PageContainer>
+    );
+  }
 
   // ─── Cerrar conciliación ─────────────────────────────────────────────────
   async function cerrarConciliacion() {
@@ -495,12 +536,12 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
           <Card>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 10 }}>
               <Kpi label="Total" value={cruce.totales.extracto_total.toString()} color="var(--muted2)" />
-              <Kpi label="🟢 Match" value={stats.verdes.toString()} color="var(--success)" />
-              <Kpi label="🟢 Agrupados" value={stats.verdesAgrupados.toString()} color="var(--success)" />
-              <Kpi label="🟡 Por elegir" value={stats.amarillos.toString()} color="var(--warn)" />
-              <Kpi label="🟡 Combos" value={stats.amarillosAgrupados.toString()} color="var(--warn)" />
+              <Kpi label="🟢 Match" value={(stats.verdes + stats.verdesAgrupados + stats.verdesBloque).toString()} color="var(--success)" />
+              <Kpi label="🟡 Por elegir" value={(stats.amarillos + stats.amarillosAgrupados).toString()} color="var(--warn)" />
+              <Kpi label="🟠 Dif. proveedor" value={stats.bloquesDif.toString()} color="#f97316" />
               <Kpi label="🔴 Faltan" value={stats.rojos_falta.toString()} color="var(--danger)" />
               <Kpi label="🔴 Sobran" value={stats.rojos_sobra.toString()} color="var(--danger)" />
+              <Kpi label="✓ Resueltos" value={stats.resueltos_count.toString()} color="var(--muted2)" />
             </div>
             <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: 13, color: "var(--muted2)" }}>
@@ -528,6 +569,84 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
               </div>
             )}
           </Card>
+
+          {/* BLOQUES POR PROVEEDOR CON DIFERENCIA — lo más accionable.
+              Las transferencias y los pagos en PASE no se pueden aparear
+              1-a-1 (Anto carga en tandas), pero la DIFERENCIA de totales
+              dice exactamente cuánta plata falta (o sobra) cargar. */}
+          {bloquesPorProveedor.length > 0 && (
+            <Card>
+              <h4 style={{ marginTop: 0, fontSize: 14 }}>
+                🟠 Diferencias por proveedor <span style={{ color: "var(--muted2)" }}>({bloquesPorProveedor.length})</span>
+              </h4>
+              <p style={{ color: "var(--muted2)", fontSize: 12, lineHeight: 1.5, marginBottom: 12 }}>
+                Las transferencias al proveedor no coinciden 1-a-1 con los pagos cargados en PASE
+                (se cargan en tandas, en fechas distintas). Lo que importa: la <strong>diferencia del total</strong>.
+                Si es negativa, faltan cargar pagos en PASE por ese monto. Si es positiva, hay pagos
+                cargados que corresponden a transferencias de otro mes.
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {bloquesPorProveedor.map(({ bloque, filas }) => (
+                  <div key={bloque.proveedor} style={{
+                    padding: 12, background: "rgba(249,115,22,0.06)",
+                    border: "1px solid rgba(249,115,22,0.25)", borderRadius: 6,
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
+                      <strong style={{ fontSize: 13 }}>{bloque.proveedor}</strong>
+                      <span style={{
+                        fontSize: 13, fontWeight: 600, fontVariantNumeric: "tabular-nums",
+                        color: Number(bloque.dif) < 0 ? "var(--danger)" : "var(--warn)",
+                      }}>
+                        {Number(bloque.dif) < 0
+                          ? `Faltan cargar ${fmt_$(Math.abs(Number(bloque.dif)))} en PASE`
+                          : `Hay ${fmt_$(Number(bloque.dif))} cargados de más (¿mes anterior?)`}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--muted2)", marginTop: 4 }}>
+                      Extracto: {fmt_$(Number(bloque.suma_extracto))} en {bloque.n_transferencias} transferencia{bloque.n_transferencias === 1 ? "" : "s"}
+                      {" · "}PASE: {fmt_$(Number(bloque.suma_pase ?? 0))} en {bloque.n_pagos} pago{bloque.n_pagos === 1 ? "" : "s"}
+                    </div>
+                    <details style={{ marginTop: 6 }}>
+                      <summary style={{ cursor: "pointer", fontSize: 11, color: "var(--muted2)" }}>
+                        Ver detalle ({filas.length} transferencias + {bloque.movs?.length ?? 0} pagos)
+                      </summary>
+                      <div style={{ marginTop: 6, fontSize: 11 }}>
+                        <div style={{ color: "var(--muted2)", marginBottom: 2 }}>Transferencias del extracto:</div>
+                        {filas.map(f => (
+                          <div key={f.idx} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0 2px 12px" }}>
+                            <span>{fmt_d(f.fecha)} · {f.descripcion.slice(0, 50)}</span>
+                            <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(f.monto)}</span>
+                          </div>
+                        ))}
+                        <div style={{ color: "var(--muted2)", margin: "6px 0 2px" }}>Pagos cargados en PASE:</div>
+                        {(bloque.movs ?? []).map(m => (
+                          <div key={m.id} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0 2px 12px" }}>
+                            <span>{fmt_d(m.fecha)} · {(m.detalle ?? "").slice(0, 50)}</span>
+                            <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(m.importe)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                    <div style={{ marginTop: 8 }}>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => {
+                          // Marca todas las filas del bloque como ignoradas
+                          setResueltos(p => {
+                            const next = { ...p };
+                            for (const f of filas) next[`ext:${f.idx}`] = "ignorar";
+                            return next;
+                          });
+                        }}
+                      >
+                        Marcar bloque como revisado
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {/* AMARILLOS — múltiples candidatos */}
           <SeccionFilas
@@ -622,7 +741,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                 key={sob.id}
                 fecha={sob.fecha}
                 monto={sob.importe}
-                descripcion={sob.detalle || "(sin detalle)"}
+                descripcion={(sob.detalle || "(sin detalle)") + (sob.bloque_prov ? ` 🟠 [parte del bloque ${sob.bloque_prov} — ver Diferencias por proveedor]` : "")}
               >
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button

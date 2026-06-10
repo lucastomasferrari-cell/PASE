@@ -1,0 +1,433 @@
+-- 202606101200_conciliacion_v2_matching.sql
+-- Reescritura del matching de fn_cruzar_extracto_mp tras el análisis con
+-- data real de Rene Cantina (extracto mayo 2026, 100 egresos):
+--   - Regla vieja (monto exacto): solo 28/100 matcheaban.
+--   - +10 se perdían por CENTAVOS (Anto transfiere redondeado, carga la
+--     factura con centavos: $440.999 vs $440.999,95).
+--   - 2 combos fallaban porque el agrupado EXCLUÍA pagos de remito.
+--   - Sin consumo 1-a-1: un mismo mov de PASE podía quedar verde en DOS
+--     filas del extracto (duplicados tipo "Nieva -25.500 x2").
+--   - Sueldos con monto redondo ($500.000) matcheaban transferencias ajenas
+--     (retiro "Armando Baldi" ↔ sueldo TAPIA) — falso verde.
+--   - Proveedores grandes (FRIGORIFICO MARILU): 6 transferencias vs 10
+--     pagos cargados en tandas en fechas que NO se corresponden → imposible
+--     aparear 1-a-1. Lo único útil es comparar TOTALES por proveedor.
+--
+-- Cambios v2:
+--   R1 individual: tolerancia ±$1 + ventana ±15d + asignación greedy con
+--      CONSUMO (un mov matchea una sola fila) + regla anti-falso-sueldo
+--      (mov con liquidacion_id solo es candidato si el apellido del
+--      empleado aparece en la descripción del extracto).
+--   R2 sueldo por nombre: igual que antes (apellido ≥5 en desc + tolerancia
+--      $500/0.5%) pero con consumo.
+--   R3 combos 2..5 por proveedor: ahora INCLUYE remitos (prov vía
+--      facturas.prov_id O remitos.prov_id), tolerancia ±$5, consumo.
+--   R4 BLOQUES por proveedor (nuevo): para lo que queda rojo, agrupa por
+--      proveedor usando tokens "raros" del nombre (≥5 chars, no genéricos)
+--      buscados en la descripción del extracto. Compara la SUMA de
+--      transferencias del extracto vs la SUMA de pagos libres en PASE:
+--        · dif ≈ 0  → verde_bloque (todo conciliado en bloque)
+--        · dif ≠ 0  → bloque_diferencia: "transferiste $X / cargaste $Y →
+--          faltan cargar $Z" — la info accionable para Anto.
+--
+-- Estados resultantes: verde | amarillo | verde_agrupado | amarillo_agrupado
+--                      | verde_bloque | bloque_diferencia | rojo_falta
+
+DROP FUNCTION IF EXISTS fn_cruzar_extracto_mp(INTEGER, DATE, DATE, JSONB);
+DROP FUNCTION IF EXISTS fn_cruzar_extracto_mp(INTEGER, DATE, DATE, JSONB, BOOLEAN);
+DROP FUNCTION IF EXISTS fn_cruzar_extracto_mp(INTEGER, DATE, DATE, JSONB, BOOLEAN, BOOLEAN);
+
+CREATE OR REPLACE FUNCTION fn_cruzar_extracto_mp(
+  p_local_id      INTEGER,
+  p_periodo_desde DATE,
+  p_periodo_hasta DATE,
+  p_movs_extracto JSONB,
+  p_solo_egresos  BOOLEAN DEFAULT TRUE,
+  p_match_agrupado BOOLEAN DEFAULT TRUE
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_tenant_id UUID;
+  v_resultado JSONB;
+  v_ext_count INTEGER;
+  v_vent_ind_desde DATE; v_vent_ind_hasta DATE;     -- ±15d (individual)
+  v_vent_agr_desde DATE; v_vent_agr_hasta DATE;     -- ±30d (agrupado/bloque)
+  -- loop vars
+  v_fila RECORD;
+  v_mov  RECORD;
+  v_prov RECORD;
+  v_cand_count INT;
+  v_cand_id TEXT;
+  v_cands JSONB;
+  v_iter INT;
+  v_cambio BOOLEAN;
+  -- combos
+  v_movs_arr JSONB[];
+  v_amounts NUMERIC[];
+  v_ids TEXT[];
+  v_n INT;
+  i1 INT; i2 INT; i3 INT; i4 INT; i5 INT;
+  v_suma NUMERIC;
+  v_combos JSONB;
+  v_combo_movs JSONB;
+  v_combo_ids TEXT[];
+  -- bloques
+  v_tokens TEXT[];
+  v_tok TEXT;
+  v_regex TEXT;
+  v_filas_bloque INT[];
+  v_suma_ext NUMERIC;
+  v_suma_pase NUMERIC;
+  v_movs_bloque JSONB;
+  v_ids_bloque TEXT[];
+  v_dif NUMERIC;
+BEGIN
+  v_tenant_id := auth_tenant_id();
+  IF v_tenant_id IS NULL THEN RAISE EXCEPTION 'NO_AUTH'; END IF;
+  IF NOT auth_es_dueno_o_admin()
+     AND NOT (p_local_id = ANY(auth_locales_visibles())) THEN
+    RAISE EXCEPTION 'LOCAL_NO_PERMITIDO';
+  END IF;
+
+  v_vent_ind_desde := p_periodo_desde - INTERVAL '15 days';
+  v_vent_ind_hasta := p_periodo_hasta + INTERVAL '15 days';
+  v_vent_agr_desde := p_periodo_desde - INTERVAL '30 days';
+  v_vent_agr_hasta := p_periodo_hasta + INTERVAL '30 days';
+
+  DROP TABLE IF EXISTS _ce_ext;
+  DROP TABLE IF EXISTS _ce_mov;
+
+  -- ── Filas del extracto (egresos) ────────────────────────────────────────
+  CREATE TEMP TABLE _ce_ext AS
+  SELECT
+    (ordinality - 1)::INT                  AS idx,
+    (e->>'fecha')::DATE                    AS fecha,
+    (e->>'monto')::NUMERIC                 AS monto,
+    COALESCE(e->>'descripcion', '')        AS descripcion,
+    NULLIF(e->>'referencia_externa', '')   AS referencia,
+    'rojo_falta'::TEXT                     AS estado,
+    '[]'::JSONB                            AS candidatos,
+    '[]'::JSONB                            AS combinaciones,
+    NULL::JSONB                            AS bloque
+  FROM jsonb_array_elements(p_movs_extracto) WITH ORDINALITY AS t(e, ordinality)
+  WHERE (NOT p_solo_egresos OR (e->>'monto')::NUMERIC < 0);
+
+  SELECT COUNT(*) INTO v_ext_count FROM _ce_ext;
+
+  -- ── Movs de PASE (egresos MP del local, ventana amplia ±30d) ───────────
+  -- prov viene de factura O remito. emp_apellido si es pago de sueldo.
+  CREATE TEMP TABLE _ce_mov AS
+  SELECT
+    m.id, m.fecha, m.importe, m.detalle,
+    COALESCE(f.prov_id, r.prov_id)         AS prov_id,
+    COALESCE(pf.nombre, pr.nombre)         AS prov_nombre,
+    e.apellido                             AS emp_apellido,
+    (m.liquidacion_id IS NOT NULL)         AS es_sueldo,
+    FALSE                                  AS usado,
+    NULL::TEXT                             AS bloque_prov
+  FROM movimientos m
+  LEFT JOIN facturas f  ON f.id = m.fact_id
+  LEFT JOIN proveedores pf ON pf.id = f.prov_id
+  LEFT JOIN remitos r   ON r.id = m.remito_id_ref
+  LEFT JOIN proveedores pr ON pr.id = r.prov_id
+  LEFT JOIN rrhh_liquidaciones l ON l.id = m.liquidacion_id
+  LEFT JOIN rrhh_novedades nv ON nv.id = l.novedad_id
+  LEFT JOIN rrhh_empleados e ON e.id = nv.empleado_id
+  WHERE m.tenant_id = v_tenant_id
+    AND m.local_id = p_local_id
+    AND m.cuenta = 'MercadoPago'
+    AND m.anulado = false
+    AND m.fecha BETWEEN v_vent_agr_desde AND v_vent_agr_hasta
+    AND (NOT p_solo_egresos OR m.importe < 0);
+
+  -- ── R1: individual ±$1, ±15d, consumo greedy (3 iteraciones) ───────────
+  -- Anti-falso-sueldo: un mov de sueldo SOLO es candidato si el apellido
+  -- del empleado aparece como palabra en la descripción del extracto.
+  FOR v_iter IN 1..3 LOOP
+    v_cambio := FALSE;
+    FOR v_fila IN SELECT * FROM _ce_ext WHERE estado = 'rojo_falta' ORDER BY idx LOOP
+      SELECT COUNT(*), MIN(m.id)
+      INTO v_cand_count, v_cand_id
+      FROM _ce_mov m
+      WHERE NOT m.usado
+        AND ABS(m.importe - v_fila.monto) <= 1
+        AND ABS(m.fecha - v_fila.fecha) <= 15
+        AND (
+          m.emp_apellido IS NULL
+          OR unaccent(LOWER(v_fila.descripcion)) ~* ('\m' || unaccent(LOWER(m.emp_apellido)) || '\M')
+        );
+      IF v_cand_count = 1 THEN
+        UPDATE _ce_mov SET usado = TRUE WHERE id = v_cand_id;
+        UPDATE _ce_ext SET
+          estado = 'verde',
+          candidatos = (
+            SELECT jsonb_build_array(jsonb_build_object(
+              'id', m.id, 'fecha', m.fecha, 'importe', m.importe,
+              'detalle', m.detalle,
+              'dias_diff', ABS(m.fecha - v_fila.fecha),
+              'dif_monto', ABS(m.importe - v_fila.monto),
+              'ya_conciliado', false
+            )) FROM _ce_mov m WHERE m.id = v_cand_id
+          )
+        WHERE idx = v_fila.idx;
+        v_cambio := TRUE;
+      END IF;
+    END LOOP;
+    EXIT WHEN NOT v_cambio;
+  END LOOP;
+
+  -- Filas con MÚLTIPLES candidatos libres → amarillo (no consume, elige el user)
+  FOR v_fila IN SELECT * FROM _ce_ext WHERE estado = 'rojo_falta' ORDER BY idx LOOP
+    SELECT COUNT(*),
+           COALESCE(jsonb_agg(jsonb_build_object(
+             'id', m.id, 'fecha', m.fecha, 'importe', m.importe,
+             'detalle', m.detalle,
+             'dias_diff', ABS(m.fecha - v_fila.fecha),
+             'dif_monto', ABS(m.importe - v_fila.monto),
+             'ya_conciliado', false
+           ) ORDER BY ABS(m.fecha - v_fila.fecha)), '[]'::jsonb)
+    INTO v_cand_count, v_cands
+    FROM _ce_mov m
+    WHERE NOT m.usado
+      AND ABS(m.importe - v_fila.monto) <= 1
+      AND ABS(m.fecha - v_fila.fecha) <= 15
+      AND (
+        m.emp_apellido IS NULL
+        OR unaccent(LOWER(v_fila.descripcion)) ~* ('\m' || unaccent(LOWER(m.emp_apellido)) || '\M')
+      );
+    IF v_cand_count >= 2 THEN
+      UPDATE _ce_ext SET estado = 'amarillo', candidatos = v_cands WHERE idx = v_fila.idx;
+    END IF;
+  END LOOP;
+
+  -- ── R2: sueldos por nombre (tolerancia amplia $500/0.5%) ───────────────
+  FOR v_fila IN SELECT * FROM _ce_ext WHERE estado = 'rojo_falta' ORDER BY idx LOOP
+    SELECT COUNT(*), MIN(m.id),
+           COALESCE(jsonb_agg(jsonb_build_object(
+             'id', m.id, 'fecha', m.fecha, 'importe', m.importe,
+             'detalle', m.detalle || ' [' || m.emp_apellido || ']',
+             'dias_diff', ABS(m.fecha - v_fila.fecha),
+             'dif_monto', ABS(m.importe - v_fila.monto),
+             'ya_conciliado', false, 'match_por_nombre', true
+           ) ORDER BY ABS(m.importe - v_fila.monto)), '[]'::jsonb)
+    INTO v_cand_count, v_cand_id, v_cands
+    FROM _ce_mov m
+    WHERE NOT m.usado
+      AND m.es_sueldo
+      AND m.emp_apellido IS NOT NULL
+      AND LENGTH(m.emp_apellido) >= 5
+      AND unaccent(LOWER(v_fila.descripcion)) ~* ('\m' || unaccent(LOWER(m.emp_apellido)) || '\M')
+      AND ABS(m.fecha - v_fila.fecha) <= 15
+      AND (
+        ABS(m.importe - v_fila.monto) <= 500
+        OR ABS(m.importe - v_fila.monto) <= ABS(v_fila.monto) * 0.005
+      );
+    IF v_cand_count = 1 THEN
+      UPDATE _ce_mov SET usado = TRUE WHERE id = v_cand_id;
+      UPDATE _ce_ext SET estado = 'verde', candidatos = v_cands WHERE idx = v_fila.idx;
+    ELSIF v_cand_count >= 2 THEN
+      UPDATE _ce_ext SET estado = 'amarillo', candidatos = v_cands WHERE idx = v_fila.idx;
+    END IF;
+  END LOOP;
+
+  -- ── R3: combos 2..5 por proveedor, ±$5, INCLUYE remitos, consumo ───────
+  IF p_match_agrupado THEN
+    FOR v_fila IN SELECT * FROM _ce_ext WHERE estado = 'rojo_falta' ORDER BY idx LOOP
+      v_combos := '[]'::jsonb;
+      v_combo_ids := NULL;
+
+      FOR v_prov IN
+        SELECT m.prov_id, m.prov_nombre, COUNT(*) AS n
+        FROM _ce_mov m
+        WHERE NOT m.usado AND m.prov_id IS NOT NULL
+        GROUP BY m.prov_id, m.prov_nombre
+        HAVING COUNT(*) >= 2
+      LOOP
+        SELECT
+          array_agg(jsonb_build_object('id', m.id, 'fecha', m.fecha, 'importe', m.importe, 'detalle', m.detalle) ORDER BY m.fecha),
+          array_agg(m.importe ORDER BY m.fecha),
+          array_agg(m.id ORDER BY m.fecha)
+        INTO v_movs_arr, v_amounts, v_ids
+        FROM (
+          SELECT * FROM _ce_mov m2
+          WHERE NOT m2.usado AND m2.prov_id = v_prov.prov_id
+          ORDER BY m2.fecha LIMIT 10
+        ) m;
+        v_n := COALESCE(array_length(v_movs_arr, 1), 0);
+        IF v_n < 2 THEN CONTINUE; END IF;
+
+        FOR i1 IN 1..v_n LOOP FOR i2 IN (i1+1)..v_n LOOP
+          v_suma := v_amounts[i1] + v_amounts[i2];
+          IF ABS(v_suma - v_fila.monto) <= 5 THEN
+            v_combos := v_combos || jsonb_build_object('proveedor', v_prov.prov_nombre, 'num_movs', 2,
+              'movs', jsonb_build_array(v_movs_arr[i1], v_movs_arr[i2]));
+            IF v_combo_ids IS NULL THEN v_combo_ids := ARRAY[v_ids[i1], v_ids[i2]]; END IF;
+          END IF;
+          IF v_n >= 3 THEN FOR i3 IN (i2+1)..v_n LOOP
+            v_suma := v_amounts[i1] + v_amounts[i2] + v_amounts[i3];
+            IF ABS(v_suma - v_fila.monto) <= 5 THEN
+              v_combos := v_combos || jsonb_build_object('proveedor', v_prov.prov_nombre, 'num_movs', 3,
+                'movs', jsonb_build_array(v_movs_arr[i1], v_movs_arr[i2], v_movs_arr[i3]));
+              IF v_combo_ids IS NULL THEN v_combo_ids := ARRAY[v_ids[i1], v_ids[i2], v_ids[i3]]; END IF;
+            END IF;
+            IF v_n >= 4 THEN FOR i4 IN (i3+1)..v_n LOOP
+              v_suma := v_amounts[i1] + v_amounts[i2] + v_amounts[i3] + v_amounts[i4];
+              IF ABS(v_suma - v_fila.monto) <= 5 THEN
+                v_combos := v_combos || jsonb_build_object('proveedor', v_prov.prov_nombre, 'num_movs', 4,
+                  'movs', jsonb_build_array(v_movs_arr[i1], v_movs_arr[i2], v_movs_arr[i3], v_movs_arr[i4]));
+                IF v_combo_ids IS NULL THEN v_combo_ids := ARRAY[v_ids[i1], v_ids[i2], v_ids[i3], v_ids[i4]]; END IF;
+              END IF;
+              IF v_n >= 5 THEN FOR i5 IN (i4+1)..v_n LOOP
+                v_suma := v_amounts[i1] + v_amounts[i2] + v_amounts[i3] + v_amounts[i4] + v_amounts[i5];
+                IF ABS(v_suma - v_fila.monto) <= 5 THEN
+                  v_combos := v_combos || jsonb_build_object('proveedor', v_prov.prov_nombre, 'num_movs', 5,
+                    'movs', jsonb_build_array(v_movs_arr[i1], v_movs_arr[i2], v_movs_arr[i3], v_movs_arr[i4], v_movs_arr[i5]));
+                  IF v_combo_ids IS NULL THEN v_combo_ids := ARRAY[v_ids[i1], v_ids[i2], v_ids[i3], v_ids[i4], v_ids[i5]]; END IF;
+                END IF;
+              END LOOP; END IF;
+            END LOOP; END IF;
+          END LOOP; END IF;
+        END LOOP; END LOOP;
+      END LOOP;
+
+      IF jsonb_array_length(v_combos) = 1 THEN
+        -- combinación única → verde agrupado, consume
+        UPDATE _ce_mov SET usado = TRUE WHERE id = ANY(v_combo_ids);
+        UPDATE _ce_ext SET estado = 'verde_agrupado', combinaciones = v_combos WHERE idx = v_fila.idx;
+      ELSIF jsonb_array_length(v_combos) > 1 THEN
+        UPDATE _ce_ext SET estado = 'amarillo_agrupado', combinaciones = v_combos WHERE idx = v_fila.idx;
+      END IF;
+    END LOOP;
+  END IF;
+
+  -- ── R4: BLOQUES por proveedor (suma extracto vs suma PASE) ─────────────
+  -- Para cada proveedor con movs libres: tokens "raros" del nombre (≥5
+  -- chars, no genéricos) buscados en la descripción de las filas rojas.
+  -- Compara totales y reporta la diferencia.
+  IF p_match_agrupado THEN
+    FOR v_prov IN
+      SELECT m.prov_id, m.prov_nombre, COUNT(*) AS n_movs, SUM(m.importe) AS suma_movs
+      FROM _ce_mov m
+      WHERE NOT m.usado AND m.prov_id IS NOT NULL
+      GROUP BY m.prov_id, m.prov_nombre
+    LOOP
+      -- tokens raros del nombre del proveedor
+      SELECT array_agg(DISTINCT tok)
+      INTO v_tokens
+      FROM unnest(regexp_split_to_array(unaccent(UPPER(COALESCE(v_prov.prov_nombre, ''))), '[^A-Z]+')) AS tok
+      WHERE LENGTH(tok) >= 5
+        AND tok NOT IN ('DISTRIBUIDORA','FRIGORIFICO','ALIMENTOS','CONSULTORA','SOCIEDAD','ANONIMA',
+                        'COMERCIAL','SERVICIOS','PRODUCTOS','HERMANOS','ARGENTINA','BEBIDAS',
+                        'IMPORTADORA','EXPORTADORA','MAYORISTA','MINORISTA');
+      IF v_tokens IS NULL OR array_length(v_tokens, 1) = 0 THEN CONTINUE; END IF;
+
+      v_regex := '\m(' || array_to_string(v_tokens, '|') || ')\M';
+
+      -- filas del extracto aún rojas cuya descripción contiene algún token
+      SELECT array_agg(idx), SUM(monto), COUNT(*)
+      INTO v_filas_bloque, v_suma_ext, v_cand_count
+      FROM _ce_ext
+      WHERE estado = 'rojo_falta'
+        AND unaccent(UPPER(descripcion)) ~ v_regex;
+
+      IF v_filas_bloque IS NULL OR v_cand_count = 0 THEN CONTINUE; END IF;
+
+      -- movs libres del proveedor
+      SELECT SUM(m.importe),
+             jsonb_agg(jsonb_build_object('id', m.id, 'fecha', m.fecha, 'importe', m.importe, 'detalle', m.detalle) ORDER BY m.fecha),
+             array_agg(m.id)
+      INTO v_suma_pase, v_movs_bloque, v_ids_bloque
+      FROM _ce_mov m
+      WHERE NOT m.usado AND m.prov_id = v_prov.prov_id;
+
+      v_dif := v_suma_ext - COALESCE(v_suma_pase, 0);
+
+      IF ABS(v_dif) <= GREATEST(2, (v_cand_count + COALESCE(v_prov.n_movs, 0))) THEN
+        -- Suma cierra → todo el bloque verde, consume
+        UPDATE _ce_mov SET usado = TRUE WHERE id = ANY(v_ids_bloque);
+        UPDATE _ce_ext SET
+          estado = 'verde_bloque',
+          bloque = jsonb_build_object(
+            'proveedor', v_prov.prov_nombre,
+            'n_transferencias', v_cand_count,
+            'suma_extracto', v_suma_ext,
+            'n_pagos', v_prov.n_movs,
+            'suma_pase', v_suma_pase,
+            'dif', v_dif,
+            'movs', v_movs_bloque
+          )
+        WHERE idx = ANY(v_filas_bloque);
+      ELSE
+        -- Suma NO cierra → informar la diferencia (accionable: "faltan
+        -- cargar $X en pagos a este proveedor")
+        UPDATE _ce_mov SET bloque_prov = v_prov.prov_nombre WHERE id = ANY(v_ids_bloque);
+        UPDATE _ce_ext SET
+          estado = 'bloque_diferencia',
+          bloque = jsonb_build_object(
+            'proveedor', v_prov.prov_nombre,
+            'n_transferencias', v_cand_count,
+            'suma_extracto', v_suma_ext,
+            'n_pagos', v_prov.n_movs,
+            'suma_pase', v_suma_pase,
+            'dif', v_dif,
+            'movs', v_movs_bloque
+          )
+        WHERE idx = ANY(v_filas_bloque);
+      END IF;
+    END LOOP;
+  END IF;
+
+  -- ── Resultado ────────────────────────────────────────────────────────────
+  SELECT jsonb_build_object(
+    'extracto', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+        'idx', idx, 'fecha', fecha, 'monto', monto,
+        'descripcion', descripcion, 'referencia_externa', referencia,
+        'estado', estado,
+        'num_candidatos', jsonb_array_length(candidatos),
+        'candidatos', candidatos,
+        'combinaciones', combinaciones,
+        'bloque', bloque
+      ) ORDER BY idx) FROM _ce_ext
+    ), '[]'::jsonb),
+    'sobrantes', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+        'id', m.id, 'fecha', m.fecha, 'importe', m.importe, 'detalle', m.detalle,
+        'bloque_prov', m.bloque_prov
+      ) ORDER BY m.fecha DESC)
+      FROM _ce_mov m
+      WHERE NOT m.usado
+        AND m.fecha BETWEEN p_periodo_desde AND p_periodo_hasta
+    ), '[]'::jsonb),
+    'totales', jsonb_build_object(
+      'extracto_total',      v_ext_count,
+      'verdes',              (SELECT COUNT(*) FROM _ce_ext WHERE estado = 'verde'),
+      'amarillos',           (SELECT COUNT(*) FROM _ce_ext WHERE estado = 'amarillo'),
+      'verdes_agrupados',    (SELECT COUNT(*) FROM _ce_ext WHERE estado = 'verde_agrupado'),
+      'amarillos_agrupados', (SELECT COUNT(*) FROM _ce_ext WHERE estado = 'amarillo_agrupado'),
+      'verdes_bloque',       (SELECT COUNT(*) FROM _ce_ext WHERE estado = 'verde_bloque'),
+      'bloques_diferencia',  (SELECT COUNT(*) FROM _ce_ext WHERE estado = 'bloque_diferencia'),
+      'rojos_falta',         (SELECT COUNT(*) FROM _ce_ext WHERE estado = 'rojo_falta'),
+      'rojos_sobra',         (SELECT COUNT(*) FROM _ce_mov m WHERE NOT m.usado
+                               AND m.fecha BETWEEN p_periodo_desde AND p_periodo_hasta)
+    )
+  ) INTO v_resultado;
+
+  DROP TABLE IF EXISTS _ce_ext;
+  DROP TABLE IF EXISTS _ce_mov;
+
+  RETURN v_resultado;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION fn_cruzar_extracto_mp(INTEGER, DATE, DATE, JSONB, BOOLEAN, BOOLEAN) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION fn_cruzar_extracto_mp(INTEGER, DATE, DATE, JSONB, BOOLEAN, BOOLEAN) TO authenticated;
+
+COMMENT ON FUNCTION fn_cruzar_extracto_mp IS
+  'v2 (10-jun): matching extracto MP vs movimientos. R1 individual ±$1 ±15d con consumo + anti-falso-sueldo; R2 sueldo por apellido; R3 combos 2-5 por prov (facturas+remitos) ±$5; R4 bloques por proveedor con diferencia de totales.';
+
+NOTIFY pgrst, 'reload schema';
