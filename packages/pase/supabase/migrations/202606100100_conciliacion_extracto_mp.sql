@@ -74,7 +74,13 @@ CREATE OR REPLACE FUNCTION fn_cruzar_extracto_mp(
   p_local_id   INTEGER,
   p_periodo_desde DATE,
   p_periodo_hasta DATE,
-  p_movs_extracto JSONB  -- [{fecha:"YYYY-MM-DD", monto:Number, descripcion:Text, referencia_externa:Text|null}]
+  p_movs_extracto JSONB,  -- [{fecha:"YYYY-MM-DD", monto:Number, descripcion:Text, referencia_externa:Text|null}]
+  -- Lucas 10-jun: por default SOLO conciliamos egresos. Las liquidaciones
+  -- de venta, rendimientos y transferencias recibidas son ingresos que
+  -- vienen por otra vía (POS, intereses automáticos) y son cientos por
+  -- mes — no tiene sentido cruzarlos uno por uno. Si true, filtra el
+  -- extracto a monto<0 Y los movs de PASE a importe<0 también.
+  p_solo_egresos BOOLEAN DEFAULT TRUE
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -99,7 +105,14 @@ BEGIN
     RAISE EXCEPTION 'LOCAL_NO_PERMITIDO';
   END IF;
 
-  v_extracto_count := COALESCE(jsonb_array_length(p_movs_extracto), 0);
+  -- Conteo del extracto post-filtro (solo egresos si aplica).
+  IF p_solo_egresos THEN
+    SELECT COUNT(*) INTO v_extracto_count
+    FROM jsonb_array_elements(p_movs_extracto) AS e
+    WHERE (e->>'monto')::NUMERIC < 0;
+  ELSE
+    v_extracto_count := COALESCE(jsonb_array_length(p_movs_extracto), 0);
+  END IF;
   -- Ventana de búsqueda en PASE: período del extracto ± 15 días
   v_ventana_desde := p_periodo_desde - INTERVAL '15 days';
   v_ventana_hasta := p_periodo_hasta + INTERVAL '15 days';
@@ -113,10 +126,17 @@ BEGIN
       NULLIF(e->>'referencia_externa', '')    AS referencia_externa,
       ordinality - 1                          AS idx
     FROM jsonb_array_elements(p_movs_extracto) WITH ORDINALITY AS t(e, ordinality)
+    -- Si p_solo_egresos=TRUE (default), solo procesamos movs con monto<0.
+    -- Los ingresos del extracto (liquidaciones de venta, rendimientos,
+    -- transferencias recibidas) NO se concilian — vienen de otra vía.
+    WHERE (NOT p_solo_egresos OR (e->>'monto')::NUMERIC < 0)
   ),
   movs_pase AS (
     -- conciliado_at no existe en movimientos; lo dejamos NULL siempre.
     -- Si en el futuro agregamos tracking de conciliación, acá se pobla.
+    -- Si p_solo_egresos=TRUE, también filtramos los movs de PASE a
+    -- importe<0, sino TODOS los ingresos de PASE aparecerían como
+    -- "rojo_sobra" (porque no tienen counterpart en el extracto filtrado).
     SELECT id, fecha, importe, detalle, cuenta, anulado,
            NULL::TIMESTAMPTZ AS conciliado_at
     FROM movimientos
@@ -125,6 +145,7 @@ BEGIN
       AND cuenta = 'MercadoPago'
       AND anulado = false
       AND fecha BETWEEN v_ventana_desde AND v_ventana_hasta
+      AND (NOT p_solo_egresos OR importe < 0)
   ),
   -- Para cada mov del extracto, encontrar todos los movs de PASE que matchean
   -- (mismo monto, fecha en ventana ±15d)
@@ -225,8 +246,11 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION fn_cruzar_extracto_mp(INTEGER, DATE, DATE, JSONB) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION fn_cruzar_extracto_mp(INTEGER, DATE, DATE, JSONB) TO authenticated;
+-- Limpiamos firma vieja (sin p_solo_egresos) si existe — drop CASCADE por
+-- si algún view o trigger la referencia (poco probable, RPC nuevo).
+DROP FUNCTION IF EXISTS fn_cruzar_extracto_mp(INTEGER, DATE, DATE, JSONB);
+REVOKE ALL ON FUNCTION fn_cruzar_extracto_mp(INTEGER, DATE, DATE, JSONB, BOOLEAN) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION fn_cruzar_extracto_mp(INTEGER, DATE, DATE, JSONB, BOOLEAN) TO authenticated;
 
 COMMENT ON TABLE conciliacion_corridas IS
   'Histórico de conciliaciones de extracto MP por local + período. Una fila por archivo subido y cerrado (Lucas 10-jun).';

@@ -161,7 +161,12 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
           final_balance: resultado.resumen.final_balance,
         });
       }
-      showToast(`Cargados ${resultado.movimientos.length} movimientos del archivo`);
+      // Reglas del módulo (Lucas 10-jun): conciliamos SOLO egresos. Los
+      // ingresos (liquidaciones de venta, rendimientos, transferencias
+      // recibidas) son cientos y vienen por otra vía — no se cruzan acá.
+      const egresos = resultado.movimientos.filter(m => m.monto < 0).length;
+      const ingresos = resultado.movimientos.length - egresos;
+      showToast(`Cargados ${egresos} egresos a conciliar (${ingresos} ingresos ignorados)`);
     } catch (e) {
       console.error(e);
       showError("Error al leer el archivo: " + (e instanceof Error ? e.message : String(e)));
@@ -170,12 +175,20 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     }
   }
 
+  // Solo egresos del extracto (Lucas 10-jun). El RPC también filtra los
+  // movs de PASE para que los ingresos de PASE no aparezcan como
+  // "sobrantes" (no tienen counterpart en el extracto filtrado).
+  const egresosExtracto = useMemo(
+    () => extractoMovs.filter(m => m.monto < 0),
+    [extractoMovs],
+  );
+
   // ─── Cruzar con PASE ─────────────────────────────────────────────────────
   async function cruzar() {
-    if (!extractoMovs.length || !periodoDesde || !periodoHasta) return;
+    if (!egresosExtracto.length || !periodoDesde || !periodoHasta) return;
     setCruzando(true);
     try {
-      const payload = extractoMovs.map(m => ({
+      const payload = egresosExtracto.map(m => ({
         fecha: m.fecha,
         monto: m.monto,
         descripcion: m.descripcion,
@@ -186,6 +199,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
         p_periodo_desde: periodoDesde,
         p_periodo_hasta: periodoHasta,
         p_movs_extracto: payload,
+        p_solo_egresos: true,
       });
       if (error) { showError(translateRpcError(error)); return; }
       setCruce(data as CruceResultado);
@@ -364,9 +378,12 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
             <div>
               <div style={{ fontSize: 13, color: "var(--muted2)" }}>📄 {archivoNombre}</div>
               <div style={{ fontSize: 22, fontWeight: 600, marginTop: 4 }}>
-                {extractoMovs.length} movimientos
+                {egresosExtracto.length} egresos a conciliar
               </div>
-              <div style={{ fontSize: 13, color: "var(--muted2)", marginTop: 4 }}>
+              <div style={{ fontSize: 12, color: "var(--muted2)", marginTop: 2 }}>
+                ({extractoMovs.length - egresosExtracto.length} ingresos del extracto se ignoran — vienen por otra vía)
+              </div>
+              <div style={{ fontSize: 13, color: "var(--muted2)", marginTop: 6 }}>
                 Período: {fmt_d(periodoDesde)} → {fmt_d(periodoHasta)}
               </div>
               {resumenExtracto && (
@@ -377,7 +394,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button className="btn btn-ghost" onClick={resetearTodo}>Cancelar</button>
-              <button className="btn btn-acc" onClick={cruzar} disabled={cruzando}>
+              <button className="btn btn-acc" onClick={cruzar} disabled={cruzando || egresosExtracto.length === 0}>
                 {cruzando ? "Cruzando…" : "Cruzar con PASE →"}
               </button>
             </div>

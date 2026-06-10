@@ -18,8 +18,9 @@ import { createDuenoClient } from "./helpers/supabaseClient";
 // (87_654.32). Cleanup idempotente al final.
 
 const LOCAL = "Local Prueba 2";
-const SENTINEL_MATCH = 87654.32;       // mov que matchea con extracto
-const SENTINEL_SOBRA = 12345.67;       // mov que sobra en PASE
+// Montos NEGATIVOS — el módulo solo concilia egresos (Lucas 10-jun)
+const SENTINEL_MATCH = -87654.32;      // egreso que matchea con extracto
+const SENTINEL_SOBRA = -12345.67;      // egreso que sobra en PASE
 const PERIODO_DESDE = "2099-04-01";    // fuera de rango productivo
 const PERIODO_HASTA = "2099-04-30";
 
@@ -56,12 +57,12 @@ test.describe("Conciliación extracto MP — fn_cruzar_extracto_mp mutante", () 
     } catch { /* ignore */ }
   });
 
-  test("verde: 1 mov del extracto matchea con 1 mov en PASE (mismo monto, fecha en ±15d)", async () => {
-    // Crear 1 mov en PASE con monto SENTINEL_MATCH, fecha 15-abr-2099
-    const { data: created, error: cErr } = await db.rpc("crear_movimiento_caja", {
+  test("verde: 1 egreso del extracto matchea con 1 egreso en PASE (mismo monto, fecha en ±15d)", async () => {
+    // Crear 1 EGRESO en PASE con monto SENTINEL_MATCH (negativo), fecha 15-abr-2099
+    const { error: cErr } = await db.rpc("crear_movimiento_caja", {
       p_fecha: "2099-04-15",
       p_cuenta: "MercadoPago",
-      p_tipo: "Ingreso Manual",
+      p_tipo: "Egreso Manual",
       p_cat: null,
       p_importe: SENTINEL_MATCH,
       p_detalle: "TEST-CONCIL-VERDE",
@@ -103,15 +104,15 @@ test.describe("Conciliación extracto MP — fn_cruzar_extracto_mp mutante", () 
     expect(res.extracto[0]!.num_candidatos).toBe(1);
   });
 
-  test("amarillo: extracto tiene 1 mov, PASE tiene 2 movs con mismo monto en ventana", async () => {
-    // Crear 2 movs en PASE con MISMO monto, fechas distintas pero ambas en ventana ±15d
+  test("amarillo: extracto tiene 1 egreso, PASE tiene 2 egresos con mismo monto en ventana", async () => {
+    // Crear 2 EGRESOS en PASE con MISMO monto (negativo), fechas distintas pero ambas en ventana ±15d
     for (const fecha of ["2099-04-10", "2099-04-20"]) {
       const { error } = await db.rpc("crear_movimiento_caja", {
         p_fecha: fecha,
         p_cuenta: "MercadoPago",
-        p_tipo: "Ingreso Manual",
+        p_tipo: "Egreso Manual",
         p_cat: null,
-        p_importe: SENTINEL_MATCH + 1,  // distinto al del verde para no interferir
+        p_importe: SENTINEL_MATCH - 1,  // distinto al del verde para no interferir (más negativo)
         p_detalle: `TEST-CONCIL-AMARILLO-${fecha}`,
         p_local_id: localId,
       });
@@ -124,13 +125,13 @@ test.describe("Conciliación extracto MP — fn_cruzar_extracto_mp mutante", () 
     expect(movsAmarillo && movsAmarillo.length).toBe(2);
     movsAmarillo!.forEach(m => movIdsCreated.push(m.id as string));
 
-    // Extracto: 1 mov fecha 15-abr (entre las 2 fechas de PASE) con mismo monto
+    // Extracto: 1 egreso fecha 15-abr (entre las 2 fechas de PASE) con mismo monto
     const { data, error } = await db.rpc("fn_cruzar_extracto_mp", {
       p_local_id: localId,
       p_periodo_desde: PERIODO_DESDE,
       p_periodo_hasta: PERIODO_HASTA,
       p_movs_extracto: [
-        { fecha: "2099-04-15", monto: SENTINEL_MATCH + 1, descripcion: "test amarillo", referencia_externa: null },
+        { fecha: "2099-04-15", monto: SENTINEL_MATCH - 1, descripcion: "test amarillo", referencia_externa: null },
       ],
     });
     if (error) throw new Error(`RPC falló: ${error.message}`);
@@ -145,9 +146,9 @@ test.describe("Conciliación extracto MP — fn_cruzar_extracto_mp mutante", () 
     expect(res.extracto[0]!.candidatos.length).toBe(2);
   });
 
-  test("rojo_falta: extracto tiene mov que NO está en PASE (distinto monto)", async () => {
-    // El mov del extracto tiene un monto que NUNCA cargamos en PASE
-    const MONTO_INEXISTENTE = 999_999.99;
+  test("rojo_falta: extracto tiene egreso que NO está en PASE (distinto monto)", async () => {
+    // El egreso del extracto tiene un monto que NUNCA cargamos en PASE
+    const MONTO_INEXISTENTE = -999_999.99;
     const { data, error } = await db.rpc("fn_cruzar_extracto_mp", {
       p_local_id: localId,
       p_periodo_desde: PERIODO_DESDE,
@@ -167,12 +168,12 @@ test.describe("Conciliación extracto MP — fn_cruzar_extracto_mp mutante", () 
     expect(res.extracto[0]!.num_candidatos).toBe(0);
   });
 
-  test("rojo_sobra: PASE tiene mov que NO está en el extracto", async () => {
-    // Crear mov sobrante en PASE
+  test("rojo_sobra: PASE tiene egreso que NO está en el extracto", async () => {
+    // Crear EGRESO sobrante en PASE (monto negativo)
     const { error: cErr } = await db.rpc("crear_movimiento_caja", {
       p_fecha: "2099-04-22",
       p_cuenta: "MercadoPago",
-      p_tipo: "Ingreso Manual",
+      p_tipo: "Egreso Manual",
       p_cat: null,
       p_importe: SENTINEL_SOBRA,
       p_detalle: "TEST-CONCIL-SOBRA",
@@ -208,13 +209,13 @@ test.describe("Conciliación extracto MP — fn_cruzar_extracto_mp mutante", () 
     expect(Number(nuestroSobrante!.importe)).toBe(SENTINEL_SOBRA);
   });
 
-  test("regla 15 días: mov en PASE +20 días NO matchea (cae a rojo_falta)", async () => {
-    const MONTO_OUT = 88_888.88;
-    // Crear mov en PASE a 25 días del fecha extracto (fuera de ventana ±15d)
+  test("regla 15 días: egreso en PASE +20 días NO matchea (cae a rojo_falta)", async () => {
+    const MONTO_OUT = -88_888.88;
+    // Crear egreso en PASE a 25 días del fecha extracto (fuera de ventana ±15d)
     const { error: cErr } = await db.rpc("crear_movimiento_caja", {
       p_fecha: "2099-05-15", // fuera de período pero más lejos que 15d del 04-20
       p_cuenta: "MercadoPago",
-      p_tipo: "Ingreso Manual",
+      p_tipo: "Egreso Manual",
       p_cat: null,
       p_importe: MONTO_OUT,
       p_detalle: "TEST-CONCIL-FUERA-VENTANA",
@@ -244,5 +245,50 @@ test.describe("Conciliación extracto MP — fn_cruzar_extracto_mp mutante", () 
     };
     expect(res.extracto[0]!.estado).toBe("rojo_falta");
     expect(res.extracto[0]!.num_candidatos).toBe(0);
+  });
+
+  test("ingresos ignorados: extracto con monto>0 NO genera filas + ingresos PASE NO sobran", async () => {
+    // Lucas 10-jun: el módulo solo concilia egresos. Los ingresos del
+    // extracto (liquidaciones, rendimientos, transferencias recibidas)
+    // se filtran. Y los ingresos de PASE tampoco aparecen como sobrantes.
+    const MONTO_ING = 77_777.77;
+    // Crear ingreso en PASE en el período (no debería aparecer como sobrante)
+    const { error: cErr } = await db.rpc("crear_movimiento_caja", {
+      p_fecha: "2099-04-12",
+      p_cuenta: "MercadoPago",
+      p_tipo: "Ingreso Manual",
+      p_cat: null,
+      p_importe: MONTO_ING,
+      p_detalle: "TEST-CONCIL-INGRESO-PASE",
+      p_local_id: localId,
+    });
+    if (cErr) throw new Error(`No se pudo crear ingreso: ${cErr.message}`);
+    const { data: movs } = await db.from("movimientos")
+      .select("id").eq("local_id", localId)
+      .eq("detalle", "TEST-CONCIL-INGRESO-PASE").limit(1);
+    if (movs && movs.length > 0) movIdsCreated.push(movs[0]!.id as string);
+
+    // Extracto: 1 ingreso (monto positivo) — debe ignorarse completo
+    const { data, error } = await db.rpc("fn_cruzar_extracto_mp", {
+      p_local_id: localId,
+      p_periodo_desde: PERIODO_DESDE,
+      p_periodo_hasta: PERIODO_HASTA,
+      p_movs_extracto: [
+        { fecha: "2099-04-12", monto: MONTO_ING, descripcion: "liquidación test", referencia_externa: null },
+      ],
+      p_solo_egresos: true,
+    });
+    if (error) throw new Error(`RPC falló: ${error.message}`);
+    const res = data as {
+      totales: { extracto_total: number; verdes: number; amarillos: number; rojos_falta: number; rojos_sobra: number };
+      extracto: unknown[];
+      sobrantes: Array<{ id: string; detalle: string }>;
+    };
+    // Extracto post-filtro debería ser 0 (el único mov era ingreso)
+    expect(res.totales.extracto_total).toBe(0);
+    expect(res.extracto.length).toBe(0);
+    // Y el ingreso de PASE NO debe aparecer en sobrantes
+    const ingresoEnSobrantes = res.sobrantes.find(s => s.detalle === "TEST-CONCIL-INGRESO-PASE");
+    expect(ingresoEnSobrantes).toBeUndefined();
   });
 });
