@@ -279,6 +279,31 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
     if(!form.local_id){showError("Seleccioná el local antes de guardar.");return;}
     if(!form.nro){showError("Completá el número de factura.");return;}
 
+    // Check FUERTE por número exacto (caso 10-jun: factura EL CRIOLLO
+    // 0009-00693518 cargada 3 veces — el aviso blando de abajo fue
+    // aceptado sin leer). Mismo nro + mismo proveedor = misma factura,
+    // sin ambigüedad. Mensaje contundente con el estado actual.
+    if (form.nro && form.prov_id) {
+      // eslint-disable-next-line pase-local/require-apply-local-scope -- dup check cross-local intencional
+      const { data: mismoNro } = await db.from("facturas")
+        .select("nro, fecha, total, estado")
+        .eq("prov_id", parseInt(form.prov_id))
+        .eq("nro", form.nro)
+        .neq("estado", "anulada")
+        .limit(1);
+      if (mismoNro && mismoNro.length > 0) {
+        const d = mismoNro[0]!;
+        const ok = confirm(
+          `⚠️ FACTURA DUPLICADA ⚠️\n\n` +
+          `Ya existe la factura ${d.nro} de este proveedor:\n` +
+          `  ${d.fecha ? fmt_d(d.fecha) : "?"} · ${fmt_$(Number(d.total))} · estado: ${String(d.estado).toUpperCase()}\n\n` +
+          `Cargarla de nuevo DUPLICA el gasto en el CMV del mes.\n\n` +
+          `¿Estás SEGURO de que es otra factura distinta con el mismo número?`,
+        );
+        if (!ok) return;
+      }
+    }
+
     // Warning de duplicados (bug #29): mismo flow que Compras.tsx. Prev fecha
     // y total del form detectado por IA + confirmado por usuario.
     const totalForm = parseMonto(form.total);

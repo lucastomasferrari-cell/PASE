@@ -487,6 +487,29 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       }
     }
 
+    // Check FUERTE por número exacto (caso 10-jun: factura cargada 3 veces
+    // pese al aviso blando). Mismo nro + mismo proveedor = misma factura.
+    if (form.nro && form.prov_id) {
+      // eslint-disable-next-line pase-local/require-apply-local-scope -- dup check cross-local intencional
+      const { data: mismoNro } = await db.from("facturas")
+        .select("nro, fecha, total, estado")
+        .eq("prov_id", parseInt(form.prov_id))
+        .eq("nro", form.nro)
+        .neq("estado", "anulada")
+        .limit(1);
+      if (mismoNro && mismoNro.length > 0) {
+        const d = mismoNro[0]!;
+        const ok = confirm(
+          `⚠️ FACTURA DUPLICADA ⚠️\n\n` +
+          `Ya existe la factura ${d.nro} de este proveedor:\n` +
+          `  ${d.fecha ? fmt_d(d.fecha) : "?"} · ${fmt_$(Number(d.total))} · estado: ${String(d.estado).toUpperCase()}\n\n` +
+          `Cargarla de nuevo DUPLICA el gasto en el CMV del mes.\n\n` +
+          `¿Estás SEGURO de que es otra factura distinta con el mismo número?`,
+        );
+        if (!ok) return;
+      }
+    }
+
     setSaving(true);
     try {
       const id = genId(isNC ? "NC" : "FACT");
