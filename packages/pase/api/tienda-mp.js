@@ -47,6 +47,15 @@ export default async function handler(req, res) {
     if (action === 'preference' && req.method === 'POST') {
       return await handlePreference(req, res);
     }
+    // MESA módulo #4 (09-jun): checkout de eventos con prepago y giftcards.
+    // Mismo flujo MP que la tienda, external_reference con prefijo para que
+    // el webhook rutee (evento:<id> / gift:<id> vs numérico = venta tienda).
+    if (action === 'evento-preference' && req.method === 'POST') {
+      return await handlePagoPublicoPreference(req, res, 'evento');
+    }
+    if (action === 'giftcard-preference' && req.method === 'POST') {
+      return await handlePagoPublicoPreference(req, res, 'gift');
+    }
     if (action === 'webhook' && req.method === 'POST') {
       return await handleWebhook(req, res);
     }
@@ -221,6 +230,148 @@ async function handlePreference(req, res) {
   });
 }
 
+// ─── MESA módulo #4: preference para eventos (prepago) y giftcards ────────
+// tipo = 'evento' (evento_inscripciones) | 'gift' (giftcard_compras).
+// El monto NUNCA viene del front: se lee de la fila pendiente_pago que creó
+// la RPC pública (fn_inscribir_evento_publico / fn_comprar_giftcard_publica),
+// que a su vez lo calculó server-side del catálogo.
+async function handlePagoPublicoPreference(req, res, tipo) {
+  const { id, back_url_success } = req.body || {};
+  if (!id) {
+    res.status(400).json({ error: 'Body inválido: requiere id' });
+    return;
+  }
+  const supabase = db();
+
+  let row, titulo, cantidad, monto;
+  if (tipo === 'evento') {
+    const { data, error } = await supabase
+      .from('evento_inscripciones')
+      .select('id, tenant_id, local_id, cantidad, monto_total, estado, nombre, telefono, eventos(titulo)')
+      .eq('id', id).single();
+    if (error || !data) { res.status(404).json({ error: 'Inscripción no encontrada' }); return; }
+    row = data;
+    titulo = `Evento: ${data.eventos?.titulo ?? 'Reserva de cupo'}`;
+    cantidad = Number(data.cantidad) || 1;
+    monto = Number(data.monto_total);
+  } else {
+    const { data, error } = await supabase
+      .from('giftcard_compras')
+      .select('id, tenant_id, local_id, monto, estado, comprador_nombre, comprador_telefono, giftcards(nombre)')
+      .eq('id', id).single();
+    if (error || !data) { res.status(404).json({ error: 'Compra no encontrada' }); return; }
+    row = data;
+    titulo = `Giftcard: ${data.giftcards?.nombre ?? 'Regalo'}`;
+    cantidad = 1;
+    monto = Number(data.monto);
+  }
+  if (row.estado !== 'pendiente_pago') {
+    res.status(409).json({ error: `Estado inválido: ${row.estado}` });
+    return;
+  }
+
+  // Credencial MP del local (misma que usa la tienda — cero setup extra).
+  const { data: cred, error: errCred } = await supabase
+    .from('mp_credenciales')
+    .select('id, activa')
+    .eq('local_id', row.local_id)
+    .eq('activa', true)
+    .limit(1)
+    .single();
+  if (errCred || !cred) {
+    res.status(400).json({ error: 'Local sin credenciales MP activas' });
+    return;
+  }
+  const getToken = createMpTokenGetter(supabase);
+  const token = await getToken(cred.id);
+
+  const origin = req.headers.origin || req.headers.host || 'https://pase-yndx.vercel.app';
+  const baseOrigin = origin.startsWith('http') ? origin : 'https://' + origin;
+  const baseBack = back_url_success || `${baseOrigin}/r/confirmacion/${tipo}/${id}`;
+  const notificationUrl = `https://pase-yndx.vercel.app/api/tienda-mp?action=webhook`;
+
+  const prefBody = {
+    items: [{
+      id: '0',
+      title: String(titulo).slice(0, 250),
+      quantity: 1,
+      // El monto total ya incluye la cantidad de cupos — 1 ítem por el total
+      // evita drift de redondeo entre qty×unit y el monto guardado.
+      unit_price: monto,
+      currency_id: 'ARS',
+    }],
+    external_reference: `${tipo}:${id}`,
+    metadata: {
+      mp_credencial_id: cred.id,
+      tenant_id: row.tenant_id,
+      local_id: row.local_id,
+      mesa_tipo: tipo,
+      mesa_cantidad: cantidad,
+    },
+    back_urls: { success: baseBack, pending: baseBack, failure: baseBack },
+    auto_return: 'approved',
+    notification_url: notificationUrl,
+    payer: (row.telefono || row.comprador_telefono) ? {
+      name: row.nombre || row.comprador_nombre || undefined,
+      phone: { number: row.telefono || row.comprador_telefono },
+    } : undefined,
+    statement_descriptor: 'PASE Resto',
+  };
+
+  const mpResp = await fetch('https://api.mercadopago.com/checkout/preferences', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(prefBody),
+  });
+  if (!mpResp.ok) {
+    const errText = await mpResp.text();
+    console.error(`[tienda-mp ${tipo}-preference] MP error:`, mpResp.status, errText);
+    res.status(502).json({ error: `MP rechazó la preference: ${mpResp.status}` });
+    return;
+  }
+  const pref = await mpResp.json();
+
+  // Guardar el preference id en la fila (trazabilidad + soporte).
+  const tabla = tipo === 'evento' ? 'evento_inscripciones' : 'giftcard_compras';
+  await supabase.from(tabla).update({ mp_preference_id: pref.id }).eq('id', id);
+
+  res.status(200).json({
+    preference_id: pref.id,
+    init_point: pref.init_point,
+    sandbox_init_point: pref.sandbox_init_point,
+    monto,
+  });
+}
+
+// MESA módulo #4: confirmación de pago de evento/giftcard desde el webhook.
+// El payment YA fue validado contra la API de MP (handleWebhook). Acá se
+// delega a las RPCs atómicas (GRANT solo service_role) que validan monto,
+// son idempotentes por estado, incrementan cupos y generan el código.
+async function confirmarPagoPublico(supabase, payment, paymentId, extRef, res) {
+  if (payment.status !== 'approved') {
+    res.status(200).json({ ok: true, status: payment.status });
+    return;
+  }
+  const [tipo, idStr] = extRef.split(':');
+  const rowId = Number(idStr);
+  if (!rowId) {
+    res.status(200).json({ ok: true, bad_ref: extRef });
+    return;
+  }
+  const rpc = tipo === 'evento' ? 'fn_confirmar_pago_evento' : 'fn_confirmar_pago_giftcard';
+  const args = tipo === 'evento'
+    ? { p_inscripcion_id: rowId, p_payment_id: String(paymentId), p_monto: Number(payment.transaction_amount) }
+    : { p_compra_id: rowId, p_payment_id: String(paymentId), p_monto: Number(payment.transaction_amount) };
+  const { data, error } = await supabase.rpc(rpc, args);
+  if (error) {
+    console.error(`[tienda-mp webhook ${tipo}] error confirmando`, rowId, error.message);
+    // 200 igual — si fue una notif duplicada/tardía no queremos retry-loops de MP.
+    res.status(200).json({ ok: false, error: error.message });
+    return;
+  }
+  res.status(200).json({ ok: true, tipo, id: rowId, result: data });
+}
+
 // ─── WEBHOOK ─────────────────────────────────────────────────────────────
 async function handleWebhook(req, res) {
   // MP envía notif con query ?type=payment&data.id=123 o en body. Soportamos ambos.
@@ -305,6 +456,13 @@ async function handleWebhook(req, res) {
   if (!payment) {
     res.status(404).json({ error: 'Payment no encontrado en ninguna credencial' });
     return;
+  }
+
+  // MESA módulo #4: prefijos de external_reference para eventos/giftcards.
+  // (numérico pelado = venta de tienda, flujo original intacto.)
+  const extRef = String(payment.external_reference || '');
+  if (extRef.startsWith('evento:') || extRef.startsWith('gift:')) {
+    return await confirmarPagoPublico(supabase, payment, paymentId, extRef, res);
   }
 
   const ventaId = Number(payment.external_reference);
