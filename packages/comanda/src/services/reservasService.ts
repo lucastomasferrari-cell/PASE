@@ -147,15 +147,70 @@ export async function listReservas(opts: ListReservasOpts = {}): Promise<{ data:
   return { data: (data ?? []) as Reserva[], error: null };
 }
 
+// MESA módulo #1 (09-jun): alta MANUAL por el staff. La creación pública
+// (fn_crear_reserva_publica) sigue aparte — esta valida contra el local
+// visible del usuario autenticado y es idempotente.
+export async function crearReserva(args: {
+  localId: number;
+  clienteNombre: string;
+  clienteTelefono?: string;
+  clienteEmail?: string;
+  fechaHora: string;          // ISO timestamptz
+  personas: number;
+  notas?: string;
+  idempotencyKey?: string;
+}): Promise<{ id: number | null; error: string | null }> {
+  const { data, error } = await db.rpc('fn_crear_reserva', {
+    p_local_id: args.localId,
+    p_cliente_nombre: args.clienteNombre,
+    p_cliente_telefono: args.clienteTelefono ?? null,
+    p_cliente_email: args.clienteEmail ?? null,
+    p_fecha_hora: args.fechaHora,
+    p_personas: args.personas,
+    p_notas: args.notas ?? null,
+    p_idempotency_key: args.idempotencyKey ?? null,
+  });
+  if (error) return { id: null, error: translateError(error) };
+  return { id: Number(data), error: null };
+}
+
+// MESA módulo #1: edición — el backend solo la permite en pendiente/confirmada.
+// Los campos undefined NO se tocan (la RPC usa COALESCE/CASE por campo).
+export async function editarReserva(args: {
+  reservaId: number;
+  clienteNombre?: string;
+  clienteTelefono?: string;
+  clienteEmail?: string;
+  fechaHora?: string;
+  personas?: number;
+  notas?: string;
+}): Promise<{ error: string | null }> {
+  const { error } = await db.rpc('fn_editar_reserva', {
+    p_reserva_id: args.reservaId,
+    p_cliente_nombre: args.clienteNombre ?? null,
+    p_cliente_telefono: args.clienteTelefono ?? null,
+    p_cliente_email: args.clienteEmail ?? null,
+    p_fecha_hora: args.fechaHora ?? null,
+    p_personas: args.personas ?? null,
+    p_notas: args.notas ?? null,
+  });
+  if (error) return { error: translateError(error) };
+  return { error: null };
+}
+
 export async function cambiarEstadoReserva(args: {
   reservaId: number;
   nuevoEstado: 'confirmada' | 'cumplida' | 'no_show' | 'cancelada';
   motivo?: string;
+  // MESA módulo #1: al sentar (cumplida) se puede asignar mesa en el mismo
+  // paso. El backend valida que la mesa sea del mismo local.
+  mesaId?: number;
 }): Promise<{ error: string | null }> {
   const { error } = await db.rpc('fn_cambiar_estado_reserva', {
     p_reserva_id: args.reservaId,
     p_nuevo_estado: args.nuevoEstado,
     p_motivo: args.motivo ?? null,
+    p_mesa_id: args.mesaId ?? null,
   });
   if (error) return { error: translateError(error) };
   return { error: null };
