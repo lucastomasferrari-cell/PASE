@@ -66,17 +66,34 @@ interface BloqueProveedor {
   movs: MovEnCombinacion[];
 }
 
+// Factura/remito cargado pero NO marcado como pagado, cuyo total coincide
+// con la transferencia. tipo='tanda' agrupa varias facturas del proveedor.
+interface FacturaPendiente {
+  tipo: "factura" | "remito" | "tanda";
+  id?: string;
+  nro?: string | null;
+  proveedor?: string | null;
+  fecha?: string;
+  total?: number;
+  dif: number;
+  // solo para tipo='tanda':
+  n?: number;
+  total_suma?: number;
+  facturas?: Array<{ tipo: "factura"; id: string; nro: string | null; fecha: string; total: number }>;
+}
+
 interface FilaExtracto {
   idx: number;
   fecha: string;
   monto: number;
   descripcion: string;
   referencia_externa: string | null;
-  estado: "verde" | "amarillo" | "verde_agrupado" | "amarillo_agrupado" | "verde_bloque" | "bloque_diferencia" | "rojo_falta";
+  estado: "verde" | "amarillo" | "verde_agrupado" | "amarillo_agrupado" | "verde_bloque" | "bloque_diferencia" | "factura_sin_pagar" | "rojo_falta";
   num_candidatos: number;
   candidatos: CandidatoPase[];
   combinaciones: Combinacion[];
   bloque: BloqueProveedor | null;
+  facturas_pendientes: FacturaPendiente[];
 }
 
 interface Sobrante {
@@ -110,6 +127,7 @@ interface Totales {
   amarillos_agrupados: number;
   verdes_bloque: number;
   bloques_diferencia: number;
+  facturas_sin_pagar: number;
   rojos_falta: number;
   rojos_sobra: number;
 }
@@ -376,6 +394,53 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     }
   }
 
+  // ─── Marcar facturas/remitos como pagados (Lucas 10-jun) ────────────────
+  // Caso: la factura está cargada pero el empleado se olvidó de marcarla
+  // como pagada. La transferencia salió de MP. Acá la marcamos pagada con
+  // cuenta MercadoPago y fecha de la transferencia REAL → crea el
+  // movimiento → queda conciliado.
+  async function marcarFacturaPagada(fila: FilaExtracto, cand: FacturaPendiente) {
+    setSavingAccion(true);
+    try {
+      const items = cand.tipo === "tanda"
+        ? (cand.facturas ?? []).map(f => ({ tipo: "factura" as const, id: f.id, total: f.total, nro: f.nro }))
+        : [{ tipo: cand.tipo as "factura" | "remito", id: cand.id!, total: cand.total!, nro: cand.nro }];
+      let pagadas = 0;
+      for (const item of items) {
+        const detalle = `[Concil. ${periodoDesde.slice(0, 7)}] ${fila.descripcion.slice(0, 80)}`;
+        if (item.tipo === "factura") {
+          const { error } = await db.rpc("pagar_factura", {
+            p_factura_id: item.id,
+            p_monto: item.total,
+            p_cuenta: "MercadoPago",
+            p_fecha: fila.fecha,
+            p_detalle: detalle,
+            p_idempotency_key: crypto.randomUUID(),
+            p_generar_saldo: false,
+            p_cerrar_factura: false,
+          });
+          if (error) { showError(`Factura ${item.nro ?? item.id}: ${translateRpcError(error)}`); continue; }
+        } else {
+          const { error } = await db.rpc("pagar_remito", {
+            p_remito_id: item.id,
+            p_monto: item.total,
+            p_cuenta: "MercadoPago",
+            p_fecha: fila.fecha,
+            p_idempotency_key: crypto.randomUUID(),
+          });
+          if (error) { showError(`Remito ${item.nro ?? item.id}: ${translateRpcError(error)}`); continue; }
+        }
+        pagadas++;
+      }
+      if (pagadas > 0) {
+        setResueltos(p => ({ ...p, [`ext:${fila.idx}`]: "pagada" }));
+        showToast(pagadas === 1 ? "Marcada como pagada" : `${pagadas} marcadas como pagadas`);
+      }
+    } finally {
+      setSavingAccion(false);
+    }
+  }
+
   async function ejecutarAnularSobrante() {
     if (!anularSobrante) return;
     if (!motivoAnular.trim()) { showError("Tenés que poner un motivo"); return; }
@@ -399,11 +464,11 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   const stats = useMemo(() => {
     if (!cruce) return null;
     let verdes = 0, amarillos = 0, verdesAgrupados = 0, amarillosAgrupados = 0,
-      verdesBloque = 0, bloquesDif = 0, rojos_falta = 0, rojos_sobra = 0;
+      verdesBloque = 0, bloquesDif = 0, facturasSinPagar = 0, rojos_falta = 0, rojos_sobra = 0;
     let resueltos_count = 0;
     for (const fila of cruce.extracto) {
       const r = resueltos[`ext:${fila.idx}`];
-      if (r === "ignorar" || r === "creado" || (r && (r.startsWith("matcheado:") || r.startsWith("combo:")))) {
+      if (r === "ignorar" || r === "creado" || r === "pagada" || (r && (r.startsWith("matcheado:") || r.startsWith("combo:")))) {
         resueltos_count++;
         continue;
       }
@@ -413,6 +478,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
       else if (fila.estado === "amarillo_agrupado") amarillosAgrupados++;
       else if (fila.estado === "verde_bloque") verdesBloque++;
       else if (fila.estado === "bloque_diferencia") bloquesDif++;
+      else if (fila.estado === "factura_sin_pagar") facturasSinPagar++;
       else if (fila.estado === "rojo_falta") rojos_falta++;
     }
     for (const sob of cruce.sobrantes) {
@@ -426,11 +492,11 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     }
     return {
       verdes, amarillos, verdesAgrupados, amarillosAgrupados,
-      verdesBloque, bloquesDif, rojos_falta, rojos_sobra,
+      verdesBloque, bloquesDif, facturasSinPagar, rojos_falta, rojos_sobra,
       // verdes (individuales + agrupados + bloque OK) NO son pendientes.
       // bloques_diferencia tampoco bloquean el cierre: son informativos
       // (la acción es cargar los pagos faltantes y re-conciliar).
-      total_pendientes: amarillos + amarillosAgrupados + rojos_falta + rojos_sobra,
+      total_pendientes: amarillos + amarillosAgrupados + facturasSinPagar + rojos_falta + rojos_sobra,
       resueltos_count,
     };
   }, [cruce, resueltos]);
@@ -593,9 +659,9 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
               <Kpi label="🟢 Match" value={(stats.verdes + stats.verdesAgrupados + stats.verdesBloque).toString()} color="var(--success)" />
               <Kpi label="🟡 Por elegir" value={(stats.amarillos + stats.amarillosAgrupados).toString()} color="var(--warn)" />
               <Kpi label="🟠 Dif. proveedor" value={stats.bloquesDif.toString()} color="#f97316" />
+              <Kpi label="🔵 Sin marcar pag." value={stats.facturasSinPagar.toString()} color="#3b82f6" />
               <Kpi label="🔴 Faltan" value={stats.rojos_falta.toString()} color="var(--danger)" />
               <Kpi label="🔴 Sobran" value={stats.rojos_sobra.toString()} color="var(--danger)" />
-              <Kpi label="✓ Resueltos" value={stats.resueltos_count.toString()} color="var(--muted2)" />
             </div>
             <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: 13, color: "var(--muted2)" }}>
@@ -751,6 +817,51 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                   <button className="btn btn-ghost btn-sm" onClick={() => ignorarExtracto(fila.idx)}>
                     Ignorar
                   </button>
+                </div>
+              </FilaCard>
+            )}
+          />
+
+          {/* 🔵 FACTURAS CARGADAS PERO SIN MARCAR COMO PAGADAS */}
+          <SeccionFilas
+            titulo="🔵 Facturas cargadas pero sin marcar como pagadas"
+            descripcion="La transferencia salió de MP y la factura está en PASE, pero nadie tocó Pagar. Marcala como pagada acá mismo: se registra con cuenta MercadoPago y la fecha real de la transferencia."
+            filas={cruce.extracto.filter(f =>
+              f.estado === "factura_sin_pagar" && !resueltos[`ext:${f.idx}`]
+            )}
+            renderFila={fila => (
+              <FilaCard
+                key={fila.idx}
+                fecha={fila.fecha}
+                monto={fila.monto}
+                descripcion={fila.descripcion}
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {(fila.facturas_pendientes ?? []).map((cand, ci) => (
+                    <div key={ci} style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      gap: 8, flexWrap: "wrap", padding: "6px 8px",
+                      background: "rgba(59,130,246,0.07)", borderRadius: 4, fontSize: 12,
+                    }}>
+                      <span>
+                        {cand.tipo === "tanda"
+                          ? <><strong>{cand.proveedor}</strong> · {cand.n} facturas pendientes suman {fmt_$(Number(cand.total_suma))} {Number(cand.dif) > 0.01 && <em>(dif {fmt_$(Number(cand.dif))})</em>}</>
+                          : <><strong>{cand.proveedor ?? "—"}</strong> · {cand.tipo} {cand.nro ?? cand.id} · {cand.fecha ? fmt_d(cand.fecha) : ""} · {fmt_$(Number(cand.total))} {Number(cand.dif) > 0.01 && <em>(dif {fmt_$(Number(cand.dif))})</em>}</>}
+                      </span>
+                      <button
+                        className="btn btn-acc btn-sm"
+                        disabled={savingAccion}
+                        onClick={() => void marcarFacturaPagada(fila, cand)}
+                      >
+                        {cand.tipo === "tanda" ? `Marcar las ${cand.n} como pagadas` : "Marcar como pagada"}
+                      </button>
+                    </div>
+                  ))}
+                  <div>
+                    <button className="btn btn-ghost btn-sm" onClick={() => ignorarExtracto(fila.idx)}>
+                      No es ninguna de estas — ignorar
+                    </button>
+                  </div>
                 </div>
               </FilaCard>
             )}

@@ -112,7 +112,8 @@ BEGIN
     'rojo_falta'::TEXT                     AS estado,
     '[]'::JSONB                            AS candidatos,
     '[]'::JSONB                            AS combinaciones,
-    NULL::JSONB                            AS bloque
+    NULL::JSONB                            AS bloque,
+    '[]'::JSONB                            AS facturas_pend
   FROM jsonb_array_elements(p_movs_extracto) WITH ORDINALITY AS t(e, ordinality)
   WHERE (NOT p_solo_egresos OR (e->>'monto')::NUMERIC < 0);
 
@@ -324,6 +325,69 @@ BEGIN
     END LOOP;
   END IF;
 
+  -- ── R3.5: facturas/remitos CARGADOS pero NO marcados como pagados ──────
+  -- (Lucas 10-jun: "a veces los empleados se olvidan de marcar como pagado
+  -- las facturas"). La transferencia salió, la factura existe en PASE,
+  -- pero nadie tocó Pagar → no hay movimiento → el matcher no la ve.
+  -- Buscamos facturas estado='pendiente' (y remitos 'sin_factura') cuyo
+  -- total coincida con la transferencia (±$1), emitidas hasta 60 días antes
+  -- (se compra a crédito). Si no hay match individual, probamos la TANDA:
+  -- la suma de todas las pendientes del proveedor ≈ la transferencia.
+  FOR v_fila IN SELECT * FROM _ce_ext WHERE estado = 'rojo_falta' ORDER BY idx LOOP
+    -- a) individual: 1 factura/remito pendiente con total ≈ |monto|
+    SELECT COUNT(*), COALESCE(jsonb_agg(jsonb_build_object(
+      'tipo', t.tipo, 'id', t.id, 'nro', t.nro, 'proveedor', t.prov_nombre,
+      'fecha', t.fecha, 'total', t.total,
+      'dif', ABS(t.total - ABS(v_fila.monto))
+    ) ORDER BY ABS(t.total - ABS(v_fila.monto))), '[]'::jsonb)
+    INTO v_cand_count, v_cands
+    FROM (
+      SELECT 'factura'::TEXT AS tipo, f.id, f.nro, p.nombre AS prov_nombre, f.fecha, f.total
+      FROM facturas f LEFT JOIN proveedores p ON p.id = f.prov_id
+      WHERE f.tenant_id = v_tenant_id AND f.local_id = p_local_id
+        AND f.estado = 'pendiente' AND f.total > 0
+        AND ABS(f.total - ABS(v_fila.monto)) <= 1
+        AND f.fecha BETWEEN v_fila.fecha - 60 AND v_fila.fecha + 5
+      UNION ALL
+      SELECT 'remito', r.id, r.nro, p.nombre, r.fecha, r.monto
+      FROM remitos r LEFT JOIN proveedores p ON p.id = r.prov_id
+      WHERE r.tenant_id = v_tenant_id AND r.local_id = p_local_id
+        AND r.estado = 'sin_factura' AND r.monto > 0
+        AND ABS(r.monto - ABS(v_fila.monto)) <= 1
+        AND r.fecha BETWEEN v_fila.fecha - 60 AND v_fila.fecha + 5
+    ) t;
+    IF v_cand_count >= 1 THEN
+      UPDATE _ce_ext SET estado = 'factura_sin_pagar', facturas_pend = v_cands
+      WHERE idx = v_fila.idx;
+      CONTINUE;
+    END IF;
+
+    -- b) tanda: 2+ facturas pendientes del mismo proveedor que SUMAN ≈ |monto|
+    SELECT COALESCE(jsonb_agg(g.bloque), '[]'::jsonb)
+    INTO v_cands
+    FROM (
+      SELECT jsonb_build_object(
+        'tipo', 'tanda', 'proveedor', p.nombre,
+        'n', COUNT(*), 'total_suma', SUM(f.total),
+        'dif', ABS(SUM(f.total) - ABS(v_fila.monto)),
+        'facturas', jsonb_agg(jsonb_build_object(
+          'tipo', 'factura', 'id', f.id, 'nro', f.nro, 'fecha', f.fecha, 'total', f.total
+        ) ORDER BY f.fecha)
+      ) AS bloque
+      FROM facturas f LEFT JOIN proveedores p ON p.id = f.prov_id
+      WHERE f.tenant_id = v_tenant_id AND f.local_id = p_local_id
+        AND f.estado = 'pendiente' AND f.total > 0
+        AND f.fecha BETWEEN v_fila.fecha - 60 AND v_fila.fecha + 5
+      GROUP BY f.prov_id, p.nombre
+      HAVING COUNT(*) >= 2
+         AND ABS(SUM(f.total) - ABS(v_fila.monto)) <= GREATEST(2, COUNT(*))
+    ) g;
+    IF jsonb_array_length(v_cands) >= 1 THEN
+      UPDATE _ce_ext SET estado = 'factura_sin_pagar', facturas_pend = v_cands
+      WHERE idx = v_fila.idx;
+    END IF;
+  END LOOP;
+
   -- ── R4: BLOQUES por proveedor (suma extracto vs suma PASE) ─────────────
   -- Para cada proveedor con movs libres: tokens "raros" del nombre (≥5
   -- chars, no genéricos) buscados en la descripción de las filas rojas.
@@ -411,7 +475,8 @@ BEGIN
         'num_candidatos', jsonb_array_length(candidatos),
         'candidatos', candidatos,
         'combinaciones', combinaciones,
-        'bloque', bloque
+        'bloque', bloque,
+        'facturas_pendientes', facturas_pend
       ) ORDER BY idx) FROM _ce_ext
     ), '[]'::jsonb),
     'sobrantes', COALESCE((
@@ -431,6 +496,7 @@ BEGIN
       'amarillos_agrupados', (SELECT COUNT(*) FROM _ce_ext WHERE estado = 'amarillo_agrupado'),
       'verdes_bloque',       (SELECT COUNT(*) FROM _ce_ext WHERE estado = 'verde_bloque'),
       'bloques_diferencia',  (SELECT COUNT(*) FROM _ce_ext WHERE estado = 'bloque_diferencia'),
+      'facturas_sin_pagar',  (SELECT COUNT(*) FROM _ce_ext WHERE estado = 'factura_sin_pagar'),
       'rojos_falta',         (SELECT COUNT(*) FROM _ce_ext WHERE estado = 'rojo_falta'),
       'rojos_sobra',         (SELECT COUNT(*) FROM _ce_mov m WHERE NOT m.usado
                                AND m.fecha BETWEEN p_periodo_desde AND p_periodo_hasta)
