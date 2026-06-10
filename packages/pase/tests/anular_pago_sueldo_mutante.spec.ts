@@ -16,6 +16,13 @@ import { createDuenoClient } from "./helpers/supabaseClient";
 //   - adelanto consumido (descontado=true para siempre)
 //   - aguinaldo inflado en el empleado
 //
+// Actualizado 09-jun a la semántica vigente:
+//   - 202606072000/2100: total_a_pagar = NETO (bruto − adelanto); el adelanto
+//     NO suma a pagos_realizados (solo cash cuenta).
+//   - 202606072300: aguinaldo acumula subtotal2/12 (BRUTO).
+//   - 202606100300 (H1): anular revierte con COALESCE(subtotal2,total_a_pagar)/12
+//     — misma base que acumula (simétrico).
+//
 // El test es DB-only (no UI) — replica el escenario completo vía RPCs y
 // verifica el estado final en DB. Sentinel valores enteros para evitar
 // rounding.
@@ -178,7 +185,8 @@ test.describe("anular_movimiento de pago de sueldo — mutante completo", () => 
   });
 
   test("pago completo con adelanto → anular → todo revertido", async () => {
-    // ── 1. Pagar sueldo via RPC (DB-only, no UI). 100% efectivo. ─────────
+    // ── 1. Pagar sueldo via RPC (DB-only, no UI). Cash cubre el NETO. ─────
+    // Semántica 07-jun: total_a_pagar = NETO (bruto − adelanto tildado).
     const pCalc = {
       sueldo_base: SENTINEL_SUELDO,
       descuento_ausencias: 0,
@@ -190,7 +198,7 @@ test.describe("anular_movimiento de pago de sueldo — mutante completo", () => 
       monto_presentismo: 0,
       subtotal2: SENTINEL_SUELDO,
       adelantos: ADELANTO_MONTO,
-      total_a_pagar: SENTINEL_SUELDO,
+      total_a_pagar: CASH_MONTO,
       efectivo: CASH_MONTO,
       transferencia: 0,
     };
@@ -217,7 +225,9 @@ test.describe("anular_movimiento de pago de sueldo — mutante completo", () => 
     const { data: preLiq } = await db.from("rrhh_liquidaciones")
       .select("estado, pagos_realizados, total_a_pagar, anulado").eq("id", liqId).single();
     expect(preLiq?.estado).toBe("pagado");
-    expect(Number(preLiq?.pagos_realizados)).toBe(SENTINEL_SUELDO);
+    // pagos_realizados = SOLO el cash; el adelanto no cuenta (fix 202606072100).
+    expect(Number(preLiq?.pagos_realizados)).toBe(CASH_MONTO);
+    expect(Number(preLiq?.total_a_pagar)).toBe(CASH_MONTO);
     expect(preLiq?.anulado).not.toBe(true);
 
     const { data: preMov } = await db.from("movimientos")
@@ -232,7 +242,8 @@ test.describe("anular_movimiento de pago de sueldo — mutante completo", () => 
 
     const { data: preEmp } = await db.from("rrhh_empleados")
       .select("aguinaldo_acumulado").eq("id", empId).single();
-    // total_a_pagar / 12.0 sumado al inicial. toBeCloseTo por floats.
+    // Aguinaldo acumula subtotal2/12 (BRUTO, fix 202606072300) sumado al
+    // inicial — NO neto/12. toBeCloseTo por floats.
     expect(Number(preEmp?.aguinaldo_acumulado))
       .toBeCloseTo(aguinaldoInicial + SENTINEL_SUELDO / 12.0, 2);
 
@@ -253,8 +264,11 @@ test.describe("anular_movimiento de pago de sueldo — mutante completo", () => 
     expect(postLiq?.anulado).toBe(true);
     expect(Number(postLiq?.pagos_realizados)).toBe(0);
     expect(postLiq?.estado).toBe("pendiente");
-    expect(postLiq?.pagado_at).toBeNull();
-    expect(postLiq?.pagado_por).toBeNull();
+    // AUDIT FIX #7 (202605270700): pagado_at/pagado_por NO se blanquean al
+    // anular — se preserva el historial. Solo se resetean si pagar_sueldo
+    // revive la liquidación (202606051200).
+    expect(postLiq?.pagado_at).not.toBeNull();
+    expect(postLiq?.pagado_por).not.toBeNull();
 
     const { data: postMov } = await db.from("movimientos")
       .select("anulado").eq("id", movId).single();
@@ -265,12 +279,57 @@ test.describe("anular_movimiento de pago de sueldo — mutante completo", () => 
     expect(postAdelanto?.descontado).toBe(false);
     expect(postAdelanto?.liquidacion_consumidora_id).toBeNull();
 
-    const { data: postEmp } = await db.from("rrhh_empleados")
-      .select("aguinaldo_acumulado").eq("id", empId).single();
-    expect(Number(postEmp?.aguinaldo_acumulado)).toBeCloseTo(aguinaldoInicial, 2);
+    // NOTA: la reversión del aguinaldo se asserta en el test dedicado de abajo
+    // (bug encontrado y arreglado el 09-jun, migración 202606100500).
 
     const { data: postSaldo } = await db.from("saldos_caja")
       .select("saldo").eq("cuenta", CUENTA).eq("local_id", localId).single();
     expect(Number(postSaldo?.saldo)).toBe(saldoCajaInicial);
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // BUG REAL descubierto 09-jun al actualizar este test — Y ARREGLADO el mismo
+  // día (migración 202606100500):
+  //
+  // anular_movimiento NUNCA revertía aguinaldo_acumulado. Secuencia del bug:
+  //   1. anular_movimiento hacía `UPDATE movimientos SET anulado=true`.
+  //   2. El trigger trg_sync_pagos_rrhh (202605222200, AFTER UPDATE row-level)
+  //      llama _resync_liquidacion_pagos → recalcula pagos=0 y pone
+  //      liq.estado='pendiente' AHÍ MISMO (fin del statement).
+  //   3. Recién después leía `SELECT * INTO v_liq` → estado ya 'pendiente' →
+  //      el `IF v_liq.estado = 'pagado'` que revierte aguinaldo era código
+  //      muerto desde el 22-may (cada pagar→anular→re-pagar inflaba el
+  //      aguinaldo en subtotal2/12).
+  //
+  // FIX aplicado: anular_movimiento captura y lockea la liquidación ANTES del
+  // UPDATE del movimiento (snapshot pre-trigger). Este test lo protege.
+  // ─────────────────────────────────────────────────────────────────────────
+  test("anular pago completo revierte aguinaldo_acumulado (fix 202606100500)", async () => {
+    const pCalc = {
+      sueldo_base: SENTINEL_SUELDO, descuento_ausencias: 0, total_horas_extras: 0,
+      total_dobles: 0, total_feriados: 0, total_vacaciones: 0,
+      subtotal1: SENTINEL_SUELDO, monto_presentismo: 0, subtotal2: SENTINEL_SUELDO,
+      adelantos: ADELANTO_MONTO, total_a_pagar: CASH_MONTO,
+      efectivo: CASH_MONTO, transferencia: 0,
+    };
+    const { data: payResult, error: payErr } = await db.rpc("pagar_sueldo", {
+      p_nov_id: novId, p_formas_pago: [{ cuenta: CUENTA, monto: CASH_MONTO }],
+      p_adelantos_ids: [adelantoId],
+      p_fecha: `${ANIO}-${String(MES).padStart(2, "0")}-30`,
+      p_mes: MES, p_anio: ANIO, p_crear_liq: true, p_calc: pCalc,
+    });
+    expect(payErr).toBeNull();
+    liqId = (payResult as { liquidacion_id: string }).liquidacion_id;
+    movId = (payResult as { mov_ids: string[] }).mov_ids[0]!;
+
+    const { error: anErr } = await db.rpc("anular_movimiento", {
+      p_mov_id: movId, p_motivo: "test mutante: anular pago (aguinaldo)",
+    });
+    expect(anErr).toBeNull();
+
+    // Lo que el producto DEBERÍA hacer (simétrico a la acumulación subtotal2/12):
+    const { data: postEmp } = await db.from("rrhh_empleados")
+      .select("aguinaldo_acumulado").eq("id", empId).single();
+    expect(Number(postEmp?.aguinaldo_acumulado)).toBeCloseTo(aguinaldoInicial, 2);
   });
 });

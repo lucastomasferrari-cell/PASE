@@ -10,6 +10,14 @@ import { createDuenoClient } from "./helpers/supabaseClient";
 // "FOR UPDATE is not allowed with aggregate functions" y NO se podía pagar a
 // nadie con adelantos. Migración 202606042700 lo arregla (lock aparte + sum).
 //
+// Actualizado 09-jun a la semántica vigente (migración 202606072000 "YA
+// PAGADO" + fix Esteban 202606072100):
+//   - El frontend manda total_a_pagar = NETO (bruto − adelantos tildados).
+//   - El adelanto NO suma a pagos_realizados; solo se marca descontado=true.
+//   - completa = (efectivo/transferencia asignados) >= NETO pendiente.
+//   - El adelanto se elige explícito vía p_adelantos_ids (fecha dentro del
+//     período de la novedad — acá: agosto 2099).
+//
 // DB-only. Mes 8 (Agosto) 2099 para no colisionar con otros tests de sueldo.
 // ─────────────────────────────────────────────────────────────────────────
 const SENTINEL = 567890;     // sueldo_mensual del Empleado Prueba
@@ -97,16 +105,18 @@ test.describe("Sueldo con adelanto — mutante (FOR UPDATE fix)", () => {
     }]).select();
     novId = novIns![0]!.id as string;
 
-    // 3. Pagar con el adelanto tildado. Total = SENTINEL; efectivo = SENTINEL - ADELANTO.
+    // 3. Pagar con el adelanto tildado. Semántica 07-jun: total_a_pagar = NETO
+    //    (bruto − adelanto), igual que arma el frontend; el cash cubre el NETO.
+    const NETO = SENTINEL - ADELANTO;
     const pCalc = {
       sueldo_base: SENTINEL, descuento_ausencias: 0, total_horas_extras: 0, total_dobles: 0,
       total_feriados: 0, total_vacaciones: 0, subtotal1: SENTINEL, monto_presentismo: 0,
-      subtotal2: SENTINEL, adelantos: ADELANTO, total_a_pagar: SENTINEL,
-      efectivo: SENTINEL - ADELANTO, transferencia: 0,
+      subtotal2: SENTINEL, adelantos: ADELANTO, total_a_pagar: NETO,
+      efectivo: NETO, transferencia: 0,
     };
     const { data: r, error: payErr } = await db.rpc("pagar_sueldo", {
       p_nov_id: novId,
-      p_formas_pago: [{ cuenta: CUENTA, monto: SENTINEL - ADELANTO }],
+      p_formas_pago: [{ cuenta: CUENTA, monto: NETO }],
       p_adelantos_ids: [adelId],
       p_fecha: `${ANIO}-08-05`, p_mes: MES, p_anio: ANIO,
       p_crear_liq: true, p_calc: pCalc, p_idempotency_key: null,
@@ -116,6 +126,8 @@ test.describe("Sueldo con adelanto — mutante (FOR UPDATE fix)", () => {
     liqId = (r as { liquidacion_id: string }).liquidacion_id;
     movIds = ((r as { mov_ids: string[] }).mov_ids) || [];
     expect((r as { completa: boolean }).completa).toBe(true);
+    // pagos_realizados = SOLO el cash (el adelanto no cuenta como pago).
+    expect(Number((r as { pagos_realizados: number }).pagos_realizados)).toBe(NETO);
 
     // El adelanto quedó descontado.
     const { data: adAfter } = await db.from("rrhh_adelantos").select("descontado").eq("id", adelId).single();
