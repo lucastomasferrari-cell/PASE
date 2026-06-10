@@ -86,6 +86,12 @@ export function SolicitudesContent({ user, withHeader = true }: ContentProps) {
     let cancelado = false;
     void (async () => {
       setLoading(true);
+      // Antes de leer, marcar como 'expirada' las pendientes que pasaron
+      // el deadline (Lucas 10-jun: "las pendientes ya vencidas no quiero
+      // que me aparezcan como pendientes sino como vencidas en otro
+      // cuadro"). La RPC corre como SECURITY DEFINER con check de tenant.
+      try { await db.rpc("fn_auto_expirar_solicitudes"); }
+      catch { /* no es crítico, la pantalla muestra el listado igual */ }
       // Traer histórico completo del tenant (últimos 200, ordenadas DESC).
       // RLS filtra por tenant + rol automáticamente.
       // eslint-disable-next-line pase-local/require-apply-local-scope -- tabla por tenant, sin local_id
