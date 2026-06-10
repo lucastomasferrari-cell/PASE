@@ -44,6 +44,7 @@ const SueldosPreview = lazy(() => import("./pages/SueldosPreview"));
 const Tenants = lazy(() => import("./pages/Tenants"));
 const DesignSystem = lazy(() => import("./pages/DesignSystem"));
 const Finanzas = lazy(() => import("./pages/Finanzas"));
+const ConciliacionExtracto = lazy(() => import("./pages/ConciliacionExtracto"));
 const Rentabilidad = lazy(() => import("./pages/Rentabilidad"));
 // Insumos + Recetas (sprint 28-may noche): gestión de catálogo de materia
 // prima y vinculación con platos (CMV teórico, margen, alertas). Las acciones
@@ -946,6 +947,9 @@ function AppMain() {
               {/* Dirección */}
               <Route path="/negocio" element={<Negocio user={user || undefined} locales={locales} localActivo={localActivo}/>} />
               <Route path="/finanzas" element={<Finanzas user={user || undefined} locales={locales} localActivo={localActivo}/>} />
+              <Route path="/conciliacion-extracto" element={
+                user && tienePermiso(user, "conciliacion") ? <ConciliacionExtracto user={user} locales={locales} localActivo={localActivo}/> : <Navigate to="/inicio" replace/>
+              } />
               <Route path="/rentabilidad" element={
                 user ? <Rentabilidad user={user} locales={locales} localActivo={localActivo}/> : <Navigate to="/" replace/>
               } />

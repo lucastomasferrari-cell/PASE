@@ -247,3 +247,48 @@ export function esExtractoMpCsv(file: File): Promise<boolean> {
     reader.readAsText(slice);
   });
 }
+
+/**
+ * Detecta si un archivo es probablemente un account_statement XLSX de MP.
+ * MP entrega el mismo formato que el CSV pero dentro de un Excel.
+ * No verifica el contenido (eso lo hace el parser): solo extension.
+ */
+export function esExtractoMpExcel(file: File): boolean {
+  const name = file.name.toLowerCase();
+  return name.endsWith(".xlsx")
+    || name.endsWith(".xls")
+    || file.type === "application/vnd.ms-excel"
+    || file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+}
+
+/**
+ * Lee un archivo XLSX/XLS de MP y lo convierte a texto CSV-compatible que
+ * el parser principal `parseExtractoMP` sabe leer. Reusa toda la lógica de
+ * parsing del CSV — XLSX es solo un envoltorio del mismo formato.
+ *
+ * El XLSX de MP tiene UNA hoja "sheet0" con la misma estructura del CSV:
+ *   Fila 0: INITIAL_BALANCE | CREDITS | DEBITS | FINAL_BALANCE
+ *   Fila 1: valores
+ *   Fila 2: en blanco
+ *   Fila 3: RELEASE_DATE | TRANSACTION_TYPE | REFERENCE_ID | TRANSACTION_NET_AMOUNT | PARTIAL_BALANCE
+ *   Filas 4+: movimientos
+ *
+ * Usa la lib `xlsx` (SheetJS) para abrir el archivo. Tree-shaking parcial:
+ * solo importamos `read` y `utils.sheet_to_csv`.
+ *
+ * Si el archivo no tiene la estructura esperada, devuelve null y el caller
+ * cae a Claude IA o muestra error.
+ */
+export async function parseExtractoMpExcel(file: File): Promise<ExtractoResultado | null> {
+  const XLSX = await import("xlsx");
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: "array", raw: false });
+  const sheetName = wb.SheetNames[0];
+  if (!sheetName) return null;
+  const sheet = wb.Sheets[sheetName];
+  if (!sheet) return null;
+  // Convertimos a CSV con ; como separador (mismo formato que el CSV original).
+  // FS=";" → field separator. raw:false ya pasó por formato de texto.
+  const csv = XLSX.utils.sheet_to_csv(sheet, { FS: ";", strip: false });
+  return parseExtractoMP(csv);
+}

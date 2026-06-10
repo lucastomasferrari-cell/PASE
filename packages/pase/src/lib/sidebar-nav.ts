@@ -62,6 +62,11 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   // === Dirección ===
   { path: "/negocio",                    slug: "negocio",       label: "Negocio",         sec: "Dirección" },
   { path: "/finanzas",                   slug: "finanzas",      label: "Finanzas",        sec: "Dirección" },
+  // Conciliación 10-jun-2026 (Lucas): nuevo módulo para cierre de mes —
+  // sube el extracto MP y cruza contra movimientos del local activo.
+  // Diferente del viejo /caja/conciliacion (que justifica mp_movimientos
+  // contra facturas/gastos): este es flow mensual extracto-vs-PASE.
+  { path: "/conciliacion-extracto",      slug: "conciliacion",  label: "Conciliación",    sec: "Dirección" },
   { path: "/rentabilidad",               slug: "rentabilidad",  label: "Rentabilidad",    sec: "Dirección" },
   { path: "/objetivos",                  slug: "objetivos",     label: "Objetivos",       sec: "Dirección" },
   { path: "/reportes",                   slug: "eerr",          label: "Reportes",        sec: "Dirección" },

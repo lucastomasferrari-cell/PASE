@@ -149,6 +149,12 @@ export function tienePermiso(user: MaybeUser, slug: string): boolean {
   if (slug === "codigos_manager") {
     return user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin";
   }
+  // 'conciliacion' (módulo nuevo Lucas 10-jun): cierre de mes contra extracto
+  // de MercadoPago. Solo dueño/admin — toca crear y anular movimientos en
+  // base al cruce con el extracto, es zona financiera sensible.
+  if (slug === "conciliacion") {
+    return user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin";
+  }
   // 'herramientas_hub' (pantalla con cards de herramientas avanzadas). Visible
   // si el user tiene acceso a AL MENOS UNA de las 6 herramientas que viven en
   // el hub. Si no tiene ninguna, el item no aparece en el sidebar.
