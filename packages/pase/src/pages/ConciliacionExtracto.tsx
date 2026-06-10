@@ -299,29 +299,79 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     setResueltos(p => ({ ...p, [`ext:${idx}`]: `combo:${comboIdx}` }));
   }
 
+  // Crea UN movimiento en Caja a partir de una fila del extracto.
+  // Devuelve true si se creó OK. Reusada por el modal individual y el lote.
+  async function crearMovimientoDeFila(fila: FilaExtracto): Promise<boolean> {
+    // Categorización: positivo → Ingreso Manual, negativo → Egreso Manual.
+    // En el campo detalle dejamos toda la traza para auditoría.
+    const esEgreso = fila.monto < 0;
+    const tipoMov = esEgreso ? "Egreso Manual" : "Ingreso Manual";
+    const detalle = `[Concil. ${periodoDesde.slice(0, 7)}] ${fila.descripcion}${fila.referencia_externa ? ` · ref ${fila.referencia_externa}` : ""}`;
+    const { error } = await db.rpc("crear_movimiento_caja", {
+      p_fecha: fila.fecha,
+      p_cuenta: "MercadoPago",
+      p_tipo: tipoMov,
+      p_cat: null,
+      p_importe: fila.monto,
+      p_detalle: detalle,
+      p_local_id: localActivo,
+    });
+    if (error) {
+      showError(`${fila.descripcion.slice(0, 40)}: ${translateRpcError(error)}`);
+      return false;
+    }
+    setResueltos(p => ({ ...p, [`ext:${fila.idx}`]: "creado" }));
+    return true;
+  }
+
   async function ejecutarCrearFaltante() {
     if (!crearFaltante) return;
     setSavingAccion(true);
     try {
-      // Categorización: positivo → Ingreso Manual, negativo → Egreso Manual.
-      // En el campo detalle dejamos toda la traza para auditoría.
-      const esEgreso = crearFaltante.monto < 0;
-      const tipoMov = esEgreso ? "Egreso Manual" : "Ingreso Manual";
-      const detalle = `[Concil. ${periodoDesde.slice(0, 7)}] ${crearFaltante.descripcion}${crearFaltante.referencia_externa ? ` · ref ${crearFaltante.referencia_externa}` : ""}`;
-      const { error } = await db.rpc("crear_movimiento_caja", {
-        p_fecha: crearFaltante.fecha,
-        p_cuenta: "MercadoPago",
-        p_tipo: tipoMov,
-        p_cat: null,
-        p_importe: crearFaltante.monto,
-        p_detalle: detalle,
-        p_local_id: localActivo,
-      });
-      if (error) { showError(translateRpcError(error)); return; }
-      setResueltos(p => ({ ...p, [`ext:${crearFaltante.idx}`]: "creado" }));
-      setCrearFaltante(null);
-      showToast("Movimiento creado");
+      const ok = await crearMovimientoDeFila(crearFaltante);
+      if (ok) {
+        setCrearFaltante(null);
+        showToast("Movimiento creado");
+      }
     } finally {
+      setSavingAccion(false);
+    }
+  }
+
+  // ─── Creación EN LOTE (Lucas 10-jun: "siguen siendo muchos") ────────────
+  // La mayoría de los faltantes son gastos reales no cargados. Crearlos de
+  // a uno (35 clicks + 35 confirmaciones) es un dolor: checkboxes + un solo
+  // botón que los crea todos secuencialmente.
+  const [seleccionados, setSeleccionados] = useState<Set<number>>(new Set());
+  const [confirmarLote, setConfirmarLote] = useState(false);
+  const [progresoLote, setProgresoLote] = useState<string | null>(null);
+
+  function toggleSeleccion(idx: number) {
+    setSeleccionados(p => {
+      const n = new Set(p);
+      if (n.has(idx)) n.delete(idx); else n.add(idx);
+      return n;
+    });
+  }
+
+  async function ejecutarCrearLote() {
+    if (!cruce) return;
+    const filas = cruce.extracto.filter(f => seleccionados.has(f.idx) && !resueltos[`ext:${f.idx}`]);
+    if (filas.length === 0) return;
+    setSavingAccion(true);
+    setConfirmarLote(false);
+    let creados = 0;
+    try {
+      for (let i = 0; i < filas.length; i++) {
+        setProgresoLote(`Creando ${i + 1} de ${filas.length}…`);
+        const ok = await crearMovimientoDeFila(filas[i]!);
+        if (ok) creados++;
+        // Si falla uno, seguimos con el resto (el error ya se mostró).
+      }
+      showToast(`${creados} de ${filas.length} movimientos creados`);
+      setSeleccionados(new Set());
+    } finally {
+      setProgresoLote(null);
       setSavingAccion(false);
     }
   }
@@ -368,6 +418,10 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     for (const sob of cruce.sobrantes) {
       const r = resueltos[`sob:${sob.id}`];
       if (r === "ignorar" || r === "anulado") { resueltos_count++; continue; }
+      // Sobrantes que pertenecen a un bloque con diferencia NO cuentan como
+      // "sobran": ya están explicados por el bloque naranja (la transferencia
+      // agrupada del proveedor). Anular uno de estos sería un error.
+      if (sob.bloque_prov) continue;
       rojos_sobra++;
     }
     return {
@@ -702,39 +756,127 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
             )}
           />
 
-          {/* ROJOS — falta en PASE */}
-          <SeccionFilas
-            titulo="🔴 Faltan en PASE (están en el extracto pero no se cargaron)"
-            descripcion="Si era un cobro real, tocá Crear y queda registrado en Caja con cuenta MercadoPago."
-            filas={cruce.extracto.filter(f =>
-              f.estado === "rojo_falta"
-              && !resueltos[`ext:${f.idx}`]
-            )}
-            renderFila={fila => (
-              <FilaCard
-                key={fila.idx}
-                fecha={fila.fecha}
-                monto={fila.monto}
-                descripcion={fila.descripcion}
-              >
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button className="btn btn-acc btn-sm" onClick={() => setCrearFaltante(fila)}>
-                    Crear en Caja
+          {/* ROJOS — falta en PASE (con selección múltiple para crear en lote) */}
+          {(() => {
+            const filasRojas = cruce.extracto.filter(f =>
+              f.estado === "rojo_falta" && !resueltos[`ext:${f.idx}`]
+            );
+            if (filasRojas.length === 0) return null;
+            const numSel = filasRojas.filter(f => seleccionados.has(f.idx)).length;
+            const sumaSel = filasRojas.filter(f => seleccionados.has(f.idx)).reduce((s, f) => s + f.monto, 0);
+            return (
+              <Card>
+                <h4 style={{ marginTop: 0, fontSize: 14 }}>
+                  🔴 Faltan en PASE (están en el extracto pero no se cargaron) <span style={{ color: "var(--muted2)" }}>({filasRojas.length})</span>
+                </h4>
+                <p style={{ color: "var(--muted2)", fontSize: 12, lineHeight: 1.5, marginBottom: 10 }}>
+                  Son gastos reales que salieron de MP y no están cargados. Tildá los que correspondan
+                  y crealos todos juntos, o resolvelos de a uno.
+                </p>
+                {/* Barra de acciones de lote */}
+                <div style={{
+                  display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap",
+                  padding: "8px 10px", background: "var(--s2)", borderRadius: 6, marginBottom: 10,
+                }}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => {
+                      const todos = new Set(filasRojas.map(f => f.idx));
+                      setSeleccionados(numSel === filasRojas.length ? new Set() : todos);
+                    }}
+                  >
+                    {numSel === filasRojas.length ? "Destildar todos" : "Tildar todos"}
                   </button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => ignorarExtracto(fila.idx)}>
-                    Ignorar (es de otro mes / no me interesa)
-                  </button>
+                  <span style={{ fontSize: 12, color: "var(--muted2)" }}>
+                    {numSel > 0 ? <>{numSel} seleccionados · {fmt_$(sumaSel)}</> : "Nada seleccionado"}
+                  </span>
+                  <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      disabled={numSel === 0 || savingAccion}
+                      onClick={() => {
+                        setResueltos(p => {
+                          const next = { ...p };
+                          for (const f of filasRojas) if (seleccionados.has(f.idx)) next[`ext:${f.idx}`] = "ignorar";
+                          return next;
+                        });
+                        setSeleccionados(new Set());
+                      }}
+                    >
+                      Ignorar seleccionados
+                    </button>
+                    <button
+                      className="btn btn-acc btn-sm"
+                      disabled={numSel === 0 || savingAccion}
+                      onClick={() => setConfirmarLote(true)}
+                    >
+                      {progresoLote ?? `Crear ${numSel > 0 ? numSel : ""} en Caja →`}
+                    </button>
+                  </div>
                 </div>
-              </FilaCard>
-            )}
-          />
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {filasRojas.map(fila => (
+                    <div key={fila.idx} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <input
+                        type="checkbox"
+                        checked={seleccionados.has(fila.idx)}
+                        onChange={() => toggleSeleccion(fila.idx)}
+                        style={{ marginTop: 14, width: 16, height: 16, cursor: "pointer" }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <FilaCard
+                          fecha={fila.fecha}
+                          monto={fila.monto}
+                          descripcion={fila.descripcion}
+                        >
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            <button className="btn btn-acc btn-sm" onClick={() => setCrearFaltante(fila)}>
+                              Crear en Caja
+                            </button>
+                            <button className="btn btn-ghost btn-sm" onClick={() => ignorarExtracto(fila.idx)}>
+                              Ignorar
+                            </button>
+                          </div>
+                        </FilaCard>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            );
+          })()}
 
-          {/* ROJOS — sobra en PASE */}
+          {/* Sobrantes que pertenecen a un bloque — colapsados, informativos.
+              NO se deben anular: están explicados por el bloque naranja. */}
+          {cruce.sobrantes.some(s => s.bloque_prov && !resueltos[`sob:${s.id}`]) && (
+            <Card>
+              <details>
+                <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--muted2)" }}>
+                  🟠 {cruce.sobrantes.filter(s => s.bloque_prov && !resueltos[`sob:${s.id}`]).length} pagos
+                  cargados que pertenecen a bloques de proveedor (no anular — ver Diferencias por proveedor)
+                </summary>
+                <div style={{ marginTop: 8, maxHeight: 280, overflowY: "auto", fontSize: 12 }}>
+                  {cruce.sobrantes.filter(s => s.bloque_prov && !resueltos[`sob:${s.id}`]).map(s => (
+                    <div key={s.id} style={{
+                      display: "flex", justifyContent: "space-between",
+                      padding: "5px 0", borderBottom: "1px solid var(--bd)",
+                    }}>
+                      <span>{fmt_d(s.fecha)} · {(s.detalle ?? "").slice(0, 55)} <em style={{ color: "var(--muted2)" }}>[{s.bloque_prov}]</em></span>
+                      <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(s.importe)}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </Card>
+          )}
+
+          {/* ROJOS — sobra en PASE (excluye los que están en bloques) */}
           <SeccionFilas
             titulo="🔴 Sobran en PASE (cargaste pero no están en el extracto)"
             descripcion="Probablemente un error humano: alguien cargó un mov MP que en realidad no entró. Tocá Anular y queda invalidado (con motivo)."
             filas={cruce.sobrantes.filter(s =>
               !resueltos[`sob:${s.id}`]
+              && !s.bloque_prov
             )}
             renderFila={(sob) => (
               <FilaCard
@@ -889,6 +1031,39 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
               </button>
             ))}
           </div>
+        </Modal>
+      )}
+
+      {/* Modal: confirmar creación en lote */}
+      {confirmarLote && cruce && (
+        <Modal isOpen={true} onClose={() => setConfirmarLote(false)} title="Crear movimientos en lote">
+          {(() => {
+            const filas = cruce.extracto.filter(f => seleccionados.has(f.idx) && !resueltos[`ext:${f.idx}`]);
+            const suma = filas.reduce((s, f) => s + f.monto, 0);
+            return (
+              <>
+                <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+                  Se van a crear <strong>{filas.length} movimientos</strong> en Caja con cuenta
+                  <strong> MercadoPago</strong> de <strong>{localNombre}</strong>, por un total
+                  de <strong>{fmt_$(suma)}</strong>.
+                </div>
+                <div style={{ marginTop: 10, maxHeight: 240, overflowY: "auto", fontSize: 11 }}>
+                  {filas.map(f => (
+                    <div key={f.idx} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid var(--bd)" }}>
+                      <span>{fmt_d(f.fecha)} · {f.descripcion.slice(0, 45)}</span>
+                      <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(f.monto)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+                  <button className="btn btn-ghost" onClick={() => setConfirmarLote(false)} disabled={savingAccion}>Cancelar</button>
+                  <button className="btn btn-acc" onClick={ejecutarCrearLote} disabled={savingAccion}>
+                    {savingAccion ? (progresoLote ?? "Creando…") : `Confirmar crear ${filas.length}`}
+                  </button>
+                </div>
+              </>
+            );
+          })()}
         </Modal>
       )}
 
