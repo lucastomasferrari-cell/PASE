@@ -137,7 +137,7 @@ export function AdminHome() {
   if (!sesion) {
     return (
       <div className="min-h-screen grid place-items-center px-6">
-        <form onSubmit={entrar} className="w-full max-w-sm rounded-2xl bg-white border border-ink/5 shadow-sm p-6 space-y-4">
+        <form onSubmit={entrar} className="w-full max-w-sm rounded-2xl bg-white border border-ink/5 shadow-card p-6 space-y-4">
           <div>
             <span className="font-display text-2xl font-semibold text-brand-600">mesa.</span>
             <p className="text-sm text-ink-muted mt-1">Panel del restaurante — misma cuenta que PASE/COMANDA.</p>
@@ -194,7 +194,7 @@ export function AdminHome() {
 
         {form && (
           <div className="mt-6 grid lg:grid-cols-2 gap-6 max-w-5xl">
-            <div className="rounded-2xl bg-white border border-ink/5 shadow-sm p-5 space-y-4">
+            <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <p className="font-medium">{form.nombre}</p>
                 {form.slug && (
@@ -218,7 +218,7 @@ export function AdminHome() {
               </Campo>
             </div>
 
-            <div className="rounded-2xl bg-white border border-ink/5 shadow-sm p-5 space-y-4 self-start">
+            <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5 space-y-4 self-start">
               <Campo label="Dirección">
                 <input value={form.direccion ?? ''} onChange={(e) => setForm((f) => f && ({ ...f, direccion: e.target.value }))}
                        className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />

@@ -123,7 +123,7 @@ export function PerfilLocal() {
               <p className="text-sm text-ink-muted -mt-2 mb-4">Lo más pedido por los comensales este mes — datos reales, no curaduría.</p>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {populares.map((p) => (
-                  <div key={p.nombre} className="rounded-xl bg-white border border-ink/5 overflow-hidden shadow-sm">
+                  <div key={p.nombre} className="rounded-xl bg-white border border-ink/5 overflow-hidden shadow-card">
                     {p.foto_url
                       ? <img src={p.foto_url} alt={p.nombre} className="h-28 w-full object-cover" />
                       : <div className="h-28 bg-gradient-to-br from-crema to-brand-100" />}
@@ -164,7 +164,7 @@ export function PerfilLocal() {
               <p className="text-sm text-ink-muted -mt-2 mb-4">Solo pueden reseñar quienes realmente consumieron.</p>
               <div className="space-y-3">
                 {reviews.ultimas.map((r, i) => (
-                  <div key={i} className="rounded-xl bg-white border border-ink/5 p-4 shadow-sm">
+                  <div key={i} className="rounded-xl bg-white border border-ink/5 p-4 shadow-card">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm">{r.autor}</span>
                       <span className="inline-flex">
@@ -211,7 +211,7 @@ export function PerfilLocal() {
               <div className="grid sm:grid-cols-2 gap-3">
                 {hermanos.map((h) => (
                   <Link key={h.slug} to={`/${h.slug}`}
-                        className="rounded-xl bg-white border border-ink/5 p-4 shadow-sm hover:border-brand-300 transition-colors">
+                        className="rounded-xl bg-white border border-ink/5 p-4 shadow-card hover:border-brand-300 transition-colors">
                     <p className="font-medium">{h.nombre}</p>
                     {h.direccion && <p className="text-xs text-ink-muted mt-0.5">{h.direccion}</p>}
                   </Link>
@@ -256,7 +256,7 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
 
   if (!perfil.reservas.activas) {
     return (
-      <div className="rounded-2xl bg-white border border-ink/5 shadow-sm p-5">
+      <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5">
         <p className="font-medium">Reservas</p>
         <p className="mt-2 text-sm text-ink-muted">
           Este local todavía no toma reservas online.
@@ -296,7 +296,7 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
 
   if (paso === 'lista') {
     return (
-      <div className="rounded-2xl bg-white border border-green-200 shadow-sm p-6 text-center">
+      <div className="rounded-2xl bg-white border border-green-200 shadow-card p-6 text-center">
         <CalendarCheck className="h-10 w-10 text-green-600 mx-auto" />
         <p className="mt-3 font-display text-2xl">¡Listo, {nombre.split(' ')[0]}!</p>
         <p className="mt-2 text-sm text-ink-soft">
@@ -312,7 +312,7 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
   }
 
   return (
-    <div className="rounded-2xl bg-white border border-ink/5 shadow-sm p-5">
+    <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5">
       <p className="font-medium">Configurá tu reserva</p>
 
       {paso === 'buscar' && (
@@ -408,7 +408,7 @@ function EventoCard({ evento: e, slug }: { evento: PerfilLocalData['eventos'][nu
   }
 
   return (
-    <div className="rounded-xl bg-white border border-ink/5 shadow-sm overflow-hidden">
+    <div className="rounded-xl bg-white border border-ink/5 shadow-card overflow-hidden">
       <div className="flex">
         {e.foto_url && <img src={e.foto_url} alt={e.titulo} className="w-32 object-cover hidden sm:block" />}
         <div className="p-4 flex-1 min-w-0">
@@ -474,7 +474,7 @@ function GiftcardCard({ gift: g, slug }: { gift: PerfilLocalData['giftcards'][nu
   }
 
   return (
-    <div className="rounded-xl bg-white border border-ink/5 shadow-sm overflow-hidden">
+    <div className="rounded-xl bg-white border border-ink/5 shadow-card overflow-hidden">
       <div className="flex">
         {g.foto_url && <img src={g.foto_url} alt={g.nombre} className="w-32 object-cover hidden sm:block" />}
         <div className="p-4 flex-1 min-w-0">

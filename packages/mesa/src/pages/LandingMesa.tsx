@@ -30,7 +30,7 @@ export function LandingMesa() {
             { icon: Gift, t: 'Giftcards', d: 'Se venden online, se canjean en el salón.' },
             { icon: Users, t: 'Conocé a tu cliente', d: 'Perfil con consumo real de cada visita.' },
           ].map(({ icon: Icon, t, d }) => (
-            <div key={t} className="rounded-xl bg-white p-4 shadow-sm border border-ink/5">
+            <div key={t} className="rounded-xl bg-white p-4 shadow-card border border-ink/5">
               <Icon className="h-5 w-5 text-brand-500" />
               <p className="mt-2 font-medium">{t}</p>
               <p className="mt-1 text-sm text-ink-muted">{d}</p>

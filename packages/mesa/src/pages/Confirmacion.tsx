@@ -59,7 +59,7 @@ export function Confirmacion() {
 
   return (
     <div className="min-h-screen grid place-items-center px-6">
-      <div className="w-full max-w-md rounded-2xl bg-white border border-ink/5 shadow-sm p-8 text-center">
+      <div className="w-full max-w-md rounded-2xl bg-white border border-ink/5 shadow-card p-8 text-center">
         {pagado ? (
           <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto" />
         ) : (

@@ -1,9 +1,9 @@
 import type { Config } from 'tailwindcss';
 
-// MESA — identidad visual propia: hospitalidad cálida (referencia "Coral
-// hospitalario" de las referencias visuales del ecosistema + el mix
-// Blackbird/Tock/Meitre que eligió Lucas). El design system completo se
-// define en el sprint visual de la página pública — esto es la base.
+// MESA — alineado a la paleta del ecosistema PASE/COMANDA (pedido Lucas
+// 10-jun): navy #1A3A5E como tinta, celeste sobrio como primario, fondos
+// celeste muy claro (#F4F9FD = --pase-bg-soft). Playfair Display se mantiene
+// para los títulos (toque hospitality premium sobre la marca del ecosistema).
 const config: Config = {
   darkMode: ['class'],
   content: ['./index.html', './src/**/*.{ts,tsx}'],
@@ -20,23 +20,26 @@ const config: Config = {
       },
       colors: {
         brand: {
-          50: '#fff5f2',
-          100: '#ffe6df',
-          200: '#ffc9bb',
-          300: '#ffa48c',
-          400: '#ff7a5c',
-          500: '#f25b3f',  // coral MESA
-          600: '#d9432a',
-          700: '#b5331f',
-          800: '#922b1d',
-          900: '#78281e',
+          50: '#F4F9FD',   // --pase-bg-soft
+          100: '#E3F0FA',
+          200: '#C5E0F4',
+          300: '#9CCAEA',
+          400: '#7EB3DD',  // --pase-celeste (primary del ecosistema)
+          500: '#5E9FD1',  // primary-hover
+          600: '#4486BC',
+          700: '#356C99',
+          800: '#2C5878',
+          900: '#1A3A5E',  // --pase-text (navy ancla de marca)
         },
         ink: {
-          DEFAULT: '#1d1a17',
-          soft: '#5c554e',
-          muted: '#8a8178',
+          DEFAULT: '#1A3A5E',  // navy PASE
+          soft: '#4A6584',
+          muted: '#7D93AB',
         },
-        crema: '#faf7f3',
+        crema: '#F7FAFD',      // fondo general, celeste casi blanco
+      },
+      boxShadow: {
+        card: '0 1px 3px rgba(26,58,94,0.06), 0 8px 24px rgba(26,58,94,0.06)',
       },
     },
   },
