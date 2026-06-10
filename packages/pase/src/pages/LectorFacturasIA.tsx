@@ -282,7 +282,11 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
     // Check FUERTE por número exacto (caso 10-jun: factura EL CRIOLLO
     // 0009-00693518 cargada 3 veces — el aviso blando de abajo fue
     // aceptado sin leer). Mismo nro + mismo proveedor = misma factura,
-    // sin ambigüedad. Mensaje contundente con el estado actual.
+    // sin ambigüedad. Mensaje contundente con el estado actual y
+    // contraste explícito con el total/fecha del form para detectar
+    // errores de lectura de la IA (Lucas 10-jun: facturas Quilmes
+    // 02747734/02747701 que la IA leía como 02743412 — el aviso
+    // mostraba el mismo nro 2 veces sin permitir comparar).
     if (form.nro && form.prov_id) {
       // eslint-disable-next-line pase-local/require-apply-local-scope -- dup check cross-local intencional
       const { data: mismoNro } = await db.from("facturas")
@@ -293,12 +297,24 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
         .limit(1);
       if (mismoNro && mismoNro.length > 0) {
         const d = mismoNro[0]!;
+        const dTotal = Number(d.total) || 0;
+        const fTotal = parseMonto(form.total);
+        const totalCoincide = fTotal > 0 && Math.abs(dTotal - fTotal) <= Math.max(1, dTotal * 0.005);
+        const fechaCoincide = !!form.fecha && d.fecha === form.fecha;
         const ok = confirm(
           `⚠️ FACTURA DUPLICADA ⚠️\n\n` +
-          `Ya existe la factura ${d.nro} de este proveedor:\n` +
-          `  ${d.fecha ? fmt_d(d.fecha) : "?"} · ${fmt_$(Number(d.total))} · estado: ${String(d.estado).toUpperCase()}\n\n` +
-          `Cargarla de nuevo DUPLICA el gasto en el CMV del mes.\n\n` +
-          `¿Estás SEGURO de que es otra factura distinta con el mismo número?`,
+          `Estás cargando:\n` +
+          `  Nº ${form.nro}\n` +
+          `  ${form.fecha ? fmt_d(form.fecha) : "(sin fecha)"} · ${fTotal > 0 ? fmt_$(fTotal) : "(sin total)"}\n\n` +
+          `Ya existe con ese mismo Nº:\n` +
+          `  Nº ${d.nro}\n` +
+          `  ${d.fecha ? fmt_d(d.fecha) : "?"} · ${fmt_$(dTotal)} · estado: ${String(d.estado).toUpperCase()}\n\n` +
+          (totalCoincide && fechaCoincide
+            ? `Coinciden Nº, fecha y total → es la MISMA factura. Cargarla de nuevo DUPLICA el gasto.\n\n¿Cancelar la carga? (OK = cargar igual)`
+            : `OJO: el total ${totalCoincide ? "coincide" : "NO coincide"} y la fecha ${fechaCoincide ? "coincide" : "NO coincide"}.\n` +
+              `Si NO COINCIDEN total o fecha, probablemente la IA leyó MAL el número del recibo y matcheó con una factura vieja.\n\n` +
+              `Mirá el recibo: si el Nº ${form.nro} NO es el que ves impreso, cancelá y corregí el Nº a mano.\n\n` +
+              `¿Cargar igual (es otra factura con el mismo Nº)?`),
         );
         if (!ok) return;
       }

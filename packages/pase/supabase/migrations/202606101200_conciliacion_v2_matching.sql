@@ -113,11 +113,24 @@ BEGIN
     '[]'::JSONB                            AS candidatos,
     '[]'::JSONB                            AS combinaciones,
     NULL::JSONB                            AS bloque,
-    '[]'::JSONB                            AS facturas_pend
+    '[]'::JSONB                            AS facturas_pend,
+    NULL::TEXT                             AS alias_tipo,
+    NULL::INTEGER                          AS alias_prov
   FROM jsonb_array_elements(p_movs_extracto) WITH ORDINALITY AS t(e, ordinality)
   WHERE (NOT p_solo_egresos OR (e->>'monto')::NUMERIC < 0);
 
   SELECT COUNT(*) INTO v_ext_count FROM _ce_ext;
+
+  -- ── ALIAS APRENDIDOS (Lucas 10-jun: solución general) ──────────────────
+  -- Mapeo titular→proveedor/gasto_directo aprendido de conciliaciones
+  -- anteriores. El alias GOBIERNA combos, facturas pendientes y bloques.
+  UPDATE _ce_ext e SET
+    alias_tipo = a.tipo,
+    alias_prov = a.prov_id
+  FROM conciliacion_alias a
+  WHERE a.tenant_id = v_tenant_id
+    AND a.local_id = p_local_id
+    AND a.titular = fn_extraer_titular(e.descripcion);
 
   -- ── PASS 0: filas YA CONCILIADAS en cierres anteriores ─────────────────
   -- (Lucas 10-jun: el "tag invisible"). Si la transferencia ya quedó
@@ -272,6 +285,8 @@ BEGIN
   -- espacio de búsqueda y elimina combos espurios de fechas lejanas.
   IF p_match_agrupado THEN
     FOR v_fila IN SELECT * FROM _ce_ext WHERE estado = 'rojo_falta' ORDER BY idx LOOP
+      -- Alias gasto_directo: este titular no es proveedor — sin combos.
+      IF v_fila.alias_tipo = 'gasto_directo' THEN CONTINUE; END IF;
       v_combos := '[]'::jsonb;
       v_combo_ids := NULL;
 
@@ -280,6 +295,8 @@ BEGIN
         FROM _ce_mov m
         WHERE NOT m.usado AND m.prov_id IS NOT NULL
           AND ABS(m.fecha - v_fila.fecha) <= 4
+          -- Alias proveedor: solo combos con ESE proveedor.
+          AND (v_fila.alias_prov IS NULL OR m.prov_id = v_fila.alias_prov)
         GROUP BY m.prov_id, m.prov_nombre
         HAVING COUNT(*) >= 2
       LOOP
@@ -363,6 +380,8 @@ BEGIN
   -- (se compra a crédito). Si no hay match individual, probamos la TANDA:
   -- la suma de todas las pendientes del proveedor ≈ la transferencia.
   FOR v_fila IN SELECT * FROM _ce_ext WHERE estado = 'rojo_falta' ORDER BY idx LOOP
+    -- Alias gasto_directo: titular que no es proveedor — sin facturas.
+    IF v_fila.alias_tipo = 'gasto_directo' THEN CONTINUE; END IF;
     -- a) individual: 1 factura/remito pendiente con total ≈ |monto|
     SELECT COUNT(*), COALESCE(jsonb_agg(jsonb_build_object(
       'tipo', t.tipo, 'id', t.id, 'nro', t.nro, 'proveedor', t.prov_nombre,
@@ -377,6 +396,7 @@ BEGIN
         AND f.estado = 'pendiente' AND f.total > 0
         AND ABS(f.total - ABS(v_fila.monto)) <= 1
         AND f.fecha BETWEEN v_fila.fecha - 180 AND v_fila.fecha + 5
+        AND (v_fila.alias_prov IS NULL OR f.prov_id = v_fila.alias_prov)
       UNION ALL
       SELECT 'remito', r.id, r.nro, p.nombre, r.fecha, r.monto
       FROM remitos r LEFT JOIN proveedores p ON p.id = r.prov_id
@@ -384,6 +404,7 @@ BEGIN
         AND r.estado = 'sin_factura' AND r.monto > 0
         AND ABS(r.monto - ABS(v_fila.monto)) <= 1
         AND r.fecha BETWEEN v_fila.fecha - 180 AND v_fila.fecha + 5
+        AND (v_fila.alias_prov IS NULL OR r.prov_id = v_fila.alias_prov)
     ) t;
     IF v_cand_count >= 1 THEN
       UPDATE _ce_ext SET estado = 'factura_sin_pagar', facturas_pend = v_cands
@@ -440,12 +461,21 @@ BEGIN
 
       v_regex := '\m(' || array_to_string(v_tokens, '|') || ')\M';
 
-      -- filas del extracto aún rojas cuya descripción contiene algún token
+      -- filas del extracto aún rojas que pertenecen a este proveedor:
+      -- con ALIAS aprendido manda el alias (exacto); sin alias, heurística
+      -- de tokens — pero NUNCA si la fila tiene alias a OTRO proveedor o
+      -- a gasto_directo (caso Baldi: retiros de la dueña compartían
+      -- apellido con el proveedor ARMANDO MARIO BALDI).
       SELECT array_agg(idx), SUM(monto), COUNT(*)
       INTO v_filas_bloque, v_suma_ext, v_cand_count
       FROM _ce_ext
       WHERE estado = 'rojo_falta'
-        AND unaccent(UPPER(descripcion)) ~ v_regex;
+        AND (
+          alias_prov = v_prov.prov_id
+          OR (alias_prov IS NULL
+              AND COALESCE(alias_tipo, '') <> 'gasto_directo'
+              AND unaccent(UPPER(descripcion)) ~ v_regex)
+        );
 
       IF v_filas_bloque IS NULL OR v_cand_count = 0 THEN CONTINUE; END IF;
 

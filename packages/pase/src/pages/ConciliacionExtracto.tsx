@@ -552,6 +552,37 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     }
   }
 
+  // Set de IDs de movs PASE que ya quedaron consumidos por una resolución
+  // del usuario o por un match automático del cruce. Sirve para que la
+  // sección "Sobran en PASE" NO los muestre — si Lucas resolvió una fila
+  // amarilla eligiendo el mov X de PASE, X dejó de "sobrar".
+  // (Lucas 10-jun: "algunos me aparecian en la parte de por elegir, y
+  // ahora me aparecen aca, puede ser?".)
+  const movsUsadosResueltos = useMemo(() => {
+    const s = new Set<string>();
+    if (!cruce) return s;
+    for (const fila of cruce.extracto) {
+      const r = resueltos[`ext:${fila.idx}`];
+      // Resoluciones manuales del usuario sobre filas amarillas/agrupadas.
+      if (r && r.startsWith("matcheado:")) {
+        s.add(r.slice("matcheado:".length));
+      } else if (r && r.startsWith("combo:")) {
+        const idx = Number(r.slice("combo:".length));
+        fila.combinaciones[idx]?.movs.forEach(m => s.add(m.id));
+      } else if (!r) {
+        // Sin resolución → cuentan los matches automáticos del cruce.
+        if (fila.estado === "verde" && fila.candidatos.length === 1) {
+          s.add(fila.candidatos[0]!.id);
+        } else if (fila.estado === "verde_agrupado" && fila.combinaciones.length === 1) {
+          fila.combinaciones[0]!.movs.forEach(m => s.add(m.id));
+        } else if ((fila.estado === "verde_bloque" || fila.estado === "bloque_diferencia") && fila.bloque) {
+          (fila.bloque.movs ?? []).forEach(m => s.add(m.id));
+        }
+      }
+    }
+    return s;
+  }, [cruce, resueltos]);
+
   // ─── KPIs en vivo ────────────────────────────────────────────────────────
   const stats = useMemo(() => {
     if (!cruce) return null;
@@ -581,6 +612,10 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
       // "sobran": ya están explicados por el bloque naranja (la transferencia
       // agrupada del proveedor). Anular uno de estos sería un error.
       if (sob.bloque_prov) continue;
+      // Si el sobrante quedó consumido por una resolución (matcheado/combo
+      // de una amarilla, o verde/agrupado/bloque automático), tampoco
+      // sobra — ya tiene contraparte en el extracto.
+      if (movsUsadosResueltos.has(sob.id)) { resueltos_count++; continue; }
       rojos_sobra++;
     }
     return {
@@ -592,7 +627,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
       total_pendientes: amarillos + amarillosAgrupados + facturasSinPagar + rojos_falta + rojos_sobra,
       resueltos_count,
     };
-  }, [cruce, resueltos]);
+  }, [cruce, resueltos, movsUsadosResueltos]);
 
   // Agrupar filas bloque_diferencia por proveedor para la sección naranja.
   const bloquesPorProveedor = useMemo(() => {
@@ -1174,13 +1209,15 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
             </Card>
           )}
 
-          {/* ROJOS — sobra en PASE (excluye los que están en bloques) */}
+          {/* ROJOS — sobra en PASE (excluye los que están en bloques y los
+              que el usuario ya consumió como match de una fila amarilla) */}
           <SeccionFilas
             titulo="🔴 Sobran en PASE (cargaste pero no están en el extracto)"
             descripcion="Probablemente un error humano: alguien cargó un mov MP que en realidad no entró. Tocá Anular y queda invalidado (con motivo)."
             filas={cruce.sobrantes.filter(s =>
               !resueltos[`sob:${s.id}`]
               && !s.bloque_prov
+              && !movsUsadosResueltos.has(s.id)
             )}
             renderFila={(sob) => (
               <FilaCard

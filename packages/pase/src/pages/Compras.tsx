@@ -499,12 +499,23 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
         .limit(1);
       if (mismoNro && mismoNro.length > 0) {
         const d = mismoNro[0]!;
+        const dTotal = Number(d.total) || 0;
+        const fTotal = calcTotal();
+        const totalCoincide = fTotal > 0 && Math.abs(dTotal - fTotal) <= Math.max(1, dTotal * 0.005);
+        const fechaCoincide = !!form.fecha && d.fecha === form.fecha;
         const ok = confirm(
           `⚠️ FACTURA DUPLICADA ⚠️\n\n` +
-          `Ya existe la factura ${d.nro} de este proveedor:\n` +
-          `  ${d.fecha ? fmt_d(d.fecha) : "?"} · ${fmt_$(Number(d.total))} · estado: ${String(d.estado).toUpperCase()}\n\n` +
-          `Cargarla de nuevo DUPLICA el gasto en el CMV del mes.\n\n` +
-          `¿Estás SEGURO de que es otra factura distinta con el mismo número?`,
+          `Estás cargando:\n` +
+          `  Nº ${form.nro}\n` +
+          `  ${form.fecha ? fmt_d(form.fecha) : "(sin fecha)"} · ${fTotal > 0 ? fmt_$(fTotal) : "(sin total)"}\n\n` +
+          `Ya existe con ese mismo Nº:\n` +
+          `  Nº ${d.nro}\n` +
+          `  ${d.fecha ? fmt_d(d.fecha) : "?"} · ${fmt_$(dTotal)} · estado: ${String(d.estado).toUpperCase()}\n\n` +
+          (totalCoincide && fechaCoincide
+            ? `Coinciden Nº, fecha y total → es la MISMA factura. Cargarla de nuevo DUPLICA el gasto.\n\n¿Cancelar la carga? (OK = cargar igual)`
+            : `OJO: el total ${totalCoincide ? "coincide" : "NO coincide"} y la fecha ${fechaCoincide ? "coincide" : "NO coincide"}.\n` +
+              `Si NO COINCIDEN total o fecha, revisá el recibo: ¿el Nº que pusiste es realmente el del recibo o te equivocaste tipeando?\n\n` +
+              `¿Cargar igual (es otra factura con el mismo Nº)?`),
         );
         if (!ok) return;
       }

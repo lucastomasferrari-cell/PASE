@@ -138,6 +138,51 @@ BEGIN
       ELSE NULL END
   FROM jsonb_array_elements(p_items) AS i;
 
+  -- ── APRENDIZAJE de alias (Lucas 10-jun: solución general, no parches) ──
+  -- El sistema aprende de las resoluciones del usuario:
+  --   - fila resuelta contra pagos de un proveedor → titular→proveedor
+  --   - fila resuelta con "Crear en Caja" → titular→gasto_directo
+  --     (este titular no es proveedor de facturas: retiros de socios,
+  --      servicios, sindicatos, compras ML, etc.)
+  --   - 'ignorada' y 'bloque_diferencia' NO enseñan (decisión puntual /
+  --     agrupación heurística no confirmada).
+  -- Próximas conciliaciones: el alias gobierna el matching de combos,
+  -- facturas pendientes y bloques — la heurística de tokens queda como
+  -- fallback para titulares nunca vistos.
+  INSERT INTO conciliacion_alias (tenant_id, local_id, titular, tipo, prov_id)
+  SELECT DISTINCT ON (t.titular)
+    v_tenant_id, p_local_id, t.titular, t.tipo, t.prov_id
+  FROM (
+    SELECT
+      fn_extraer_titular(i->>'descripcion') AS titular,
+      CASE WHEN i->>'estado_final' = 'creado' THEN 'gasto_directo' ELSE 'proveedor' END AS tipo,
+      prov.prov_id,
+      i->>'estado_final' AS estado_final
+    FROM jsonb_array_elements(p_items) AS i
+    LEFT JOIN LATERAL (
+      SELECT COALESCE(f.prov_id, r.prov_id) AS prov_id
+      FROM movimientos m
+      LEFT JOIN facturas f ON f.id = m.fact_id
+      LEFT JOIN remitos r ON r.id = m.remito_id_ref
+      WHERE m.id = (ARRAY(SELECT jsonb_array_elements_text(i->'mov_ids')))[1]
+      LIMIT 1
+    ) prov ON TRUE
+  ) t
+  WHERE t.titular IS NOT NULL AND LENGTH(t.titular) >= 4
+    AND (
+      t.estado_final = 'creado'
+      OR (t.prov_id IS NOT NULL
+          AND t.estado_final IN ('verde','matcheado','combo','verde_agrupado','verde_bloque','pagada'))
+    )
+  -- Si el mismo titular aparece como proveedor Y como gasto directo en el
+  -- mismo cierre, gana proveedor (gasto_directo lo excluiría de bloques).
+  ORDER BY t.titular, (t.prov_id IS NULL)
+  ON CONFLICT (tenant_id, local_id, titular) DO UPDATE
+    SET veces = conciliacion_alias.veces + 1,
+        tipo = EXCLUDED.tipo,
+        prov_id = EXCLUDED.prov_id,
+        updated_at = NOW();
+
   RETURN jsonb_build_object('id', v_corrida_id, 'created_at', NOW());
 END;
 $$;
