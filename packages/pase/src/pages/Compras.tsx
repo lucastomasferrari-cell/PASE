@@ -304,7 +304,11 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     // muy viejas se ven con el date range picker manual del usuario.
     const haceUnAnio = toLocalISO(new Date(Date.now() - 365 * 24 * 60 * 60 * 1000));
     let fq = db.from("facturas")
-      .select("id, prov_id, local_id, nro, fecha, venc, neto, iva21, iva105, iibb, total, cat, estado, detalle, pagos, tipo, perc_iva, otros_cargos, descuentos")
+      // imagen_url: path del comprobante en Storage (Lector IA). Se perdió
+      // en la optimización de egress del 28-may (SELECT * → columnas
+      // explícitas) y el modal Ver Factura nunca recibía el dato (bug
+      // Lucas 10-jun). Es un path corto, no pesa.
+      .select("id, prov_id, local_id, nro, fecha, venc, neto, iva21, iva105, iibb, total, cat, estado, detalle, pagos, tipo, perc_iva, otros_cargos, descuentos, imagen_url")
       .gte("fecha", haceUnAnio)
       .order("fecha", { ascending: false })
       .limit(1000);

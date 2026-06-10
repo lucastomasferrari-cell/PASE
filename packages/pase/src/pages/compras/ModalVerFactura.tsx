@@ -70,6 +70,14 @@ export function ModalVerFactura({ factura, onClose, proveedores, locales }: Moda
           ))}
         </div>
       )}
+      {/* Si la factura no tiene comprobante adjunto (cargada a mano sin
+          Lector IA), lo decimos explícito — antes no aparecía nada y
+          parecía un bug (Lucas 10-jun). */}
+      {!factura.imagen_url && (
+        <div style={{ marginTop: 16, fontSize: 11, color: "var(--muted2)" }}>
+          Sin comprobante adjunto (cargada a mano, sin Lector IA).
+        </div>
+      )}
       {factura.imagen_url && (
         <div style={{ marginTop: 16 }}>
           <div style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase", marginBottom: 8 }}>Comprobante</div>
