@@ -420,17 +420,29 @@ BEGIN
 
       IF v_filas_bloque IS NULL OR v_cand_count = 0 THEN CONTINUE; END IF;
 
-      -- movs libres del proveedor
+      -- movs libres del proveedor — SOLO del período + 4 días de margen.
+      -- Fix Lucas 10-jun: un pago del 9/6 entraba al bloque de MAYO
+      -- (ventana vieja ±30d) y distorsionaba la suma ("hay $X cargados
+      -- de más"). Ese pago corresponde a una transferencia de JUNIO que
+      -- va a aparecer en el extracto de junio. Por la regla de tanda
+      -- (los pagos se cargan cerca de la transferencia real), los pagos
+      -- del bloque del mes son: período ± 4 días.
       SELECT SUM(m.importe),
              jsonb_agg(jsonb_build_object('id', m.id, 'fecha', m.fecha, 'importe', m.importe, 'detalle', m.detalle) ORDER BY m.fecha),
-             array_agg(m.id)
-      INTO v_suma_pase, v_movs_bloque, v_ids_bloque
+             array_agg(m.id),
+             COUNT(*)
+      INTO v_suma_pase, v_movs_bloque, v_ids_bloque, v_n
       FROM _ce_mov m
-      WHERE NOT m.usado AND m.prov_id = v_prov.prov_id;
+      WHERE NOT m.usado AND m.prov_id = v_prov.prov_id
+        AND m.fecha BETWEEN p_periodo_desde - 4 AND p_periodo_hasta + 4;
+
+      -- Si el proveedor no tiene NINGÚN pago dentro del período±4d, el
+      -- bloque no aporta nada (las filas quedan rojas → "no cargado").
+      IF COALESCE(v_n, 0) = 0 THEN CONTINUE; END IF;
 
       v_dif := v_suma_ext - COALESCE(v_suma_pase, 0);
 
-      IF ABS(v_dif) <= GREATEST(2, (v_cand_count + COALESCE(v_prov.n_movs, 0))) THEN
+      IF ABS(v_dif) <= GREATEST(2, (v_cand_count + COALESCE(v_n, 0))) THEN
         -- Suma cierra → todo el bloque verde, consume
         UPDATE _ce_mov SET usado = TRUE WHERE id = ANY(v_ids_bloque);
         UPDATE _ce_ext SET
@@ -439,7 +451,7 @@ BEGIN
             'proveedor', v_prov.prov_nombre,
             'n_transferencias', v_cand_count,
             'suma_extracto', v_suma_ext,
-            'n_pagos', v_prov.n_movs,
+            'n_pagos', v_n,
             'suma_pase', v_suma_pase,
             'dif', v_dif,
             'movs', v_movs_bloque
@@ -455,7 +467,7 @@ BEGIN
             'proveedor', v_prov.prov_nombre,
             'n_transferencias', v_cand_count,
             'suma_extracto', v_suma_ext,
-            'n_pagos', v_prov.n_movs,
+            'n_pagos', v_n,
             'suma_pase', v_suma_pase,
             'dif', v_dif,
             'movs', v_movs_bloque
