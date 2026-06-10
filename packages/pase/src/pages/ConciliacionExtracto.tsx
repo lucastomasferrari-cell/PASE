@@ -65,6 +65,15 @@ interface BloqueProveedor {
   suma_pase: number | null;
   dif: number;
   movs: MovEnCombinacion[];
+  // Facturas/remitos PENDIENTES del proveedor — pista para resolver la
+  // diferencia (suelen ser facturas que nadie marcó como pagadas).
+  facturas_pendientes?: Array<{
+    tipo: "factura" | "remito";
+    id: string;
+    nro: string | null;
+    fecha: string;
+    total: number;
+  }>;
 }
 
 // Factura/remito cargado pero NO marcado como pagado, cuyo total coincide
@@ -474,6 +483,56 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     }
   }
 
+  // Marcar como pagada una factura/remito pendiente DESDE UN BLOQUE de
+  // proveedor (caso EL CRIOLLO $555.950 "Vencida"). La fecha del pago es
+  // la de la última transferencia del bloque (la más probable). No marca
+  // la fila como resuelta: hay que re-cruzar para que el bloque recalcule.
+  async function pagarPendienteDeBloque(
+    filas: FilaExtracto[],
+    pend: NonNullable<BloqueProveedor["facturas_pendientes"]>[number],
+  ) {
+    setSavingAccion(true);
+    try {
+      const fechasOrdenadas = filas.map(f => f.fecha).sort();
+      const fechaPago = fechasOrdenadas[fechasOrdenadas.length - 1] ?? periodoHasta;
+      const detalle = `[Concil. ${periodoDesde.slice(0, 7)}] pago dentro de transferencias agrupadas`;
+      if (pend.tipo === "factura") {
+        const { error } = await db.rpc("pagar_factura", {
+          p_factura_id: pend.id,
+          p_monto: pend.total,
+          p_cuenta: "MercadoPago",
+          p_fecha: fechaPago,
+          p_detalle: detalle,
+          p_idempotency_key: crypto.randomUUID(),
+          p_generar_saldo: false,
+          p_cerrar_factura: false,
+        });
+        if (error) { showError(translateRpcError(error)); return; }
+      } else {
+        const { error } = await db.rpc("pagar_remito", {
+          p_remito_id: pend.id,
+          p_monto: pend.total,
+          p_cuenta: "MercadoPago",
+          p_fecha: fechaPago,
+          p_idempotency_key: crypto.randomUUID(),
+        });
+        if (error) { showError(translateRpcError(error)); return; }
+      }
+      // Track del mov generado para conciliarlo al cerrar.
+      try {
+        const col = pend.tipo === "factura" ? "fact_id" : "remito_id_ref";
+        let q = db.from("movimientos").select("id").eq(col, pend.id)
+          .eq("fecha", fechaPago).order("created_at", { ascending: false }).limit(3);
+        q = applyLocalScope(q, user, localActivo);
+        const { data: nuevos } = await q;
+        (nuevos ?? []).forEach(n => movsSesionRef.current.add(n.id as string));
+      } catch { /* best-effort */ }
+      showToast(`${pend.tipo === "factura" ? "Factura" : "Remito"} ${pend.nro ?? ""} marcada como pagada (${fmt_d(fechaPago)}, MercadoPago). Tocá "Cruzar con PASE" de nuevo para recalcular el bloque.`);
+    } finally {
+      setSavingAccion(false);
+    }
+  }
+
   async function ejecutarAnularSobrante() {
     if (!anularSobrante) return;
     if (!motivoAnular.trim()) { showError("Tenés que poner un motivo"); return; }
@@ -824,6 +883,36 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                             <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(m.importe)}</span>
                           </div>
                         ))}
+                        {/* Facturas pendientes del proveedor — la pista para
+                            cerrar la diferencia (caso "no la marcaron como
+                            pagada"). Botón paga con cuenta MP + fecha de la
+                            última transferencia del bloque. */}
+                        {(bloque.facturas_pendientes ?? []).length > 0 && (
+                          <>
+                            <div style={{ color: "#3b82f6", margin: "8px 0 2px", fontWeight: 600 }}>
+                              💡 Facturas de este proveedor SIN marcar como pagadas:
+                            </div>
+                            {(bloque.facturas_pendientes ?? []).map(p => (
+                              <div key={p.id} style={{
+                                display: "flex", justifyContent: "space-between", alignItems: "center",
+                                gap: 8, padding: "3px 0 3px 12px",
+                              }}>
+                                <span>{fmt_d(p.fecha)} · {p.tipo} {p.nro ?? p.id}</span>
+                                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(-Math.abs(Number(p.total)))}</span>
+                                  <button
+                                    className="btn btn-acc btn-sm"
+                                    style={{ padding: "2px 8px", fontSize: 10 }}
+                                    disabled={savingAccion}
+                                    onClick={() => void pagarPendienteDeBloque(filas, p)}
+                                  >
+                                    Marcar pagada
+                                  </button>
+                                </span>
+                              </div>
+                            ))}
+                          </>
+                        )}
                       </div>
                     </details>
                     <div style={{ marginTop: 8 }}>

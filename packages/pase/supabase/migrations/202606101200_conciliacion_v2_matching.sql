@@ -302,7 +302,7 @@ BEGIN
         -- sin límite de 5 facturas (cubre tandas de 6, 7, 10 facturas).
         v_suma := 0;
         FOR i1 IN 1..v_n LOOP v_suma := v_suma + v_amounts[i1]; END LOOP;
-        IF ABS(v_suma - v_fila.monto) <= GREATEST(5, v_n) THEN
+        IF ABS(v_suma - v_fila.monto) <= GREATEST(10, 2 * v_n) THEN
           v_combos := v_combos || jsonb_build_object(
             'proveedor', v_prov.prov_nombre, 'num_movs', v_n,
             'movs', (SELECT jsonb_agg(x) FROM unnest(v_movs_arr) AS x));
@@ -312,28 +312,28 @@ BEGIN
 
         FOR i1 IN 1..v_n LOOP FOR i2 IN (i1+1)..v_n LOOP
           v_suma := v_amounts[i1] + v_amounts[i2];
-          IF ABS(v_suma - v_fila.monto) <= 5 THEN
+          IF ABS(v_suma - v_fila.monto) <= 10 THEN
             v_combos := v_combos || jsonb_build_object('proveedor', v_prov.prov_nombre, 'num_movs', 2,
               'movs', jsonb_build_array(v_movs_arr[i1], v_movs_arr[i2]));
             IF v_combo_ids IS NULL THEN v_combo_ids := ARRAY[v_ids[i1], v_ids[i2]]; END IF;
           END IF;
           IF v_n >= 3 THEN FOR i3 IN (i2+1)..v_n LOOP
             v_suma := v_amounts[i1] + v_amounts[i2] + v_amounts[i3];
-            IF ABS(v_suma - v_fila.monto) <= 5 THEN
+            IF ABS(v_suma - v_fila.monto) <= 10 THEN
               v_combos := v_combos || jsonb_build_object('proveedor', v_prov.prov_nombre, 'num_movs', 3,
                 'movs', jsonb_build_array(v_movs_arr[i1], v_movs_arr[i2], v_movs_arr[i3]));
               IF v_combo_ids IS NULL THEN v_combo_ids := ARRAY[v_ids[i1], v_ids[i2], v_ids[i3]]; END IF;
             END IF;
             IF v_n >= 4 THEN FOR i4 IN (i3+1)..v_n LOOP
               v_suma := v_amounts[i1] + v_amounts[i2] + v_amounts[i3] + v_amounts[i4];
-              IF ABS(v_suma - v_fila.monto) <= 5 THEN
+              IF ABS(v_suma - v_fila.monto) <= 10 THEN
                 v_combos := v_combos || jsonb_build_object('proveedor', v_prov.prov_nombre, 'num_movs', 4,
                   'movs', jsonb_build_array(v_movs_arr[i1], v_movs_arr[i2], v_movs_arr[i3], v_movs_arr[i4]));
                 IF v_combo_ids IS NULL THEN v_combo_ids := ARRAY[v_ids[i1], v_ids[i2], v_ids[i3], v_ids[i4]]; END IF;
               END IF;
               IF v_n >= 5 THEN FOR i5 IN (i4+1)..v_n LOOP
                 v_suma := v_amounts[i1] + v_amounts[i2] + v_amounts[i3] + v_amounts[i4] + v_amounts[i5];
-                IF ABS(v_suma - v_fila.monto) <= 5 THEN
+                IF ABS(v_suma - v_fila.monto) <= 10 THEN
                   v_combos := v_combos || jsonb_build_object('proveedor', v_prov.prov_nombre, 'num_movs', 5,
                     'movs', jsonb_build_array(v_movs_arr[i1], v_movs_arr[i2], v_movs_arr[i3], v_movs_arr[i4], v_movs_arr[i5]));
                   IF v_combo_ids IS NULL THEN v_combo_ids := ARRAY[v_ids[i1], v_ids[i2], v_ids[i3], v_ids[i4], v_ids[i5]]; END IF;
@@ -499,7 +499,35 @@ BEGIN
             'n_pagos', v_n,
             'suma_pase', v_suma_pase,
             'dif', v_dif,
-            'movs', v_movs_bloque
+            'movs', v_movs_bloque,
+            -- Pista clave (Lucas 10-jun caso EL CRIOLLO $555.950 vencida):
+            -- las facturas/remitos PENDIENTES del proveedor. Parte de la
+            -- diferencia suele ser una factura cargada que nadie marcó
+            -- como pagada — mostrarla acá conecta los puntos.
+            'facturas_pendientes', (
+              SELECT COALESCE(jsonb_agg(t.j ORDER BY (t.j->>'fecha')), '[]'::jsonb)
+              FROM (
+                SELECT jsonb_build_object(
+                  'tipo', 'factura', 'id', f.id, 'nro', f.nro,
+                  'fecha', f.fecha, 'total', f.total
+                ) AS j
+                FROM facturas f
+                WHERE f.tenant_id = v_tenant_id AND f.local_id = p_local_id
+                  AND f.prov_id = v_prov.prov_id
+                  AND f.estado = 'pendiente' AND f.total > 0
+                  AND f.fecha <= p_periodo_hasta + 5
+                UNION ALL
+                SELECT jsonb_build_object(
+                  'tipo', 'remito', 'id', r.id, 'nro', r.nro,
+                  'fecha', r.fecha, 'total', r.monto
+                )
+                FROM remitos r
+                WHERE r.tenant_id = v_tenant_id AND r.local_id = p_local_id
+                  AND r.prov_id = v_prov.prov_id
+                  AND r.estado = 'sin_factura' AND r.monto > 0
+                  AND r.fecha <= p_periodo_hasta + 5
+              ) t
+            )
           )
         WHERE idx = ANY(v_filas_bloque);
       END IF;
