@@ -35,6 +35,16 @@ interface IAFacturaResponse {
   percepciones_iibb?: number | string;
   percepciones_iva?: number | string;
   total?: number | string;
+  // Discriminación fiscal AR ampliada (Lucas 10-jun, Libro IVA del contador).
+  iva_27?: number | string;
+  no_gravado?: number | string;
+  exento?: number | string;
+  iibb_caba?: number | string;
+  iibb_ba?: number | string;
+  iibb_otros?: number | string;
+  iibb_otros_jurisdiccion?: string | null;
+  perc_ganancias?: number | string;
+  retencion_suss?: number | string;
   items?: IAFacturaItem[];
   confianza?: Partial<Record<"razon_social" | "nro_factura" | "fecha_emision" | "total" | "neto_gravado", number>>;
   confianza_global?: number;
@@ -68,7 +78,28 @@ export default function LectorFacturasIA({ user, locales, localActivo, onSaved }
   const [resultado,setResultado]=useState<IAFacturaResponse | null>(null);
   const [proveedores,setProveedores]=useState<Proveedor[]>([]);
   const [guardando,setGuardando]=useState(false);
-  const [form,setForm]=useState<{local_id: string|number, prov_id: string, fecha: string, venc: string, nro: string, neto: number|string, iva21: number|string, iva105: number|string, iibb: number|string, total: number|string, cat: string}>({local_id:localActivo||"",prov_id:"",fecha:"",venc:"",nro:"",neto:0,iva21:0,iva105:0,iibb:0,total:0,cat:""});
+  // Form state — incluye discriminación fiscal AR (Lucas 10-jun).
+  // Los campos avanzados van en el panel <details> colapsable; el usuario
+  // los confirma/edita después de leer con IA.
+  const formVacio = {
+    local_id: localActivo || "" as string|number,
+    prov_id: "" as string,
+    fecha: "", venc: "", nro: "",
+    neto: 0 as number|string, iva21: 0 as number|string, iva105: 0 as number|string,
+    iibb: 0 as number|string, perc_iva: 0 as number|string, total: 0 as number|string,
+    cat: "",
+    // discriminación fiscal ampliada
+    iva27: 0 as number|string,
+    no_gravado: 0 as number|string,
+    exento: 0 as number|string,
+    iibb_caba: 0 as number|string,
+    iibb_ba: 0 as number|string,
+    iibb_otros: 0 as number|string,
+    iibb_otros_jurisdiccion: "",
+    perc_ganancias: 0 as number|string,
+    retencion_suss: 0 as number|string,
+  };
+  const [form,setForm]=useState<typeof formVacio>(formVacio);
   // Sync form.local_id con sidebar (bug fix 29-may, cache stale del localActivo).
   // Solo update si el user NO tocó el campo manualmente Y aún no procesó factura.
   useEffect(() => {
@@ -155,8 +186,17 @@ Estructura JSON requerida:
   "neto_gravado": numero_o_0,
   "iva_21": numero_o_0,
   "iva_105": numero_o_0,
-  "percepciones_iibb": numero_o_0,
+  "iva_27": numero_o_0,
+  "no_gravado": numero_o_0,
+  "exento": numero_o_0,
+  "iibb_caba": numero_o_0,
+  "iibb_ba": numero_o_0,
+  "iibb_otros": numero_o_0,
+  "iibb_otros_jurisdiccion": "string o null (ej: 'Córdoba')",
   "percepciones_iva": numero_o_0,
+  "perc_ganancias": numero_o_0,
+  "retencion_suss": numero_o_0,
+  "percepciones_iibb": numero_o_0,
   "total": numero_o_0,
   "items": [{"descripcion": "string", "cantidad": numero, "unidad": "kg|l|u", "precio_unitario": numero, "subtotal": numero}],
   "confianza": {"razon_social": 0-100, "nro_factura": 0-100, "fecha_emision": 0-100, "total": 0-100, "neto_gravado": 0-100},
@@ -164,12 +204,20 @@ Estructura JSON requerida:
   "advertencias": ["string corto"]
 }
 
+REGLAS PARA DISCRIMINAR PERCEPCIONES IIBB (importante para el contador):
+- Si la factura dice "Perc IIBB CABA" o "Perc IIBB Cdad. Bs. As." → iibb_caba.
+- Si dice "Perc IIBB Bs. As." o "Perc IIBB Pcia. Bs. As." (provincia) → iibb_ba.
+- Si dice cualquier otra jurisdicción (Córdoba, Mendoza, Santa Fe, etc) → iibb_otros, y completá iibb_otros_jurisdiccion con el nombre.
+- Si solo dice "Perc IIBB" sin especificar jurisdicción → iibb_otros con jurisdicción null.
+- "percepciones_iibb" debe ser la SUMA de las 3 anteriores (cache).
+
 VALIDACIÓN INTERNA antes de responder:
 - ¿La suma de items.subtotal coincide aproximadamente con neto_gravado? Si no, baja confianza.
-- ¿neto_gravado + iva_21 + iva_105 + percepciones suma aproximadamente al total? Si no, agregá advertencia "totales no cuadran".
+- ¿neto_gravado + no_gravado + exento + iva_21 + iva_105 + iva_27 + percepciones suma aproximadamente al total? Si no, agregá advertencia "totales no cuadran".
 - Si total parece desproporcionadamente grande (>10M para una factura típica), revisá los separadores decimales una vez más antes de responder.
 
-Si la factura está borrosa o no podés leer claramente, bajá confianza_global a <50 y NO inventes números.`}
+Si la factura está borrosa o no podés leer claramente, bajá confianza_global a <50 y NO inventes números.
+Si la factura es simple (solo IVA 21%) y NO ves ninguna percepción/retención/exención adicional, dejá esos campos en 0 — no inventes.`}
             ]
           }]
         })
@@ -250,6 +298,17 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
         if(nombre.length>=10&&razon.includes(nombre.slice(0,10))) return true;
         return false;
       });
+      // IIBB: si la IA dio el desglose por jurisdicción, usar eso. Si solo
+      // dio el total agregado (compat hacia atrás), va a iibb_otros sin
+      // jurisdicción (el usuario re-asigna manual después).
+      const iibbCaba = parseMonto(parsed.iibb_caba);
+      const iibbBa = parseMonto(parsed.iibb_ba);
+      const iibbOtrosIA = parseMonto(parsed.iibb_otros);
+      const iibbAgregado = parseMonto(parsed.percepciones_iibb);
+      const iibbDesgloseSum = iibbCaba + iibbBa + iibbOtrosIA;
+      const iibbOtrosFinal = iibbDesgloseSum > 0
+        ? iibbOtrosIA
+        : iibbAgregado; // fallback: si IA no discriminó, todo va a "otros"
       setForm(f=>({
         ...f,
         prov_id: provMatch ? String(provMatch.id) : "",
@@ -259,9 +318,21 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
         neto:parseMonto(parsed.neto_gravado),
         iva21:parseMonto(parsed.iva_21),
         iva105:parseMonto(parsed.iva_105),
-        iibb:parseMonto(parsed.percepciones_iibb)+parseMonto(parsed.percepciones_iva),
+        // legacy iibb plano = suma para que el total cierre
+        iibb: iibbCaba + iibbBa + iibbOtrosFinal,
+        perc_iva: parseMonto(parsed.percepciones_iva),
         total:parseMonto(parsed.total),
         cat:provMatch?.cat||"",
+        // discriminación fiscal ampliada
+        iva27: parseMonto(parsed.iva_27),
+        no_gravado: parseMonto(parsed.no_gravado),
+        exento: parseMonto(parsed.exento),
+        iibb_caba: iibbCaba,
+        iibb_ba: iibbBa,
+        iibb_otros: iibbOtrosFinal,
+        iibb_otros_jurisdiccion: parsed.iibb_otros_jurisdiccion || "",
+        perc_ganancias: parseMonto(parsed.perc_ganancias),
+        retencion_suss: parseMonto(parsed.retencion_suss),
       }));
     }catch(err){
       const msg = err instanceof Error ? err.message : String(err);
@@ -370,7 +441,30 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
 
       const confGlobal=resultado?.confianza_global??100;
       const estado=confGlobal<70?"revision":"pendiente";
-      const nueva = {...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(String(form.local_id)), neto: parseMonto(form.neto), iva21: parseMonto(form.iva21), iva105: parseMonto(form.iva105), iibb: parseMonto(form.iibb), total: parseMonto(form.total), estado, pagos: [], imagen_url, fecha: form.fecha || null, venc: form.venc || null, tipo: "factura"};
+      // IIBB legacy = cache de las 3 jurisdicciones (compat con queries
+      // que aún leen el campo plano).
+      const iibbCacheTotal =
+        parseMonto(form.iibb_caba) + parseMonto(form.iibb_ba) + parseMonto(form.iibb_otros);
+      const nueva = {
+        ...form, id,
+        prov_id: parseInt(form.prov_id), local_id: parseInt(String(form.local_id)),
+        neto: parseMonto(form.neto),
+        iva21: parseMonto(form.iva21), iva105: parseMonto(form.iva105),
+        iva27: parseMonto(form.iva27),
+        no_gravado: parseMonto(form.no_gravado), exento: parseMonto(form.exento),
+        iibb: iibbCacheTotal,
+        iibb_caba: parseMonto(form.iibb_caba),
+        iibb_ba: parseMonto(form.iibb_ba),
+        iibb_otros: parseMonto(form.iibb_otros),
+        iibb_otros_jurisdiccion: form.iibb_otros_jurisdiccion.trim() || null,
+        perc_iva: parseMonto(form.perc_iva),
+        perc_ganancias: parseMonto(form.perc_ganancias),
+        retencion_suss: parseMonto(form.retencion_suss),
+        total: parseMonto(form.total),
+        estado, pagos: [], imagen_url,
+        fecha: form.fecha || null, venc: form.venc || null,
+        tipo: "factura",
+      };
       const {error:insErr} = await db.rpc("crear_factura_completa", {
         p_factura: nueva,
         p_items: [],
@@ -383,7 +477,7 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
       }
 
       setArchivo(null);setPreview(null);setResultado(null);
-      setForm({local_id:localActivo||"",prov_id:"",fecha:"",venc:"",nro:"",neto:0,iva21:0,iva105:0,iibb:0,total:0,cat:""});
+      setForm({ ...formVacio, local_id: localActivo || "" });
       showToast("Factura cargada correctamente");
       onSaved?.();
     } finally {
@@ -525,13 +619,58 @@ Si la factura está borrosa o no podés leer claramente, bajá confianza_global 
                   <div className="field"><label>Vencimiento</label><input type="date" value={form.venc||""} onChange={e=>setForm({...form,venc:e.target.value})}/></div>
                 </div>
                 <div style={{background:"var(--s2)",padding:12,borderRadius:"var(--r)",marginBottom:12}}>
-                  {[["Neto Gravado","neto","neto_gravado"],["IVA 21%","iva21",null],["IVA 10.5%","iva105",null],["Perc. IIBB","iibb",null]].map(([l,k,confKey])=>(
+                  {[["Neto Gravado","neto","neto_gravado"],["IVA 21%","iva21",null],["IVA 10.5%","iva105",null],["Perc. IVA","perc_iva",null]].map(([l,k,confKey])=>(
                     <div key={k as string} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                       <span style={{fontSize:11,color:"var(--muted2)"}}>{l}</span>
                       <input type="number" step="0.01" value={form[k as keyof typeof form] as string | number} onChange={e=>setForm({...form,[k as string]:e.target.value})}
                         style={{width:120,background:"var(--bg)",border:confKey?campoBorder(confKey as string):"1px solid var(--bd)",color:"var(--txt)",padding:"4px 8px",fontFamily:"'DM Mono',monospace",fontSize:12,borderRadius:"var(--r)",textAlign:"right"}}/>
                     </div>
                   ))}
+
+                  {/* Discriminación fiscal AR — colapsable (Lucas 10-jun).
+                      La IA pre-cargó lo que detectó; el usuario lo corrige
+                      si fuese necesario. Solo se muestra el panel si la IA
+                      detectó al menos uno de estos campos. */}
+                  {(() => {
+                    const tieneExtras =
+                      Number(form.iva27) > 0 || Number(form.no_gravado) > 0 || Number(form.exento) > 0 ||
+                      Number(form.iibb_caba) > 0 || Number(form.iibb_ba) > 0 || Number(form.iibb_otros) > 0 ||
+                      Number(form.perc_ganancias) > 0 || Number(form.retencion_suss) > 0;
+                    return (
+                      <details open={tieneExtras} style={{ margin: "8px 0", padding: "6px 8px", border: "1px solid var(--bd)", borderRadius: "var(--r)" }}>
+                        <summary style={{ cursor: "pointer", fontSize: 11, color: "var(--muted2)", fontWeight: 500 }}>
+                          Discriminación fiscal {tieneExtras ? "✓ IA detectó" : "(opcional)"}
+                        </summary>
+                        <div style={{ marginTop: 8 }}>
+                          {[
+                            ["IVA 27%","iva27"],
+                            ["No gravado","no_gravado"],
+                            ["Exento","exento"],
+                            ["IIBB · CABA","iibb_caba"],
+                            ["IIBB · Bs As","iibb_ba"],
+                            ["IIBB · Otra","iibb_otros"],
+                            ["Perc. Ganancias","perc_ganancias"],
+                            ["Retención SUSS","retencion_suss"],
+                          ].map(([l,k]) => (
+                            <div key={k as string} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                              <span style={{fontSize:11,color:"var(--muted2)"}}>{l}</span>
+                              <input type="number" step="0.01" value={form[k as keyof typeof form] as string | number} onChange={e=>setForm({...form,[k as string]:e.target.value})}
+                                style={{width:120,background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--txt)",padding:"3px 6px",fontFamily:"'DM Mono',monospace",fontSize:11,borderRadius:"var(--r)",textAlign:"right"}}/>
+                            </div>
+                          ))}
+                          {Number(form.iibb_otros) > 0 && (
+                            <div style={{ marginTop: 6 }}>
+                              <input type="text" placeholder="Jurisdicción del IIBB otra (Córdoba, Mendoza…)"
+                                value={form.iibb_otros_jurisdiccion}
+                                onChange={e=>setForm({...form,iibb_otros_jurisdiccion: e.target.value})}
+                                style={{width:"100%",background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--txt)",padding:"3px 6px",fontSize:11,borderRadius:"var(--r)"}}/>
+                            </div>
+                          )}
+                        </div>
+                      </details>
+                    );
+                  })()}
+
                   <div style={{display:"flex",justifyContent:"space-between",borderTop:"1px solid var(--bd)",paddingTop:8}}>
                     <span style={{fontWeight:500}}>TOTAL</span>
                     <input type="number" step="0.01" value={form.total} onChange={e=>setForm({...form,total:e.target.value})}

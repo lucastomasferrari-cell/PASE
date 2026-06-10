@@ -311,14 +311,55 @@ export function ModalCargarFactura({
           <div className="form3">
             <div className="field"><label>IVA 21%</label><CurrencyInput value={form.iva21} onChange={v => setForm({ ...form, iva21: v })} aria-label="IVA 21%" /></div>
             <div className="field"><label>IVA 10.5%</label><CurrencyInput value={form.iva105} onChange={v => setForm({ ...form, iva105: v })} aria-label="IVA 10.5%" /></div>
-            <div className="field"><label>Perc. IIBB</label><CurrencyInput value={form.iibb} onChange={v => setForm({ ...form, iibb: v })} aria-label="Percepción IIBB" /></div>
-          </div>
-          <div className="form3">
             <div className="field"><label>Perc. IVA</label><CurrencyInput value={form.perc_iva} onChange={v => setForm({ ...form, perc_iva: v })} aria-label="Percepción IVA" /></div>
+          </div>
+
+          {/* Discriminación fiscal AR — colapsable (Lucas 10-jun, Libro IVA
+              Compras del contador). Por default va cerrado: la mayoría de
+              las facturas solo usan los campos comunes de arriba. Si la
+              factura tiene IIBB, IVA 27%, no gravado, perc. ganancias, etc.,
+              el usuario abre y completa lo que corresponde. */}
+          <details style={{ marginTop: 10, padding: "8px 10px", border: "1px solid var(--bd)", borderRadius: "var(--r)", background: "var(--s2)" }}>
+            <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--muted2)", fontWeight: 500 }}>
+              Discriminación fiscal (IVA 27% · No grav. · Exento · IIBB por jurisdicción · Perc. Gan. · SUSS)
+            </summary>
+            <div style={{ marginTop: 10, fontSize: 11, color: "var(--muted2)" }}>
+              Completá solo lo que aplique a esta factura. Los campos van al Libro IVA Compras para el contador.
+            </div>
+            <div className="form3" style={{ marginTop: 8 }}>
+              <div className="field"><label>IVA 27%</label><CurrencyInput value={form.iva27} onChange={v => setForm({ ...form, iva27: v })} aria-label="IVA 27%" /></div>
+              <div className="field"><label>No gravado</label><CurrencyInput value={form.no_gravado} onChange={v => setForm({ ...form, no_gravado: v })} aria-label="No gravado" /></div>
+              <div className="field"><label>Exento</label><CurrencyInput value={form.exento} onChange={v => setForm({ ...form, exento: v })} aria-label="Exento" /></div>
+            </div>
+            <div className="form3">
+              <div className="field"><label>Perc. IIBB · CABA</label><CurrencyInput value={form.iibb_caba} onChange={v => setForm({ ...form, iibb_caba: v })} aria-label="IIBB CABA" /></div>
+              <div className="field"><label>Perc. IIBB · Bs As</label><CurrencyInput value={form.iibb_ba} onChange={v => setForm({ ...form, iibb_ba: v })} aria-label="IIBB Bs As" /></div>
+              <div className="field">
+                <label>Perc. IIBB · Otra</label>
+                <CurrencyInput value={form.iibb_otros} onChange={v => setForm({ ...form, iibb_otros: v })} aria-label="IIBB otra jurisdicción" />
+                {form.iibb_otros > 0 && (
+                  <input
+                    type="text"
+                    placeholder="Jurisdicción (Córdoba, Mendoza...)"
+                    value={form.iibb_otros_jurisdiccion}
+                    onChange={e => setForm({ ...form, iibb_otros_jurisdiccion: e.target.value })}
+                    style={{ marginTop: 4, fontSize: 11 }}
+                  />
+                )}
+              </div>
+            </div>
+            <div className="form3">
+              <div className="field"><label>Perc. Ganancias</label><CurrencyInput value={form.perc_ganancias} onChange={v => setForm({ ...form, perc_ganancias: v })} aria-label="Percepción Ganancias" /></div>
+              <div className="field"><label>Retención SUSS</label><CurrencyInput value={form.retencion_suss} onChange={v => setForm({ ...form, retencion_suss: v })} aria-label="Retención SUSS" /></div>
+              <div className="field" />
+            </div>
+          </details>
+
+          <div className="form3" style={{ marginTop: 10 }}>
             <div className="field"><label>Otros Cargos</label><CurrencyInput value={form.otros_cargos} onChange={v => setForm({ ...form, otros_cargos: v })} aria-label="Otros cargos" /></div>
             <div className="field"><label>Descuentos (−)</label><CurrencyInput value={form.descuentos} onChange={v => setForm({ ...form, descuentos: v })} aria-label="Descuentos" /></div>
+            <div className="field"><label>Total calculado</label><input readOnly value={fmt_$(calcTotal())} style={{ color: "var(--acc)", fontFamily: "'Inter',sans-serif", fontWeight: 500 }} /></div>
           </div>
-          <div className="field"><label>Total calculado</label><input readOnly value={fmt_$(calcTotal())} style={{ color: "var(--acc)", fontFamily: "'Inter',sans-serif", fontWeight: 500 }} /></div>
           <div className="field"><label>Descripción</label><input value={form.detalle} onChange={e => setForm({ ...form, detalle: e.target.value })} placeholder="Detalle general..." /></div>
 
           {/* DETALLE DE INSUMOS */}

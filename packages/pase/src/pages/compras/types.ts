@@ -31,13 +31,25 @@ export interface FormFactura {
   neto: number;
   iva21: number;
   iva105: number;
-  iibb: number;
+  iibb: number;        // total IIBB (suma de las 3 jurisdicciones) — cache
   perc_iva: number;
   otros_cargos: number;
   descuentos: number;
   cat: string;
   detalle: string;
   tipo: string;
+  // Discriminación fiscal AR (Lucas 10-jun, Libro IVA Compras del contador).
+  // Defaults a 0 en el form; el panel "Discriminación fiscal" del modal los
+  // muestra colapsados hasta que el usuario los necesite.
+  iva27: number;
+  no_gravado: number;
+  exento: number;
+  iibb_caba: number;
+  iibb_ba: number;
+  iibb_otros: number;
+  iibb_otros_jurisdiccion: string;
+  perc_ganancias: number;
+  retencion_suss: number;
 }
 
 // Forma del state form (cargar remito valorado).

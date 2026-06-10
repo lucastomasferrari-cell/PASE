@@ -72,6 +72,19 @@ export interface Factura {
   perc_iva: number;
   otros_cargos: number;
   descuentos: number;
+  // Discriminación fiscal AR (migración 202606102300 / Lucas 10-jun: el
+  // contador necesita TODO desglosado). Todas opcionales con default 0
+  // — facturas viejas tienen estos en 0 (excepto iibb_otros, backfilleado
+  // desde el iibb legacy plano para que el contador re-asigne después).
+  iva27?: number;
+  no_gravado?: number;
+  exento?: number;
+  iibb_caba?: number;
+  iibb_ba?: number;
+  iibb_otros?: number;
+  iibb_otros_jurisdiccion?: string | null;
+  perc_ganancias?: number;
+  retencion_suss?: number;
   // Path al archivo de comprobante en Supabase Storage (bucket "facturas").
   // Set por LectorFacturasIA al subir, leído por Compras → "Ver factura".
   imagen_url?: string | null;

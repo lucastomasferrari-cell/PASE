@@ -96,7 +96,7 @@ test.describe("Facturas — cargar mutante", () => {
   test("cargar factura manual crea factura + recalcula saldo proveedor", async ({ page }) => {
     await goTo(page, "Compras");
 
-    await page.getByRole("button", { name: "+ Cargar Factura" }).click();
+    await page.getByRole("button", { name: "+ Cargar factura" }).click();
     await expect(page.locator(".overlay")).toBeVisible({ timeout: 5_000 });
 
     const modal = page.locator(".overlay .modal");

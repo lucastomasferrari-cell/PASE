@@ -264,7 +264,17 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const [pagando, setPagando] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const emptyForm: FormFactura = { prov_id: "", local_id: localActivo ? String(localActivo) : "", nro: "", fecha: toISO(today), venc: "", neto: 0, iva21: 0, iva105: 0, iibb: 0, perc_iva: 0, otros_cargos: 0, descuentos: 0, cat: "", detalle: "", tipo: "factura" };
+  const emptyForm: FormFactura = {
+    prov_id: "", local_id: localActivo ? String(localActivo) : "",
+    nro: "", fecha: toISO(today), venc: "",
+    neto: 0, iva21: 0, iva105: 0, iibb: 0,
+    perc_iva: 0, otros_cargos: 0, descuentos: 0,
+    cat: "", detalle: "", tipo: "factura",
+    // Discriminación fiscal AR (Lucas 10-jun) — todos 0 por default.
+    iva27: 0, no_gravado: 0, exento: 0,
+    iibb_caba: 0, iibb_ba: 0, iibb_otros: 0, iibb_otros_jurisdiccion: "",
+    perc_ganancias: 0, retencion_suss: 0,
+  };
   const [form, setForm] = useState<FormFactura>(emptyForm);
   const [items, setItems] = useState<ItemFactura[]>([]);
   // Bug Caja-1: el default cuenta="MercadoPago" pisaba la elección del
@@ -293,9 +303,16 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const visLocs = localesVisibles(user);
   const localesDisp = visLocs === null ? locales : locales.filter((l: Local) => visLocs.includes(l.id));
   // CurrencyInput entrega number directo — no necesita parseMonto.
-  const calcTotal = () =>
-    form.neto + form.iva21 + form.iva105 + form.iibb + form.perc_iva +
-    form.otros_cargos - form.descuentos;
+  // IIBB total = suma de las 3 jurisdicciones discriminadas (CABA + BA +
+  // otros). El campo legacy `form.iibb` queda como cache para compat con
+  // queries históricas — el INSERT lo setea al guardar.
+  const calcTotal = () => {
+    const iibbTotal = form.iibb_caba + form.iibb_ba + form.iibb_otros;
+    return form.neto + form.no_gravado + form.exento +
+      form.iva21 + form.iva105 + form.iva27 +
+      iibbTotal + form.perc_iva + form.perc_ganancias + form.retencion_suss +
+      form.otros_cargos - form.descuentos;
+  };
 
   const load = async () => {
     setLoading(true);
@@ -533,7 +550,17 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       // gasto_comision | gasto_impuesto). Si la cat no está mapeada (libre
       // o legacy), bucket queda null y EERR la trata como CMV.
       const bucket = form.cat ? (categoriaToBucket[form.cat] ?? null) : null;
-      const nueva = { ...form, id, prov_id: parseInt(form.prov_id), local_id: parseInt(form.local_id), total, estado: "pendiente", pagos: [], tipo: form.tipo, fecha: form.fecha || null, venc: form.venc || null, bucket };
+      // iibb legacy = cache de suma de jurisdicciones (compat con queries
+      // viejas que leen ese campo plano).
+      const iibbTotal = form.iibb_caba + form.iibb_ba + form.iibb_otros;
+      const nueva = {
+        ...form, id,
+        prov_id: parseInt(form.prov_id), local_id: parseInt(form.local_id),
+        iibb: iibbTotal,
+        total, estado: "pendiente", pagos: [], tipo: form.tipo,
+        fecha: form.fecha || null, venc: form.venc || null, bucket,
+        iibb_otros_jurisdiccion: form.iibb_otros_jurisdiccion.trim() || null,
+      };
       // Mapeo explícito a columnas de factura_items. materia_prima_id es opcional;
       // si el cajero lo vinculó, dispara trigger SQL que actualiza el precio_actual
       // de esa MP y recalcula el costo del insumo unificado (CMV refactor 15-may).
