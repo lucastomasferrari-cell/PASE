@@ -235,6 +235,11 @@ BEGIN
   END LOOP;
 
   -- ── R3: combos 2..5 por proveedor, ±$5, INCLUYE remitos, consumo ───────
+  -- Insight operativo (Lucas 10-jun): cuando Anto paga N facturas con UNA
+  -- transferencia, las marca como pagadas TODAS JUNTAS, el mismo día o muy
+  -- cerca del día de la transferencia real. Por eso los candidatos del
+  -- combo se filtran a ±4 días de la fecha de la transferencia — acota el
+  -- espacio de búsqueda y elimina combos espurios de fechas lejanas.
   IF p_match_agrupado THEN
     FOR v_fila IN SELECT * FROM _ce_ext WHERE estado = 'rojo_falta' ORDER BY idx LOOP
       v_combos := '[]'::jsonb;
@@ -244,6 +249,7 @@ BEGIN
         SELECT m.prov_id, m.prov_nombre, COUNT(*) AS n
         FROM _ce_mov m
         WHERE NOT m.usado AND m.prov_id IS NOT NULL
+          AND ABS(m.fecha - v_fila.fecha) <= 4
         GROUP BY m.prov_id, m.prov_nombre
         HAVING COUNT(*) >= 2
       LOOP
@@ -255,10 +261,24 @@ BEGIN
         FROM (
           SELECT * FROM _ce_mov m2
           WHERE NOT m2.usado AND m2.prov_id = v_prov.prov_id
-          ORDER BY m2.fecha LIMIT 10
+            AND ABS(m2.fecha - v_fila.fecha) <= 4
+          ORDER BY m2.fecha LIMIT 12
         ) m;
         v_n := COALESCE(array_length(v_movs_arr, 1), 0);
         IF v_n < 2 THEN CONTINUE; END IF;
+
+        -- PASO PREVIO "tanda completa": si TODOS los pagos del proveedor
+        -- en ±4d suman el monto de la transferencia → combo único directo,
+        -- sin límite de 5 facturas (cubre tandas de 6, 7, 10 facturas).
+        v_suma := 0;
+        FOR i1 IN 1..v_n LOOP v_suma := v_suma + v_amounts[i1]; END LOOP;
+        IF ABS(v_suma - v_fila.monto) <= GREATEST(5, v_n) THEN
+          v_combos := v_combos || jsonb_build_object(
+            'proveedor', v_prov.prov_nombre, 'num_movs', v_n,
+            'movs', (SELECT jsonb_agg(x) FROM unnest(v_movs_arr) AS x));
+          IF v_combo_ids IS NULL THEN v_combo_ids := v_ids; END IF;
+          CONTINUE; -- tanda completa encontrada, no hace falta subset-sum
+        END IF;
 
         FOR i1 IN 1..v_n LOOP FOR i2 IN (i1+1)..v_n LOOP
           v_suma := v_amounts[i1] + v_amounts[i2];
