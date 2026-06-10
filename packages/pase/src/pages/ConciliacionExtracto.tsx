@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { translateRpcError } from "../lib/errors";
 import { useToast } from "../hooks/useToast";
@@ -75,6 +75,21 @@ interface Sobrante {
   detalle: string;
 }
 
+// Fila histórica de conciliaciones ya cerradas (de conciliacion_corridas).
+// Solo se usa para mostrar el listado al tope de la pantalla.
+interface CorridaHistorica {
+  id: string;
+  periodo_desde: string;
+  periodo_hasta: string;
+  archivo_nombre: string | null;
+  total_movs: number;
+  verdes: number;
+  amarillos: number;
+  rojos_falta: number;
+  rojos_sobra: number;
+  cerrada_at: string | null;
+}
+
 interface Totales {
   extracto_total: number;
   verdes: number;
@@ -129,6 +144,42 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   const [savingAccion, setSavingAccion] = useState(false);
   // Última corrida persistida (cerrada)
   const [corridaCerrada, setCorridaCerrada] = useState<{ id: string; created_at: string } | null>(null);
+  // Historial de conciliaciones cerradas del local activo. Se carga al
+  // montar la pantalla + al cambiar de local + al cerrar una conciliación
+  // nueva (para que refresque sin recargar página).
+  const [historial, setHistorial] = useState<CorridaHistorica[]>([]);
+  const [historialLoading, setHistorialLoading] = useState(false);
+
+  // ─── Cargar historial de conciliaciones cerradas ─────────────────────────
+  useEffect(() => {
+    if (localActivo == null) {
+      setHistorial([]);
+      return;
+    }
+    let cancelled = false;
+    setHistorialLoading(true);
+    (async () => {
+      const { data, error } = await db
+        .from("conciliacion_corridas")
+        .select("id, periodo_desde, periodo_hasta, archivo_nombre, total_movs, verdes, amarillos, rojos_falta, rojos_sobra, cerrada_at")
+        .eq("local_id", localActivo)
+        .eq("cuenta", "MercadoPago")
+        .not("cerrada_at", "is", null)
+        .order("periodo_desde", { ascending: false })
+        .limit(24);
+      if (cancelled) return;
+      if (error) {
+        console.error("Error cargando historial:", error);
+        setHistorial([]);
+      } else {
+        setHistorial((data ?? []) as CorridaHistorica[]);
+      }
+      setHistorialLoading(false);
+    })();
+    return () => { cancelled = true; };
+    // Se recarga cuando cambia de local O cuando se cierra una nueva corrida
+    // (corridaCerrada.id sirve como token de invalidación).
+  }, [localActivo, corridaCerrada?.id]);
 
   // Si no hay local activo, pedir que elija desde el sidebar.
   if (localActivo == null) {
@@ -372,6 +423,17 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
       <PageHeader title={`Conciliación · MercadoPago · ${localNombre}`} />
 
       {toast && <ToastComponent toast={toast} />}
+
+      {/* Historial de conciliaciones cerradas (visible siempre que no
+          estés en pleno proceso de cruce). Sirve para ver qué meses
+          ya cerraste y si hay gaps. */}
+      {!cruce && (
+        <Historial
+          corridas={historial}
+          loading={historialLoading}
+          localNombre={localNombre}
+        />
+      )}
 
       {/* PASO 1: Cargar archivo */}
       {!extractoMovs.length && (
@@ -809,6 +871,119 @@ function SeccionFilas<T>({
         {filas.map(renderFila)}
       </div>
     </Card>
+  );
+}
+
+// ─── Historial de conciliaciones cerradas ────────────────────────────────
+// Lucas 10-jun: "lo importante es la conciliación en sí, después del resto
+// es tener un registro para ver que todos los meses se haya hecho."
+// Muestra las últimas conciliaciones cerradas del local activo en una
+// tabla compacta + un mini-strip de los últimos 6 meses con verde
+// (cerrado) / rojo (sin cerrar) para detectar gaps visualmente.
+function Historial({
+  corridas,
+  loading,
+  localNombre,
+}: {
+  corridas: CorridaHistorica[];
+  loading: boolean;
+  localNombre: string;
+}) {
+  // Armar los últimos 6 meses (incluyendo el actual) y mapear cuáles tienen
+  // conciliación cerrada. Match por inicio de mes (periodo_desde).
+  const ultimos6Meses = useMemo(() => {
+    const meses: Array<{ key: string; label: string; cerrada: boolean }> = [];
+    const hoy = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleDateString("es-AR", { month: "short", year: "2-digit" });
+      const cerrada = corridas.some(c => c.periodo_desde.startsWith(key));
+      meses.push({ key, label, cerrada });
+    }
+    return meses;
+  }, [corridas]);
+
+  if (loading) {
+    return (
+      <div className="panel" style={{ padding: 14, marginBottom: 12, fontSize: 12, color: "var(--muted2)" }}>
+        Cargando historial…
+      </div>
+    );
+  }
+
+  return (
+    <div className="panel" style={{ padding: 16, marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+        <h3 style={{ margin: 0, fontSize: 14 }}>
+          Conciliaciones cerradas — {localNombre}
+        </h3>
+        <span style={{ fontSize: 11, color: "var(--muted2)" }}>
+          {corridas.length === 0 ? "Sin historial todavía" : `${corridas.length} registradas`}
+        </span>
+      </div>
+
+      {/* Strip últimos 6 meses */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+        {ultimos6Meses.map(m => (
+          <div
+            key={m.key}
+            title={m.cerrada ? "Conciliada" : "Sin conciliar"}
+            style={{
+              flex: 1, padding: "6px 4px", borderRadius: 4,
+              background: m.cerrada ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.10)",
+              border: `1px solid ${m.cerrada ? "rgba(34,197,94,0.4)" : "rgba(239,68,68,0.3)"}`,
+              textAlign: "center", fontSize: 10,
+              color: m.cerrada ? "var(--success)" : "var(--danger)",
+              textTransform: "uppercase", letterSpacing: 0.3, fontWeight: 600,
+            }}
+          >
+            {m.cerrada ? "✓" : "—"} {m.label}
+          </div>
+        ))}
+      </div>
+
+      {/* Tabla con últimas conciliaciones (si hay) */}
+      {corridas.length > 0 && (
+        <details>
+          <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--muted2)" }}>
+            Ver detalle de las últimas {Math.min(corridas.length, 24)} conciliaciones
+          </summary>
+          <div style={{ marginTop: 8, maxHeight: 280, overflowY: "auto", fontSize: 11 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--bd)", color: "var(--muted2)" }}>
+                  <th style={{ textAlign: "left", padding: "5px 4px" }}>Período</th>
+                  <th style={{ textAlign: "right", padding: "5px 4px" }}>Total</th>
+                  <th style={{ textAlign: "right", padding: "5px 4px" }}>🟢</th>
+                  <th style={{ textAlign: "right", padding: "5px 4px" }}>🟡</th>
+                  <th style={{ textAlign: "right", padding: "5px 4px" }}>🔴 falta</th>
+                  <th style={{ textAlign: "right", padding: "5px 4px" }}>🔴 sobra</th>
+                  <th style={{ textAlign: "right", padding: "5px 4px" }}>Cerrada</th>
+                </tr>
+              </thead>
+              <tbody>
+                {corridas.map(c => (
+                  <tr key={c.id} style={{ borderBottom: "1px solid var(--bd)" }}>
+                    <td style={{ padding: "5px 4px" }}>
+                      {fmt_d(c.periodo_desde)} → {fmt_d(c.periodo_hasta)}
+                    </td>
+                    <td style={{ textAlign: "right", padding: "5px 4px", fontVariantNumeric: "tabular-nums" }}>{c.total_movs}</td>
+                    <td style={{ textAlign: "right", padding: "5px 4px", color: "var(--success)", fontVariantNumeric: "tabular-nums" }}>{c.verdes}</td>
+                    <td style={{ textAlign: "right", padding: "5px 4px", color: "var(--warn)", fontVariantNumeric: "tabular-nums" }}>{c.amarillos}</td>
+                    <td style={{ textAlign: "right", padding: "5px 4px", color: "var(--danger)", fontVariantNumeric: "tabular-nums" }}>{c.rojos_falta}</td>
+                    <td style={{ textAlign: "right", padding: "5px 4px", color: "var(--danger)", fontVariantNumeric: "tabular-nums" }}>{c.rojos_sobra}</td>
+                    <td style={{ textAlign: "right", padding: "5px 4px", color: "var(--muted2)" }}>
+                      {c.cerrada_at ? fmt_d(c.cerrada_at.slice(0, 10)) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+    </div>
   );
 }
 
