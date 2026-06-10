@@ -195,6 +195,80 @@ BEGIN
   FROM candidatos
   GROUP BY extracto_idx, extracto_fecha, extracto_monto, extracto_descripcion, extracto_referencia;
 
+  -- ── PASS 1.5: matching por NOMBRE de empleado (sueldos) ─────────────
+  -- Lucas 10-jun: el extracto MP dice "Transferencia enviada GARCIA MARIA
+  -- SOLANA" — y en PASE el pago de sueldo de ese empleado puede tener
+  -- monto un poquito distinto (comisión MP, redondeo). Buscamos empleados
+  -- del local cuyo APELLIDO aparezca como palabra completa en la
+  -- descripción del extracto, y si existe un pago de sueldo de ese
+  -- empleado con monto similar (±$500 o ±0.5%) en ±15d, lo proponemos
+  -- como candidato (queda amarillo si el monto no es exacto).
+  --
+  -- Filtros para evitar falsos positivos:
+  --   - Apellido >= 5 chars (apellidos cortos como "Ruiz" matchean
+  --     demasiados extractos)
+  --   - Match WORD BOUNDARY (\m...\M) — no match "RUIZ" dentro de "CRUIZ"
+  --   - unaccent + LOWER para comparación case+accent insensitive
+  --   - Solo mov vinculado a liquidacion_id (= pago de sueldo confirmado)
+  WITH sueldos_por_nombre AS (
+    SELECT
+      t.extracto_idx,
+      t.extracto_monto,
+      m.id AS mov_id,
+      m.fecha AS mov_fecha,
+      m.importe AS mov_importe,
+      m.detalle AS mov_detalle,
+      e.apellido || ', ' || e.nombre AS emp_full,
+      ABS(m.fecha - t.extracto_fecha)::INTEGER AS dias_diff,
+      m.importe = t.extracto_monto AS monto_exacto
+    FROM _concil_tmp t
+    JOIN rrhh_empleados e
+      ON e.tenant_id = v_tenant_id
+      AND e.local_id = p_local_id
+      AND COALESCE(e.activo, true) = true
+      AND LENGTH(e.apellido) >= 5
+      AND unaccent(LOWER(t.extracto_descripcion)) ~* ('\m' || unaccent(LOWER(e.apellido)) || '\M')
+    JOIN movimientos m
+      ON m.tenant_id = v_tenant_id
+      AND m.local_id = p_local_id
+      AND m.cuenta = 'MercadoPago'
+      AND m.anulado = false
+      AND m.importe < 0
+      AND ABS(m.fecha - t.extracto_fecha) <= 15
+      AND m.liquidacion_id IS NOT NULL
+    JOIN rrhh_liquidaciones l ON l.id = m.liquidacion_id
+    JOIN rrhh_novedades n ON n.id = l.novedad_id AND n.empleado_id = e.id
+    WHERE t.num_candidatos = 0
+      -- Filtramos a montos cercanos: exacto O ±0.5% O ±$500 (lo que sea
+      -- más permisivo). Sino agregar demasiados falsos.
+      AND (
+        m.importe = t.extracto_monto
+        OR ABS(m.importe - t.extracto_monto) <= 500
+        OR ABS(m.importe - t.extracto_monto) <= ABS(t.extracto_monto) * 0.005
+      )
+  ),
+  sueldos_agg AS (
+    SELECT
+      extracto_idx,
+      COUNT(*) AS n,
+      jsonb_agg(jsonb_build_object(
+        'id', mov_id, 'fecha', mov_fecha, 'importe', mov_importe,
+        'detalle', mov_detalle || ' [' || emp_full || ']',
+        'dias_diff', dias_diff,
+        'ya_conciliado', false,
+        'monto_exacto', monto_exacto,
+        'match_por_nombre', true
+      ) ORDER BY monto_exacto DESC, dias_diff ASC) AS candidatos
+    FROM sueldos_por_nombre
+    GROUP BY extracto_idx
+  )
+  UPDATE _concil_tmp t
+    SET
+      num_candidatos = sa.n,
+      candidatos = sa.candidatos
+  FROM sueldos_agg sa
+  WHERE t.extracto_idx = sa.extracto_idx;
+
   -- ── PASS 2: matching agrupado por proveedor (subset-sum) ──────────────
   -- Para cada fila del extracto que NO tuvo match individual, buscar
   -- combinaciones de 2 a 5 movs del MISMO proveedor en ventana ±30d que
