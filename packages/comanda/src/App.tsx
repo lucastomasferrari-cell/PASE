@@ -126,6 +126,7 @@ const MermasOneTap = lazy(() => import('./pages/Inventario/MermasOneTap').then(m
 const ReservasAdmin = lazy(() => import('./pages/Salon/ReservasAdmin').then(m => ({ default: m.ReservasAdmin })));
 const TiendaReservar = lazy(() => import('./pages/Tienda/TiendaReservar').then(m => ({ default: m.TiendaReservar })));
 const CuponesAdmin = lazy(() => import('./pages/Marketing/CuponesAdmin').then(m => ({ default: m.CuponesAdmin })));
+const EventosGiftcardsAdmin = lazy(() => import('./pages/Marketing/EventosGiftcardsAdmin').then(m => ({ default: m.EventosGiftcardsAdmin })));
 const SettingsMesas = lazy(() => import('./pages/Settings/SettingsMesas').then(m => ({ default: m.SettingsMesas })));
 const SettingsMetodosCobro = lazy(() => import('./pages/Settings/SettingsMetodosCobro').then(m => ({ default: m.SettingsMetodosCobro })));
 const SettingsPermisos = lazy(() => import('./pages/Settings/SettingsPermisos').then(m => ({ default: m.SettingsPermisos })));
@@ -325,6 +326,7 @@ export default function App() {
                   <Route path="/marketing" element={<Navigate to="/marketing/promociones" replace />} />
                   <Route path="/marketing/promociones" element={<StubRoute />} />
                   <Route path="/marketing/cupones" element={<CuponesAdmin />} />
+                  <Route path="/marketing/eventos" element={<EventosGiftcardsAdmin />} />
                   <Route path="/marketing/fidelidad" element={<FidelidadLista />} />
                   <Route path="/marketing/campanas" element={<StubRoute />} />
 

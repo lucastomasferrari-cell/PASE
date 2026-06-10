@@ -170,6 +170,7 @@ const ADMIN_NAVIGATION_FULL: NavCategory[] = [
     subItems: [
       { slug: 'promociones', label: 'Promociones y descuentos', href: '/marketing/promociones', badge: 'soon' },
       { slug: 'cupones',     label: 'Cupones',                  href: '/marketing/cupones' },
+      { slug: 'eventos',     label: 'Eventos y Giftcards',      href: '/marketing/eventos' },
       { slug: 'fidelidad',   label: 'Programa de fidelidad',    href: '/marketing/fidelidad',   badge: 'soon' },
       { slug: 'campanas',    label: 'Email/WhatsApp campaigns', href: '/marketing/campanas',    badge: 'soon' },
     ],
