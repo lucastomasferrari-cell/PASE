@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
+import { applyLocalScope } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
@@ -88,7 +89,7 @@ interface FilaExtracto {
   monto: number;
   descripcion: string;
   referencia_externa: string | null;
-  estado: "verde" | "amarillo" | "verde_agrupado" | "amarillo_agrupado" | "verde_bloque" | "bloque_diferencia" | "factura_sin_pagar" | "rojo_falta";
+  estado: "verde" | "amarillo" | "verde_agrupado" | "amarillo_agrupado" | "verde_bloque" | "bloque_diferencia" | "factura_sin_pagar" | "ya_conciliada" | "rojo_falta";
   num_candidatos: number;
   candidatos: CandidatoPase[];
   combinaciones: Combinacion[];
@@ -128,6 +129,7 @@ interface Totales {
   verdes_bloque: number;
   bloques_diferencia: number;
   facturas_sin_pagar: number;
+  ya_conciliadas: number;
   rojos_falta: number;
   rojos_sobra: number;
 }
@@ -317,6 +319,10 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     setResueltos(p => ({ ...p, [`ext:${idx}`]: `combo:${comboIdx}` }));
   }
 
+  // Movimientos creados/pagados durante ESTA sesión de conciliación.
+  // Se acumulan para marcarlos como conciliados al cerrar (tag invisible).
+  const movsSesionRef = useRef<Set<string>>(new Set());
+
   // Crea UN movimiento en Caja a partir de una fila del extracto.
   // Devuelve true si se creó OK. Reusada por el modal individual y el lote.
   async function crearMovimientoDeFila(fila: FilaExtracto): Promise<boolean> {
@@ -338,6 +344,20 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
       showError(`${fila.descripcion.slice(0, 40)}: ${translateRpcError(error)}`);
       return false;
     }
+    // Recuperar el id del mov recién creado para conciliarlo al cerrar.
+    // crear_movimiento_caja no retorna el id — lookup por campos únicos.
+    try {
+      let q = db.from("movimientos")
+        .select("id")
+        .eq("cuenta", "MercadoPago")
+        .eq("importe", fila.monto)
+        .eq("detalle", detalle)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      q = applyLocalScope(q, user, localActivo);
+      const { data: nuevo } = await q;
+      if (nuevo && nuevo.length > 0) movsSesionRef.current.add(nuevo[0]!.id as string);
+    } catch { /* tracking best-effort, no bloquea */ }
     setResueltos(p => ({ ...p, [`ext:${fila.idx}`]: "creado" }));
     return true;
   }
@@ -431,6 +451,19 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
           if (error) { showError(`Remito ${item.nro ?? item.id}: ${translateRpcError(error)}`); continue; }
         }
         pagadas++;
+        // Recuperar los movs generados por el pago para conciliarlos al cerrar.
+        try {
+          const col = item.tipo === "factura" ? "fact_id" : "remito_id_ref";
+          let q = db.from("movimientos")
+            .select("id")
+            .eq(col, item.id)
+            .eq("fecha", fila.fecha)
+            .order("created_at", { ascending: false })
+            .limit(3);
+          q = applyLocalScope(q, user, localActivo);
+          const { data: nuevos } = await q;
+          (nuevos ?? []).forEach(n => movsSesionRef.current.add(n.id as string));
+        } catch { /* tracking best-effort */ }
       }
       if (pagadas > 0) {
         setResueltos(p => ({ ...p, [`ext:${fila.idx}`]: "pagada" }));
@@ -479,6 +512,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
       else if (fila.estado === "verde_bloque") verdesBloque++;
       else if (fila.estado === "bloque_diferencia") bloquesDif++;
       else if (fila.estado === "factura_sin_pagar") facturasSinPagar++;
+      else if (fila.estado === "ya_conciliada") resueltos_count++; // conciliada en cierre anterior
       else if (fila.estado === "rojo_falta") rojos_falta++;
     }
     for (const sob of cruce.sobrantes) {
@@ -532,6 +566,10 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   }
 
   // ─── Cerrar conciliación ─────────────────────────────────────────────────
+  // Junta los movimientos que quedaron conciliados en esta sesión (verdes
+  // automáticos, amarillos resueltos, combos, bloques, creados y pagados)
+  // y los marca con el "tag invisible" via fn_cerrar_conciliacion. A partir
+  // de ahí no vuelven a aparecer en cruces futuros.
   async function cerrarConciliacion() {
     if (!cruce || !stats) return;
     if (stats.total_pendientes > 0) {
@@ -540,28 +578,69 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     }
     setSavingAccion(true);
     try {
-      // eslint-disable-next-line pase-local/no-direct-financiera-write -- C4: conciliacion_corridas NO es tabla financiera, es metadata histórica del cierre. No mueve plata.
-      const { data, error } = await db.from("conciliacion_corridas").insert({
-        local_id: localActivo,
-        cuenta: "MercadoPago",
-        periodo_desde: periodoDesde,
-        periodo_hasta: periodoHasta,
-        archivo_nombre: archivoNombre,
-        total_movs: cruce.totales.extracto_total,
-        verdes: cruce.totales.verdes,
-        amarillos: cruce.totales.amarillos,
-        rojos_falta: cruce.totales.rojos_falta,
-        rojos_sobra: cruce.totales.rojos_sobra,
-        saldo_inicial_extracto: resumenExtracto?.initial_balance ?? null,
-        saldo_final_extracto: resumenExtracto?.final_balance ?? null,
-        cerrada_at: new Date().toISOString(),
-        cerrada_por: user?.id,
-        created_by: user?.id,
-        tenant_id: (user as { tenant_id?: string }).tenant_id,
-      }).select("id, created_at").single();
+      // 1. Recolectar movs conciliados + estado final por fila del extracto
+      const movIds = new Set<string>(movsSesionRef.current);
+      const items: Array<{
+        fecha: string; monto: number; descripcion: string;
+        referencia_externa: string | null; estado_final: string; mov_ids: string[];
+      }> = [];
+
+      for (const fila of cruce.extracto) {
+        const r = resueltos[`ext:${fila.idx}`];
+        const filaMovs: string[] = [];
+        let estadoFinal: string = fila.estado;
+
+        if (r === "ignorar") estadoFinal = "ignorada";
+        else if (r === "creado") estadoFinal = "creado";
+        else if (r === "pagada") estadoFinal = "pagada";
+        else if (r && r.startsWith("matcheado:")) {
+          estadoFinal = "matcheado";
+          filaMovs.push(r.slice("matcheado:".length));
+        } else if (r && r.startsWith("combo:")) {
+          estadoFinal = "combo";
+          const combo = fila.combinaciones[Number(r.slice("combo:".length))];
+          combo?.movs.forEach(m => filaMovs.push(m.id));
+        } else if (fila.estado === "verde" && fila.candidatos.length === 1) {
+          filaMovs.push(fila.candidatos[0]!.id);
+        } else if (fila.estado === "verde_agrupado" && fila.combinaciones.length === 1) {
+          fila.combinaciones[0]!.movs.forEach(m => filaMovs.push(m.id));
+        } else if ((fila.estado === "verde_bloque" || fila.estado === "bloque_diferencia") && fila.bloque) {
+          // Bloques (verdes Y con diferencia): los pagos del bloque
+          // pertenecen a las transferencias del mes — quedan conciliados.
+          (fila.bloque.movs ?? []).forEach(m => filaMovs.push(m.id));
+        }
+        filaMovs.forEach(id => movIds.add(id));
+        items.push({
+          fecha: fila.fecha,
+          monto: fila.monto,
+          descripcion: fila.descripcion,
+          referencia_externa: fila.referencia_externa,
+          estado_final: estadoFinal,
+          mov_ids: filaMovs,
+        });
+      }
+
+      // 2. Cerrar atómicamente: corrida + tag en movimientos + items
+      const { data, error } = await db.rpc("fn_cerrar_conciliacion", {
+        p_local_id: localActivo,
+        p_periodo_desde: periodoDesde,
+        p_periodo_hasta: periodoHasta,
+        p_archivo_nombre: archivoNombre,
+        p_totales: {
+          total_movs: cruce.totales.extracto_total,
+          verdes: cruce.totales.verdes,
+          amarillos: cruce.totales.amarillos,
+          rojos_falta: cruce.totales.rojos_falta,
+          rojos_sobra: cruce.totales.rojos_sobra,
+        },
+        p_saldo_inicial: resumenExtracto?.initial_balance ?? null,
+        p_saldo_final: resumenExtracto?.final_balance ?? null,
+        p_movs_conciliados: [...movIds],
+        p_items: items,
+      });
       if (error) { showError(translateRpcError(error)); return; }
       setCorridaCerrada(data as { id: string; created_at: string });
-      showToast("Conciliación cerrada y registrada");
+      showToast("Conciliación cerrada — los movimientos quedaron marcados como conciliados");
     } finally {
       setSavingAccion(false);
     }
@@ -821,6 +900,31 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
               </FilaCard>
             )}
           />
+
+          {/* Transferencias ya conciliadas en cierres anteriores (tag invisible).
+              Informativo — pasa cuando se re-sube un archivo ya procesado o
+              un extracto que pisa un período ya cerrado. */}
+          {cruce.extracto.some(f => f.estado === "ya_conciliada") && (
+            <Card>
+              <details>
+                <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--muted2)" }}>
+                  ✓ {cruce.extracto.filter(f => f.estado === "ya_conciliada").length} transferencias
+                  ya conciliadas en cierres anteriores (no requieren acción)
+                </summary>
+                <div style={{ marginTop: 8, maxHeight: 280, overflowY: "auto", fontSize: 12 }}>
+                  {cruce.extracto.filter(f => f.estado === "ya_conciliada").map(f => (
+                    <div key={f.idx} style={{
+                      display: "flex", justifyContent: "space-between",
+                      padding: "5px 0", borderBottom: "1px solid var(--bd)", opacity: 0.7,
+                    }}>
+                      <span>{fmt_d(f.fecha)} · {f.descripcion.slice(0, 55)}</span>
+                      <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(f.monto)}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </Card>
+          )}
 
           {/* 🔵 FACTURAS CARGADAS PERO SIN MARCAR COMO PAGADAS */}
           <SeccionFilas

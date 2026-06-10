@@ -247,6 +247,70 @@ test.describe("Conciliación extracto MP — fn_cruzar_extracto_mp mutante", () 
     expect(res.extracto[0]!.num_candidatos).toBe(0);
   });
 
+  test("tag conciliado: mov con conciliado_corrida_id NO aparece (ni candidato ni sobrante)", async () => {
+    const MONTO_TAG = -76543.21;
+    // Crear mov + marcarlo como conciliado a mano (simula cierre previo)
+    const { error: cErr } = await db.rpc("crear_movimiento_caja", {
+      p_fecha: "2099-04-18",
+      p_cuenta: "MercadoPago",
+      p_tipo: "Egreso Manual",
+      p_cat: null,
+      p_importe: MONTO_TAG,
+      p_detalle: "TEST-CONCIL-TAG",
+      p_local_id: localId,
+    });
+    if (cErr) throw new Error(`No se pudo crear mov: ${cErr.message}`);
+    const { data: movs } = await db.from("movimientos")
+      .select("id").eq("local_id", localId).eq("detalle", "TEST-CONCIL-TAG").limit(1);
+    expect(movs && movs.length).toBe(1);
+    const movId = movs![0]!.id as string;
+    movIdsCreated.push(movId);
+
+    // Necesitamos una corrida para el FK. Insertamos una de prueba.
+    const { data: tenantRow } = await db.from("locales").select("tenant_id").eq("id", localId).single();
+    const { data: corrida, error: corrErr } = await db.from("conciliacion_corridas").insert({
+      tenant_id: tenantRow!.tenant_id, local_id: localId, cuenta: "MercadoPago",
+      periodo_desde: "2099-04-01", periodo_hasta: "2099-04-30",
+      archivo_nombre: "test-tag.xlsx", total_movs: 1,
+      cerrada_at: new Date().toISOString(),
+    }).select("id").single();
+    if (corrErr) throw new Error(`No se pudo crear corrida: ${corrErr.message}`);
+
+    // eslint-disable-next-line pase-local/no-direct-financiera-write -- test: simular cierre previo
+    await db.from("movimientos").update({ conciliado_corrida_id: corrida!.id }).eq("id", movId);
+
+    try {
+      // Extracto con el monto exacto del mov conciliado → NO debe matchear
+      // (el mov está taggeado) → rojo_falta. Y tampoco debe aparecer en
+      // sobrantes (extracto vacío del período).
+      const { data, error } = await db.rpc("fn_cruzar_extracto_mp", {
+        p_local_id: localId,
+        p_periodo_desde: PERIODO_DESDE,
+        p_periodo_hasta: PERIODO_HASTA,
+        p_movs_extracto: [
+          { fecha: "2099-04-18", monto: MONTO_TAG, descripcion: "test tag", referencia_externa: null },
+        ],
+        p_solo_egresos: true,
+        p_match_agrupado: true,
+      });
+      if (error) throw new Error(`RPC falló: ${error.message}`);
+      const res = data as {
+        extracto: Array<{ estado: string; num_candidatos: number }>;
+        sobrantes: Array<{ id: string }>;
+      };
+      expect(res.extracto[0]!.estado).toBe("rojo_falta");
+      expect(res.extracto[0]!.num_candidatos).toBe(0);
+      const enSobrantes = res.sobrantes.find(s => s.id === movId);
+      expect(enSobrantes).toBeUndefined();
+    } finally {
+      // cleanup corrida (el mov se limpia en afterAll; quitar tag primero
+      // para que el delete del mov no choque con FK)
+      // eslint-disable-next-line pase-local/no-direct-financiera-write -- cleanup test
+      await db.from("movimientos").update({ conciliado_corrida_id: null }).eq("id", movId);
+      await db.from("conciliacion_corridas").delete().eq("id", corrida!.id);
+    }
+  });
+
   test("ingresos ignorados: extracto con monto>0 NO genera filas + ingresos PASE NO sobran", async () => {
     // Lucas 10-jun: el módulo solo concilia egresos. Los ingresos del
     // extracto (liquidaciones, rendimientos, transferencias recibidas)

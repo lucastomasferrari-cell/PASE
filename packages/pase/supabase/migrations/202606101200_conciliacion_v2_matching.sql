@@ -119,6 +119,32 @@ BEGIN
 
   SELECT COUNT(*) INTO v_ext_count FROM _ce_ext;
 
+  -- ── PASS 0: filas YA CONCILIADAS en cierres anteriores ─────────────────
+  -- (Lucas 10-jun: el "tag invisible"). Si la transferencia ya quedó
+  -- registrada en una corrida cerrada (match por referencia MP, o por
+  -- fecha+monto+descripción), no se vuelve a procesar. Esto permite
+  -- re-subir el mismo archivo sin que todo aparezca rojo, y elimina la
+  -- dependencia de ventanas de tiempo entre meses.
+  -- Las filas que quedaron SIN resolver en el cierre anterior (rojas,
+  -- amarillas, bloques con diferencia) SÍ se vuelven a ofrecer.
+  UPDATE _ce_ext e SET estado = 'ya_conciliada'
+  WHERE EXISTS (
+    SELECT 1
+    FROM conciliacion_extracto_items i
+    JOIN conciliacion_corridas c ON c.id = i.corrida_id
+    WHERE i.tenant_id = v_tenant_id
+      AND i.local_id = p_local_id
+      AND c.cuenta = 'MercadoPago'
+      AND c.cerrada_at IS NOT NULL
+      AND i.estado_final NOT IN ('rojo_falta','amarillo','amarillo_agrupado','bloque_diferencia')
+      AND (
+        (e.referencia IS NOT NULL AND i.referencia_externa IS NOT NULL
+         AND i.referencia_externa = e.referencia)
+        OR (i.fecha = e.fecha AND i.monto = e.monto
+            AND COALESCE(i.descripcion, '') = e.descripcion)
+      )
+  );
+
   -- ── Movs de PASE (egresos MP del local, ventana amplia ±30d) ───────────
   -- prov viene de factura O remito. emp_apellido si es pago de sueldo.
   CREATE TEMP TABLE _ce_mov AS
@@ -142,6 +168,9 @@ BEGIN
     AND m.local_id = p_local_id
     AND m.cuenta = 'MercadoPago'
     AND m.anulado = false
+    -- Tag invisible (Lucas 10-jun): lo ya conciliado en corridas
+    -- anteriores no entra nunca más (ni candidato ni sobrante).
+    AND m.conciliado_corrida_id IS NULL
     AND m.fecha BETWEEN v_vent_agr_desde AND v_vent_agr_hasta
     AND (NOT p_solo_egresos OR m.importe < 0);
 
@@ -347,14 +376,14 @@ BEGIN
       WHERE f.tenant_id = v_tenant_id AND f.local_id = p_local_id
         AND f.estado = 'pendiente' AND f.total > 0
         AND ABS(f.total - ABS(v_fila.monto)) <= 1
-        AND f.fecha BETWEEN v_fila.fecha - 60 AND v_fila.fecha + 5
+        AND f.fecha BETWEEN v_fila.fecha - 180 AND v_fila.fecha + 5
       UNION ALL
       SELECT 'remito', r.id, r.nro, p.nombre, r.fecha, r.monto
       FROM remitos r LEFT JOIN proveedores p ON p.id = r.prov_id
       WHERE r.tenant_id = v_tenant_id AND r.local_id = p_local_id
         AND r.estado = 'sin_factura' AND r.monto > 0
         AND ABS(r.monto - ABS(v_fila.monto)) <= 1
-        AND r.fecha BETWEEN v_fila.fecha - 60 AND v_fila.fecha + 5
+        AND r.fecha BETWEEN v_fila.fecha - 180 AND v_fila.fecha + 5
     ) t;
     IF v_cand_count >= 1 THEN
       UPDATE _ce_ext SET estado = 'factura_sin_pagar', facturas_pend = v_cands
@@ -377,7 +406,7 @@ BEGIN
       FROM facturas f LEFT JOIN proveedores p ON p.id = f.prov_id
       WHERE f.tenant_id = v_tenant_id AND f.local_id = p_local_id
         AND f.estado = 'pendiente' AND f.total > 0
-        AND f.fecha BETWEEN v_fila.fecha - 60 AND v_fila.fecha + 5
+        AND f.fecha BETWEEN v_fila.fecha - 180 AND v_fila.fecha + 5
       GROUP BY f.prov_id, p.nombre
       HAVING COUNT(*) >= 2
          AND ABS(SUM(f.total) - ABS(v_fila.monto)) <= GREATEST(2, COUNT(*))
@@ -509,6 +538,7 @@ BEGIN
       'verdes_bloque',       (SELECT COUNT(*) FROM _ce_ext WHERE estado = 'verde_bloque'),
       'bloques_diferencia',  (SELECT COUNT(*) FROM _ce_ext WHERE estado = 'bloque_diferencia'),
       'facturas_sin_pagar',  (SELECT COUNT(*) FROM _ce_ext WHERE estado = 'factura_sin_pagar'),
+      'ya_conciliadas',      (SELECT COUNT(*) FROM _ce_ext WHERE estado = 'ya_conciliada'),
       'rojos_falta',         (SELECT COUNT(*) FROM _ce_ext WHERE estado = 'rojo_falta'),
       'rojos_sobra',         (SELECT COUNT(*) FROM _ce_mov m WHERE NOT m.usado
                                AND m.fecha BETWEEN p_periodo_desde AND p_periodo_hasta)
