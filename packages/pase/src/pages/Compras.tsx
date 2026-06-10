@@ -49,6 +49,9 @@ const IconX = (
 const IconLink = (
   <svg width="13" height="13" viewBox="0 0 16 16" {...iconStroke}><path d="M7 5a3 3 0 0 0 0 6h2"/><path d="M9 11a3 3 0 0 0 0-6H7"/></svg>
 );
+const IconEdit = (
+  <svg width="13" height="13" viewBox="0 0 16 16" {...iconStroke}><path d="M12 2l2 2-9 9H3v-2z"/><path d="M11 3l2 2"/></svg>
+);
 
 // Wrapper común para botones icon-only: 26x26, radius 6, hover bg-soft.
 function IconBtn(props: { title: string; onClick: () => void; tone?: "default" | "success" | "danger"; disabled?: boolean; children: React.ReactNode }) {
@@ -263,6 +266,13 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const [loading, setLoading] = useState(true);
   const [pagando, setPagando] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Edición de factura (Lucas 10-jun: "en compras capaz que también, con
+  // los parámetros correspondientes"). Cuando NO es null, el modal de
+  // cargar opera en "modo edición" y al guardar llama editar_factura en
+  // vez de crear_factura_completa.
+  const [editandoFactura, setEditandoFactura] = useState<Factura | null>(null);
+  const [editandoMotivo, setEditandoMotivo] = useState("");
+  const [idempKeyEditFact, setIdempKeyEditFact] = useState<string>(() => crypto.randomUUID());
 
   const emptyForm: FormFactura = {
     prov_id: "", local_id: localActivo ? String(localActivo) : "",
@@ -574,6 +584,43 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
             materia_prima_id: it.materia_prima_id ?? null,
           }))
         : [];
+      // Modo edición (Lucas 10-jun): si hay una factura en editandoFactura,
+      // llamamos editar_factura RPC en vez de crear_factura_completa.
+      if (editandoFactura) {
+        const motivo = editandoMotivo.trim();
+        if (!motivo) { showError("Necesitás justificar la edición."); return; }
+        const { error: editErr } = await db.rpc("editar_factura", {
+          p_factura_id: editandoFactura.id,
+          p_motivo: motivo,
+          p_nro: form.nro,
+          p_fecha: form.fecha || null,
+          p_venc: form.venc || null,
+          p_cat: form.cat || null,
+          p_detalle: form.detalle || null,
+          p_neto: form.neto,
+          p_iva21: form.iva21,
+          p_iva105: form.iva105,
+          p_iva27: form.iva27,
+          p_no_gravado: form.no_gravado,
+          p_exento: form.exento,
+          p_iibb_caba: form.iibb_caba,
+          p_iibb_ba: form.iibb_ba,
+          p_iibb_otros: form.iibb_otros,
+          p_iibb_otros_jurisdiccion: form.iibb_otros_jurisdiccion.trim() || null,
+          p_perc_iva: form.perc_iva,
+          p_perc_ganancias: form.perc_ganancias,
+          p_retencion_suss: form.retencion_suss,
+          p_otros_cargos: form.otros_cargos,
+          p_descuentos: form.descuentos,
+          p_idempotency_key: idempKeyEditFact,
+        });
+        if (editErr) throw new Error("Error editando factura: " + (editErr.message || editErr));
+        setModal(false); setForm(emptyForm); setItems([]);
+        setEditandoFactura(null); setEditandoMotivo("");
+        setIdempKeyEditFact(crypto.randomUUID());
+        load();
+        return;
+      }
       // RPC atómica (deuda C4-F12 cerrada): INSERT factura + INSERT items en
       // una sola TX con idempotency key. Antes podía quedar factura sin items
       // si el segundo INSERT fallaba.
@@ -592,6 +639,43 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Lucas 10-jun: abre el modal de cargar factura en modo edición —
+  // pre-llena form con los valores de la factura, marca editandoFactura,
+  // el guardar despacha a editar_factura en vez de crear_factura_completa.
+  const abrirEditarFactura = (f: Factura) => {
+    setEditandoFactura(f);
+    setEditandoMotivo("");
+    setIdempKeyEditFact(crypto.randomUUID());
+    setForm({
+      prov_id: String(f.prov_id),
+      local_id: String(f.local_id),
+      nro: f.nro || "",
+      fecha: f.fecha ? toLocalISO(new Date(f.fecha)) : toISO(today),
+      venc: f.venc ? toLocalISO(new Date(f.venc)) : "",
+      neto: Number(f.neto) || 0,
+      iva21: Number(f.iva21) || 0,
+      iva105: Number(f.iva105) || 0,
+      iibb: Number(f.iibb) || 0,
+      perc_iva: Number(f.perc_iva) || 0,
+      otros_cargos: Number(f.otros_cargos) || 0,
+      descuentos: Number(f.descuentos) || 0,
+      cat: f.cat || "",
+      detalle: f.detalle || "",
+      tipo: f.tipo || "factura",
+      iva27: Number(f.iva27 ?? 0),
+      no_gravado: Number(f.no_gravado ?? 0),
+      exento: Number(f.exento ?? 0),
+      iibb_caba: Number(f.iibb_caba ?? 0),
+      iibb_ba: Number(f.iibb_ba ?? 0),
+      iibb_otros: Number(f.iibb_otros ?? 0),
+      iibb_otros_jurisdiccion: f.iibb_otros_jurisdiccion ?? "",
+      perc_ganancias: Number(f.perc_ganancias ?? 0),
+      retencion_suss: Number(f.retencion_suss ?? 0),
+    });
+    setItems([]);
+    setModal(true);
   };
 
   const pagar = async () => {
@@ -1224,6 +1308,11 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                   <td>
                     <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
                       <IconBtn title="Ver detalle" onClick={() => setVerModal(f)}>{IconEye}</IconBtn>
+                      {/* Editar (Lucas 10-jun): solo si está pendiente/revisión
+                          — la RPC editar_factura rechaza pagadas/anuladas. */}
+                      {f.estado !== "pagada" && f.estado !== "anulada" && (
+                        <IconBtn title="Editar" onClick={() => abrirEditarFactura(f)}>{IconEdit}</IconBtn>
+                      )}
                       {!isNC && f.estado !== "pagada" && (
                         <IconBtn title="Registrar pago" tone="success" onClick={() => { setPagarModal(f); setPagoForm({ cuenta: "", monto: Number(f.total) || 0, fecha: toISO(today) }); setIdempKeyPagarFac(crypto.randomUUID()); }}>{IconPay}</IconBtn>
                       )}
@@ -1251,9 +1340,14 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
         onSaved={() => { load(); setLectorModal(false); }}
       />
 
-      {/* MODAL CARGAR FACTURA */}
+      {/* MODAL CARGAR / EDITAR FACTURA. En modo edición pasamos también
+          editandoFactura y editandoMotivo para que el modal muestre el
+          input de justificativo + título distinto. */}
       <ModalCargarFactura
-        abierto={modal} onClose={() => setModal(false)}
+        abierto={modal} onClose={() => { setModal(false); setEditandoFactura(null); setEditandoMotivo(""); }}
+        editandoFactura={editandoFactura}
+        editandoMotivo={editandoMotivo}
+        setEditandoMotivo={setEditandoMotivo}
         user={user}
         form={form} setForm={setForm}
         proveedores={proveedores} localesDisp={localesDisp} localActivo={localActivo}

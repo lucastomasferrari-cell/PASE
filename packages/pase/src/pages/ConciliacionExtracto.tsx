@@ -6,6 +6,7 @@ import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import { PageHeader, PageContainer, EmptyState, Modal } from "../components/ui";
 import { fmt_$, fmt_d } from "@pase/shared/utils";
+import { useCategorias } from "../lib/useCategorias";
 import {
   parseExtractoMP,
   parseExtractoMpExcel,
@@ -183,6 +184,13 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   const [motivoAnular, setMotivoAnular] = useState<string>("");
   // Estado temporal para confirmar creación de mov faltante
   const [crearFaltante, setCrearFaltante] = useState<FilaExtracto | null>(null);
+  // Tipo y categoría para el mov a crear desde el modal. Se setean al abrirlo
+  // (Lucas 10-jun: "no te pide poner ni tipo ni categoria como corresponde"
+  // — antes los mov creados quedaban con tipo="Egreso Manual"/null cat,
+  // descuadrando el EERR).
+  const [crearTipo, setCrearTipo] = useState<string>("");
+  const [crearCat, setCrearCat] = useState<string>("");
+  const { GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS, CATEGORIAS_COMPRA, CATEGORIAS_INGRESO } = useCategorias();
   // Saving flags
   const [savingAccion, setSavingAccion] = useState(false);
   // Última corrida persistida (cerrada)
@@ -192,6 +200,69 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   // nueva (para que refresque sin recargar página).
   const [historial, setHistorial] = useState<CorridaHistorica[]>([]);
   const [historialLoading, setHistorialLoading] = useState(false);
+
+  // ─── BORRADOR persistente en localStorage (Lucas 10-jun) ─────────────────
+  // "se me cerro varias veces y tuve que empezar de 0, estaria bueno que se
+  // pueda quedar en borrador". Serialize el estado crítico por local —
+  // si recargás o cerrás la pestaña, al volver te aparece el cruce en el
+  // punto donde lo dejaste.
+  const BORRADOR_KEY = localActivo != null ? `pase_concil_borrador_local_${localActivo}` : "";
+
+  // Restaurar al montar / cambiar de local
+  useEffect(() => {
+    if (!BORRADOR_KEY) return;
+    try {
+      const raw = localStorage.getItem(BORRADOR_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as {
+        archivoNombre?: string;
+        extractoMovs?: ExtractoMovimiento[];
+        periodoDesde?: string;
+        periodoHasta?: string;
+        resumenExtracto?: {
+          initial_balance: number; credits: number; debits: number; final_balance: number;
+        } | null;
+        cruce?: CruceResultado | null;
+        resueltos?: Record<string, string>;
+      };
+      if (draft.archivoNombre) setArchivoNombre(draft.archivoNombre);
+      if (draft.extractoMovs) setExtractoMovs(draft.extractoMovs);
+      if (draft.periodoDesde) setPeriodoDesde(draft.periodoDesde);
+      if (draft.periodoHasta) setPeriodoHasta(draft.periodoHasta);
+      if (draft.resumenExtracto !== undefined) setResumenExtracto(draft.resumenExtracto);
+      if (draft.cruce) setCruce(draft.cruce);
+      if (draft.resueltos) setResueltos(draft.resueltos);
+    } catch (e) {
+      console.warn("[Conciliación] error restaurando borrador:", e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localActivo]);
+
+  // Guardar al cambiar cualquier pieza relevante. Skip si no hay nada
+  // cargado todavía (no queremos pisar un borrador real con state vacío
+  // del mount inicial).
+  useEffect(() => {
+    if (!BORRADOR_KEY) return;
+    if (corridaCerrada) return; // ya cerrada — no guarda más borrador
+    const hayCruce = !!cruce && cruce.extracto.length > 0;
+    if (!hayCruce && extractoMovs.length === 0) return;
+    try {
+      localStorage.setItem(BORRADOR_KEY, JSON.stringify({
+        archivoNombre, extractoMovs, periodoDesde, periodoHasta,
+        resumenExtracto, cruce, resueltos,
+      }));
+    } catch (e) {
+      // Quota exceeded u otra falla — no es crítico, la conciliación sigue
+      // funcionando in-memory.
+      console.warn("[Conciliación] no se pudo guardar borrador:", e);
+    }
+  }, [BORRADOR_KEY, corridaCerrada, archivoNombre, extractoMovs, periodoDesde, periodoHasta, resumenExtracto, cruce, resueltos]);
+
+  // Limpiar al cerrar la conciliación o al usuario tocar "Empezar de cero".
+  function limpiarBorrador() {
+    if (!BORRADOR_KEY) return;
+    try { localStorage.removeItem(BORRADOR_KEY); } catch { /* idempotente */ }
+  }
 
   // ─── Cargar historial de conciliaciones cerradas ─────────────────────────
   useEffect(() => {
@@ -334,17 +405,23 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
 
   // Crea UN movimiento en Caja a partir de una fila del extracto.
   // Devuelve true si se creó OK. Reusada por el modal individual y el lote.
-  async function crearMovimientoDeFila(fila: FilaExtracto): Promise<boolean> {
-    // Categorización: positivo → Ingreso Manual, negativo → Egreso Manual.
-    // En el campo detalle dejamos toda la traza para auditoría.
+  // Acepta tipo + cat opcionales (Lucas 10-jun): si vienen seteados, los usa;
+  // si no, fallback a "Egreso/Ingreso Manual" + null (comportamiento viejo
+  // para el flow de lote que aún no pide ambos).
+  async function crearMovimientoDeFila(
+    fila: FilaExtracto,
+    tipoOverride?: string,
+    catOverride?: string,
+  ): Promise<boolean> {
     const esEgreso = fila.monto < 0;
-    const tipoMov = esEgreso ? "Egreso Manual" : "Ingreso Manual";
+    const tipoMov = tipoOverride && tipoOverride.trim() ? tipoOverride : (esEgreso ? "Egreso Manual" : "Ingreso Manual");
+    const cat = catOverride && catOverride.trim() ? catOverride : null;
     const detalle = `[Concil. ${periodoDesde.slice(0, 7)}] ${fila.descripcion}${fila.referencia_externa ? ` · ref ${fila.referencia_externa}` : ""}`;
     const { error } = await db.rpc("crear_movimiento_caja", {
       p_fecha: fila.fecha,
       p_cuenta: "MercadoPago",
       p_tipo: tipoMov,
-      p_cat: null,
+      p_cat: cat,
       p_importe: fila.monto,
       p_detalle: detalle,
       p_local_id: localActivo,
@@ -373,11 +450,15 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
 
   async function ejecutarCrearFaltante() {
     if (!crearFaltante) return;
+    if (!crearTipo) { showError("Elegí un tipo"); return; }
+    if (!crearCat) { showError("Elegí una categoría"); return; }
     setSavingAccion(true);
     try {
-      const ok = await crearMovimientoDeFila(crearFaltante);
+      const ok = await crearMovimientoDeFila(crearFaltante, crearTipo, crearCat);
       if (ok) {
         setCrearFaltante(null);
+        setCrearTipo("");
+        setCrearCat("");
         showToast("Movimiento creado");
       }
     } finally {
@@ -734,6 +815,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
       });
       if (error) { showError(translateRpcError(error)); return; }
       setCorridaCerrada(data as { id: string; created_at: string });
+      limpiarBorrador(); // la corrida quedó persistida en DB — borrar borrador local
       showToast("Conciliación cerrada — los movimientos quedaron marcados como conciliados");
     } finally {
       setSavingAccion(false);
@@ -749,6 +831,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     setPeriodoDesde("");
     setPeriodoHasta("");
     setCorridaCerrada(null);
+    limpiarBorrador();
   }
 
   // ─── RENDER ──────────────────────────────────────────────────────────────
@@ -1408,9 +1491,33 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
         </Modal>
       )}
 
-      {/* Modal: confirmar crear faltante */}
-      {crearFaltante && (
-        <Modal isOpen={true} onClose={() => setCrearFaltante(null)} title="Crear este movimiento en Caja">
+      {/* Modal: confirmar crear faltante (con tipo + categoría obligatorios
+          desde el 10-jun para que el mov NO quede en "Otros" sin clasificar) */}
+      {crearFaltante && (() => {
+        const esEgreso = crearFaltante.monto < 0;
+        // Tipos sugeridos para egresos vs ingresos. Para egresos respetamos
+        // los buckets del EERR (CMV / Fijos / Variables / Publicidad /
+        // Comisiones / Impuestos) — los empleados eligen el que aplica.
+        const tiposEgreso = ["Mercadería (CMV)","Gasto Fijo","Gasto Variable","Publicidad","Comisión","Impuesto","Retiro Socio","Otros"];
+        const tiposIngreso = ["Ingreso Manual","Devolución","Otros"];
+        const tipos = esEgreso ? tiposEgreso : tiposIngreso;
+        // Categorías según el tipo elegido — restringe el dropdown para
+        // que la categoría siempre matchee con el bucket EERR.
+        let catsDisponibles: string[] = [];
+        if (esEgreso) {
+          if (crearTipo === "Mercadería (CMV)") catsDisponibles = CATEGORIAS_COMPRA;
+          else if (crearTipo === "Gasto Fijo") catsDisponibles = GASTOS_FIJOS;
+          else if (crearTipo === "Gasto Variable") catsDisponibles = GASTOS_VARIABLES;
+          else if (crearTipo === "Publicidad") catsDisponibles = GASTOS_PUBLICIDAD;
+          else if (crearTipo === "Comisión") catsDisponibles = COMISIONES_CATS;
+          else if (crearTipo === "Impuesto") catsDisponibles = GASTOS_IMPUESTOS;
+          else if (crearTipo === "Retiro Socio") catsDisponibles = ["RETIRO SOCIO"];
+          else if (crearTipo === "Otros") catsDisponibles = ["OTROS"];
+        } else {
+          catsDisponibles = CATEGORIAS_INGRESO.length > 0 ? CATEGORIAS_INGRESO : ["OTROS"];
+        }
+        return (
+        <Modal isOpen={true} onClose={() => { setCrearFaltante(null); setCrearTipo(""); setCrearCat(""); }} title="Crear este movimiento en Caja">
           <div style={{ fontSize: 13, lineHeight: 1.6 }}>
             <div>Fecha: <strong>{fmt_d(crearFaltante.fecha)}</strong></div>
             <div>Monto: <strong>{fmt_$(crearFaltante.monto)}</strong></div>
@@ -1418,14 +1525,53 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
             <div>Local: <strong>{localNombre}</strong></div>
             <div style={{ marginTop: 6 }}>Detalle: <em>[Concil. {periodoDesde.slice(0, 7)}] {crearFaltante.descripcion}{crearFaltante.referencia_externa ? ` · ref ${crearFaltante.referencia_externa}` : ""}</em></div>
           </div>
+
+          {/* Tipo + Categoría obligatorios. Sin esto, los movs caen en
+              "Otros" del EERR y descuadran el reporte mensual. */}
+          <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <label style={{ fontSize: 12, color: "var(--muted2)", display: "block", marginBottom: 4 }}>
+                Tipo *
+              </label>
+              <select
+                value={crearTipo}
+                onChange={e => { setCrearTipo(e.target.value); setCrearCat(""); }}
+                style={{ width: "100%", padding: "8px 10px", fontSize: 13, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--text)", borderRadius: 6 }}
+              >
+                <option value="">Seleccioná…</option>
+                {tipos.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: "var(--muted2)", display: "block", marginBottom: 4 }}>
+                Categoría *
+              </label>
+              <select
+                value={crearCat}
+                onChange={e => setCrearCat(e.target.value)}
+                disabled={!crearTipo}
+                style={{ width: "100%", padding: "8px 10px", fontSize: 13, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--text)", borderRadius: 6 }}
+              >
+                <option value="">{crearTipo ? "Seleccioná…" : "(elegí tipo primero)"}</option>
+                {catsDisponibles.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+          {esEgreso && !crearTipo && (
+            <div style={{ marginTop: 8, fontSize: 11, color: "var(--muted2)" }}>
+              Mirá la descripción ("{crearFaltante.descripcion.slice(0, 60)}") y elegí el bucket EERR que aplique. Por ejemplo, "Pago de servicio AySA" → Gasto Fijo / AYSA.
+            </div>
+          )}
+
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-            <button className="btn btn-ghost" onClick={() => setCrearFaltante(null)} disabled={savingAccion}>Cancelar</button>
-            <button className="btn btn-acc" onClick={ejecutarCrearFaltante} disabled={savingAccion}>
+            <button className="btn btn-ghost" onClick={() => { setCrearFaltante(null); setCrearTipo(""); setCrearCat(""); }} disabled={savingAccion}>Cancelar</button>
+            <button className="btn btn-acc" onClick={ejecutarCrearFaltante} disabled={savingAccion || !crearTipo || !crearCat}>
               {savingAccion ? "Creando…" : "Confirmar crear"}
             </button>
           </div>
         </Modal>
-      )}
+        );
+      })()}
 
       {/* Modal: confirmar anular sobrante */}
       {anularSobrante && (

@@ -53,6 +53,12 @@ interface ModalCargarFacturaProps {
   removeItem: (i: number) => void;
   guardar: () => void;
   saving: boolean;
+  /** Modo edición (Lucas 10-jun): si !== null, el modal muestra el input
+   *  de justificativo + título "Editar factura" + esconde el detalle de
+   *  insumos (la edición no remap items). */
+  editandoFactura?: { id: string; nro: string | null; estado: string } | null;
+  editandoMotivo?: string;
+  setEditandoMotivo?: (s: string) => void;
 }
 
 // Insumo light para el dropdown del mini-modal de quick-create MP
@@ -65,7 +71,9 @@ interface InsumoOpcion { id: number; nombre: string; unidad: string }
 export function ModalCargarFactura({
   abierto, onClose, user, form, setForm, proveedores, localesDisp, localActivo, categorias,
   onProvChange, calcTotal, items, addItem, updateItem, removeItem, guardar, saving,
+  editandoFactura, editandoMotivo, setEditandoMotivo,
 }: ModalCargarFacturaProps) {
+  const esEdicion = !!editandoFactura;
   const { toast, showError, showToast } = useToast();
   const [materiasPrimas, setMateriasPrimas] = useState<MateriaPrimaOpcion[]>([]);
   const [insumosOpts, setInsumosOpts] = useState<InsumoOpcion[]>([]);
@@ -248,13 +256,34 @@ export function ModalCargarFactura({
     <Modal
       isOpen={abierto}
       onClose={onClose}
-      title={form.tipo === "nota_credito" ? "Cargar Nota de Crédito" : "Cargar Factura"}
+      title={
+        esEdicion
+          ? `Editar factura ${editandoFactura?.nro ?? ""}`
+          : (form.tipo === "nota_credito" ? "Cargar Nota de Crédito" : "Cargar Factura")
+      }
       maxWidth={680}
       preventCloseOnOverlay={saving}
-      footer={<><button className="btn btn-sec" onClick={onClose}>Cancelar</button><button className="btn btn-acc" onClick={guardarConConfirmacion} disabled={saving || !form.local_id}>{saving ? "Guardando..." : "Guardar"}</button></>}
+      footer={<><button className="btn btn-sec" onClick={onClose}>Cancelar</button><button className="btn btn-acc" onClick={guardarConConfirmacion} disabled={saving || !form.local_id || (esEdicion && !(editandoMotivo || "").trim())}>{saving ? "Guardando..." : (esEdicion ? "Guardar cambios" : "Guardar")}</button></>}
     >
+          {esEdicion && (
+            <div className="alert alert-info" style={{ marginBottom: 12, fontSize: 12 }}>
+              Estás editando la factura <strong>{editandoFactura?.nro}</strong> (estado: <strong>{editandoFactura?.estado}</strong>).
+              Si ya estuviera pagada o anulada, la edición se rechazaría — en ese caso anulala y volvé a cargar.
+            </div>
+          )}
+          {esEdicion && (
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label>Motivo de la edición *</label>
+              <input
+                value={editandoMotivo || ""}
+                onChange={e => setEditandoMotivo?.(e.target.value)}
+                placeholder="¿Por qué editás? (obligatorio para auditoría)"
+                style={{ width: "100%" }}
+              />
+            </div>
+          )}
           <div className="form2">
-            <div className="field"><label>Tipo de comprobante</label><select value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })}><option value="factura">Factura</option><option value="nota_credito">Nota de Crédito</option></select></div>
+            <div className="field"><label>Tipo de comprobante</label><select value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })} disabled={esEdicion}><option value="factura">Factura</option><option value="nota_credito">Nota de Crédito</option></select></div>
             <div className="field"><label>Local *</label>
               {localActivo !== null ? (
                 <div style={{ paddingTop: 4 }}>

@@ -297,6 +297,12 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   // 09-jun: "vuelvo de otra pestaña y el historial se va al principio de todo").
   const cargadosRef = useRef(TESORERIA_PAGE_SIZE);
 
+  // Mapa gasto_id → "APELLIDO, NOMBRE" para movs con tipo='empleado'. El
+  // gasto no guarda empleado_id directo; se liga via rrhh_adelantos.gasto_id
+  // (mismo patrón que Gastos.tsx). Lucas 10-jun: "anto me pidio ver de qué
+  // empleado son esos movimientos, deberia mostrarlo por algun lado".
+  const [empPorGasto, setEmpPorGasto] = useState<Record<string, string>>({});
+
   const load = async (preservarPaginas = false) => {
     setLoading(true);
     const cantidad = preservarPaginas ? Math.max(TESORERIA_PAGE_SIZE, cargadosRef.current) : TESORERIA_PAGE_SIZE;
@@ -333,8 +339,39 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     const obj: Record<string, number> = {};
     (s||[]).forEach(x=> { obj[x.cuenta] = (obj[x.cuenta]||0) + (x.saldo||0); });
     setSaldos(obj);
+    // Lucas 10-jun: para movs vinculados a un gasto tipo='empleado',
+    // mostrar el nombre del empleado. Lookup en rrhh_adelantos por gasto_id
+    // (mismo patrón que Gastos.tsx).
+    void cargarEmpPorGasto(movs);
     setLoading(false);
   };
+
+  // Trae nombre del empleado para los movs cuyo gasto_id_ref apunta a un
+  // gasto tipo='empleado' (que se liga via rrhh_adelantos.gasto_id).
+  // Se llama después de cargar movs — la actualización es asíncrona y no
+  // bloquea el render del listado.
+  async function cargarEmpPorGasto(movs: Movimiento[]) {
+    const gastoIds = movs.map(m => m.gasto_id_ref).filter((x): x is string => !!x);
+    if (gastoIds.length === 0) return;
+    const { data: adel } = await db.from("rrhh_adelantos")
+      .select("gasto_id, empleado_id").in("gasto_id", gastoIds);
+    if (!adel || adel.length === 0) return;
+    const empIds = [...new Set((adel as Array<{empleado_id: number|null}>).map(a => a.empleado_id).filter((x): x is number => !!x))];
+    if (empIds.length === 0) return;
+    const { data: emps } = await db.from("rrhh_empleados")
+      .select("id, apellido, nombre").in("id", empIds);
+    const nombrePorEmp: Record<number, string> = {};
+    (emps || []).forEach((e: { id: number; apellido: string | null; nombre: string | null }) => {
+      nombrePorEmp[e.id] = `${(e.apellido || "").toUpperCase()}, ${e.nombre || ""}`.trim();
+    });
+    const nuevo: Record<string, string> = {};
+    (adel as Array<{gasto_id: string; empleado_id: number|null}>).forEach(a => {
+      if (!a.empleado_id) return;
+      const nm = nombrePorEmp[a.empleado_id];
+      if (nm) nuevo[a.gasto_id] = nm;
+    });
+    setEmpPorGasto(prev => ({ ...prev, ...nuevo }));
+  }
 
   // Pagination forward: trae el siguiente bloque y lo concatena. No resetea
   // el listado actual ni los saldos.
@@ -345,6 +382,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     const nuevos = (m as Movimiento[]) || [];
     setMovimientos(prev => { const all = [...prev, ...nuevos]; cargadosRef.current = all.length; return all; });
     setHasMore(nuevos.length === TESORERIA_PAGE_SIZE);
+    void cargarEmpPorGasto(nuevos);
     setLoadingMore(false);
   };
 
@@ -799,7 +837,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
                 )}
               </td>
               <td>{m.cat?<span className="badge b-muted">{m.cat}</span>:"—"}</td>
-              <td style={{fontSize:11,maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+              <td style={{fontSize:11,maxWidth:260,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                 {(() => {
                   const origen = origenMovimiento(m);
                   if (!origen) return null;
@@ -820,6 +858,21 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
                     >{origen.label}</span>
                   );
                 })()}
+                {/* Nombre del empleado para gastos tipo='empleado' (Lucas 10-jun). */}
+                {m.gasto_id_ref && empPorGasto[m.gasto_id_ref] && (
+                  <span
+                    style={{
+                      fontSize: 10, marginRight: 6,
+                      padding: "1px 6px",
+                      borderRadius: 4,
+                      color: "var(--pase-text)",
+                      background: "rgba(117,170,219,0.12)",
+                      border: "0.5px solid rgba(117,170,219,0.3)",
+                      fontWeight: 500,
+                      whiteSpace: "nowrap",
+                    }}
+                  >{empPorGasto[m.gasto_id_ref]}</span>
+                )}
                 {m.detalle}
               </td>
               <td className="num-right"><span style={{color:m.importe<0?"var(--danger)":"var(--success)"}}>{fmt_$(m.importe)}</span></td>
@@ -867,19 +920,62 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
           <button className="btn btn-acc" onClick={guardarEditMov} disabled={savingEdit}>{savingEdit ? "Guardando..." : "Guardar"}</button>
         </>}
       >
-        {editMov && <>
-          <div className="field"><label>Fecha</label>
-            <input type="date" value={editMov.fecha} onChange={e => setEditMov({...editMov, fecha: e.target.value})}/>
-          </div>
+        {editMov && (() => {
+          // Lucas 10-jun: en Caja-Editar quiero poder modificar TODOS los
+          // campos (como en Gastos). Antes solo fecha/cuenta/importe/detalle.
+          // Ahora agregamos también tipo + categoría (el tipo se re-deriva
+          // automático según la cat para mantener consistencia EERR).
+          const esEgreso = (parseFloat(String(editMov.importe)) || 0) < 0;
+          // Listado de categorías por bucket EERR (mismo orden que en
+          // ModalCargarFactura/Conciliación, para que el dropdown sea
+          // consistente entre módulos).
+          const allCats = esEgreso
+            ? [
+                ...CATEGORIAS_COMPRA.map(c => ({ value: c, label: c, group: "Mercadería (CMV)" })),
+                ...GASTOS_FIJOS.map(c => ({ value: c, label: c, group: "Gastos Fijos" })),
+                ...GASTOS_VARIABLES.map(c => ({ value: c, label: c, group: "Gastos Variables" })),
+                ...GASTOS_PUBLICIDAD.map(c => ({ value: c, label: c, group: "Publicidad" })),
+                ...COMISIONES_CATS.map(c => ({ value: c, label: c, group: "Comisiones" })),
+                ...GASTOS_IMPUESTOS.map(c => ({ value: c, label: c, group: "Impuestos" })),
+              ]
+            : []; // ingresos sin catálogo cerrado — texto libre
+          // Agrupar para <optgroup>
+          const groups = allCats.reduce<Record<string, typeof allCats>>((acc, o) => {
+            (acc[o.group] = acc[o.group] || []).push(o); return acc;
+          }, {});
+          return (<>
           <div className="form2">
+            <div className="field"><label>Fecha</label>
+              <input type="date" value={editMov.fecha} onChange={e => setEditMov({...editMov, fecha: e.target.value})}/>
+            </div>
             <div className="field"><label>Cuenta</label>
               <select value={editMov.cuenta} onChange={e => setEditMov({...editMov, cuenta: e.target.value})}>
                 {cuentasOperablesList.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
+          </div>
+          <div className="form2">
             <div className="field"><label>Importe $</label>
               <input type="number" value={editMov.importe}
                 onChange={e => setEditMov({...editMov, importe: e.target.value})}/>
+              <div style={{fontSize:10,color:"var(--muted2)",marginTop:2}}>
+                Si cambiás el signo, el tipo se re-deriva automático.
+              </div>
+            </div>
+            <div className="field"><label>Categoría EERR</label>
+              {esEgreso ? (
+                <select value={editMov.cat || ""} onChange={e => setEditMov({...editMov, cat: e.target.value || null})}>
+                  <option value="">(sin categoría — Egreso Manual)</option>
+                  {Object.entries(groups).map(([g, opts]) => (
+                    <optgroup key={g} label={g}>
+                      {opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+              ) : (
+                <input value={editMov.cat || ""} onChange={e => setEditMov({...editMov, cat: e.target.value || null})}
+                  placeholder="Liquidación Rappi, Ingreso Socio, etc."/>
+              )}
             </div>
           </div>
           <div className="field"><label>Detalle</label>
@@ -890,7 +986,8 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
               onChange={e => setEditMov({...editMov, justificativo: e.target.value})}
               placeholder="Motivo de la modificación..."/>
           </div>
-        </>}
+          </>);
+        })()}
       </Modal>
 
       {/* AUDIT F4B#1 / sprint #5: migrado a <Modal>. */}
