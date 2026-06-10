@@ -43,15 +43,29 @@ interface CandidatoPase {
   ya_conciliado: boolean;
 }
 
+interface MovEnCombinacion {
+  id: string;
+  fecha: string;
+  importe: number;
+  detalle: string;
+}
+
+interface Combinacion {
+  proveedor: string | null;
+  num_movs: number;
+  movs: MovEnCombinacion[];
+}
+
 interface FilaExtracto {
   idx: number;
   fecha: string;
   monto: number;
   descripcion: string;
   referencia_externa: string | null;
-  estado: "verde" | "amarillo" | "rojo_falta";
+  estado: "verde" | "amarillo" | "verde_agrupado" | "amarillo_agrupado" | "rojo_falta";
   num_candidatos: number;
   candidatos: CandidatoPase[];
+  combinaciones: Combinacion[];
 }
 
 interface Sobrante {
@@ -65,6 +79,8 @@ interface Totales {
   extracto_total: number;
   verdes: number;
   amarillos: number;
+  verdes_agrupados: number;
+  amarillos_agrupados: number;
   rojos_falta: number;
   rojos_sobra: number;
 }
@@ -102,6 +118,8 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   const [resueltos, setResueltos] = useState<Record<string, string>>({});
   // Estados temporales para el modal de "elegir candidato" en amarillos
   const [pickCandidato, setPickCandidato] = useState<FilaExtracto | null>(null);
+  // Modal: elegir entre varias combinaciones agrupadas
+  const [pickCombinacion, setPickCombinacion] = useState<FilaExtracto | null>(null);
   // Estado temporal para confirmar anulación de sobrante
   const [anularSobrante, setAnularSobrante] = useState<Sobrante | null>(null);
   const [motivoAnular, setMotivoAnular] = useState<string>("");
@@ -200,6 +218,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
         p_periodo_hasta: periodoHasta,
         p_movs_extracto: payload,
         p_solo_egresos: true,
+        p_match_agrupado: true,
       });
       if (error) { showError(translateRpcError(error)); return; }
       setCruce(data as CruceResultado);
@@ -219,6 +238,9 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   }
   function elegirCandidato(idx: number, movId: string) {
     setResueltos(p => ({ ...p, [`ext:${idx}`]: `matcheado:${movId}` }));
+  }
+  function elegirCombinacion(idx: number, comboIdx: number) {
+    setResueltos(p => ({ ...p, [`ext:${idx}`]: `combo:${comboIdx}` }));
   }
 
   async function ejecutarCrearFaltante() {
@@ -270,16 +292,18 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   // ─── KPIs en vivo ────────────────────────────────────────────────────────
   const stats = useMemo(() => {
     if (!cruce) return null;
-    let verdes = 0, amarillos = 0, rojos_falta = 0, rojos_sobra = 0;
+    let verdes = 0, amarillos = 0, verdesAgrupados = 0, amarillosAgrupados = 0, rojos_falta = 0, rojos_sobra = 0;
     let resueltos_count = 0;
     for (const fila of cruce.extracto) {
       const r = resueltos[`ext:${fila.idx}`];
-      if (r === "ignorar" || r === "creado" || (r && r.startsWith("matcheado:"))) {
+      if (r === "ignorar" || r === "creado" || (r && (r.startsWith("matcheado:") || r.startsWith("combo:")))) {
         resueltos_count++;
         continue;
       }
       if (fila.estado === "verde") verdes++;
       else if (fila.estado === "amarillo") amarillos++;
+      else if (fila.estado === "verde_agrupado") verdesAgrupados++;
+      else if (fila.estado === "amarillo_agrupado") amarillosAgrupados++;
       else if (fila.estado === "rojo_falta") rojos_falta++;
     }
     for (const sob of cruce.sobrantes) {
@@ -288,10 +312,10 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
       rojos_sobra++;
     }
     return {
-      verdes, amarillos, rojos_falta, rojos_sobra,
-      total_pendientes: amarillos + rojos_falta + rojos_sobra,
+      verdes, amarillos, verdesAgrupados, amarillosAgrupados, rojos_falta, rojos_sobra,
+      // verdes (individuales + agrupados) NO son pendientes — son auto-OK
+      total_pendientes: amarillos + amarillosAgrupados + rojos_falta + rojos_sobra,
       resueltos_count,
-      // verdes NO se cuentan como "pendiente" porque son OK automático
     };
   }, [cruce, resueltos]);
 
@@ -407,12 +431,14 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
         <>
           {/* KPIs arriba */}
           <Card>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
-              <Kpi label="Total extracto" value={cruce.totales.extracto_total.toString()} color="var(--muted2)" />
-              <Kpi label="🟢 Coinciden" value={stats.verdes.toString()} color="var(--success)" />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 10 }}>
+              <Kpi label="Total" value={cruce.totales.extracto_total.toString()} color="var(--muted2)" />
+              <Kpi label="🟢 Match" value={stats.verdes.toString()} color="var(--success)" />
+              <Kpi label="🟢 Agrupados" value={stats.verdesAgrupados.toString()} color="var(--success)" />
               <Kpi label="🟡 Por elegir" value={stats.amarillos.toString()} color="var(--warn)" />
-              <Kpi label="🔴 Faltan en PASE" value={stats.rojos_falta.toString()} color="var(--danger)" />
-              <Kpi label="🔴 Sobran en PASE" value={stats.rojos_sobra.toString()} color="var(--danger)" />
+              <Kpi label="🟡 Combos" value={stats.amarillosAgrupados.toString()} color="var(--warn)" />
+              <Kpi label="🔴 Faltan" value={stats.rojos_falta.toString()} color="var(--danger)" />
+              <Kpi label="🔴 Sobran" value={stats.rojos_sobra.toString()} color="var(--danger)" />
             </div>
             <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: 13, color: "var(--muted2)" }}>
@@ -459,6 +485,33 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button className="btn btn-acc btn-sm" onClick={() => setPickCandidato(fila)}>
                     Elegir cuál es ({fila.num_candidatos} candidatos)
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => ignorarExtracto(fila.idx)}>
+                    Ignorar
+                  </button>
+                </div>
+              </FilaCard>
+            )}
+          />
+
+          {/* AMARILLOS AGRUPADOS — varias combinaciones que suman exacto */}
+          <SeccionFilas
+            titulo="🟡 Combos posibles (varias combinaciones de facturas suman este monto)"
+            descripcion="El extracto tiene 1 transferencia y en PASE hay varias combinaciones de 2-5 facturas del mismo proveedor en ±30d que suman exacto. Elegí cuál es la correcta."
+            filas={cruce.extracto.filter(f =>
+              f.estado === "amarillo_agrupado"
+              && !resueltos[`ext:${f.idx}`]
+            )}
+            renderFila={fila => (
+              <FilaCard
+                key={fila.idx}
+                fecha={fila.fecha}
+                monto={fila.monto}
+                descripcion={fila.descripcion}
+              >
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button className="btn btn-acc btn-sm" onClick={() => setPickCombinacion(fila)}>
+                    Elegir combo ({fila.combinaciones.length} opciones)
                   </button>
                   <button className="btn btn-ghost btn-sm" onClick={() => ignorarExtracto(fila.idx)}>
                     Ignorar
@@ -547,6 +600,43 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
             </Card>
           )}
 
+          {/* VERDES AGRUPADOS — combinación única, solo informativo */}
+          {stats.verdesAgrupados > 0 && (
+            <Card>
+              <details>
+                <summary style={{ cursor: "pointer", fontSize: 14, color: "var(--muted2)" }}>
+                  🟢 Ver los {stats.verdesAgrupados} movimientos agrupados que coinciden OK
+                  <span style={{ marginLeft: 6, fontSize: 11, opacity: 0.8 }}>
+                    (1 transferencia = N facturas del mismo proveedor en ±30d)
+                  </span>
+                </summary>
+                <div style={{ marginTop: 10, maxHeight: 400, overflowY: "auto" }}>
+                  {cruce.extracto.filter(f => f.estado === "verde_agrupado").map(fila => {
+                    const combo = fila.combinaciones[0]!;
+                    return (
+                      <div key={fila.idx} style={{
+                        padding: "8px 0", borderBottom: "1px solid var(--bd)", fontSize: 12,
+                      }}>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span><strong>{fmt_d(fila.fecha)}</strong> · {fila.descripcion}</span>
+                          <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{fmt_$(fila.monto)}</span>
+                        </div>
+                        <div style={{ marginTop: 4, paddingLeft: 12, color: "var(--muted2)" }}>
+                          ↳ {combo.proveedor ?? "—"} · {combo.num_movs} facturas:
+                          {combo.movs.map((m, i) => (
+                            <span key={m.id} style={{ marginLeft: 8 }}>
+                              {fmt_d(m.fecha)} {fmt_$(m.importe)}{i < combo.movs.length - 1 ? " +" : ""}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </details>
+            </Card>
+          )}
+
           {/* TODO RESUELTO — mensaje feliz */}
           {stats.total_pendientes === 0 && !corridaCerrada && (
             <Card>
@@ -583,6 +673,38 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                   Diferencia: {c.dias_diff} día{c.dias_diff === 1 ? "" : "s"}
                   {c.ya_conciliado && " · ⚠ ya conciliado antes"}
                 </div>
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal: elegir combinación agrupada (para amarillos_agrupados) */}
+      {pickCombinacion && (
+        <Modal isOpen={true} onClose={() => setPickCombinacion(null)} title="Elegí qué facturas se pagaron juntas">
+          <div style={{ marginBottom: 10, fontSize: 13 }}>
+            Extracto: <strong>{fmt_d(pickCombinacion.fecha)}</strong> · {fmt_$(pickCombinacion.monto)} · {pickCombinacion.descripcion}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {pickCombinacion.combinaciones.map((combo, idx) => (
+              <button
+                key={idx}
+                className="btn btn-ghost"
+                onClick={() => { elegirCombinacion(pickCombinacion.idx, idx); setPickCombinacion(null); }}
+                style={{ textAlign: "left", padding: "12px 14px", display: "block" }}
+              >
+                <div style={{ fontSize: 12, color: "var(--muted2)", marginBottom: 6 }}>
+                  Opción {idx + 1}: <strong style={{ color: "var(--text)" }}>{combo.proveedor ?? "—"}</strong> · {combo.num_movs} facturas
+                </div>
+                {combo.movs.map(m => (
+                  <div key={m.id} style={{
+                    display: "flex", justifyContent: "space-between",
+                    padding: "3px 0", fontSize: 12,
+                  }}>
+                    <span>{fmt_d(m.fecha)} · {m.detalle || "(sin detalle)"}</span>
+                    <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(m.importe)}</span>
+                  </div>
+                ))}
               </button>
             ))}
           </div>
