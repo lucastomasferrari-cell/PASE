@@ -119,15 +119,18 @@ export function VentasSemanaWidget({ ctx }: { ctx: WidgetContext }) {
           </div>
         )}
       </div>
-      {/* Sparkline */}
+      {/* Sparkline. Altura de barra en PX, no %: la columna intermedia
+          (barra + label apilados) tiene altura auto, así que `height: N%`
+          resolvía a 0 y las barras eran invisibles (bug reportado 11-jun:
+          "no se ven los gráficos de barra"). */}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 60, marginTop: 4 }}>
         {datos.dias.map((d, i) => {
-          const pct = Math.max(4, Math.round((d.total / maxDia) * 100));
+          const barPx = Math.max(3, Math.round((d.total / maxDia) * 42));
           return (
-            <div key={d.fecha} title={`${d.diaLabel} — ${formatCurrencyCompact(d.total)}`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+            <div key={d.fecha} title={`${d.diaLabel} — ${formatCurrencyCompact(d.total)}`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
               <div style={{
                 width: "100%",
-                height: `${pct}%`,
+                height: barPx,
                 background: i === datos.dias.length - 1 ? "var(--pase-celeste)" : "var(--pase-celeste-200)",
                 borderRadius: "3px 3px 0 0",
                 transition: "background 0.15s",

@@ -61,17 +61,21 @@ export function VentasMesAMesWidget({ ctx }: { ctx: WidgetContext }) {
   const mesActualIdx = data.length - 1;
   return (
     <div>
+      {/* Altura de barra en PX, no %: la columna intermedia (valor + barra +
+          mes apilados) tiene altura auto, así que `height: N%` resolvía a 0
+          y las barras eran invisibles — bug heredado de la ex-Finanzas,
+          reportado por Lucas 11-jun. */}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 120 }}>
         {data.map((m, i) => {
-          const pct = Math.max(4, Math.round((m.total / max) * 100));
+          const barPx = Math.max(4, Math.round((m.total / max) * 72));
           return (
-            <div key={m.mesLabel + i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }} title={`${m.mesLabel} — ${formatCurrencyCompact(m.total)}`}>
+            <div key={m.mesLabel + i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 4 }} title={`${m.mesLabel} — ${formatCurrencyCompact(m.total)}`}>
               <span style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", fontVariantNumeric: "tabular-nums" }}>
                 {formatCurrencyCompact(m.total)}
               </span>
               <div style={{
                 width: "100%",
-                height: `${pct}%`,
+                height: barPx,
                 background: i === mesActualIdx ? "var(--pase-celeste)" : "var(--pase-celeste-200)",
                 borderRadius: "4px 4px 0 0",
               }} />
