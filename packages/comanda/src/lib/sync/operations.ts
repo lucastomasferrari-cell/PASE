@@ -108,6 +108,17 @@ export async function markSynced(opId: string, serverResult?: unknown): Promise<
 // intervención manual (UI de "Operaciones rotas").
 const MAX_RETRIES = 5;
 
+// Errores donde reintentar JAMÁS va a funcionar — el server siempre va a
+// responder lo mismo. Bug Lucas 2026-06-11: una op con payload que no
+// matcheaba la firma de fn_anular_venta_comanda_offline (PGRST202 = 404)
+// reintentó 5 veces a lo largo de horas spameando la consola.
+//   - PGRST202: función no encontrada / argumentos no matchean la firma
+//   - PGRST204: columna inexistente
+//   - 22P02: valor con sintaxis inválida para el tipo (ej: uuid malformado)
+export function isPermanentSyncError(errorMsg: string): boolean {
+  return /PGRST202|PGRST204|Could not find the function|22P02|invalid input syntax/i.test(errorMsg);
+}
+
 export async function markFailed(opId: string, errorMsg: string): Promise<void> {
   const db = await getDb();
   const op = (await db.get('pending_ops', opId)) as PendingOp | undefined;
@@ -115,7 +126,8 @@ export async function markFailed(opId: string, errorMsg: string): Promise<void> 
   op.retries += 1;
   op.last_attempt_at = new Date().toISOString();
   op.last_error = errorMsg;
-  op.status = op.retries >= MAX_RETRIES ? 'failed' : 'pending';
+  // Error permanente → failed directo, sin quemar reintentos.
+  op.status = (op.retries >= MAX_RETRIES || isPermanentSyncError(errorMsg)) ? 'failed' : 'pending';
   await db.put('pending_ops', op);
 }
 
@@ -164,6 +176,30 @@ export async function resetSyncingOpsAtBoot(): Promise<number> {
     }
   }
   return reset;
+}
+
+// Higiene al boot: ops pending/syncing con más de N días son basura de una
+// sesión vieja (ej: pestaña POS abierta 9 días con un build viejo que dejó
+// 13 ops imposibles de sincronizar — caso Lucas 2026-06-11). Las marcamos
+// `failed` para que dejen de reintentarse y de contar como "pendientes";
+// no las borramos así quedan inspeccionables en la UI de operaciones rotas.
+// Se llama desde syncEngine.start().
+const MAX_PENDING_AGE_DAYS = 3;
+
+export async function expireStalePendingOps(): Promise<number> {
+  const db = await getDb();
+  const cutoff = Date.now() - MAX_PENDING_AGE_DAYS * 24 * 60 * 60 * 1000;
+  const all = (await db.getAll('pending_ops')) as PendingOp[];
+  let expired = 0;
+  for (const op of all) {
+    if (op.status !== 'pending' && op.status !== 'syncing') continue;
+    if (new Date(op.created_at).getTime() >= cutoff) continue;
+    op.status = 'failed';
+    op.last_error = `expired_at_boot: op pendiente hace más de ${MAX_PENDING_AGE_DAYS} días, no se reintenta más`;
+    await db.put('pending_ops', op);
+    expired++;
+  }
+  return expired;
 }
 
 // Cleanup: elimina ops `synced` con más de N días. Llamar periódicamente

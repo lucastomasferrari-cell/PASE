@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   enqueueOperation, listPendingOps, markSyncing, markSynced, markFailed,
   pendingCount, failedCount, backoffMs, cleanupOldSynced, resetSyncingOpsAtBoot,
+  isPermanentSyncError, expireStalePendingOps,
 } from '../operations';
 import { resetDb, _resetSingletonForTest } from '../../db/index';
 import { getDb } from '../../db/index';
@@ -166,6 +167,88 @@ describe('sync/operations', () => {
     it('retorna 0 cuando no hay ops huérfanas', async () => {
       const reset = await resetSyncingOpsAtBoot();
       expect(reset).toBe(0);
+    });
+  });
+
+  // Bug Lucas 2026-06-11: una op cuya RPC da PGRST202 (404 — función no
+  // encontrada / firma no matchea) reintentaba 5 veces a lo largo de horas
+  // spameando la consola, cuando reintentar JAMÁS va a funcionar (el payload
+  // está malformado o la función no existe). Errores permanentes → failed
+  // directo al primer intento.
+  describe('errores permanentes (bug 404 anular venta 11-jun)', () => {
+    it('isPermanentSyncError detecta PGRST202 / función no encontrada / uuid inválido', () => {
+      expect(isPermanentSyncError('PGRST202: Could not find the function public.fn_anular_venta_comanda_offline')).toBe(true);
+      expect(isPermanentSyncError('Could not find the function public.x in the schema cache')).toBe(true);
+      expect(isPermanentSyncError('22P02: invalid input syntax for type uuid: "__pending_parent__"')).toBe(true);
+      expect(isPermanentSyncError('PGRST204: column not found')).toBe(true);
+    });
+
+    it('isPermanentSyncError NO matchea errores transitorios', () => {
+      expect(isPermanentSyncError('Failed to fetch')).toBe(false);
+      expect(isPermanentSyncError('timeout')).toBe(false);
+      expect(isPermanentSyncError('SALDO_INSUFICIENTE')).toBe(false);
+      expect(isPermanentSyncError('')).toBe(false);
+    });
+
+    it('markFailed con error permanente → failed directo (sin 5 reintentos)', async () => {
+      const id = await enqueueOperation({ target: 'x', op_type: 'rpc', payload: null });
+      await markFailed(id, 'PGRST202: Could not find the function public.fn_x');
+      const db = await getDb();
+      const op = await db.get('pending_ops', id);
+      expect(op?.status).toBe('failed');
+    });
+
+    it('markFailed con error transitorio sigue reintentando como antes', async () => {
+      const id = await enqueueOperation({ target: 'x', op_type: 'rpc', payload: null });
+      await markFailed(id, 'Failed to fetch');
+      const db = await getDb();
+      const op = await db.get('pending_ops', id);
+      expect(op?.status).toBe('pending');
+      expect(op?.retries).toBe(1);
+    });
+  });
+
+  // Higiene al boot: ops pending/syncing con más de N días son basura de
+  // sesiones viejas (ej: las 13 pendientes acumuladas por la pestaña abierta
+  // 9 días con un build viejo). Se marcan failed para que dejen de
+  // reintentarse y de contar como "pendientes" — quedan inspeccionables.
+  describe('expireStalePendingOps', () => {
+    async function antedatar(id: string, dias: number) {
+      const db = await getDb();
+      const op = await db.get('pending_ops', id);
+      op!.created_at = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
+      await db.put('pending_ops', op!);
+    }
+
+    it('marca failed las pending con más de 3 días, deja las frescas', async () => {
+      const vieja = await enqueueOperation({ target: 'v', op_type: 'rpc', payload: null });
+      const fresca = await enqueueOperation({ target: 'f', op_type: 'rpc', payload: null });
+      await antedatar(vieja, 4);
+      const expired = await expireStalePendingOps();
+      expect(expired).toBe(1);
+      const db = await getDb();
+      expect((await db.get('pending_ops', vieja))?.status).toBe('failed');
+      expect((await db.get('pending_ops', vieja))?.last_error).toContain('expired_at_boot');
+      expect((await db.get('pending_ops', fresca))?.status).toBe('pending');
+    });
+
+    it('también expira ops viejas en syncing, no toca synced/failed', async () => {
+      const sync = await enqueueOperation({ target: 's', op_type: 'rpc', payload: null });
+      const ok = await enqueueOperation({ target: 'ok', op_type: 'rpc', payload: null });
+      await markSyncing(sync);
+      await markSynced(ok);
+      await antedatar(sync, 5);
+      await antedatar(ok, 5);
+      const expired = await expireStalePendingOps();
+      expect(expired).toBe(1);
+      const db = await getDb();
+      expect((await db.get('pending_ops', sync))?.status).toBe('failed');
+      expect((await db.get('pending_ops', ok))?.status).toBe('synced');
+    });
+
+    it('retorna 0 sin ops viejas', async () => {
+      await enqueueOperation({ target: 'a', op_type: 'rpc', payload: null });
+      expect(await expireStalePendingOps()).toBe(0);
     });
   });
 });

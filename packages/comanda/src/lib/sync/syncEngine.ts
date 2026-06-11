@@ -20,7 +20,7 @@
 import { pullInitialAll, type PullContext } from './pullInitial';
 import { pullIncrementalAll } from './pullIncremental';
 import { processPushQueue } from './pushQueue';
-import { pendingCount, failedCount, resetSyncingOpsAtBoot } from './operations';
+import { pendingCount, failedCount, resetSyncingOpsAtBoot, expireStalePendingOps } from './operations';
 
 export type SyncState =
   | { kind: 'idle'; pendingOps: number; failedOps: number; lastSyncAt: string | null }
@@ -52,6 +52,15 @@ class SyncEngine {
       if (reset > 0) console.log(`[syncEngine] reset ${reset} ops huérfanas en 'syncing'`);
     } catch (e) {
       console.warn('[syncEngine] resetSyncingOpsAtBoot falló:', e);
+    }
+    // Higiene: ops pendientes de hace días son de una sesión/build viejo y
+    // no van a sincronizar nunca (caso 13 pendientes acumuladas, 11-jun).
+    // Las marcamos failed para que no se reintenten ni inflen el badge.
+    try {
+      const expired = await expireStalePendingOps();
+      if (expired > 0) console.warn(`[syncEngine] ${expired} ops pendientes viejas expiradas (>3 días)`);
+    } catch (e) {
+      console.warn('[syncEngine] expireStalePendingOps falló:', e);
     }
     this.startPeriodicSync();
     await this.runFullCycle(true); // primer ciclo con pull initial

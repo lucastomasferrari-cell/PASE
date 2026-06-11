@@ -5,6 +5,15 @@ vi.mock('../lib/supabase', () => ({
   db: { rpc: (...args: unknown[]) => mockRpc(...args), from: () => ({}) },
 }));
 
+// Estos tests validan la rama ONLINE de pagosService. La rama offline tiene
+// su propio suite (pagosOverridesTransferOffline.test.ts). Fijamos el flag
+// en false explícitamente — sin esto, con el default global en true, cobrar()
+// iba por la rama offline y explotaba con "indexedDB is not defined" (jsdom
+// no trae IndexedDB; los suites offline usan fake-indexeddb).
+vi.mock('../lib/featureFlags', () => ({
+  featureFlags: { offlineFirstVentas: false },
+}));
+
 import { cobrar, refundVenta, newIdempotencyKey } from './pagosService';
 
 beforeEach(() => mockRpc.mockReset());

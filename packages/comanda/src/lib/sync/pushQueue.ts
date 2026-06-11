@@ -61,7 +61,21 @@ async function processOp(op: PendingOp): Promise<ProcessResult> {
           : op.target;
         const args = { ...payload, p_idempotency_key: op.id };
         const { data, error } = await supabase.rpc(targetRpc, args);
-        if (error) return { status: 'error', message: error.message };
+        if (error) {
+          // Diagnóstico completo: rpc + claves enviadas + código PostgREST.
+          // Sin esto un PGRST202 (404) solo mostraba "Failed to load
+          // resource" en consola y era imposible saber qué payload exacto
+          // falló (bug anular venta 11-jun). El código dentro del message
+          // también permite a markFailed detectar errores permanentes.
+          console.error('[pushQueue] RPC falló', {
+            rpc: targetRpc, code: error.code, message: error.message,
+            hint: error.hint, args,
+          });
+          return {
+            status: 'error',
+            message: `${error.code ?? ''}: ${error.message} [rpc=${targetRpc} keys=${Object.keys(args).join(',')}]`,
+          };
+        }
         return { status: 'ok', data };
       }
       case 'insert': {
