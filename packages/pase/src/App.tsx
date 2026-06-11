@@ -8,7 +8,7 @@ import { skipAutoSignOut } from "./lib/rememberMe";
 // Los errores capturados se incluyen en tickets de soporte para que el agent
 // auto-fix tenga contexto del browser cuando diagnostica.
 initConsoleCapture();
-import { AuthProvider, necesitaElegirLocal, getPermisos, tienePermiso, mergeLocales, debeReintentarLocales } from "./lib/auth";
+import { AuthProvider, necesitaElegirLocal, getPermisos, tienePermiso, mergeLocales, debeReintentarLocales, unirPermisos } from "./lib/auth";
 import { getDefaultRoute, LEGACY_REDIRECTS } from "./lib/sidebar-nav";
 import type { Usuario, UsuarioRow, Local, Tenant } from "./types";
 import { Sidebar, css } from "./components/Layout";
@@ -283,7 +283,7 @@ function AppMain() {
           // las RLS pueden filtrar columnas y `payload.new` no incluye
           // _permisos ni _locales — los necesitamos enriquecidos).
           const { data: perfil } = await db.from("usuarios")
-            .select("id, auth_id, email, nombre, rol, activo, password_temporal, locales, cuentas_visibles, cuentas_operables, tenant_id")
+            .select("id, auth_id, email, nombre, rol, rol_id, activo, password_temporal, locales, cuentas_visibles, cuentas_operables, tenant_id")
             .eq("auth_id", authId).single();
           if (!perfil) return;
           // Si el admin desactivó al user mientras estaba operando, signOut.
@@ -557,7 +557,7 @@ function AppMain() {
                 const { data: refData, error: refErr } = await db.auth.refreshSession();
                 if (!refErr && refData?.session?.user) {
                   const { data: perfilFresh } = await db.from("usuarios")
-                    .select("id, auth_id, email, nombre, rol, activo, password_temporal, locales, cuentas_visibles, cuentas_operables, tenant_id")
+                    .select("id, auth_id, email, nombre, rol, rol_id, activo, password_temporal, locales, cuentas_visibles, cuentas_operables, tenant_id")
                     .eq("auth_id", refData.session.user.id).single();
                   if (perfilFresh && perfilFresh.activo !== false) {
                     // eslint-disable-next-line react-hooks/immutability
@@ -582,7 +582,7 @@ function AppMain() {
             // eslint-disable-next-line no-console
             console.warn("[App] getUser() error transitorio, conservando sesión:", errAny?.message);
           }
-          const { data: perfil } = await db.from("usuarios").select("id, auth_id, email, nombre, rol, activo, password_temporal, locales, cuentas_visibles, cuentas_operables, tenant_id").eq("auth_id", session.user.id).single();
+          const { data: perfil } = await db.from("usuarios").select("id, auth_id, email, nombre, rol, rol_id, activo, password_temporal, locales, cuentas_visibles, cuentas_operables, tenant_id").eq("auth_id", session.user.id).single();
 
           // CRÍTICO (fix 2026-05-30 — "veo Conecta tu Instagram con todo
           // conectado" + "sidebar sin selector de local"): si el JWT en
@@ -693,7 +693,7 @@ function AppMain() {
       if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
         setUser(curr => {
           if (curr) return curr;
-          db.from("usuarios").select("id, auth_id, email, nombre, rol, activo, password_temporal, locales, cuentas_visibles, cuentas_operables, tenant_id").eq("auth_id", session.user.id).single().then(({ data: perfil }) => {
+          db.from("usuarios").select("id, auth_id, email, nombre, rol, rol_id, activo, password_temporal, locales, cuentas_visibles, cuentas_operables, tenant_id").eq("auth_id", session.user.id).single().then(({ data: perfil }) => {
             if (perfil && perfil.activo !== false) applyLogin(perfil);
           });
           return curr;
@@ -706,7 +706,7 @@ function AppMain() {
       }
       if (event === "USER_UPDATED" && session?.user) {
         const { data: perfil } = await db.from("usuarios")
-          .select("id, auth_id, email, nombre, rol, activo, password_temporal, locales, cuentas_visibles, cuentas_operables, tenant_id")
+          .select("id, auth_id, email, nombre, rol, rol_id, activo, password_temporal, locales, cuentas_visibles, cuentas_operables, tenant_id")
           .eq("auth_id", session.user.id).single();
         if (perfil) {
           setUser(curr => curr ? { ...curr, ...perfil } as Usuario : curr);
@@ -719,13 +719,23 @@ function AppMain() {
   },[]);
 
   const applyLogin = async (u: UsuarioRow) => {
-    const [{ data: permsData }, { data: locsData }] = await Promise.all([
+    // RBAC fix 11-jun: además de los permisos sueltos (usuario_permisos),
+    // traer los del rol asignado (rol_permisos via rol_id). Sin esto, un
+    // usuario creado solo con rol (ej. Socio) veía el sidebar vacío — el
+    // backend lo dejaba pasar (auth_tiene_permiso) pero la UI no se enteraba.
+    const [{ data: permsData }, { data: locsData }, { data: rolPermsData }] = await Promise.all([
       db.from("usuario_permisos").select("modulo_slug").eq("usuario_id", u.id),
       db.from("usuario_locales").select("local_id").eq("usuario_id", u.id),
+      u.rol_id
+        ? db.from("rol_permisos").select("modulo_slug").eq("rol_id", u.rol_id)
+        : Promise.resolve({ data: [] as Array<{ modulo_slug: string }> }),
     ]);
     const enriched: Usuario = {
       ...u,
-      _permisos: (permsData || []).map((p: { modulo_slug: string }) => p.modulo_slug),
+      _permisos: unirPermisos(
+        (rolPermsData || []).map((p: { modulo_slug: string }) => p.modulo_slug),
+        (permsData || []).map((p: { modulo_slug: string }) => p.modulo_slug),
+      ),
       _locales: (locsData || []).length ? (locsData || []).map((l: { local_id: number }) => l.local_id) : (u.locales || []),
     };
     setUser(enriched);

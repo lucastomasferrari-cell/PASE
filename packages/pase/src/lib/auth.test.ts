@@ -4,6 +4,7 @@ import {
   cuentasVisibles, cuentasOperables, cuentasVisiblesParaListados,
   puedeVerCuenta, puedeOperarCuenta, puedeVerMovimientosDeCuenta,
   mergeLocales, debeReintentarLocales, debeReintentarCargaVacia,
+  unirPermisos,
 } from "./auth";
 import type { Usuario } from "../types";
 
@@ -48,6 +49,33 @@ describe("debeReintentarCargaVacia (genérico — usado en loadEmpleados)", () =
   });
   it("alcanzó el tope → NO reintenta (dataset realmente vacío)", () => {
     expect(debeReintentarCargaVacia(0, true, 3, 3)).toBe(false);
+  });
+});
+
+describe("unirPermisos (RBAC fix 11-jun: rol + sueltos)", () => {
+  it("usuario solo con rol (ej. Socio recién creado) → permisos del rol", () => {
+    expect(unirPermisos(["finanzas", "eerr", "negocio"], []))
+      .toEqual(["finanzas", "eerr", "negocio"]);
+  });
+  it("usuario solo con permisos sueltos (legacy) → idéntico a antes del fix", () => {
+    expect(unirPermisos([], ["caja", "ventas"])).toEqual(["caja", "ventas"]);
+  });
+  it("rol + extras → unión sin duplicados", () => {
+    expect(unirPermisos(["finanzas", "eerr"], ["eerr", "rentabilidad"]))
+      .toEqual(["finanzas", "eerr", "rentabilidad"]);
+  });
+  it("ambos vacíos → vacío (sidebar sin módulos, comportamiento previo)", () => {
+    expect(unirPermisos([], [])).toEqual([]);
+  });
+  it("la unión alimenta tienePermiso vía _permisos (caso Socio end-to-end)", () => {
+    const socio = {
+      rol: "encargado", // legacy col: los no-dueño quedan como encargado
+      _permisos: unirPermisos(["finanzas", "eerr", "negocio", "rentabilidad"], []),
+    };
+    expect(tienePermiso(socio, "finanzas")).toBe(true);
+    expect(tienePermiso(socio, "rentabilidad")).toBe(true);
+    expect(tienePermiso(socio, "rrhh")).toBe(false);
+    expect(tienePermiso(socio, "usuarios")).toBe(false);
   });
 });
 

@@ -43,6 +43,14 @@ export default function Config(_props: ConfigProps) {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(()=>{load();},[]);
 
+  // /api/auth-admin exige Authorization: Bearer <jwt> desde la auditoría
+  // CRIT-1 (21-may). Sin esto responde 401 missing_authorization_header.
+  const getAuthHeaders=async():Promise<Record<string,string>|null>=>{
+    const {data:{session}}=await db.auth.getSession();
+    if(!session?.access_token)return null;
+    return {"Content-Type":"application/json","Authorization":`Bearer ${session.access_token}`};
+  };
+
   const savingRef = useRef(false);
   const guardar=async()=>{
     if(savingRef.current)return;
@@ -50,9 +58,11 @@ export default function Config(_props: ConfigProps) {
     savingRef.current=true;
     setSaving(true);setFormErr("");
     try{
+      const headers=await getAuthHeaders();
+      if(!headers){setFormErr("Tu sesión venció. Recargá la página y volvé a intentar.");return;}
       const r=await fetch("/api/auth-admin",{
         method:"POST",
-        headers:{"Content-Type":"application/json"},
+        headers,
         body:JSON.stringify({action:"create",nombre:form.nombre,usuario:form.email,password:form.password,rol:form.rol,locales:form.locales}),
       });
       const d=await r.json();
@@ -75,9 +85,11 @@ export default function Config(_props: ConfigProps) {
         setFormErr("Usuario legacy sin Supabase Auth — migralo desde /usuarios primero.");
         return;
       }
+      const headers=await getAuthHeaders();
+      if(!headers){setFormErr("Tu sesión venció. Recargá la página y volvé a intentar.");return;}
       const r=await fetch("/api/auth-admin",{
         method:"POST",
-        headers:{"Content-Type":"application/json"},
+        headers,
         body:JSON.stringify({action:"change_password",authId:editModal.auth_id,password:editModal.password}),
       });
       const d=await r.json();

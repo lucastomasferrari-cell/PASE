@@ -178,6 +178,20 @@ export function esEncargado(user: MaybeUser): boolean {
 }
 
 /**
+ * Une los permisos del rol RBAC (rol_permisos via usuarios.rol_id) con los
+ * permisos sueltos del usuario (usuario_permisos), sin duplicados.
+ *
+ * Fix 11-jun: applyLogin hidrataba _permisos SOLO desde usuario_permisos,
+ * ignorando el rol asignado. Un usuario con rol "Socio" y cero checkboxes
+ * veía el sidebar vacío aunque el backend (auth_tiene_permiso) sí le diera
+ * acceso. Los permisos efectivos del frontend ahora son la unión de ambos,
+ * espejando la semántica OR de auth_tiene_permiso en Postgres.
+ */
+export function unirPermisos(rolPermisos: string[], permisosSueltos: string[]): string[] {
+  return Array.from(new Set([...rolPermisos, ...permisosSueltos]));
+}
+
+/**
  * Decide qué hacer con localActivo para este usuario al loguearse/restaurar.
  * Parte del fix del bug #27: encargados con >1 local NO pueden operar con
  * localActivo=null, así que se les muestra un modal bloqueante.

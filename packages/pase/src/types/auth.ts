@@ -18,6 +18,9 @@ export interface UsuarioRow {
   cuentas_operables?: string[] | null;
   /** TASK 0.15: NULL para superadmin (fuera de tenants); UUID para resto. */
   tenant_id: string | null;
+  /** Rol RBAC asignado (FK a roles.id, migración 202605201900). NULL = sin
+   *  rol, el usuario opera solo con permisos sueltos de usuario_permisos. */
+  rol_id?: string | null;
 }
 
 export interface Usuario extends UsuarioRow {

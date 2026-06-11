@@ -15,6 +15,13 @@ interface UsuariosProps {
 
 type ModalState = null | "new" | Usuario;
 
+// slug → label legible, para el resumen "Qué incluye este rol". Slugs que no
+// estén en MODULOS ni PERMISOS_EXTRAS (legacy/raros) se muestran crudos.
+const SLUG_LABELS = new Map<string, string>([
+  ...MODULOS.map(m => [m.slug, `${m.icon} ${m.label}`] as [string, string]),
+  ...PERMISOS_EXTRAS.map(p => [p.slug, p.label] as [string, string]),
+]);
+
 // AUDIT F2D #29: SHA-256 client-side eliminado. Antes este archivo escribía
 // `usuarios.password` con SHA-256 sin sal (rompible con rainbow) y filtraba
 // los primeros 16 chars del hash en console.log. Ahora solo cambia password
@@ -44,6 +51,9 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
   // se exponen en un dropdown dentro del form de usuario. Si el dueño
   // necesita un set custom, va a /usuarios/roles a crear uno.
   const [rolesDisponibles, setRolesDisponibles] = useState<Array<{ id: string; nombre: string; slug: string; es_sistema: boolean }>>([]);
+  // rol_id → slugs de permisos del rol. Alimenta el resumen read-only
+  // "Este rol incluye: ..." del modal (Opción B, 11-jun).
+  const [rolPermsMap, setRolPermsMap] = useState<Map<string, string[]>>(new Map());
   const { toast, showError } = useToast();
 
   const load = async () => {
@@ -67,12 +77,21 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
 
   // Cargar roles disponibles (sistema + custom del tenant) para el dropdown
   // del form. RLS filtra: sistema (tenant_id NULL) + tenant del user.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     void db.from("roles").select("id, nombre, slug, es_sistema, tenant_id")
       .order("es_sistema", { ascending: false })
       .order("nombre")
       .then(({ data }) => setRolesDisponibles(data ?? []));
+    // Permisos de cada rol, para el resumen del modal. RLS filtra a roles
+    // del sistema + del tenant (la tabla es chica, traerla entera es barato).
+    void db.from("rol_permisos").select("rol_id, modulo_slug")
+      .then(({ data }) => {
+        const map = new Map<string, string[]>();
+        (data ?? []).forEach((p: { rol_id: string; modulo_slug: string }) => {
+          map.set(p.rol_id, [...(map.get(p.rol_id) ?? []), p.modulo_slug]);
+        });
+        setRolPermsMap(map);
+      });
   }, []);
 
   // Sprint Realtime: cambios remotos en usuarios o usuario_permisos del
@@ -126,6 +145,14 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
     setForm(f => ({ ...f, cuentas_operables: f.cuentas_operables.includes(c) ? f.cuentas_operables.filter(x => x !== c) : [...f.cuentas_operables, c] }));
   };
 
+  // /api/auth-admin exige Authorization: Bearer <jwt> desde la auditoría
+  // CRIT-1 (21-may). Sin esto responde 401 missing_authorization_header.
+  const getAuthHeaders = async (): Promise<Record<string, string> | null> => {
+    const { data: { session } } = await db.auth.getSession();
+    if (!session?.access_token) return null;
+    return { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` };
+  };
+
   const guardando = useRef(false);
   const guardar = async () => {
     if (!form.nombre || !form.email) return;
@@ -145,8 +172,10 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
         // dueno = acceso total, encargado = matriz custom. Eliminados los
         // roles intermedios (admin/compras/cajero) de la UI.
         const rolNuevo = form.esDueno ? "dueno" : "encargado";
+        const headers = await getAuthHeaders();
+        if (!headers) { setErr("Tu sesión venció. Recargá la página y volvé a intentar."); setSaving(false); guardando.current = false; return; }
         const r = await fetch("/api/auth-admin", {
-          method: "POST", headers: { "Content-Type": "application/json" },
+          method: "POST", headers,
           body: JSON.stringify({ action:"create", nombre:form.nombre, usuario:form.email, password:form.password, rol:rolNuevo, locales:form.locales_ids }),
         });
         const d = await r.json();
@@ -183,8 +212,10 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
             return;
           }
           try {
+            const headers = await getAuthHeaders();
+            if (!headers) { setErr("Tu sesión venció. Recargá la página y volvé a intentar."); setSaving(false); return; }
             const r = await fetch("/api/auth-admin", {
-              method: "POST", headers: { "Content-Type": "application/json" },
+              method: "POST", headers,
               body: JSON.stringify({ action:"change_password", authId:modal.auth_id, password:form.password }),
             });
             const d = await r.json();
@@ -238,8 +269,12 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
 
       setModal(null); load();
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
-    setSaving(false);
-    guardando.current = false;
+    // finally-style: los return tempranos de error dejaban guardando.current
+    // en true → el botón Guardar quedaba muerto hasta reabrir el modal.
+    finally {
+      setSaving(false);
+      guardando.current = false;
+    }
   };
 
   const toggleActivo = async (u: Usuario) => {
@@ -267,8 +302,8 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
       <PageHeader
         title="Usuarios"
         info={<>
-          Creá usuarios del equipo y asignales exactamente los permisos que querés que tengan. Sin roles predefinidos — vos decidís qué puede hacer cada uno (módulos, cuentas, sucursales).<br /><br />
-          La única excepción es el toggle <strong>"Dueño/Admin"</strong> que da acceso total (atajo para cuando un usuario debe ver todo).
+          Creá usuarios del equipo y asignales un <strong>rol</strong> (Dueño, Socio, Administrador, Encargado, Cajero, Contador, o uno custom). El rol define qué módulos ve y qué puede hacer.<br /><br />
+          Si un rol no alcanza, podés sumarle permisos extra al usuario desde Editar, o crear un rol custom desde "Gestionar roles".
         </>}
         actions={<button className="btn btn-acc" onClick={abrirNuevo}>+ Nuevo usuario</button>}
       />
@@ -288,6 +323,9 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
               const esDueno = u.rol === "dueno" || u.rol === "admin" || u.rol === "superadmin";
               const nombres = esDueno ? null : getUserLocaleNamesArray(u);
               const cantPermisos = (u._permisos || []).length;
+              // Rol RBAC asignado (si tiene): mostrarlo en la columna Acceso
+              // en vez de "Sin permisos" / "N módulos" (que solo cuenta sueltos).
+              const rolAsignado = u.rol_id ? rolesDisponibles.find(r => r.id === u.rol_id) : null;
               return (
                 <tr key={u.id} style={{ opacity: u.activo === false ? 0.5 : 1 }}>
                   <td style={{ padding: "12px" }}>
@@ -323,6 +361,11 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                   <td style={{ fontSize: "var(--pase-fs-sm)" }}>
                     {esDueno ? (
                       <span style={{ color: "var(--pase-celeste)", fontWeight: 500 }}>Dueño/Admin</span>
+                    ) : rolAsignado ? (
+                      <span style={{ color: "var(--pase-text)", fontWeight: 500 }}>
+                        {rolAsignado.nombre}
+                        {cantPermisos > 0 && <span style={{ color: "var(--pase-text-muted)", fontWeight: 400 }}> +{cantPermisos} extra{cantPermisos > 1 ? "s" : ""}</span>}
+                      </span>
                     ) : cantPermisos === 0 ? (
                       <span style={{ color: "var(--pase-text-muted)", fontStyle: "italic" }}>Sin permisos</span>
                     ) : (
@@ -451,7 +494,15 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                         // Si elige Dueño, marcamos esDueno true para que el save
                         // legacy ponga rol='dueno' en usuarios.
                         const esDuenoNuevo = rolElegido?.slug === "dueno";
-                        setForm((f) => ({ ...f, rol_id: newRolId, esDueno: esDuenoNuevo }));
+                        // En "nuevo" con rol elegido los checkboxes se ocultan —
+                        // limpiamos modulos para no persistir tildes invisibles
+                        // que el dueño marcó antes de decidirse por un rol.
+                        setForm((f) => ({
+                          ...f,
+                          rol_id: newRolId,
+                          esDueno: esDuenoNuevo,
+                          modulos: (modal === "new" && newRolId) ? [] : f.modulos,
+                        }));
                       }}
                       style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "0.5px solid var(--pase-border-strong)", background: "var(--pase-bg)", color: "var(--pase-text)", fontSize: "var(--pase-fs-base)" }}
                     >
@@ -485,45 +536,87 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
                     )}
                   </div>
 
-                  {/* ─── Módulos ───────────────────────────────────────── */}
-                  <SectionTitle locked={isSelf || form.esDueno}>
-                    Módulos habilitados {form.esDueno && <span style={{ textTransform: "none", letterSpacing: 0, fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", fontWeight: 400, marginLeft: 6 }}>(todos por ser dueño/admin)</span>}
-                  </SectionTitle>
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(180px, 1fr))", gap:8, marginBottom: 20 }}>
-                    {MODULOS.map(m => {
-                      const checked = isDueno || form.modulos.includes(m.slug);
-                      const blockedSelfGrant = m.slug === "usuarios" && !currentUserPuedeGrantUsuarios;
-                      const finalLocked = lockPermisos || blockedSelfGrant;
-                      return (
-                        <PermisoCheck
-                          key={m.slug}
-                          checked={checked}
-                          disabled={finalLocked}
-                          onChange={() => !finalLocked && toggleModulo(m.slug)}
-                          label={`${m.icon} ${m.label}`}
-                          title={blockedSelfGrant ? "Solo dueño/admin puede otorgar este permiso" : undefined}
-                        />
-                      );
-                    })}
-                  </div>
+                  {/* ─── Permisos según rol / checkboxes (Opción B, 11-jun) ──
+                      Con rol no-dueño elegido: resumen read-only de lo que el
+                      rol incluye. Los checkboxes se ocultan al CREAR (el rol
+                      alcanza) y en EDITAR quedan como "Permisos extra" que
+                      suman al rol (misma semántica OR que auth_tiene_permiso).
+                      Sin rol elegido: checkboxes como siempre (modo legacy). */}
+                  {(() => {
+                    const tieneRolNoDueno = !!form.rol_id && !isDueno;
+                    const permisosDelRol = form.rol_id ? (rolPermsMap.get(form.rol_id) ?? []) : [];
+                    const mostrarCheckboxes = !tieneRolNoDueno || modal !== "new";
+                    const tituloModulos = tieneRolNoDueno ? "Permisos extra (suman al rol)" : "Módulos habilitados";
+                    return (<>
+                      {tieneRolNoDueno && (
+                        <>
+                          <SectionTitle>Qué incluye este rol</SectionTitle>
+                          {permisosDelRol.length === 0 ? (
+                            <div className="alert alert-warn" style={{ marginBottom: 16 }}>
+                              Este rol no tiene permisos cargados. Editalo desde "Gestionar roles" o sumá permisos sueltos.
+                            </div>
+                          ) : (
+                            <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom: 16 }}>
+                              {permisosDelRol.map(slug => (
+                                <span key={slug} style={{
+                                  padding:"5px 10px", borderRadius:999, fontSize:"var(--pase-fs-xs)",
+                                  background:"var(--pase-celeste-100)", border:"0.5px solid var(--pase-celeste-300)",
+                                  color:"var(--pase-text)", fontWeight:500,
+                                }}>
+                                  {SLUG_LABELS.get(slug) ?? slug}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
 
-                  {/* ─── Permisos avanzados ────────────────────────────── */}
-                  <SectionTitle locked={isSelf}>Permisos avanzados</SectionTitle>
-                  <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom: 20 }}>
-                    {PERMISOS_EXTRAS.map(p => {
-                      const checked = isDueno || form.modulos.includes(p.slug);
-                      return (
-                        <PermisoCheck
-                          key={p.slug}
-                          checked={checked}
-                          disabled={lockPermisos}
-                          onChange={() => !lockPermisos && toggleModulo(p.slug)}
-                          label={p.label}
-                          description={p.descripcion}
-                        />
-                      );
-                    })}
-                  </div>
+                      {mostrarCheckboxes && (<>
+                        {/* ─── Módulos ─────────────────────────────────── */}
+                        <SectionTitle locked={isSelf || form.esDueno}>
+                          {tituloModulos} {form.esDueno && <span style={{ textTransform: "none", letterSpacing: 0, fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", fontWeight: 400, marginLeft: 6 }}>(todos por ser dueño/admin)</span>}
+                        </SectionTitle>
+                        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(180px, 1fr))", gap:8, marginBottom: 20 }}>
+                          {MODULOS.map(m => {
+                            const checked = isDueno || form.modulos.includes(m.slug);
+                            const incluidoEnRol = tieneRolNoDueno && permisosDelRol.includes(m.slug);
+                            const blockedSelfGrant = m.slug === "usuarios" && !currentUserPuedeGrantUsuarios;
+                            const finalLocked = lockPermisos || blockedSelfGrant || incluidoEnRol;
+                            return (
+                              <PermisoCheck
+                                key={m.slug}
+                                checked={checked || incluidoEnRol}
+                                disabled={finalLocked}
+                                onChange={() => !finalLocked && toggleModulo(m.slug)}
+                                label={`${m.icon} ${m.label}`}
+                                title={blockedSelfGrant ? "Solo dueño/admin puede otorgar este permiso" : incluidoEnRol ? "Ya incluido en el rol elegido" : undefined}
+                              />
+                            );
+                          })}
+                        </div>
+
+                        {/* ─── Permisos avanzados ──────────────────────── */}
+                        <SectionTitle locked={isSelf}>Permisos avanzados</SectionTitle>
+                        <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom: 20 }}>
+                          {PERMISOS_EXTRAS.map(p => {
+                            const incluidoEnRol = tieneRolNoDueno && permisosDelRol.includes(p.slug);
+                            const checked = isDueno || form.modulos.includes(p.slug) || incluidoEnRol;
+                            const finalLocked = lockPermisos || incluidoEnRol;
+                            return (
+                              <PermisoCheck
+                                key={p.slug}
+                                checked={checked}
+                                disabled={finalLocked}
+                                onChange={() => !finalLocked && toggleModulo(p.slug)}
+                                label={p.label}
+                                description={incluidoEnRol ? "Ya incluido en el rol elegido." : p.descripcion}
+                              />
+                            );
+                          })}
+                        </div>
+                      </>)}
+                    </>);
+                  })()}
 
                   {/* ─── Cuentas de Tesorería ──────────────────────────── */}
                   {!isDueno && (
