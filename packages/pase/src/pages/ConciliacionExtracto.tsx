@@ -1625,8 +1625,8 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
             {(() => {
               const q = busquedaProv.trim().toLowerCase();
               const filtrados = q.length === 0
-                ? proveedoresList.slice(0, 50)
-                : proveedoresList.filter(p => p.nombre.toLowerCase().includes(q)).slice(0, 50);
+                ? proveedoresList
+                : proveedoresList.filter(p => p.nombre.toLowerCase().includes(q));
               if (filtrados.length === 0) {
                 return <div style={{ padding: 14, fontSize: 12, color: "var(--muted2)" }}>Sin resultados. Probá con otra parte del nombre, o creá el proveedor en Compras → Proveedores y volvé.</div>;
               }
