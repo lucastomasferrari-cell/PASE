@@ -119,9 +119,11 @@ export async function softDeleteMesa(id: number): Promise<{ error: string | null
 
 // ─── Operaciones de mesa con override (Sprint 4) ──────────────────────────
 // Sprint A2 (2026-05-19): cuando el flag offline-first está ON, escribimos
-// local + encolamos. La capa offline NO transporta managerId/motivo: el
-// override ya fue verificado en cliente al mostrar el diálogo, y el server
-// re-aplica auth_es_manager() al procesar la cola.
+// local + encolamos. Bug 11-jun: la capa offline ahora SÍ transporta
+// managerId/motivo — las RPCs internas (fn_transferir_mesa_comanda, etc.)
+// exigen manager (MANAGER_REQUERIDO) y auditan en ventas_pos_overrides;
+// el comentario viejo que decía que el server "re-aplicaba auth solo" era
+// incorrecto y dejaba la auditoría sin manager.
 
 export async function transferirMesaService(
   ventaId: number,
@@ -133,7 +135,7 @@ export async function transferirMesaService(
   if (featureFlags.offlineFirstVentas) {
     const { transferirMesaOffline } = await import('./offline/transferenciasOfflineService');
     try {
-      await transferirMesaOffline({ ventaId, mesaDestinoId });
+      await transferirMesaOffline({ ventaId, mesaDestinoId, managerId, motivo });
       return { error: null };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error transfiriendo mesa (offline)';
@@ -159,7 +161,7 @@ export async function unirMesasService(
   if (featureFlags.offlineFirstVentas) {
     const { unirMesasOffline } = await import('./offline/transferenciasOfflineService');
     try {
-      await unirMesasOffline({ ventaDestinoId, ventaOrigenId });
+      await unirMesasOffline({ ventaDestinoId, ventaOrigenId, managerId, motivo });
       return { error: null };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error uniendo mesas (offline)';
@@ -195,6 +197,7 @@ export async function partirCuentaService(
       try {
         const r = await partirCuentaOffline({
           ventaOriginalId: ventaId, itemsToMove: itemIds, tenantId, localId,
+          managerId, motivo,
         });
         return { ventaNuevaId: r.tempVentaNuevaId, error: null };
       } catch (err) {

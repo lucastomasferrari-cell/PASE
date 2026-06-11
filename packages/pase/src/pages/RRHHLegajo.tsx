@@ -255,7 +255,8 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
   const antiguedadAnios = antiguedadMs / (365.25 * 24 * 60 * 60 * 1000);
   const diasVacAnuales = diasVacacionesPorAnio(Math.floor(antiguedadAnios));
   const diasVacPorMes = diasVacAnuales / 12;
-  const vacAcumuladas = calcularVacaciones(emp.fecha_inicio, vacTomadas);
+  const tieneLiqFinal = pagosEsp.some(p => p.tipo === "liquidacion_final" && !p.pendiente);
+  const vacAcumuladas = tieneLiqFinal ? 0 : calcularVacaciones(emp.fecha_inicio, vacTomadas);
 
   // SAC teórico — toma mejor sueldo del semestre (Art 122 LCT) prorrateado
   // por tiempo efectivamente trabajado (considera fecha_inicio + historial).
@@ -265,7 +266,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
   const sueldoNum = parseFloat(String(emp.sueldo_mensual || 0)) || 0;
   const sinSueldo = sueldoNum <= 0;
   const mesesEnSemestre = mesesTrabajadosEnSemestre(emp.fecha_inicio, mesActual, anioActual);
-  const sacAcumulado = calcularSACMejorSueldo({
+  const sacAcumulado = tieneLiqFinal ? 0 : calcularSACMejorSueldo({
     sueldoActual: sueldoNum,
     historialSueldos: histSueldos,
     fechaInicio: emp.fecha_inicio,

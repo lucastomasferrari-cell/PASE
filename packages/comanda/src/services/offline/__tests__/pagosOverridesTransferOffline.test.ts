@@ -150,19 +150,29 @@ describe('transferenciasOfflineService', () => {
     _resetSingletonForTest();
   });
 
-  it('transferirMesaOffline cambia mesa_id local + encola RPC', async () => {
+  it('transferirMesaOffline cambia mesa_id local + encola RPC con manager/motivo', async () => {
     const { tempVentaId } = await setupVentaConItems();
-    await transferirMesaOffline({ ventaId: tempVentaId, mesaDestinoId: 99 });
+    await transferirMesaOffline({
+      ventaId: tempVentaId, mesaDestinoId: 99, managerId: 'mgr-uuid', motivo: 'cliente pidió mudarse',
+    });
     const v = await ventasRepo.getById(tempVentaId);
     expect(v?.mesa_id).toBe(99);
     const ops = await listPendingOps();
-    expect(ops.some((o) => o.target === 'fn_transferir_mesa_comanda')).toBe(true);
+    const op = ops.find((o) => o.target === 'fn_transferir_mesa_comanda');
+    expect(op).toBeDefined();
+    // Bug 11-jun: la capa offline descartaba manager/motivo y la RPC interna
+    // exige manager (MANAGER_REQUERIDO) — ahora viajan en el payload.
+    const payload = op?.payload as Record<string, unknown>;
+    expect(payload.p_manager_id).toBe('mgr-uuid');
+    expect(payload.p_motivo).toBe('cliente pidió mudarse');
   });
 
   it('unirMesasOffline mueve items destino + cierra origen + suma totales', async () => {
     const { tempVentaId: destino } = await setupVentaConItems(); // total 1800
     const { tempVentaId: origen, itemA: itemAOrigen } = await setupVentaConItems(); // otra venta total 1800
-    await unirMesasOffline({ ventaDestinoId: destino, ventaOrigenId: origen });
+    await unirMesasOffline({
+      ventaDestinoId: destino, ventaOrigenId: origen, managerId: 'mgr-uuid', motivo: 'mesas contiguas unidas',
+    });
     // Venta destino: ahora tiene items propios + items de origen
     const itemsDestino = await ventasItemsRepo.listByVenta(destino);
     expect(itemsDestino).toHaveLength(4); // 2 originales + 2 de origen
@@ -183,6 +193,7 @@ describe('transferenciasOfflineService', () => {
       ventaOriginalId: tempVentaId,
       itemsToMove: [itemA], // 2×500=1000
       tenantId: 'T', localId: 1,
+      managerId: 'mgr-uuid', motivo: 'cliente paga por separado',
     });
     expect(res.tempVentaNuevaId).toBeLessThan(0);
     // Venta original sin itemA: subtotal y total bajaron 1000
@@ -206,6 +217,7 @@ describe('transferenciasOfflineService', () => {
       ventaOriginalId: tempVentaId,
       itemsToMove: [itemA],
       tenantId: 'T', localId: 1,
+      managerId: 'mgr-uuid', motivo: 'cliente paga por separado',
     });
     const ops = await listPendingOps();
     const partirOp = ops.find((o) => o.target === 'fn_partir_cuenta_comanda');

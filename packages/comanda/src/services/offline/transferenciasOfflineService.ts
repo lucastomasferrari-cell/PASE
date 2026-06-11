@@ -31,6 +31,12 @@ function nextTempId(): number {
 export interface TransferirMesaArgs {
   ventaId: number;
   mesaDestinoId: number;
+  // Bug 11-jun: la capa offline NO transportaba manager/motivo, pero la RPC
+  // interna (fn_transferir_mesa_comanda) exige manager (MANAGER_REQUERIDO)
+  // y audita en ventas_pos_overrides. Cierra la deuda "los _offline no
+  // auditan manager_id" del 19-may.
+  managerId: string;
+  motivo: string;
 }
 
 export async function transferirMesaOffline(args: TransferirMesaArgs): Promise<{ queuedOpId: string }> {
@@ -48,6 +54,8 @@ export async function transferirMesaOffline(args: TransferirMesaArgs): Promise<{
       p_venta_id: args.ventaId > 0 ? args.ventaId : null,
       p_venta_idempotency_uuid: args.ventaId < 0 ? '__pending_parent__' : null,
       p_mesa_destino_id: args.mesaDestinoId,
+      p_manager_id: args.managerId,
+      p_motivo: args.motivo,
       p_idempotency_uuid: genUUID(),
     },
     reconcile: { kind: 'none' },
@@ -61,6 +69,8 @@ export async function transferirMesaOffline(args: TransferirMesaArgs): Promise<{
 export interface UnirMesasArgs {
   ventaDestinoId: number;
   ventaOrigenId: number;
+  managerId: string;
+  motivo: string;
 }
 
 export async function unirMesasOffline(args: UnirMesasArgs): Promise<{ queuedOpId: string }> {
@@ -95,6 +105,8 @@ export async function unirMesasOffline(args: UnirMesasArgs): Promise<{ queuedOpI
       p_venta_destino_idempotency_uuid: args.ventaDestinoId < 0 ? '__pending_parent__' : null,
       p_venta_origen_id: args.ventaOrigenId > 0 ? args.ventaOrigenId : null,
       p_venta_origen_idempotency_uuid: args.ventaOrigenId < 0 ? '__pending_parent__' : null,
+      p_manager_id: args.managerId,
+      p_motivo: args.motivo,
       p_idempotency_uuid: genUUID(),
     },
     reconcile: { kind: 'none' },
@@ -110,6 +122,8 @@ export interface PartirCuentaArgs {
   itemsToMove: number[];   // ids de items que van a la venta nueva
   tenantId: string;
   localId: number;
+  managerId: string;
+  motivo: string;
 }
 
 export interface PartirCuentaResult {
@@ -171,6 +185,8 @@ export async function partirCuentaOffline(args: PartirCuentaArgs): Promise<Parti
       p_venta_original_id: args.ventaOriginalId > 0 ? args.ventaOriginalId : null,
       p_venta_original_idempotency_uuid: args.ventaOriginalId < 0 ? '__pending_parent__' : null,
       p_item_ids: args.itemsToMove,
+      p_manager_id: args.managerId,
+      p_motivo: args.motivo,
       p_idempotency_uuid: genUUID(),
     },
     reconcile: { kind: 'venta', tempVentaId: tempVentaNuevaId },

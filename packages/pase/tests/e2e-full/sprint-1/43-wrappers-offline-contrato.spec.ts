@@ -94,18 +94,24 @@ const PROBES: Array<[string, Record<string, unknown>]> = [
     p_monto: 1, p_motivo: "probe contrato e2e", p_manager_id: null,
     p_idempotency_uuid: null, p_idempotency_key: null,
   }],
+  // Mesa-ops: desde 202606111300 los wrappers aceptan p_manager_id/p_motivo
+  // (la capa offline ahora los transporta — bug 11-jun parte 2). Los probes
+  // los incluyen a propósito: si alguien revierte la firma, esto da PGRST202.
   ["fn_transferir_mesa_comanda_offline", {
     p_venta_id: NX_ID, p_venta_idempotency_uuid: NX_UUID,
-    p_mesa_destino_id: NX_ID, p_idempotency_uuid: null, p_idempotency_key: null,
+    p_mesa_destino_id: NX_ID, p_manager_id: null, p_motivo: "probe contrato e2e",
+    p_idempotency_uuid: null, p_idempotency_key: null,
   }],
   ["fn_unir_mesas_comanda_offline", {
     p_venta_destino_id: NX_ID, p_venta_destino_idempotency_uuid: NX_UUID,
     p_venta_origen_id: NX_ID, p_venta_origen_idempotency_uuid: NX_UUID,
+    p_manager_id: null, p_motivo: "probe contrato e2e",
     p_idempotency_uuid: null, p_idempotency_key: null,
   }],
   ["fn_partir_cuenta_comanda_offline", {
     p_venta_original_id: NX_ID, p_venta_original_idempotency_uuid: NX_UUID,
-    p_item_ids: [NX_ID], p_idempotency_uuid: null, p_idempotency_key: null,
+    p_item_ids: [NX_ID], p_manager_id: null, p_motivo: "probe contrato e2e",
+    p_idempotency_uuid: null, p_idempotency_key: null,
   }],
 ];
 
