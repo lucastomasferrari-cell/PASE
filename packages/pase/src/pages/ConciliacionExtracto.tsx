@@ -988,17 +988,19 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
           {/* BLOQUES POR PROVEEDOR CON DIFERENCIA — lo más accionable.
               Las transferencias y los pagos en PASE no se pueden aparear
               1-a-1 (Anto carga en tandas), pero la DIFERENCIA de totales
-              dice exactamente cuánta plata falta (o sobra) cargar. */}
+              dice exactamente cuánta plata falta (o sobra) cargar.
+              Lucas 10-jun: unificado visualmente con "sueltos" abajo. */}
           {bloquesPorProveedor.length > 0 && (
             <Card>
               <h4 style={{ marginTop: 0, fontSize: 14 }}>
-                🟠 Diferencias por proveedor <span style={{ color: "var(--muted2)" }}>({bloquesPorProveedor.length})</span>
+                🟠 Falta cargar en PASE · <span style={{ color: "var(--muted2)" }}>agrupado por proveedor</span> <span style={{ color: "var(--muted2)" }}>({bloquesPorProveedor.length})</span>
               </h4>
               <p style={{ color: "var(--muted2)", fontSize: 12, lineHeight: 1.5, marginBottom: 12 }}>
-                Las transferencias al proveedor no coinciden 1-a-1 con los pagos cargados en PASE
-                (se cargan en tandas, en fechas distintas). Lo que importa: la <strong>diferencia del total</strong>.
-                Si es negativa, faltan cargar pagos en PASE por ese monto. Si es positiva, hay pagos
-                cargados que corresponden a transferencias de otro mes.
+                El sistema encontró pagos cargados en PASE para estos proveedores y los agrupó con
+                las transferencias del extracto. Lo que importa: la <strong>diferencia del total</strong>.
+                Si es negativa, faltan cargar pagos en PASE. Si es positiva, hay pagos cargados que
+                corresponden a transferencias de otro mes. <em>Abajo (🔴 sueltos) están las transferencias
+                que no se pudieron agrupar con ningún proveedor.</em>
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {bloquesPorProveedor.map(({ bloque, filas, resuelto }) => (
@@ -1116,6 +1118,132 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
               </div>
             </Card>
           )}
+
+          {/* ROJOS — sueltos sin agrupar. Inmediatamente después de los
+              bloques porque son la misma información conceptual (faltan en
+              PASE), solo que estos no se pudieron asociar con proveedor.
+              Lucas 10-jun: "deberia estar todo junto y al principio los que
+              son agrupados por proveedor y abajo los sueltos". */}
+          {(() => {
+            const filasRojas = cruce.extracto.filter(f =>
+              f.estado === "rojo_falta" && !resueltos[`ext:${f.idx}`]
+            );
+            if (filasRojas.length === 0) return null;
+            const numSel = filasRojas.filter(f => seleccionados.has(f.idx)).length;
+            const sumaSel = filasRojas.filter(f => seleccionados.has(f.idx)).reduce((s, f) => s + f.monto, 0);
+            return (
+              <Card>
+                <h4 style={{ marginTop: 0, fontSize: 14 }}>
+                  🔴 Falta cargar en PASE · <span style={{ color: "var(--muted2)" }}>sueltos sin agrupar</span> <span style={{ color: "var(--muted2)" }}>({filasRojas.length})</span>
+                </h4>
+                <p style={{ color: "var(--muted2)", fontSize: 12, lineHeight: 1.5, marginBottom: 10 }}>
+                  Son transferencias del extracto que no se pudieron asociar con ningún proveedor
+                  (porque el proveedor no existe en PASE, no hay pagos cargados para él, o el sistema
+                  no reconoció el nombre del titular MP). Tildalas para crear varias juntas, asignalas
+                  a un proveedor existente para que se aprenda, o ignoralas si no aplican.
+                </p>
+                <div style={{
+                  display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap",
+                  padding: "8px 10px", background: "var(--s2)", borderRadius: 6, marginBottom: 10,
+                }}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => {
+                      const todos = new Set(filasRojas.map(f => f.idx));
+                      setSeleccionados(numSel === filasRojas.length ? new Set() : todos);
+                    }}
+                  >
+                    {numSel === filasRojas.length ? "Destildar todos" : "Tildar todos"}
+                  </button>
+                  <span style={{ fontSize: 12, color: "var(--muted2)" }}>
+                    {numSel > 0 ? <>{numSel} seleccionados · {fmt_$(sumaSel)}</> : "Nada seleccionado"}
+                  </span>
+                  <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      disabled={numSel === 0 || savingAccion}
+                      onClick={() => {
+                        setResueltos(p => {
+                          const next = { ...p };
+                          for (const f of filasRojas) if (seleccionados.has(f.idx)) next[`ext:${f.idx}`] = "ignorar";
+                          return next;
+                        });
+                        setSeleccionados(new Set());
+                      }}
+                    >
+                      Ignorar seleccionados
+                    </button>
+                    <button
+                      className="btn btn-acc btn-sm"
+                      disabled={numSel === 0 || savingAccion}
+                      onClick={() => setConfirmarLote(true)}
+                    >
+                      {progresoLote ?? `Crear ${numSel > 0 ? numSel : ""} en Caja →`}
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {filasRojas.map(fila => {
+                    const r = resueltos[`ext:${fila.idx}`];
+                    const resuelta = !!r;
+                    let resumen = "";
+                    if (r === "ignorar") resumen = "Ignorada";
+                    else if (r === "creado") resumen = "Creada en Caja";
+                    else if (r === "pagada") resumen = "Marcada como pagada";
+                    else if (r && r.startsWith("prov:")) {
+                      const pid = Number(r.slice(5));
+                      const p = proveedoresList.find(x => x.id === pid);
+                      resumen = `Asignada a ${p?.nombre ?? `proveedor #${pid}`} (se aprenderá al cerrar)`;
+                    } else if (r) resumen = "Resuelta";
+                    return (
+                    <div key={fila.idx} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <input
+                        type="checkbox"
+                        checked={seleccionados.has(fila.idx)}
+                        onChange={() => toggleSeleccion(fila.idx)}
+                        disabled={resuelta}
+                        style={{ marginTop: 14, width: 16, height: 16, cursor: resuelta ? "default" : "pointer" }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <FilaCard
+                          fecha={fila.fecha}
+                          monto={fila.monto}
+                          descripcion={fila.descripcion}
+                          resuelta={resuelta}
+                        >
+                          {resuelta ? (
+                            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                              <span style={{ color: "var(--success)", fontSize: 12 }}>✓ {resumen}</span>
+                              <button className="btn btn-ghost btn-sm" style={{ color: "var(--muted2)" }} onClick={() => deshacerResolucion(fila.idx)}>
+                                ↺ Deshacer
+                              </button>
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              <button className="btn btn-acc btn-sm" onClick={() => setCrearFaltante(fila)}>
+                                Crear en Caja
+                              </button>
+                              <button
+                                className="btn btn-ghost btn-sm"
+                                style={{ color: "var(--acc)" }}
+                                onClick={() => { setAsignarProvFila(fila); setBusquedaProv(""); }}
+                              >
+                                Pertenece a proveedor…
+                              </button>
+                              <button className="btn btn-ghost btn-sm" onClick={() => ignorarExtracto(fila.idx)}>
+                                Ignorar
+                              </button>
+                            </div>
+                          )}
+                        </FilaCard>
+                      </div>
+                    </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            );
+          })()}
 
           {/* AMARILLOS — múltiples candidatos.
               Lucas 10-jun: "si toco marcar como bloque revisado desaparece,
@@ -1274,130 +1402,6 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
               </FilaCard>
             )}
           />
-
-          {/* ROJOS — falta en PASE (con selección múltiple para crear en lote) */}
-          {(() => {
-            const filasRojas = cruce.extracto.filter(f =>
-              f.estado === "rojo_falta" && !resueltos[`ext:${f.idx}`]
-            );
-            if (filasRojas.length === 0) return null;
-            const numSel = filasRojas.filter(f => seleccionados.has(f.idx)).length;
-            const sumaSel = filasRojas.filter(f => seleccionados.has(f.idx)).reduce((s, f) => s + f.monto, 0);
-            return (
-              <Card>
-                <h4 style={{ marginTop: 0, fontSize: 14 }}>
-                  🔴 Faltan en PASE (están en el extracto pero no se cargaron) <span style={{ color: "var(--muted2)" }}>({filasRojas.length})</span>
-                </h4>
-                <p style={{ color: "var(--muted2)", fontSize: 12, lineHeight: 1.5, marginBottom: 10 }}>
-                  Son gastos reales que salieron de MP y no están cargados. Tildá los que correspondan
-                  y crealos todos juntos, o resolvelos de a uno.
-                </p>
-                {/* Barra de acciones de lote */}
-                <div style={{
-                  display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap",
-                  padding: "8px 10px", background: "var(--s2)", borderRadius: 6, marginBottom: 10,
-                }}>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => {
-                      const todos = new Set(filasRojas.map(f => f.idx));
-                      setSeleccionados(numSel === filasRojas.length ? new Set() : todos);
-                    }}
-                  >
-                    {numSel === filasRojas.length ? "Destildar todos" : "Tildar todos"}
-                  </button>
-                  <span style={{ fontSize: 12, color: "var(--muted2)" }}>
-                    {numSel > 0 ? <>{numSel} seleccionados · {fmt_$(sumaSel)}</> : "Nada seleccionado"}
-                  </span>
-                  <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      disabled={numSel === 0 || savingAccion}
-                      onClick={() => {
-                        setResueltos(p => {
-                          const next = { ...p };
-                          for (const f of filasRojas) if (seleccionados.has(f.idx)) next[`ext:${f.idx}`] = "ignorar";
-                          return next;
-                        });
-                        setSeleccionados(new Set());
-                      }}
-                    >
-                      Ignorar seleccionados
-                    </button>
-                    <button
-                      className="btn btn-acc btn-sm"
-                      disabled={numSel === 0 || savingAccion}
-                      onClick={() => setConfirmarLote(true)}
-                    >
-                      {progresoLote ?? `Crear ${numSel > 0 ? numSel : ""} en Caja →`}
-                    </button>
-                  </div>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {filasRojas.map(fila => {
-                    const r = resueltos[`ext:${fila.idx}`];
-                    const resuelta = !!r;
-                    let resumen = "";
-                    if (r === "ignorar") resumen = "Ignorada";
-                    else if (r === "creado") resumen = "Creada en Caja";
-                    else if (r === "pagada") resumen = "Marcada como pagada";
-                    else if (r && r.startsWith("prov:")) {
-                      const pid = Number(r.slice(5));
-                      const p = proveedoresList.find(x => x.id === pid);
-                      resumen = `Asignada a ${p?.nombre ?? `proveedor #${pid}`} (se aprenderá al cerrar)`;
-                    } else if (r) resumen = "Resuelta";
-                    return (
-                    <div key={fila.idx} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                      <input
-                        type="checkbox"
-                        checked={seleccionados.has(fila.idx)}
-                        onChange={() => toggleSeleccion(fila.idx)}
-                        disabled={resuelta}
-                        style={{ marginTop: 14, width: 16, height: 16, cursor: resuelta ? "default" : "pointer" }}
-                      />
-                      <div style={{ flex: 1 }}>
-                        <FilaCard
-                          fecha={fila.fecha}
-                          monto={fila.monto}
-                          descripcion={fila.descripcion}
-                          resuelta={resuelta}
-                        >
-                          {resuelta ? (
-                            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                              <span style={{ color: "var(--success)", fontSize: 12 }}>✓ {resumen}</span>
-                              <button className="btn btn-ghost btn-sm" style={{ color: "var(--muted2)" }} onClick={() => deshacerResolucion(fila.idx)}>
-                                ↺ Deshacer
-                              </button>
-                            </div>
-                          ) : (
-                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                              <button className="btn btn-acc btn-sm" onClick={() => setCrearFaltante(fila)}>
-                                Crear en Caja
-                              </button>
-                              {/* Lucas 10-jun: interfaz de aprendizaje — decir
-                                  "esta transferencia es del proveedor X" así el
-                                  sistema aprende el alias al cerrar. */}
-                              <button
-                                className="btn btn-ghost btn-sm"
-                                style={{ color: "var(--acc)" }}
-                                onClick={() => { setAsignarProvFila(fila); setBusquedaProv(""); }}
-                              >
-                                Pertenece a proveedor…
-                              </button>
-                              <button className="btn btn-ghost btn-sm" onClick={() => ignorarExtracto(fila.idx)}>
-                                Ignorar
-                              </button>
-                            </div>
-                          )}
-                        </FilaCard>
-                      </div>
-                    </div>
-                    );
-                  })}
-                </div>
-              </Card>
-            );
-          })()}
 
           {/* Sobrantes que pertenecen a un bloque — colapsados, informativos.
               NO se deben anular: están explicados por el bloque naranja. */}
