@@ -113,6 +113,8 @@ interface Sobrante {
   importe: number;
   detalle: string;
   bloque_prov?: string | null;
+  prov_id?: number | null;
+  prov_nombre?: string | null;
 }
 
 // Fila histórica de conciliaciones ya cerradas (de conciliacion_corridas).
@@ -684,6 +686,21 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
         }
       }
     }
+    // Sobrantes consumidos por bloques virtuales (asignación manual a
+    // proveedor): si una fila tiene resolución prov:X, todos los sobrantes
+    // cuyo prov_id=X quedan consumidos y no deben aparecer en "Sobran".
+    const provIdsAsignados = new Set<number>();
+    for (const fila of cruce.extracto) {
+      const r = resueltos[`ext:${fila.idx}`];
+      if (r && r.startsWith("prov:")) provIdsAsignados.add(Number(r.slice("prov:".length)));
+    }
+    if (provIdsAsignados.size > 0) {
+      for (const sob of cruce.sobrantes) {
+        if (sob.prov_id && provIdsAsignados.has(sob.prov_id) && !sob.bloque_prov) {
+          s.add(sob.id);
+        }
+      }
+    }
     return s;
   }, [cruce, resueltos]);
 
@@ -755,23 +772,49 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     // Agregar sueltos asignados a proveedor via "Pertenece a proveedor":
     // aparecen inmediatamente en la sección "agrupado por proveedor".
     const provNames = new Map(proveedoresList.map(p => [p.id, p.nombre]));
-    const virtualBloques = new Map<string, { provNombre: string; filas: FilaExtracto[] }>();
+    const virtualBloques = new Map<string, { provId: number; provNombre: string; filas: FilaExtracto[] }>();
     for (const fila of cruce.extracto) {
       if (fila.estado !== "rojo_falta") continue;
       const r = resueltos[`ext:${fila.idx}`];
       if (!r || !r.startsWith("prov:")) continue;
       const provId = Number(r.slice("prov:".length));
       const provNombre = provNames.get(provId) ?? `Proveedor #${provId}`;
-      if (!virtualBloques.has(provNombre)) virtualBloques.set(provNombre, { provNombre, filas: [] });
+      if (!virtualBloques.has(provNombre)) virtualBloques.set(provNombre, { provId, provNombre, filas: [] });
       virtualBloques.get(provNombre)!.filas.push(fila);
     }
     for (const [key, vb] of virtualBloques) {
+      // Buscar sobrantes (pagos cargados en PASE) que pertenecen a este
+      // proveedor — sin esto aparecían como "Sobran en PASE" en vez de
+      // cruzarse contra las transferencias del extracto.
+      const matchingSobrantes = cruce.sobrantes.filter(s =>
+        s.prov_id === vb.provId && !s.bloque_prov
+      );
+      const movs: MovEnCombinacion[] = matchingSobrantes.map(s => ({
+        id: s.id, fecha: s.fecha, importe: s.importe, detalle: s.detalle,
+      }));
+      const sumaPase = matchingSobrantes.reduce((s, m) => s + m.importe, 0);
+      const sumaExt = vb.filas.reduce((s, f) => s + f.monto, 0);
       if (map.has(key)) {
-        for (const f of vb.filas) map.get(key)!.filas.push(f);
+        const entry = map.get(key)!;
+        for (const f of vb.filas) entry.filas.push(f);
+        // Also add matching sobrantes to existing bloque
+        for (const m of movs) entry.bloque.movs.push(m);
+        entry.bloque.n_pagos += matchingSobrantes.length;
+        entry.bloque.suma_pase = (Number(entry.bloque.suma_pase) || 0) + sumaPase;
+        entry.bloque.suma_extracto += sumaExt;
+        entry.bloque.n_transferencias += vb.filas.length;
+        entry.bloque.dif = entry.bloque.suma_extracto - entry.bloque.suma_pase;
       } else {
-        const sumaExt = vb.filas.reduce((s, f) => s + f.monto, 0);
         map.set(key, {
-          bloque: { proveedor: vb.provNombre, n_transferencias: vb.filas.length, suma_extracto: sumaExt, n_pagos: 0, suma_pase: 0, dif: sumaExt, movs: [] },
+          bloque: {
+            proveedor: vb.provNombre,
+            n_transferencias: vb.filas.length,
+            suma_extracto: sumaExt,
+            n_pagos: matchingSobrantes.length,
+            suma_pase: sumaPase,
+            dif: sumaExt - sumaPase,
+            movs,
+          },
           filas: vb.filas,
           resuelto: false,
         });
