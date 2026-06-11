@@ -695,7 +695,11 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     let resueltos_count = 0;
     for (const fila of cruce.extracto) {
       const r = resueltos[`ext:${fila.idx}`];
-      if (r === "ignorar" || r === "creado" || r === "pagada" || (r && (r.startsWith("matcheado:") || r.startsWith("combo:") || r.startsWith("prov:")))) {
+      if (r && r.startsWith("prov:")) {
+        bloquesDif++;
+        continue;
+      }
+      if (r === "ignorar" || r === "creado" || r === "pagada" || (r && (r.startsWith("matcheado:") || r.startsWith("combo:")))) {
         resueltos_count++;
         continue;
       }
@@ -774,7 +778,10 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
       }
     }
     for (const v of map.values()) {
-      v.resuelto = v.filas.every(f => !!resueltos[`ext:${f.idx}`]);
+      v.resuelto = v.filas.every(f => {
+        const r = resueltos[`ext:${f.idx}`];
+        return !!r && !r.startsWith("prov:");
+      });
     }
     return [...map.values()];
   }, [cruce, resueltos, proveedoresList]);
