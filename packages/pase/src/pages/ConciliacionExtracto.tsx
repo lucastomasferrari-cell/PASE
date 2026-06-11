@@ -386,6 +386,10 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   }
 
   // ─── Resolver cada caso ──────────────────────────────────────────────────
+  // Borra la resolución (Lucas 10-jun: poder deshacer si se equivoca).
+  function deshacerResolucion(idx: number) {
+    setResueltos(p => { const n = { ...p }; delete n[`ext:${idx}`]; return n; });
+  }
   function ignorarExtracto(idx: number) {
     setResueltos(p => ({ ...p, [`ext:${idx}`]: "ignorar" }));
   }
@@ -711,15 +715,23 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   }, [cruce, resueltos, movsUsadosResueltos]);
 
   // Agrupar filas bloque_diferencia por proveedor para la sección naranja.
+  // Lucas 10-jun: "si toco marcar como bloque revisado desaparece, lo mismo
+  // con elegir entre varios candidatos". Antes filtrábamos las filas
+  // resueltas (= cualquier fila con resueltos[...]) → bloque desaparecía.
+  // Ahora dejamos visibles TODOS los bloques con bloque_diferencia y, si
+  // todas sus filas están resueltas, mostramos check verde + Deshacer.
   const bloquesPorProveedor = useMemo(() => {
     if (!cruce) return [];
-    const map = new Map<string, { bloque: BloqueProveedor; filas: FilaExtracto[] }>();
+    const map = new Map<string, { bloque: BloqueProveedor; filas: FilaExtracto[]; resuelto: boolean }>();
     for (const fila of cruce.extracto) {
       if (fila.estado !== "bloque_diferencia" || !fila.bloque) continue;
-      if (resueltos[`ext:${fila.idx}`]) continue;
       const key = fila.bloque.proveedor;
-      if (!map.has(key)) map.set(key, { bloque: fila.bloque, filas: [] });
+      if (!map.has(key)) map.set(key, { bloque: fila.bloque, filas: [], resuelto: true });
       map.get(key)!.filas.push(fila);
+    }
+    // Por cada bloque, "resuelto" = todas las filas tienen resolución.
+    for (const v of map.values()) {
+      v.resuelto = v.filas.every(f => !!resueltos[`ext:${f.idx}`]);
     }
     return [...map.values()];
   }, [cruce, resueltos]);
@@ -962,13 +974,19 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                 cargados que corresponden a transferencias de otro mes.
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {bloquesPorProveedor.map(({ bloque, filas }) => (
+                {bloquesPorProveedor.map(({ bloque, filas, resuelto }) => (
                   <div key={bloque.proveedor} style={{
-                    padding: 12, background: "rgba(249,115,22,0.06)",
-                    border: "1px solid rgba(249,115,22,0.25)", borderRadius: 6,
+                    padding: 12,
+                    background: resuelto ? "rgba(34,197,94,0.08)" : "rgba(249,115,22,0.06)",
+                    border: resuelto ? "1px solid rgba(34,197,94,0.35)" : "1px solid rgba(249,115,22,0.25)",
+                    borderRadius: 6,
+                    opacity: resuelto ? 0.85 : 1,
                   }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
-                      <strong style={{ fontSize: 13 }}>{bloque.proveedor}</strong>
+                      <strong style={{ fontSize: 13 }}>
+                        {resuelto && <span style={{ color: "var(--success)", marginRight: 6 }}>✓</span>}
+                        {bloque.proveedor}
+                      </strong>
                       <span style={{
                         fontSize: 13, fontWeight: 600, fontVariantNumeric: "tabular-nums",
                         color: Number(bloque.dif) < 0 ? "var(--danger)" : "var(--warn)",
@@ -1034,19 +1052,37 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                       </div>
                     </details>
                     <div style={{ marginTop: 8 }}>
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => {
-                          // Marca todas las filas del bloque como ignoradas
-                          setResueltos(p => {
-                            const next = { ...p };
-                            for (const f of filas) next[`ext:${f.idx}`] = "ignorar";
-                            return next;
-                          });
-                        }}
-                      >
-                        Marcar bloque como revisado
-                      </button>
+                      {/* Lucas 10-jun: "si toco marcar como bloque revisado
+                          desaparece". Ahora el bloque queda visible con check
+                          verde y este botón pasa a "Deshacer" para revertir. */}
+                      {!resuelto ? (
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => {
+                            setResueltos(p => {
+                              const next = { ...p };
+                              for (const f of filas) next[`ext:${f.idx}`] = "ignorar";
+                              return next;
+                            });
+                          }}
+                        >
+                          Marcar bloque como revisado
+                        </button>
+                      ) : (
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ color: "var(--muted2)" }}
+                          onClick={() => {
+                            setResueltos(p => {
+                              const next = { ...p };
+                              for (const f of filas) delete next[`ext:${f.idx}`];
+                              return next;
+                            });
+                          }}
+                        >
+                          ↺ Deshacer revisado
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1054,58 +1090,92 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
             </Card>
           )}
 
-          {/* AMARILLOS — múltiples candidatos */}
+          {/* AMARILLOS — múltiples candidatos.
+              Lucas 10-jun: "si toco marcar como bloque revisado desaparece,
+              lo mismo con elegir entre varios candidatos". Ahora las filas
+              resueltas se quedan visibles con borde verde + check + botón
+              "Deshacer" — así si te equivocaste podés volver atrás. */}
           <SeccionFilas
             titulo="🟡 Por elegir (varios candidatos)"
             descripcion="El extracto tiene un mov con monto X y en PASE hay varios con ese mismo monto en la ventana ±15d. Elegí cuál es el que corresponde."
-            filas={cruce.extracto.filter(f =>
-              f.estado === "amarillo"
-              && !resueltos[`ext:${f.idx}`]
-            )}
-            renderFila={fila => (
-              <FilaCard
-                key={fila.idx}
-                fecha={fila.fecha}
-                monto={fila.monto}
-                descripcion={fila.descripcion}
-              >
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button className="btn btn-acc btn-sm" onClick={() => setPickCandidato(fila)}>
-                    Elegir cuál es ({fila.num_candidatos} candidatos)
-                  </button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => ignorarExtracto(fila.idx)}>
-                    Ignorar
-                  </button>
-                </div>
-              </FilaCard>
-            )}
+            filas={cruce.extracto.filter(f => f.estado === "amarillo")}
+            renderFila={fila => {
+              const r = resueltos[`ext:${fila.idx}`];
+              const resuelta = !!r;
+              const resumen =
+                r === "ignorar" ? "Ignorada"
+                : r && r.startsWith("matcheado:") ? `Matcheada con mov ${r.slice("matcheado:".length).slice(0, 8)}…`
+                : "Resuelta";
+              return (
+                <FilaCard
+                  key={fila.idx}
+                  fecha={fila.fecha}
+                  monto={fila.monto}
+                  descripcion={fila.descripcion}
+                  resuelta={resuelta}
+                >
+                  {resuelta ? (
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      <span style={{ color: "var(--success)", fontSize: 12 }}>✓ {resumen}</span>
+                      <button className="btn btn-ghost btn-sm" style={{ color: "var(--muted2)" }} onClick={() => deshacerResolucion(fila.idx)}>
+                        ↺ Deshacer
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button className="btn btn-acc btn-sm" onClick={() => setPickCandidato(fila)}>
+                        Elegir cuál es ({fila.num_candidatos} candidatos)
+                      </button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => ignorarExtracto(fila.idx)}>
+                        Ignorar
+                      </button>
+                    </div>
+                  )}
+                </FilaCard>
+              );
+            }}
           />
 
           {/* AMARILLOS AGRUPADOS — varias combinaciones que suman exacto */}
           <SeccionFilas
             titulo="🟡 Combos posibles (varias combinaciones de facturas suman este monto)"
             descripcion="El extracto tiene 1 transferencia y en PASE hay varias combinaciones de 2-5 facturas del mismo proveedor en ±30d que suman exacto. Elegí cuál es la correcta."
-            filas={cruce.extracto.filter(f =>
-              f.estado === "amarillo_agrupado"
-              && !resueltos[`ext:${f.idx}`]
-            )}
-            renderFila={fila => (
-              <FilaCard
-                key={fila.idx}
-                fecha={fila.fecha}
-                monto={fila.monto}
-                descripcion={fila.descripcion}
-              >
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button className="btn btn-acc btn-sm" onClick={() => setPickCombinacion(fila)}>
-                    Elegir combo ({fila.combinaciones.length} opciones)
-                  </button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => ignorarExtracto(fila.idx)}>
-                    Ignorar
-                  </button>
-                </div>
-              </FilaCard>
-            )}
+            filas={cruce.extracto.filter(f => f.estado === "amarillo_agrupado")}
+            renderFila={fila => {
+              const r = resueltos[`ext:${fila.idx}`];
+              const resuelta = !!r;
+              const resumen =
+                r === "ignorar" ? "Ignorada"
+                : r && r.startsWith("combo:") ? `Combo ${Number(r.slice("combo:".length)) + 1} elegido`
+                : "Resuelta";
+              return (
+                <FilaCard
+                  key={fila.idx}
+                  fecha={fila.fecha}
+                  monto={fila.monto}
+                  descripcion={fila.descripcion}
+                  resuelta={resuelta}
+                >
+                  {resuelta ? (
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      <span style={{ color: "var(--success)", fontSize: 12 }}>✓ {resumen}</span>
+                      <button className="btn btn-ghost btn-sm" style={{ color: "var(--muted2)" }} onClick={() => deshacerResolucion(fila.idx)}>
+                        ↺ Deshacer
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button className="btn btn-acc btn-sm" onClick={() => setPickCombinacion(fila)}>
+                        Elegir combo ({fila.combinaciones.length} opciones)
+                      </button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => ignorarExtracto(fila.idx)}>
+                        Ignorar
+                      </button>
+                    </div>
+                  )}
+                </FilaCard>
+              );
+            }}
           />
 
           {/* Transferencias ya conciliadas en cierres anteriores (tag invisible).
@@ -1773,16 +1843,24 @@ function FilaCard({
   monto,
   descripcion,
   children,
+  resuelta = false,
 }: {
   fecha: string;
   monto: number;
   descripcion: string;
   children: React.ReactNode;
+  /** Si true, la fila se renderiza atenuada con borde verde (Lucas 10-jun:
+   *  filas resueltas siguen visibles para poder deshacer si te equivocaste). */
+  resuelta?: boolean;
 }) {
   return (
     <div style={{
-      padding: 12, background: "var(--s2)", borderRadius: 6,
+      padding: 12,
+      background: resuelta ? "rgba(34,197,94,0.06)" : "var(--s2)",
+      border: resuelta ? "1px solid rgba(34,197,94,0.3)" : undefined,
+      borderRadius: 6,
       display: "flex", flexDirection: "column", gap: 8,
+      opacity: resuelta ? 0.85 : 1,
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
         <div style={{ fontSize: 13 }}>
