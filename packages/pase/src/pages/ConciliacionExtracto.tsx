@@ -589,10 +589,6 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     }
   }
 
-  // Marcar como pagada una factura/remito pendiente DESDE UN BLOQUE de
-  // proveedor (caso EL CRIOLLO $555.950 "Vencida"). La fecha del pago es
-  // la de la última transferencia del bloque (la más probable). No marca
-  // la fila como resuelta: hay que re-cruzar para que el bloque recalcule.
   async function pagarPendienteDeBloque(
     filas: FilaExtracto[],
     pend: NonNullable<BloqueProveedor["facturas_pendientes"]>[number],
@@ -624,16 +620,51 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
         });
         if (error) { showError(translateRpcError(error)); return; }
       }
-      // Track del mov generado para conciliarlo al cerrar.
+      // Fetch the newly created movement to show it in the bloque immediately.
+      let nuevoMov: MovEnCombinacion | null = null;
       try {
         const col = pend.tipo === "factura" ? "fact_id" : "remito_id_ref";
-        let q = db.from("movimientos").select("id").eq(col, pend.id)
-          .eq("fecha", fechaPago).order("created_at", { ascending: false }).limit(3);
+        let q = db.from("movimientos").select("id, fecha, importe, detalle").eq(col, pend.id)
+          .eq("fecha", fechaPago).eq("cuenta", "MercadoPago").eq("anulado", false)
+          .order("created_at", { ascending: false }).limit(1);
         q = applyLocalScope(q, user, localActivo);
         const { data: nuevos } = await q;
-        (nuevos ?? []).forEach(n => movsSesionRef.current.add(n.id as string));
+        if (nuevos?.[0]) {
+          nuevoMov = nuevos[0] as MovEnCombinacion;
+          movsSesionRef.current.add(nuevoMov.id);
+        }
       } catch { /* best-effort */ }
-      showToast(`${pend.tipo === "factura" ? "Factura" : "Remito"} ${pend.nro ?? ""} marcada como pagada (${fmt_d(fechaPago)}, MercadoPago). Tocá "Cruzar con PASE" de nuevo para recalcular el bloque.`);
+      // Update cruce in memory so the payment moves up to "Pagos cargados en
+      // PASE" immediately — no need to re-run the whole conciliación.
+      const bloqueNombre = filas[0]?.bloque?.proveedor;
+      if (bloqueNombre) {
+        const importePago = nuevoMov?.importe ?? -Math.abs(pend.total);
+        setCruce(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            extracto: prev.extracto.map(fila => {
+              if (fila.bloque?.proveedor !== bloqueNombre) return fila;
+              const newMovs = [...(fila.bloque.movs || [])];
+              if (nuevoMov) newMovs.push(nuevoMov);
+              const newFactPend = (fila.bloque.facturas_pendientes || []).filter(fp => fp.id !== pend.id);
+              const newSumaPase = (Number(fila.bloque.suma_pase) || 0) + importePago;
+              return {
+                ...fila,
+                bloque: {
+                  ...fila.bloque,
+                  movs: newMovs,
+                  n_pagos: (fila.bloque.n_pagos || 0) + 1,
+                  suma_pase: newSumaPase,
+                  dif: Number(fila.bloque.suma_extracto) - newSumaPase,
+                  facturas_pendientes: newFactPend,
+                },
+              };
+            }),
+          };
+        });
+      }
+      showToast(`${pend.tipo === "factura" ? "Factura" : "Remito"} ${pend.nro ?? ""} marcada como pagada`);
     } finally {
       setSavingAccion(false);
     }
