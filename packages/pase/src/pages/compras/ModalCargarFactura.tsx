@@ -263,7 +263,23 @@ export function ModalCargarFactura({
       }
       maxWidth={680}
       preventCloseOnOverlay={saving}
-      footer={<><button className="btn btn-sec" onClick={onClose}>Cancelar</button><button className="btn btn-acc" onClick={guardarConConfirmacion} disabled={saving || !form.local_id || (esEdicion && !(editandoMotivo || "").trim())}>{saving ? "Guardando..." : (esEdicion ? "Guardar cambios" : "Guardar")}</button></>}
+      footer={(() => {
+        const faltaMotivoEdicion = esEdicion && !(editandoMotivo || "").trim();
+        const disabled = saving || !form.local_id || faltaMotivoEdicion;
+        return (<>
+          <button className="btn btn-sec" onClick={onClose}>Cancelar</button>
+          <button
+            className="btn btn-acc"
+            onClick={guardarConConfirmacion}
+            disabled={disabled}
+            title={faltaMotivoEdicion ? "Completá el 'Motivo de la edición' arriba (es obligatorio para auditoría)." : undefined}
+          >
+            {saving ? "Guardando..."
+              : faltaMotivoEdicion ? "↑ Falta el motivo de la edición"
+              : (esEdicion ? "Guardar cambios" : "Guardar")}
+          </button>
+        </>);
+      })()}
     >
           {esEdicion && (
             <div className="alert alert-info" style={{ marginBottom: 12, fontSize: 12 }}>
