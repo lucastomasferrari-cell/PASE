@@ -5,24 +5,27 @@ import { ObjetivosMesWidget } from "../dashboards/widgets/ObjetivosMesWidget";
 import { VentasSemanaWidget } from "../dashboards/widgets/VentasSemanaWidget";
 import { ComparativaSucursalesWidget } from "../dashboards/widgets/ComparativaSucursalesWidget";
 import { FacturasPorVencerWidget } from "../dashboards/widgets/FacturasPorVencerWidget";
+import { VentasMesAMesWidget } from "../dashboards/widgets/VentasMesAMesWidget";
+import { DiasMasVendidosWidget } from "../dashboards/widgets/DiasMasVendidosWidget";
 import type { WidgetContext, RolPase } from "../dashboards/types";
 
 /**
- * Negocio — vista ejecutiva del dueño/gerente.
+ * Negocio — LA vista de dirección. Fusión de las ex-pantallas Negocio +
+ * Finanzas (rediseño 11-jun, pedido Lucas: "me tiran exactamente la misma
+ * información, muy repetitivo, quiero unificar").
  *
- * Reescrita 2026-05-17. Antes mostraba KPIs devengados (margen, CMV, rentabilidad)
- * a mitad de mes — números engañosos porque los gastos fijos caen los primeros
- * 15 días y distorsionan cualquier comparativa intra-mes.
+ * Reparto de responsabilidades post-fusión:
+ *   - /inicio  → "qué pasa HOY y qué tengo que hacer" (tareas, ventas hoy,
+ *                facturas vencidas/por vencer, efectivo). Personalizable.
+ *   - /negocio → "cómo viene el NEGOCIO" (esta pantalla, fija):
+ *       1. La semana   — ventas 7 días + objetivo del mes.
+ *       2. El mes      — punto de equilibrio + vencimientos próximos.
+ *       3. Tendencia   — mes a mes + días que más se vende.
+ *       4. Sucursales  — ranking (solo si hay ≥2 locales).
  *
- * Nueva orientación: métricas HONESTAS en cualquier momento del mes:
- *   1. Punto de equilibrio (BEP) — cuánto falta facturar para cubrir fijos.
- *   2. Objetivo del mes — facturación vs meta cargada.
- *   3. Ventas última semana — tendencia + variación vs semana previa.
- *   4. Ranking sucursales — comparativa entre locales.
- *   5. Facturas por vencer en 7 días — qué se viene encima.
- *
- * El EERR mensual devengado sigue viviendo en /reportes, pero solo tiene
- * sentido mirarlo a fin de mes (no a mid-month).
+ * Sigue la regla de métricas HONESTAS mid-month (2026-05-17): nada de
+ * margen/CMV/ingresos-vs-egresos acá — los fijos caen los primeros 15 días
+ * y distorsionan. El EERR devengado vive en /reportes (fin de mes).
  */
 
 interface LocalRef { id: number; nombre: string }
@@ -36,8 +39,6 @@ interface Props {
 }
 
 export default function Negocio({ user, locales = [], localActivo = null }: Props) {
-  // Construyo el ctx que esperan los widgets reutilizando los componentes
-  // del dashboard. localActivo viene directo del sidebar (App.tsx).
   const ctx: WidgetContext = useMemo(() => ({
     usuario: {
       id: user?.id ?? 0,
@@ -56,37 +57,49 @@ export default function Negocio({ user, locales = [], localActivo = null }: Prop
     <div style={{ padding: "0 20px" }}>
       <PageHeader
         title="Negocio"
-        subtitle={nombreActivo ? `vista ejecutiva · ${nombreActivo}` : "vista ejecutiva en tiempo real"}
+        subtitle={nombreActivo ? `cómo viene el negocio · ${nombreActivo}` : "cómo viene el negocio, en tiempo real"}
       />
 
-      {/* Aclaración educativa — explicar que NO es el EERR */}
-      <div className="alert" style={{ marginBottom: 16 }}>
-        <strong>¿Por qué no veo "ingresos vs egresos" acá?</strong>
-        <div style={{ fontSize: "var(--pase-fs-sm)", color: "var(--pase-text-muted)", marginTop: 4, lineHeight: 1.5 }}>
-          A mitad de mes esos números mienten — los fijos (alquileres, sueldos, servicios) se pagan los primeros 15 días.
-          Acá mostramos métricas <strong>honestas en cualquier momento</strong>: punto de equilibrio, ventas y objetivos.
-          El EERR mensual completo (devengado) está en <strong>Reportes</strong>, donde sí tiene sentido mirarlo a fin de mes.
-        </div>
-      </div>
-
       <div className="neg-grid">
-        <Card title="Punto de equilibrio" wide>
-          <PuntoEquilibrioWidget ctx={ctx} />
-        </Card>
-        <Card title="Objetivo de facturación">
-          <ObjetivosMesWidget ctx={ctx} />
-        </Card>
-        <Card title="Ventas — últimos 7 días" wide>
+        {/* ─── 1. La semana ─────────────────────────────────────────── */}
+        <Card title="Ventas — últimos 7 días" span={7}>
           <VentasSemanaWidget ctx={ctx} />
         </Card>
+        <Card title="Objetivo del mes" span={5}>
+          <ObjetivosMesWidget ctx={ctx} />
+        </Card>
+
+        {/* ─── 2. El mes ────────────────────────────────────────────── */}
+        <Card title="Punto de equilibrio" span={7}>
+          <PuntoEquilibrioWidget ctx={ctx} />
+        </Card>
+        <Card title="Vencimientos próximos (7 días)" span={5}>
+          <FacturasPorVencerWidget ctx={ctx} />
+        </Card>
+
+        {/* ─── 3. Tendencia ─────────────────────────────────────────── */}
+        <Card title="Ventas mes a mes" span={7}>
+          <VentasMesAMesWidget ctx={ctx} />
+        </Card>
+        <Card title="Días que más se vende" span={5}>
+          <DiasMasVendidosWidget ctx={ctx} />
+        </Card>
+
+        {/* ─── 4. Sucursales ────────────────────────────────────────── */}
         {locales.length >= 2 && (
-          <Card title="Ranking de sucursales" wide>
+          <Card title="Ranking de sucursales" span={12}>
             <ComparativaSucursalesWidget ctx={ctx} />
           </Card>
         )}
-        <Card title="Vencimientos próximos (7 días)">
-          <FacturasPorVencerWidget ctx={ctx} />
-        </Card>
+      </div>
+
+      {/* Notas al pie, compactas — antes eran 2 alerts grandes que comían
+          media pantalla entre las dos páginas. */}
+      <div style={{ marginTop: 16, fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", lineHeight: 1.6 }}>
+        El resultado del mes completo (ingresos vs egresos devengados) está en <strong>Reportes</strong> —
+        tiene sentido mirarlo a fin de mes, no a mitad: los fijos se pagan los primeros 15 días y distorsionan.
+        <br />
+        Cuando COMANDA esté integrado se suman: top productos vendidos, productos más rentables, horas pico y ticket promedio por banda horaria.
       </div>
 
       <style>{`
@@ -109,23 +122,17 @@ export default function Negocio({ user, locales = [], localActivo = null }: Prop
           color: var(--pase-text);
           letter-spacing: var(--pase-ls-snug);
         }
-        .neg-grid > .neg-card { grid-column: span 6; }
-        .neg-grid > .neg-card.wide { grid-column: span 6; }
-        @media (min-width: 1100px) {
-          .neg-grid > .neg-card { grid-column: span 4; }
-          .neg-grid > .neg-card.wide { grid-column: span 6; }
-        }
-        @media (max-width: 700px) {
-          .neg-grid > .neg-card { grid-column: span 12; }
+        @media (max-width: 900px) {
+          .neg-grid > .neg-card { grid-column: span 12 !important; }
         }
       `}</style>
     </div>
   );
 }
 
-function Card({ title, children, wide }: { title: string; children: React.ReactNode; wide?: boolean }) {
+function Card({ title, children, span }: { title: string; children: React.ReactNode; span: number }) {
   return (
-    <section className={`neg-card${wide ? " wide" : ""}`}>
+    <section className="neg-card" style={{ gridColumn: `span ${span}` }}>
       <h3 className="neg-card-title">{title}</h3>
       <div>{children}</div>
     </section>

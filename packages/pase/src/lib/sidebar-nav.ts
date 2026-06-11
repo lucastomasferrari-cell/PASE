@@ -35,6 +35,9 @@ export interface SidebarItem {
   path: string;
   /** Slug interno (compat con auth.ts MODULOS y tienePermiso) */
   slug: string;
+  /** Slugs alternativos: el item es visible si el user tiene el principal
+   *  O alguno de estos. Caso: Negocio absorbió Finanzas (11-jun). */
+  altSlugs?: string[];
   /** Texto visible */
   label: string;
   /** Sección */
@@ -60,8 +63,8 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   { path: "/recetario",                  slug: "rentabilidad",  label: "Recetario",       sec: "Operación" },
 
   // === Dirección ===
-  { path: "/negocio",                    slug: "negocio",       label: "Negocio",         sec: "Dirección" },
-  { path: "/finanzas",                   slug: "finanzas",      label: "Finanzas",        sec: "Dirección" },
+  // Finanzas fusionada en Negocio (rediseño 11-jun) — /finanzas redirige.
+  { path: "/negocio",                    slug: "negocio",       altSlugs: ["finanzas"], label: "Negocio", sec: "Dirección" },
   // Conciliación 10-jun-2026 (Lucas): nuevo módulo para cierre de mes —
   // sube el extracto MP y cruza contra movimientos del local activo.
   // Diferente del viejo /caja/conciliacion (que justifica mp_movimientos
@@ -99,7 +102,10 @@ export const SIDEBAR_SECTIONS: SidebarSection[] = ["Operación", "Dirección", "
  */
 export function getDefaultRoute(user: Usuario | null | undefined): string {
   if (!user) return "/ajustes";
-  const first = SIDEBAR_ITEMS.find(item => tienePermiso(user, item.slug));
+  const first = SIDEBAR_ITEMS.find(item =>
+    tienePermiso(user, item.slug)
+    || (item.altSlugs ?? []).some(alt => tienePermiso(user, alt)),
+  );
   return first?.path ?? "/ajustes";
 }
 

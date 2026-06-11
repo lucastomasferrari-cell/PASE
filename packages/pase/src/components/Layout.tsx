@@ -20,7 +20,8 @@ const SLUG_TO_FEATURE: Record<string, string> = {
   gastos: "modulo.gastos",
   rrhh: "modulo.rrhh",
   negocio: "modulo.negocio",
-  finanzas: "modulo.finanzas",
+  // finanzas: el item de sidebar se fusionó en Negocio (11-jun) — el feature
+  // "modulo.finanzas" ya no gatea ningún item propio.
   objetivos: "modulo.objetivos",
   eerr: "modulo.reportes",
   herramientas_hub: "modulo.herramientas_hub",
@@ -66,7 +67,10 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
   // tienePermiso() y el array de permisos por rol. Tocar acá implica
   // ajustar src/lib/sidebar-nav.ts (misma source-of-truth).
   // ───────────────────────────────────────────────────────────────────
-  const nav = [
+  // `altSlugs`: el item se muestra si el user tiene el slug principal O
+  // alguno de los alternativos. Caso: Negocio absorbió Finanzas (11-jun) —
+  // usuarios con permiso 'finanzas' pero sin 'negocio' siguen viendo el item.
+  const nav: Array<{ slug: string; path: string; label: string; sec: string; icon: string; altSlugs?: string[] }> = [
     // === INICIO (1) — dashboard personalizado por usuario ===
     {slug:"inicio",path:"/inicio",label:"Inicio",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6 L7 2 L12 6 V12 a1 1 0 0 1 -1 1 H3 a1 1 0 0 1 -1 -1 Z"/><path d="M5.5 13 V8.5 h3 V13"/></svg>`},
 
@@ -90,8 +94,9 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
     // existiendo para compat con tour y bookmarks.
 
     // === DIRECCIÓN (4) ===
-    {slug:"negocio",path:"/negocio",label:"Negocio",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 1.5 A5.5 5.5 0 1 1 1.5 7 L7 7 Z"/><path d="M7 1.5 A5.5 5.5 0 0 1 12.5 7 L7 7 Z"/></svg>`},
-    {slug:"finanzas",path:"/finanzas",label:"Finanzas",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h9a1 1 0 0 1 1 1V11a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h7.5"/><circle cx="9.5" cy="8" r="0.9"/></svg>`},
+    // Finanzas fusionada en Negocio (rediseño 11-jun): una sola vista de
+    // dirección. altSlugs mantiene el acceso a users con permiso 'finanzas'.
+    {slug:"negocio",altSlugs:["finanzas"],path:"/negocio",label:"Negocio",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 1.5 A5.5 5.5 0 1 1 1.5 7 L7 7 Z"/><path d="M7 1.5 A5.5 5.5 0 0 1 12.5 7 L7 7 Z"/></svg>`},
     // Conciliación 10-jun-2026 (Lucas): nuevo módulo para cierre de mes contra
     // extracto de MercadoPago. Cruza el archivo del panel MP línea por línea
     // contra movimientos.cuenta='MercadoPago' del local activo.
@@ -156,7 +161,9 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
             // 'tenants' (superadmin). Estos no viven en MODULOS pero sí en `nav`.
             const items = nav.filter(n => {
               if (n.sec !== s) return false;
-              if (!tienePermiso(user, n.slug)) return false;
+              const tieneAcceso = tienePermiso(user, n.slug)
+                || (n.altSlugs ?? []).some(alt => tienePermiso(user, alt));
+              if (!tieneAcceso) return false;
               // Feature flag gate — superadmin bypassa (tenantTieneFeature
               // siempre devuelve TRUE). Tenant normal: si el feature está
               // mapeado y desactivado, ocultar.

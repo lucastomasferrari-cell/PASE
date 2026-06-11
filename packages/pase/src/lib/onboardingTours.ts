@@ -222,21 +222,24 @@ const TOURS_POR_PERMISO: Record<string, PaseStep[]> = {
       step: {
         popover: {
           title: "🎯 Negocio",
-          description: `Tu pantalla del día como dueño. Punto de equilibrio, objetivo del mes, ventas última semana, ranking sucursales y vencimientos.<br /><br />
-            Métricas honestas en cualquier momento del mes — sin los espejismos del EERR mid-month.`,
+          description: `Cómo viene el negocio, en una sola pantalla: ventas de la semana, objetivo del mes, punto de equilibrio, vencimientos, tendencia mes a mes, días que más vendés y ranking de sucursales.<br /><br />
+            Métricas honestas en cualquier momento del mes — el EERR completo vive en Reportes.`,
           side: "over", align: "center",
         },
       },
     },
   ],
 
+  // Finanzas fusionada en Negocio (rediseño 11-jun). El tour apunta a
+  // /negocio para usuarios que tienen el permiso 'finanzas' pero no 'negocio'
+  // — ven la misma pantalla fusionada.
   finanzas: [
     {
-      route: "/finanzas",
+      route: "/negocio",
       step: {
         popover: {
-          title: "📊 Análisis financiero",
-          description: `Ventas mes a mes, días que más vendés, comparativas entre sucursales y vencimientos próximos.`,
+          title: "📊 Negocio",
+          description: `Ventas mes a mes, días que más vendés, comparativas entre sucursales y vencimientos próximos — todo en la pantalla Negocio.`,
           side: "over", align: "center",
         },
       },

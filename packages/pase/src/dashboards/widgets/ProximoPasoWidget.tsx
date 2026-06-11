@@ -31,8 +31,8 @@ const ORDEN_RECOMENDADO: Array<{ slug: string; titulo: string; descripcion: stri
   { slug: "compras",   titulo: "Subí una factura",   descripcion: "Form manual, lector IA y remitos para compras informales." },
   { slug: "gastos",    titulo: "Registrá un gasto",  descripcion: "Servicios, sueldos, etc. Genera el movimiento de Caja automático." },
   { slug: "rrhh",      titulo: "Conocé Equipo",      descripcion: "Empleados, novedades del mes, liquidaciones, adelantos." },
-  { slug: "negocio",   titulo: "Mirá Negocio",       descripcion: "Tu pantalla del día como dueño: punto equilibrio + objetivos + ranking." },
-  { slug: "finanzas",  titulo: "Analizá Finanzas",   descripcion: "Ventas mes a mes, días que más vendés, comparativa entre sucursales." },
+  // Finanzas fusionada en Negocio (rediseño 11-jun) — una sola card.
+  { slug: "negocio",   titulo: "Mirá Negocio",       descripcion: "Cómo viene el negocio: equilibrio, objetivo, tendencia mes a mes y ranking de sucursales." },
   { slug: "eerr",      titulo: "Revisá Reportes",    descripcion: "EERR mensual completo. Exportable para tu contador." },
   { slug: "herramientas_hub", titulo: "Hub de Herramientas", descripcion: "Módulos avanzados: Importar, Lector MP, Códigos Manager, etc." },
 ];

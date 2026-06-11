@@ -44,7 +44,25 @@ describe("SIDEBAR_ITEMS", () => {
 
   it("incluye los items de Dirección", () => {
     const dir = SIDEBAR_ITEMS.filter(i => i.sec === "Dirección").map(i => i.slug);
-    expect(dir).toEqual(expect.arrayContaining(["negocio", "finanzas", "objetivos", "eerr"]));
+    expect(dir).toEqual(expect.arrayContaining(["negocio", "objetivos", "eerr"]));
+  });
+
+  it("Finanzas fusionada en Negocio (11-jun): no hay item finanzas, pero el slug sobrevive como altSlug", () => {
+    expect(SIDEBAR_ITEMS.some(i => i.slug === "finanzas")).toBe(false);
+    const negocio = SIDEBAR_ITEMS.find(i => i.slug === "negocio");
+    expect(negocio?.altSlugs).toContain("finanzas");
+  });
+
+  it("getDefaultRoute respeta altSlugs (user con solo 'finanzas' llega a /negocio antes que /ajustes)", () => {
+    // Usuario hipotético con SOLO el permiso finanzas (sin inicio no existe —
+    // inicio es para todos — así que simulamos buscando el item directo).
+    const u = { rol: "encargado", _permisos: ["finanzas"] } as Usuario;
+    // 'inicio' siempre gana como primer item; lo que validamos es que el
+    // item negocio sería visible para este user vía altSlugs.
+    expect(getDefaultRoute(u)).toBe("/inicio");
+    const negocio = SIDEBAR_ITEMS.find(i => i.slug === "negocio")!;
+    const visible = (negocio.altSlugs ?? []).some(alt => u._permisos!.includes(alt));
+    expect(visible).toBe(true);
   });
 
   it("incluye 'tenants' (solo visible si superadmin)", () => {

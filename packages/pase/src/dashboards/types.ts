@@ -80,26 +80,28 @@ export interface DashboardConfig {
 // Defaults por rol — usados cuando el usuario no tiene config en DB todavía.
 // Como ahora los permisos vienen de la matriz (no del rol), estos defaults
 // son una sugerencia inicial. El dueño puede customizar widget por widget.
+//
+// Rediseño 11-jun (Lucas: "Inicio/Negocio/Finanzas me tiran lo mismo"):
+// Inicio = "qué pasa HOY y qué tengo que hacer" (acción). Los widgets de
+// dirección (ventas_semana, objetivos_mes, punto_equilibrio, comparativa)
+// salieron del default dueño/admin porque viven fijos en /negocio — siguen
+// disponibles opt-in desde Configurar dashboards.
 export const DEFAULT_WIDGETS_POR_ROL: Record<RolPase, string[]> = {
-  superadmin: ["tareas_pineadas", "ventas_semana", "objetivos_mes"],
+  superadmin: ["tareas_pineadas", "ventas_hoy", "facturas_vencidas"],
   dueno: [
     "tareas_pineadas",
+    "ventas_hoy",
     "efectivo_consolidado",
-    "ventas_semana",
-    "objetivos_mes",
-    "punto_equilibrio",
-    "comparativa_sucursales",
-    "facturas_por_vencer",
     "facturas_vencidas",
+    "facturas_por_vencer",
     "ultimos_overrides",
   ],
   admin: [
     "tareas_pineadas",
+    "ventas_hoy",
     "efectivo_consolidado",
-    "ventas_semana",
-    "objetivos_mes",
-    "punto_equilibrio",
     "facturas_vencidas",
+    "facturas_por_vencer",
     "ultimos_overrides",
   ],
   // saldo_caja ELIMINADO 24-may noche por leak Caja Efectivo a encargados.

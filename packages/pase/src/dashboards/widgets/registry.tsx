@@ -28,6 +28,8 @@ import { ObjetivosMesWidget } from "./ObjetivosMesWidget";
 import { PuntoEquilibrioWidget } from "./PuntoEquilibrioWidget";
 import { UltimosOverridesWidget } from "./UltimosOverridesWidget";
 import { ProximoPasoWidget } from "./ProximoPasoWidget";
+import { VentasMesAMesWidget } from "./VentasMesAMesWidget";
+import { DiasMasVendidosWidget } from "./DiasMasVendidosWidget";
 
 export const WIDGETS: WidgetDefinition[] = [
   // ─── Cross-rol ─────────────────────────────────────────────────────────
@@ -112,6 +114,25 @@ export const WIDGETS: WidgetDefinition[] = [
     permisosRequeridos: ["negocio", "finanzas"],
     size: "md",
     render: (ctx) => <ComparativaSucursalesWidget ctx={ctx} />,
+  },
+  // Extraídos de la ex-pantalla Finanzas (rediseño 11-jun, fusión con
+  // Negocio). La pantalla Negocio los muestra fija; acá quedan disponibles
+  // para que cualquier usuario los sume a su Inicio.
+  {
+    id: "ventas_mes_a_mes",
+    title: "Ventas mes a mes",
+    description: "Barras de facturación de los últimos 6 meses. El mes actual va parcial.",
+    permisosRequeridos: ["negocio", "finanzas"],
+    size: "md",
+    render: (ctx) => <VentasMesAMesWidget ctx={ctx} />,
+  },
+  {
+    id: "dias_mas_vendidos",
+    title: "Días que más se vende",
+    description: "Ranking de días de la semana por facturación (últimos 90 días).",
+    permisosRequeridos: ["negocio", "finanzas"],
+    size: "md",
+    render: (ctx) => <DiasMasVendidosWidget ctx={ctx} />,
   },
   {
     id: "efectivo_consolidado",
