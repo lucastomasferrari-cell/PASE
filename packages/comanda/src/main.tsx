@@ -3,6 +3,13 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import { db } from './lib/supabase';
+import { installChunkLoadErrorHandler } from './lib/chunkLoadErrorHandler';
+
+// Detectar "Failed to fetch dynamically imported module" después de un
+// deploy nuevo de Vercel → auto-reload (anti-loop con cooldown 60s).
+// Cubre imports dinámicos fuera del render de React (services, click
+// handlers) donde el ErrorBoundary no llega. Bug "Abrir mesa" 11-jun.
+installChunkLoadErrorHandler();
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('No root element');
