@@ -1176,7 +1176,10 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
           await ejecutarAnularMov(mov, motivo, codigo);
         }}
       />
-      {/* MODAL MANAGER OVERRIDE — para editar movimiento sin permiso caja_anular */}
+      {/* MODAL MANAGER OVERRIDE — para editar movimiento sin permiso caja_anular.
+          Lucas 10-jun: el context lleva TODOS los valores nuevos así cuando
+          el dueño aprueba, fn_aprobar_solicitud aplica la edición sin
+          depender de que el empleado vuelva a esta pantalla. */}
       <ManagerOverrideModal
         open={pendingEditarMov !== null}
         permiso="caja_anular"
@@ -1184,6 +1187,13 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         context={pendingEditarMov ? {
           movimiento_id: pendingEditarMov.id,
           total: Math.abs(parseFloat(String(pendingEditarMov.importe)) || 0),
+          // valores nuevos (snapshot del draft de Agos):
+          nuevo_fecha: pendingEditarMov.fecha,
+          nuevo_cuenta: pendingEditarMov.cuenta,
+          nuevo_importe: parseFloat(String(pendingEditarMov.importe)) || 0,
+          nuevo_detalle: pendingEditarMov.detalle ?? "",
+          nuevo_cat: pendingEditarMov.cat ?? null,
+          justificativo: pendingEditarMov.justificativo,
         } : undefined}
         descripcion={pendingEditarMov ? `Editar movimiento de ${fmt_$(Math.abs(parseFloat(String(pendingEditarMov.importe)) || 0))}` : undefined}
         onClose={() => setPendingEditarMov(null)}

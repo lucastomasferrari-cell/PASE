@@ -1060,7 +1060,10 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
         }}
       />
 
-      {/* MODAL MANAGER OVERRIDE — para editar gasto sin permiso compras_anular */}
+      {/* MODAL MANAGER OVERRIDE — para editar gasto sin permiso compras_anular.
+          Lucas 10-jun: el context lleva TODOS los valores nuevos. Cuando
+          el dueño aprueba, fn_aprobar_solicitud aplica la edición sin
+          depender de que el empleado vuelva a esta pantalla. */}
       <ManagerOverrideModal
         open={pendingEditarGasto !== null}
         permiso="compras_anular"
@@ -1069,6 +1072,14 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
           gasto_id: pendingEditarGasto.id,
           categoria: pendingEditarGasto.categoria,
           total: pendingEditarGasto.monto,
+          // valores nuevos del draft del empleado:
+          nuevo_fecha: pendingEditarGasto.fecha,
+          nuevo_categoria: pendingEditarGasto.categoria,
+          nuevo_tipo: pendingEditarGasto.tipo,
+          nuevo_monto: typeof pendingEditarGasto.monto === "number" ? pendingEditarGasto.monto : parseFloat(String(pendingEditarGasto.monto)) || 0,
+          nuevo_cuenta: pendingEditarGasto.cuenta ?? null,
+          nuevo_detalle: pendingEditarGasto.detalle ?? "",
+          justificativo: pendingEditarGasto.justificativo,
         } : undefined}
         descripcion={pendingEditarGasto
           ? `Editar gasto ${pendingEditarGasto.categoria} → ${fmt_$(typeof pendingEditarGasto.monto === 'number' ? pendingEditarGasto.monto : parseFloat(String(pendingEditarGasto.monto)) || 0)}`
