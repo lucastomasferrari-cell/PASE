@@ -695,7 +695,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     let resueltos_count = 0;
     for (const fila of cruce.extracto) {
       const r = resueltos[`ext:${fila.idx}`];
-      if (r === "ignorar" || r === "creado" || r === "pagada" || (r && (r.startsWith("matcheado:") || r.startsWith("combo:")))) {
+      if (r === "ignorar" || r === "creado" || r === "pagada" || (r && (r.startsWith("matcheado:") || r.startsWith("combo:") || r.startsWith("prov:")))) {
         resueltos_count++;
         continue;
       }
@@ -748,12 +748,36 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
       if (!map.has(key)) map.set(key, { bloque: fila.bloque, filas: [], resuelto: true });
       map.get(key)!.filas.push(fila);
     }
-    // Por cada bloque, "resuelto" = todas las filas tienen resolución.
+    // Agregar sueltos asignados a proveedor via "Pertenece a proveedor":
+    // aparecen inmediatamente en la sección "agrupado por proveedor".
+    const provNames = new Map(proveedoresList.map(p => [p.id, p.nombre]));
+    const virtualBloques = new Map<string, { provNombre: string; filas: FilaExtracto[] }>();
+    for (const fila of cruce.extracto) {
+      if (fila.estado !== "rojo_falta") continue;
+      const r = resueltos[`ext:${fila.idx}`];
+      if (!r || !r.startsWith("prov:")) continue;
+      const provId = Number(r.slice("prov:".length));
+      const provNombre = provNames.get(provId) ?? `Proveedor #${provId}`;
+      if (!virtualBloques.has(provNombre)) virtualBloques.set(provNombre, { provNombre, filas: [] });
+      virtualBloques.get(provNombre)!.filas.push(fila);
+    }
+    for (const [key, vb] of virtualBloques) {
+      if (map.has(key)) {
+        for (const f of vb.filas) map.get(key)!.filas.push(f);
+      } else {
+        const sumaExt = vb.filas.reduce((s, f) => s + f.monto, 0);
+        map.set(key, {
+          bloque: { proveedor: vb.provNombre, n_transferencias: vb.filas.length, suma_extracto: sumaExt, n_pagos: 0, suma_pase: 0, dif: sumaExt, movs: [] },
+          filas: vb.filas,
+          resuelto: false,
+        });
+      }
+    }
     for (const v of map.values()) {
       v.resuelto = v.filas.every(f => !!resueltos[`ext:${f.idx}`]);
     }
     return [...map.values()];
-  }, [cruce, resueltos]);
+  }, [cruce, resueltos, proveedoresList]);
 
   // ─── EARLY RETURN: tiene que ir DESPUÉS de TODOS los hooks ──────────────
   // React error #310 si los hooks se ejecutan en distinto orden entre
@@ -1635,7 +1659,18 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                   key={p.id}
                   className="btn btn-ghost"
                   onClick={() => {
-                    setResueltos(prev => ({ ...prev, [`ext:${asignarProvFila.idx}`]: `prov:${p.id}` }));
+                    const desc = asignarProvFila.descripcion;
+                    setResueltos(prev => {
+                      const next = { ...prev, [`ext:${asignarProvFila.idx}`]: `prov:${p.id}` };
+                      if (cruce) {
+                        for (const f of cruce.extracto) {
+                          if (f.idx !== asignarProvFila.idx && f.estado === "rojo_falta" && f.descripcion === desc && !prev[`ext:${f.idx}`]) {
+                            next[`ext:${f.idx}`] = `prov:${p.id}`;
+                          }
+                        }
+                      }
+                      return next;
+                    });
                     setAsignarProvFila(null);
                     setBusquedaProv("");
                   }}
@@ -1647,7 +1682,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
             })()}
           </div>
           <div style={{ marginTop: 10, fontSize: 11, color: "var(--muted2)" }}>
-            Después de cerrar la conciliación, las próximas transferencias con la misma descripción se agruparán automáticamente bajo este proveedor.
+            Al elegir, todas las transferencias con la misma descripción se asignan automáticamente al proveedor y aparecen arriba en "agrupado por proveedor".
           </div>
         </Modal>
       )}
