@@ -174,7 +174,16 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   // - "creado:<movId>": el rojo_falta fue resuelto creando este mov
   // - "matcheado:<movId>": el amarillo fue resuelto eligiendo este mov
   // - "anulado": el sobrante fue anulado
+  // - "prov:<prov_id>": Lucas 10-jun — el rojo_falta pertenece a un
+  //   proveedor; al cerrar la conciliación se aprende el alias
+  //   titular→proveedor para que la próxima vez vaya directo al bloque.
   const [resueltos, setResueltos] = useState<Record<string, string>>({});
+  // Catálogo de proveedores del tenant — para el modal "Pertenece a..."
+  // (interfaz de aprendizaje, Lucas 10-jun).
+  const [proveedoresList, setProveedoresList] = useState<Array<{ id: number; nombre: string }>>([]);
+  // Modal: asignar fila roja a un proveedor existente.
+  const [asignarProvFila, setAsignarProvFila] = useState<FilaExtracto | null>(null);
+  const [busquedaProv, setBusquedaProv] = useState<string>("");
   // Estados temporales para el modal de "elegir candidato" en amarillos
   const [pickCandidato, setPickCandidato] = useState<FilaExtracto | null>(null);
   // Modal: elegir entre varias combinaciones agrupadas
@@ -294,6 +303,16 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     // Se recarga cuando cambia de local O cuando se cierra una nueva corrida
     // (corridaCerrada.id sirve como token de invalidación).
   }, [localActivo, corridaCerrada?.id]);
+
+  // Catálogo de proveedores para el dropdown "Pertenece a..." (Lucas 10-jun).
+  useEffect(() => {
+    void db.from("proveedores")
+      .select("id, nombre")
+      .eq("estado", "Activo")
+      .order("nombre")
+      .limit(2000)
+      .then(({ data }) => setProveedoresList((data ?? []) as Array<{ id: number; nombre: string }>));
+  }, []);
 
   // localNombre se calcula SIEMPRE (default "—" si no hay local).
   // Se usa antes del early-return solo en sub-componentes que se renderizan
@@ -770,12 +789,14 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
       const items: Array<{
         fecha: string; monto: number; descripcion: string;
         referencia_externa: string | null; estado_final: string; mov_ids: string[];
+        prov_id?: number; // Lucas 10-jun: para aprender alias cuando se asignó manual
       }> = [];
 
       for (const fila of cruce.extracto) {
         const r = resueltos[`ext:${fila.idx}`];
         const filaMovs: string[] = [];
         let estadoFinal: string = fila.estado;
+        let provAsignado: number | undefined = undefined;
 
         if (r === "ignorar") estadoFinal = "ignorada";
         else if (r === "creado") estadoFinal = "creado";
@@ -787,6 +808,11 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
           estadoFinal = "combo";
           const combo = fila.combinaciones[Number(r.slice("combo:".length))];
           combo?.movs.forEach(m => filaMovs.push(m.id));
+        } else if (r && r.startsWith("prov:")) {
+          // Lucas 10-jun — "Pertenece a proveedor X". La fila queda como
+          // "asignada_prov" y al cerrar el server aprende el alias.
+          estadoFinal = "asignada_prov";
+          provAsignado = Number(r.slice("prov:".length));
         } else if (fila.estado === "verde" && fila.candidatos.length === 1) {
           filaMovs.push(fila.candidatos[0]!.id);
         } else if (fila.estado === "verde_agrupado" && fila.combinaciones.length === 1) {
@@ -804,6 +830,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
           referencia_externa: fila.referencia_externa,
           estado_final: estadoFinal,
           mov_ids: filaMovs,
+          ...(provAsignado ? { prov_id: provAsignado } : {}),
         });
       }
 
@@ -1307,32 +1334,66 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                   </div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {filasRojas.map(fila => (
+                  {filasRojas.map(fila => {
+                    const r = resueltos[`ext:${fila.idx}`];
+                    const resuelta = !!r;
+                    let resumen = "";
+                    if (r === "ignorar") resumen = "Ignorada";
+                    else if (r === "creado") resumen = "Creada en Caja";
+                    else if (r === "pagada") resumen = "Marcada como pagada";
+                    else if (r && r.startsWith("prov:")) {
+                      const pid = Number(r.slice(5));
+                      const p = proveedoresList.find(x => x.id === pid);
+                      resumen = `Asignada a ${p?.nombre ?? `proveedor #${pid}`} (se aprenderá al cerrar)`;
+                    } else if (r) resumen = "Resuelta";
+                    return (
                     <div key={fila.idx} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                       <input
                         type="checkbox"
                         checked={seleccionados.has(fila.idx)}
                         onChange={() => toggleSeleccion(fila.idx)}
-                        style={{ marginTop: 14, width: 16, height: 16, cursor: "pointer" }}
+                        disabled={resuelta}
+                        style={{ marginTop: 14, width: 16, height: 16, cursor: resuelta ? "default" : "pointer" }}
                       />
                       <div style={{ flex: 1 }}>
                         <FilaCard
                           fecha={fila.fecha}
                           monto={fila.monto}
                           descripcion={fila.descripcion}
+                          resuelta={resuelta}
                         >
-                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                            <button className="btn btn-acc btn-sm" onClick={() => setCrearFaltante(fila)}>
-                              Crear en Caja
-                            </button>
-                            <button className="btn btn-ghost btn-sm" onClick={() => ignorarExtracto(fila.idx)}>
-                              Ignorar
-                            </button>
-                          </div>
+                          {resuelta ? (
+                            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                              <span style={{ color: "var(--success)", fontSize: 12 }}>✓ {resumen}</span>
+                              <button className="btn btn-ghost btn-sm" style={{ color: "var(--muted2)" }} onClick={() => deshacerResolucion(fila.idx)}>
+                                ↺ Deshacer
+                              </button>
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              <button className="btn btn-acc btn-sm" onClick={() => setCrearFaltante(fila)}>
+                                Crear en Caja
+                              </button>
+                              {/* Lucas 10-jun: interfaz de aprendizaje — decir
+                                  "esta transferencia es del proveedor X" así el
+                                  sistema aprende el alias al cerrar. */}
+                              <button
+                                className="btn btn-ghost btn-sm"
+                                style={{ color: "var(--acc)" }}
+                                onClick={() => { setAsignarProvFila(fila); setBusquedaProv(""); }}
+                              >
+                                Pertenece a proveedor…
+                              </button>
+                              <button className="btn btn-ghost btn-sm" onClick={() => ignorarExtracto(fila.idx)}>
+                                Ignorar
+                              </button>
+                            </div>
+                          )}
                         </FilaCard>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </Card>
             );
@@ -1524,6 +1585,65 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                 ))}
               </button>
             ))}
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal: asignar fila roja a un proveedor (Lucas 10-jun, interfaz
+          de aprendizaje). Al elegir, la fila queda marcada y al cerrar
+          la conciliación se aprende el alias titular→proveedor para que
+          la próxima vez vaya directo al bloque de ese proveedor. */}
+      {asignarProvFila && (
+        <Modal
+          isOpen={true}
+          onClose={() => { setAsignarProvFila(null); setBusquedaProv(""); }}
+          title="¿De qué proveedor es esta transferencia?"
+          maxWidth={560}
+        >
+          <div style={{ fontSize: 13, marginBottom: 12, color: "var(--muted2)" }}>
+            <strong style={{ color: "var(--text)" }}>{asignarProvFila.descripcion}</strong>
+            <br />
+            {fmt_d(asignarProvFila.fecha)} · {fmt_$(asignarProvFila.monto)}
+          </div>
+          <input
+            autoFocus
+            type="text"
+            placeholder="Buscar proveedor por nombre…"
+            value={busquedaProv}
+            onChange={e => setBusquedaProv(e.target.value)}
+            style={{
+              width: "100%", padding: "8px 10px", fontSize: 13,
+              background: "var(--bg)", border: "1px solid var(--bd)",
+              color: "var(--text)", borderRadius: 6, marginBottom: 10,
+            }}
+          />
+          <div style={{ maxHeight: 340, overflowY: "auto", border: "1px solid var(--bd)", borderRadius: 6 }}>
+            {(() => {
+              const q = busquedaProv.trim().toLowerCase();
+              const filtrados = q.length === 0
+                ? proveedoresList.slice(0, 50)
+                : proveedoresList.filter(p => p.nombre.toLowerCase().includes(q)).slice(0, 50);
+              if (filtrados.length === 0) {
+                return <div style={{ padding: 14, fontSize: 12, color: "var(--muted2)" }}>Sin resultados. Probá con otra parte del nombre, o creá el proveedor en Compras → Proveedores y volvé.</div>;
+              }
+              return filtrados.map(p => (
+                <button
+                  key={p.id}
+                  className="btn btn-ghost"
+                  onClick={() => {
+                    setResueltos(prev => ({ ...prev, [`ext:${asignarProvFila.idx}`]: `prov:${p.id}` }));
+                    setAsignarProvFila(null);
+                    setBusquedaProv("");
+                  }}
+                  style={{ width: "100%", textAlign: "left", padding: "8px 12px", borderRadius: 0, borderBottom: "1px solid var(--bd)" }}
+                >
+                  {p.nombre}
+                </button>
+              ));
+            })()}
+          </div>
+          <div style={{ marginTop: 10, fontSize: 11, color: "var(--muted2)" }}>
+            Después de cerrar la conciliación, las próximas transferencias con la misma descripción se agruparán automáticamente bajo este proveedor.
           </div>
         </Modal>
       )}
