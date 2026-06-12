@@ -22,6 +22,7 @@ import { Modal } from "../components/ui";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 
+interface StockLocalRow { local_id: number; cantidad: number; }
 interface Insumo {
   id: number;
   nombre: string;
@@ -31,6 +32,7 @@ interface Insumo {
   stock_minimo: number | null;
   stock_maximo: number | null;
   costo_actual: number | null;
+  insumo_stock_local?: StockLocalRow[];
 }
 interface MotivoMerma { id: number; nombre: string; emoji: string | null; }
 interface Conteo {
@@ -54,6 +56,16 @@ interface StockProps {
 }
 
 const fmtDt = (s: string) => new Date(s).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+// Stock a mostrar: con local activo → cantidad de ESE local (0 si no hay fila);
+// sin local activo (dueño viendo todo) → stock_actual global.
+const stockVisible = (ins: Pick<Insumo, "stock_actual" | "insumo_stock_local">, localActivo: number | null): number => {
+  if (localActivo != null) {
+    const fila = (ins.insumo_stock_local ?? []).find(l => l.local_id === localActivo);
+    return Number(fila?.cantidad ?? 0);
+  }
+  return Number(ins.stock_actual ?? 0);
+};
 
 export default function Stock({ user, localActivo, embedded = false }: StockProps) {
   const { toast, showError, showToast } = useToast();
@@ -94,8 +106,8 @@ export default function Stock({ user, localActivo, embedded = false }: StockProp
   const cargarBase = useCallback(async () => {
     setLoading(true);
     const [iRes, mRes] = await Promise.all([
-      db.from("insumos").select("id, nombre, unidad, emoji, stock_actual, stock_minimo, stock_maximo, costo_actual")
-        .eq("activo", true).eq("stock_disponible", true).is("deleted_at", null).order("nombre"),
+      db.from("insumos").select("id, nombre, unidad, emoji, stock_actual, stock_minimo, stock_maximo, costo_actual, insumo_stock_local(local_id, cantidad)")
+        .eq("activo", true).is("deleted_at", null).order("nombre"),
       db.from("mermas_motivos").select("id, nombre, emoji").eq("activo", true).is("deleted_at", null).order("orden"),
     ]);
     if (iRes.error) { showError("No se pudo cargar stock: " + iRes.error.message); setLoading(false); return; }
@@ -208,8 +220,8 @@ export default function Stock({ user, localActivo, embedded = false }: StockProp
 
   // ── Render ──
   const insumosFiltrados = insumos.filter(i => !search || i.nombre.toLowerCase().includes(search.toLowerCase()));
-  const valorStock = insumos.reduce((s, i) => s + Number(i.stock_actual ?? 0) * Number(i.costo_actual ?? 0), 0);
-  const bajoMinimo = insumos.filter(i => i.stock_minimo != null && Number(i.stock_actual ?? 0) < Number(i.stock_minimo)).length;
+  const valorStock = insumos.reduce((s, i) => s + stockVisible(i, localActivo) * Number(i.costo_actual ?? 0), 0);
+  const bajoMinimo = insumos.filter(i => i.stock_minimo != null && stockVisible(i, localActivo) < Number(i.stock_minimo)).length;
 
   const sinLocal = !localActivo;
 
@@ -248,23 +260,27 @@ export default function Stock({ user, localActivo, embedded = false }: StockProp
       {vista === "stock" && (
         <div className="panel">
           {loading ? <div className="loading" style={{ padding: 40 }}>Cargando…</div> : insumosFiltrados.length === 0 ? (
-            <div className="empty" style={{ padding: 40 }}>No hay insumos con stock.</div>
+            <div className="empty" style={{ padding: 40 }}>No hay insumos.</div>
           ) : (
             <table>
               <thead><tr><th></th><th>Insumo</th><th style={{ textAlign: "right" }}>Stock</th><th style={{ textAlign: "right" }}>Mínimo</th><th style={{ textAlign: "right" }}>Costo unit.</th><th style={{ textAlign: "right" }}>Valor</th></tr></thead>
               <tbody>
                 {insumosFiltrados.map(i => {
-                  const bajo = i.stock_minimo != null && Number(i.stock_actual ?? 0) < Number(i.stock_minimo);
+                  const stk = stockVisible(i, localActivo);
+                  const agotado = stk <= 0;
+                  const bajo = !agotado && i.stock_minimo != null && stk < Number(i.stock_minimo);
                   return (
                     <tr key={i.id}>
                       <td style={{ width: 26, fontSize: 16 }}>{i.emoji ?? "📦"}</td>
                       <td style={{ fontWeight: 500 }}>{i.nombre}</td>
-                      <td className="mono" style={{ textAlign: "right", color: bajo ? "var(--danger)" : undefined }}>
-                        {Number(i.stock_actual ?? 0).toFixed(2)} {i.unidad}{bajo && <span className="badge b-danger" style={{ fontSize: 9, marginLeft: 4 }}>bajo</span>}
+                      <td className="mono" style={{ textAlign: "right", color: agotado || bajo ? "var(--danger)" : undefined }}>
+                        {stk.toFixed(2)} {i.unidad}
+                        {agotado && <span className="badge b-danger" style={{ fontSize: 9, marginLeft: 4 }}>Agotado</span>}
+                        {bajo && <span className="badge b-danger" style={{ fontSize: 9, marginLeft: 4 }}>bajo</span>}
                       </td>
                       <td className="mono" style={{ textAlign: "right", color: "var(--muted2)" }}>{i.stock_minimo != null ? Number(i.stock_minimo).toFixed(0) : "—"}</td>
                       <td className="mono" style={{ textAlign: "right", color: "var(--muted2)" }}>{i.costo_actual ? fmt_$(Number(i.costo_actual)) : "—"}</td>
-                      <td className="mono" style={{ textAlign: "right" }}>{fmt_$(Number(i.stock_actual ?? 0) * Number(i.costo_actual ?? 0))}</td>
+                      <td className="mono" style={{ textAlign: "right" }}>{fmt_$(stk * Number(i.costo_actual ?? 0))}</td>
                     </tr>
                   );
                 })}
@@ -361,7 +377,7 @@ export default function Stock({ user, localActivo, embedded = false }: StockProp
             <label style={{ fontSize: 11, color: "var(--muted2)" }}>Insumo</label>
             <select value={mermaForm.insumo_id} onChange={e => setMermaForm({ ...mermaForm, insumo_id: e.target.value })} className="search" style={{ width: "100%" }}>
               <option value="">Elegí…</option>
-              {insumos.map(i => <option key={i.id} value={String(i.id)}>{i.nombre} ({i.unidad}) · stock {Number(i.stock_actual ?? 0).toFixed(2)}</option>)}
+              {insumos.map(i => <option key={i.id} value={String(i.id)}>{i.nombre} ({i.unidad}) · stock {stockVisible(i, localActivo).toFixed(2)}</option>)}
             </select>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
