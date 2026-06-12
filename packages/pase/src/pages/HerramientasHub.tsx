@@ -168,21 +168,24 @@ export default function HerramientasHub({ user, locales, localActivo }: Props) {
               gap: 12,
               padding: 20,
               minHeight: 140,
-              background: "var(--pase-bg-soft)",
+              background: "var(--pase-bg)",
               border: "0.5px solid var(--pase-border)",
-              borderRadius: 12,
+              borderRadius: 14,
               cursor: "pointer",
               textAlign: "left",
               fontFamily: "inherit",
-              transition: "transform 0.1s ease, border-color 0.2s ease",
+              boxShadow: "var(--pase-shadow-sm)",
+              transition: "transform 0.15s ease, border-color 0.2s ease, box-shadow 0.2s ease",
             }}
             onMouseEnter={e => {
               e.currentTarget.style.transform = "translateY(-2px)";
-              e.currentTarget.style.borderColor = "var(--pase-celeste)";
+              e.currentTarget.style.borderColor = "var(--pase-border-strong)";
+              e.currentTarget.style.boxShadow = "var(--pase-shadow-md)";
             }}
             onMouseLeave={e => {
               e.currentTarget.style.transform = "";
               e.currentTarget.style.borderColor = "var(--pase-border)";
+              e.currentTarget.style.boxShadow = "var(--pase-shadow-sm)";
             }}
           >
             <t.Icon size={28} tone="gold" />
