@@ -12,6 +12,8 @@
 //      - 2 items en ventas_pos_items
 //      - movimiento creado por 15500
 //      - saldo "Caja Efectivo" del local subió en 15500
+//      - puente ventas_pos → ventas (12-jun): fila en ventas_pos_proyecciones
+//        + fila diaria en `ventas` origen='comanda' por el neto del cobro
 //   7. Cleanup: anular venta + cleanup tenant
 //
 // Por qué DB-only (no Playwright UI):
@@ -34,6 +36,17 @@ import {
   seedComandaPos,
   type E2EComandaPosSeed,
 } from "../setup/seed-comanda";
+
+// Misma regla que fn_proyectar_venta_pos (migración 202606121200): día
+// calendario y turno en hora Argentina (UTC-3 fijo). <17:00 = Mediodía,
+// si no Noche. NUNCA hardcodear fecha/turno — el test corre a cualquier hora.
+function fechaTurnoAR(cobradaAtIso: string): { fecha: string; turno: string } {
+  const utc = new Date(cobradaAtIso);
+  const ar = new Date(utc.getTime() - 3 * 3600 * 1000);
+  const fecha = ar.toISOString().slice(0, 10);
+  const turno = ar.getUTCHours() < 17 ? "Mediodía" : "Noche";
+  return { fecha, turno };
+}
 
 test.describe.serial("E2E Sprint 2 — POS cobro efectivo (DB-only)", () => {
   let seed: E2ETenantSeedResult | null = null;
@@ -134,7 +147,7 @@ test.describe.serial("E2E Sprint 2 — POS cobro efectivo (DB-only)", () => {
     // ── 5. Verificar resultados ────────────────────────────────────────
     // (a) venta queda cobrada
     const { data: venta } = await svc.from("ventas_pos")
-      .select("estado, total")
+      .select("estado, total, cobrada_at")
       .eq("id", ventaId)
       .single();
     expect(venta?.estado).toBe("cobrada");
@@ -167,6 +180,50 @@ test.describe.serial("E2E Sprint 2 — POS cobro efectivo (DB-only)", () => {
       .eq("id", mesa1Id)
       .single();
     expect(mesa?.estado).toBe("libre");
+
+    // (e) Puente ventas_pos → ventas (trigger trg_venta_pos_proyectar, 12-jun):
+    // al pasar a 'cobrada', los pagos confirmados (neto de propina) se
+    // proyectan como fila diaria en `ventas` con origen='comanda' y se
+    // registra el aporte exacto en `ventas_pos_proyecciones`.
+    const { fecha: fechaEsperada, turno: turnoEsperado } =
+      fechaTurnoAR(venta!.cobrada_at as string);
+
+    // (e.1) Registro de proyección para ESTA venta
+    const { data: proj, error: projErr } = await svc
+      .from("ventas_pos_proyecciones")
+      .select("tenant_id, local_id, fecha, turno, detalle")
+      .eq("venta_id", ventaId)
+      .single();
+    if (projErr) throw new Error(`Query ventas_pos_proyecciones: ${projErr.message}`);
+    expect(proj!.tenant_id).toBe(seed.tenantId);
+    expect(proj!.local_id).toBe(seed.local1Id);
+    expect(proj!.fecha).toBe(fechaEsperada);
+    expect(proj!.turno).toBe(turnoEsperado);
+    const detalle = proj!.detalle as Array<{ medio: string; monto: number }>;
+    expect(detalle).toHaveLength(1);
+    expect(detalle[0]!.medio).toBe("EFECTIVO");
+    // Propina 0 → neto = total del cobro
+    expect(Number(detalle[0]!.monto)).toBe(totalEsperado);
+
+    // (e.2) Fila diaria en `ventas` origen='comanda' del tenant E2E.
+    // Este es el primer cobro POS de la corrida → monto exacto = neto.
+    // OJO: `ventas` NO tiene columna `estado` en prod (la migración del CHECK
+    // 202605121600 era condicional y no aplicó — las ventas se eliminan via
+    // RPC eliminar_venta, no se marcan anuladas).
+    const { data: vComanda, error: vcErr } = await svc.from("ventas")
+      .select("medio, monto")
+      .eq("tenant_id", seed.tenantId)
+      .eq("local_id", seed.local1Id)
+      .eq("origen", "comanda")
+      .eq("fecha", fechaEsperada)
+      .eq("turno", turnoEsperado)
+      .eq("medio", "EFECTIVO");
+    if (vcErr) throw new Error(`Query ventas origen=comanda: ${vcErr.message}`);
+    expect(
+      vComanda,
+      `Esperaba 1 fila ventas origen=comanda (${fechaEsperada}/${turnoEsperado}/EFECTIVO). Filas: ${JSON.stringify(vComanda)}`,
+    ).toHaveLength(1);
+    expect(Number(vComanda![0]!.monto)).toBe(totalEsperado);
 
     // NOTA: saldos_caja NO se modifica acá. COMANDA mantiene `movimientos_caja`
     // del turno. El passage a `saldos_caja` y `movimientos` de PASE ocurre al
