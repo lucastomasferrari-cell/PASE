@@ -1,36 +1,29 @@
-/* PASE — Polish layer v1.0
- * Mejoras visuales sobre los estilos globales de Layout.tsx.
+/* PASE — Polish layer v2.0
+ * Mejoras visuales profesionales sobre Layout.tsx globals.
  * Solo agrega/mejora propiedades — NO redefine estructura o layout.
- *
  * Importar DESPUÉS de tokens.css y Layout (main.tsx).
- * Cada regla usa la misma especificidad que el original para ganar
- * por orden de cascada (último gana). Si no alcanza, duplicar el
- * selector (no usar !important).
  */
 
 /* ═══════════════════════════════════════════════════════════════════
- * CARDS & PANELS — sombra sutil + hover lift
+ * CARDS & PANELS — elevación con sombra, flotan sobre el canvas
  * ═══════════════════════════════════════════════════════════════════ */
 .kpi {
-  box-shadow: var(--pase-shadow-xs);
+  box-shadow: var(--pase-shadow-sm);
   transition:
     border-color var(--pase-duration-fast) var(--pase-ease-out),
     box-shadow var(--pase-duration-normal) var(--pase-ease-out),
     transform var(--pase-duration-normal) var(--pase-ease-out);
 }
 .kpi:hover {
-  box-shadow: var(--pase-shadow-sm);
+  box-shadow: var(--pase-shadow-md);
   border-color: var(--pase-border-strong);
 }
 
 .panel {
-  box-shadow: var(--pase-shadow-xs);
+  box-shadow: var(--pase-shadow-sm);
   transition:
     border-color var(--pase-duration-fast) var(--pase-ease-out),
     box-shadow var(--pase-duration-normal) var(--pase-ease-out);
-}
-.panel:hover {
-  box-shadow: var(--pase-shadow-sm);
 }
 
 .caja-card {
@@ -60,28 +53,27 @@
   transform: scale(0.97);
 }
 .btn:disabled {
-  opacity: 0.55;
+  opacity: 0.5;
   cursor: not-allowed;
+  pointer-events: none;
 }
 
 .btn-acc {
-  box-shadow: var(--pase-shadow-xs);
+  box-shadow: 0 1px 3px rgba(117,170,219,0.25);
 }
 .btn-acc:hover:not(:disabled) {
-  box-shadow: var(--pase-shadow-sm);
+  box-shadow: 0 2px 6px rgba(117,170,219,0.3);
 }
 
-/* btn-primary = misma estética que btn-acc (legacy: muchas pages usan
-   className="btn btn-primary" sin btn-acc). */
 .btn-primary {
   background: var(--pase-celeste);
   color: #fff;
   border: none;
-  box-shadow: var(--pase-shadow-xs);
+  box-shadow: 0 1px 3px rgba(117,170,219,0.25);
 }
 .btn-primary:hover:not(:disabled) {
   background: var(--pase-celeste-300);
-  box-shadow: var(--pase-shadow-sm);
+  box-shadow: 0 2px 6px rgba(117,170,219,0.3);
 }
 
 .btn-outline {
@@ -95,7 +87,7 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- * INPUTS & SELECTS — focus ring mejorado
+ * INPUTS & SELECTS — focus ring + hover
  * ═══════════════════════════════════════════════════════════════════ */
 .search:focus,
 input.search:focus,
@@ -107,7 +99,6 @@ select.search:focus,
   box-shadow: 0 0 0 3px var(--pase-celeste-100), var(--pase-shadow-xs);
 }
 
-/* Hover sutil en inputs (antes no tenía ningún feedback pre-focus) */
 .search:hover:not(:focus),
 input.search:hover:not(:focus),
 select.search:hover:not(:focus),
@@ -118,7 +109,7 @@ select.search:hover:not(:focus),
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- * TABLAS — row hover más suave
+ * TABLAS — filas limpias
  * ═══════════════════════════════════════════════════════════════════ */
 tbody tr {
   transition: background var(--pase-duration-fast) var(--pase-ease-out);
@@ -138,7 +129,7 @@ tbody tr.clickable:hover {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- * PILLS — transición suave
+ * PILLS
  * ═══════════════════════════════════════════════════════════════════ */
 .pill {
   transition:
@@ -152,7 +143,7 @@ tbody tr.clickable:hover {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- * BADGES — sombra micro
+ * BADGES
  * ═══════════════════════════════════════════════════════════════════ */
 .badge {
   transition:
@@ -161,7 +152,7 @@ tbody tr.clickable:hover {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- * MODALES — entrada animada mejorada
+ * MODALES — entrada animada
  * ═══════════════════════════════════════════════════════════════════ */
 .overlay {
   animation: pase-overlay-in var(--pase-duration-normal) var(--pase-ease-out);
@@ -195,27 +186,27 @@ tbody tr.clickable:hover {
 .alert-info   { border-left: 3px solid var(--pase-celeste); }
 
 /* ═══════════════════════════════════════════════════════════════════
- * SIDEBAR — sombra en desktop
+ * SIDEBAR — elevada, limpia
  * ═══════════════════════════════════════════════════════════════════ */
 .sb {
-  box-shadow: 1px 0 0 var(--pase-border);
+  box-shadow: var(--pase-shadow-sm);
+  border-right: none;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- * NAV ITEMS — hover más expresivo
+ * NAV ITEMS — hover refinado
  * ═══════════════════════════════════════════════════════════════════ */
 .nav-item {
   transition:
     background var(--pase-duration-fast) var(--pase-ease-out),
-    color var(--pase-duration-fast) var(--pase-ease-out),
-    transform var(--pase-duration-fast) var(--pase-ease-out);
+    color var(--pase-duration-fast) var(--pase-ease-out);
 }
 .nav-item.active {
   box-shadow: inset 3px 0 0 var(--pase-celeste);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- * LOADING & EMPTY — shimmer animation
+ * LOADING — spinner
  * ═══════════════════════════════════════════════════════════════════ */
 .loading::after {
   content: "";
@@ -234,14 +225,14 @@ tbody tr.clickable:hover {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- * LOGIN CARD — sombra dramática
+ * LOGIN CARD
  * ═══════════════════════════════════════════════════════════════════ */
 .login-card {
   box-shadow: var(--pase-shadow-lg);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- * SCROLLBAR GLOBAL — sutil y consistente
+ * SCROLLBAR — sutil y consistente
  * ═══════════════════════════════════════════════════════════════════ */
 ::-webkit-scrollbar {
   width: 6px;
@@ -259,9 +250,75 @@ tbody tr.clickable:hover {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- * SELECTION — brand-colored text selection
+ * SELECTION
  * ═══════════════════════════════════════════════════════════════════ */
 ::selection {
   background: var(--pase-celeste-200);
   color: var(--pase-text);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * PAGE HEADER — más profesional
+ * ═══════════════════════════════════════════════════════════════════ */
+.ph-row {
+  padding-bottom: 16px;
+  border-bottom: 0.5px solid var(--pase-border);
+  margin-bottom: 24px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * SECTION TITLES — consistent
+ * ═══════════════════════════════════════════════════════════════════ */
+.section-title {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: var(--pase-fs-xs);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * EERR — líneas más limpias
+ * ═══════════════════════════════════════════════════════════════════ */
+.eerr-row {
+  padding: 10px 18px;
+}
+.eerr-section-title {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: var(--pase-fs-xs);
+  padding: 10px 18px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * FILTER TOOLBAR — separación visual del contenido
+ * ═══════════════════════════════════════════════════════════════════ */
+.panel-hd {
+  gap: 10px;
+}
+.panel-hd .search,
+.panel-hd input.search,
+.panel-hd select.search {
+  background: var(--pase-bg-soft);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * SIDEBAR SECTION LABELS — más refinados
+ * ═══════════════════════════════════════════════════════════════════ */
+.sb-section {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--pase-text-muted);
+  opacity: 0.7;
+  padding: 18px 14px 6px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * SIDEBAR USER SECTION
+ * ═══════════════════════════════════════════════════════════════════ */
+.sb-user {
+  padding: 16px 18px;
+}
+.sb-logout {
+  border-radius: 8px;
+  padding: 7px;
+  font-size: 10.5px;
 }

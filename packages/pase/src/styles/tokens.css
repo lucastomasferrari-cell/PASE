@@ -28,7 +28,8 @@
   --pase-border-strong: #DCE8F4;  /* inputs, frames principales */
 
   /* Fondos */
-  --pase-bg:      #FFFFFF;        /* fondo principal */
+  --pase-bg:      #FFFFFF;        /* fondo principal (cards, modales) */
+  --pase-bg-page: #F7F9FC;        /* fondo de página/canvas — cards flotan sobre esto */
   --pase-bg-soft: #F4F9FD;        /* titlebar, secciones */
   --pase-bg-out:  #F2F5F8;        /* íconos "salida"/grises */
 
@@ -177,7 +178,8 @@
   /* Base — paleta unificada con COMANDA POS (2026-05-17): tono más neutro,
    * menos navy puro, mejor contraste para data densa. Mantenemos el ancla
    * celeste/dorado de marca pero la base es "graphite-blue" más oscuro. */
-  --pase-bg:      #0E1726;        /* fondo principal — graphite-blue muy oscuro */
+  --pase-bg:      #141E30;        /* fondo cards/panels — graphite-blue */
+  --pase-bg-page: #0C1220;        /* fondo canvas — más oscuro que cards */
   --pase-bg-soft: #1A2540;        /* cards/panels — claro distinguible del bg */
   --pase-bg-out:  #2A3550;        /* secciones secundarias / chips */
 
