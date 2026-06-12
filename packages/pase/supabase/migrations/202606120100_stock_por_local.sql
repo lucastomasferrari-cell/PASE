@@ -58,12 +58,12 @@ BEGIN
     updated_at = NOW()
   WHERE id = NEW.insumo_id;
 
+  -- Auto-86 inverso: si el stock vuelve a > 0 y estaba en false, NO desmarcamos
+  -- automático (puede haber otros insumos faltando). Si el stock pasa a <= 0
+  -- forzamos stock_disponible = FALSE (dispara auto-86).
   IF v_stock_despues <= 0 THEN
     UPDATE insumos SET stock_disponible = FALSE
      WHERE id = NEW.insumo_id AND stock_disponible = TRUE;
-  ELSE
-    UPDATE insumos SET stock_disponible = TRUE
-     WHERE id = NEW.insumo_id AND stock_disponible = FALSE;
   END IF;
 
   -- NUEVO: cache por local (solo movimientos con local)

@@ -6,7 +6,8 @@
 --   Base copiada ÍNTEGRA de la versión vigente (202605212200, CRIT-10).
 -- - fn_finalizar_conteo_fisico: auditada — el INSERT del ajuste tipo='conteo'
 --   YA incluye local_id (v_local_id de stock_conteos). Se recrea igual
---   (sin cambios funcionales) desde la versión vigente (202605212200).
+--   (sin cambios funcionales) desde la versión VIGENTE (202605260200:
+--   3 columnas de retorno incl. movs_durante + popula movs_durante_conteo).
 -- - fn_cmv_real v2: stock inicial/final per-local sumando el ledger hasta
 --   el borde del período (antes: snapshots globales stock_antes/stock_despues).
 --   Se CONSERVA el check CRIT-3 (TENANT_MISMATCH) de la versión vigente.
@@ -69,22 +70,26 @@ GRANT EXECUTE ON FUNCTION fn_iniciar_conteo_fisico(INTEGER, TEXT) TO authenticat
 -- El INSERT del movimiento de ajuste tipo='conteo' ya incluye local_id
 -- (v_local_id leído de stock_conteos) → con el trigger nuevo de
 -- 202606120100, el ajuste impacta la cache per-local automáticamente.
-CREATE OR REPLACE FUNCTION fn_finalizar_conteo_fisico(p_conteo_id BIGINT)
-RETURNS TABLE (ajustes INTEGER, diferencia_valor NUMERIC)
+-- Copia fiel de la versión vigente (202605260200). NO se repite el DROP de
+-- esa migración porque el return type (3 columnas) ya coincide con el de la DB.
+CREATE OR REPLACE FUNCTION public.fn_finalizar_conteo_fisico(p_conteo_id BIGINT)
+RETURNS TABLE(ajustes INTEGER, diferencia_valor NUMERIC, movs_durante INTEGER)
 LANGUAGE plpgsql SECURITY DEFINER
 AS $$
 DECLARE
   v_tenant_id UUID;
   v_local_id INTEGER;
+  v_iniciado_at TIMESTAMPTZ;
   v_ajustes INTEGER := 0;
   v_dif NUMERIC := 0;
+  v_movs_durante INTEGER := 0;
   v_linea RECORD;
   v_costo NUMERIC;
 BEGIN
   v_tenant_id := auth_tenant_id();
   IF v_tenant_id IS NULL THEN RAISE EXCEPTION 'NO_AUTH'; END IF;
 
-  SELECT tenant_id, local_id INTO v_tenant_id, v_local_id
+  SELECT tenant_id, local_id, iniciado_at INTO v_tenant_id, v_local_id, v_iniciado_at
     FROM stock_conteos
    WHERE id = p_conteo_id AND estado = 'abierto';
   IF v_local_id IS NULL THEN RAISE EXCEPTION 'CONTEO_NO_ABIERTO'; END IF;
@@ -93,6 +98,7 @@ BEGIN
     RAISE EXCEPTION 'PERMISO_DENEGADO';
   END IF;
 
+  -- Aplicar los ajustes (lógica original preservada).
   FOR v_linea IN
     SELECT l.insumo_id, l.diferencia, i.costo_actual
       FROM stock_conteo_lineas l
@@ -115,15 +121,27 @@ BEGIN
     v_dif := v_dif + (v_linea.diferencia * v_costo);
   END LOOP;
 
+  -- NUEVO 26-may: contar movs reales (no 'conteo') que ocurrieron entre
+  -- iniciado_at y now(). Si > 0, el snapshot original quedó desincronizado
+  -- y el ajuste aplicado puede descuadrar el stock_actual.
+  SELECT COUNT(*) INTO v_movs_durante
+    FROM insumo_movimientos im
+   WHERE im.tenant_id = v_tenant_id
+     AND im.local_id = v_local_id
+     AND im.created_at BETWEEN v_iniciado_at AND now()
+     AND im.tipo IN ('salida_venta', 'merma', 'robo', 'donacion', 'entrada_compra')
+     AND COALESCE(im.deleted_at, NULL) IS NULL;
+
   UPDATE stock_conteos SET
     estado = 'finalizado',
     finalizado_at = NOW(),
     finalizado_por = auth_usuario_id(),
     total_ajustes = v_ajustes,
-    valor_diferencia = v_dif
+    valor_diferencia = v_dif,
+    movs_durante_conteo = v_movs_durante  -- nuevo campo 26-may
   WHERE id = p_conteo_id;
 
-  RETURN QUERY SELECT v_ajustes, v_dif;
+  RETURN QUERY SELECT v_ajustes, v_dif, v_movs_durante;
 END;
 $$;
 REVOKE ALL ON FUNCTION fn_finalizar_conteo_fisico(BIGINT) FROM PUBLIC, anon;
