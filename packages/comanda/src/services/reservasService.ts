@@ -8,7 +8,7 @@
 //
 // Para admin (con auth):
 //   - listReservas            → reservas del local con filtros
-//   - cambiarEstado           → confirmar / cumplida / no_show / cancelada
+//   - cambiarEstado           → confirmar / sentar / finalizar / no_show / cancelar
 
 import { db } from '../lib/supabase';
 import { dbAnon } from '../lib/supabaseAnon';
@@ -16,7 +16,10 @@ import { translateError } from '../lib/errors';
 
 // ─── Types ────────────────────────────────────────────────────────────
 
-export type EstadoReserva = 'pendiente' | 'confirmada' | 'cumplida' | 'no_show' | 'cancelada';
+// Modelo v3 (12-jun): 'cumplida' ya no existe — el histórico se migró a
+// 'finalizada' y al sentar se usa 'sentada' (estado activo, no terminal).
+// La reserva sentada se finaliza sola cuando se cobra el ticket linkeado.
+export type EstadoReserva = 'pendiente' | 'confirmada' | 'sentada' | 'finalizada' | 'no_show' | 'cancelada';
 
 export interface Reserva {
   id: number;
@@ -34,8 +37,10 @@ export interface Reserva {
   mesa_id: number | null;
   created_at: string;
   confirmada_at: string | null;
-  cumplida_at: string | null;
   cancelada_at: string | null;
+  // Modelo v3 (12-jun)
+  duracion_min: number | null;
+  no_show_auto: boolean;
 }
 
 export interface ReservasInfoPublico {
@@ -200,10 +205,10 @@ export async function editarReserva(args: {
 
 export async function cambiarEstadoReserva(args: {
   reservaId: number;
-  nuevoEstado: 'confirmada' | 'cumplida' | 'no_show' | 'cancelada';
+  nuevoEstado: 'confirmada' | 'sentada' | 'finalizada' | 'no_show' | 'cancelada';
   motivo?: string;
-  // MESA módulo #1: al sentar (cumplida) se puede asignar mesa en el mismo
-  // paso. El backend valida que la mesa sea del mismo local.
+  // MESA módulo #1: al sentar se puede asignar mesa en el mismo paso.
+  // El backend valida que la mesa sea del mismo local.
   mesaId?: number;
 }): Promise<{ error: string | null }> {
   const { error } = await db.rpc('fn_cambiar_estado_reserva', {
@@ -218,7 +223,7 @@ export async function cambiarEstadoReserva(args: {
 
 // F5 Chunk D (2026-06-02): asignar mesa a reserva. Valida que la mesa
 // pertenezca al mismo local que la reserva + que la reserva esté en
-// estado pendiente/confirmada (cancelada/cumplida/no_show no se reasignan).
+// estado pendiente/confirmada (sentada/finalizada/cancelada/no_show no se reasignan acá).
 export async function asignarMesaReserva(args: {
   reservaId: number;
   mesaId: number;

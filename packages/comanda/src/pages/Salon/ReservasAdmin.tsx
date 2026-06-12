@@ -3,11 +3,13 @@
 // Tabs:
 //   - Hoy/Próximas: lo importante para operar el día.
 //   - Pendientes confirmación: si el local requiere confirmación manual.
+//   - En mesa: reservas sentadas (modelo v3 — se finalizan solas al cobrar).
 //   - Histórico: todas con filtros.
 //
 // Acciones por reserva:
 //   - Confirmar (si está pendiente)
-//   - Marcar cumplida (cuando el cliente vino y consumió)
+//   - Sentar (el cliente llegó — estado 'sentada', con mesa opcional)
+//   - Finalizar (cierre manual; al cobrar el ticket se finaliza sola)
 //   - Marcar no-show (no apareció)
 //   - Cancelar con motivo
 //   - WhatsApp directo al cliente
@@ -39,7 +41,8 @@ import { whatsAppUrl, mensajeGenericoCliente } from '@/lib/whatsapp';
 const ESTADO_COLORS: Record<EstadoReserva, string> = {
   pendiente:  'bg-amber-100 text-amber-800',
   confirmada: 'bg-green-100 text-green-800',
-  cumplida:   'bg-sky-100 text-sky-800',
+  sentada:    'bg-indigo-100 text-indigo-800',
+  finalizada: 'bg-sky-100 text-sky-800',
   no_show:    'bg-red-100 text-red-800',
   cancelada:  'bg-gray-100 text-gray-700',
 };
@@ -47,7 +50,8 @@ const ESTADO_COLORS: Record<EstadoReserva, string> = {
 const ESTADO_LABELS: Record<EstadoReserva, string> = {
   pendiente:  '⏳ Pendiente',
   confirmada: '✓ Confirmada',
-  cumplida:   '✅ Cumplida',
+  sentada:    '🪑 En mesa',
+  finalizada: '✅ Finalizada',
   no_show:    '❌ No show',
   cancelada:  '🚫 Cancelada',
 };
@@ -152,14 +156,16 @@ export function ReservasAdmin() {
       proximas: reservas.filter((r) =>
         r.estado === 'confirmada' && new Date(r.fecha_hora).getTime() > now - 3600_000
       ).sort((a, b) => a.fecha_hora.localeCompare(b.fecha_hora)),
+      enMesa: reservas.filter((r) => r.estado === 'sentada')
+        .sort((a, b) => a.fecha_hora.localeCompare(b.fecha_hora)),
       historico: reservas.filter((r) =>
-        r.estado === 'cumplida' || r.estado === 'no_show' || r.estado === 'cancelada' ||
+        r.estado === 'finalizada' || r.estado === 'no_show' || r.estado === 'cancelada' ||
         (r.estado === 'confirmada' && new Date(r.fecha_hora).getTime() <= now - 3600_000)
       ).sort((a, b) => b.fecha_hora.localeCompare(a.fecha_hora)),
     };
   }, [reservas, now]);
 
-  async function cambiarEstado(r: Reserva, nuevoEstado: 'confirmada' | 'cumplida' | 'no_show' | 'cancelada', motivo?: string) {
+  async function cambiarEstado(r: Reserva, nuevoEstado: 'confirmada' | 'sentada' | 'finalizada' | 'no_show' | 'cancelada', motivo?: string) {
     setBusy(r.id);
     const { error } = await cambiarEstadoReserva({
       reservaId: r.id,
@@ -184,6 +190,9 @@ export function ReservasAdmin() {
     if (motivo === null) return; // canceló el prompt
     await cambiarEstado(r, 'cancelada', motivo || undefined);
   }
+  // Cierre manual de una reserva sentada. Normalmente no hace falta:
+  // al cobrar el ticket linkeado, el backend la finaliza solo.
+  async function handleFinalizar(r: Reserva) { await cambiarEstado(r, 'finalizada'); }
 
   // ── MESA módulo #1: agenda por día + alta/edición + sentar con mesa ──────
   const [agendaFecha, setAgendaFecha] = useState<string>(toLocalDateStr(new Date()));
@@ -256,7 +265,7 @@ export function ReservasAdmin() {
     }
   }
 
-  // Sentar (cumplida) con mesa opcional en un paso.
+  // Sentar (estado 'sentada') con mesa opcional en un paso.
   const [sentarTarget, setSentarTarget] = useState<Reserva | null>(null);
   const [sentarMesa, setSentarMesa] = useState<string>('');
   function abrirSentar(r: Reserva) {
@@ -268,7 +277,7 @@ export function ReservasAdmin() {
     const mesaId = sentarMesa ? parseInt(sentarMesa, 10) : undefined;
     setBusy(sentarTarget.id);
     const { error } = await cambiarEstadoReserva({
-      reservaId: sentarTarget.id, nuevoEstado: 'cumplida', mesaId,
+      reservaId: sentarTarget.id, nuevoEstado: 'sentada', mesaId,
     });
     setBusy(null);
     if (error) { toast.error(error); return; }
@@ -312,6 +321,13 @@ export function ReservasAdmin() {
             )}
           </TabsTrigger>
           <TabsTrigger value="proximas">Próximas ({grupos.proximas.length})</TabsTrigger>
+          <TabsTrigger value="enmesa">
+            En mesa {grupos.enMesa.length > 0 && (
+              <span className="ml-1.5 px-1.5 py-0.5 rounded bg-indigo-200 text-indigo-900 text-xs">
+                {grupos.enMesa.length}
+              </span>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="historico">Histórico ({grupos.historico.length})</TabsTrigger>
         </TabsList>
 
@@ -344,10 +360,11 @@ export function ReservasAdmin() {
                         horaSola
                         onConfirmar={r.estado === 'pendiente' ? () => handleConfirmar(r) : undefined}
                         onSentar={r.estado === 'pendiente' || r.estado === 'confirmada' ? () => abrirSentar(r) : undefined}
+                        onFinalizar={r.estado === 'sentada' ? () => handleFinalizar(r) : undefined}
                         onNoShow={r.estado === 'confirmada' ? () => handleNoShow(r) : undefined}
                         onCancelar={r.estado === 'pendiente' || r.estado === 'confirmada' ? () => handleCancelar(r) : undefined}
                         onEditar={r.estado === 'pendiente' || r.estado === 'confirmada' ? () => abrirEdicion(r) : undefined}
-                        readOnly={r.estado === 'cumplida' || r.estado === 'no_show' || r.estado === 'cancelada'} />
+                        readOnly={r.estado === 'finalizada' || r.estado === 'no_show' || r.estado === 'cancelada'} />
           ))}
         </TabsContent>
 
@@ -385,6 +402,28 @@ export function ReservasAdmin() {
                         onEditar={() => abrirEdicion(r)}
                         onAsignarMesa={(mesaId) => handleAsignarMesa(r, mesaId)} />
           ))}
+        </TabsContent>
+
+        {/* ── Modelo v3: reservas sentadas (en mesa ahora) ───────────────── */}
+        <TabsContent value="enmesa" className="mt-4 space-y-2">
+          {grupos.enMesa.length === 0 ? (
+            <Card>
+              <CardContent className="p-12 text-center text-foreground/60">
+                Nadie en mesa por reserva ahora.
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <p className="text-xs text-foreground/60">
+                Al cobrar el ticket de la mesa, la reserva se finaliza sola. “Finalizar” es solo para cerrarla a mano.
+              </p>
+              {grupos.enMesa.map((r) => (
+                <ReservaRow key={r.id} reserva={r} busy={busy === r.id}
+                            mesas={mesas}
+                            onFinalizar={() => handleFinalizar(r)} />
+              ))}
+            </>
+          )}
         </TabsContent>
 
         <TabsContent value="historico" className="mt-4 space-y-2">
@@ -489,7 +528,7 @@ export function ReservasAdmin() {
 }
 
 function ReservaRow({
-  reserva: r, busy, mesas, horaSola, onConfirmar, onSentar, onNoShow, onCancelar, onEditar, onAsignarMesa, readOnly,
+  reserva: r, busy, mesas, horaSola, onConfirmar, onSentar, onFinalizar, onNoShow, onCancelar, onEditar, onAsignarMesa, readOnly,
 }: {
   reserva: Reserva;
   busy?: boolean;
@@ -498,6 +537,7 @@ function ReservaRow({
   horaSola?: boolean;
   onConfirmar?: () => void;
   onSentar?: () => void;
+  onFinalizar?: () => void;
   onNoShow?: () => void;
   onCancelar?: () => void;
   onEditar?: () => void;
@@ -520,6 +560,12 @@ function ReservaRow({
               <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${ESTADO_COLORS[r.estado]}`}>
                 {ESTADO_LABELS[r.estado]}
               </span>
+              {r.estado === 'no_show' && r.no_show_auto && (
+                <span className="text-xs px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-200"
+                      title="Marcada automáticamente por el sistema (pasó la hora + gracia sin sentarse)">
+                  auto
+                </span>
+              )}
               <span className="text-xs text-foreground/60">#{r.id}</span>
               {mesaLabel && (
                 <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 font-medium">
@@ -534,6 +580,11 @@ function ReservaRow({
               <span className="flex items-center gap-1">
                 <Users className="h-3.5 w-3.5" /> {r.personas}
               </span>
+              {r.duracion_min != null && (
+                <span className="text-xs text-foreground/50" title="Duración estimada de la reserva">
+                  ~{r.duracion_min} min
+                </span>
+              )}
               {r.cliente_telefono && (
                 <a href={`tel:${r.cliente_telefono}`} className="flex items-center gap-1 hover:underline text-primary">
                   <Phone className="h-3.5 w-3.5" /> {r.cliente_telefono}
@@ -583,6 +634,12 @@ function ReservaRow({
               {onSentar && (
                 <Button size="sm" variant="outline" onClick={onSentar} disabled={busy}>
                   <Armchair className="h-4 w-4 mr-1" /> Sentar
+                </Button>
+              )}
+              {onFinalizar && (
+                <Button size="sm" variant="outline" onClick={onFinalizar} disabled={busy}
+                        title="Cierre manual — al cobrar el ticket se finaliza sola">
+                  <Check className="h-4 w-4 mr-1" /> Finalizar
                 </Button>
               )}
               {onNoShow && (
