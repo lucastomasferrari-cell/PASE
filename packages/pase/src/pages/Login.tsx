@@ -81,16 +81,16 @@ export default function Login({ onLogin }: LoginProps) {
         <div className="login-brand">PASE</div>
         <div className="login-sub">aliado gastronómico</div>
         {cambioOk && !err && (
-          <div className="alert" style={{
-            background: "rgba(43,182,115,0.12)",
-            border: "1px solid rgba(43,182,115,0.3)",
-            color: "#2BB673",
+          <div className="alert alert-success" style={{
+            background: "var(--pase-celeste-100)",
+            border: "0.5px solid var(--pase-celeste-200)",
+            color: "var(--pase-text)",
             padding: "10px 14px",
-            borderRadius: 8,
-            fontSize: 14,
+            borderRadius: 10,
+            fontSize: "var(--pase-fs-base)",
             marginBottom: 14,
           }}>
-            ✓ Contraseña cambiada. Ingresá con la nueva.
+            Contraseña cambiada. Ingresá con la nueva.
           </div>
         )}
         {err && <div className="alert alert-danger">{err}</div>}
@@ -101,10 +101,10 @@ export default function Login({ onLogin }: LoginProps) {
             display: "flex",
             alignItems: "center",
             gap: 8,
-            margin: "10px 0 14px",
+            margin: "12px 0 18px",
             cursor: "pointer",
-            fontSize: 13,
-            color: "var(--muted, #6b7280)",
+            fontSize: "var(--pase-fs-sm)",
+            color: "var(--pase-text-muted)",
             userSelect: "none",
           }}
         >

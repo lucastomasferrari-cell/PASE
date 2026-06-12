@@ -95,7 +95,7 @@ export default function Negocio({ user, locales = [], localActivo = null }: Prop
 
       {/* Notas al pie, compactas — antes eran 2 alerts grandes que comían
           media pantalla entre las dos páginas. */}
-      <div style={{ marginTop: 16, fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", lineHeight: 1.6 }}>
+      <div style={{ marginTop: 20, fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", lineHeight: 1.6, opacity: 0.8 }}>
         El resultado del mes completo (ingresos vs egresos devengados) está en <strong>Reportes</strong> —
         tiene sentido mirarlo a fin de mes, no a mitad: los fijos se pagan los primeros 15 días y distorsionan.
         <br />
@@ -112,19 +112,28 @@ export default function Negocio({ user, locales = [], localActivo = null }: Prop
           background: var(--pase-bg);
           border: 0.5px solid var(--pase-border);
           border-radius: var(--pase-radius-card);
-          padding: 18px;
+          padding: 20px;
           min-width: 0;
+          box-shadow: var(--pase-shadow-sm);
+          transition: border-color var(--pase-duration-fast) var(--pase-ease-out),
+                      box-shadow var(--pase-duration-normal) var(--pase-ease-out);
+        }
+        .neg-card:hover {
+          border-color: var(--pase-border-strong);
+          box-shadow: var(--pase-shadow-md);
         }
         .neg-card-title {
           margin: 0 0 14px;
-          font-size: var(--pase-fs-base);
+          font-size: var(--pase-fs-xs);
           font-weight: 500;
-          color: var(--pase-text);
-          letter-spacing: var(--pase-ls-snug);
+          color: var(--pase-text-muted);
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
         }
         @media (max-width: 900px) {
           .neg-grid > .neg-card { grid-column: span 12 !important; }
         }
+        [data-theme="dark"] .neg-card { background: var(--pase-bg-soft); }
       `}</style>
     </div>
   );

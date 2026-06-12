@@ -287,11 +287,11 @@ body{
    bandera). El --pase-bg adapta automáticamente a dark mode. */
 .sb-logo{padding:28px 20px 24px;border-bottom:0.5px solid var(--pase-border);text-align:center;position:relative}
 .sb-logo::before{content:'';position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(180deg,var(--pase-celeste) 0,var(--pase-celeste) 2px,var(--pase-bg) 2px,var(--pase-bg) 3px,var(--pase-celeste) 3px,var(--pase-celeste) 5px);opacity:0.85}
-.brand{font-size:32px;font-weight:500;color:var(--pase-text);letter-spacing:-0.035em;line-height:1}
+.brand{font-size:34px;font-weight:500;color:var(--pase-text);letter-spacing:-0.04em;line-height:1}
 /* El punto del logo: dorado --pase-gold. Junto con el sol del InfoTooltip,
    son los 2 únicos usos de dorado en el producto (anclas de marca). */
 .brand-dot{color:var(--pase-gold)}
-.brand-sub{font-size:9px;color:var(--pase-text-muted);letter-spacing:0.04em;margin-top:6px}
+.brand-sub{font-size:8.5px;color:var(--pase-text-muted);letter-spacing:0.06em;margin-top:6px;text-transform:uppercase}
 .brand-tenant{margin-top:10px;font-size:10px;color:var(--pase-text-muted);letter-spacing:0.02em}
 .badge-sb{margin-top:10px;padding:4px 8px;border-radius:8px;font-size:9.5px;font-weight:500;text-align:center}
 .badge-sb-super{background:var(--pase-celeste-100);color:var(--pase-text);letter-spacing:0.02em}
@@ -546,12 +546,12 @@ input[type="month"].search:hover::-webkit-calendar-picker-indicator{
    que todavía no migraron a <EmptyState> se vean dignas (no migrar 8+ pantallas
    archivo por archivo cuando una mejora global cubre el 80%). */
 .empty{
-  padding:40px 24px;
+  padding:48px 24px;
   text-align:center;
   color:var(--pase-text-muted);
   font-size:var(--pase-fs-sm);
   line-height:1.55;
-  font-style:italic;
+  font-style:normal;
   letter-spacing:var(--pase-ls-snug);
 }
 .loading{
@@ -563,20 +563,21 @@ input[type="month"].search:hover::-webkit-calendar-picker-indicator{
 }
 
 /* ─── LOGIN ────────────────────────────────────────────────────────── */
-.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--pase-bg-page);position:relative}
-.login-bg{position:absolute;inset:0}
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--pase-bg-page);position:relative;overflow:hidden}
+.login-bg{position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,var(--pase-celeste-100) 0%,transparent 70%);opacity:0.5;pointer-events:none}
 .login-card{position:relative;width:420px;background:var(--pase-bg);border:0.5px solid var(--pase-border);border-radius:16px;padding:44px 40px}
 .login-brand{font-family:var(--pase-font);font-size:36px;font-weight:500;color:var(--pase-text);line-height:1;letter-spacing:-0.04em}
-.login-sub{font-size:11px;color:var(--pase-text-muted);margin-bottom:36px;margin-top:8px;letter-spacing:0.02em}
+.login-sub{font-size:11px;color:var(--pase-text-muted);margin-bottom:36px;margin-top:8px;letter-spacing:0.04em;text-transform:uppercase}
 
 /* ─── NUM/MONO ─────────────────────────────────────────────────────── */
 .num{font-family:var(--pase-font);font-size:14px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--pase-text)}
 .mono{font-family:var(--pase-font);font-size:11px;font-variant-numeric:tabular-nums}
 
 /* ─── EERR ─────────────────────────────────────────────────────────── */
-.eerr-row{display:flex;align-items:center;justify-content:space-between;padding:9px 16px;border-bottom:0.5px solid var(--pase-border);color:var(--pase-text)}
+.eerr-row{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:0.5px solid var(--pase-border);color:var(--pase-text);font-size:var(--pase-fs-base)}
 .eerr-row:last-child{border-bottom:none}
-.eerr-section-title{padding:11px 16px;font-size:11px;color:var(--pase-text-muted);font-weight:500;border-top:0.5px solid var(--pase-border);background:var(--pase-bg-soft);letter-spacing:-0.01em}
+.eerr-row:hover{background:var(--pase-bg-soft)}
+.eerr-section-title{padding:10px 18px;font-size:var(--pase-fs-xs);color:var(--pase-text-muted);font-weight:500;border-top:0.5px solid var(--pase-border);background:var(--pase-bg-soft);letter-spacing:0.04em;text-transform:uppercase}
 
 .items-table{width:100%;border-collapse:collapse;margin-top:8px}
 .items-table th{font-size:var(--pase-fs-sm);color:var(--pase-text-muted);padding:6px;text-align:left;border-bottom:0.5px solid var(--pase-border);font-weight:500}
@@ -588,7 +589,7 @@ input[type="month"].search:hover::-webkit-calendar-picker-indicator{
 
 .section{margin-bottom:14px}
 .section-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.section-title{font-size:var(--pase-fs-sm);color:var(--pase-text-muted);font-weight:500;letter-spacing:var(--pase-ls-snug)}
+.section-title{font-size:var(--pase-fs-xs);color:var(--pase-text-muted);font-weight:500;letter-spacing:0.04em;text-transform:uppercase}
 .section-total{font-size:var(--pase-fs-base);color:var(--pase-text);font-weight:500;font-variant-numeric:tabular-nums}
 
 /* ─── PILLS ────────────────────────────────────────────────────────── */

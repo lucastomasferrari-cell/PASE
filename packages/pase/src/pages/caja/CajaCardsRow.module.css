@@ -37,6 +37,7 @@
 
 .card:hover {
   transform: translateY(-1px);
+  box-shadow: var(--pase-shadow-md);
 }
 
 /* Anchor (Caja Efectivo) — celeste sólido */
@@ -44,6 +45,7 @@
   background: var(--pase-celeste);
   color: #fff;
   overflow: hidden;
+  box-shadow: 0 2px 8px rgba(117,170,219,0.3);
 }
 
 .cardAnchor .label {
@@ -79,6 +81,7 @@
   background: var(--pase-bg);
   border: 0.5px solid var(--pase-border);
   color: var(--pase-text);
+  box-shadow: var(--pase-shadow-sm);
 }
 
 .cardNormal .label {

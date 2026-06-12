@@ -72,16 +72,17 @@ export function PageHeader({ title, subtitle, info, actions }: PageHeaderProps) 
         }
         .pase-page-header__title {
           margin: 0;
-          font-size: 22px;
+          font-size: var(--pase-fs-xl);
           font-weight: 500;
           color: var(--pase-text);
-          letter-spacing: -0.025em;
+          letter-spacing: var(--pase-ls-tight);
           line-height: 1.15;
           font-family: var(--pase-font);
         }
         .pase-page-header__subtitle {
           color: var(--pase-text-muted);
           font-weight: 400;
+          font-size: var(--pase-fs-md);
           margin-left: 2px;
         }
         .pase-page-header__actions {
