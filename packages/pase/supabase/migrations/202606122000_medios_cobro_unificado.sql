@@ -141,4 +141,25 @@ SELECT id, tenant_id, local_id, created_at, updated_at, deleted_at,
   FROM medios_cobro;
 GRANT SELECT, INSERT, UPDATE ON metodos_cobro TO authenticated;
 
+-- 9) Realtime: el RENAME arrastró metodos_cobro (que estaba en la publication
+-- 202605101100) hacia la legacy, y una VIEW no puede publicarse. La tabla
+-- unificada entra a la publication — habilita la invalidación Realtime de
+-- useMediosCobro (PASE) y el refresco del catálogo en COMANDA.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+     WHERE pubname = 'supabase_realtime' AND tablename = 'medios_cobro'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE medios_cobro;
+  END IF;
+  -- sacar la legacy de la publication (quedó arrastrada por el RENAME)
+  IF EXISTS (
+    SELECT 1 FROM pg_publication_tables
+     WHERE pubname = 'supabase_realtime' AND tablename = '_metodos_cobro_legacy_20260612'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime DROP TABLE _metodos_cobro_legacy_20260612;
+  END IF;
+END $$;
+
 COMMIT;
