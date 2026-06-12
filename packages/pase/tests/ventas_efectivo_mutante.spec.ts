@@ -63,12 +63,20 @@ test.describe("Ventas — efectivo mutante", () => {
 
   test.afterEach(async () => {
     try {
-      if (ventaId) {
-        const { error } = await db.rpc("eliminar_venta", { p_venta_id: ventaId });
+      // Red de seguridad (12-jun): buscar el sentinel SIN filtro de local.
+      // Si una corrida rota guardó la venta en un local equivocado (pasó:
+      // cayó en Neko Villa Crespo, un local REAL), igual la levantamos acá.
+      const { data: huerfanas } = await db
+        .from("ventas")
+        .select("id, local_id")
+        .eq("monto", SENTINEL);
+      const ids = new Set<string>((huerfanas ?? []).map(v => v.id as string));
+      if (ventaId) ids.add(ventaId);
+      for (const id of ids) {
+        const { error } = await db.rpc("eliminar_venta", { p_venta_id: id });
         if (error) {
           // No throw: ya estamos en afterEach. Log para diagnosticar manualmente.
-           
-          console.error(`[cleanup] eliminar_venta(${ventaId}) falló: ${error.message}`);
+          console.error(`[cleanup] eliminar_venta(${id}) falló: ${error.message}`);
         }
       }
     } finally {
@@ -80,12 +88,20 @@ test.describe("Ventas — efectivo mutante", () => {
     await goTo(page, "Ventas");
 
     await page.getByRole("button", { name: "+ Cargar venta" }).click();
-    await expect(page.locator(".overlay")).toBeVisible({ timeout: 5_000 });
 
-    const modal = page.locator(".overlay .modal");
+    // Modal nuevo (refactor c43ea74): <Modal> con role="dialog" + aria-label=title.
+    const modal = page.getByRole("dialog", { name: "Nueva Venta" });
+    await expect(modal).toBeVisible({ timeout: 5_000 });
 
-    // El modal tiene su propio select de Local (independiente del sidebar).
-    await modal.locator('.field:has(label:text-is("Local")) select').selectOption({ label: LOCAL });
+    // ── BARRERA DE SEGURIDAD (12-jun) ────────────────────────────────────
+    // El campo Local ya no es un select del modal: con sucursal activa en el
+    // sidebar muestra un LocalLockedChip con el nombre. Si el chip NO dice
+    // "Local Prueba 2", el sentinel iría a parar a un local REAL (pasó con
+    // Neko Villa Crespo) → frenamos ANTES de guardar.
+    await expect(
+      modal.getByText(LOCAL, { exact: false }),
+      `El modal debe estar bloqueado en "${LOCAL}" (chip del sidebar). Si muestra otro local, loginAs no seteó la sucursal.`,
+    ).toBeVisible({ timeout: 5_000 });
 
     // Default fecha = hoy y turno = Noche, no los tocamos.
 
@@ -94,19 +110,24 @@ test.describe("Ventas — efectivo mutante", () => {
     await modal.locator('input[type="number"]').first().fill(String(SENTINEL));
 
     await modal.getByRole("button", { name: "Guardar" }).click();
-    await expect(page.locator(".overlay")).not.toBeVisible({ timeout: 10_000 });
+    await expect(modal).not.toBeVisible({ timeout: 10_000 });
 
-    // ── Assert 1: la venta existe en DB con sentinel exacto ──────────────
+    // ── Assert 1: la venta existe en DB con sentinel exacto Y EN EL LOCAL
+    // CORRECTO. Buscamos SIN filtro de local a propósito: si cayó en otro
+    // local (el accidente del 12-jun), este assert lo grita acá mismo.
     const { data: ventas, error: ventasErr } = await db
       .from("ventas")
       .select("id, local_id, monto, medio, turno")
-      .eq("local_id", localId)
       .eq("monto", SENTINEL);
     expect(ventasErr).toBeNull();
     expect(ventas?.length).toBe(1);
+    ventaId = ventas![0]!.id as string;
+    expect(
+      ventas?.[0]?.local_id,
+      `La venta sentinel cayó en local_id=${ventas?.[0]?.local_id} en vez de ${localId} (${LOCAL}) — revisar loginAs/sidebar`,
+    ).toBe(localId);
     expect(ventas?.[0]?.medio).toBe(MEDIO);
     expect(ventas?.[0]?.turno).toBe("Noche");
-    ventaId = ventas![0]!.id as string;
 
     // ── Assert 2: el movimiento asociado existe ─────────────────────────
     const { data: movs, error: movsErr } = await db

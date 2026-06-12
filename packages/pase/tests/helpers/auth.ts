@@ -57,11 +57,29 @@ export async function loginAs(
     await page.waitForSelector(".sb", { timeout: 10_000 });
   } else if (opts.local) {
     // Dueño/admin: sin modal. Si pidieron un local específico, lo elegimos en
-    // el dropdown del sidebar (.sb-local). Para usuarios con 1 solo local el
-    // dropdown no se renderiza, así que es no-op silencioso.
+    // el dropdown del sidebar (.sb-local). OJO (fix 12-jun): el sidebar ya NO
+    // tiene "Todas" (decisión 17-may) — siempre hay UNA sucursal activa, y el
+    // default puede ser un local REAL (Neko). El check viejo `if (count())`
+    // era un race: si los locales todavía no habían cargado, el select no
+    // estaba renderizado y el pedido de local se salteaba EN SILENCIO → el
+    // test seguía parado en el local default (así cayó una venta sentinel en
+    // Neko el 12-jun). Ahora: esperamos el select y fallamos ruidoso.
     const sidebarSelect = page.locator(".sb-local select");
-    if (await sidebarSelect.count()) {
-      await sidebarSelect.selectOption({ label: opts.local });
+    try {
+      await sidebarSelect.waitFor({ state: "visible", timeout: 10_000 });
+    } catch {
+      throw new Error(
+        `loginAs: pidieron local "${opts.local}" pero el selector de sucursal ` +
+        `del sidebar (.sb-local select) nunca apareció. Si el usuario tiene un ` +
+        `solo local visible el dropdown no se renderiza — en ese caso no pases ` +
+        `opts.local. Si tiene varios, esto es un bug de carga del sidebar.`,
+      );
+    }
+    await sidebarSelect.selectOption({ label: opts.local });
+    // Verificación: la opción seleccionada es la pedida (falla ruidoso si no).
+    const elegido = await sidebarSelect.locator("option:checked").textContent();
+    if (elegido?.trim() !== opts.local) {
+      throw new Error(`loginAs: se pidió local "${opts.local}" pero quedó seleccionado "${elegido}"`);
     }
   }
 }
