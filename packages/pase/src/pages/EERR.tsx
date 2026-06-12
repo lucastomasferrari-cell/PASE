@@ -49,6 +49,7 @@ interface MesResumen {
   comisiones: number;
   impuestos: number;
   sueldos: number;
+  cargasSociales: number;
   utilBruta: number;
   utilNeta: number;
 }
@@ -114,7 +115,8 @@ export default function EERR({ user, localActivo }: EERRProps) {
     const facsBucket = (b: string) => facturasArr.filter(x => x.bucket === b);
     const sumF = (arr: Factura[]) => arr.reduce((s, x) => s + Number(x.total), 0);
     const cmv = sumF(facsCMV);
-    const gastosFijos = gastosArr.filter(x => x.tipo === "fijo").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_fijo"));
+    const cargasSociales = gastosArr.filter(x => x.tipo === "fijo" && x.categoria === "CARGAS SOCIALES").reduce((s, x) => s + Number(x.monto), 0);
+    const gastosFijos = gastosArr.filter(x => x.tipo === "fijo" && x.categoria !== "CARGAS SOCIALES").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_fijo"));
     const gastosVar = gastosArr.filter(x => x.tipo === "variable").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_variable"));
     const publicidad = gastosArr.filter(x => x.tipo === "publicidad").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_publicidad"));
     const comisiones = gastosArr.filter(x => x.tipo === "comision").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_comision"));
@@ -122,8 +124,8 @@ export default function EERR({ user, localActivo }: EERRProps) {
     const liqFilt = liqRows.filter(l => !lid || (l.rrhh_novedades?.rrhh_empleados?.local_id === lid));
     const sueldos = liqFilt.reduce((s, l) => s + Number(l.total_a_pagar), 0);
     const utilBruta = ventas - cmv;
-    const utilNeta = utilBruta - gastosFijos - gastosVar - sueldos - publicidad - comisiones - impuestos;
-    return { mes: mesArg, ventas, cmv, gastosFijos, gastosVar, publicidad, comisiones, impuestos, sueldos, utilBruta, utilNeta };
+    const utilNeta = utilBruta - gastosFijos - gastosVar - sueldos - cargasSociales - publicidad - comisiones - impuestos;
+    return { mes: mesArg, ventas, cmv, gastosFijos, gastosVar, publicidad, comisiones, impuestos, sueldos, cargasSociales, utilBruta, utilNeta };
   };
 
   // Cargar los resúmenes de los meses comparados. Se dispara cuando cambia
@@ -202,7 +204,8 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const facturasCMV=[...facturas.filter(f=>!f.bucket), ...facturasBucket("cat_compra")];
   const sumarMonto=<T extends {total?:number,monto?:number}>(rows:T[],key:"total"|"monto"="total")=>rows.reduce((s,x)=>s+(Number(x[key])||0),0);
   const totalCMV=sumarMonto(facturasCMV,"total");
-  const totalGastosFijos=gastos.filter((g)=>g.tipo==="fijo").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_fijo"),"total");
+  const totalCargasSociales=gastos.filter((g)=>g.tipo==="fijo"&&g.categoria==="CARGAS SOCIALES").reduce((s, g)=>s+(g.monto||0),0);
+  const totalGastosFijos=gastos.filter((g)=>g.tipo==="fijo"&&g.categoria!=="CARGAS SOCIALES").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_fijo"),"total");
   const totalGastosVar=gastos.filter((g)=>g.tipo==="variable").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_variable"),"total");
   const totalPublicidad=gastos.filter((g)=>g.tipo==="publicidad").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_publicidad"),"total");
   const totalComisiones=gastos.filter((g)=>g.tipo==="comision").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_comision"),"total");
@@ -213,7 +216,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const totalRetiros=gastos.filter((g)=>g.tipo==="retiro_socio").reduce((s, g)=>s+(g.monto||0),0);
   const totalGastos=totalGastosFijos+totalGastosVar;
   const utilBruta=totalVentas-totalCMV;
-  const utilNeta=utilBruta-totalGastos-sueldos-totalPublicidad-totalComisiones-totalImpuestos;
+  const utilNeta=utilBruta-totalGastos-sueldos-totalCargasSociales-totalPublicidad-totalComisiones-totalImpuestos;
   // utilNetaPostRetiros: lo que queda al socio después de retirar lo que
   // efectivamente retiró. Si retiró todo, es ~0; si no retiró, == utilNeta.
   const utilNetaPostRetiros=utilNeta-totalRetiros;
@@ -251,7 +254,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
     gastos.filter(g => g.tipo === tipo && g.categoria === cat).reduce((s, g) => s + Number(g.monto || 0), 0);
 
   const porCatCMV=CATEGORIAS_COMPRA.map(c=>({c,t:tFactCat(c, null)})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
-  const porCatFijos=GASTOS_FIJOS.map(c=>({c,t:tGastoCat(c, "fijo") + tFactCat(c, "gasto_fijo")})).filter(x=>x.t>0);
+  const porCatFijos=GASTOS_FIJOS.filter(c=>c!=="CARGAS SOCIALES").map(c=>({c,t:tGastoCat(c, "fijo") + tFactCat(c, "gasto_fijo")})).filter(x=>x.t>0);
   const porCatVar=GASTOS_VARIABLES.map(c=>({c,t:tGastoCat(c, "variable") + tFactCat(c, "gasto_variable")})).filter(x=>x.t>0);
   const porCatPub=GASTOS_PUBLICIDAD.map(c=>({c,t:tGastoCat(c, "publicidad") + tFactCat(c, "gasto_publicidad")})).filter(x=>x.t>0);
   const porCatCom=COMISIONES_CATS.map(c=>({c,t:tGastoCat(c, "comision") + tFactCat(c, "gasto_comision")})).filter(x=>x.t>0);
@@ -287,6 +290,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
     comisiones: totalComisiones,
     impuestos: totalImpuestos,
     sueldos,
+    cargasSociales: totalCargasSociales,
     utilBruta,
     utilNeta,
   };
@@ -325,7 +329,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
     mes: fmtMesLabel(r.mes),
     Ventas: Math.round(r.ventas),
     CMV: Math.round(r.cmv),
-    Sueldos: Math.round(r.sueldos),
+    "Sueldos + CS": Math.round(r.sueldos + r.cargasSociales),
     "Util. Neta": Math.round(r.utilNeta),
   }));
 
@@ -347,6 +351,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
     { label: "(-) Gastos Fijos", key: "gastosFijos", tipo: "costo", signo: -1 },
     { label: "(-) Gastos Variables", key: "gastosVar", tipo: "costo", signo: -1 },
     { label: "(-) Sueldos", key: "sueldos", tipo: "costo", signo: -1 },
+    { label: "(-) Cargas Sociales", key: "cargasSociales", tipo: "costo", signo: -1 },
     { label: "(-) Publicidad y MKT", key: "publicidad", tipo: "costo", signo: -1 },
     { label: "(-) Comisiones", key: "comisiones", tipo: "costo", signo: -1 },
     { label: "(-) Impuestos", key: "impuestos", tipo: "costo", signo: -1 },
@@ -391,6 +396,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
                 ["(=) Utilidad Bruta", utilBruta, pct(utilBruta)],
                 ["(-) Gastos Fijos y Variables", -totalGastos, pct(totalGastos)],
                 ["(-) Sueldos", -sueldos, pct(sueldos)],
+                ["(-) Cargas Sociales", -totalCargasSociales, pct(totalCargasSociales)],
                 ["(-) Publicidad y MKT", -totalPublicidad, pct(totalPublicidad)],
                 ["(-) Comisiones", -totalComisiones, pct(totalComisiones)],
                 ["(-) Impuestos", -totalImpuestos, pct(totalImpuestos)],
@@ -411,7 +417,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
           <div className="eerr-kpis-row">
             <div className="kpi"><div className="kpi-label">Ventas</div><div className="kpi-value-compact kpi-success">{fmt_$(totalVentas)}</div></div>
             <div className="kpi"><div className="kpi-label">CMV</div><div className="kpi-value-compact kpi-warn">{fmt_$(totalCMV)}</div><div className="kpi-sub">{pct(totalCMV)}</div></div>
-            <div className="kpi"><div className="kpi-label">Labor Cost</div><div className="kpi-value-compact kpi-danger">{fmt_$(sueldos)}</div><div className="kpi-sub">{pct(sueldos)}</div></div>
+            <div className="kpi"><div className="kpi-label">Labor Cost</div><div className="kpi-value-compact kpi-danger">{fmt_$(sueldos+totalCargasSociales)}</div><div className="kpi-sub">{pct(sueldos+totalCargasSociales)}</div></div>
             <div className="kpi"><div className="kpi-label">% Rentabilidad</div><div className={`kpi-value-compact ${utilNeta>=0?"kpi-success":"kpi-danger"}`}>{totalVentas>0?((utilNeta/totalVentas)*100).toFixed(1):"0"}%</div></div>
             <div className="kpi"><div className="kpi-label">Ganancia del mes</div><div className={`kpi-value-compact ${utilNeta>=0?"kpi-success":"kpi-danger"}`}>{fmt_$(utilNeta)}</div></div>
           </div>
@@ -472,6 +478,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
                   <ERow label="(=) Utilidad Bruta" valor={utilBruta} color={utilBruta>=0?"var(--success)":"var(--danger)"} big={true}/>
                   <ERow label="(-) Gastos Fijos y Variables" valor={-totalGastos} color="var(--danger)" big={false}/>
                   <ERow label="(-) Sueldos" valor={-sueldos} color="var(--danger)" big={false}/>
+                  <ERow label="(-) Cargas Sociales" valor={-totalCargasSociales} color="var(--danger)" big={false}/>
                   <ERow label="(-) Publicidad y MKT" valor={-totalPublicidad} color="var(--danger)" big={false}/>
                   <ERow label="(-) Comisiones" valor={-totalComisiones} color="var(--danger)" big={false}/>
                   <ERow label="(-) Impuestos" valor={-totalImpuestos} color="var(--danger)" big={false}/>
@@ -587,6 +594,12 @@ export default function EERR({ user, localActivo }: EERRProps) {
                     </div>
                   );
                 })}
+              </div>
+            )}
+            {totalCargasSociales !== 0 && (
+              <div className="eerr-section-title">
+                CARGAS SOCIALES — <span style={{color:"var(--danger)"}}>{fmt_$(totalCargasSociales)}</span>{" "}
+                <span style={{color:"var(--muted)"}}>{pct(totalCargasSociales)}</span>
               </div>
             )}
             <ESection title="PUBLICIDAD Y MKT" items={porCatPub} total={totalPublicidad} color="var(--info)"/>

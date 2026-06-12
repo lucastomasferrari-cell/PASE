@@ -118,6 +118,9 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const [_fechaPago, setFechaPago] = useState<string>(toISO(today));
   const [_adelantosPendientes, setAdelantosPendientes] = useState<Adelanto[]>([]);
   const [adelModal, setAdelModal] = useState(false);
+  const [csModal, setCsModal] = useState(false);
+  const [csForm, setCsForm] = useState({ monto:"", cuenta:"", fecha:toISO(today), detalle:"" });
+  const [csIdempKey, setCsIdempKey] = useState(() => crypto.randomUUID());
   // Bug Caja-1: default vacío en cuenta fuerza elección consciente del user.
   // Saldo flexible (30-may): auto_aplicar default TRUE = comportamiento histórico
   // (se descuenta al próximo pago). Anto puede destildar para dejar como saldo.
@@ -867,8 +870,30 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     if (tab === "pagos") await loadPagos();
   });
 
-  // Rediseño 31-may: 3 tabs (antes eran 5). Novedades + Pagos + Historial
-  // → unificados en "Sueldos". Empleados y Dashboard quedan igual.
+  const csHandler = useGuardedHandler(async () => {
+    const monto = parseFloat(csForm.monto);
+    if (!monto || monto <= 0) { showError("Ingresá un monto válido"); return; }
+    if (!csForm.cuenta) { showError("Elegí una cuenta de egreso"); return; }
+    const lid = localActivo || (locsDisp.length === 1 ? locsDisp[0]?.id : null);
+    const { error } = await db.rpc("crear_gasto", {
+      p_fecha: csForm.fecha,
+      p_local_id: lid || null,
+      p_categoria: "CARGAS SOCIALES",
+      p_tipo: "fijo",
+      p_monto: monto,
+      p_detalle: csForm.detalle || "Cargas Sociales",
+      p_cuenta: csForm.cuenta,
+      p_plantilla_id: null,
+      p_idempotency_key: csIdempKey,
+    });
+    if (error) { showError(translateRpcError(error)); return; }
+    showToast("Cargas sociales registradas");
+    setCsModal(false);
+    setCsForm({ monto:"", cuenta:"", fecha:toISO(today), detalle:"" });
+    setCsIdempKey(crypto.randomUUID());
+    if (tab === "dashboard") loadDashboard();
+  });
+
   const tabs = [
     { id:"dashboard", label:"Dashboard" },
     { id:"empleados", label:"Empleados" },
@@ -888,7 +913,17 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
         {tabs.map(t => <div key={t.id} className={`tab ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)}>{t.label}</div>)}
       </div>
 
-      {tab === "dashboard" && <TabDashboard dashStats={dashStats} dashLoading={dashLoading} />}
+      {tab === "dashboard" && (
+        <>
+          {esDueno && (
+            <div style={{display:"flex",gap:8,marginBottom:12}}>
+              <button className="btn btn-primary btn-sm" onClick={()=>{setCsModal(true);setCsIdempKey(crypto.randomUUID());}}>Pagar Cargas Sociales</button>
+              <button className="btn btn-outline btn-sm" onClick={()=>setAdelModal(true)}>Registrar Adelanto</button>
+            </div>
+          )}
+          <TabDashboard dashStats={dashStats} dashLoading={dashLoading} />
+        </>
+      )}
 
       {tab === "empleados" && (
         <TabEmpleados
@@ -965,6 +1000,32 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
         guardarAdelanto={guardarAdelanto}
         guardando={guardandoAdelanto}
       />
+
+      <Modal isOpen={csModal} onClose={()=>setCsModal(false)} title="Pagar Cargas Sociales" maxWidth={420}>
+        <div style={{display:"flex",flexDirection:"column",gap:12,padding:"8px 0"}}>
+          <p style={{fontSize:12,color:"var(--muted2)",margin:0}}>
+            Registra el pago de cargas sociales (aportes patronales, ART, seguros, etc.) sin asociar a un empleado puntual.
+          </p>
+          <label style={{fontSize:12}}>Monto *
+            <input type="number" className="search" placeholder="$0" value={csForm.monto} onChange={e=>setCsForm(f=>({...f,monto:e.target.value}))} autoFocus style={{width:"100%",marginTop:4}} min="0" step="0.01"/>
+          </label>
+          <label style={{fontSize:12}}>Cuenta de egreso *
+            <select className="search" value={csForm.cuenta} onChange={e=>setCsForm(f=>({...f,cuenta:e.target.value}))} style={{width:"100%",marginTop:4}}>
+              <option value="">— Elegí cuenta —</option>
+              {cuentasUsables.map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+          <label style={{fontSize:12}}>Fecha
+            <input type="date" className="search" value={csForm.fecha} onChange={e=>setCsForm(f=>({...f,fecha:e.target.value}))} style={{width:"100%",marginTop:4}}/>
+          </label>
+          <label style={{fontSize:12}}>Detalle (opcional)
+            <input type="text" className="search" placeholder="Ej: ARCA junio 2026" value={csForm.detalle} onChange={e=>setCsForm(f=>({...f,detalle:e.target.value}))} style={{width:"100%",marginTop:4}}/>
+          </label>
+          <button className="btn btn-primary" onClick={csHandler.run} disabled={csHandler.isPending} style={{marginTop:4}}>
+            {csHandler.isPending ? "Guardando…" : "Registrar pago"}
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }
