@@ -4,7 +4,7 @@ import { translateError } from '../lib/errors';
 
 export async function listMetodos(tenantId: string): Promise<{ data: MetodoCobro[]; error: string | null }> {
   const { data, error } = await db
-    .from('metodos_cobro')
+    .from('medios_cobro')
     .select('*')
     .eq('tenant_id', tenantId)
     .is('deleted_at', null)
@@ -20,27 +20,27 @@ export type MetodoDraft = Pick<
 > & { tenant_id: string; local_id: number | null };
 
 export async function createMetodo(draft: MetodoDraft): Promise<{ id: number | null; error: string | null }> {
-  const { data, error } = await db.from('metodos_cobro').insert(draft).select('id').single();
+  const { data, error } = await db.from('medios_cobro').insert(draft).select('id').single();
   if (error) return { id: null, error: translateError(error) };
   return { id: data.id as number, error: null };
 }
 
 export async function updateMetodo(id: number, patch: Partial<MetodoDraft>): Promise<{ error: string | null }> {
-  const { error } = await db.from('metodos_cobro').update(patch).eq('id', id);
+  const { error } = await db.from('medios_cobro').update(patch).eq('id', id);
   return { error: error?.message ?? null };
 }
 
 export async function softDeleteMetodo(id: number): Promise<{ error: string | null }> {
-  const { error } = await db.from('metodos_cobro').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+  const { error } = await db.from('medios_cobro').update({ deleted_at: new Date().toISOString() }).eq('id', id);
   return { error: error?.message ?? null };
 }
 
 export async function toggleActivo(id: number, activo: boolean): Promise<{ error: string | null }> {
-  const { error } = await db.from('metodos_cobro').update({ activo }).eq('id', id);
+  const { error } = await db.from('medios_cobro').update({ activo }).eq('id', id);
   return { error: error?.message ?? null };
 }
 
 export async function setOrden(id: number, orden: number): Promise<{ error: string | null }> {
-  const { error } = await db.from('metodos_cobro').update({ orden }).eq('id', id);
+  const { error } = await db.from('medios_cobro').update({ orden }).eq('id', id);
   return { error: error?.message ?? null };
 }

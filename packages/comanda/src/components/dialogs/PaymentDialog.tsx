@@ -24,7 +24,7 @@ interface PagoEnCurso {
 }
 
 // Helper: detectar si el método de cobro es de crédito (acepta cuotas).
-// Reconoce por slug (configurable en metodos_cobro).
+// Reconoce por slug (configurable en medios_cobro, catálogo único).
 function metodoAceptaCuotas(slug: string): boolean {
   const s = slug.toLowerCase();
   return s.includes('credit') || s === 'tc' || s.includes('tarjeta_credito');

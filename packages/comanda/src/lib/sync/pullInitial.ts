@@ -12,6 +12,8 @@
 // (mostrar UI de "no se pudo iniciar turno", retry, etc).
 
 import { db as supabase } from '../supabase';
+import { cacheSet } from '../offlineCache';
+import { mediosCobroCacheKey } from '../../services/configService';
 import { itemsRepo } from '../db/repositories/itemsRepo';
 import { gruposRepo } from '../db/repositories/gruposRepo';
 import { mesasRepo } from '../db/repositories/mesasRepo';
@@ -28,7 +30,9 @@ export interface PullContext {
 }
 
 export interface PullResult {
-  store: StoreName;
+  // 'medios_cobro' no es un object store del sync engine — se cachea en
+  // offlineCache (comanda-offline), pero reporta igual que el resto.
+  store: StoreName | 'medios_cobro';
   count: number;
   durationMs: number;
 }
@@ -120,6 +124,27 @@ async function pullCanales(ctx: PullContext): Promise<PullResult> {
   await tx.done;
   await updateSyncMeta('canales', ctx.tenantId);
   return { store: 'canales', count: rows.length, durationMs: Math.round(performance.now() - t0) };
+}
+
+// Medios de cobro (catálogo único compartido con PASE). A diferencia de los
+// otros pulls, NO va al sync engine (no hay object store dedicado): se
+// precalienta el cache SWR de offlineCache bajo la MISMA key que lee
+// configService.listMetodosCobro → el PaymentDialog puede cobrar offline
+// con la lista de métodos aunque nunca se haya abierto online.
+async function pullMediosCobro(ctx: PullContext): Promise<PullResult> {
+  const t0 = performance.now();
+  let q = supabase
+    .from('medios_cobro')
+    .select('id, tenant_id, local_id, nombre, slug, emoji, pide_vuelto, activo, orden')
+    .eq('tenant_id', ctx.tenantId)
+    .is('deleted_at', null)
+    .or(`local_id.is.null,local_id.eq.${ctx.localId}`);
+  q = q.order('orden', { ascending: true }).order('id', { ascending: true });
+  const { data, error } = await q;
+  if (error) throw error;
+  const rows = data ?? [];
+  await cacheSet('medios_cobro', mediosCobroCacheKey(ctx.localId), rows);
+  return { store: 'medios_cobro', count: rows.length, durationMs: Math.round(performance.now() - t0) };
 }
 
 async function pullEmpleados(ctx: PullContext): Promise<PullResult> {
@@ -243,6 +268,7 @@ export async function pullInitialAll(ctx: PullContext): Promise<{
     pullGrupos(ctx),
     pullMesas(ctx),
     pullCanales(ctx),
+    pullMediosCobro(ctx),
     pullEmpleados(ctx),
     pullVentasAbiertas(ctx),
   ]);
@@ -258,6 +284,7 @@ export const _internal = {
   pullGrupos,
   pullMesas,
   pullCanales,
+  pullMediosCobro,
   pullEmpleados,
   pullVentasAbiertas,
 };

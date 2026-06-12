@@ -16,7 +16,8 @@ import { openDB, type IDBPDatabase } from 'idb';
 // (preferimos error a mostrar precios viejos por días).
 
 const DB_NAME = 'comanda-offline';
-const DB_VERSION = 1;
+// v2: + store 'medios_cobro' (catálogo único de medios de cobro, 2026-06-12).
+const DB_VERSION = 2;
 const STALE_MS = 24 * 60 * 60 * 1000;
 
 export type CacheKey =
@@ -26,7 +27,8 @@ export type CacheKey =
   | 'empleados'
   | 'canales'
   | 'modificadores'
-  | 'lista_precios';
+  | 'lista_precios'
+  | 'medios_cobro';
 
 interface CacheEntry<T> {
   key: string;          // 'items:tenant_id' por ejemplo, para scope por tenant
@@ -43,7 +45,7 @@ function getDb(): Promise<IDBPDatabase> {
         // Un object store por cada master data table. Indexado por key.
         const stores: CacheKey[] = [
           'items', 'grupos', 'mesas', 'empleados', 'canales',
-          'modificadores', 'lista_precios',
+          'modificadores', 'lista_precios', 'medios_cobro',
         ];
         for (const store of stores) {
           if (!db.objectStoreNames.contains(store)) {

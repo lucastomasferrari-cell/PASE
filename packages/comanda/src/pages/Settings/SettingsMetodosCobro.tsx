@@ -33,9 +33,10 @@ export function SettingsMetodosCobro() {
 
   useEffect(() => { reload(); }, [reload]);
 
-  // Sprint Realtime: cualquier cambio remoto en metodos_cobro del mismo
-  // tenant dispara reload. No reemplaza el reload tras mutación local.
-  useRealtimeTable({ table: 'metodos_cobro', onChange: () => reload() });
+  // Sprint Realtime: cualquier cambio remoto en medios_cobro (catálogo
+  // único, tabla real — la view legacy metodos_cobro NO emite eventos CDC)
+  // del mismo tenant dispara reload. No reemplaza el reload tras mutación local.
+  useRealtimeTable({ table: 'medios_cobro', onChange: () => reload() });
 
   return (
     <div>

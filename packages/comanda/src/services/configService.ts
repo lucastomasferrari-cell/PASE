@@ -1,21 +1,47 @@
 import { db } from '../lib/supabase';
 import type { ComandaLocalSettings, MetodoCobro, PosModo } from '../types/database';
 import { translateError } from '../lib/errors';
+import { cacheGet, cacheSet, isNetworkError } from '../lib/offlineCache';
 
 // ─── Métodos de cobro ────────────────────────────────────────────────────
+// Catálogo único `medios_cobro` (compartido con PASE desde 2026-06-12).
+// La view legacy `metodos_cobro` quedó solo para clientes ya deployados.
+
+// Key del cache offline — la usa también pullInitial para precalentar al
+// login POS (misma key = el dialog de cobro lee el snapshot precalentado).
+export function mediosCobroCacheKey(localId: number | null): string {
+  return `medios_cobro:${localId ?? 'global'}`;
+}
 
 export async function listMetodosCobro(localId: number | null): Promise<{ data: MetodoCobro[]; error: string | null }> {
+  const cacheKey = mediosCobroCacheKey(localId);
   // Trae globales + del local específico, activos primero, ordenados por orden
-  let q = db.from('metodos_cobro').select('*').is('deleted_at', null);
+  let q = db.from('medios_cobro').select('*').is('deleted_at', null);
   if (localId !== null) {
     q = q.or(`local_id.is.null,local_id.eq.${localId}`);
   } else {
     q = q.is('local_id', null);
   }
   q = q.order('orden', { ascending: true }).order('id', { ascending: true });
-  const { data, error } = await q;
-  if (error) return { data: [], error: translateError(error) };
-  return { data: (data ?? []) as MetodoCobro[], error: null };
+  try {
+    const { data, error } = await q;
+    if (error) {
+      if (isNetworkError(error)) {
+        const offline = await cacheGet<MetodoCobro[]>('medios_cobro', cacheKey);
+        if (offline) return { data: offline, error: null };
+      }
+      return { data: [], error: translateError(error) };
+    }
+    const result = (data ?? []) as MetodoCobro[];
+    void cacheSet('medios_cobro', cacheKey, result);
+    return { data: result, error: null };
+  } catch (err) {
+    if (isNetworkError(err)) {
+      const offline = await cacheGet<MetodoCobro[]>('medios_cobro', cacheKey);
+      if (offline) return { data: offline, error: null };
+    }
+    throw err;
+  }
 }
 
 export async function listMetodosCobroActivos(localId: number | null): Promise<{ data: MetodoCobro[]; error: string | null }> {
