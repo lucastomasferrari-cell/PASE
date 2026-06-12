@@ -22,12 +22,14 @@ export function DiasMasVendidosWidget({ ctx }: { ctx: WidgetContext }) {
       const today = now();
       const desde = toLocalISO(new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000));
       const hasta = toLocalISO(today);
+      // `ventas` NO tiene columna `estado` (las anuladas se eliminan via RPC
+      // eliminar_venta) — filtrar por estado hacía fallar la query entera y
+      // el widget quedaba vacío en silencio (bug detectado 12-jun).
       let q = db
         .from("ventas")
         .select("fecha, monto")
         .gte("fecha", desde)
-        .lte("fecha", hasta)
-        .neq("estado", "anulada");
+        .lte("fecha", hasta);
       if (ctx.localActivo !== null) q = q.eq("local_id", ctx.localActivo);
       const { data: rows, error } = await q;
       if (cancelled || error) { setLoading(false); return; }
