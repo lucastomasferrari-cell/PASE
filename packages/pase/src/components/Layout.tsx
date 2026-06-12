@@ -6,6 +6,7 @@ import { ThemeToggle } from "./ui/ThemeToggle";
 import { BandejaEntradaBoton } from "./BandejaEntradaBoton";
 import { useTenantFeatures } from "../lib/useTenantFeatures";
 import { tenantTieneFeature } from "../lib/features";
+import polishCss from "../styles/polish.css?raw";
 
 // Mapa de slug del sidebar → feature flag del catálogo (src/lib/features.ts).
 // Si el feature está OFF para el tenant, el item NO aparece en el sidebar.
@@ -681,4 +682,4 @@ input[type="month"].search:hover::-webkit-calendar-picker-indicator{
   }
   .overlay-sb.open { display: block; }
 }
-`;
+` + polishCss;

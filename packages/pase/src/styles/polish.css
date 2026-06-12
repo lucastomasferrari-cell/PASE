@@ -1,0 +1,267 @@
+/* PASE — Polish layer v1.0
+ * Mejoras visuales sobre los estilos globales de Layout.tsx.
+ * Solo agrega/mejora propiedades — NO redefine estructura o layout.
+ *
+ * Importar DESPUÉS de tokens.css y Layout (main.tsx).
+ * Cada regla usa la misma especificidad que el original para ganar
+ * por orden de cascada (último gana). Si no alcanza, duplicar el
+ * selector (no usar !important).
+ */
+
+/* ═══════════════════════════════════════════════════════════════════
+ * CARDS & PANELS — sombra sutil + hover lift
+ * ═══════════════════════════════════════════════════════════════════ */
+.kpi {
+  box-shadow: var(--pase-shadow-xs);
+  transition:
+    border-color var(--pase-duration-fast) var(--pase-ease-out),
+    box-shadow var(--pase-duration-normal) var(--pase-ease-out),
+    transform var(--pase-duration-normal) var(--pase-ease-out);
+}
+.kpi:hover {
+  box-shadow: var(--pase-shadow-sm);
+  border-color: var(--pase-border-strong);
+}
+
+.panel {
+  box-shadow: var(--pase-shadow-xs);
+  transition:
+    border-color var(--pase-duration-fast) var(--pase-ease-out),
+    box-shadow var(--pase-duration-normal) var(--pase-ease-out);
+}
+.panel:hover {
+  box-shadow: var(--pase-shadow-sm);
+}
+
+.caja-card {
+  box-shadow: var(--pase-shadow-sm);
+  transition:
+    border-color var(--pase-duration-fast) var(--pase-ease-out),
+    box-shadow var(--pase-duration-normal) var(--pase-ease-out),
+    transform var(--pase-duration-normal) var(--pase-ease-out);
+}
+.caja-card:hover {
+  box-shadow: var(--pase-shadow-md);
+  transform: translateY(-1px);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * BOTONES — profundidad + feedback táctil
+ * ═══════════════════════════════════════════════════════════════════ */
+.btn {
+  transition:
+    background var(--pase-duration-fast) var(--pase-ease-out),
+    border-color var(--pase-duration-fast) var(--pase-ease-out),
+    color var(--pase-duration-fast) var(--pase-ease-out),
+    box-shadow var(--pase-duration-fast) var(--pase-ease-out),
+    transform var(--pase-duration-fast) var(--pase-ease-out);
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-acc {
+  box-shadow: var(--pase-shadow-xs);
+}
+.btn-acc:hover:not(:disabled) {
+  box-shadow: var(--pase-shadow-sm);
+}
+
+/* btn-primary = misma estética que btn-acc (legacy: muchas pages usan
+   className="btn btn-primary" sin btn-acc). */
+.btn-primary {
+  background: var(--pase-celeste);
+  color: #fff;
+  border: none;
+  box-shadow: var(--pase-shadow-xs);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--pase-celeste-300);
+  box-shadow: var(--pase-shadow-sm);
+}
+
+.btn-outline {
+  background: var(--pase-bg);
+  color: var(--pase-text);
+  border: 0.5px solid var(--pase-border-strong);
+}
+.btn-outline:hover:not(:disabled) {
+  background: var(--pase-bg-soft);
+  border-color: var(--pase-celeste-300);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * INPUTS & SELECTS — focus ring mejorado
+ * ═══════════════════════════════════════════════════════════════════ */
+.search:focus,
+input.search:focus,
+select.search:focus,
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--pase-celeste);
+  box-shadow: 0 0 0 3px var(--pase-celeste-100), var(--pase-shadow-xs);
+}
+
+/* Hover sutil en inputs (antes no tenía ningún feedback pre-focus) */
+.search:hover:not(:focus),
+input.search:hover:not(:focus),
+select.search:hover:not(:focus),
+.field input:hover:not(:focus),
+.field select:hover:not(:focus),
+.field textarea:hover:not(:focus) {
+  border-color: var(--pase-celeste-300);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * TABLAS — row hover más suave
+ * ═══════════════════════════════════════════════════════════════════ */
+tbody tr {
+  transition: background var(--pase-duration-fast) var(--pase-ease-out);
+}
+tbody tr.clickable:hover {
+  background: var(--pase-celeste-100);
+  box-shadow: inset 3px 0 0 var(--pase-celeste);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * TABS — underline animado
+ * ═══════════════════════════════════════════════════════════════════ */
+.tab {
+  transition:
+    color var(--pase-duration-fast) var(--pase-ease-out),
+    border-color var(--pase-duration-normal) var(--pase-ease-out);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * PILLS — transición suave
+ * ═══════════════════════════════════════════════════════════════════ */
+.pill {
+  transition:
+    background var(--pase-duration-fast) var(--pase-ease-out),
+    color var(--pase-duration-fast) var(--pase-ease-out),
+    border-color var(--pase-duration-fast) var(--pase-ease-out),
+    box-shadow var(--pase-duration-fast) var(--pase-ease-out);
+}
+.pill.active {
+  box-shadow: var(--pase-shadow-xs);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * BADGES — sombra micro
+ * ═══════════════════════════════════════════════════════════════════ */
+.badge {
+  transition:
+    background var(--pase-duration-fast) var(--pase-ease-out),
+    color var(--pase-duration-fast) var(--pase-ease-out);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * MODALES — entrada animada mejorada
+ * ═══════════════════════════════════════════════════════════════════ */
+.overlay {
+  animation: pase-overlay-in var(--pase-duration-normal) var(--pase-ease-out);
+}
+@keyframes pase-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal {
+  box-shadow: var(--pase-shadow-xl);
+  animation: pase-modal-in var(--pase-duration-normal) var(--pase-ease-spring);
+}
+@keyframes pase-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * ALERTS — borde izquierdo semántico
+ * ═══════════════════════════════════════════════════════════════════ */
+.alert-danger { border-left: 3px solid var(--danger); }
+.alert-warn   { border-left: 3px solid var(--warn); }
+.alert-success{ border-left: 3px solid var(--success); }
+.alert-info   { border-left: 3px solid var(--pase-celeste); }
+
+/* ═══════════════════════════════════════════════════════════════════
+ * SIDEBAR — sombra en desktop
+ * ═══════════════════════════════════════════════════════════════════ */
+.sb {
+  box-shadow: 1px 0 0 var(--pase-border);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * NAV ITEMS — hover más expresivo
+ * ═══════════════════════════════════════════════════════════════════ */
+.nav-item {
+  transition:
+    background var(--pase-duration-fast) var(--pase-ease-out),
+    color var(--pase-duration-fast) var(--pase-ease-out),
+    transform var(--pase-duration-fast) var(--pase-ease-out);
+}
+.nav-item.active {
+  box-shadow: inset 3px 0 0 var(--pase-celeste);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * LOADING & EMPTY — shimmer animation
+ * ═══════════════════════════════════════════════════════════════════ */
+.loading::after {
+  content: "";
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-left: 8px;
+  border: 2px solid var(--pase-border-strong);
+  border-top-color: var(--pase-celeste);
+  border-radius: 50%;
+  animation: pase-spin 0.6s linear infinite;
+  vertical-align: middle;
+}
+@keyframes pase-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * LOGIN CARD — sombra dramática
+ * ═══════════════════════════════════════════════════════════════════ */
+.login-card {
+  box-shadow: var(--pase-shadow-lg);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * SCROLLBAR GLOBAL — sutil y consistente
+ * ═══════════════════════════════════════════════════════════════════ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--pase-border-strong);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--pase-text-muted);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * SELECTION — brand-colored text selection
+ * ═══════════════════════════════════════════════════════════════════ */
+::selection {
+  background: var(--pase-celeste-200);
+  color: var(--pase-text);
+}
