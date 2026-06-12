@@ -180,6 +180,12 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   //   proveedor; al cerrar la conciliación se aprende el alias
   //   titular→proveedor para que la próxima vez vaya directo al bloque.
   const [resueltos, setResueltos] = useState<Record<string, string>>({});
+  const [checkedLines, setCheckedLines] = useState<Set<string>>(new Set());
+  const toggleLine = (key: string) => setCheckedLines(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
   // Catálogo de proveedores del tenant — para el modal "Pertenece a..."
   // (interfaz de aprendizaje, Lucas 10-jun).
   const [proveedoresList, setProveedoresList] = useState<Array<{ id: number; nombre: string }>>([]);
@@ -1194,19 +1200,29 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                       </summary>
                       <div style={{ marginTop: 6, fontSize: 11 }}>
                         <div style={{ color: "var(--muted2)", marginBottom: 2 }}>Transferencias del extracto:</div>
-                        {filas.map(f => (
-                          <div key={f.idx} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0 2px 12px" }}>
-                            <span>{fmt_d(f.fecha)} · {f.descripcion.slice(0, 50)}</span>
-                            <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(f.monto)}</span>
-                          </div>
-                        ))}
+                        {filas.map(f => {
+                          const ck = `ext-line:${f.idx}`;
+                          const on = checkedLines.has(ck);
+                          return (
+                            <div key={f.idx} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0 2px 4px", opacity: on ? 0.4 : 1, textDecoration: on ? "line-through" : "none", cursor: "pointer" }} onClick={() => toggleLine(ck)}>
+                              <input type="checkbox" checked={on} readOnly style={{ width: 13, height: 13, cursor: "pointer", flexShrink: 0 }} />
+                              <span style={{ flex: 1 }}>{fmt_d(f.fecha)} · {f.descripcion.slice(0, 50)}</span>
+                              <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(f.monto)}</span>
+                            </div>
+                          );
+                        })}
                         <div style={{ color: "var(--muted2)", margin: "6px 0 2px" }}>Pagos cargados en PASE:</div>
-                        {(bloque.movs ?? []).map(m => (
-                          <div key={m.id} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0 2px 12px" }}>
-                            <span>{fmt_d(m.fecha)} · {(m.detalle ?? "").slice(0, 50)}</span>
-                            <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(m.importe)}</span>
-                          </div>
-                        ))}
+                        {(bloque.movs ?? []).map(m => {
+                          const ck = `pase-line:${m.id}`;
+                          const on = checkedLines.has(ck);
+                          return (
+                            <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0 2px 4px", opacity: on ? 0.4 : 1, textDecoration: on ? "line-through" : "none", cursor: "pointer" }} onClick={() => toggleLine(ck)}>
+                              <input type="checkbox" checked={on} readOnly style={{ width: 13, height: 13, cursor: "pointer", flexShrink: 0 }} />
+                              <span style={{ flex: 1 }}>{fmt_d(m.fecha)} · {(m.detalle ?? "").slice(0, 50)}</span>
+                              <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(m.importe)}</span>
+                            </div>
+                          );
+                        })}
                         {/* Facturas pendientes del proveedor — la pista para
                             cerrar la diferencia (caso "no la marcaron como
                             pagada"). Botón paga con cuenta MP + fecha de la
