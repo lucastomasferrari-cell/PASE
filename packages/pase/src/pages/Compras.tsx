@@ -324,8 +324,8 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       form.otros_cargos - form.descuentos;
   };
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
     // Optimización egress 2026-05-17: proyectar campos específicos en vez
     // de SELECT * + limit 1000 + filtro fecha default 365 días. Las facturas
     // muy viejas se ven con el date range picker manual del usuario.
@@ -382,9 +382,9 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   // Sprint Realtime: cambios remotos en facturas, remitos o proveedores
   // del mismo tenant disparan reload. Cubre el flow de "carga manual de
   // factura en una compu, otra debe ver el cambio sin F5".
-  useRealtimeTable({ table: 'facturas', onChange: () => load() });
-  useRealtimeTable({ table: 'remitos', onChange: () => load() });
-  useRealtimeTable({ table: 'proveedores', onChange: () => load() });
+  useRealtimeTable({ table: 'facturas', onChange: (s) => load(s) });
+  useRealtimeTable({ table: 'remitos', onChange: (s) => load(s) });
+  useRealtimeTable({ table: 'proveedores', onChange: (s) => load(s) });
 
   // BUG 1: Lector IA modal solo cierra con X o ESC, no con click en backdrop.
   useEffect(() => {

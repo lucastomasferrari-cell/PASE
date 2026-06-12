@@ -56,8 +56,8 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
   const [rolPermsMap, setRolPermsMap] = useState<Map<string, string[]>>(new Map());
   const { toast, showError } = useToast();
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
     const [{ data: users }, { data: allPerms }, { data: allLocs }] = await Promise.all([
       db.from("usuarios").select("*").order("nombre"),
       db.from("usuario_permisos").select("usuario_id, modulo_slug"),
@@ -97,9 +97,9 @@ export default function Usuarios({ user, locales }: UsuariosProps) {
   // Sprint Realtime: cambios remotos en usuarios o usuario_permisos del
   // mismo tenant disparan reload. Si otro admin agrega permisos a un
   // user, se ve sin F5.
-  useRealtimeTable({ table: 'usuarios', onChange: () => load() });
-  useRealtimeTable({ table: 'usuario_permisos', onChange: () => load() });
-  useRealtimeTable({ table: 'usuario_locales', onChange: () => load() });
+  useRealtimeTable({ table: 'usuarios', onChange: (s) => load(s) });
+  useRealtimeTable({ table: 'usuario_permisos', onChange: (s) => load(s) });
+  useRealtimeTable({ table: 'usuario_locales', onChange: (s) => load(s) });
 
   const abrirNuevo = () => { setForm(emptyForm); setModal("new"); setErr(""); setShowPw(false); };
 

@@ -42,7 +42,7 @@ const EVENTS_DEFAULT: readonly ("INSERT" | "UPDATE" | "DELETE")[] = ["INSERT", "
 
 interface UseRealtimeTableOptions {
   table: string;
-  onChange: () => void;
+  onChange: (silent?: boolean) => void;
   scopeByTenant?: boolean;
   scopeByLocal?: boolean;
   extraFilter?: string;
@@ -161,7 +161,7 @@ export function useRealtimeTable({
       const now = Date.now();
       if (now - lastVisibilityRefresh < 5000) return;
       lastVisibilityRefresh = now;
-      onChangeRef.current();
+      onChangeRef.current(true);
     }
     document.addEventListener("visibilitychange", handleVisibility);
 

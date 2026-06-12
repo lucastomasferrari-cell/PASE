@@ -406,9 +406,9 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     }
   }
 
-  async function refrescarCruce() {
+  async function refrescarCruce(silent = false) {
     if (!egresosExtracto.length || !periodoDesde || !periodoHasta) return;
-    setCruzando(true);
+    if (!silent) setCruzando(true);
     try {
       const payload = egresosExtracto.map(m => ({
         fecha: m.fecha,
@@ -424,18 +424,18 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
         p_solo_egresos: true,
         p_match_agrupado: true,
       });
-      if (error) { showError(translateRpcError(error)); return; }
+      if (error) { if (!silent) showError(translateRpcError(error)); return; }
       setCruce(data as CruceResultado);
-      showToast("Datos actualizados — tus resoluciones se mantienen");
+      if (!silent) showToast("Datos actualizados — tus resoluciones se mantienen");
     } finally {
-      setCruzando(false);
+      if (!silent) setCruzando(false);
     }
   }
 
   useEffect(() => {
     function onVisible() {
       if (document.visibilityState === "visible" && cruce && !cruzando) {
-        void refrescarCruce();
+        void refrescarCruce(true);
       }
     }
     document.addEventListener("visibilitychange", onVisible);
@@ -1121,7 +1121,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button className="btn btn-ghost" onClick={resetearTodo}>Cancelar todo</button>
-                <button className="btn btn-outline" onClick={refrescarCruce} disabled={cruzando}>
+                <button className="btn btn-outline" onClick={() => refrescarCruce()} disabled={cruzando}>
                   {cruzando ? "Actualizando…" : "↻ Refrescar"}
                 </button>
                 <button

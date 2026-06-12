@@ -303,8 +303,8 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   // empleado son esos movimientos, deberia mostrarlo por algun lado".
   const [empPorGasto, setEmpPorGasto] = useState<Record<string, string>>({});
 
-  const load = async (preservarPaginas = false) => {
-    setLoading(true);
+  const load = async (preservarPaginas = false, silent = false) => {
+    if (!silent) setLoading(true);
     const cantidad = preservarPaginas ? Math.max(TESORERIA_PAGE_SIZE, cargadosRef.current) : TESORERIA_PAGE_SIZE;
     const mQ = queryMovimientos(0, cantidad);
     let sq = db.from("saldos_caja").select("cuenta, saldo, local_id");
@@ -394,8 +394,8 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   // Sprint Realtime: cualquier cambio remoto en movimientos o saldos_caja
   // del mismo tenant dispara reload. Refresca la card de saldos + lista
   // de movimientos sin necesidad de F5.
-  useRealtimeTable({ table: 'movimientos', onChange: () => load() });
-  useRealtimeTable({ table: 'saldos_caja', onChange: () => load() });
+  useRealtimeTable({ table: 'movimientos', onChange: (s) => load(false, s) });
+  useRealtimeTable({ table: 'saldos_caja', onChange: (s) => load(false, s) });
 
   // Carga el auditoría log cuando el usuario clickea "Ver edición" en
   // un movimiento. setAuditLog es derivada del detalleEdicion.
