@@ -184,19 +184,22 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
                   background: "var(--pase-bg)",
                   border: "0.5px solid var(--pase-border)",
                   borderRadius: "var(--pase-radius-card)",
-                  padding: 16,
+                  padding: 20,
                   minWidth: 0,
+                  boxShadow: "var(--pase-shadow-sm)",
+                  transition: "border-color 0.12s, box-shadow 0.2s",
                 }}
                 aria-label={w.title}
                 className="dashboard-widget"
               >
-                <header style={{ marginBottom: 12 }}>
+                <header style={{ marginBottom: 14 }}>
                   <h3 style={{
                     margin: 0,
-                    fontSize: "var(--pase-fs-base)",
+                    fontSize: "var(--pase-fs-xs)",
                     fontWeight: 500,
-                    color: "var(--pase-text)",
-                    letterSpacing: "var(--pase-ls-snug)",
+                    color: "var(--pase-text-muted)",
+                    letterSpacing: "0.04em",
+                    textTransform: "uppercase" as const,
                   }}>
                     {w.title}
                   </h3>
@@ -213,6 +216,13 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
           display: grid;
           grid-template-columns: repeat(12, 1fr);
           gap: 16px;
+        }
+        .dashboard-widget:hover {
+          border-color: var(--pase-border-strong) !important;
+          box-shadow: var(--pase-shadow-md) !important;
+        }
+        [data-theme="dark"] .dashboard-widget {
+          background: var(--pase-bg-soft) !important;
         }
         @media (max-width: 900px) {
           .dashboard-widget {

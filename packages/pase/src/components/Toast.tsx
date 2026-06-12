@@ -14,15 +14,17 @@ export function ToastComponent({ toast, onDismiss }: { toast: Toast | null; onDi
       style={{
         position: "fixed", top: 16, right: 16, zIndex: 300,
         padding: "10px 16px",
-        borderRadius: 14,
+        borderRadius: 12,
         background: "var(--pase-bg)",
         color: "var(--pase-text)",
-        border: "0.5px solid var(--pase-celeste-300)",
-        fontSize: 12, fontWeight: 500,
+        border: "0.5px solid var(--pase-border-strong)",
+        boxShadow: "var(--pase-shadow-lg)",
+        fontSize: "var(--pase-fs-sm)", fontWeight: 500,
         fontFamily: "var(--pase-font)",
         letterSpacing: "-0.005em",
         maxWidth: 420,
         cursor: onDismiss ? "pointer" : "default",
+        animation: "pase-fade-in 0.2s ease-out",
       }}
     >
       {toast.message}
