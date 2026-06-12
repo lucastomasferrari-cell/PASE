@@ -58,7 +58,7 @@ function IconBtn(props: { title: string; onClick: () => void; tone?: "default" |
   const tone = props.tone || "default";
   const color =
     tone === "success" ? "var(--pase-celeste)" :
-    tone === "danger"  ? "var(--pase-text-muted)" :
+    tone === "danger"  ? "#DC2626" :
     "var(--pase-text-muted)";
   return (
     <button
@@ -68,18 +68,18 @@ function IconBtn(props: { title: string; onClick: () => void; tone?: "default" |
       onClick={props.onClick}
       disabled={props.disabled}
       style={{
-        width: 26, height: 26, padding: 0,
+        width: 28, height: 28, padding: 0,
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         background: "transparent",
-        border: "0.5px solid var(--pase-border-strong)",
+        border: "none",
         borderRadius: 6,
         color,
         cursor: props.disabled ? "default" : "pointer",
-        opacity: props.disabled ? 0.4 : 1,
-        transition: "background 0.12s, color 0.12s, border-color 0.12s",
+        opacity: props.disabled ? 0.35 : 0.6,
+        transition: "opacity 0.15s, background 0.15s, color 0.15s",
       }}
-      onMouseEnter={e => { if (!props.disabled) e.currentTarget.style.background = "var(--pase-bg-soft)"; }}
-      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+      onMouseEnter={e => { if (!props.disabled) { e.currentTarget.style.opacity = "1"; e.currentTarget.style.background = "var(--pase-celeste-100)"; } }}
+      onMouseLeave={e => { e.currentTarget.style.opacity = props.disabled ? "0.35" : "0.6"; e.currentTarget.style.background = "transparent"; }}
     >
       {props.children}
     </button>

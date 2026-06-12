@@ -11,37 +11,40 @@
 .aside {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  padding-top: 2px;
-  padding-left: 18px;
-  border-left: 0.5px solid var(--pase-border);
-  width: 156px;
+  gap: 2px;
+  padding: 14px 0 14px 0;
+  width: 160px;
   flex-shrink: 0;
+  background: var(--pase-bg);
+  border-radius: 14px;
+  border: 0.5px solid var(--pase-border);
+  box-shadow: 0 1px 2px rgba(26,58,94,0.04), 0 2px 4px rgba(26,58,94,0.04);
 }
 
 .sectionHeader {
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 500;
-  color: var(--pase-celeste-300);
-  letter-spacing: 0.06em;
+  color: var(--pase-text-muted);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 0 10px 6px;
+  padding: 0 14px 6px;
   font-family: var(--pase-font);
 }
 
 .sectionHeader:not(:first-of-type) {
-  padding-top: 16px;
+  padding-top: 14px;
+  margin-top: 4px;
+  border-top: 0.5px solid var(--pase-border);
 }
 
-/* ── Item: navegacional, sin card ──────────────────────────────────── */
 .item {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 7px 10px;
-  border-radius: 8px;
+  padding: 7px 14px;
+  border-radius: 0;
   font-size: 12.5px;
   color: var(--pase-text-muted);
   background: transparent;
@@ -51,15 +54,14 @@
   letter-spacing: -0.005em;
   width: 100%;
   text-align: left;
-  transition: background 0.12s, color 0.12s;
+  transition: background 0.15s, color 0.15s;
 }
 
 .item:hover {
-  background: var(--pase-celeste-100, rgba(90, 143, 168, 0.08));
+  background: var(--pase-celeste-100);
   color: var(--pase-text);
 }
 
-/* ── Item activo: pill celeste sólida, sin sombras ni adornos ──────── */
 .itemActive {
   background: var(--pase-celeste);
   color: #fff;

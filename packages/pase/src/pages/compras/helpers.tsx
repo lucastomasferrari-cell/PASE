@@ -1,32 +1,30 @@
 // Helpers de UI del módulo Compras. Extraídos en F9 split (2026-05-11).
 
 export function estadoDot(estado: string) {
-  // Colores del dot — usamos tonos firmes para que se vean en dark:
-  // - pendiente: dorado muted (warning) — espera acción
-  // - vencida:  rojo/coral firme — atención inmediata
-  // - pagada:   celeste (success en sistema PASE)
-  // - anulada:  muted apagado con tachado
-  // - revision: dorado fuerte
-  const dotColors: Record<string,string> = {
-    pendiente: "#D97706",
-    vencida:   "#DC2626",
-    pagada:    "var(--pase-celeste)",
-    anulada:   "var(--pase-text-muted)",
-    revision:  "var(--pase-gold)",
+  const config: Record<string, { dot: string; bg: string; text: string }> = {
+    pendiente: { dot: "#D97706", bg: "rgba(217,119,6,0.08)", text: "#D97706" },
+    vencida:   { dot: "#DC2626", bg: "rgba(220,38,38,0.08)", text: "#DC2626" },
+    pagada:    { dot: "var(--pase-celeste)", bg: "var(--pase-celeste-100)", text: "var(--pase-text)" },
+    anulada:   { dot: "var(--pase-text-muted)", bg: "var(--pase-bg-out)", text: "var(--pase-text-muted)" },
+    revision:  { dot: "var(--pase-gold)", bg: "rgba(245,197,24,0.1)", text: "#D97706" },
   };
   const labels: Record<string,string> = {
     pendiente: "Pendiente",
     vencida:   "Vencida",
     pagada:    "Pagada",
     anulada:   "Anulada",
-    revision:  "⚠ Revisión",
+    revision:  "Revisión",
   };
-  // Texto: var(--pase-text) (legible en ambos modos) salvo anulada que va apagada.
-  const textColor = estado === "anulada" ? "var(--pase-text-muted)" : "var(--pase-text)";
+  const c = config[estado] || { dot: "var(--pase-text-muted)", bg: "var(--pase-bg-out)", text: "var(--pase-text-muted)" };
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--pase-fs-sm)", color: textColor, fontWeight: 500 }}>
-      <div style={{ width: 7, height: 7, borderRadius: "50%", background: dotColors[estado] || "var(--pase-text-muted)", flexShrink: 0 }} />
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 6,
+      fontSize: "var(--pase-fs-xs)", fontWeight: 500, letterSpacing: "0.02em",
+      color: c.text, background: c.bg,
+      padding: "3px 10px 3px 8px", borderRadius: 999,
+    }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: c.dot, flexShrink: 0 }} />
       {labels[estado] || estado}
-    </div>
+    </span>
   );
 }
