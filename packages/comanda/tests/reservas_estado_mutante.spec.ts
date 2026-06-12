@@ -3,15 +3,20 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createDuenoClient } from './helpers/supabaseClient';
 
 // MESA módulo #1 — mutante de la máquina de estados de reservas (09-jun).
+// Actualizado 12-jun al modelo v3 (migración 202606130100): 'cumplida' ya no
+// existe como estado — la RPC lo acepta como ALIAS de compat y lo interpreta
+// como 'sentada' (bundles COMANDA viejos siguen andando).
 //
-// Cubre las 3 RPCs nuevas/reescritas (migración 202606100400):
+// Cubre las 3 RPCs (migración 202606100400 + v3 202606130100):
 //   fn_crear_reserva   — alta manual del staff (+ idempotency + validaciones)
 //   fn_editar_reserva  — solo en pendiente/confirmada
-//   fn_cambiar_estado_reserva — máquina ESTRICTA:
-//       pendiente  → confirmada | cumplida (walk-in) | cancelada
-//       confirmada → cumplida | no_show | cancelada
-//       terminales → RESERVA_TRANSICION_INVALIDA
-//   + sentar (cumplida) con p_mesa_id opcional (valida mismo local).
+//   fn_cambiar_estado_reserva — máquina ESTRICTA v3:
+//       pendiente  → confirmada | sentada (walk-in) | cancelada
+//       confirmada → sentada | no_show | cancelada
+//       sentada    → finalizada
+//       terminales (finalizada/no_show/cancelada) → RESERVA_TRANSICION_INVALIDA
+//   + alias 'cumplida' → 'sentada' (compat)
+//   + sentar con p_mesa_id opcional (valida mismo local).
 //
 // DB-only contra Local Prueba 2.
 
@@ -70,7 +75,7 @@ test.describe('Reservas — máquina de estados (mutante)', () => {
     try { await db.auth.signOut(); } catch { /* idempotente */ }
   });
 
-  test('flujo feliz: crear → confirmar → sentar con mesa', async () => {
+  test('flujo feliz: crear → confirmar → sentar con mesa (alias cumplida → sentada)', async () => {
     const id = await crear('MUTANTE flujo feliz');
     expect((await getEstado(id)).estado).toBe('pendiente');
 
@@ -78,7 +83,8 @@ test.describe('Reservas — máquina de estados (mutante)', () => {
     expect(e1).toBeNull();
     expect((await getEstado(id)).estado).toBe('confirmada');
 
-    // Sentar con mesa del MISMO local en el mismo paso.
+    // Sentar con mesa del MISMO local en el mismo paso. Se manda el alias
+    // viejo 'cumplida' a propósito (compat bundles): v3 lo trata como 'sentada'.
     const { data: mesas } = await db.from('mesas')
       .select('id').eq('local_id', localId).is('deleted_at', null).limit(1);
     expect(mesas && mesas.length > 0).toBe(true);
@@ -87,15 +93,21 @@ test.describe('Reservas — máquina de estados (mutante)', () => {
     const { error: e2 } = await cambiar(id, 'cumplida', mesaId);
     expect(e2).toBeNull();
     const fin = await getEstado(id);
-    expect(fin.estado).toBe('cumplida');
+    expect(fin.estado, "alias 'cumplida' debe producir 'sentada' (modelo v3)").toBe('sentada');
     expect(fin.mesa_id).toBe(mesaId);
   });
 
-  test('walk-in: pendiente → cumplida directo está permitido', async () => {
+  test('walk-in: pendiente → sentada directo está permitido (vía alias cumplida)', async () => {
     const id = await crear('MUTANTE walkin');
     const { error } = await cambiar(id, 'cumplida');
     expect(error).toBeNull();
-    expect((await getEstado(id)).estado).toBe('cumplida');
+    expect((await getEstado(id)).estado).toBe('sentada');
+
+    // Y con el estado nuevo explícito también.
+    const id2 = await crear('MUTANTE walkin v3');
+    const { error: e2 } = await cambiar(id2, 'sentada');
+    expect(e2).toBeNull();
+    expect((await getEstado(id2)).estado).toBe('sentada');
   });
 
   test('transiciones inválidas → RESERVA_TRANSICION_INVALIDA', async () => {
@@ -114,12 +126,22 @@ test.describe('Reservas — máquina de estados (mutante)', () => {
     expect(eB!.message).toContain('RESERVA_TRANSICION_INVALIDA');
     expect((await getEstado(b)).estado).toBe('cancelada');
 
-    // cumplida es TERMINAL: no se puede cancelar después.
-    const c = await crear('MUTANTE inv cumplida');
-    await cambiar(c, 'cumplida');
+    // sentada NO es terminal pero SOLO va a finalizada (v3): cancelar falla.
+    const c = await crear('MUTANTE inv sentada');
+    await cambiar(c, 'cumplida'); // alias → sentada
     const { error: eC } = await cambiar(c, 'cancelada');
     expect(eC).not.toBeNull();
     expect(eC!.message).toContain('RESERVA_TRANSICION_INVALIDA');
+
+    // sentada → finalizada es la única salida válida.
+    const { error: eFin } = await cambiar(c, 'finalizada');
+    expect(eFin).toBeNull();
+    expect((await getEstado(c)).estado).toBe('finalizada');
+
+    // finalizada es el TERMINAL nuevo: ninguna transición posterior.
+    const { error: eTerm } = await cambiar(c, 'sentada');
+    expect(eTerm).not.toBeNull();
+    expect(eTerm!.message).toContain('RESERVA_TRANSICION_INVALIDA');
   });
 
   test('mesa de OTRO local al sentar → MESA_OTRO_LOCAL', async () => {
