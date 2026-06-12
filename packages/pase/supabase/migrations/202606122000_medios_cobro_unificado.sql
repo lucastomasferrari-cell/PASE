@@ -18,9 +18,18 @@ ALTER TABLE medios_cobro
   ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 
 -- 2) Backfill multi-tenant ---------------------------------------------------
+-- NOTA (descubierto en dry-run): tenant_id YA existía en medios_cobro desde
+-- 202604281201:132 (FK NOT VALID). En prod hay filas huérfanas del tenant
+-- E2E Test Suite (eliminar_tenant_completo borra el tenant con los FKs
+-- deshabilitados → quedan restos cuando una corrida muere antes del teardown).
+-- Como la FK NOT VALID se re-valida en CUALQUIER UPDATE de la fila, esas
+-- huérfanas rompen los updates de slug de la sección 3 → purgarlas primero.
+DELETE FROM medios_cobro mc
+ WHERE mc.tenant_id IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM tenants t WHERE t.id = mc.tenant_id);
+
 -- 2a. Filas con local: heredan el tenant del local — SOLO si ese tenant
---     existe en `tenants` (en prod hay tenant_ids huérfanos del tenant E2E
---     Test Suite, que se crea y borra en cada corrida; la FK los rechaza).
+--     existe en `tenants` (mismo motivo).
 UPDATE medios_cobro mc SET tenant_id = l.tenant_id
   FROM locales l
  WHERE mc.local_id = l.id AND mc.tenant_id IS NULL
