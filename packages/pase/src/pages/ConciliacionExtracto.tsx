@@ -598,6 +598,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
       const fechasOrdenadas = filas.map(f => f.fecha).sort();
       const fechaPago = fechasOrdenadas[fechasOrdenadas.length - 1] ?? periodoHasta;
       const detalle = `[Concil. ${periodoDesde.slice(0, 7)}] pago dentro de transferencias agrupadas`;
+      let yaEstabaPagada = false;
       if (pend.tipo === "factura") {
         const { error } = await db.rpc("pagar_factura", {
           p_factura_id: pend.id,
@@ -609,7 +610,13 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
           p_generar_saldo: false,
           p_cerrar_factura: false,
         });
-        if (error) { showError(translateRpcError(error)); return; }
+        if (error) {
+          if (error.message?.includes("FACTURA_YA_PAGADA")) {
+            yaEstabaPagada = true;
+          } else {
+            showError(translateRpcError(error)); return;
+          }
+        }
       } else {
         const { error } = await db.rpc("pagar_remito", {
           p_remito_id: pend.id,
@@ -618,14 +625,20 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
           p_fecha: fechaPago,
           p_idempotency_key: crypto.randomUUID(),
         });
-        if (error) { showError(translateRpcError(error)); return; }
+        if (error) {
+          if (error.message?.includes("REMITO_YA_PAGADO")) {
+            yaEstabaPagada = true;
+          } else {
+            showError(translateRpcError(error)); return;
+          }
+        }
       }
-      // Fetch the newly created movement to show it in the bloque immediately.
+      // Fetch the payment movement (newly created, or existing if already paid).
       let nuevoMov: MovEnCombinacion | null = null;
       try {
         const col = pend.tipo === "factura" ? "fact_id" : "remito_id_ref";
         let q = db.from("movimientos").select("id, fecha, importe, detalle").eq(col, pend.id)
-          .eq("fecha", fechaPago).eq("cuenta", "MercadoPago").eq("anulado", false)
+          .eq("cuenta", "MercadoPago").eq("anulado", false)
           .order("created_at", { ascending: false }).limit(1);
         q = applyLocalScope(q, user, localActivo);
         const { data: nuevos } = await q;
@@ -664,7 +677,9 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
           };
         });
       }
-      showToast(`${pend.tipo === "factura" ? "Factura" : "Remito"} ${pend.nro ?? ""} marcada como pagada`);
+      showToast(yaEstabaPagada
+        ? `${pend.tipo === "factura" ? "Factura" : "Remito"} ${pend.nro ?? ""} ya estaba pagada — vinculada al bloque`
+        : `${pend.tipo === "factura" ? "Factura" : "Remito"} ${pend.nro ?? ""} marcada como pagada`);
     } finally {
       setSavingAccion(false);
     }
