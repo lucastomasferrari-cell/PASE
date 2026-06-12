@@ -227,6 +227,16 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
 
   // Restaurar al montar / cambiar de local
   useEffect(() => {
+    setExtractoMovs([]);
+    setResumenExtracto(null);
+    setCruce(null);
+    setResueltos({});
+    setCheckedLines(new Set());
+    setArchivoNombre("");
+    setPeriodoDesde("");
+    setPeriodoHasta("");
+    setCorridaCerrada(null);
+
     if (!BORRADOR_KEY) return;
     try {
       const raw = localStorage.getItem(BORRADOR_KEY);
