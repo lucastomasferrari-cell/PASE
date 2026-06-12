@@ -45,8 +45,11 @@ RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
   v_stock_antes NUMERIC(12, 4);
   v_stock_despues NUMERIC(12, 4);
+  v_insumo_existe BOOLEAN;
 BEGIN
-  SELECT stock_actual INTO v_stock_antes FROM insumos WHERE id = NEW.insumo_id FOR UPDATE;
+  SELECT TRUE, stock_actual INTO v_insumo_existe, v_stock_antes
+    FROM insumos WHERE id = NEW.insumo_id FOR UPDATE;
+  v_insumo_existe := COALESCE(v_insumo_existe, FALSE);
   v_stock_antes := COALESCE(v_stock_antes, 0);
   v_stock_despues := v_stock_antes + NEW.cantidad;
 
@@ -66,8 +69,10 @@ BEGIN
      WHERE id = NEW.insumo_id AND stock_disponible = TRUE;
   END IF;
 
-  -- NUEVO: cache por local (solo movimientos con local)
-  IF NEW.local_id IS NOT NULL THEN
+  -- NUEVO: cache por local (solo movimientos con local y con insumo vivo:
+  -- en prod existen movimientos huérfanos de insumos hard-deleted, ej. id 354,
+  -- y la FK de insumo_stock_local los rechazaría)
+  IF NEW.local_id IS NOT NULL AND v_insumo_existe THEN
     INSERT INTO insumo_stock_local (tenant_id, insumo_id, local_id, cantidad)
     VALUES (NEW.tenant_id, NEW.insumo_id, NEW.local_id, NEW.cantidad)
     ON CONFLICT (insumo_id, local_id) DO UPDATE
@@ -113,6 +118,7 @@ BEGIN
   INSERT INTO insumo_stock_local (tenant_id, insumo_id, local_id, cantidad)
   SELECT im.tenant_id, im.insumo_id, im.local_id, SUM(im.cantidad)
     FROM insumo_movimientos im
+    JOIN insumos ins ON ins.id = im.insumo_id  -- excluye movimientos huérfanos (FK)
    WHERE im.insumo_id = p_insumo_id
      AND im.local_id IS NOT NULL
      AND im.deleted_at IS NULL
@@ -166,6 +172,7 @@ BEGIN
   INSERT INTO insumo_stock_local (tenant_id, insumo_id, local_id, cantidad)
   SELECT im.tenant_id, im.insumo_id, im.local_id, SUM(im.cantidad)
     FROM insumo_movimientos im
+    JOIN insumos ins ON ins.id = im.insumo_id  -- excluye movimientos huérfanos (FK)
    WHERE im.tenant_id = v_tenant_id
      AND im.local_id IS NOT NULL
      AND im.deleted_at IS NULL
@@ -181,6 +188,7 @@ GRANT EXECUTE ON FUNCTION fn_recalcular_stock_todos(UUID) TO authenticated;
 INSERT INTO insumo_stock_local (tenant_id, insumo_id, local_id, cantidad)
 SELECT im.tenant_id, im.insumo_id, im.local_id, SUM(im.cantidad)
   FROM insumo_movimientos im
+  JOIN insumos ins ON ins.id = im.insumo_id  -- en prod hay movimientos huérfanos (insumo hard-deleted, ej. id 354)
  WHERE im.local_id IS NOT NULL
    AND im.deleted_at IS NULL
  GROUP BY im.tenant_id, im.insumo_id, im.local_id
