@@ -90,11 +90,11 @@ export default function EERR({ user, localActivo }: EERRProps) {
     const lastDay = new Date(yr, mo, 0).getDate();
     const desde = mesArg + "-01", hasta = mesArg + "-" + String(lastDay).padStart(2, "0");
     const lid = localActivo ? parseInt(String(localActivo)) : null;
-    let vq = db.from("ventas").select("monto, local_id").gte("fecha", desde).lte("fecha", hasta).neq("estado", "anulada");
+    let vq = db.from("ventas").select("monto, local_id").gte("fecha", desde).lte("fecha", hasta).or("estado.neq.anulada,estado.is.null");
     vq = applyLocalScope(vq, user, lid);
-    let fq = db.from("facturas").select("total, local_id").gte("fecha", desde).lte("fecha", hasta).neq("estado", "anulada");
+    let fq = db.from("facturas").select("total, local_id").gte("fecha", desde).lte("fecha", hasta).or("estado.neq.anulada,estado.is.null");
     fq = applyLocalScope(fq, user, lid);
-    let gq = db.from("gastos").select("monto, tipo, categoria, local_id").gte("fecha", desde).lte("fecha", hasta).neq("estado", "anulado");
+    let gq = db.from("gastos").select("monto, tipo, categoria, local_id").gte("fecha", desde).lte("fecha", hasta).or("estado.neq.anulado,estado.is.null");
     gq = applyLocalScope(gq, user, lid);
     const [{ data: v }, { data: f }, { data: g0 }, { data: liq }] = await Promise.all([
       vq, fq, gq,
@@ -155,11 +155,11 @@ export default function EERR({ user, localActivo }: EERRProps) {
       const lid=localActivo?parseInt(String(localActivo)):null;
       // Optimización egress 2026-05-17: proyectar solo lo que EERR realmente usa.
       // Antes SELECT * traía JSON + campos auditoría innecesarios para reporte.
-      let vq = db.from("ventas").select("fecha, monto, medio, local_id").gte("fecha",desde).lte("fecha",hasta).neq("estado","anulada");
+      let vq = db.from("ventas").select("fecha, monto, medio, local_id").gte("fecha",desde).lte("fecha",hasta).or("estado.neq.anulada,estado.is.null");
       vq = applyLocalScope(vq, user, lid);
-      let fq = db.from("facturas").select("id, fecha, total, neto, iva21, iva105, iibb, cat, estado, local_id, tipo").gte("fecha",desde).lte("fecha",hasta).neq("estado","anulada");
+      let fq = db.from("facturas").select("id, fecha, total, neto, iva21, iva105, iibb, cat, estado, local_id, tipo").gte("fecha",desde).lte("fecha",hasta).or("estado.neq.anulada,estado.is.null");
       fq = applyLocalScope(fq, user, lid);
-      let gq = db.from("gastos").select("id, fecha, monto, categoria, tipo, local_id").gte("fecha",desde).lte("fecha",hasta).neq("estado","anulado");
+      let gq = db.from("gastos").select("id, fecha, monto, categoria, tipo, local_id").gte("fecha",desde).lte("fecha",hasta).or("estado.neq.anulado,estado.is.null");
       gq = applyLocalScope(gq, user, lid);
       const [{data:v},{data:f},{data:g},{data:liqData}]=await Promise.all([
         vq,
