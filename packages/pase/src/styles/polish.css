@@ -396,12 +396,6 @@ tbody tr.clickable:hover {
   background: radial-gradient(ellipse 80% 60% at 50% 0%, var(--pase-celeste-100) 0%, transparent 70%);
   opacity: 0.3;
 }
-[data-theme="dark"] .login-brand {
-  color: #E8EDF4;
-}
-[data-theme="dark"] .login-sub {
-  color: var(--pase-text-muted);
-}
 [data-theme="dark"] .eerr-row:hover {
   background: var(--pase-bg-out);
 }

@@ -78,7 +78,7 @@ export default function Login({ onLogin }: LoginProps) {
     <div className="login-wrap">
       <div className="login-bg" />
       <div className="login-card">
-        <div className="login-brand">PASE</div>
+        <div className="login-brand">pase<span style={{color:"var(--pase-gold)"}}>.</span></div>
         <div className="login-sub">aliado gastronómico</div>
         {cambioOk && !err && (
           <div className="alert alert-success" style={{

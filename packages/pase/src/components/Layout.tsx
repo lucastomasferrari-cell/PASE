@@ -126,7 +126,7 @@ export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, 
       <div className={`overlay-sb ${open ? "open" : ""}`} onClick={close}/>
       <div className={`sb ${open ? "open" : ""}`}>
         <div className="sb-logo">
-          <div className="brand">PASE</div>
+          <div className="brand">pase<span className="brand-dot">.</span></div>
           <div className="brand-sub">aliado gastronómico</div>
           {/* Multi-tenant badges (TASK 0.15). El nombre del tenant en
               régimen normal (no-superadmin) NO se muestra acá — es
@@ -287,7 +287,7 @@ body{
    bandera). El --pase-bg adapta automáticamente a dark mode. */
 .sb-logo{padding:28px 20px 24px;border-bottom:0.5px solid var(--pase-border);text-align:center;position:relative}
 .sb-logo::before{content:'';position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(180deg,var(--pase-celeste) 0,var(--pase-celeste) 2px,var(--pase-bg) 2px,var(--pase-bg) 3px,var(--pase-celeste) 3px,var(--pase-celeste) 5px);opacity:0.85}
-.brand{font-size:28px;font-weight:700;color:var(--pase-text);letter-spacing:0.06em;line-height:1}
+.brand{font-size:34px;font-weight:500;color:var(--pase-text);letter-spacing:-0.04em;line-height:1}
 /* El punto del logo: dorado --pase-gold. Junto con el sol del InfoTooltip,
    son los 2 únicos usos de dorado en el producto (anclas de marca). */
 .brand-dot{color:var(--pase-gold)}
@@ -566,8 +566,8 @@ input[type="month"].search:hover::-webkit-calendar-picker-indicator{
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--pase-bg-page);position:relative;overflow:hidden}
 .login-bg{position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,var(--pase-celeste-100) 0%,transparent 70%);opacity:0.5;pointer-events:none}
 .login-card{position:relative;width:420px;background:var(--pase-bg);border:0.5px solid var(--pase-border);border-radius:16px;padding:44px 40px}
-.login-brand{font-family:var(--pase-font);font-size:54px;font-weight:700;color:#0F1B2D;line-height:1;letter-spacing:0.06em;text-align:center}
-.login-sub{font-size:12px;color:#6E8CAB;margin-bottom:36px;margin-top:10px;letter-spacing:0.18em;text-transform:uppercase;font-weight:500;text-align:center}
+.login-brand{font-family:var(--pase-font);font-size:48px;font-weight:500;color:var(--pase-text);line-height:1;letter-spacing:-0.04em;text-align:center}
+.login-sub{font-size:10px;color:var(--pase-text-muted);margin-bottom:36px;margin-top:8px;letter-spacing:0.06em;text-transform:uppercase;font-weight:400;text-align:center}
 
 /* ─── NUM/MONO ─────────────────────────────────────────────────────── */
 .num{font-family:var(--pase-font);font-size:14px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--pase-text)}
