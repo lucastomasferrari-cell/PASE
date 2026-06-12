@@ -1256,13 +1256,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
         </div>
       ) : (
       <div className="panel">
-        {loading ? <div className="loading">Cargando...</div> : fFilt.length === 0 ? (
-          <EmptyState
-            icon={<ReceiptIcon size={36} tone="muted" />}
-            title="Sin facturas con esos filtros"
-            description="Probá cambiar el rango de fechas, el filtro de proveedor o el estado."
-          />
-        ) : (
+        {loading ? <div className="loading">Cargando...</div> : (
           <table>
             <thead><tr>
               <th><ColumnFilter label="Proveedor · Nº" values={fColFilters.uniqueValues("proveedor")} selected={fColFilters.getFilter("proveedor")} onChange={s => fColFilters.setFilter("proveedor", s)} /></th>
@@ -1274,6 +1268,15 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
               <th><ColumnFilter label="Estado" values={fColFilters.uniqueValues("estado")} selected={fColFilters.getFilter("estado")} onChange={s => fColFilters.setFilter("estado", s)} /></th>
               <th></th>
             </tr></thead>
+            {fVisible.length === 0 ? (
+              <tbody><tr><td colSpan={localActivo ? 7 : 8} style={{padding:0}}>
+                <EmptyState
+                  icon={<ReceiptIcon size={36} tone="muted" />}
+                  title="Sin facturas con esos filtros"
+                  description={fColFilters.hasActiveFilters ? "No hay facturas con los filtros de columna seleccionados. Usá los filtros para ampliar la búsqueda." : "Probá cambiar el rango de fechas, el filtro de proveedor o el estado."}
+                />
+              </td></tr></tbody>
+            ) : (
             <tbody>{fVisible.map(f => {
               const prov = proveedores.find(p => String(p.id) === String(f.prov_id));
               const isNC = (f.tipo || "factura") === "nota_credito";
@@ -1331,6 +1334,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                 </tr>
               );
             })}</tbody>
+          )}
           </table>
         )}
       </div>

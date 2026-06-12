@@ -160,7 +160,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   // Idempotency key (regla C1) — anti doble-click en el modal de editar mov.
   // Se regenera cada vez que se abre el modal.
   const [idempKeyEditMov, setIdempKeyEditMov] = useState<string>(() => crypto.randomUUID());
-  const [filtCuenta, setFiltCuenta] = useState("Todas");
+  // filtCuenta eliminado — reemplazado por ColumnFilter en el header de Cuenta.
   const [mostrarAnulados, setMostrarAnulados] = useState(false);
   // Orden de los movimientos:
   //  - "fecha": fecha del hecho económico (default, igual que histórico). El
@@ -422,7 +422,6 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   }, [detalleEdicion]);
 
   const mFiltBase = movimientos
-    .filter(m => filtCuenta === "Todas" || m.cuenta === filtCuenta)
     .filter(m => mostrarAnulados ? true : !m.anulado);
 
   const mColFilters = useColumnFilters<Movimiento>(mFiltBase, {
@@ -710,9 +709,6 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
                 Ver anulados
               </label>
             )}
-            <select className="search" style={{width:160}} value={filtCuenta} onChange={e=>setFiltCuenta(e.target.value)}>
-              <option>Todas</option>{cuentasParaListado.map(c=><option key={c}>{c}</option>)}
-            </select>
             <select
               className="search"
               style={{width:180}}
@@ -759,28 +755,22 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
             </button>
           </div>
         )}
-        {loading?<div className="loading">Cargando...</div>:mFilt.length===0?(
-          <EmptyState
-            icon="📋"
-            title="Sin movimientos"
-            description="No hay movimientos en el rango de fechas seleccionado. Probá ampliar el rango o cargar un movimiento manual."
-          />
-        ):(
-          // table-scroll-wrap (global, en Layout.tsx) = overflow-x auto.
-          // Antes la tabla se cortaba a la derecha (los importes salían como
-          // "-$65." sin completar) cuando el ancho del aside + sidebar dejaba
-          // poco espacio. Cada vez que agregábamos una columna se rompía de
-          // nuevo. Ahora: scroll horizontal automático si no entra. Lucas
-          // 2026-05-20 ("se desconfigura a cada rato").
+        {loading?<div className="loading">Cargando...</div>:(
           <div className="table-scroll-wrap">
           <table style={{minWidth: 720}}><thead><tr>
             <th className="col-fecha">Fecha</th>
             {ordenPor === "carga" && <th className="col-fecha" title="Cuándo se cargó realmente al sistema (puede diferir de la fecha del movimiento)">Cargado</th>}
-            {/* Columna "Estado" fusionada con "Tipo" para que la tabla entre
-                en la pantalla sin scroll horizontal (Lucas 2026-05-19).
-                El badge "Anulado"/"Editado" va al lado del tipo. */}
             <th><ColumnFilter label="Cuenta" values={mColFilters.uniqueValues("cuenta")} selected={mColFilters.getFilter("cuenta")} onChange={s => mColFilters.setFilter("cuenta", s)} /></th><th><ColumnFilter label="Tipo" values={mColFilters.uniqueValues("tipo")} selected={mColFilters.getFilter("tipo")} onChange={s => mColFilters.setFilter("tipo", s)} /></th><th><ColumnFilter label="Categoría" values={mColFilters.uniqueValues("categoria")} selected={mColFilters.getFilter("categoria")} onChange={s => mColFilters.setFilter("categoria", s)} /></th><th>Detalle</th><th className="num-right">Importe</th><th></th>
           </tr></thead>
+          {mFilt.length===0?(
+            <tbody><tr><td colSpan={ordenPor === "carga" ? 8 : 7} style={{padding:0}}>
+              <EmptyState
+                icon="📋"
+                title="Sin movimientos"
+                description={mColFilters.hasActiveFilters ? "No hay movimientos con los filtros seleccionados. Usá los filtros de columna para ampliar la búsqueda." : "No hay movimientos en el rango de fechas seleccionado. Probá ampliar el rango o cargar un movimiento manual."}
+              />
+            </td></tr></tbody>
+          ):(
           <tbody>{mFilt.map(m=>{
             // Bug fix 2026-06-04: usar created_at si está disponible
             // (movimientos.created_at agregado migration 202606040900).
@@ -895,7 +885,9 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
               </td>
             </tr>
             );
-          })}</tbody></table>
+          })}</tbody>
+        )}
+          </table>
           </div>
         )}
         {/* Contador + paginación. Total exacto del rango lo trae el conteo

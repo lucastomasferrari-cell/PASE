@@ -613,15 +613,18 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
           </div>
         </div>
         <div className="panel">
-          {loading ? <div className="loading">Cargando...</div> : gVisible.length === 0 ? (
-            <EmptyState
-              icon="📭"
-              title="Sin movimientos en el período"
-              description="No hay gastos cargados en el rango de fechas. Probá ampliar el rango o cargar un gasto."
-            />
-          ) : (
+          {loading ? <div className="loading">Cargando...</div> : (
             <table>
               <thead><tr><th className="col-fecha">Fecha</th><th><ColumnFilter label="Tipo" values={gColFilters.uniqueValues("tipo")} selected={gColFilters.getFilter("tipo")} onChange={s => gColFilters.setFilter("tipo", s)} /></th><th><ColumnFilter label="Categoría" values={gColFilters.uniqueValues("categoria")} selected={gColFilters.getFilter("categoria")} onChange={s => gColFilters.setFilter("categoria", s)} /></th><th>Detalle</th><th>Local</th><th><ColumnFilter label="Cuenta" values={gColFilters.uniqueValues("cuenta")} selected={gColFilters.getFilter("cuenta")} onChange={s => gColFilters.setFilter("cuenta", s)} /></th><th className="num-right">Monto</th><th></th></tr></thead>
+              {gVisible.length === 0 ? (
+                <tbody><tr><td colSpan={8} style={{padding:0}}>
+                  <EmptyState
+                    icon="📭"
+                    title="Sin movimientos en el período"
+                    description={gColFilters.hasActiveFilters ? "No hay gastos con los filtros seleccionados. Usá los filtros de columna para ampliar la búsqueda." : "No hay gastos cargados en el rango de fechas. Probá ampliar el rango o cargar un gasto."}
+                  />
+                </td></tr></tbody>
+              ) : (
               <tbody>{gVisible.map(g => {
                 const anulado = g.estado === "anulado";
                 return (
@@ -705,6 +708,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                 </tr>
                 );
               })}</tbody>
+            )}
             </table>
           )}
         </div>
