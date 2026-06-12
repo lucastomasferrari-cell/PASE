@@ -406,6 +406,42 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     }
   }
 
+  async function refrescarCruce() {
+    if (!egresosExtracto.length || !periodoDesde || !periodoHasta) return;
+    setCruzando(true);
+    try {
+      const payload = egresosExtracto.map(m => ({
+        fecha: m.fecha,
+        monto: m.monto,
+        descripcion: m.descripcion,
+        referencia_externa: m.referencia_externa,
+      }));
+      const { data, error } = await db.rpc("fn_cruzar_extracto_mp", {
+        p_local_id: localActivo,
+        p_periodo_desde: periodoDesde,
+        p_periodo_hasta: periodoHasta,
+        p_movs_extracto: payload,
+        p_solo_egresos: true,
+        p_match_agrupado: true,
+      });
+      if (error) { showError(translateRpcError(error)); return; }
+      setCruce(data as CruceResultado);
+      showToast("Datos actualizados — tus resoluciones se mantienen");
+    } finally {
+      setCruzando(false);
+    }
+  }
+
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === "visible" && cruce && !cruzando) {
+        void refrescarCruce();
+      }
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  });
+
   // ─── Resolver cada caso ──────────────────────────────────────────────────
   // Borra la resolución (Lucas 10-jun: poder deshacer si se equivoca).
   function deshacerResolucion(idx: number) {
@@ -1085,6 +1121,9 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button className="btn btn-ghost" onClick={resetearTodo}>Cancelar todo</button>
+                <button className="btn btn-outline" onClick={refrescarCruce} disabled={cruzando}>
+                  {cruzando ? "Actualizando…" : "↻ Refrescar"}
+                </button>
                 <button
                   className="btn btn-acc"
                   onClick={cerrarConciliacion}
