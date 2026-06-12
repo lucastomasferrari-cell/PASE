@@ -18,9 +18,13 @@ ALTER TABLE medios_cobro
   ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 
 -- 2) Backfill multi-tenant ---------------------------------------------------
--- 2a. Filas con local: heredan el tenant del local.
+-- 2a. Filas con local: heredan el tenant del local — SOLO si ese tenant
+--     existe en `tenants` (en prod hay tenant_ids huérfanos del tenant E2E
+--     Test Suite, que se crea y borra en cada corrida; la FK los rechaza).
 UPDATE medios_cobro mc SET tenant_id = l.tenant_id
-  FROM locales l WHERE mc.local_id = l.id AND mc.tenant_id IS NULL;
+  FROM locales l
+ WHERE mc.local_id = l.id AND mc.tenant_id IS NULL
+   AND EXISTS (SELECT 1 FROM tenants t WHERE t.id = l.tenant_id);
 
 -- 2b. Filas globales (local NULL, sin tenant): clonar una copia POR TENANT
 --     existente (cada tenant pasa a tener su propio catálogo).
@@ -65,6 +69,7 @@ UPDATE medios_cobro mc
        pide_vuelto = mc.pide_vuelto OR m.pide_vuelto
   FROM metodos_cobro m
  WHERE m.deleted_at IS NULL
+   AND EXISTS (SELECT 1 FROM tenants t WHERE t.id = m.tenant_id)  -- sin huérfanos E2E
    AND mc.tenant_id = m.tenant_id
    AND COALESCE(mc.local_id, 0) = COALESCE(m.local_id, 0)
    AND mc.slug = m.slug;
@@ -75,6 +80,7 @@ INSERT INTO medios_cobro (tenant_id, local_id, nombre, slug, emoji, pide_vuelto,
 SELECT m.tenant_id, m.local_id, m.nombre, m.slug, m.emoji, m.pide_vuelto, m.activo, 100 + m.orden, NULL
   FROM metodos_cobro m
  WHERE m.deleted_at IS NULL
+   AND EXISTS (SELECT 1 FROM tenants t WHERE t.id = m.tenant_id)  -- sin huérfanos E2E
    AND NOT EXISTS (
      SELECT 1 FROM medios_cobro mc
       WHERE mc.tenant_id = m.tenant_id
