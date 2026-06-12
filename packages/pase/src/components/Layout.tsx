@@ -566,8 +566,8 @@ input[type="month"].search:hover::-webkit-calendar-picker-indicator{
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--pase-bg-page);position:relative;overflow:hidden}
 .login-bg{position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,var(--pase-celeste-100) 0%,transparent 70%);opacity:0.5;pointer-events:none}
 .login-card{position:relative;width:420px;background:var(--pase-bg);border:0.5px solid var(--pase-border);border-radius:16px;padding:44px 40px}
-.login-brand{font-family:var(--pase-font);font-size:36px;font-weight:500;color:var(--pase-text);line-height:1;letter-spacing:-0.04em}
-.login-sub{font-size:11px;color:var(--pase-text-muted);margin-bottom:36px;margin-top:8px;letter-spacing:0.04em;text-transform:uppercase}
+.login-brand{font-family:var(--pase-font);font-size:54px;font-weight:700;color:#0F1B2D;line-height:1;letter-spacing:0.06em}
+.login-sub{font-size:12px;color:#6E8CAB;margin-bottom:36px;margin-top:10px;letter-spacing:0.18em;text-transform:uppercase;font-weight:500}
 
 /* ─── NUM/MONO ─────────────────────────────────────────────────────── */
 .num{font-family:var(--pase-font);font-size:14px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--pase-text)}

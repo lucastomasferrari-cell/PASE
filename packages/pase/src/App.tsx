@@ -782,7 +782,10 @@ function AppMain() {
   };
 
   const logout = async () => {
-    await db.auth.signOut();
+    try { await db.auth.signOut(); } catch { /* token ya inválido — limpiamos igual */ }
+    try { sessionStorage.removeItem("pase_user"); } catch { /* idem */ }
+    setUser(null);
+    setAuthLoading(false);
   };
 
   const props: { user: Usuario; locales: Local[]; localActivo: number | null } = { user: user!, locales, localActivo };
