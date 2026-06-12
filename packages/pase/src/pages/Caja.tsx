@@ -9,7 +9,7 @@ import { useDebouncedValue } from "@pase/shared/utils";
 import { CUENTAS, CUENTAS_OCULTAS_TEMPORAL } from "../lib/constants";
 import { toISO, fmt_d, fmt_$, toLocalISO } from '@pase/shared/utils';
 import { today } from '../lib/utils';
-import { RightSubNav, type SubNavSection, PageHeader, EmptyState, LocalLockedChip, Modal, ColumnFilter, useColumnFilters } from "../components/ui";
+import { RightSubNav, type SubNavSection, PageHeader, EmptyState, LocalLockedChip, Modal, ColumnFilter, useColumnFilters, DateRangeFilter } from "../components/ui";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import { ManagerOverrideModal } from "../components/ManagerOverrideModal";
@@ -698,11 +698,6 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         <div className="panel-hd" style={{flexWrap:"wrap",gap:8}}>
           <span className="panel-title">Movimientos</span>
           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-            <input type="date" className="search" style={{width:140}} value={filtDesde}
-              onChange={e=>setFiltDesde(e.target.value)} title="Desde" />
-            <span style={{color:"var(--muted2)",fontSize:11}}>→</span>
-            <input type="date" className="search" style={{width:140}} value={filtHasta}
-              onChange={e=>setFiltHasta(e.target.value)} title="Hasta" />
             {tienePermiso(user, "ver_anulados") && (
               <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"var(--muted2)",cursor:"pointer"}}>
                 <input type="checkbox" checked={mostrarAnulados} onChange={e => setMostrarAnulados(e.target.checked)}/>
@@ -758,7 +753,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         {loading?<div className="loading">Cargando...</div>:(
           <div className="table-scroll-wrap">
           <table style={{minWidth: 720}}><thead><tr>
-            <th className="col-fecha">Fecha</th>
+            <th className="col-fecha"><DateRangeFilter label="Fecha" desde={filtDesde} hasta={filtHasta} onDesdeChange={setFiltDesde} onHastaChange={setFiltHasta} /></th>
             {ordenPor === "carga" && <th className="col-fecha" title="Cuándo se cargó realmente al sistema (puede diferir de la fecha del movimiento)">Cargado</th>}
             <th><ColumnFilter label="Cuenta" values={mColFilters.uniqueValues("cuenta")} selected={mColFilters.getFilter("cuenta")} onChange={s => mColFilters.setFilter("cuenta", s)} /></th><th><ColumnFilter label="Tipo" values={mColFilters.uniqueValues("tipo")} selected={mColFilters.getFilter("tipo")} onChange={s => mColFilters.setFilter("tipo", s)} /></th><th><ColumnFilter label="Categoría" values={mColFilters.uniqueValues("categoria")} selected={mColFilters.getFilter("categoria")} onChange={s => mColFilters.setFilter("categoria", s)} /></th><th>Detalle</th><th className="num-right">Importe</th><th></th>
           </tr></thead>

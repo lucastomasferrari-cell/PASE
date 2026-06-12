@@ -15,6 +15,7 @@ export { PageHeader } from "./PageHeader";
 export { PageContainer } from "./PageContainer";
 export { TipoPill } from "./TipoPill";
 export { ColumnFilter, useColumnFilters } from "./ColumnFilter";
+export { DateRangeFilter } from "./DateRangeFilter";
 export { StatCard } from "./StatCard";
 export { EmptyState } from "./EmptyState";
 export { LocalContextPicker } from "./LocalContextPicker";

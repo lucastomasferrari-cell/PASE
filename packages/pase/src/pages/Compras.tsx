@@ -8,7 +8,7 @@ import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { CUENTAS } from "../lib/constants";
 import { toISO, fmt_d, fmt_$, genId, parseMonto, toLocalISO } from '@pase/shared/utils';
 import { today, estadoFactura } from '../lib/utils';
-import { RightSubNav, type SubNavSection, PageHeader, EmptyState, BoxIcon, ReceiptIcon, ColumnFilter, useColumnFilters } from "../components/ui";
+import { RightSubNav, type SubNavSection, PageHeader, EmptyState, BoxIcon, ReceiptIcon, ColumnFilter, useColumnFilters, DateRangeFilter } from "../components/ui";
 import { ManagerOverrideModal } from "../components/ManagerOverrideModal";
 import { exportCSV } from "../lib/exportCSV";
 import type { Usuario, Local } from "../types";
@@ -1122,21 +1122,6 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
       {/* Filtros */}
       <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center", flexWrap: "wrap" }}>
         <input className="search" placeholder="Buscar proveedor o Nº..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: 200 }} />
-        <div style={{ width: 1, height: 22, background: "var(--bd)" }} />
-        <label style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"var(--muted2)"}}>
-          Desde
-          <input type="date" className="search" value={desde} onChange={e => setDesde(e.target.value)} style={{ width: 140 }} />
-        </label>
-        <span style={{ fontSize: 12, color: "var(--muted2)" }}>→</span>
-        <label style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"var(--muted2)"}}>
-          Hasta
-          <input type="date" className="search" value={hasta} onChange={e => setHasta(e.target.value)} style={{ width: 140 }} />
-        </label>
-        <div style={{ width: 1, height: 22, background: "var(--bd)" }} />
-        <select className="search" value={provFiltro} onChange={e => setProvFiltro(e.target.value)} style={{ width: 200 }}>
-          <option value="">Todos los proveedores</option>
-          {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-        </select>
       </div>
 
       {/* Banner de deuda acumulada cuando hay proveedor filtrado (Bug #25) */}
@@ -1261,7 +1246,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
             <thead><tr>
               <th><ColumnFilter label="Proveedor · Nº" values={fColFilters.uniqueValues("proveedor")} selected={fColFilters.getFilter("proveedor")} onChange={s => fColFilters.setFilter("proveedor", s)} /></th>
               {!localActivo && <th>Local</th>}
-              <th>Fecha</th>
+              <th><DateRangeFilter label="Fecha" desde={desde} hasta={hasta} onDesdeChange={setDesde} onHastaChange={setHasta} /></th>
               <th>Vencimiento</th>
               <th><ColumnFilter label="Categoría" values={fColFilters.uniqueValues("categoria")} selected={fColFilters.getFilter("categoria")} onChange={s => fColFilters.setFilter("categoria", s)} /></th>
               <th style={{ textAlign: "right" }}>Total</th>

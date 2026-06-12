@@ -10,7 +10,7 @@ import { useDebouncedValue } from "@pase/shared/utils";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import { Combobox } from "../components/Combobox";
-import { PageHeader, TipoPill, EmptyState, LocalLockedChip, LocalSelectorObligatorio, Modal, ColumnFilter, useColumnFilters } from "../components/ui";
+import { PageHeader, TipoPill, EmptyState, LocalLockedChip, LocalSelectorObligatorio, Modal, ColumnFilter, useColumnFilters, DateRangeFilter } from "../components/ui";
 import { ManagerOverrideModal } from "../components/ManagerOverrideModal";
 import { exportCSV } from "../lib/exportCSV";
 import type { Usuario, Local } from "../types";
@@ -538,28 +538,9 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
         }
       />
 
-      {/* Filtros: búsqueda + rango fechas (con labels Desde/Hasta) + dropdown de tipo. */}
+      {/* Filtros: búsqueda */}
       <div style={{display:"flex",gap:8,marginBottom:16,alignItems:"center",flexWrap:"wrap"}}>
-        <input className="search" placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)} style={{width:140}}/>
-        <label style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"var(--muted2)"}}>
-          Desde
-          <input type="date" className="search" value={desde} onChange={e=>setDesde(e.target.value)} style={{width:130}}/>
-        </label>
-        <span style={{fontSize:11,color:"var(--muted)"}}>→</span>
-        <label style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"var(--muted2)"}}>
-          Hasta
-          <input type="date" className="search" value={hasta} onChange={e=>setHasta(e.target.value)} style={{width:130}}/>
-        </label>
-        <div style={{width:1,height:14,background:"var(--bd)",margin:"0 4px"}}/>
-        <div style={{width:200}}>
-          <Combobox
-            value={tipoFiltro==="todos"?"":tipoFiltro}
-            onChange={v=>setTipoFiltro(v||"todos")}
-            options={TIPOS.filter(t=>t.id!=="todos").map(t=>({value:t.id,label:t.label}))}
-            placeholder="Todos los tipos"
-            clearable
-          />
-        </div>
+        <input className="search" placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)} style={{width:200}}/>
       </div>
 
       {/* Recurrentes del período */}
@@ -615,7 +596,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
         <div className="panel">
           {loading ? <div className="loading">Cargando...</div> : (
             <table>
-              <thead><tr><th className="col-fecha">Fecha</th><th><ColumnFilter label="Tipo" values={gColFilters.uniqueValues("tipo")} selected={gColFilters.getFilter("tipo")} onChange={s => gColFilters.setFilter("tipo", s)} /></th><th><ColumnFilter label="Categoría" values={gColFilters.uniqueValues("categoria")} selected={gColFilters.getFilter("categoria")} onChange={s => gColFilters.setFilter("categoria", s)} /></th><th>Detalle</th><th>Local</th><th><ColumnFilter label="Cuenta" values={gColFilters.uniqueValues("cuenta")} selected={gColFilters.getFilter("cuenta")} onChange={s => gColFilters.setFilter("cuenta", s)} /></th><th className="num-right">Monto</th><th></th></tr></thead>
+              <thead><tr><th className="col-fecha"><DateRangeFilter label="Fecha" desde={desde} hasta={hasta} onDesdeChange={setDesde} onHastaChange={setHasta} /></th><th><ColumnFilter label="Tipo" values={gColFilters.uniqueValues("tipo")} selected={gColFilters.getFilter("tipo")} onChange={s => gColFilters.setFilter("tipo", s)} /></th><th><ColumnFilter label="Categoría" values={gColFilters.uniqueValues("categoria")} selected={gColFilters.getFilter("categoria")} onChange={s => gColFilters.setFilter("categoria", s)} /></th><th>Detalle</th><th>Local</th><th><ColumnFilter label="Cuenta" values={gColFilters.uniqueValues("cuenta")} selected={gColFilters.getFilter("cuenta")} onChange={s => gColFilters.setFilter("cuenta", s)} /></th><th className="num-right">Monto</th><th></th></tr></thead>
               {gVisible.length === 0 ? (
                 <tbody><tr><td colSpan={8} style={{padding:0}}>
                   <EmptyState
