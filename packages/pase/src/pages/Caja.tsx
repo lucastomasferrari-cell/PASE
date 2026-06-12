@@ -578,7 +578,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     await ejecutarEditMov(editMov);
   };
 
-  const cc = (c: string) => c==="Caja Chica"?"var(--acc)":c==="Caja Mayor"?"var(--acc2)":c==="MercadoPago"?"var(--acc3)":"var(--info)";
+  const cc = (_c: string) => "var(--pase-text-muted)";
 
   // Sub-nav del módulo madre Caja. 2 items, ambos siempre visibles.
   const subNavSections: SubNavSection[] = [
@@ -794,7 +794,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
                 {fechasDifieren && <span style={{marginLeft:4,color:"var(--warn)",fontSize:9}} title="Cargado con fecha distinta a la de creación">⚠</span>}
               </td>
               {ordenPor === "carga" && <td className="mono" style={{fontSize:11,color:"var(--muted2)"}}>{fmtFechaCarga(fCarga)}</td>}
-              <td><span className="badge" style={{background:"transparent",color:cc(m.cuenta),border:`1px solid ${cc(m.cuenta)}44`}}>{m.cuenta}</span></td>
+              <td><span className="badge b-muted">{m.cuenta}</span></td>
               <td style={{fontSize:11,color:"var(--muted2)"}}>
                 <span>{m.tipo}</span>
                 {/* Badges sutiles: borde + texto, sin fondo. Coherente con
@@ -875,7 +875,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
                 )}
                 {m.detalle}
               </td>
-              <td className="num-right"><span style={{color:m.importe<0?"var(--danger)":"var(--success)"}}>{fmt_$(m.importe)}</span></td>
+              <td className="num-right"><span>{fmt_$(m.importe)}</span></td>
               <td>
                 <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
                   {!m.anulado && <button className="btn btn-ghost btn-sm" onClick={() => { setEditMov({...m, justificativo: ""}); setIdempKeyEditMov(crypto.randomUUID()); }}>Editar</button>}

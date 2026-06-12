@@ -105,7 +105,7 @@ export function TabEmpleados({
             const yaTomadosAlta = (e as { dias_vacaciones_ya_tomados_al_alta?: number }).dias_vacaciones_ya_tomados_al_alta ?? 0;
             const vacTomadasTotal = (vacTomadas[e.id] || 0) + yaTomadosAlta;
             const vac = calcularVacaciones(e.fecha_inicio, vacTomadasTotal);
-            const vacColor = vac >= 14 ? "var(--success)" : vac >= 7 ? "var(--warn)" : "var(--muted2)";
+            const vacColor = "var(--pase-text-muted)";
             const alertas: string[] = [];
             if (!e.cuil || e.cuil.trim() === "") alertas.push("Sin CUIL");
             if (!e.fecha_inicio) alertas.push("Sin fecha inicio");
@@ -123,34 +123,22 @@ export function TabEmpleados({
                     <div style={{marginTop:3}}>
                       <span
                         title="En período de prueba — primeros 6 meses desde el ingreso (LCT Art. 92 bis)"
-                        style={{
-                          display:"inline-flex",alignItems:"center",gap:4,
-                          padding:"2px 7px",borderRadius:999,
-                          background:"rgba(37,99,235,0.12)",
-                          border:"0.5px solid rgba(37,99,235,0.35)",
-                          color:"#2563EB",fontSize:9,fontWeight:500,
-                        }}
-                      >🧪 En prueba</span>
+                        className="badge b-muted"
+                        style={{fontSize:9}}
+                      >En prueba</span>
                     </div>
                   )}
                 </td>
                 <td style={{textAlign:"right"}}><span className="num kpi-acc">{fmt_$(e.sueldo_mensual)}</span></td>
-                <td style={{fontSize:11,color:vacColor}} title={yaTomadosAlta > 0 ? `Incluye ${yaTomadosAlta}d ya tomados antes del alta` : undefined}>{vac >= 14 && "🌴 "}{vac.toFixed(1)}d</td>
+                <td style={{fontSize:11,color:vacColor}} title={yaTomadosAlta > 0 ? `Incluye ${yaTomadosAlta}d ya tomados antes del alta` : undefined}>{vac.toFixed(1)}d</td>
                 <td>
-                  <span className={`badge ${reg ? "b-success" : ""}`} style={{
-                    fontSize:8,
-                    ...(reg ? {} : {
-                      background: "rgba(217,119,6,0.12)",
-                      color: "#D97706",
-                      border: "0.5px solid rgba(217,119,6,0.35)",
-                    }),
-                  }}>{reg ? "Sí" : "No"}</span>
+                  <span className="badge b-muted" style={{fontSize:8}}>{reg ? "Sí" : "No"}</span>
                 </td>
                 <td>{alertas.length > 0
-                  ? <span className="badge b-warn" style={{fontSize:8}} title={alertas.join(", ")}>⚠ {alertas.length} alerta{alertas.length > 1 ? "s" : ""}</span>
-                  : <span className="badge b-success" style={{fontSize:8}}>✓ Completo</span>
+                  ? <span className="badge b-muted" style={{fontSize:8}} title={alertas.join(", ")}>{alertas.length} alerta{alertas.length > 1 ? "s" : ""}</span>
+                  : <span className="badge b-muted" style={{fontSize:8}}>Completo</span>
                 }</td>
-                <td><span className={`badge ${e.activo !== false ? "b-success" : "b-muted"}`} style={{fontSize:8}}>{e.activo !== false ? "Si" : "No"}</span></td>
+                <td><span className="badge b-muted" style={{fontSize:8}}>{e.activo !== false ? "Sí" : "No"}</span></td>
                 <td><div style={{display:"flex",gap:4}}>
                   <button className="btn btn-ghost btn-sm" style={{fontSize:9}} onClick={() => setLegajoId(e.id)}>Legajo</button>
                   <button className="btn btn-ghost btn-sm" style={{fontSize:9}} onClick={() => abrirEmpEditar(e)}>Editar</button>

@@ -357,13 +357,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
               <tr key={g.key}>
                 <td className="mono">{fmt_d(g.fecha)}</td>
                 <td>
-                  {/* Turno con color contextual: Mediodía → beige/durazno
-                      (estética solar), Noche → lila/violeta pastel (estética
-                      nocturna). Reemplaza b-info/b-warn que eran gris uniformes. */}
-                  <span className="badge" style={{
-                    background: g.turno === "Noche" ? "#E5E0F0" : "#FBEDD9",
-                    color:      g.turno === "Noche" ? "#4E3D7A" : "#7A5018",
-                  }}>{g.turno}</span>
+                  <span className="badge b-muted">{g.turno}</span>
                 </td>
                 <td style={{fontSize:11,color:"var(--muted2)"}}>{locales.find((l: Local)=>String(l.id)===String(g.local_id))?.nombre||"—"}</td>
                 <td style={{fontSize:11,color:"var(--muted2)"}}>{g.items.length} formas de cobro</td>
