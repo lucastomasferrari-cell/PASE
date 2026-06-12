@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from "react";
-import { Modal } from "../components/ui";
+import { Modal, PageHeader } from "../components/ui";
 import { db } from "../lib/supabase";
 import { localesVisibles, applyLocalScope, cuentasOperables, tienePermiso, debeReintentarCargaVacia } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
@@ -905,24 +905,22 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     <div>
       <ToastComponent toast={toast} />
 
-      <div className="ph-row">
-        <div><div className="ph-title">Equipo</div></div>
-      </div>
+      <PageHeader
+        title="Equipo"
+        actions={esDueno ? (
+          <>
+            <button className="btn btn-acc btn-sm" onClick={()=>{setCsModal(true);setCsIdempKey(crypto.randomUUID());}}>Pagar Cargas Sociales</button>
+            <button className="btn btn-outline btn-sm" onClick={()=>setAdelModal(true)}>Registrar Adelanto</button>
+          </>
+        ) : undefined}
+      />
 
       <div className="tabs">
         {tabs.map(t => <div key={t.id} className={`tab ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)}>{t.label}</div>)}
       </div>
 
       {tab === "dashboard" && (
-        <>
-          {esDueno && (
-            <div style={{display:"flex",gap:8,marginBottom:12}}>
-              <button className="btn btn-primary btn-sm" onClick={()=>{setCsModal(true);setCsIdempKey(crypto.randomUUID());}}>Pagar Cargas Sociales</button>
-              <button className="btn btn-outline btn-sm" onClick={()=>setAdelModal(true)}>Registrar Adelanto</button>
-            </div>
-          )}
-          <TabDashboard dashStats={dashStats} dashLoading={dashLoading} />
-        </>
+        <TabDashboard dashStats={dashStats} dashLoading={dashLoading} />
       )}
 
       {tab === "empleados" && (

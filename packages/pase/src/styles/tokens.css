@@ -9,6 +9,8 @@
  */
 
 :root {
+  color-scheme: light;
+
   /* === COLOR === */
 
   /* Marca — único celeste */
@@ -24,14 +26,14 @@
   --pase-text-muted: #6E8CAB;     /* labels, sub-textos, placeholders */
 
   /* Bordes */
-  --pase-border:        #EAF3FB;  /* finos de cards y separadores */
-  --pase-border-strong: #DCE8F4;  /* inputs, frames principales */
+  --pase-border:        #E0EAF4;  /* finos de cards y separadores */
+  --pase-border-strong: #D0DCEA;  /* inputs, frames principales */
 
   /* Fondos */
   --pase-bg:      #FFFFFF;        /* fondo principal (cards, modales) */
-  --pase-bg-page: #F7F9FC;        /* fondo de página/canvas — cards flotan sobre esto */
-  --pase-bg-soft: #F4F9FD;        /* titlebar, secciones */
-  --pase-bg-out:  #F2F5F8;        /* íconos "salida"/grises */
+  --pase-bg-page: #EFF3F8;        /* fondo de página/canvas — cards flotan sobre esto */
+  --pase-bg-soft: #EBF0F6;        /* titlebar, secciones */
+  --pase-bg-out:  #E5EAF1;        /* íconos "salida"/grises */
 
   /* Acento dorado — uso restringido (solo logo dot + indicador "en vivo" +
      icono del componente InfoTooltip que apareció en 2026-05-14). */
@@ -175,6 +177,8 @@
  * ════════════════════════════════════════════════════════════════════ */
 
 [data-theme="dark"] {
+  color-scheme: dark;
+
   /* Base — paleta unificada con COMANDA POS (2026-05-17): tono más neutro,
    * menos navy puro, mejor contraste para data densa. Mantenemos el ancla
    * celeste/dorado de marca pero la base es "graphite-blue" más oscuro. */
