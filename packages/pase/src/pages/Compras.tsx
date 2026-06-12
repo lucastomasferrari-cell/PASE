@@ -8,7 +8,7 @@ import { useRealtimeTable } from "../lib/useRealtimeTable";
 import { CUENTAS } from "../lib/constants";
 import { toISO, fmt_d, fmt_$, genId, parseMonto, toLocalISO } from '@pase/shared/utils';
 import { today, estadoFactura } from '../lib/utils';
-import { RightSubNav, type SubNavSection, PageHeader, EmptyState, BoxIcon, ReceiptIcon } from "../components/ui";
+import { RightSubNav, type SubNavSection, PageHeader, EmptyState, BoxIcon, ReceiptIcon, ColumnFilter, useColumnFilters } from "../components/ui";
 import { ManagerOverrideModal } from "../components/ManagerOverrideModal";
 import { exportCSV } from "../lib/exportCSV";
 import type { Usuario, Local } from "../types";
@@ -450,6 +450,13 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
     }
     return true;
   });
+
+  const fColFilters = useColumnFilters<Factura>(fFilt, {
+    proveedor: (f) => proveedores.find(p => String(p.id) === String(f.prov_id))?.nombre || "—",
+    categoria: (f) => f.cat || "—",
+    estado: (f) => estadoFactura(f),
+  });
+  const fVisible = fColFilters.filtered;
 
   const onProvChange = (prov_id: string) => {
     const prov = proveedores.find(p => String(p.id) === String(prov_id));
@@ -1258,16 +1265,16 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
         ) : (
           <table>
             <thead><tr>
-              <th>Proveedor · Nº</th>
+              <th><ColumnFilter label="Proveedor · Nº" values={fColFilters.uniqueValues("proveedor")} selected={fColFilters.getFilter("proveedor")} onChange={s => fColFilters.setFilter("proveedor", s)} /></th>
               {!localActivo && <th>Local</th>}
               <th>Fecha</th>
               <th>Vencimiento</th>
-              <th>Categoría</th>
+              <th><ColumnFilter label="Categoría" values={fColFilters.uniqueValues("categoria")} selected={fColFilters.getFilter("categoria")} onChange={s => fColFilters.setFilter("categoria", s)} /></th>
               <th style={{ textAlign: "right" }}>Total</th>
-              <th>Estado</th>
+              <th><ColumnFilter label="Estado" values={fColFilters.uniqueValues("estado")} selected={fColFilters.getFilter("estado")} onChange={s => fColFilters.setFilter("estado", s)} /></th>
               <th></th>
             </tr></thead>
-            <tbody>{fFilt.map(f => {
+            <tbody>{fVisible.map(f => {
               const prov = proveedores.find(p => String(p.id) === String(f.prov_id));
               const isNC = (f.tipo || "factura") === "nota_credito";
               return (

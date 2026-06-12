@@ -10,7 +10,7 @@ import { useDebouncedValue } from "@pase/shared/utils";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import { Combobox } from "../components/Combobox";
-import { PageHeader, TipoPill, EmptyState, LocalLockedChip, LocalSelectorObligatorio, Modal } from "../components/ui";
+import { PageHeader, TipoPill, EmptyState, LocalLockedChip, LocalSelectorObligatorio, Modal, ColumnFilter, useColumnFilters } from "../components/ui";
 import { ManagerOverrideModal } from "../components/ManagerOverrideModal";
 import { exportCSV } from "../lib/exportCSV";
 import type { Usuario, Local } from "../types";
@@ -296,7 +296,14 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
     return matchTipo && matchSearch;
   });
 
-  const totalPeriodo = histFiltrado.reduce((s, g) => s + (g.monto || 0), 0);
+  const gColFilters = useColumnFilters<GastoExt>(histFiltrado, {
+    tipo: (g) => g.tipo || "—",
+    categoria: (g) => g.categoria || "—",
+    cuenta: (g) => g.cuenta || "—",
+  });
+  const gVisible = gColFilters.filtered;
+
+  const totalPeriodo = gVisible.reduce((s, g) => s + (g.monto || 0), 0);
 
   const getEstadoPlantilla = (plantilla: GastoPlantilla) => {
     const pago = gastos.find(g => g.plantilla_id === plantilla.id);
@@ -602,11 +609,11 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                 Mostrar anulados
               </label>
             )}
-            <span className="section-total">{histFiltrado.length} movimientos · {fmt_$(totalPeriodo)}</span>
+            <span className="section-total">{gVisible.length} movimientos · {fmt_$(totalPeriodo)}</span>
           </div>
         </div>
         <div className="panel">
-          {loading ? <div className="loading">Cargando...</div> : histFiltrado.length === 0 ? (
+          {loading ? <div className="loading">Cargando...</div> : gVisible.length === 0 ? (
             <EmptyState
               icon="📭"
               title="Sin movimientos en el período"
@@ -614,8 +621,8 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
             />
           ) : (
             <table>
-              <thead><tr><th className="col-fecha">Fecha</th><th>Tipo</th><th>Categoría</th><th>Detalle</th><th>Local</th><th>Cuenta</th><th className="num-right">Monto</th><th></th></tr></thead>
-              <tbody>{histFiltrado.map(g => {
+              <thead><tr><th className="col-fecha">Fecha</th><th><ColumnFilter label="Tipo" values={gColFilters.uniqueValues("tipo")} selected={gColFilters.getFilter("tipo")} onChange={s => gColFilters.setFilter("tipo", s)} /></th><th><ColumnFilter label="Categoría" values={gColFilters.uniqueValues("categoria")} selected={gColFilters.getFilter("categoria")} onChange={s => gColFilters.setFilter("categoria", s)} /></th><th>Detalle</th><th>Local</th><th><ColumnFilter label="Cuenta" values={gColFilters.uniqueValues("cuenta")} selected={gColFilters.getFilter("cuenta")} onChange={s => gColFilters.setFilter("cuenta", s)} /></th><th className="num-right">Monto</th><th></th></tr></thead>
+              <tbody>{gVisible.map(g => {
                 const anulado = g.estado === "anulado";
                 return (
                 <tr key={g.id} style={anulado ? { opacity: 0.5, textDecoration: "line-through" } : undefined}>

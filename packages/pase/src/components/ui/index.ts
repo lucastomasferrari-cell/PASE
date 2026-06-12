@@ -14,6 +14,7 @@ export { InfoTooltip } from "./InfoTooltip";
 export { PageHeader } from "./PageHeader";
 export { PageContainer } from "./PageContainer";
 export { TipoPill } from "./TipoPill";
+export { ColumnFilter, useColumnFilters } from "./ColumnFilter";
 export { StatCard } from "./StatCard";
 export { EmptyState } from "./EmptyState";
 export { LocalContextPicker } from "./LocalContextPicker";

@@ -9,7 +9,7 @@ import { useDebouncedValue } from "@pase/shared/utils";
 import { CUENTAS, CUENTAS_OCULTAS_TEMPORAL } from "../lib/constants";
 import { toISO, fmt_d, fmt_$, toLocalISO } from '@pase/shared/utils';
 import { today } from '../lib/utils';
-import { RightSubNav, type SubNavSection, PageHeader, EmptyState, LocalLockedChip, Modal } from "../components/ui";
+import { RightSubNav, type SubNavSection, PageHeader, EmptyState, LocalLockedChip, Modal, ColumnFilter, useColumnFilters } from "../components/ui";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
 import { ManagerOverrideModal } from "../components/ManagerOverrideModal";
@@ -421,9 +421,16 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
       });
   }, [detalleEdicion]);
 
-  const mFilt = movimientos
+  const mFiltBase = movimientos
     .filter(m => filtCuenta === "Todas" || m.cuenta === filtCuenta)
     .filter(m => mostrarAnulados ? true : !m.anulado);
+
+  const mColFilters = useColumnFilters<Movimiento>(mFiltBase, {
+    cuenta: (m) => m.cuenta || "—",
+    tipo: (m) => m.tipo || "—",
+    categoria: (m) => m.cat || "—",
+  });
+  const mFilt = mColFilters.filtered;
 
   // Ref-based guard contra doble-click (fix sistémico 2026-05-18). El state
   // `saving` por sí solo tiene race condition: dos clicks rápidos ven
@@ -772,7 +779,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
             {/* Columna "Estado" fusionada con "Tipo" para que la tabla entre
                 en la pantalla sin scroll horizontal (Lucas 2026-05-19).
                 El badge "Anulado"/"Editado" va al lado del tipo. */}
-            <th>Cuenta</th><th>Tipo</th><th>Categoría</th><th>Detalle</th><th className="num-right">Importe</th><th></th>
+            <th><ColumnFilter label="Cuenta" values={mColFilters.uniqueValues("cuenta")} selected={mColFilters.getFilter("cuenta")} onChange={s => mColFilters.setFilter("cuenta", s)} /></th><th><ColumnFilter label="Tipo" values={mColFilters.uniqueValues("tipo")} selected={mColFilters.getFilter("tipo")} onChange={s => mColFilters.setFilter("tipo", s)} /></th><th><ColumnFilter label="Categoría" values={mColFilters.uniqueValues("categoria")} selected={mColFilters.getFilter("categoria")} onChange={s => mColFilters.setFilter("categoria", s)} /></th><th>Detalle</th><th className="num-right">Importe</th><th></th>
           </tr></thead>
           <tbody>{mFilt.map(m=>{
             // Bug fix 2026-06-04: usar created_at si está disponible
