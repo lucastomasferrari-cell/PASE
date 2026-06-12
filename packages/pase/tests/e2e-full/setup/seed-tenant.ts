@@ -303,11 +303,12 @@ export async function seedE2ETenant(opts: {
 
   // 6. Seed catálogos
   // medios_cobro: tenant_id default usa auth_tenant_id() que es NULL con
-  // service_role → hay que pasarlo explícito.
+  // service_role → hay que pasarlo explícito. Desde el catálogo unificado
+  // (migración 202606122000) slug es NOT NULL → se pasa explícito también.
   const { data: medios, error: mediosErr } = await svc.from("medios_cobro").insert([
-    { tenant_id: tenantId, nombre: "EFECTIVO", cuenta_destino: "Caja Efectivo", activo: true },
-    { tenant_id: tenantId, nombre: "TARJETA", cuenta_destino: "MercadoPago", activo: true },
-    { tenant_id: tenantId, nombre: "MP_QR", cuenta_destino: "MercadoPago", activo: true },
+    { tenant_id: tenantId, nombre: "EFECTIVO", slug: "efectivo", pide_vuelto: true, cuenta_destino: "Caja Efectivo", activo: true },
+    { tenant_id: tenantId, nombre: "TARJETA", slug: "tarjeta", pide_vuelto: false, cuenta_destino: "MercadoPago", activo: true },
+    { tenant_id: tenantId, nombre: "MP_QR", slug: "mp_qr", pide_vuelto: false, cuenta_destino: "MercadoPago", activo: true },
   ]).select("id, nombre");
   if (mediosErr) throw new Error(`Seed medios_cobro: ${mediosErr.message}`);
   const medioEfectivoId = medios!.find(m => m.nombre === "EFECTIVO")!.id as number;
