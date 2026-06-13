@@ -146,9 +146,23 @@ interface Totales {
   rojos_sobra: number;
 }
 
+interface AlertaCercana {
+  mov_id: string;
+  mov_fecha: string;
+  mov_importe: number;
+  mov_detalle: string;
+  mov_prov: string | null;
+  ext_idx: number;
+  ext_fecha: string;
+  ext_monto: number;
+  ext_descripcion: string;
+  dias_fuera: number;
+}
+
 interface CruceResultado {
   extracto: FilaExtracto[];
   sobrantes: Sobrante[];
+  alertas?: AlertaCercana[];
   totales: Totales;
 }
 
@@ -1691,6 +1705,45 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
               />
             );
           })()}
+
+          {/* Alertas: movimientos fuera del período que coinciden por monto */}
+          {(cruce.alertas ?? []).length > 0 && (
+            <Card>
+              <details>
+                <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--warn)" }}>
+                  ⚠ {cruce.alertas!.length} movimiento{cruce.alertas!.length === 1 ? "" : "s"} fuera del período pero con monto coincidente
+                </summary>
+                <p style={{ color: "var(--muted2)", fontSize: 12, lineHeight: 1.5, marginTop: 8 }}>
+                  Estos pagos cargados en PASE están fuera del rango del extracto (mes anterior o siguiente)
+                  pero coinciden en monto con transferencias no matcheadas. Revisalos por si la fecha de carga
+                  en PASE es distinta a la fecha real de la transferencia.
+                </p>
+                <div style={{ maxHeight: 300, overflowY: "auto", fontSize: 12, marginTop: 6 }}>
+                  {cruce.alertas!.map((a, i) => (
+                    <div key={i} style={{
+                      padding: "8px 0", borderBottom: "1px solid var(--bd)",
+                      display: "flex", flexDirection: "column", gap: 4,
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
+                        <span>
+                          <strong>Extracto:</strong> {fmt_d(a.ext_fecha)} · {a.ext_descripcion.slice(0, 50)} · {fmt_$(a.ext_monto)}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 6, color: "var(--warn)" }}>
+                        <span>
+                          <strong>PASE:</strong> {fmt_d(a.mov_fecha)} · {(a.mov_detalle ?? "").slice(0, 50)} · {fmt_$(a.mov_importe)}
+                          {a.mov_prov && <em> [{a.mov_prov}]</em>}
+                        </span>
+                        <span style={{ fontSize: 11 }}>
+                          {a.dias_fuera} día{a.dias_fuera === 1 ? "" : "s"} fuera del período
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </Card>
+          )}
 
           {/* Sobrantes que pertenecen a un bloque — colapsados, informativos.
               NO se deben anular: están explicados por el bloque naranja. */}
