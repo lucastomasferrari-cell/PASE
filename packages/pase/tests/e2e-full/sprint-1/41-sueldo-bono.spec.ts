@@ -85,14 +85,9 @@ test.describe.serial("E2E Test 41 — Bono suma al sueldo", () => {
         .select("bono, total_a_pagar, subtotal2").eq("id", res.liquidacion_id).single();
       expect(Number(liq!.total_a_pagar)).toBe(TOTAL);                 // incluye el bono
       expect(Number(liq!.total_a_pagar)).toBe(Number(liq!.subtotal2) + BONO); // = sueldo+present.+bono
-      // El bono YA está sumado en total_a_pagar (lo verifica la línea de arriba).
-      // NOTA REGRESIÓN: la migración 202606130400 reescribió pagar_sueldo a partir
-      // de 202606072100 (pre-bonos) y NO re-incluyó el snapshot `liq.bono` que sí
-      // guardaba 202606072200 (INSERT/UPDATE leían p_calc->>'bono'). Por eso hoy
-      // la columna queda en 0 aunque el total esté bien. Se afloja este assert a
-      // ">= 0" para no acoplar el test a la regresión; el efecto monetario (bono
-      // suma al total) queda cubierto por los dos asserts de arriba.
-      expect(Number(liq!.bono)).toBeGreaterThanOrEqual(0);
+      // Snapshot del bono persistido (restaurado en 202606130510: la 130400 lo
+      // había perdido al portar desde 072100; ahora INSERT/UPDATE leen v_canon->>'bono').
+      expect(Number(liq!.bono)).toBe(BONO);
     } finally {
       for (const m of movIds) {
         try { await duenoDb.rpc("anular_movimiento", { p_mov_id: m, p_motivo: "E2E cleanup t41" }); } catch { /* */ }
