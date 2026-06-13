@@ -329,11 +329,11 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const porCatOtros=Object.entries(otrosGastosArr.reduce<Record<string,number>>((acc,g)=>{const k=g.categoria||g.tipo;acc[k]=(acc[k]||0)+(g.monto||0);return acc},{})).map(([c,t])=>({c,t})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
 
   const ERow=({label,valor,color,big}: {label: string, valor: number, color: string, big?: boolean})=>(
-    <div className={big?"eerr-row-big":"eerr-row-summary"}>
-      <span style={{fontSize:big?13:12,fontWeight:big?600:400,color:big?"var(--pase-text)":"var(--pase-text)"}}>{label}</span>
+    <div className="eerr-row-summary" style={big?{borderTop:"1.5px solid var(--pase-border)",marginTop:2}:{}}>
+      <span style={{fontSize:12,fontWeight:big?600:400,color:"var(--pase-text)"}}>{label}</span>
       <div style={{textAlign:"right"}}>
-        <span style={{fontFamily:"'Inter',sans-serif",fontSize:big?17:14,fontWeight:big?600:500,color,fontVariantNumeric:"tabular-nums"}}>{fmt_$(valor)}</span>
-        {!big&&<span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(Math.abs(valor))}</span>}
+        <span style={{fontFamily:"'Inter',sans-serif",fontSize:13,fontWeight:500,color,fontVariantNumeric:"tabular-nums"}}>{fmt_$(valor)}</span>
+        <span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(Math.abs(valor))}</span>
       </div>
     </div>
   );
@@ -409,17 +409,17 @@ export default function EERR({ user, localActivo }: EERRProps) {
   // es malo) de ingresos/utilidad (donde "+" es bueno) para colorear bien.
   const filasPyL: { label: string; key: keyof MesResumen; tipo: "ingreso" | "costo" | "util"; big?: boolean; signo?: 1 | -1 }[] = [
     { label: "Ventas Brutas", key: "ventas", tipo: "ingreso", signo: 1 },
-    { label: "(-) CMV", key: "cmv", tipo: "costo", signo: -1 },
-    { label: "(=) Utilidad Bruta", key: "utilBruta", tipo: "util", big: true, signo: 1 },
-    { label: "(-) Gastos Fijos", key: "gastosFijos", tipo: "costo", signo: -1 },
-    { label: "(-) Gastos Variables", key: "gastosVar", tipo: "costo", signo: -1 },
-    { label: "(-) Sueldos", key: "sueldos", tipo: "costo", signo: -1 },
-    { label: "(-) Cargas Sociales", key: "cargasSociales", tipo: "costo", signo: -1 },
-    { label: "(-) Publicidad y MKT", key: "publicidad", tipo: "costo", signo: -1 },
-    { label: "(-) Comisiones", key: "comisiones", tipo: "costo", signo: -1 },
-    { label: "(-) Impuestos", key: "impuestos", tipo: "costo", signo: -1 },
-    { label: "(-) Otros Gastos", key: "otrosGastos", tipo: "costo", signo: -1 },
-    { label: "(=) Utilidad Neta", key: "utilNeta", tipo: "util", big: true, signo: 1 },
+    { label: "CMV", key: "cmv", tipo: "costo", signo: -1 },
+    { label: "Utilidad Bruta", key: "utilBruta", tipo: "util", big: true, signo: 1 },
+    { label: "Gastos Fijos", key: "gastosFijos", tipo: "costo", signo: -1 },
+    { label: "Gastos Variables", key: "gastosVar", tipo: "costo", signo: -1 },
+    { label: "Sueldos", key: "sueldos", tipo: "costo", signo: -1 },
+    { label: "Cargas Sociales", key: "cargasSociales", tipo: "costo", signo: -1 },
+    { label: "Publicidad y MKT", key: "publicidad", tipo: "costo", signo: -1 },
+    { label: "Comisiones", key: "comisiones", tipo: "costo", signo: -1 },
+    { label: "Impuestos", key: "impuestos", tipo: "costo", signo: -1 },
+    { label: "Otros Gastos", key: "otrosGastos", tipo: "costo", signo: -1 },
+    { label: "Utilidad Neta", key: "utilNeta", tipo: "util", big: true, signo: 1 },
   ];
 
   return (
@@ -456,16 +456,16 @@ export default function EERR({ user, localActivo }: EERRProps) {
               // Export del Resumen P&L del mes activo en CSV (Excel-friendly).
               const rows: (string | number)[][] = [
                 ["Ventas Brutas", totalVentas, "100,00%"],
-                ["(-) CMV", -totalCMV, pct(totalCMV)],
-                ["(=) Utilidad Bruta", utilBruta, pct(utilBruta)],
-                ["(-) Gastos Fijos y Variables", -totalGastos, pct(totalGastos)],
-                ["(-) Sueldos", -sueldos, pct(sueldos)],
-                ["(-) Cargas Sociales", -totalCargasSociales, pct(totalCargasSociales)],
-                ["(-) Publicidad y MKT", -totalPublicidad, pct(totalPublicidad)],
-                ["(-) Comisiones", -totalComisiones, pct(totalComisiones)],
-                ["(-) Impuestos", -totalImpuestos, pct(totalImpuestos)],
-                ...(totalOtrosGastos ? [["(-) Otros Gastos", -totalOtrosGastos, pct(totalOtrosGastos)]] : []),
-                ["(=) Utilidad Neta", utilNeta, pct(utilNeta)],
+                ["CMV", -totalCMV, pct(totalCMV)],
+                ["Utilidad Bruta", utilBruta, pct(utilBruta)],
+                ["Gastos Fijos y Variables", -totalGastos, pct(totalGastos)],
+                ["Sueldos", -sueldos, pct(sueldos)],
+                ["Cargas Sociales", -totalCargasSociales, pct(totalCargasSociales)],
+                ["Publicidad y MKT", -totalPublicidad, pct(totalPublicidad)],
+                ["Comisiones", -totalComisiones, pct(totalComisiones)],
+                ["Impuestos", -totalImpuestos, pct(totalImpuestos)],
+                ...(totalOtrosGastos ? [["Otros Gastos", -totalOtrosGastos, pct(totalOtrosGastos)]] : []),
+                ["Utilidad Neta", utilNeta, pct(utilNeta)],
               ];
               if (totalRetiros !== 0) rows.push(["Retiros de Socios (info)", -totalRetiros, pct(totalRetiros)]);
               exportCSV(`reporte_${mes}.csv`, ["Concepto", "Monto", "% sobre ventas"], rows);
@@ -529,8 +529,8 @@ export default function EERR({ user, localActivo }: EERRProps) {
               <div className="panel-hd"><span className="panel-title">Ingresos por Forma de Cobro</span></div>
               {porMedio.length===0?<div className="empty">Sin ventas este mes</div>:(
                 <div>
-                  {porMedio.map(x=><div key={x.m} className="eerr-row"><span style={{fontSize:11}}>{x.m}</span><div><span className="num kpi-success">{fmt_$(x.t)}</span><span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(x.t)}</span></div></div>)}
-                  <div className="eerr-row" style={{background:"var(--s2)"}}><span style={{fontWeight:500}}>TOTAL VENTAS</span><span style={{fontFamily:"'Inter',sans-serif",fontSize:15,fontWeight:500,color:"var(--success)"}}>{fmt_$(totalVentas)}</span></div>
+                  {porMedio.map(x=><div key={x.m} className="eerr-row-summary"><span style={{fontSize:12,color:"var(--pase-text)"}}>{x.m}</span><div style={{textAlign:"right"}}><span style={{fontFamily:"'Inter',sans-serif",fontSize:13,fontWeight:500,color:"var(--pase-text)",fontVariantNumeric:"tabular-nums"}}>{fmt_$(x.t)}</span><span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(x.t)}</span></div></div>)}
+                  <div className="eerr-row-summary" style={{borderTop:"1.5px solid var(--pase-border)",marginTop:2}}><span style={{fontSize:12,fontWeight:600,color:"var(--pase-text)"}}>TOTAL VENTAS</span><div style={{textAlign:"right"}}><span style={{fontFamily:"'Inter',sans-serif",fontSize:13,fontWeight:500,color:"var(--success)",fontVariantNumeric:"tabular-nums"}}>{fmt_$(totalVentas)}</span><span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>100.0%</span></div></div>
                 </div>
               )}
             </div>
@@ -539,16 +539,16 @@ export default function EERR({ user, localActivo }: EERRProps) {
               {mesesComp.length === 0 ? (
                 <div style={{padding:"4px 0 12px"}}>
                   <ERow label="Ventas Brutas" valor={totalVentas} color="var(--pase-text)" big={false}/>
-                  <ERow label="(-) CMV" valor={-totalCMV} color="var(--danger)" big={false}/>
-                  <ERow label="(=) Utilidad Bruta" valor={utilBruta} color={utilBruta>=0?"var(--success)":"var(--danger)"} big={true}/>
-                  <ERow label="(-) Gastos Fijos y Variables" valor={-totalGastos} color="var(--danger)" big={false}/>
-                  <ERow label="(-) Sueldos" valor={-sueldos} color="var(--danger)" big={false}/>
-                  <ERow label="(-) Cargas Sociales" valor={-totalCargasSociales} color="var(--danger)" big={false}/>
-                  <ERow label="(-) Publicidad y MKT" valor={-totalPublicidad} color="var(--danger)" big={false}/>
-                  <ERow label="(-) Comisiones" valor={-totalComisiones} color="var(--danger)" big={false}/>
-                  <ERow label="(-) Impuestos" valor={-totalImpuestos} color="var(--danger)" big={false}/>
-                  {totalOtrosGastos!==0&&<ERow label="(-) Otros Gastos" valor={-totalOtrosGastos} color="var(--danger)" big={false}/>}
-                  <ERow label="(=) Utilidad Neta" valor={utilNeta} color={utilNeta>=0?"var(--success)":"var(--danger)"} big={true}/>
+                  <ERow label="CMV" valor={-totalCMV} color="var(--danger)" big={false}/>
+                  <ERow label="Utilidad Bruta" valor={utilBruta} color={utilBruta>=0?"var(--success)":"var(--danger)"} big={true}/>
+                  <ERow label="Gastos Fijos y Variables" valor={-totalGastos} color="var(--danger)" big={false}/>
+                  <ERow label="Sueldos" valor={-sueldos} color="var(--danger)" big={false}/>
+                  <ERow label="Cargas Sociales" valor={-totalCargasSociales} color="var(--danger)" big={false}/>
+                  <ERow label="Publicidad y MKT" valor={-totalPublicidad} color="var(--danger)" big={false}/>
+                  <ERow label="Comisiones" valor={-totalComisiones} color="var(--danger)" big={false}/>
+                  <ERow label="Impuestos" valor={-totalImpuestos} color="var(--danger)" big={false}/>
+                  {totalOtrosGastos!==0&&<ERow label="Otros Gastos" valor={-totalOtrosGastos} color="var(--danger)" big={false}/>}
+                  <ERow label="Utilidad Neta" valor={utilNeta} color={utilNeta>=0?"var(--success)":"var(--danger)"} big={true}/>
                   {/* Retiros de socios: distribución de utilidades. NO restan
                       a Util. Neta arriba — la utilidad del negocio se ve sin
                       contar lo que se llevaron los socios. Esta sección

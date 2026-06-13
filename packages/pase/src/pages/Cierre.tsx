@@ -146,17 +146,17 @@ export default function Cierre({ user, localActivo }: CierreProps) {
 
   const FILAS = dataA && dataB ? [
     { label: "Ventas Brutas", a: dataA.ventas, b: dataB.ventas, tipo: "ingreso", big: false },
-    { label: "(-) CMV", a: dataA.cmv, b: dataB.cmv, tipo: "costo", big: false },
-    { label: "(=) Utilidad Bruta", a: dataA.utilBruta, b: dataB.utilBruta, tipo: "util", big: true },
-    { label: "(-) Gastos Fijos", a: dataA.gastosFijos, b: dataB.gastosFijos, tipo: "costo", big: false },
-    { label: "(-) Gastos Variables", a: dataA.gastosVar, b: dataB.gastosVar, tipo: "costo", big: false },
-    { label: "(-) Sueldos", a: dataA.sueldos, b: dataB.sueldos, tipo: "costo", big: false },
-    { label: "(-) Cargas Sociales", a: dataA.cargasSociales, b: dataB.cargasSociales, tipo: "costo", big: false },
-    { label: "(-) Publicidad", a: dataA.publicidad, b: dataB.publicidad, tipo: "costo", big: false },
-    { label: "(-) Comisiones", a: dataA.comisiones, b: dataB.comisiones, tipo: "costo", big: false },
-    { label: "(-) Impuestos", a: dataA.impuestos, b: dataB.impuestos, tipo: "costo", big: false },
-    ...(dataA.otrosGastos||dataB.otrosGastos?[{ label: "(-) Otros Gastos", a: dataA.otrosGastos, b: dataB.otrosGastos, tipo: "costo", big: false }]:[]),
-    { label: "(=) Utilidad Neta", a: dataA.utilNeta, b: dataB.utilNeta, tipo: "util", big: true },
+    { label: "CMV", a: dataA.cmv, b: dataB.cmv, tipo: "costo", big: false },
+    { label: "Utilidad Bruta", a: dataA.utilBruta, b: dataB.utilBruta, tipo: "util", big: true },
+    { label: "Gastos Fijos", a: dataA.gastosFijos, b: dataB.gastosFijos, tipo: "costo", big: false },
+    { label: "Gastos Variables", a: dataA.gastosVar, b: dataB.gastosVar, tipo: "costo", big: false },
+    { label: "Sueldos", a: dataA.sueldos, b: dataB.sueldos, tipo: "costo", big: false },
+    { label: "Cargas Sociales", a: dataA.cargasSociales, b: dataB.cargasSociales, tipo: "costo", big: false },
+    { label: "Publicidad", a: dataA.publicidad, b: dataB.publicidad, tipo: "costo", big: false },
+    { label: "Comisiones", a: dataA.comisiones, b: dataB.comisiones, tipo: "costo", big: false },
+    { label: "Impuestos", a: dataA.impuestos, b: dataB.impuestos, tipo: "costo", big: false },
+    ...(dataA.otrosGastos||dataB.otrosGastos?[{ label: "Otros Gastos", a: dataA.otrosGastos, b: dataB.otrosGastos, tipo: "costo", big: false }]:[]),
+    { label: "Utilidad Neta", a: dataA.utilNeta, b: dataB.utilNeta, tipo: "util", big: true },
   ] : [];
 
   return (

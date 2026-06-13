@@ -295,15 +295,6 @@ tbody tr.clickable:hover {
 .eerr-row-summary:last-child {
   border-bottom: none;
 }
-.eerr-row-big {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 14px 18px;
-  background: var(--pase-celeste-100);
-  border-left: 3px solid var(--pase-celeste);
-  margin: 4px 0;
-}
 .eerr-section-title {
   text-transform: uppercase;
   letter-spacing: 0.06em;
