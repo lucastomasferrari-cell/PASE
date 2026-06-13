@@ -117,6 +117,39 @@ export interface AgregarPagoArgs {
 }
 
 export async function agregarPago(args: AgregarPagoArgs): Promise<{ pagoId: number | null; error: string | null }> {
+  // Sprint cobro offline (2026-06-13): rama simétrica a cobrar(). Si el flag
+  // está ON, encolamos el pago localmente. La venta se marca cobrada en idb
+  // cuando los pagos cubren el total; el push lo procesa con
+  // fn_agregar_pago_venta_comanda_offline (resuelve venta_id por UUID si la
+  // venta es local-only). La inner es idempotente por idempotency_key.
+  const { featureFlags } = await import('../lib/featureFlags');
+  if (featureFlags.offlineFirstVentas) {
+    const { agregarPagoOffline } = await import('./offline/pagosOfflineService');
+    const { ventasRepo } = await import('@/lib/db/repositories/ventasRepo');
+    const venta = await ventasRepo.getById(args.ventaId);
+    if (!venta) return { pagoId: null, error: 'VENTA_NO_ENCONTRADA' };
+    try {
+      const r = await agregarPagoOffline({
+        ventaId: args.ventaId,
+        ventaUuid: (venta as { idempotency_uuid?: string | null }).idempotency_uuid ?? null,
+        ventaOpId: (venta as { _local_op_id?: string | null })._local_op_id ?? null,
+        metodo: args.metodo,
+        monto: args.monto,
+        idempotencyKey: args.idempotencyKey,
+        cobradoPor: args.cobradoPor ?? null,
+        vuelto: args.vuelto ?? null,
+        propinaIncluida: args.propinaIncluida ?? 0,
+        cuotas: args.cuotas ?? null,
+        tenantId: venta.tenant_id,
+        localId: venta.local_id,
+      });
+      return { pagoId: r.tempPagoId, error: null };
+    } catch (err) {
+      return { pagoId: null, error: err instanceof Error ? err.message : 'Error cobrando offline' };
+    }
+  }
+
+  // ── camino online legacy (idéntico al actual) ──
   const { data, error } = await db.rpc('fn_agregar_pago_venta_comanda', {
     p_venta_id: args.ventaId,
     p_metodo: args.metodo,
