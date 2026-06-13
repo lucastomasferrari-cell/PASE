@@ -73,6 +73,7 @@ const MAP: Record<string, string> = {
   LIQUIDACION_NO_ENCONTRADA: "No hay liquidación para esa novedad",
   LIQUIDACION_ANULADA: "La liquidación está anulada",
   LIQUIDACION_YA_PAGADA: "Esta liquidación ya está pagada",
+  LIQUIDACION_CALCULO_INCONSISTENTE: "El monto no coincide con el cálculo del sistema. Recargá la pantalla e intentá de nuevo.",
   NOVEDAD_INVALIDA: "Novedad inválida",
   LIQ_FINAL_YA_EXISTE: "Este empleado ya tiene liquidación final registrada",
   MONTO_EXCEDE_PENDIENTE: "El monto asignado supera el pendiente",
