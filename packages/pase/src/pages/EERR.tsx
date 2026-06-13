@@ -48,6 +48,7 @@ interface MesResumen {
   publicidad: number;
   comisiones: number;
   impuestos: number;
+  otrosGastos: number;
   sueldos: number;
   cargasSociales: number;
   utilBruta: number;
@@ -121,12 +122,13 @@ export default function EERR({ user, localActivo }: EERRProps) {
     const publicidad = gastosArr.filter(x => x.tipo === "publicidad").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_publicidad"));
     const comisiones = gastosArr.filter(x => x.tipo === "comision").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_comision"));
     const impuestos = gastosArr.filter(x => x.tipo === "impuesto").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_impuesto"));
+    const otrosGastos = gastosArr.filter(x => !["fijo","variable","publicidad","comision","impuesto","retiro_socio","empleado"].includes(x.tipo)).reduce((s, x) => s + Number(x.monto), 0);
     const liqFilt = liqRows.filter(l => !lid || (l.rrhh_novedades?.rrhh_empleados?.local_id === lid));
     const gastosEmpFilt = gastosEmp.filter(x => !lid || x.local_id === lid);
     const sueldos = liqFilt.reduce((s, l) => s + Number(l.total_a_pagar), 0) + gastosEmpFilt.reduce((s, x) => s + Number(x.monto), 0);
     const utilBruta = ventas - cmv;
-    const utilNeta = utilBruta - gastosFijos - gastosVar - sueldos - cargasSociales - publicidad - comisiones - impuestos;
-    return { mes: mesArg, ventas, cmv, gastosFijos, gastosVar, publicidad, comisiones, impuestos, sueldos, cargasSociales, utilBruta, utilNeta };
+    const utilNeta = utilBruta - gastosFijos - gastosVar - sueldos - cargasSociales - publicidad - comisiones - impuestos - otrosGastos;
+    return { mes: mesArg, ventas, cmv, gastosFijos, gastosVar, publicidad, comisiones, impuestos, otrosGastos, sueldos, cargasSociales, utilBruta, utilNeta };
   };
 
   // Cargar los resúmenes de los meses comparados. Se dispara cuando cambia
@@ -211,13 +213,14 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const totalPublicidad=gastos.filter((g)=>g.tipo==="publicidad").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_publicidad"),"total");
   const totalComisiones=gastos.filter((g)=>g.tipo==="comision").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_comision"),"total");
   const totalImpuestos=gastos.filter((g)=>g.tipo==="impuesto").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_impuesto"),"total");
+  const totalOtrosGastos=gastos.filter((g)=>!["fijo","variable","publicidad","comision","impuesto","retiro_socio","empleado"].includes(g.tipo)).reduce((s, g)=>s+(g.monto||0),0);
   // Retiros de socios: distribución de utilidades, NO suma a gastos
   // operativos. Se muestra DESPUÉS de Util. Neta. Solo se cargan via la
   // pantalla Gastos (no facturas).
   const totalRetiros=gastos.filter((g)=>g.tipo==="retiro_socio").reduce((s, g)=>s+(g.monto||0),0);
   const totalGastos=totalGastosFijos+totalGastosVar;
   const utilBruta=totalVentas-totalCMV;
-  const utilNeta=utilBruta-totalGastos-sueldos-totalCargasSociales-totalPublicidad-totalComisiones-totalImpuestos;
+  const utilNeta=utilBruta-totalGastos-sueldos-totalCargasSociales-totalPublicidad-totalComisiones-totalImpuestos-totalOtrosGastos;
   // utilNetaPostRetiros: lo que queda al socio después de retirar lo que
   // efectivamente retiró. Si retiró todo, es ~0; si no retiró, == utilNeta.
   const utilNetaPostRetiros=utilNeta-totalRetiros;
@@ -261,6 +264,8 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const porCatCom=COMISIONES_CATS.map(c=>({c,t:tGastoCat(c, "comision") + tFactCat(c, "gasto_comision")})).filter(x=>x.t>0);
   const porCatImp=GASTOS_IMPUESTOS.map(c=>({c,t:tGastoCat(c, "impuesto") + tFactCat(c, "gasto_impuesto")})).filter(x=>x.t>0);
   const porCatRet=RETIROS_SOCIOS.map(c=>({c,t:tGastoCat(c, "retiro_socio")})).filter(x=>x.t>0);
+  const otrosGastosArr=gastos.filter(g=>!["fijo","variable","publicidad","comision","impuesto","retiro_socio","empleado"].includes(g.tipo));
+  const porCatOtros=Object.entries(otrosGastosArr.reduce<Record<string,number>>((acc,g)=>{const k=g.categoria||g.tipo;acc[k]=(acc[k]||0)+(g.monto||0);return acc},{})).map(([c,t])=>({c,t})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
 
   const ERow=({label,valor,color,big}: {label: string, valor: number, color: string, big?: boolean})=>(
     <div className="eerr-row" style={big?{background:"var(--pase-celeste-100)",padding:"12px 16px",borderLeft:"3px solid var(--pase-celeste)"}:{}}>
@@ -290,6 +295,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
     publicidad: totalPublicidad,
     comisiones: totalComisiones,
     impuestos: totalImpuestos,
+    otrosGastos: totalOtrosGastos,
     sueldos,
     cargasSociales: totalCargasSociales,
     utilBruta,
@@ -356,6 +362,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
     { label: "(-) Publicidad y MKT", key: "publicidad", tipo: "costo", signo: -1 },
     { label: "(-) Comisiones", key: "comisiones", tipo: "costo", signo: -1 },
     { label: "(-) Impuestos", key: "impuestos", tipo: "costo", signo: -1 },
+    { label: "(-) Otros Gastos", key: "otrosGastos", tipo: "costo", signo: -1 },
     { label: "(=) Utilidad Neta", key: "utilNeta", tipo: "util", big: true, signo: 1 },
   ];
 
@@ -401,6 +408,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
                 ["(-) Publicidad y MKT", -totalPublicidad, pct(totalPublicidad)],
                 ["(-) Comisiones", -totalComisiones, pct(totalComisiones)],
                 ["(-) Impuestos", -totalImpuestos, pct(totalImpuestos)],
+                ...(totalOtrosGastos ? [["(-) Otros Gastos", -totalOtrosGastos, pct(totalOtrosGastos)]] : []),
                 ["(=) Utilidad Neta", utilNeta, pct(utilNeta)],
               ];
               if (totalRetiros !== 0) rows.push(["Retiros de Socios (info)", -totalRetiros, pct(totalRetiros)]);
@@ -483,6 +491,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
                   <ERow label="(-) Publicidad y MKT" valor={-totalPublicidad} color="var(--danger)" big={false}/>
                   <ERow label="(-) Comisiones" valor={-totalComisiones} color="var(--danger)" big={false}/>
                   <ERow label="(-) Impuestos" valor={-totalImpuestos} color="var(--danger)" big={false}/>
+                  {totalOtrosGastos!==0&&<ERow label="(-) Otros Gastos" valor={-totalOtrosGastos} color="var(--danger)" big={false}/>}
                   <ERow label="(=) Utilidad Neta" valor={utilNeta} color={utilNeta>=0?"var(--success)":"var(--danger)"} big={true}/>
                   {/* Retiros de socios: distribución de utilidades. NO restan
                       a Util. Neta arriba — la utilidad del negocio se ve sin
@@ -606,6 +615,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
             <ESection title="PUBLICIDAD Y MKT" items={porCatPub} total={totalPublicidad} color="var(--info)"/>
             <ESection title="COMISIONES" items={porCatCom} total={totalComisiones} color="var(--acc2)"/>
             <ESection title="IMPUESTOS" items={porCatImp} total={totalImpuestos} color="var(--danger)"/>
+            {porCatOtros.length>0&&<ESection title="OTROS GASTOS" items={porCatOtros} total={totalOtrosGastos} color="var(--danger)"/>}
             {totalRetiros !== 0 && (
               <ESection title="RETIROS DE SOCIOS (post Util. Neta)" items={porCatRet} total={totalRetiros} color="var(--info)"/>
             )}

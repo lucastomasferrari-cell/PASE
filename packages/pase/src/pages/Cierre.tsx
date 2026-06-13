@@ -18,6 +18,10 @@ interface MesData {
   gastosFijos: number;
   gastosVar: number;
   publicidad: number;
+  comisiones: number;
+  impuestos: number;
+  cargasSociales: number;
+  otrosGastos: number;
   sueldos: number;
   utilBruta: number;
   utilNeta: number;
@@ -75,17 +79,21 @@ export default function Cierre({ user, localActivo }: CierreProps) {
 
     const ventas = ventas_arr.reduce((s, x) => s + Number(x.monto), 0);
     const cmv = facturas_arr.reduce((s, x) => s + Number(x.total), 0);
-    const gastosFijos = gastos_arr.filter(x => x.tipo === "fijo").reduce((s, x) => s + Number(x.monto), 0);
+    const cargasSociales = gastos_arr.filter(x => x.tipo === "fijo" && x.categoria === "CARGAS SOCIALES").reduce((s, x) => s + Number(x.monto), 0);
+    const gastosFijos = gastos_arr.filter(x => x.tipo === "fijo" && x.categoria !== "CARGAS SOCIALES").reduce((s, x) => s + Number(x.monto), 0);
     const gastosVar = gastos_arr.filter(x => x.tipo === "variable").reduce((s, x) => s + Number(x.monto), 0);
     const publicidad = gastos_arr.filter(x => x.tipo === "publicidad").reduce((s, x) => s + Number(x.monto), 0);
+    const comisiones = gastos_arr.filter(x => x.tipo === "comision").reduce((s, x) => s + Number(x.monto), 0);
+    const impuestos = gastos_arr.filter(x => x.tipo === "impuesto").reduce((s, x) => s + Number(x.monto), 0);
+    const otrosGastos = gastos_arr.filter(x => !["fijo","variable","publicidad","comision","impuesto","retiro_socio","empleado"].includes(x.tipo)).reduce((s, x) => s + Number(x.monto), 0);
     const liqFilt = liqRows.filter(l => !lid || (l.rrhh_novedades?.rrhh_empleados?.local_id === lid));
     const gastosEmpFilt = gastosEmp.filter(x => !lid || x.local_id === lid);
     const sueldos = liqFilt.reduce((s, l) => s + Number(l.total_a_pagar), 0) + gastosEmpFilt.reduce((s, x) => s + Number(x.monto), 0);
     const utilBruta = ventas - cmv;
-    const utilNeta = utilBruta - gastosFijos - gastosVar - sueldos - publicidad;
+    const utilNeta = utilBruta - gastosFijos - gastosVar - sueldos - cargasSociales - publicidad - comisiones - impuestos - otrosGastos;
     const pct = (n: number) => ventas > 0 ? ((n / ventas) * 100).toFixed(1) + "%" : "—";
 
-    return { ventas, cmv, gastosFijos, gastosVar, publicidad, sueldos, utilBruta, utilNeta, pct };
+    return { ventas, cmv, gastosFijos, gastosVar, publicidad, comisiones, impuestos, cargasSociales, otrosGastos, sueldos, utilBruta, utilNeta, pct };
   };
 
   const cargar = async () => {
@@ -120,7 +128,11 @@ export default function Cierre({ user, localActivo }: CierreProps) {
     { label: "(-) Gastos Fijos", a: dataA.gastosFijos, b: dataB.gastosFijos, tipo: "costo", big: false },
     { label: "(-) Gastos Variables", a: dataA.gastosVar, b: dataB.gastosVar, tipo: "costo", big: false },
     { label: "(-) Sueldos", a: dataA.sueldos, b: dataB.sueldos, tipo: "costo", big: false },
+    { label: "(-) Cargas Sociales", a: dataA.cargasSociales, b: dataB.cargasSociales, tipo: "costo", big: false },
     { label: "(-) Publicidad", a: dataA.publicidad, b: dataB.publicidad, tipo: "costo", big: false },
+    { label: "(-) Comisiones", a: dataA.comisiones, b: dataB.comisiones, tipo: "costo", big: false },
+    { label: "(-) Impuestos", a: dataA.impuestos, b: dataB.impuestos, tipo: "costo", big: false },
+    ...(dataA.otrosGastos||dataB.otrosGastos?[{ label: "(-) Otros Gastos", a: dataA.otrosGastos, b: dataB.otrosGastos, tipo: "costo", big: false }]:[]),
     { label: "(=) Utilidad Neta", a: dataA.utilNeta, b: dataB.utilNeta, tipo: "util", big: true },
   ] : [];
 
