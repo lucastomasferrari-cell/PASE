@@ -201,7 +201,10 @@ test.describe.serial("E2E Sprint 2 — POS cobro efectivo (DB-only)", () => {
     expect(proj!.turno).toBe(turnoEsperado);
     const detalle = proj!.detalle as Array<{ medio: string; monto: number }>;
     expect(detalle).toHaveLength(1);
-    expect(detalle[0]!.medio).toBe("EFECTIVO");
+    // El puente traduce el slug del pago ('efectivo') al NOMBRE del medio del
+    // catálogo del tenant. Desde el seed genérico (migración 202606130800) el
+    // medio es Title Case "Efectivo" (antes el seed E2E insertaba "EFECTIVO").
+    expect(detalle[0]!.medio).toBe("Efectivo");
     // Propina 0 → neto = total del cobro
     expect(Number(detalle[0]!.monto)).toBe(totalEsperado);
 
@@ -217,11 +220,11 @@ test.describe.serial("E2E Sprint 2 — POS cobro efectivo (DB-only)", () => {
       .eq("origen", "comanda")
       .eq("fecha", fechaEsperada)
       .eq("turno", turnoEsperado)
-      .eq("medio", "EFECTIVO");
+      .eq("medio", "Efectivo");
     if (vcErr) throw new Error(`Query ventas origen=comanda: ${vcErr.message}`);
     expect(
       vComanda,
-      `Esperaba 1 fila ventas origen=comanda (${fechaEsperada}/${turnoEsperado}/EFECTIVO). Filas: ${JSON.stringify(vComanda)}`,
+      `Esperaba 1 fila ventas origen=comanda (${fechaEsperada}/${turnoEsperado}/Efectivo). Filas: ${JSON.stringify(vComanda)}`,
     ).toHaveLength(1);
     expect(Number(vComanda![0]!.monto)).toBe(totalEsperado);
 
