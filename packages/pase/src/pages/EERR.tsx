@@ -338,18 +338,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
     </div>
   );
 
-  const ESection=({title,items,total,color,defaultOpen}: {title: string, items: {c?: string, m?: string, t: number}[], total: number, color: string, defaultOpen?: boolean})=>{
-    const [open,setOpen]=useState(!!defaultOpen);
-    return (
-      <>
-        <div className="eerr-section-title" style={{cursor:"pointer",userSelect:"none"}} onClick={()=>setOpen(o=>!o)}>
-          {title} — <span style={{color}}>{fmt_$(total)}</span> <span style={{color:"var(--muted)"}}>{pct(total)}</span>
-          <span style={{color:"var(--muted2)",fontSize:10,marginLeft:8}}>{open?"▲":"▼"}</span>
-        </div>
-        {open&&items.map(x=><div key={x.c||x.m} className="eerr-row"><span style={{fontSize:11,color:"var(--muted2)"}}>{x.c||x.m}</span><div><span className="num" style={{color}}>{fmt_$(x.t)}</span><span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(x.t)}</span></div></div>)}
-      </>
-    );
-  };
+  // ESection se define afuera — pct se pasa como prop
 
   // Resumen del mes principal en el mismo formato que dataComp — para
   // consumir por el gráfico de evolución y la tabla comparativa.
@@ -639,9 +628,9 @@ export default function EERR({ user, localActivo }: EERRProps) {
                 </Suspense>
               </div>
             )}
-            <ESection title="MERCADERÍA (CMV)" items={porCatCMV} total={totalCMV} color="var(--warn)"/>
-            <ESection title="GASTOS FIJOS" items={porCatFijos} total={totalGastosFijos} color="var(--danger)"/>
-            <ESection title="GASTOS VARIABLES" items={porCatVar} total={totalGastosVar} color="var(--danger)"/>
+            <ESection title="MERCADERÍA (CMV)" items={porCatCMV} total={totalCMV} color="var(--warn)" pct={pct}/>
+            <ESection title="GASTOS FIJOS" items={porCatFijos} total={totalGastosFijos} color="var(--danger)" pct={pct}/>
+            <ESection title="GASTOS VARIABLES" items={porCatVar} total={totalGastosVar} color="var(--danger)" pct={pct}/>
             <div
               className="eerr-section-title"
               style={{cursor:"pointer",userSelect:"none"}}
@@ -683,16 +672,29 @@ export default function EERR({ user, localActivo }: EERRProps) {
                 <span style={{color:"var(--muted)"}}>{pct(totalCargasSociales)}</span>
               </div>
             )}
-            <ESection title="PUBLICIDAD Y MKT" items={porCatPub} total={totalPublicidad} color="var(--info)"/>
-            <ESection title="COMISIONES" items={porCatCom} total={totalComisiones} color="var(--acc2)"/>
-            <ESection title="IMPUESTOS" items={porCatImp} total={totalImpuestos} color="var(--danger)"/>
-            {porCatOtros.length>0&&<ESection title="OTROS GASTOS" items={porCatOtros} total={totalOtrosGastos} color="var(--danger)"/>}
+            <ESection title="PUBLICIDAD Y MKT" items={porCatPub} total={totalPublicidad} color="var(--info)" pct={pct}/>
+            <ESection title="COMISIONES" items={porCatCom} total={totalComisiones} color="var(--acc2)" pct={pct}/>
+            <ESection title="IMPUESTOS" items={porCatImp} total={totalImpuestos} color="var(--danger)" pct={pct}/>
+            {porCatOtros.length>0&&<ESection title="OTROS GASTOS" items={porCatOtros} total={totalOtrosGastos} color="var(--danger)" pct={pct}/>}
             {totalRetiros !== 0 && (
-              <ESection title="RETIROS DE SOCIOS (post Util. Neta)" items={porCatRet} total={totalRetiros} color="var(--info)"/>
+              <ESection title="RETIROS DE SOCIOS (post Util. Neta)" items={porCatRet} total={totalRetiros} color="var(--info)" pct={pct}/>
             )}
           </div>
         </>
       )}
     </div>
+  );
+}
+
+function ESection({title,items,total,color,pct}: {title: string, items: {c?: string, m?: string, t: number}[], total: number, color: string, pct: (n: number) => string}) {
+  const [open,setOpen]=useState(false);
+  return (
+    <>
+      <div className="eerr-section-title" style={{cursor:"pointer",userSelect:"none"}} onClick={()=>setOpen(o=>!o)}>
+        {title} — <span style={{color}}>{fmt_$(total)}</span> <span style={{color:"var(--muted)"}}>{pct(total)}</span>
+        <span style={{color:"var(--muted2)",fontSize:10,marginLeft:8}}>{open?"▲":"▼"}</span>
+      </div>
+      {open&&items.map(x=><div key={x.c||x.m} className="eerr-row"><span style={{fontSize:11,color:"var(--muted2)"}}>{x.c||x.m}</span><div><span className="num" style={{color}}>{fmt_$(x.t)}</span><span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(x.t)}</span></div></div>)}
+    </>
   );
 }
