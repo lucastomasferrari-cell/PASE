@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+﻿import { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import { ROLES, tienePermiso } from "../lib/auth";
 import type { Usuario, Local, Tenant } from "../types";
@@ -49,163 +49,170 @@ interface SidebarProps {
 
 export function Sidebar({ user, onLogout, locales, localActivo, setLocalActivo, tenant, tenantOverride, onClearOverride }: SidebarProps) {
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem('pase_sb_collapsed') === '1'; } catch { return false; }
+  });
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
+    try { const s = localStorage.getItem('pase_sb_sections'); return s ? JSON.parse(s) : {}; } catch { return {}; }
+  });
+
+  useEffect(() => {
+    document.body.classList.toggle('sb-collapsed', collapsed);
+    return () => { document.body.classList.remove('sb-collapsed'); };
+  }, [collapsed]);
+
   const close = () => setOpen(false);
+  const toggleCollapse = () => {
+    setCollapsed(c => {
+      const next = !c;
+      try { localStorage.setItem('pase_sb_collapsed', next ? '1' : '0'); } catch { /* */ }
+      return next;
+    });
+  };
+  const toggleSection = (sec: string) => {
+    setOpenSections(prev => {
+      const next = { ...prev, [sec]: !(prev[sec] ?? true) };
+      try { localStorage.setItem('pase_sb_sections', JSON.stringify(next)); } catch { /* */ }
+      return next;
+    });
+  };
+
   const esSuperAdmin = user.rol === "superadmin";
   const localesDisp = (user.rol==="dueno" || user.rol==="admin" || esSuperAdmin) ? locales : locales.filter((l: { id: number })=>(user._locales||user.locales||[]).includes(l.id));
-  // Sprint 27-may noche: features por tenant. Para superadmin, el helper
-  // tenantTieneFeature siempre devuelve TRUE — ven todo.
   const { features: tenantFeatures } = useTenantFeatures(user.tenant_id ?? null);
-  // ───────────────────────────────────────────────────────────────────
-  // Sidebar consolidado a 13 items en 4 secciones (sprint mayo 2026):
-  //   • OPERACIÓN    (4) — caja, compras, ventas, gastos
-  //   • DIRECCIÓN    (4) — negocio, finanzas, objetivos, reportes
-  //   • HERRAMIENTAS (3) — equipo, contador/iva, blindaje
-  //   • SISTEMA      (3) — ajustes, usuarios, tenants
-  //
-  // 'tenants' aparece solo si user.rol === "superadmin" (filtrado por
-  // getPermisos en lib/auth.ts). Items con `path` (URL real, post Commit 1
-  // sprint v2 — React Router). El `slug` se mantiene para compat con
-  // tienePermiso() y el array de permisos por rol. Tocar acá implica
-  // ajustar src/lib/sidebar-nav.ts (misma source-of-truth).
-  // ───────────────────────────────────────────────────────────────────
-  // `altSlugs`: el item se muestra si el user tiene el slug principal O
-  // alguno de los alternativos. Caso: Negocio absorbió Finanzas (11-jun) —
-  // usuarios con permiso 'finanzas' pero sin 'negocio' siguen viendo el item.
   const nav: Array<{ slug: string; path: string; label: string; sec: string; icon: string; altSlugs?: string[] }> = [
-    // === INICIO (1) — dashboard personalizado por usuario ===
-    {slug:"inicio",path:"/inicio",label:"Inicio",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6 L7 2 L12 6 V12 a1 1 0 0 1 -1 1 H3 a1 1 0 0 1 -1 -1 Z"/><path d="M5.5 13 V8.5 h3 V13"/></svg>`},
-
-    // === OPERACIÓN (4) ===
-    {slug:"caja",path:"/caja",label:"Caja",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="5" width="12" height="8" rx="1"/><path d="M4 5V4a3 3 0 0 1 6 0v1"/></svg>`},
-    {slug:"compras",path:"/compras",label:"Compras",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1"/><circle cx="11" cy="12" r="1"/><path d="M1 2h2l1.5 7.5h7L13 4H4"/></svg>`},
-    {slug:"ventas",path:"/ventas",label:"Ventas",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="5.5"/><path d="M7 4v6M9 5.5c0-1-1-1.5-2-1.5s-2 .5-2 1.5 1 1.3 2 1.5 2 .5 2 1.5-1 1.5-2 1.5-2-.5-2-1.5"/></svg>`},
-    {slug:"gastos",path:"/gastos",label:"Gastos",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="6" r="4.5"/><path d="M7 4v4M5 6.5l2 2 2-2"/></svg>`},
-    // Equipo MOVIDO de Herramientas → Operación 2026-05-18 (Lucas).
-    {slug:"rrhh",path:"/equipo",label:"Equipo",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="5" r="2.5"/><path d="M1 13c0-2.5 2-4 4-4s4 1.5 4 4"/><circle cx="10" cy="5" r="2"/><path d="M13 13c0-2 -1-3.5-3-3.5"/></svg>`},
-    // Recetario (28-may noche): hub Insumos+Recetas. Reemplaza los 2 entries
-    // que estaban sueltos en Dirección. Slug 'rentabilidad' por permisos.
-    {slug:"rentabilidad",path:"/recetario",label:"Recetario",sec:"Operación",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2h6l2 2v8.5a.5.5 0 0 1-.5.5H3.5a.5.5 0 0 1-.5-.5z"/><path d="M5 5h4M5 7.5h4M5 10h3"/></svg>`},
-    // Reservas OCULTADO 2026-05-18 (Lucas: "no sirve, vive en COMANDA").
-    // Item comentado para reactivar fácil si se decide reintroducir.
-    // {slug:"reservas",path:"/reservas",label:"Reservas",sec:"Operación",icon:`<svg...`},
-
-    // Equipo y Contador/IVA TAMBIÉN viven en el hub /herramientas ahora
-    // (Lucas 2026-05-18: "herramientas no concentré todo al final"). Se sacan
-    // del sidebar para evitar duplicación. Las rutas standalone siguen
-    // existiendo para compat con tour y bookmarks.
-
-    // === DIRECCIÓN (4) ===
-    // Finanzas fusionada en Negocio (rediseño 11-jun): una sola vista de
-    // dirección. altSlugs mantiene el acceso a users con permiso 'finanzas'.
-    {slug:"negocio",altSlugs:["finanzas"],path:"/negocio",label:"Negocio",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 1.5 A5.5 5.5 0 1 1 1.5 7 L7 7 Z"/><path d="M7 1.5 A5.5 5.5 0 0 1 12.5 7 L7 7 Z"/></svg>`},
-    // Conciliación 10-jun-2026 (Lucas): nuevo módulo para cierre de mes contra
-    // extracto de MercadoPago. Cruza el archivo del panel MP línea por línea
-    // contra movimientos.cuenta='MercadoPago' del local activo.
-    {slug:"conciliacion",path:"/conciliacion-extracto",label:"Conciliación",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4l2 2 4-4"/><path d="M2 9l2 2 4-4"/><path d="M11 4h1.5"/><path d="M11 9h1.5"/></svg>`},
-    {slug:"objetivos",path:"/objetivos",label:"Objetivos",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5.5"/><circle cx="7" cy="7" r="3"/><circle cx="7" cy="7" r="0.5" fill="currentColor"/></svg>`},
-    {slug:"eerr",path:"/reportes",label:"Reportes",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,11 5,7 8,9 13,3"/><polyline points="10,3 13,3 13,6"/></svg>`},
-    {slug:"rentabilidad",path:"/rentabilidad",label:"Rentabilidad",sec:"Dirección",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 11V5l3 4 3-6 4 8"/></svg>`},
-
-    // === HERRAMIENTAS (1) ===
-    // Consolidación 2026-05-18 (Lucas: "herramientas concentrá todo al final").
-    // Una sola entrada al hub /herramientas con grilla de cards adentro:
-    // Equipo, Contador/IVA, Blindaje, Importar, Lector MP, Configurar
-    // dashboards, Códigos Manager. Las rutas standalone /equipo, /herramientas/*
-    // siguen existiendo para compat con tour y bookmarks.
-    {slug:"herramientas_hub",path:"/herramientas",label:"Herramientas",sec:"Herramientas",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5l3-3 2 2-3 3-2 0z"/><path d="M9 7l3 3-1.5 1.5-3-3"/><path d="M5 9l-3 3M7 7l5 5"/></svg>`},
-
-    // === SISTEMA (5) ===
-    {slug:"ajustes",path:"/ajustes",label:"Ajustes",sec:"Sistema",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="2.5"/><path d="M7 1v1M7 12v1M1 7h1M12 7h1M2.9 2.9l.7.7M10.4 10.4l.7.7M2.9 11.1l.7-.7M10.4 3.6l.7-.7"/></svg>`},
-    {slug:"usuarios",path:"/usuarios",label:"Usuarios",sec:"Sistema",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="4.5" r="2.5"/><path d="M2.5 12.5c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5"/></svg>`},
-    {slug:"tenants",path:"/tenants",label:"Tenants",sec:"Sistema",icon:`<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="1.5" width="9" height="11" rx="0.5"/><path d="M5 4h1M8 4h1M5 6.5h1M8 6.5h1M5 9h1M8 9h1M6.5 12.5v-2h1v2"/></svg>`},
+    {slug:"inicio",path:"/inicio",label:"Inicio",sec:"Operación",icon:`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6 L7 2 L12 6 V12 a1 1 0 0 1 -1 1 H3 a1 1 0 0 1 -1 -1 Z"/><path d="M5.5 13 V8.5 h3 V13"/></svg>`},
+    {slug:"caja",path:"/caja",label:"Caja",sec:"Operación",icon:`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="5" width="12" height="8" rx="1"/><path d="M4 5V4a3 3 0 0 1 6 0v1"/></svg>`},
+    {slug:"compras",path:"/compras",label:"Compras",sec:"Operación",icon:`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1"/><circle cx="11" cy="12" r="1"/><path d="M1 2h2l1.5 7.5h7L13 4H4"/></svg>`},
+    {slug:"ventas",path:"/ventas",label:"Ventas",sec:"Operación",icon:`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="5.5"/><path d="M7 4v6M9 5.5c0-1-1-1.5-2-1.5s-2 .5-2 1.5 1 1.3 2 1.5 2 .5 2 1.5-1 1.5-2 1.5-2-.5-2-1.5"/></svg>`},
+    {slug:"gastos",path:"/gastos",label:"Gastos",sec:"Operación",icon:`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="6" r="4.5"/><path d="M7 4v4M5 6.5l2 2 2-2"/></svg>`},
+    {slug:"rrhh",path:"/equipo",label:"Equipo",sec:"Operación",icon:`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="5" r="2.5"/><path d="M1 13c0-2.5 2-4 4-4s4 1.5 4 4"/><circle cx="10" cy="5" r="2"/><path d="M13 13c0-2 -1-3.5-3-3.5"/></svg>`},
+    {slug:"rentabilidad",path:"/recetario",label:"Recetario",sec:"Operación",icon:`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2h6l2 2v8.5a.5.5 0 0 1-.5.5H3.5a.5.5 0 0 1-.5-.5z"/><path d="M5 5h4M5 7.5h4M5 10h3"/></svg>`},
+    {slug:"negocio",altSlugs:["finanzas"],path:"/negocio",label:"Negocio",sec:"Dirección",icon:`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 1.5 A5.5 5.5 0 1 1 1.5 7 L7 7 Z"/><path d="M7 1.5 A5.5 5.5 0 0 1 12.5 7 L7 7 Z"/></svg>`},
+    {slug:"conciliacion",path:"/conciliacion-extracto",label:"Conciliación",sec:"Dirección",icon:`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4l2 2 4-4"/><path d="M2 9l2 2 4-4"/><path d="M11 4h1.5"/><path d="M11 9h1.5"/></svg>`},
+    {slug:"objetivos",path:"/objetivos",label:"Objetivos",sec:"Dirección",icon:`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5.5"/><circle cx="7" cy="7" r="3"/><circle cx="7" cy="7" r="0.5" fill="currentColor"/></svg>`},
+    {slug:"eerr",path:"/reportes",label:"Reportes",sec:"Dirección",icon:`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,11 5,7 8,9 13,3"/><polyline points="10,3 13,3 13,6"/></svg>`},
+    {slug:"rentabilidad",path:"/rentabilidad",label:"Rentabilidad",sec:"Dirección",icon:`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 11V5l3 4 3-6 4 8"/></svg>`},
+    {slug:"herramientas_hub",path:"/herramientas",label:"Herramientas",sec:"Herramientas",icon:`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5l3-3 2 2-3 3-2 0z"/><path d="M9 7l3 3-1.5 1.5-3-3"/><path d="M5 9l-3 3M7 7l5 5"/></svg>`},
+    {slug:"ajustes",path:"/ajustes",label:"Ajustes",sec:"Sistema",icon:`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="2.5"/><path d="M7 1v1M7 12v1M1 7h1M12 7h1M2.9 2.9l.7.7M10.4 10.4l.7.7M2.9 11.1l.7-.7M10.4 3.6l.7-.7"/></svg>`},
+    {slug:"usuarios",path:"/usuarios",label:"Usuarios",sec:"Sistema",icon:`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="4.5" r="2.5"/><path d="M2.5 12.5c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5"/></svg>`},
+    {slug:"tenants",path:"/tenants",label:"Tenants",sec:"Sistema",icon:`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="1.5" width="9" height="11" rx="0.5"/><path d="M5 4h1M8 4h1M5 6.5h1M8 6.5h1M5 9h1M8 9h1M6.5 12.5v-2h1v2"/></svg>`},
   ];
   const secs = [...new Set(nav.map(n=>n.sec))];
+
   return (
     <>
       <button className="hamburger" onClick={() => setOpen(o => !o)} aria-label="Menú">☰</button>
       <div className={`overlay-sb ${open ? "open" : ""}`} onClick={close}/>
-      <div className={`sb ${open ? "open" : ""}`}>
-        <div className="sb-logo">
-          <div className="brand">pase<span className="brand-dot">.</span></div>
-          <div className="brand-sub">aliado gastronómico</div>
-          {/* Multi-tenant badges (TASK 0.15). El nombre del tenant en
-              régimen normal (no-superadmin) NO se muestra acá — es
-              redundante con el dropdown de sucursales del propio sidebar.
-              Sprint v2 cosmético: header minimalista. */}
-          {esSuperAdmin && !tenantOverride && (
+      <div className={`sb ${open ? "open" : ""} ${collapsed ? "sb-rail" : ""}`}>
+        {/* ── Header ──────────────────────────────────────────────── */}
+        <div className="sb-header">
+          <div className="sb-brand-row">
+            {collapsed
+              ? <div className="sb-brand-icon">P</div>
+              : <div className="sb-brand-text">pase<span className="brand-dot">.</span></div>
+            }
+            <button className="sb-toggle" onClick={toggleCollapse} title={collapsed ? "Expandir sidebar" : "Colapsar sidebar"}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                {collapsed
+                  ? <polyline points="5,3 9,7 5,11"/>
+                  : <polyline points="9,3 5,7 9,11"/>
+                }
+              </svg>
+            </button>
+          </div>
+          {!collapsed && esSuperAdmin && !tenantOverride && (
             <div className="badge-sb badge-sb-super">Modo superadmin</div>
           )}
-          {tenantOverride && tenant && (
+          {!collapsed && tenantOverride && tenant && (
             <div className="badge-sb badge-sb-tenant">
               <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tenant.nombre}</span>
               <button onClick={onClearOverride} className="badge-sb-close" title="Volver a vista superadmin">✕</button>
             </div>
           )}
         </div>
+
+        {/* ── Selector de local ───────────────────────────────────── */}
         {localesDisp.length > 1 && (
-          <div className="sb-local" data-tour="sidebar-local">
-            {/* Decisión Lucas 2026-05-17: eliminada la opción "Todas las
-                sucursales" del sidebar. El modo consolidado generaba bugs
-                de lógica (objetivos de 1 local cruzados con ventas de N).
-                Las comparativas viven dentro de pantallas específicas
-                (ej: card "Ranking sucursales" en /negocio). El sidebar
-                siempre tiene UNA sucursal activa. */}
-            <select value={localActivo??""} onChange={e=>setLocalActivo(parseInt(e.target.value))}>
-              {localesDisp.map((l: { id: number; nombre: string })=><option key={l.id} value={l.id}>{l.nombre}</option>)}
-            </select>
+          <div className="sb-workspace" data-tour="sidebar-local">
+            {collapsed ? (
+              <div className="sb-workspace-icon" title={localesDisp.find(l => l.id === localActivo)?.nombre ?? "Local"}>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="10" height="10" rx="2"/><path d="M5 5h4M5 7h4M5 9h2"/></svg>
+              </div>
+            ) : (
+              <select value={localActivo??""} onChange={e=>setLocalActivo(parseInt(e.target.value))}>
+                {localesDisp.map((l: { id: number; nombre: string })=><option key={l.id} value={l.id}>{l.nombre}</option>)}
+              </select>
+            )}
           </div>
         )}
+
+        {/* ── Navegación ──────────────────────────────────────────── */}
         <nav className="sb-nav" data-tour="sidebar-nav">
           {secs.map(s=>{
-            // tienePermiso (no perms.includes) para respetar los short-circuits
-            // de slugs especiales: 'inicio' (todos), 'ajustes_dashboards' (dueño/admin),
-            // 'tenants' (superadmin). Estos no viven en MODULOS pero sí en `nav`.
             const items = nav.filter(n => {
               if (n.sec !== s) return false;
               const tieneAcceso = tienePermiso(user, n.slug)
                 || (n.altSlugs ?? []).some(alt => tienePermiso(user, alt));
               if (!tieneAcceso) return false;
-              // Feature flag gate — superadmin bypassa (tenantTieneFeature
-              // siempre devuelve TRUE). Tenant normal: si el feature está
-              // mapeado y desactivado, ocultar.
               if (esSuperAdmin) return true;
               const featureSlug = SLUG_TO_FEATURE[n.slug];
-              if (!featureSlug) return true; // sin mapeo = siempre visible
+              if (!featureSlug) return true;
               return tenantTieneFeature(featureSlug, tenantFeatures);
             });
             if(!items.length) return null;
-            return (<div key={s}><div className="sb-section">{s}</div>{items.map(n=>(
-              <NavLink
-                key={n.slug}
-                to={n.path}
-                onClick={close}
-                className={({isActive}) => `nav-item${isActive ? " active" : ""}`}
-              >
-                <span style={{width:14,height:14,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html: n.icon}}/>
-                {n.label}
-              </NavLink>
-            ))}</div>);
+            const isOpen = openSections[s] ?? true;
+            return (
+              <div key={s} className="sb-group">
+                {!collapsed && (
+                  <button className="sb-group-hd" onClick={() => toggleSection(s)}>
+                    <span>{s}</span>
+                    <svg className={`sb-chev ${isOpen ? "" : "sb-chev-closed"}`} width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><polyline points="3,4.5 6,7.5 9,4.5"/></svg>
+                  </button>
+                )}
+                {collapsed && <div className="sb-group-dot"/>}
+                {(collapsed || isOpen) && items.map(n=>(
+                  <NavLink
+                    key={n.slug}
+                    to={n.path}
+                    onClick={close}
+                    className={({isActive}) => `nav-item${isActive ? " active" : ""}`}
+                    title={collapsed ? n.label : undefined}
+                  >
+                    <span className="nav-icon" dangerouslySetInnerHTML={{__html: n.icon}}/>
+                    {!collapsed && <span className="nav-label">{n.label}</span>}
+                  </NavLink>
+                ))}
+              </div>
+            );
           })}
         </nav>
-        <div className="sb-user">
-          {/* Fila 'Nombre | Toggle tema' — el toggle vivía flotando entre
-              el nav y el bloque del usuario; sprint v2 cosmético lo trae
-              al row del nombre para agrupar visualmente la zona inferior. */}
-          <div className="sb-user-row">
-            <div className="sb-uname">{user.nombre}</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <BandejaEntradaBoton user={user} />
-              <ThemeToggle />
-            </div>
+
+        {/* ── Usuario ─────────────────────────────────────────────── */}
+        <div className="sb-foot">
+          <div className="sb-foot-row">
+            <div className="sb-avatar" title={collapsed ? user.nombre : undefined}>{user.nombre?.[0]?.toUpperCase() ?? "?"}</div>
+            {!collapsed && (
+              <div className="sb-foot-info">
+                <div className="sb-uname">{user.nombre}</div>
+                <div className="sb-urole">{ROLES[user.rol]?.label}</div>
+              </div>
+            )}
+            {!collapsed && (
+              <div className="sb-foot-actions">
+                <BandejaEntradaBoton user={user} />
+                <ThemeToggle />
+              </div>
+            )}
           </div>
-          {/* Decisión 2026-05-13: roles sin color. La distinción es solo textual. */}
-          <div className="sb-urole">{ROLES[user.rol]?.label}</div>
-          {/* Botón "Abrir COMANDA" ELIMINADO 24-may noche.
-              Sprint COMANDA Autónomo Fase 5: COMANDA es un sistema
-              independiente — el dueño se loguea directo en
-              pase-comanda.vercel.app con su email/password de PASE
-              (auth compartido, perfiles separados). */}
-          <button className="sb-logout" onClick={onLogout}>Cerrar sesión →</button>
+          {!collapsed && (
+            <button className="sb-logout" onClick={onLogout}>Cerrar sesión</button>
+          )}
+          {collapsed && (
+            <button className="sb-logout-icon" onClick={onLogout} title="Cerrar sesión">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12H3a1 1 0 01-1-1V3a1 1 0 011-1h2"/><polyline points="8,9 11,7 8,5"/><line x1="11" y1="7" x2="4" y2="7"/></svg>
+            </button>
+          )}
         </div>
       </div>
     </>
@@ -281,48 +288,73 @@ body{
 .app{display:flex;min-height:100vh}
 
 /* ─── SIDEBAR ──────────────────────────────────────────────────────── */
-.sb{width:220px;background:var(--pase-bg);border-right:0.5px solid var(--pase-border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:20}
-/* Detalle decorativo "argentino" (2026-05-14): banner de 5px arriba del
-   header del sidebar con stripes celeste-blanco-celeste (estética de la
-   bandera). El --pase-bg adapta automáticamente a dark mode. */
-.sb-logo{padding:28px 20px 24px;border-bottom:0.5px solid var(--pase-border);text-align:center;position:relative}
-.sb-logo::before{content:'';position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(180deg,var(--pase-celeste) 0,var(--pase-celeste) 2px,var(--pase-bg) 2px,var(--pase-bg) 3px,var(--pase-celeste) 3px,var(--pase-celeste) 5px);opacity:0.85}
-.brand{font-size:34px;font-weight:500;color:var(--pase-text);letter-spacing:-0.04em;line-height:1}
-/* El punto del logo: dorado --pase-gold. Junto con el sol del InfoTooltip,
-   son los 2 únicos usos de dorado en el producto (anclas de marca). */
+.sb{width:220px;background:var(--pase-bg);border-right:0.5px solid var(--pase-border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:20;transition:width 0.2s ease}
+.sb.sb-rail{width:56px}
+
+/* Header */
+.sb-header{padding:16px 14px 12px;border-bottom:0.5px solid var(--pase-border)}
+.sb-brand-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sb-brand-text{font-size:22px;font-weight:500;color:var(--pase-text);letter-spacing:-0.04em;line-height:1}
 .brand-dot{color:var(--pase-gold)}
-.brand-sub{font-size:8.5px;color:var(--pase-text-muted);letter-spacing:0.06em;margin-top:6px;text-transform:uppercase}
-.brand-tenant{margin-top:10px;font-size:10px;color:var(--pase-text-muted);letter-spacing:0.02em}
+.sb-brand-icon{width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:var(--pase-text);background:var(--pase-celeste-100);border-radius:8px;letter-spacing:-0.02em}
+.sb-toggle{width:24px;height:24px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:var(--pase-text-muted);cursor:pointer;border-radius:6px;transition:all 0.15s;flex-shrink:0}
+.sb-toggle:hover{background:var(--pase-bg-soft);color:var(--pase-text)}
+.sb.sb-rail .sb-toggle{margin:0 auto}
 .badge-sb{margin-top:10px;padding:4px 8px;border-radius:8px;font-size:9.5px;font-weight:500;text-align:center}
 .badge-sb-super{background:var(--pase-celeste-100);color:var(--pase-text);letter-spacing:0.02em}
 .badge-sb-tenant{background:var(--pase-celeste-100);color:var(--pase-text);display:flex;align-items:center;justify-content:space-between;gap:6px}
 .badge-sb-close{background:none;border:none;color:var(--pase-text-muted);cursor:pointer;padding:0;font-size:11px}
 .badge-sb-close:hover{color:var(--pase-text)}
 
-.sb-local{padding:10px 14px;border-bottom:0.5px solid var(--pase-border)}
-.sb-local select{width:100%;background:var(--pase-bg);border:0.5px solid var(--pase-border-strong);color:var(--pase-text);padding:6px 8px;font-size:11.5px;font-family:var(--pase-font);border-radius:8px;outline:none}
-.sb-local select:focus{border-color:var(--pase-celeste-300)}
+/* Workspace / Local selector */
+.sb-workspace{padding:8px 10px;border-bottom:0.5px solid var(--pase-border)}
+.sb-workspace select{width:100%;background:var(--pase-bg-soft);border:0.5px solid var(--pase-border);color:var(--pase-text);padding:7px 10px;font-size:11.5px;font-family:var(--pase-font);border-radius:8px;outline:none;transition:all 0.15s;cursor:pointer}
+.sb-workspace select:hover{border-color:var(--pase-border-strong)}
+.sb-workspace select:focus{border-color:var(--pase-celeste-300);box-shadow:0 0 0 2px var(--pase-celeste-100)}
+.sb-workspace-icon{width:36px;height:36px;display:flex;align-items:center;justify-content:center;margin:0 auto;color:var(--pase-text-muted);background:var(--pase-bg-soft);border-radius:8px;cursor:pointer;transition:all 0.15s}
+.sb-workspace-icon:hover{background:var(--pase-celeste-100);color:var(--pase-text)}
 
-.sb-nav{flex:1;padding:8px 0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--pase-border-strong) transparent}
+/* Nav */
+.sb-nav{flex:1;padding:6px 0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--pase-border-strong) transparent}
 .sb-nav::-webkit-scrollbar{width:4px}
 .sb-nav::-webkit-scrollbar-thumb{background:var(--pase-border-strong);border-radius:2px}
-.sb-section{padding:14px 12px 6px;font-size:10px;letter-spacing:0.05em;text-transform:uppercase;color:var(--pase-celeste-300);font-weight:500}
-.nav-item{display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;font-size:12.5px;color:var(--pase-text-muted);border-radius:8px;margin:1px 10px;transition:background 0.15s ease,color 0.15s ease;text-decoration:none}
+
+/* Section groups */
+.sb-group{margin-bottom:2px}
+.sb-group-hd{display:flex;align-items:center;justify-content:space-between;width:100%;padding:10px 14px 4px;border:none;background:none;cursor:pointer;font-size:10px;letter-spacing:0.05em;text-transform:uppercase;color:var(--pase-text-muted);font-weight:500;font-family:var(--pase-font);transition:color 0.15s}
+.sb-group-hd:hover{color:var(--pase-text)}
+.sb-chev{transition:transform 0.2s ease;flex-shrink:0;opacity:0.5}
+.sb-chev-closed{transform:rotate(-90deg)}
+.sb-group-dot{width:4px;height:4px;border-radius:50%;background:var(--pase-border-strong);margin:8px auto 4px}
+
+/* Nav items */
+.nav-item{display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;font-size:12.5px;color:var(--pase-text-muted);border-radius:8px;margin:1px 8px;transition:all 0.15s ease;text-decoration:none;position:relative}
 .nav-item:hover,.nav-item:focus,.nav-item.active{text-decoration:none}
 .nav-item:hover{background:var(--pase-bg-soft);color:var(--pase-text)}
 .nav-item.active{background:var(--pase-celeste-100);color:var(--pase-text);font-weight:500}
+.nav-icon{width:16px;height:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.nav-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb.sb-rail .nav-item{justify-content:center;padding:8px;margin:1px 8px;border-radius:8px}
+.sb.sb-rail .nav-item.active::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:3px;height:16px;border-radius:0 3px 3px 0;background:var(--pase-celeste)}
 
-.sb-user{padding:14px 16px;border-top:0.5px solid var(--pase-border)}
-.sb-user-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.sb-uname{font-size:12px;font-weight:500;color:var(--pase-text)}
+/* User section */
+.sb-foot{padding:12px;border-top:0.5px solid var(--pase-border)}
+.sb-foot-row{display:flex;align-items:center;gap:10px}
+.sb-avatar{width:30px;height:30px;border-radius:8px;background:var(--pase-celeste-100);color:var(--pase-text);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;letter-spacing:-0.02em}
+.sb-foot-info{flex:1;min-width:0;overflow:hidden}
+.sb-uname{font-size:12px;font-weight:500;color:var(--pase-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sb-urole{font-size:10px;color:var(--pase-text-muted)}
-.sb-logout{display:block;width:100%;margin-top:8px;padding:6px;background:transparent;border:0.5px solid var(--pase-border-strong);color:var(--pase-text-muted);cursor:pointer;font-size:10px;font-family:var(--pase-font);border-radius:8px;transition:all 0.15s}
+.sb-foot-actions{display:flex;align-items:center;gap:2px;flex-shrink:0}
+.sb-logout{display:block;width:100%;margin-top:8px;padding:6px;background:transparent;border:0.5px solid var(--pase-border);color:var(--pase-text-muted);cursor:pointer;font-size:10px;font-family:var(--pase-font);border-radius:8px;transition:all 0.15s}
 .sb-logout:hover{border-color:var(--pase-celeste-300);color:var(--pase-text)}
-.sb-comanda{display:block;width:100%;margin-top:8px;padding:7px 8px;background:var(--pase-celeste-100);border:0.5px solid var(--pase-celeste-300);color:var(--pase-text);font-size:11px;font-weight:500;font-family:var(--pase-font);border-radius:8px;transition:all 0.15s;text-align:center;text-decoration:none}
-.sb-comanda:hover{background:var(--pase-celeste-200);border-color:var(--pase-celeste-400)}
+.sb-logout-icon{width:36px;height:36px;display:flex;align-items:center;justify-content:center;margin:8px auto 0;border:none;background:transparent;color:var(--pase-text-muted);cursor:pointer;border-radius:8px;transition:all 0.15s}
+.sb-logout-icon:hover{background:var(--pase-bg-soft);color:var(--pase-text)}
+.sb.sb-rail .sb-avatar{margin:0 auto}
+.sb.sb-rail .sb-foot{padding:10px 8px}
 
 /* ─── MAIN ─────────────────────────────────────────────────────────── */
-.main{margin-left:220px;flex:1;padding:28px 36px 36px;min-height:100vh;background:var(--pase-bg-page)}
+.main{margin-left:220px;flex:1;padding:28px 36px 36px;min-height:100vh;background:var(--pase-bg-page);transition:margin-left 0.2s ease}
+body.sb-collapsed .main{margin-left:56px}
 .ph-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;gap:12px;flex-wrap:wrap}
 .ph-title{font-family:var(--pase-font);font-size:20px;font-weight:500;line-height:1.15;color:var(--pase-text);letter-spacing:-0.025em}
 .ph-sub{font-size:11px !important;color:var(--pase-text-muted);margin-top:5px;font-weight:400 !important}
@@ -471,7 +503,8 @@ textarea:focus-visible,
 /* overlay con padding-left:200px para respetar el sidebar fijo. Sin esto,
    modales anchos (legajo, pago de sueldo) se centraban en el viewport
    total y quedaban tapados parcialmente por el sidebar. */
-.overlay{position:fixed;inset:0;padding-left:220px;background:rgba(10,20,40,0.45);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;z-index:100}
+.overlay{position:fixed;inset:0;padding-left:220px;background:rgba(10,20,40,0.45);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;z-index:100;transition:padding-left 0.2s ease}
+body.sb-collapsed .overlay{padding-left:56px}
 @media (max-width: 920px){ .overlay{padding-left:0} }
 .modal{background:var(--pase-bg);border:0.5px solid var(--pase-border);border-radius:16px;width:640px;max-width:96vw;max-height:92vh;overflow-y:auto}
 .modal-hd{padding:18px 24px;border-bottom:0.5px solid var(--pase-border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--pase-bg);z-index:1}
@@ -628,16 +661,19 @@ input[type="month"].search:hover::-webkit-calendar-picker-indicator{
     transform: translateX(-100%);
     transition: transform 0.25s ease;
     z-index: 50;
-    width: 240px;
+    width: 240px !important;
     box-shadow: 0 0 32px rgba(26,58,94,0.08);
   }
+  .sb.sb-rail { width: 240px !important; }
   .sb.open { transform: translateX(0); }
-  .main {
+  .sb-toggle { display: none !important; }
+  .main, body.sb-collapsed .main {
     margin-left: 0;
     padding: 16px;
     padding-top: calc(60px + env(safe-area-inset-top, 0px));
     background: var(--pase-bg-page);
   }
+  body.sb-collapsed .overlay { padding-left: 0; }
   .grid4 { grid-template-columns: repeat(2,1fr); }
   .grid3 { grid-template-columns: repeat(2,1fr); }
   .grid2 { grid-template-columns: 1fr; }
