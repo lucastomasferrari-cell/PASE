@@ -67,12 +67,16 @@ test.describe("Offline-first — flow mutante", () => {
 
     // Resolver cualquier item activo del tenant (necesitamos su id para
     // agregar al carrito). Si no existe ninguno, pre-check accionable.
+    // items.estado='disponible' = item activo. La columna `activo` no existe
+    // (drift de schema: el catálogo COMANDA migró a estado disponible/agotado
+    // + deleted_at). El `.eq("activo", true)` previo devolvía error silencioso
+    // → este pre-check fallaba con "Falta item" aunque hay 137 disponibles.
     const { data: items } = await db.from("items")
-      .select("id").eq("tenant_id", tenantId).eq("activo", true)
-      .limit(1);
+      .select("id").eq("tenant_id", tenantId).eq("estado", "disponible")
+      .is("deleted_at", null).limit(1);
     if (!items || items.length === 0) {
       throw new Error(
-        `Falta al menos un item activo para tenant ${tenantId}. ` +
+        `Falta al menos un item disponible para tenant ${tenantId}. ` +
         `Crear uno desde la UI Catálogo o INSERT directo.`
       );
     }

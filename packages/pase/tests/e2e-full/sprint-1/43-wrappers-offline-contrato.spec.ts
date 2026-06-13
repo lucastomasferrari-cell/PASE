@@ -94,6 +94,15 @@ const PROBES: Array<[string, Record<string, unknown>]> = [
     p_monto: 1, p_motivo: "probe contrato e2e", p_manager_id: null,
     p_idempotency_uuid: null, p_idempotency_key: null,
   }],
+  // Cobro offline incremental (Tier 2, 13-jun): wrapper de fn_agregar_pago_
+  // venta_comanda. Resuelve la venta por UUID y delega en la inner idempotente
+  // por p_idempotency_key. Con venta inexistente corta en el resolver (P0001).
+  ["fn_agregar_pago_venta_comanda_offline", {
+    p_venta_id: NX_ID, p_venta_idempotency_uuid: NX_UUID,
+    p_metodo: "efectivo", p_monto: 1, p_idempotency_key: "probe-contrato-e2e",
+    p_cobrado_por: null, p_vuelto: null, p_propina_incluida: 0, p_cuotas: null,
+    p_idempotency_uuid: null,
+  }],
   // Mesa-ops: desde 202606111300 los wrappers aceptan p_manager_id/p_motivo
   // (la capa offline ahora los transporta — bug 11-jun parte 2). Los probes
   // los incluyen a propósito: si alguien revierte la firma, esto da PGRST202.

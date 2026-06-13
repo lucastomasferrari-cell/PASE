@@ -5,7 +5,7 @@
 
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { cobrarVentaOffline } from '../pagosOfflineService';
+import { cobrarVentaOffline, agregarPagoOffline } from '../pagosOfflineService';
 import {
   anularItemOffline, cortesiaItemOffline, modificarPrecioItemOffline,
   aplicarDescuentoOffline, anularVentaOffline,
@@ -74,6 +74,68 @@ describe('pagosOfflineService', () => {
     const pagos = await ventasPagosRepo.listByVenta(tempVentaId);
     expect(pagos).toHaveLength(2);
     expect(pagos.map((p) => p.metodo).sort()).toEqual(['efectivo', 'tarjeta-debito']);
+  });
+
+  // ─── agregarPagoOffline (cobro incremental: PaymentDialog / split) ────────
+  it('agregarPagoOffline: escribe pago local + encola con p_venta_idempotency_uuid', async () => {
+    const { tempVentaId } = await setupVentaConItems(); // total 1800
+    const v = await ventasRepo.getById(tempVentaId);
+    const ventaUuid = (v as unknown as { idempotency_uuid: string }).idempotency_uuid;
+
+    const r = await agregarPagoOffline({
+      ventaId: tempVentaId,
+      ventaUuid,
+      ventaOpId: (v as unknown as { _local_op_id: string })._local_op_id,
+      metodo: 'efectivo',
+      monto: 1000, // parcial: NO cubre los 1800
+      idempotencyKey: 'pago-k1',
+      tenantId: 'T', localId: 1,
+    });
+    expect(r.tempPagoId).toBeLessThan(0); // tempId negativo
+
+    const pagos = await ventasPagosRepo.listByVenta(tempVentaId);
+    expect(pagos).toHaveLength(1);
+    expect(pagos[0]!.metodo).toBe('efectivo');
+    expect(pagos[0]!.idempotency_key).toBe('pago-k1');
+
+    // Op encolada contra la inner; el payload transporta el UUID de la venta
+    // (pushQueue le agrega el sufijo _offline en runtime).
+    const ops = await listPendingOps();
+    const op = ops.find((o) => o.target === 'fn_agregar_pago_venta_comanda');
+    expect(op).toBeDefined();
+    const payload = op?.payload as Record<string, unknown>;
+    expect(payload.p_venta_idempotency_uuid).toBe(ventaUuid);
+    expect(payload.p_idempotency_key).toBe('pago-k1');
+    expect(payload.p_monto).toBe(1000);
+
+    // Pago parcial → venta sigue abierta.
+    const vDespues = await ventasRepo.getById(tempVentaId);
+    expect(vDespues?.estado).toBe('abierta');
+  });
+
+  it('agregarPagoOffline: marca venta cobrada localmente cuando los pagos cubren el total', async () => {
+    const { tempVentaId } = await setupVentaConItems(); // total 1800
+    const v = await ventasRepo.getById(tempVentaId);
+    const ventaUuid = (v as unknown as { idempotency_uuid: string }).idempotency_uuid;
+
+    // Dos pagos parciales que juntos cubren el total.
+    await agregarPagoOffline({
+      ventaId: tempVentaId, ventaUuid, metodo: 'efectivo', monto: 1000,
+      idempotencyKey: 'pago-k1', tenantId: 'T', localId: 1,
+    });
+    const vMedio = await ventasRepo.getById(tempVentaId);
+    expect(vMedio?.estado).toBe('abierta'); // 1000 < 1800
+
+    await agregarPagoOffline({
+      ventaId: tempVentaId, ventaUuid, metodo: 'tarjeta-debito', monto: 800,
+      idempotencyKey: 'pago-k2', tenantId: 'T', localId: 1,
+    });
+    const vFinal = await ventasRepo.getById(tempVentaId);
+    expect(vFinal?.estado).toBe('cobrada'); // 1000+800 = 1800
+    expect((vFinal as unknown as { pagada: boolean }).pagada).toBe(true);
+
+    const pagos = await ventasPagosRepo.listByVenta(tempVentaId);
+    expect(pagos).toHaveLength(2);
   });
 });
 
