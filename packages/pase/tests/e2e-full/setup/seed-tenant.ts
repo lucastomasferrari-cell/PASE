@@ -301,21 +301,36 @@ export async function seedE2ETenant(opts: {
   }, { onConflict: "tenant_id,email" });
   if (cuErr) throw new Error(`Seed comanda_usuario dueño: ${cuErr.message}`);
 
-  // 6. Seed catálogos
-  // medios_cobro: tenant_id default usa auth_tenant_id() que es NULL con
-  // service_role → hay que pasarlo explícito. Desde el catálogo unificado
-  // (migración 202606122000) slug es NOT NULL → se pasa explícito también.
-  const { data: medios, error: mediosErr } = await svc.from("medios_cobro").insert([
-    { tenant_id: tenantId, nombre: "EFECTIVO", slug: "efectivo", pide_vuelto: true, cuenta_destino: "Caja Efectivo", activo: true },
-    { tenant_id: tenantId, nombre: "TARJETA", slug: "tarjeta", pide_vuelto: false, cuenta_destino: "MercadoPago", activo: true },
-    { tenant_id: tenantId, nombre: "MP_QR", slug: "mp_qr", pide_vuelto: false, cuenta_destino: "MercadoPago", activo: true },
-  ]).select("id, nombre");
-  if (mediosErr) throw new Error(`Seed medios_cobro: ${mediosErr.message}`);
-  const medioEfectivoId = medios!.find(m => m.nombre === "EFECTIVO")!.id as number;
-  const medioTarjetaId = medios!.find(m => m.nombre === "TARJETA")!.id as number;
-  const medioMpId = medios!.find(m => m.nombre === "MP_QR")!.id as number;
+  // 6. Catálogos
+  //
+  // medios_cobro: desde la migración 202606130800 `crear_tenant_v2` siembra
+  // automáticamente un catálogo genérico AR (vía fn_seed_catalogo_tenant) al
+  // crear el tenant — incluye los medios "Efectivo", "Tarjeta débito",
+  // "MercadoPago", etc. (globales, local_id NULL). YA NO insertamos medios a
+  // mano: el slug 'efectivo' del auto-seed chocaría con el UNIQUE
+  // uniq_medios_cobro_slug (tenant_id, COALESCE(local_id,0), slug). En cambio,
+  // leemos los IDs del catálogo sembrado para poblar el result (ningún spec
+  // de la suite los consume hoy, pero los exponemos por compatibilidad).
+  const { data: medios, error: mediosErr } = await svc.from("medios_cobro")
+    .select("id, nombre, slug")
+    .eq("tenant_id", tenantId)
+    .is("local_id", null)
+    .is("deleted_at", null);
+  if (mediosErr) throw new Error(`Leer medios_cobro sembrados: ${mediosErr.message}`);
+  if (!medios || medios.length === 0) {
+    throw new Error("medios_cobro vacío tras crear_tenant_v2 — el auto-seed de catálogo no corrió (revisar migración 202606130800).");
+  }
+  const findMedio = (slug: string) => medios.find(m => m.slug === slug)?.id as number | undefined;
+  const medioEfectivoId = findMedio("efectivo") ?? (medios[0]!.id as number);
+  const medioTarjetaId = findMedio("tarjeta_debito") ?? medioEfectivoId;
+  const medioMpId = findMedio("mercadopago") ?? medioEfectivoId;
 
-  // Categorías de gastos básicas
+  // Categorías de gastos básicas. El auto-seed (crear_tenant_v2) ya sembró un
+  // catálogo genérico (Title Case: Alquiler, Compras generales, etc.). Estos
+  // inserts son ADITIVOS y siguen siendo necesarios: varios specs dependen de
+  // nombres específicos en MAYÚS — "INSUMOS COCINA" (03/26/34) y "SUELDOS"
+  // (08/23/35) — que NO están en el template. config_categorias no tiene UNIQUE
+  // → no hay colisión con las del auto-seed (distinto nombre).
   const { error: catErr } = await svc.from("config_categorias").insert([
     { tenant_id: tenantId, nombre: "INSUMOS COCINA", tipo: "gasto_variable", orden: 10, activo: true },
     { tenant_id: tenantId, nombre: "ALQUILER", tipo: "gasto_fijo", orden: 20, activo: true },
@@ -323,7 +338,11 @@ export async function seedE2ETenant(opts: {
   ]);
   if (catErr) throw new Error(`Seed config_categorias: ${catErr.message}`);
 
-  // Puestos RRHH (tabla rrhh_puestos: id INTEGER, nombre TEXT, activo BOOL, tenant_id UUID)
+  // Puestos RRHH (tabla rrhh_puestos: id INTEGER, nombre TEXT, activo BOOL, tenant_id UUID).
+  // El auto-seed (crear_tenant_v2) ya sembró puestos genéricos en Title Case
+  // (Mozo, Cocinero, Cajero, ...). Estos en MAYÚS son ADITIVOS: los empleados
+  // del seed usan puesto "MOZO"/"COCINERO"/"CAJERO" (texto libre). UNIQUE es
+  // (tenant_id, nombre) exacto → MAYÚS ≠ Title Case, no colisiona.
   await svc.from("rrhh_puestos").insert([
     { tenant_id: tenantId, nombre: "MOZO", activo: true },
     { tenant_id: tenantId, nombre: "COCINERO", activo: true },
