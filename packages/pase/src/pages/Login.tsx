@@ -94,13 +94,12 @@ export default function Login({ onLogin }: LoginProps) {
           </div>
         )}
         {err && <div className="alert alert-danger">{err}</div>}
-        <div className="field" style={{textAlign:"center"}}><label style={{textAlign:"center"}}>Usuario</label><input style={{textAlign:"center"}} autoComplete="username" value={usuario} onChange={e=>setUsuario(e.target.value)} placeholder="Ingresá tu usuario" onKeyDown={e=>e.key==="Enter"&&go()} /></div>
-        <div className="field" style={{textAlign:"center"}}><label style={{textAlign:"center"}}>Contraseña</label><input ref={passRef} style={{textAlign:"center"}} type="password" autoComplete="current-password" defaultValue="" placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&go()} /></div>
+        <div className="field"><label>Usuario</label><input autoComplete="username" value={usuario} onChange={e=>setUsuario(e.target.value)} placeholder="Ingresá tu usuario" onKeyDown={e=>e.key==="Enter"&&go()} /></div>
+        <div className="field"><label>Contraseña</label><input ref={passRef} type="password" autoComplete="current-password" defaultValue="" placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&go()} /></div>
         <label
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
             gap: 8,
             margin: "12px 0 18px",
             cursor: "pointer",
