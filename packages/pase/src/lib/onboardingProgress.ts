@@ -63,6 +63,25 @@ export async function marcarPasoOnboarding(
 }
 
 /**
+ * Auto-detecta los pasos del onboarding mirando los datos reales del tenant
+ * (RPC `fn_onboarding_autodetectar`, migration 202606131000): marca TRUE cada
+ * paso cuyo dato ya exista (provincia/localidad del local, empleado activo,
+ * insumo, item, canal). Idempotente — solo FALSE→TRUE, nunca desmarca y NO
+ * marca `completado`. Devuelve la fila actualizada para usarla directo en el
+ * widget sin un segundo round-trip.
+ *
+ * Si el usuario no tiene tenant en el JWT, la RPC devuelve NULL (no-op).
+ */
+export async function autodetectarOnboarding(): Promise<{
+  data: OnboardingProgress | null;
+  error: string | null;
+}> {
+  const { data, error } = await db.rpc("fn_onboarding_autodetectar");
+  if (error) return { data: null, error: error.message };
+  return { data: (data as OnboardingProgress | null), error: null };
+}
+
+/**
  * Calcula el % de avance (0-100) y el siguiente paso pendiente.
  * Si está completado, devuelve { pct: 100, next: null }.
  */

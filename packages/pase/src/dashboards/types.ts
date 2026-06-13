@@ -89,6 +89,7 @@ export interface DashboardConfig {
 export const DEFAULT_WIDGETS_POR_ROL: Record<RolPase, string[]> = {
   superadmin: ["tareas_pineadas", "ventas_hoy", "facturas_vencidas"],
   dueno: [
+    "onboarding_checklist",
     "tareas_pineadas",
     "ventas_hoy",
     "efectivo_consolidado",
@@ -97,6 +98,7 @@ export const DEFAULT_WIDGETS_POR_ROL: Record<RolPase, string[]> = {
     "ultimos_overrides",
   ],
   admin: [
+    "onboarding_checklist",
     "tareas_pineadas",
     "ventas_hoy",
     "efectivo_consolidado",

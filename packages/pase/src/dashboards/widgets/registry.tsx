@@ -28,10 +28,24 @@ import { ObjetivosMesWidget } from "./ObjetivosMesWidget";
 import { PuntoEquilibrioWidget } from "./PuntoEquilibrioWidget";
 import { UltimosOverridesWidget } from "./UltimosOverridesWidget";
 import { ProximoPasoWidget } from "./ProximoPasoWidget";
+import { OnboardingChecklistWidget } from "./OnboardingChecklistWidget";
 import { VentasMesAMesWidget } from "./VentasMesAMesWidget";
 import { DiasMasVendidosWidget } from "./DiasMasVendidosWidget";
 
 export const WIDGETS: WidgetDefinition[] = [
+  // ─── Onboarding (setup del dueño) ────────────────────────────────────────
+  {
+    id: "onboarding_checklist",
+    title: "Primeros pasos",
+    description:
+      "Checklist de bienvenida: completá el setup inicial (datos del local, primer empleado, insumo, item y canal). Se auto-marca cuando cargás el dato real y se esconde solo cuando terminás. Solo dueño/admin.",
+    // El registry filtra por permisos, no por rol. Dejamos [] (visible) y el
+    // gate de rol vive dentro del widget (return null para no dueño/admin).
+    permisosRequeridos: [],
+    size: "md",
+    render: (ctx) => <OnboardingChecklistWidget ctx={ctx} />,
+  },
+
   // ─── Cross-rol ─────────────────────────────────────────────────────────
   {
     id: "proximo_paso",
