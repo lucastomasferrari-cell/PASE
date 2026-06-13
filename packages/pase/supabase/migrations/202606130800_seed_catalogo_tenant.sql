@@ -1,6 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Seed de catálogo GENÉRICO AR para tenant nuevo + wire en crear_tenant_v2 +
--- backfill de tenants existentes vacíos.
+-- backfill de tenants existentes (cada bloque se auto-gatea, ver abajo).
 --
 -- Tier 3 (informe 05-permisos-ajustes §2.2 / "no hay defaults, hay datos de
 -- Neko"). Hoy un tenant nuevo arranca con config_categorias / medios_cobro /
@@ -13,11 +13,15 @@
 -- editable al crear el tenant + backfillear los tenants vacíos existentes.
 -- La función gatea CADA bloque por si el tenant ya tiene ESE catálogo, así que
 -- "rellena solo lo que falta, nunca toca data existente": es idempotente,
--- collision-proof y Neko-safe en cualquier estado. Neko no recibe nada (tiene
--- gasto_fijo + 26 medios + puestos); Kanzo/Malita/Pruebas V2 reciben categorías
--- y puestos pero NO medios (ya tienen los 22 clonados de Neko el 12-jun → si
--- sembráramos chocaría el UNIQUE de slug). La limpieza de esos medios clonados
--- es un tema aparte, fuera del alcance de este seed.
+-- collision-proof y Neko-safe en cualquier estado. Gates:
+--   • categorías → skip si ya tiene cat_compra (catálogo CMV armado).
+--   • medios     → skip si ya tiene CUALQUIER medio activo.
+--   • puestos    → skip si ya tiene CUALQUIER puesto.
+-- Neko no recibe nada (tiene cat_compra + 26 medios + 14 puestos, queda
+-- intacto). Kanzo/Malita/Pruebas V2 reciben categorías + puestos pero NO medios
+-- (ya tienen los 22 clonados de Neko el 12-jun → si sembráramos chocaría el
+-- UNIQUE de slug). La limpieza de esos medios clonados es un tema aparte, fuera
+-- del alcance de este seed.
 --
 -- Reglas: C7 (multi-tenant — tenant_id explícito), C11 (SECURITY DEFINER con
 -- GRANT solo a service_role + authenticated; el dedup la hace segura para
@@ -59,14 +63,22 @@ BEGIN
   END IF;
 
   -- ── 1) Categorías (config_categorias) ────────────────────────────────────
-  -- tipo + grupo + nombre + orden. Dedup por (tenant_id, nombre, tipo).
-  -- Gate de bloque: solo sembramos el template si el tenant NO tiene todavía
-  -- ninguna categoría de gasto (LIKE 'gasto%'). Así un tenant que ya configuró
-  -- sus categorías de gasto no recibe el template (caso Neko: tiene gasto_fijo).
-  -- El NOT EXISTS por (nombre,tipo) de adentro queda igual como red de seguridad.
+  -- tipo + grupo + nombre + orden. Dedup FINO por (tenant_id, nombre, tipo) en
+  -- el WHERE NOT EXISTS de adentro (config_categorias NO tiene UNIQUE → el insert
+  -- por-renglón nunca choca; solo agrega los nombres del template que falten).
+  --
+  -- Gate de bloque por `cat_compra`: un tenant que YA configuró su catálogo de
+  -- compras (CMV) tiene un catálogo propio y maduro → NO le metemos el template
+  -- (si no, le agregaríamos ~26 renglones title-case que no matchean sus nombres
+  -- en MAYÚS reales y le ensuciamos los dropdowns). Caso Neko: tiene cat_compra
+  -- + cat_ingreso reales → NO entra, queda intacto. Los tenants chicos
+  -- (Kanzo/Malita/Pruebas V2) tienen 0 cat_compra (apenas unas categorías de
+  -- gasto sueltas, clonadas) → SÍ entran y se completan. (Se usa cat_compra y NO
+  -- 'gasto%' porque los chicos sí tienen algún gasto suelto → 'gasto%' los
+  -- bloquearía por error; cat_compra discrimina limpio "catálogo armado vs no".)
   IF NOT EXISTS (
     SELECT 1 FROM config_categorias
-    WHERE tenant_id = p_tenant_id AND tipo LIKE 'gasto%'
+    WHERE tenant_id = p_tenant_id AND tipo = 'cat_compra'
   ) THEN
   INSERT INTO config_categorias (tenant_id, tipo, grupo, nombre, orden, activo)
   SELECT p_tenant_id, v.tipo, v.grupo, v.nombre, v.orden, true
