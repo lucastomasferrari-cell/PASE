@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Calculator, Hash } from 'lucide-react';
+import { Lock, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Calculator, Hash, Info } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
 import { useLocalActivo } from '../../lib/localActivo';
+import { usePermiso } from '../../lib/usePermiso';
 import {
   getTurnoAbierto, totalesPorMetodo, cerrarTurno, type TotalesPorMetodo,
 } from '../../services/turnosCajaService';
@@ -22,6 +23,11 @@ export function CajaCerrar() {
   const { empleado } = useAuthPos();
   const [localId] = useLocalActivo(user);
   const navigate = useNavigate();
+  // Cierre CIEGO por default (Tier 2a, modelo Toast): solo quien tiene este
+  // permiso ve el esperado/totales por método ANTES de declarar. El resto
+  // cuenta el efectivo físico a ciegas; la diferencia la devuelve la RPC
+  // después de cerrar (igual para todos).
+  const puedeVerEsperado = usePermiso('comanda.caja.ver_esperado_cierre');
 
   const [turno, setTurno] = useState<TurnoCaja | null>(null);
   const [totales, setTotales] = useState<TotalesPorMetodo[]>([]);
@@ -38,19 +44,25 @@ export function CajaCerrar() {
 
   useEffect(() => {
     if (localId === null) return;
+    let cancelled = false;
     (async () => {
       const { data: t } = await getTurnoAbierto(localId);
+      if (cancelled) return;
       setTurno(t);
-      if (t) {
+      // Solo pedir los totales si el empleado puede VER el esperado — sin
+      // permiso no se consulta (no regalar el dato en la response de red).
+      // NUNCA autocompletar el declarado: declarar es contar (cierre ciego).
+      if (t && puedeVerEsperado) {
         const tot = await totalesPorMetodo(t.id);
+        if (cancelled) return;
         setTotales(tot.data);
-        // totalesPorMetodo ya incluye la apertura — NO sumar monto_inicial otra vez.
-        const efectivo = tot.data.find((x) => x.metodo === 'efectivo');
-        setMontoEfectivoDeclarado(Number(efectivo?.total ?? 0));
+      } else {
+        setTotales([]);
       }
       setLoading(false);
     })();
-  }, [localId]);
+    return () => { cancelled = true; };
+  }, [localId, puedeVerEsperado]);
 
   if (loading) return <Centered>Cargando…</Centered>;
   if (!turno) return <Centered>No hay turno abierto.</Centered>;
@@ -93,33 +105,41 @@ export function CajaCerrar() {
         </p>
       </header>
 
-      {/* Totales del turno */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-xs text-muted-foreground uppercase tracking-wide font-medium">
-            Totales del turno (sistema)
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-sm">
-            <Row label="Apertura (efectivo)" valor={formatARS(turno.monto_inicial)} />
-            <Row
-              label={`Movimientos efectivo netos del turno`}
-              valor={(movimientosEfectivoNetos >= 0 ? '+ ' : '− ') + formatARS(Math.abs(movimientosEfectivoNetos))}
-            />
-            {totales
-              .filter((t) => t.metodo !== 'efectivo')
-              .map((t) => (
-                <Row key={t.metodo} label={`${t.metodo} (${t.cantidad} mov., no en caja)`} valor={formatARS(t.total)} />
-              ))}
-            <Row
-              label="Esperado en efectivo al cierre"
-              valor={formatARS(calculadoEfectivo)}
-              highlight
-            />
-          </div>
-        </CardContent>
-      </Card>
+      {/* Totales del turno — solo visibles con permiso ver_esperado_cierre.
+          Sin permiso: cierre CIEGO (el cajero cuenta sin conocer el esperado). */}
+      {puedeVerEsperado ? (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-xs text-muted-foreground uppercase tracking-wide font-medium">
+              Totales del turno (sistema)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-sm">
+              <Row label="Apertura (efectivo)" valor={formatARS(turno.monto_inicial)} />
+              <Row
+                label={`Movimientos efectivo netos del turno`}
+                valor={(movimientosEfectivoNetos >= 0 ? '+ ' : '− ') + formatARS(Math.abs(movimientosEfectivoNetos))}
+              />
+              {totales
+                .filter((t) => t.metodo !== 'efectivo')
+                .map((t) => (
+                  <Row key={t.metodo} label={`${t.metodo} (${t.cantidad} mov., no en caja)`} valor={formatARS(t.total)} />
+                ))}
+              <Row
+                label="Esperado en efectivo al cierre"
+                valor={formatARS(calculadoEfectivo)}
+                highlight
+              />
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="mb-6 p-3 rounded-md border border-border bg-muted/40 text-sm text-muted-foreground flex items-start gap-3">
+          <Info className="h-5 w-5 flex-shrink-0 mt-0.5" />
+          <span>Contá el efectivo físico y cargalo. La diferencia se calcula al cerrar.</span>
+        </div>
+      )}
 
       {/* Form */}
       <form onSubmit={onSubmit} className="space-y-4">
@@ -159,24 +179,27 @@ export function CajaCerrar() {
           )}
         </div>
 
-        {/* Diferencia con semáforo */}
-        <div
-          className={cn(
-            'p-3 rounded-md border text-sm font-medium flex items-start gap-3',
-            difState.classes,
-          )}
-        >
-          <difState.Icon className="h-5 w-5 flex-shrink-0 mt-0.5" />
-          <div>
+        {/* Diferencia con semáforo — revela el esperado, así que solo con
+            permiso. Sin permiso, la diferencia la informa la RPC al cerrar. */}
+        {puedeVerEsperado && (
+          <div
+            className={cn(
+              'p-3 rounded-md border text-sm font-medium flex items-start gap-3',
+              difState.classes,
+            )}
+          >
+            <difState.Icon className="h-5 w-5 flex-shrink-0 mt-0.5" />
             <div>
-              Diferencia:{' '}
-              <span className="tabular-nums ml-1">
-                {diferencia > 0 ? '+' : ''}{formatARS(diferencia)}
-              </span>
+              <div>
+                Diferencia:{' '}
+                <span className="tabular-nums ml-1">
+                  {diferencia > 0 ? '+' : ''}{formatARS(diferencia)}
+                </span>
+              </div>
+              <div className="text-xs font-normal mt-0.5 opacity-80">{difState.label}</div>
             </div>
-            <div className="text-xs font-normal mt-0.5 opacity-80">{difState.label}</div>
           </div>
-        </div>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="notas">Notas del cierre (opcional)</Label>
