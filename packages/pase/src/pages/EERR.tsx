@@ -74,6 +74,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const [gastos,setGastos]=useState<Gasto[]>([]);
   const [sueldos,setSueldos]=useState(0);
   const [sueldosDetalle,setSueldosDetalle]=useState<LiquidacionConEmpleado[]>([]);
+  const [sueldoMovsPorLiq,setSueldoMovsPorLiq]=useState<Map<string,number>|null>(null);
   const [sueldosExpanded,setSueldosExpanded]=useState(false);
   const [mes,setMes]=useState(toISO(today).slice(0,7));
   const [loading,setLoading]=useState(true);
@@ -98,19 +99,26 @@ export default function EERR({ user, localActivo }: EERRProps) {
     fq = applyLocalScope(fq, user, lid);
     let gq = db.from("gastos").select("monto, tipo, categoria, local_id").gte("fecha", desde).lte("fecha", hasta).or("estado.neq.anulado,estado.is.null");
     gq = applyLocalScope(gq, user, lid);
-    const [{ data: v }, { data: f }, { data: g0 }, { data: liq }] = await Promise.all([
+    const [{ data: v }, { data: f }, { data: g0 }, { data: liq }, { data: sMov }] = await Promise.all([
       vq, fq, gq,
       db.from("rrhh_liquidaciones")
-        .select("total_a_pagar, rrhh_novedades(mes, anio, rrhh_empleados(local_id))")
+        .select("id, total_a_pagar, rrhh_novedades(mes, anio, rrhh_empleados(local_id))")
         .in("estado", ["pendiente", "pagado"]).eq("anulado", false),
+      db.from("movimientos")
+        .select("importe, local_id, liquidacion_id")
+        .eq("cat", "SUELDOS").eq("anulado", false)
+        .not("liquidacion_id", "is", null),
     ]);
     const ventasArr = (v as Venta[]) || [];
     const facturasArr = (f as Factura[]) || [];
     const allGastos = ((g0 as Gasto[]) || []).filter(x => x.categoria !== "SUELDOS");
     const gastosEmp = allGastos.filter(x => x.tipo === "empleado");
     const gastosArr = allGastos.filter(x => x.tipo !== "empleado");
-    const liqRows = (((liq as unknown) as LiquidacionPendienteRow[]) || [])
+    const liqRows = (((liq as unknown) as (LiquidacionPendienteRow & {id:string})[]) || [])
       .filter(l => l.rrhh_novedades?.mes === mo && l.rrhh_novedades?.anio === yr);
+    const liqIdSet = new Set(liqRows.map(l => l.id));
+    const sueldoMovsComp = ((sMov as {importe:number,local_id:number,liquidacion_id:string}[]) || [])
+      .filter(m => liqIdSet.has(m.liquidacion_id));
     const ventas = ventasArr.reduce((s, x) => s + Number(x.monto), 0);
     const facsCMV = facturasArr.filter(x => !x.bucket || x.bucket === "cat_compra");
     const facsBucket = (b: string) => facturasArr.filter(x => x.bucket === b);
@@ -123,9 +131,24 @@ export default function EERR({ user, localActivo }: EERRProps) {
     const comisiones = gastosArr.filter(x => x.tipo === "comision").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_comision"));
     const impuestos = gastosArr.filter(x => x.tipo === "impuesto").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_impuesto"));
     const otrosGastos = gastosArr.filter(x => !["fijo","variable","publicidad","comision","impuesto","retiro_socio","empleado"].includes(x.tipo)).reduce((s, x) => s + Number(x.monto), 0);
-    const liqFilt = liqRows.filter(l => !lid || (l.rrhh_novedades?.rrhh_empleados?.local_id === lid));
+    let sueldos: number;
     const gastosEmpFilt = gastosEmp.filter(x => !lid || x.local_id === lid);
-    const sueldos = liqFilt.reduce((s, l) => s + Number(l.total_a_pagar), 0) + gastosEmpFilt.reduce((s, x) => s + Number(x.monto), 0);
+    if (lid) {
+      const movsPorLiq = new Map<string,number>();
+      for (const m of sueldoMovsComp) {
+        if (m.local_id !== lid) continue;
+        movsPorLiq.set(m.liquidacion_id, (movsPorLiq.get(m.liquidacion_id) || 0) + Math.abs(m.importe));
+      }
+      const liqFilt = liqRows.filter(l => movsPorLiq.has(l.id) || (l.rrhh_novedades?.rrhh_empleados?.local_id === lid));
+      sueldos = 0;
+      for (const l of liqFilt) {
+        const fromMovs = movsPorLiq.get(l.id);
+        sueldos += fromMovs != null ? fromMovs : Number(l.total_a_pagar);
+      }
+    } else {
+      sueldos = liqRows.reduce((s, l) => s + Number(l.total_a_pagar), 0);
+    }
+    sueldos += gastosEmpFilt.reduce((s, x) => s + Number(x.monto), 0);
     const utilBruta = ventas - cmv;
     const utilNeta = utilBruta - gastosFijos - gastosVar - sueldos - cargasSociales - publicidad - comisiones - impuestos - otrosGastos;
     return { mes: mesArg, ventas, cmv, gastosFijos, gastosVar, publicidad, comisiones, impuestos, otrosGastos, sueldos, cargasSociales, utilBruta, utilNeta };
@@ -166,7 +189,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
       fq = applyLocalScope(fq, user, lid);
       let gq = db.from("gastos").select("id, fecha, monto, categoria, tipo, local_id").gte("fecha",desde).lte("fecha",hasta).or("estado.neq.anulado,estado.is.null");
       gq = applyLocalScope(gq, user, lid);
-      const [{data:v},{data:f},{data:g},{data:liqData}]=await Promise.all([
+      const [{data:v},{data:f},{data:g},{data:liqData},{data:sueldoMovsData}]=await Promise.all([
         vq,
         fq,
         gq,
@@ -174,6 +197,11 @@ export default function EERR({ user, localActivo }: EERRProps) {
           .select("*, rrhh_novedades(mes, anio, empleado_id, rrhh_empleados(nombre, apellido, puesto, local_id))")
           .in("estado", ["pendiente", "pagado"])
           .eq("anulado", false),
+        db.from("movimientos")
+          .select("importe, local_id, liquidacion_id")
+          .eq("cat", "SUELDOS")
+          .eq("anulado", false)
+          .not("liquidacion_id", "is", null),
       ]);
       setVentas((v as Venta[]) || []);
       setFacturas((f as Factura[]) || []);
@@ -182,14 +210,47 @@ export default function EERR({ user, localActivo }: EERRProps) {
       setGastos(allGastos.filter(x => x.tipo !== "empleado"));
       const liqRows = (((liqData as unknown) as LiquidacionConEmpleado[]) || [])
         .filter(l => l.rrhh_novedades?.mes === mo && l.rrhh_novedades?.anio === yr);
-      const liqFiltradas = liqRows.filter((l) => {
-        const emp = l.rrhh_novedades?.rrhh_empleados;
-        return !lid || (emp ? emp.local_id === lid : false);
-      });
+      const liqById = new Map(liqRows.map(l => [l.id!, l]));
+      const sueldoMovs = ((sueldoMovsData as {importe:number,local_id:number,liquidacion_id:string}[]) || [])
+        .filter(m => liqById.has(m.liquidacion_id));
+
+      let liqFiltradas: LiquidacionConEmpleado[];
+      let sueldosTotal: number;
+      if (lid) {
+        const movsPorLiq = new Map<string,number>();
+        for (const m of sueldoMovs) {
+          if (m.local_id !== lid) continue;
+          movsPorLiq.set(m.liquidacion_id, (movsPorLiq.get(m.liquidacion_id) || 0) + Math.abs(m.importe));
+        }
+        liqFiltradas = liqRows.filter(l => {
+          const emp = l.rrhh_novedades?.rrhh_empleados;
+          return movsPorLiq.has(l.id!) || (emp ? emp.local_id === lid : false);
+        });
+        sueldosTotal = 0;
+        for (const l of liqFiltradas) {
+          const fromMovs = movsPorLiq.get(l.id!);
+          if (fromMovs != null) {
+            sueldosTotal += fromMovs;
+          } else {
+            sueldosTotal += l.total_a_pagar || 0;
+          }
+        }
+      } else {
+        liqFiltradas = liqRows;
+        sueldosTotal = liqRows.reduce((s, l) => s + (l.total_a_pagar || 0), 0);
+      }
       setSueldosDetalle(liqFiltradas);
+      setSueldoMovsPorLiq(lid ? (() => {
+        const m = new Map<string,number>();
+        for (const mv of sueldoMovs) {
+          if (mv.local_id !== lid) continue;
+          m.set(mv.liquidacion_id, (m.get(mv.liquidacion_id) || 0) + Math.abs(mv.importe));
+        }
+        return m;
+      })() : null);
       const gastosEmpFilt = gastosEmpleado.filter(x => !lid || x.local_id === lid);
       const extraLabor = gastosEmpFilt.reduce((s, x) => s + (x.monto || 0), 0);
-      setSueldos(liqFiltradas.reduce((s, l) => s + (l.total_a_pagar || 0), 0) + extraLabor);
+      setSueldos(sueldosTotal + extraLabor);
       setLoading(false);
     };
     load();
@@ -593,7 +654,8 @@ export default function EERR({ user, localActivo }: EERRProps) {
                   if(!emp) return acc;
                   const k=liq.rrhh_novedades!.empleado_id;
                   if(!acc[k]) acc[k]={emp,total:0};
-                  acc[k].total+=liq.total_a_pagar||0;
+                  const fromMovs=sueldoMovsPorLiq?.get(liq.id!);
+                  acc[k].total+=(fromMovs!=null?fromMovs:(liq.total_a_pagar||0));
                   return acc;
                 },{})).sort((a,b)=>b.total-a.total).map(({emp,total})=>(
                     <div key={emp.apellido+emp.nombre} className="eerr-row">

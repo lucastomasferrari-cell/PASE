@@ -30,6 +30,7 @@ interface MesData {
 
 // Subset de Liquidacion + nested join (mismo patrón que Cashflow).
 interface LiquidacionPendienteRow {
+  id: string;
   total_a_pagar: number;
   rrhh_novedades: { mes: number; anio: number; rrhh_empleados: { local_id: number | null } | null } | null;
 }
@@ -61,13 +62,17 @@ export default function Cierre({ user, localActivo }: CierreProps) {
     fq = applyLocalScope(fq, user, lid);
     let gq = db.from("gastos").select("monto, tipo, categoria, local_id").gte("fecha", desde).lte("fecha", hasta);
     gq = applyLocalScope(gq, user, lid);
-    const [{ data: v }, { data: f }, { data: g0 }, { data: liq }] = await Promise.all([
+    const [{ data: v }, { data: f }, { data: g0 }, { data: liq }, { data: sMov }] = await Promise.all([
       vq,
       fq,
       gq,
       db.from("rrhh_liquidaciones")
-        .select("total_a_pagar, rrhh_novedades(mes, anio, rrhh_empleados(local_id))")
+        .select("id, total_a_pagar, rrhh_novedades(mes, anio, rrhh_empleados(local_id))")
         .in("estado", ["pendiente", "pagado"]).eq("anulado", false),
+      db.from("movimientos")
+        .select("importe, local_id, liquidacion_id")
+        .eq("cat", "SUELDOS").eq("anulado", false)
+        .not("liquidacion_id", "is", null),
     ]);
     const ventas_arr = (v as Venta[]) || [];
     const facturas_arr = (f as Factura[]) || [];
@@ -76,6 +81,9 @@ export default function Cierre({ user, localActivo }: CierreProps) {
     const gastos_arr = allGastos.filter(x => x.tipo !== "empleado");
     const liqRows = (((liq as unknown) as LiquidacionPendienteRow[]) || [])
       .filter(l => l.rrhh_novedades?.mes === mo && l.rrhh_novedades?.anio === yr);
+    const liqIdSet = new Set(liqRows.map(l => l.id));
+    const sueldoMovsCierre = ((sMov as {importe:number,local_id:number,liquidacion_id:string}[]) || [])
+      .filter(m => liqIdSet.has(m.liquidacion_id));
 
     const ventas = ventas_arr.reduce((s, x) => s + Number(x.monto), 0);
     const cmv = facturas_arr.reduce((s, x) => s + Number(x.total), 0);
@@ -86,9 +94,24 @@ export default function Cierre({ user, localActivo }: CierreProps) {
     const comisiones = gastos_arr.filter(x => x.tipo === "comision").reduce((s, x) => s + Number(x.monto), 0);
     const impuestos = gastos_arr.filter(x => x.tipo === "impuesto").reduce((s, x) => s + Number(x.monto), 0);
     const otrosGastos = gastos_arr.filter(x => !["fijo","variable","publicidad","comision","impuesto","retiro_socio","empleado"].includes(x.tipo)).reduce((s, x) => s + Number(x.monto), 0);
-    const liqFilt = liqRows.filter(l => !lid || (l.rrhh_novedades?.rrhh_empleados?.local_id === lid));
+    let sueldos: number;
     const gastosEmpFilt = gastosEmp.filter(x => !lid || x.local_id === lid);
-    const sueldos = liqFilt.reduce((s, l) => s + Number(l.total_a_pagar), 0) + gastosEmpFilt.reduce((s, x) => s + Number(x.monto), 0);
+    if (lid) {
+      const movsPorLiq = new Map<string,number>();
+      for (const m of sueldoMovsCierre) {
+        if (m.local_id !== lid) continue;
+        movsPorLiq.set(m.liquidacion_id, (movsPorLiq.get(m.liquidacion_id) || 0) + Math.abs(m.importe));
+      }
+      const liqFilt = liqRows.filter(l => movsPorLiq.has(l.id) || (l.rrhh_novedades?.rrhh_empleados?.local_id === lid));
+      sueldos = 0;
+      for (const l of liqFilt) {
+        const fromMovs = movsPorLiq.get(l.id);
+        sueldos += fromMovs != null ? fromMovs : Number(l.total_a_pagar);
+      }
+    } else {
+      sueldos = liqRows.reduce((s, l) => s + Number(l.total_a_pagar), 0);
+    }
+    sueldos += gastosEmpFilt.reduce((s, x) => s + Number(x.monto), 0);
     const utilBruta = ventas - cmv;
     const utilNeta = utilBruta - gastosFijos - gastosVar - sueldos - cargasSociales - publicidad - comisiones - impuestos - otrosGastos;
     const pct = (n: number) => ventas > 0 ? ((n / ventas) * 100).toFixed(1) + "%" : "—";
