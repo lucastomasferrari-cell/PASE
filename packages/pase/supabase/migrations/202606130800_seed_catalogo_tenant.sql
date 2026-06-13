@@ -11,9 +11,13 @@
 --
 -- Fix de DB (esta migración): sembrar un catálogo default genérico, liviano y
 -- editable al crear el tenant + backfillear los tenants vacíos existentes.
--- Neko se saltea en el backfill (ya tiene su catálogo real → guard por
--- gasto_fijo). La función es idempotente por (tenant_id, nombre[, tipo]) así
--- que re-correrla nunca duplica.
+-- La función gatea CADA bloque por si el tenant ya tiene ESE catálogo, así que
+-- "rellena solo lo que falta, nunca toca data existente": es idempotente,
+-- collision-proof y Neko-safe en cualquier estado. Neko no recibe nada (tiene
+-- gasto_fijo + 26 medios + puestos); Kanzo/Malita/Pruebas V2 reciben categorías
+-- y puestos pero NO medios (ya tienen los 22 clonados de Neko el 12-jun → si
+-- sembráramos chocaría el UNIQUE de slug). La limpieza de esos medios clonados
+-- es un tema aparte, fuera del alcance de este seed.
 --
 -- Reglas: C7 (multi-tenant — tenant_id explícito), C11 (SECURITY DEFINER con
 -- GRANT solo a service_role + authenticated; el dedup la hace segura para
@@ -39,7 +43,9 @@ BEGIN;
 
 -- ───────────────────────────────────────────────────────────────────────────
 -- fn_seed_catalogo_tenant: siembra el catálogo genérico AR para un tenant.
--- Idempotente: NOT EXISTS / NOT EXISTS-equivalente en los 3 bloques.
+-- Idempotente y collision-proof: cada uno de los 3 bloques (categorías / medios
+-- / puestos) se auto-gatea con IF NOT EXISTS por si el tenant YA tiene ESE
+-- catálogo. Rellena solo lo que falta, nunca pisa ni duplica data existente.
 -- ───────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION fn_seed_catalogo_tenant(p_tenant_id uuid)
 RETURNS void
@@ -54,6 +60,14 @@ BEGIN
 
   -- ── 1) Categorías (config_categorias) ────────────────────────────────────
   -- tipo + grupo + nombre + orden. Dedup por (tenant_id, nombre, tipo).
+  -- Gate de bloque: solo sembramos el template si el tenant NO tiene todavía
+  -- ninguna categoría de gasto (LIKE 'gasto%'). Así un tenant que ya configuró
+  -- sus categorías de gasto no recibe el template (caso Neko: tiene gasto_fijo).
+  -- El NOT EXISTS por (nombre,tipo) de adentro queda igual como red de seguridad.
+  IF NOT EXISTS (
+    SELECT 1 FROM config_categorias
+    WHERE tenant_id = p_tenant_id AND tipo LIKE 'gasto%'
+  ) THEN
   INSERT INTO config_categorias (tenant_id, tipo, grupo, nombre, orden, activo)
   SELECT p_tenant_id, v.tipo, v.grupo, v.nombre, v.orden, true
   FROM (VALUES
@@ -116,11 +130,24 @@ BEGIN
       AND cc.nombre = v.nombre
       AND cc.tipo = v.tipo
   );
+  END IF;
 
   -- ── 2) Medios de cobro (medios_cobro) ─────────────────────────────────────
   -- slug = slugify(nombre) (lower, sin acentos, [^a-z0-9]+ → '_', trim '_').
   -- cuenta_destino 'Caja Chica' solo para los efectivos; el resto NULL.
   -- Globales del tenant (local_id NULL). Dedup por (tenant_id, nombre) global.
+  --
+  -- IMPORTANTE: NO sembramos medios si el tenant YA tiene CUALQUIER medio activo.
+  -- Caso Kanzo/Malita/Lucas Pruebas V2: por la unificación del 12-jun les
+  -- clonaron los 22 medios de Neko → si igual sembráramos el template chocaría
+  -- el UNIQUE de slug. La regla es "rellenar solo lo que falta, nunca tocar data
+  -- existente": tenant con 0 medios = nuevo → recibe el template; tenant con
+  -- medios (clonados o propios) = se respetan tal cual. (La limpieza de esos
+  -- medios clonados de Neko es un tema aparte, fuera del alcance de este seed.)
+  IF NOT EXISTS (
+    SELECT 1 FROM medios_cobro
+    WHERE tenant_id = p_tenant_id AND deleted_at IS NULL
+  ) THEN
   INSERT INTO medios_cobro (tenant_id, local_id, nombre, slug, emoji, pide_vuelto, cuenta_destino, activo, orden)
   SELECT
     p_tenant_id,
@@ -152,9 +179,14 @@ BEGIN
       AND upper(mc.nombre) = upper(v.nombre)
       AND mc.deleted_at IS NULL
   );
+  END IF;
 
   -- ── 3) Puestos RRHH (rrhh_puestos) ────────────────────────────────────────
   -- UNIQUE(tenant_id, nombre) → ON CONFLICT DO NOTHING (idempotente).
+  -- Gate de bloque: solo si el tenant no tiene NINGÚN puesto todavía.
+  IF NOT EXISTS (
+    SELECT 1 FROM rrhh_puestos WHERE tenant_id = p_tenant_id
+  ) THEN
   INSERT INTO rrhh_puestos (tenant_id, nombre, orden, activo)
   SELECT p_tenant_id, v.nombre, v.orden, true
   FROM (VALUES
@@ -168,6 +200,7 @@ BEGIN
     ('Cadete/Delivery',   8)
   ) AS v(nombre, orden)
   ON CONFLICT (tenant_id, nombre) DO NOTHING;
+  END IF;
 END;
 $$;
 
@@ -291,21 +324,17 @@ REVOKE ALL ON FUNCTION crear_tenant_v2(text, text, text, text, text, uuid, text,
 GRANT EXECUTE ON FUNCTION crear_tenant_v2(text, text, text, text, text, uuid, text, text, int) TO service_role;
 
 -- ───────────────────────────────────────────────────────────────────────────
--- Backfill: sembrar el catálogo a cada tenant activo que NO tenga ninguna
--- categoría de gasto_fijo (= tenant genuinamente vacío). Neko ya tiene las
--- suyas → se saltea. La idempotencia por nombre/tipo lo hace seguro igual.
+-- Backfill: invocar fn_seed_catalogo_tenant para CADA tenant activo. Como la
+-- función gatea bloque por bloque, esto rellena solo lo que falta a cada uno y
+-- no toca a los que ya tienen. Neko queda intacto; Kanzo/Malita/Pruebas V2
+-- reciben categorías + puestos pero conservan sus medios (los 22 de Neko).
 -- ───────────────────────────────────────────────────────────────────────────
 DO $$
 DECLARE
   t RECORD;
 BEGIN
   FOR t IN SELECT id FROM tenants WHERE activo LOOP
-    IF NOT EXISTS (
-      SELECT 1 FROM config_categorias
-      WHERE tenant_id = t.id AND tipo = 'gasto_fijo'
-    ) THEN
-      PERFORM fn_seed_catalogo_tenant(t.id);
-    END IF;
+    PERFORM fn_seed_catalogo_tenant(t.id);
   END LOOP;
 END $$;
 
