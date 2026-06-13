@@ -310,7 +310,7 @@ test.describe("Stock por local + fecha de compra (mutante)", () => {
       p_hasta: hasta,
     });
     expect(errCmv).toBeNull();
-    const fila = (cmv as any[] | null)?.find((r) => Number(r.insumo_id) === insumoId);
+    const fila = (cmv as Array<Record<string, unknown>> | null)?.find((r) => Number(r.insumo_id) === insumoId);
     expect(fila).toBeTruthy();
     expect(Number(fila!.stock_inicial).toFixed(4)).toBe((0).toFixed(4));
     expect(Number(fila!.compras_cantidad).toFixed(4)).toBe(QTY_COMPRA.toFixed(4));
