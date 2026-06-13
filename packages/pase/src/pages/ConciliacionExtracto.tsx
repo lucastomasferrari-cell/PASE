@@ -75,6 +75,11 @@ interface BloqueProveedor {
     fecha: string;
     total: number;
   }>;
+  ya_matcheados_ext?: Array<{ idx: number; fecha: string; monto: number; descripcion: string; estado: string }>;
+  ya_matcheados_pase?: Array<{ id: string; fecha: string; importe: number; detalle: string }>;
+  total_completo_ext?: number;
+  total_completo_pase?: number;
+  total_completo_dif?: number;
 }
 
 // Factura/remito cargado pero NO marcado como pagado, cuyo total coincide
@@ -1308,7 +1313,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                     </div>
                     <details style={{ marginTop: 6 }}>
                       <summary style={{ cursor: "pointer", fontSize: 11, color: "var(--muted2)" }}>
-                        Ver detalle ({filas.length} transferencias + {bloque.movs?.length ?? 0} pagos)
+                        Ver detalle ({filas.length + (bloque.ya_matcheados_ext?.length ?? 0)} transferencias + {(bloque.movs?.length ?? 0) + (bloque.ya_matcheados_pase?.length ?? 0)} pagos)
                       </summary>
                       <div style={{ marginTop: 6, fontSize: 11 }}>
                         <div style={{ color: "var(--muted2)", marginBottom: 2 }}>Transferencias del extracto:</div>
@@ -1335,10 +1340,53 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                             </div>
                           );
                         })}
-                        {/* Facturas pendientes del proveedor — la pista para
-                            cerrar la diferencia (caso "no la marcaron como
-                            pagada"). Botón paga con cuenta MP + fecha de la
-                            última transferencia del bloque. */}
+                        {/* Contexto: transfers y pagos que YA matchearon individualmente */}
+                        {(bloque.ya_matcheados_ext ?? []).length > 0 && (
+                          <>
+                            <div style={{ color: "var(--muted2)", margin: "8px 0 2px", fontStyle: "italic" }}>
+                              Ya matcheadas individualmente ({bloque.ya_matcheados_ext!.length}):
+                            </div>
+                            {bloque.ya_matcheados_ext!.map((f: any, i: number) => (
+                              <div key={`ctx-ext-${i}`} style={{ display: "flex", gap: 6, padding: "2px 0 2px 4px", opacity: 0.45, fontSize: 11 }}>
+                                <span style={{ color: "var(--success)", flexShrink: 0 }}>✓</span>
+                                <span style={{ flex: 1 }}>{fmt_d(f.fecha)} · {(f.descripcion ?? "").slice(0, 50)}</span>
+                                <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(f.monto)}</span>
+                              </div>
+                            ))}
+                          </>
+                        )}
+                        {(bloque.ya_matcheados_pase ?? []).length > 0 && (
+                          <>
+                            <div style={{ color: "var(--muted2)", margin: "8px 0 2px", fontStyle: "italic" }}>
+                              Pagos ya matcheados ({bloque.ya_matcheados_pase!.length}):
+                            </div>
+                            {bloque.ya_matcheados_pase!.map((m: any) => (
+                              <div key={`ctx-pase-${m.id}`} style={{ display: "flex", gap: 6, padding: "2px 0 2px 4px", opacity: 0.45, fontSize: 11 }}>
+                                <span style={{ color: "var(--success)", flexShrink: 0 }}>✓</span>
+                                <span style={{ flex: 1 }}>{fmt_d(m.fecha)} · {(m.detalle ?? "").slice(0, 50)}</span>
+                                <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(m.importe)}</span>
+                              </div>
+                            ))}
+                          </>
+                        )}
+                        {/* Totales completos (matcheados + no matcheados) */}
+                        {bloque.total_completo_ext != null && (
+                          <div style={{
+                            margin: "8px 0 4px", padding: "6px 8px",
+                            background: "var(--s2)", borderRadius: 4, fontSize: 11,
+                            display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 4,
+                          }}>
+                            <span>Total completo extracto: <b>{fmt_$(bloque.total_completo_ext)}</b></span>
+                            <span>Total completo PASE: <b>{fmt_$(bloque.total_completo_pase)}</b></span>
+                            <span style={{
+                              fontWeight: 600,
+                              color: Math.abs(Number(bloque.total_completo_dif)) <= 2 ? "var(--success)" : "var(--danger)",
+                            }}>
+                              Dif total: {fmt_$(bloque.total_completo_dif)}
+                            </span>
+                          </div>
+                        )}
+                        {/* Facturas pendientes del proveedor */}
                         {(bloque.facturas_pendientes ?? []).length > 0 && (
                           <>
                             <div style={{ color: "#3b82f6", margin: "8px 0 2px", fontWeight: 600 }}>
