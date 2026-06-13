@@ -413,7 +413,7 @@ BEGIN
       WHERE NOT m.usado
         AND (m.prov_id = v_prov.prov_id
              OR (m.prov_nombre IS NOT NULL AND unaccent(UPPER(m.prov_nombre)) ~ v_regex))
-        AND m.fecha BETWEEN p_periodo_desde - 4 AND p_periodo_hasta + 4;
+        AND m.fecha BETWEEN p_periodo_desde AND p_periodo_hasta;
 
       IF COALESCE(v_n, 0) = 0 THEN
         IF NOT EXISTS (
@@ -449,7 +449,7 @@ BEGIN
       WHERE m.usado
         AND (m.prov_id = v_prov.prov_id
              OR (m.prov_nombre IS NOT NULL AND unaccent(UPPER(m.prov_nombre)) ~ v_regex))
-        AND m.fecha BETWEEN p_periodo_desde - 4 AND p_periodo_hasta + 4;
+        AND m.fecha BETWEEN p_periodo_desde AND p_periodo_hasta;
 
       -- Totales completos (matcheados + no matcheados)
       SELECT COUNT(*), SUM(e.monto)
@@ -467,7 +467,7 @@ BEGIN
       FROM _ce_mov m
       WHERE (m.prov_id = v_prov.prov_id
              OR (m.prov_nombre IS NOT NULL AND unaccent(UPPER(m.prov_nombre)) ~ v_regex))
-        AND m.fecha BETWEEN p_periodo_desde - 4 AND p_periodo_hasta + 4;
+        AND m.fecha BETWEEN p_periodo_desde AND p_periodo_hasta;
 
       v_dif := v_suma_ext - COALESCE(v_suma_pase, 0);
 
