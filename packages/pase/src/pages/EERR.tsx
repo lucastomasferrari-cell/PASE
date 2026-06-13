@@ -56,7 +56,7 @@ interface MesResumen {
 
 interface LiquidacionPendienteRow {
   total_a_pagar: number;
-  rrhh_novedades: { rrhh_empleados: { local_id: number | null } | null } | null;
+  rrhh_novedades: { mes: number; anio: number; rrhh_empleados: { local_id: number | null } | null } | null;
 }
 
 const fmtMesLabel = (mes: string): string => {
@@ -93,24 +93,24 @@ export default function EERR({ user, localActivo }: EERRProps) {
     const lid = localActivo ? parseInt(String(localActivo)) : null;
     let vq = db.from("ventas").select("monto, local_id").gte("fecha", desde).lte("fecha", hasta);
     vq = applyLocalScope(vq, user, lid);
-    let fq = db.from("facturas").select("total, local_id").gte("fecha", desde).lte("fecha", hasta).or("estado.neq.anulada,estado.is.null");
+    let fq = db.from("facturas").select("total, bucket, local_id").gte("fecha", desde).lte("fecha", hasta).or("estado.neq.anulada,estado.is.null");
     fq = applyLocalScope(fq, user, lid);
     let gq = db.from("gastos").select("monto, tipo, categoria, local_id").gte("fecha", desde).lte("fecha", hasta).or("estado.neq.anulado,estado.is.null");
     gq = applyLocalScope(gq, user, lid);
     const [{ data: v }, { data: f }, { data: g0 }, { data: liq }] = await Promise.all([
       vq, fq, gq,
       db.from("rrhh_liquidaciones")
-        .select("total_a_pagar, rrhh_novedades(rrhh_empleados(local_id))")
+        .select("total_a_pagar, rrhh_novedades!inner(mes, anio, rrhh_empleados(local_id))")
         .in("estado", ["pendiente", "pagado"]).eq("anulado", false)
-        .gte("calculado_at", desde + "T00:00:00").lte("calculado_at", hasta + "T23:59:59"),
+        .eq("rrhh_novedades.mes", mo).eq("rrhh_novedades.anio", yr),
     ]);
     const ventasArr = (v as Venta[]) || [];
     const facturasArr = (f as Factura[]) || [];
-    const gastosArr = ((g0 as Gasto[]) || []).filter(x => x.categoria !== "SUELDOS");
+    const allGastos = ((g0 as Gasto[]) || []).filter(x => x.categoria !== "SUELDOS");
+    const gastosEmp = allGastos.filter(x => x.tipo === "empleado");
+    const gastosArr = allGastos.filter(x => x.tipo !== "empleado");
     const liqRows = ((liq as unknown) as LiquidacionPendienteRow[]) || [];
     const ventas = ventasArr.reduce((s, x) => s + Number(x.monto), 0);
-    // Clasificación por bucket: facturas legacy (bucket=null) o cat_compra
-    // suman al CMV; el resto suma a su bucket de gastos correspondiente.
     const facsCMV = facturasArr.filter(x => !x.bucket || x.bucket === "cat_compra");
     const facsBucket = (b: string) => facturasArr.filter(x => x.bucket === b);
     const sumF = (arr: Factura[]) => arr.reduce((s, x) => s + Number(x.total), 0);
@@ -122,7 +122,8 @@ export default function EERR({ user, localActivo }: EERRProps) {
     const comisiones = gastosArr.filter(x => x.tipo === "comision").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_comision"));
     const impuestos = gastosArr.filter(x => x.tipo === "impuesto").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_impuesto"));
     const liqFilt = liqRows.filter(l => !lid || (l.rrhh_novedades?.rrhh_empleados?.local_id === lid));
-    const sueldos = liqFilt.reduce((s, l) => s + Number(l.total_a_pagar), 0);
+    const gastosEmpFilt = gastosEmp.filter(x => !lid || x.local_id === lid);
+    const sueldos = liqFilt.reduce((s, l) => s + Number(l.total_a_pagar), 0) + gastosEmpFilt.reduce((s, x) => s + Number(x.monto), 0);
     const utilBruta = ventas - cmv;
     const utilNeta = utilBruta - gastosFijos - gastosVar - sueldos - cargasSociales - publicidad - comisiones - impuestos;
     return { mes: mesArg, ventas, cmv, gastosFijos, gastosVar, publicidad, comisiones, impuestos, sueldos, cargasSociales, utilBruta, utilNeta };
@@ -159,7 +160,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
       // Antes SELECT * traía JSON + campos auditoría innecesarios para reporte.
       let vq = db.from("ventas").select("fecha, monto, medio, local_id").gte("fecha",desde).lte("fecha",hasta);
       vq = applyLocalScope(vq, user, lid);
-      let fq = db.from("facturas").select("id, fecha, total, neto, iva21, iva105, iibb, cat, estado, local_id, tipo").gte("fecha",desde).lte("fecha",hasta).or("estado.neq.anulada,estado.is.null");
+      let fq = db.from("facturas").select("id, fecha, total, neto, iva21, iva105, iibb, cat, estado, local_id, tipo, bucket").gte("fecha",desde).lte("fecha",hasta).or("estado.neq.anulada,estado.is.null");
       fq = applyLocalScope(fq, user, lid);
       let gq = db.from("gastos").select("id, fecha, monto, categoria, tipo, local_id").gte("fecha",desde).lte("fecha",hasta).or("estado.neq.anulado,estado.is.null");
       gq = applyLocalScope(gq, user, lid);
@@ -168,15 +169,17 @@ export default function EERR({ user, localActivo }: EERRProps) {
         fq,
         gq,
         db.from("rrhh_liquidaciones")
-          .select("*, rrhh_novedades(mes, anio, empleado_id, rrhh_empleados(nombre, apellido, puesto, local_id))")
+          .select("*, rrhh_novedades!inner(mes, anio, empleado_id, rrhh_empleados(nombre, apellido, puesto, local_id))")
           .in("estado", ["pendiente", "pagado"])
           .eq("anulado", false)
-          .gte("calculado_at", desde+"T00:00:00")
-          .lte("calculado_at", hasta+"T23:59:59"),
+          .eq("rrhh_novedades.mes", mo)
+          .eq("rrhh_novedades.anio", yr),
       ]);
       setVentas((v as Venta[]) || []);
       setFacturas((f as Factura[]) || []);
-      setGastos(((g as Gasto[]) || []).filter((x) => x.categoria !== "SUELDOS"));
+      const allGastos = ((g as Gasto[]) || []).filter((x) => x.categoria !== "SUELDOS");
+      const gastosEmpleado = allGastos.filter(x => x.tipo === "empleado");
+      setGastos(allGastos.filter(x => x.tipo !== "empleado"));
       // El cast a unknown primero salva el mismatch entre lo que Supabase tipa
       // (nested FK como array) y la realidad 1:1 que LiquidacionConEmpleado
       // refleja — convención existente del codebase, ver comentario del type.
@@ -186,7 +189,9 @@ export default function EERR({ user, localActivo }: EERRProps) {
         return !lid || (emp ? emp.local_id === lid : false);
       });
       setSueldosDetalle(liqFiltradas);
-      setSueldos(liqFiltradas.reduce((s, l) => s + (l.total_a_pagar || 0), 0));
+      const gastosEmpFilt = gastosEmpleado.filter(x => !lid || x.local_id === lid);
+      const extraLabor = gastosEmpFilt.reduce((s, x) => s + (x.monto || 0), 0);
+      setSueldos(liqFiltradas.reduce((s, l) => s + (l.total_a_pagar || 0), 0) + extraLabor);
       setLoading(false);
     };
     load();

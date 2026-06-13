@@ -27,7 +27,7 @@ interface MesData {
 // Subset de Liquidacion + nested join (mismo patrón que Cashflow).
 interface LiquidacionPendienteRow {
   total_a_pagar: number;
-  rrhh_novedades: { rrhh_empleados: { local_id: number | null } | null } | null;
+  rrhh_novedades: { mes: number; anio: number; rrhh_empleados: { local_id: number | null } | null } | null;
 }
 
 export default function Cierre({ user, localActivo }: CierreProps) {
@@ -62,14 +62,15 @@ export default function Cierre({ user, localActivo }: CierreProps) {
       fq,
       gq,
       db.from("rrhh_liquidaciones")
-        .select("total_a_pagar, rrhh_novedades(rrhh_empleados(local_id))")
+        .select("total_a_pagar, rrhh_novedades!inner(mes, anio, rrhh_empleados(local_id))")
         .in("estado", ["pendiente", "pagado"]).eq("anulado", false)
-        .gte("calculado_at", desde + "T00:00:00").lte("calculado_at", hasta + "T23:59:59"),
+        .eq("rrhh_novedades.mes", mo).eq("rrhh_novedades.anio", yr),
     ]);
     const ventas_arr = (v as Venta[]) || [];
     const facturas_arr = (f as Factura[]) || [];
-    const gastos_arr = ((g0 as Gasto[]) || []).filter(x => x.categoria !== "SUELDOS");
-    // Cast a unknown primero por convención del codebase para nested FK.
+    const allGastos = ((g0 as Gasto[]) || []).filter(x => x.categoria !== "SUELDOS");
+    const gastosEmp = allGastos.filter(x => x.tipo === "empleado");
+    const gastos_arr = allGastos.filter(x => x.tipo !== "empleado");
     const liqRows = ((liq as unknown) as LiquidacionPendienteRow[]) || [];
 
     const ventas = ventas_arr.reduce((s, x) => s + Number(x.monto), 0);
@@ -78,7 +79,8 @@ export default function Cierre({ user, localActivo }: CierreProps) {
     const gastosVar = gastos_arr.filter(x => x.tipo === "variable").reduce((s, x) => s + Number(x.monto), 0);
     const publicidad = gastos_arr.filter(x => x.tipo === "publicidad").reduce((s, x) => s + Number(x.monto), 0);
     const liqFilt = liqRows.filter(l => !lid || (l.rrhh_novedades?.rrhh_empleados?.local_id === lid));
-    const sueldos = liqFilt.reduce((s, l) => s + Number(l.total_a_pagar), 0);
+    const gastosEmpFilt = gastosEmp.filter(x => !lid || x.local_id === lid);
+    const sueldos = liqFilt.reduce((s, l) => s + Number(l.total_a_pagar), 0) + gastosEmpFilt.reduce((s, x) => s + Number(x.monto), 0);
     const utilBruta = ventas - cmv;
     const utilNeta = utilBruta - gastosFijos - gastosVar - sueldos - publicidad;
     const pct = (n: number) => ventas > 0 ? ((n / ventas) * 100).toFixed(1) + "%" : "—";
