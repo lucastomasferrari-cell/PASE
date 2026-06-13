@@ -279,14 +279,22 @@ tbody tr.clickable:hover {
  * EERR — líneas más limpias
  * ═══════════════════════════════════════════════════════════════════ */
 .eerr-row {
-  padding: 10px 18px;
+  padding: 8px 18px 8px 28px;
   transition: background var(--pase-duration-fast) var(--pase-ease-out);
 }
 .eerr-section-title {
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   font-size: var(--pase-fs-xs);
-  padding: 10px 18px;
+  font-weight: 600;
+  padding: 12px 18px 6px;
+  margin-top: 8px;
+  border-top: 1px solid var(--pase-border);
+  color: var(--pase-text);
+}
+.eerr-section-title:first-child {
+  border-top: none;
+  margin-top: 0;
 }
 .eerr-row .num,
 .eerr-row .num-right {
