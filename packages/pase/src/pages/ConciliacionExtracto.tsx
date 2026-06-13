@@ -201,6 +201,10 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   const [motivoAnular, setMotivoAnular] = useState<string>("");
   // Estado temporal para confirmar creación de mov faltante
   const [crearFaltante, setCrearFaltante] = useState<FilaExtracto | null>(null);
+  // "Crear como Gasto" — para sueltos que son gastos operativos (Edenor,
+  // suscripciones, etc.) y no pertenecen a un proveedor. Usa crear_gasto
+  // RPC que crea gasto + movimiento → aparece en EERR correctamente.
+  const [crearGastoFila, setCrearGastoFila] = useState<FilaExtracto | null>(null);
   // Tipo y categoría para el mov a crear desde el modal. Se setean al abrirlo
   // (Lucas 10-jun: "no te pide poner ni tipo ni categoria como corresponde"
   // — antes los mov creados quedaban con tipo="Egreso Manual"/null cat,
@@ -543,6 +547,38 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     }
   }
 
+  async function ejecutarCrearGasto() {
+    if (!crearGastoFila) return;
+    if (!crearTipo) { showError("Elegí un tipo"); return; }
+    if (!crearCat) { showError("Elegí una categoría"); return; }
+    setSavingAccion(true);
+    try {
+      const detalle = `[Concil. ${periodoDesde.slice(0, 7)}] ${crearGastoFila.descripcion}${crearGastoFila.referencia_externa ? ` · ref ${crearGastoFila.referencia_externa}` : ""}`;
+      const { error } = await db.rpc("crear_gasto", {
+        p_fecha: crearGastoFila.fecha,
+        p_local_id: localActivo,
+        p_categoria: crearCat,
+        p_tipo: crearTipo,
+        p_monto: Math.abs(crearGastoFila.monto),
+        p_detalle: detalle,
+        p_cuenta: "MercadoPago",
+        p_plantilla_id: null,
+        p_idempotency_key: crypto.randomUUID(),
+      });
+      if (error) {
+        showError(translateRpcError(error));
+        return;
+      }
+      setResueltos(p => ({ ...p, [`ext:${crearGastoFila.idx}`]: "creado" }));
+      setCrearGastoFila(null);
+      setCrearTipo("");
+      setCrearCat("");
+      showToast("Gasto creado");
+    } finally {
+      setSavingAccion(false);
+    }
+  }
+
   // ─── Creación EN LOTE (Lucas 10-jun: "siguen siendo muchos") ────────────
   // La mayoría de los faltantes son gastos reales no cargados. Crearlos de
   // a uno (35 clicks + 35 confirmaciones) es un dolor: checkboxes + un solo
@@ -728,6 +764,18 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
             }),
           };
         });
+      }
+      // Resolver factura_sin_pagar filas que tengan esta factura/remito
+      // en sus candidatos — evita que queden huérfanas en la UI.
+      if (cruce) {
+        for (const fila of cruce.extracto) {
+          if (fila.estado !== "factura_sin_pagar") continue;
+          if (resueltos[`ext:${fila.idx}`]) continue;
+          const match = (fila.facturas_pendientes ?? []).some(fp =>
+            fp.id === pend.id || (fp.tipo === "tanda" && (fp.facturas ?? []).some(tf => tf.id === pend.id))
+          );
+          if (match) setResueltos(p => ({ ...p, [`ext:${fila.idx}`]: "pagada" }));
+        }
       }
       showToast(yaEstabaPagada
         ? `${pend.tipo === "factura" ? "Factura" : "Remito"} ${pend.nro ?? ""} ya estaba pagada — vinculada al bloque`
@@ -918,6 +966,48 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
         });
       }
     }
+    // Integrar factura_sin_pagar en bloques de proveedor (Lucas 11-jun:
+    // "no debería cargarla directamente en la parte de arriba donde están
+    // los consolidados por proveedor?"). Agrupamos por proveedor y las
+    // insertamos en el bloque correspondiente.
+    for (const fila of cruce.extracto) {
+      if (fila.estado !== "factura_sin_pagar") continue;
+      if (resueltos[`ext:${fila.idx}`]) continue;
+      for (const cand of (fila.facturas_pendientes ?? [])) {
+        const provName = cand.proveedor ?? "Sin proveedor";
+        if (!map.has(provName)) {
+          map.set(provName, {
+            bloque: {
+              proveedor: provName,
+              n_transferencias: 0,
+              suma_extracto: 0,
+              n_pagos: 0,
+              suma_pase: 0,
+              dif: 0,
+              movs: [],
+              facturas_pendientes: [],
+            },
+            filas: [],
+            resuelto: false,
+          });
+        }
+        const entry = map.get(provName)!;
+        if (!entry.filas.some(f => f.idx === fila.idx)) {
+          entry.filas.push(fila);
+          entry.bloque.n_transferencias++;
+          entry.bloque.suma_extracto += fila.monto;
+          entry.bloque.dif = entry.bloque.suma_extracto - (Number(entry.bloque.suma_pase) || 0);
+        }
+        if (!entry.bloque.facturas_pendientes) entry.bloque.facturas_pendientes = [];
+        if (cand.tipo !== "tanda") {
+          const existing = entry.bloque.facturas_pendientes!;
+          if (!existing.some(p => p.id === cand.id)) {
+            existing.push({ tipo: cand.tipo as "factura" | "remito", id: cand.id!, nro: cand.nro ?? null, fecha: cand.fecha ?? "", total: Number(cand.total ?? 0) });
+          }
+        }
+      }
+    }
+
     for (const v of map.values()) {
       v.resuelto = v.filas.every(f => {
         const r = resueltos[`ext:${f.idx}`];
@@ -1171,11 +1261,9 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                 🟠 Falta cargar en PASE · <span style={{ color: "var(--muted2)" }}>agrupado por proveedor</span> <span style={{ color: "var(--muted2)" }}>({bloquesPorProveedor.length})</span>
               </h4>
               <p style={{ color: "var(--muted2)", fontSize: 12, lineHeight: 1.5, marginBottom: 12 }}>
-                El sistema encontró pagos cargados en PASE para estos proveedores y los agrupó con
-                las transferencias del extracto. Lo que importa: la <strong>diferencia del total</strong>.
-                Si es negativa, faltan cargar pagos en PASE. Si es positiva, hay pagos cargados que
-                corresponden a transferencias de otro mes. <em>Abajo (🔴 sueltos) están las transferencias
-                que no se pudieron agrupar con ningún proveedor.</em>
+                Transferencias del extracto agrupadas por proveedor. Incluye diferencias de totales
+                y facturas pendientes de pago. Abrí el detalle de cada proveedor para ver las
+                transferencias, los pagos cargados, y las facturas que faltan marcar como pagadas.
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {bloquesPorProveedor.map(({ bloque, filas, resuelto }) => (
@@ -1408,6 +1496,14 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                               <button className="btn btn-acc btn-sm" onClick={() => setCrearFaltante(fila)}>
                                 Crear en Caja
                               </button>
+                              {fila.monto < 0 && (
+                                <button
+                                  className="btn btn-sec btn-sm"
+                                  onClick={() => { setCrearGastoFila(fila); setCrearTipo(""); setCrearCat(""); }}
+                                >
+                                  Crear como Gasto
+                                </button>
+                              )}
                               <button
                                 className="btn btn-ghost btn-sm"
                                 style={{ color: "var(--acc)" }}
@@ -1543,50 +1639,58 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
             </Card>
           )}
 
-          {/* 🔵 FACTURAS CARGADAS PERO SIN MARCAR COMO PAGADAS */}
-          <SeccionFilas
-            titulo="🔵 Facturas cargadas pero sin marcar como pagadas"
-            descripcion="La transferencia salió de MP y la factura está en PASE, pero nadie tocó Pagar. Marcala como pagada acá mismo: se registra con cuenta MercadoPago y la fecha real de la transferencia."
-            filas={cruce.extracto.filter(f =>
+          {/* Facturas sin pagar que NO pudieron agruparse en ningún bloque
+              (sin proveedor asignado) — fallback individual */}
+          {(() => {
+            const sinProv = cruce.extracto.filter(f =>
               f.estado === "factura_sin_pagar" && !resueltos[`ext:${f.idx}`]
-            )}
-            renderFila={fila => (
-              <FilaCard
-                key={fila.idx}
-                fecha={fila.fecha}
-                monto={fila.monto}
-                descripcion={fila.descripcion}
-              >
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {(fila.facturas_pendientes ?? []).map((cand, ci) => (
-                    <div key={ci} style={{
-                      display: "flex", justifyContent: "space-between", alignItems: "center",
-                      gap: 8, flexWrap: "wrap", padding: "6px 8px",
-                      background: "rgba(59,130,246,0.07)", borderRadius: 4, fontSize: 12,
-                    }}>
-                      <span>
-                        {cand.tipo === "tanda"
-                          ? <><strong>{cand.proveedor}</strong> · {cand.n} facturas pendientes suman {fmt_$(Number(cand.total_suma))} {Number(cand.dif) > 0.01 && <em>(dif {fmt_$(Number(cand.dif))})</em>}</>
-                          : <><strong>{cand.proveedor ?? "—"}</strong> · {cand.tipo} {cand.nro ?? cand.id} · {cand.fecha ? fmt_d(cand.fecha) : ""} · {fmt_$(Number(cand.total))} {Number(cand.dif) > 0.01 && <em>(dif {fmt_$(Number(cand.dif))})</em>}</>}
-                      </span>
-                      <button
-                        className="btn btn-acc btn-sm"
-                        disabled={savingAccion}
-                        onClick={() => void marcarFacturaPagada(fila, cand)}
-                      >
-                        {cand.tipo === "tanda" ? `Marcar las ${cand.n} como pagadas` : "Marcar como pagada"}
-                      </button>
+              && (f.facturas_pendientes ?? []).every(fp => !fp.proveedor)
+            );
+            if (sinProv.length === 0) return null;
+            return (
+              <SeccionFilas
+                titulo="🔵 Facturas sin marcar como pagadas (sin proveedor)"
+                descripcion="La transferencia salió de MP y hay facturas pendientes pero no se pudo identificar el proveedor."
+                filas={sinProv}
+                renderFila={fila => (
+                  <FilaCard
+                    key={fila.idx}
+                    fecha={fila.fecha}
+                    monto={fila.monto}
+                    descripcion={fila.descripcion}
+                  >
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {(fila.facturas_pendientes ?? []).map((cand, ci) => (
+                        <div key={ci} style={{
+                          display: "flex", justifyContent: "space-between", alignItems: "center",
+                          gap: 8, flexWrap: "wrap", padding: "6px 8px",
+                          background: "rgba(59,130,246,0.07)", borderRadius: 4, fontSize: 12,
+                        }}>
+                          <span>
+                            {cand.tipo === "tanda"
+                              ? <><strong>{cand.proveedor ?? "—"}</strong> · {cand.n} facturas pendientes suman {fmt_$(Number(cand.total_suma))} {Number(cand.dif) > 0.01 && <em>(dif {fmt_$(Number(cand.dif))})</em>}</>
+                              : <><strong>{cand.proveedor ?? "—"}</strong> · {cand.tipo} {cand.nro ?? cand.id} · {cand.fecha ? fmt_d(cand.fecha) : ""} · {fmt_$(Number(cand.total))} {Number(cand.dif) > 0.01 && <em>(dif {fmt_$(Number(cand.dif))})</em>}</>}
+                          </span>
+                          <button
+                            className="btn btn-acc btn-sm"
+                            disabled={savingAccion}
+                            onClick={() => void marcarFacturaPagada(fila, cand)}
+                          >
+                            {cand.tipo === "tanda" ? `Marcar las ${cand.n} como pagadas` : "Marcar como pagada"}
+                          </button>
+                        </div>
+                      ))}
+                      <div>
+                        <button className="btn btn-ghost btn-sm" onClick={() => ignorarExtracto(fila.idx)}>
+                          No es ninguna de estas — ignorar
+                        </button>
+                      </div>
                     </div>
-                  ))}
-                  <div>
-                    <button className="btn btn-ghost btn-sm" onClick={() => ignorarExtracto(fila.idx)}>
-                      No es ninguna de estas — ignorar
-                    </button>
-                  </div>
-                </div>
-              </FilaCard>
-            )}
-          />
+                  </FilaCard>
+                )}
+              />
+            );
+          })()}
 
           {/* Sobrantes que pertenecen a un bloque — colapsados, informativos.
               NO se deben anular: están explicados por el bloque naranja. */}
@@ -1957,6 +2061,65 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
             <button className="btn btn-ghost" onClick={() => { setCrearFaltante(null); setCrearTipo(""); setCrearCat(""); }} disabled={savingAccion}>Cancelar</button>
             <button className="btn btn-acc" onClick={ejecutarCrearFaltante} disabled={savingAccion || !crearTipo || !crearCat}>
               {savingAccion ? "Creando…" : "Confirmar crear"}
+            </button>
+          </div>
+        </Modal>
+        );
+      })()}
+
+      {/* Modal: crear como gasto (sueltos que son gastos operativos) */}
+      {crearGastoFila && (() => {
+        const tiposGasto = ["Gasto Fijo","Gasto Variable","Publicidad","Comisión","Impuesto","Otros"];
+        let catsDisponibles: string[] = [];
+        if (crearTipo === "Gasto Fijo") catsDisponibles = GASTOS_FIJOS;
+        else if (crearTipo === "Gasto Variable") catsDisponibles = GASTOS_VARIABLES;
+        else if (crearTipo === "Publicidad") catsDisponibles = GASTOS_PUBLICIDAD;
+        else if (crearTipo === "Comisión") catsDisponibles = COMISIONES_CATS;
+        else if (crearTipo === "Impuesto") catsDisponibles = GASTOS_IMPUESTOS;
+        else if (crearTipo === "Otros") catsDisponibles = ["OTROS"];
+        return (
+        <Modal isOpen={true} onClose={() => { setCrearGastoFila(null); setCrearTipo(""); setCrearCat(""); }} title="Crear como gasto">
+          <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+            <div>Fecha: <strong>{fmt_d(crearGastoFila.fecha)}</strong></div>
+            <div>Monto: <strong>{fmt_$(Math.abs(crearGastoFila.monto))}</strong></div>
+            <div>Cuenta: <strong>MercadoPago</strong></div>
+            <div>Local: <strong>{localNombre}</strong></div>
+            <div style={{ marginTop: 6 }}>Detalle: <em>{crearGastoFila.descripcion}</em></div>
+          </div>
+          <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <label style={{ fontSize: 12, color: "var(--muted2)", display: "block", marginBottom: 4 }}>Tipo *</label>
+              <select
+                value={crearTipo}
+                onChange={e => { setCrearTipo(e.target.value); setCrearCat(""); }}
+                style={{ width: "100%", padding: "8px 10px", fontSize: 13, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--text)", borderRadius: 6 }}
+              >
+                <option value="">Seleccioná…</option>
+                {tiposGasto.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: "var(--muted2)", display: "block", marginBottom: 4 }}>Categoría *</label>
+              <select
+                value={crearCat}
+                onChange={e => setCrearCat(e.target.value)}
+                disabled={!crearTipo}
+                style={{ width: "100%", padding: "8px 10px", fontSize: 13, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--text)", borderRadius: 6 }}
+              >
+                <option value="">{crearTipo ? "Seleccioná…" : "(elegí tipo primero)"}</option>
+                {catsDisponibles.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+          {!crearTipo && (
+            <div style={{ marginTop: 8, fontSize: 11, color: "var(--muted2)" }}>
+              Mirá la descripción ("{crearGastoFila.descripcion.slice(0, 60)}") y elegí el tipo que aplique. Ej: "Pago de servicio Edenor" → Gasto Fijo / EDENOR.
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+            <button className="btn btn-ghost" onClick={() => { setCrearGastoFila(null); setCrearTipo(""); setCrearCat(""); }} disabled={savingAccion}>Cancelar</button>
+            <button className="btn btn-acc" onClick={ejecutarCrearGasto} disabled={savingAccion || !crearTipo || !crearCat}>
+              {savingAccion ? "Creando…" : "Confirmar crear gasto"}
             </button>
           </div>
         </Modal>
