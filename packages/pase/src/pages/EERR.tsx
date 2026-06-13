@@ -329,10 +329,10 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const porCatOtros=Object.entries(otrosGastosArr.reduce<Record<string,number>>((acc,g)=>{const k=g.categoria||g.tipo;acc[k]=(acc[k]||0)+(g.monto||0);return acc},{})).map(([c,t])=>({c,t})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
 
   const ERow=({label,valor,color,big}: {label: string, valor: number, color: string, big?: boolean})=>(
-    <div className="eerr-row" style={big?{background:"var(--pase-celeste-100)",padding:"12px 16px",borderLeft:"3px solid var(--pase-celeste)"}:{}}>
-      <span style={{fontSize:big?13:11,fontWeight:big?600:400,color:big?"var(--pase-text)":"var(--muted2)"}}>{label}</span>
-      <div>
-        <span style={{fontFamily:"'Inter',sans-serif",fontSize:big?17:13,fontWeight:500,color}}>{fmt_$(valor)}</span>
+    <div className={big?"eerr-row-big":"eerr-row-summary"}>
+      <span style={{fontSize:big?13:12,fontWeight:big?600:400,color:big?"var(--pase-text)":"var(--pase-text)"}}>{label}</span>
+      <div style={{textAlign:"right"}}>
+        <span style={{fontFamily:"'Inter',sans-serif",fontSize:big?17:14,fontWeight:big?600:500,color,fontVariantNumeric:"tabular-nums"}}>{fmt_$(valor)}</span>
         {!big&&<span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(Math.abs(valor))}</span>}
       </div>
     </div>
