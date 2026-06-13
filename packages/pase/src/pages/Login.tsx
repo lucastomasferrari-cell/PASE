@@ -100,6 +100,7 @@ export default function Login({ onLogin }: LoginProps) {
           style={{
             display: "flex",
             alignItems: "center",
+            justifyContent: "center",
             gap: 8,
             margin: "12px 0 18px",
             cursor: "pointer",

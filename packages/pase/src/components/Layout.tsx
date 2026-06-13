@@ -565,7 +565,9 @@ input[type="month"].search:hover::-webkit-calendar-picker-indicator{
 /* ─── LOGIN ────────────────────────────────────────────────────────── */
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--pase-bg-page);position:relative;overflow:hidden}
 .login-bg{position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,var(--pase-celeste-100) 0%,transparent 70%);opacity:0.5;pointer-events:none}
-.login-card{position:relative;width:420px;background:var(--pase-bg);border:0.5px solid var(--pase-border);border-radius:16px;padding:44px 40px}
+.login-card{position:relative;width:420px;background:var(--pase-bg);border:0.5px solid var(--pase-border);border-radius:16px;padding:44px 40px;text-align:center}
+.login-card .field label{text-align:center}
+.login-card .field input{text-align:center}
 .login-brand{font-family:var(--pase-font);font-size:48px;font-weight:500;color:var(--pase-text);line-height:1;letter-spacing:-0.04em;text-align:center}
 .login-sub{font-size:10px;color:var(--pase-text-muted);margin-bottom:36px;margin-top:8px;letter-spacing:0.06em;text-transform:uppercase;font-weight:400;text-align:center}
 
