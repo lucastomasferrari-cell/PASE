@@ -120,13 +120,21 @@ export function useMediosCobro(): MediosCobroState {
     try {
       const { data, error } = await db.from("medios_cobro")
         .select("id, nombre, local_id, cuenta_destino, activo, orden");
-      if (error || !data || data.length === 0) {
+      if (error) {
+        // Error duro (network/RLS): fallback defensivo transitorio.
         console.warn(
           "[useMediosCobro] usando FALLBACK hardcoded — los datos pueden estar desactualizados.",
-          { cause: error?.message || (data?.length === 0 ? "0 rows (RLS?)" : "no data") }
+          { cause: error.message }
         );
         setMedios(FALLBACK);
         setSource("fallback");
+      } else if (!data || data.length === 0) {
+        // DB respondió OK con 0 filas → tenant sin medios. Mostrar VACÍO,
+        // NUNCA el FALLBACK con los medios de Neko. source='db' (la DB manda).
+        // Con el seed de catálogo al crear tenant esto casi no pasa, pero es
+        // la red de seguridad contra el leak de Neko en un tenant vacío.
+        setMedios([]);
+        setSource("db");
       } else {
         const rows = data as MedioCobro[];
         writeCache(rows);

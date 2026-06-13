@@ -117,6 +117,30 @@ const FALLBACK: CategoriasData = {
   categoriaToBucket: buildCategoriaToBucket(_FALLBACK_BASE),
 };
 
+// Catálogo VACÍO. Se usa cuando la DB responde OK pero con 0 filas (tenant
+// genuinamente sin catálogo). En ese caso NUNCA mostramos el FALLBACK (que
+// tiene los nombres reales de Neko) — un tenant vacío debe ver vacío, y el
+// empty-state de Ajustes invita a crear sus propias categorías. Con el seed
+// de catálogo al crear tenant esto casi no pasa, pero es la red de seguridad
+// contra el leak de Neko. El FALLBACK queda SOLO para error duro (transitorio).
+const EMPTY_BASE: BaseData = {
+  CATEGORIAS_COMPRA: [],
+  GASTOS_FIJOS: [],
+  GASTOS_VARIABLES: [],
+  GASTOS_PUBLICIDAD: [],
+  COMISIONES_CATS: [],
+  GASTOS_IMPUESTOS: [],
+  RETIROS_SOCIOS: [],
+  GASTOS_JUICIOS: [],
+  CATEGORIAS_INGRESO: [],
+};
+
+const EMPTY: CategoriasData = {
+  ...EMPTY_BASE,
+  categoriaToTipo: {},
+  categoriaToBucket: {},
+};
+
 function readCache(): CategoriasData | null {
   try {
     const raw = sessionStorage.getItem(CACHE_KEY);
@@ -189,12 +213,19 @@ export function useCategorias(): CategoriasState {
     try {
       const { data, error } = await db.from("config_categorias")
         .select("tipo, nombre, orden, grupo, activo");
-      if (error || !data || data.length === 0) {
+      if (error) {
+        // Error duro (network/RLS): fallback defensivo transitorio.
         console.warn(
           "[useCategorias] usando FALLBACK hardcoded de constants.ts — los datos pueden estar desactualizados.",
-          { cause: error?.message || (data?.length === 0 ? "0 rows (RLS bloqueando? user sin permiso para SELECT?)" : "no data") }
+          { cause: error.message }
         );
         setState(s => ({ ...FALLBACK, loading: false, source: "fallback", refresh: s.refresh }));
+        return;
+      }
+      if (!data || data.length === 0) {
+        // DB respondió OK con 0 filas → tenant sin catálogo. Mostrar VACÍO,
+        // NUNCA el FALLBACK con datos de Neko. source='db' (la verdad es la DB).
+        setState(s => ({ ...EMPTY, loading: false, source: "db", refresh: s.refresh }));
         return;
       }
       const next = fromRows(data as ConfigCategoriaRow[]);
@@ -221,12 +252,18 @@ export function useCategorias(): CategoriasState {
         const { data, error } = await db.from("config_categorias")
           .select("tipo, nombre, orden, grupo, activo");
         if (cancelled) return;
-        if (error || !data || data.length === 0) {
+        if (error) {
+          // Error duro: fallback defensivo transitorio.
           console.warn(
-            "[useCategorias] mount-fetch retornó vacío — usando FALLBACK constants.ts.",
-            { cause: error?.message || "0 rows (RLS o falta de datos)" }
+            "[useCategorias] mount-fetch error — usando FALLBACK constants.ts.",
+            { cause: error.message }
           );
           setState(s => ({ ...FALLBACK, loading: false, source: "fallback", refresh: s.refresh }));
+          return;
+        }
+        if (!data || data.length === 0) {
+          // 0 filas sin error → tenant sin catálogo: mostrar VACÍO, no Neko.
+          setState(s => ({ ...EMPTY, loading: false, source: "db", refresh: s.refresh }));
           return;
         }
         const next = fromRows(data as ConfigCategoriaRow[]);
