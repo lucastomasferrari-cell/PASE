@@ -628,15 +628,15 @@ export default function EERR({ user, localActivo }: EERRProps) {
                 </Suspense>
               </div>
             )}
-            <ESection title="MERCADERÍA (CMV)" items={porCatCMV} total={totalCMV} color="var(--warn)" pct={pct}/>
-            <ESection title="GASTOS FIJOS" items={porCatFijos} total={totalGastosFijos} color="var(--danger)" pct={pct}/>
-            <ESection title="GASTOS VARIABLES" items={porCatVar} total={totalGastosVar} color="var(--danger)" pct={pct}/>
+            <ESection title="MERCADERÍA (CMV)" items={porCatCMV} total={totalCMV} color="var(--pase-text)" pct={pct}/>
+            <ESection title="GASTOS FIJOS" items={porCatFijos} total={totalGastosFijos} color="var(--pase-text)" pct={pct}/>
+            <ESection title="GASTOS VARIABLES" items={porCatVar} total={totalGastosVar} color="var(--pase-text)" pct={pct}/>
             <div
               className="eerr-section-title"
               style={{cursor:"pointer",userSelect:"none"}}
               onClick={()=>setSueldosExpanded(e=>!e)}
             >
-              SUELDOS — <span style={{color:"var(--danger)"}}>{fmt_$(sueldos)}</span>{" "}
+              SUELDOS — <span style={{color:"var(--pase-text)"}}>{fmt_$(sueldos)}</span>{" "}
               <span style={{color:"var(--muted)"}}>{pct(sueldos)}</span>
               <span style={{color:"var(--muted2)",fontSize:10,marginLeft:8}}>{sueldosExpanded?"▲":"▼"}</span>
             </div>
@@ -659,7 +659,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
                         <span style={{fontSize:9,color:"var(--muted)",marginLeft:6}}>{emp.puesto}</span>
                       </span>
                       <div>
-                        <span className="num" style={{color:"var(--danger)"}}>{fmt_$(total)}</span>
+                        <span className="num" style={{color:"var(--pase-text)"}}>{fmt_$(total)}</span>
                         <span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(total)}</span>
                       </div>
                     </div>
@@ -668,16 +668,16 @@ export default function EERR({ user, localActivo }: EERRProps) {
             )}
             {totalCargasSociales !== 0 && (
               <div className="eerr-section-title">
-                CARGAS SOCIALES — <span style={{color:"var(--danger)"}}>{fmt_$(totalCargasSociales)}</span>{" "}
+                CARGAS SOCIALES — <span style={{color:"var(--pase-text)"}}>{fmt_$(totalCargasSociales)}</span>{" "}
                 <span style={{color:"var(--muted)"}}>{pct(totalCargasSociales)}</span>
               </div>
             )}
-            <ESection title="PUBLICIDAD Y MKT" items={porCatPub} total={totalPublicidad} color="var(--info)" pct={pct}/>
-            <ESection title="COMISIONES" items={porCatCom} total={totalComisiones} color="var(--acc2)" pct={pct}/>
-            <ESection title="IMPUESTOS" items={porCatImp} total={totalImpuestos} color="var(--danger)" pct={pct}/>
-            {porCatOtros.length>0&&<ESection title="OTROS GASTOS" items={porCatOtros} total={totalOtrosGastos} color="var(--danger)" pct={pct}/>}
+            <ESection title="PUBLICIDAD Y MKT" items={porCatPub} total={totalPublicidad} color="var(--pase-text)" pct={pct}/>
+            <ESection title="COMISIONES" items={porCatCom} total={totalComisiones} color="var(--pase-text)" pct={pct}/>
+            <ESection title="IMPUESTOS" items={porCatImp} total={totalImpuestos} color="var(--pase-text)" pct={pct}/>
+            {porCatOtros.length>0&&<ESection title="OTROS GASTOS" items={porCatOtros} total={totalOtrosGastos} color="var(--pase-text)" pct={pct}/>}
             {totalRetiros !== 0 && (
-              <ESection title="RETIROS DE SOCIOS (post Util. Neta)" items={porCatRet} total={totalRetiros} color="var(--info)" pct={pct}/>
+              <ESection title="RETIROS DE SOCIOS (post Util. Neta)" items={porCatRet} total={totalRetiros} color="var(--pase-text)" pct={pct}/>
             )}
           </div>
         </>

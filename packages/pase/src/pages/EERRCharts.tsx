@@ -1,4 +1,4 @@
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, Legend, CartesianGrid } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, Legend, CartesianGrid } from "recharts";
 
 interface EvolucionRow {
   mes: string;
@@ -46,9 +46,7 @@ export function CategoriaCMVChart({ data }: { data: CategoriaRow[] }) {
           contentStyle={{background:"var(--s1)",border:"1px solid var(--bd2)",borderRadius:6,fontSize:11}}
           formatter={(v)=>[`$${Number(v).toLocaleString("es-AR")}`, "CMV"] as [string, string]}
         />
-        <Bar dataKey="monto" radius={[4,4,0,0]}>
-          {data.map((_,i)=><Cell key={i} fill={i===0?"var(--warn)":i===1?"var(--acc)":"var(--info)"}/>)}
-        </Bar>
+        <Bar dataKey="monto" radius={[4,4,0,0]} fill="var(--pase-celeste)"/>
       </BarChart>
     </ResponsiveContainer>
   );
