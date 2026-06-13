@@ -23,7 +23,7 @@ interface CategoriaRow { tipo: string; nombre: string; orden: number; grupo: str
 interface MedioCobroRow { id: number; nombre: string; cuenta_destino: string | null; activo: boolean }
 interface PuestoRow { id: number; nombre: string; activo: boolean }
 
-type GrupoId = "gastos" | "compras" | "ingresos" | "medios" | "puestos" | "turnos";
+type GrupoId = "gastos" | "compras" | "ingresos" | "medios" | "puestos";
 type TipoGasto = "fijo" | "variable";
 
 // Sub-tipos de "Categorías de gastos" para mostrar pill Fijo/Variable.
@@ -97,7 +97,9 @@ const GRUPOS_DEF: GrupoSpec[] = [
   { id: "ingresos", label: "Categorías de ingresos" },
   { id: "medios",   label: "Medios de cobro"        },
   { id: "puestos",  label: "Puestos del equipo"     },
-  { id: "turnos",   label: "Turnos y horarios"      },
+  // "Turnos y horarios" se removió (2026-06-13): era un placeholder vacío
+  // ("próximamente") sin tabla ni CRUD — confundía a un cliente nuevo. Cuando
+  // exista la feature de turnos/horarios, se re-agrega con su sección real.
 ];
 
 interface AjustesProps {
@@ -399,7 +401,6 @@ export default function Ajustes({ user }: AjustesProps = {}) {
     ingresos: itemsIngresos.length,
     medios: itemsMedios.length,
     puestos: itemsPuestos.length,
-    turnos: 0,
   };
 
   return (
@@ -565,17 +566,11 @@ export default function Ajustes({ user }: AjustesProps = {}) {
                         <button className={`${styles.itemAccion} ${styles.itemAccionDanger}`} title="Eliminar (soft delete)" onClick={() => eliminarPuesto(p)}>×</button>
                       </div>
                     ))}
-                    {g.id === "turnos" && (
-                      <div className={styles.empty}>
-                        No configurado aún. Próximamente vas a poder definir turnos (Mediodía / Noche / Custom) y horarios por sucursal.
-                      </div>
-                    )}
-
-                    {count === 0 && g.id !== "turnos" && !searchActive && (
+                    {count === 0 && !searchActive && (
                       <div className={styles.empty}>No hay items en este grupo todavía.</div>
                     )}
 
-                    {g.id !== "turnos" && count > 0 && !searchActive && (
+                    {count > 0 && !searchActive && (
                       <button
                         type="button"
                         className={styles.linkAgregar}
