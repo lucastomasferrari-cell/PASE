@@ -1290,16 +1290,21 @@ export function TabSueldos({
                     </div>
                     <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 2 }}>{emp.puesto}</div>
                   </div>
-                  <div style={{ textAlign: "right", fontSize: 11 }}>
-                    {todasPagas ? (
-                      <span className="badge b-success" style={{ fontSize: 10 }}>
-                        {cuotasTotal === 1 ? "Mes pagado ✓" : "Mes completo ✓"}
-                      </span>
-                    ) : (
-                      <span style={{ color: "var(--muted2)" }}>
-                        {cuotasInfo.filter(c => c.estado === "pagado").length}/{cuotasInfo.length} pagada{cuotasInfo.length !== 1 ? "s" : ""}
-                      </span>
-                    )}
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--acc)" }}>
+                      {fmt_$(cuotasInfo.reduce((s, c) => s + c.total, 0))}
+                    </div>
+                    <div style={{ fontSize: 10, marginTop: 2 }}>
+                      {todasPagas ? (
+                        <span className="badge b-success" style={{ fontSize: 9 }}>
+                          {cuotasTotal === 1 ? "Mes pagado ✓" : "Mes completo ✓"}
+                        </span>
+                      ) : (
+                        <span style={{ color: "var(--muted2)" }}>
+                          {cuotasInfo.filter(c => c.estado === "pagado").length}/{cuotasInfo.length} pagada{cuotasInfo.length !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 

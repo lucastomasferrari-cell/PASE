@@ -588,22 +588,25 @@ export default function EERR({ user, localActivo }: EERRProps) {
               <div style={{paddingBottom:8}}>
                 {sueldosDetalle.length===0?(
                   <div className="eerr-row"><span style={{fontSize:11,color:"var(--muted2)"}}>Sin sueldos pagados este mes</span></div>
-                ):sueldosDetalle.map((liq,i)=>{
+                ):Object.values(sueldosDetalle.reduce<Record<string,{emp:NonNullable<NonNullable<LiquidacionConEmpleado["rrhh_novedades"]>["rrhh_empleados"]>,total:number}>>((acc,liq)=>{
                   const emp=liq.rrhh_novedades?.rrhh_empleados;
-                  if(!emp) return null;
-                  return (
-                    <div key={i} className="eerr-row">
+                  if(!emp) return acc;
+                  const k=liq.rrhh_novedades!.empleado_id;
+                  if(!acc[k]) acc[k]={emp,total:0};
+                  acc[k].total+=liq.total_a_pagar||0;
+                  return acc;
+                },{})).sort((a,b)=>b.total-a.total).map(({emp,total})=>(
+                    <div key={emp.apellido+emp.nombre} className="eerr-row">
                       <span style={{fontSize:11,color:"var(--muted2)"}}>
                         {emp.apellido}, {emp.nombre}
                         <span style={{fontSize:9,color:"var(--muted)",marginLeft:6}}>{emp.puesto}</span>
                       </span>
                       <div>
-                        <span className="num" style={{color:"var(--danger)"}}>{fmt_$(liq.total_a_pagar)}</span>
-                        <span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(liq.total_a_pagar)}</span>
+                        <span className="num" style={{color:"var(--danger)"}}>{fmt_$(total)}</span>
+                        <span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(total)}</span>
                       </div>
                     </div>
-                  );
-                })}
+                ))}
               </div>
             )}
             {totalCargasSociales !== 0 && (
