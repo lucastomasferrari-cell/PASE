@@ -338,12 +338,18 @@ export default function EERR({ user, localActivo }: EERRProps) {
     </div>
   );
 
-  const ESection=({title,items,total,color}: {title: string, items: {c?: string, m?: string, t: number}[], total: number, color: string})=>(
-    <>
-      <div className="eerr-section-title">{title} — <span style={{color}}>{fmt_$(total)}</span> <span style={{color:"var(--muted)"}}>{pct(total)}</span></div>
-      {items.map(x=><div key={x.c||x.m} className="eerr-row"><span style={{fontSize:11,color:"var(--muted2)"}}>{x.c||x.m}</span><div><span className="num" style={{color}}>{fmt_$(x.t)}</span><span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(x.t)}</span></div></div>)}
-    </>
-  );
+  const ESection=({title,items,total,color,defaultOpen}: {title: string, items: {c?: string, m?: string, t: number}[], total: number, color: string, defaultOpen?: boolean})=>{
+    const [open,setOpen]=useState(!!defaultOpen);
+    return (
+      <>
+        <div className="eerr-section-title" style={{cursor:"pointer",userSelect:"none"}} onClick={()=>setOpen(o=>!o)}>
+          {title} — <span style={{color}}>{fmt_$(total)}</span> <span style={{color:"var(--muted)"}}>{pct(total)}</span>
+          <span style={{color:"var(--muted2)",fontSize:10,marginLeft:8}}>{open?"▲":"▼"}</span>
+        </div>
+        {open&&items.map(x=><div key={x.c||x.m} className="eerr-row"><span style={{fontSize:11,color:"var(--muted2)"}}>{x.c||x.m}</span><div><span className="num" style={{color}}>{fmt_$(x.t)}</span><span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(x.t)}</span></div></div>)}
+      </>
+    );
+  };
 
   // Resumen del mes principal en el mismo formato que dataComp — para
   // consumir por el gráfico de evolución y la tabla comparativa.
@@ -643,7 +649,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
             >
               SUELDOS — <span style={{color:"var(--danger)"}}>{fmt_$(sueldos)}</span>{" "}
               <span style={{color:"var(--muted)"}}>{pct(sueldos)}</span>
-              <span style={{color:"var(--muted2)",fontSize:10,marginLeft:8}}>{sueldosExpanded?"▲ ocultar":"▼ ver detalle"}</span>
+              <span style={{color:"var(--muted2)",fontSize:10,marginLeft:8}}>{sueldosExpanded?"▲":"▼"}</span>
             </div>
             {sueldosExpanded&&(
               <div style={{paddingBottom:8}}>
