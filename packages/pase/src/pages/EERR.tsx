@@ -100,16 +100,16 @@ export default function EERR({ user, localActivo }: EERRProps) {
     const [{ data: v }, { data: f }, { data: g0 }, { data: liq }] = await Promise.all([
       vq, fq, gq,
       db.from("rrhh_liquidaciones")
-        .select("total_a_pagar, rrhh_novedades!inner(mes, anio, rrhh_empleados(local_id))")
-        .in("estado", ["pendiente", "pagado"]).eq("anulado", false)
-        .eq("rrhh_novedades.mes", mo).eq("rrhh_novedades.anio", yr),
+        .select("total_a_pagar, rrhh_novedades(mes, anio, rrhh_empleados(local_id))")
+        .in("estado", ["pendiente", "pagado"]).eq("anulado", false),
     ]);
     const ventasArr = (v as Venta[]) || [];
     const facturasArr = (f as Factura[]) || [];
     const allGastos = ((g0 as Gasto[]) || []).filter(x => x.categoria !== "SUELDOS");
     const gastosEmp = allGastos.filter(x => x.tipo === "empleado");
     const gastosArr = allGastos.filter(x => x.tipo !== "empleado");
-    const liqRows = ((liq as unknown) as LiquidacionPendienteRow[]) || [];
+    const liqRows = (((liq as unknown) as LiquidacionPendienteRow[]) || [])
+      .filter(l => l.rrhh_novedades?.mes === mo && l.rrhh_novedades?.anio === yr);
     const ventas = ventasArr.reduce((s, x) => s + Number(x.monto), 0);
     const facsCMV = facturasArr.filter(x => !x.bucket || x.bucket === "cat_compra");
     const facsBucket = (b: string) => facturasArr.filter(x => x.bucket === b);
@@ -169,21 +169,17 @@ export default function EERR({ user, localActivo }: EERRProps) {
         fq,
         gq,
         db.from("rrhh_liquidaciones")
-          .select("*, rrhh_novedades!inner(mes, anio, empleado_id, rrhh_empleados(nombre, apellido, puesto, local_id))")
+          .select("*, rrhh_novedades(mes, anio, empleado_id, rrhh_empleados(nombre, apellido, puesto, local_id))")
           .in("estado", ["pendiente", "pagado"])
-          .eq("anulado", false)
-          .eq("rrhh_novedades.mes", mo)
-          .eq("rrhh_novedades.anio", yr),
+          .eq("anulado", false),
       ]);
       setVentas((v as Venta[]) || []);
       setFacturas((f as Factura[]) || []);
       const allGastos = ((g as Gasto[]) || []).filter((x) => x.categoria !== "SUELDOS");
       const gastosEmpleado = allGastos.filter(x => x.tipo === "empleado");
       setGastos(allGastos.filter(x => x.tipo !== "empleado"));
-      // El cast a unknown primero salva el mismatch entre lo que Supabase tipa
-      // (nested FK como array) y la realidad 1:1 que LiquidacionConEmpleado
-      // refleja — convención existente del codebase, ver comentario del type.
-      const liqRows = ((liqData as unknown) as LiquidacionConEmpleado[]) || [];
+      const liqRows = (((liqData as unknown) as LiquidacionConEmpleado[]) || [])
+        .filter(l => l.rrhh_novedades?.mes === mo && l.rrhh_novedades?.anio === yr);
       const liqFiltradas = liqRows.filter((l) => {
         const emp = l.rrhh_novedades?.rrhh_empleados;
         return !lid || (emp ? emp.local_id === lid : false);

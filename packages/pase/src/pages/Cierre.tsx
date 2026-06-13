@@ -62,16 +62,16 @@ export default function Cierre({ user, localActivo }: CierreProps) {
       fq,
       gq,
       db.from("rrhh_liquidaciones")
-        .select("total_a_pagar, rrhh_novedades!inner(mes, anio, rrhh_empleados(local_id))")
-        .in("estado", ["pendiente", "pagado"]).eq("anulado", false)
-        .eq("rrhh_novedades.mes", mo).eq("rrhh_novedades.anio", yr),
+        .select("total_a_pagar, rrhh_novedades(mes, anio, rrhh_empleados(local_id))")
+        .in("estado", ["pendiente", "pagado"]).eq("anulado", false),
     ]);
     const ventas_arr = (v as Venta[]) || [];
     const facturas_arr = (f as Factura[]) || [];
     const allGastos = ((g0 as Gasto[]) || []).filter(x => x.categoria !== "SUELDOS");
     const gastosEmp = allGastos.filter(x => x.tipo === "empleado");
     const gastos_arr = allGastos.filter(x => x.tipo !== "empleado");
-    const liqRows = ((liq as unknown) as LiquidacionPendienteRow[]) || [];
+    const liqRows = (((liq as unknown) as LiquidacionPendienteRow[]) || [])
+      .filter(l => l.rrhh_novedades?.mes === mo && l.rrhh_novedades?.anio === yr);
 
     const ventas = ventas_arr.reduce((s, x) => s + Number(x.monto), 0);
     const cmv = facturas_arr.reduce((s, x) => s + Number(x.total), 0);
