@@ -141,14 +141,23 @@ test.describe.serial("E2E Test 23 — Anular pago de sueldo", () => {
     // cuota_num) impide insertar otra. Antes pagar_sueldo cortaba con
     // LIQUIDACION_ANULADA → quincena trabada. Migración 202606051200 hace que
     // la liquidación anulada se REVIVA (reset + valores nuevos del p_calc).
-    const calc = {
-      sueldo_base: 100000, descuento_ausencias: 0, total_horas_extras: 0, total_dobles: 0,
-      total_feriados: 0, total_vacaciones: 0, subtotal1: 100000, monto_presentismo: 0,
-      subtotal2: 100000, adelantos: 0, total_a_pagar: 100000, efectivo: 100000, transferencia: 0,
-    };
+    //
+    // Alineación 13-jun (migración 202606130400): al revivir, pagar_sueldo
+    // RECALCULA el total canónico desde la novedad + sueldo vigente y rechaza si
+    // el p_calc del cliente difiere. Además los componentes resucitados salen del
+    // canónico (NO del p_calc). Por eso pedimos el desglose canónico, lo usamos
+    // como p_calc y pagamos EXACTAMENTE el total canónico (no el 100k de la liq
+    // manual de arriba — esa quedó anulada y se sobreescribe al revivir).
+    const { data: canonData, error: canonErr } = await duenoDb.rpc("fn_liquidacion_total_canonico", {
+      p_nov_id: nov!.id, p_adelantos_ids: null,
+    });
+    if (canonErr) throw new Error(`canonico: ${canonErr.message}`);
+    const canon = canonData as Record<string, number>;
+    const TOTAL_CANON = Number(canon.total_a_pagar);
+    const calc = { ...canon, efectivo: TOTAL_CANON, transferencia: 0 };
     const { data: repago, error: repagoErr } = await duenoDb.rpc("pagar_sueldo", {
       p_nov_id: nov!.id,
-      p_formas_pago: [{ cuenta: "Caja Efectivo", monto: 100000 }],
+      p_formas_pago: [{ cuenta: "Caja Efectivo", monto: TOTAL_CANON }],
       p_adelantos_ids: null,
       p_fecha: fecha.toISOString().slice(0, 10),
       p_mes: mesUnico, p_anio: anioUnico,
@@ -163,7 +172,7 @@ test.describe.serial("E2E Test 23 — Anular pago de sueldo", () => {
       .select("anulado, estado, pagos_realizados").eq("id", liq!.id).single();
     expect(liqRevived?.anulado).toBe(false);
     expect(liqRevived?.estado).toBe("pagado");
-    expect(Number(liqRevived!.pagos_realizados)).toBe(100000);
+    expect(Number(liqRevived!.pagos_realizados)).toBe(TOTAL_CANON);
 
     // Cleanup: anular el nuevo mov para devolver el tenant E2E al saldo previo
     // (no dejar plata movida que rompa invariantes de tests posteriores).

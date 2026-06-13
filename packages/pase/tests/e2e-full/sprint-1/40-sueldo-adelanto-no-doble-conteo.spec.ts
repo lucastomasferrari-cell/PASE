@@ -11,12 +11,20 @@
 // FIX: pagos_realizados = SOLO efectivo/transferencia. El adelanto únicamente:
 // (a) ya está restado de total_a_pagar, (b) se marca descontado=true.
 //
-// Escenario: bruto 100.000, adelanto 30.000 → neto 70.000.
-//   - Pago PARCIAL de 40.000 en efectivo + tildo el adelanto.
-//   - Esperado (post-fix): pagos_realizados = 40.000 (solo efectivo),
-//     pendiente, falta 30.000, adelanto descontado=true.
-//   - Pre-fix (bug): pagos_realizados = 70.000 (40.000 + 30.000 adelanto).
-// Luego pago el resto (30.000) → completa, pagos = 70.000 = neto.
+// Escenario: sueldo del empleado mensual (seed) + adelanto 30.000.
+//   NETO = total canónico − adelanto.
+//   - Pago PARCIAL de la mitad del neto en efectivo + tildo el adelanto.
+//   - Esperado (post-fix): pagos_realizados = SOLO el efectivo del parcial,
+//     pendiente, adelanto descontado=true.
+//   - Pre-fix (bug): pagos_realizados = parcial + adelanto (doble conteo).
+// Luego pago el resto → completa, pagos = NETO.
+//
+// Alineación 13-jun (migración 202606130400): el servidor RECALCULA el total
+// canónico desde la novedad + sueldo vigente + adelantos tildados (NO desde
+// números hechos a mano). El test pide a `fn_liquidacion_total_canonico` el
+// desglose (con el adelanto incluido) y lo usa como p_calc → el total_a_pagar
+// del cliente coincide por construcción con el del server. La INTENCIÓN del
+// test (pagos_realizados = solo efectivo, no efectivo+adelanto) se mantiene.
 // ─────────────────────────────────────────────────────────────────────────
 
 import { test, expect } from "@playwright/test";
@@ -37,7 +45,7 @@ test.describe.serial("E2E Test 40 — adelanto sin doble conteo", () => {
     const duenoDb = await createE2EDuenoClient();
     const empleado = seed.empleados.mensual;
     const mes = 9, anio = 2099; // aislado
-    const BRUTO = 100000, ADELANTO = 30000, NETO = BRUTO - ADELANTO; // 70.000
+    const ADELANTO = 30000;
     let novId: string | undefined, adelId: string | undefined;
     const movIds: string[] = [];
 
@@ -72,15 +80,24 @@ test.describe.serial("E2E Test 40 — adelanto sin doble conteo", () => {
       if (novErr) throw new Error(`novedad: ${novErr.message}`);
       novId = nov!.id as string;
 
-      // p_calc: total_a_pagar = NETO (bruto − adelanto), como hace el frontend.
-      const calc = {
-        sueldo_base: BRUTO, descuento_ausencias: 0, total_horas_extras: 0, total_dobles: 0,
-        total_feriados: 0, total_vacaciones: 0, subtotal1: BRUTO, monto_presentismo: 0,
-        subtotal2: BRUTO, adelantos: ADELANTO, total_a_pagar: NETO, efectivo: NETO, transferencia: 0,
-      };
+      // Desglose CANÓNICO server-side, con el adelanto tildado incluido. El
+      // total canónico YA viene con el adelanto restado (NETO = subtotal2 −
+      // adelanto), igual que lo arma el frontend. Lo usamos como p_calc → el
+      // total_a_pagar coincide con el recálculo del server por construcción.
+      const { data: canonData, error: canonErr } = await duenoDb.rpc("fn_liquidacion_total_canonico", {
+        p_nov_id: novId, p_adelantos_ids: [adelId],
+      });
+      if (canonErr) throw new Error(`canonico: ${canonErr.message}`);
+      const canon = canonData as Record<string, number>;
+      const NETO = Number(canon.total_a_pagar);     // subtotal2 − adelanto
+      const SUBTOTAL2 = Number(canon.subtotal2);     // BRUTO (sueldo + presentismo)
+      // El adelanto entró restado en el total canónico.
+      expect(Number(canon.adelantos)).toBe(ADELANTO);
+      expect(NETO).toBe(SUBTOTAL2 - ADELANTO);
+      const calc = { ...canon, efectivo: NETO, transferencia: 0 };
 
-      // 3. PAGO PARCIAL: 40.000 efectivo + adelanto tildado.
-      const PARCIAL = 40000;
+      // 3. PAGO PARCIAL: la mitad del neto en efectivo + adelanto tildado.
+      const PARCIAL = Math.round(NETO / 2);
       const { data: r1, error: e1 } = await duenoDb.rpc("pagar_sueldo", {
         p_nov_id: novId, p_formas_pago: [{ cuenta: "Caja Efectivo", monto: PARCIAL }],
         p_adelantos_ids: [adelId], p_fecha: `${anio}-${String(mes).padStart(2, "0")}-10`,
@@ -90,9 +107,9 @@ test.describe.serial("E2E Test 40 — adelanto sin doble conteo", () => {
       const res1 = r1 as { completa: boolean; pagos_realizados: number; liquidacion_id: string; mov_ids: string[] };
       movIds.push(...(res1.mov_ids || []));
 
-      // ★ ASSERT CLAVE: pagos = SOLO efectivo (40.000), NO 70.000 (40k + 30k adelanto).
+      // ★ ASSERT CLAVE: pagos = SOLO el efectivo del parcial, NO parcial + adelanto.
       expect(Number(res1.pagos_realizados)).toBe(PARCIAL);
-      expect(res1.completa).toBe(false); // 40.000 < 70.000 neto
+      expect(res1.completa).toBe(false); // PARCIAL (mitad) < NETO
 
       const { data: liq1 } = await svc.from("rrhh_liquidaciones")
         .select("pagos_realizados, total_a_pagar, estado").eq("id", res1.liquidacion_id).single();
@@ -104,25 +121,31 @@ test.describe.serial("E2E Test 40 — adelanto sin doble conteo", () => {
       const { data: adelAfter } = await svc.from("rrhh_adelantos").select("descontado").eq("id", adelId).single();
       expect(adelAfter!.descontado).toBe(true);
 
-      // 4. PAGO DEL RESTO: 30.000 efectivo → completa (pagos = 70.000 = neto).
+      // 4. PAGO DEL RESTO: el saldo del neto en efectivo → completa (pagos = NETO).
+      // p_calc: null → no se re-valida el total (la liq ya existe con su NETO
+      // guardado y este pago NO tilda el adelanto, así que el recálculo canónico
+      // de esta llamada NO restaría el adelanto y daría el bruto; pasar el calc
+      // con-adelanto chocaría con LIQUIDACION_CALCULO_INCONSISTENTE). El frontend
+      // hace lo mismo: en el pago del saldo no re-manda el desglose, solo abona
+      // contra el total ya fijado al crear la liquidación.
       const { data: r2, error: e2 } = await duenoDb.rpc("pagar_sueldo", {
         p_nov_id: novId, p_formas_pago: [{ cuenta: "Caja Efectivo", monto: NETO - PARCIAL }],
         p_adelantos_ids: null, p_fecha: `${anio}-${String(mes).padStart(2, "0")}-11`,
-        p_mes: mes, p_anio: anio, p_crear_liq: false, p_calc: calc,
+        p_mes: mes, p_anio: anio, p_crear_liq: false, p_calc: null,
         p_liq_id: res1.liquidacion_id, p_idempotency_key: null,
       });
       if (e2) throw new Error(`pago resto: ${e2.message}`);
       const res2 = r2 as { completa: boolean; pagos_realizados: number; mov_ids: string[] };
       movIds.push(...(res2.mov_ids || []));
       expect(res2.completa).toBe(true);
-      expect(Number(res2.pagos_realizados)).toBe(NETO); // 70.000, no 100.000
+      expect(Number(res2.pagos_realizados)).toBe(NETO); // = neto, NO neto + adelanto
 
-      // ★ Aguinaldo (07-jun): acumula sobre el BRUTO (subtotal2 = 100.000),
-      // NO sobre el neto (70.000). delta = 100.000/12 ≈ 8.333,33.
+      // ★ Aguinaldo (07-jun + fix 130410): acumula sobre el BRUTO (subtotal2),
+      // NO sobre el neto. delta = subtotal2/12 (no neto/12).
       const { data: empPost } = await svc.from("rrhh_empleados")
         .select("aguinaldo_acumulado").eq("id", empleado.id).single();
       const deltaAguinaldo = Number(empPost!.aguinaldo_acumulado) - aguinaldoPre;
-      expect(deltaAguinaldo).toBeCloseTo(BRUTO / 12, 1); // 8.333,33 (no 5.833,33 del neto)
+      expect(deltaAguinaldo).toBeCloseTo(SUBTOTAL2 / 12, 1); // sobre el bruto, no el neto
     } finally {
       // Cleanup: anular movs de pago (revierte saldo + libera adelanto), borrar filas.
       for (const m of movIds) {
