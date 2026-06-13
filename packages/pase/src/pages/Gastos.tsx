@@ -117,6 +117,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
   // Default: últimos 90 días (consistente con Compras y demás filtros del admin).
   const [desde, setDesde] = useState(() => { const d = new Date(today); d.setDate(d.getDate() - 90); return toISO(d); });
   const [hasta, setHasta] = useState(toISO(today));
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- WIP filtro tipo (sesión polish); setter pendiente de cablear
   const [tipoFiltro, setTipoFiltro] = useState("todos");
   const [gastos, setGastos] = useState<GastoExt[]>([]);
   // Mapa gasto_id → "APELLIDO, NOMBRE" para gastos tipo='empleado'. El gasto no

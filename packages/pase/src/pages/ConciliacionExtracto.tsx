@@ -1346,6 +1346,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                             <div style={{ color: "var(--muted2)", margin: "8px 0 2px", fontStyle: "italic" }}>
                               Ya matcheadas individualmente ({bloque.ya_matcheados_ext!.length}):
                             </div>
+                            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- fila de contexto del bloque (jsonb) */}
                             {bloque.ya_matcheados_ext!.map((f: any, i: number) => (
                               <div key={`ctx-ext-${i}`} style={{ display: "flex", gap: 6, padding: "2px 0 2px 4px", opacity: 0.45, fontSize: 11 }}>
                                 <span style={{ color: "var(--success)", flexShrink: 0 }}>✓</span>
@@ -1360,6 +1361,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                             <div style={{ color: "var(--muted2)", margin: "8px 0 2px", fontStyle: "italic" }}>
                               Pagos ya matcheados ({bloque.ya_matcheados_pase!.length}):
                             </div>
+                            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- pago de contexto del bloque (jsonb) */}
                             {bloque.ya_matcheados_pase!.map((m: any) => (
                               <div key={`ctx-pase-${m.id}`} style={{ display: "flex", gap: 6, padding: "2px 0 2px 4px", opacity: 0.45, fontSize: 11 }}>
                                 <span style={{ color: "var(--success)", flexShrink: 0 }}>✓</span>

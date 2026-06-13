@@ -143,6 +143,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   // (tabla principal) y filtro de cuenta. NO se filtra: el user debe ver
   // los movimientos contra Banco/MP que registró (aunque el saldo este oculto).
   const visParaListado = cuentasVisiblesParaListados(user);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- WIP sesión polish; pendiente cablear
   const cuentasParaListado = visParaListado === null ? CUENTAS : visParaListado;
 
   // Locales accesibles: dueno/admin = todos; encargado = los asignados.
@@ -584,6 +585,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     await ejecutarEditMov(editMov);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- WIP sesión polish; helper pendiente de uso
   const cc = (_c: string) => "var(--pase-text-muted)";
 
   // Sub-nav del módulo madre Caja. 2 items, ambos siempre visibles.

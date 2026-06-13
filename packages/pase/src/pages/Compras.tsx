@@ -115,6 +115,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   // 3 meses por default y que filtren manual si quieren ventana más chica.
   const [desde, setDesde] = useState(() => { const d = new Date(today); d.setDate(d.getDate() - 90); return toISO(d); });
   const [hasta, setHasta] = useState(toISO(today));
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- WIP filtro proveedor (sesión polish); setter pendiente de cablear
   const [provFiltro, setProvFiltro] = useState("");
   // ──────────────────────────────────────────────────────────────────
   // Sub-section + filtro de estado controlados por URL (sprint v2 Commit 4).
@@ -1178,6 +1179,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
               description="Probá cambiar el rango de fechas o limpiar el filtro de proveedor."
             />
           ) : (
+            <div className="table-scroll-wrap">
             <table>
               <thead><tr>
                 <th>Proveedor · Nº</th>
@@ -1187,7 +1189,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                 <th>Descripción</th>
                 <th style={{ textAlign: "right" }}>Monto</th>
                 <th>Estado</th>
-                <th></th>
+                <th style={{ minWidth: 120 }}></th>
               </tr></thead>
               <tbody>{rFilt.map(r => {
                 const prov = proveedores.find(p => String(p.id) === String(r.prov_id));
