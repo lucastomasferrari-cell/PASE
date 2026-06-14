@@ -153,19 +153,13 @@ class TicketBuilder {
 
 // ─── Cliente WebUSB ─────────────────────────────────────────────────────
 
-// Vendor IDs típicos de fabricantes de impresoras térmicas. WebUSB usa
-// estos como filter al pedir autorización. Lista no-exhaustiva — el
-// browser muestra TODOS los dispositivos USB conectados al usuario y
-// este filter solo sirve para destacar los conocidos.
-const VENDOR_IDS_TERMICAS = [
-  0x04b8,  // Epson
-  0x0519,  // Star Micronics
-  0x0fe6,  // ICS Advent (común en HP/Gainscha)
-  0x1504,  // Bixolon
-  0x0dd4,  // Custom Engineering
-  0x28e9,  // Generic ESC/POS chinas (Xprinter, Gainscha rebrand)
-  0x1d6b,  // Linux Foundation (algunas térmicas se identifican así)
-];
+// NOTA (fix 2026-06-13): antes filtrábamos requestDevice por una lista de
+// vendor IDs conocidos. Pero `requestDevice({ filters })` SOLO muestra los
+// dispositivos que matchean el filtro (el comentario viejo que decía "muestra
+// todos" era incorrecto). Con eso, una impresora china genérica cuyo vendor no
+// estaba en la lista NO aparecía en el selector → chooser vacío y parecía que la
+// impresora no funcionaba. Ahora pedimos SIN filtro para que aparezca CUALQUIER
+// dispositivo USB y el usuario elija su impresora.
 
 export class Printer {
   private device: USBDevice;
@@ -186,9 +180,7 @@ export class Printer {
       throw new Error('Tu navegador no soporta WebUSB. Usá Chrome o Edge.');
     }
     const usb = (navigator as Navigator & { usb: USB }).usb;
-    const device = await usb.requestDevice({
-      filters: VENDOR_IDS_TERMICAS.map(vid => ({ vendorId: vid })),
-    });
+    const device = await usb.requestDevice({ filters: [] });
     return Printer.openDevice(device);
   }
 
