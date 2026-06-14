@@ -42,13 +42,23 @@ export function SyncStatusBadge() {
     label = 'Error sync';
     color = 'text-destructive bg-destructive/10 border-destructive/30';
     title = `Error sincronizando: ${state.message}`;
-  } else if (pending > 0 || failed > 0) {
+  } else if (pending > 0) {
+    // Pendientes legítimas: esperando el próximo push (van a sincronizar solas).
     icon = <Clock className="h-3.5 w-3.5" />;
-    label = `${pending + failed} pendiente${pending + failed === 1 ? '' : 's'}`;
+    label = `${pending} pendiente${pending === 1 ? '' : 's'}`;
     color = 'text-amber-700 bg-amber-500/10 border-amber-500/30 dark:text-amber-400';
     title = failed > 0
-      ? `${pending} pendientes + ${failed} fallidas. Revisar.`
+      ? `${pending} esperando sincronizar · ${failed} con error (se descartan solas)`
       : `${pending} operaciones esperando sincronizar`;
+  } else if (failed > 0) {
+    // Solo ops `failed`, sin pendientes: NO son "pendientes" — son operaciones
+    // que no se pudieron sincronizar (build viejo / datos inválidos) y no se
+    // reintentan más. Se auto-descartan a los 7 días (cleanupOldFailed). Las
+    // mostramos discretas: el cajero no tiene nada para hacer con ellas.
+    icon = <AlertCircle className="h-3.5 w-3.5" />;
+    label = `${failed} con error`;
+    color = 'text-muted-foreground bg-muted border-border';
+    title = `${failed} operación(es) de una sesión vieja no se pudieron sincronizar. Se descartan solas en unos días — no requieren acción.`;
   } else {
     icon = <CheckCircle2 className="h-3.5 w-3.5" />;
     label = 'Sincronizado';

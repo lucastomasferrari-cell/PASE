@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   enqueueOperation, listPendingOps, markSyncing, markSynced, markFailed,
   pendingCount, failedCount, backoffMs, cleanupOldSynced, resetSyncingOpsAtBoot,
-  isPermanentSyncError, expireStalePendingOps,
+  isPermanentSyncError, expireStalePendingOps, cleanupOldFailed,
 } from '../operations';
 import { resetDb, _resetSingletonForTest } from '../../db/index';
 import { getDb } from '../../db/index';
@@ -111,6 +111,32 @@ describe('sync/operations', () => {
     expect(removed).toBe(1);
     expect(await db.get('pending_ops', a)).toBeUndefined();
     expect(await db.get('pending_ops', b)).toBeDefined();
+  });
+
+  it('cleanupOldFailed borra failed viejas pero deja pending y failed recientes', async () => {
+    const db = await getDb();
+    // (a) failed vieja (8 días) → se borra
+    const a = await enqueueOperation({ target: 'a', op_type: 'rpc', payload: null });
+    const opA = await db.get('pending_ops', a);
+    opA!.status = 'failed';
+    opA!.created_at = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+    await db.put('pending_ops', opA!);
+    // (b) failed reciente (hoy) → se queda (ventana de inspección)
+    const b = await enqueueOperation({ target: 'b', op_type: 'rpc', payload: null });
+    const opB = await db.get('pending_ops', b);
+    opB!.status = 'failed';
+    await db.put('pending_ops', opB!);
+    // (c) pending vieja (8 días) → NO la toca (eso es trabajo de expireStalePendingOps)
+    const c = await enqueueOperation({ target: 'c', op_type: 'rpc', payload: null });
+    const opC = await db.get('pending_ops', c);
+    opC!.created_at = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+    await db.put('pending_ops', opC!);
+
+    const removed = await cleanupOldFailed();
+    expect(removed).toBe(1);
+    expect(await db.get('pending_ops', a)).toBeUndefined();
+    expect(await db.get('pending_ops', b)).toBeDefined();
+    expect(await db.get('pending_ops', c)).toBeDefined();
   });
 
   it('dependencias preservadas: depends_on se guarda', async () => {

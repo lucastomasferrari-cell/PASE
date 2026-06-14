@@ -237,7 +237,7 @@ export function SoporteWidget() {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="fixed bottom-5 right-5 z-[9000] w-13 h-13 rounded-full bg-primary text-primary-foreground shadow-lg hover:scale-105 transition-transform flex items-center justify-center"
+        className="fixed bottom-5 left-5 z-[9000] w-13 h-13 rounded-full bg-primary text-primary-foreground shadow-lg hover:scale-105 transition-transform flex items-center justify-center"
         style={{ width: 52, height: 52 }}
         title="Ayuda / Soporte"
         aria-label="Abrir soporte"
@@ -247,7 +247,7 @@ export function SoporteWidget() {
 
       {open && (
         <div
-          className="fixed right-5 z-[9001] bg-card border border-border rounded-lg shadow-2xl flex flex-col"
+          className="fixed left-5 z-[9001] bg-card border border-border rounded-lg shadow-2xl flex flex-col"
           style={{
             bottom: 84,
             width: 400,

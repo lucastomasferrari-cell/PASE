@@ -20,7 +20,7 @@
 import { pullInitialAll, type PullContext } from './pullInitial';
 import { pullIncrementalAll } from './pullIncremental';
 import { processPushQueue } from './pushQueue';
-import { pendingCount, failedCount, resetSyncingOpsAtBoot, expireStalePendingOps } from './operations';
+import { pendingCount, failedCount, resetSyncingOpsAtBoot, expireStalePendingOps, cleanupOldFailed } from './operations';
 
 export type SyncState =
   | { kind: 'idle'; pendingOps: number; failedOps: number; lastSyncAt: string | null }
@@ -61,6 +61,14 @@ class SyncEngine {
       if (expired > 0) console.warn(`[syncEngine] ${expired} ops pendientes viejas expiradas (>3 días)`);
     } catch (e) {
       console.warn('[syncEngine] expireStalePendingOps falló:', e);
+    }
+    // Descartar ops `failed` viejas: nunca van a sincronizar y solo inflan el
+    // badge ("X pendientes" fantasma). Caso Lucas 13-jun.
+    try {
+      const purged = await cleanupOldFailed();
+      if (purged > 0) console.warn(`[syncEngine] ${purged} ops failed viejas descartadas (>7 días)`);
+    } catch (e) {
+      console.warn('[syncEngine] cleanupOldFailed falló:', e);
     }
     this.startPeriodicSync();
     await this.runFullCycle(true); // primer ciclo con pull initial

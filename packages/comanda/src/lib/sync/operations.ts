@@ -219,3 +219,26 @@ export async function cleanupOldSynced(): Promise<number> {
   }
   return removed;
 }
+
+// Cleanup: elimina ops `failed` con más de N días. Una op failed NUNCA va a
+// sincronizar (error permanente — payload de un build viejo que el server
+// rechaza — o agotó los 5 reintentos). No hay UI para resolverlas, así que
+// mantenerlas para siempre solo infla el contador del badge (caso Lucas
+// 2026-06-13: 13 ops rotas de una pestaña vieja seguían contando como
+// "pendientes" indefinidamente). Las dejamos unos días por si hace falta
+// inspeccionarlas en consola, después se descartan solas. Se llama al boot.
+const KEEP_FAILED_DAYS = 7;
+
+export async function cleanupOldFailed(): Promise<number> {
+  const db = await getDb();
+  const cutoff = Date.now() - KEEP_FAILED_DAYS * 24 * 60 * 60 * 1000;
+  const all = (await db.getAll('pending_ops')) as PendingOp[];
+  let removed = 0;
+  for (const op of all) {
+    if (op.status === 'failed' && new Date(op.created_at).getTime() < cutoff) {
+      await db.delete('pending_ops', op.id);
+      removed++;
+    }
+  }
+  return removed;
+}
