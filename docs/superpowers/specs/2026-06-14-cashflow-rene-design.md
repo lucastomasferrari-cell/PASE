@@ -65,6 +65,26 @@ Nace de un problema real (Rene Cantina): el EERR decía ~$120M de ganancia pero 
 
 > **`transferencia_interna`** (entre tus propias cuentas: alivios caja↔caja, efvo↔MP↔banco, MP→banco): se marca y **NO cuenta** como ingreso ni egreso (netea). Es la causa de la mayoría de los descuadres históricos.
 
+### 3.1 Definición estricta de "retiro de socio" (anti-mezcla) — CRÍTICO
+
+Fue el error recurrente de toda la reconstrucción: cosas que parecían retiros y no lo eran inflaban el número de reparto (de ~$57M real a ~$90M falso). El módulo debe **separar tajantemente**:
+
+**ES `retiro_socio`** (distribución de utilidades — sale de la ganancia):
+- La **repartija formal** a los socios (las "ganancias" que se llevan los dueños).
+- Idealmente ligada a la repartija del mes (qué % de qué ganancia) y al destinatario socio.
+
+**NO es `retiro_socio`** (aunque lo parezca):
+- **Transferencias internas / alivios** (caja→caja, local→casa, entre cuentas). En los libros viejos los alivios estaban mal etiquetados como "retiro socios" → es `transferencia_interna`.
+- **"Retiro efectivo" / "retiro del local"** = mover plata entre cajas. Es `transferencia_interna`, NO afecta P&L ni es distribución.
+- **Pagos a personas/familiares por obra o servicios** (ej. "Armando Baldi" = mantenimiento) → `obra_capex` / `proveedor`, NO retiro.
+- **Movimientos operativos a la cuenta de un socio que administra la plata** (ej. Anto, que es admin y pareja del dueño): mover plata a su cuenta para operar ≠ distribución. Solo la parte que es reparto es `retiro_socio`.
+- **Aportes de capital** (plata que el socio PONE) → `aporte_socio`, es ingreso/financiación, NO retiro.
+
+**Reglas de implementación:**
+1. **`retiro_socio` NUNCA se auto-asigna por nombre del destinatario** (que diga "Baldi" o "retiro" en la descripción no lo hace retiro). Requiere **marcación/confirmación explícita** del usuario.
+2. El módulo muestra un **total de retiros separado y auditable** (por socio, por mes), distinto de transferencias internas y de aportes.
+3. Opcional (suma valor): **conciliar retiros vs repartija decidida** — comparar lo que se sacó contra lo que correspondía repartir, para detectar sobre/sub-distribución.
+
 ---
 
 ## 4. La cuenta "en tránsito" (float) — pieza clave
