@@ -187,6 +187,13 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   // siempre aparece todo lo último cargado.
   const [filtDesde, setFiltDesde] = useState<string>("");
   const [filtHasta, setFiltHasta] = useState<string>("");
+  // Filtro de Cuenta SERVER-SIDE (fix 2026-06-14): antes el filtro de columna
+  // de cuenta era client-side sobre los movimientos ya cargados (paginados de
+  // a 80), así que una cuenta sin movimientos en el bloque cargado (típico:
+  // Caja Efectivo más abajo) ni aparecía como opción, y al tildarla solo
+  // filtraba lo cargado. Ahora se aplica en queryMovimientos (.in cuenta) y
+  // re-consulta toda la base.
+  const [cuentaFiltro, setCuentaFiltro] = useState<string[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   // Debounce: evita disparar fetch en cada keystroke del datepicker.
@@ -284,6 +291,19 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
         q = q.eq("cuenta", "___NONE___");
       } else {
         q = q.in("cuenta", visParaListado);
+      }
+    }
+    // Filtro de cuenta elegido por el usuario (server-side). Replica la
+    // semántica del ColumnFilter: set vacío = "todos" (no filtra); el
+    // centinela "__none__" (botón "Ninguno") = no mostrar nada; cualquier
+    // otra cosa = filtrar por esas cuentas (ignorando el centinela si quedó
+    // mezclado). Se interseca con visParaListado de arriba (AND en Supabase).
+    if (cuentaFiltro.length > 0) {
+      const reales = cuentaFiltro.filter(c => c !== "__none__");
+      if (reales.length === 0) {
+        q = q.eq("cuenta", "___NONE___"); // "Ninguno" → resultado vacío
+      } else {
+        q = q.in("cuenta", reales);
       }
     }
     return q;
@@ -390,7 +410,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   // Patrón fetch-on-dep-change. Re-fetch al cambiar local, rango de fechas
   // u orden seleccionado.
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
-  useEffect(()=>{load();},[localActivo, debDesde, debHasta, ordenPor]);
+  useEffect(()=>{load();},[localActivo, debDesde, debHasta, ordenPor, cuentaFiltro.join("|")]);
 
   // Sprint Realtime: cualquier cambio remoto en movimientos o saldos_caja
   // del mismo tenant dispara reload. Refresca la card de saldos + lista
@@ -425,8 +445,10 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   const mFiltBase = movimientos
     .filter(m => mostrarAnulados ? true : !m.anulado);
 
+  // Nota: 'cuenta' NO está acá — se filtra server-side vía cuentaFiltro
+  // (ver queryMovimientos). Tipo y categoría siguen client-side sobre lo
+  // cargado (mismo bug latente que tenía cuenta; pendiente migrarlos igual).
   const mColFilters = useColumnFilters<Movimiento>(mFiltBase, {
-    cuenta: (m) => m.cuenta || "—",
     tipo: (m) => m.tipo || "—",
     categoria: (m) => m.cat || "—",
   });
@@ -757,7 +779,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
           <table style={{minWidth: 720}}><thead><tr>
             <th className="col-fecha"><DateRangeFilter label="Fecha" desde={filtDesde} hasta={filtHasta} onDesdeChange={setFiltDesde} onHastaChange={setFiltHasta} /></th>
             {ordenPor === "carga" && <th className="col-fecha" title="Cuándo se cargó realmente al sistema (puede diferir de la fecha del movimiento)">Cargado</th>}
-            <th><ColumnFilter label="Cuenta" values={mColFilters.uniqueValues("cuenta")} selected={mColFilters.getFilter("cuenta")} onChange={s => mColFilters.setFilter("cuenta", s)} /></th><th><ColumnFilter label="Tipo" values={mColFilters.uniqueValues("tipo")} selected={mColFilters.getFilter("tipo")} onChange={s => mColFilters.setFilter("tipo", s)} /></th><th><ColumnFilter label="Categoría" values={mColFilters.uniqueValues("categoria")} selected={mColFilters.getFilter("categoria")} onChange={s => mColFilters.setFilter("categoria", s)} /></th><th>Detalle</th><th className="num-right">Importe</th><th></th>
+            <th><ColumnFilter label="Cuenta" values={cuentasParaListado} selected={new Set(cuentaFiltro)} onChange={s => setCuentaFiltro([...s])} /></th><th><ColumnFilter label="Tipo" values={mColFilters.uniqueValues("tipo")} selected={mColFilters.getFilter("tipo")} onChange={s => mColFilters.setFilter("tipo", s)} /></th><th><ColumnFilter label="Categoría" values={mColFilters.uniqueValues("categoria")} selected={mColFilters.getFilter("categoria")} onChange={s => mColFilters.setFilter("categoria", s)} /></th><th>Detalle</th><th className="num-right">Importe</th><th></th>
           </tr></thead>
           {mFilt.length===0?(
             <tbody><tr><td colSpan={ordenPor === "carga" ? 8 : 7} style={{padding:0}}>
