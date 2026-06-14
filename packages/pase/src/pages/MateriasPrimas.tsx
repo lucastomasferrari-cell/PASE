@@ -64,7 +64,6 @@ interface Form {
   insumo_id: string;
   unidad_compra: string;
   factor_conversion: string;
-  merma_pct: string;
   precio_actual: string;
   notas: string;
   activa: boolean;
@@ -76,7 +75,6 @@ const emptyForm: Form = {
   insumo_id: "",
   unidad_compra: "bolsa",
   factor_conversion: "1",
-  merma_pct: "0",
   precio_actual: "",
   notas: "",
   activa: true,
@@ -194,7 +192,6 @@ export default function MateriasPrimas({ user, embedded = false }: MateriasPrima
       insumo_id: String(mp.insumo_id),
       unidad_compra: mp.unidad_compra,
       factor_conversion: String(mp.factor_conversion),
-      merma_pct: String(mp.merma_pct),
       precio_actual: mp.precio_actual != null ? String(mp.precio_actual) : "",
       notas: mp.notas ?? "",
       activa: mp.activa,
@@ -208,8 +205,6 @@ export default function MateriasPrimas({ user, embedded = false }: MateriasPrima
     if (!form.unidad_compra) return "Especificá la unidad de compra";
     const factor = parseFloat(form.factor_conversion);
     if (isNaN(factor) || factor <= 0) return "El factor de conversión debe ser > 0";
-    const merma = parseFloat(form.merma_pct);
-    if (form.merma_pct && (isNaN(merma) || merma < 0 || merma > 100)) return "Merma % debe estar entre 0 y 100";
     if (form.precio_actual) {
       const p = parseFloat(form.precio_actual);
       if (isNaN(p) || p < 0) return "Precio inválido";
@@ -223,7 +218,9 @@ export default function MateriasPrimas({ user, embedded = false }: MateriasPrima
     insumo_id: parseInt(form.insumo_id),
     unidad_compra: form.unidad_compra,
     factor_conversion: parseFloat(form.factor_conversion),
-    merma_pct: parseFloat(form.merma_pct || "0"),
+    // merma_pct DEPRECADO: la merma/rendimiento vive en la línea de receta.
+    // Se manda 0 fijo para filas nuevas (la columna sigue existiendo).
+    merma_pct: 0,
     precio_actual: form.precio_actual ? parseFloat(form.precio_actual) : null,
     notas: form.notas.trim() || null,
     activa: form.activa,
@@ -608,7 +605,7 @@ function FormFields({
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         <div>
           <label style={{ fontSize: 11, color: "var(--muted2)" }}>Unidad de compra *</label>
           <input
@@ -638,19 +635,11 @@ function FormFields({
             {insumoSel ? `Cuántos ${insumoSel.unidad} por ${form.unidad_compra || "unidad"}` : "Cantidad por unidad de compra"}
           </div>
         </div>
-        <div>
-          <label style={{ fontSize: 11, color: "var(--muted2)" }}>Merma %</label>
-          <input
-            type="number"
-            step="1"
-            min="0"
-            max="50"
-            value={form.merma_pct}
-            onChange={e => set("merma_pct", e.target.value)}
-            className="search"
-            style={{ width: "100%" }}
-          />
-        </div>
+      </div>
+
+      <div style={{ fontSize: 10, color: "var(--muted2)", background: "var(--bg2)", borderRadius: 6, padding: "6px 8px", lineHeight: 1.4 }}>
+        💡 El costo del insumo es <b>as-bought</b> (precio ÷ factor). La <b>merma o rendimiento</b>
+        {" "}(fileteado, limpieza, prep) se carga en cada <b>línea de receta</b>, no acá — así no se cuenta dos veces.
       </div>
 
       <div>
