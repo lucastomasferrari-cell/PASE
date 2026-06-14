@@ -1239,11 +1239,13 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                 );
               })}</tbody>
             </table>
+            </div>
           )}
         </div>
       ) : (
       <div className="panel">
         {loading ? <div className="loading">Cargando...</div> : (
+          <div className="table-scroll-wrap">
           <table>
             <thead><tr>
               <th><ColumnFilter label="Proveedor · Nº" values={fColFilters.uniqueValues("proveedor")} selected={fColFilters.getFilter("proveedor")} onChange={s => fColFilters.setFilter("proveedor", s)} /></th>
@@ -1253,7 +1255,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
               <th><ColumnFilter label="Categoría" values={fColFilters.uniqueValues("categoria")} selected={fColFilters.getFilter("categoria")} onChange={s => fColFilters.setFilter("categoria", s)} /></th>
               <th style={{ textAlign: "right" }}>Total</th>
               <th><ColumnFilter label="Estado" values={fColFilters.uniqueValues("estado")} selected={fColFilters.getFilter("estado")} onChange={s => fColFilters.setFilter("estado", s)} /></th>
-              <th></th>
+              <th style={{ minWidth: 130 }}></th>
             </tr></thead>
             {fVisible.length === 0 ? (
               <tbody><tr><td colSpan={localActivo ? 7 : 8} style={{padding:0}}>
@@ -1303,7 +1305,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                       })()
                     : estadoDot(estadoFactura(f))}</td>
                   <td>
-                    <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                    <div style={{ display: "flex", gap: 4, justifyContent: "flex-end", paddingRight: 6 }}>
                       <IconBtn title="Ver detalle" onClick={() => setVerModal(f)}>{IconEye}</IconBtn>
                       {/* Editar (Lucas 10-jun): solo si está pendiente/revisión
                           — la RPC editar_factura rechaza pagadas/anuladas. */}
@@ -1323,6 +1325,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
             })}</tbody>
           )}
           </table>
+          </div>
         )}
       </div>
       )}
