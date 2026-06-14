@@ -3,7 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, L
 interface EvolucionRow {
   mes: string;
   Ventas: number;
-  CMV: number;
+  Compras: number;
   "Sueldos + CS": number;
   "Util. Neta": number;
 }
@@ -26,7 +26,7 @@ export function EvolucionChart({ data }: { data: EvolucionRow[] }) {
         />
         <Legend wrapperStyle={{fontSize:11}}/>
         <Line type="monotone" dataKey="Ventas" stroke="var(--success)" strokeWidth={2} dot={{r:3}} />
-        <Line type="monotone" dataKey="CMV" stroke="var(--warn)" strokeWidth={2} dot={{r:3}} />
+        <Line type="monotone" dataKey="Compras" stroke="var(--warn)" strokeWidth={2} dot={{r:3}} />
         <Line type="monotone" dataKey="Sueldos + CS" stroke="var(--danger)" strokeWidth={2} dot={{r:3}} />
         <Line type="monotone" dataKey="Util. Neta" stroke="var(--acc)" strokeWidth={2} dot={{r:3}} />
       </LineChart>

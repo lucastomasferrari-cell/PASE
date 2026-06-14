@@ -282,6 +282,11 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const totalGastos=totalGastosFijos+totalGastosVar;
   const utilBruta=totalVentas-totalCMV;
   const utilNeta=utilBruta-totalGastos-sueldos-totalCargasSociales-totalPublicidad-totalComisiones-totalImpuestos-totalOtrosGastos;
+  // Prime Cost = Compras de mercadería + Costo laboral (sueldos + cargas). Es el
+  // KPI #1 de gastronomía: lo que el dueño controla día a día. Benchmark típico
+  // ≤60% de las ventas (verde); 60-65% amarillo; >65% rojo.
+  const primeCost=totalCMV+sueldos+totalCargasSociales;
+  const primePct=totalVentas>0?(primeCost/totalVentas)*100:0;
   // utilNetaPostRetiros: lo que queda al socio después de retirar lo que
   // efectivamente retiró. Si retiró todo, es ~0; si no retiró, == utilNeta.
   const utilNetaPostRetiros=utilNeta-totalRetiros;
@@ -391,7 +396,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const evolucionData = mesesOrdenados.map(r => ({
     mes: fmtMesLabel(r.mes),
     Ventas: Math.round(r.ventas),
-    CMV: Math.round(r.cmv),
+    Compras: Math.round(r.cmv),
     "Sueldos + CS": Math.round(r.sueldos + r.cargasSociales),
     "Util. Neta": Math.round(r.utilNeta),
   }));
@@ -409,7 +414,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
   // es malo) de ingresos/utilidad (donde "+" es bueno) para colorear bien.
   const filasPyL: { label: string; key: keyof MesResumen; tipo: "ingreso" | "costo" | "util"; big?: boolean; signo?: 1 | -1 }[] = [
     { label: "Ventas Brutas", key: "ventas", tipo: "ingreso", signo: 1 },
-    { label: "CMV", key: "cmv", tipo: "costo", signo: -1 },
+    { label: "Compras de mercadería", key: "cmv", tipo: "costo", signo: -1 },
     { label: "Utilidad Bruta", key: "utilBruta", tipo: "util", big: true, signo: 1 },
     { label: "Gastos Fijos", key: "gastosFijos", tipo: "costo", signo: -1 },
     { label: "Gastos Variables", key: "gastosVar", tipo: "costo", signo: -1 },
@@ -456,7 +461,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
               // Export del Resumen P&L del mes activo en CSV (Excel-friendly).
               const rows: (string | number)[][] = [
                 ["Ventas Brutas", totalVentas, "100,00%"],
-                ["CMV", -totalCMV, pct(totalCMV)],
+                ["Compras de mercadería", -totalCMV, pct(totalCMV)],
                 ["Utilidad Bruta", utilBruta, pct(utilBruta)],
                 ["Gastos Fijos y Variables", -totalGastos, pct(totalGastos)],
                 ["Sueldos", -sueldos, pct(sueldos)],
@@ -481,8 +486,9 @@ export default function EERR({ user, localActivo }: EERRProps) {
         <>
           <div className="eerr-kpis-row">
             <div className="kpi"><div className="kpi-label">Ventas</div><div className="kpi-value-compact kpi-success">{fmt_$(totalVentas)}</div></div>
-            <div className="kpi"><div className="kpi-label">CMV</div><div className="kpi-value-compact kpi-warn">{fmt_$(totalCMV)}</div><div className="kpi-sub">{pct(totalCMV)}</div></div>
-            <div className="kpi"><div className="kpi-label">Labor Cost</div><div className="kpi-value-compact kpi-danger">{fmt_$(sueldos+totalCargasSociales)}</div><div className="kpi-sub">{pct(sueldos+totalCargasSociales)}</div></div>
+            <div className="kpi"><div className="kpi-label">Compras merc.</div><div className="kpi-value-compact kpi-warn">{fmt_$(totalCMV)}</div><div className="kpi-sub">{pct(totalCMV)}</div></div>
+            <div className="kpi"><div className="kpi-label">Costo laboral</div><div className="kpi-value-compact kpi-danger">{fmt_$(sueldos+totalCargasSociales)}</div><div className="kpi-sub">{pct(sueldos+totalCargasSociales)}</div></div>
+            <div className="kpi"><div className="kpi-label">Prime Cost</div><div className={`kpi-value-compact ${primePct<60?"kpi-success":primePct<=65?"kpi-warn":"kpi-danger"}`}>{fmt_$(primeCost)}</div><div className="kpi-sub">{pct(primeCost)} · ideal ≤60%</div></div>
             <div className="kpi"><div className="kpi-label">% Rentabilidad</div><div className={`kpi-value-compact ${utilNeta>=0?"kpi-success":"kpi-danger"}`}>{totalVentas>0?((utilNeta/totalVentas)*100).toFixed(1):"0"}%</div></div>
             <div className="kpi"><div className="kpi-label">Ganancia del mes</div><div className={`kpi-value-compact ${utilNeta>=0?"kpi-success":"kpi-danger"}`}>{fmt_$(utilNeta)}</div></div>
           </div>
@@ -539,7 +545,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
               {mesesComp.length === 0 ? (
                 <div style={{padding:"4px 0 12px"}}>
                   <ERow label="Ventas Brutas" valor={totalVentas} color="var(--pase-text)" big={false}/>
-                  <ERow label="CMV" valor={-totalCMV} color="var(--danger)" big={false}/>
+                  <ERow label="Compras de mercadería" valor={-totalCMV} color="var(--danger)" big={false}/>
                   <ERow label="Utilidad Bruta" valor={utilBruta} color={utilBruta>=0?"var(--success)":"var(--danger)"} big={true}/>
                   <ERow label="Gastos Fijos y Variables" valor={-totalGastos} color="var(--danger)" big={false}/>
                   <ERow label="Sueldos" valor={-sueldos} color="var(--danger)" big={false}/>
