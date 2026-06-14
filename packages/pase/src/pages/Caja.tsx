@@ -548,6 +548,21 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   }
 
   const eliminarMov = async (m: Movimiento) => {
+    // Guarda anti-desincronización (fix 2026-06-14): un movimiento generado
+    // por un documento de origen (gasto, factura, remito, sueldo, adelanto)
+    // NO se puede anular suelto desde Caja — quedaría el movimiento anulado
+    // pero el documento activo, y el EERR (que lee los documentos) seguiría
+    // contándolo. Hay que anular el documento de origen, que cascada al
+    // movimiento vía su RPC (anular_gasto / anular_factura / etc.).
+    const origen = origenMovimiento(m);
+    if (origen) {
+      const pantalla =
+        (m.fact_id || m.remito_id_ref) ? "Compras"
+        : (m.liquidacion_id || m.adelanto_id_ref || m.pago_especial_id_ref) ? "Equipo"
+        : "Gastos";
+      showError(`Este movimiento se generó ${origen.label} — no se puede anular desde Caja (quedaría desincronizado con el reporte). Andá a ${pantalla} y anulá el documento de origen; el movimiento se anula solo.`);
+      return;
+    }
     const motivo = prompt("¿Por qué anulás este movimiento? (obligatorio)");
     if (!motivo?.trim()) return;
     if (tienePermiso(user, "compras_anular")) {
@@ -899,7 +914,11 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
                       handler eliminarMov abre el modal de Manager Override
                       pidiendo código del dueño. Decisión Lucas 2026-05-19:
                       ausencia de permiso NO oculta la acción. */}
-                  {!m.anulado && <button className="btn btn-danger btn-sm" onClick={() => eliminarMov(m)}>Anular</button>}
+                  {!m.anulado && <button
+                    className={origenMovimiento(m) ? "btn btn-ghost btn-sm" : "btn btn-danger btn-sm"}
+                    title={origenMovimiento(m) ? "Viene de un documento — para anularlo, andá al documento de origen" : undefined}
+                    onClick={() => eliminarMov(m)}
+                  >Anular</button>}
                 </div>
               </td>
             </tr>
