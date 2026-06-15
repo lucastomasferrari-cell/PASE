@@ -443,7 +443,7 @@ COMMIT;
 
 ---
 
-## FASE 4 — Motor de cálculo del cashflow (backend de lectura)
+## FASE 4 — Motor de cálculo del cashflow (backend de lectura) — ✅ HECHO (15-jun, EN PROD: resumen f1bfa3e, puente 4612dfe, cerrar+libro 13b61a1)
 
 ### Task 6: RPC `cashflow_resumen_mes` — ✅ HECHO (15-jun, commit f1bfa3e, EN PROD; validado vs Rene mayo)
 
@@ -465,7 +465,7 @@ COMMIT;
 - [ ] **Step 2:** Aplicar + verificar con Rene (local 5, 2026-05): comparar el efectivo operativo y la composición contra lo reconstruido (ventas efvo may ≈ $26M; proveedores/sueldos/gastos del efectivo; "Por revisar" debe levantar los $9M RETIRO SOCIOS + transfers local→casa). Cargar un extracto MP real (vía parser + `cashflow_subir_extracto`) y ver el bloque MP cuadrar contra el `saldo_final` del extracto.
 - [ ] **Step 3:** Commit — `feat(cashflow): RPC resumen mensual consolidado (hereda categorías por documento)`
 
-### Task 7: RPC `cashflow_puente_mes` (devengado ↔ cash)
+### Task 7: RPC `cashflow_puente_mes` (devengado ↔ cash) — ✅ HECHO (15-jun, commit 4612dfe, EN PROD; devengado validado vs EERR Rene mayo)
 
 **Files:**
 - Create: `packages/pase/supabase/migrations/202606141600_cashflow_puente.sql`
