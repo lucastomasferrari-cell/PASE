@@ -65,6 +65,8 @@ Nace de un problema real (Rene Cantina): el EERR decía ~$120M de ganancia pero 
 
 > **`transferencia_interna`** (entre tus propias cuentas: alivios caja↔caja, efvo↔MP↔banco, MP→banco): se marca y **NO cuenta** como ingreso ni egreso (netea). Es la causa de la mayoría de los descuadres históricos.
 
+> **Refinado 2026-06-15 (brainstorm):** ver el **Addendum 2026-06-15** al final de este documento — el cashflow hereda las categorías del PyL por fecha de pago, los `retiro_socio` se gestionan en un **módulo Utilidades** aparte (con una **CAJA UTILIDADES** de reserva), y se agrega una vista de **libro contable / línea de tiempo**. La definición anti-mezcla de abajo sigue vigente y se refuerza.
+
 ### 3.1 Definición estricta de "retiro de socio" (anti-mezcla) — CRÍTICO
 
 Fue el error recurrente de toda la reconstrucción: cosas que parecían retiros y no lo eran inflaban el número de reparto (de ~$57M real a ~$90M falso). El módulo debe **separar tajantemente**:
@@ -175,3 +177,85 @@ Nueva pantalla **"Cashflow"** bajo `DIRECCIÓN` (al lado de Conciliación / Repo
 
 ## 10. Criterio de éxito (MVP)
 Para un mes dado, el dueño ve: saldo inicial, en qué entró/salió la plata, saldo final **que cuadra con el extracto real**, y el puente que explica la diferencia con la ganancia del EERR — sin ayuda de un contador.
+
+---
+
+# Addendum 2026-06-15 — Clasificación de movimientos, libro contable y módulo Utilidades
+
+> Refina las secciones §3 (categorías) y §7 (UX) tras el brainstorm con Lucas (15-jun). Surgió al investigar el efectivo real de Rene: los movimientos manuales (`Ingreso/Egreso Manual`, ~$37M en mayo) mezclan saldos de arranque + transferencias internas + retiros mal etiquetados, y NO se pueden clasificar derecho por `tipo`. Estas decisiones son **autoritativas** sobre el modelo de clasificación.
+
+## A. El cashflow hereda las categorías del PyL, fechadas por pago
+
+**Principio (decisión de Lucas):** el cashflow **no inventa** categorías para lo operativo. Sigue cada **pago** hasta su **documento de origen** y usa **la misma categoría que el PyL/EERR**:
+
+| Movimiento de caja | Documento de origen | Categoría |
+|---|---|---|
+| `Pago Proveedor` (`fact_id` / `remito_id_ref`) | factura / remito (Compras) | la `cat` del documento (CMV/bebidas/almacén…) |
+| `Gasto fijo/variable/impuesto` (`gasto_id_ref`) | gasto (Gastos) | la `cat` del gasto (fijos/variables/impuestos/comisiones/publicidad) |
+| `Pago Sueldo` / `Gasto empleado` (`liquidacion_id` / `adelanto_id_ref`) | liquidación / adelanto (Equipo) | `sueldo` |
+| `Ingreso Venta` | venta efectivo | `venta` |
+
+**La única diferencia con el PyL es la FECHA:** el PyL cuenta por la fecha del **documento** (devengado = "lo comprado"); el cashflow por la fecha del **pago** (percibido = "lo pagado"). El mecanismo ya es posible: `movimientos` guarda los links (`fact_id`, `gasto_id_ref`, `remito_id_ref`, `liquidacion_id`, `adelanto_id_ref`).
+
+## B. Categorías propias del cashflow (solo para movimientos SIN documento)
+
+Los manuales sin documento no aparecen en el PyL ("no afectan el EERR pero sí el cashflow"). Sus categorías son propias del cashflow:
+
+| Categoría | Qué es |
+|---|---|
+| `apertura_ajuste` | saldo inicial, "caja en 0", arqueos (sobrante/faltante). Fija/corrige el conteo; **no es flujo operativo**; de acá sale el punto cero. |
+| `transferencia_interna` | mover plata entre cajas/cuentas propias (local→casa, caja→caja, → CAJA UTILIDADES). Netea, no cambia la plata total. |
+| `aporte_socio` | un socio **pone** plata (ej. para pagar proveedores). Financiación, no venta. |
+| `otro` | lo que no encaja, hasta clasificar. |
+| `retiro_socio` | reparto a socios. **Existe como línea, pero se GESTIONA en el módulo Utilidades** (ver D). El cashflow nunca lo auto-asigna. |
+
+`venta` también aplica a cobros (efectivo del mostrador + liquidaciones del extracto MP/banco).
+
+## C. Reglas de clasificación
+
+1. **Con documento de origen → automático.** Hereda la categoría del documento (sección A). La mayoría de los movimientos.
+2. **`Transferencia Entrada/Salida` → automático** = `transferencia_interna`.
+3. **`Ingreso Venta` → automático** = `venta`.
+4. **`Ingreso/Egreso Manual` (sin documento) → reglas de texto + memoria + bandeja "Por revisar":**
+   - `saldo inicial` / `caja en 0` / `ajuste` / `sobrante` / `faltante` → `apertura_ajuste`.
+   - `retiro del local` / `de caja X a caja Y` / "retiro lucas-anto" cuando es **mover plata** → `transferencia_interna`.
+   - `aporte de socio…` → `aporte_socio`.
+   - **`retiro_socio` NUNCA automático** — los retiros reales se cargan en el módulo Utilidades (D), no se infieren de un movimiento de caja.
+   - La bandeja "Por revisar" junta los manuales sin clasificar (pocos y grandes) para resolverlos de una; las decisiones se recuerdan (memoria por texto normalizado).
+5. **Memoria:** se reusa `cashflow_mapeo` (texto normalizado del `detalle` → categoría). Auto-aplica para todas las categorías propias menos `retiro_socio`.
+6. **Modelo de datos (implicación):** `movimientos` no puede guardar la categoría del cashflow → se agrega una tabla de override `cashflow_mov_clasif (tenant_id, movimiento_id, categoria, es_interno, updated_at)`. El motor resuelve la categoría así: **override manual > categoría heredada del documento > regla de texto/default**.
+
+## D. Decomposición: módulo Utilidades + CAJA UTILIDADES (futuro, su propio spec)
+
+Lucas definió que el reparto a socios vive en un **módulo nuevo "Utilidades / Reparto de utilidades"**, separado del cashflow.
+
+- **CAJA UTILIDADES** = una **cuenta nueva de reserva** (el "balde" de Profit First hecho real). Mover plata operativa → CAJA UTILIDADES = `transferencia_interna` con sentido de **reservar** (apartar). De CAJA UTILIDADES → socio = el `retiro_socio` real.
+- **Cashflow (ahora):** consolida **todas** las cuentas, incluida CAJA UTILIDADES si existe; muestra la posición partida en **líquido operativo vs reservado (Utilidades) vs en tránsito**. **No gestiona** el reparto; solo **muestra** la línea de retiros (de los movimientos ya tipados como retiro).
+- **Utilidades (módulo futuro):** crea y gestiona CAJA UTILIDADES — reservar (apartar un %), repartir a socios, el fondo, "cuánto es seguro repartir" (Profit First, contra la repartija del mes). Crea los movimientos de retiro que el cashflow después lee.
+- **Orden:** el cashflow trata CAJA UTILIDADES de forma **genérica** (una cuenta más), así no se traba esperando a Utilidades; la **creación + gestión** se hacen en el módulo Utilidades. Los retiros históricos mal cargados (ej. "RETIRO SOCIOS JUANMA" como Egreso Manual) se re-registran prolijo cuando se construya Utilidades.
+
+## E. Vistas (refina §7)
+
+Tres formas de ver el mismo mes:
+
+1. **📖 Libro contable / línea de tiempo** *(pedido de Lucas):* tabla cronológica, una fila por movimiento, con **Debe | Haber | Saldo corrido** — se ve cómo el saldo sube y baja. Por cuenta (efvo / MP / banco / CAJA UTILIDADES) o consolidado.
+
+   | Fecha | Concepto | Categoría | Debe | Haber | Saldo |
+   |---|---|---:|---:|---:|---:|
+   | 04/05 | Cobro tarjeta (liquidación) | venta | | 215.077 | 505.512 |
+   | 05/05 | LEY 25.413 | retención | 398 | | 65.892 |
+   | 06/05 | Pago proveedor Distribuidora | proveedor | 120.000 | | … |
+
+2. **📊 Resumen / waterfall:** saldo inicial → +ingresos por categoría → −egresos por categoría → saldo final, **verificado vs el extracto** (✓ o diferencia). `retiro_socio` y `aporte_socio` en bloques separados (anti-mezcla).
+
+3. **🌉 El puente** (§6): por qué la ganancia del PyL ≠ la plata.
+
+**Posición de caja (tarjetas):** líquido operativo · reservado en CAJA UTILIDADES · en tránsito (float) · total. Drill-down: tocar una categoría del resumen → sus filas en el libro contable.
+
+## F. Impacto en el plan de implementación
+
+- **Categoría nueva `apertura_ajuste`:** se agrega a la lista válida de categorías. Requiere una migración chica que actualice el CHECK de `cashflow_reclasificar` (hoy en prod acepta: venta, comision, retencion, proveedor, sueldo, gasto, retiro_socio, aporte_socio, obra_capex, transferencia_interna, otro) y el `fn_cashflow_clasificar_default`. Nomenclatura canónica: **`retencion`** cubre impuestos (no hay categoría `impuesto` separada).
+- **Task 6 (`cashflow_resumen_mes`)** se reescribe: el efectivo se categoriza siguiendo el link al documento (no por `tipo` crudo); los manuales usan `cashflow_mov_clasif` + reglas/memoria; excluye `transferencia_interna` y `apertura_ajuste` de ingresos/egresos operativos.
+- **Nueva tarea (Fase 3.5):** migración `cashflow_mov_clasif` + `apertura_ajuste` en la lista válida + RPC `cashflow_reclasificar_mov` (espejo de `cashflow_reclasificar` pero para movimientos de efectivo) + reglas default por `tipo`/texto.
+- **Nueva vista (Fase 5):** el libro contable / línea de tiempo.
+- **Módulo Utilidades:** spec + plan propios, futuros (no en este MVP).
