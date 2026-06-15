@@ -16,7 +16,7 @@
 
 ## FASE 1 — Esquema de datos (migración)
 
-### Task 1: Migración con las 4 tablas `cashflow_*` + RLS
+### Task 1: Migración con las 4 tablas `cashflow_*` + RLS — ✅ HECHO (15-jun, commit ae2e8fe, EN PROD)
 
 **Files:**
 - Create: `packages/pase/supabase/migrations/202606141200_cashflow_schema.sql`
