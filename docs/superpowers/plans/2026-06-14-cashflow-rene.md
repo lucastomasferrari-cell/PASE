@@ -445,7 +445,7 @@ COMMIT;
 
 ## FASE 4 — Motor de cálculo del cashflow (backend de lectura)
 
-### Task 6: RPC `cashflow_resumen_mes`
+### Task 6: RPC `cashflow_resumen_mes` — ✅ HECHO (15-jun, commit f1bfa3e, EN PROD; validado vs Rene mayo)
 
 **Files:**
 - Create: `packages/pase/supabase/migrations/202606141500_cashflow_resumen.sql`
@@ -480,7 +480,7 @@ COMMIT;
 - [ ] **Step 2:** Aplicar + verificar contra mayo Rene (devengado ≈ $69M vs cash ≈ $92M, dif ≈ $23M = stock + deudas).
 - [ ] **Step 3:** Commit — `feat(cashflow): RPC puente devengado-cash`
 
-### Task 8: RPC `cashflow_cerrar_mes` (bloqueo)
+### Task 8: RPC `cashflow_cerrar_mes` (bloqueo) — ✅ HECHO (15-jun, commit 13b61a1, EN PROD)
 
 **Files:**
 - Create: `packages/pase/supabase/migrations/202606141700_cashflow_cerrar.sql`
@@ -489,7 +489,7 @@ COMMIT;
 - [ ] **Step 2:** Aplicar + verificar.
 - [ ] **Step 3:** Commit — `feat(cashflow): RPC cerrar/bloquear mes`
 
-### Task 8.5: RPC `cashflow_libro_mes` (libro contable / línea de tiempo) — NUEVA (addendum 15-jun)
+### Task 8.5: RPC `cashflow_libro_mes` (libro contable / línea de tiempo) — ✅ HECHO (15-jun, commit 13b61a1, EN PROD; validado: saldo corrido mayo = 7.250.339)
 
 **Files:**
 - Create: `packages/pase/supabase/migrations/202606141800_cashflow_libro.sql`
