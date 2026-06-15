@@ -250,6 +250,7 @@ export function mpResultadoParaCashflow(r: ExtractoResultado): CashflowExtractoP
       comision: 0,
       retencion: 0,
     })),
+    ...(r.advertencias.length > 0 ? { advertencias: r.advertencias } : {}),
   };
 }
 

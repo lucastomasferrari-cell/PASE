@@ -27,4 +27,10 @@ export interface CashflowExtractoParseado {
   saldoInicial: number;
   saldoFinal: number;
   lineas: CashflowLineaCargada[];
+  /**
+   * Avisos no fatales para mostrar en el preview antes de confirmar (ej. el
+   * saldo final derivado no cuadra con el saldo de cierre declarado en el
+   * extracto). Nunca bloquean: el usuario decide.
+   */
+  advertencias?: string[];
 }

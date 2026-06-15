@@ -25,6 +25,7 @@
     "@supabase/supabase-js": "^2.103.0",
     "driver.js": "^1.4.0",
     "open-props": "^1.7.23",
+    "pdfjs-dist": "^6.0.227",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.14.2",
