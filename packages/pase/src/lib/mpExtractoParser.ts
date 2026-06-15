@@ -33,6 +33,8 @@
  * Si solo tiene PDF/imagen, cae al lector IA (mismo shape de output).
  */
 
+import type { CashflowExtractoParseado } from "./cashflowExtracto";
+
 export interface ExtractoMovimiento {
   fecha: string;          // YYYY-MM-DD (normalizado desde DD-MM-YYYY)
   monto: number;          // signed
@@ -223,6 +225,42 @@ export function parseExtractoMP(csvText: string): ExtractoResultado | null {
     confianza_global: 1.0,
     advertencias,
   };
+}
+
+/**
+ * Adapta el resultado del parser MP al contrato común del módulo Cashflow.
+ *
+ * MVP (decisión documentada en el plan, Task 3): el account_statement de MP da
+ * el NETO por línea; el detalle bruto/comisión vive en el "settlement report"
+ * (otro archivo). Por eso acá `monto_bruto` = neto y `comision`/`retencion`
+ * quedan en 0 a nivel línea. La comisión total se estima/carga como categoría
+ * aparte. Migrar a bruto/fee desagregado es mejora de fase 2.
+ *
+ * `saldoInicial`/`saldoFinal` salen de la fila de resumen del extracto
+ * (INITIAL_BALANCE / FINAL_BALANCE). Si el extracto no la trae, quedan en 0.
+ */
+export function mpResultadoParaCashflow(r: ExtractoResultado): CashflowExtractoParseado {
+  return {
+    saldoInicial: r.resumen?.initial_balance ?? 0,
+    saldoFinal: r.resumen?.final_balance ?? 0,
+    lineas: r.movimientos.map(m => ({
+      fecha: m.fecha,
+      descripcion: m.descripcion,
+      monto_bruto: m.monto,
+      comision: 0,
+      retencion: 0,
+    })),
+  };
+}
+
+/**
+ * Conveniencia para la pantalla: lee el archivo XLSX/XLS de MP y lo devuelve ya
+ * adaptado al shape del cashflow. Devuelve null si el archivo no parsea (el
+ * caller decide mostrar error o caer a carga manual).
+ */
+export async function mpLineasParaCashflow(file: File): Promise<CashflowExtractoParseado | null> {
+  const r = await parseExtractoMpExcel(file);
+  return r ? mpResultadoParaCashflow(r) : null;
 }
 
 /**

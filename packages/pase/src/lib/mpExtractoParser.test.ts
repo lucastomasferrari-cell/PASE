@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseExtractoMP } from "./mpExtractoParser";
+import { parseExtractoMP, mpResultadoParaCashflow } from "./mpExtractoParser";
 
 const BOM = String.fromCharCode(0xfeff);
 
@@ -129,5 +129,61 @@ describe("parseExtractoMP — sanity check vs header de resumen", () => {
     // suman mucho menos → genera advertencias.
     const r = parseExtractoMP(SAMPLE_REAL)!;
     expect(r.advertencias.some(a => a.toLowerCase().includes("créditos") || a.toLowerCase().includes("débitos"))).toBe(true);
+  });
+});
+
+describe("mpResultadoParaCashflow — adaptador al shape del módulo Cashflow", () => {
+  it("toma saldoInicial/saldoFinal de la fila de resumen del extracto", () => {
+    const r = parseExtractoMP(SAMPLE_REAL)!;
+    const cf = mpResultadoParaCashflow(r);
+    expect(cf.saldoInicial).toBeCloseTo(911181.47, 2);
+    expect(cf.saldoFinal).toBeCloseTo(660798.92, 2);
+  });
+
+  it("mapea cada movimiento a { fecha, descripcion, monto_bruto:neto, comision:0, retencion:0 }", () => {
+    const r = parseExtractoMP(SAMPLE_REAL)!;
+    const cf = mpResultadoParaCashflow(r);
+    expect(cf.lineas).toHaveLength(6);
+
+    // Toda línea respeta el contrato de cashflow_subir_extracto.
+    for (const l of cf.lineas) {
+      expect(l.fecha).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(typeof l.descripcion).toBe("string");
+      expect(typeof l.monto_bruto).toBe("number");
+      expect(l.comision).toBe(0);
+      expect(l.retencion).toBe(0);
+    }
+  });
+
+  it("monto_bruto conserva el neto con signo del extracto (egresos negativos)", () => {
+    const r = parseExtractoMP(SAMPLE_REAL)!;
+    const cf = mpResultadoParaCashflow(r);
+
+    const rendimientos = cf.lineas[0]!;
+    expect(rendimientos.fecha).toBe("2026-04-01");
+    expect(rendimientos.descripcion).toBe("Rendimientos");
+    expect(rendimientos.monto_bruto).toBeCloseTo(98.76, 2);
+
+    const metrogas = cf.lineas[1]!;
+    expect(metrogas.descripcion).toContain("Metrogas");
+    expect(metrogas.monto_bruto).toBeCloseTo(-78436.86, 2);
+  });
+
+  it("saldos en 0 si el resultado no trae fila de resumen", () => {
+    // El adaptador es la unidad bajo test: lo alimentamos con un resultado sin
+    // `resumen` (caso defensivo) y verificamos el fallback a 0.
+    const cf = mpResultadoParaCashflow({
+      movimientos: [
+        { fecha: "2026-05-01", monto: 5000, tipo: "liquidacion", descripcion: "Liquidación de dinero", referencia_externa: "1" },
+      ],
+      total_movimientos: 1,
+      rango_fechas: { desde: "2026-05-01", hasta: "2026-05-01" },
+      confianza_global: 1.0,
+      advertencias: [],
+    });
+    expect(cf.saldoInicial).toBe(0);
+    expect(cf.saldoFinal).toBe(0);
+    expect(cf.lineas).toHaveLength(1);
+    expect(cf.lineas[0]!.monto_bruto).toBeCloseTo(5000, 2);
   });
 });
