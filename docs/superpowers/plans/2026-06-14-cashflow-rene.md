@@ -297,6 +297,152 @@ COMMIT;
 
 ---
 
+## FASE 3.5 — Clasificación de los movimientos de efectivo (backend) — NUEVA (addendum 15-jun)
+
+> Surgió del brainstorm: el efectivo (`movimientos`) hereda la categoría del PyL siguiendo el link al documento, y los manuales sin documento (`Ingreso/Egreso Manual`) se clasifican con override + memoria. Ver `docs/superpowers/specs/2026-06-14-cashflow-rene-design.md` Addendum §A–C. **`retiro_socio` NUNCA se auto-asigna en efectivo** (se gestiona en el módulo Utilidades, futuro).
+
+### Task 5.5: Tabla de override + categoría `apertura_ajuste` + helper de categoría de efectivo
+
+**Files:**
+- Create: `packages/pase/supabase/migrations/202606141450_cashflow_efectivo_clasif.sql`
+
+- [ ] **Step 1: Escribir la migración**
+
+```sql
+-- 202606141450_cashflow_efectivo_clasif.sql
+-- Override manual de categoría de cashflow para movimientos de efectivo +
+-- categoría apertura_ajuste + helper que resuelve la categoría de un movimiento
+-- de efectivo: override > tipo/documento > reglas de texto.
+BEGIN;
+
+-- 1) Override por movimiento (movimientos no puede guardar la categoría del cashflow).
+CREATE TABLE IF NOT EXISTS cashflow_mov_clasif (
+  tenant_id     UUID NOT NULL,
+  local_id      INTEGER NOT NULL,
+  movimiento_id TEXT NOT NULL,                -- movimientos.id es TEXT
+  categoria     TEXT NOT NULL,
+  es_interno    BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (tenant_id, movimiento_id)
+);
+CREATE INDEX IF NOT EXISTS idx_cf_movclasif_tl ON cashflow_mov_clasif(tenant_id, local_id);
+
+ALTER TABLE cashflow_mov_clasif ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS cashflow_mov_clasif_all ON cashflow_mov_clasif;
+CREATE POLICY cashflow_mov_clasif_all ON cashflow_mov_clasif FOR ALL TO authenticated
+  USING (tenant_id = auth_tenant_id() AND (auth_es_dueno_o_admin() OR local_id = ANY(auth_locales_visibles())))
+  WITH CHECK (tenant_id = auth_tenant_id() AND (auth_es_dueno_o_admin() OR local_id = ANY(auth_locales_visibles())));
+
+-- 2) Categoría apertura_ajuste en la lista válida: recrear cashflow_reclasificar
+--    con el CHECK ampliado (resto idéntico a 202606141400).
+CREATE OR REPLACE FUNCTION cashflow_reclasificar(
+  p_linea_id uuid, p_categoria text, p_es_interno boolean DEFAULT false,
+  p_aplicar_todas boolean DEFAULT false, p_global boolean DEFAULT false
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions AS $$
+DECLARE
+  v_tenant uuid; v_local integer; v_desc text; v_cuenta text; v_periodo date;
+  v_texto text; v_scope text; v_afectadas int := 0; v_extra int := 0;
+BEGIN
+  v_tenant := auth_tenant_id();
+  IF v_tenant IS NULL THEN RAISE EXCEPTION 'NO_AUTH'; END IF;
+  IF p_categoria NOT IN ('venta','comision','retencion','proveedor','sueldo','gasto',
+                         'retiro_socio','aporte_socio','obra_capex','transferencia_interna','apertura_ajuste','otro') THEN
+    RAISE EXCEPTION 'CATEGORIA_INVALIDA';
+  END IF;
+  SELECT l.local_id, l.descripcion, e.cuenta, e.periodo_mes
+    INTO v_local, v_desc, v_cuenta, v_periodo
+  FROM cashflow_lineas l JOIN cashflow_extractos e ON e.id = l.extracto_id
+  WHERE l.id = p_linea_id AND l.tenant_id = v_tenant;
+  IF NOT FOUND THEN RAISE EXCEPTION 'LINEA_NO_ENCONTRADA'; END IF;
+  IF NOT (auth_es_dueno_o_admin() OR v_local = ANY(auth_locales_visibles())) THEN
+    RAISE EXCEPTION 'LOCAL_NO_PERMITIDO'; END IF;
+  IF EXISTS (SELECT 1 FROM cashflow_cierres WHERE tenant_id=v_tenant AND local_id=v_local
+             AND periodo_mes=v_periodo AND bloqueado) THEN RAISE EXCEPTION 'MES_BLOQUEADO'; END IF;
+  v_texto := fn_normalizar_texto(v_desc);
+  UPDATE cashflow_lineas SET categoria=p_categoria, es_interno=p_es_interno, confirmada=true, updated_at=NOW()
+   WHERE id=p_linea_id AND tenant_id=v_tenant;
+  v_afectadas := 1;
+  IF p_aplicar_todas THEN
+    v_scope := CASE WHEN p_global THEN '*' ELSE v_cuenta END;
+    INSERT INTO cashflow_mapeo (tenant_id, texto_norm, cuenta, categoria, es_interno, updated_at)
+    VALUES (v_tenant, v_texto, v_scope, p_categoria, p_es_interno, NOW())
+    ON CONFLICT (tenant_id, texto_norm, cuenta)
+    DO UPDATE SET categoria=EXCLUDED.categoria, es_interno=EXCLUDED.es_interno, updated_at=NOW();
+    UPDATE cashflow_lineas l SET categoria=p_categoria, es_interno=p_es_interno, updated_at=NOW()
+      FROM cashflow_extractos e
+     WHERE l.extracto_id=e.id AND l.tenant_id=v_tenant AND l.id<>p_linea_id AND NOT l.confirmada
+       AND fn_normalizar_texto(l.descripcion)=v_texto AND (p_global OR e.cuenta=v_cuenta)
+       AND NOT EXISTS (SELECT 1 FROM cashflow_cierres cc WHERE cc.tenant_id=l.tenant_id
+                       AND cc.local_id=l.local_id AND cc.periodo_mes=e.periodo_mes AND cc.bloqueado);
+    GET DIAGNOSTICS v_extra = ROW_COUNT;
+    v_afectadas := v_afectadas + v_extra;
+  END IF;
+  RETURN jsonb_build_object('linea_id', p_linea_id, 'afectadas', v_afectadas);
+END $$;
+REVOKE ALL ON FUNCTION cashflow_reclasificar(uuid,text,boolean,boolean,boolean) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION cashflow_reclasificar(uuid,text,boolean,boolean,boolean) TO authenticated;
+
+-- 3) Helper: categoría de cashflow de un movimiento de efectivo.
+--    Prioridad: override manual > tipo/documento > reglas de texto (manuales).
+--    NUNCA devuelve retiro_socio por texto (anti-mezcla). 'apertura_ajuste' para seeds/arqueos.
+CREATE OR REPLACE FUNCTION fn_cashflow_cat_efectivo(
+  p_tenant uuid, p_mov_id text, p_tipo text, p_detalle text, p_importe numeric,
+  p_fact_id text, p_remito_id text, p_gasto_id text, p_liq_id uuid, p_adelanto_id uuid
+) RETURNS jsonb LANGUAGE plpgsql STABLE SET search_path = public, extensions AS $$
+DECLARE v_cat text; v_int boolean; v_ovr record; d text;
+BEGIN
+  -- 1) override manual
+  SELECT categoria, es_interno INTO v_ovr FROM cashflow_mov_clasif
+    WHERE tenant_id=p_tenant AND movimiento_id=p_mov_id;
+  IF FOUND THEN RETURN jsonb_build_object('categoria',v_ovr.categoria,'es_interno',v_ovr.es_interno,'fuente','override'); END IF;
+  -- 2) por tipo / documento de origen
+  v_cat := CASE
+    WHEN p_tipo IN ('Transferencia Entrada','Transferencia Salida') THEN 'transferencia_interna'
+    WHEN p_tipo = 'Ingreso Venta' THEN 'venta'
+    WHEN p_tipo = 'Pago Proveedor' OR p_fact_id IS NOT NULL OR p_remito_id IS NOT NULL THEN 'proveedor'
+    WHEN p_tipo IN ('Pago Sueldo','Gasto empleado') OR p_liq_id IS NOT NULL OR p_adelanto_id IS NOT NULL THEN 'sueldo'
+    WHEN p_tipo = 'Gasto impuesto' THEN 'retencion'
+    WHEN p_tipo = 'Gasto retiro_socio' THEN 'retiro_socio'
+    WHEN p_tipo IN ('Gasto variable','Gasto fijo') OR p_gasto_id IS NOT NULL THEN 'gasto'
+    ELSE NULL END;
+  IF v_cat IS NOT NULL THEN
+    RETURN jsonb_build_object('categoria',v_cat,'es_interno', v_cat='transferencia_interna','fuente','tipo');
+  END IF;
+  -- 3) manuales sin documento → reglas de texto (NUNCA retiro_socio)
+  d := fn_normalizar_texto(p_detalle);
+  IF d LIKE '%saldo inicial%' OR d LIKE '%caja en 0%' OR d LIKE '%saldo caja fuerte%'
+     OR d LIKE '%ajuste%' OR d LIKE '%sobrante%' OR d LIKE '%faltante%' OR d LIKE '%arqueo%' THEN
+    RETURN jsonb_build_object('categoria','apertura_ajuste','es_interno',false,'fuente','texto');
+  END IF;
+  IF d LIKE '%retiro del local%' OR d LIKE '%caja grande%' OR d LIKE '%a caja %' OR d LIKE '%entre caja%' THEN
+    RETURN jsonb_build_object('categoria','transferencia_interna','es_interno',true,'fuente','texto');
+  END IF;
+  IF d LIKE '%aporte%' THEN
+    RETURN jsonb_build_object('categoria','aporte_socio','es_interno',false,'fuente','texto');
+  END IF;
+  -- default: queda 'otro' (la bandeja "Por revisar" lo levanta)
+  RETURN jsonb_build_object('categoria','otro','es_interno',false,'fuente','default');
+END $$;
+REVOKE ALL ON FUNCTION fn_cashflow_cat_efectivo(uuid,text,text,text,numeric,text,text,text,uuid,uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION fn_cashflow_cat_efectivo(uuid,text,text,text,numeric,text,text,text,uuid,uuid) TO authenticated;
+
+COMMIT;
+```
+
+- [ ] **Step 2: Aplicar** (flujo oficial `vercel env pull` → script `pg`) + verificar: `cashflow_mov_clasif` existe con RLS; `cashflow_reclasificar` acepta `apertura_ajuste` (probar `SELECT cashflow_reclasificar(...)` no aplica acá sin sesión — verificar solo el `pg_get_function_arguments` y que el CHECK incluya apertura_ajuste vía `pg_get_functiondef`); smoke de `fn_cashflow_cat_efectivo` contra detalles reales (saldo inicial→apertura_ajuste, RETIRO DEL LOCAL→transferencia_interna, RETIRO SOCIOS→otro NO retiro_socio).
+- [ ] **Step 3: Commit** — `feat(cashflow): override+helper de clasificación de efectivo + apertura_ajuste`
+
+### Task 5.6: RPC `cashflow_reclasificar_mov` (clasificar/recordar un movimiento de efectivo)
+
+**Files:**
+- Create: `packages/pase/supabase/migrations/202606141460_cashflow_reclasificar_mov.sql`
+
+- [ ] **Step 1: Escribir la RPC** — espejo de `cashflow_reclasificar` pero sobre `cashflow_mov_clasif`. Recibe `p_mov_id text, p_categoria text, p_es_interno boolean, p_aplicar_todas boolean`. Valida categoría (misma lista, **rechaza si querés impedir retiro_socio acá** — decisión: SE PERMITE retiro_socio manual para que la caja cuadre, pero el detalle de reparto es Utilidades). Auth check (lee `local_id`/`fecha` del movimiento, valida `auth_locales_visibles`, guard `MES_BLOQUEADO` si hay cierre del mes de `fecha`). Upsert en `cashflow_mov_clasif`. Si `p_aplicar_todas`: guarda en `cashflow_mapeo` (cuenta `'efectivo'`) por `fn_normalizar_texto(detalle)` y aplica override a los demás movimientos de efectivo del tenant con el mismo texto normalizado que NO tengan override y no estén en mes bloqueado. Devuelve `{mov_id, afectadas}`. `REVOKE FROM PUBLIC,anon` + `GRANT authenticated`.
+- [ ] **Step 2:** Aplicar + verificar (existe, DEFINER, grants).
+- [ ] **Step 3: Commit** — `feat(cashflow): RPC reclasificar movimiento de efectivo con memoria`
+
+---
+
 ## FASE 4 — Motor de cálculo del cashflow (backend de lectura)
 
 ### Task 6: RPC `cashflow_resumen_mes`
@@ -304,16 +450,20 @@ COMMIT;
 **Files:**
 - Create: `packages/pase/supabase/migrations/202606141500_cashflow_resumen.sql`
 
-- [ ] **Step 1: Escribir `cashflow_resumen_mes(p_local_id integer, p_periodo_mes date)`** que devuelve un jsonb con todo lo que la pantalla necesita. SECURITY DEFINER, auth check, sin idempotency (es read-only). Lógica:
-  - **Efectivo del mes:** de `movimientos` (cuentas Caja Chica/Mayor/Efectivo), `anulado=false`, `local_id=p_local_id`, fecha en el mes. Excluir transferencias internas (tipo LIKE 'Transferencia%' o detalle LIKE '%alivio%'). Agrupar ingresos/egresos por categoría (`cat`/`tipo`).
-  - **MP/Banco del mes:** de `cashflow_lineas` join `cashflow_extractos` por `periodo_mes`. Excluir `es_interno`. Agrupar por `categoria`.
-  - **Saldos iniciales/finales:** de `cashflow_extractos.saldo_inicial/final` (MP, banco); efectivo de `saldos_caja` (o derivado).
-  - **En tránsito (float):** `Σ ventas no-efectivo del mes (de tabla ventas, medio != efectivo)` − `Σ líneas categoria='venta' de MP+banco del mes` − comisiones. Devolver como bloque.
-  - **Verificación:** saldo_final_calculado vs saldo_final del extracto → flag `cuadra` + `diferencia`.
-  - **Total por categoría** consolidado (efvo+MP+banco), separando explícitamente `retiro_socio` y `aporte_socio` (nunca mezclados con operativo).
-  - Devolver estructura: `{ saldos_iniciales, ingresos[], egresos[], retiros[], aportes[], en_transito, saldo_final_calc, saldo_final_real, cuadra, diferencia, bloqueado }`.
-- [ ] **Step 2:** Aplicar + verificar con un mes real de Rene (local 5, 2026-05) → comparar contra los números que ya reconstruimos manualmente (efectivo operativo may ≈ $35M, MP proveedores may ≈ $53M, retiros may efvo $9M).
-- [ ] **Step 3:** Commit — `feat(cashflow): RPC resumen mensual consolidado`
+> **Reescrito (addendum 15-jun):** el efectivo se categoriza con `fn_cashflow_cat_efectivo` (override > tipo/documento > texto), NO por `tipo` crudo. `transferencia_interna` y `apertura_ajuste` se EXCLUYEN de ingresos/egresos operativos (netean / son baseline). Cuentas de efectivo = `Caja Chica`/`Caja Mayor`/`Caja Efectivo` (las cuentas `MercadoPago`/`Banco` de `movimientos` se IGNORAN — están rotas; MP/banco salen del extracto). `CAJA UTILIDADES` (si existe) se trata como cuenta de reserva → posición `líquido vs reservado`.
+
+- [ ] **Step 1: Escribir `cashflow_resumen_mes(p_local_id integer, p_periodo_mes date)`** — SECURITY DEFINER, auth check (`NO_AUTH`/`LOCAL_NO_PERMITIDO`), read-only (sin idempotency). Lógica:
+  - **Efectivo del mes:** `movimientos` con `local_id=p_local_id`, `anulado=false`, `cuenta IN ('Caja Chica','Caja Mayor','Caja Efectivo','CAJA UTILIDADES')`, `fecha` en `[p_periodo_mes, +1 mes)`. Para cada uno: categoría vía `fn_cashflow_cat_efectivo(tenant, id, tipo, detalle, importe, fact_id, remito_id_ref, gasto_id_ref, liquidacion_id, adelanto_id_ref)`. `importe>0` → ingreso, `importe<0` → egreso. **Excluir de operativo** las categorías `transferencia_interna` y `apertura_ajuste`.
+  - **MP/Banco del mes:** `cashflow_lineas l JOIN cashflow_extractos e` por `e.local_id=p_local_id AND e.periodo_mes=p_periodo_mes`, `NOT l.es_interno`, categoría `l.categoria`. (Sin extracto cargado → ese bloque queda vacío + flag `falta_extracto`.)
+  - **Saldos iniciales de efectivo (punto cero):** saldo corrido de cada caja al INICIO del mes = `SUM(importe)` de todos los `movimientos` de esa cuenta con `fecha < p_periodo_mes` (los `apertura_ajuste`/seeds ya están incluidos en el saldo corrido, por eso NO se cuentan como ingreso del mes). Saldo final efvo = inicial + `SUM(importe del mes)`.
+  - **Saldos MP/Banco:** `saldo_inicial`/`saldo_final` de `cashflow_extractos`.
+  - **En tránsito (float):** `Σ ventas no-efectivo del mes` (`ventas`, `medio <> 'EFECTIVO'`, por `fecha` y `local_id`, sumar `monto`) − `Σ líneas categoria='venta' del extracto del mes` (lo que ya se acreditó). Devolver bruto, acreditado y neto-en-tránsito.
+  - **Verificación:** por cuenta con extracto, `saldo_inicial + Σ movimientos = saldo_final` declarado → flag `cuadra` + `diferencia`.
+  - **Posición:** `liquido_operativo` (efvo Chica+Mayor+Efectivo + MP + banco) vs `reservado` (CAJA UTILIDADES) vs `en_transito`.
+  - **Por revisar:** count de movimientos de efectivo con categoría `otro` sin override (los manuales sin resolver).
+  - Devolver: `{ saldos_iniciales{efvo,mp,banco,utilidades}, ingresos[{categoria,total}], egresos[{categoria,total}], retiros_total, aportes_total, en_transito{bruto,acreditado,neto}, posicion{liquido,reservado,transito}, saldo_final_calc, saldo_final_real, cuadra, diferencia, por_revisar, bloqueado }`. Separar SIEMPRE `retiro_socio` y `aporte_socio` de los ingresos/egresos operativos.
+- [ ] **Step 2:** Aplicar + verificar con Rene (local 5, 2026-05): comparar el efectivo operativo y la composición contra lo reconstruido (ventas efvo may ≈ $26M; proveedores/sueldos/gastos del efectivo; "Por revisar" debe levantar los $9M RETIRO SOCIOS + transfers local→casa). Cargar un extracto MP real (vía parser + `cashflow_subir_extracto`) y ver el bloque MP cuadrar contra el `saldo_final` del extracto.
+- [ ] **Step 3:** Commit — `feat(cashflow): RPC resumen mensual consolidado (hereda categorías por documento)`
 
 ### Task 7: RPC `cashflow_puente_mes` (devengado ↔ cash)
 
@@ -339,6 +489,19 @@ COMMIT;
 - [ ] **Step 2:** Aplicar + verificar.
 - [ ] **Step 3:** Commit — `feat(cashflow): RPC cerrar/bloquear mes`
 
+### Task 8.5: RPC `cashflow_libro_mes` (libro contable / línea de tiempo) — NUEVA (addendum 15-jun)
+
+**Files:**
+- Create: `packages/pase/supabase/migrations/202606141800_cashflow_libro.sql`
+
+- [ ] **Step 1: Escribir `cashflow_libro_mes(p_local_id integer, p_periodo_mes date, p_cuenta text DEFAULT NULL)`** — read-only, SECURITY DEFINER, auth check. Devuelve las filas cronológicas con saldo corrido (Debe/Haber/Saldo) para la vista de libro contable. Lógica:
+  - Si `p_cuenta` es una cuenta de efectivo (o NULL=consolidado efectivo): filas de `movimientos` (cuentas de efectivo, `anulado=false`, mes), cada una con su categoría vía `fn_cashflow_cat_efectivo`, ordenadas por `fecha, created_at`. `debe = CASE WHEN importe<0 THEN -importe END`, `haber = CASE WHEN importe>0 THEN importe END`, `saldo` = corrido arrancando del saldo inicial de la cuenta (sección Task 6).
+  - Si `p_cuenta IN ('MercadoPago','Banco')`: filas de `cashflow_lineas` del extracto del mes, `monto_bruto` con signo → debe/haber, `saldo` corrido desde `saldo_inicial` del extracto.
+  - Cada fila: `{ fecha, concepto (detalle/descripcion), categoria, es_interno, debe, haber, saldo, ref_id }`.
+  - Devolver `{ cuenta, saldo_inicial, filas[], saldo_final }`.
+- [ ] **Step 2:** Aplicar + verificar contra Rene (el saldo corrido del efectivo de mayo debe terminar en el saldo real de la caja).
+- [ ] **Step 3:** Commit — `feat(cashflow): RPC libro contable mensual con saldo corrido`
+
 ---
 
 ## FASE 5 — Frontend: servicios + pantalla
@@ -348,7 +511,7 @@ COMMIT;
 **Files:**
 - Create: `packages/pase/src/lib/cashflow.ts`
 
-- [ ] **Step 1:** Funciones tipadas que llaman las RPCs: `subirExtracto(...)`, `reclasificarLinea(...)`, `resumenMes(localId, mes)`, `puenteMes(...)`, `cerrarMes(...)`. Tipos de retorno explícitos (TS estricto). Sin lógica de negocio (solo wrappers + tipos).
+- [ ] **Step 1:** Funciones tipadas que llaman las RPCs: `subirExtracto(...)`, `reclasificarLinea(...)`, `reclasificarMov(...)` (efectivo), `resumenMes(localId, mes)`, `libroMes(localId, mes, cuenta?)`, `puenteMes(...)`, `cerrarMes(...)`. Tipos de retorno explícitos (TS estricto, interfaces para el resumen/libro/puente). Sin lógica de negocio (solo wrappers + tipos).
 - [ ] **Step 2:** Commit — `feat(cashflow): servicio lib/cashflow.ts`
 
 ### Task 10: Pantalla `Cashflow.tsx` — estructura + resumen mensual
@@ -373,6 +536,16 @@ COMMIT;
 - [ ] **Step 2:** Tabla por categoría con monto; tocar una categoría → drill-down (modal o expand) listando las líneas/movimientos de esa categoría (reusar patrón de tablas existentes).
 - [ ] **Step 3:** Probar en navegador.
 - [ ] **Step 4:** Commit — `feat(cashflow): waterfall + drill-down por categoría`
+
+### Task 11.5: Vista libro contable / línea de tiempo — NUEVA (addendum 15-jun)
+
+**Files:**
+- Modify: `packages/pase/src/pages/Cashflow.tsx`
+
+- [ ] **Step 1:** Pestaña/sección "Libro" que llama `libroMes(localActivo, mes, cuenta)`. Selector de cuenta (Efectivo / MercadoPago / Banco / CAJA UTILIDADES / consolidado). Tabla: `Fecha | Concepto | Categoría | Debe | Haber | Saldo` con el saldo corriendo; Debe en rojo, Haber en verde, saldo en negrita. Reusar `fmt_money`/componentes de tabla existentes.
+- [ ] **Step 2:** Fila clickeable → si es un movimiento manual de efectivo sin clasificar (`categoria='otro'`), permitir reclasificar inline (dropdown de categorías) → `reclasificarMov` con checkbox "recordar / aplicar a todas las iguales". La bandeja "Por revisar" del resumen linkea acá.
+- [ ] **Step 3:** Probar en navegador con Rene (ver el saldo corrido del efectivo de mayo terminar en el saldo real).
+- [ ] **Step 4:** Commit — `feat(cashflow): vista libro contable con saldo corrido + reclasificar efectivo`
 
 ### Task 12: Upload de extracto + preview de clasificación + reclasificar
 
@@ -429,7 +602,16 @@ COMMIT;
 
 ---
 
+---
+
+## Módulo futuro: Utilidades / Reparto de utilidades (NO en este plan)
+
+Decidido en el brainstorm (15-jun): el reparto a socios es un **módulo aparte** con su propio spec+plan. Incluye una **CAJA UTILIDADES** (cuenta de reserva, balde Profit First), las acciones reservar/repartir, el cálculo de "cuánto es seguro repartir" (contra la repartija del mes), y la re-registración prolija de los retiros históricos mal cargados. Este plan (cashflow) solo deja a CAJA UTILIDADES tratada como una cuenta más y muestra `retiro_socio` como línea separada. **Arrancar Utilidades con `superpowers:brainstorming` cuando se retome.**
+
 ## Self-review notes (gaps conocidos a confirmar durante ejecución)
+- **Clasificación de efectivo por documento** (Task 6 / Fase 3.5): el MVP mapea `tipo`→categoría de cashflow (Pago Proveedor→proveedor, etc.); la categoría DETALLADA del documento (la `cat` real de la factura/gasto) se ve en el drill-down/libro. Si Lucas quiere agrupar el waterfall por los grupos exactos del PyL (CMV/Gastos Fijos/…), es una mejora sobre `fn_cashflow_cat_efectivo` (join a `config_categorias`).
+- **`apertura_ajuste` y punto cero**: los seeds/arqueos quedan fuera de ingresos/egresos operativos y ya están dentro del saldo corrido (por eso el saldo inicial del mes se deriva de `SUM(importe) WHERE fecha < mes`). Verificar que el primer mes cargado no los cuente como ingreso.
+- **`retiro_socio` en efectivo**: `cashflow_reclasificar_mov` PERMITE marcar un movimiento como retiro_socio (para que la caja cuadre), pero la GESTIÓN del reparto es Utilidades. Confirmar con Lucas si el cashflow debe dejar marcar retiros o solo mostrarlos.
 - **Banco PDF parsing** (Task 2): confirmar formato con Lucas; si PDF en browser es frágil, fallback a carga manual asistida o pedir CSV.
 - **Δ stock valorizado** (Task 7): si el inventario no está cargado/costeado, el puente usa input manual del mes (flag `stock_estimado`). No bloquear por esto.
 - **Comisión a nivel línea** (Task 3): el `account_statement` da neto; bruto/fee detallado está en el settlement report. MVP usa neto; la comisión total se puede sumar como categoría aparte. Mejorar en fase 2.
