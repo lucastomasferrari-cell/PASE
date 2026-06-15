@@ -506,7 +506,7 @@ COMMIT;
 
 ## FASE 5 — Frontend: servicios + pantalla
 
-### Task 9: Servicio de cashflow (lib)
+### Task 9: Servicio de cashflow (lib) — ✅ HECHO (15-jun, commit da964e4)
 
 **Files:**
 - Create: `packages/pase/src/lib/cashflow.ts`
@@ -514,7 +514,7 @@ COMMIT;
 - [ ] **Step 1:** Funciones tipadas que llaman las RPCs: `subirExtracto(...)`, `reclasificarLinea(...)`, `reclasificarMov(...)` (efectivo), `resumenMes(localId, mes)`, `libroMes(localId, mes, cuenta?)`, `puenteMes(...)`, `cerrarMes(...)`. Tipos de retorno explícitos (TS estricto, interfaces para el resumen/libro/puente). Sin lógica de negocio (solo wrappers + tipos).
 - [ ] **Step 2:** Commit — `feat(cashflow): servicio lib/cashflow.ts`
 
-### Task 10: Pantalla `Cashflow.tsx` — estructura + resumen mensual
+### Task 10: Pantalla `Cashflow.tsx` — estructura + resumen mensual — ✅ HECHO (15-jun, commit b4108cc, EN PROD; falta smoke en navegador)
 
 **Files:**
 - Create: `packages/pase/src/pages/Cashflow.tsx`
