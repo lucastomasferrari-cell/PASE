@@ -55,6 +55,7 @@ const Rentabilidad = lazy(() => import("./pages/Rentabilidad"));
 const Recetario = lazy(() => import("./pages/Recetario"));
 const MensajeriaIG = lazy(() => import("./pages/MensajeriaIG"));
 const Negocio = lazy(() => import("./pages/Negocio"));
+const Cashflow = lazy(() => import("./pages/Cashflow"));
 const Objetivos = lazy(() => import("./pages/Objetivos"));
 const Ajustes = lazy(() => import("./pages/Ajustes"));
 const Importar = lazy(() => import("./pages/Importar"));
@@ -981,6 +982,7 @@ function AppMain() {
                 user?.tenant_id ? <Objetivos locales={locales} tenantId={user.tenant_id} localActivo={localActivo}/> : <Navigate to="/" replace/>
               } />
               <Route path="/reportes" element={<EERR {...props}/>} />
+              <Route path="/cashflow" element={<Cashflow {...props}/>} />
 
               {/* Herramientas */}
               <Route path="/equipo" element={<RRHHPage {...props}/>} />
