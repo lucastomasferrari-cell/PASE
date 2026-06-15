@@ -297,7 +297,7 @@ COMMIT;
 
 ---
 
-## FASE 3.5 — Clasificación de los movimientos de efectivo (backend) — NUEVA (addendum 15-jun)
+## FASE 3.5 — Clasificación de los movimientos de efectivo (backend) — ✅ HECHO (15-jun, commits a635240 + 6678192, EN PROD)
 
 > Surgió del brainstorm: el efectivo (`movimientos`) hereda la categoría del PyL siguiendo el link al documento, y los manuales sin documento (`Ingreso/Egreso Manual`) se clasifican con override + memoria. Ver `docs/superpowers/specs/2026-06-14-cashflow-rene-design.md` Addendum §A–C. **`retiro_socio` NUNCA se auto-asigna en efectivo** (se gestiona en el módulo Utilidades, futuro).
 
