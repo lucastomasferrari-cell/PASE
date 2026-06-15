@@ -789,14 +789,18 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
             </button>
           </div>
         )}
-        {loading?<div className="loading">Cargando...</div>:(
+        {(
           <div className="table-scroll-wrap">
           <table style={{minWidth: 720}}><thead><tr>
             <th className="col-fecha"><DateRangeFilter label="Fecha" desde={filtDesde} hasta={filtHasta} onDesdeChange={setFiltDesde} onHastaChange={setFiltHasta} /></th>
             {ordenPor === "carga" && <th className="col-fecha" title="Cuándo se cargó realmente al sistema (puede diferir de la fecha del movimiento)">Cargado</th>}
             <th><ColumnFilter label="Cuenta" values={cuentasParaListado} selected={new Set(cuentaFiltro)} onChange={s => setCuentaFiltro([...s])} /></th><th><ColumnFilter label="Tipo" values={mColFilters.uniqueValues("tipo")} selected={mColFilters.getFilter("tipo")} onChange={s => mColFilters.setFilter("tipo", s)} /></th><th><ColumnFilter label="Categoría" values={mColFilters.uniqueValues("categoria")} selected={mColFilters.getFilter("categoria")} onChange={s => mColFilters.setFilter("categoria", s)} /></th><th>Detalle</th><th className="num-right">Importe</th><th></th>
           </tr></thead>
-          {mFilt.length===0?(
+          {loading?(
+            <tbody><tr><td colSpan={ordenPor === "carga" ? 8 : 7}>
+              <div className="loading" style={{padding:24,textAlign:"center"}}>Cargando...</div>
+            </td></tr></tbody>
+          ):mFilt.length===0?(
             <tbody><tr><td colSpan={ordenPor === "carga" ? 8 : 7} style={{padding:0}}>
               <EmptyState
                 icon="📋"
