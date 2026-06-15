@@ -177,9 +177,11 @@ describe("parseExtractoBanco", () => {
 
 ---
 
-## FASE 3 — Clasificación con memoria (backend)
+## FASE 3 — Clasificación con memoria (backend) — ✅ HECHO (15-jun, commit 33fa38d, EN PROD)
 
-### Task 4: RPC de upload de extracto + auto-clasificación
+> Migraciones 202606141300 + 202606141400 aplicadas y verificadas en prod (funciones existen, modo DEFINER/INVOKER correcto, anon/public sin EXECUTE, smoke del clasificador OK contra descripciones reales — `Transferencia enviada Baldi` → `proveedor`, NO retiro_socio). Decisión de diseño en reclasificar: la línea tocada queda `confirmada`; las hermanas en masa quedan sin confirmar (una corrección futura del mismo texto las vuelve a alcanzar); la masa nunca toca meses bloqueados.
+
+### Task 4: RPC de upload de extracto + auto-clasificación — ✅ HECHO
 
 **Files:**
 - Create: `packages/pase/supabase/migrations/202606141300_cashflow_rpcs_upload.sql`
@@ -284,7 +286,7 @@ COMMIT;
 - [ ] **Step 2:** Aplicar migración (flujo oficial) + verificar funciones existen.
 - [ ] **Step 3:** Commit — `feat(cashflow): RPC subir extracto + auto-clasificación`
 
-### Task 5: RPC para re-clasificar una línea (con memoria)
+### Task 5: RPC para re-clasificar una línea (con memoria) — ✅ HECHO
 
 **Files:**
 - Create: `packages/pase/supabase/migrations/202606141400_cashflow_reclasificar.sql`
