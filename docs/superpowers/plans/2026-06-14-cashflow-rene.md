@@ -127,11 +127,11 @@ git commit -m "feat(cashflow): schema base (extractos, lineas, mapeo, cierres) +
 
 ---
 
-## FASE 2 — Parsers de extracto
+## FASE 2 — Parsers de extracto — ✅ HECHO (15-jun, commits 0500a10 + a324c72)
 
-> MP ya tiene parser (`src/lib/mpExtractoParser.ts`). Banco (BBVA) necesita uno nuevo. **Decisión a confirmar con Lucas en el primer task:** BBVA entrega PDF; opciones: (a) parsear PDF en browser con `pdfjs-dist` (texto), (b) pedir export CSV/xlsx de BBVA si existe, (c) carga manual asistida. El plan asume (a) con fallback a carga manual.
+> MP ya tenía parser; se le agregó el adaptador. Banco (BBVA) = PDF (confirmado: Lucas baja `Resumen.pdf` del home banking; 8 resúmenes reales en Downloads). Se eligió opción (a): `pdfjs-dist` extrae el texto en browser → `parseExtractoBanco`. Pendiente abierto (no bloqueante): si BBVA ofrece export xlsx/CSV sería más robusto que el texto del PDF. **Corrección al diseño:** el stub asumía `saldoInicial = 1.817.391,59`, pero ese es el CIERRE (`SALDO AL`/`Saldo Consolidado`); el inicial real es `SALDO ANTERIOR` (0,00 en mayo). El signo del movimiento se deriva del **delta del saldo corrido** (el texto colapsa las columnas Débito/Crédito).
 
-### Task 2: Parser de banco BBVA
+### Task 2: Parser de banco BBVA — ✅ HECHO
 
 **Files:**
 - Create: `packages/pase/src/lib/bancoExtractoParser.ts`
@@ -163,7 +163,7 @@ describe("parseExtractoBanco", () => {
 
 - [ ] **Step 5: Commit** — `feat(cashflow): parser de extracto banco BBVA`
 
-### Task 3: Adaptar el parser MP para cashflow (bruto/comisión/neto)
+### Task 3: Adaptar el parser MP para cashflow (bruto/comisión/neto) — ✅ HECHO
 
 **Files:**
 - Modify: `packages/pase/src/lib/mpExtractoParser.ts`
