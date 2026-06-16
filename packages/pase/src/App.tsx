@@ -56,6 +56,7 @@ const Recetario = lazy(() => import("./pages/Recetario"));
 const MensajeriaIG = lazy(() => import("./pages/MensajeriaIG"));
 const Negocio = lazy(() => import("./pages/Negocio"));
 const Cashflow = lazy(() => import("./pages/Cashflow"));
+const Utilidades = lazy(() => import("./pages/Utilidades"));
 const Objetivos = lazy(() => import("./pages/Objetivos"));
 const Ajustes = lazy(() => import("./pages/Ajustes"));
 const Importar = lazy(() => import("./pages/Importar"));
@@ -983,6 +984,7 @@ function AppMain() {
               } />
               <Route path="/reportes" element={<EERR {...props}/>} />
               <Route path="/cashflow" element={<Cashflow {...props}/>} />
+              <Route path="/utilidades" element={<Utilidades {...props}/>} />
 
               {/* Herramientas */}
               <Route path="/equipo" element={<RRHHPage {...props}/>} />
