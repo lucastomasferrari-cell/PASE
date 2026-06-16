@@ -244,6 +244,12 @@ function ResumenView({ lid, periodoMes, refreshKey, onChanged }: {
         </div>
       </Card>
 
+      <FlujoMes
+        saldoIni={resumen.saldos_iniciales.efectivo + resumen.saldos_iniciales.mercadopago + resumen.saldos_iniciales.banco}
+        saldoFin={resumen.posicion.liquido_operativo}
+        ingresos={resumen.ingresos} egresos={resumen.egresos}
+      />
+
       <div style={gridTwo}>
         <CategoriaList titulo={`Ingresos · ${fmt_$(totalIngresos)}`} items={resumen.ingresos} positivo />
         <CategoriaList titulo={`Egresos · ${fmt_$(totalEgresos)}`} items={resumen.egresos} />
@@ -470,6 +476,43 @@ function CategoriaList({ titulo, items, positivo }: { titulo: string; items: Res
           <span style={{ fontVariantNumeric: "tabular-nums", color: positivo ? "var(--pase-celeste)" : "var(--pase-text)" }}>{fmt_$(i.total)}</span>
         </div>
       ))}
+    </Card>
+  );
+}
+
+function FlujoMes({ saldoIni, saldoFin, ingresos, egresos }: {
+  saldoIni: number; saldoFin: number; ingresos: ResumenCategoria[]; egresos: ResumenCategoria[];
+}) {
+  const items = [
+    ...ingresos.map((i) => ({ ...i, signo: 1 as const })),
+    ...egresos.map((e) => ({ ...e, signo: -1 as const })),
+  ].sort((a, b) => b.total - a.total);
+  if (items.length === 0) return null;
+  const max = Math.max(1, ...items.map((i) => i.total));
+  return (
+    <Card padding="lg">
+      <div style={cardTitle}>Flujo del mes</div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+        <span style={subMuted}>Saldo inicial</span>
+        <b style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(saldoIni)}</b>
+      </div>
+      {items.map((it, i) => (
+        <div key={`${it.categoria}-${i}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: "3px 0" }}>
+          <span style={{ flex: "0 0 140px", fontSize: "var(--pase-fs-sm)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {it.signo > 0 ? "▲" : "▼"} {CATEGORIA_LABEL[it.categoria] ?? it.categoria}
+          </span>
+          <div style={{ flex: 1, height: 14, background: "rgba(127,127,127,0.12)", borderRadius: 3, overflow: "hidden" }}>
+            <div style={{ width: `${Math.max(2, (it.total / max) * 100)}%`, height: "100%", background: it.signo > 0 ? "var(--pase-celeste)" : "#E06666" }} />
+          </div>
+          <span style={{ flex: "0 0 120px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: "var(--pase-fs-sm)", color: it.signo > 0 ? "var(--pase-celeste)" : "#B91C1C" }}>
+            {it.signo > 0 ? "+" : "−"}{fmt_$(it.total)}
+          </span>
+        </div>
+      ))}
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, paddingTop: 8, borderTop: "1px solid var(--pase-border)", fontWeight: 600 }}>
+        <span>Saldo final (líquido)</span>
+        <b style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(saldoFin)}</b>
+      </div>
     </Card>
   );
 }
