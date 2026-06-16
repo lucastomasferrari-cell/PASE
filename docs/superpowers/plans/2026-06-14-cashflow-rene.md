@@ -527,7 +527,7 @@ COMMIT;
 - [ ] **Step 4:** Probar en navegador (dev server) con Rene → ver el resumen de mayo cuadrar.
 - [ ] **Step 5:** Commit — `feat(cashflow): pantalla base + registro nav/route`
 
-### Task 11: Waterfall + tabla de ingresos/egresos + drill-down — 🟡 PARCIAL (el Resumen ya muestra ingresos/egresos por categoría; faltan las barras visuales del waterfall + drill-down a las filas. Bajo valor, opcional.)
+### Task 11: Waterfall + tabla de ingresos/egresos + drill-down — ✅ HECHO (15-jun, commit 078b316; bloque "Flujo del mes" con barras proporcionales en el Resumen)
 
 **Files:**
 - Modify: `packages/pase/src/pages/Cashflow.tsx`
@@ -591,9 +591,9 @@ COMMIT;
 
 ---
 
-## FASE 7 — Cierre
+## FASE 7 — Cierre — ✅ CASI (solo falta el smoke en vivo del upload por Lucas)
 
-### Task 16: Verificación final + memoria
+### Task 16: Verificación final + memoria — ✅ CASI
 
 - [ ] **Step 1:** Smoke test completo en prod con Rene: subir MP + banco de un mes, ver el resumen cuadrar contra el extracto, ver el puente, cerrar el mes. Confirmar con Lucas.
 - [ ] **Step 2:** `pnpm --filter pase typecheck` + `pnpm --filter pase lint` → 0 errores. Verificar deploy Vercel `state=READY`.
