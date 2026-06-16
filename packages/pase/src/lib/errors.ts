@@ -16,6 +16,7 @@ const MAP: Record<string, string> = {
   LOCAL_NO_AUTORIZADO: "No tenés asignado este local. Pedile al dueño que te lo asigne (Usuarios → tu nombre → Locales). El código de autorización del dueño NO sirve para esto — solo autoriza acciones en locales que ya tenés.",
   SALDO_INSUFICIENTE: "Saldo insuficiente en la cuenta seleccionada",
   CATEGORIA_REQUERIDA: "La categoría es obligatoria",
+  TIPO_GASTO_INVALIDO: "No pude reconocer el tipo de gasto. Elegí un tipo válido (Gasto Fijo, Variable, Publicidad, Comisión o Impuesto) y una categoría de la lista.",
   MOTIVO_REQUERIDO: "El motivo es obligatorio",
   PADRE_CON_MOVIMIENTOS_VIVOS: "No se puede borrar/recalcular: ya tiene un pago hecho en caja. Anulá el pago primero (botón Anular o Editar) y después recalculá.",
   PAGOS_NO_SUMAN_TOTAL: "Las formas de pago tienen que sumar exactamente el total de la liquidación.",

@@ -231,4 +231,49 @@ test.describe("Gastos — mutante", () => {
       .eq("cuenta", CUENTA).eq("local_id", localId).maybeSingle()).data?.saldo;
     expect(saldoTrasDos).toBe(saldoTrasUno);
   });
+
+  // ── Test mutante #3: robustez del tipo (bug Anto jun-2026). ─────────────
+  // crear_gasto traducía el tipo SOLO por el grupo de la categoría; si la
+  // categoría no matcheaba config_categorias, metía la etiqueta cruda
+  // ("Otros") en gastos.tipo y violaba gastos_tipo_check. Ahora la etiqueta
+  // se normaliza a un valor del enum ("Otros" → 'variable').
+  test("crear_gasto: etiqueta 'Otros' + categoría desconocida cae a 'variable' (no viola el check)", async () => {
+    const SENTINEL_OTROS = 234002.34;
+    const { data, error } = await db.rpc("crear_gasto", {
+      p_fecha: new Date().toISOString().slice(0, 10),
+      p_local_id: localId,
+      p_categoria: "__CAT_INEXISTENTE_MUTANTE__", // fuerza el fallback por etiqueta
+      p_tipo: "Otros",
+      p_monto: SENTINEL_OTROS,
+      p_detalle: "e2e tipo robusto",
+      p_cuenta: CUENTA,
+      p_plantilla_id: null,
+      p_idempotency_key: null,
+    });
+    expect(error).toBeNull();
+    gastoId = (data as { gasto_id: string }).gasto_id;
+    movId = (data as { mov_id: string }).mov_id;
+    expect((data as { tipo: string }).tipo).toBe("variable");
+
+    const { data: g } = await db.from("gastos").select("tipo").eq("id", gastoId).single();
+    expect(g?.tipo).toBe("variable"); // valor válido del enum, no la etiqueta cruda
+  });
+
+  // ── Test mutante #4: tipo irreconocible → error claro, no "violates check".
+  test("crear_gasto: tipo irreconocible tira TIPO_GASTO_INVALIDO (no error crudo de Postgres)", async () => {
+    const { error } = await db.rpc("crear_gasto", {
+      p_fecha: new Date().toISOString().slice(0, 10),
+      p_local_id: localId,
+      p_categoria: "__CAT_INEXISTENTE_MUTANTE__",
+      p_tipo: "zzz-no-existe",
+      p_monto: 234003.45,
+      p_detalle: "e2e tipo invalido",
+      p_cuenta: CUENTA,
+      p_plantilla_id: null,
+      p_idempotency_key: null,
+    });
+    // Falla antes de insertar nada → sin cleanup (gastoId/movId quedan null).
+    expect(error).not.toBeNull();
+    expect(error?.message).toContain("TIPO_GASTO_INVALIDO");
+  });
 });

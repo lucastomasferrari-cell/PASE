@@ -566,33 +566,57 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     }
   }
 
+  // Crea UN gasto (crear_gasto → impacta EERR + Caja) a partir de una fila del
+  // extracto. Reusada por el modal individual y por el lote. Devuelve true si OK.
+  // crear_gasto retorna {gasto_id, mov_id} → usamos mov_id directo (sin lookup).
+  async function crearGastoDeFila(fila: FilaExtracto, tipo: string, cat: string): Promise<boolean> {
+    const detalle = `[Concil. ${periodoDesde.slice(0, 7)}] ${fila.descripcion}${fila.referencia_externa ? ` · ref ${fila.referencia_externa}` : ""}`;
+    const { data, error } = await db.rpc("crear_gasto", {
+      p_fecha: fila.fecha,
+      p_local_id: localActivo,
+      p_categoria: cat,
+      p_tipo: tipo,
+      p_monto: Math.abs(fila.monto),
+      p_detalle: detalle,
+      p_cuenta: "MercadoPago",
+      p_plantilla_id: null,
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    if (error) {
+      showError(`${fila.descripcion.slice(0, 40)}: ${translateRpcError(error)}`);
+      return false;
+    }
+    if (data && (data as { mov_id?: string }).mov_id) {
+      movsSesionRef.current.add((data as { mov_id: string }).mov_id);
+    }
+    // Aprender: este titular MP = gasto de esta categoría. La próxima
+    // conciliación lo reconoce y lo pre-clasifica como "conocido" (Lucas
+    // 16-jun: que aprenda como "pertenece a proveedor"). Best-effort.
+    void db.rpc("fn_aprender_gasto_alias", {
+      p_local_id: localActivo,
+      p_descripcion: fila.descripcion,
+      p_categoria: cat,
+      p_tipo: tipo,
+    }).then(({ error }) => {
+      if (error) console.warn("[Concil] no se aprendió alias de gasto:", error.message);
+    });
+    setResueltos(p => ({ ...p, [`ext:${fila.idx}`]: "creado" }));
+    return true;
+  }
+
   async function ejecutarCrearGasto() {
     if (!crearGastoFila) return;
     if (!crearTipo) { showError("Elegí un tipo"); return; }
     if (!crearCat) { showError("Elegí una categoría"); return; }
     setSavingAccion(true);
     try {
-      const detalle = `[Concil. ${periodoDesde.slice(0, 7)}] ${crearGastoFila.descripcion}${crearGastoFila.referencia_externa ? ` · ref ${crearGastoFila.referencia_externa}` : ""}`;
-      const { error } = await db.rpc("crear_gasto", {
-        p_fecha: crearGastoFila.fecha,
-        p_local_id: localActivo,
-        p_categoria: crearCat,
-        p_tipo: crearTipo,
-        p_monto: Math.abs(crearGastoFila.monto),
-        p_detalle: detalle,
-        p_cuenta: "MercadoPago",
-        p_plantilla_id: null,
-        p_idempotency_key: crypto.randomUUID(),
-      });
-      if (error) {
-        showError(translateRpcError(error));
-        return;
+      const ok = await crearGastoDeFila(crearGastoFila, crearTipo, crearCat);
+      if (ok) {
+        setCrearGastoFila(null);
+        setCrearTipo("");
+        setCrearCat("");
+        showToast("Gasto creado");
       }
-      setResueltos(p => ({ ...p, [`ext:${crearGastoFila.idx}`]: "creado" }));
-      setCrearGastoFila(null);
-      setCrearTipo("");
-      setCrearCat("");
-      showToast("Gasto creado");
     } finally {
       setSavingAccion(false);
     }
@@ -601,10 +625,22 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   // ─── Creación EN LOTE (Lucas 10-jun: "siguen siendo muchos") ────────────
   // La mayoría de los faltantes son gastos reales no cargados. Crearlos de
   // a uno (35 clicks + 35 confirmaciones) es un dolor: checkboxes + un solo
-  // botón que los crea todos secuencialmente.
+  // botón que los crea todos.
+  //
+  // Lucas 16-jun: el lote ahora pide TIPO + CATEGORÍA y crea GASTOS (crear_gasto
+  // → impactan EERR + Caja), no movimientos sueltos "Egreso Manual" (que solo
+  // tocaban la caja y NO figuraban en el balance). El tipo/categoría elegido se
+  // aplica a TODAS las seleccionadas — pensado para tandas del mismo concepto
+  // (ej: los impuestos de extracción de MP).
   const [seleccionados, setSeleccionados] = useState<Set<number>>(new Set());
   const [confirmarLote, setConfirmarLote] = useState(false);
   const [progresoLote, setProgresoLote] = useState<string | null>(null);
+  const [loteTipo, setLoteTipo] = useState<string>("");
+  const [loteCat, setLoteCat] = useState<string>("");
+  // Gastos "conocidos": filas rojas cuyo titular MP ya fue clasificado como
+  // gasto en una conciliación anterior (fn_clasificar_gastos_conocidos). Map
+  // descripcion → {categoria, tipo}. Permite crear de un clic / todos juntos.
+  const [gastosConocidos, setGastosConocidos] = useState<Record<string, { categoria: string; tipo: string }>>({});
 
   function toggleSeleccion(idx: number) {
     setSeleccionados(p => {
@@ -614,8 +650,31 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     });
   }
 
+  // Cuando carga/cambia el cruce, preguntar al backend qué filas rojas ya son
+  // gastos "conocidos" (titular aprendido antes) para pre-clasificarlas.
+  useEffect(() => {
+    if (!cruce || localActivo == null) return;
+    const descrs = Array.from(new Set(
+      cruce.extracto.filter(f => f.estado === "rojo_falta").map(f => f.descripcion),
+    ));
+    if (descrs.length === 0) return;
+    let cancel = false;
+    void db.rpc("fn_clasificar_gastos_conocidos", { p_local_id: localActivo, p_descripciones: descrs })
+      .then(({ data, error }) => {
+        if (cancel || error || !data) return;
+        const map: Record<string, { categoria: string; tipo: string }> = {};
+        for (const row of data as Array<{ descripcion: string; categoria: string; tipo: string | null }>) {
+          map[row.descripcion] = { categoria: row.categoria, tipo: row.tipo ?? "" };
+        }
+        setGastosConocidos(map);
+      });
+    return () => { cancel = true; };
+  }, [cruce, localActivo]);
+
   async function ejecutarCrearLote() {
     if (!cruce) return;
+    if (!loteTipo) { showError("Elegí un tipo"); return; }
+    if (!loteCat) { showError("Elegí una categoría"); return; }
     const filas = cruce.extracto.filter(f => seleccionados.has(f.idx) && !resueltos[`ext:${f.idx}`]);
     if (filas.length === 0) return;
     setSavingAccion(true);
@@ -624,12 +683,14 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     try {
       for (let i = 0; i < filas.length; i++) {
         setProgresoLote(`Creando ${i + 1} de ${filas.length}…`);
-        const ok = await crearMovimientoDeFila(filas[i]!);
+        const ok = await crearGastoDeFila(filas[i]!, loteTipo, loteCat);
         if (ok) creados++;
         // Si falla uno, seguimos con el resto (el error ya se mostró).
       }
-      showToast(`${creados} de ${filas.length} movimientos creados`);
+      showToast(`${creados} de ${filas.length} gastos creados`);
       setSeleccionados(new Set());
+      setLoteTipo("");
+      setLoteCat("");
     } finally {
       setProgresoLote(null);
       setSavingAccion(false);
@@ -1494,6 +1555,36 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                     {numSel > 0 ? <>{numSel} seleccionados · {fmt_$(sumaSel)}</> : "Nada seleccionado"}
                   </span>
                   <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+                    {(() => {
+                      const knownFilas = filasRojas.filter(f => gastosConocidos[f.descripcion]);
+                      if (knownFilas.length === 0) return null;
+                      return (
+                        <button
+                          className="btn btn-acc btn-sm"
+                          disabled={savingAccion}
+                          title="Crea de un saque todas las filas cuyo titular ya clasificaste antes como gasto"
+                          onClick={async () => {
+                            setSavingAccion(true);
+                            let creados = 0;
+                            try {
+                              for (let i = 0; i < knownFilas.length; i++) {
+                                const f = knownFilas[i]!;
+                                const k = gastosConocidos[f.descripcion]!;
+                                setProgresoLote(`Creando ${i + 1} de ${knownFilas.length}…`);
+                                const ok = await crearGastoDeFila(f, k.tipo || "Impuesto", k.categoria);
+                                if (ok) creados++;
+                              }
+                              showToast(`${creados} gastos conocidos creados`);
+                            } finally {
+                              setProgresoLote(null);
+                              setSavingAccion(false);
+                            }
+                          }}
+                        >
+                          {progresoLote ?? `✓ Crear ${knownFilas.length} conocidos →`}
+                        </button>
+                      );
+                    })()}
                     <button
                       className="btn btn-ghost btn-sm"
                       disabled={numSel === 0 || savingAccion}
@@ -1555,7 +1646,27 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                             </div>
                           ) : (
                             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                              <button className="btn btn-acc btn-sm" onClick={() => setCrearFaltante(fila)}>
+                              {gastosConocidos[fila.descripcion] && (
+                                <button
+                                  className="btn btn-acc btn-sm"
+                                  disabled={savingAccion}
+                                  title="Crear como gasto con la categoría que aprendió de antes"
+                                  onClick={async () => {
+                                    const k = gastosConocidos[fila.descripcion]!;
+                                    setSavingAccion(true);
+                                    try {
+                                      const ok = await crearGastoDeFila(fila, k.tipo || "Impuesto", k.categoria);
+                                      if (ok) showToast("Gasto creado");
+                                    } finally { setSavingAccion(false); }
+                                  }}
+                                >
+                                  ✓ Crear gasto · {gastosConocidos[fila.descripcion]!.categoria}
+                                </button>
+                              )}
+                              <button
+                                className={gastosConocidos[fila.descripcion] ? "btn btn-ghost btn-sm" : "btn btn-acc btn-sm"}
+                                onClick={() => setCrearFaltante(fila)}
+                              >
                                 Crear en Caja
                               </button>
                               {fila.monto < 0 && (
@@ -2054,37 +2165,71 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
       )}
 
       {/* Modal: confirmar creación en lote */}
-      {confirmarLote && cruce && (
-        <Modal isOpen={true} onClose={() => setConfirmarLote(false)} title="Crear movimientos en lote">
-          {(() => {
-            const filas = cruce.extracto.filter(f => seleccionados.has(f.idx) && !resueltos[`ext:${f.idx}`]);
-            const suma = filas.reduce((s, f) => s + f.monto, 0);
-            return (
-              <>
-                <div style={{ fontSize: 13, lineHeight: 1.6 }}>
-                  Se van a crear <strong>{filas.length} movimientos</strong> en Caja con cuenta
-                  <strong> MercadoPago</strong> de <strong>{localNombre}</strong>, por un total
-                  de <strong>{fmt_$(suma)}</strong>.
-                </div>
-                <div style={{ marginTop: 10, maxHeight: 240, overflowY: "auto", fontSize: 11 }}>
-                  {filas.map(f => (
-                    <div key={f.idx} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid var(--bd)" }}>
-                      <span>{fmt_d(f.fecha)} · {f.descripcion.slice(0, 45)}</span>
-                      <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(f.monto)}</span>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-                  <button className="btn btn-ghost" onClick={() => setConfirmarLote(false)} disabled={savingAccion}>Cancelar</button>
-                  <button className="btn btn-acc" onClick={ejecutarCrearLote} disabled={savingAccion}>
-                    {savingAccion ? (progresoLote ?? "Creando…") : `Confirmar crear ${filas.length}`}
-                  </button>
-                </div>
-              </>
-            );
-          })()}
+      {confirmarLote && cruce && (() => {
+        const filas = cruce.extracto.filter(f => seleccionados.has(f.idx) && !resueltos[`ext:${f.idx}`]);
+        const suma = filas.reduce((s, f) => s + f.monto, 0);
+        // Mismo set de tipos/categorías que el modal "Crear como gasto".
+        const tiposGasto = ["Gasto Fijo", "Gasto Variable", "Publicidad", "Comisión", "Impuesto", "Otros"];
+        let catsDisponibles: string[] = [];
+        if (loteTipo === "Gasto Fijo") catsDisponibles = GASTOS_FIJOS;
+        else if (loteTipo === "Gasto Variable") catsDisponibles = GASTOS_VARIABLES;
+        else if (loteTipo === "Publicidad") catsDisponibles = GASTOS_PUBLICIDAD;
+        else if (loteTipo === "Comisión") catsDisponibles = COMISIONES_CATS;
+        else if (loteTipo === "Impuesto") catsDisponibles = GASTOS_IMPUESTOS;
+        else if (loteTipo === "Otros") catsDisponibles = ["OTROS"];
+        return (
+        <Modal isOpen={true} onClose={() => { setConfirmarLote(false); setLoteTipo(""); setLoteCat(""); }} title="Crear gastos en lote">
+          <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+            Se van a crear <strong>{filas.length} gastos</strong> con cuenta
+            <strong> MercadoPago</strong> de <strong>{localNombre}</strong>, por un total
+            de <strong>{fmt_$(suma)}</strong>. Todas con el <strong>mismo tipo y categoría</strong>
+            {" "}— se cargan como gasto (impactan el balance/EERR, no solo la caja).
+          </div>
+
+          {/* Tipo + Categoría obligatorios — se aplican a TODAS las seleccionadas */}
+          <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <label style={{ fontSize: 12, color: "var(--muted2)", display: "block", marginBottom: 4 }}>Tipo *</label>
+              <select
+                value={loteTipo}
+                onChange={e => { setLoteTipo(e.target.value); setLoteCat(""); }}
+                style={{ width: "100%", padding: "8px 10px", fontSize: 13, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--text)", borderRadius: 6 }}
+              >
+                <option value="">Seleccioná…</option>
+                {tiposGasto.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: "var(--muted2)", display: "block", marginBottom: 4 }}>Categoría *</label>
+              <select
+                value={loteCat}
+                onChange={e => setLoteCat(e.target.value)}
+                disabled={!loteTipo}
+                style={{ width: "100%", padding: "8px 10px", fontSize: 13, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--text)", borderRadius: 6 }}
+              >
+                <option value="">{loteTipo ? "Seleccioná…" : "(elegí tipo primero)"}</option>
+                {catsDisponibles.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 12, maxHeight: 220, overflowY: "auto", fontSize: 11 }}>
+            {filas.map(f => (
+              <div key={f.idx} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid var(--bd)" }}>
+                <span>{fmt_d(f.fecha)} · {f.descripcion.slice(0, 45)}</span>
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(f.monto)}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+            <button className="btn btn-ghost" onClick={() => { setConfirmarLote(false); setLoteTipo(""); setLoteCat(""); }} disabled={savingAccion}>Cancelar</button>
+            <button className="btn btn-acc" onClick={ejecutarCrearLote} disabled={savingAccion || !loteTipo || !loteCat}>
+              {savingAccion ? (progresoLote ?? "Creando…") : `Confirmar crear ${filas.length}`}
+            </button>
+          </div>
         </Modal>
-      )}
+        );
+      })()}
 
       {/* Modal: confirmar crear faltante (con tipo + categoría obligatorios
           desde el 10-jun para que el mov NO quede en "Otros" sin clasificar) */}

@@ -33,13 +33,11 @@ const LINEAS = [
 test.describe.serial("E2E Test 45 — CASHFLOW: extracto → clasificación → resumen → cuadre", () => {
   let duenoDb: SupabaseClient;
   let localId: number;
-  let tenantId: string;
   let extractoId: string;
 
   test.beforeAll(async () => {
     const seed = loadSharedSeed();
     localId = seed.local1Id;
-    tenantId = seed.tenantId;
     duenoDb = await createE2EDuenoClient();
   });
 
