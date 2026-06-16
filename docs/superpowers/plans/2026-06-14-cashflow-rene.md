@@ -569,9 +569,9 @@ COMMIT;
 
 ---
 
-## FASE 6 — Tests
+## FASE 6 — Tests — ✅ HECHO (15-jun, commits 94ce1b9 + 220c3af; ambos verdes)
 
-### Task 14: Test E2E mutante del cashflow
+### Task 14: Test E2E mutante del cashflow — ✅ HECHO (1 passed 26.9s)
 
 **Files:**
 - Create: `packages/pase/tests/cashflow_mutante.spec.ts`
@@ -580,7 +580,7 @@ COMMIT;
 - [ ] **Step 2:** Correr → PASS. `pnpm --filter pase test:e2e -- cashflow_mutante`
 - [ ] **Step 3:** Commit — `test(cashflow): e2e mutante de carga + clasificación + resumen`
 
-### Task 15: Tocar e2e-full
+### Task 15: Tocar e2e-full — ✅ HECHO (spec 45, 1 passed 19.5s)
 
 **Files:**
 - Modify: `packages/pase/tests/e2e-full/` (script del "mes operativo" + invariantes)
