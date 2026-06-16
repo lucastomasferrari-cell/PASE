@@ -219,9 +219,9 @@ function ResumenView({ lid, periodoMes, refreshKey, onChanged }: {
         <Card padding="md"><span style={{ color: "var(--pase-celeste)", fontWeight: 500 }}>🔒 Mes cerrado y bloqueado.</span></Card>
       )}
       <div style={gridCards}>
-        <StatCard variant="anchor" label="Líquido operativo" value={fmt_$(resumen.posicion.liquido_operativo)} sub="efectivo + MercadoPago + banco" />
-        <StatCard label="Reservado (Utilidades)" value={fmt_$(resumen.posicion.reservado)} sub="apartado para repartir / fondo" />
-        <StatCard label="En tránsito (a cobrar)" value={fmt_$(resumen.en_transito.neto)} sub={`vendido ${fmt_$(resumen.en_transito.bruto)} − acreditado ${fmt_$(resumen.en_transito.acreditado)}`} />
+        <StatCard variant="anchor" label="Líquido operativo" value={fmtM(resumen.posicion.liquido_operativo)} sub="efectivo + MercadoPago + banco" />
+        <StatCard label="Reservado (Utilidades)" value={fmtM(resumen.posicion.reservado)} sub="apartado para repartir / fondo" />
+        <StatCard label="En tránsito (a cobrar)" value={fmtM(resumen.en_transito.neto)} sub={`vendido ${fmtM(resumen.en_transito.bruto)} − acreditado ${fmtM(resumen.en_transito.acreditado)}`} />
         {resumen.por_revisar > 0 && (
           <StatCard label="Por revisar" value={String(resumen.por_revisar)} sub="movimientos manuales sin clasificar (ver Libro)" />
         )}
@@ -455,6 +455,9 @@ function PuenteView({ lid, periodoMes, refreshKey }: { lid: number; periodoMes: 
 
 function Cargando() { return <div style={{ color: "var(--pase-text-muted)", padding: 24 }}>Cargando…</div>; }
 function sumCat(items: ResumenCategoria[]): number { return items.reduce((s, i) => s + i.total, 0); }
+/** Plata redondeada (sin centavos) para las tarjetas de posición — evita que los
+ *  montos grandes se corten. El detalle exacto va en las tablas. */
+function fmtM(n: number): string { return `$ ${Math.round(n).toLocaleString("es-AR")}`; }
 
 function CategoriaList({ titulo, items, positivo }: { titulo: string; items: ResumenCategoria[]; positivo?: boolean }) {
   return (
