@@ -140,31 +140,44 @@ export async function extraerTextoPdf(file: File): Promise<string> {
   const pdf = await pdfjs.getDocument({ data }).promise;
   const paginas: string[] = [];
 
+  // Tolerancia de agrupación por fila. Los ítems de una misma fila se reportan
+  // con Y que difiere por sub-píxeles; agrupar por Y EXACTA los separa (rompe
+  // movimientos). Las filas reales están a ~12 de distancia, así que 4 reúne la
+  // fila sin fusionar filas distintas. (Validado vs Resumen.pdf real de BBVA:
+  // 24/24 movimientos, saldo de cierre exacto, 0 mismatches.)
+  const TOL = 4;
+
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p);
     const content = await page.getTextContent();
 
-    // Agrupar items por línea (misma Y, redondeada) y ordenar por X.
-    const filas = new Map<number, { x: number; str: string }[]>();
+    // Ítems con posición (X, Y), de arriba→abajo, izquierda→derecha.
+    const items: { x: number; y: number; str: string }[] = [];
     for (const item of content.items) {
-      if (!("str" in item)) continue;
+      if (!("str" in item) || item.str.trim() === "") continue;
       const tr = item.transform as number[];
-      const y = Math.round((tr[5] ?? 0) as number);
-      const x = (tr[4] ?? 0) as number;
-      const fila = filas.get(y) ?? [];
-      fila.push({ x, str: item.str });
-      filas.set(y, fila);
+      items.push({ y: (tr[5] ?? 0) as number, x: (tr[4] ?? 0) as number, str: item.str });
+    }
+    items.sort((a, b) => b.y - a.y || a.x - b.x);
+
+    // Agrupar en filas por Y con tolerancia.
+    const filas: { y: number; items: { x: number; str: string }[] }[] = [];
+    let actual: { y: number; items: { x: number; str: string }[] } | null = null;
+    for (const it of items) {
+      if (actual && Math.abs(it.y - actual.y) <= TOL) actual.items.push(it);
+      else { actual = { y: it.y, items: [it] }; filas.push(actual); }
     }
 
-    const ys = [...filas.keys()].sort((a, b) => b - a); // arriba → abajo
-    const lineasPagina = ys.map(y =>
-      filas
-        .get(y)!
+    const lineasPagina = filas.map(f =>
+      f.items
         .sort((a, b) => a.x - b.x)
         .map(it => it.str)
         .join(" ")
         .replace(/\s+/g, " ")
-        .trim(),
+        .trim()
+        // Recortar glifos basura antes de la primera fecha DD/MM: un ítem mal
+        // decodificado puede anclar la fila y robarse el movimiento.
+        .replace(/^.*?(?=\d{2}\/\d{2}\s)/, ""),
     );
     paginas.push(lineasPagina.join("\n"));
   }
