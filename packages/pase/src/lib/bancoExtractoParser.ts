@@ -52,7 +52,12 @@ const SALDO_AL_RE = /SALDO AL\b.*?(-?[\d.]+,\d{2})\s*$/i;
  */
 export function parseExtractoBanco(texto: string, anio: number): CashflowExtractoParseado {
   const advertencias: string[] = [];
-  const lineasTexto = texto.split(/\r?\n/).map(l => l.trim());
+  // Robustez de extracción: algunos extractores (pdfjs en el browser) agrupan
+  // dos movimientos en una misma línea cuando sus coordenadas Y redondean igual.
+  // Un saldo (`…,dd`) seguido de una fecha `DD/MM` marca el inicio de otro
+  // movimiento → insertamos un salto de línea ahí para separarlos.
+  const normalizado = texto.replace(/(,\d{2})\s+(\d{2}\/\d{2}\s)/g, "$1\n$2");
+  const lineasTexto = normalizado.split(/\r?\n/).map(l => l.trim());
 
   // Saldo de apertura.
   let saldoInicial = 0;
