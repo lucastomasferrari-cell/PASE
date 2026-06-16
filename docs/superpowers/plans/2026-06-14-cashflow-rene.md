@@ -527,7 +527,7 @@ COMMIT;
 - [ ] **Step 4:** Probar en navegador (dev server) con Rene → ver el resumen de mayo cuadrar.
 - [ ] **Step 5:** Commit — `feat(cashflow): pantalla base + registro nav/route`
 
-### Task 11: Waterfall + tabla de ingresos/egresos + drill-down
+### Task 11: Waterfall + tabla de ingresos/egresos + drill-down — 🟡 PARCIAL (el Resumen ya muestra ingresos/egresos por categoría; faltan las barras visuales del waterfall + drill-down a las filas. Bajo valor, opcional.)
 
 **Files:**
 - Modify: `packages/pase/src/pages/Cashflow.tsx`
@@ -537,7 +537,7 @@ COMMIT;
 - [ ] **Step 3:** Probar en navegador.
 - [ ] **Step 4:** Commit — `feat(cashflow): waterfall + drill-down por categoría`
 
-### Task 11.5: Vista libro contable / línea de tiempo — NUEVA (addendum 15-jun)
+### Task 11.5: Vista libro contable / línea de tiempo — ✅ HECHO (15-jun, commit ada811b, EN PROD)
 
 **Files:**
 - Modify: `packages/pase/src/pages/Cashflow.tsx`
@@ -547,7 +547,7 @@ COMMIT;
 - [ ] **Step 3:** Probar en navegador con Rene (ver el saldo corrido del efectivo de mayo terminar en el saldo real).
 - [ ] **Step 4:** Commit — `feat(cashflow): vista libro contable con saldo corrido + reclasificar efectivo`
 
-### Task 12: Upload de extracto + preview de clasificación + reclasificar
+### Task 12: Upload de extracto + preview de clasificación + reclasificar — ✅ HECHO (15-jun, commit abb866e, EN PROD; **falta smoke pdfjs banco en navegador**)
 
 **Files:**
 - Modify: `packages/pase/src/pages/Cashflow.tsx`
@@ -558,7 +558,7 @@ COMMIT;
 - [ ] **Step 4:** Probar el ciclo completo en navegador con un extracto real de Rene.
 - [ ] **Step 5:** Commit — `feat(cashflow): upload extracto + preview + reclasificación + cierre`
 
-### Task 13: El puente en la pantalla
+### Task 13: El puente en la pantalla — ✅ HECHO (15-jun, commit ada811b, EN PROD)
 
 **Files:**
 - Modify: `packages/pase/src/pages/Cashflow.tsx`
