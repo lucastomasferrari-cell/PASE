@@ -86,6 +86,16 @@ export const MODULOS = [
   // Sprint D del proyecto IG bot (mayo 2026).
   { slug:"mensajeria", label:"Mensajería", icon:"💬" },
   { slug:"eerr", label:"Reportes", icon:"📊" },
+  // Cashflow RE-INTRODUCIDO (jun-2026): la "ruta del dinero" (base percibida).
+  // OJO: reusa el slug del Cashflow viejo (borrado 11-may); quedaron grants
+  // colgados en rol_permisos/usuario_permisos que lo encendían para quien los
+  // tuviera. Por eso DEBE estar acá (= aparece en la grilla y es controlable).
+  // Default OFF para empleados (no se auto-otorga); dueño/superadmin lo ven
+  // siempre y pueden darle acceso a quien quieran.
+  { slug:"cashflow", label:"Cashflow", icon:"💵" },
+  // Utilidades / reparto de socios (jun-2026). Mismo criterio: sensible, default
+  // OFF para empleados, grantable por el dueño.
+  { slug:"utilidades", label:"Utilidades (reparto socios)", icon:"🤝" },
   { slug:"rrhh", label:"Equipo", icon:"💼" },
   { slug:"ajustes", label:"Ajustes", icon:"⚙" },
   // Pantallas/sub-secciones accesibles internamente (no en sidebar top-level)
@@ -99,7 +109,8 @@ export const MODULOS = [
   // Módulo solo para superadmin (TASK 0.15). Filtrado por getPermisos/tienePermiso
   // — no aparece en dropdowns de otros usuarios aunque esté en el array.
   { slug:"tenants", label:"Tenants", icon:"🏢" },
-  // Cashflow eliminado del producto (Lucas, 2026-05-11).
+  // Cashflow RE-INTRODUCIDO jun-2026 (ver arriba) — el comentario viejo
+  // "eliminado 11-may" ya no aplica.
   // Cierre Comparativo fusionado en EERR (Lucas, 2026-05-08).
   // Dashboard ("Inicio") y Movimientos eliminados del producto (2026-05-13).
 ];
