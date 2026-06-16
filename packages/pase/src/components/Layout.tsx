@@ -435,6 +435,7 @@ td.col-truncate{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-spa
 .table-scroll-wrap{
   width:100%;
   overflow-x:auto;
+  padding-right:8px;
   /* Saca la barra de scroll cuando la tabla ya entra (mejora UX en desktop).
      Solo aparece cuando hace falta. */
   scrollbar-gutter:stable;

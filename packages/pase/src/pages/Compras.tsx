@@ -1219,7 +1219,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                     </td>
                     <td>
                       {!isAnulado && (
-                        <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "flex-end" }}>
+                        <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "flex-end", paddingRight: 6 }}>
                           {r.estado === "sin_factura" && (
                             <IconBtn title="Vincular factura" onClick={() => setVincModal(r)}>{IconLink}</IconBtn>
                           )}
