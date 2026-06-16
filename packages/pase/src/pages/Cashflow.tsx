@@ -6,16 +6,19 @@
 // Todo el cálculo vive en las RPCs (lib/cashflow.ts).
 
 import { useEffect, useState } from "react";
-import { PageContainer, PageHeader, StatCard, Card } from "../components/ui";
+import { PageContainer, PageHeader, StatCard, Card, Modal } from "../components/ui";
 import { fmt_$, todayAR_ISO } from "../lib/utils";
 import { translateRpcError } from "../lib/errors";
 import type { Usuario, Local } from "../types/auth";
 import {
   resumenMes, libroMes, puenteMes, reclasificarMov, reclasificarLinea,
-  CATEGORIA_LABEL,
+  subirExtracto, cerrarMes, CATEGORIA_LABEL,
   type CashflowResumen, type ResumenCategoria, type CashflowLibro,
-  type CashflowPuente, type CashflowCategoria,
+  type CashflowPuente, type CashflowCategoria, type CashflowCuenta,
 } from "../lib/cashflow";
+import { mpLineasParaCashflow } from "../lib/mpExtractoParser";
+import { bancoLineasParaCashflow } from "../lib/bancoExtractoParser";
+import type { CashflowExtractoParseado } from "../lib/cashflowExtracto";
 
 interface Props {
   user: Usuario;
@@ -35,9 +38,12 @@ export default function Cashflow({ locales, localActivo }: Props) {
   const [mes, setMes] = useState<string>(() => todayAR_ISO().slice(0, 7)); // YYYY-MM
   const [localSel, setLocalSel] = useState<number | null>(localActivo ?? locales[0]?.id ?? null);
   const [tab, setTab] = useState<Tab>("resumen");
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const lid = localActivo ?? localSel;
   const periodoMes = `${mes}-01`;
+  const refresh = () => setRefreshKey((k) => k + 1);
 
   return (
     <PageContainer width="wide">
@@ -52,6 +58,7 @@ export default function Cashflow({ locales, localActivo }: Props) {
               </select>
             )}
             <input type="month" value={mes} onChange={(e) => setMes(e.target.value)} style={selStyle} />
+            {lid && <button className="btn btn-acc" onClick={() => setUploadOpen(true)}>+ Subir extracto</button>}
           </div>
         }
       />
@@ -65,19 +72,119 @@ export default function Cashflow({ locales, localActivo }: Props) {
       </div>
 
       {!lid && <div style={{ color: "var(--pase-text-muted)", padding: 24 }}>Elegí un local para ver la ruta del dinero.</div>}
-      {lid && tab === "resumen" && <ResumenView lid={lid} periodoMes={periodoMes} />}
-      {lid && tab === "libro" && <LibroView lid={lid} periodoMes={periodoMes} />}
-      {lid && tab === "puente" && <PuenteView lid={lid} periodoMes={periodoMes} />}
+      {lid && tab === "resumen" && <ResumenView lid={lid} periodoMes={periodoMes} refreshKey={refreshKey} onChanged={refresh} />}
+      {lid && tab === "libro" && <LibroView lid={lid} periodoMes={periodoMes} refreshKey={refreshKey} />}
+      {lid && tab === "puente" && <PuenteView lid={lid} periodoMes={periodoMes} refreshKey={refreshKey} />}
+
+      {lid && uploadOpen && (
+        <UploadExtractoModal
+          lid={lid} periodoMes={periodoMes}
+          onClose={() => setUploadOpen(false)}
+          onDone={() => { setUploadOpen(false); refresh(); }}
+        />
+      )}
     </PageContainer>
+  );
+}
+
+/* ----------------------------- Subir extracto ----------------------------- */
+
+function UploadExtractoModal({ lid, periodoMes, onClose, onDone }: {
+  lid: number; periodoMes: string; onClose: () => void; onDone: () => void;
+}) {
+  const [cuenta, setCuenta] = useState<CashflowCuenta>("MercadoPago");
+  const [parseado, setParseado] = useState<CashflowExtractoParseado | null>(null);
+  const [archivo, setArchivo] = useState<string>("");
+  const [estado, setEstado] = useState<"idle" | "parsing" | "uploading">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  const anio = Number(periodoMes.slice(0, 4));
+
+  async function onFile(file: File | null) {
+    if (!file) return;
+    setError(null); setParseado(null); setArchivo(file.name); setEstado("parsing");
+    try {
+      const r = cuenta === "MercadoPago"
+        ? await mpLineasParaCashflow(file)
+        : await bancoLineasParaCashflow(file, anio);
+      if (!r || r.lineas.length === 0) {
+        setError("No pude leer movimientos del archivo. Revisá que sea el extracto correcto (MP: .xlsx; Banco: el PDF del resumen).");
+      } else {
+        setParseado(r);
+      }
+    } catch {
+      setError("No pude procesar el archivo. Si es el PDF del banco, probá de nuevo o avisá.");
+    }
+    setEstado("idle");
+  }
+
+  async function confirmar() {
+    if (!parseado) return;
+    setEstado("uploading"); setError(null);
+    const { error } = await subirExtracto({
+      localId: lid, cuenta, periodoMes, parseado, archivoNombre: archivo,
+      idempotencyKey: `${lid}-${cuenta}-${periodoMes}-${parseado.lineas.length}`,
+    });
+    setEstado("idle");
+    if (error) setError(translateRpcError(error));
+    else onDone();
+  }
+
+  return (
+    <Modal isOpen onClose={onClose} title="Subir extracto" subtitle={`Período ${periodoMes.slice(0, 7)}`} preventCloseOnOverlay
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-acc" disabled={!parseado || estado === "uploading"} onClick={confirmar}>
+            {estado === "uploading" ? "Subiendo…" : "Confirmar"}
+          </button>
+        </>
+      }>
+      <div style={{ display: "grid", gap: 12 }}>
+        <label style={{ display: "grid", gap: 4 }}>
+          <span style={subMuted}>Cuenta</span>
+          <select value={cuenta} onChange={(e) => { setCuenta(e.target.value as CashflowCuenta); setParseado(null); }} style={selStyle}>
+            <option value="MercadoPago">MercadoPago (.xlsx del panel)</option>
+            <option value="Banco">Banco BBVA (.pdf del resumen)</option>
+          </select>
+        </label>
+        <label style={{ display: "grid", gap: 4 }}>
+          <span style={subMuted}>Archivo</span>
+          <input type="file" accept={cuenta === "MercadoPago" ? ".xlsx,.xls" : ".pdf"}
+            onChange={(e) => onFile(e.target.files?.[0] ?? null)} />
+        </label>
+
+        {estado === "parsing" && <div style={subMuted}>Leyendo el archivo…</div>}
+        {error && <div style={{ color: "#B91C1C", fontSize: "var(--pase-fs-sm)" }}>{error}</div>}
+
+        {parseado && (
+          <Card padding="md">
+            <div style={cardTitle}>Vista previa</div>
+            <div style={rowBetween}><span>Movimientos</span><b>{parseado.lineas.length}</b></div>
+            <div style={rowBetween}><span>Saldo inicial</span><span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(parseado.saldoInicial)}</span></div>
+            <div style={rowBetween}><span>Saldo final</span><span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(parseado.saldoFinal)}</span></div>
+            {parseado.advertencias && parseado.advertencias.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                {parseado.advertencias.map((a, i) => <div key={i} style={{ color: "#B45309", fontSize: "var(--pase-fs-xs)" }}>⚠️ {a}</div>)}
+              </div>
+            )}
+            <div style={{ ...subMuted, marginTop: 8 }}>Al confirmar se clasifican solas; revisá y corregí en la pestaña "Libro contable" ({cuenta}).</div>
+          </Card>
+        )}
+      </div>
+    </Modal>
   );
 }
 
 /* ----------------------------- Resumen ----------------------------- */
 
-function ResumenView({ lid, periodoMes }: { lid: number; periodoMes: string }) {
+function ResumenView({ lid, periodoMes, refreshKey, onChanged }: {
+  lid: number; periodoMes: string; refreshKey: number; onChanged: () => void;
+}) {
   const [resumen, setResumen] = useState<CashflowResumen | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cerrando, setCerrando] = useState(false);
 
   useEffect(() => {
     let cancel = false;
@@ -88,11 +195,20 @@ function ResumenView({ lid, periodoMes }: { lid: number; periodoMes: string }) {
       setLoading(false);
     });
     return () => { cancel = true; };
-  }, [lid, periodoMes]);
+  }, [lid, periodoMes, refreshKey]);
+
+  async function cerrar() {
+    if (!confirm("Cerrar y bloquear el mes? No se va a poder editar después.")) return;
+    setCerrando(true);
+    const { error } = await cerrarMes(lid, periodoMes, `${lid}-${periodoMes}`);
+    setCerrando(false);
+    if (error) setError(translateRpcError(error)); else onChanged();
+  }
 
   if (error) return <Card padding="md"><div style={{ color: "#B91C1C" }}>{error}</div></Card>;
   if (!resumen && loading) return <Cargando />;
   if (!resumen) return null;
+  const todoCuadra = resumen.extractos.length > 0 && resumen.extractos.every((e) => e.cuadra);
 
   const totalIngresos = sumCat(resumen.ingresos);
   const totalEgresos = sumCat(resumen.egresos);
@@ -161,6 +277,15 @@ function ResumenView({ lid, periodoMes }: { lid: number; periodoMes: string }) {
           ))}
         </Card>
       )}
+
+      {!resumen.bloqueado && (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button className="btn" disabled={cerrando} onClick={cerrar}
+            title={todoCuadra ? "" : "Conviene cerrar cuando todos los extractos cuadran"}>
+            {cerrando ? "Cerrando…" : "🔒 Cerrar mes"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -177,7 +302,7 @@ const CUENTAS_LIBRO = [
   { value: "Banco", label: "Banco" },
 ];
 
-function LibroView({ lid, periodoMes }: { lid: number; periodoMes: string }) {
+function LibroView({ lid, periodoMes, refreshKey }: { lid: number; periodoMes: string; refreshKey: number }) {
   const [cuenta, setCuenta] = useState<string>("");
   const [libro, setLibro] = useState<CashflowLibro | null>(null);
   const [loading, setLoading] = useState(false);
@@ -195,7 +320,7 @@ function LibroView({ lid, periodoMes }: { lid: number; periodoMes: string }) {
       setLoading(false);
     });
     return () => { cancel = true; };
-  }, [lid, periodoMes, cuenta, version]);
+  }, [lid, periodoMes, cuenta, version, refreshKey]);
 
   async function reclasificar(refId: string, categoria: CashflowCategoria) {
     const r = esExtracto
@@ -264,7 +389,7 @@ function LibroView({ lid, periodoMes }: { lid: number; periodoMes: string }) {
 
 /* ----------------------------- Puente ----------------------------- */
 
-function PuenteView({ lid, periodoMes }: { lid: number; periodoMes: string }) {
+function PuenteView({ lid, periodoMes, refreshKey }: { lid: number; periodoMes: string; refreshKey: number }) {
   const [puente, setPuente] = useState<CashflowPuente | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -278,7 +403,7 @@ function PuenteView({ lid, periodoMes }: { lid: number; periodoMes: string }) {
       setLoading(false);
     });
     return () => { cancel = true; };
-  }, [lid, periodoMes]);
+  }, [lid, periodoMes, refreshKey]);
 
   if (error) return <Card padding="md"><div style={{ color: "#B91C1C" }}>{error}</div></Card>;
   if (!puente && loading) return <Cargando />;
