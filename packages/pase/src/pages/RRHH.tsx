@@ -119,7 +119,9 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const [_adelantosPendientes, setAdelantosPendientes] = useState<Adelanto[]>([]);
   const [adelModal, setAdelModal] = useState(false);
   const [csModal, setCsModal] = useState(false);
-  const [csForm, setCsForm] = useState({ monto:"", cuenta:"", fecha:toISO(today), detalle:"" });
+  // concepto: CARGAS SOCIALES (F931/AFIP) o BOLETAS SINDICALES (sindicato/obra
+  // social). Ambos son costo laboral en el EERR (línea propia c/u). Lucas 16-jun.
+  const [csForm, setCsForm] = useState({ concepto:"CARGAS SOCIALES", monto:"", cuenta:"", fecha:toISO(today), detalle:"" });
   const [csIdempKey, setCsIdempKey] = useState(() => crypto.randomUUID());
   // Bug Caja-1: default vacío en cuenta fuerza elección consciente del user.
   // Saldo flexible (30-may): auto_aplicar default TRUE = comportamiento histórico
@@ -874,22 +876,24 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
     const monto = parseFloat(csForm.monto);
     if (!monto || monto <= 0) { showError("Ingresá un monto válido"); return; }
     if (!csForm.cuenta) { showError("Elegí una cuenta de egreso"); return; }
+    const esSindical = csForm.concepto === "BOLETAS SINDICALES";
+    const nombreConcepto = esSindical ? "Boletas Sindicales" : "Cargas Sociales";
     const lid = localActivo || (locsDisp.length === 1 ? locsDisp[0]?.id : null);
     const { error } = await db.rpc("crear_gasto", {
       p_fecha: csForm.fecha,
       p_local_id: lid || null,
-      p_categoria: "CARGAS SOCIALES",
+      p_categoria: csForm.concepto,
       p_tipo: "fijo",
       p_monto: monto,
-      p_detalle: csForm.detalle || "Cargas Sociales",
+      p_detalle: csForm.detalle || nombreConcepto,
       p_cuenta: csForm.cuenta,
       p_plantilla_id: null,
       p_idempotency_key: csIdempKey,
     });
     if (error) { showError(translateRpcError(error)); return; }
-    showToast("Cargas sociales registradas");
+    showToast(`${nombreConcepto} registradas`);
     setCsModal(false);
-    setCsForm({ monto:"", cuenta:"", fecha:toISO(today), detalle:"" });
+    setCsForm({ concepto:"CARGAS SOCIALES", monto:"", cuenta:"", fecha:toISO(today), detalle:"" });
     setCsIdempKey(crypto.randomUUID());
     if (tab === "dashboard") loadDashboard();
   });
@@ -909,7 +913,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
         title="Equipo"
         actions={esDueno ? (
           <>
-            <button className="btn btn-acc btn-sm" onClick={()=>{setCsModal(true);setCsIdempKey(crypto.randomUUID());}}>Pagar Cargas Sociales</button>
+            <button className="btn btn-acc btn-sm" onClick={()=>{setCsModal(true);setCsIdempKey(crypto.randomUUID());}}>Pagar Cargas / Sindicato</button>
             <button className="btn btn-outline btn-sm" onClick={()=>setAdelModal(true)}>Registrar Adelanto</button>
           </>
         ) : undefined}
@@ -999,11 +1003,17 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
         guardando={guardandoAdelanto}
       />
 
-      <Modal isOpen={csModal} onClose={()=>setCsModal(false)} title="Pagar Cargas Sociales" maxWidth={420}>
+      <Modal isOpen={csModal} onClose={()=>{setCsModal(false);setCsForm({concepto:"CARGAS SOCIALES",monto:"",cuenta:"",fecha:toISO(today),detalle:""});}} title="Pagar cargas / sindicato" maxWidth={420}>
         <div style={{display:"flex",flexDirection:"column",gap:12,padding:"8px 0"}}>
           <p style={{fontSize:12,color:"var(--muted2)",margin:0}}>
-            Registra el pago de cargas sociales (aportes patronales, ART, seguros, etc.) sin asociar a un empleado puntual.
+            Registra un pago de costo laboral sin asociar a un empleado puntual. Ambos conceptos suman al Costo Laboral del EERR (cada uno con su línea).
           </p>
+          <label style={{fontSize:12}}>Concepto *
+            <select className="search" value={csForm.concepto} onChange={e=>setCsForm(f=>({...f,concepto:e.target.value}))} style={{width:"100%",marginTop:4}}>
+              <option value="CARGAS SOCIALES">Cargas Sociales (F931 / AFIP, ART, seguros)</option>
+              <option value="BOLETAS SINDICALES">Boletas Sindicales (sindicato / obra social)</option>
+            </select>
+          </label>
           <label style={{fontSize:12}}>Monto *
             <input type="number" className="search" placeholder="$0" value={csForm.monto} onChange={e=>setCsForm(f=>({...f,monto:e.target.value}))} autoFocus style={{width:"100%",marginTop:4}} min="0" step="0.01"/>
           </label>
