@@ -230,7 +230,22 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   // descuadrando el EERR).
   const [crearTipo, setCrearTipo] = useState<string>("");
   const [crearCat, setCrearCat] = useState<string>("");
-  const { GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS, CATEGORIAS_COMPRA, CATEGORIAS_INGRESO } = useCategorias();
+  const { GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS, GASTOS_JUICIOS, CATEGORIAS_COMPRA, CATEGORIAS_INGRESO } = useCategorias();
+  // Tipos/categorías de gasto = MISMA fuente que el reporte (EERR) y la
+  // pantalla Gastos (useCategorias), no una lista personalizada (Lucas 16-jun:
+  // "deberían aparecer todos los conceptos del reporte"). Incluye Juicios y
+  // Demandas; las categorías de cada tipo salen del catálogo (Cargas Sociales y
+  // Boletas Sindicales viven dentro de Gasto Fijo). Retiro de Socios NO está acá
+  // a propósito: se maneja por el módulo Utilidades (anti-mezcla).
+  const GASTO_TIPOS_CONCIL: { label: string; cats: string[] }[] = [
+    { label: "Gasto Fijo", cats: GASTOS_FIJOS },
+    { label: "Gasto Variable", cats: GASTOS_VARIABLES },
+    { label: "Publicidad", cats: GASTOS_PUBLICIDAD },
+    { label: "Comisión", cats: COMISIONES_CATS },
+    { label: "Impuesto", cats: GASTOS_IMPUESTOS },
+    { label: "Juicios y Demandas", cats: GASTOS_JUICIOS },
+  ];
+  const catsDeTipoGasto = (label: string) => GASTO_TIPOS_CONCIL.find(t => t.label === label)?.cats ?? [];
   // Saving flags
   const [savingAccion, setSavingAccion] = useState(false);
   // Última corrida persistida (cerrada)
@@ -2168,15 +2183,9 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
       {confirmarLote && cruce && (() => {
         const filas = cruce.extracto.filter(f => seleccionados.has(f.idx) && !resueltos[`ext:${f.idx}`]);
         const suma = filas.reduce((s, f) => s + f.monto, 0);
-        // Mismo set de tipos/categorías que el modal "Crear como gasto".
-        const tiposGasto = ["Gasto Fijo", "Gasto Variable", "Publicidad", "Comisión", "Impuesto", "Otros"];
-        let catsDisponibles: string[] = [];
-        if (loteTipo === "Gasto Fijo") catsDisponibles = GASTOS_FIJOS;
-        else if (loteTipo === "Gasto Variable") catsDisponibles = GASTOS_VARIABLES;
-        else if (loteTipo === "Publicidad") catsDisponibles = GASTOS_PUBLICIDAD;
-        else if (loteTipo === "Comisión") catsDisponibles = COMISIONES_CATS;
-        else if (loteTipo === "Impuesto") catsDisponibles = GASTOS_IMPUESTOS;
-        else if (loteTipo === "Otros") catsDisponibles = ["OTROS"];
+        // Mismos tipos/categorías que el reporte (useCategorias), no lista propia.
+        const tiposGasto = GASTO_TIPOS_CONCIL.map(t => t.label);
+        const catsDisponibles = catsDeTipoGasto(loteTipo);
         return (
         <Modal isOpen={true} onClose={() => { setConfirmarLote(false); setLoteTipo(""); setLoteCat(""); }} title="Crear gastos en lote">
           <div style={{ fontSize: 13, lineHeight: 1.6 }}>
@@ -2315,14 +2324,9 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
 
       {/* Modal: crear como gasto (sueltos que son gastos operativos) */}
       {crearGastoFila && (() => {
-        const tiposGasto = ["Gasto Fijo","Gasto Variable","Publicidad","Comisión","Impuesto","Otros"];
-        let catsDisponibles: string[] = [];
-        if (crearTipo === "Gasto Fijo") catsDisponibles = GASTOS_FIJOS;
-        else if (crearTipo === "Gasto Variable") catsDisponibles = GASTOS_VARIABLES;
-        else if (crearTipo === "Publicidad") catsDisponibles = GASTOS_PUBLICIDAD;
-        else if (crearTipo === "Comisión") catsDisponibles = COMISIONES_CATS;
-        else if (crearTipo === "Impuesto") catsDisponibles = GASTOS_IMPUESTOS;
-        else if (crearTipo === "Otros") catsDisponibles = ["OTROS"];
+        // Mismos tipos/categorías que el reporte (useCategorias), no lista propia.
+        const tiposGasto = GASTO_TIPOS_CONCIL.map(t => t.label);
+        const catsDisponibles = catsDeTipoGasto(crearTipo);
         return (
         <Modal isOpen={true} onClose={() => { setCrearGastoFila(null); setCrearTipo(""); setCrearCat(""); }} title="Crear como gasto">
           <div style={{ fontSize: 13, lineHeight: 1.6 }}>
