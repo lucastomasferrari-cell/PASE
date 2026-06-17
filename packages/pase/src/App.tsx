@@ -58,6 +58,7 @@ const Negocio = lazy(() => import("./pages/Negocio"));
 const Cashflow = lazy(() => import("./pages/Cashflow"));
 const Utilidades = lazy(() => import("./pages/Utilidades"));
 const Objetivos = lazy(() => import("./pages/Objetivos"));
+const Ayuda = lazy(() => import("./pages/Ayuda"));
 const Ajustes = lazy(() => import("./pages/Ajustes"));
 const Importar = lazy(() => import("./pages/Importar"));
 const LectorExtractoMP = lazy(() => import("./pages/LectorExtractoMP"));
@@ -985,6 +986,7 @@ function AppMain() {
               <Route path="/reportes" element={<EERR {...props}/>} />
               <Route path="/cashflow" element={<Cashflow {...props}/>} />
               <Route path="/utilidades" element={<Utilidades {...props}/>} />
+              <Route path="/ayuda" element={<Ayuda/>} />
 
               {/* Herramientas */}
               <Route path="/equipo" element={<RRHHPage {...props}/>} />

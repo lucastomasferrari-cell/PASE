@@ -138,6 +138,8 @@ export function tienePermiso(user: MaybeUser, slug: string): boolean {
   if (slug === "tenants") return user.rol === "superadmin";
   // 'inicio' (dashboard personalizado) lo tienen TODOS los usuarios autenticados.
   if (slug === "inicio") return true;
+  // 'ayuda' (página de ayuda/manual) — visible para todos.
+  if (slug === "ayuda") return true;
   // 'ajustes_dashboards' (config de dashboards de otros) solo dueño/admin/superadmin.
   if (slug === "ajustes_dashboards") {
     return user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin";
