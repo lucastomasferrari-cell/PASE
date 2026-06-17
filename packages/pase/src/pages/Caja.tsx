@@ -100,6 +100,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
   const {
     CATEGORIAS_COMPRA, GASTOS_FIJOS, GASTOS_VARIABLES,
     GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, COMISIONES_CATS,
+    GASTOS_MANO_OBRA, GASTOS_JUICIOS,
   } = useCategorias();
 
   // Deriva tipo del movimiento a partir de cat + dirección. Movimientos
@@ -123,6 +124,8 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
     if (GASTOS_PUBLICIDAD.includes(cat)) return "Gasto publicidad";
     if (GASTOS_IMPUESTOS.includes(cat)) return "Gasto impuesto";
     if (COMISIONES_CATS.includes(cat)) return "Gasto comision";
+    if (GASTOS_MANO_OBRA.includes(cat)) return "Gasto mano_obra";
+    if (GASTOS_JUICIOS.includes(cat)) return "Gasto juicios_demandas";
     if (CATEGORIAS_COMPRA.includes(cat)) return "Pago Proveedor";
     return "Egreso Manual";
   };
