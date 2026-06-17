@@ -21,6 +21,8 @@ import { InfoTooltip } from "../components/ui";
 import { toISO, fmt_$ } from "@pase/shared/utils";
 import { today } from "../lib/utils";
 import { exportCSV } from "../lib/exportCSV";
+import EERRSimulador from "./EERRSimulador";
+import type { LineasEERR } from "../lib/eerrSimulador";
 
 // Recharts pesa ~250KB. Se code-splittea aparte para que el chunk inicial
 // de /reportes no lo arrastre. Si el usuario ve EERR sin meses comparados
@@ -78,6 +80,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const [sueldosExpanded,setSueldosExpanded]=useState(false);
   const [mes,setMes]=useState(toISO(today).slice(0,7));
   const [loading,setLoading]=useState(true);
+  const [simulando,setSimulando]=useState(false);
   // Meses adicionales para comparar (máximo 2). Si están vacíos, la pantalla
   // funciona como antes (solo mes principal). Cuando se agregan, el Resumen
   // P&L pasa a columnas comparativas y aparece el gráfico de evolución.
@@ -371,6 +374,21 @@ export default function EERR({ user, localActivo }: EERRProps) {
     utilNeta,
   };
 
+  // Base para el simulador de escenarios (mismas cifras que el EERR; cargas
+  // sociales incluye boletas sindicales, igual que resumenPrincipal).
+  const baseSimulador: LineasEERR = {
+    ventas: totalVentas,
+    cmv: totalCMV,
+    gastosFijos: totalGastosFijos,
+    gastosVar: totalGastosVar,
+    sueldos,
+    cargasSociales: totalCargasSociales + totalBoletasSindicales,
+    publicidad: totalPublicidad,
+    comisiones: totalComisiones,
+    impuestos: totalImpuestos,
+    otrosGastos: totalOtrosGastos,
+  };
+
   // Lista ordenada cronológicamente (para gráfico y columnas). Mes principal
   // se mezcla con los comparados; el orden por mes da una serie temporal.
   const mesesOrdenados = [resumenPrincipal, ...mesesComp.map(m => dataComp[m]).filter((x): x is MesResumen => !!x)]
@@ -462,6 +480,11 @@ export default function EERR({ user, localActivo }: EERRProps) {
               + Comparar {mesesComp.length === 0 ? "mes" : "otro mes"}
             </button>
           )}
+          <button type="button" className="btn btn-ghost btn-sm" style={{fontSize:11}}
+            onClick={() => setSimulando(s => !s)}
+            title="Tocar las líneas del EERR y ver el impacto en la rentabilidad (no modifica datos)">
+            {simulando ? "Cerrar simulador" : "Simular escenario"}
+          </button>
           <button
             type="button"
             className="btn btn-ghost btn-sm"
@@ -493,6 +516,9 @@ export default function EERR({ user, localActivo }: EERRProps) {
       </div>
       {loading?<div className="loading">Cargando...</div>:(
         <>
+          {simulando && (
+            <EERRSimulador base={baseSimulador} mes={mes} onClose={() => setSimulando(false)} />
+          )}
           <div className="eerr-kpis-row">
             <div className="kpi"><div className="kpi-label">Ventas</div><div className="kpi-value-compact kpi-success">{fmt_$(totalVentas)}</div></div>
             <div className="kpi"><div className="kpi-label">Compras merc.</div><div className="kpi-value-compact kpi-warn">{fmt_$(totalCMV)}</div><div className="kpi-sub">{pct(totalCMV)}</div></div>
