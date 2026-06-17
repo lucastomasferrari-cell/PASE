@@ -18,6 +18,7 @@ import {
   calcularPreaviso,
   enPeriodoPrueba,
   aplicarAumento,
+  faltaSueldo,
 } from "./rrhh";
 
 describe("enPeriodoPrueba (LCT Art 92 bis — 6 meses)", () => {
@@ -814,5 +815,26 @@ describe("aplicarAumento", () => {
 
   it("redondeo a $1.000 también funciona (múltiplo configurable)", () => {
     expect(aplicarAumento(1234567, { tipo: "pct", valor: 0, redondeo: 1000 })).toBe(1235000);
+  });
+});
+
+describe("faltaSueldo (bug versiones jun-2026)", () => {
+  it("sin pago previo: falta = total en vivo", () => {
+    expect(faltaSueldo(757500, 0)).toBe(757500);
+  });
+  it("pagado completo (total en vivo == pagado) → falta 0, NO fantasma", () => {
+    // Caso Villalba/De Jesús: novedades corregidas bajaron el total; lo pagado
+    // ES el sueldo real. Antes daba 'falta' contra el total congelado.
+    expect(faltaSueldo(560000, 560000)).toBe(0);
+    expect(faltaSueldo(231400, 231400)).toBe(0);
+  });
+  it("parcial real: falta = total en vivo − pagado", () => {
+    expect(faltaSueldo(560000, 350000)).toBe(210000);
+  });
+  it("sobrepago (pagado > total en vivo) → falta 0 (no negativo)", () => {
+    expect(faltaSueldo(500000, 560000)).toBe(0);
+  });
+  it("redondea ambos lados (evita centavos fantasma)", () => {
+    expect(faltaSueldo(560000.4, 560000.1)).toBe(0);
   });
 });

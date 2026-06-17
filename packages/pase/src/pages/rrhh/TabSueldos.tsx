@@ -26,7 +26,7 @@ import { fmt_$, fmt_d, toISO, parseMonto } from "@pase/shared/utils";
 import { today } from "../../lib/utils";
 import { Modal } from "../../components/ui";
 import { translateRpcError } from "../../lib/errors";
-import { calcularTotalLiquidacion } from "../../lib/calculos/rrhh";
+import { calcularTotalLiquidacion, faltaSueldo } from "../../lib/calculos/rrhh";
 import { useToast } from "../../hooks/useToast";
 import { ToastComponent } from "../../components/Toast";
 import { PrintRecibos } from "../../components/recibos/PrintRecibos";
@@ -989,9 +989,8 @@ export function TabSueldos({
     // doble pago (caso Alexia/Esteban: se volvía a pagar el sueldo completo).
     const liqExist = liqDelSlot(s.emp.id, s.cuota);
     const yaPagado = Math.round(Number(liqExist?.pagos_realizados ?? 0));
-    const faltaPagar = yaPagado > 0 && liqExist
-      ? Math.max(0, Math.round(Number(liqExist.total_a_pagar)) - yaPagado)
-      : Math.round(total);
+    // Falta = total EN VIVO − ya pagado (no el total_a_pagar congelado). faltaSueldo().
+    const faltaPagar = faltaSueldo(total, yaPagado);
     const cuentaEfectivo = cuentasUsables.find(c => /efect/i.test(c)) ?? cuentasUsables[0] ?? "";
     const cuentaMP = cuentasUsables.find(c => /mp|mercado/i.test(c)) ?? cuentasUsables[1] ?? cuentasUsables[0] ?? "";
 
@@ -1054,8 +1053,8 @@ export function TabSueldos({
     // que en un 2º pago el aviso compare contra el puchito pendiente, no el total.
     const liqYa = liqDelSlot(s.emp.id, s.cuota);
     const yaPagadoPrev = Math.round(Number(liqYa?.pagos_realizados ?? 0));
-    const totalSueldoPago = yaPagadoPrev > 0 && liqYa ? Math.round(Number(liqYa.total_a_pagar)) : Math.round(total);
-    const faltaPagarAhora = Math.max(0, totalSueldoPago - yaPagadoPrev);
+    // Lo que falta = total EN VIVO − ya pagado (no el congelado). faltaSueldo().
+    const faltaPagarAhora = faltaSueldo(total, yaPagadoPrev);
     const totalAsignado = formasValidas.reduce((acc, f) => acc + f.monto, 0) + sumaAdel;
 
     if (totalAsignado < faltaPagarAhora - 1) {
@@ -1585,8 +1584,11 @@ export function TabSueldos({
                         // Así se ve claro el puchito pendiente (pedido Anto 08-jun).
                         const liqSlot = liqDelSlot(s.emp.id, s.cuota);
                         const yaPagadoSlot = Math.round(Number(liqSlot?.pagos_realizados ?? 0));
-                        const totalSueldo = yaPagadoSlot > 0 && liqSlot ? Math.round(Number(liqSlot.total_a_pagar)) : Math.round(d.total);
-                        const total = Math.max(0, totalSueldo - yaPagadoSlot);
+                        // Total EN VIVO (recalculado con las novedades de hoy), NO el
+                        // total_a_pagar congelado de la liq: si las novedades cambian
+                        // post-pago, el "falta" se recalcula bien (no fantasma). faltaSueldo().
+                        const totalSueldo = Math.round(d.total);
+                        const total = faltaSueldo(d.total, yaPagadoSlot);
                         const dif = total - cargado;
                         // Pagar de MÁS está permitido (redondeo para arriba —
                         // en Argentina ya casi no hay billetes chicos). Pagar
@@ -1611,7 +1613,7 @@ export function TabSueldos({
                           <div style={{
                             marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--bd)",
                           }}>
-                            {yaPagadoSlot > 0 && (
+                            {yaPagadoSlot > 0 && total > 0 && (
                               <div style={{
                                 marginBottom: 10, padding: "7px 12px", borderRadius: 6,
                                 background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)",
@@ -1704,9 +1706,9 @@ export function TabSueldos({
                                 <button
                                   className="btn btn-acc btn-sm"
                                   onClick={() => void confirmarSlot(s.key)}
-                                  disabled={togglingConfirm.has(s.key) || falta}
+                                  disabled={togglingConfirm.has(s.key)}
                                   title={falta
-                                    ? "La suma de Efectivo + MP no puede ser menor al Total."
+                                    ? "Confirma las novedades (no exige cargar el pago — eso es en 'Pagar')."
                                     : sobrepago
                                       ? "Vas a confirmar pagando de más (redondeo). El extra sale de la caja."
                                       : "Bloquea los campos para evitar modificaciones accidentales."}

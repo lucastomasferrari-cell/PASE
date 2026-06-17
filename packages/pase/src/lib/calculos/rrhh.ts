@@ -478,3 +478,18 @@ export function calcularLiquidacionFinal(params: LiquidacionFinalParams): Liquid
     antiguedad_anios,
   };
 }
+
+/**
+ * Lo que FALTA pagar de un sueldo = total EN VIVO (según las novedades actuales)
+ * − lo ya pagado. Nunca negativo.
+ *
+ * REGLA (bug jun-2026): usar SIEMPRE el total en vivo (recalculado con las
+ * novedades de hoy), NUNCA el `total_a_pagar` congelado de la liquidación. Si
+ * las novedades cambian después de un pago (se cargan faltas, se saca un bono),
+ * el total congelado queda obsoleto y genera "falta" fantasma — pasó con
+ * Villalba (5 faltas), De Jesús, Valdez y Vázquez (bonos sacados): figuraban
+ * "falta $X" cuando ya estaban pagados completos.
+ */
+export function faltaSueldo(totalEnVivo: number, yaPagado: number): number {
+  return Math.max(0, Math.round(totalEnVivo) - Math.round(yaPagado));
+}
