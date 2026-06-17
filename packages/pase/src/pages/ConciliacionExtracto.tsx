@@ -230,7 +230,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   // descuadrando el EERR).
   const [crearTipo, setCrearTipo] = useState<string>("");
   const [crearCat, setCrearCat] = useState<string>("");
-  const { GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS, GASTOS_JUICIOS, CATEGORIAS_COMPRA, CATEGORIAS_INGRESO } = useCategorias();
+  const { GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, COMISIONES_CATS, GASTOS_IMPUESTOS, GASTOS_MANO_OBRA, GASTOS_JUICIOS, CATEGORIAS_COMPRA, CATEGORIAS_INGRESO } = useCategorias();
   // Tipos/categorías de gasto = MISMA fuente que el reporte (EERR) y la
   // pantalla Gastos (useCategorias), no una lista personalizada (Lucas 16-jun:
   // "deberían aparecer todos los conceptos del reporte"). Incluye Juicios y
@@ -243,6 +243,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     { label: "Publicidad", cats: GASTOS_PUBLICIDAD },
     { label: "Comisión", cats: COMISIONES_CATS },
     { label: "Impuesto", cats: GASTOS_IMPUESTOS },
+    { label: "Mano de Obra", cats: GASTOS_MANO_OBRA },
     { label: "Juicios y Demandas", cats: GASTOS_JUICIOS },
   ];
   const catsDeTipoGasto = (label: string) => GASTO_TIPOS_CONCIL.find(t => t.label === label)?.cats ?? [];

@@ -276,4 +276,29 @@ test.describe("Gastos — mutante", () => {
     expect(error).not.toBeNull();
     expect(error?.message).toContain("TIPO_GASTO_INVALIDO");
   });
+
+  // ── Test mutante #5: tipo nuevo 'mano_obra' (Costo Laboral suelto). ──────
+  // Etiqueta "Mano de Obra" → enum 'mano_obra'; el EERR lo suma a Costo Laboral
+  // (no pide empleado registrado, a diferencia de 'empleado'). Lucas 16-jun.
+  test("crear_gasto: etiqueta 'Mano de Obra' → tipo 'mano_obra' (no viola el check)", async () => {
+    const SENTINEL_MO = 234004.56;
+    const { data, error } = await db.rpc("crear_gasto", {
+      p_fecha: new Date().toISOString().slice(0, 10),
+      p_local_id: localId,
+      p_categoria: "__CAT_MANOBRA_MUTANTE__", // fuerza fallback por etiqueta
+      p_tipo: "Mano de Obra",
+      p_monto: SENTINEL_MO,
+      p_detalle: "e2e mano de obra",
+      p_cuenta: CUENTA,
+      p_plantilla_id: null,
+      p_idempotency_key: null,
+    });
+    expect(error).toBeNull();
+    gastoId = (data as { gasto_id: string }).gasto_id;
+    movId = (data as { mov_id: string }).mov_id;
+    expect((data as { tipo: string }).tipo).toBe("mano_obra");
+
+    const { data: g } = await db.from("gastos").select("tipo").eq("id", gastoId).single();
+    expect(g?.tipo).toBe("mano_obra");
+  });
 });

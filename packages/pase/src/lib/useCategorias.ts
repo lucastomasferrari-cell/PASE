@@ -22,6 +22,10 @@ export interface CategoriasState {
   GASTOS_PUBLICIDAD: string[];  // grupo = Publicidad y MKT
   COMISIONES_CATS: string[];    // grupo = Comisiones
   GASTOS_IMPUESTOS: string[];   // grupo = Impuestos
+  // Mano de obra suelta (repartidores, sueldo del día, eventos, personal sin
+  // legajo). tipo = gasto_mano_obra → gastos.tipo = 'mano_obra'. El EERR lo
+  // suma al Costo Laboral. NO pide empleado registrado (a diferencia de 'empleado').
+  GASTOS_MANO_OBRA: string[];   // tipo = gasto_mano_obra
   // Retiro de socios — distribución de utilidades, NO gasto operativo.
   // EERR los muestra en sección post-Util.Neta (no resta al cálculo).
   RETIROS_SOCIOS: string[];     // tipo = retiro_socio
@@ -45,7 +49,8 @@ export interface CategoriasState {
 }
 
 // Bump v6→v7: incorpora GASTOS_JUICIOS (juicios y demandas).
-const CACHE_KEY = "pase_categorias_v7";
+// Bump v7→v8: incorpora GASTOS_MANO_OBRA (mano de obra / costo laboral).
+const CACHE_KEY = "pase_categorias_v8";
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1h
 
 type CategoriasData = Omit<CategoriasState, "loading" | "source" | "refresh">;
@@ -64,6 +69,7 @@ const TIPO_DB_TO_FORM: Record<string, string> = {
   gasto_publicidad: "publicidad",
   gasto_comision: "comision",
   gasto_impuesto: "impuesto",
+  gasto_mano_obra: "mano_obra",
   retiro_socio: "retiro_socio",
   gasto_juicios_demandas: "juicios_demandas",
 };
@@ -77,6 +83,7 @@ function buildCategoriaToTipo(data: BaseData): Record<string, string> {
   for (const c of data.GASTOS_PUBLICIDAD) m[c] = "publicidad";
   for (const c of data.COMISIONES_CATS)   m[c] = "comision";
   for (const c of data.GASTOS_IMPUESTOS)  m[c] = "impuesto";
+  for (const c of data.GASTOS_MANO_OBRA)  m[c] = "mano_obra";
   for (const c of data.RETIROS_SOCIOS)    m[c] = "retiro_socio";
   for (const c of data.GASTOS_JUICIOS)    m[c] = "juicios_demandas";
   return m;
@@ -101,6 +108,7 @@ const _FALLBACK_BASE: BaseData = {
   GASTOS_PUBLICIDAD: [..._GP],
   COMISIONES_CATS: [..._CO],
   GASTOS_IMPUESTOS: [..._GI],
+  GASTOS_MANO_OBRA: [],
   RETIROS_SOCIOS: [],
   GASTOS_JUICIOS: ["JUICIOS Y DEMANDAS", "ABOGADO / LEGAL", "INDEMNIZACIONES"],
   CATEGORIAS_INGRESO: [
@@ -130,6 +138,7 @@ const EMPTY_BASE: BaseData = {
   GASTOS_PUBLICIDAD: [],
   COMISIONES_CATS: [],
   GASTOS_IMPUESTOS: [],
+  GASTOS_MANO_OBRA: [],
   RETIROS_SOCIOS: [],
   GASTOS_JUICIOS: [],
   CATEGORIAS_INGRESO: [],
@@ -177,6 +186,7 @@ function fromRows(rows: ConfigCategoriaRow[]): CategoriasData {
     GASTOS_PUBLICIDAD: byTipo("gasto_publicidad"),
     COMISIONES_CATS: byTipo("gasto_comision"),
     GASTOS_IMPUESTOS: byTipo("gasto_impuesto"),
+    GASTOS_MANO_OBRA: byTipo("gasto_mano_obra"),
     RETIROS_SOCIOS: byTipo("retiro_socio"),
     GASTOS_JUICIOS: byTipo("gasto_juicios_demandas"),
     CATEGORIAS_INGRESO: byTipo("cat_ingreso"),

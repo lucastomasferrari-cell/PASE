@@ -112,8 +112,9 @@ export default function EERR({ user, localActivo }: EERRProps) {
     const ventasArr = (v as Venta[]) || [];
     const facturasArr = (f as Factura[]) || [];
     const allGastos = ((g0 as Gasto[]) || []).filter(x => x.categoria !== "SUELDOS");
-    const gastosEmp = allGastos.filter(x => x.tipo === "empleado");
-    const gastosArr = allGastos.filter(x => x.tipo !== "empleado");
+    // Costo laboral = sueldos (RRHH) + gastos tipo empleado + mano_obra (suelta).
+    const gastosEmp = allGastos.filter(x => x.tipo === "empleado" || x.tipo === "mano_obra");
+    const gastosArr = allGastos.filter(x => x.tipo !== "empleado" && x.tipo !== "mano_obra");
     const liqRows = (((liq as unknown) as (LiquidacionPendienteRow & {id:string})[]) || [])
       .filter(l => l.rrhh_novedades?.mes === mo && l.rrhh_novedades?.anio === yr);
     const liqIdSet = new Set(liqRows.map(l => l.id));
@@ -132,7 +133,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
     const publicidad = gastosArr.filter(x => x.tipo === "publicidad").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_publicidad"));
     const comisiones = gastosArr.filter(x => x.tipo === "comision").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_comision"));
     const impuestos = gastosArr.filter(x => x.tipo === "impuesto").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_impuesto"));
-    const otrosGastos = gastosArr.filter(x => !["fijo","variable","publicidad","comision","impuesto","retiro_socio","empleado"].includes(x.tipo)).reduce((s, x) => s + Number(x.monto), 0);
+    const otrosGastos = gastosArr.filter(x => !["fijo","variable","publicidad","comision","impuesto","retiro_socio","empleado","mano_obra"].includes(x.tipo)).reduce((s, x) => s + Number(x.monto), 0);
     let sueldos: number;
     const gastosEmpFilt = gastosEmp.filter(x => !lid || x.local_id === lid);
     if (lid) {
@@ -208,8 +209,8 @@ export default function EERR({ user, localActivo }: EERRProps) {
       setVentas((v as Venta[]) || []);
       setFacturas((f as Factura[]) || []);
       const allGastos = ((g as Gasto[]) || []).filter((x) => x.categoria !== "SUELDOS");
-      const gastosEmpleado = allGastos.filter(x => x.tipo === "empleado");
-      setGastos(allGastos.filter(x => x.tipo !== "empleado"));
+      const gastosEmpleado = allGastos.filter(x => x.tipo === "empleado" || x.tipo === "mano_obra");
+      setGastos(allGastos.filter(x => x.tipo !== "empleado" && x.tipo !== "mano_obra"));
       const liqRows = (((liqData as unknown) as LiquidacionConEmpleado[]) || [])
         .filter(l => l.rrhh_novedades?.mes === mo && l.rrhh_novedades?.anio === yr);
       const liqById = new Map(liqRows.map(l => [l.id!, l]));
@@ -279,7 +280,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const totalPublicidad=gastos.filter((g)=>g.tipo==="publicidad").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_publicidad"),"total");
   const totalComisiones=gastos.filter((g)=>g.tipo==="comision").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_comision"),"total");
   const totalImpuestos=gastos.filter((g)=>g.tipo==="impuesto").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_impuesto"),"total");
-  const totalOtrosGastos=gastos.filter((g)=>!["fijo","variable","publicidad","comision","impuesto","retiro_socio","empleado"].includes(g.tipo)).reduce((s, g)=>s+(g.monto||0),0);
+  const totalOtrosGastos=gastos.filter((g)=>!["fijo","variable","publicidad","comision","impuesto","retiro_socio","empleado","mano_obra"].includes(g.tipo)).reduce((s, g)=>s+(g.monto||0),0);
   // Retiros de socios: distribución de utilidades, NO suma a gastos
   // operativos. Se muestra DESPUÉS de Util. Neta. Solo se cargan via la
   // pantalla Gastos (no facturas).
@@ -335,7 +336,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const porCatCom=COMISIONES_CATS.map(c=>({c,t:tGastoCat(c, "comision") + tFactCat(c, "gasto_comision")})).filter(x=>x.t>0);
   const porCatImp=GASTOS_IMPUESTOS.map(c=>({c,t:tGastoCat(c, "impuesto") + tFactCat(c, "gasto_impuesto")})).filter(x=>x.t>0);
   const porCatRet=RETIROS_SOCIOS.map(c=>({c,t:tGastoCat(c, "retiro_socio")})).filter(x=>x.t>0);
-  const otrosGastosArr=gastos.filter(g=>!["fijo","variable","publicidad","comision","impuesto","retiro_socio","empleado"].includes(g.tipo));
+  const otrosGastosArr=gastos.filter(g=>!["fijo","variable","publicidad","comision","impuesto","retiro_socio","empleado","mano_obra"].includes(g.tipo));
   const porCatOtros=Object.entries(otrosGastosArr.reduce<Record<string,number>>((acc,g)=>{const k=g.categoria||g.tipo;acc[k]=(acc[k]||0)+(g.monto||0);return acc},{})).map(([c,t])=>({c,t})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
 
   const ERow=({label,valor,color,big}: {label: string, valor: number, color: string, big?: boolean})=>(

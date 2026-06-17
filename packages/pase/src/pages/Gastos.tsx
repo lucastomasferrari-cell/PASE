@@ -52,6 +52,10 @@ const TIPOS = [
   { id: "publicidad", label: "Publicidad" },
   { id: "impuesto", label: "Impuestos" },
   { id: "comision", label: "Comisiones" },
+  // Mano de obra suelta (repartidores, sueldo del día, eventos, personal sin
+  // legajo) → cae en Costo Laboral del EERR. NO pide empleado (distinto de
+  // crear_gasto_empleado). Lucas 16-jun.
+  { id: "mano_obra", label: "Mano de Obra" },
   // Lucas 22-may noche: juicios/demandas es grupo independiente
   // (NO es fijo, NO requiere empleado puntual). Contiene: abogado,
   // indemnizaciones, juicios y demandas.
@@ -91,14 +95,15 @@ interface EmpleadoVisible {
   locales_ids?: number[] | null;
 }
 export default function Gastos({ user, locales, localActivo }: GastosProps) {
-  const { GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, COMISIONES_CATS, RETIROS_SOCIOS, GASTOS_JUICIOS } = useCategorias();
-  const ALL_CATS = [...GASTOS_FIJOS, ...GASTOS_VARIABLES, ...GASTOS_PUBLICIDAD, ...GASTOS_IMPUESTOS, ...COMISIONES_CATS, ...RETIROS_SOCIOS, ...GASTOS_JUICIOS];
+  const { GASTOS_FIJOS, GASTOS_VARIABLES, GASTOS_PUBLICIDAD, GASTOS_IMPUESTOS, COMISIONES_CATS, GASTOS_MANO_OBRA, RETIROS_SOCIOS, GASTOS_JUICIOS } = useCategorias();
+  const ALL_CATS = [...GASTOS_FIJOS, ...GASTOS_VARIABLES, ...GASTOS_PUBLICIDAD, ...GASTOS_IMPUESTOS, ...COMISIONES_CATS, ...GASTOS_MANO_OBRA, ...RETIROS_SOCIOS, ...GASTOS_JUICIOS];
   const catsByTipo = (t: string) =>
     t === "fijo" ? GASTOS_FIJOS :
     t === "variable" ? GASTOS_VARIABLES :
     t === "publicidad" ? GASTOS_PUBLICIDAD :
     t === "impuesto" ? GASTOS_IMPUESTOS :
     t === "comision" ? COMISIONES_CATS :
+    t === "mano_obra" ? GASTOS_MANO_OBRA :
     t === "retiro_socio" ? RETIROS_SOCIOS :
     t === "juicios_demandas" ? GASTOS_JUICIOS :
     ALL_CATS;
