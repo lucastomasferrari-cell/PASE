@@ -35,7 +35,7 @@ export function SpikeOfflinePage() {
     let cancel = false;
     (async () => {
       const database = await crearSpikeDB();
-      if (cancel) { await database.remove(); return; }
+      if (cancel) return; // singleton compartido: NO removerlo (StrictMode lo reusa)
       setDb(database);
       addLog('store local listo (RxDB/Dexie)');
       try {
