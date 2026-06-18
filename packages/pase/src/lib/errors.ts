@@ -3,6 +3,9 @@
 // está mapeado (muestra el string crudo, útil para diagnóstico).
 
 const MAP: Record<string, string> = {
+  // Cierre / bloqueo de mes
+  PERIODO_CERRADO: "Ese mes está cerrado. Reabrilo desde Reportes para poder modificarlo.",
+  SOLO_DUENO_ADMIN: "Solo el dueño o un administrador puede cerrar o reabrir un mes.",
   // Monto / cuenta / local genéricos
   MONTO_INVALIDO: "El monto debe ser mayor a cero",
   CUENTA_INVALIDA: "Cuenta inválida",

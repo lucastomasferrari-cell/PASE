@@ -23,6 +23,8 @@ import { today } from "../lib/utils";
 import { exportCSV } from "../lib/exportCSV";
 import EERRSimulador from "./EERRSimulador";
 import type { LineasEERR } from "../lib/eerrSimulador";
+import { estaCerrado, cerrarPeriodo, reabrirPeriodo } from "../lib/periodos";
+import { translateRpcError } from "../lib/errors";
 
 // Recharts pesa ~250KB. Se code-splittea aparte para que el chunk inicial
 // de /reportes no lo arrastre. Si el usuario ve EERR sin meses comparados
@@ -81,6 +83,9 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const [mes,setMes]=useState(toISO(today).slice(0,7));
   const [loading,setLoading]=useState(true);
   const [simulando,setSimulando]=useState(false);
+  const [mesCerrado,setMesCerrado]=useState(false);
+  const [cerrandoMes,setCerrandoMes]=useState(false);
+  const esDuenoAdmin = user.rol === "dueno" || user.rol === "admin";
   // Meses adicionales para comparar (máximo 2). Si están vacíos, la pantalla
   // funciona como antes (solo mes principal). Cuando se agregan, el Resumen
   // P&L pasa a columnas comparativas y aparece el gráfico de evolución.
@@ -262,6 +267,14 @@ export default function EERR({ user, localActivo }: EERRProps) {
     load();
   // user no cambia durante el lifecycle (App desmonta en logout).
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[mes,localActivo]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (localActivo == null) { setMesCerrado(false); return; }
+    let cancel = false;
+    estaCerrado(localActivo, mes).then(({ data }) => { if (!cancel) setMesCerrado(!!data); });
+    return () => { cancel = true; };
   },[mes,localActivo]);
 
   const totalVentas=ventas.reduce((s, v)=>s+(v.monto||0),0);
@@ -485,6 +498,25 @@ export default function EERR({ user, localActivo }: EERRProps) {
             title="Tocar las líneas del EERR y ver el impacto en la rentabilidad (no modifica datos)">
             {simulando ? "Cerrar simulador" : "Simular escenario"}
           </button>
+          {esDuenoAdmin && (
+            <button type="button" className="btn btn-ghost btn-sm" style={{fontSize:11}}
+              disabled={localActivo == null || cerrandoMes}
+              title={localActivo == null ? "Elegí un local para cerrar el mes" : (mesCerrado ? "Reabrir el mes para poder modificarlo" : "Cerrar el mes: bloquea cambios con fecha en este mes")}
+              onClick={async () => {
+                if (localActivo == null) return;
+                const cerrar = !mesCerrado;
+                if (cerrar && !confirm(`¿Cerrar ${mes}? No se va a poder crear ni editar nada con fecha en ese mes hasta reabrirlo.`)) return;
+                setCerrandoMes(true);
+                const { error } = cerrar
+                  ? await cerrarPeriodo(localActivo, mes)
+                  : await reabrirPeriodo(localActivo, mes);
+                setCerrandoMes(false);
+                if (error) { alert(translateRpcError(error)); return; }
+                setMesCerrado(cerrar);
+              }}>
+              {cerrandoMes ? "..." : (mesCerrado ? "🔓 Reabrir mes" : "🔒 Cerrar mes")}
+            </button>
+          )}
           <button
             type="button"
             className="btn btn-ghost btn-sm"
@@ -518,6 +550,11 @@ export default function EERR({ user, localActivo }: EERRProps) {
         <>
           {simulando && (
             <EERRSimulador base={baseSimulador} mes={mes} onClose={() => setSimulando(false)} />
+          )}
+          {mesCerrado && (
+            <div style={{margin:"4px 0 12px",padding:"6px 12px",borderRadius:8,background:"rgba(117,170,219,0.12)",fontSize:12,color:"var(--pase-text)"}}>
+              🔒 Mes cerrado — no se pueden crear ni editar datos con fecha en {mes}. Reabrilo para modificarlo.
+            </div>
           )}
           <div className="eerr-kpis-row">
             <div className="kpi"><div className="kpi-label">Ventas</div><div className="kpi-value-compact kpi-success">{fmt_$(totalVentas)}</div></div>
