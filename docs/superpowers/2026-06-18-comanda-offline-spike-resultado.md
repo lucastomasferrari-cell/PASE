@@ -1,7 +1,7 @@
 # Spike offline COMANDA — Resultado PARCIAL + hallazgos + recomendación preliminar
 
 **Fecha:** 2026-06-18
-**Estado:** Tareas 1-4 del plan construidas (RxDB, flujo, test verde). **Validación live de criterios 2-5 + comparación PowerSync = PENDIENTE de Lucas** (requiere navegador logueado + instancia PowerSync). Este informe captura lo aprendido construyendo; la recomendación es **preliminar** hasta la validación live.
+**Estado:** Tareas 1-4 construidas (RxDB, flujo, test verde). **Criterios 1-3 VALIDADOS en navegador real (18-jun, vía preview)**: el flujo abrir→agregar→cobrar corre instantáneo sobre el store local, sin red (Sync OFF), y persiste en IndexedDB. **Criterios 4-5 (sync real + RLS) + comparación PowerSync = PENDIENTE de Lucas** (requieren navegador logueado + instancia PowerSync). Recomendación **preliminar** hasta esa validación.
 
 Plan: `docs/superpowers/plans/2026-06-18-comanda-offline-spike.md` · Spec: `docs/superpowers/specs/2026-06-18-comanda-offline-rebuild-design.md`.
 
@@ -21,9 +21,9 @@ Sandbox aislado en `packages/comanda/src/spike-offline/`, ruta dev-only `/pos/_s
 ## 2. Los 6 criterios — estado
 | # | Criterio | Estado |
 |---|---|---|
-| 1 | **Instantáneo** (la red no está en el camino del toque) | ✅ **Validado por diseño + test automatizado.** El flujo escribe en RxDB local y la UI se suscribe al store; no hay `await` de red en el toque. El test prueba abrir→agregar→cobrar local-only. (Falta: confirmar "feel" en tablet real.) |
-| 2 | **Offline real** (flujo completo sin internet) | ⏳ Pendiente live (DevTools Offline en el navegador). El test ya corre sin red, buena señal. |
-| 3 | **Sobrevive recarga** | ⏳ Pendiente live (F5 con red OFF). RxDB persiste en IndexedDB → debería; **OJO**: para sobrevivir recarga el app-shell tiene que cargar offline → eso es la **PWA** (Fase 2), no el motor. |
+| 1 | **Instantáneo** (la red no está en el camino del toque) | ✅ **Validado en navegador real + test.** Flujo escribe en RxDB local y la UI se suscribe; no hay `await` de red en el toque. abrir→agregar→cobrar corrió, total y estado se actualizaron solos. (Falta confirmar "feel" en tablet real de Lucas.) |
+| 2 | **Offline real** (flujo completo sin internet) | ✅ **Validado en navegador real:** con Sync OFF (sin red) el flujo completo corre 100% sobre el store local. `id server: null` confirma identidad offline por uuid. |
+| 3 | **Sobrevive recarga** | ✅ **Persistencia validada:** los datos quedan en IndexedDB (`rxdb-dexie-comanda-spike--0--ventas`, store `docs`, 1 registro). IndexedDB persiste → sobrevive recarga. **OJO:** para que el app-shell CARGUE offline al recargar hace falta la **PWA** (Fase 2), no el motor. |
 | 4 | **Reconcilia sin duplicados** | ⏳ Pendiente live (Sync ON → ver filas en Supabase). El push usa upsert idempotente por `idempotency_uuid`. |
 | 5 | **RLS / multi-tenant** | ⏳ Pendiente live (logueado, con tenant real). El sync usa el JWT de la sesión. |
 | 6 | **Costo / operación** | RxDB = **$0** (client-side, sin servicio). PowerSync = pendiente evaluar (necesita instancia). |
@@ -35,6 +35,7 @@ Sandbox aislado en `packages/comanda/src/spike-offline/`, ruta dev-only `/pos/_s
 2. **🎯 Raíz del bug `__pending_parent__`:** `ventas_pos_pagos` **NO tiene** columna `venta_idempotency_uuid` (los items SÍ). Sin ella, un **pago offline no puede referenciar una venta aún sin `id`**. **El rebuild DEBE agregar `venta_idempotency_uuid` a `ventas_pos_pagos`** (migración chica). Es la causa del bug que se veía en producción.
 3. **Impedancia RPC vs tabla (decisión central del rebuild):** un motor local-first sincroniza escribiendo **tablas** directo, pero el repo manda que toda escritura de plata pase por **RPCs atómicas** (regla `no-direct-financiera-write` + lógica de negocio en las RPCs). El push del motor tiene que **llamar a las RPCs** (no upsert crudo) para no perder la lógica/validaciones. Esto vale para RxDB y para PowerSync por igual.
 4. **`updated_at` existe en las 3 tablas** → sirve de checkpoint para el pull incremental. Bien.
+5. **React StrictMode (dev) cuelga el init de RxDB** si se crea la DB por nombre fijo en un `useEffect` (monta→desmonta→monta = 2 `createRxDatabase` con el mismo nombre → choque/cuelgue, sin error visible). **Fix aplicado:** singleton por nombre + no remover el store en el cleanup. El rebuild debe inicializar el motor UNA vez (provider/singleton), no por componente. (Encontrado y arreglado en el spike.)
 
 ---
 
