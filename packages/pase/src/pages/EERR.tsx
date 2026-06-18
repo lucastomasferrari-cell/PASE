@@ -25,6 +25,22 @@ import EERRSimulador from "./EERRSimulador";
 import type { LineasEERR } from "../lib/eerrSimulador";
 import { estaCerrado, cerrarPeriodo, reabrirPeriodo } from "../lib/periodos";
 import { translateRpcError } from "../lib/errors";
+import EERRDetalleModal, { buildSueldoBreakdown } from "./EERRDetalleModal";
+import type { DetalleState, DetalleDescriptor } from "./EERRDetalleModal";
+
+// Cómo encontrar los movimientos que componen cada sección del desglose.
+// Debe quedar en sync con los porCat* / totales de abajo (misma lógica de
+// tipo de gasto + bucket de factura).
+const DETALLE_SECCIONES: Record<string, DetalleDescriptor> = {
+  cmv:        { gastoTipo: null,          facturaBucket: null,               cmv: true },
+  fijo:       { gastoTipo: "fijo",        facturaBucket: "gasto_fijo" },
+  variable:   { gastoTipo: "variable",    facturaBucket: "gasto_variable" },
+  publicidad: { gastoTipo: "publicidad",  facturaBucket: "gasto_publicidad" },
+  comision:   { gastoTipo: "comision",    facturaBucket: "gasto_comision" },
+  impuesto:   { gastoTipo: "impuesto",    facturaBucket: "gasto_impuesto" },
+  otros:      { gastoTipo: null,          facturaBucket: null,               otros: true },
+  retiro:     { gastoTipo: "retiro_socio", facturaBucket: null },
+};
 
 // Recharts pesa ~250KB. Se code-splittea aparte para que el chunk inicial
 // de /reportes no lo arrastre. Si el usuario ve EERR sin meses comparados
@@ -80,6 +96,10 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const [sueldosDetalle,setSueldosDetalle]=useState<LiquidacionConEmpleado[]>([]);
   const [sueldoMovsPorLiq,setSueldoMovsPorLiq]=useState<Map<string,number>|null>(null);
   const [sueldosExpanded,setSueldosExpanded]=useState(false);
+  const [detalle,setDetalle]=useState<DetalleState|null>(null);
+  // Devuelve el handler de click para las filas de una sección del desglose.
+  const abrirCat=(descriptor: DetalleDescriptor)=>(categoria: string)=>
+    setDetalle({tipo:"cat",titulo:categoria,descriptor,categoria});
   const [mes,setMes]=useState(toISO(today).slice(0,7));
   const [loading,setLoading]=useState(true);
   const [simulando,setSimulando]=useState(false);
@@ -713,9 +733,9 @@ export default function EERR({ user, localActivo }: EERRProps) {
                 </Suspense>
               </div>
             )}
-            <ESection title="MERCADERÍA (CMV)" items={porCatCMV} total={totalCMV} color="var(--pase-text)" pct={pct}/>
-            <ESection title="GASTOS FIJOS" items={porCatFijos} total={totalGastosFijos} color="var(--pase-text)" pct={pct}/>
-            <ESection title="GASTOS VARIABLES" items={porCatVar} total={totalGastosVar} color="var(--pase-text)" pct={pct}/>
+            <ESection title="MERCADERÍA (CMV)" items={porCatCMV} total={totalCMV} color="var(--pase-text)" pct={pct} onItem={abrirCat(DETALLE_SECCIONES.cmv!)}/>
+            <ESection title="GASTOS FIJOS" items={porCatFijos} total={totalGastosFijos} color="var(--pase-text)" pct={pct} onItem={abrirCat(DETALLE_SECCIONES.fijo!)}/>
+            <ESection title="GASTOS VARIABLES" items={porCatVar} total={totalGastosVar} color="var(--pase-text)" pct={pct} onItem={abrirCat(DETALLE_SECCIONES.variable!)}/>
             <div
               className="eerr-section-title"
               style={{cursor:"pointer",userSelect:"none"}}
@@ -729,19 +749,27 @@ export default function EERR({ user, localActivo }: EERRProps) {
               <div style={{paddingBottom:8}}>
                 {sueldosDetalle.length===0?(
                   <div className="eerr-row"><span style={{fontSize:11,color:"var(--muted2)"}}>Sin sueldos pagados este mes</span></div>
-                ):Object.values(sueldosDetalle.reduce<Record<string,{emp:NonNullable<NonNullable<LiquidacionConEmpleado["rrhh_novedades"]>["rrhh_empleados"]>,total:number}>>((acc,liq)=>{
+                ):Object.values(sueldosDetalle.reduce<Record<string,{emp:NonNullable<NonNullable<LiquidacionConEmpleado["rrhh_novedades"]>["rrhh_empleados"]>,total:number,liqs:LiquidacionConEmpleado[]}>>((acc,liq)=>{
                   const emp=liq.rrhh_novedades?.rrhh_empleados;
                   if(!emp) return acc;
                   const k=liq.rrhh_novedades!.empleado_id;
-                  if(!acc[k]) acc[k]={emp,total:0};
+                  if(!acc[k]) acc[k]={emp,total:0,liqs:[]};
                   const fromMovs=sueldoMovsPorLiq?.get(liq.id!);
                   acc[k].total+=(fromMovs!=null?fromMovs:(liq.total_a_pagar||0));
+                  acc[k].liqs.push(liq);
                   return acc;
-                },{})).sort((a,b)=>b.total-a.total).map(({emp,total})=>(
-                    <div key={emp.apellido+emp.nombre} className="eerr-row">
+                },{})).sort((a,b)=>b.total-a.total).map(({emp,total,liqs})=>(
+                    <div
+                      key={emp.apellido+emp.nombre}
+                      className="eerr-row"
+                      onClick={()=>setDetalle({tipo:"sueldo",titulo:`${emp.apellido}, ${emp.nombre}`,subtitulo:emp.puesto||"",breakdown:buildSueldoBreakdown(liqs),total})}
+                      style={{cursor:"pointer"}}
+                      title="Ver resumen de novedades"
+                    >
                       <span style={{fontSize:11,color:"var(--muted2)"}}>
                         {emp.apellido}, {emp.nombre}
                         <span style={{fontSize:9,color:"var(--muted)",marginLeft:6}}>{emp.puesto}</span>
+                        <span style={{fontSize:9,color:"var(--muted)",marginLeft:5}}>›</span>
                       </span>
                       <div>
                         <span className="num" style={{color:"var(--pase-text)"}}>{fmt_$(total)}</span>
@@ -763,21 +791,30 @@ export default function EERR({ user, localActivo }: EERRProps) {
                 <span style={{color:"var(--muted)"}}>{pct(totalBoletasSindicales)}</span>
               </div>
             )}
-            <ESection title="PUBLICIDAD Y MKT" items={porCatPub} total={totalPublicidad} color="var(--pase-text)" pct={pct}/>
-            <ESection title="COMISIONES" items={porCatCom} total={totalComisiones} color="var(--pase-text)" pct={pct}/>
-            <ESection title="IMPUESTOS" items={porCatImp} total={totalImpuestos} color="var(--pase-text)" pct={pct}/>
-            {porCatOtros.length>0&&<ESection title="OTROS GASTOS" items={porCatOtros} total={totalOtrosGastos} color="var(--pase-text)" pct={pct}/>}
+            <ESection title="PUBLICIDAD Y MKT" items={porCatPub} total={totalPublicidad} color="var(--pase-text)" pct={pct} onItem={abrirCat(DETALLE_SECCIONES.publicidad!)}/>
+            <ESection title="COMISIONES" items={porCatCom} total={totalComisiones} color="var(--pase-text)" pct={pct} onItem={abrirCat(DETALLE_SECCIONES.comision!)}/>
+            <ESection title="IMPUESTOS" items={porCatImp} total={totalImpuestos} color="var(--pase-text)" pct={pct} onItem={abrirCat(DETALLE_SECCIONES.impuesto!)}/>
+            {porCatOtros.length>0&&<ESection title="OTROS GASTOS" items={porCatOtros} total={totalOtrosGastos} color="var(--pase-text)" pct={pct} onItem={abrirCat(DETALLE_SECCIONES.otros!)}/>}
             {totalRetiros !== 0 && (
-              <ESection title="RETIROS DE SOCIOS (post Util. Neta)" items={porCatRet} total={totalRetiros} color="var(--pase-text)" pct={pct}/>
+              <ESection title="RETIROS DE SOCIOS (post Util. Neta)" items={porCatRet} total={totalRetiros} color="var(--pase-text)" pct={pct} onItem={abrirCat(DETALLE_SECCIONES.retiro!)}/>
             )}
           </div>
         </>
+      )}
+      {detalle && (
+        <EERRDetalleModal
+          state={detalle}
+          mes={mes}
+          localActivo={localActivo}
+          user={user}
+          onClose={()=>setDetalle(null)}
+        />
       )}
     </div>
   );
 }
 
-function ESection({title,items,total,color,pct}: {title: string, items: {c?: string, m?: string, t: number}[], total: number, color: string, pct: (n: number) => string}) {
+function ESection({title,items,total,color,pct,onItem}: {title: string, items: {c?: string, m?: string, t: number}[], total: number, color: string, pct: (n: number) => string, onItem?: (cat: string) => void}) {
   const [open,setOpen]=useState(false);
   return (
     <>
@@ -785,7 +822,22 @@ function ESection({title,items,total,color,pct}: {title: string, items: {c?: str
         {title} — <span style={{color}}>{fmt_$(total)}</span> <span style={{color:"var(--muted)"}}>{pct(total)}</span>
         <span style={{color:"var(--muted2)",fontSize:10,marginLeft:8}}>{open?"▲":"▼"}</span>
       </div>
-      {open&&items.map(x=><div key={x.c||x.m} className="eerr-row"><span style={{fontSize:11,color:"var(--muted2)"}}>{x.c||x.m}</span><div><span className="num" style={{color}}>{fmt_$(x.t)}</span><span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(x.t)}</span></div></div>)}
+      {open&&items.map(x=>{
+        const cat=x.c||x.m;
+        const clickable=!!onItem&&!!cat;
+        return (
+          <div
+            key={cat}
+            className="eerr-row"
+            onClick={clickable?()=>onItem!(cat!):undefined}
+            style={clickable?{cursor:"pointer"}:undefined}
+            title={clickable?"Ver detalle":undefined}
+          >
+            <span style={{fontSize:11,color:"var(--muted2)"}}>{cat}{clickable&&<span style={{fontSize:9,color:"var(--muted)",marginLeft:5}}>›</span>}</span>
+            <div><span className="num" style={{color}}>{fmt_$(x.t)}</span><span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(x.t)}</span></div>
+          </div>
+        );
+      })}
     </>
   );
 }
