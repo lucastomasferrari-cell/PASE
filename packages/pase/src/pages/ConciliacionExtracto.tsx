@@ -249,6 +249,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   const catsDeTipoGasto = (label: string) => GASTO_TIPOS_CONCIL.find(t => t.label === label)?.cats ?? [];
   // Saving flags
   const [savingAccion, setSavingAccion] = useState(false);
+  const [reabriendo, setReabriendo] = useState<string | null>(null);
   // Última corrida persistida (cerrada)
   const [corridaCerrada, setCorridaCerrada] = useState<{ id: string; created_at: string } | null>(null);
   // Historial de conciliaciones cerradas del local activo. Se carga al
@@ -1219,6 +1220,21 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     }
   }
 
+  // Reabrir una conciliación cerrada: la desmarca (libera los movimientos +
+  // borra la corrida) para corregirla y volver a cerrarla. No toca saldos.
+  async function reabrirCorrida(corridaId: string) {
+    if (!window.confirm("¿Reabrir esta conciliación?\n\nSe va a desmarcar: los movimientos vuelven a quedar sin conciliar y vas a poder cargar el extracto de nuevo, corregir y volver a cerrarla. No se pierde ningún saldo.")) return;
+    setReabriendo(corridaId);
+    try {
+      const { error } = await db.rpc("fn_reabrir_conciliacion", { p_corrida_id: corridaId });
+      if (error) { showError(translateRpcError(error)); return; }
+      setHistorial(hs => hs.filter(c => c.id !== corridaId));
+      showToast("Conciliación reabierta — cargá el extracto de nuevo para corregirla");
+    } finally {
+      setReabriendo(null);
+    }
+  }
+
   function resetearTodo() {
     setExtractoMovs([]);
     setResumenExtracto(null);
@@ -1246,6 +1262,8 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
           corridas={historial}
           loading={historialLoading}
           localNombre={localNombre}
+          onReabrir={reabrirCorrida}
+          reabriendo={reabriendo}
         />
       )}
 
@@ -2469,10 +2487,14 @@ function Historial({
   corridas,
   loading,
   localNombre,
+  onReabrir,
+  reabriendo,
 }: {
   corridas: CorridaHistorica[];
   loading: boolean;
   localNombre: string;
+  onReabrir: (id: string) => void;
+  reabriendo: string | null;
 }) {
   // Armar los últimos 6 meses (incluyendo el actual) y mapear cuáles tienen
   // conciliación cerrada. Match por inicio de mes (periodo_desde).
@@ -2545,6 +2567,7 @@ function Historial({
                   <th style={{ textAlign: "right", padding: "5px 4px" }}>🔴 falta</th>
                   <th style={{ textAlign: "right", padding: "5px 4px" }}>🔴 sobra</th>
                   <th style={{ textAlign: "right", padding: "5px 4px" }}>Cerrada</th>
+                  <th style={{ padding: "5px 4px" }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -2560,6 +2583,21 @@ function Historial({
                     <td style={{ textAlign: "right", padding: "5px 4px", color: "var(--danger)", fontVariantNumeric: "tabular-nums" }}>{c.rojos_sobra}</td>
                     <td style={{ textAlign: "right", padding: "5px 4px", color: "var(--muted2)" }}>
                       {c.cerrada_at ? fmt_d(c.cerrada_at.slice(0, 10)) : "—"}
+                    </td>
+                    <td style={{ textAlign: "right", padding: "5px 4px" }}>
+                      <button
+                        type="button"
+                        onClick={() => onReabrir(c.id)}
+                        disabled={reabriendo === c.id}
+                        title="Reabrir esta conciliación para corregirla"
+                        style={{
+                          fontSize: 10, padding: "2px 8px", borderRadius: 6,
+                          border: "0.5px solid var(--bd)", background: "transparent",
+                          color: "var(--muted)", cursor: reabriendo === c.id ? "default" : "pointer",
+                        }}
+                      >
+                        {reabriendo === c.id ? "Reabriendo…" : "Reabrir"}
+                      </button>
                     </td>
                   </tr>
                 ))}
