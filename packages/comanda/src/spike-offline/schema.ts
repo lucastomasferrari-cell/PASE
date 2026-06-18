@@ -1,0 +1,103 @@
+// Schemas RxDB del spike — subset REAL de ventas_pos / ventas_pos_items /
+// ventas_pos_pagos (introspectado 18-jun).
+//
+// Identidad offline = `idempotency_uuid` (client-generated), porque el `id`
+// real es bigint que asigna el server. Es el mismo patrón del sistema actual
+// (fn_resolver_venta_id_por_uuid). Por eso el primaryKey de RxDB es
+// `idempotency_uuid`, y `id` (server bigint) queda nullable hasta sincronizar.
+//
+// HALLAZGO: `ventas_pos_pagos` NO tiene columna `venta_idempotency_uuid`
+// (items SÍ). Para linkear un pago offline a una venta aún sin `id`, acá
+// guardamos `venta_idempotency_uuid` como campo LOCAL (no existe server-side).
+// El rebuild necesita agregar esa columna (origen del bug __pending_parent__).
+import type { RxJsonSchema } from 'rxdb';
+
+export interface VentaDoc {
+  idempotency_uuid: string;
+  id: number | null;            // server bigint, null hasta sync
+  tenant_id: string;
+  local_id: number;
+  mesa_id: number | null;
+  estado: string;
+  subtotal: number;
+  total: number;
+  updated_at: string;
+}
+
+export interface ItemDoc {
+  idempotency_uuid: string;
+  id: number | null;
+  venta_idempotency_uuid: string; // link al padre por uuid (col real existe)
+  tenant_id: string;
+  local_id: number;
+  item_id: number;
+  cantidad: number;
+  precio_unitario: number;
+  subtotal: number;
+  curso: number;
+  estado: string;
+  updated_at: string;
+}
+
+export interface PagoDoc {
+  idempotency_uuid: string;
+  id: number | null;
+  venta_idempotency_uuid: string; // LOCAL: la col NO existe server-side (hallazgo)
+  tenant_id: string;
+  local_id: number;
+  metodo: string;
+  monto: number;
+  estado: string;
+  updated_at: string;
+}
+
+export const ventaSchema: RxJsonSchema<VentaDoc> = {
+  version: 0, primaryKey: 'idempotency_uuid', type: 'object',
+  properties: {
+    idempotency_uuid: { type: 'string', maxLength: 64 },
+    id: { type: ['number', 'null'] },
+    tenant_id: { type: 'string', maxLength: 64 },
+    local_id: { type: 'number' },
+    mesa_id: { type: ['number', 'null'] },
+    estado: { type: 'string' },
+    subtotal: { type: 'number' },
+    total: { type: 'number' },
+    updated_at: { type: 'string', maxLength: 32 },
+  },
+  required: ['idempotency_uuid', 'tenant_id', 'local_id', 'estado', 'subtotal', 'total', 'updated_at'],
+};
+
+export const itemSchema: RxJsonSchema<ItemDoc> = {
+  version: 0, primaryKey: 'idempotency_uuid', type: 'object',
+  properties: {
+    idempotency_uuid: { type: 'string', maxLength: 64 },
+    id: { type: ['number', 'null'] },
+    venta_idempotency_uuid: { type: 'string', maxLength: 64 },
+    tenant_id: { type: 'string', maxLength: 64 },
+    local_id: { type: 'number' },
+    item_id: { type: 'number' },
+    cantidad: { type: 'number' },
+    precio_unitario: { type: 'number' },
+    subtotal: { type: 'number' },
+    curso: { type: 'number' },
+    estado: { type: 'string' },
+    updated_at: { type: 'string', maxLength: 32 },
+  },
+  required: ['idempotency_uuid', 'venta_idempotency_uuid', 'tenant_id', 'local_id', 'item_id', 'cantidad', 'precio_unitario', 'updated_at'],
+};
+
+export const pagoSchema: RxJsonSchema<PagoDoc> = {
+  version: 0, primaryKey: 'idempotency_uuid', type: 'object',
+  properties: {
+    idempotency_uuid: { type: 'string', maxLength: 64 },
+    id: { type: ['number', 'null'] },
+    venta_idempotency_uuid: { type: 'string', maxLength: 64 },
+    tenant_id: { type: 'string', maxLength: 64 },
+    local_id: { type: 'number' },
+    metodo: { type: 'string' },
+    monto: { type: 'number' },
+    estado: { type: 'string' },
+    updated_at: { type: 'string', maxLength: 32 },
+  },
+  required: ['idempotency_uuid', 'venta_idempotency_uuid', 'tenant_id', 'local_id', 'metodo', 'monto', 'updated_at'],
+};
