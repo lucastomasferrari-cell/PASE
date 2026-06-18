@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildSueldoBreakdown } from "./EERRDetalleModal";
+import { buildSueldoBreakdown } from "./eerrDetalle";
 import type { LiquidacionConEmpleado } from "../types/rrhh";
 
 // Liquidación mínima — solo los campos que usa buildSueldoBreakdown.

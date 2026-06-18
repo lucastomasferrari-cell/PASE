@@ -25,8 +25,9 @@ import EERRSimulador from "./EERRSimulador";
 import type { LineasEERR } from "../lib/eerrSimulador";
 import { estaCerrado, cerrarPeriodo, reabrirPeriodo } from "../lib/periodos";
 import { translateRpcError } from "../lib/errors";
-import EERRDetalleModal, { buildSueldoBreakdown } from "./EERRDetalleModal";
-import type { DetalleState, DetalleDescriptor } from "./EERRDetalleModal";
+import EERRDetalleModal from "./EERRDetalleModal";
+import { buildSueldoBreakdown } from "./eerrDetalle";
+import type { DetalleState, DetalleDescriptor } from "./eerrDetalle";
 
 // Cómo encontrar los movimientos que componen cada sección del desglose.
 // Debe quedar en sync con los porCat* / totales de abajo (misma lógica de

@@ -22,3 +22,14 @@ input[type="number"] {
 #root {
   display: block;
 }
+
+/* Deep-link a una fila (EERR drill-down → Gastos/Compras): parpadeo al llegar.
+   Lo togglea useFocusRow() agregando/quitando la clase. */
+@keyframes row-focus-flash-kf {
+  0%   { background-color: var(--pase-accent-soft, rgba(99, 102, 241, 0.22)); }
+  100% { background-color: transparent; }
+}
+.row-focus-flash > td,
+.row-focus-flash {
+  animation: row-focus-flash-kf 2.6s ease-out;
+}

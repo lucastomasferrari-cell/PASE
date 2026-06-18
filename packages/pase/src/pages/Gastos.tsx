@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { db } from "../lib/supabase";
+import { useFocusRow } from "../lib/useFocusRow";
 import { applyLocalScope, cuentasOperables, localesVisibles, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
@@ -119,9 +121,13 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
   const visLocs = localesVisibles(user);
   const locsDisp: Local[] = visLocs === null ? locales : locales.filter((l: Local) => visLocs.includes(l.id));
   const [search, setSearch] = useState("");
-  // Default: últimos 90 días (consistente con Compras y demás filtros del admin).
-  const [desde, setDesde] = useState(() => { const d = new Date(today); d.setDate(d.getDate() - 90); return toISO(d); });
-  const [hasta, setHasta] = useState(toISO(today));
+  // Deep-link desde el EERR (drill-down de categoría → "Abrir en Gastos"):
+  // ?focus=<id>&desde=&hasta= → arranca con el rango del mes del movimiento y lo
+  // resalta. Si no vienen, default últimos 90 días (consistente con Compras).
+  const [searchParams] = useSearchParams();
+  const focusId = searchParams.get("focus");
+  const [desde, setDesde] = useState(() => searchParams.get("desde") || (() => { const d = new Date(today); d.setDate(d.getDate() - 90); return toISO(d); })());
+  const [hasta, setHasta] = useState(() => searchParams.get("hasta") || toISO(today));
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- WIP filtro tipo (sesión polish); setter pendiente de cablear
   const [tipoFiltro, setTipoFiltro] = useState("todos");
   const [gastos, setGastos] = useState<GastoExt[]>([]);
@@ -287,6 +293,8 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
   // Debounce de date pickers (C6) — evita fetches en cada tecla al editar.
   const debDesde = useDebouncedValue(desde, 300);
   const debHasta = useDebouncedValue(hasta, 300);
+  // Resalta + scrollea al gasto que llega por deep-link del EERR.
+  useFocusRow(focusId, !loading, "grow-");
   // Patrón fetch-on-dep-change. No agregar load a deps (re-fetch infinito).
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [debDesde, debHasta, localActivo]);
@@ -615,7 +623,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
               <tbody>{gVisible.map(g => {
                 const anulado = g.estado === "anulado";
                 return (
-                <tr key={g.id} style={anulado ? { opacity: 0.5, textDecoration: "line-through" } : undefined}>
+                <tr key={g.id} id={`grow-${g.id}`} style={anulado ? { opacity: 0.5, textDecoration: "line-through" } : undefined}>
                   <td className="mono">{fmt_d(g.fecha)}</td>
                   <td>
                     <TipoPill tipo={g.tipo} />

@@ -5,6 +5,7 @@ import { applyLocalScope, cuentasOperables, localesVisibles, tienePermiso } from
 import { translateRpcError } from "../lib/errors";
 import { useCategorias } from "../lib/useCategorias";
 import { useRealtimeTable } from "../lib/useRealtimeTable";
+import { useFocusRow } from "../lib/useFocusRow";
 import { CUENTAS } from "../lib/constants";
 import { toISO, fmt_d, fmt_$, genId, parseMonto, toLocalISO } from '@pase/shared/utils';
 import { today, estadoFactura } from '../lib/utils';
@@ -113,8 +114,11 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   // Default: últimos 90 días. Antes era inicio del mes (~15 días promedio)
   // pero los usuarios reportaron faltarles facturas viejas — mejor mostrar
   // 3 meses por default y que filtren manual si quieren ventana más chica.
-  const [desde, setDesde] = useState(() => { const d = new Date(today); d.setDate(d.getDate() - 90); return toISO(d); });
-  const [hasta, setHasta] = useState(toISO(today));
+  // Deep-link del EERR (drill-down → "Abrir en Compras"): ?desde=&hasta= arranca
+  // con el rango del mes del movimiento (searchParams se declara más abajo, así
+  // que el initializer lee la URL directo).
+  const [desde, setDesde] = useState(() => new URLSearchParams(window.location.search).get("desde") || (() => { const d = new Date(today); d.setDate(d.getDate() - 90); return toISO(d); })());
+  const [hasta, setHasta] = useState(() => new URLSearchParams(window.location.search).get("hasta") || toISO(today));
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- WIP filtro proveedor (sesión polish); setter pendiente de cablear
   const [provFiltro, setProvFiltro] = useState("");
   // ──────────────────────────────────────────────────────────────────
@@ -131,6 +135,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const focusId = searchParams.get("focus");
 
   const pathTail = location.pathname.replace(/^\/compras\/?/, "");
   const subSection: SubSection =
@@ -265,6 +270,8 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
   const [ncsAplicar, setNcsAplicar] = useState<Record<string, number>>({});
   const [verModal, setVerModal] = useState<Factura | null>(null);
   const [loading, setLoading] = useState(true);
+  // Resalta + scrollea a la factura que llega por deep-link del EERR.
+  useFocusRow(focusId, !loading, "frow-");
   const [pagando, setPagando] = useState(false);
   const [saving, setSaving] = useState(false);
   // Edición de factura (Lucas 10-jun: "en compras capaz que también, con
@@ -1270,7 +1277,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
               const prov = proveedores.find(p => String(p.id) === String(f.prov_id));
               const isNC = (f.tipo || "factura") === "nota_credito";
               return (
-                <tr key={f.id}>
+                <tr key={f.id} id={`frow-${f.id}`}>
                   <td>
                     <div style={{ fontSize: 12, fontWeight: 500, color: "var(--txt)" }}>{prov?.nombre || "—"}</div>
                     <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 1, display: "flex", alignItems: "center", gap: 6 }}>

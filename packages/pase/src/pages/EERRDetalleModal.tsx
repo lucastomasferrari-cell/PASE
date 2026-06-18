@@ -11,67 +11,20 @@
  *              Los datos ya están en memoria → no hace fetch.
  */
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Modal } from "../components/ui";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
 import { fmt_$ } from "@pase/shared/utils";
 import type { Usuario } from "../types/auth";
-import type { LiquidacionConEmpleado } from "../types/rrhh";
+import type { DetalleState } from "./eerrDetalle";
 
 // Tipos de gasto "canónicos" — todo lo que NO cae acá va a "Otros Gastos".
 // Debe quedar en sync con la lista de EERR.tsx (porCatOtros / totalOtrosGastos).
 const TIPOS_CANONICOS = ["fijo", "variable", "publicidad", "comision", "impuesto", "retiro_socio", "empleado", "mano_obra"];
 
-/** Cómo encontrar los movimientos que componen una categoría según su sección. */
-export interface DetalleDescriptor {
-  /** tipo a filtrar en `gastos`; null = la sección no toma gastos (CMV). */
-  gastoTipo: string | null;
-  /** bucket a filtrar en `facturas`; null = no toma facturas normales. */
-  facturaBucket: string | null;
-  /** Modo CMV: facturas con cat=categoria y bucket null o "cat_compra". */
-  cmv?: boolean;
-  /** Modo Otros: gastos por categoría cuyo tipo NO es canónico. */
-  otros?: boolean;
-}
-
-export interface BreakdownRow {
-  label: string;
-  monto: number;
-  /** Resta (se muestra en rojo con signo −). */
-  neg?: boolean;
-  /** Línea de total/subtotal (separador arriba, peso 600). */
-  big?: boolean;
-}
-
-/** Resumen de novedades de un empleado: suma de sus liquidaciones del mes.
- *  Solo incluye las líneas con valor (≠0), salvo "Total a pagar" que siempre va. */
-export function buildSueldoBreakdown(liqs: LiquidacionConEmpleado[]): BreakdownRow[] {
-  const sum = (f: (l: LiquidacionConEmpleado) => number | undefined) =>
-    liqs.reduce((s, l) => s + (f(l) || 0), 0);
-  const rows: BreakdownRow[] = [];
-  const push = (label: string, val: number, opts?: Partial<BreakdownRow>) => {
-    if (val) rows.push({ label, monto: val, ...opts });
-  };
-  push("Sueldo base", sum(l => l.sueldo_base));
-  push("Presentismo", sum(l => l.monto_presentismo));
-  push("Horas extras", sum(l => l.total_horas_extras));
-  push("Horas dobles", sum(l => l.total_dobles));
-  push("Feriados", sum(l => l.total_feriados));
-  push("Vacaciones", sum(l => l.total_vacaciones));
-  push("Bono", sum(l => (l as { bono?: number }).bono));
-  push("Ausencias", sum(l => l.descuento_ausencias), { neg: true });
-  push("Adelantos", sum(l => l.adelantos), { neg: true });
-  push("Otros descuentos", sum(l => (l as { otros_descuentos?: number }).otros_descuentos), { neg: true });
-  rows.push({ label: "Total a pagar", monto: sum(l => l.total_a_pagar), big: true });
-  push("Pagado", sum(l => l.pagos_realizados));
-  return rows;
-}
-
-export type DetalleState =
-  | { tipo: "cat"; titulo: string; descriptor: DetalleDescriptor; categoria: string }
-  | { tipo: "sueldo"; titulo: string; subtitulo: string; breakdown: BreakdownRow[]; total: number };
-
 interface MovRow {
+  id: string;
   fecha: string;
   label: string;
   sublabel?: string;
@@ -94,8 +47,21 @@ const provNombre = (p: unknown): string => {
 };
 
 export default function EERRDetalleModal({ state, mes, localActivo, user, onClose }: Props) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(state.tipo === "cat");
   const [rows, setRows] = useState<MovRow[]>([]);
+
+  // Saltar a la pantalla de origen (Gastos / Compras) con el ítem en el rango
+  // de su mes y resaltado (param `focus`). El rango lo pasamos = el mes del EERR
+  // para que el movimiento entre seguro (las pantallas filtran 90d por default).
+  const irAlOrigen = (r: MovRow) => {
+    const [yr, mo] = mes.split("-").map(Number) as [number, number];
+    const lastDay = new Date(yr, mo, 0).getDate();
+    const desde = mes + "-01", hasta = mes + "-" + String(lastDay).padStart(2, "0");
+    const base = r.origen === "Compra" ? "/compras" : "/gastos";
+    onClose();
+    navigate(`${base}?focus=${encodeURIComponent(r.id)}&desde=${desde}&hasta=${hasta}`);
+  };
 
   useEffect(() => {
     if (state.tipo !== "cat") return;
@@ -120,10 +86,11 @@ export default function EERRDetalleModal({ state, mes, localActivo, user, onClos
         if (descriptor.gastoTipo) gq = gq.eq("tipo", descriptor.gastoTipo);
         gq = applyLocalScope(gq, user, lid);
         tareas.push(gq.then(({ data }) => {
-          const gs = (data as { fecha: string; monto: number; categoria: string; subcategoria: string | null; detalle: string | null; tipo: string }[]) || [];
+          const gs = (data as { id: string; fecha: string; monto: number; categoria: string; subcategoria: string | null; detalle: string | null; tipo: string }[]) || [];
           return gs
             .filter(g => descriptor.gastoTipo ? true : !TIPOS_CANONICOS.includes(g.tipo))
             .map<MovRow>(g => ({
+              id: g.id,
               fecha: g.fecha,
               label: g.detalle?.trim() || g.subcategoria?.trim() || g.categoria || "(sin detalle)",
               sublabel: g.detalle?.trim() && g.subcategoria?.trim() ? g.subcategoria! : undefined,
@@ -144,8 +111,9 @@ export default function EERRDetalleModal({ state, mes, localActivo, user, onClos
         if (descriptor.cmv) fq = fq.or("bucket.is.null,bucket.eq.cat_compra");
         fq = applyLocalScope(fq, user, lid);
         tareas.push(fq.then(({ data }) => {
-          const fs = (data as { fecha: string; total: number; nro: string | null; detalle: string | null; proveedores: unknown }[]) || [];
+          const fs = (data as { id: string; fecha: string; total: number; nro: string | null; detalle: string | null; proveedores: unknown }[]) || [];
           return fs.map<MovRow>(f => ({
+            id: f.id,
             fecha: f.fecha,
             label: `${provNombre(f.proveedores)}${f.nro ? ` · N° ${f.nro}` : ""}`,
             sublabel: f.detalle?.trim() || undefined,
@@ -221,9 +189,12 @@ export default function EERRDetalleModal({ state, mes, localActivo, user, onClos
           {rows.map((r, i) => (
             <div
               key={i}
+              onClick={() => irAlOrigen(r)}
+              title={`Abrir en ${r.origen === "Compra" ? "Compras" : "Gastos"}`}
               style={{
                 display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10,
                 padding: "8px 2px",
+                cursor: "pointer",
                 borderBottom: i < rows.length - 1 ? "0.5px solid var(--pase-border)" : undefined,
               }}
             >
@@ -242,8 +213,9 @@ export default function EERRDetalleModal({ state, mes, localActivo, user, onClos
                   {r.sublabel && <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 1 }}>{r.sublabel}</div>}
                 </div>
               </div>
-              <span className="num" style={{ fontSize: 13, fontWeight: 500, color: "var(--pase-text)", flexShrink: 0 }}>
+              <span className="num" style={{ fontSize: 13, fontWeight: 500, color: "var(--pase-text)", flexShrink: 0, display: "flex", alignItems: "center", gap: 5 }}>
                 {fmt_$(r.monto)}
+                <span style={{ fontSize: 11, color: "var(--muted)" }}>›</span>
               </span>
             </div>
           ))}
