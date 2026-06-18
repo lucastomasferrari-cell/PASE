@@ -55,8 +55,19 @@ export const featureFlags = {
   //   3. Limpiar zombies: await __comandaCleanupOffline()
   //
   // Test que protege: packages/pase/tests/offline_first_mutante.spec.ts
+  //
+  // 2026-06-18: APAGADO por default (decisión de producto, Lucas). En uso real
+  //   la capa offline-first actual resultó net-negativa: lag en cada toque
+  //   (UI NO-optimista: espera la escritura local + encolar + import dinámico
+  //   ANTES de pintar la pantalla), cola que se traba ("13 pendientes" por ops
+  //   con `__pending_parent__` sin depends_on que fallan permanente), y crash al
+  //   "Anular venta" por el chunk lazy `overridesOfflineService` tras redeploy.
+  //   El POS ONLINE funciona perfecto (apagar esto NO rompe nada). La
+  //   reconstrucción correcta (UI optimista + cola idempotente, o motor tipo
+  //   PowerSync/RxDB) queda como sub-proyecto aparte. Para re-encender en UNA
+  //   terminal puntual (testing): localStorage.setItem('comanda.ff.offline_first_ventas','1').
   get offlineFirstVentas(): boolean {
-    return getFlag('offline_first_ventas', 'VITE_FF_OFFLINE_FIRST_VENTAS', true);
+    return getFlag('offline_first_ventas', 'VITE_FF_OFFLINE_FIRST_VENTAS', false);
   },
 };
 
