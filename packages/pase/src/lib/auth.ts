@@ -108,6 +108,11 @@ export const MODULOS = [
   { slug:"gastos", label:"Gastos", icon:"💸" },
   { slug:"proveedores", label:"Proveedores", icon:"🏭" },
   { slug:"mp", label:"Conciliación MP", icon:"💳" },
+  // Conciliación (cierre de mes contra extracto MP). Sensible: crea/anula
+  // movimientos según el cruce. Default OFF para empleados; dueño/admin lo ven
+  // siempre y pueden otorgarlo (antes era role-only y no figuraba en la grilla,
+  // así que no se podía dar acceso por usuario — Lucas 18-jun).
+  { slug:"conciliacion", label:"Conciliación", icon:"🔀" },
   { slug:"contador", label:"Contador / IVA", icon:"🧾" },
   { slug:"blindaje", label:"Blindaje", icon:"🛡" },
   { slug:"usuarios", label:"Usuarios", icon:"👥" },
@@ -171,7 +176,9 @@ export function tienePermiso(user: MaybeUser, slug: string): boolean {
   // de MercadoPago. Solo dueño/admin — toca crear y anular movimientos en
   // base al cruce con el extracto, es zona financiera sensible.
   if (slug === "conciliacion") {
-    return user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin";
+    if (user.rol === "dueno" || user.rol === "admin" || user.rol === "superadmin") return true;
+    // Grantable por usuario desde la grilla de permisos (Lucas 18-jun).
+    return getPermisos(user).includes("conciliacion");
   }
   // 'herramientas_hub' (pantalla con cards de herramientas avanzadas). Visible
   // si el user tiene acceso a AL MENOS UNA de las 6 herramientas que viven en
