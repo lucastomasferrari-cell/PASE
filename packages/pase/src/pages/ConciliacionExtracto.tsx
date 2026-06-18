@@ -265,7 +265,29 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   // punto donde lo dejaste.
   const BORRADOR_KEY = localActivo != null ? `pase_concil_borrador_local_${localActivo}` : "";
 
-  // Restaurar al montar / cambiar de local
+  // Forma del borrador (localStorage + base).
+  type BorradorData = {
+    archivoNombre?: string;
+    extractoMovs?: ExtractoMovimiento[];
+    periodoDesde?: string;
+    periodoHasta?: string;
+    resumenExtracto?: { initial_balance: number; final_balance: number } | null;
+    cruce?: CruceResultado | null;
+    resueltos?: Record<string, string>;
+  };
+  const aplicarBorrador = (d: BorradorData) => {
+    if (d.archivoNombre) setArchivoNombre(d.archivoNombre);
+    if (d.extractoMovs) setExtractoMovs(d.extractoMovs);
+    if (d.periodoDesde) setPeriodoDesde(d.periodoDesde);
+    if (d.periodoHasta) setPeriodoHasta(d.periodoHasta);
+    if (d.resumenExtracto !== undefined) setResumenExtracto(d.resumenExtracto);
+    if (d.cruce) setCruce(d.cruce);
+    if (d.resueltos) setResueltos(d.resueltos);
+  };
+
+  // Restaurar al montar / cambiar de local: localStorage (instantáneo) + base
+  // (cross-device — si entrás desde otra compu, trae el progreso; gana el más
+  // nuevo entre el de la base y el local).
   useEffect(() => {
     setExtractoMovs([]);
     setResumenExtracto(null);
@@ -277,58 +299,64 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     setPeriodoHasta("");
     setCorridaCerrada(null);
 
-    if (!BORRADOR_KEY) return;
+    if (!BORRADOR_KEY || localActivo == null) return;
+    let cancel = false;
+    let localSavedAt = 0;
     try {
       const raw = localStorage.getItem(BORRADOR_KEY);
-      if (!raw) return;
-      const draft = JSON.parse(raw) as {
-        archivoNombre?: string;
-        extractoMovs?: ExtractoMovimiento[];
-        periodoDesde?: string;
-        periodoHasta?: string;
-        resumenExtracto?: {
-          initial_balance: number; credits: number; debits: number; final_balance: number;
-        } | null;
-        cruce?: CruceResultado | null;
-        resueltos?: Record<string, string>;
-      };
-      if (draft.archivoNombre) setArchivoNombre(draft.archivoNombre);
-      if (draft.extractoMovs) setExtractoMovs(draft.extractoMovs);
-      if (draft.periodoDesde) setPeriodoDesde(draft.periodoDesde);
-      if (draft.periodoHasta) setPeriodoHasta(draft.periodoHasta);
-      if (draft.resumenExtracto !== undefined) setResumenExtracto(draft.resumenExtracto);
-      if (draft.cruce) setCruce(draft.cruce);
-      if (draft.resueltos) setResueltos(draft.resueltos);
+      if (raw) {
+        const draft = JSON.parse(raw) as BorradorData & { savedAt?: number };
+        localSavedAt = draft.savedAt || 0;
+        aplicarBorrador(draft);
+      }
     } catch (e) {
-      console.warn("[Conciliación] error restaurando borrador:", e);
+      console.warn("[Conciliación] error restaurando borrador local:", e);
     }
+    (async () => {
+      try {
+        const { data } = await db.from("conciliacion_borradores")
+          .select("data, updated_at").eq("local_id", localActivo).maybeSingle();
+        if (cancel || !data?.data) return;
+        const dbSavedAt = data.updated_at ? new Date(data.updated_at as string).getTime() : 0;
+        if (dbSavedAt >= localSavedAt) aplicarBorrador(data.data as BorradorData);
+      } catch (e) {
+        console.warn("[Conciliación] error trayendo borrador de la base:", e);
+      }
+    })();
+    return () => { cancel = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localActivo]);
 
-  // Guardar al cambiar cualquier pieza relevante. Skip si no hay nada
-  // cargado todavía (no queremos pisar un borrador real con state vacío
-  // del mount inicial).
+  // Guardar al cambiar cualquier pieza: localStorage (instantáneo) + base
+  // (debounce 1.5s, sincroniza entre compus). Skip si no hay nada cargado
+  // todavía (no pisar un borrador real con el state vacío del mount).
   useEffect(() => {
-    if (!BORRADOR_KEY) return;
+    if (!BORRADOR_KEY || localActivo == null) return;
     if (corridaCerrada) return; // ya cerrada — no guarda más borrador
     const hayCruce = !!cruce && cruce.extracto.length > 0;
     if (!hayCruce && extractoMovs.length === 0) return;
+    const payload: BorradorData = { archivoNombre, extractoMovs, periodoDesde, periodoHasta, resumenExtracto, cruce, resueltos };
     try {
-      localStorage.setItem(BORRADOR_KEY, JSON.stringify({
-        archivoNombre, extractoMovs, periodoDesde, periodoHasta,
-        resumenExtracto, cruce, resueltos,
-      }));
+      localStorage.setItem(BORRADOR_KEY, JSON.stringify({ ...payload, savedAt: Date.now() }));
     } catch (e) {
-      // Quota exceeded u otra falla — no es crítico, la conciliación sigue
-      // funcionando in-memory.
-      console.warn("[Conciliación] no se pudo guardar borrador:", e);
+      // Quota exceeded u otra falla — no es crítico, la conciliación sigue in-memory.
+      console.warn("[Conciliación] no se pudo guardar borrador local:", e);
     }
-  }, [BORRADOR_KEY, corridaCerrada, archivoNombre, extractoMovs, periodoDesde, periodoHasta, resumenExtracto, cruce, resueltos]);
+    const t = setTimeout(() => {
+      db.from("conciliacion_borradores")
+        .upsert({ local_id: localActivo, data: payload, updated_at: new Date().toISOString() }, { onConflict: "tenant_id,local_id" })
+        .then(({ error }) => { if (error) console.warn("[Conciliación] no se pudo sincronizar borrador en la base:", error.message); });
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [BORRADOR_KEY, localActivo, corridaCerrada, archivoNombre, extractoMovs, periodoDesde, periodoHasta, resumenExtracto, cruce, resueltos]);
 
   // Limpiar al cerrar la conciliación o al usuario tocar "Empezar de cero".
   function limpiarBorrador() {
-    if (!BORRADOR_KEY) return;
-    try { localStorage.removeItem(BORRADOR_KEY); } catch { /* idempotente */ }
+    if (BORRADOR_KEY) { try { localStorage.removeItem(BORRADOR_KEY); } catch { /* idempotente */ } }
+    if (localActivo != null) {
+      db.from("conciliacion_borradores").delete().eq("local_id", localActivo)
+        .then(({ error }) => { if (error) console.warn("[Conciliación] no se pudo borrar borrador de la base:", error.message); });
+    }
   }
 
   // ─── Cargar historial de conciliaciones cerradas ─────────────────────────
