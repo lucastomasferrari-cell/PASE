@@ -134,6 +134,8 @@ const SettingsAuditoria = lazy(() => import('./pages/Settings/SettingsAuditoria'
 const SettingsKds = lazy(() => import('./pages/Settings/SettingsKds').then(m => ({ default: m.SettingsKds })));
 const SettingsMenuQr = lazy(() => import('./pages/Settings/SettingsMenuQr').then(m => ({ default: m.SettingsMenuQr })));
 const SettingsEstaciones = lazy(() => import('./pages/Settings/SettingsEstaciones').then(m => ({ default: m.SettingsEstaciones })));
+// SPIKE OFFLINE (descartable, solo dev) — sandbox de validación de motor local-first.
+const SpikeOfflinePage = lazy(() => import('./spike-offline/SpikeOfflinePage').then(m => ({ default: m.SpikeOfflinePage })));
 
 // ─── Loader fallback para Suspense (full-page) ────────────────────────────
 function PageLoader() {
@@ -214,6 +216,7 @@ export default function App() {
           <ErrorBoundary>
             <Suspense fallback={<PageLoader />}>
               <Routes>
+                {import.meta.env.DEV && <Route path="/pos/_spike-offline" element={<SpikeOfflinePage />} />}
                 <Route path="/login" element={<RedirectIfAuth><LoginPage /></RedirectIfAuth>} />
 
                 {/* Rutas PÚBLICAS (sin auth, sin PIN) */}
