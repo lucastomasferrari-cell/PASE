@@ -27,7 +27,7 @@ import { estaCerrado, cerrarPeriodo, reabrirPeriodo } from "../lib/periodos";
 import { translateRpcError } from "../lib/errors";
 import EERRDetalleModal from "./EERRDetalleModal";
 import { buildSueldoBreakdown } from "./eerrDetalle";
-import type { DetalleState, DetalleDescriptor } from "./eerrDetalle";
+import type { DetalleState, DetalleDescriptor, AdelantoEmpleado } from "./eerrDetalle";
 
 // Cómo encontrar los movimientos que componen cada sección del desglose.
 // Debe quedar en sync con los porCat* / totales de abajo (misma lógica de
@@ -96,6 +96,10 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const [sueldos,setSueldos]=useState(0);
   const [sueldosDetalle,setSueldosDetalle]=useState<LiquidacionConEmpleado[]>([]);
   const [sueldoMovsPorLiq,setSueldoMovsPorLiq]=useState<Map<string,number>|null>(null);
+  // Adelantos (y otros gastos de empleado) atribuidos a cada empleado, para
+  // mostrar el sueldo completo por persona en el desglose de Sueldos.
+  const [adelantosPorEmp,setAdelantosPorEmp]=useState<Record<string,AdelantoEmpleado[]>>({});
+  const [laborSinAsignar,setLaborSinAsignar]=useState(0);
   const [sueldosExpanded,setSueldosExpanded]=useState(false);
   const [detalle,setDetalle]=useState<DetalleState|null>(null);
   // Devuelve el handler de click para las filas de una sección del desglose.
@@ -289,6 +293,32 @@ export default function EERR({ user, localActivo }: EERRProps) {
       const gastosEmpFilt = gastosEmpleado.filter(x => !lid || x.local_id === lid);
       const extraLabor = gastosEmpFilt.reduce((s, x) => s + (x.monto || 0), 0);
       setSueldos(sueldosTotal + extraLabor);
+
+      // Atribuir cada gasto de empleado (adelanto/feriado/etc.) a su empleado,
+      // para que el desglose de Sueldos muestre el sueldo completo por persona.
+      // El link gasto→empleado vive en rrhh_adelantos. Lo que no tenga link
+      // (mano de obra sin empleado) queda en `laborSinAsignar` (fila aparte).
+      const gastoIdsEmp = gastosEmpFilt.map(x => x.id).filter((x): x is string => !!x);
+      const adelMap: Record<string, AdelantoEmpleado[]> = {};
+      let sinAsignar = 0;
+      if (gastoIdsEmp.length) {
+        const { data: adeData } = await db.from("rrhh_adelantos")
+          .select("gasto_id, empleado_id").in("gasto_id", gastoIdsEmp);
+        const gastoToEmp = new Map<string, string>();
+        for (const a of (adeData as { gasto_id: string | null; empleado_id: string | null }[]) || []) {
+          if (a.gasto_id && a.empleado_id) gastoToEmp.set(a.gasto_id, String(a.empleado_id));
+        }
+        for (const g of gastosEmpFilt) {
+          const empId = g.id ? gastoToEmp.get(g.id) : undefined;
+          if (empId) (adelMap[empId] ||= []).push({ fecha: g.fecha, monto: Number(g.monto || 0), label: g.categoria || "Adelanto" });
+          else sinAsignar += Number(g.monto || 0);
+        }
+        for (const arr of Object.values(adelMap)) arr.sort((a, b) => a.fecha.localeCompare(b.fecha));
+      } else {
+        sinAsignar = extraLabor;
+      }
+      setAdelantosPorEmp(adelMap);
+      setLaborSinAsignar(sinAsignar);
       setLoading(false);
     };
     load();
@@ -746,40 +776,72 @@ export default function EERR({ user, localActivo }: EERRProps) {
               <span style={{color:"var(--muted)"}}>{pct(sueldos)}</span>
               <span style={{color:"var(--muted2)",fontSize:10,marginLeft:8}}>{sueldosExpanded?"▲":"▼"}</span>
             </div>
-            {sueldosExpanded&&(
-              <div style={{paddingBottom:8}}>
-                {sueldosDetalle.length===0?(
-                  <div className="eerr-row"><span style={{fontSize:11,color:"var(--muted2)"}}>Sin sueldos pagados este mes</span></div>
-                ):Object.values(sueldosDetalle.reduce<Record<string,{emp:NonNullable<NonNullable<LiquidacionConEmpleado["rrhh_novedades"]>["rrhh_empleados"]>,total:number,liqs:LiquidacionConEmpleado[]}>>((acc,liq)=>{
-                  const emp=liq.rrhh_novedades?.rrhh_empleados;
-                  if(!emp) return acc;
-                  const k=liq.rrhh_novedades!.empleado_id;
-                  if(!acc[k]) acc[k]={emp,total:0,liqs:[]};
-                  const fromMovs=sueldoMovsPorLiq?.get(liq.id!);
-                  acc[k].total+=(fromMovs!=null?fromMovs:(liq.total_a_pagar||0));
-                  acc[k].liqs.push(liq);
-                  return acc;
-                },{})).sort((a,b)=>b.total-a.total).map(({emp,total,liqs})=>(
-                    <div
-                      key={emp.apellido+emp.nombre}
-                      className="eerr-row"
-                      onClick={()=>setDetalle({tipo:"sueldo",titulo:`${emp.apellido}, ${emp.nombre}`,subtitulo:emp.puesto||"",breakdown:buildSueldoBreakdown(liqs),total})}
-                      style={{cursor:"pointer"}}
-                      title="Ver resumen de novedades"
-                    >
-                      <span style={{fontSize:11,color:"var(--muted2)"}}>
-                        {emp.apellido}, {emp.nombre}
-                        <span style={{fontSize:9,color:"var(--muted)",marginLeft:6}}>{emp.puesto}</span>
-                        <span style={{fontSize:9,color:"var(--muted)",marginLeft:5}}>›</span>
-                      </span>
-                      <div>
-                        <span className="num" style={{color:"var(--pase-text)"}}>{fmt_$(total)}</span>
-                        <span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(total)}</span>
+            {sueldosExpanded&&(()=>{
+              // Agrupa liquidaciones por empleado y le suma SUS adelantos
+              // (pagados por fuera de la liquidación) para mostrar el sueldo
+              // completo del mes por persona.
+              const grupos=sueldosDetalle.reduce<Record<string,{emp:NonNullable<NonNullable<LiquidacionConEmpleado["rrhh_novedades"]>["rrhh_empleados"]>,total:number,liqs:LiquidacionConEmpleado[]}>>((acc,liq)=>{
+                const emp=liq.rrhh_novedades?.rrhh_empleados;
+                if(!emp) return acc;
+                const k=liq.rrhh_novedades!.empleado_id;
+                if(!acc[k]) acc[k]={emp,total:0,liqs:[]};
+                const fromMovs=sueldoMovsPorLiq?.get(liq.id!);
+                acc[k].total+=(fromMovs!=null?fromMovs:(liq.total_a_pagar||0));
+                acc[k].liqs.push(liq);
+                return acc;
+              },{});
+              const conLiq=new Set(Object.keys(grupos));
+              // Adelantos de empleados SIN liquidación este mes → van a la fila
+              // "sin asignar" para que el desglose cierre con el total de Sueldos.
+              let huerfanos=0;
+              for(const [empId,items] of Object.entries(adelantosPorEmp)){
+                if(!conLiq.has(empId)) huerfanos+=items.reduce((s,i)=>s+i.monto,0);
+              }
+              const restoSinAsignar=laborSinAsignar+huerfanos;
+              const filas=Object.entries(grupos).map(([empId,g])=>{
+                const ade=adelantosPorEmp[empId]||[];
+                return {emp:g.emp,liqs:g.liqs,ade,total:g.total+ade.reduce((s,i)=>s+i.monto,0)};
+              }).sort((a,b)=>b.total-a.total);
+              return (
+                <div style={{paddingBottom:8}}>
+                  {filas.length===0&&restoSinAsignar<=0.5?(
+                    <div className="eerr-row"><span style={{fontSize:11,color:"var(--muted2)"}}>Sin sueldos pagados este mes</span></div>
+                  ):(<>
+                    {filas.map(({emp,total,liqs,ade})=>(
+                      <div
+                        key={emp.apellido+emp.nombre}
+                        className="eerr-row"
+                        onClick={()=>setDetalle({tipo:"sueldo",titulo:`${emp.apellido}, ${emp.nombre}`,subtitulo:emp.puesto||"",breakdown:buildSueldoBreakdown(liqs,ade),total})}
+                        style={{cursor:"pointer"}}
+                        title="Ver resumen de novedades"
+                      >
+                        <span style={{fontSize:11,color:"var(--muted2)"}}>
+                          {emp.apellido}, {emp.nombre}
+                          <span style={{fontSize:9,color:"var(--muted)",marginLeft:6}}>{emp.puesto}</span>
+                          <span style={{fontSize:9,color:"var(--muted)",marginLeft:5}}>›</span>
+                        </span>
+                        <div>
+                          <span className="num" style={{color:"var(--pase-text)"}}>{fmt_$(total)}</span>
+                          <span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(total)}</span>
+                        </div>
                       </div>
-                    </div>
-                ))}
-              </div>
-            )}
+                    ))}
+                    {restoSinAsignar>0.5&&(
+                      <div className="eerr-row">
+                        <span style={{fontSize:11,color:"var(--muted2)"}}>
+                          Mano de obra / otros
+                          <span style={{fontSize:9,color:"var(--muted)",marginLeft:6}}>sin empleado asignado</span>
+                        </span>
+                        <div>
+                          <span className="num" style={{color:"var(--pase-text)"}}>{fmt_$(restoSinAsignar)}</span>
+                          <span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(restoSinAsignar)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </>)}
+                </div>
+              );
+            })()}
             {totalCargasSociales !== 0 && (
               <div className="eerr-section-title">
                 CARGAS SOCIALES — <span style={{color:"var(--pase-text)"}}>{fmt_$(totalCargasSociales)}</span>{" "}

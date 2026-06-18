@@ -27,9 +27,27 @@ export type DetalleState =
   | { tipo: "cat"; titulo: string; descriptor: DetalleDescriptor; categoria: string }
   | { tipo: "sueldo"; titulo: string; subtitulo: string; breakdown: BreakdownRow[]; total: number };
 
-/** Resumen de novedades de un empleado: suma de sus liquidaciones del mes.
- *  Solo incluye las líneas con valor (≠0), salvo "Total a pagar" que siempre va. */
-export function buildSueldoBreakdown(liqs: LiquidacionConEmpleado[]): BreakdownRow[] {
+/** Un adelanto/pago extra a un empleado, cargado como gasto de empleado fuera
+ *  de la liquidación (ej: adelanto, feriado). */
+export interface AdelantoEmpleado {
+  fecha: string;   // "YYYY-MM-DD"
+  monto: number;
+  label: string;   // categoría del gasto (ej: "Adelanto", "Feriado")
+}
+
+const fechaCortaDM = (f: string): string => {
+  const p = f.split("-");
+  return p.length >= 3 ? `${p[2]}/${p[1]}` : f;
+};
+
+/** Resumen de novedades de un empleado: liquidación(es) del mes + los adelantos
+ *  que se le pagaron por fuera. El "Total del mes" reconcilia el sueldo completo
+ *  (lo de la liquidación + lo que ya cobró como adelanto). Solo incluye líneas
+ *  con valor (≠0), salvo "Total a pagar" que siempre va. */
+export function buildSueldoBreakdown(
+  liqs: LiquidacionConEmpleado[],
+  adelantos: AdelantoEmpleado[] = [],
+): BreakdownRow[] {
   const sum = (f: (l: LiquidacionConEmpleado) => number | undefined) =>
     liqs.reduce((s, l) => s + (f(l) || 0), 0);
   const rows: BreakdownRow[] = [];
@@ -44,9 +62,20 @@ export function buildSueldoBreakdown(liqs: LiquidacionConEmpleado[]): BreakdownR
   push("Vacaciones", sum(l => l.total_vacaciones));
   push("Bono", sum(l => (l as { bono?: number }).bono));
   push("Ausencias", sum(l => l.descuento_ausencias), { neg: true });
-  push("Adelantos", sum(l => l.adelantos), { neg: true });
+  push("Adelantos (descontados)", sum(l => l.adelantos), { neg: true });
   push("Otros descuentos", sum(l => (l as { otros_descuentos?: number }).otros_descuentos), { neg: true });
-  rows.push({ label: "Total a pagar", monto: sum(l => l.total_a_pagar), big: true });
-  push("Pagado", sum(l => l.pagos_realizados));
+  const totalLiq = sum(l => l.total_a_pagar);
+  rows.push({ label: "Saldo en liquidación", monto: totalLiq, big: true });
+  push("Pagado (liquidación)", sum(l => l.pagos_realizados));
+  // Adelantos pagados por fuera: se muestran adentro del empleado y suman al
+  // total del mes (antes quedaban sueltos en el total de Sueldos del P&L).
+  if (adelantos.length) {
+    let adeSum = 0;
+    for (const a of adelantos) {
+      adeSum += a.monto;
+      push(`${a.label} ya pagado (${fechaCortaDM(a.fecha)})`, a.monto);
+    }
+    rows.push({ label: "Total del mes", monto: totalLiq + adeSum, big: true });
+  }
   return rows;
 }

@@ -11,11 +11,11 @@ const liq = (over: Partial<LiquidacionConEmpleado>): LiquidacionConEmpleado => (
 } as unknown as LiquidacionConEmpleado);
 
 describe("buildSueldoBreakdown", () => {
-  it("omite las líneas en cero pero siempre incluye Total a pagar", () => {
+  it("omite las líneas en cero pero siempre incluye el saldo en liquidación", () => {
     const rows = buildSueldoBreakdown([liq({ sueldo_base: 100000, total_a_pagar: 100000 })]);
     const labels = rows.map(r => r.label);
-    expect(labels).toEqual(["Sueldo base", "Total a pagar"]);
-    expect(rows.find(r => r.label === "Total a pagar")?.big).toBe(true);
+    expect(labels).toEqual(["Sueldo base", "Saldo en liquidación"]);
+    expect(rows.find(r => r.label === "Saldo en liquidación")?.big).toBe(true);
   });
 
   it("suma varias liquidaciones del mismo empleado (quincenas/cuotas)", () => {
@@ -25,7 +25,7 @@ describe("buildSueldoBreakdown", () => {
     ]);
     expect(rows.find(r => r.label === "Sueldo base")?.monto).toBe(150000);
     expect(rows.find(r => r.label === "Horas extras")?.monto).toBe(20000);
-    expect(rows.find(r => r.label === "Total a pagar")?.monto).toBe(170000);
+    expect(rows.find(r => r.label === "Saldo en liquidación")?.monto).toBe(170000);
   });
 
   it("marca los descuentos como negativos", () => {
@@ -33,7 +33,7 @@ describe("buildSueldoBreakdown", () => {
       liq({ sueldo_base: 100000, descuento_ausencias: 8000, adelantos: 15000, total_a_pagar: 77000 }),
     ]);
     expect(rows.find(r => r.label === "Ausencias")?.neg).toBe(true);
-    expect(rows.find(r => r.label === "Adelantos")?.neg).toBe(true);
+    expect(rows.find(r => r.label === "Adelantos (descontados)")?.neg).toBe(true);
     expect(rows.find(r => r.label === "Sueldo base")?.neg).toBeUndefined();
   });
 
@@ -44,5 +44,25 @@ describe("buildSueldoBreakdown", () => {
     expect(rows.find(r => r.label === "Bono")?.monto).toBe(40000);
     expect(rows.find(r => r.label === "Otros descuentos")?.monto).toBe(10000);
     expect(rows.find(r => r.label === "Otros descuentos")?.neg).toBe(true);
+  });
+
+  it("atribuye el adelanto pagado por fuera y reconcilia el total del mes (caso ROJAS)", () => {
+    const rows = buildSueldoBreakdown(
+      [liq({ sueldo_base: 900000, adelantos: 150000, total_a_pagar: 750000, pagos_realizados: 750000 })],
+      [{ fecha: "2026-05-19", monto: 150000, label: "Adelanto" }],
+    );
+    // saldo de la liquidación = 750k
+    expect(rows.find(r => r.label === "Saldo en liquidación")?.monto).toBe(750000);
+    // el adelanto aparece adentro del empleado, con su fecha
+    expect(rows.find(r => r.label === "Adelanto ya pagado (19/05)")?.monto).toBe(150000);
+    // total del mes = liquidación + adelanto = sueldo base
+    const totalMes = rows.find(r => r.label === "Total del mes");
+    expect(totalMes?.monto).toBe(900000);
+    expect(totalMes?.big).toBe(true);
+  });
+
+  it("sin adelantos no agrega la línea 'Total del mes'", () => {
+    const rows = buildSueldoBreakdown([liq({ sueldo_base: 100000, total_a_pagar: 100000 })]);
+    expect(rows.find(r => r.label === "Total del mes")).toBeUndefined();
   });
 });
