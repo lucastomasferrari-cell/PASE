@@ -121,8 +121,11 @@ export default function EERR({ user, localActivo }: EERRProps) {
     const facturasArr = (f as Factura[]) || [];
     const allGastos = ((g0 as Gasto[]) || []).filter(x => x.categoria !== "SUELDOS");
     // Costo laboral = sueldos (RRHH) + gastos tipo empleado + mano_obra (suelta).
-    const gastosEmp = allGastos.filter(x => x.tipo === "empleado" || x.tipo === "mano_obra");
-    const gastosArr = allGastos.filter(x => x.tipo !== "empleado" && x.tipo !== "mano_obra");
+    // Cargas/Boletas son mano_obra pero van en su LÍNEA propia: se sacan del sum
+    // de sueldos (gastosEmp) y quedan en gastosArr para contarlas por categoría.
+    const esCargasOBoletas = (c?: string | null) => c === "CARGAS SOCIALES" || c === "BOLETAS SINDICALES";
+    const gastosEmp = allGastos.filter(x => (x.tipo === "empleado" || x.tipo === "mano_obra") && !esCargasOBoletas(x.categoria));
+    const gastosArr = allGastos.filter(x => (x.tipo !== "empleado" && x.tipo !== "mano_obra") || esCargasOBoletas(x.categoria));
     const liqRows = (((liq as unknown) as (LiquidacionPendienteRow & {id:string})[]) || [])
       .filter(l => l.rrhh_novedades?.mes === mo && l.rrhh_novedades?.anio === yr);
     const liqIdSet = new Set(liqRows.map(l => l.id));
@@ -135,7 +138,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
     const cmv = sumF(facsCMV);
     // Costo laboral: cargas sociales + boletas sindicales juntas en la
     // comparativa (línea separada solo en el detalle de un mes).
-    const cargasSociales = gastosArr.filter(x => x.tipo === "fijo" && (x.categoria === "CARGAS SOCIALES" || x.categoria === "BOLETAS SINDICALES")).reduce((s, x) => s + Number(x.monto), 0);
+    const cargasSociales = gastosArr.filter(x => esCargasOBoletas(x.categoria)).reduce((s, x) => s + Number(x.monto), 0);
     const gastosFijos = gastosArr.filter(x => x.tipo === "fijo" && x.categoria !== "CARGAS SOCIALES" && x.categoria !== "BOLETAS SINDICALES").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_fijo"));
     const gastosVar = gastosArr.filter(x => x.tipo === "variable").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_variable"));
     const publicidad = gastosArr.filter(x => x.tipo === "publicidad").reduce((s, x) => s + Number(x.monto), 0) + sumF(facsBucket("gasto_publicidad"));
@@ -217,8 +220,11 @@ export default function EERR({ user, localActivo }: EERRProps) {
       setVentas((v as Venta[]) || []);
       setFacturas((f as Factura[]) || []);
       const allGastos = ((g as Gasto[]) || []).filter((x) => x.categoria !== "SUELDOS");
-      const gastosEmpleado = allGastos.filter(x => x.tipo === "empleado" || x.tipo === "mano_obra");
-      setGastos(allGastos.filter(x => x.tipo !== "empleado" && x.tipo !== "mano_obra"));
+      // Cargas/Boletas (mano_obra) van en su línea propia: fuera del sum de
+      // sueldos, pero quedan en `gastos` para contarlas por categoría.
+      const esCargasOBoletas = (c?: string | null) => c === "CARGAS SOCIALES" || c === "BOLETAS SINDICALES";
+      const gastosEmpleado = allGastos.filter(x => (x.tipo === "empleado" || x.tipo === "mano_obra") && !esCargasOBoletas(x.categoria));
+      setGastos(allGastos.filter(x => (x.tipo !== "empleado" && x.tipo !== "mano_obra") || esCargasOBoletas(x.categoria)));
       const liqRows = (((liqData as unknown) as LiquidacionConEmpleado[]) || [])
         .filter(l => l.rrhh_novedades?.mes === mo && l.rrhh_novedades?.anio === yr);
       const liqById = new Map(liqRows.map(l => [l.id!, l]));
@@ -287,10 +293,10 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const facturasCMV=[...facturas.filter(f=>!f.bucket), ...facturasBucket("cat_compra")];
   const sumarMonto=<T extends {total?:number,monto?:number}>(rows:T[],key:"total"|"monto"="total")=>rows.reduce((s,x)=>s+(Number(x[key])||0),0);
   const totalCMV=sumarMonto(facturasCMV,"total");
-  const totalCargasSociales=gastos.filter((g)=>g.tipo==="fijo"&&g.categoria==="CARGAS SOCIALES").reduce((s, g)=>s+(g.monto||0),0);
+  const totalCargasSociales=gastos.filter((g)=>g.categoria==="CARGAS SOCIALES").reduce((s, g)=>s+(g.monto||0),0);
   // Boletas sindicales (cuota sindical + obra social): costo laboral, línea
   // propia (Lucas 16-jun). Se excluye de Gastos Fijos para no contar doble.
-  const totalBoletasSindicales=gastos.filter((g)=>g.tipo==="fijo"&&g.categoria==="BOLETAS SINDICALES").reduce((s, g)=>s+(g.monto||0),0);
+  const totalBoletasSindicales=gastos.filter((g)=>g.categoria==="BOLETAS SINDICALES").reduce((s, g)=>s+(g.monto||0),0);
   const totalGastosFijos=gastos.filter((g)=>g.tipo==="fijo"&&g.categoria!=="CARGAS SOCIALES"&&g.categoria!=="BOLETAS SINDICALES").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_fijo"),"total");
   const totalGastosVar=gastos.filter((g)=>g.tipo==="variable").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_variable"),"total");
   const totalPublicidad=gastos.filter((g)=>g.tipo==="publicidad").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_publicidad"),"total");
