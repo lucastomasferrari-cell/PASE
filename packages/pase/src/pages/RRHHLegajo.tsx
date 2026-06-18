@@ -7,7 +7,7 @@
 /* eslint-disable pase-local/require-apply-local-scope */
 import { useState, useEffect, useRef } from "react";
 import { db } from "../lib/supabase";
-import { cuentasOperables } from "../lib/auth";
+import { cuentasOperables, tienePermiso } from "../lib/auth";
 import { translateRpcError } from "../lib/errors";
 import { useToast } from "../hooks/useToast";
 import { ToastComponent } from "../components/Toast";
@@ -141,6 +141,9 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
   }, [liqFinalModal, liqFinalData, liqFinalLineas]);
 
   const esDueno = user?.rol === "dueno" || user?.rol === "admin";
+  // Liquidación final: dueño/admin, o quien tenga el permiso puntual (ej. Anto).
+  // El resto del legajo (actualizar sueldo, pagar vac/agu, docs) sigue en esDueno.
+  const puedeLiqFinal = esDueno || tienePermiso(user, "rrhh_liquidacion_final");
 
   // ─── LOAD ──────────────────────────────────────────────────────────────────
   const loadEmp = async () => {
@@ -422,7 +425,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
     { id:"movimientos", label:"Movimientos" },
     { id:"vacagu", label:"Vacaciones / Aguinaldo" },
     { id:"documentos", label:"Documentos" },
-    ...(esDueno ? [{ id:"liquidacion", label:"Liquidación final" }] : []),
+    ...(puedeLiqFinal ? [{ id:"liquidacion", label:"Liquidación final" }] : []),
   ];
 
   return (

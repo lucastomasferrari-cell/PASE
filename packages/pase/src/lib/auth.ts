@@ -55,6 +55,11 @@ export const PERMISOS_EXTRAS = [
     descripcion:"Permite anular cierres de ventas. Sin esto, solo puede crear cierres pero no revertirlos." },
   { slug:"caja_anular", label:"Anular movimientos de caja",
     descripcion:"Permite anular movimientos en Tesorería. Sin esto, solo puede ver/editar; anular bloqueado." },
+  // Liquidación final (despidos/renuncias): plata sensible. Por default solo
+  // dueño/admin la ven en el Legajo; este permiso la habilita a un encargado
+  // puntual (ej: quien gestiona bajas) sin abrirle todo Equipo. Lucas 17-jun.
+  { slug:"rrhh_liquidacion_final", label:"Liquidación final (despidos/renuncias)",
+    descripcion:"Permite ver y hacer la liquidación final de un empleado (indemnización, SAC, vacaciones) desde el Legajo. Por default solo dueño/admin." },
 ];
 
 // MODULOS = lista maestra de slugs asignables como permisos. Incluye TODO
