@@ -741,9 +741,14 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
 
       // 2) Pagar el resto con plata si queda saldo. Si solo se aplicaron NCs
       //    + saldo a favor y la factura ya queda saldada, se omite pagar_factura.
+      // Lo ya saldado ANTES de abrir el modal (pagos en plata + NCs aplicadas
+      // previamente — todas viven en f.pagos). El neto a pagar arranca del
+      // pendiente real, no del total bruto (bug: se pagaba el total ignorando
+      // las NC ya aplicadas → sobre-pago). Lucas 18-jun.
+      const yaPagadoPrevio = (f.pagos || []).reduce((s: number, p) => s + Number(p.monto || 0), 0);
       const restanteAPagar = pagoForm.monto > 0
         ? pagoForm.monto
-        : Math.max(0, f.total - totalNcAplicado - aplicarSaldoFavor);
+        : Math.max(0, f.total - yaPagadoPrevio - totalNcAplicado - aplicarSaldoFavor);
       if (restanteAPagar > 0) {
         if (!pagoForm.cuenta) {
           showError("Elegí una cuenta de egreso para el saldo restante");
@@ -1320,7 +1325,7 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                         <IconBtn title="Editar" onClick={() => abrirEditarFactura(f)}>{IconEdit}</IconBtn>
                       )}
                       {!isNC && f.estado !== "pagada" && (
-                        <IconBtn title="Registrar pago" tone="success" onClick={() => { setPagarModal(f); setPagoForm({ cuenta: "", monto: Number(f.total) || 0, fecha: toISO(today) }); setIdempKeyPagarFac(crypto.randomUUID()); }}>{IconPay}</IconBtn>
+                        <IconBtn title="Registrar pago" tone="success" onClick={() => { setPagarModal(f); setPagoForm({ cuenta: "", monto: 0, fecha: toISO(today) }); setIdempKeyPagarFac(crypto.randomUUID()); }}>{IconPay}</IconBtn>
                       )}
                       {/* Siempre visible. Si no tiene permiso, anular() abre
                           modal de Manager Override pidiendo código del dueño. */}
