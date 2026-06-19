@@ -17,7 +17,11 @@ export interface VentaDoc {
   id: number | null;            // server bigint, null hasta sync
   tenant_id: string;
   local_id: number;
+  canal_id: number;             // requerido por fn_abrir_venta_comanda_offline
+  modo: string;                 // requerido (mesa/mostrador/...)
   mesa_id: number | null;
+  mozo_id: string | null;
+  cajero_id: string | null;
   estado: string;
   subtotal: number;
   total: number;
@@ -58,13 +62,17 @@ export const ventaSchema: RxJsonSchema<VentaDoc> = {
     id: { type: ['number', 'null'] },
     tenant_id: { type: 'string', maxLength: 64 },
     local_id: { type: 'number' },
+    canal_id: { type: 'number' },
+    modo: { type: 'string' },
     mesa_id: { type: ['number', 'null'] },
+    mozo_id: { type: ['string', 'null'] },
+    cajero_id: { type: ['string', 'null'] },
     estado: { type: 'string' },
     subtotal: { type: 'number' },
     total: { type: 'number' },
     updated_at: { type: 'string', maxLength: 32 },
   },
-  required: ['idempotency_uuid', 'tenant_id', 'local_id', 'estado', 'subtotal', 'total', 'updated_at'],
+  required: ['idempotency_uuid', 'tenant_id', 'local_id', 'canal_id', 'modo', 'estado', 'subtotal', 'total', 'updated_at'],
 };
 
 export const itemSchema: RxJsonSchema<ItemDoc> = {
