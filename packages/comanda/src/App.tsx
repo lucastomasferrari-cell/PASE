@@ -13,6 +13,8 @@ initConsoleCapture();
 import { AuthProvider } from './lib/AuthProvider';
 import { AuthPosProvider } from './lib/AuthPosProvider';
 import { SyncEngineLifecycle } from './lib/sync/SyncEngineLifecycle';
+import { OfflineProvider } from './lib/offline2/OfflineProvider';
+import { featureFlags } from './lib/featureFlags';
 import { SoporteWidget } from './components/SoporteWidget';
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
 import { RedirectIfAuth } from './components/RedirectIfAuth';
@@ -372,7 +374,12 @@ export default function App() {
                 {/* Rutas POS / Caja: requieren sesión Supabase + PIN POS */}
                 <Route element={<AuthGate />}>
                   <Route element={<PinGate />}>
-                    <Route element={<PosLayout />}>
+                    {/* offline2 (rebuild estilo Toast): cuando el flag está ON,
+                        montamos el motor RxDB UNA vez sobre el subárbol POS. Con
+                        el flag OFF (default) no monta nada → cero impacto. */}
+                    <Route element={featureFlags.offlineFirstVentas
+                      ? <OfflineProvider><PosLayout /></OfflineProvider>
+                      : <PosLayout />}>
                       <Route path="/" element={<DefaultModeRedirect />} />
                       <Route path="/pos" element={<DefaultModeRedirect />} />
                       <Route path="/pos/salon" element={<SalonView />} />

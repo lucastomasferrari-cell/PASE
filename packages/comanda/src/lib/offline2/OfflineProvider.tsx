@@ -4,6 +4,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { crearOfflineDB, type OfflineDB } from './db';
 import { startSync } from './sync';
+import { db as supa } from '../supabase';
 
 const Ctx = createContext<OfflineDB | null>(null);
 
@@ -19,7 +20,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     crearOfflineDB().then((d) => {
       if (cancel) return;
       setDb(d);
-      stop = startSync(d); // pull incremental + push vía RPCs `_offline`
+      stop = startSync(d, supa); // pull incremental + push vía RPCs `_offline`
     });
     return () => { cancel = true; stop?.(); };
   }, []);
