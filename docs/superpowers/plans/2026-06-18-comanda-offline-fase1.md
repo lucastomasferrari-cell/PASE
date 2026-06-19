@@ -1,5 +1,18 @@
 # COMANDA Offline Rebuild — Fase 1 (Flujo central) Implementation Plan
 
+> **ESTADO al 2026-06-19 (engine probado end-to-end):**
+> - ✅ **T1** store RxDB + provider singleton (commit 9911b81) — resuelve cuelgue StrictMode.
+> - ✅ **T2-T3** `sync.ts`: pull incremental + **push vía RPCs `_offline`** (commit 7511e70). Pieza clave.
+> - ✅ **T4** columna `venta_idempotency_uuid` (migración 202606181400 aplicada); RPC pago ya resuelve padre por uuid.
+> - ✅ **T5** `repos.ts` operaciones locales optimistas + test memory (commit a022199).
+> - ✅ **T6 (parcial)** `<OfflineProvider>` montado en App.tsx tras el flag (commit cd65607). Aditivo, flag OFF = no monta.
+> - ✅ **T7** e2e mutante `offline2_sync_mutante.spec.ts` VERDE contra DB real (Local Prueba 2): flujo local → flushPending vía RPCs → venta+item+pago materializados, id reconciliado, cobrada/confirmado, idempotente sin duplicados (commit cd65607).
+> - ⏳ **T6b (RESTANTE) — bridge UI:** wirear los services (`ventasService`/`pagosService`/`mesasService`) a offline2 para que las pantallas sean optimistas. Requiere bridge `tempId(numérico)↔uuid` **derivado determinísticamente del uuid** (NO se puede guardar `temp_id` en el doc replicado: el pull lo pisaría) + mappers `VentaDoc→VentaPos`/`ItemDoc→VentaPosItem` + repuntar las ramas `id<0` de getVenta/listVentasItems del viejo `ventasRepo` a offline2 + evento `comanda:reconcile-id`. **Las pantallas ya hacen "acción→reload", así que con escribir/leer offline2 quedan optimistas sin suscripción reactiva.** Scope mínimo = flujo MOSTRADOR (abrir→agregar→cobrar en una pantalla); salón/mesa-ops/pedidos = Fase 2. **Validación = smoke en browser con flag ON (Lucas o browser logueado).**
+> - ⏳ **T8** cierre: prender flag + smoke + actualizar memoria + Fase 2.
+>
+> **Gap detectado (Fase 2):** la venta offline no lleva `turno_caja_id` → el cobro NO genera `movimientos_caja`. Asociar el turno abierto del local al sincronizar.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans (o subagent-driven-development) task-by-task. Steps usan checkbox `- [ ]`. **Contexto que baja el riesgo: COMANDA está en CERO — sin clientes, sin data real (la data de ventas_pos es de prueba).** Por eso se migra de una, sin flag-incrementalismo ultra-cauto. OJO igual: la DB es compartida con PASE (producción real) → migraciones SQL solo aditivas + verificadas.
 
 **Goal:** Migrar el flujo central de COMANDA (abrir mesa → agregar ítem → cobrar) al motor local-first **RxDB**, con **UI optimista** (lee/escribe el store local, instantáneo) y **push vía las RPCs `_offline`** (no upsert crudo — confirmado necesario por el spike), reemplazando el sistema offline artesanal actual para ese flujo.

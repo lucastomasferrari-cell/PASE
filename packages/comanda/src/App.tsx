@@ -13,8 +13,10 @@ initConsoleCapture();
 import { AuthProvider } from './lib/AuthProvider';
 import { AuthPosProvider } from './lib/AuthPosProvider';
 import { SyncEngineLifecycle } from './lib/sync/SyncEngineLifecycle';
-import { OfflineProvider } from './lib/offline2/OfflineProvider';
 import { featureFlags } from './lib/featureFlags';
+// Lazy: RxDB (pesado) solo se baja cuando el flag offline-first está ON.
+// Con el flag OFF (default) este chunk no se carga → cero peso muerto.
+const OfflineProvider = lazy(() => import('./lib/offline2/OfflineProvider').then(m => ({ default: m.OfflineProvider })));
 import { SoporteWidget } from './components/SoporteWidget';
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
 import { RedirectIfAuth } from './components/RedirectIfAuth';
