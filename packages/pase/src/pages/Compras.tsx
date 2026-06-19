@@ -1324,8 +1324,11 @@ export default function Compras({ user, locales, localActivo }: ComprasProps) {
                       {f.estado !== "pagada" && f.estado !== "anulada" && (
                         <IconBtn title="Editar" onClick={() => abrirEditarFactura(f)}>{IconEdit}</IconBtn>
                       )}
+                      {/* Fecha del pago arranca en la fecha de la FACTURA (no la de hoy):
+                          el dinero suele salir cerca de la factura, así el movimiento cae
+                          en el mes correcto y la conciliación lo encuentra. Editable. Lucas 18-jun. */}
                       {!isNC && f.estado !== "pagada" && (
-                        <IconBtn title="Registrar pago" tone="success" onClick={() => { setPagarModal(f); setPagoForm({ cuenta: "", monto: 0, fecha: toISO(today) }); setIdempKeyPagarFac(crypto.randomUUID()); }}>{IconPay}</IconBtn>
+                        <IconBtn title="Registrar pago" tone="success" onClick={() => { setPagarModal(f); setPagoForm({ cuenta: "", monto: 0, fecha: f.fecha ? String(f.fecha).slice(0, 10) : toISO(today) }); setIdempKeyPagarFac(crypto.randomUUID()); }}>{IconPay}</IconBtn>
                       )}
                       {/* Siempre visible. Si no tiene permiso, anular() abre
                           modal de Manager Override pidiendo código del dueño. */}
