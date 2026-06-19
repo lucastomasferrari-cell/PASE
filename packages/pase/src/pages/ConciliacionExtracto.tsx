@@ -250,6 +250,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   // Saving flags
   const [savingAccion, setSavingAccion] = useState(false);
   const [reabriendo, setReabriendo] = useState<string | null>(null);
+  const [recolocando, setRecolocando] = useState<string | null>(null);
   // Última corrida persistida (cerrada)
   const [corridaCerrada, setCorridaCerrada] = useState<{ id: string; created_at: string } | null>(null);
   // Historial de conciliaciones cerradas del local activo. Se carga al
@@ -513,6 +514,25 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
       if (!silent) showToast("Datos actualizados — tus resoluciones se mantienen");
     } finally {
       if (!silent) setCruzando(false);
+    }
+  }
+
+  // "Traer a este mes": el pago está cargado en PASE con fecha de otro mes
+  // (lo cargaste días después de la transferencia real). Le pone la fecha de
+  // la transferencia del extracto y re-cruza, así matchea en el mes correcto.
+  // No mueve plata — solo la fecha. El usuario confirma cada uno (no es masivo).
+  async function traerAlMes(a: AlertaCercana) {
+    setRecolocando(a.mov_id);
+    try {
+      const { error } = await db.rpc("fn_recolocar_mov_fecha", {
+        p_mov_id: a.mov_id,
+        p_nueva_fecha: a.ext_fecha,
+      });
+      if (error) { showError(translateRpcError(error)); return; }
+      showToast(`Pago traído al ${fmt_d(a.ext_fecha)} — re-cruzando…`);
+      await refrescarCruce();
+    } finally {
+      setRecolocando(null);
     }
   }
 
@@ -1958,6 +1978,21 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                         <span style={{ fontSize: 11 }}>
                           {a.dias_fuera} día{a.dias_fuera === 1 ? "" : "s"} fuera del período
                         </span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                        <button
+                          type="button"
+                          onClick={() => traerAlMes(a)}
+                          disabled={recolocando === a.mov_id}
+                          title="Ponerle la fecha de la transferencia del extracto para que entre en este mes"
+                          style={{
+                            fontSize: 11, padding: "3px 10px", borderRadius: 6,
+                            border: "0.5px solid var(--warn)", background: "transparent",
+                            color: "var(--warn)", cursor: recolocando === a.mov_id ? "default" : "pointer",
+                          }}
+                        >
+                          {recolocando === a.mov_id ? "Trayendo…" : `↦ Traer al ${fmt_d(a.ext_fecha)}`}
+                        </button>
                       </div>
                     </div>
                   ))}

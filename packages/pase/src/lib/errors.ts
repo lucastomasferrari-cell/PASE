@@ -24,6 +24,10 @@ const MAP: Record<string, string> = {
   PADRE_CON_MOVIMIENTOS_VIVOS: "No se puede borrar/recalcular: ya tiene un pago hecho en caja. Anulá el pago primero (botón Anular o Editar) y después recalculá.",
   PAGOS_NO_SUMAN_TOTAL: "Las formas de pago tienen que sumar exactamente el total de la liquidación.",
 
+  // Conciliación — recolocar fecha de un pago
+  MOVIMIENTO_YA_CONCILIADO: "Ese pago ya está conciliado en otra corrida; no se le puede cambiar la fecha.",
+  MOVIMIENTO_ANULADO: "Ese movimiento está anulado.",
+
   // Facturas
   FACTURA_NO_ENCONTRADA: "La factura no existe",
   FACTURA_YA_PAGADA: "Esta factura ya está pagada",
