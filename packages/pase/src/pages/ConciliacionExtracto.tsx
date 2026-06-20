@@ -14,6 +14,7 @@ import {
   esExtractoMpExcel,
   type ExtractoMovimiento,
 } from "../lib/mpExtractoParser";
+import { refsDevueltas } from "../lib/conciliacionDevueltas";
 import type { Usuario, Local } from "../types";
 
 // Módulo NUEVO de conciliación de extracto MP (Lucas 10-jun).
@@ -458,9 +459,24 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   // Solo egresos del extracto (Lucas 10-jun). El RPC también filtra los
   // movs de PASE para que los ingresos de PASE no aparezcan como
   // "sobrantes" (no tienen counterpart en el extracto filtrado).
+  const devueltasRefs = useMemo(() => refsDevueltas(extractoMovs), [extractoMovs]);
   const egresosExtracto = useMemo(
-    () => extractoMovs.filter(m => m.monto < 0),
-    [extractoMovs],
+    () => extractoMovs.filter(
+      m => m.monto < 0 && !(m.referencia_externa != null && devueltasRefs.has(m.referencia_externa)),
+    ),
+    [extractoMovs, devueltasRefs],
+  );
+  const egresosDevueltos = useMemo(
+    () => extractoMovs.filter(
+      m => m.monto < 0 && m.referencia_externa != null && devueltasRefs.has(m.referencia_externa),
+    ),
+    [extractoMovs, devueltasRefs],
+  );
+  const ingresosReales = useMemo(
+    () => extractoMovs.filter(
+      m => m.monto > 0 && !(m.referencia_externa != null && devueltasRefs.has(m.referencia_externa)),
+    ),
+    [extractoMovs, devueltasRefs],
   );
 
   // ─── Cruzar con PASE ─────────────────────────────────────────────────────
@@ -1347,8 +1363,13 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                 {egresosExtracto.length} egresos a conciliar
               </div>
               <div style={{ fontSize: 12, color: "var(--muted2)", marginTop: 2 }}>
-                ({extractoMovs.length - egresosExtracto.length} ingresos del extracto se ignoran — vienen por otra vía)
+                ({ingresosReales.length} ingresos del extracto se ignoran — vienen por otra vía)
               </div>
+              {egresosDevueltos.length > 0 && (
+                <div style={{ fontSize: 12, color: "var(--muted2)", marginTop: 2 }}>
+                  ↩️ {egresosDevueltos.length} {egresosDevueltos.length === 1 ? "transferencia devuelta" : "transferencias devueltas"} (enviadas y reintegradas) — se ignoran
+                </div>
+              )}
               <div style={{ fontSize: 13, color: "var(--muted2)", marginTop: 6 }}>
                 Período: {fmt_d(periodoDesde)} → {fmt_d(periodoHasta)}
               </div>
