@@ -28,6 +28,11 @@ const MAP: Record<string, string> = {
   MOVIMIENTO_YA_CONCILIADO: "Ese pago ya está conciliado en otra corrida; no se le puede cambiar la fecha.",
   MOVIMIENTO_ANULADO: "Ese movimiento está anulado.",
 
+  // Conciliación — alias de proveedor (sugerencias)
+  SIN_PERMISO_CONCILIACION: "No tenés permiso para conciliación.",
+  TITULAR_INVALIDO: "El titular es inválido.",
+  PROVEEDOR_INVALIDO: "El proveedor no existe.",
+
   // Facturas
   FACTURA_NO_ENCONTRADA: "La factura no existe",
   FACTURA_YA_PAGADA: "Esta factura ya está pagada",
