@@ -45,8 +45,8 @@ export async function agregarItem(
   return u;
 }
 
-/** Registra un pago y marca la venta cobrada. Devuelve el uuid del pago. */
-export async function cobrar(
+/** Inserta un pago local (NO cambia el estado de la venta). Devuelve su uuid. */
+export async function agregarPago(
   db: OfflineDB, ctx: Ctx, ventaUuid: string, metodo: string, monto: number,
 ): Promise<string> {
   const u = uuid();
@@ -55,8 +55,21 @@ export async function cobrar(
     tenant_id: ctx.tenant_id, local_id: ctx.local_id, metodo, monto,
     estado: 'confirmado', updated_at: now(),
   });
+  return u;
+}
+
+/** Marca la venta como cobrada en el store local. */
+export async function marcarVentaCobrada(db: OfflineDB, ventaUuid: string): Promise<void> {
   const venta = await db.ventas.findOne(ventaUuid).exec();
   await venta?.patch({ estado: 'cobrada', updated_at: now() });
+}
+
+/** Registra un pago y marca la venta cobrada (caso simple). Devuelve el uuid del pago. */
+export async function cobrar(
+  db: OfflineDB, ctx: Ctx, ventaUuid: string, metodo: string, monto: number,
+): Promise<string> {
+  const u = await agregarPago(db, ctx, ventaUuid, metodo, monto);
+  await marcarVentaCobrada(db, ventaUuid);
   return u;
 }
 

@@ -88,26 +88,21 @@ export async function abrirVenta(args: AbrirVentaArgs): Promise<{ ventaId: numbe
   // y emite evento `comanda:reconcile-id` para que la UI navegue al real.
   const { featureFlags } = await import('../lib/featureFlags');
   if (featureFlags.offlineFirstVentas) {
-    const { abrirVentaOffline } = await import('./offline/ventasOfflineService');
-    // tenantId requiere viaje porque la RPC offline lo deriva del auth de la
-    // sesión. Acá lo pasamos vacío y el service local lo guarda en la fila
-    // (servirá cuando el sync resuelva el server-side).
-    // tenantId NO está en AbrirVentaArgs original — lo derivamos del modo
-    // sync (auth_tenant_id() server). Por ahora pasamos string vacío y el
-    // repo guarda el row; el server al sync usa auth_tenant_id().
+    // Rebuild offline2 (estilo Toast): escribe el store local RxDB al instante y
+    // devuelve un tempId negativo. El push (sync.ts) lo materializa en Supabase
+    // vía las RPCs `_offline`; al reconciliar el id real, OfflineProvider emite
+    // `comanda:reconcile-id` y la pantalla navega al id real.
     try {
-      const r = await abrirVentaOffline({
-        tenantId: '',
+      const { abrirVentaLocal } = await import('../lib/offline2/bridge');
+      const tempId = await abrirVentaLocal({
         localId: args.localId,
         canalId: args.canalId,
-        modo: args.modo as 'salon' | 'mostrador' | 'delivery' | 'retiro',
+        modo: args.modo,
         mesaId: args.mesaId ?? null,
         mozoId: args.mozoId ?? null,
         cajeroId: args.cajeroId ?? null,
-        clienteId: args.clienteId ?? null,
-        covers: args.covers ?? 2,
       });
-      return { ventaId: r.tempVentaId, error: null };
+      return { ventaId: tempId, error: null };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error abriendo venta offline';
       return { ventaId: null, error: msg };
@@ -142,6 +137,13 @@ export async function abrirVenta(args: AbrirVentaArgs): Promise<{ ventaId: numbe
 // Fix: leer del repo local cuando id < 0.
 export async function getVenta(ventaId: number): Promise<{ data: VentaPos | null; error: string | null }> {
   if (ventaId < 0) {
+    const { featureFlags } = await import('../lib/featureFlags');
+    if (featureFlags.offlineFirstVentas) {
+      const { getVentaLocal } = await import('../lib/offline2/bridge');
+      const local = await getVentaLocal(ventaId);
+      if (!local) return { data: null, error: 'VENTA_LOCAL_NO_ENCONTRADA' };
+      return { data: local, error: null };
+    }
     const { ventasRepo } = await import('@/lib/db/repositories/ventasRepo');
     const local = await ventasRepo.getById(ventaId);
     if (!local) return { data: null, error: 'VENTA_LOCAL_NO_ENCONTRADA' };
@@ -159,8 +161,13 @@ export async function getVenta(ventaId: number): Promise<{ data: VentaPos | null
 }
 
 export async function listVentasItems(ventaId: number): Promise<{ data: VentaPosItem[]; error: string | null }> {
-  // Mismo patrón: venta_id negativo → leer items del repo local
+  // Mismo patrón: venta_id negativo → leer items del store local
   if (ventaId < 0) {
+    const { featureFlags } = await import('../lib/featureFlags');
+    if (featureFlags.offlineFirstVentas) {
+      const { listItemsLocal } = await import('../lib/offline2/bridge');
+      return { data: await listItemsLocal(ventaId), error: null };
+    }
     const { ventasItemsRepo } = await import('@/lib/db/repositories/ventasRepo');
     const items = await ventasItemsRepo.listByVenta(ventaId);
     // Sort: curso ASC (nulls last) → id ASC (mismo orden que la query remote)
@@ -289,28 +296,19 @@ export interface AgregarItemArgs {
 export async function agregarItem(args: AgregarItemArgs): Promise<{ id: number | null; error: string | null }> {
   const { featureFlags } = await import('../lib/featureFlags');
   if (featureFlags.offlineFirstVentas) {
-    const { agregarItemOffline } = await import('./offline/ventasOfflineService');
-    // Necesitamos precio_unitario — el server lo derivaba de items.precio_madre.
-    // Para mantener compatibilidad, lo leemos del catálogo cacheado en local.
+    // Rebuild offline2: escribe el ítem en el store local al instante.
+    // El precio lo derivaba el server de items.precio_madre; offline lo leemos
+    // del catálogo cacheado (read-only, seguro). TODO Fase 2: catálogo en offline2.
     const { itemsRepo } = await import('@/lib/db/repositories/itemsRepo');
     const cat = await itemsRepo.getById(args.itemId);
     const precio = Number(cat?.precio_madre ?? 0);
-    const { ventasRepo } = await import('@/lib/db/repositories/ventasRepo');
-    const venta = await ventasRepo.getById(args.ventaId);
     try {
-      const r = await agregarItemOffline({
-        ventaId: args.ventaId,
-        itemId: args.itemId,
-        cantidad: args.cantidad,
-        precioUnitario: precio,
-        curso: args.curso ?? 1,
-        modificadores: args.modificadores ?? undefined,
-        notas: args.notas ?? null,
-        cargadoPor: args.cargadoPor ?? null,
-        tenantId: venta?.tenant_id ?? '',
-        localId: venta?.local_id ?? 0,
+      const { agregarItemLocal } = await import('../lib/offline2/bridge');
+      const tempItemId = await agregarItemLocal(args.ventaId, {
+        itemId: args.itemId, cantidad: args.cantidad, precioUnitario: precio, curso: args.curso ?? 1,
       });
-      return { id: r.tempItemId, error: null };
+      if (tempItemId == null) return { id: null, error: 'VENTA_LOCAL_NO_ENCONTRADA' };
+      return { id: tempItemId, error: null };
     } catch (err) {
       return { id: null, error: err instanceof Error ? err.message : 'Error agregando' };
     }

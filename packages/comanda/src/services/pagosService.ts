@@ -34,30 +34,19 @@ export async function cobrar(
   // Resuelve el bug "La venta no existe" al cobrar venta offline.
   const { featureFlags } = await import('../lib/featureFlags');
   if (featureFlags.offlineFirstVentas) {
-    const { cobrarVentaOffline } = await import('./offline/pagosOfflineService');
-    const { ventasRepo } = await import('@/lib/db/repositories/ventasRepo');
-    const venta = await ventasRepo.getById(ventaId);
-    if (!venta) return { totalCobrado: 0, error: 'VENTA_NO_ENCONTRADA' };
-    try {
-      const r = await cobrarVentaOffline({
-        ventaId,
-        pagos: pagos.map((p) => ({
-          metodo: p.metodo,
-          monto: p.monto,
-          vuelto: p.vuelto ?? 0,
-          propina_incluida: p.propina_incluida ?? 0,
-        })),
-        propina,
-        cobradoPor,
-        tenantId: venta.tenant_id,
-        localId: venta.local_id,
-      });
-      return { totalCobrado: r.totalCobrado, error: null };
-    } catch (err) {
-      return {
-        totalCobrado: 0,
-        error: err instanceof Error ? err.message : 'Error cobrando offline',
-      };
+    // Rebuild offline2: registra los pagos en el store local y marca la venta
+    // cobrada al instante. El push (sync.ts) los sube vía
+    // fn_agregar_pago_venta_comanda_offline (resuelve la venta por uuid aunque
+    // todavía no tenga id bigint). Para ventas ya sincronizadas (id positivo)
+    // cae al flujo online normal de abajo.
+    if (ventaId < 0) {
+      try {
+        const { cobrarLocal } = await import('../lib/offline2/bridge');
+        const r = await cobrarLocal(ventaId, pagos.map((p) => ({ metodo: p.metodo, monto: p.monto })));
+        return { totalCobrado: r.total, error: r.error };
+      } catch (err) {
+        return { totalCobrado: 0, error: err instanceof Error ? err.message : 'Error cobrando offline' };
+      }
     }
   }
 
