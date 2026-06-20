@@ -20,7 +20,6 @@ import { useMediosCobro } from "../lib/useMediosCobro";
 import { InfoTooltip } from "../components/ui";
 import { toISO, fmt_$ } from "@pase/shared/utils";
 import { today } from "../lib/utils";
-import { exportCSV } from "../lib/exportCSV";
 import EERRSimulador from "./EERRSimulador";
 import type { LineasEERR } from "../lib/eerrSimulador";
 import { estaCerrado, cerrarPeriodo, reabrirPeriodo } from "../lib/periodos";
@@ -110,6 +109,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const [simulando,setSimulando]=useState(false);
   const [mesCerrado,setMesCerrado]=useState(false);
   const [cerrandoMes,setCerrandoMes]=useState(false);
+  const [exportando,setExportando]=useState(false);
   const esDuenoAdmin = user.rol === "dueno" || user.rol === "admin";
   // Meses adicionales para comparar (máximo 2). Si están vacíos, la pantalla
   // funciona como antes (solo mes principal). Cuando se agregan, el Resumen
@@ -577,29 +577,44 @@ export default function EERR({ user, localActivo }: EERRProps) {
           <button
             type="button"
             className="btn btn-ghost btn-sm"
-            onClick={() => {
-              // Export del Resumen P&L del mes activo en CSV (Excel-friendly).
-              const rows: (string | number)[][] = [
-                ["Ventas Brutas", totalVentas, "100,00%"],
-                ["Compras de mercadería", -totalCMV, pct(totalCMV)],
-                ["Utilidad Bruta", utilBruta, pct(utilBruta)],
-                ["Gastos Fijos y Variables", -totalGastos, pct(totalGastos)],
-                ["Sueldos", -sueldos, pct(sueldos)],
-                ["Cargas Sociales", -totalCargasSociales, pct(totalCargasSociales)],
-                ...(totalBoletasSindicales ? [["Boletas Sindicales", -totalBoletasSindicales, pct(totalBoletasSindicales)]] : []),
-                ["Publicidad y MKT", -totalPublicidad, pct(totalPublicidad)],
-                ["Comisiones", -totalComisiones, pct(totalComisiones)],
-                ["Impuestos", -totalImpuestos, pct(totalImpuestos)],
-                ...(totalOtrosGastos ? [["Otros Gastos", -totalOtrosGastos, pct(totalOtrosGastos)]] : []),
-                ["Utilidad Neta", utilNeta, pct(utilNeta)],
-              ];
-              if (totalRetiros !== 0) rows.push(["Retiros de Socios (info)", -totalRetiros, pct(totalRetiros)]);
-              exportCSV(`reporte_${mes}.csv`, ["Concepto", "Monto", "% sobre ventas"], rows);
+            disabled={exportando || loading}
+            onClick={async () => {
+              // Export del Estado de Resultados a PDF con diseño PASE.
+              setExportando(true);
+              try {
+                let localNombre = "Todos los locales";
+                if (localActivo != null) {
+                  const { data: loc } = await db.from("locales").select("nombre").eq("id", localActivo).maybeSingle();
+                  if (loc?.nombre) localNombre = loc.nombre as string;
+                }
+                const { exportEERRPdf } = await import("../lib/exportEERRPdf");
+                await exportEERRPdf({
+                  localNombre,
+                  mes,
+                  emitido: new Date().toLocaleDateString("es-AR"),
+                  ventas: totalVentas,
+                  cmv: totalCMV,
+                  utilBruta,
+                  gastosFijosVar: totalGastos,
+                  sueldos,
+                  cargas: totalCargasSociales,
+                  boletas: totalBoletasSindicales,
+                  publicidad: totalPublicidad,
+                  comisiones: totalComisiones,
+                  impuestos: totalImpuestos,
+                  otros: totalOtrosGastos,
+                  utilNeta,
+                });
+              } catch (e) {
+                alert("No se pudo generar el PDF: " + (e instanceof Error ? e.message : String(e)));
+              } finally {
+                setExportando(false);
+              }
             }}
             style={{fontSize:11}}
-            title="Descargar P&L del mes en CSV (abre en Excel)"
+            title="Descargar el Estado de Resultados del mes en PDF"
           >
-            ⬇ Exportar
+            {exportando ? "Generando..." : "⬇ Exportar PDF"}
           </button>
         </div>
       </div>
