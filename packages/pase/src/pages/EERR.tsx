@@ -23,6 +23,7 @@ import { today } from "../lib/utils";
 import EERRSimulador from "./EERRSimulador";
 import type { LineasEERR } from "../lib/eerrSimulador";
 import { estaCerrado, cerrarPeriodo, reabrirPeriodo } from "../lib/periodos";
+import { listarSocios } from "../lib/utilidades";
 import { translateRpcError } from "../lib/errors";
 import EERRDetalleModal from "./EERRDetalleModal";
 import { buildSueldoBreakdown } from "./eerrDetalle";
@@ -110,6 +111,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const [mesCerrado,setMesCerrado]=useState(false);
   const [cerrandoMes,setCerrandoMes]=useState(false);
   const [exportando,setExportando]=useState(false);
+  const [menuExport,setMenuExport]=useState(false);
   const esDuenoAdmin = user.rol === "dueno" || user.rol === "admin";
   // Meses adicionales para comparar (máximo 2). Si están vacíos, la pantalla
   // funciona como antes (solo mes principal). Cuando se agregan, el Resumen
@@ -497,6 +499,70 @@ export default function EERR({ user, localActivo }: EERRProps) {
     "Util. Neta": Math.round(r.utilNeta),
   }));
 
+  // ── Export (botón "Exportar") ──────────────────────────────────────────────
+  const nombreLocalExport = async (): Promise<string> => {
+    if (localActivo == null) return "Todos los locales";
+    const { data: loc } = await db.from("locales").select("nombre").eq("id", localActivo).maybeSingle();
+    return (loc?.nombre as string | undefined) || "Local";
+  };
+
+  // Resumen P&L de 1 hoja en PDF (estética PASE).
+  const exportarResumenUnaHoja = async () => {
+    setMenuExport(false); setExportando(true);
+    try {
+      const localNombre = await nombreLocalExport();
+      const { exportEERRPdf } = await import("../lib/exportEERRPdf");
+      await exportEERRPdf({
+        localNombre, mes, emitido: new Date().toLocaleDateString("es-AR"),
+        ventas: totalVentas, cmv: totalCMV, utilBruta, gastosFijosVar: totalGastos,
+        sueldos, cargas: totalCargasSociales, boletas: totalBoletasSindicales,
+        publicidad: totalPublicidad, comisiones: totalComisiones, impuestos: totalImpuestos,
+        otros: totalOtrosGastos, utilNeta,
+      });
+    } catch (e) {
+      alert("No se pudo generar el PDF: " + (e instanceof Error ? e.message : String(e)));
+    } finally { setExportando(false); }
+  };
+
+  // Presentación de cierre (6 slides) en PDF o PowerPoint.
+  const prevMesDe = (m: string): string => {
+    const [yr, mo] = m.split("-").map(Number);
+    const d = new Date((yr ?? 2026), (mo ?? 1) - 2, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  };
+  const exportarCierre = async (formato: "pdf" | "pptx") => {
+    setMenuExport(false); setExportando(true);
+    try {
+      const localNombre = await nombreLocalExport();
+      const pmes = prevMesDe(mes);
+      const prevRes = await cargarMesResumen(pmes).catch(() => null);
+      let socios: { nombre: string; porcentaje: number }[] = [];
+      if (localActivo != null) {
+        const { data: ss } = await listarSocios(localActivo);
+        socios = (ss || []).filter(s => s.activo).map(s => ({ nombre: s.nombre, porcentaje: Number(s.porcentaje) }));
+      }
+      const input = {
+        localNombre, mes, emitido: new Date().toLocaleDateString("es-AR"),
+        ventas: totalVentas, cmv: totalCMV, utilBruta, gastosFijosVar: totalGastos,
+        sueldos, cargas: totalCargasSociales, boletas: totalBoletasSindicales,
+        publicidad: totalPublicidad, comisiones: totalComisiones, impuestos: totalImpuestos,
+        otros: totalOtrosGastos, utilNeta,
+        porMedio: porMedio.map(x => ({ label: x.m, value: x.t })),
+        cmvPorCat: porCatCMV.map(x => ({ label: x.c, value: x.t })),
+        gastosPorCat: [...porCatFijos, ...porCatVar].map(x => ({ label: x.c, value: x.t })).sort((a, b) => b.value - a.value),
+        prev: prevRes ? { ventas: prevRes.ventas, cmv: prevRes.cmv, gastosFijos: prevRes.gastosFijos, gastosVar: prevRes.gastosVar, publicidad: prevRes.publicidad, comisiones: prevRes.comisiones, impuestos: prevRes.impuestos, otrosGastos: prevRes.otrosGastos, sueldos: prevRes.sueldos, cargasSociales: prevRes.cargasSociales, utilNeta: prevRes.utilNeta } : null,
+        prevMes: prevRes ? pmes : null,
+        socios,
+      };
+      const { assembleCierre } = await import("../lib/cierre/cierreData");
+      const model = assembleCierre(input);
+      if (formato === "pdf") await (await import("../lib/cierre/cierrePdf")).exportCierrePdf(model);
+      else await (await import("../lib/cierre/cierrePptx")).exportCierrePptx(model);
+    } catch (e) {
+      alert("No se pudo generar la presentación: " + (e instanceof Error ? e.message : String(e)));
+    } finally { setExportando(false); }
+  };
+
   // % delta de "compMes" vs principal para una métrica. Se usa en la tabla
   // comparativa. Para costos (CMV, gastos), un + significa que el costo
   // creció vs el principal (malo); para ingresos/utilidad, + es bueno.
@@ -574,48 +640,30 @@ export default function EERR({ user, localActivo }: EERRProps) {
               {cerrandoMes ? "..." : (mesCerrado ? "🔓 Reabrir mes" : "🔒 Cerrar mes")}
             </button>
           )}
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            disabled={exportando || loading}
-            onClick={async () => {
-              // Export del Estado de Resultados a PDF con diseño PASE.
-              setExportando(true);
-              try {
-                let localNombre = "Todos los locales";
-                if (localActivo != null) {
-                  const { data: loc } = await db.from("locales").select("nombre").eq("id", localActivo).maybeSingle();
-                  if (loc?.nombre) localNombre = loc.nombre as string;
-                }
-                const { exportEERRPdf } = await import("../lib/exportEERRPdf");
-                await exportEERRPdf({
-                  localNombre,
-                  mes,
-                  emitido: new Date().toLocaleDateString("es-AR"),
-                  ventas: totalVentas,
-                  cmv: totalCMV,
-                  utilBruta,
-                  gastosFijosVar: totalGastos,
-                  sueldos,
-                  cargas: totalCargasSociales,
-                  boletas: totalBoletasSindicales,
-                  publicidad: totalPublicidad,
-                  comisiones: totalComisiones,
-                  impuestos: totalImpuestos,
-                  otros: totalOtrosGastos,
-                  utilNeta,
-                });
-              } catch (e) {
-                alert("No se pudo generar el PDF: " + (e instanceof Error ? e.message : String(e)));
-              } finally {
-                setExportando(false);
-              }
-            }}
-            style={{fontSize:11}}
-            title="Descargar el Estado de Resultados del mes en PDF"
-          >
-            {exportando ? "Generando..." : "⬇ Exportar PDF"}
-          </button>
+          <div style={{ position: "relative", display: "inline-block" }}>
+            <button type="button" className="btn btn-ghost btn-sm" disabled={exportando || loading}
+              onClick={() => setMenuExport(o => !o)} style={{ fontSize: 11 }}
+              title="Descargar el reporte del mes">
+              {exportando ? "Generando..." : "⬇ Exportar ▾"}
+            </button>
+            {menuExport && !exportando && (
+              <div style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: "var(--pase-bg, #fff)", border: "0.5px solid var(--pase-border-strong)", borderRadius: 8, boxShadow: "0 6px 18px rgba(20,23,31,.08)", zIndex: 30, minWidth: 250, overflow: "hidden" }}>
+                {([
+                  { k: "resumen", t: "Resumen (1 hoja) · PDF" },
+                  { k: "cierre-pdf", t: "Presentación de cierre · PDF" },
+                  { k: "cierre-pptx", t: "Presentación de cierre · PowerPoint" },
+                ] as const).map(opt => (
+                  <button key={opt.k} type="button" className="btn btn-ghost btn-sm"
+                    style={{ display: "block", width: "100%", textAlign: "left", fontSize: 12, borderRadius: 0, padding: "8px 12px" }}
+                    onClick={() => {
+                      if (opt.k === "resumen") void exportarResumenUnaHoja();
+                      else if (opt.k === "cierre-pdf") void exportarCierre("pdf");
+                      else void exportarCierre("pptx");
+                    }}>{opt.t}</button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
       {loading?<div className="loading">Cargando...</div>:(
