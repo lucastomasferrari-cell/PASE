@@ -965,7 +965,7 @@ function AppMain() {
                   para bookmarks y deep-links viejos. */}
               <Route path="/finanzas" element={<Navigate to="/negocio" replace />} />
               <Route path="/conciliacion-extracto" element={
-                user && tienePermiso(user, "conciliacion") ? <ConciliacionExtracto user={user} locales={locales} localActivo={localActivo}/> : <Navigate to="/inicio" replace/>
+                user && tienePermiso(user, "conciliacion") ? <ConciliacionExtracto key={localActivo ?? "sin-local"} user={user} locales={locales} localActivo={localActivo}/> : <Navigate to="/inicio" replace/>
               } />
               <Route path="/rentabilidad" element={
                 user ? <Rentabilidad user={user} locales={locales} localActivo={localActivo}/> : <Navigate to="/" replace/>
