@@ -29,12 +29,13 @@ function parseISOUTC(s: string | null): Date | null {
 }
 
 /**
- * @param sueldoMensual sueldo mensual declarado del legajo
- * @param fechaInicio   "YYYY-MM-DD" de ingreso (null = se asume semestre completo)
- * @param fechaRef      fecha de pago — define el semestre (ene-jun / jul-dic)
+ * @param baseMensual base mensual del aguinaldo (el bruto del mejor mes del
+ *                    semestre; o el sueldo declarado si no hay liquidaciones)
+ * @param fechaInicio "YYYY-MM-DD" de ingreso (null = se asume semestre completo)
+ * @param fechaRef    fecha de pago — define el semestre (ene-jun / jul-dic)
  */
 export function calcularAguinaldo(
-  sueldoMensual: number,
+  baseMensual: number,
   fechaInicio: string | null,
   fechaRef: Date,
 ): AguinaldoCalc {
@@ -56,7 +57,7 @@ export function calcularAguinaldo(
   if (diasTrabajados < 0) diasTrabajados = 0;
 
   const fraccion = diasSemestre > 0 ? diasTrabajados / diasSemestre : 0;
-  const monto = Math.round((sueldoMensual / 2) * fraccion);
+  const monto = Math.round((baseMensual / 2) * fraccion);
   const parcial = diasTrabajados < diasSemestre;
   return { monto, fraccion, diasTrabajados, diasSemestre, parcial };
 }

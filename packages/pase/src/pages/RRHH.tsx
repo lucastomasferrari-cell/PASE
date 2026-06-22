@@ -1041,7 +1041,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       {agModal && (
         <AguinaldoModal
           onClose={()=>setAgModal(false)}
-          empleados={allEmps.filter(e=>e.activo)}
+          localId={localActivo}
           cuentasUsables={cuentasUsables}
           localNombre={locales.find(l=>l.id===localActivo)?.nombre ?? "todos los locales"}
           showToast={showToast}

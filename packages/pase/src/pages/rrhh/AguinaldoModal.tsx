@@ -1,29 +1,36 @@
 // AguinaldoModal — pago masivo de aguinaldos (Lucas 22-jun).
-// Lista los empleados activos del local activo con su aguinaldo = sueldo
-// mensual / 2 (editable), permite tildar a quiénes pagar, elegir UNA cuenta de
-// egreso + la fecha, y paga cada uno con la RPC atómica `pagar_aguinaldo`
-// (descuenta de la caja + queda en los movimientos del empleado).
-// Marca los que YA cobraron aguinaldo este semestre para no pagar dos veces.
+// Base del cálculo = el MEJOR mes del semestre (mayor bruto) de cada empleado,
+// traído por la RPC aguinaldo_preview_local. Aguinaldo = bruto/2 * proporción
+// (días trabajados / días del semestre). Muestra el desglose del mejor mes,
+// es editable, marca los que ya cobraron este semestre, y permite imprimir.
+// Si el empleado no tiene liquidaciones todavía → se usa el sueldo declarado.
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { Modal } from "../../components/ui";
 import { db } from "../../lib/supabase";
 import { translateRpcError } from "../../lib/errors";
 import { toISO } from "@pase/shared/utils";
 import { today } from "../../lib/utils";
-import type { Empleado } from "../../types/rrhh";
-import { calcularAguinaldo, type AguinaldoCalc } from "./aguinaldo";
+import { calcularAguinaldo } from "./aguinaldo";
+
+interface Desglose {
+  sueldo_base: number; presentismo: number; horas_extras: number; dobles: number;
+  feriados: number; vacaciones: number; bono: number; ausencias: number;
+}
+interface PreviewRow {
+  empleado_id: string; apellido: string; nombre: string; puesto: string;
+  fecha_inicio: string | null; sueldo_mensual: number;
+  mejor_mes: number | null; bruto: number; desglose: Desglose | null;
+}
 
 interface Props {
-  onClose: () => void;
-  /** Empleados ACTIVOS del local activo (ya scopeados por applyLocalScope). */
-  empleados: Empleado[];
+  localId: number | null;
   cuentasUsables: string[];
   localNombre: string;
   showToast: (m: string) => void;
   showError: (m: string) => void;
-  /** Se llama después de pagar (para refrescar dashboard/pagos si hace falta). */
   onPagado: () => void;
+  onClose: () => void;
 }
 
 const fmt$ = (n: number) => "$" + Math.round(n).toLocaleString("es-AR");
@@ -32,77 +39,93 @@ const fechaCorta = (s: string | null): string => {
   const p = s.slice(0, 10).split("-");
   return p.length === 3 ? `${p[2]}/${p[1]}` : s;
 };
+const MESES = ["", "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
-// El modal se monta sólo cuando se abre (render condicional en RRHH), así el
-// estado arranca fresco cada vez: aguinaldo = sueldo/2, todos tildados.
-export function AguinaldoModal({
-  onClose, empleados, cuentasUsables, localNombre, showToast, showError, onPagado,
-}: Props) {
+/** Base mensual del cálculo: bruto del mejor mes; si no hay liquidaciones, el
+ *  sueldo declarado del legajo (respaldo, para no dejar en cero al recién entrado). */
+function baseDe(r: PreviewRow): number {
+  return r.bruto > 0 ? r.bruto : (r.sueldo_mensual || 0);
+}
+
+/** Líneas del desglose del mejor mes (solo las que tienen valor). */
+function lineasDesglose(r: PreviewRow): Array<{ label: string; monto: number; neg?: boolean }> {
+  const d = r.desglose;
+  if (!d || r.mejor_mes == null) return [];
+  const out: Array<{ label: string; monto: number; neg?: boolean }> = [];
+  const add = (label: string, v: number, neg = false) => { if (v) out.push({ label, monto: v, neg }); };
+  add("Sueldo base", d.sueldo_base);
+  add("Presentismo", d.presentismo);
+  add("Horas extra", d.horas_extras);
+  add("Horas dobles", d.dobles);
+  add("Feriados", d.feriados);
+  add("Vacaciones", d.vacaciones);
+  add("Bono", d.bono);
+  if (d.ausencias) out.push({ label: "Ausencias", monto: d.ausencias, neg: true });
+  return out;
+}
+
+export function AguinaldoModal({ localId, cuentasUsables, localNombre, showToast, showError, onPagado, onClose }: Props) {
+  const [preview, setPreview] = useState<PreviewRow[] | null>(null);
   const [cuenta, setCuenta] = useState("");
   const [fecha, setFecha] = useState(toISO(today));
-  // Aguinaldo proporcional al tiempo trabajado en el semestre (según fecha de
-  // ingreso del legajo). Se calcula una vez al montar.
-  const [calcs] = useState<Record<string, AguinaldoCalc>>(() => {
-    const c: Record<string, AguinaldoCalc> = {};
-    for (const e of empleados) c[e.id] = calcularAguinaldo(e.sueldo_mensual || 0, e.fecha_inicio, today);
-    return c;
-  });
-  const [montos, setMontos] = useState<Record<string, string>>(() => {
-    const m: Record<string, string> = {};
-    for (const e of empleados) m[e.id] = String(calcs[e.id]?.monto ?? 0);
-    return m;
-  });
-  const [incluir, setIncluir] = useState<Record<string, boolean>>(() => {
-    const inc: Record<string, boolean> = {};
-    for (const e of empleados) inc[e.id] = true;
-    return inc;
-  });
+  const [montos, setMontos] = useState<Record<string, string>>({});
+  const [incluir, setIncluir] = useState<Record<string, boolean>>({});
   const [yaPagado, setYaPagado] = useState<Set<string>>(new Set());
+  const [expandido, setExpandido] = useState<Set<string>>(new Set());
   const [pagando, setPagando] = useState(false);
   const [resultado, setResultado] = useState<{ ok: string[]; fail: { nombre: string; error: string }[] } | null>(null);
 
-  // Detectar quién ya cobró aguinaldo este semestre (para destildarlos y no
-  // pagar dos veces). El setState va dentro del callback async, no en el cuerpo
-  // del efecto.
+  // Trae el preview (mejor mes + desglose) y arma montos/incluir + ya pagados.
   useEffect(() => {
-    const sem1 = today.getMonth() <= 5;          // 0-5 = ene-jun
-    const anio = today.getFullYear();
-    const semIni = sem1 ? `${anio}-01-01` : `${anio}-07-01`;
-    const semFin = sem1 ? `${anio}-06-30T23:59:59` : `${anio}-12-31T23:59:59`;
-    const ids = empleados.map(e => e.id);
-    if (ids.length === 0) return;
     let cancel = false;
     void (async () => {
-      const { data } = await db.from("rrhh_pagos_especiales")
-        .select("empleado_id")
-        .eq("tipo", "aguinaldo")
-        .in("empleado_id", ids)
-        .gte("pagado_at", semIni)
-        .lte("pagado_at", semFin);
+      const { data, error } = await db.rpc("aguinaldo_preview_local", { p_local_id: localId });
       if (cancel) return;
-      const set = new Set<string>((data || []).map((r: { empleado_id: string }) => r.empleado_id));
+      if (error) { showError(translateRpcError(error)); setPreview([]); return; }
+      const rows = (data as PreviewRow[]) || [];
+      const m: Record<string, string> = {};
+      const inc: Record<string, boolean> = {};
+      for (const r of rows) {
+        m[r.empleado_id] = String(calcularAguinaldo(baseDe(r), r.fecha_inicio, today).monto);
+        inc[r.empleado_id] = true;
+      }
+      setMontos(m);
+      setIncluir(inc);
+      setPreview(rows);
+
+      const sem1 = today.getMonth() <= 5;
+      const anio = today.getFullYear();
+      const semIni = sem1 ? `${anio}-01-01` : `${anio}-07-01`;
+      const semFin = sem1 ? `${anio}-06-30T23:59:59` : `${anio}-12-31T23:59:59`;
+      const ids = rows.map(r => r.empleado_id);
+      if (ids.length === 0) return;
+      const { data: pe } = await db.from("rrhh_pagos_especiales")
+        .select("empleado_id").eq("tipo", "aguinaldo").in("empleado_id", ids)
+        .gte("pagado_at", semIni).lte("pagado_at", semFin);
+      if (cancel) return;
+      const set = new Set<string>((pe || []).map((x: { empleado_id: string }) => x.empleado_id));
       if (set.size === 0) return;
       setYaPagado(set);
-      setIncluir(prev => {
-        const next = { ...prev };
-        for (const id of set) next[id] = false;
-        return next;
-      });
+      setIncluir(prev => { const n = { ...prev }; for (const id of set) n[id] = false; return n; });
     })();
     return () => { cancel = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const seleccionados = empleados.filter(e => incluir[e.id] && Number(montos[e.id]) > 0);
-  const total = seleccionados.reduce((s, e) => s + Number(montos[e.id] || 0), 0);
-  const todosTildados = empleados.length > 0 && empleados.every(e => yaPagado.has(e.id) || incluir[e.id]);
+  const rows = preview || [];
+  const seleccionados = rows.filter(r => incluir[r.empleado_id] && Number(montos[r.empleado_id]) > 0);
+  const total = seleccionados.reduce((s, r) => s + Number(montos[r.empleado_id] || 0), 0);
+  const todosTildados = rows.length > 0 && rows.every(r => yaPagado.has(r.empleado_id) || incluir[r.empleado_id]);
 
   function toggleTodos() {
     setIncluir(() => {
       const next: Record<string, boolean> = {};
-      for (const e of empleados) next[e.id] = !todosTildados && !yaPagado.has(e.id);
+      for (const r of rows) next[r.empleado_id] = !todosTildados && !yaPagado.has(r.empleado_id);
       return next;
     });
+  }
+  function toggleExpand(id: string) {
+    setExpandido(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   }
 
   async function pagar() {
@@ -112,17 +135,17 @@ export function AguinaldoModal({
     const ok: string[] = [];
     const fail: { nombre: string; error: string }[] = [];
     const pagadosIds = new Set<string>();
-    for (const e of seleccionados) {
-      const monto = Math.round(Number(montos[e.id]));
-      const nombre = `${e.apellido} ${e.nombre}`;
+    for (const r of seleccionados) {
+      const monto = Math.round(Number(montos[r.empleado_id]));
+      const nombre = `${r.apellido} ${r.nombre}`;
       const { error } = await db.rpc("pagar_aguinaldo", {
-        p_empleado_id: e.id,
+        p_empleado_id: r.empleado_id,
         p_lineas: [{ cuenta, monto }],
         p_monto_esperado: monto,
         p_fecha: fecha,
       });
       if (error) fail.push({ nombre, error: translateRpcError(error) });
-      else { ok.push(nombre); pagadosIds.add(e.id); }
+      else { ok.push(nombre); pagadosIds.add(r.empleado_id); }
     }
     setPagando(false);
     setResultado({ ok, fail });
@@ -135,25 +158,28 @@ export function AguinaldoModal({
     if (fail.length > 0 && ok.length === 0) showError(`No se pudo pagar (${fail.length} con error)`);
   }
 
-  // Imprime una planilla limpia (empleado / puesto / aguinaldo / firma) de los
-  // empleados seleccionados, abriendo una ventana nueva y mandando a imprimir.
   function imprimir() {
-    const rows = seleccionados;
-    if (rows.length === 0) { showError("Tildá al menos un empleado para imprimir"); return; }
-    const win = window.open("", "_blank", "width=820,height=640");
+    const sel = seleccionados;
+    if (sel.length === 0) { showError("Tildá al menos un empleado para imprimir"); return; }
+    const win = window.open("", "_blank", "width=860,height=680");
     if (!win) { showError("El navegador bloqueó la ventana de impresión"); return; }
     const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
     const p = fecha.split("-");
     const fdmy = p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : fecha;
-    const total = rows.reduce((s, e) => s + Number(montos[e.id] || 0), 0);
-    const filas = rows.map((e, i) => `
+    const totalSel = sel.reduce((s, r) => s + Number(montos[r.empleado_id] || 0), 0);
+    const desgloseTxt = (r: PreviewRow) => {
+      if (r.mejor_mes == null) return `Sin liquidaciones — base: sueldo declarado ${fmt$(r.sueldo_mensual)}`;
+      const parts = lineasDesglose(r).map(l => `${l.label} ${l.neg ? "−" : ""}${fmt$(Math.abs(l.monto))}`);
+      return `Mejor mes (${MESES[r.mejor_mes]}): ${parts.join(" + ")} = bruto ${fmt$(r.bruto)} → ÷2`;
+    };
+    const filas = sel.map((r, i) => `
       <tr>
         <td>${i + 1}</td>
-        <td>${esc(e.apellido)}, ${esc(e.nombre)}</td>
-        <td>${esc(e.puesto || "")}</td>
-        <td class="num">${fmt$(Number(montos[e.id] || 0))}</td>
+        <td>${esc(r.apellido)}, ${esc(r.nombre)}</td>
+        <td class="num">${fmt$(Number(montos[r.empleado_id] || 0))}</td>
         <td class="firma"></td>
-      </tr>`).join("");
+      </tr>
+      <tr class="desg"><td></td><td colspan="3">${esc(desgloseTxt(r))}</td></tr>`).join("");
     win.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8">
       <title>Aguinaldos ${esc(localNombre)} ${fdmy}</title>
       <style>
@@ -161,19 +187,20 @@ export function AguinaldoModal({
         h1{font-size:18px;margin:0 0 2px;}
         .sub{font-size:12px;color:#444;margin-bottom:16px;}
         table{width:100%;border-collapse:collapse;font-size:12px;}
-        th,td{border:1px solid #999;padding:6px 8px;text-align:left;}
+        th,td{border:1px solid #999;padding:6px 8px;text-align:left;vertical-align:top;}
         th{background:#eee;}
         td.num,th.num{text-align:right;white-space:nowrap;}
         td.firma{width:220px;}
+        tr.desg td{border-top:none;font-size:10px;color:#555;background:#fafafa;}
         tfoot td{font-weight:bold;background:#f5f5f5;}
         @media print{body{margin:12mm;}}
       </style></head><body>
       <h1>Liquidación de aguinaldos</h1>
-      <div class="sub">${esc(localNombre)} · Fecha: ${fdmy}${cuenta ? " · Cuenta: " + esc(cuenta) : ""}</div>
+      <div class="sub">${esc(localNombre)} · Fecha: ${fdmy}${cuenta ? " · Cuenta: " + esc(cuenta) : ""} · Base: mejor sueldo del semestre ÷ 2 (proporcional)</div>
       <table>
-        <thead><tr><th>#</th><th>Empleado</th><th>Puesto</th><th class="num">Aguinaldo</th><th>Firma y aclaración</th></tr></thead>
+        <thead><tr><th>#</th><th>Empleado</th><th class="num">Aguinaldo</th><th>Firma y aclaración</th></tr></thead>
         <tbody>${filas}</tbody>
-        <tfoot><tr><td colspan="3">Total · ${rows.length} empleados</td><td class="num">${fmt$(total)}</td><td></td></tr></tfoot>
+        <tfoot><tr><td colspan="2">Total · ${sel.length} empleados</td><td class="num">${fmt$(totalSel)}</td><td></td></tr></tfoot>
       </table>
       </body></html>`);
     win.document.close();
@@ -185,10 +212,10 @@ export function AguinaldoModal({
   const td: React.CSSProperties = { fontSize: 13, padding: "6px 8px", borderTop: "1px solid var(--pase-border)" };
 
   return (
-    <Modal isOpen onClose={onClose} title={`Pagar aguinaldos · ${localNombre}`} maxWidth={700}>
+    <Modal isOpen onClose={onClose} title={`Pagar aguinaldos · ${localNombre}`} maxWidth={740}>
       <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "8px 0" }}>
         <p style={{ fontSize: 12, color: "var(--muted2)", margin: 0 }}>
-          El aguinaldo es <b>medio sueldo mensual</b>, <b>proporcional</b> al tiempo trabajado en el semestre (según la fecha de ingreso). Podés editar el monto de cada uno. Los que ya cobraron este semestre aparecen marcados.
+          El aguinaldo se calcula sobre el <b>mejor sueldo del semestre ÷ 2</b>, <b>proporcional</b> al tiempo trabajado. Tocá <b>"ver desglose"</b> para ver cómo se compone ese mes. Editable; los que ya cobraron este semestre aparecen marcados.
         </p>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -203,64 +230,93 @@ export function AguinaldoModal({
           </label>
         </div>
 
-        <div style={{ maxHeight: 360, overflowY: "auto", border: "1px solid var(--pase-border)", borderRadius: 8 }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th style={{ ...th, width: 32 }}>
-                  <input type="checkbox" checked={todosTildados} onChange={toggleTodos} title="Tildar/destildar todos" />
-                </th>
-                <th style={th}>EMPLEADO</th>
-                <th style={{ ...th, textAlign: "right" }}>SUELDO</th>
-                <th style={{ ...th, textAlign: "right", width: 150 }}>AGUINALDO</th>
-              </tr>
-            </thead>
-            <tbody>
-              {empleados.length === 0 && (
-                <tr><td style={td} colSpan={4}>No hay empleados activos en este local.</td></tr>
-              )}
-              {empleados.map(e => {
-                const pagado = yaPagado.has(e.id);
-                return (
-                  <tr key={e.id} style={pagado ? { opacity: 0.55 } : undefined}>
-                    <td style={td}>
-                      <input
-                        type="checkbox"
-                        checked={!!incluir[e.id]}
-                        disabled={pagado}
-                        onChange={ev => setIncluir(prev => ({ ...prev, [e.id]: ev.target.checked }))}
-                      />
-                    </td>
-                    <td style={td}>
-                      <div style={{ fontWeight: 600 }}>{e.apellido}, {e.nombre}</div>
-                      <div style={{ fontSize: 11, color: "var(--muted2)" }}>
-                        {e.puesto}
-                        {pagado
-                          ? " · ✓ ya cobró este semestre"
-                          : calcs[e.id]?.parcial
-                            ? ` · proporcional (entró ${fechaCorta(e.fecha_inicio)})`
-                            : ""}
-                      </div>
-                    </td>
-                    <td style={{ ...td, textAlign: "right", color: "var(--muted2)" }}>{fmt$(e.sueldo_mensual || 0)}</td>
-                    <td style={{ ...td, textAlign: "right" }}>
-                      <input
-                        type="number"
-                        className="search"
-                        value={montos[e.id] ?? ""}
-                        disabled={pagado}
-                        onChange={ev => setMontos(prev => ({ ...prev, [e.id]: ev.target.value }))}
-                        style={{ width: 130, textAlign: "right" }}
-                        min="0"
-                        step="1"
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        {preview === null ? (
+          <div style={{ padding: 24, textAlign: "center", color: "var(--muted2)", fontSize: 13 }}>Cargando empleados y sueldos…</div>
+        ) : (
+          <div style={{ maxHeight: 380, overflowY: "auto", border: "1px solid var(--pase-border)", borderRadius: 8 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={{ ...th, width: 32 }}>
+                    <input type="checkbox" checked={todosTildados} onChange={toggleTodos} title="Tildar/destildar todos" />
+                  </th>
+                  <th style={th}>EMPLEADO</th>
+                  <th style={{ ...th, textAlign: "right" }}>MEJOR SUELDO</th>
+                  <th style={{ ...th, textAlign: "right", width: 150 }}>AGUINALDO</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.length === 0 && (
+                  <tr><td style={td} colSpan={4}>No hay empleados activos en este local.</td></tr>
+                )}
+                {rows.map(r => {
+                  const pagado = yaPagado.has(r.empleado_id);
+                  const calc = calcularAguinaldo(baseDe(r), r.fecha_inicio, today);
+                  const abierto = expandido.has(r.empleado_id);
+                  const lineas = lineasDesglose(r);
+                  return (
+                    <Fragment key={r.empleado_id}>
+                      <tr style={pagado ? { opacity: 0.55 } : undefined}>
+                        <td style={td}>
+                          <input type="checkbox" checked={!!incluir[r.empleado_id]} disabled={pagado}
+                            onChange={ev => setIncluir(prev => ({ ...prev, [r.empleado_id]: ev.target.checked }))} />
+                        </td>
+                        <td style={td}>
+                          <div style={{ fontWeight: 600 }}>{r.apellido}, {r.nombre}</div>
+                          <div style={{ fontSize: 11, color: "var(--muted2)" }}>
+                            {r.puesto}
+                            {pagado ? " · ✓ ya cobró este semestre" : calc.parcial ? ` · proporcional (entró ${fechaCorta(r.fecha_inicio)})` : ""}
+                            {r.mejor_mes == null ? " · sin liquidaciones (sueldo declarado)" : ""}
+                            {" · "}
+                            <button onClick={() => toggleExpand(r.empleado_id)}
+                              style={{ background: "none", border: "none", color: "var(--acc, #6aa3ff)", cursor: "pointer", fontSize: 11, padding: 0 }}>
+                              {abierto ? "ocultar desglose" : "ver desglose"}
+                            </button>
+                          </div>
+                        </td>
+                        <td style={{ ...td, textAlign: "right", color: "var(--muted2)" }}>
+                          {fmt$(baseDe(r))}
+                          {r.mejor_mes != null && <div style={{ fontSize: 10 }}>{MESES[r.mejor_mes]}</div>}
+                        </td>
+                        <td style={{ ...td, textAlign: "right" }}>
+                          <input type="number" className="search" value={montos[r.empleado_id] ?? ""} disabled={pagado}
+                            onChange={ev => setMontos(prev => ({ ...prev, [r.empleado_id]: ev.target.value }))}
+                            style={{ width: 130, textAlign: "right" }} min="0" step="1" />
+                        </td>
+                      </tr>
+                      {abierto && (
+                        <tr>
+                          <td style={{ ...td, borderTop: "none" }}></td>
+                          <td style={{ ...td, borderTop: "none", fontSize: 11, color: "var(--muted2)" }} colSpan={3}>
+                            {r.mejor_mes == null ? (
+                              <span>Sin liquidaciones cargadas este semestre — se usa el sueldo declarado del legajo ({fmt$(r.sueldo_mensual)}).</span>
+                            ) : (
+                              <div>
+                                <div style={{ marginBottom: 2 }}><b>Mejor mes: {MESES[r.mejor_mes]}</b></div>
+                                {lineas.map((l, i) => (
+                                  <div key={i} style={{ display: "flex", justifyContent: "space-between", maxWidth: 320 }}>
+                                    <span>{l.label}</span>
+                                    <span style={{ color: l.neg ? "var(--danger)" : undefined }}>{l.neg ? "−" : ""}{fmt$(Math.abs(l.monto))}</span>
+                                  </div>
+                                ))}
+                                <div style={{ display: "flex", justifyContent: "space-between", maxWidth: 320, borderTop: "1px solid var(--pase-border)", marginTop: 2, paddingTop: 2, fontWeight: 600 }}>
+                                  <span>Bruto del mes</span><span>{fmt$(r.bruto)}</span>
+                                </div>
+                                <div style={{ marginTop: 2 }}>
+                                  Aguinaldo = {fmt$(r.bruto)} ÷ 2 {calc.parcial ? `× ${calc.diasTrabajados}/${calc.diasSemestre} días` : ""} = <b>{fmt$(calc.monto)}</b>
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {resultado && (
           <div style={{ fontSize: 12, background: "var(--pase-bg-soft, rgba(255,255,255,0.04))", borderRadius: 8, padding: 10 }}>
@@ -279,9 +335,7 @@ export function AguinaldoModal({
             <b>{fmt$(total)}</b> <span style={{ color: "var(--muted2)" }}>· {seleccionados.length} empleado(s)</span>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-outline" onClick={imprimir} disabled={seleccionados.length === 0}>
-              Imprimir
-            </button>
+            <button className="btn btn-outline" onClick={imprimir} disabled={seleccionados.length === 0}>Imprimir</button>
             <button className="btn btn-primary" onClick={pagar} disabled={pagando || seleccionados.length === 0 || !cuenta}>
               {pagando ? "Pagando…" : `Pagar ${fmt$(total)}`}
             </button>
