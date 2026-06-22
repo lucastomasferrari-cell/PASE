@@ -45,6 +45,17 @@ describe("assembleCierre", () => {
     expect(m.resumen.rentabilidadPct).toBe("28,5%");
     expect(m.resumen.totalGastosFmt).toBe("$76.290.411,47"); // ventas - utilNeta
   });
+  it("resumen: lista TODOS los conceptos y reconcilian con el total de gastos", () => {
+    const m = assembleCierre(base);
+    const labels = m.resumen.lines.map((l) => l.label);
+    expect(labels).toContain("Costo de mercadería");      // los grandes que faltaban
+    expect(labels).toContain("Gastos fijos y variables");
+    expect(labels).toContain("Gastos de personal");
+    // las líneas deben sumar al total de gastos (ventas − utilidad neta)
+    const parse = (s: string) => Number(s.replace(/[^\d,-]/g, "").replace(/\./g, "").replace(",", "."));
+    const sumaLineas = m.resumen.lines.reduce((s, l) => s + parse(l.montoFmt), 0);
+    expect(Math.round(sumaLineas)).toBe(Math.round(parse(m.resumen.totalGastosFmt)));
+  });
   it("extras: una sección por categoría con datos (Personal/Comisiones/Impuestos), Marketing vacío se omite", () => {
     const m = assembleCierre(base);
     const titulos = m.extras.map((e) => e.titulo);

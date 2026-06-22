@@ -120,11 +120,16 @@ export function assembleCierre(i: CierreInput): CierreModel {
     },
     extras,
     resumen: {
+      // TODOS los conceptos de egreso, para que sumen al Total de gastos
+      // (ventas − utilidad neta). Las líneas en $0 se omiten salvo CMV/gastos.
       lines: [
-        { label: "Gastos de marketing", pct: pctOf(i.publicidad, v), montoFmt: money(i.publicidad) },
+        { label: "Costo de mercadería", pct: pctOf(i.cmv, v), montoFmt: money(i.cmv) },
+        { label: "Gastos fijos y variables", pct: pctOf(i.gastosFijosVar, v), montoFmt: money(i.gastosFijosVar) },
         { label: "Gastos de personal", pct: pctOf(costoLaboral, v), montoFmt: money(costoLaboral) },
         { label: "Comisiones apps y bancos", pct: pctOf(i.comisiones, v), montoFmt: money(i.comisiones) },
         { label: "Impuestos", pct: pctOf(i.impuestos, v), montoFmt: money(i.impuestos) },
+        { label: "Gastos de marketing", pct: pctOf(i.publicidad, v), montoFmt: money(i.publicidad) },
+        ...(i.otros > 0 ? [{ label: "Otros gastos", pct: pctOf(i.otros, v), montoFmt: money(i.otros) }] : []),
       ],
       totalGastosFmt: money(totalGastos),
       rentabilidadFmt: money(i.utilNeta),
