@@ -12,6 +12,7 @@ import { translateRpcError } from "../../lib/errors";
 import { toISO } from "@pase/shared/utils";
 import { today } from "../../lib/utils";
 import type { Empleado } from "../../types/rrhh";
+import { calcularAguinaldo, type AguinaldoCalc } from "./aguinaldo";
 
 interface Props {
   onClose: () => void;
@@ -26,6 +27,11 @@ interface Props {
 }
 
 const fmt$ = (n: number) => "$" + Math.round(n).toLocaleString("es-AR");
+const fechaCorta = (s: string | null): string => {
+  if (!s) return "";
+  const p = s.slice(0, 10).split("-");
+  return p.length === 3 ? `${p[2]}/${p[1]}` : s;
+};
 
 // El modal se monta sólo cuando se abre (render condicional en RRHH), así el
 // estado arranca fresco cada vez: aguinaldo = sueldo/2, todos tildados.
@@ -34,9 +40,16 @@ export function AguinaldoModal({
 }: Props) {
   const [cuenta, setCuenta] = useState("");
   const [fecha, setFecha] = useState(toISO(today));
+  // Aguinaldo proporcional al tiempo trabajado en el semestre (según fecha de
+  // ingreso del legajo). Se calcula una vez al montar.
+  const [calcs] = useState<Record<string, AguinaldoCalc>>(() => {
+    const c: Record<string, AguinaldoCalc> = {};
+    for (const e of empleados) c[e.id] = calcularAguinaldo(e.sueldo_mensual || 0, e.fecha_inicio, today);
+    return c;
+  });
   const [montos, setMontos] = useState<Record<string, string>>(() => {
     const m: Record<string, string> = {};
-    for (const e of empleados) m[e.id] = String(Math.round((e.sueldo_mensual || 0) / 2));
+    for (const e of empleados) m[e.id] = String(calcs[e.id]?.monto ?? 0);
     return m;
   });
   const [incluir, setIncluir] = useState<Record<string, boolean>>(() => {
@@ -129,7 +142,7 @@ export function AguinaldoModal({
     <Modal isOpen onClose={onClose} title={`Pagar aguinaldos · ${localNombre}`} maxWidth={700}>
       <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "8px 0" }}>
         <p style={{ fontSize: 12, color: "var(--muted2)", margin: 0 }}>
-          El aguinaldo se calcula como <b>medio sueldo mensual</b> de cada empleado. Podés editar el monto de cada uno. Los que ya cobraron este semestre aparecen marcados.
+          El aguinaldo es <b>medio sueldo mensual</b>, <b>proporcional</b> al tiempo trabajado en el semestre (según la fecha de ingreso). Podés editar el monto de cada uno. Los que ya cobraron este semestre aparecen marcados.
         </p>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -175,7 +188,12 @@ export function AguinaldoModal({
                     <td style={td}>
                       <div style={{ fontWeight: 600 }}>{e.apellido}, {e.nombre}</div>
                       <div style={{ fontSize: 11, color: "var(--muted2)" }}>
-                        {e.puesto}{pagado ? " · ✓ ya cobró este semestre" : ""}
+                        {e.puesto}
+                        {pagado
+                          ? " · ✓ ya cobró este semestre"
+                          : calcs[e.id]?.parcial
+                            ? ` · proporcional (entró ${fechaCorta(e.fecha_inicio)})`
+                            : ""}
                       </div>
                     </td>
                     <td style={{ ...td, textAlign: "right", color: "var(--muted2)" }}>{fmt$(e.sueldo_mensual || 0)}</td>
