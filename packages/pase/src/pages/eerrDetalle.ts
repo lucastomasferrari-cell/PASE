@@ -27,6 +27,44 @@ export type DetalleState =
   | { tipo: "cat"; titulo: string; descriptor: DetalleDescriptor; categoria: string }
   | { tipo: "sueldo"; titulo: string; subtitulo: string; breakdown: BreakdownRow[]; total: number };
 
+/** Una línea del detalle por categoría: nombre (`c`) + total (`t`). */
+export interface CategoriaRow {
+  c: string;
+  t: number;
+}
+
+/** Arma el detalle por categoría desde los datos REALES (no desde el catálogo),
+ *  para que el detalle SIEMPRE cuadre con el total del grupo. Agrupa por la
+ *  categoría de cada ítem (las vacías van a `sinCategoriaLabel`), descarta las
+ *  de monto ~0, y ordena: primero las del catálogo (en su orden), después las
+ *  categorías "huérfanas" (reales pero que no están en el catálogo) por monto
+ *  desc. Bug 21-jun: antes el detalle se recorría desde el catálogo y se "comía"
+ *  los gastos cuya categoría no estaba listada (ej: REPARTIDORES, Sueldo evento,
+ *  PERSONAL) — sumaban al total del grupo pero no aparecían como línea. */
+export function ordenarPorCategoria(
+  items: Array<{ cat: string | null | undefined; monto: number }>,
+  catalogo: string[],
+  sinCategoriaLabel = "Sin categoría",
+): CategoriaRow[] {
+  const acc: Record<string, number> = {};
+  for (const it of items) {
+    const k = it.cat || sinCategoriaLabel;
+    acc[k] = (acc[k] || 0) + Number(it.monto || 0);
+  }
+  const orden = new Map(catalogo.map((c, i) => [c, i] as const));
+  return Object.entries(acc)
+    .map(([c, t]) => ({ c, t }))
+    .filter(x => Math.abs(x.t) > 0.005)
+    .sort((a, b) => {
+      const oa = orden.get(a.c);
+      const ob = orden.get(b.c);
+      if (oa !== undefined && ob !== undefined) return oa - ob;
+      if (oa !== undefined) return -1;
+      if (ob !== undefined) return 1;
+      return b.t - a.t;
+    });
+}
+
 /** Un adelanto/pago extra a un empleado, cargado como gasto de empleado fuera
  *  de la liquidación (ej: adelanto, feriado). */
 export interface AdelantoEmpleado {
