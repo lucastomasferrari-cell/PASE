@@ -26,7 +26,7 @@ import { estaCerrado, cerrarPeriodo, reabrirPeriodo } from "../lib/periodos";
 import { listarSocios } from "../lib/utilidades";
 import { translateRpcError } from "../lib/errors";
 import EERRDetalleModal from "./EERRDetalleModal";
-import { buildSueldoBreakdown } from "./eerrDetalle";
+import { buildSueldoBreakdown, ordenarPorCategoria } from "./eerrDetalle";
 import type { DetalleState, DetalleDescriptor, AdelantoEmpleado } from "./eerrDetalle";
 
 // Cómo encontrar los movimientos que componen cada sección del desglose.
@@ -359,7 +359,11 @@ export default function EERR({ user, localActivo }: EERRProps) {
   // Retiros de socios: distribución de utilidades, NO suma a gastos
   // operativos. Se muestra DESPUÉS de Util. Neta. Solo se cargan via la
   // pantalla Gastos (no facturas).
-  const totalRetiros=gastos.filter((g)=>g.tipo==="retiro_socio").reduce((s, g)=>s+(g.monto||0),0);
+  // "Retiro de socio" REAL = solo la categoría canónica "Retiro socio" (la que
+  // crea el módulo de Reparto). Otras categorías que quedaron mal en el tipo
+  // retiro_socio (RETIRO EFECTIVO = movimiento de caja; COMPRA ONLINE = compra)
+  // NO son retiros → el EERR las ignora (Lucas 21-jun).
+  const totalRetiros=gastos.filter((g)=>g.tipo==="retiro_socio"&&g.categoria==="Retiro socio").reduce((s, g)=>s+(g.monto||0),0);
   const totalGastos=totalGastosFijos+totalGastosVar;
   const utilBruta=totalVentas-totalCMV;
   const utilNeta=utilBruta-totalGastos-sueldos-totalCargasSociales-totalBoletasSindicales-totalPublicidad-totalComisiones-totalImpuestos-totalOtrosGastos;
@@ -393,24 +397,25 @@ export default function EERR({ user, localActivo }: EERRProps) {
       if(ob!==undefined) return 1;
       return b.t-a.t;
     });
-  // Detalle por categoría: cada bucket suma sus categorías de gastos +
-  // las facturas con ese bucket. Las facturas con bucket=cat_compra (o
-  // legacy null) van al CMV junto con CATEGORIAS_COMPRA del catálogo.
-  const tFactCat = (cat: string, bucket: string | null) =>
-    facturas.filter(f => f.cat === cat && (bucket === null
-      ? (!f.bucket || f.bucket === "cat_compra")
-      : f.bucket === bucket
-    )).reduce((s, f) => s + Number(f.total || 0), 0);
-  const tGastoCat = (cat: string, tipo: string) =>
-    gastos.filter(g => g.tipo === tipo && g.categoria === cat).reduce((s, g) => s + Number(g.monto || 0), 0);
-
-  const porCatCMV=CATEGORIAS_COMPRA.map(c=>({c,t:tFactCat(c, null)})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
-  const porCatFijos=GASTOS_FIJOS.filter(c=>c!=="CARGAS SOCIALES"&&c!=="BOLETAS SINDICALES").map(c=>({c,t:tGastoCat(c, "fijo") + tFactCat(c, "gasto_fijo")})).filter(x=>x.t>0);
-  const porCatVar=GASTOS_VARIABLES.map(c=>({c,t:tGastoCat(c, "variable") + tFactCat(c, "gasto_variable")})).filter(x=>x.t>0);
-  const porCatPub=GASTOS_PUBLICIDAD.map(c=>({c,t:tGastoCat(c, "publicidad") + tFactCat(c, "gasto_publicidad")})).filter(x=>x.t>0);
-  const porCatCom=COMISIONES_CATS.map(c=>({c,t:tGastoCat(c, "comision") + tFactCat(c, "gasto_comision")})).filter(x=>x.t>0);
-  const porCatImp=GASTOS_IMPUESTOS.map(c=>({c,t:tGastoCat(c, "impuesto") + tFactCat(c, "gasto_impuesto")})).filter(x=>x.t>0);
-  const porCatRet=RETIROS_SOCIOS.map(c=>({c,t:tGastoCat(c, "retiro_socio")})).filter(x=>x.t>0);
+  // Detalle por categoría: se arma desde los DATOS reales (no recorriendo el
+  // catálogo) para que el detalle SIEMPRE cuadre con el total del grupo. El
+  // catálogo solo ordena (catálogo primero en su orden, huérfanas después por
+  // monto). Bug 21-jun: antes recorría el catálogo y se comía los gastos cuya
+  // categoría no estaba listada (REPARTIDORES, Sueldo evento, PERSONAL…) — sumaban
+  // al total del grupo pero no aparecían como línea. Las facturas con
+  // bucket=cat_compra (o legacy null) van al CMV.
+  const itemsGastoFact = (gastoTipo: string, factBucket: string, excluir: string[] = []) => [
+    ...gastos.filter(g => g.tipo === gastoTipo && !excluir.includes(g.categoria || ""))
+      .map(g => ({ cat: g.categoria, monto: Number(g.monto || 0) })),
+    ...facturasBucket(factBucket).map(f => ({ cat: f.cat, monto: Number(f.total || 0) })),
+  ];
+  const porCatCMV=ordenarPorCategoria(facturasCMV.map(f=>({cat:f.cat,monto:Number(f.total||0)})), CATEGORIAS_COMPRA);
+  const porCatFijos=ordenarPorCategoria(itemsGastoFact("fijo","gasto_fijo",["CARGAS SOCIALES","BOLETAS SINDICALES"]), GASTOS_FIJOS.filter(c=>c!=="CARGAS SOCIALES"&&c!=="BOLETAS SINDICALES"));
+  const porCatVar=ordenarPorCategoria(itemsGastoFact("variable","gasto_variable"), GASTOS_VARIABLES);
+  const porCatPub=ordenarPorCategoria(itemsGastoFact("publicidad","gasto_publicidad"), GASTOS_PUBLICIDAD);
+  const porCatCom=ordenarPorCategoria(itemsGastoFact("comision","gasto_comision"), COMISIONES_CATS);
+  const porCatImp=ordenarPorCategoria(itemsGastoFact("impuesto","gasto_impuesto"), GASTOS_IMPUESTOS);
+  const porCatRet=ordenarPorCategoria(gastos.filter(g=>g.tipo==="retiro_socio"&&g.categoria==="Retiro socio").map(g=>({cat:g.categoria,monto:Number(g.monto||0)})), RETIROS_SOCIOS);
   const otrosGastosArr=gastos.filter(g=>!["fijo","variable","publicidad","comision","impuesto","retiro_socio","empleado","mano_obra"].includes(g.tipo));
   const porCatOtros=Object.entries(otrosGastosArr.reduce<Record<string,number>>((acc,g)=>{const k=g.categoria||g.tipo;acc[k]=(acc[k]||0)+(g.monto||0);return acc},{})).map(([c,t])=>({c,t})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
 
