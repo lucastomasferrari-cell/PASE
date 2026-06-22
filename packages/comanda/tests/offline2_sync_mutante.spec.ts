@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { createDuenoClient } from './helpers/supabaseClient';
 import { crearOfflineDB, type OfflineDB } from '../src/lib/offline2/db';
-import { abrirMesa, agregarItem, cobrar } from '../src/lib/offline2/repos';
+import { abrirMesa, agregarItem, cobrar, anularVenta } from '../src/lib/offline2/repos';
 import { flushPending, callAbrir } from '../src/lib/offline2/sync';
 import type { VentaDoc } from '../src/lib/offline2/schema';
 
@@ -156,5 +156,31 @@ test.describe('offline2 ciclo offline→sync (mutante)', () => {
     const { data: dupCheck } = await supa.from('ventas_pos')
       .select('id').eq('idempotency_uuid', ventaUuid);
     expect(dupCheck?.length).toBe(1); // sin duplicados
+  });
+
+  test('anular venta offline → sync (outbox) → queda anulada en el server', async () => {
+    const ctx = { tenant_id: tenantId, local_id: localId, canal_id: canalId, modo: 'mostrador', cajero_id: cajeroId };
+
+    // ── 1. Abrir + agregar + ANULAR, todo local ──────────────────────────────
+    const ventaUuid = await abrirMesa(db!, ctx, null);
+    await agregarItem(db!, ctx, ventaUuid, { item_id: itemId, precio_unitario: PRECIO, curso: 1 });
+    await anularVenta(db!, ventaUuid, { managerId: cajeroId, motivo: 'mutante o2 anular' });
+
+    const localV = await db!.ventas.findOne(ventaUuid).exec();
+    expect(localV?.estado).toBe('anulada');
+    const opsPend = await db!.ops.find({ selector: { done: false } }).exec();
+    expect(opsPend.length).toBe(1); // la operación quedó encolada
+
+    // ── 2. Sync: crea la venta y luego ejecuta la operación de anular ─────────
+    await flushPending(supa, db!);
+
+    const { data: ventaSrv } = await supa.from('ventas_pos')
+      .select('id, estado').eq('idempotency_uuid', ventaUuid).maybeSingle();
+    expect(ventaSrv).not.toBeNull();
+    ventaServerId = ventaSrv!.id as number;
+    expect(ventaSrv?.estado).toBe('anulada'); // la operación se aplicó en el server
+
+    const opsDone = await db!.ops.find({ selector: { done: false } }).exec();
+    expect(opsDone.length).toBe(0); // la operación quedó marcada hecha
   });
 });

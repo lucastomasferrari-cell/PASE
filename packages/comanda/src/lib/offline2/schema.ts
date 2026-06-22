@@ -109,3 +109,31 @@ export const pagoSchema: RxJsonSchema<PagoDoc> = {
   },
   required: ['idempotency_uuid', 'venta_idempotency_uuid', 'tenant_id', 'local_id', 'metodo', 'monto', 'updated_at'],
 };
+
+// Outbox de OPERACIONES (Fase 2): acciones que MODIFICAN una venta existente
+// (anular, descuento, cortesía, mandar curso, mesa-ops). El flujo de Fase 1 solo
+// CREA (venta/item/pago); estas modificaciones se encolan acá y el sync las
+// empuja en orden vía su RPC `_offline` (que resuelve el padre por uuid).
+// payload = params extra de la RPC (sin p_venta_id / p_venta_idempotency_uuid,
+// que los agrega el push) guardados como JSON (RxDB no quiere objetos libres).
+export interface OpDoc {
+  idempotency_uuid: string;        // PK = id de la operación
+  rpc: string;                     // ej 'fn_anular_venta_comanda_offline'
+  venta_idempotency_uuid: string;  // venta sobre la que opera (resuelve p_venta_id)
+  payload_json: string;            // JSON.stringify de los params extra
+  done: boolean;                   // false hasta que el sync la empuja OK
+  updated_at: string;
+}
+
+export const opSchema: RxJsonSchema<OpDoc> = {
+  version: 0, primaryKey: 'idempotency_uuid', type: 'object',
+  properties: {
+    idempotency_uuid: { type: 'string', maxLength: 64 },
+    rpc: { type: 'string', maxLength: 80 },
+    venta_idempotency_uuid: { type: 'string', maxLength: 64 },
+    payload_json: { type: 'string' },
+    done: { type: 'boolean' },
+    updated_at: { type: 'string', maxLength: 32 },
+  },
+  required: ['idempotency_uuid', 'rpc', 'venta_idempotency_uuid', 'payload_json', 'done', 'updated_at'],
+};

@@ -7,7 +7,7 @@
 // que el sync está empujando).
 import type { VentaPos, VentaPosItem, ModoVenta, EstadoVenta, EstadoVentaItem } from '@/types/database';
 import { crearOfflineDB } from './db';
-import { abrirMesa, agregarItem as repoAgregarItem, agregarPago, marcarVentaCobrada } from './repos';
+import { abrirMesa, agregarItem as repoAgregarItem, agregarPago, marcarVentaCobrada, anularVenta as repoAnularVenta } from './repos';
 import { uuidToTempId } from './tempId';
 import type { VentaDoc, ItemDoc } from './schema';
 import type { OfflineDB } from './db';
@@ -111,6 +111,17 @@ export async function agregarItemLocal(
     item_id: item.itemId, precio_unitario: item.precioUnitario, curso: item.curso ?? 1, cantidad: item.cantidad,
   });
   return uuidToTempId(itemUuid);
+}
+
+/** Anula una venta local (la marca anulada + encola la operación para el sync). */
+export async function anularLocal(
+  tempId: number, args: { managerId: string | null; motivo: string },
+): Promise<{ error: string | null }> {
+  const db = await crearOfflineDB();
+  const uuid = await resolveUuid(db, tempId);
+  if (!uuid) return { error: 'VENTA_LOCAL_NO_ENCONTRADA' };
+  await repoAnularVenta(db, uuid, args);
+  return { error: null };
 }
 
 /** Cobra una venta local (uno o varios pagos) y la marca cobrada. */

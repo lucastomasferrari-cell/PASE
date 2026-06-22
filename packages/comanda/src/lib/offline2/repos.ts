@@ -80,3 +80,31 @@ export async function recalcularTotal(db: OfflineDB, ventaUuid: string): Promise
   const venta = await db.ventas.findOne(ventaUuid).exec();
   await venta?.patch({ subtotal: total, total, updated_at: now() });
 }
+
+// ── Outbox de operaciones (Fase 2: modificar/anular ventas ya existentes) ─────
+
+/** Encola una operación pendiente. `payload` = params extra de la RPC `_offline`
+ *  (sin p_venta_id / p_venta_idempotency_uuid; los agrega el push). */
+export async function enqueueOp(
+  db: OfflineDB, rpc: string, ventaUuid: string, payload: Record<string, unknown>,
+): Promise<string> {
+  const u = uuid();
+  await db.ops.insert({
+    idempotency_uuid: u, rpc, venta_idempotency_uuid: ventaUuid,
+    payload_json: JSON.stringify(payload), done: false, updated_at: now(),
+  });
+  return u;
+}
+
+/** Anula una venta: la marca anulada en el store local + encola la operación. */
+export async function anularVenta(
+  db: OfflineDB, ventaUuid: string, args: { managerId: string | null; motivo: string },
+): Promise<void> {
+  const venta = await db.ventas.findOne(ventaUuid).exec();
+  await venta?.patch({ estado: 'anulada', updated_at: now() });
+  await enqueueOp(db, 'fn_anular_venta_comanda_offline', ventaUuid, {
+    p_manager_id: args.managerId,
+    p_motivo: args.motivo,
+    p_idempotency_uuid: uuid(),
+  });
+}

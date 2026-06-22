@@ -14,7 +14,7 @@ import { replicateRxCollection } from 'rxdb/plugins/replication';
 import type { WithDeleted } from 'rxdb';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { OfflineDB } from './db';
-import type { VentaDoc, ItemDoc, PagoDoc } from './schema';
+import type { VentaDoc, ItemDoc, PagoDoc, OpDoc } from './schema';
 // NOTA: este módulo NO importa el cliente de `../supabase` (que lee
 // import.meta.env y tira al cargar). El cliente entra por parámetro → el
 // módulo es importable en tests Node (Playwright mutante) sin Vite.
@@ -68,6 +68,19 @@ export async function resolverVentaId(supa: SupabaseClient, db: OfflineDB, venta
   return (data?.id as number | undefined) ?? null;
 }
 
+/** Ejecuta una operación del outbox (anular/descuento/etc.) vía su RPC `_offline`.
+ *  El push agrega p_venta_id + p_venta_idempotency_uuid (resueltos por uuid); el
+ *  resto de params vienen del payload. Si la venta padre aún no existe server-side,
+ *  la RPC tira VENTA_NO_ENCONTRADA → throw → retry (igual que items/pagos). */
+export async function callOp(supa: SupabaseClient, db: OfflineDB, op: OpDoc): Promise<void> {
+  const ventaId = await resolverVentaId(supa, db, op.venta_idempotency_uuid);
+  const payload = JSON.parse(op.payload_json) as Record<string, unknown>;
+  const { error } = await supa.rpc(op.rpc, {
+    p_venta_id: ventaId, p_venta_idempotency_uuid: op.venta_idempotency_uuid, ...payload,
+  });
+  if (error) throw error;
+}
+
 /**
  * Empuja TODO lo pendiente (id == null) en orden: ventas → items → pagos,
  * reconciliando el id bigint en el doc local. Determinístico (lo usa el test
@@ -89,13 +102,40 @@ export async function flushPending(supa: SupabaseClient, db: OfflineDB): Promise
     const id = await callAgregarPago(supa, ventaId, p.toJSON() as PagoDoc);
     await p.patch({ id });
   }
+  // Operaciones (anular/descuento/etc.) DESPUÉS de crear venta/items/pagos.
+  for (const op of await db.ops.find({ selector: { done: false } }).exec()) {
+    await callOp(supa, db, op.toJSON() as OpDoc);
+    await op.patch({ done: true });
+  }
 }
 
 // ── Replicación live (app) ────────────────────────────────────────────────────
 
 export function startSync(db: OfflineDB, supa: SupabaseClient) {
-  const states = [syncVentas(db, supa), syncItems(db, supa), syncPagos(db, supa)];
+  const states = [syncVentas(db, supa), syncItems(db, supa), syncPagos(db, supa), syncOps(db, supa)];
   return () => states.forEach((s) => s.cancel());
+}
+
+/** Push-only de la cola de operaciones. Las ops son locales (no se bajan del
+ *  server) → el pull devuelve vacío; el push ejecuta las pendientes vía su RPC. */
+function syncOps(db: OfflineDB, supa: SupabaseClient) {
+  return replicateRxCollection<OpDoc, Cp>({
+    collection: db.ops, replicationIdentifier: 'o2-ops', live: true, retryTime: 5000,
+    pull: { batchSize: BATCH, handler: async (cp) => ({ documents: [], checkpoint: cp }) },
+    push: {
+      batchSize: BATCH,
+      async handler(rows) {
+        for (const r of rows) {
+          const op = r.newDocumentState as OpDoc;
+          if (op.done) continue;
+          await callOp(supa, db, op); // si la venta aún no está → throw → retry
+          const doc = await db.ops.findOne(op.idempotency_uuid).exec();
+          await doc?.patch({ done: true });
+        }
+        return [];
+      },
+    },
+  });
 }
 
 function syncVentas(db: OfflineDB, supa: SupabaseClient) {

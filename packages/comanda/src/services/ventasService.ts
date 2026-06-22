@@ -540,20 +540,16 @@ export async function anularVenta(
   ventaId: number, managerId: string, motivo: string,
   idempotencyKey?: string,
 ): Promise<{ error: string | null }> {
-  // Sprint offline-first cierre (2026-06-02): si el flag está ON, encolar
-  // la anulación localmente. Mismo patrón que cobrar (pagosService.cobrar).
+  // Rebuild offline2 (Fase 2): si la venta es local (id<0, sin sincronizar),
+  // se anula en el store local y se encola la operación (outbox) → el sync la
+  // empuja vía fn_anular_venta_comanda_offline. Las ya sincronizadas (id>0)
+  // van por el flujo online de abajo. Mismo patrón que pagosService.cobrar.
   const { featureFlags } = await import('../lib/featureFlags');
-  if (featureFlags.offlineFirstVentas) {
-    const { anularVentaOffline } = await import('./offline/overridesOfflineService');
+  if (featureFlags.offlineFirstVentas && ventaId < 0) {
     try {
-      await anularVentaOffline({ ventaId, managerId, motivo });
-      // Notif partner sólo si la venta tiene id real positivo (sincronizada).
-      // Si es temp negativa, el partner notification es N/A (la venta no
-      // existe en el partner externo todavía).
-      if (ventaId > 0) {
-        void notifyPartnerStatusChange(ventaId, 'cancel', { reason: motivo || 'OTHER' });
-      }
-      return { error: null };
+      const { anularLocal } = await import('../lib/offline2/bridge');
+      const r = await anularLocal(ventaId, { managerId, motivo });
+      return { error: r.error }; // venta temp: no existe en el partner externo → sin notif
     } catch (err) {
       return { error: err instanceof Error ? err.message : 'Error anulando offline' };
     }

@@ -3,12 +3,13 @@
 // StrictMode al crear la DB 2 veces con el mismo nombre).
 import { createRxDatabase, type RxDatabase, type RxCollection, type RxStorage } from 'rxdb';
 import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie';
-import { ventaSchema, itemSchema, pagoSchema, type VentaDoc, type ItemDoc, type PagoDoc } from './schema';
+import { ventaSchema, itemSchema, pagoSchema, opSchema, type VentaDoc, type ItemDoc, type PagoDoc, type OpDoc } from './schema';
 
 export type OfflineCollections = {
   ventas: RxCollection<VentaDoc>;
   items: RxCollection<ItemDoc>;
   pagos: RxCollection<PagoDoc>;
+  ops: RxCollection<OpDoc>;
 };
 export type OfflineDB = RxDatabase<OfflineCollections>;
 
@@ -23,6 +24,7 @@ export function crearOfflineDB(name = 'comanda-offline2', storage?: RxStorage<un
       ventas: { schema: ventaSchema },
       items: { schema: itemSchema },
       pagos: { schema: pagoSchema },
+      ops: { schema: opSchema },
     });
     return db;
   })();
