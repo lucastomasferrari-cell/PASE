@@ -60,7 +60,7 @@ export function VentaScreen() {
   const navigate = useNavigate();
 
   // Hook #1: carga + reload de los 4 datasets primarios + realtime + reconcile
-  const { venta, items, catalogo, grupos, loading, reloadVenta } = useVentaData(ventaId);
+  const { venta, items, catalogo, grupos, loading, reloadVenta, addOptimistic, reconcileAdd } = useVentaData(ventaId);
 
   // 'favoritos' = filtra solo los Quick Items del empleado; null = todos; N = grupo_id
   const [grupoSel, setGrupoSel] = useState<number | 'favoritos' | null>(null);
@@ -191,20 +191,44 @@ export function VentaScreen() {
   const maxCurso = Math.max(3, ...cursosExistentes);
 
   async function addItem(it: ItemConGrupo, modificadores: { nombre: string; precio_extra: number; modifier_id?: number }[] = [], notas: string | null = null, cantidad: number = 1) {
-    if (!editable || !empleado) return;
+    if (!editable || !empleado || !venta) return;
+
+    // UI optimista: la fila aparece YA (id temporal negativo), sin esperar el
+    // round-trip. El precio definitivo lo pone el server; acá usamos precio_madre
+    // + modificadores como estimación (se reconcilia al refrescar).
+    const precio = Number(it.precio_madre ?? 0);
+    const sumMods = modificadores.reduce((s, m) => s + Number(m.precio_extra ?? 0), 0);
+    const ahora = new Date().toISOString();
+    const tempId = addOptimistic({
+      tenant_id: venta.tenant_id, local_id: venta.local_id, venta_id: ventaId,
+      item_id: it.id, cantidad, precio_unitario: precio, subtotal: (precio + sumMods) * cantidad,
+      descuento: 0, modificadores: modificadores.length > 0 ? modificadores : null,
+      curso: cursoActivo, comensal: null, combo_padre_id: null, es_combo_padre: false,
+      estado: 'hold', enviado_at: null, listo_at: null, anulado_at: null, anulado_motivo: null,
+      notas, cargado_por: empleado.id, es_cortesia: false, precio_unitario_original: null,
+      stay_until_release: false, created_at: ahora, updated_at: ahora, deleted_at: null,
+    });
+    setLastAddedItemId(it.id);
+    setLastAddedRowId(tempId);
+    setSearch('');
+    searchRef.current?.focus();
+
     const { id, error } = await agregarItem({
       ventaId, itemId: it.id, cantidad, curso: cursoActivo,
       modificadores: modificadores.length > 0 ? modificadores : null,
       notas,
       cargadoPor: empleado.id,
     });
-    if (error) { toast.error(error); return; }
-    toast.success(`${cantidad > 1 ? `${cantidad}× ` : ''}${it.nombre} agregado al curso ${cursoActivo}`);
-    setLastAddedItemId(it.id);
+    if (error) {
+      toast.error(error);
+      reconcileAdd(tempId, null); // sacá la fila optimista — el INSERT falló
+      return;
+    }
+    reconcileAdd(tempId, id);
     if (id != null) setLastAddedRowId(id);
+    // Sin reload() bloqueante: el realtime de ventas_pos_items trae la fila
+    // canónica y reconcilia. Igual disparamos uno liviano por las dudas.
     reload();
-    setSearch('');
-    searchRef.current?.focus();
   }
 
   async function repetirItem(itemRow: VentaPosItem) {
@@ -216,17 +240,8 @@ export function VentaScreen() {
       precio_extra: Number(m.precio_extra),
       modifier_id: m.modifier_id,
     })) ?? [];
-    const { id, error } = await agregarItem({
-      ventaId, itemId: itemRow.item_id, cantidad: 1, curso: cursoActivo,
-      modificadores: mods.length > 0 ? mods : null,
-      notas: itemRow.notas ?? null,
-      cargadoPor: empleado.id,
-    });
-    if (error) { toast.error(error); return; }
-    toast.success(`+1 ${cat.nombre} (curso ${cursoActivo})`);
-    setLastAddedItemId(itemRow.item_id);
-    if (id != null) setLastAddedRowId(id);
-    reload();
+    // Delega en addItem → misma UI optimista (la fila aparece al instante).
+    await addItem(cat, mods, itemRow.notas ?? null, 1);
   }
 
   async function removeItem(itemRow: VentaPosItem) {

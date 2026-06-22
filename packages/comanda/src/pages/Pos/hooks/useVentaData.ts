@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../../../lib/auth';
@@ -18,6 +18,10 @@ export interface UseVentaDataResult {
   loading: boolean;
   reloadFull: () => Promise<void>;
   reloadVenta: () => Promise<void>;
+  /** UI optimista: muestra la fila YA con un id temporal negativo (que devuelve) mientras el server confirma. */
+  addOptimistic: (row: Omit<VentaPosItem, 'id'>) => number;
+  /** Reconcilia la fila optimista: tempId→realId si ok, o la saca si el RPC falló (realId null). */
+  reconcileAdd: (tempId: number, realId: number | null) => void;
 }
 
 export function useVentaData(ventaId: number): UseVentaDataResult {
@@ -29,6 +33,16 @@ export function useVentaData(ventaId: number): UseVentaDataResult {
   const [catalogo, setCatalogo] = useState<ItemConGrupo[]>([]);
   const [grupos, setGrupos] = useState<ItemGrupo[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // UI optimista (2026-06-22): al tocar un producto la fila aparece al instante
+  // con un id temporal negativo, sin esperar el round-trip del INSERT + refetch.
+  // - pendingAddsRef: filas optimistas que el server todavía NO materializó.
+  //   reloadVenta las preserva (no las pisa) hasta que el refetch las trae.
+  // - reloadSeqRef: guard de secuencia. Un refetch viejo que resuelve tarde NO
+  //   puede pisar uno más nuevo (era la causa del "tocá otro para ver el anterior").
+  const pendingAddsRef = useRef<Map<number, VentaPosItem>>(new Map());
+  const reloadSeqRef = useRef(0);
+  const tempIdRef = useRef(-1);
 
   // Sprint optim egress 2026-05-16 (sesión 2): separar reload full vs light.
   // - reloadFull: trae venta + items + catálogo (200 items × 30cols) + grupos.
@@ -60,18 +74,63 @@ export function useVentaData(ventaId: number): UseVentaDataResult {
   // (que cambia muy poco) ni los grupos. Usado por Realtime + acciones
   // internas que solo afectan la venta actual.
   const reloadVenta = useCallback(async () => {
+    const seq = ++reloadSeqRef.current;
     try {
       const [vRes, iRes] = await Promise.all([
         getVenta(ventaId),
         listVentasItems(ventaId),
       ]);
+      // Guard: si mientras esperábamos arrancó otra recarga (realtime, otro toque),
+      // descartamos esta respuesta vieja — la nueva manda.
+      if (seq !== reloadSeqRef.current) return;
       if (vRes.error) toast.error(vRes.error);
       setVenta(vRes.data);
-      setItems(iRes.data);
+
+      // Merge no destructivo con las filas optimistas pendientes:
+      // las que el server ya materializó dejan de estar pendientes; las que
+      // todavía no aparecen en el refetch se preservan encima.
+      const server = iRes.data;
+      const serverIds = new Set(server.map((i) => i.id));
+      for (const id of [...pendingAddsRef.current.keys()]) {
+        if (serverIds.has(id)) pendingAddsRef.current.delete(id);
+      }
+      const pendientes = [...pendingAddsRef.current.values()].filter((p) => !serverIds.has(p.id));
+      setItems(pendientes.length ? [...server, ...pendientes] : server);
     } catch (err) {
       toast.error('Error cargando venta: ' + (err instanceof Error ? err.message : 'desconocido'));
     }
   }, [ventaId]);
+
+  // UI optimista: agrega la fila al instante y devuelve su id temporal (negativo).
+  const addOptimistic = useCallback((row: Omit<VentaPosItem, 'id'>): number => {
+    const tempId = tempIdRef.current--;
+    const full = { ...row, id: tempId } as VentaPosItem;
+    pendingAddsRef.current.set(tempId, full);
+    setItems((prev) => [...prev, full]);
+    return tempId;
+  }, []);
+
+  // Reconcilia la fila optimista contra el resultado del RPC.
+  const reconcileAdd = useCallback((tempId: number, realId: number | null) => {
+    const row = pendingAddsRef.current.get(tempId);
+    pendingAddsRef.current.delete(tempId);
+    if (realId == null || !row) {
+      // RPC falló (o ya no está) → sacamos la fila optimista.
+      setItems((prev) => prev.filter((i) => i.id !== tempId));
+      return;
+    }
+    const real = { ...row, id: realId };
+    pendingAddsRef.current.set(realId, real);
+    setItems((prev) => {
+      // Si un refetch/realtime ya trajo la fila canónica (realId), evitamos
+      // duplicar: descartamos la optimista en vez de mapearla.
+      if (prev.some((i) => i.id === realId && i.id !== tempId)) {
+        pendingAddsRef.current.delete(realId);
+        return prev.filter((i) => i.id !== tempId);
+      }
+      return prev.map((i) => (i.id === tempId ? real : i));
+    });
+  }, []);
 
   // Load inicial al mount
   useEffect(() => { reloadFull(); }, [reloadFull]);
@@ -107,5 +166,5 @@ export function useVentaData(ventaId: number): UseVentaDataResult {
     enabled: Number.isFinite(ventaId) && ventaId > 0,
   });
 
-  return { venta, items, setItems, catalogo, grupos, loading, reloadFull, reloadVenta };
+  return { venta, items, setItems, catalogo, grupos, loading, reloadFull, reloadVenta, addOptimistic, reconcileAdd };
 }
