@@ -54,6 +54,15 @@ export async function exportCierrePptx(model: CierreModel): Promise<void> {
   s4.addTable(tablaMontos(model.gastos.items), { x: 0.6, y: 1.7, w: 6, ...tableOpts });
   s4.addChart(p.ChartType.doughnut, chartData(model.gastos.chart), { x: 7.1, y: 1.5, w: 5.6, h: 5.4, chartColors: chartColors(model.gastos.chart), showLegend: true, legendPos: "r", showPercent: true, holeSize: 55 });
 
+  // 4b. Desgloses extra (Personal, Comisiones, Impuestos, Marketing).
+  for (const sec of model.extras) {
+    const se = p.addSlide();
+    titulo(se, sec.titulo, `${sec.pctVentas} sobre ventas` + (sec.prevPct ? `  ·  ${model.ingresos.prevLabel}: ${sec.prevPct}` : ""));
+    se.addTable(tablaMontos(sec.items), { x: 0.6, y: 1.7, w: 6, ...tableOpts });
+    se.addText(`Total: ${sec.totalFmt}`, { x: 0.6, y: 6.6, w: 6, h: 0.4, fontSize: 14, color: INK, fontFace: "Inter" });
+    se.addChart(p.ChartType.doughnut, chartData(sec.chart), { x: 7.1, y: 1.5, w: 5.6, h: 5.4, chartColors: chartColors(sec.chart), showLegend: true, legendPos: "r", showPercent: true, holeSize: 55 });
+  }
+
   // 5. Resumen.
   const s5 = p.addSlide();
   titulo(s5, "Egresos · Resumen");

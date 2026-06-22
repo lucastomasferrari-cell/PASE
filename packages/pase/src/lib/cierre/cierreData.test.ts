@@ -10,6 +10,10 @@ const base: CierreInput = {
   porMedio: [{ label: "EFECTIVO", value: 30000000 }, { label: "MERCADOPAGO", value: 76765435.5 }],
   cmvPorCat: [{ label: "PESCADERIA", value: 20000000 }, { label: "VERDULERIA", value: 19160853.4 }],
   gastosPorCat: [{ label: "ALQUILER", value: 8000000 }, { label: "EXPENSAS", value: 3068053.92 }],
+  personalItems: [{ label: "ROJAS, J", value: 9000000 }, { label: "PEREZ, M", value: 5603400 }, { label: "Cargas sociales", value: 2892195.01 }, { label: "Boletas sindicales", value: 692452 }],
+  comisionesItems: [{ label: "Comisión Rappi", value: 1500000 }, { label: "Comisión MP", value: 1019349.8 }],
+  impuestosItems: [{ label: "IIBB", value: 3000000 }, { label: "Débitos y créditos", value: 2354107.34 }],
+  marketingItems: [],
   prev: { ventas: 90000000, cmv: 27000000, gastosFijos: 9000000, gastosVar: 0, publicidad: 0, comisiones: 2000000, impuestos: 4000000, otrosGastos: 0, sueldos: 13000000, cargasSociales: 2500000, utilNeta: 24000000 },
   prevMes: "2026-04",
   socios: [{ nombre: "David", porcentaje: 50 }, { nombre: "Neko", porcentaje: 50 }],
@@ -40,6 +44,19 @@ describe("assembleCierre", () => {
     expect(m.resumen.rentabilidadFmt).toBe("$30.475.024,03");
     expect(m.resumen.rentabilidadPct).toBe("28,5%");
     expect(m.resumen.totalGastosFmt).toBe("$76.290.411,47"); // ventas - utilNeta
+  });
+  it("extras: una sección por categoría con datos (Personal/Comisiones/Impuestos), Marketing vacío se omite", () => {
+    const m = assembleCierre(base);
+    const titulos = m.extras.map((e) => e.titulo);
+    expect(titulos).toContain("Egresos · Personal");
+    expect(titulos).toContain("Egresos · Comisiones");
+    expect(titulos).toContain("Egresos · Impuestos");
+    expect(titulos).not.toContain("Egresos · Marketing"); // marketingItems vacío
+    const personal = m.extras.find((e) => e.titulo === "Egresos · Personal")!;
+    expect(personal.totalFmt).toBe("$18.188.047,01"); // sueldos+cargas+boletas (costo laboral)
+    expect(personal.pctVentas).toBe("17,0%");
+    expect(personal.prevPct).toBe("17,2%"); // (13M+2.5M)/90M
+    expect(personal.items.length).toBe(4);
   });
   it("división: reparto por socio sobre la rentabilidad", () => {
     const m = assembleCierre(base);

@@ -83,7 +83,19 @@ function slidesHtml(m: CierreModel): string[] {
         <span>${esc(d.nombre)} <span style="color:#6E8CAB;font-size:15px">(${d.pct})</span></span><span style="font-variant-numeric:tabular-nums">${d.montoFmt}</span></div>`).join("")}
     </div></div>` : "";
 
-  return [s1, s2, s3, s4, s5, s6].filter(Boolean);
+  // Slides de desglose extra (Personal, Comisiones, Impuestos, Marketing).
+  const extraSlides = m.extras.map((sec) => `<div class="slide" style="${SLIDE_BG};display:flex;flex-direction:column">
+    ${headTitle(esc(sec.titulo), `${sec.pctVentas} sobre ventas${sec.prevPct ? ` &nbsp;·&nbsp; ${esc(prevL)}: ${sec.prevPct}` : ""}`)}
+    <div style="display:flex;gap:50px;flex:1">
+      <div style="flex:1.05">${listaMontos(sec.items)}
+        <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:500;border-top:0.5px solid #DCE8F4;margin-top:8px;padding-top:8px;color:#1A3A5E"><span>Total</span><span>${sec.totalFmt}</span></div></div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center">
+        ${svgDonut(sec.chart, 300)}
+        <div style="width:100%;margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:4px 18px">${leyenda(sec.chart)}</div>
+      </div>
+    </div></div>`);
+
+  return [s1, s2, s3, s4, ...extraSlides, s5, s6].filter(Boolean);
 }
 
 export async function exportCierrePdf(model: CierreModel): Promise<void> {

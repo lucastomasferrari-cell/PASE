@@ -549,6 +549,32 @@ export default function EERR({ user, localActivo }: EERRProps) {
         const { data: ss } = await listarSocios(localActivo);
         socios = (ss || []).filter(s => s.activo).map(s => ({ nombre: s.nombre, porcentaje: Number(s.porcentaje) }));
       }
+      // Personal por empleado: misma lógica que el desglose de Sueldos en
+      // pantalla (liquidación + adelantos atribuidos + mano de obra sin asignar).
+      // Suma = total de Sueldos. Le agregamos Cargas y Boletas para que la slide
+      // refleje el costo laboral completo.
+      const gruposEmp = sueldosDetalle.reduce<Record<string, { emp: { apellido: string; nombre: string }; total: number }>>((acc, liq) => {
+        const emp = liq.rrhh_novedades?.rrhh_empleados;
+        if (!emp || !liq.rrhh_novedades) return acc;
+        const k = String(liq.rrhh_novedades.empleado_id);
+        if (!acc[k]) acc[k] = { emp, total: 0 };
+        const fromMovs = liq.id != null ? sueldoMovsPorLiq?.get(liq.id) : undefined;
+        acc[k].total += (fromMovs != null ? fromMovs : (liq.total_a_pagar || 0));
+        return acc;
+      }, {});
+      const conLiq = new Set(Object.keys(gruposEmp));
+      let huerfanos = 0;
+      for (const [empId, items] of Object.entries(adelantosPorEmp)) {
+        if (!conLiq.has(empId)) huerfanos += items.reduce((s, it) => s + it.monto, 0);
+      }
+      const restoSinAsignar = laborSinAsignar + huerfanos;
+      const personalItems = Object.entries(gruposEmp).map(([empId, g]) => ({
+        label: `${g.emp.apellido}, ${g.emp.nombre}`,
+        value: g.total + (adelantosPorEmp[empId] || []).reduce((s, it) => s + it.monto, 0),
+      })).sort((a, b) => b.value - a.value);
+      if (restoSinAsignar > 0.5) personalItems.push({ label: "Mano de obra / otros", value: restoSinAsignar });
+      if (totalCargasSociales > 0) personalItems.push({ label: "Cargas sociales", value: totalCargasSociales });
+      if (totalBoletasSindicales > 0) personalItems.push({ label: "Boletas sindicales", value: totalBoletasSindicales });
       const input = {
         localNombre, mes, emitido: new Date().toLocaleDateString("es-AR"),
         ventas: ventasReales, cmv: totalCMV, utilBruta: utilBrutaReal, gastosFijosVar: totalGastos,
@@ -558,6 +584,10 @@ export default function EERR({ user, localActivo }: EERRProps) {
         porMedio: porMedio.filter(x => !/canje/i.test(x.m)).map(x => ({ label: x.m, value: x.t })),
         cmvPorCat: porCatCMV.map(x => ({ label: x.c, value: x.t })),
         gastosPorCat: [...porCatFijos, ...porCatVar].map(x => ({ label: x.c, value: x.t })).sort((a, b) => b.value - a.value),
+        personalItems,
+        comisionesItems: porCatCom.map(x => ({ label: x.c, value: x.t })),
+        impuestosItems: porCatImp.map(x => ({ label: x.c, value: x.t })),
+        marketingItems: porCatPub.map(x => ({ label: x.c, value: x.t })),
         prev: prevRes ? { ventas: prevRes.ventas, cmv: prevRes.cmv, gastosFijos: prevRes.gastosFijos, gastosVar: prevRes.gastosVar, publicidad: prevRes.publicidad, comisiones: prevRes.comisiones, impuestos: prevRes.impuestos, otrosGastos: prevRes.otrosGastos, sueldos: prevRes.sueldos, cargasSociales: prevRes.cargasSociales, utilNeta: prevRes.utilNeta } : null,
         prevMes: prevRes ? pmes : null,
         socios,
