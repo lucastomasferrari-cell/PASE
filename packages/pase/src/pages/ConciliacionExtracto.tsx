@@ -479,6 +479,24 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     [extractoMovs, devueltasRefs],
   );
 
+  // Para AUDITAR: por cada PAGO de PASE que cruzó, contra qué TRANSFERENCIA del
+  // banco lo hizo. Se reconstruye desde el resultado global del cruce con el
+  // mismo criterio que usa la confirmación al cerrar. Solo display.
+  const movAtransferencia = useMemo(() => {
+    const map = new Map<string, { fecha: string; descripcion: string; monto: number }>();
+    for (const fila of cruce?.extracto ?? []) {
+      const r = resueltos[`ext:${fila.idx}`];
+      let movIds: string[] = [];
+      if (r && r.startsWith("matcheado:")) movIds = [r.slice("matcheado:".length)];
+      else if (r && r.startsWith("combo:")) movIds = fila.combinaciones[Number(r.slice("combo:".length))]?.movs.map(m => m.id) ?? [];
+      else if (fila.estado === "verde" && fila.candidatos.length === 1) movIds = [fila.candidatos[0]!.id];
+      else if (fila.estado === "verde_agrupado" && fila.combinaciones.length === 1) movIds = fila.combinaciones[0]!.movs.map(m => m.id);
+      else if ((fila.estado === "verde_bloque" || fila.estado === "bloque_diferencia") && fila.bloque) movIds = (fila.bloque.movs ?? []).map(m => m.id);
+      for (const id of movIds) map.set(id, { fecha: fila.fecha, descripcion: fila.descripcion, monto: fila.monto });
+    }
+    return map;
+  }, [cruce, resueltos]);
+
   // ─── Cruzar con PASE ─────────────────────────────────────────────────────
   async function cruzar() {
     if (!egresosExtracto.length || !periodoDesde || !periodoHasta) return;
@@ -1522,15 +1540,31 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                         {(bloque.ya_matcheados_pase ?? []).length > 0 && (
                           <>
                             <div style={{ color: "var(--muted2)", margin: "8px 0 2px", fontStyle: "italic" }}>
-                              Pagos ya matcheados ({bloque.ya_matcheados_pase!.length}):
+                              Pagos ya cruzados — cada uno con su transferencia del banco ({bloque.ya_matcheados_pase!.length}):
                             </div>
-                            {bloque.ya_matcheados_pase!.map((m) => (
-                              <div key={`ctx-pase-${m.id}`} style={{ display: "flex", gap: 6, padding: "2px 0 2px 4px", opacity: 0.45, fontSize: 11 }}>
-                                <span style={{ color: "var(--success)", flexShrink: 0 }}>✓</span>
-                                <span style={{ flex: 1 }}>{fmt_d(m.fecha)} · {(m.detalle ?? "").slice(0, 50)}</span>
-                                <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(m.importe)}</span>
-                              </div>
-                            ))}
+                            {bloque.ya_matcheados_pase!.map((m) => {
+                              const transf = movAtransferencia.get(m.id);
+                              const difMonto = transf ? Math.abs(transf.monto) - Math.abs(m.importe) : 0;
+                              return (
+                                <div key={`ctx-pase-${m.id}`} style={{ padding: "4px 0 4px 4px", opacity: 0.7, fontSize: 11, borderBottom: "1px solid var(--bd)" }}>
+                                  <div style={{ display: "flex", gap: 6 }}>
+                                    <span style={{ color: "var(--success)", flexShrink: 0 }}>✓</span>
+                                    <span style={{ flex: 1 }}><b>PASE</b> · {fmt_d(m.fecha)} · {(m.detalle ?? "").slice(0, 48)}</span>
+                                    <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(m.importe)}</span>
+                                  </div>
+                                  {transf ? (
+                                    <div style={{ display: "flex", gap: 6, paddingLeft: 16, color: "var(--muted2)" }}>
+                                      <span style={{ flex: 1 }}>↳ <b>Banco</b> · {fmt_d(transf.fecha)} · {(transf.descripcion ?? "").slice(0, 44)}
+                                        {Math.abs(difMonto) > 0.5 && <span style={{ color: "var(--danger)", marginLeft: 6 }}>⚠ dif {fmt_$(difMonto)}</span>}
+                                      </span>
+                                      <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(transf.monto)}</span>
+                                    </div>
+                                  ) : (
+                                    <div style={{ paddingLeft: 16, color: "var(--muted)" }}>↳ Banco · (la transferencia figura en otra parte del extracto)</div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </>
                         )}
                         {/* Totales completos (matcheados + no matcheados) */}
