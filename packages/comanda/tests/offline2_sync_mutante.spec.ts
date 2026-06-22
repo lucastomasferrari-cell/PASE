@@ -20,8 +20,9 @@ import type { VentaDoc } from '../src/lib/offline2/schema';
 //   4. Idempotencia: re-pushear la venta (mismo idempotency_uuid) devuelve el
 //      MISMO id y NO duplica filas (las RPCs dedup por uuid).
 //
-// NOTA (gap Fase 2): la venta offline no lleva turno_caja_id → el cobro NO
-// genera movimientos_caja. Asociar turno al sincronizar es trabajo de Fase 2.
+// Fase 2 (2026-06-22): la venta offline AHORA se asocia al turno abierto del
+// local (fn_abrir_venta_comanda_offline) → al cobrar genera el movimiento de
+// caja. Este test lo verifica (invariante 5).
 
 const LOCAL = 'Local Prueba 2';
 const PRECIO = 4500;
@@ -34,6 +35,7 @@ test.describe('offline2 ciclo offline→sync (mutante)', () => {
   let canalId: number;
   let itemId: number;
   let cajeroId: string;
+  let turnoId: number | null = null;
   let ventaServerId: number | null = null;
 
   test.beforeEach(async () => {
@@ -60,6 +62,21 @@ test.describe('offline2 ciclo offline→sync (mutante)', () => {
       .from('rrhh_empleados').select('id').eq('local_id', localId).eq('pos_activo', true).limit(1);
     if (!emp?.length) throw new Error('Sin empleado POS activo en Local Prueba 2');
     cajeroId = emp[0].id as string;
+
+    // Turno de caja abierto (necesario para que el cobro genere el movimiento).
+    const { data: turnoExistente } = await supa
+      .from('turnos_caja').select('id').eq('local_id', localId).eq('estado', 'abierto')
+      .order('id', { ascending: false }).limit(1);
+    if (turnoExistente && turnoExistente.length > 0) {
+      turnoId = turnoExistente[0].id as number;
+    } else {
+      const { data: turnoData, error: turnoErr } = await supa.rpc('fn_abrir_turno_caja_comanda', {
+        p_local_id: localId, p_cajero_id: cajeroId, p_monto_inicial: 0,
+        p_notas: 'o2 mutante', p_idempotency_key: `o2-abrir-turno-${Date.now()}`,
+      });
+      if (turnoErr) throw new Error(`Error abriendo turno: ${turnoErr.message}`);
+      turnoId = Number(turnoData);
+    }
 
     db = await crearOfflineDB(`o2-mutante-${crypto.randomUUID().slice(0, 8)}`, getRxStorageMemory());
     ventaServerId = null;
@@ -122,6 +139,16 @@ test.describe('offline2 ciclo offline→sync (mutante)', () => {
     expect(pagosSrv?.length).toBe(1);
     expect(pagosSrv?.[0]?.estado).toBe('confirmado');
     expect(Number(pagosSrv?.[0]?.monto)).toBe(PRECIO);
+
+    // ── 3b. Fase 2: el cobro offline AHORA genera el movimiento de caja ───────
+    // La venta offline tomó el turno abierto → fn_agregar_pago crea el mov.
+    const { data: movs } = await supa.from('movimientos_caja')
+      .select('tipo, monto, metodo, turno_caja_id').eq('venta_id', ventaServerId!);
+    const movVenta = (movs ?? []).find(m => m.tipo === 'venta');
+    expect(movVenta, 'el cobro offline debe generar el movimiento de caja').toBeDefined();
+    expect(Number(movVenta?.monto)).toBe(PRECIO);
+    expect(movVenta?.metodo).toBe('efectivo');
+    expect(movVenta?.turno_caja_id).toBe(turnoId); // asociado al turno abierto
 
     // ── 4. Idempotencia: re-pushear la venta (mismo uuid) no duplica ─────────
     const reId = await callAbrir(supa, sync!.toJSON() as VentaDoc);
