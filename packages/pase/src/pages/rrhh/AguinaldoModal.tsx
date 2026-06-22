@@ -135,6 +135,52 @@ export function AguinaldoModal({
     if (fail.length > 0 && ok.length === 0) showError(`No se pudo pagar (${fail.length} con error)`);
   }
 
+  // Imprime una planilla limpia (empleado / puesto / aguinaldo / firma) de los
+  // empleados seleccionados, abriendo una ventana nueva y mandando a imprimir.
+  function imprimir() {
+    const rows = seleccionados;
+    if (rows.length === 0) { showError("Tildá al menos un empleado para imprimir"); return; }
+    const win = window.open("", "_blank", "width=820,height=640");
+    if (!win) { showError("El navegador bloqueó la ventana de impresión"); return; }
+    const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
+    const p = fecha.split("-");
+    const fdmy = p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : fecha;
+    const total = rows.reduce((s, e) => s + Number(montos[e.id] || 0), 0);
+    const filas = rows.map((e, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${esc(e.apellido)}, ${esc(e.nombre)}</td>
+        <td>${esc(e.puesto || "")}</td>
+        <td class="num">${fmt$(Number(montos[e.id] || 0))}</td>
+        <td class="firma"></td>
+      </tr>`).join("");
+    win.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8">
+      <title>Aguinaldos ${esc(localNombre)} ${fdmy}</title>
+      <style>
+        body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:28px;}
+        h1{font-size:18px;margin:0 0 2px;}
+        .sub{font-size:12px;color:#444;margin-bottom:16px;}
+        table{width:100%;border-collapse:collapse;font-size:12px;}
+        th,td{border:1px solid #999;padding:6px 8px;text-align:left;}
+        th{background:#eee;}
+        td.num,th.num{text-align:right;white-space:nowrap;}
+        td.firma{width:220px;}
+        tfoot td{font-weight:bold;background:#f5f5f5;}
+        @media print{body{margin:12mm;}}
+      </style></head><body>
+      <h1>Liquidación de aguinaldos</h1>
+      <div class="sub">${esc(localNombre)} · Fecha: ${fdmy}${cuenta ? " · Cuenta: " + esc(cuenta) : ""}</div>
+      <table>
+        <thead><tr><th>#</th><th>Empleado</th><th>Puesto</th><th class="num">Aguinaldo</th><th>Firma y aclaración</th></tr></thead>
+        <tbody>${filas}</tbody>
+        <tfoot><tr><td colspan="3">Total · ${rows.length} empleados</td><td class="num">${fmt$(total)}</td><td></td></tr></tfoot>
+      </table>
+      </body></html>`);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 250);
+  }
+
   const th: React.CSSProperties = { fontSize: 11, color: "var(--muted2)", textAlign: "left", padding: "6px 8px", fontWeight: 600 };
   const td: React.CSSProperties = { fontSize: 13, padding: "6px 8px", borderTop: "1px solid var(--pase-border)" };
 
@@ -232,9 +278,14 @@ export function AguinaldoModal({
             <span style={{ color: "var(--muted2)" }}>Total a pagar: </span>
             <b>{fmt$(total)}</b> <span style={{ color: "var(--muted2)" }}>· {seleccionados.length} empleado(s)</span>
           </div>
-          <button className="btn btn-primary" onClick={pagar} disabled={pagando || seleccionados.length === 0 || !cuenta}>
-            {pagando ? "Pagando…" : `Pagar ${fmt$(total)}`}
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-outline" onClick={imprimir} disabled={seleccionados.length === 0}>
+              Imprimir
+            </button>
+            <button className="btn btn-primary" onClick={pagar} disabled={pagando || seleccionados.length === 0 || !cuenta}>
+              {pagando ? "Pagando…" : `Pagar ${fmt$(total)}`}
+            </button>
+          </div>
         </div>
       </div>
     </Modal>
