@@ -356,14 +356,14 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const totalComisiones=gastos.filter((g)=>g.tipo==="comision").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_comision"),"total");
   const totalImpuestos=gastos.filter((g)=>g.tipo==="impuesto").reduce((s, g)=>s+(g.monto||0),0)+sumarMonto(facturasBucket("gasto_impuesto"),"total");
   const totalOtrosGastos=gastos.filter((g)=>!["fijo","variable","publicidad","comision","impuesto","retiro_socio","empleado","mano_obra"].includes(g.tipo)).reduce((s, g)=>s+(g.monto||0),0);
-  // Retiros de socios: distribución de utilidades, NO suma a gastos
-  // operativos. Se muestra DESPUÉS de Util. Neta. Solo se cargan via la
-  // pantalla Gastos (no facturas).
-  // "Retiro de socio" REAL = solo la categoría canónica "Retiro socio" (la que
-  // crea el módulo de Reparto). Otras categorías que quedaron mal en el tipo
-  // retiro_socio (RETIRO EFECTIVO = movimiento de caja; COMPRA ONLINE = compra)
-  // NO son retiros → el EERR las ignora (Lucas 21-jun).
-  const totalRetiros=gastos.filter((g)=>g.tipo==="retiro_socio"&&g.categoria==="Retiro socio").reduce((s, g)=>s+(g.monto||0),0);
+  // Retiros de socios: distribución de utilidades / compras personales pagadas
+  // por el negocio. NO suma a gastos operativos; se muestra DESPUÉS de Util.
+  // Neta. Incluye TODO el tipo retiro_socio (Retiro socio, COMPRA ONLINE, etc.)
+  // EXCEPTO "RETIRO EFECTIVO", que es un movimiento de caja ya contado y el EERR
+  // ignora a propósito (Lucas 22-jun: COMPRA ONLINE SÍ es retiro de socios).
+  const ES_RETIRO = (g: { tipo: string; categoria: string | null }) =>
+    g.tipo === "retiro_socio" && g.categoria !== "RETIRO EFECTIVO";
+  const totalRetiros=gastos.filter(ES_RETIRO).reduce((s, g)=>s+(g.monto||0),0);
   const totalGastos=totalGastosFijos+totalGastosVar;
   const utilBruta=totalVentas-totalCMV;
   const utilNeta=utilBruta-totalGastos-sueldos-totalCargasSociales-totalBoletasSindicales-totalPublicidad-totalComisiones-totalImpuestos-totalOtrosGastos;
@@ -415,7 +415,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const porCatPub=ordenarPorCategoria(itemsGastoFact("publicidad","gasto_publicidad"), GASTOS_PUBLICIDAD);
   const porCatCom=ordenarPorCategoria(itemsGastoFact("comision","gasto_comision"), COMISIONES_CATS);
   const porCatImp=ordenarPorCategoria(itemsGastoFact("impuesto","gasto_impuesto"), GASTOS_IMPUESTOS);
-  const porCatRet=ordenarPorCategoria(gastos.filter(g=>g.tipo==="retiro_socio"&&g.categoria==="Retiro socio").map(g=>({cat:g.categoria,monto:Number(g.monto||0)})), RETIROS_SOCIOS);
+  const porCatRet=ordenarPorCategoria(gastos.filter(ES_RETIRO).map(g=>({cat:g.categoria,monto:Number(g.monto||0)})), RETIROS_SOCIOS);
   const otrosGastosArr=gastos.filter(g=>!["fijo","variable","publicidad","comision","impuesto","retiro_socio","empleado","mano_obra"].includes(g.tipo));
   const porCatOtros=Object.entries(otrosGastosArr.reduce<Record<string,number>>((acc,g)=>{const k=g.categoria||g.tipo;acc[k]=(acc[k]||0)+(g.monto||0);return acc},{})).map(([c,t])=>({c,t})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
 
