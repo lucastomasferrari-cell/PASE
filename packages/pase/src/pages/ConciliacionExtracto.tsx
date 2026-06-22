@@ -2079,23 +2079,38 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
             )}
           />
 
-          {/* VERDES — match automático, solo informativo */}
+          {/* VERDES — match automático. Muestra la PAREJA banco ↔ PASE para
+              auditar cada cruce (antes solo se veía el lado banco). */}
           {stats.verdes > 0 && (
             <Card>
               <details>
                 <summary style={{ cursor: "pointer", fontSize: 14, color: "var(--muted2)" }}>
-                  🟢 Ver los {stats.verdes} movimientos que coinciden OK (no requieren acción)
+                  🟢 Ver los {stats.verdes} movimientos que coinciden OK — banco ↔ PASE (no requieren acción)
                 </summary>
-                <div style={{ marginTop: 10, maxHeight: 300, overflowY: "auto" }}>
-                  {cruce.extracto.filter(f => f.estado === "verde").map(fila => (
-                    <div key={fila.idx} style={{
-                      padding: "6px 0", borderBottom: "1px solid var(--bd)",
-                      fontSize: 12, display: "flex", justifyContent: "space-between",
-                    }}>
-                      <span>{fmt_d(fila.fecha)} · {fila.descripcion}</span>
-                      <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(fila.monto)}</span>
-                    </div>
-                  ))}
+                <div style={{ marginTop: 10, maxHeight: 360, overflowY: "auto" }}>
+                  {cruce.extracto.filter(f => f.estado === "verde").map(fila => {
+                    const pago = fila.candidatos[0]; // verde individual = 1 pago matcheado
+                    const difMonto = pago ? Math.abs(fila.monto) - Math.abs(pago.importe) : 0;
+                    return (
+                      <div key={fila.idx} style={{ padding: "8px 0", borderBottom: "1px solid var(--bd)", fontSize: 12 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span><strong>Banco</strong> · {fmt_d(fila.fecha)} · {fila.descripcion}</span>
+                          <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{fmt_$(fila.monto)}</span>
+                        </div>
+                        {pago ? (
+                          <div style={{ marginTop: 3, paddingLeft: 12, color: "var(--muted2)", display: "flex", justifyContent: "space-between" }}>
+                            <span>↳ <strong>PASE</strong> · {fmt_d(pago.fecha)} · {pago.detalle}
+                              {pago.dias_diff !== 0 && <span style={{ opacity: 0.7 }}> ({pago.dias_diff > 0 ? `+${pago.dias_diff}` : pago.dias_diff}d)</span>}
+                              {Math.abs(difMonto) > 0.5 && <span style={{ color: "var(--danger)", marginLeft: 6 }}>⚠ dif {fmt_$(difMonto)}</span>}
+                            </span>
+                            <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(pago.importe)}</span>
+                          </div>
+                        ) : (
+                          <div style={{ marginTop: 3, paddingLeft: 12, color: "var(--muted)" }}>↳ (sin pago asociado)</div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </details>
             </Card>
