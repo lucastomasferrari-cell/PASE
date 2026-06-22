@@ -267,8 +267,11 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
   // punto donde lo dejaste.
   const BORRADOR_KEY = localActivo != null ? `pase_concil_borrador_local_${localActivo}` : "";
 
-  // Forma del borrador (localStorage + base).
+  // Forma del borrador (localStorage + base). `local_id` estampa a qué local
+  // pertenece — al cargar se descarta el que no coincida (anti cruce de
+  // archivos entre locales, Lucas 22-jun).
   type BorradorData = {
+    local_id?: number;
     archivoNombre?: string;
     extractoMovs?: ExtractoMovimiento[];
     periodoDesde?: string;
@@ -308,8 +311,15 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
       const raw = localStorage.getItem(BORRADOR_KEY);
       if (raw) {
         const draft = JSON.parse(raw) as BorradorData & { savedAt?: number };
-        localSavedAt = draft.savedAt || 0;
-        aplicarBorrador(draft);
+        // Solo confío en el borrador local si está estampado con ESTE local.
+        // Los viejos (sin estampa) o contaminados se descartan y se limpian —
+        // así no re-siembran el extracto de otro local en la base.
+        if (draft.local_id === localActivo) {
+          localSavedAt = draft.savedAt || 0;
+          aplicarBorrador(draft);
+        } else {
+          localStorage.removeItem(BORRADOR_KEY);
+        }
       }
     } catch (e) {
       console.warn("[Conciliación] error restaurando borrador local:", e);
@@ -319,8 +329,12 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
         const { data } = await db.from("conciliacion_borradores")
           .select("data, updated_at").eq("local_id", localActivo).maybeSingle();
         if (cancel || !data?.data) return;
+        const d = data.data as BorradorData;
+        // Descarta el borrador de la base si está estampado con OTRO local
+        // (dato contaminado de un cruce viejo). Sin estampa = legacy, se confía.
+        if (d.local_id != null && d.local_id !== localActivo) return;
         const dbSavedAt = data.updated_at ? new Date(data.updated_at as string).getTime() : 0;
-        if (dbSavedAt >= localSavedAt) aplicarBorrador(data.data as BorradorData);
+        if (dbSavedAt >= localSavedAt) aplicarBorrador(d);
       } catch (e) {
         console.warn("[Conciliación] error trayendo borrador de la base:", e);
       }
@@ -337,7 +351,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
     if (corridaCerrada) return; // ya cerrada — no guarda más borrador
     const hayCruce = !!cruce && cruce.extracto.length > 0;
     if (!hayCruce && extractoMovs.length === 0) return;
-    const payload: BorradorData = { archivoNombre, extractoMovs, periodoDesde, periodoHasta, resumenExtracto, cruce, resueltos };
+    const payload: BorradorData = { local_id: localActivo, archivoNombre, extractoMovs, periodoDesde, periodoHasta, resumenExtracto, cruce, resueltos };
     try {
       localStorage.setItem(BORRADOR_KEY, JSON.stringify({ ...payload, savedAt: Date.now() }));
     } catch (e) {
