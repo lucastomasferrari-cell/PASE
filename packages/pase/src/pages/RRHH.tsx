@@ -40,6 +40,7 @@ import { TabSueldosBase } from "./rrhh/TabSueldosBase";
 // 31-may, decisión Lucas 4b). Los archivos viejos quedan en disk para git
 // history; se pueden borrar después de validar 1 semana en prod.
 import { AdelantoModal } from "./rrhh/AdelantoModal";
+import { AguinaldoModal } from "./rrhh/AguinaldoModal";
 
 interface RRHHProps {
   user: Usuario;
@@ -118,6 +119,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const [_fechaPago, setFechaPago] = useState<string>(toISO(today));
   const [_adelantosPendientes, setAdelantosPendientes] = useState<Adelanto[]>([]);
   const [adelModal, setAdelModal] = useState(false);
+  const [agModal, setAgModal] = useState(false);
   const [csModal, setCsModal] = useState(false);
   // concepto: CARGAS SOCIALES (F931/AFIP) o BOLETAS SINDICALES (sindicato/obra
   // social). Ambos son costo laboral en el EERR (línea propia c/u). Lucas 16-jun.
@@ -913,6 +915,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
         title="Equipo"
         actions={esDueno ? (
           <>
+            <button className="btn btn-acc btn-sm" onClick={()=>setAgModal(true)}>Pagar Aguinaldos</button>
             <button className="btn btn-acc btn-sm" onClick={()=>{setCsModal(true);setCsIdempKey(crypto.randomUUID());}}>Pagar Cargas / Sindicato</button>
             <button className="btn btn-outline btn-sm" onClick={()=>setAdelModal(true)}>Registrar Adelanto</button>
           </>
@@ -1034,6 +1037,18 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
           </button>
         </div>
       </Modal>
+
+      {agModal && (
+        <AguinaldoModal
+          onClose={()=>setAgModal(false)}
+          empleados={allEmps.filter(e=>e.activo)}
+          cuentasUsables={cuentasUsables}
+          localNombre={locales.find(l=>l.id===localActivo)?.nombre ?? "todos los locales"}
+          showToast={showToast}
+          showError={showError}
+          onPagado={()=>{ if (tab==="dashboard") loadDashboard(); }}
+        />
+      )}
     </div>
   );
 }
