@@ -42,8 +42,11 @@ export function assembleCierre(i: CierreInput): CierreModel {
   const v = i.ventas;
   const costoLaboral = i.sueldos + i.cargas + i.boletas;
   const totalGastos = v - i.utilNeta; // CMV + todos los egresos
-  const prevVentas = i.prev?.ventas ?? 0;
-  const prevGastosFV = i.prev ? i.prev.gastosFijos + i.prev.gastosVar : 0;
+  // El mes anterior solo sirve para comparar si REALMENTE tiene datos cargados.
+  // Si no (ventas 0 = mes sin cargar), no mostramos la comparación (sería falsa).
+  const prev = i.prev && i.prev.ventas > 0 ? i.prev : null;
+  const prevVentas = prev?.ventas ?? 0;
+  const prevGastosFV = prev ? prev.gastosFijos + prev.gastosVar : 0;
 
   const division = (i.socios.length > 0 && i.utilNeta > 0)
     ? {
@@ -61,14 +64,14 @@ export function assembleCierre(i: CierreInput): CierreModel {
     portada: { localNombre: i.localNombre, mesLabel: mesLabel(i.mes) },
     ingresos: {
       totalFmt: money(v),
-      prevLabel: i.prevMes ? mesLabel(i.prevMes) : null,
-      prevFmt: i.prev ? money(i.prev.ventas) : null,
+      prevLabel: prev && i.prevMes ? mesLabel(i.prevMes) : null,
+      prevFmt: prev ? money(prev.ventas) : null,
       items: toList(i.porMedio, v),
       chart: toChart(i.porMedio, v),
     },
     cmv: {
       pctVentas: pctOf(i.cmv, v),
-      prevPct: i.prev ? pctOf(i.prev.cmv, prevVentas) : null,
+      prevPct: prev ? pctOf(prev.cmv, prevVentas) : null,
       items: toList(i.cmvPorCat, v),
       chart: toChart(i.cmvPorCat, i.cmv),
       totalFmt: money(i.cmv),
@@ -76,7 +79,7 @@ export function assembleCierre(i: CierreInput): CierreModel {
     },
     gastos: {
       pctVentas: pctOf(i.gastosFijosVar, v),
-      prevPct: i.prev ? pctOf(prevGastosFV, prevVentas) : null,
+      prevPct: prev ? pctOf(prevGastosFV, prevVentas) : null,
       items: toList(i.gastosPorCat, v),
       chart: toChart(i.gastosPorCat, i.gastosFijosVar),
       totalFmt: money(i.gastosFijosVar),

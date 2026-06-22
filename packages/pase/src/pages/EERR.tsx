@@ -500,6 +500,14 @@ export default function EERR({ user, localActivo }: EERRProps) {
   }));
 
   // ── Export (botón "Exportar") ──────────────────────────────────────────────
+  // "Canje" no es facturación real (trueque): se saca de las formas de pago y
+  // se resta de las ventas → como bajan las ventas, baja también utilidad bruta
+  // y neta (el reporte queda consistente: ventas − costos = utilidad).
+  const canjeMonto = porMedio.filter(x => /canje/i.test(x.m)).reduce((s, x) => s + x.t, 0);
+  const ventasReales = totalVentas - canjeMonto;
+  const utilBrutaReal = utilBruta - canjeMonto;
+  const utilNetaReal = utilNeta - canjeMonto;
+
   const nombreLocalExport = async (): Promise<string> => {
     if (localActivo == null) return "Todos los locales";
     const { data: loc } = await db.from("locales").select("nombre").eq("id", localActivo).maybeSingle();
@@ -514,10 +522,10 @@ export default function EERR({ user, localActivo }: EERRProps) {
       const { exportEERRPdf } = await import("../lib/exportEERRPdf");
       await exportEERRPdf({
         localNombre, mes, emitido: new Date().toLocaleDateString("es-AR"),
-        ventas: totalVentas, cmv: totalCMV, utilBruta, gastosFijosVar: totalGastos,
+        ventas: ventasReales, cmv: totalCMV, utilBruta: utilBrutaReal, gastosFijosVar: totalGastos,
         sueldos, cargas: totalCargasSociales, boletas: totalBoletasSindicales,
         publicidad: totalPublicidad, comisiones: totalComisiones, impuestos: totalImpuestos,
-        otros: totalOtrosGastos, utilNeta,
+        otros: totalOtrosGastos, utilNeta: utilNetaReal,
       });
     } catch (e) {
       alert("No se pudo generar el PDF: " + (e instanceof Error ? e.message : String(e)));
@@ -543,11 +551,11 @@ export default function EERR({ user, localActivo }: EERRProps) {
       }
       const input = {
         localNombre, mes, emitido: new Date().toLocaleDateString("es-AR"),
-        ventas: totalVentas, cmv: totalCMV, utilBruta, gastosFijosVar: totalGastos,
+        ventas: ventasReales, cmv: totalCMV, utilBruta: utilBrutaReal, gastosFijosVar: totalGastos,
         sueldos, cargas: totalCargasSociales, boletas: totalBoletasSindicales,
         publicidad: totalPublicidad, comisiones: totalComisiones, impuestos: totalImpuestos,
-        otros: totalOtrosGastos, utilNeta,
-        porMedio: porMedio.map(x => ({ label: x.m, value: x.t })),
+        otros: totalOtrosGastos, utilNeta: utilNetaReal,
+        porMedio: porMedio.filter(x => !/canje/i.test(x.m)).map(x => ({ label: x.m, value: x.t })),
         cmvPorCat: porCatCMV.map(x => ({ label: x.c, value: x.t })),
         gastosPorCat: [...porCatFijos, ...porCatVar].map(x => ({ label: x.c, value: x.t })).sort((a, b) => b.value - a.value),
         prev: prevRes ? { ventas: prevRes.ventas, cmv: prevRes.cmv, gastosFijos: prevRes.gastosFijos, gastosVar: prevRes.gastosVar, publicidad: prevRes.publicidad, comisiones: prevRes.comisiones, impuestos: prevRes.impuestos, otrosGastos: prevRes.otrosGastos, sueldos: prevRes.sueldos, cargasSociales: prevRes.cargasSociales, utilNeta: prevRes.utilNeta } : null,

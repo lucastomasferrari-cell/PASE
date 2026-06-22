@@ -56,6 +56,14 @@ describe("assembleCierre", () => {
     expect(m.ingresos.prevFmt).toBeNull();
     expect(m.cmv.prevPct).toBeNull();
   });
+  it("mes anterior sin cargar (ventas 0) → no compara (sería falso)", () => {
+    const prevVacio = { ventas: 0, cmv: 0, gastosFijos: 0, gastosVar: 0, publicidad: 0, comisiones: 0, impuestos: 0, otrosGastos: 0, sueldos: 0, cargasSociales: 0, utilNeta: 0 };
+    const m = assembleCierre({ ...base, prev: prevVacio, prevMes: "2026-04" });
+    expect(m.ingresos.prevFmt).toBeNull();
+    expect(m.ingresos.prevLabel).toBeNull();
+    expect(m.cmv.prevPct).toBeNull();
+    expect(m.gastos.prevPct).toBeNull();
+  });
   it("ventas 0 (apertura) → % '—', sin NaN/Infinity", () => {
     const m = assembleCierre({ ...base, ventas: 0 });
     const s = JSON.stringify(m);
