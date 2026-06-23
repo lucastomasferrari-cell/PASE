@@ -18,6 +18,7 @@ export interface VentaHeaderProps {
   onEditNotas: () => void;
   onCancelNotas: () => void;
   onGuardarNotas: () => void;
+  onDescuento: () => void;
   onTransfer: () => void;
   onMerge: () => void;
   onSplit: () => void;
@@ -39,6 +40,7 @@ export const VentaHeader = React.memo(function VentaHeader({
   onEditNotas,
   onCancelNotas,
   onGuardarNotas,
+  onDescuento,
   onTransfer,
   onMerge,
   onSplit,
@@ -86,6 +88,9 @@ export const VentaHeader = React.memo(function VentaHeader({
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onEditNotas}>
                 {venta.notas ? 'Editar nota' : 'Agregar nota'}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onDescuento}>
+                Aplicar descuento
               </DropdownMenuItem>
               {venta.modo === 'salon' && (
                 <>

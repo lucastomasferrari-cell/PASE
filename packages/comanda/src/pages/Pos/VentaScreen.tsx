@@ -416,6 +416,7 @@ export function VentaScreen() {
           onEditNotas={() => { setNotasDraft(venta.notas ?? ''); setEditandoNotas(true); }}
           onCancelNotas={() => setEditandoNotas(false)}
           onGuardarNotas={guardarNotasVenta}
+          onDescuento={() => setShowDescuento(true)}
           onTransfer={() => setShowTransfer(true)}
           onMerge={() => setShowMerge(true)}
           onSplit={() => setShowSplit(true)}
@@ -453,12 +454,6 @@ export function VentaScreen() {
           venta={venta}
           editable={editable}
           onCobrar={() => setShowCobro(true)}
-          onDescuento={() => setShowDescuento(true)}
-          onTransfer={() => setShowTransfer(true)}
-          onMerge={() => setShowMerge(true)}
-          onSplit={() => setShowSplit(true)}
-          onOpenHistorial={() => setHistorialOpen(true)}
-          onAnular={() => setShowAnular(true)}
         />
       </aside>
 

@@ -1,15 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet } from 'react-router-dom';
-import { ArrowLeft, Wallet, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
-import { usePermiso } from '@/lib/usePermiso';
 import { getTurnoAbierto } from '@/services/turnosCajaService';
 import type { TurnoCaja } from '@/types/database';
 import { Button } from '@/components/ui/button';
-import { ThemeToggle } from '@/components/ThemeToggle';
 import { BusyModeButton } from '@/components/BusyModeButton';
-import { FullscreenToggle } from '@/components/FullscreenToggle';
 import { PosSidebar } from '@/components/PosSidebar';
 import { UserAvatarMenu } from '@/components/UserAvatarMenu';
 import { AllChecksModal } from '@/components/AllChecksModal';
@@ -24,7 +21,6 @@ export function PosLayout() {
   const { user } = useAuth();
   const [localId] = useLocalActivo(user);
   const [turno, setTurno] = useState<TurnoCaja | null>(null);
-  const puedeAdmin = usePermiso('comanda.config.editar');
   const [allChecksOpen, setAllChecksOpen] = useState(false);
 
   useEffect(() => {
@@ -128,27 +124,7 @@ export function PosLayout() {
 
             <BusyModeButton />
 
-            <FullscreenToggle />
-
-            <ThemeToggle />
-
-            <Button variant="outline" asChild>
-              <Link to="/caja" className="flex items-center gap-2">
-                <Wallet className="h-4 w-4" />
-                <span className="hidden sm:inline">Caja</span>
-              </Link>
-            </Button>
-
             <UserAvatarMenu />
-
-            {puedeAdmin && (
-              <Button variant="ghost" size="sm" asChild>
-                <Link to="/catalogo" className="flex items-center gap-1.5">
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  Admin
-                </Link>
-              </Button>
-            )}
           </div>
         </div>
       </header>

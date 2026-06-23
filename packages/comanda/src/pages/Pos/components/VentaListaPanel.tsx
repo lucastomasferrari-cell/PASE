@@ -1,6 +1,5 @@
 import React from 'react';
 import { Send, Trash2, PauseCircle, Play, CloudUpload } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -197,35 +196,36 @@ export const VentaListaPanel = React.memo(function VentaListaPanel({
           const stay = stayCount(curso);
           return (
             <div key={curso}>
-              <div className={cn(
-                'flex items-center justify-between gap-2 px-2 py-1.5 rounded-md border text-xs font-medium',
-                CURSO_COLORS[curso] ?? 'bg-muted',
-              )}>
-                <span>Curso {curso}</span>
-                <div className="flex items-center gap-1">
-                  {hold > 0 ? (
-                    <Badge variant="amber">{hold} en hold</Badge>
-                  ) : stay === 0 ? (
-                    <Badge variant="green">Enviado</Badge>
-                  ) : null}
+              {/* Un solo bloque: muestra estado del curso y actúa como botón de envío */}
+              <button
+                type="button"
+                onClick={() => { if (hold > 0 && editable) onMandarCurso(curso); }}
+                disabled={hold === 0 || !editable}
+                className={cn(
+                  'w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md border text-xs font-medium transition-colors',
+                  hold > 0 && editable ? 'hover:brightness-95 active:brightness-90 cursor-pointer' : 'cursor-default',
+                  CURSO_COLORS[curso] ?? 'bg-muted',
+                )}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span>Curso {curso}</span>
                   {stay > 0 && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-200 text-purple-900 dark:bg-purple-900/40 dark:text-purple-100 font-bold uppercase inline-flex items-center gap-0.5" title="Items en STAY: no salen con mandar curso, requieren liberación individual">
-                      <PauseCircle className="h-2.5 w-2.5" /> {stay} stay
+                    <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-purple-200 text-purple-900 dark:bg-purple-900/40 dark:text-purple-100 font-bold uppercase text-[9px]">
+                      <PauseCircle className="h-2 w-2" /> {stay} stay
                     </span>
                   )}
                 </div>
-              </div>
-              {hold > 0 && editable && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full mt-1.5"
-                  onClick={() => onMandarCurso(curso)}
-                >
-                  <Send className="h-3.5 w-3.5 mr-1.5" />
-                  Mandar curso {curso} ({hold})
-                </Button>
-              )}
+                <div className="flex items-center gap-1.5">
+                  {hold > 0 ? (
+                    <>
+                      <span className="opacity-70">{hold} sin enviar</span>
+                      {editable && <Send className="h-3 w-3" />}
+                    </>
+                  ) : stay === 0 ? (
+                    <Badge variant="green">Enviado</Badge>
+                  ) : null}
+                </div>
+              </button>
               <div className="mt-1">
                 {itemsCurso.map((it) => (
                   <CheckRow

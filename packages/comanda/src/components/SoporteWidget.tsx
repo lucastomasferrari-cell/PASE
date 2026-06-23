@@ -5,7 +5,7 @@
 // Sumado post cleanup 22-may noche cuando COMANDA se separó a URL propia.
 
 import { useState, useRef, useEffect } from 'react';
-import { LifeBuoy, X, Send, Bug, RotateCcw } from 'lucide-react';
+import { X, Send, Bug, RotateCcw } from 'lucide-react';
 import { db } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { getConsoleErrors } from '@/lib/consoleCapture';
@@ -117,6 +117,13 @@ export function SoporteWidget() {
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [msgs, open]);
+
+  // Escucha el evento del sidebar para abrir/cerrar.
+  useEffect(() => {
+    function onToggle() { setOpen((o) => !o); }
+    window.addEventListener('comanda:toggle-soporte', onToggle);
+    return () => window.removeEventListener('comanda:toggle-soporte', onToggle);
+  }, []);
 
   // Guard antes de los handlers para que TS sepa que user no es null adentro.
   // (Early return en componente no propaga la narrowing a funciones inner.)
@@ -233,27 +240,15 @@ export function SoporteWidget() {
 
   return (
     <>
-      {/* Botón flotante */}
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="fixed bottom-5 left-5 z-[9000] w-13 h-13 rounded-full bg-primary text-primary-foreground shadow-lg hover:scale-105 transition-transform flex items-center justify-center"
-        style={{ width: 52, height: 52 }}
-        title="Ayuda / Soporte"
-        aria-label="Abrir soporte"
-      >
-        <LifeBuoy className="w-5 h-5" />
-      </button>
-
       {open && (
         <div
-          className="fixed left-5 z-[9001] bg-card border border-border rounded-lg shadow-2xl flex flex-col"
+          className="fixed left-[80px] z-[9001] bg-card border border-border rounded-lg shadow-2xl flex flex-col"
           style={{
-            bottom: 84,
+            bottom: 16,
             width: 400,
-            maxWidth: 'calc(100vw - 40px)',
+            maxWidth: 'calc(100vw - 96px)',
             height: 560,
-            maxHeight: 'calc(100vh - 110px)',
+            maxHeight: 'calc(100vh - 32px)',
           }}
           onClick={(e) => e.stopPropagation()}
         >
