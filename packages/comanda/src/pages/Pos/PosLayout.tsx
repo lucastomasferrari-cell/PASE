@@ -65,7 +65,7 @@ export function PosLayout() {
     // F1.8: data-surface="internal" → paleta celeste PASE (tokens override
     // en globals.css). Coherente con AdminLayout. Customer-facing (Tienda,
     // MenuQR, KDS) NO usan data-surface.
-    <div data-surface="internal" className="min-h-screen bg-background flex flex-col">
+    <div data-surface="internal" className="h-screen bg-background flex flex-col overflow-hidden">
       {/* Banner offline sticky — aparece solo cuando no hay conexión a Supabase */}
       <OfflineBanner />
       {/* Header */}
