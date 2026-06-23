@@ -1,23 +1,11 @@
 import React, { useRef } from 'react';
-import { Star, Package } from 'lucide-react';
+import { Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '../../../components/SearchInput';
 import { formatARS } from '../../../lib/format';
 import { cn } from '@/lib/utils';
 import type { ItemConGrupo } from '../../../services/itemsService';
 import type { ItemGrupo } from '../../../types/database';
-
-// Color ramps for ProductTile — must match VentaScreen RAMP_CLASSES
-const RAMP_CLASSES: Record<string, string> = {
-  amber:  'bg-amber-100 text-amber-900 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-100 dark:hover:bg-amber-900/50',
-  pink:   'bg-pink-100 text-pink-900 hover:bg-pink-200 dark:bg-pink-900/30 dark:text-pink-100 dark:hover:bg-pink-900/50',
-  purple: 'bg-purple-100 text-purple-900 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-100 dark:hover:bg-purple-900/50',
-  blue:   'bg-blue-100 text-blue-900 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-100 dark:hover:bg-blue-900/50',
-  coral:  'bg-orange-100 text-orange-900 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-100 dark:hover:bg-orange-900/50',
-  teal:   'bg-teal-100 text-teal-900 hover:bg-teal-200 dark:bg-teal-900/30 dark:text-teal-100 dark:hover:bg-teal-900/50',
-  green:  'bg-green-100 text-green-900 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-100 dark:hover:bg-green-900/50',
-  gray:   'bg-muted text-foreground hover:bg-accent',
-};
 
 interface GrupoTabProps {
   active: boolean;
@@ -42,7 +30,6 @@ function GrupoTab({ active, onClick, children }: GrupoTabProps) {
 
 interface ProductTileProps {
   item: ItemConGrupo;
-  grupo: ItemGrupo | null;
   disabled: boolean;
   flashed?: boolean;
   favorito?: boolean;
@@ -51,9 +38,8 @@ interface ProductTileProps {
   onLongPress?: () => void;
 }
 
-function ProductTile({ item, grupo, disabled, flashed, favorito, onToggleFavorito, onClick, onLongPress }: ProductTileProps) {
-  const ramp = grupo?.color_ramp ?? 'gray';
-  const cls = RAMP_CLASSES[ramp] ?? RAMP_CLASSES.gray;
+// Fila plana tipo menú: nombre … precio. Sin caja, sin monograma, sin emoji.
+function ProductTile({ item, disabled, flashed, favorito, onToggleFavorito, onClick, onLongPress }: ProductTileProps) {
   const agotado = item.estado === 'agotado';
   const longPressRef = useRef<{ timer: number | null; fired: boolean }>({ timer: null, fired: false });
 
@@ -80,24 +66,18 @@ function ProductTile({ item, grupo, disabled, flashed, favorito, onToggleFavorit
     onClick();
   }
 
+  const agotadoLabel = (() => {
+    if (!agotado) return null;
+    if (!item.agotado_hasta) return 'agotado';
+    const ms = new Date(item.agotado_hasta).getTime() - Date.now();
+    if (ms <= 0) return 'agotado';
+    const min = Math.floor(ms / 60000);
+    const horas = Math.floor(min / 60);
+    return horas > 0 ? `agotado · vuelve en ${horas}h${min % 60}m` : `agotado · vuelve en ${min}m`;
+  })();
+
   return (
-    <div className="group relative">
-      {onToggleFavorito && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onToggleFavorito(); }}
-          aria-label={favorito ? 'Quitar de favoritos' : 'Agregar a favoritos'}
-          className={cn(
-            'absolute top-1 right-1 z-10 h-6 w-6 inline-flex items-center justify-center rounded-full transition-all',
-            favorito
-              ? 'bg-amber-400 text-white shadow'
-              : 'bg-background/70 text-muted-foreground hover:bg-amber-100 hover:text-amber-600 opacity-0 group-hover:opacity-100 focus:opacity-100',
-          )}
-          title={favorito ? 'Quitar de favoritos' : 'Agregar a Quick Items'}
-        >
-          <Star className={cn('h-3.5 w-3.5', favorito && 'fill-current')} />
-        </button>
-      )}
+    <div className="group relative border-b border-border/40">
       <button
         type="button"
         onClick={handleClick}
@@ -110,58 +90,40 @@ function ProductTile({ item, grupo, disabled, flashed, favorito, onToggleFavorit
         }}
         disabled={disabled || (agotado && !onLongPress)}
         className={cn(
-          'w-full aspect-[4/3] rounded-lg p-3 flex flex-col items-center justify-center gap-1 relative',
-          'transition-all duration-300 active:scale-[0.98] touch-target-lg',
-          'disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100',
-          cls,
-          flashed && 'ring-4 ring-success scale-[1.02]',
+          'w-full flex items-baseline justify-between gap-3 pl-1 pr-7 py-3 text-left rounded-md',
+          'transition-colors hover:bg-accent active:bg-accent touch-target-lg',
+          'disabled:opacity-50 disabled:cursor-not-allowed',
+          flashed && 'bg-success/15',
           agotado && 'opacity-50',
         )}
         title={agotado ? 'AGOTADO — mantené presionado para reponer' : 'Tocá para agregar · mantené presionado para marcar agotado'}
       >
-        {agotado && (
-          <div className="absolute inset-0 rounded-lg bg-destructive/10 flex flex-col items-center justify-center pointer-events-none gap-1">
-            <div className="bg-destructive text-destructive-foreground px-2 py-0.5 rounded text-[10px] font-bold uppercase rotate-[-12deg] shadow">
-              Agotado
-            </div>
-            {item.agotado_hasta && (() => {
-              const ms = new Date(item.agotado_hasta).getTime() - Date.now();
-              if (ms <= 0) return null;
-              const min = Math.floor(ms / 60000);
-              const horas = Math.floor(min / 60);
-              const label = horas > 0 ? `vuelve en ${horas}h${min % 60}m` : `vuelve en ${min}m`;
-              return (
-                <div className="bg-background/80 px-1.5 py-0.5 rounded text-[8px] tabular-nums text-foreground/70">
-                  ⏱ {label}
-                </div>
-              );
-            })()}
-          </div>
-        )}
-        {flashed && (
-          <div className="absolute inset-0 rounded-lg bg-success/20 flex items-center justify-center pointer-events-none">
-            <div className="bg-success text-success-foreground rounded-full h-10 w-10 flex items-center justify-center text-2xl shadow-lg">
-              ✓
-            </div>
-          </div>
-        )}
-        {item.foto_url ? (
-          <img src={item.foto_url} alt="" loading="lazy" className="w-12 h-12 object-cover rounded" />
-        ) : item.emoji ? (
-          <div className="text-3xl">{item.emoji}</div>
-        ) : (
-          <div className="text-2xl font-medium leading-none">
-            {item.nombre.split(' ').filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('')}
-            <Package className="hidden" />
-          </div>
-        )}
-        <div className="text-[10px] text-center line-clamp-2 leading-tight opacity-80">
+        <span className="min-w-0 flex-1 truncate text-sm">
           {item.nombre}
-        </div>
-        <div className="text-xs font-medium tabular-nums">
+          {agotadoLabel && (
+            <span className="ml-2 text-[10px] uppercase tracking-wide text-destructive font-medium">{agotadoLabel}</span>
+          )}
+        </span>
+        <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
           {formatARS(item.precio_madre)}
-        </div>
+        </span>
       </button>
+      {onToggleFavorito && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onToggleFavorito(); }}
+          aria-label={favorito ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+          className={cn(
+            'absolute top-1/2 -translate-y-1/2 right-1 z-10 h-6 w-6 inline-flex items-center justify-center rounded-full transition-all',
+            favorito
+              ? 'text-amber-500'
+              : 'text-muted-foreground/40 hover:text-amber-500 opacity-0 group-hover:opacity-100 focus:opacity-100',
+          )}
+          title={favorito ? 'Quitar de favoritos' : 'Agregar a Quick Items'}
+        >
+          <Star className={cn('h-3.5 w-3.5', favorito && 'fill-current')} />
+        </button>
+      )}
     </div>
   );
 }
@@ -242,23 +204,22 @@ export const VentaCatalogoPanel = React.memo(function VentaCatalogoPanel({
       <div className="flex gap-1 mb-3 flex-wrap">
         {favoritosSet.size > 0 && (
           <GrupoTab active={grupoSel === 'favoritos'} onClick={() => setGrupoSel('favoritos')}>
-            ★ Favoritos ({favoritosSet.size})
+            Favoritos ({favoritosSet.size})
           </GrupoTab>
         )}
         <GrupoTab active={grupoSel === null} onClick={() => setGrupoSel(null)}>Todos</GrupoTab>
         {grupos.map((g) => (
           <GrupoTab key={g.id} active={grupoSel === g.id} onClick={() => setGrupoSel(g.id)}>
-            {g.emoji ?? ''} {g.nombre}
+            {g.nombre}
           </GrupoTab>
         ))}
       </div>
 
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-x-6">
         {catalogoFiltrado.map((it) => (
           <ProductTile
             key={it.id}
             item={it}
-            grupo={grupos.find((g) => g.id === it.grupo_id) ?? null}
             disabled={!editable}
             flashed={lastAddedItemId === it.id}
             favorito={favoritosSet.has(it.id)}
