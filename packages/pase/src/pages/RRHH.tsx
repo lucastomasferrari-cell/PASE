@@ -186,10 +186,32 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const loadEmpleados = async (retryDepth = 0) => {
     // Esperar a que la sesión esté hidratada antes de pegarle a la RLS.
     await db.auth.getSession();
-    let q = db.from("rrhh_empleados").select("*").order("apellido");
-    q = applyLocalScope(q, user, localActivo);
-    const { data, error } = await q;
-    const emps = (data as Empleado[]) || [];
+    // La lista de un local incluye sus empleados PRINCIPALES + los CEDIDOS desde
+    // otro local (tabla m:n rrhh_empleado_locales). Antes filtraba solo por el
+    // local principal y se perdían los cesionados (Lucas 22-jun: cesionado de
+    // Belgrano en Maneki no figuraba).
+    let data: Empleado[] | null = null;
+    let error: unknown = null;
+    if (localActivo != null) {
+      const { data: asign } = await db.from("rrhh_empleado_locales")
+        .select("empleado_id").eq("local_id", localActivo).is("deleted_at", null);
+      const ids = [...new Set((asign ?? []).map(a => a.empleado_id as string))];
+      if (ids.length === 0) {
+        data = [];
+      } else {
+        const res = await db.from("rrhh_empleados").select("*").in("id", ids).order("apellido");
+        data = res.data as Empleado[] | null;
+        error = res.error;
+      }
+    } else {
+      // Dueño/admin viendo todos los locales: sin filtro por local.
+      let q = db.from("rrhh_empleados").select("*").order("apellido");
+      q = applyLocalScope(q, user, localActivo);
+      const res = await q;
+      data = res.data as Empleado[] | null;
+      error = res.error;
+    }
+    const emps = data || [];
     // SELF-HEAL del bug "Sin empleados" intermitente al loguearse (mismo race
     // que refetchLocales en App.tsx): si volvió 0 filas SIN error pero hay
     // sesión activa, el JWT casi seguro no propagó todavía a PostgREST y la RLS
