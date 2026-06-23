@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Link, Outlet } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { Search, Smartphone, Maximize2, Minimize2, Moon, Sun } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import { getTurnoAbierto } from '@/services/turnosCajaService';
@@ -13,6 +13,7 @@ import { AllChecksModal } from '@/components/AllChecksModal';
 import { MobileModoMozoBanner } from '@/components/MobileModoMozoBanner';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { SyncStatusBadge } from '@/components/SyncStatusBadge';
+import { useTheme } from '@/hooks/useTheme';
 
 // Layout principal POS: header sticky con marca + turno + acciones,
 // sidebar permanente de 72px (Salón/Mostrador/Pedidos), contenido en
@@ -55,6 +56,39 @@ export function PosLayout() {
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
+  const { theme, toggleTheme } = useTheme();
+
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenSupported, setFullscreenSupported] = useState(false);
+  useEffect(() => {
+    const doc = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
+    setFullscreenSupported(
+      typeof document.fullscreenEnabled === 'boolean'
+        ? document.fullscreenEnabled
+        : Boolean(doc.webkitRequestFullscreen),
+    );
+    function onChange() { setIsFullscreen(Boolean(document.fullscreenElement)); }
+    document.addEventListener('fullscreenchange', onChange);
+    document.addEventListener('webkitfullscreenchange', onChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      document.removeEventListener('webkitfullscreenchange', onChange);
+    };
+  }, []);
+  const toggleFullscreen = useCallback(async () => {
+    const doc = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
+    const docExit = document as Document & { webkitExitFullscreen?: () => Promise<void> };
+    try {
+      if (!document.fullscreenElement) {
+        if (doc.requestFullscreen) await doc.requestFullscreen();
+        else if (doc.webkitRequestFullscreen) await doc.webkitRequestFullscreen();
+      } else {
+        if (docExit.exitFullscreen) await docExit.exitFullscreen();
+        else if (docExit.webkitExitFullscreen) await docExit.webkitExitFullscreen();
+      }
+    } catch { /* silencioso */ }
   }, []);
 
   const minutosTurno = turno
@@ -108,19 +142,46 @@ export function PosLayout() {
           </div>
 
           {/* Derecha: acciones */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1 flex-shrink-0">
             <SyncStatusBadge />
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
               onClick={() => setAllChecksOpen(true)}
               title="Buscar cuentas (atajo: /)"
-              className="gap-1.5"
+              className="gap-1.5 text-muted-foreground hover:text-foreground"
             >
               <Search className="h-4 w-4" />
               <span className="hidden sm:inline">Buscar venta</span>
-              <kbd className="hidden lg:inline-block ml-1 px-1.5 py-0.5 text-[10px] bg-muted rounded border border-border font-mono">/</kbd>
             </Button>
+
+            <Link
+              to="/pos/handheld"
+              className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              title="Vista mozo (handheld)"
+            >
+              <Smartphone className="h-4 w-4" />
+            </Link>
+
+            {fullscreenSupported && (
+              <button
+                type="button"
+                onClick={() => void toggleFullscreen()}
+                className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+              >
+                {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              title="Cambiar tema"
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
 
             <BusyModeButton />
 
