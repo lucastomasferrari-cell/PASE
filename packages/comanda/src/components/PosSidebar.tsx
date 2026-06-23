@@ -111,6 +111,31 @@ export function PosSidebar() {
         <span className="text-[10px] font-medium">Caja</span>
       </Link>
 
+      {/* Admin (solo si tiene permiso) */}
+      {puedeAdmin && (
+        <Link
+          to="/catalogo"
+          className={linkCls(false)}
+          aria-label="Administración"
+          title="Ir al panel de administración"
+        >
+          <ArrowLeft className="h-5 w-5" />
+          <span className="text-[10px] font-medium">Admin</span>
+        </Link>
+      )}
+
+      {/* Fullscreen (solo si el browser lo soporta) */}
+      {fullscreenSupported && (
+        <SidebarItem label={isFullscreen ? 'Salir' : 'Full'} onClick={toggleFullscreen}>
+          {isFullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+        </SidebarItem>
+      )}
+
+      {/* Tema */}
+      <SidebarItem label="Tema" onClick={toggleTheme}>
+        {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+      </SidebarItem>
+
       {/* Sección inferior */}
       <div className="mt-auto flex flex-col items-center gap-1 w-full">
         {/* Vista mozo handheld */}
@@ -123,31 +148,6 @@ export function PosSidebar() {
           <Smartphone className="h-5 w-5" />
           <span className="text-[10px] font-medium">Mozo</span>
         </Link>
-
-        {/* Admin (solo si tiene permiso) */}
-        {puedeAdmin && (
-          <Link
-            to="/catalogo"
-            className={linkCls(false)}
-            aria-label="Administración"
-            title="Ir al panel de administración"
-          >
-            <ArrowLeft className="h-5 w-5" />
-            <span className="text-[10px] font-medium">Admin</span>
-          </Link>
-        )}
-
-        {/* Fullscreen (solo si el browser lo soporta) */}
-        {fullscreenSupported && (
-          <SidebarItem label={isFullscreen ? 'Salir' : 'Full'} onClick={toggleFullscreen}>
-            {isFullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
-          </SidebarItem>
-        )}
-
-        {/* Tema */}
-        <SidebarItem label="Tema" onClick={toggleTheme}>
-          {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-        </SidebarItem>
 
         {/* Ayuda / Soporte — abre el widget vía evento global */}
         <SidebarItem
