@@ -60,7 +60,7 @@ export function VentaScreen() {
   const navigate = useNavigate();
 
   // Hook #1: carga + reload de los 4 datasets primarios + realtime + reconcile
-  const { venta, items, catalogo, grupos, loading, reloadVenta, addOptimistic, reconcileAdd } = useVentaData(ventaId);
+  const { venta, items, setItems, catalogo, grupos, loading, reloadVenta, addOptimistic, reconcileAdd } = useVentaData(ventaId);
 
   // 'favoritos' = filtra solo los Quick Items del empleado; null = todos; N = grupo_id
   const [grupoSel, setGrupoSel] = useState<number | 'favoritos' | null>(null);
@@ -192,6 +192,31 @@ export function VentaScreen() {
 
   async function addItem(it: ItemConGrupo, modificadores: { nombre: string; precio_extra: number; modifier_id?: number }[] = [], notas: string | null = null, cantidad: number = 1) {
     if (!editable || !empleado || !venta) return;
+
+    // Merge: si el mismo producto ya está en hold en el mismo curso, sin
+    // modificadores ni notas, incrementamos la cantidad en vez de crear nueva fila.
+    if (modificadores.length === 0 && notas == null) {
+      const existente = items.find(
+        (i) => i.item_id === it.id && i.curso === cursoActivo && i.estado === 'hold'
+          && (!i.modificadores || i.modificadores.length === 0) && !i.notas && i.id > 0,
+      );
+      if (existente) {
+        const nuevaCantidad = Number(existente.cantidad) + cantidad;
+        setItems((prev) => prev.map((i) => i.id === existente.id ? { ...i, cantidad: nuevaCantidad } : i));
+        setLastAddedItemId(it.id);
+        setLastAddedRowId(existente.id);
+        setSearch('');
+        searchRef.current?.focus();
+        const { error } = await modificarItem(existente.id, { cantidad: nuevaCantidad });
+        if (error) {
+          toast.error(error);
+          setItems((prev) => prev.map((i) => i.id === existente.id ? { ...i, cantidad: existente.cantidad } : i));
+          return;
+        }
+        reload();
+        return;
+      }
+    }
 
     // UI optimista: la fila aparece YA (id temporal negativo), sin esperar el
     // round-trip. El precio definitivo lo pone el server; acá usamos precio_madre

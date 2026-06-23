@@ -5,7 +5,6 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '../../../components/Badge';
-import { Stepper } from '../../../components/Stepper';
 import { formatARS } from '../../../lib/format';
 import { cn } from '@/lib/utils';
 import type { VentaPosItem } from '../../../types/database';
@@ -37,136 +36,115 @@ function CheckRow({
   onCambiarPrecio, onCortesia, onMandarSolo, onToggleStay, editable, flashed,
 }: CheckRowProps) {
   const it = catalogo.find((c) => c.id === item.item_id);
+  const anulado = item.estado === 'anulado';
   return (
     <div
       className={cn(
-        'p-2 border-b border-border flex gap-2 items-start transition-colors duration-700',
-        item.estado === 'anulado' && 'opacity-40',
-        flashed && 'bg-amber-100/70 dark:bg-amber-900/30 ring-2 ring-amber-400',
+        'py-1 px-2 border-b border-border transition-colors duration-700',
+        anulado && 'opacity-40',
+        flashed && 'bg-amber-100/70 dark:bg-amber-900/30 ring-1 ring-amber-400',
       )}
     >
-      <div className="text-base">{it?.emoji ?? '📦'}</div>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium truncate flex items-center gap-1.5">
-          {it?.nombre ?? `Item #${item.item_id}`}
+      {/* Línea 1: nombre · controles de qty · precio total */}
+      <div className="flex items-center gap-1.5">
+        <div className="flex-1 min-w-0 flex items-center gap-1 flex-wrap">
+          <span className="text-sm font-medium truncate">{it?.nombre ?? `Item #${item.item_id}`}</span>
           {item.es_cortesia && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-success/15 text-success font-bold uppercase">Cortesía</span>
+            <span className="text-[9px] px-1 py-0.5 rounded bg-success/15 text-success font-bold uppercase">Cortesía</span>
           )}
           {item.precio_unitario_original != null && Number(item.precio_unitario_original) !== Number(item.precio_unitario) && !item.es_cortesia && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-warning/15 text-warning font-bold uppercase" title={`Precio original ${formatARS(item.precio_unitario_original)}`}>Precio mod.</span>
+            <span className="text-[9px] px-1 py-0.5 rounded bg-warning/15 text-warning font-bold uppercase">Precio mod.</span>
           )}
           {item.stay_until_release && item.estado === 'hold' && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-200 text-purple-900 dark:bg-purple-900/40 dark:text-purple-100 font-bold uppercase inline-flex items-center gap-0.5" title="STAY: no se envía con 'mandar curso'. Liberalo con ▶ para enviarlo.">
+            <span className="text-[9px] px-1 py-0.5 rounded bg-purple-200 text-purple-900 dark:bg-purple-900/40 dark:text-purple-100 font-bold uppercase inline-flex items-center gap-0.5">
               <PauseCircle className="h-2.5 w-2.5" /> Stay
             </span>
           )}
           {(item as unknown as { _local_dirty?: boolean })._local_dirty && (
-            <span
-              className="text-[9px] px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100 font-bold uppercase inline-flex items-center gap-0.5 animate-pulse"
-              title="Pendiente de sincronizar al servidor — se va a subir cuando vuelva internet"
-            >
+            <span className="text-[9px] px-1 py-0.5 rounded bg-amber-200 text-amber-900 font-bold uppercase inline-flex items-center gap-0.5 animate-pulse">
               <CloudUpload className="h-2.5 w-2.5" /> Queued
             </span>
           )}
         </div>
-        {item.modificadores && item.modificadores.length > 0 && (
-          <div className="text-xs text-muted-foreground">
-            {item.modificadores.map((m) => m.nombre).join(' · ')}
-          </div>
-        )}
-        {item.notas && <div className="text-xs text-warning italic">{item.notas}</div>}
-        <div className="text-xs text-muted-foreground mt-0.5">
-          {item.precio_unitario_original != null && Number(item.precio_unitario_original) !== Number(item.precio_unitario) && (
-            <span className="line-through mr-1.5 opacity-60">{formatARS(item.precio_unitario_original)}</span>
-          )}
-          {formatARS(item.precio_unitario)} c/u · {item.estado}
-        </div>
-      </div>
-      <div className="flex flex-col items-end gap-1">
         {editable && item.estado === 'hold' ? (
-          <div className="flex items-center gap-1">
-            <Stepper value={Number(item.cantidad)} onChange={onQty} min={1} max={99} />
+          <div className="flex items-center gap-0.5 shrink-0">
+            <div className="flex items-center rounded border border-border divide-x divide-border overflow-hidden">
+              <button
+                type="button"
+                className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:bg-accent text-base leading-none"
+                onClick={() => onQty(Math.max(1, Number(item.cantidad) - 1))}
+              >−</button>
+              <span className="w-6 text-center text-xs tabular-nums select-none">{item.cantidad}</span>
+              <button
+                type="button"
+                className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:bg-accent text-base leading-none"
+                onClick={() => onQty(Math.min(99, Number(item.cantidad) + 1))}
+              >+</button>
+            </div>
             <button
               type="button"
               onClick={onRemove}
-              aria-label="Quitar item"
-              title="Quitar (solo items en hold)"
-              className="h-9 w-9 inline-flex items-center justify-center rounded-md text-destructive hover:bg-destructive/10 transition-colors"
+              title="Quitar"
+              className="h-6 w-6 flex items-center justify-center rounded text-destructive hover:bg-destructive/10"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="h-3 w-3" />
             </button>
           </div>
         ) : (
-          <span className="text-xs">x{item.cantidad}</span>
+          <span className="text-xs text-muted-foreground shrink-0">×{item.cantidad}</span>
         )}
-        <strong className="text-sm tabular-nums">{formatARS(item.subtotal)}</strong>
-        {editable && item.estado !== 'anulado' && (
-          <div className="flex items-center gap-1 mt-0.5 flex-wrap justify-end">
-            <button
-              type="button"
-              onClick={onRepetir}
-              aria-label={`Repetir ${it?.nombre ?? 'item'}`}
-              title="Agregar uno más igual (mismos modificadores) al curso activo"
-              className="text-[10px] text-primary hover:underline"
-            >
-              + Repetir
-            </button>
-            {item.estado === 'hold' && (
-              <>
-                <button
-                  type="button"
-                  onClick={onMandarSolo}
-                  aria-label="Enviar solo este item"
-                  title="Enviar este item a cocina ahora (sin mandar el curso entero)"
-                  className="text-[10px] inline-flex items-center gap-0.5 text-success hover:underline"
-                >
-                  <Send className="h-2.5 w-2.5" /> Enviar solo
-                </button>
-                <button
-                  type="button"
-                  onClick={onToggleStay}
-                  aria-label={item.stay_until_release ? 'Quitar STAY' : 'Marcar STAY'}
-                  title={item.stay_until_release
-                    ? 'Quitar STAY — el item volverá a salir cuando se mande el curso'
-                    : 'STAY — el item se queda en hold aunque mandes el curso (sale solo cuando lo liberes)'}
-                  className={cn(
-                    'text-[10px] inline-flex items-center gap-0.5 hover:underline',
-                    item.stay_until_release ? 'text-purple-600 dark:text-purple-300 font-medium' : 'text-muted-foreground',
-                  )}
-                >
-                  {item.stay_until_release ? <Play className="h-2.5 w-2.5" /> : <PauseCircle className="h-2.5 w-2.5" />}
-                  {item.stay_until_release ? 'Liberar' : 'Stay'}
-                </button>
-              </>
-            )}
-            {item.estado !== 'hold' && !item.es_cortesia && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="text-[10px] text-muted-foreground hover:text-foreground px-1 rounded hover:bg-accent"
-                    aria-label="Más acciones del item"
-                    title="Más acciones (manager override)"
-                  >
-                    ⋯
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-44">
-                  <DropdownMenuItem onClick={onCambiarPrecio}>
-                    Cambiar precio…
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={onCortesia}>
-                    🎁 Cortesía (gratis)
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={onAnular} className="text-destructive">
-                    Anular item
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
-        )}
+        <strong className="text-sm tabular-nums shrink-0">{formatARS(item.subtotal)}</strong>
       </div>
+
+      {/* Línea 2: modificadores / notas / precio u. (solo si hay info extra) */}
+      {(item.modificadores && item.modificadores.length > 0 || item.notas) && (
+        <div className="text-[11px] text-muted-foreground truncate">
+          {item.modificadores?.map((m) => m.nombre).join(' · ')}
+          {item.modificadores?.length && item.notas ? ' · ' : ''}
+          {item.notas && <span className="text-warning italic">{item.notas}</span>}
+        </div>
+      )}
+
+      {/* Acciones rápidas */}
+      {editable && !anulado && (
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={onRepetir} className="text-[10px] text-primary hover:underline">+ Repetir</button>
+          {item.estado === 'hold' && (
+            <>
+              <button
+                type="button"
+                onClick={onMandarSolo}
+                className="text-[10px] inline-flex items-center gap-0.5 text-success hover:underline"
+              >
+                <Send className="h-2.5 w-2.5" /> Enviar solo
+              </button>
+              <button
+                type="button"
+                onClick={onToggleStay}
+                className={cn(
+                  'text-[10px] inline-flex items-center gap-0.5 hover:underline',
+                  item.stay_until_release ? 'text-purple-600 dark:text-purple-300 font-medium' : 'text-muted-foreground',
+                )}
+              >
+                {item.stay_until_release ? <Play className="h-2.5 w-2.5" /> : <PauseCircle className="h-2.5 w-2.5" />}
+                {item.stay_until_release ? 'Liberar' : 'Stay'}
+              </button>
+            </>
+          )}
+          {item.estado !== 'hold' && !item.es_cortesia && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="text-[10px] text-muted-foreground hover:text-foreground px-1 rounded hover:bg-accent">⋯</button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem onClick={onCambiarPrecio}>Cambiar precio…</DropdownMenuItem>
+                <DropdownMenuItem onClick={onCortesia}>🎁 Cortesía (gratis)</DropdownMenuItem>
+                <DropdownMenuItem onClick={onAnular} className="text-destructive">Anular item</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      )}
     </div>
   );
 }
