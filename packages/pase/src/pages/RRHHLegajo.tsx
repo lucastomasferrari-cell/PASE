@@ -458,6 +458,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
         <TabDatos
           liqTab={tab === "liquidacion"}
           emp={emp}
+          locales={locales}
           histSueldos={histSueldos}
           antiguedadAnios={antiguedadAnios}
           vacAcumuladas={vacAcumuladas}
@@ -557,6 +558,7 @@ interface TabDatosProps {
   /** true → renderiza el panel de Liquidación final en vez de los datos. */
   liqTab: boolean;
   emp: Empleado;
+  locales: Local[];
   histSueldos: HistorialSueldo[];
   antiguedadAnios: number;
   vacAcumuladas: number;
@@ -587,7 +589,7 @@ interface TabDatosProps {
 
 function TabDatos({
   liqTab,
-  emp, histSueldos, antiguedadAnios, vacAcumuladas, esDueno,
+  emp, locales, histSueldos, antiguedadAnios, vacAcumuladas, esDueno,
   sueldoModal, setSueldoModal, sueldoForm, setSueldoForm, guardarSueldo, toggleActivo,
   liqFinalModal, setLiqFinalModal, liqFinalForm, setLiqFinalForm, liqFinalData,
   liqFinalLineas, setLiqFinalLineas, liqFinalOverrides, setLiqFinalOverrides,
@@ -748,7 +750,7 @@ function TabDatos({
           if (!liqFinalData || liqFinalLoading) return;
           const lineas = liqFinalLineas
             .filter(l => l.cuenta && (parseFloat(l.monto) || 0) > 0)
-            .map(l => ({ cuenta: l.cuenta, monto: Math.round(parseFloat(l.monto)) }));
+            .map(l => ({ cuenta: l.cuenta, monto: Math.round(parseFloat(l.monto)), local_id: l.local_id ?? emp.local_id }));
           if (lineas.length === 0) { showToast("Cargá al menos una forma de pago"); return; }
           const sumaPagos = lineas.reduce((s, l) => s + l.monto, 0);
           if (Math.abs(sumaPagos - total) > 1) {
@@ -868,6 +870,11 @@ function TabDatos({
               <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Formas de pago *</div>
               {liqFinalLineas.map((l, i) => (
                 <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
+                  <select className="search" style={{width:130}} title="Local del que sale la plata"
+                    value={l.local_id ?? emp.local_id ?? ""}
+                    onChange={e => setLiqFinalLineas((prev) => prev.map((f, j) => j === i ? { ...f, local_id: e.target.value ? parseInt(e.target.value) : null } : f))}>
+                    {locales.map((lo) => <option key={lo.id} value={lo.id}>{lo.nombre}</option>)}
+                  </select>
                   <select className="search" style={{flex:1}} value={l.cuenta}
                     onChange={e => setLiqFinalLineas((prev) => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
                     <option value="">Seleccioná una cuenta…</option>
