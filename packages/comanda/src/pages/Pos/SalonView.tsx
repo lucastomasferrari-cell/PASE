@@ -93,6 +93,11 @@ export function SalonView() {
     };
   }, [mesasFiltradas]);
 
+  // mesaMap: id interno → número visible ("B1"). Debe declararse ACÁ, antes del
+  // early return de abajo: si va dentro del JSX queda como hook condicional
+  // (se saltea cuando no hay empleado) y React rompe (rules-of-hooks).
+  const mesaMap = useMemo(() => new Map(mesas.map((m) => [m.id, m.numero])), [mesas]);
+
   if (!empleado) {
     return <div className="p-8 text-center text-muted-foreground">Sesión POS requerida.</div>;
   }
@@ -102,7 +107,7 @@ export function SalonView() {
       {/* Rail — pasa el mapa id→nombre para mostrar "B1" en vez del ID interno */}
       <ComandasRail
         modos={['salon']}
-        mesaMap={useMemo(() => new Map(mesas.map((m) => [m.id, m.numero])), [mesas])}
+        mesaMap={mesaMap}
       />
 
       {/* Contenido: plano de mesas */}
