@@ -355,7 +355,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
 
     const lineas = aguLineas
       .filter(l => (parseFloat(l.monto) || 0) > 0 && !!l.cuenta)
-      .map(l => ({ cuenta: l.cuenta, monto: parseFloat(l.monto) }));
+      .map(l => ({ cuenta: l.cuenta, monto: parseFloat(l.monto), local_id: l.local_id ?? emp.local_id }));
 
     if (lineas.length === 0) { showToast("Elegí una cuenta para cada línea de pago"); return; }
     pagandoAguRef.current = true;
@@ -503,6 +503,8 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
 
       {tab === "vacagu" && (
         <TabVacAgu
+          empLocalId={emp.local_id}
+          locales={locales}
           vacAcumuladas={vacAcumuladas}
           vacTomadas={vacTomadas}
           valorDia={valorDia}
@@ -1150,6 +1152,8 @@ interface TabVacAguProps {
   pagarVacaciones: () => Promise<void>;
   pagarAguinaldo: () => Promise<void>;
   cuentasUsables: string[];
+  empLocalId: number | null;
+  locales: Local[];
 }
 
 function TabVacAgu({
@@ -1160,7 +1164,7 @@ function TabVacAgu({
   vacModal, setVacModal, vacDias, setVacDias, vacLineas, setVacLineas,
   aguModal, setAguModal, aguLineas, setAguLineas,
   pagarVacaciones, pagarAguinaldo,
-  cuentasUsables,
+  cuentasUsables, empLocalId, locales,
 }: TabVacAguProps) {
   return (
     <>
@@ -1338,6 +1342,11 @@ function TabVacAgu({
             <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Formas de pago</div>
             {aguLineas.map((l, i) => (
               <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
+                <select className="search" style={{width:120}} title="Local del que sale la plata"
+                  value={l.local_id ?? empLocalId ?? ""}
+                  onChange={e => setAguLineas((prev) => prev.map((f, j) => j === i ? { ...f, local_id: e.target.value ? parseInt(e.target.value) : null } : f))}>
+                  {locales.map((lo) => <option key={lo.id} value={lo.id}>{lo.nombre}</option>)}
+                </select>
                 <select className="search" style={{flex:1}} value={l.cuenta}
                   onChange={e => setAguLineas((prev) => prev.map((f, j) => j === i ? { ...f, cuenta: e.target.value } : f))}>
                   <option value="">Seleccioná una cuenta…</option>
