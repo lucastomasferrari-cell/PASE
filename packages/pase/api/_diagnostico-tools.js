@@ -138,6 +138,22 @@ export const TOOLS = [
       required: ['local_id', 'nombre'],
     },
   },
+  {
+    name: 'resumen_mp',
+    description:
+      'Resumen de MercadoPago de un local en un mes: cuánto liquidó (ingresos, egresos, neto) ' +
+      'y el desglose por tipo de movimiento. Usala para "cuánto me liquidó MP en tal mes" o ' +
+      '"qué movió MP". OJO: para saber qué FALTA CONCILIAR/justificar puntualmente NO uses ' +
+      'esto — eso se calcula en vivo en la pantalla Conciliación MP; guiá al usuario ahí.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        local_id: { type: 'integer', description: 'ID del local (obligatorio).' },
+        mes: { type: 'string', description: 'Mes en formato YYYY-MM (obligatorio).' },
+      },
+      required: ['local_id', 'mes'],
+    },
+  },
 ];
 
 // Sanea texto libre antes de meterlo en un filtro PostgREST (.or/.ilike):
@@ -340,6 +356,33 @@ export async function executeTool(admin, scope, name, input) {
       out.push({ ...emp, adelantos: adel.data || [], pagos_especiales: esp.data || [] });
     }
     return { empleados: out };
+  }
+
+  if (name === 'resumen_mp') {
+    if (!enScope(input.local_id)) return FUERA;
+    const b = mesBounds(input.mes);
+    if (!b) return { error: 'MES_INVALIDO', detalle: 'mes debe tener formato "YYYY-MM".' };
+    // mp_movimientos.fecha es timestamptz → bordes del mes en hora Argentina.
+    const desdeTs = `${b.desde}T00:00:00-03:00`;
+    const hastaTs = `${b.hastaExcl}T00:00:00-03:00`;
+    const { data, error } = await admin.from('mp_movimientos')
+      .select('monto, tipo, anulado')
+      .eq('local_id', input.local_id).gte('fecha', desdeTs).lt('fecha', hastaTs)
+      .limit(5000);
+    if (error) return { error: 'QUERY_FALLO', detalle: error.message };
+    const round2 = (n) => Math.round(n * 100) / 100;
+    const vivos = (data || []).filter((m) => !m.anulado);
+    const ingresos = round2(vivos.filter((m) => Number(m.monto) > 0).reduce((s, x) => s + Number(x.monto || 0), 0));
+    const egresos = round2(vivos.filter((m) => Number(m.monto) < 0).reduce((s, x) => s + Number(x.monto || 0), 0));
+    const porTipo = new Map();
+    for (const m of vivos) {
+      const k = m.tipo || 'otros';
+      const e = porTipo.get(k) || { tipo: k, cantidad: 0, monto: 0 };
+      e.cantidad += 1; e.monto += Number(m.monto || 0); porTipo.set(k, e);
+    }
+    const por_tipo = [...porTipo.values()].map((e) => ({ ...e, monto: round2(e.monto) }))
+      .sort((a, c) => Math.abs(c.monto) - Math.abs(a.monto));
+    return { mes: input.mes, movimientos: vivos.length, ingresos, egresos, neto: round2(ingresos + egresos), por_tipo };
   }
 
   return { error: 'TOOL_DESCONOCIDA', detalle: `No existe la herramienta '${name}'.` };

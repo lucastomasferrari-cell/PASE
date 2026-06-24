@@ -54,6 +54,10 @@ describe('executeTool — control de acceso (aislamiento)', () => {
     const out = await executeTool(makeAdmin({}), scope, 'estado_empleado', { local_id: 99, nombre: 'x' });
     expect(out.error).toBe('LOCAL_FUERA_DE_ALCANCE');
   });
+  it('resumen_mp: rechaza local fuera del alcance', async () => {
+    const out = await executeTool(makeAdmin({}), scope, 'resumen_mp', { local_id: 99, mes: '2026-06' });
+    expect(out.error).toBe('LOCAL_FUERA_DE_ALCANCE');
+  });
   it('sin especificar local → rechaza', async () => {
     const out = await executeTool(makeAdmin({}), scope, 'buscar_gasto', {});
     expect(out.error).toBe('LOCAL_FUERA_DE_ALCANCE');
@@ -146,15 +150,32 @@ describe('estado_empleado', () => {
   });
 });
 
+describe('resumen_mp', () => {
+  it('suma ingresos/egresos/neto y agrupa por tipo (excluye anulados)', async () => {
+    const admin = makeAdmin({ mp_movimientos: [
+      { monto: 1000, tipo: 'payment' },
+      { monto: 500, tipo: 'payment' },
+      { monto: -200, tipo: 'tax' },
+      { monto: 99999, tipo: 'payment', anulado: true },
+    ] });
+    const out = await executeTool(admin, scope, 'resumen_mp', { local_id: 5, mes: '2026-06' });
+    expect(out.movimientos).toBe(3);
+    expect(out.ingresos).toBe(1500);
+    expect(out.egresos).toBe(-200);
+    expect(out.neto).toBe(1300);
+    expect(out.por_tipo.find((t) => t.tipo === 'payment').cantidad).toBe(2);
+  });
+});
+
 describe('TOOLS (schema)', () => {
-  it('tiene las 7 herramientas', () => {
+  it('tiene las 8 herramientas', () => {
     expect(TOOLS.map((t) => t.name).sort()).toEqual([
       'buscar_factura', 'buscar_gasto', 'buscar_movimiento', 'desglose_categoria',
-      'detalle_registro', 'estado_empleado', 'saldo_cuentas',
+      'detalle_registro', 'estado_empleado', 'resumen_mp', 'saldo_cuentas',
     ]);
   });
   it('las de búsqueda exigen local_id', () => {
-    for (const n of ['buscar_gasto', 'buscar_movimiento', 'saldo_cuentas', 'buscar_factura', 'desglose_categoria', 'estado_empleado']) {
+    for (const n of ['buscar_gasto', 'buscar_movimiento', 'saldo_cuentas', 'buscar_factura', 'desglose_categoria', 'estado_empleado', 'resumen_mp']) {
       expect(TOOLS.find((t) => t.name === n).input_schema.required).toContain('local_id');
     }
   });
