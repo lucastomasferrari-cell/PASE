@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
   CalendarCheck, Phone, MessageCircle, Check, X,
-  Clock, Users, RefreshCw, Plus, Pencil, Armchair,
+  Clock, Users, RefreshCw, Plus, Pencil, Armchair, LayoutDashboard,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -36,6 +36,9 @@ import {
   crearReserva, editarReserva,
   type Reserva, type EstadoReserva, type MesaSimple,
 } from '@/services/reservasService';
+import { listMesas, estadoMesasLive } from '@/services/mesasService';
+import type { Mesa, MesaEstadoLive } from '@/types/database';
+import { FloorPlanCanvas } from '@/components/FloorPlanCanvas';
 import { whatsAppUrl, mensajeGenericoCliente } from '@/lib/whatsapp';
 
 const ESTADO_COLORS: Record<EstadoReserva, string> = {
@@ -102,7 +105,9 @@ export function ReservasAdmin() {
   const { user } = useAuth();
   const [localActivo] = useLocalActivo(user);
   const [reservas, setReservas] = useState<Reserva[]>([]);
-  const [mesas, setMesas] = useState<MesaSimple[]>([]);  // F5 Chunk D
+  const [mesas, setMesas] = useState<MesaSimple[]>([]);  // F5 Chunk D — dropdown sentar
+  const [mesasCompletas, setMesasCompletas] = useState<Mesa[]>([]);  // para FloorPlanCanvas
+  const [estadoLiveMap, setEstadoLiveMap] = useState<Map<number, MesaEstadoLive>>(new Map());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState<number | null>(null);
@@ -127,16 +132,31 @@ export function ReservasAdmin() {
     return () => clearInterval(t);
   }, [reload]);
 
-  // F5 Chunk D: cargar mesas del local para el dropdown de asignación.
-  // Se recargan cuando cambia el local — no tienen polling porque las
-  // mesas son master data que no cambia frecuente.
+  // F5 Chunk D: dropdown de asignación + mesas completas para floor plan.
   useEffect(() => {
     if (!localActivo) return;
     void (async () => {
-      const { data } = await listMesasDelLocal(localActivo);
-      setMesas(data);
+      const [simple, completas] = await Promise.all([
+        listMesasDelLocal(localActivo),
+        listMesas(localActivo),
+      ]);
+      setMesas(simple.data);
+      setMesasCompletas(completas.data);
     })();
   }, [localActivo]);
+
+  // Motor de disponibilidad en vivo — poll 30s.
+  const reloadLive = useCallback(async () => {
+    if (!localActivo) return;
+    const { data } = await estadoMesasLive(localActivo);
+    setEstadoLiveMap(new Map(data.map((e) => [e.mesa_id, e])));
+  }, [localActivo]);
+
+  useEffect(() => {
+    void reloadLive();
+    const t = setInterval(() => { void reloadLive(); }, 30_000);
+    return () => clearInterval(t);
+  }, [reloadLive]);
 
   async function handleAsignarMesa(r: Reserva, mesaId: number) {
     setBusy(r.id);
@@ -329,6 +349,10 @@ export function ReservasAdmin() {
             )}
           </TabsTrigger>
           <TabsTrigger value="historico">Histórico ({grupos.historico.length})</TabsTrigger>
+          <TabsTrigger value="plano" className="gap-1.5">
+            <LayoutDashboard className="h-3.5 w-3.5" />
+            Plano
+          </TabsTrigger>
         </TabsList>
 
         {/* ── MESA módulo #1: agenda del día ─────────────────────────────── */}
@@ -430,6 +454,17 @@ export function ReservasAdmin() {
           {grupos.historico.map((r) => (
             <ReservaRow key={r.id} reserva={r} mesas={mesas} readOnly />
           ))}
+        </TabsContent>
+
+        {/* ── Módulo #2: plano del salón en tiempo real ─────────────────── */}
+        <TabsContent value="plano" className="mt-4">
+          <PlanoEnVivo
+            mesas={mesasCompletas}
+            estadoLiveMap={estadoLiveMap}
+            reservas={reservas}
+            onReloadLive={() => void reloadLive()}
+            onSentar={(r) => abrirSentar(r)}
+          />
         </TabsContent>
       </Tabs>
 
@@ -662,5 +697,184 @@ function ReservaRow({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// ── Plano en vivo (módulo #2) ─────────────────────────────────────────────────
+function PlanoEnVivo({
+  mesas,
+  estadoLiveMap,
+  reservas,
+  onReloadLive,
+  onSentar,
+}: {
+  mesas: Mesa[];
+  estadoLiveMap: Map<number, MesaEstadoLive>;
+  reservas: Reserva[];
+  onReloadLive: () => void;
+  onSentar: (r: Reserva) => void;
+}) {
+  const [selectedMesa, setSelectedMesa] = useState<Mesa | null>(null);
+
+  // KPIs de disponibilidad en vivo (spec MESA sección 3.1)
+  const kpis = useMemo(() => {
+    const estados = [...estadoLiveMap.values()];
+    const ocupadas = estados.filter((e) => e.estado_live === 'ocupada_ticket' || e.estado_live === 'ocupada_reserva').length;
+    const reservadasPronto = estados.filter((e) => e.estado_live === 'reservada_pronto').length;
+    const libres = estados.filter((e) => e.estado_live === 'libre').length;
+    const totalCapacidad = mesas.reduce((s, m) => s + (m.capacidad ?? 0), 0);
+    const cubiertosOcupados = estados
+      .filter((e) => e.estado_live === 'ocupada_ticket' || e.estado_live === 'ocupada_reserva')
+      .reduce((s, e) => s + (e.reserva_personas ?? 0), 0);
+    return { ocupadas, reservadasPronto, libres, totalCapacidad, cubiertosOcupados };
+  }, [estadoLiveMap, mesas]);
+
+  // Reservas próximas SIN mesa asignada (para el panel lateral)
+  const proxSinMesa = useMemo(() =>
+    reservas
+      .filter((r) =>
+        (r.estado === 'pendiente' || r.estado === 'confirmada') &&
+        r.mesa_id == null &&
+        new Date(r.fecha_hora).getTime() < Date.now() + 90 * 60_000
+      )
+      .sort((a, b) => a.fecha_hora.localeCompare(b.fecha_hora)),
+  [reservas]);
+
+  // Detalle de la mesa seleccionada
+  const selectedEstado = selectedMesa ? (estadoLiveMap.get(selectedMesa.id) ?? null) : null;
+  const selectedReservas = selectedMesa
+    ? reservas.filter((r) =>
+        r.mesa_id === selectedMesa.id &&
+        (r.estado === 'pendiente' || r.estado === 'confirmada' || r.estado === 'sentada')
+      )
+    : [];
+
+  if (mesas.length === 0) {
+    return (
+      <div className="py-16 text-center text-muted-foreground text-sm">
+        No hay mesas configuradas. Creá mesas desde Configuración → Mesas.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Barra KPI disponibilidad en vivo */}
+      <div className="flex items-center gap-6 text-sm flex-wrap">
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+          <span><strong className="text-foreground">{kpis.libres}</strong> <span className="text-muted-foreground">libres</span></span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
+          <span><strong className="text-foreground">{kpis.ocupadas}</strong> <span className="text-muted-foreground">ocupadas</span></span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+          <span><strong className="text-foreground">{kpis.reservadasPronto}</strong> <span className="text-muted-foreground">reservadas pronto</span></span>
+        </div>
+        {kpis.totalCapacidad > 0 && (
+          <span className="text-muted-foreground text-xs ml-auto">
+            {kpis.cubiertosOcupados} / {kpis.totalCapacidad} cubiertos en uso
+          </span>
+        )}
+        <Button variant="ghost" size="sm" onClick={onReloadLive} className="ml-0 h-7 px-2">
+          <RefreshCw className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      <div className="flex gap-4 items-start">
+        {/* Canvas principal */}
+        <div className="flex-1 min-w-0">
+          <FloorPlanCanvas
+            mesas={mesas}
+            estadoLive={estadoLiveMap}
+            readonly
+            onMesaClick={(m) => setSelectedMesa((prev) => prev?.id === m.id ? null : m)}
+          />
+        </div>
+
+        {/* Panel lateral: reservas próximas sin mesa + detalle de mesa seleccionada */}
+        <div className="w-64 shrink-0 space-y-3">
+          {selectedMesa && (
+            <div className="rounded-lg border border-border p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-sm">Mesa {selectedMesa.numero}</span>
+                <button type="button" className="text-muted-foreground hover:text-foreground text-xs" onClick={() => setSelectedMesa(null)}>✕</button>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Capacidad: {selectedMesa.capacidad ?? '—'} · {selectedMesa.zona ?? 'Sin zona'}
+              </div>
+              {selectedEstado && selectedEstado.estado_live !== 'libre' && (
+                <div className="text-xs space-y-1">
+                  {selectedEstado.estado_live === 'ocupada_ticket' && selectedEstado.venta_abierta_at && (
+                    <p className="text-red-700">🔴 Ticket abierto hace {fmtHora(selectedEstado.venta_abierta_at)}</p>
+                  )}
+                  {(selectedEstado.estado_live === 'ocupada_reserva' || selectedEstado.estado_live === 'reservada_pronto') && selectedEstado.reserva_nombre && (
+                    <p className={selectedEstado.estado_live === 'ocupada_reserva' ? 'text-indigo-700' : 'text-amber-700'}>
+                      {selectedEstado.estado_live === 'ocupada_reserva' ? '🪑' : '⏳'}{' '}
+                      {selectedEstado.reserva_nombre} · {selectedEstado.reserva_personas}p
+                      {selectedEstado.reserva_hora && ` · ${fmtHora(selectedEstado.reserva_hora)}`}
+                    </p>
+                  )}
+                </div>
+              )}
+              {selectedReservas.length > 0 && (
+                <div className="space-y-1.5 pt-1 border-t border-border">
+                  {selectedReservas.map((r) => (
+                    <div key={r.id} className="text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{r.cliente_nombre}</span>
+                        <span className="text-muted-foreground">{fmtHora(r.fecha_hora)}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <span>{r.personas}p</span>
+                        {(r.estado === 'pendiente' || r.estado === 'confirmada') && (
+                          <button
+                            type="button"
+                            className="text-primary hover:underline"
+                            onClick={() => onSentar(r)}
+                          >
+                            Sentar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {proxSinMesa.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <p className="text-xs font-medium text-amber-800 mb-2">
+                Próximas sin mesa ({proxSinMesa.length})
+              </p>
+              <div className="space-y-1.5">
+                {proxSinMesa.slice(0, 5).map((r) => (
+                  <div key={r.id} className="text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-amber-900">{r.cliente_nombre}</span>
+                      <span className="text-amber-700">{fmtHora(r.fecha_hora)}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-amber-700">
+                      <span>{r.personas}p</span>
+                      <button
+                        type="button"
+                        className="hover:underline"
+                        onClick={() => onSentar(r)}
+                      >
+                        Sentar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

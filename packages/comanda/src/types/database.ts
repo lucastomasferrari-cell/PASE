@@ -215,8 +215,24 @@ export interface Mesa {
   capacidad: number | null;
   pos_x: number | null;
   pos_y: number | null;
+  ancho: number;
+  alto: number;
   forma: FormaMesa;
   estado: EstadoMesa;
+}
+
+export type EstadoMesaLive = 'libre' | 'ocupada_ticket' | 'ocupada_reserva' | 'reservada_pronto';
+
+export interface MesaEstadoLive {
+  mesa_id: number;
+  estado_live: EstadoMesaLive;
+  venta_id: number | null;
+  venta_total: number | null;
+  venta_abierta_at: string | null;
+  reserva_id: number | null;
+  reserva_nombre: string | null;
+  reserva_hora: string | null;
+  reserva_personas: number | null;
 }
 
 export interface TurnoCaja {

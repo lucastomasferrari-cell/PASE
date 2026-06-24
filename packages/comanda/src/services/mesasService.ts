@@ -1,5 +1,5 @@
 import { db } from '../lib/supabase';
-import type { Mesa, EstadoMesa, FormaMesa } from '../types/database';
+import type { Mesa, EstadoMesa, FormaMesa, MesaEstadoLive } from '../types/database';
 import { translateError } from '../lib/errors';
 import { cacheGet, cacheSet, isNetworkError } from '../lib/offlineCache';
 
@@ -83,8 +83,29 @@ export interface MesaDraft {
   zona: string | null;
   capacidad: number | null;
   forma: FormaMesa;
+  ancho?: number;
+  alto?: number;
   tenant_id: string;
   local_id: number;
+}
+
+export async function estadoMesasLive(localId: number): Promise<{ data: MesaEstadoLive[]; error: string | null }> {
+  const { data, error } = await db.rpc('fn_estado_mesas_live', { p_local_id: localId });
+  if (error) return { data: [], error: error.message };
+  return {
+    data: (data ?? []).map((r: Record<string, unknown>) => ({
+      mesa_id: Number(r['mesa_id']),
+      estado_live: r['estado_live'] as MesaEstadoLive,
+      venta_id: r['venta_id'] != null ? Number(r['venta_id']) : null,
+      venta_total: r['venta_total'] != null ? Number(r['venta_total']) : null,
+      venta_abierta_at: (r['venta_abierta_at'] as string | null) ?? null,
+      reserva_id: r['reserva_id'] != null ? Number(r['reserva_id']) : null,
+      reserva_nombre: (r['reserva_nombre'] as string | null) ?? null,
+      reserva_hora: (r['reserva_hora'] as string | null) ?? null,
+      reserva_personas: r['reserva_personas'] != null ? Number(r['reserva_personas']) : null,
+    })),
+    error: null,
+  };
 }
 
 export async function createMesa(draft: MesaDraft): Promise<{ id: number | null; error: string | null }> {

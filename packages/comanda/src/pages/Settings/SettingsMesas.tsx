@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Armchair } from 'lucide-react';
+import { Plus, Pencil, Trash2, Armchair, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import {
-  listMesas, createMesa, updateMesa, softDeleteMesa, type MesaDraft,
+  listMesas, createMesa, updateMesa, softDeleteMesa, updateMesaEditor, type MesaDraft,
 } from '@/services/mesasService';
 import type { Mesa, FormaMesa } from '@/types/database';
 import { Card, CardContent } from '@/components/ui/card';
@@ -16,7 +16,9 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EstadoMesaBadge } from '@/components/EstadoBadge';
+import { FloorPlanCanvas } from '@/components/FloorPlanCanvas';
 
 const FORMAS: { value: FormaMesa; label: string }[] = [
   { value: 'cuadrado', label: 'Cuadrado' },
@@ -31,6 +33,7 @@ export function SettingsMesas() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Mesa | 'new' | null>(null);
   const [search, setSearch] = useState('');
+  const [saving, setSaving] = useState<number | null>(null);
 
   const reload = useCallback(async () => {
     if (localId === null) return;
@@ -41,70 +44,115 @@ export function SettingsMesas() {
   }, [localId]);
 
   useEffect(() => { reload(); }, [reload]);
-
-  // Sprint Realtime: cambios remotos en mesas del mismo tenant.
   useRealtimeTable({ table: 'mesas', onChange: () => reload() });
 
   const filtered = mesas.filter((m) =>
     !search || m.numero.toLowerCase().includes(search.toLowerCase()) || (m.zona ?? '').toLowerCase().includes(search.toLowerCase()),
   );
 
+  async function handleMesaMoved(id: number, x: number, y: number) {
+    setSaving(id);
+    const { error } = await updateMesaEditor(id, { pos_x: x, pos_y: y });
+    setSaving(null);
+    if (error) toast.error('Error guardando posición: ' + error);
+    else {
+      setMesas((prev) => prev.map((m) => m.id === id ? { ...m, pos_x: x, pos_y: y } : m));
+    }
+  }
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar mesa…"
-          className="max-w-xs h-10"
-        />
-        <Button onClick={() => setEditing('new')} size="lg">
-          <Plus className="h-5 w-5" />
-          Nueva mesa
-        </Button>
-      </div>
-
-      {loading ? (
-        <Card><CardContent className="py-12 text-center text-muted-foreground">Cargando…</CardContent></Card>
-      ) : filtered.length === 0 ? (
-        <Card><CardContent className="py-16 text-center">
-          <Armchair className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-          <h3 className="text-lg font-medium mb-1">Sin mesas</h3>
-          <p className="text-sm text-muted-foreground mb-4">Agregá las mesas del salón.</p>
-          <Button onClick={() => setEditing('new')}><Plus className="h-4 w-4 mr-2" />Crear primera mesa</Button>
-        </CardContent></Card>
-      ) : (
-        <Card className="overflow-hidden">
-          <div className="grid grid-cols-[120px_1fr_140px_140px_140px_140px] gap-4 px-6 py-3 border-b border-border bg-muted/40 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            <div>Número</div><div>Zona</div><div>Capacidad</div><div>Forma</div><div>Estado</div><div className="text-right">Acciones</div>
+      <Tabs defaultValue="lista">
+        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+          <TabsList>
+            <TabsTrigger value="lista">Lista</TabsTrigger>
+            <TabsTrigger value="plano">
+              <LayoutDashboard className="h-3.5 w-3.5 mr-1.5" />
+              Plano del salón
+            </TabsTrigger>
+          </TabsList>
+          <div className="flex items-center gap-2">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar mesa…"
+              className="max-w-[180px] h-9"
+            />
+            <Button onClick={() => setEditing('new')} size="sm">
+              <Plus className="h-4 w-4 mr-1" />
+              Nueva mesa
+            </Button>
           </div>
-          {filtered.map((m, idx) => (
-            <div key={m.id} className={`grid grid-cols-[120px_1fr_140px_140px_140px_140px] gap-4 px-6 py-3 items-center text-sm ${idx !== filtered.length - 1 ? 'border-b border-border' : ''}`}>
-              <div className="font-semibold">{m.numero}</div>
-              <div className="text-muted-foreground">{m.zona ?? '—'}</div>
-              <div className="text-muted-foreground">{m.capacidad ?? '—'}</div>
-              <div className="text-muted-foreground capitalize">{m.forma}</div>
-              <div><EstadoMesaBadge estado={m.estado} /></div>
-              <div className="flex justify-end gap-1">
-                <Button variant="ghost" size="sm" onClick={() => setEditing(m)}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="sm"
-                  className="text-destructive hover:bg-destructive/10"
-                  onClick={async () => {
-                    if (!confirm(`¿Borrar mesa ${m.numero}?`)) return;
-                    const { error } = await softDeleteMesa(m.id);
-                    if (error) toast.error(error);
-                    else { toast.success('Mesa borrada'); reload(); }
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+        </div>
+
+        {/* Tab: Lista */}
+        <TabsContent value="lista" className="mt-0">
+          {loading ? (
+            <Card><CardContent className="py-12 text-center text-muted-foreground">Cargando…</CardContent></Card>
+          ) : filtered.length === 0 ? (
+            <Card><CardContent className="py-16 text-center">
+              <Armchair className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+              <h3 className="text-lg font-medium mb-1">Sin mesas</h3>
+              <p className="text-sm text-muted-foreground mb-4">Agregá las mesas del salón.</p>
+              <Button onClick={() => setEditing('new')}><Plus className="h-4 w-4 mr-2" />Crear primera mesa</Button>
+            </CardContent></Card>
+          ) : (
+            <Card className="overflow-hidden">
+              <div className="grid grid-cols-[120px_1fr_120px_120px_120px_120px] gap-4 px-6 py-3 border-b border-border bg-muted/40 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <div>Número</div><div>Zona</div><div>Capacidad</div><div>Forma</div><div>Estado</div><div className="text-right">Acciones</div>
               </div>
-            </div>
-          ))}
-        </Card>
-      )}
+              {filtered.map((m, idx) => (
+                <div key={m.id} className={`grid grid-cols-[120px_1fr_120px_120px_120px_120px] gap-4 px-6 py-3 items-center text-sm ${idx !== filtered.length - 1 ? 'border-b border-border' : ''}`}>
+                  <div className="font-semibold">{m.numero}</div>
+                  <div className="text-muted-foreground">{m.zona ?? '—'}</div>
+                  <div className="text-muted-foreground">{m.capacidad ?? '—'}</div>
+                  <div className="text-muted-foreground capitalize">{m.forma}</div>
+                  <div><EstadoMesaBadge estado={m.estado} /></div>
+                  <div className="flex justify-end gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => setEditing(m)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost" size="sm"
+                      className="text-destructive hover:bg-destructive/10"
+                      onClick={async () => {
+                        if (!confirm(`¿Borrar mesa ${m.numero}?`)) return;
+                        const { error } = await softDeleteMesa(m.id);
+                        if (error) toast.error(error);
+                        else { toast.success('Mesa borrada'); reload(); }
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Tab: Plano (editor drag-drop) */}
+        <TabsContent value="plano" className="mt-0">
+          {loading ? (
+            <div className="py-12 text-center text-muted-foreground">Cargando…</div>
+          ) : mesas.length === 0 ? (
+            <Card><CardContent className="py-12 text-center text-muted-foreground">
+              Primero creá las mesas desde la pestaña Lista.
+            </CardContent></Card>
+          ) : (
+            <>
+              {saving !== null && (
+                <p className="text-xs text-muted-foreground mb-2">Guardando posición…</p>
+              )}
+              <FloorPlanCanvas
+                mesas={mesas}
+                readonly={false}
+                onMesaMoved={handleMesaMoved}
+              />
+            </>
+          )}
+        </TabsContent>
+      </Tabs>
 
       {editing && localId !== null && (
         <MesaDialog
