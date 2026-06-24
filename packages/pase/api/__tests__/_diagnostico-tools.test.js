@@ -46,6 +46,14 @@ describe('executeTool — control de acceso (aislamiento)', () => {
     const out = await executeTool(makeAdmin({}), scope, 'buscar_factura', { local_id: 7 });
     expect(out.error).toBe('LOCAL_FUERA_DE_ALCANCE');
   });
+  it('desglose_categoria: rechaza local fuera del alcance', async () => {
+    const out = await executeTool(makeAdmin({}), scope, 'desglose_categoria', { local_id: 99, mes: '2026-06' });
+    expect(out.error).toBe('LOCAL_FUERA_DE_ALCANCE');
+  });
+  it('estado_empleado: rechaza local fuera del alcance', async () => {
+    const out = await executeTool(makeAdmin({}), scope, 'estado_empleado', { local_id: 99, nombre: 'x' });
+    expect(out.error).toBe('LOCAL_FUERA_DE_ALCANCE');
+  });
   it('sin especificar local → rechaza', async () => {
     const out = await executeTool(makeAdmin({}), scope, 'buscar_gasto', {});
     expect(out.error).toBe('LOCAL_FUERA_DE_ALCANCE');
@@ -108,14 +116,45 @@ describe('executeTool — detalle_registro (valida local DESPUÉS de traer el re
   });
 });
 
+describe('desglose_categoria', () => {
+  it('rechaza un mes con formato inválido', async () => {
+    const out = await executeTool(makeAdmin({}), scope, 'desglose_categoria', { local_id: 5, mes: 'junio' });
+    expect(out.error).toBe('MES_INVALIDO');
+  });
+  it('agrega por categoría cuando no se pasa categoría', async () => {
+    const admin = makeAdmin({
+      gastos: [{ categoria: 'BEBIDAS', monto: 1000 }, { categoria: 'BEBIDAS', monto: 500 }],
+      facturas: [{ cat: 'BEBIDAS', total: 2000 }],
+    });
+    const out = await executeTool(admin, scope, 'desglose_categoria', { local_id: 5, mes: '2026-06' });
+    expect(out.total).toBe(3500);
+    expect(out.por_categoria[0]).toMatchObject({ categoria: 'BEBIDAS', total: 3500 });
+  });
+});
+
+describe('estado_empleado', () => {
+  it('devuelve empleados con sus adelantos y pagos especiales', async () => {
+    const admin = makeAdmin({
+      rrhh_empleados: [{ id: 7, nombre: 'Mauricio', apellido: 'Balcazar', local_id: 5 }],
+      rrhh_adelantos: [{ id: 'a1', monto: 5000 }],
+      rrhh_pagos_especiales: [{ id: 'p1', tipo: 'aguinaldo', monto: 90000 }],
+    });
+    const out = await executeTool(admin, scope, 'estado_empleado', { local_id: 5, nombre: 'Balcazar' });
+    expect(out.empleados).toHaveLength(1);
+    expect(out.empleados[0].pagos_especiales[0].tipo).toBe('aguinaldo');
+    expect(out.empleados[0].adelantos).toHaveLength(1);
+  });
+});
+
 describe('TOOLS (schema)', () => {
-  it('tiene las 5 herramientas v1', () => {
-    expect(TOOLS.map((t) => t.name).sort()).toEqual(
-      ['buscar_factura', 'buscar_gasto', 'buscar_movimiento', 'detalle_registro', 'saldo_cuentas'],
-    );
+  it('tiene las 7 herramientas', () => {
+    expect(TOOLS.map((t) => t.name).sort()).toEqual([
+      'buscar_factura', 'buscar_gasto', 'buscar_movimiento', 'desglose_categoria',
+      'detalle_registro', 'estado_empleado', 'saldo_cuentas',
+    ]);
   });
   it('las de búsqueda exigen local_id', () => {
-    for (const n of ['buscar_gasto', 'buscar_movimiento', 'saldo_cuentas', 'buscar_factura']) {
+    for (const n of ['buscar_gasto', 'buscar_movimiento', 'saldo_cuentas', 'buscar_factura', 'desglose_categoria', 'estado_empleado']) {
       expect(TOOLS.find((t) => t.name === n).input_schema.required).toContain('local_id');
     }
   });

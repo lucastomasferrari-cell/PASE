@@ -105,12 +105,58 @@ export const TOOLS = [
       required: ['tipo', 'id'],
     },
   },
+  {
+    name: 'desglose_categoria',
+    description:
+      'Desglosa los gastos y facturas de un local en un mes, agrupados por categoría — para ' +
+      '"por qué este total no cuadra" o "qué compone los $X de tal rubro". Sin categoría ' +
+      'devuelve el total de cada categoría; con una categoría lista los gastos y facturas ' +
+      'individuales. (No incluye ventas ni sueldos todavía — para esos, guiá a Reportes/Equipo.)',
+    input_schema: {
+      type: 'object',
+      properties: {
+        local_id: { type: 'integer', description: 'ID del local (obligatorio).' },
+        mes: { type: 'string', description: 'Mes en formato YYYY-MM (obligatorio).' },
+        categoria: { type: 'string', description: 'Categoría a detallar (opcional).' },
+      },
+      required: ['local_id', 'mes'],
+    },
+  },
+  {
+    name: 'estado_empleado',
+    description:
+      'Estado de un empleado: legajo (sueldo declarado, antigüedad), adelantos recientes y ' +
+      'pagos especiales (aguinaldo, vacaciones, liquidación final). Usala para "no le figura ' +
+      'el aguinaldo/adelanto a tal empleado". Pedí nombre del empleado + local. (Las ' +
+      'liquidaciones de sueldo mensual todavía no están acá — para eso guiá a Equipo.)',
+    input_schema: {
+      type: 'object',
+      properties: {
+        local_id: { type: 'integer', description: 'ID del local (obligatorio).' },
+        nombre: { type: 'string', description: 'Nombre o apellido del empleado (obligatorio).' },
+      },
+      required: ['local_id', 'nombre'],
+    },
+  },
 ];
 
 // Sanea texto libre antes de meterlo en un filtro PostgREST (.or/.ilike):
 // saca comas, paréntesis y comodines que podrían alterar la sintaxis del filtro.
 function sanearTexto(t) {
   return String(t).replace(/[^\w\sáéíóúüñÁÉÍÓÚÑ.\-]/gi, ' ').trim().slice(0, 80);
+}
+
+// Convierte "YYYY-MM" en { desde, hastaExcl } (primer día del mes y primer día
+// del mes siguiente, para filtrar fecha con gte/lt). null si el formato es malo.
+function mesBounds(mes) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(mes || ''));
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  if (month < 1 || month > 12) return null;
+  const ny = month === 12 ? year + 1 : year;
+  const nm = month === 12 ? 1 : month + 1;
+  return { desde: `${m[1]}-${m[2]}-01`, hastaExcl: `${ny}-${String(nm).padStart(2, '0')}-01` };
 }
 
 // Resuelve prov_id → nombre para un set de facturas (segunda query, evita
@@ -234,6 +280,66 @@ export async function executeTool(admin, scope, name, input) {
     // El registro existe: validamos que su local esté en el alcance del usuario.
     if (!enScope(data.local_id)) return FUERA;
     return { registro: data };
+  }
+
+  if (name === 'desglose_categoria') {
+    if (!enScope(input.local_id)) return FUERA;
+    const b = mesBounds(input.mes);
+    if (!b) return { error: 'MES_INVALIDO', detalle: 'mes debe tener formato "YYYY-MM".' };
+    const cat = input.categoria ? sanearTexto(input.categoria) : null;
+
+    let gq = admin.from('gastos')
+      .select('id, fecha, monto, categoria, detalle, cuenta, estado')
+      .eq('local_id', input.local_id).gte('fecha', b.desde).lt('fecha', b.hastaExcl)
+      .or('estado.neq.anulado,estado.is.null').limit(200);
+    if (cat) gq = gq.eq('categoria', cat);
+    let fq = admin.from('facturas')
+      .select('id, nro, fecha, total, cat, estado, prov_id')
+      .eq('local_id', input.local_id).gte('fecha', b.desde).lt('fecha', b.hastaExcl)
+      .or('estado.neq.anulada,estado.is.null').limit(200);
+    if (cat) fq = fq.eq('cat', cat);
+    const [gr, fr] = await Promise.all([gq, fq]);
+    if (gr.error || fr.error) return { error: 'QUERY_FALLO', detalle: (gr.error || fr.error).message };
+    const gastos = gr.data || [];
+    const facturas = fr.data || [];
+
+    if (cat) {
+      const facs = await adjuntarProveedores(admin, facturas);
+      const totG = gastos.reduce((s, x) => s + Number(x.monto || 0), 0);
+      const totF = facs.reduce((s, x) => s + Number(x.total || 0), 0);
+      return { mes: input.mes, categoria: cat, total: totG + totF, total_gastos: totG, total_facturas: totF, gastos, facturas: facs };
+    }
+    const map = new Map();
+    const sumar = (k, campo, val) => {
+      const key = k || 'SIN CATEGORÍA';
+      const e = map.get(key) || { categoria: key, gastos: 0, facturas: 0, total: 0 };
+      e[campo] += Number(val || 0); e.total += Number(val || 0); map.set(key, e);
+    };
+    for (const g of gastos) sumar(g.categoria, 'gastos', g.monto);
+    for (const f of facturas) sumar(f.cat, 'facturas', f.total);
+    const por_categoria = [...map.values()].sort((a, c) => c.total - a.total);
+    return { mes: input.mes, total: por_categoria.reduce((s, x) => s + x.total, 0), por_categoria };
+  }
+
+  if (name === 'estado_empleado') {
+    if (!enScope(input.local_id)) return FUERA;
+    const t = input.nombre ? sanearTexto(input.nombre) : '';
+    let eq = admin.from('rrhh_empleados')
+      .select('id, nombre, apellido, puesto, activo, sueldo_mensual, fecha_inicio, local_id')
+      .in('local_id', scope.locales).limit(5);
+    if (t) eq = eq.or(`nombre.ilike.%${t}%,apellido.ilike.%${t}%`);
+    const { data: emps, error: ee } = await eq;
+    if (ee) return { error: 'QUERY_FALLO', detalle: ee.message };
+    if (!emps || !emps.length) return { empleados: [], nota: 'No encontré un empleado con ese nombre en tus locales.' };
+    const out = [];
+    for (const emp of emps) {
+      const [adel, esp] = await Promise.all([
+        admin.from('rrhh_adelantos').select('*').eq('empleado_id', emp.id).order('fecha', { ascending: false }).limit(10),
+        admin.from('rrhh_pagos_especiales').select('*').eq('empleado_id', emp.id).order('pagado_at', { ascending: false }).limit(10),
+      ]);
+      out.push({ ...emp, adelantos: adel.data || [], pagos_especiales: esp.data || [] });
+    }
+    return { empleados: out };
   }
 
   return { error: 'TOOL_DESCONOCIDA', detalle: `No existe la herramienta '${name}'.` };
