@@ -18,6 +18,9 @@
 import { checkUserAuth } from './_user-auth.js';
 import { SOPORTE_SYSTEM_PROMPT } from './_soporte-prompt.js';
 import { GASTRO_SENSEI_SYSTEM_PROMPT } from './_gastro-sensei-prompt.js';
+import { DIAGNOSTICO_SYSTEM_PROMPT } from './_diagnostico-prompt.js';
+import { localesVisibles, tienePermisoDiagnostico } from './_diagnostico-scope.js';
+import { TOOLS, executeTool } from './_diagnostico-tools.js';
 import { createClient } from '@supabase/supabase-js';
 
 // Pricing por modelo (USD por 1M tokens, según Anthropic public pricing 2026).
@@ -122,6 +125,29 @@ export default async function handler(req, res) {
   // Si el body trae un `task` conocido, armamos el payload server-side.
   // Caso contrario, comportamiento legacy: proxy crudo.
   const body = req.body || {};
+
+  // Modo diagnóstico: loop de tool use server-side, gateado por el permiso
+  // `diagnostico_ia` y scopeado al tenant + locales del usuario (read-only).
+  // Si el usuario NO tiene el permiso, cae transparentemente al bot de soporte
+  // normal (manual, un solo tiro) → el widget puede mandar siempre
+  // 'diagnostico-chat' y el server decide. "Default transparente".
+  if (body.task === 'diagnostico-chat') {
+    const admin = auth.admin;
+    const permitido = admin ? await tienePermisoDiagnostico(admin, auth) : false;
+    if (permitido) {
+      const scope = { tenantId: auth.row.tenant_id, locales: await localesVisibles(admin, auth) };
+      try {
+        const result = await runDiagnosticoLoop(body, scope, admin, auth);
+        res.status(200).json(result);
+      } catch (e) {
+        res.status(502).json({ error: 'DIAGNOSTICO_LOOP_FAILED', detail: String(e?.message || e) });
+      }
+      return;
+    }
+    // Sin permiso (o sin service client): seguí como soporte-chat normal.
+    body.task = 'soporte-chat';
+  }
+
   let payload;
   if (body.task === 'soporte-chat') {
     payload = buildSoporteChatPayload(body, auth);
@@ -167,6 +193,89 @@ export default async function handler(req, res) {
   } catch (e) {
     res.status(502).json({ error: 'ANTHROPIC_FETCH_FAILED', detail: String(e?.message || e) });
   }
+}
+
+// Loop de tool use para el modo diagnóstico. Claude pide tool_use → ejecutamos
+// la consulta read-only scopeada → le devolvemos el tool_result → repite, hasta
+// end_turn o el cap de iteraciones. Devuelve el último mensaje de Anthropic
+// (el frontend lee content[0].text, igual que en soporte-chat).
+const MAX_ITER_DIAGNOSTICO = 5;
+
+async function runDiagnosticoLoop(body, scope, admin, auth) {
+  const ctx = body.contexto || {};
+  const ctxLines = [];
+  if (ctx.sistema) ctxLines.push(`Sistema: ${ctx.sistema}`);
+  if (ctx.pantalla) ctxLines.push(`Pantalla actual: ${ctx.pantalla}`);
+  if (auth?.row?.rol) ctxLines.push(`Rol del usuario: ${auth.row.rol}`);
+  // Los locales visibles van en el contexto con su nombre, para que el bot
+  // pueda mapear "Belgrano" → id al llamar las herramientas. Solo puede pedir
+  // consultas sobre estos IDs (executeTool igual revalida en cada llamada).
+  let localesCtx = scope.locales.join(', ') || '(ninguno)';
+  if (scope.locales.length) {
+    try {
+      const { data: locs } = await admin.from('locales').select('id, nombre').in('id', scope.locales);
+      if (locs && locs.length) localesCtx = locs.map((l) => `${l.nombre} (id ${l.id})`).join(', ');
+    } catch { /* si falla, quedan los IDs */ }
+  }
+  ctxLines.push(`Locales del usuario (solo podés consultar estos): ${localesCtx}`);
+
+  const system = [
+    { type: 'text', text: DIAGNOSTICO_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: '## CONTEXTO DE ESTE TURNO\n' + ctxLines.join('\n') },
+  ];
+  const model = body.model || DEFAULT_MODEL_SOPORTE;
+  const maxTokens = Math.min(body.max_tokens || DEFAULT_MAX_TOKENS_SOPORTE, MAX_TOKENS_HARD_CAP);
+
+  let messages = Array.isArray(body.messages) ? [...body.messages] : [];
+  let last = null;
+  let tokensIn = 0;
+  let tokensOut = 0;
+
+  for (let i = 0; i < MAX_ITER_DIAGNOSTICO; i++) {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({ model, max_tokens: maxTokens, system, tools: TOOLS, messages }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) return data; // propaga el error de Anthropic tal cual
+    if (data.usage) {
+      tokensIn += data.usage.input_tokens || 0;
+      tokensOut += data.usage.output_tokens || 0;
+    }
+    last = data;
+    messages.push({ role: 'assistant', content: data.content });
+    if (data.stop_reason !== 'tool_use') break;
+
+    const toolResults = [];
+    for (const block of data.content || []) {
+      if (block.type === 'tool_use') {
+        let result;
+        try {
+          result = await executeTool(admin, scope, block.name, block.input);
+        } catch (e) {
+          result = { error: 'TOOL_THREW', detalle: String(e?.message || e) };
+        }
+        toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result) });
+      }
+    }
+    if (!toolResults.length) break;
+    messages.push({ role: 'user', content: toolResults });
+  }
+
+  trackUsage({
+    tenantId: auth?.row?.tenant_id ?? null,
+    usuarioId: auth?.row?.id ?? null,
+    task: 'diagnostico-chat',
+    model,
+    tokensIn,
+    tokensOut,
+  });
+  return last;
 }
 
 // Arma el payload para Anthropic cuando es soporte-chat.

@@ -151,7 +151,9 @@ export function SoporteWidget() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          task: 'soporte-chat',
+          // Mandamos siempre 'diagnostico-chat'; el server corre el modo
+          // diagnóstico si el usuario tiene el permiso, o cae a soporte normal.
+          task: 'diagnostico-chat',
           messages: nuevoMsgs.map((m) => ({ role: m.role, content: m.content })),
           contexto: {
             sistema: 'comanda',

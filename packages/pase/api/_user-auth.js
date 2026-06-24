@@ -53,7 +53,7 @@ export async function checkUserAuth(req, res, opts = {}) {
     const user = userData.user;
     const { data: row } = await admin
       .from('usuarios')
-      .select('id, rol, activo, tenant_id, password_temporal')
+      .select('id, rol, rol_id, activo, tenant_id, password_temporal')
       .eq('auth_id', user.id)
       .maybeSingle();
     if (!row) {
@@ -74,7 +74,10 @@ export async function checkUserAuth(req, res, opts = {}) {
         hint: 'Cambiá la contraseña en la pantalla inicial antes de usar la API.' });
       return null;
     }
-    return { user, row };
+    // Devolvemos también el cliente admin (service_role) para que los
+    // endpoints que necesitan consultar la base scopeada (ej. diagnóstico IA)
+    // reusen este cliente en vez de crear otro.
+    return { user, row, admin };
   } catch (e) {
     console.warn('[user-auth] validation threw:', e?.message);
     res.status(500).json({ ok: false, error: 'auth_threw' });

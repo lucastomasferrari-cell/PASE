@@ -60,6 +60,12 @@ export const PERMISOS_EXTRAS = [
   // puntual (ej: quien gestiona bajas) sin abrirle todo Equipo. Lucas 17-jun.
   { slug:"rrhh_liquidacion_final", label:"Liquidación final (despidos/renuncias)",
     descripcion:"Permite ver y hacer la liquidación final de un empleado (indemnización, SAC, vacaciones) desde el Legajo. Por default solo dueño/admin." },
+  // Asistente de diagnóstico IA (24-jun): el bot de ayuda, además de responder
+  // con el manual, puede MIRAR la base (SOLO LECTURA) para ayudar a encontrar y
+  // entender datos. Acotado al tenant + locales del usuario. Por default solo
+  // dueño/admin; este permiso lo habilita a un encargado puntual.
+  { slug:"diagnostico_ia", label:"Asistente de diagnóstico IA",
+    descripcion:"Habilita el 'modo diagnóstico' del bot de ayuda: mira la base (solo lectura) para encontrar y explicar datos (gastos que no aparecen, diferencias, conciliación, etc.). Acotado a sus locales." },
 ];
 
 // MODULOS = lista maestra de slugs asignables como permisos. Incluye TODO
