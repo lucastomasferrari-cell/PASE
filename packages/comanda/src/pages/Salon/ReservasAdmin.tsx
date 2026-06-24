@@ -41,6 +41,7 @@ import { getLocalNombre } from '@/services/localSettingsService';
 import type { Mesa, MesaEstadoLive } from '@/types/database';
 import { FloorPlanCanvas } from '@/components/FloorPlanCanvas';
 import { ClienteHistorialDialog } from '@/components/ClienteHistorialDialog';
+import { WaitlistTab } from '@/components/WaitlistTab';
 import {
   whatsAppUrl, mensajeGenericoCliente,
   mensajeConfirmacionReserva, mensajeRecordatorioReserva,
@@ -405,6 +406,10 @@ export function ReservasAdmin() {
             <LayoutDashboard className="h-3.5 w-3.5" />
             Plano
           </TabsTrigger>
+          <TabsTrigger value="espera" className="gap-1.5">
+            <Clock className="h-3.5 w-3.5" />
+            Espera
+          </TabsTrigger>
         </TabsList>
 
         {/* ── MESA módulo #1: agenda del día ─────────────────────────────── */}
@@ -532,6 +537,11 @@ export function ReservasAdmin() {
             onReloadLive={() => void reloadLive()}
             onSentar={(r) => abrirSentar(r)}
           />
+        </TabsContent>
+
+        {/* ── Módulo #5: lista de espera walk-ins ─────────────────────────── */}
+        <TabsContent value="espera" className="mt-4">
+          <WaitlistTab localId={localActivo ?? 0} localNombre={localNombre} />
         </TabsContent>
       </Tabs>
 

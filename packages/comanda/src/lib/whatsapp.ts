@@ -114,6 +114,15 @@ function fmtHoraES(iso: string): string {
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 }
 
+export function mensajeHayMesaWaitlist(args: {
+  clienteNombre: string;
+  localNombre: string;
+  personas: number;
+}): string {
+  const p = `${args.personas} persona${args.personas === 1 ? '' : 's'}`;
+  return `Hola ${args.clienteNombre}! 🎉\n¡Tenemos una mesa disponible en *${args.localNombre}* para ${p}!\n\nSi querés, podés acercarte ahora. Te esperamos hasta en unos minutos — avisanos si ya no podés venir.`;
+}
+
 export function mensajeConfirmacionReserva(args: {
   clienteNombre: string;
   localNombre: string;
