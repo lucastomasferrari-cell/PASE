@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
   CalendarCheck, Phone, MessageCircle, Check, X,
-  Clock, Users, RefreshCw, Plus, Pencil, Armchair, LayoutDashboard, Bell,
+  Clock, Users, RefreshCw, Plus, Pencil, Armchair, LayoutDashboard, Bell, TrendingUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -42,6 +42,7 @@ import type { Mesa, MesaEstadoLive } from '@/types/database';
 import { FloorPlanCanvas } from '@/components/FloorPlanCanvas';
 import { ClienteHistorialDialog } from '@/components/ClienteHistorialDialog';
 import { WaitlistTab } from '@/components/WaitlistTab';
+import { ReservasAnalytics } from '@/components/ReservasAnalytics';
 import {
   whatsAppUrl, mensajeGenericoCliente,
   mensajeConfirmacionReserva, mensajeRecordatorioReserva,
@@ -410,6 +411,10 @@ export function ReservasAdmin() {
             <Clock className="h-3.5 w-3.5" />
             Espera
           </TabsTrigger>
+          <TabsTrigger value="stats" className="gap-1.5">
+            <TrendingUp className="h-3.5 w-3.5" />
+            Stats
+          </TabsTrigger>
         </TabsList>
 
         {/* ── MESA módulo #1: agenda del día ─────────────────────────────── */}
@@ -542,6 +547,11 @@ export function ReservasAdmin() {
         {/* ── Módulo #5: lista de espera walk-ins ─────────────────────────── */}
         <TabsContent value="espera" className="mt-4">
           <WaitlistTab localId={localActivo ?? 0} localNombre={localNombre} />
+        </TabsContent>
+
+        {/* ── Módulo #7: analytics de reservas ────────────────────────────── */}
+        <TabsContent value="stats" className="mt-4">
+          {localActivo && <ReservasAnalytics localId={localActivo} />}
         </TabsContent>
       </Tabs>
 
