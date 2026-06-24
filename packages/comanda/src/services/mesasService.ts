@@ -108,6 +108,14 @@ export async function updateMesaPosicion(id: number, x: number, y: number): Prom
   return { error: error?.message ?? null };
 }
 
+export async function updateMesaEditor(
+  id: number,
+  patch: { pos_x?: number; pos_y?: number; forma?: FormaMesa },
+): Promise<{ error: string | null }> {
+  const { error } = await db.from('mesas').update(patch).eq('id', id);
+  return { error: error?.message ?? null };
+}
+
 export async function softDeleteMesa(id: number): Promise<{ error: string | null }> {
   // Validar no tiene ventas históricas
   const { count } = await db.from('ventas_pos')
