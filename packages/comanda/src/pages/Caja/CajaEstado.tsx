@@ -66,8 +66,8 @@ export function CajaEstado() {
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-muted mb-4">
               <Lock className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h2 className="text-xl font-semibold mb-2">Caja cerrada</h2>
-            <p className="text-sm text-muted-foreground mb-6">
+            <h2 className="text-base font-semibold mb-2">Caja cerrada</h2>
+            <p className="text-xs text-muted-foreground mb-6">
               No hay turno abierto en este local.
             </p>
             <Button variant="success" size="lg" onClick={() => navigate('/caja/abrir')}>
@@ -135,7 +135,7 @@ export function CajaEstado() {
               <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">
                 Efectivo en caja
               </div>
-              <div className="text-4xl font-bold tabular-nums mt-1">
+              <div className="text-2xl font-bold tabular-nums mt-1">
                 {formatARS(efectivoEnCaja)}
               </div>
               <div className="text-xs text-muted-foreground mt-1">
@@ -147,7 +147,7 @@ export function CajaEstado() {
                 <div className="text-xs text-muted-foreground uppercase tracking-wide">
                   Cobros no-efectivo
                 </div>
-                <div className="text-lg font-semibold tabular-nums">
+                <div className="text-base font-semibold tabular-nums">
                   {formatARS(totalNoEfectivo)}
                 </div>
                 <div className="text-xs text-muted-foreground">

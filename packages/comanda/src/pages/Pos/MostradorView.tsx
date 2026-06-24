@@ -142,25 +142,25 @@ export function MostradorView() {
       <div className="flex-1 min-w-0 overflow-auto">
         <div className="p-6">
           <header className="flex items-center gap-3 mb-5">
-            <h1 className="text-2xl font-bold tracking-tight">Mostrador</h1>
-            <span className="text-sm text-muted-foreground">{ventas.length} órdenes activas</span>
+            <h1 className="text-lg font-semibold">Mostrador</h1>
+            <span className="text-xs text-muted-foreground">{ventas.length} órdenes activas</span>
             <div className="ml-auto flex gap-2">
               <Button
                 onClick={() => setAbrirTabOpen(true)}
                 disabled={creando}
                 variant="outline"
-                size="lg"
+                size="sm"
               >
-                <BookmarkPlus className="h-4 w-4 mr-2" />
+                <BookmarkPlus className="h-3.5 w-3.5 mr-1.5" />
                 Abrir tab
               </Button>
               <Button
                 onClick={nuevaOrden}
                 disabled={creando}
                 variant="success"
-                size="lg"
+                size="sm"
               >
-                <Plus className="h-5 w-5 mr-2" />
+                <Plus className="h-3.5 w-3.5 mr-1.5" />
                 {creando ? 'Creando…' : 'Nueva orden'}
               </Button>
             </div>
@@ -222,8 +222,8 @@ export function MostradorView() {
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-muted mb-4">
                   <Coffee className="h-8 w-8 text-muted-foreground" />
                 </div>
-                <h3 className="text-lg font-medium mb-1">Sin órdenes abiertas</h3>
-                <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-4">
+                <h3 className="text-sm font-medium mb-1">Sin órdenes abiertas</h3>
+                <p className="text-xs text-muted-foreground max-w-sm mx-auto mb-4">
                   Tocá "Nueva orden" para empezar a tomar pedidos del mostrador o la barra.
                 </p>
                 <Button onClick={nuevaOrden} disabled={creando} variant="success">
@@ -265,16 +265,16 @@ export function MostradorView() {
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 min-w-0">
                         {v.tab_nombre && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary text-primary-foreground font-bold uppercase shrink-0">Tab</span>
+                          <span className="text-[10px] px-1 py-0 rounded bg-primary text-primary-foreground font-bold uppercase shrink-0">Tab</span>
                         )}
-                        <strong className="text-base">#{v.numero_local}</strong>
+                        <strong className="text-sm">#{v.numero_local}</strong>
                       </div>
                       <Badge variant={estadoColor(v.estado)}>{v.estado}</Badge>
                     </div>
                     <div className="mt-2 text-sm text-muted-foreground truncate">
                       {v.tab_nombre ?? v.cliente_nombre ?? 'Sin nombre'}
                     </div>
-                    <div className="mt-3 text-xl font-bold tabular-nums">
+                    <div className="mt-2 text-base font-semibold tabular-nums">
                       {formatARS(v.total)}
                     </div>
                     <div className={cn(

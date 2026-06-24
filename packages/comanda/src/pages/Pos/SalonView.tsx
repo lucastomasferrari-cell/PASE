@@ -109,7 +109,7 @@ export function SalonView() {
       <div className="flex-1 min-w-0 overflow-auto">
         <div className="p-6">
           <header className="flex items-center gap-3 mb-5 flex-wrap">
-            <h1 className="text-2xl font-bold tracking-tight">Salón</h1>
+            <h1 className="text-lg font-semibold">Salón</h1>
             <nav className="flex gap-1 ml-2">
               <ZoneButton active={zona === null} onClick={() => setZona(null)}>
                 Todas ({mesas.length})
@@ -135,7 +135,7 @@ export function SalonView() {
 
           {/* Leyenda color-status (F #9) — chips compactos arriba del plano */}
           {!loading && mesas.length > 0 && (
-            <div className="mb-3 flex items-center gap-1.5 flex-wrap text-[10px]">
+            <div className="mb-3 flex items-center gap-1.5 flex-wrap text-xs">
               <span className="text-muted-foreground uppercase tracking-wide font-medium mr-1">Colores:</span>
               <LeyendaChip bucket="reciente" />
               <LeyendaChip bucket="normal" />
@@ -300,9 +300,9 @@ function SummaryCard({ label, value, hint, tone }: {
   }[tone];
   return (
     <div className={cn('rounded-md border p-2.5', toneClass)}>
-      <div className="text-[10px] uppercase tracking-wide font-medium opacity-80">{label}</div>
-      <div className="text-xl font-bold tabular-nums leading-tight mt-0.5">{value}</div>
-      {hint && <div className="text-[10px] opacity-60 mt-0.5">{hint}</div>}
+      <div className="text-xs uppercase tracking-wide font-medium opacity-80">{label}</div>
+      <div className="text-base font-bold tabular-nums leading-tight mt-0.5">{value}</div>
+      {hint && <div className="text-xs opacity-60 mt-0.5">{hint}</div>}
     </div>
   );
 }
@@ -379,16 +379,16 @@ function MesaTile({ mesa, onClick }: { mesa: MesaConVenta; onClick: () => void }
         styles.border,
       )}
     >
-      <div className="text-2xl font-bold">{mesa.numero}</div>
-      {mesa.zona && <div className="text-[10px] opacity-70">{mesa.zona}</div>}
+      <div className="text-lg font-semibold">{mesa.numero}</div>
+      {mesa.zona && <div className="text-xs opacity-70">{mesa.zona}</div>}
       {mesa.venta_abierta_id !== null && (
         <>
-          <div className="text-sm font-semibold mt-1 tabular-nums">
+          <div className="text-xs font-medium mt-1 tabular-nums">
             {formatARS(mesa.venta_total)}
           </div>
           {mesa.venta_abierta_at && (
             <div className={cn(
-              'text-[10px] tabular-nums',
+              'text-xs tabular-nums',
               bucket === 'urgente' && 'font-bold',
               bucket === 'atencion' && 'font-semibold',
             )}>

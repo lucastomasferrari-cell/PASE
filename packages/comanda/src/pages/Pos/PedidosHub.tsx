@@ -222,15 +222,15 @@ export function PedidosHub() {
     <div className="container py-6">
       <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Pedidos</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Pedidos online y delivery externo. Refresca cada 30 segundos.
+          <h1 className="text-lg font-semibold">Pedidos</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Pedidos online y delivery externo.
           </p>
         </div>
 
         {/* TOOLBAR: nuevo pedido + quote times editables inline (manager+) */}
         <div className="flex items-center gap-2 flex-wrap">
-          <Button onClick={() => setNuevoPedidoOpen(true)} size="lg" className="gap-1.5">
+          <Button onClick={() => setNuevoPedidoOpen(true)} size="sm" className="gap-1.5">
             <Plus className="h-4 w-4" />
             Nuevo pedido
           </Button>
@@ -521,7 +521,7 @@ function NotifierToggle({ muted, setMuted, permState, askPermission }: {
       <Icon className="h-3.5 w-3.5" />
       <span>{muted ? 'Mute' : 'Alertas'}</span>
       {!muted && permState === 'default' && (
-        <span className="text-[10px] opacity-70">(activar)</span>
+        <span className="text-xs opacity-70">(activar)</span>
       )}
     </button>
   );
@@ -543,8 +543,8 @@ function EmptyState({ tab }: { tab: PedidoTab }) {
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-muted mb-4">
           <Inbox className="h-8 w-8 text-muted-foreground" />
         </div>
-        <h3 className="text-lg font-medium mb-1">{m.titulo}</h3>
-        <p className="text-sm text-muted-foreground max-w-sm mx-auto">{m.subtitulo}</p>
+        <h3 className="text-sm font-medium mb-1">{m.titulo}</h3>
+        <p className="text-xs text-muted-foreground max-w-sm mx-auto">{m.subtitulo}</p>
       </CardContent>
     </Card>
   );

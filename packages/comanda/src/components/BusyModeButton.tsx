@@ -4,7 +4,6 @@ import { Flame, Clock } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import { db } from '@/lib/supabase';
-import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
   DropdownMenuLabel, DropdownMenuSeparator,
@@ -83,19 +82,20 @@ export function BusyModeButton() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant={activo ? 'destructive' : 'outline'}
-          size="sm"
-          className={cn('gap-1.5', activo && 'animate-pulse')}
+        <button
+          type="button"
+          className={cn(
+            'h-8 w-8 rounded-md flex items-center justify-center transition-colors',
+            activo
+              ? 'text-destructive bg-destructive/10 hover:bg-destructive/20 animate-pulse'
+              : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+          )}
           title={activo
             ? `Busy Mode activo: +${settings?.busy_extra_min}min por ${minRestantes} min más`
             : 'Bumpear tiempos de prep informados al cliente (cocina saturada)'}
         >
-          <Flame className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">
-            {activo ? `Busy +${settings?.busy_extra_min}m (${minRestantes}m)` : 'Busy'}
-          </span>
-        </Button>
+          <Flame className="h-4 w-4" />
+        </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="text-xs">
