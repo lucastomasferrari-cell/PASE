@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
   CalendarCheck, Phone, MessageCircle, Check, X,
-  Clock, Users, RefreshCw, Plus, Pencil, Armchair, LayoutDashboard,
+  Clock, Users, RefreshCw, Plus, Pencil, Armchair, LayoutDashboard, Bell,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -33,13 +33,17 @@ import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import {
   listReservas, cambiarEstadoReserva, asignarMesaReserva, listMesasDelLocal,
-  crearReserva, editarReserva,
+  crearReserva, editarReserva, listReservasParaRecordatorio, marcarRecordatorioEnviado,
   type Reserva, type EstadoReserva, type MesaSimple,
 } from '@/services/reservasService';
 import { listMesas, estadoMesasLive } from '@/services/mesasService';
+import { getLocalNombre } from '@/services/localSettingsService';
 import type { Mesa, MesaEstadoLive } from '@/types/database';
 import { FloorPlanCanvas } from '@/components/FloorPlanCanvas';
-import { whatsAppUrl, mensajeGenericoCliente } from '@/lib/whatsapp';
+import {
+  whatsAppUrl, mensajeGenericoCliente,
+  mensajeConfirmacionReserva, mensajeRecordatorioReserva,
+} from '@/lib/whatsapp';
 
 const ESTADO_COLORS: Record<EstadoReserva, string> = {
   pendiente:  'bg-amber-100 text-amber-800',
@@ -108,6 +112,8 @@ export function ReservasAdmin() {
   const [mesas, setMesas] = useState<MesaSimple[]>([]);  // F5 Chunk D — dropdown sentar
   const [mesasCompletas, setMesasCompletas] = useState<Mesa[]>([]);  // para FloorPlanCanvas
   const [estadoLiveMap, setEstadoLiveMap] = useState<Map<number, MesaEstadoLive>>(new Map());
+  const [localNombre, setLocalNombre] = useState('');
+  const [recordatorios, setRecordatorios] = useState<Reserva[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState<number | null>(null);
@@ -132,18 +138,33 @@ export function ReservasAdmin() {
     return () => clearInterval(t);
   }, [reload]);
 
-  // F5 Chunk D: dropdown de asignación + mesas completas para floor plan.
+  // F5 Chunk D: dropdown de asignación + mesas completas para floor plan + nombre del local.
   useEffect(() => {
     if (!localActivo) return;
     void (async () => {
-      const [simple, completas] = await Promise.all([
+      const [simple, completas, nombre] = await Promise.all([
         listMesasDelLocal(localActivo),
         listMesas(localActivo),
+        getLocalNombre(localActivo),
       ]);
       setMesas(simple.data);
       setMesasCompletas(completas.data);
+      setLocalNombre(nombre ?? '');
     })();
   }, [localActivo]);
+
+  // Recordatorios — reservas confirmadas en las próximas 2h sin recordatorio enviado.
+  const reloadRecordatorios = useCallback(async () => {
+    if (!localActivo) return;
+    const { data } = await listReservasParaRecordatorio(localActivo);
+    setRecordatorios(data);
+  }, [localActivo]);
+
+  useEffect(() => {
+    void reloadRecordatorios();
+    const t = setInterval(() => { void reloadRecordatorios(); }, 60_000);
+    return () => clearInterval(t);
+  }, [reloadRecordatorios]);
 
   // Motor de disponibilidad en vivo — poll 30s.
   const reloadLive = useCallback(async () => {
@@ -200,7 +221,27 @@ export function ReservasAdmin() {
     }
   }
 
-  async function handleConfirmar(r: Reserva) { await cambiarEstado(r, 'confirmada'); }
+  async function handleConfirmar(r: Reserva) {
+    await cambiarEstado(r, 'confirmada');
+    if (r.cliente_telefono) {
+      const msg = mensajeConfirmacionReserva({
+        clienteNombre: r.cliente_nombre,
+        localNombre: localNombre || 'el local',
+        fechaHora: r.fecha_hora,
+        personas: r.personas,
+      });
+      const url = whatsAppUrl(r.cliente_telefono, msg);
+      if (url) {
+        toast.success('Reserva confirmada', {
+          action: {
+            label: '📲 Enviar WA',
+            onClick: () => window.open(url, '_blank'),
+          },
+          duration: 10_000,
+        });
+      }
+    }
+  }
   async function handleNoShow(r: Reserva) {
     if (!confirm(`Marcar reserva #${r.id} (${r.cliente_nombre}) como NO SHOW?`)) return;
     await cambiarEstado(r, 'no_show');
@@ -349,6 +390,15 @@ export function ReservasAdmin() {
             )}
           </TabsTrigger>
           <TabsTrigger value="historico">Histórico ({grupos.historico.length})</TabsTrigger>
+          <TabsTrigger value="recordatorios" className="gap-1.5 relative">
+            <Bell className="h-3.5 w-3.5" />
+            Recordatorios
+            {recordatorios.length > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-amber-500 text-[10px] text-white flex items-center justify-center font-bold">
+                {recordatorios.length}
+              </span>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="plano" className="gap-1.5">
             <LayoutDashboard className="h-3.5 w-3.5" />
             Plano
@@ -454,6 +504,17 @@ export function ReservasAdmin() {
           {grupos.historico.map((r) => (
             <ReservaRow key={r.id} reserva={r} mesas={mesas} readOnly />
           ))}
+        </TabsContent>
+
+        {/* ── Módulo notificaciones: recordatorios próximas 2h ──────────── */}
+        <TabsContent value="recordatorios" className="mt-4">
+          <RecordatoriosTab
+            recordatorios={recordatorios}
+            localNombre={localNombre}
+            onEnviado={(r) => {
+              void marcarRecordatorioEnviado(r.id).then(() => void reloadRecordatorios());
+            }}
+          />
         </TabsContent>
 
         {/* ── Módulo #2: plano del salón en tiempo real ─────────────────── */}
@@ -697,6 +758,100 @@ function ReservaRow({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// ── Recordatorios próximas 2h ─────────────────────────────────────────────────
+function RecordatoriosTab({
+  recordatorios,
+  localNombre,
+  onEnviado,
+}: {
+  recordatorios: Reserva[];
+  localNombre: string;
+  onEnviado: (r: Reserva) => void;
+}) {
+  if (recordatorios.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-16 text-center">
+          <Bell className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+          <p className="text-sm text-muted-foreground">
+            Sin reservas confirmadas en las próximas 2 horas que necesiten recordatorio.
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Cuando haya una, aparece acá con un botón para enviarle WhatsApp al cliente.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Reservas confirmadas en las próximas 2 horas sin recordatorio enviado. Hacé click en "Enviar WA" para avisarle al cliente — se marca automáticamente como enviado.
+      </p>
+      {recordatorios.map((r) => {
+        const msg = mensajeRecordatorioReserva({
+          clienteNombre: r.cliente_nombre,
+          localNombre: localNombre || 'el local',
+          fechaHora: r.fecha_hora,
+          personas: r.personas,
+        });
+        const waUrl = whatsAppUrl(r.cliente_telefono, msg);
+        return (
+          <Card key={r.id}>
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium">{r.cliente_nombre}</span>
+                    <span className="text-xs text-muted-foreground">#{r.id}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-muted-foreground mt-0.5">
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5" />
+                      {fmtHora(r.fecha_hora)}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Users className="h-3.5 w-3.5" />
+                      {r.personas}
+                    </span>
+                    {r.cliente_telefono && (
+                      <span className="text-xs">{r.cliente_telefono}</span>
+                    )}
+                  </div>
+                  {r.notas && <p className="text-xs text-muted-foreground mt-0.5 italic">"{r.notas}"</p>}
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  {waUrl ? (
+                    <Button
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-700 text-white gap-1.5"
+                      onClick={() => {
+                        window.open(waUrl, '_blank');
+                        onEnviado(r);
+                      }}
+                    >
+                      <MessageCircle className="h-3.5 w-3.5" />
+                      Enviar WA
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onEnviado(r)}
+                    >
+                      Marcar enviado
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
   );
 }
 

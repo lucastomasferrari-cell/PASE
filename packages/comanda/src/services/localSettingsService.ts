@@ -60,6 +60,11 @@ export async function updateLocalSettings(
   return { error: error?.message ?? null };
 }
 
+export async function getLocalNombre(localId: number): Promise<string | null> {
+  const { data } = await db.from('locales').select('nombre').eq('id', localId).single();
+  return (data as { nombre: string } | null)?.nombre ?? null;
+}
+
 // Validar slug único para tienda online
 export async function validarSlugUnico(slug: string, excluyeLocalId: number): Promise<{ disponible: boolean; error: string | null }> {
   const { data, error } = await db

@@ -97,3 +97,41 @@ export function mensajePedidoRechazado(args: {
 export function mensajeGenericoCliente(clienteNombre: string, ventaNumero: number): string {
   return `Hola ${clienteNombre}, te escribimos por tu pedido #${ventaNumero}.`;
 }
+
+// ─── Plantillas de reserva ────────────────────────────────────────────────────
+
+const DIAS_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const MESES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+function fmtFechaHoraES(iso: string): string {
+  const d = new Date(iso);
+  const hora = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+  return `${DIAS_ES[d.getDay()]} ${d.getDate()} de ${MESES_ES[d.getMonth()]} a las ${hora}`;
+}
+
+function fmtHoraES(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+}
+
+export function mensajeConfirmacionReserva(args: {
+  clienteNombre: string;
+  localNombre: string;
+  fechaHora: string;
+  personas: number;
+}): string {
+  const fecha = fmtFechaHoraES(args.fechaHora);
+  const p = `${args.personas} persona${args.personas === 1 ? '' : 's'}`;
+  return `Hola ${args.clienteNombre}! ✅\n*Confirmamos tu reserva* en *${args.localNombre}* para el ${fecha} para ${p}.\n\nSi necesitás cancelar o modificar, avisanos con al menos 2hs de anticipación. ¡Te esperamos!`;
+}
+
+export function mensajeRecordatorioReserva(args: {
+  clienteNombre: string;
+  localNombre: string;
+  fechaHora: string;
+  personas: number;
+}): string {
+  const hora = fmtHoraES(args.fechaHora);
+  const p = `${args.personas} persona${args.personas === 1 ? '' : 's'}`;
+  return `Hola ${args.clienteNombre}! 👋\nTe recordamos que *hoy a las ${hora}* tenés reserva en *${args.localNombre}* para ${p}.\n\n¿Venís? ¡Te esperamos!`;
+}

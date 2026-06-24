@@ -41,6 +41,8 @@ export interface Reserva {
   // Modelo v3 (12-jun)
   duracion_min: number | null;
   no_show_auto: boolean;
+  // Módulo notificaciones (24-jun)
+  recordatorio_enviado_at: string | null;
 }
 
 export interface ReservasInfoPublico {
@@ -253,4 +255,35 @@ export async function listMesasDelLocal(localId: number): Promise<{ data: MesaSi
     .order('id', { ascending: true });
   if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as MesaSimple[], error: null };
+}
+
+// ─── Recordatorios ────────────────────────────────────────────────────────────
+
+export async function listReservasParaRecordatorio(
+  localId: number,
+): Promise<{ data: Reserva[]; error: string | null }> {
+  const ahora = new Date().toISOString();
+  const en2h = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+  // eslint-disable-next-line pase-local/require-apply-local-scope -- filtro explícito local_id
+  const { data, error } = await db
+    .from('reservas')
+    .select('*')
+    .eq('local_id', localId)
+    .eq('estado', 'confirmada')
+    .is('deleted_at', null)
+    .is('recordatorio_enviado_at', null)
+    .gte('fecha_hora', ahora)
+    .lte('fecha_hora', en2h)
+    .order('fecha_hora', { ascending: true });
+  if (error) return { data: [], error: translateError(error) };
+  return { data: (data ?? []) as Reserva[], error: null };
+}
+
+export async function marcarRecordatorioEnviado(reservaId: number): Promise<{ error: string | null }> {
+  // eslint-disable-next-line pase-local/require-apply-local-scope -- RLS por tenant_id
+  const { error } = await db
+    .from('reservas')
+    .update({ recordatorio_enviado_at: new Date().toISOString() })
+    .eq('id', reservaId);
+  return { error: error?.message ?? null };
 }
