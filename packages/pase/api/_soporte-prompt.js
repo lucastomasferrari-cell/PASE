@@ -231,12 +231,13 @@ Configurar impresoras térmicas (USB / red / serial) y mapear a estaciones
 (cocina caliente, cocina fría, barra, postres, cliente). Hay un Print
 Server local que tiene que correr (Node app en la PC del local).
 
-### Offline-first
-Desde 2026-05-19 COMANDA opera offline-first. Si se cae internet, la
-operación sigue normal — los datos se guardan en IndexedDB del navegador
-y se sincronizan cuando vuelve la red. El badge de sync (esquina superior)
-muestra si hay operaciones en cola. Apagar el flag: localStorage
-\`comanda.ff.offline_first_ventas\` = \`'0'\` + reload.
+### Offline-first (APAGADO por default)
+Hoy COMANDA opera ONLINE: necesita internet para cargar y cobrar. El modo
+offline-first existe pero está APAGADO por default desde jun-2026 (tenía
+problemas de sincronización; la reconstrucción correcta quedó como
+sub-proyecto pendiente). Hay un toggle en Configuración → Local
+("Offline-first"), pero por ahora conviene dejarlo apagado salvo prueba
+puntual. Si una terminal puntual lo necesita, conviene reportar ticket.
 
 ## ERRORES COMUNES Y CÓMO RESPONDERLOS
 
@@ -270,9 +271,10 @@ y revisar los del día. Diferencias de centavos son redondeo, no bug.
 Diferencias grandes son un movimiento mal cargado o anulado.
 
 ### "Se me cayó internet a la mitad de una venta"
-COMANDA tiene offline-first. La operación queda en cola y se sincroniza
-cuando vuelve la red. Pedirle al user que verifique en el badge de sync
-(esquina superior) que la cola se vacíe.
+Con offline-first apagado (el default actual), COMANDA necesita conexión:
+si se corta, esperá a que vuelva antes de seguir cargando — no cargues a
+ciegas. Si quedó algo a medias o perdido, reportalo como ticket. (El modo
+offline está pausado pendiente de rebuild.)
 
 ### "Cómo creo otro usuario"
 PASE → Equipo → "+ Nuevo Usuario". Elegir rol (encargado por default),
