@@ -43,6 +43,8 @@ export interface Reserva {
   no_show_auto: boolean;
   // Módulo notificaciones (24-jun)
   recordatorio_enviado_at: string | null;
+  // CRM 360° (24-jun)
+  cliente_id: number | null;
 }
 
 export interface ReservasInfoPublico {
@@ -275,6 +277,22 @@ export async function listReservasParaRecordatorio(
     .gte('fecha_hora', ahora)
     .lte('fecha_hora', en2h)
     .order('fecha_hora', { ascending: true });
+  if (error) return { data: [], error: translateError(error) };
+  return { data: (data ?? []) as Reserva[], error: null };
+}
+
+// CRM 360°: historial de reservas por cliente (todas sus visitas, cross-local)
+export async function listReservasByCliente(
+  clienteId: number,
+): Promise<{ data: Reserva[]; error: string | null }> {
+  // eslint-disable-next-line pase-local/require-apply-local-scope -- cross-local intencional: el cliente puede haber reservado en varios locales del tenant
+  const { data, error } = await db
+    .from('reservas')
+    .select('*')
+    .eq('cliente_id', clienteId)
+    .is('deleted_at', null)
+    .order('fecha_hora', { ascending: false })
+    .limit(30);
   if (error) return { data: [], error: translateError(error) };
   return { data: (data ?? []) as Reserva[], error: null };
 }

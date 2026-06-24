@@ -40,6 +40,7 @@ import { listMesas, estadoMesasLive } from '@/services/mesasService';
 import { getLocalNombre } from '@/services/localSettingsService';
 import type { Mesa, MesaEstadoLive } from '@/types/database';
 import { FloorPlanCanvas } from '@/components/FloorPlanCanvas';
+import { ClienteHistorialDialog } from '@/components/ClienteHistorialDialog';
 import {
   whatsAppUrl, mensajeGenericoCliente,
   mensajeConfirmacionReserva, mensajeRecordatorioReserva,
@@ -114,6 +115,7 @@ export function ReservasAdmin() {
   const [estadoLiveMap, setEstadoLiveMap] = useState<Map<number, MesaEstadoLive>>(new Map());
   const [localNombre, setLocalNombre] = useState('');
   const [recordatorios, setRecordatorios] = useState<Reserva[]>([]);
+  const [clienteIdAbierto, setClienteIdAbierto] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState<number | null>(null);
@@ -432,6 +434,7 @@ export function ReservasAdmin() {
             <ReservaRow key={r.id} reserva={r} busy={busy === r.id}
                         mesas={mesas}
                         horaSola
+                        onClienteClick={setClienteIdAbierto}
                         onConfirmar={r.estado === 'pendiente' ? () => handleConfirmar(r) : undefined}
                         onSentar={r.estado === 'pendiente' || r.estado === 'confirmada' ? () => abrirSentar(r) : undefined}
                         onFinalizar={r.estado === 'sentada' ? () => handleFinalizar(r) : undefined}
@@ -453,6 +456,7 @@ export function ReservasAdmin() {
           ) : grupos.pendientes.map((r) => (
             <ReservaRow key={r.id} reserva={r} busy={busy === r.id}
                         mesas={mesas}
+                        onClienteClick={setClienteIdAbierto}
                         onConfirmar={() => handleConfirmar(r)}
                         onCancelar={() => handleCancelar(r)}
                         onEditar={() => abrirEdicion(r)}
@@ -470,6 +474,7 @@ export function ReservasAdmin() {
           ) : grupos.proximas.map((r) => (
             <ReservaRow key={r.id} reserva={r} busy={busy === r.id}
                         mesas={mesas}
+                        onClienteClick={setClienteIdAbierto}
                         onSentar={() => abrirSentar(r)}
                         onNoShow={() => handleNoShow(r)}
                         onCancelar={() => handleCancelar(r)}
@@ -494,6 +499,7 @@ export function ReservasAdmin() {
               {grupos.enMesa.map((r) => (
                 <ReservaRow key={r.id} reserva={r} busy={busy === r.id}
                             mesas={mesas}
+                            onClienteClick={setClienteIdAbierto}
                             onFinalizar={() => handleFinalizar(r)} />
               ))}
             </>
@@ -502,7 +508,7 @@ export function ReservasAdmin() {
 
         <TabsContent value="historico" className="mt-4 space-y-2">
           {grupos.historico.map((r) => (
-            <ReservaRow key={r.id} reserva={r} mesas={mesas} readOnly />
+            <ReservaRow key={r.id} reserva={r} mesas={mesas} readOnly onClienteClick={setClienteIdAbierto} />
           ))}
         </TabsContent>
 
@@ -619,12 +625,18 @@ export function ReservasAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── CRM 360°: historial de cliente ───────────────────────────────── */}
+      <ClienteHistorialDialog
+        clienteId={clienteIdAbierto}
+        onClose={() => setClienteIdAbierto(null)}
+      />
     </div>
   );
 }
 
 function ReservaRow({
-  reserva: r, busy, mesas, horaSola, onConfirmar, onSentar, onFinalizar, onNoShow, onCancelar, onEditar, onAsignarMesa, readOnly,
+  reserva: r, busy, mesas, horaSola, onConfirmar, onSentar, onFinalizar, onNoShow, onCancelar, onEditar, onAsignarMesa, readOnly, onClienteClick,
 }: {
   reserva: Reserva;
   busy?: boolean;
@@ -639,6 +651,7 @@ function ReservaRow({
   onEditar?: () => void;
   onAsignarMesa?: (mesaId: number) => void;
   readOnly?: boolean;
+  onClienteClick?: (clienteId: number) => void;
 }) {
   const wpUrl = whatsAppUrl(r.cliente_telefono, mensajeGenericoCliente(r.cliente_nombre, r.id));
   // F5 Chunk D: nombre legible de la mesa asignada (si la hay)
@@ -652,7 +665,17 @@ function ReservaRow({
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-medium">{r.cliente_nombre}</span>
+              {r.cliente_id && onClienteClick ? (
+                <button
+                  type="button"
+                  onClick={() => onClienteClick(r.cliente_id!)}
+                  className="font-medium hover:underline hover:text-primary transition-colors text-left"
+                >
+                  {r.cliente_nombre}
+                </button>
+              ) : (
+                <span className="font-medium">{r.cliente_nombre}</span>
+              )}
               <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${ESTADO_COLORS[r.estado]}`}>
                 {ESTADO_LABELS[r.estado]}
               </span>
