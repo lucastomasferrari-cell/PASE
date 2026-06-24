@@ -269,7 +269,7 @@ export default function MensajeriaIG({ user }: MensajeriaProps) {
       });
       const data = await resp.json();
       if (!resp.ok || !data.ok) {
-        showError('Error enviando: ' + (data?.error || `HTTP ${resp.status}`));
+        showError('Error enviando: ' + (data?.detail || data?.error || `HTTP ${resp.status}`));
         return;
       }
       setRespuesta("");

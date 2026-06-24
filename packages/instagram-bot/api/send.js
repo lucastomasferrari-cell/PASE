@@ -70,7 +70,7 @@ export default async function handler(req, res) {
 
     // ─── 4. Cargar conversación + cliente + config ──────────────────────
     const { data: conv } = await db.from('ig_conversaciones')
-      .select('id, tenant_id, cliente_id, estado')
+      .select('id, tenant_id, cliente_id, estado, ig_config_id')
       .eq('id', conversacion_id)
       .single();
 
@@ -89,8 +89,22 @@ export default async function handler(req, res) {
     if (!cliente) return res.status(404).json({ ok: false, error: 'CLIENTE_NOT_FOUND' });
     if (cliente.bloqueado) return res.status(403).json({ ok: false, error: 'CLIENTE_BLOQUEADO' });
 
+    // Obtener ig_account_id de la cuenta dueña de esta conversación para usar
+    // el token correcto cuando el tenant tiene múltiples cuentas IG.
+    let igAccountId = null;
+    if (conv.ig_config_id) {
+      const { data: igCfg } = await db.from('ig_config')
+        .select('ig_account_id')
+        .eq('id', conv.ig_config_id)
+        .single();
+      igAccountId = igCfg?.ig_account_id ?? null;
+    }
+
     // AUDIT F2D #27: token leído vía RPC encrypted (no más TEXT plano).
-    const { data: tokenIG, error: tokErr } = await db.rpc('get_ig_token', { p_tenant_id: conv.tenant_id });
+    const { data: tokenIG, error: tokErr } = await db.rpc('get_ig_token', {
+      p_tenant_id: conv.tenant_id,
+      p_ig_account_id: igAccountId,
+    });
     if (tokErr || !tokenIG) {
       return res.status(500).json({ ok: false, error: 'IG_CONFIG_NO_TOKEN', detail: tokErr?.message });
     }
