@@ -14,6 +14,23 @@ import { cn } from '@/lib/utils';
 interface ChatMsg {
   role: 'user' | 'assistant';
   content: string;
+  // Imagen adjunta (base64) — para que el bot pueda VERLA. Se re-manda cada turno.
+  image?: { media_type: string; data: string };
+}
+
+// Convierte un ChatMsg al formato `content` de Anthropic. Con imagen → bloque
+// image (base64) + texto; sin imagen → string.
+function chatMsgToApi(m: ChatMsg) {
+  if (m.image) {
+    return {
+      role: m.role,
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: m.image.media_type, data: m.image.data } },
+        { type: 'text', text: m.content },
+      ],
+    };
+  }
+  return { role: m.role, content: m.content };
 }
 
 export function SoporteWidget() {
@@ -130,14 +147,41 @@ export function SoporteWidget() {
   if (!user) return null;
   const u = user;
 
+  // Achica la imagen y la pasa a base64 (sin prefijo data:) para mandarla al bot.
+  async function fileToImagePayload(file: File): Promise<{ media_type: string; data: string }> {
+    const blob = await resizeImage(file);
+    const media_type = blob.type || file.type || 'image/png';
+    const data: string = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const res = typeof reader.result === 'string' ? reader.result : '';
+        resolve(res.split(',')[1] || '');
+      };
+      reader.onerror = () => reject(new Error('read failed'));
+      reader.readAsDataURL(blob);
+    });
+    return { media_type, data };
+  }
+
   async function enviar() {
     const text = input.trim();
-    if (!text || loading) return;
+    if ((!text && !screenshotFile) || loading) return;
     setError(null);
     setReporteOk(false);
-    const nuevoMsgs: ChatMsg[] = [...msgs, { role: 'user', content: text }];
+    let image: { media_type: string; data: string } | undefined;
+    if (screenshotFile) {
+      try { image = await fileToImagePayload(screenshotFile); }
+      catch { setError('No pude procesar la imagen. Probá con otra.'); return; }
+    }
+    const userMsg: ChatMsg = {
+      role: 'user',
+      content: text || 'Mirá esta captura, ¿me ayudás con esto?',
+      ...(image ? { image } : {}),
+    };
+    const nuevoMsgs: ChatMsg[] = [...msgs, userMsg];
     setMsgs(nuevoMsgs);
     setInput('');
+    quitarImagen();
     setLoading(true);
     try {
       const { data: sess } = await db.auth.getSession();
@@ -154,7 +198,7 @@ export function SoporteWidget() {
           // Mandamos siempre 'diagnostico-chat'; el server corre el modo
           // diagnóstico si el usuario tiene el permiso, o cae a soporte normal.
           task: 'diagnostico-chat',
-          messages: nuevoMsgs.map((m) => ({ role: m.role, content: m.content })),
+          messages: nuevoMsgs.map(chatMsgToApi),
           contexto: {
             sistema: 'comanda',
             pantalla: window.location.pathname,
@@ -301,6 +345,13 @@ export function SoporteWidget() {
                     : 'self-start bg-muted border-border',
                 )}
               >
+                {m.image && (
+                  <img
+                    src={`data:${m.image.media_type};base64,${m.image.data}`}
+                    alt="adjunto"
+                    className={cn('max-w-full rounded block', m.content && 'mb-1.5')}
+                  />
+                )}
                 {m.content}
               </div>
             ))}
@@ -387,7 +438,7 @@ export function SoporteWidget() {
               <button
                 type="button"
                 onClick={() => void enviar()}
-                disabled={!input.trim() || loading}
+                disabled={(!input.trim() && !screenshotFile) || loading}
                 className="flex-1 px-3 py-1.5 rounded bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity flex items-center justify-center gap-1.5"
               >
                 <Send className="w-3.5 h-3.5" />
