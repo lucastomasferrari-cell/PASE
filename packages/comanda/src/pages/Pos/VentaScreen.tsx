@@ -85,6 +85,8 @@ export function VentaScreen() {
   const [lastAddedItemId, setLastAddedItemId] = useState<number | null>(null);
   const [lastAddedRowId, setLastAddedRowId] = useState<number | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  // Anti-double-tap: evita agregar el mismo producto 2 veces en < 350ms
+  const clickCooldownRef = useRef<Map<number, number>>(new Map());
 
   // Notas globales de la venta (editable inline)
   const [editandoNotas, setEditandoNotas] = useState(false);
@@ -304,6 +306,10 @@ export function VentaScreen() {
 
   async function clickItem(it: ItemConGrupo) {
     if (!editable) return;
+    const now = Date.now();
+    const last = clickCooldownRef.current.get(it.id) ?? 0;
+    if (now - last < 350) return;
+    clickCooldownRef.current.set(it.id, now);
     if (itemsConModifiers.has(it.id)) {
       setPendingModifiers(it);
     } else {

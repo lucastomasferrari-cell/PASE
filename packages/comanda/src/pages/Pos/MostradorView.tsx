@@ -16,7 +16,6 @@ import { Input } from '@/components/ui/input';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { ComandasRail } from '@/components/ComandasRail';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -132,10 +131,7 @@ export function MostradorView() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Rail horizontal estilo comandero */}
-      <ComandasRail modos={['mostrador']} />
-
-      {/* Centro: lista de órdenes activas + CTA */}
+      {/* Mostrador: la lista de cards abajo ya muestra todas las órdenes activas */}
       <div className="flex-1 min-w-0 overflow-auto">
         <div className="p-6">
           <header className="flex items-center gap-3 mb-5">

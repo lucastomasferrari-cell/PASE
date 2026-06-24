@@ -99,8 +99,11 @@ export function SalonView() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Rail horizontal estilo comandero */}
-      <ComandasRail modos={['salon']} />
+      {/* Rail — pasa el mapa id→nombre para mostrar "B1" en vez del ID interno */}
+      <ComandasRail
+        modos={['salon']}
+        mesaMap={useMemo(() => new Map(mesas.map((m) => [m.id, m.numero])), [mesas])}
+      />
 
       {/* Contenido: plano de mesas */}
       <div className="flex-1 min-w-0 overflow-auto">
@@ -130,44 +133,26 @@ export function SalonView() {
             )}
           </header>
 
-          {/* Leyenda color-status (F #9) — chips compactos arriba del plano */}
+          {/* Barra de resumen + leyenda — una sola línea discreta */}
           {!loading && mesas.length > 0 && (
-            <div className="mb-3 flex items-center gap-1.5 flex-wrap text-xs">
-              <span className="text-muted-foreground uppercase tracking-wide font-medium mr-1">Colores:</span>
-              <LeyendaChip bucket="reciente" />
-              <LeyendaChip bucket="normal" />
-              <LeyendaChip bucket="atencion" />
-              <LeyendaChip bucket="urgente" />
-            </div>
-          )}
-
-          {/* Resumen at-a-glance del salón (zona filtrada) */}
-          {!loading && mesas.length > 0 && (
-            <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <SummaryCard
-                label="Ocupadas"
-                value={`${resumen.ocupadas}`}
-                hint={`${resumen.libres} libres`}
-                tone="warning"
-              />
-              <SummaryCard
-                label="Cubiertos"
-                value={`${resumen.cubiertos}`}
-                hint={resumen.ocupadas > 0 ? `${(resumen.cubiertos / resumen.ocupadas).toFixed(1)} por mesa` : 'sin mesas abiertas'}
-                tone="primary"
-              />
-              <SummaryCard
-                label="Tiempo prom."
-                value={resumen.tiempoPromedio > 0 ? `${resumen.tiempoPromedio}'` : '—'}
-                hint={resumen.tiempoPromedio > 60 ? 'Largo' : 'OK'}
-                tone={resumen.tiempoPromedio > 90 ? 'destructive' : resumen.tiempoPromedio > 60 ? 'warning' : 'success'}
-              />
-              <SummaryCard
-                label="Ocupación"
-                value={mesasFiltradas.length > 0 ? `${Math.round((resumen.ocupadas / mesasFiltradas.length) * 100)}%` : '0%'}
-                hint={`${mesasFiltradas.length} mesas`}
-                tone="primary"
-              />
+            <div className="mb-4 flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+              <span>
+                <strong className="text-foreground">{resumen.ocupadas}</strong> ocupadas
+                {' · '}
+                <strong className="text-foreground">{resumen.libres}</strong> libres
+                {resumen.cubiertos > 0 && (
+                  <> · <strong className="text-foreground">{resumen.cubiertos}</strong> cubiertos</>
+                )}
+                {resumen.tiempoPromedio > 0 && (
+                  <> · <strong className={resumen.tiempoPromedio > 60 ? 'text-destructive' : 'text-foreground'}>{resumen.tiempoPromedio}'</strong> prom.</>
+                )}
+              </span>
+              <span className="ml-auto flex items-center gap-2.5">
+                <LeyendaDot bucket="reciente" />
+                <LeyendaDot bucket="normal" />
+                <LeyendaDot bucket="atencion" />
+                <LeyendaDot bucket="urgente" />
+              </span>
             </div>
           )}
 
@@ -293,21 +278,17 @@ function ZoneButton({ active, onClick, children }: { active: boolean; onClick: (
   );
 }
 
-function SummaryCard({ label, value, hint, tone }: {
-  label: string; value: string; hint?: string; tone: 'primary' | 'success' | 'warning' | 'destructive';
-}) {
-  const toneClass = {
-    primary: 'border-primary/20 bg-primary/5 text-primary',
-    success: 'border-success/30 bg-success/5 text-success',
-    warning: 'border-warning/30 bg-warning/5 text-warning',
-    destructive: 'border-destructive/30 bg-destructive/5 text-destructive',
-  }[tone];
+function LeyendaDot({ bucket }: { bucket: MesaBucket }) {
+  const s = MESA_BUCKET_STYLES[bucket];
+  const dotBg: Record<MesaBucket, string> = {
+    libre: 'bg-success/40', reciente: 'bg-success', normal: 'bg-yellow-400',
+    atencion: 'bg-amber-500', urgente: 'bg-destructive', hold: 'bg-destructive/60', otro: 'bg-muted',
+  };
   return (
-    <div className={cn('rounded-md border p-2.5', toneClass)}>
-      <div className="text-xs uppercase tracking-wide font-medium opacity-80">{label}</div>
-      <div className="text-base font-bold tabular-nums leading-tight mt-0.5">{value}</div>
-      {hint && <div className="text-xs opacity-60 mt-0.5">{hint}</div>}
-    </div>
+    <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+      <span className={cn('w-2 h-2 rounded-full flex-shrink-0', dotBg[bucket])} />
+      {s.label.replace(/ \(\d+-\d+m\)| \(>\d+m\)/g, '')}
+    </span>
   );
 }
 
@@ -355,15 +336,6 @@ function clasificarMesa(mesa: MesaConVenta): MesaBucket {
   return 'otro';
 }
 
-function LeyendaChip({ bucket }: { bucket: MesaBucket }) {
-  const s = MESA_BUCKET_STYLES[bucket];
-  return (
-    <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded border', s.bg, s.fg, s.border.replace(/animate-pulse|ring-\d+|ring-destructive\/40/g, ''))}>
-      {s.icon && <span>{s.icon}</span>}
-      <span>{s.label}</span>
-    </span>
-  );
-}
 
 function MesaTile({ mesa, onClick }: { mesa: MesaConVenta; onClick: () => void }) {
   const bucket = clasificarMesa(mesa);

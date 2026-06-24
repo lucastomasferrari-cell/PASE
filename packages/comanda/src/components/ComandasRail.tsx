@@ -6,20 +6,19 @@ import { listVentas } from '@/services/ventasService';
 import { useVisiblePolling } from '@/lib/useVisiblePolling';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import type { VentaPos, ModoVenta } from '@/types/database';
-import { formatARS, relativoCorto } from '@/lib/format';
+import { relativoCorto } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 interface Props {
   modos?: ModoVenta[];
+  /** Mapa id→nombre de mesas para mostrar "B1" en vez del ID interno */
+  mesaMap?: Map<number, string>;
 }
 
-// Rail horizontal estilo "comandero físico" — barra de metal con tickets
-// colgando uno al lado del otro, scroll horizontal cuando hay muchos.
-export function ComandasRail({ modos }: Props) {
+export function ComandasRail({ modos, mesaMap }: Props) {
   const { user } = useAuth();
   const [localId] = useLocalActivo(user);
   const [ventas, setVentas] = useState<VentaPos[]>([]);
-  const [loading, setLoading] = useState(true);
 
   const reload = useCallback(async () => {
     if (localId === null) return;
@@ -29,153 +28,69 @@ export function ComandasRail({ modos }: Props) {
       estados: ['abierta', 'enviada', 'lista', 'entregada'],
     });
     setVentas(data);
-    setLoading(false);
   }, [localId, modos]);
 
   useEffect(() => { reload(); }, [reload]);
   useVisiblePolling(reload, 90_000);
   useRealtimeTable({ table: 'ventas_pos', onChange: reload, scopeByLocal: true });
 
-  return (
-    <div className="shrink-0 border-b border-border bg-card">
-      {/* ── Barra de metal ─────────────────────────────────────────────── */}
-      <div
-        className="flex items-center px-4 gap-3 select-none"
-        style={{
-          height: 28,
-          background: 'linear-gradient(to bottom, #52525b, #3f3f46, #27272a)',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(0,0,0,0.4)',
-        }}
-      >
-        <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-          Comandas activas
-        </span>
-        {!loading && (
-          <span
-            className="text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded"
-            style={{ background: 'rgba(255,255,255,0.08)', color: '#a1a1aa' }}
-          >
-            {ventas.length}
-          </span>
-        )}
-        {/* Rieles / tornillos decorativos */}
-        <div className="flex-1 flex items-center gap-6 ml-2">
-          {[...Array(12)].map((_, i) => (
-            <div
-              key={i}
-              className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-              style={{
-                background: 'radial-gradient(circle at 35% 35%, #71717a, #27272a)',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.5)',
-              }}
-            />
-          ))}
-        </div>
-      </div>
+  if (ventas.length === 0) return null;
 
-      {/* ── Tickets ────────────────────────────────────────────────────── */}
-      {loading ? (
-        <div className="h-[104px] flex items-center px-4">
-          <span className="text-xs text-muted-foreground">Cargando…</span>
-        </div>
-      ) : ventas.length === 0 ? (
-        <div className="h-[72px] flex items-center justify-center">
-          <span className="text-xs text-muted-foreground">Sin comandas activas</span>
-        </div>
-      ) : (
-        <div
-          className="flex items-start gap-2 overflow-x-auto px-3 py-2"
-          style={{ scrollbarWidth: 'thin' }}
-        >
-          {ventas.map((v) => (
-            <Ticket key={v.id} venta={v} />
-          ))}
-        </div>
-      )}
+  return (
+    <div
+      className="shrink-0 border-b border-border"
+      style={{ background: 'var(--background)' }}
+    >
+      <div
+        className="flex items-center gap-1 px-3 py-1.5 overflow-x-auto"
+        style={{ scrollbarWidth: 'none' }}
+      >
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 shrink-0 mr-1 select-none">
+          Pedidos
+        </span>
+        {ventas.map((v) => (
+          <OrderChip key={v.id} venta={v} mesaMap={mesaMap} />
+        ))}
+      </div>
     </div>
   );
 }
 
-function Ticket({ venta: v }: { venta: VentaPos }) {
-  const minAbierta = Math.floor((Date.now() - new Date(v.abierta_at).getTime()) / 60000);
-  const urgente = minAbierta > 60;
-  const atencion = minAbierta > 30 && !urgente;
+function OrderChip({ venta: v, mesaMap }: { venta: VentaPos; mesaMap?: Map<number, string> }) {
+  const min = Math.floor((Date.now() - new Date(v.abierta_at).getTime()) / 60000);
+  const urgente = min > 60;
+  const atencion = min > 30 && !urgente;
 
   const ubicacion =
     v.modo === 'salon' && v.mesa_id
-      ? `Mesa ${v.mesa_id}`
-      : ((v as VentaPos & { tab_nombre?: string }).tab_nombre ?? v.cliente_nombre ?? 'Sin nombre');
+      ? (mesaMap?.get(v.mesa_id) ?? `#${v.mesa_id}`)
+      : ((v as VentaPos & { tab_nombre?: string }).tab_nombre ?? v.cliente_nombre ?? null);
 
   return (
     <Link
       to={`/pos/venta/${v.id}`}
       className={cn(
-        'relative flex-shrink-0 rounded border-2 bg-card hover:bg-accent transition-colors overflow-visible',
-        'flex flex-col items-center pt-3 pb-2 px-2 gap-0.5 text-center',
+        'flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium transition-colors',
+        'hover:bg-accent',
         urgente
-          ? 'border-destructive/70 bg-destructive/5'
+          ? 'border-destructive/50 text-destructive bg-destructive/5'
           : atencion
-            ? 'border-warning/60 bg-warning/5'
-            : 'border-border/80',
+            ? 'border-warning/50 text-warning-foreground bg-warning/5'
+            : 'border-border text-foreground',
       )}
-      style={{ width: 108, minHeight: 100 }}
     >
-      {/* Clip — cuelga del riel */}
+      {/* Dot de urgencia */}
       <span
-        className="absolute -top-[7px] left-1/2 -translate-x-1/2 w-5 h-[7px] rounded-t-sm block"
-        style={{
-          background: 'linear-gradient(to bottom, #71717a, #52525b)',
-          boxShadow: '0 -1px 0 rgba(255,255,255,0.1)',
-        }}
+        className={cn(
+          'w-1.5 h-1.5 rounded-full flex-shrink-0',
+          urgente ? 'bg-destructive animate-pulse' : atencion ? 'bg-warning' : 'bg-success',
+        )}
       />
-
-      {/* Número de comanda */}
-      <div className="text-base font-black leading-none tracking-tight">
-        #{v.numero_local}
-      </div>
-
-      {/* Mesa o cliente */}
-      <div className="text-[10px] text-muted-foreground truncate max-w-full leading-tight">
-        {ubicacion}
-      </div>
-
-      {/* Tiempo — color según urgencia */}
-      <div
-        className={cn(
-          'text-xs font-semibold tabular-nums leading-tight mt-0.5',
-          urgente
-            ? 'text-destructive animate-pulse'
-            : atencion
-              ? 'text-warning'
-              : 'text-muted-foreground',
-        )}
-      >
-        {relativoCorto(v.abierta_at)}
-      </div>
-
-      {/* Total */}
-      <div className="text-xs font-bold tabular-nums leading-tight">
-        {formatARS(v.total)}
-      </div>
-
-      {/* Estado */}
-      <div
-        className={cn(
-          'mt-1 text-[9px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5',
-          v.estado === 'lista'
-            ? 'bg-success/15 text-success'
-            : v.estado === 'enviada'
-              ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-              : v.estado === 'entregada'
-                ? 'bg-muted text-muted-foreground'
-                : 'bg-muted/50 text-muted-foreground',
-        )}
-      >
-        {v.estado === 'lista' ? '✓ lista'
-          : v.estado === 'enviada' ? 'cocina'
-            : v.estado === 'entregada' ? 'entregada'
-              : 'abierta'}
-      </div>
+      <span className="font-bold tabular-nums">#{v.numero_local}</span>
+      {ubicacion && (
+        <span className="text-muted-foreground">{ubicacion}</span>
+      )}
+      <span className="text-muted-foreground/70 tabular-nums">{relativoCorto(v.abierta_at)}</span>
     </Link>
   );
 }
