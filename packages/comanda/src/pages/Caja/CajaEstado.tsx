@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DoorOpen, ArrowDownToLine, ArrowUpFromLine, Lock, AlertTriangle, History, ArrowLeft, Banknote } from 'lucide-react';
+import { DoorOpen, ArrowDownToLine, ArrowUpFromLine, Lock, AlertTriangle, History, Banknote } from 'lucide-react';
 import { MovimientoCajaDialog, type TipoMovimiento } from '../../components/dialogs/MovimientoCajaDialog';
 import { useAuth } from '../../lib/auth';
 import { useLocalActivo } from '../../lib/localActivo';
@@ -94,33 +94,31 @@ export function CajaEstado() {
     <div className="container py-8">
       {/* Header */}
       <header className="flex items-center gap-3 mb-6 flex-wrap">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/pos/salon')} className="-ml-2">
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          POS
-        </Button>
-        <h1 className="text-3xl font-bold tracking-tight">Caja</h1>
-        <Badge variant="green">Turno #{turno.numero} abierto</Badge>
-        <span className="text-sm text-muted-foreground">
-          desde {formatHoraAR(turno.abierto_at)} · {relativoCorto(turno.abierto_at)}
-        </span>
-        <div className="ml-auto flex gap-2 flex-wrap">
-          <Button variant="outline" onClick={() => setMovDialog('retiro')}>
-            <ArrowUpFromLine className="h-4 w-4 mr-2" />
+        <div className="flex items-center gap-3 min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight">Caja</h1>
+          <Badge variant="green">Turno #{turno.numero} abierto</Badge>
+          <span className="text-sm text-muted-foreground hidden sm:inline">
+            desde {formatHoraAR(turno.abierto_at)} · {relativoCorto(turno.abierto_at)}
+          </span>
+        </div>
+        <div className="ml-auto flex items-center gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => setMovDialog('retiro')}>
+            <ArrowUpFromLine className="h-4 w-4 mr-1.5" />
             Retiro
           </Button>
-          <Button variant="outline" onClick={() => setMovDialog('deposito')}>
-            <ArrowDownToLine className="h-4 w-4 mr-2" />
+          <Button variant="outline" size="sm" onClick={() => setMovDialog('deposito')}>
+            <ArrowDownToLine className="h-4 w-4 mr-1.5" />
             Depósito
           </Button>
-          <Button variant="outline" onClick={() => setMovDialog('ajuste')}>
-            <AlertTriangle className="h-4 w-4 mr-2" />
+          <Button variant="outline" size="sm" onClick={() => setMovDialog('ajuste')}>
+            <AlertTriangle className="h-4 w-4 mr-1.5" />
             Ajuste
           </Button>
-          <Button variant="ghost" onClick={() => navigate('/caja/historico')}>
-            <History className="h-4 w-4 mr-2" />
+          <Button variant="outline" size="sm" onClick={() => navigate('/caja/historico')}>
+            <History className="h-4 w-4 mr-1.5" />
             Histórico
           </Button>
-          <Button variant="destructive" onClick={() => navigate('/caja/cerrar')}>
+          <Button variant="destructive" size="sm" onClick={() => navigate('/caja/cerrar')}>
             Cerrar caja
           </Button>
         </div>
@@ -146,13 +144,13 @@ export function CajaEstado() {
             </div>
             {totalNoEfectivo > 0 && (
               <div className="text-right border-l border-border pl-5 hidden sm:block">
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">
                   Cobros no-efectivo
                 </div>
                 <div className="text-lg font-semibold tabular-nums">
                   {formatARS(totalNoEfectivo)}
                 </div>
-                <div className="text-[10px] text-muted-foreground">
+                <div className="text-xs text-muted-foreground">
                   (van a banco / MP, no a caja)
                 </div>
               </div>
