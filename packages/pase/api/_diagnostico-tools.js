@@ -1,59 +1,134 @@
 // Catálogo de herramientas (READ-ONLY) del bot de diagnóstico IA.
 //
 // Cada tool = schema JSON (para que Claude sepa cuándo/cómo usarla) + su
-// ejecución en executeTool(). REGLA DE ORO: executeTool valida SIEMPRE que el
-// local pedido esté en scope.locales ANTES de consultar. El cliente
-// service_role bypassa RLS → el filtro manual por local es la única defensa
-// de aislamiento (regla E de CLAUDE.md).
+// ejecución en executeTool(). REGLA DE ORO: cada tool valida que el local
+// pedido (o el del registro encontrado) esté en scope.locales ANTES de
+// devolver datos. El cliente service_role bypassa RLS → el filtro manual por
+// local es la única defensa de aislamiento (regla E de CLAUDE.md).
 //
 // scope = { tenantId, locales: [id, ...] } (lo calcula _diagnostico-scope.js).
 
 const MAX_FILAS = 20;
+const FUERA = {
+  error: 'LOCAL_FUERA_DE_ALCANCE',
+  detalle: 'No tenés acceso a ese local, o no especificaste uno válido.',
+};
 
 export const TOOLS = [
   {
     name: 'buscar_gasto',
     description:
       'Busca gastos cargados en un local. Usala cuando alguien dice que cargó un ' +
-      'gasto y no lo encuentra, o quiere ubicar un gasto puntual. IMPORTANTE: pedí ' +
-      'SIEMPRE el local y al menos un dato más (fecha aproximada o monto aproximado) ' +
-      'antes de llamar — no busques a ciegas. Devuelve hasta 20 gastos con fecha, ' +
-      'monto, categoría, detalle, cuenta y estado (sirve para detectar fecha futura, ' +
-      'estado anulado, local equivocado, etc.).',
+      'gasto y no lo encuentra, o quiere ubicar un gasto puntual. Pedí SIEMPRE el ' +
+      'local y al menos un dato más (fecha aprox o monto aprox) antes de llamar. ' +
+      'Devuelve hasta 20 gastos con fecha, monto, categoría, detalle, cuenta y estado.',
     input_schema: {
       type: 'object',
       properties: {
-        local_id: { type: 'integer', description: 'ID del local donde buscar (obligatorio).' },
-        fecha_desde: { type: 'string', description: 'Fecha mínima, formato YYYY-MM-DD.' },
-        fecha_hasta: { type: 'string', description: 'Fecha máxima, formato YYYY-MM-DD.' },
-        monto_aprox: { type: 'number', description: 'Monto aproximado del gasto (busca ±5%).' },
-        texto: { type: 'string', description: 'Texto a buscar dentro del detalle o la categoría.' },
-        incluir_anulados: { type: 'boolean', description: 'Si es true incluye los anulados. Default false.' },
+        local_id: { type: 'integer', description: 'ID del local (obligatorio).' },
+        fecha_desde: { type: 'string', description: 'Fecha mínima YYYY-MM-DD.' },
+        fecha_hasta: { type: 'string', description: 'Fecha máxima YYYY-MM-DD.' },
+        monto_aprox: { type: 'number', description: 'Monto aproximado (±5%).' },
+        texto: { type: 'string', description: 'Texto a buscar en detalle o categoría.' },
+        incluir_anulados: { type: 'boolean', description: 'Incluir anulados. Default false.' },
       },
       required: ['local_id'],
+    },
+  },
+  {
+    name: 'buscar_movimiento',
+    description:
+      'Busca movimientos de caja (ingresos, egresos, pagos, cobros, transferencias) ' +
+      'en un local. Usala para "no encuentro un pago/ingreso/cobro", o para ver el ' +
+      'movimiento de plata que generó un gasto/factura/sueldo. Pedí local + al menos ' +
+      'un dato más (fecha aprox o monto aprox). Los egresos tienen importe negativo.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        local_id: { type: 'integer', description: 'ID del local (obligatorio).' },
+        fecha_desde: { type: 'string', description: 'Fecha mínima YYYY-MM-DD.' },
+        fecha_hasta: { type: 'string', description: 'Fecha máxima YYYY-MM-DD.' },
+        monto_aprox: { type: 'number', description: 'Monto aproximado en magnitud (matchea + o -, ±5%).' },
+        cuenta: { type: 'string', description: 'Filtrar por cuenta exacta (ej: "Caja Efectivo", "MercadoPago").' },
+        texto: { type: 'string', description: 'Texto a buscar en el detalle.' },
+        incluir_anulados: { type: 'boolean', description: 'Incluir anulados. Default false.' },
+      },
+      required: ['local_id'],
+    },
+  },
+  {
+    name: 'saldo_cuentas',
+    description:
+      'Devuelve el saldo actual de cada cuenta (Efectivo, MercadoPago, Banco, etc.) ' +
+      'de un local. Usala para "la caja no me cuadra" o "cuánto tengo en tal cuenta". ' +
+      'Para entender una diferencia, combinala con buscar_movimiento de esa cuenta.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        local_id: { type: 'integer', description: 'ID del local (obligatorio).' },
+      },
+      required: ['local_id'],
+    },
+  },
+  {
+    name: 'buscar_factura',
+    description:
+      'Busca facturas de proveedores en un local. Usala para "no encuentro una factura" ' +
+      'o "qué le debo a tal proveedor". Pedí local + (proveedor / fecha aprox / monto aprox). ' +
+      'Devuelve nro, fecha, total, categoría, estado, tipo y el nombre del proveedor.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        local_id: { type: 'integer', description: 'ID del local (obligatorio).' },
+        proveedor: { type: 'string', description: 'Nombre (o parte) del proveedor.' },
+        fecha_desde: { type: 'string', description: 'Fecha mínima YYYY-MM-DD.' },
+        fecha_hasta: { type: 'string', description: 'Fecha máxima YYYY-MM-DD.' },
+        monto_aprox: { type: 'number', description: 'Total aproximado (±5%).' },
+        estado: { type: 'string', description: 'Filtrar por estado (ej: "pendiente", "pagada").' },
+        incluir_anuladas: { type: 'boolean', description: 'Incluir anuladas. Default false.' },
+      },
+      required: ['local_id'],
+    },
+  },
+  {
+    name: 'detalle_registro',
+    description:
+      'Trae TODOS los campos de un registro puntual por su id, cuando ya lo identificaste ' +
+      'con otra herramienta y querés ver el detalle completo (fecha de carga vs fecha del ' +
+      'hecho, estado, vínculos, etc.).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        tipo: { type: 'string', enum: ['gasto', 'factura', 'movimiento'], description: 'Tipo de registro.' },
+        id: { type: 'string', description: 'ID del registro.' },
+      },
+      required: ['tipo', 'id'],
     },
   },
 ];
 
 // Sanea texto libre antes de meterlo en un filtro PostgREST (.or/.ilike):
-// saca comas, paréntesis y comodines que podrían alterar la sintaxis del
-// filtro. No es SQL (Supabase parametriza), pero evita ensuciar el OR.
+// saca comas, paréntesis y comodines que podrían alterar la sintaxis del filtro.
 function sanearTexto(t) {
   return String(t).replace(/[^\w\sáéíóúüñÁÉÍÓÚÑ.\-]/gi, ' ').trim().slice(0, 80);
 }
 
+// Resuelve prov_id → nombre para un set de facturas (segunda query, evita
+// depender del nombre del FK en un embedded select).
+async function adjuntarProveedores(admin, filas) {
+  const ids = [...new Set(filas.map((f) => f.prov_id).filter((x) => x != null))];
+  if (!ids.length) return filas;
+  const { data } = await admin.from('proveedores').select('id, nombre').in('id', ids);
+  const map = new Map((data || []).map((p) => [p.id, p.nombre]));
+  return filas.map((f) => ({ ...f, proveedor: map.get(f.prov_id) ?? null }));
+}
+
 export async function executeTool(admin, scope, name, input) {
   input = input || {};
-
-  // Defensa en profundidad: el local pedido DEBE estar en los visibles.
-  if (input.local_id == null || !scope.locales.includes(input.local_id)) {
-    return {
-      error: 'LOCAL_FUERA_DE_ALCANCE',
-      detalle: 'No tenés acceso a ese local, o no especificaste uno válido.',
-    };
-  }
+  const enScope = (lid) => lid != null && scope.locales.includes(lid);
 
   if (name === 'buscar_gasto') {
+    if (!enScope(input.local_id)) return FUERA;
     let q = admin
       .from('gastos')
       .select('id, fecha, monto, categoria, subcategoria, detalle, cuenta, estado')
@@ -74,6 +149,91 @@ export async function executeTool(admin, scope, name, input) {
     const { data, error } = await q;
     if (error) return { error: 'QUERY_FALLO', detalle: error.message };
     return { filas: data || [], truncado: (data || []).length >= MAX_FILAS };
+  }
+
+  if (name === 'buscar_movimiento') {
+    if (!enScope(input.local_id)) return FUERA;
+    let q = admin
+      .from('movimientos')
+      .select('id, fecha, cuenta, tipo, cat, importe, detalle, anulado')
+      .eq('local_id', input.local_id)
+      .order('fecha', { ascending: false })
+      .limit(MAX_FILAS);
+    if (input.fecha_desde) q = q.gte('fecha', input.fecha_desde);
+    if (input.fecha_hasta) q = q.lte('fecha', input.fecha_hasta);
+    if (typeof input.monto_aprox === 'number') {
+      const mag = Math.abs(input.monto_aprox);
+      const tol = Math.max(mag * 0.05, 100);
+      const lo = mag - tol, hi = mag + tol;
+      // Matchea importe ≈ +mag o ≈ -mag (egresos son negativos). Valores
+      // numéricos → sin riesgo de inyección en el filtro.
+      q = q.or(`and(importe.gte.${lo},importe.lte.${hi}),and(importe.gte.${-hi},importe.lte.${-lo})`);
+    }
+    if (input.cuenta) q = q.eq('cuenta', input.cuenta);
+    if (input.texto) {
+      const t = sanearTexto(input.texto);
+      if (t) q = q.ilike('detalle', `%${t}%`);
+    }
+    if (!input.incluir_anulados) q = q.eq('anulado', false);
+    const { data, error } = await q;
+    if (error) return { error: 'QUERY_FALLO', detalle: error.message };
+    return { filas: data || [], truncado: (data || []).length >= MAX_FILAS };
+  }
+
+  if (name === 'saldo_cuentas') {
+    if (!enScope(input.local_id)) return FUERA;
+    const { data, error } = await admin
+      .from('saldos_caja')
+      .select('cuenta, saldo')
+      .eq('local_id', input.local_id)
+      .order('cuenta', { ascending: true });
+    if (error) return { error: 'QUERY_FALLO', detalle: error.message };
+    return { cuentas: data || [] };
+  }
+
+  if (name === 'buscar_factura') {
+    if (!enScope(input.local_id)) return FUERA;
+    // Si filtra por proveedor, primero resolvemos los prov_id por nombre.
+    let provIds = null;
+    if (input.proveedor) {
+      const t = sanearTexto(input.proveedor);
+      if (t) {
+        const { data: provs } = await admin.from('proveedores').select('id').ilike('nombre', `%${t}%`);
+        provIds = (provs || []).map((p) => p.id);
+        if (!provIds.length) return { filas: [], truncado: false, nota: 'No hay proveedor que coincida con ese nombre.' };
+      }
+    }
+    let q = admin
+      .from('facturas')
+      .select('id, nro, fecha, total, neto, cat, estado, tipo, prov_id')
+      .eq('local_id', input.local_id)
+      .order('fecha', { ascending: false })
+      .limit(MAX_FILAS);
+    if (provIds) q = q.in('prov_id', provIds);
+    if (input.fecha_desde) q = q.gte('fecha', input.fecha_desde);
+    if (input.fecha_hasta) q = q.lte('fecha', input.fecha_hasta);
+    if (typeof input.monto_aprox === 'number') {
+      const tol = Math.max(Math.abs(input.monto_aprox) * 0.05, 100);
+      q = q.gte('total', input.monto_aprox - tol).lte('total', input.monto_aprox + tol);
+    }
+    if (input.estado) q = q.eq('estado', input.estado);
+    else if (!input.incluir_anuladas) q = q.or('estado.neq.anulada,estado.is.null');
+    const { data, error } = await q;
+    if (error) return { error: 'QUERY_FALLO', detalle: error.message };
+    const filas = await adjuntarProveedores(admin, data || []);
+    return { filas, truncado: filas.length >= MAX_FILAS };
+  }
+
+  if (name === 'detalle_registro') {
+    const tabla = { gasto: 'gastos', factura: 'facturas', movimiento: 'movimientos' }[input.tipo];
+    if (!tabla) return { error: 'TIPO_INVALIDO', detalle: 'tipo debe ser gasto, factura o movimiento.' };
+    if (input.id == null) return { error: 'FALTA_ID' };
+    const { data, error } = await admin.from(tabla).select('*').eq('id', input.id).limit(1).maybeSingle();
+    if (error) return { error: 'QUERY_FALLO', detalle: error.message };
+    if (!data) return { error: 'NO_ENCONTRADO', detalle: 'No hay un registro con ese id.' };
+    // El registro existe: validamos que su local esté en el alcance del usuario.
+    if (!enScope(data.local_id)) return FUERA;
+    return { registro: data };
   }
 
   return { error: 'TOOL_DESCONOCIDA', detalle: `No existe la herramienta '${name}'.` };

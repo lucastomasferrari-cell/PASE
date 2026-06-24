@@ -32,10 +32,12 @@ const MODEL_PRICING = {
   'claude-haiku-4':    {  in: 0.80, out:  4.00 },
 };
 
-function calcCost(model, tokensIn, tokensOut) {
+function calcCost(model, tokensIn, tokensOut, cacheWrite = 0, cacheRead = 0) {
   const p = MODEL_PRICING[model];
   if (!p) return 0; // modelo desconocido — no cobramos
-  return (tokensIn * p.in + tokensOut * p.out) / 1_000_000;
+  // Caché de Anthropic: escribir cuesta ~1.25× el precio de input, leer ~0.1×.
+  return (tokensIn * p.in + tokensOut * p.out
+        + cacheWrite * p.in * 1.25 + cacheRead * p.in * 0.1) / 1_000_000;
 }
 
 // Cliente service_role para insertar en llm_usage_log (bypassa RLS).
@@ -51,16 +53,19 @@ function getTrackingClient() {
 }
 
 // Guardar tracking en DB. Fire-and-forget (no bloquea response al user).
-function trackUsage({ tenantId, usuarioId, task, model, tokensIn, tokensOut }) {
+function trackUsage({ tenantId, usuarioId, task, model, tokensIn, tokensOut, cacheWrite = 0, cacheRead = 0 }) {
   const client = getTrackingClient();
   if (!client) return;
-  const cost = calcCost(model, tokensIn, tokensOut);
+  const cost = calcCost(model, tokensIn, tokensOut, cacheWrite, cacheRead);
   void client.from('llm_usage_log').insert({
     tenant_id: tenantId,
     usuario_id: usuarioId,
     task: task || 'legacy',
     model,
-    tokens_in: tokensIn,
+    // tokens_in = TOTAL del prompt (uncached + caché write + caché read). Antes
+    // guardaba solo input_tokens (uncached) → subestimaba groso porque el system
+    // prompt cacheado no contaba. Ahora cost_usd refleja la factura real.
+    tokens_in: tokensIn + cacheWrite + cacheRead,
     tokens_out: tokensOut,
     cost_usd: cost,
     source: 'pase-api',
@@ -186,6 +191,8 @@ export default async function handler(req, res) {
         model: payload.model || 'unknown',
         tokensIn: data.usage.input_tokens || 0,
         tokensOut: data.usage.output_tokens || 0,
+        cacheWrite: data.usage.cache_creation_input_tokens || 0,
+        cacheRead: data.usage.cache_read_input_tokens || 0,
       });
     }
 
@@ -230,6 +237,8 @@ async function runDiagnosticoLoop(body, scope, admin, auth) {
   let last = null;
   let tokensIn = 0;
   let tokensOut = 0;
+  let cacheWrite = 0;
+  let cacheRead = 0;
 
   for (let i = 0; i < MAX_ITER_DIAGNOSTICO; i++) {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -246,6 +255,8 @@ async function runDiagnosticoLoop(body, scope, admin, auth) {
     if (data.usage) {
       tokensIn += data.usage.input_tokens || 0;
       tokensOut += data.usage.output_tokens || 0;
+      cacheWrite += data.usage.cache_creation_input_tokens || 0;
+      cacheRead += data.usage.cache_read_input_tokens || 0;
     }
     last = data;
     messages.push({ role: 'assistant', content: data.content });
@@ -274,6 +285,8 @@ async function runDiagnosticoLoop(body, scope, admin, auth) {
     model,
     tokensIn,
     tokensOut,
+    cacheWrite,
+    cacheRead,
   });
   return last;
 }

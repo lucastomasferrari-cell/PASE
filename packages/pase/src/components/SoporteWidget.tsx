@@ -14,6 +14,7 @@
 import { useState, useRef, useEffect } from "react";
 import { db } from "../lib/supabase";
 import { getConsoleErrors } from "../lib/consoleCapture";
+import { tienePermiso } from "../lib/auth";
 import type { Usuario } from "../types";
 
 interface Props {
@@ -358,6 +359,11 @@ export function SoporteWidget({ user }: Props) {
           >
             {msgs.length === 0 && (
               <div style={{ color: "var(--muted2)", fontSize: 11 }}>
+                {tienePermiso(user, "diagnostico_ia") && (
+                  <div style={{ marginBottom: 8, padding: "6px 8px", borderRadius: 6, border: "1px solid rgba(59,130,246,0.3)", background: "rgba(59,130,246,0.08)" }}>
+                    🔍 <strong>Modo diagnóstico activo</strong> — además de responder dudas, puedo mirar tus datos (solo lectura) para encontrar gastos, movimientos, saldos o facturas. Ej: <em>"cargué un gasto de ~$50.000 en tal local y no lo encuentro"</em>.
+                  </div>
+                )}
                 Hola. Escribime tu duda — ej: <em>"¿Cómo registro un adelanto?"</em>,
                 <em>"No me deja editar un gasto"</em>, <em>"Para qué sirve la conciliación MP"</em>.
                 Si no resuelvo, podés convertirlo en ticket para que Lucas lo atienda.
