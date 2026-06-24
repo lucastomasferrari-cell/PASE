@@ -48,7 +48,7 @@ function itemDocToVentaPosItem(d: ItemDoc, ventaTempId: number): VentaPosItem {
     modificadores: null, curso: d.curso, comensal: null, combo_padre_id: null,
     es_combo_padre: false, estado: d.estado as EstadoVentaItem,
     enviado_at: null, listo_at: null, anulado_at: null, anulado_motivo: null,
-    notas: null, cargado_por: null,
+    notas: null, nombre_display: null, cargado_por: null,
     created_at: d.updated_at, updated_at: d.updated_at, deleted_at: null,
   };
 }

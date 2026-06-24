@@ -105,6 +105,11 @@ export function VentaScreen() {
   // Item seleccionado para agotar (abre AgotarDialog)
   const [agotarItem, setAgotarItem] = useState<ItemConGrupo | null>(null);
 
+  // Editor inline de nombre/precio (doble click en la lista)
+  const [editandoItem, setEditandoItem] = useState<VentaPosItem | null>(null);
+  const [editNombreDraft, setEditNombreDraft] = useState('');
+  const [editPrecioDraft, setEditPrecioDraft] = useState(0);
+
   useEffect(() => {
     if (lastAddedItemId == null) return;
     const t = setTimeout(() => setLastAddedItemId(null), 1200);
@@ -230,7 +235,7 @@ export function VentaScreen() {
       descuento: 0, modificadores: modificadores.length > 0 ? modificadores : null,
       curso: cursoActivo, comensal: null, combo_padre_id: null, es_combo_padre: false,
       estado: 'hold', enviado_at: null, listo_at: null, anulado_at: null, anulado_motivo: null,
-      notas, cargado_por: empleado.id, es_cortesia: false, precio_unitario_original: null,
+      notas, nombre_display: null, cargado_por: empleado.id, es_cortesia: false, precio_unitario_original: null,
       stay_until_release: false, created_at: ahora, updated_at: ahora, deleted_at: null,
     });
     setLastAddedItemId(it.id);
@@ -328,8 +333,38 @@ export function VentaScreen() {
 
   async function changeQty(itemRow: VentaPosItem, qty: number) {
     if (qty <= 0) return;
+    // Optimista: refleja el cambio antes de esperar la red
+    setItems((prev) => prev.map((i) =>
+      i.id === itemRow.id
+        ? { ...i, cantidad: qty, subtotal: qty * Number(i.precio_unitario) }
+        : i,
+    ));
     const { error } = await modificarItem(itemRow.id, { cantidad: qty });
-    if (error) { toast.error(error); return; }
+    if (error) { toast.error(error); reload(); return; }
+    reload(); // actualiza total de la venta
+  }
+
+  async function guardarEdicionItem() {
+    if (!editandoItem) return;
+    const nombre = editNombreDraft.trim() || null;
+    const precio = editPrecioDraft > 0 ? editPrecioDraft : undefined;
+    // Optimista
+    setItems((prev) => prev.map((i) =>
+      i.id === editandoItem.id
+        ? {
+            ...i,
+            nombre_display: nombre,
+            precio_unitario: precio ?? Number(i.precio_unitario),
+            subtotal: Number(i.cantidad) * (precio ?? Number(i.precio_unitario)),
+          }
+        : i,
+    ));
+    setEditandoItem(null);
+    const { error } = await modificarItem(editandoItem.id, {
+      nombre_display: nombre,
+      precio_unitario: precio,
+    });
+    if (error) { toast.error(error); reload(); return; }
     reload();
   }
 
@@ -448,6 +483,11 @@ export function VentaScreen() {
           onToggleStay={toggleStay}
           onMandarItemSolo={mandarItemSolo}
           onMandarCurso={mandarCursoHandler}
+          onEditarItem={(it) => {
+            setEditandoItem(it);
+            setEditNombreDraft(it.nombre_display ?? '');
+            setEditPrecioDraft(Number(it.precio_unitario));
+          }}
         />
 
         <VentaFooter
@@ -722,6 +762,43 @@ export function VentaScreen() {
           navigate(venta.modo === 'salon' ? '/pos/salon' : '/pos/mostrador');
         }}
       />
+
+      {/* Editor inline de ítem — doble click en el nombre */}
+      <Dialog open={editandoItem !== null} onOpenChange={(o) => { if (!o) setEditandoItem(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Editar ítem</DialogTitle>
+            <DialogDescription>
+              {editandoItem && (() => {
+                const cat = catalogo.find((c) => c.id === editandoItem.item_id);
+                return `${cat?.nombre ?? 'Item'} — precio original ${formatARS(editandoItem.precio_unitario)}`;
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Nombre en cuenta (dejar vacío = usa el del catálogo)</label>
+              <input
+                type="text"
+                value={editNombreDraft}
+                onChange={(e) => setEditNombreDraft(e.target.value)}
+                placeholder={editandoItem ? (catalogo.find((c) => c.id === editandoItem.item_id)?.nombre ?? '') : ''}
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                maxLength={80}
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Precio unitario</label>
+              <MoneyInput value={editPrecioDraft} onChange={setEditPrecioDraft} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditandoItem(null)}>Cancelar</Button>
+            <Button onClick={guardarEdicionItem} disabled={editPrecioDraft <= 0}>Guardar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -328,13 +328,15 @@ export async function agregarItem(args: AgregarItemArgs): Promise<{ id: number |
 
 export async function modificarItem(
   itemId: number,
-  patch: { cantidad?: number; curso?: number; notas?: string | null },
+  patch: { cantidad?: number; curso?: number; notas?: string | null; nombre_display?: string | null; precio_unitario?: number },
 ): Promise<{ error: string | null }> {
   const { error } = await db.rpc('fn_modificar_item_comanda', {
     p_item_id: itemId,
     p_cantidad: patch.cantidad ?? null,
     p_curso: patch.curso ?? null,
     p_notas: patch.notas ?? null,
+    p_nombre_display: patch.nombre_display ?? null,
+    p_precio_unitario: patch.precio_unitario ?? null,
   });
   return { error: error?.message ?? null };
 }

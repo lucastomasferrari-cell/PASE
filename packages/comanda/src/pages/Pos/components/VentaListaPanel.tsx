@@ -26,13 +26,14 @@ interface CheckRowProps {
   onCortesia: () => void;
   onMandarSolo: () => void;
   onToggleStay: () => void;
+  onEditar: () => void;
   editable: boolean;
   flashed?: boolean;
 }
 
 function CheckRow({
   item, catalogo, onQty, onRemove, onRepetir, onAnular,
-  onCambiarPrecio, onCortesia, onMandarSolo, onToggleStay, editable, flashed,
+  onCambiarPrecio, onCortesia, onMandarSolo, onToggleStay, onEditar, editable, flashed,
 }: CheckRowProps) {
   const it = catalogo.find((c) => c.id === item.item_id);
   const anulado = item.estado === 'anulado';
@@ -47,7 +48,16 @@ function CheckRow({
       {/* Línea 1: nombre · controles de qty · precio total */}
       <div className="flex items-center gap-1.5">
         <div className="flex-1 min-w-0 flex items-center gap-1 flex-wrap">
-          <span className="text-sm font-medium truncate">{it?.nombre ?? `Item #${item.item_id}`}</span>
+          <span
+            className={cn(
+              'text-sm font-medium truncate',
+              editable && item.estado === 'hold' && 'cursor-pointer hover:text-primary',
+            )}
+            onDoubleClick={editable && item.estado === 'hold' ? onEditar : undefined}
+            title={editable && item.estado === 'hold' ? 'Doble click para editar nombre o precio' : undefined}
+          >
+            {item.nombre_display ?? it?.nombre ?? `Item #${item.item_id}`}
+          </span>
           {item.es_cortesia && (
             <span className="text-[9px] px-1 py-0.5 rounded bg-success/15 text-success font-bold uppercase">Cortesía</span>
           )}
@@ -164,6 +174,7 @@ export interface VentaListaPanelProps {
   onToggleStay: (item: VentaPosItem) => void;
   onMandarItemSolo: (item: VentaPosItem) => void;
   onMandarCurso: (curso: number) => void;
+  onEditarItem: (item: VentaPosItem) => void;
 }
 
 export const VentaListaPanel = React.memo(function VentaListaPanel({
@@ -182,6 +193,7 @@ export const VentaListaPanel = React.memo(function VentaListaPanel({
   onToggleStay,
   onMandarItemSolo,
   onMandarCurso,
+  onEditarItem,
 }: VentaListaPanelProps) {
   const totalItems = Array.from(itemsPorCurso.values()).reduce((s, a) => s + a.length, 0);
   return (
@@ -240,6 +252,7 @@ export const VentaListaPanel = React.memo(function VentaListaPanel({
                     onCortesia={() => onCortesiaItem(it)}
                     onMandarSolo={() => onMandarItemSolo(it)}
                     onToggleStay={() => onToggleStay(it)}
+                    onEditar={() => onEditarItem(it)}
                     editable={editable}
                     flashed={lastAddedRowId === it.id}
                   />
