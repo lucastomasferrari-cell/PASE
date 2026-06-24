@@ -219,50 +219,7 @@ export function PedidosHub() {
   }
 
   return (
-    <div className="container py-6">
-      <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-lg font-semibold">Pedidos</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Pedidos online y delivery externo.
-          </p>
-        </div>
-
-        {/* TOOLBAR: nuevo pedido + quote times editables inline (manager+) */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button onClick={() => setNuevoPedidoOpen(true)} size="sm" className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            Nuevo pedido
-          </Button>
-          <NotifierToggle
-            muted={muted}
-            setMuted={setMuted}
-            permState={permState}
-            askPermission={askPermission}
-          />
-          <QuoteTimeWidget
-            label="Retiro"
-            valor={quoteRetiro}
-            editing={editingQuote === 'retiro'}
-            puedeEditar={puedeEditarQuotes}
-            onEdit={() => setEditingQuote('retiro')}
-            onCancel={() => setEditingQuote(null)}
-            onSave={(v) => guardarQuote('retiro', v)}
-            inputRef={editingQuote === 'retiro' ? editInputRef : undefined}
-          />
-          <QuoteTimeWidget
-            label="Envío"
-            valor={quoteDelivery}
-            editing={editingQuote === 'delivery'}
-            puedeEditar={puedeEditarQuotes}
-            onEdit={() => setEditingQuote('delivery')}
-            onCancel={() => setEditingQuote(null)}
-            onSave={(v) => guardarQuote('delivery', v)}
-            inputRef={editingQuote === 'delivery' ? editInputRef : undefined}
-          />
-        </div>
-      </header>
-
+    <div className="container py-4">
       <NuevoPedidoDialog
         open={nuevoPedidoOpen}
         onOpenChange={setNuevoPedidoOpen}
@@ -270,31 +227,70 @@ export function PedidosHub() {
       />
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as PedidoTab)}>
-        <TabsList className="bg-transparent border-b border-border w-full justify-start rounded-none h-auto p-0 mb-6 overflow-x-auto">
-          {TABS.map((t) => {
-            const c = counters[t.key];
-            return (
-              <TabsTrigger
-                key={t.key}
-                value={t.key}
-                className="data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent px-4 py-3 gap-2"
-              >
-                {t.label}
-                {c > 0 && (
-                  <span className={cn(
-                    'inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-semibold relative',
-                    t.key === 'necesita_aprobacion' ? 'bg-warning text-warning-foreground' : 'bg-muted text-foreground',
-                  )}>
-                    {c}
-                    {t.key === 'necesita_aprobacion' && (
-                      <span className="absolute inset-0 rounded-full bg-warning/40 animate-ping pointer-events-none" />
-                    )}
-                  </span>
-                )}
-              </TabsTrigger>
-            );
-          })}
-        </TabsList>
+        {/* Barra única: título + tabs + acciones en una sola línea */}
+        <div className="flex items-center gap-1 border-b border-border pb-0 mb-4 overflow-x-auto">
+          <span className="text-sm font-semibold shrink-0 mr-3 text-foreground">Pedidos</span>
+
+          <TabsList className="bg-transparent h-auto p-0 flex gap-0 shrink-0">
+            {TABS.map((t) => {
+              const c = counters[t.key];
+              return (
+                <TabsTrigger
+                  key={t.key}
+                  value={t.key}
+                  className="data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent px-3 py-2.5 text-sm gap-1.5"
+                >
+                  {t.label}
+                  {c > 0 && (
+                    <span className={cn(
+                      'inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-semibold relative',
+                      t.key === 'necesita_aprobacion' ? 'bg-warning text-warning-foreground' : 'bg-muted text-muted-foreground',
+                    )}>
+                      {c}
+                      {t.key === 'necesita_aprobacion' && (
+                        <span className="absolute inset-0 rounded-full bg-warning/40 animate-ping pointer-events-none" />
+                      )}
+                    </span>
+                  )}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+
+          {/* Acciones — al extremo derecho */}
+          <div className="ml-auto flex items-center gap-1.5 shrink-0 pb-1">
+            <NotifierToggle
+              muted={muted}
+              setMuted={setMuted}
+              permState={permState}
+              askPermission={askPermission}
+            />
+            <QuoteTimeWidget
+              label="Retiro"
+              valor={quoteRetiro}
+              editing={editingQuote === 'retiro'}
+              puedeEditar={puedeEditarQuotes}
+              onEdit={() => setEditingQuote('retiro')}
+              onCancel={() => setEditingQuote(null)}
+              onSave={(v) => guardarQuote('retiro', v)}
+              inputRef={editingQuote === 'retiro' ? editInputRef : undefined}
+            />
+            <QuoteTimeWidget
+              label="Envío"
+              valor={quoteDelivery}
+              editing={editingQuote === 'delivery'}
+              puedeEditar={puedeEditarQuotes}
+              onEdit={() => setEditingQuote('delivery')}
+              onCancel={() => setEditingQuote(null)}
+              onSave={(v) => guardarQuote('delivery', v)}
+              inputRef={editingQuote === 'delivery' ? editInputRef : undefined}
+            />
+            <Button onClick={() => setNuevoPedidoOpen(true)} size="sm" className="gap-1.5 h-8">
+              <Plus className="h-3.5 w-3.5" />
+              Nuevo
+            </Button>
+          </div>
+        </div>
 
         {TABS.map((t) => (
           <TabsContent key={t.key} value={t.key} className="mt-0">
