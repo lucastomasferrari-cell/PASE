@@ -430,6 +430,12 @@ export interface HorariosLocal {
   horario_dom?: string | null;
 }
 
+export interface HorarioReserva {
+  dia: number;   // 0=Dom, 1=Lun … 6=Sab
+  abre: string;  // "HH:MM"
+  cierra: string;
+}
+
 export interface ComandaLocalSettings extends HorariosLocal {
   id: number;
   tenant_id: string;
@@ -447,9 +453,17 @@ export interface ComandaLocalSettings extends HorariosLocal {
   acepta_delivery: boolean;
   autolock_minutos: number;
   features_pos_modos: PosModo[];
-  // Sprint 8 (timezone configurable). Default 'America/Argentina/Buenos_Aires'.
-  // Configurable por local cuando entren clientes en otras zonas.
   timezone: string;
+  // MESA módulo #3 — configuración de reservas online
+  reservas_activas: boolean;
+  reservas_capacidad_max: number | null;
+  reservas_anticipacion_min_hs: number;
+  reservas_anticipacion_max_dias: number;
+  reservas_duracion_estimada_min: number;
+  reservas_horarios: HorarioReserva[];
+  reservas_telefono_obligatorio: boolean;
+  reservas_requiere_confirmacion: boolean;
+  reservas_notas_visibles_cliente: string | null;
 }
 
 // ─── F1.2 CRM (auditoría estructural 2026-05-15) ───────────────────────────

@@ -1,5 +1,5 @@
 import { db } from '../lib/supabase';
-import type { ComandaLocalSettings, PosModo } from '../types/database';
+import type { ComandaLocalSettings, HorarioReserva, PosModo } from '../types/database';
 import { translateError } from '../lib/errors';
 import { compressImage } from '../lib/compressImage';
 
@@ -40,6 +40,16 @@ export interface LocalSettingsPatch {
   horario_vie?: string | null;
   horario_sab?: string | null;
   horario_dom?: string | null;
+  // MESA módulo #3 — config reservas
+  reservas_activas?: boolean;
+  reservas_capacidad_max?: number | null;
+  reservas_anticipacion_min_hs?: number;
+  reservas_anticipacion_max_dias?: number;
+  reservas_duracion_estimada_min?: number;
+  reservas_horarios?: HorarioReserva[];
+  reservas_telefono_obligatorio?: boolean;
+  reservas_requiere_confirmacion?: boolean;
+  reservas_notas_visibles_cliente?: string | null;
 }
 
 export async function updateLocalSettings(

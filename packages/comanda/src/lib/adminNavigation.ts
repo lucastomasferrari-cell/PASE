@@ -95,9 +95,10 @@ const ADMIN_NAVIGATION_FULL: NavCategory[] = [
     href: '/salon/mesas',
     requiredPermission: 'comanda.salon.editar',
     subItems: [
-      { slug: 'mesas',     label: 'Mesas',              href: '/salon/mesas' },
-      { slug: 'servicios', label: 'Servicios y turnos', href: '/salon/servicios', badge: 'soon' },
-      { slug: 'reservas',  label: 'Reservas',           href: '/salon/reservas' },
+      { slug: 'mesas',           label: 'Mesas',              href: '/salon/mesas' },
+      { slug: 'servicios',       label: 'Servicios y turnos', href: '/salon/servicios', badge: 'soon' },
+      { slug: 'reservas',        label: 'Reservas',           href: '/salon/reservas' },
+      { slug: 'config-reservas', label: 'Config. reservas',   href: '/salon/config-reservas' },
     ],
   },
   {

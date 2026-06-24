@@ -132,6 +132,7 @@ const TiendaReservar = lazy(() => import('./pages/Tienda/TiendaReservar').then(m
 const CuponesAdmin = lazy(() => import('./pages/Marketing/CuponesAdmin').then(m => ({ default: m.CuponesAdmin })));
 const EventosGiftcardsAdmin = lazy(() => import('./pages/Marketing/EventosGiftcardsAdmin').then(m => ({ default: m.EventosGiftcardsAdmin })));
 const SettingsMesas = lazy(() => import('./pages/Settings/SettingsMesas').then(m => ({ default: m.SettingsMesas })));
+const SettingsReservas = lazy(() => import('./pages/Settings/SettingsReservas').then(m => ({ default: m.SettingsReservas })));
 const SettingsMetodosCobro = lazy(() => import('./pages/Settings/SettingsMetodosCobro').then(m => ({ default: m.SettingsMetodosCobro })));
 const SettingsPermisos = lazy(() => import('./pages/Settings/SettingsPermisos').then(m => ({ default: m.SettingsPermisos })));
 const SettingsAuditoria = lazy(() => import('./pages/Settings/SettingsAuditoria').then(m => ({ default: m.SettingsAuditoria })));
@@ -290,6 +291,7 @@ export default function App() {
                   <Route path="/salon/mesas" element={<SettingsMesas />} />
                   <Route path="/salon/servicios" element={<StubRoute />} />
                   <Route path="/salon/reservas" element={<ReservasAdmin />} />
+                  <Route path="/salon/config-reservas" element={<SettingsReservas />} />
 
                   {/* ── Empleados ─────────────────────────────────────── */}
                   <Route path="/empleados" element={<Navigate to="/empleados/lista" replace />} />
