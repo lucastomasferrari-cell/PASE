@@ -56,9 +56,11 @@ interface RRHHLegajoProps {
   // para que el caller no rompa.
   onClose?: () => void;
   onGoToPago?: (emp: Empleado, nov: Novedad) => void;
+  /** Pestaña inicial (ej. "vacagu" para caer directo en Vacaciones/Aguinaldo). */
+  initialTab?: string;
 }
 
-export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RRHHLegajoProps) {
+export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago, initialTab }: RRHHLegajoProps) {
   // Cuentas para los selects de pago de vacaciones, aguinaldo y liquidación
   // final. Filtra por cuentas_operables — un usuario con permiso de cargar
   // pagos puede no ver el saldo consolidado de la cuenta.
@@ -66,7 +68,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago }: RR
   const cuentasUsables = opCuentas === null ? CUENTAS_LIQ : CUENTAS_LIQ.filter(c => opCuentas.includes(c));
   const cuentasKey = cuentasUsables.join("|");
   const [emp, setEmp] = useState<Empleado | null>(null);
-  const [tab, setTab] = useState("datos");
+  const [tab, setTab] = useState(initialTab ?? "datos");
   const [loading, setLoading] = useState(true);
 
   // Datos

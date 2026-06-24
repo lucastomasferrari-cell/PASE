@@ -60,6 +60,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
   const cuentasUsables = opCuentas === null ? CUENTAS_PAGO : CUENTAS_PAGO.filter(c => opCuentas.includes(c));
   const [tab, setTab] = useState("dashboard");
   const [legajoId, setLegajoId] = useState<string | null>(null);
+  const [legajoTab, setLegajoTab] = useState<string | undefined>(undefined);
   const { toast, showToast, showError } = useToast();
 
   const visLocs = localesVisibles(user);
@@ -1008,7 +1009,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
       >
         {legajoId && (
           <Suspense fallback={<div style={{padding:24,color:"var(--muted)"}}>Cargando legajo…</div>}>
-            <RRHHLegajo empleadoId={legajoId} user={user} locales={locales} onClose={() => { setLegajoId(null); loadEmpleados(); }} onGoToPago={goToPagoFromLegajo} />
+            <RRHHLegajo empleadoId={legajoId} user={user} locales={locales} initialTab={legajoTab} onClose={() => { setLegajoId(null); setLegajoTab(undefined); loadEmpleados(); }} onGoToPago={goToPagoFromLegajo} />
           </Suspense>
         )}
       </Modal>
@@ -1069,6 +1070,7 @@ export default function RRHH({ user, locales, localActivo }: RRHHProps) {
           showToast={showToast}
           showError={showError}
           onPagado={()=>{ if (tab==="dashboard") loadDashboard(); }}
+          onIrAlLegajo={(id)=>{ setAgModal(false); setLegajoTab("vacagu"); setLegajoId(id); }}
         />
       )}
     </div>

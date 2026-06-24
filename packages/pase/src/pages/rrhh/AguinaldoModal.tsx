@@ -21,6 +21,9 @@ interface PreviewRow {
   empleado_id: string; apellido: string; nombre: string; puesto: string;
   fecha_inicio: string | null; sueldo_mensual: number;
   mejor_mes: number | null; bruto: number; desglose: Desglose | null;
+  /** true = trabaja en varios locales → no se paga inline acá (se reparte
+   *  desde el legajo). */
+  multi_local?: boolean;
 }
 
 interface Props {
@@ -31,6 +34,9 @@ interface Props {
   showError: (m: string) => void;
   onPagado: () => void;
   onClose: () => void;
+  /** Abre el legajo del empleado (en la pestaña de aguinaldo) para repartir
+   *  el aguinaldo entre locales. */
+  onIrAlLegajo: (empleadoId: string) => void;
 }
 
 const fmt$ = (n: number) => "$" + Math.round(n).toLocaleString("es-AR");
@@ -64,7 +70,7 @@ function lineasDesglose(r: PreviewRow): Array<{ label: string; monto: number; ne
   return out;
 }
 
-export function AguinaldoModal({ localId, cuentasUsables, localNombre, showToast, showError, onPagado, onClose }: Props) {
+export function AguinaldoModal({ localId, cuentasUsables, localNombre, showToast, showError, onPagado, onClose, onIrAlLegajo }: Props) {
   const [preview, setPreview] = useState<PreviewRow[] | null>(null);
   const [cuenta, setCuenta] = useState("");
   const [fecha, setFecha] = useState(toISO(today));
@@ -87,7 +93,7 @@ export function AguinaldoModal({ localId, cuentasUsables, localNombre, showToast
       const inc: Record<string, boolean> = {};
       for (const r of rows) {
         m[r.empleado_id] = String(calcularAguinaldo(baseDe(r), r.fecha_inicio, today).monto);
-        inc[r.empleado_id] = true;
+        inc[r.empleado_id] = !r.multi_local; // multi-local: no se paga inline acá
       }
       setMontos(m);
       setIncluir(inc);
@@ -113,14 +119,16 @@ export function AguinaldoModal({ localId, cuentasUsables, localNombre, showToast
   }, []);
 
   const rows = preview || [];
-  const seleccionados = rows.filter(r => incluir[r.empleado_id] && Number(montos[r.empleado_id]) > 0);
+  // Los multi-local no se pagan inline (se reparten desde el legajo).
+  const seleccionados = rows.filter(r => !r.multi_local && incluir[r.empleado_id] && Number(montos[r.empleado_id]) > 0);
   const total = seleccionados.reduce((s, r) => s + Number(montos[r.empleado_id] || 0), 0);
-  const todosTildados = rows.length > 0 && rows.every(r => yaPagado.has(r.empleado_id) || incluir[r.empleado_id]);
+  const noPagables = (r: PreviewRow) => yaPagado.has(r.empleado_id) || !!r.multi_local;
+  const todosTildados = rows.length > 0 && rows.every(r => noPagables(r) || incluir[r.empleado_id]);
 
   function toggleTodos() {
     setIncluir(() => {
       const next: Record<string, boolean> = {};
-      for (const r of rows) next[r.empleado_id] = !todosTildados && !yaPagado.has(r.empleado_id);
+      for (const r of rows) next[r.empleado_id] = !todosTildados && !noPagables(r);
       return next;
     });
   }
@@ -254,24 +262,29 @@ export function AguinaldoModal({ localId, cuentasUsables, localNombre, showToast
                   const calc = calcularAguinaldo(baseDe(r), r.fecha_inicio, today);
                   const abierto = expandido.has(r.empleado_id);
                   const lineas = lineasDesglose(r);
+                  const multi = !!r.multi_local;
                   return (
                     <Fragment key={r.empleado_id}>
                       <tr style={pagado ? { opacity: 0.55 } : undefined}>
                         <td style={td}>
-                          <input type="checkbox" checked={!!incluir[r.empleado_id]} disabled={pagado}
-                            onChange={ev => setIncluir(prev => ({ ...prev, [r.empleado_id]: ev.target.checked }))} />
+                          {!multi && <input type="checkbox" checked={!!incluir[r.empleado_id]} disabled={pagado}
+                            onChange={ev => setIncluir(prev => ({ ...prev, [r.empleado_id]: ev.target.checked }))} />}
                         </td>
                         <td style={td}>
                           <div style={{ fontWeight: 600 }}>{r.apellido}, {r.nombre}</div>
                           <div style={{ fontSize: 11, color: "var(--muted2)" }}>
                             {r.puesto}
-                            {pagado ? " · ✓ ya cobró este semestre" : calc.parcial ? ` · proporcional (entró ${fechaCorta(r.fecha_inicio)})` : ""}
-                            {r.mejor_mes == null ? " · sin liquidaciones (sueldo declarado)" : ""}
-                            {" · "}
-                            <button onClick={() => toggleExpand(r.empleado_id)}
-                              style={{ background: "none", border: "none", color: "var(--acc, #6aa3ff)", cursor: "pointer", fontSize: 11, padding: 0 }}>
-                              {abierto ? "ocultar desglose" : "ver desglose"}
-                            </button>
+                            {multi
+                              ? <span style={{ color: "var(--warn, #d8a200)" }}> · ⚠️ trabaja en varios locales — pagalo desde el legajo para repartirlo</span>
+                              : pagado ? " · ✓ ya cobró este semestre" : calc.parcial ? ` · proporcional (entró ${fechaCorta(r.fecha_inicio)})` : ""}
+                            {!multi && r.mejor_mes == null ? " · sin liquidaciones (sueldo declarado)" : ""}
+                            {!multi && <>
+                              {" · "}
+                              <button onClick={() => toggleExpand(r.empleado_id)}
+                                style={{ background: "none", border: "none", color: "var(--acc, #6aa3ff)", cursor: "pointer", fontSize: 11, padding: 0 }}>
+                                {abierto ? "ocultar desglose" : "ver desglose"}
+                              </button>
+                            </>}
                           </div>
                         </td>
                         <td style={{ ...td, textAlign: "right", color: "var(--muted2)" }}>
@@ -279,12 +292,18 @@ export function AguinaldoModal({ localId, cuentasUsables, localNombre, showToast
                           {r.mejor_mes != null && <div style={{ fontSize: 10 }}>{MESES[r.mejor_mes]}</div>}
                         </td>
                         <td style={{ ...td, textAlign: "right" }}>
-                          <input type="number" className="search" value={montos[r.empleado_id] ?? ""} disabled={pagado}
-                            onChange={ev => setMontos(prev => ({ ...prev, [r.empleado_id]: ev.target.value }))}
-                            style={{ width: 130, textAlign: "right" }} min="0" step="1" />
+                          {multi ? (
+                            <button className="btn btn-outline btn-sm" onClick={() => onIrAlLegajo(r.empleado_id)}>
+                              Pagar en legajo →
+                            </button>
+                          ) : (
+                            <input type="number" className="search" value={montos[r.empleado_id] ?? ""} disabled={pagado}
+                              onChange={ev => setMontos(prev => ({ ...prev, [r.empleado_id]: ev.target.value }))}
+                              style={{ width: 130, textAlign: "right" }} min="0" step="1" />
+                          )}
                         </td>
                       </tr>
-                      {abierto && (
+                      {abierto && !multi && (
                         <tr>
                           <td style={{ ...td, borderTop: "none" }}></td>
                           <td style={{ ...td, borderTop: "none", fontSize: 11, color: "var(--muted2)" }} colSpan={3}>
