@@ -129,6 +129,7 @@ const InventarioTransferencias = lazy(() => import('./pages/Inventario/Inventari
 const MermasOneTap = lazy(() => import('./pages/Inventario/MermasOneTap').then(m => ({ default: m.MermasOneTap })));
 const ReservasAdmin = lazy(() => import('./pages/Salon/ReservasAdmin').then(m => ({ default: m.ReservasAdmin })));
 const TiendaReservar = lazy(() => import('./pages/Tienda/TiendaReservar').then(m => ({ default: m.TiendaReservar })));
+const ReservaPublicaPage = lazy(() => import('./pages/Salon/ReservaPublicaPage').then(m => ({ default: m.ReservaPublicaPage })));
 const CuponesAdmin = lazy(() => import('./pages/Marketing/CuponesAdmin').then(m => ({ default: m.CuponesAdmin })));
 const EventosGiftcardsAdmin = lazy(() => import('./pages/Marketing/EventosGiftcardsAdmin').then(m => ({ default: m.EventosGiftcardsAdmin })));
 const SettingsMesas = lazy(() => import('./pages/Settings/SettingsMesas').then(m => ({ default: m.SettingsMesas })));
@@ -237,6 +238,8 @@ export default function App() {
                 <Route path="/kds/:estacion" element={<KdsView />} />
                 <Route path="/menu/:token" element={<MenuQrView />} />
                 <Route path="/r/:token" element={<RiderPWA />} />
+                {/* MESA — reserva pública (link del local hacia clientes) */}
+                <Route path="/reservar/:slug" element={<ReservaPublicaPage />} />
 
                 {/* Redirects de rutas viejas a nuevas (sprint 6) */}
                 {REDIRECTS.map(([from, to]) => (

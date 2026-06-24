@@ -129,7 +129,7 @@ export function SettingsReservas() {
   }
 
   const publicUrl = settings.slug
-    ? `${window.location.origin}/tienda/${settings.slug}/reservar`
+    ? `${window.location.origin}/reservar/${settings.slug}`
     : null;
 
   return (

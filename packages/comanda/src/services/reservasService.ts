@@ -95,7 +95,7 @@ export async function checkDisponibilidadReserva(args: {
 export async function crearReservaPublica(args: {
   slug: string;
   clienteNombre: string;
-  clienteTelefono: string;
+  clienteTelefono?: string;
   clienteEmail?: string;
   fechaHora: string;
   personas: number;
