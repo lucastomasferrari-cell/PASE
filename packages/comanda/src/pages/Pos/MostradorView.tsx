@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { ComandasActivasPanel } from '@/components/ComandasActivasPanel';
+import { ComandasRail } from '@/components/ComandasRail';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -131,12 +131,9 @@ export function MostradorView() {
   }
 
   return (
-    <div className="flex h-full">
-      {/* Panel izq: comandas activas modo mostrador */}
-      <ComandasActivasPanel
-        className="w-[240px] border-r border-border flex-shrink-0 hidden lg:flex"
-        modos={['mostrador']}
-      />
+    <div className="flex flex-col h-full">
+      {/* Rail horizontal estilo comandero */}
+      <ComandasRail modos={['mostrador']} />
 
       {/* Centro: lista de órdenes activas + CTA */}
       <div className="flex-1 min-w-0 overflow-auto">

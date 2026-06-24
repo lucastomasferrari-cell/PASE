@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
-import { ComandasActivasPanel } from '@/components/ComandasActivasPanel';
+import { ComandasRail } from '@/components/ComandasRail';
 import { SalonLayoutEditor } from './SalonLayoutEditor';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { cn } from '@/lib/utils';
@@ -98,14 +98,11 @@ export function SalonView() {
   }
 
   return (
-    <div className="flex h-full">
-      {/* Panel izq: comandas activas (solo lg+ por espacio) */}
-      <ComandasActivasPanel
-        className="w-[240px] border-r border-border flex-shrink-0 hidden lg:flex"
-        modos={['salon']}
-      />
+    <div className="flex flex-col h-full">
+      {/* Rail horizontal estilo comandero */}
+      <ComandasRail modos={['salon']} />
 
-      {/* Centro: plano de mesas */}
+      {/* Contenido: plano de mesas */}
       <div className="flex-1 min-w-0 overflow-auto">
         <div className="p-6">
           <header className="flex items-center gap-3 mb-5 flex-wrap">
@@ -232,6 +229,9 @@ export function SalonView() {
 // Plano custom: mesas posicionadas con pos_x/pos_y absolute. Las que NO
 // tienen posición se renderizan en grid auto debajo. El user puede mezclar:
 // algunas mesas en el plano, otras todavía sin posicionar.
+const FORMA_W: Record<string, number> = { cuadrado: 88, redondo: 88, rectangular: 140 };
+const FORMA_H: Record<string, number> = { cuadrado: 88, redondo: 88, rectangular: 80 };
+
 function PlanoCustom({ mesas, onClick }: { mesas: MesaConVenta[]; onClick: (m: MesaConVenta) => void }) {
   const posicionadas = mesas.filter((m) => m.pos_x !== null && m.pos_y !== null);
   const sinPosicion = mesas.filter((m) => m.pos_x === null || m.pos_y === null);
@@ -240,20 +240,24 @@ function PlanoCustom({ mesas, onClick }: { mesas: MesaConVenta[]; onClick: (m: M
       <div className="relative bg-muted/20 border border-dashed border-border rounded-lg overflow-auto"
         style={{ minHeight: 400 }}>
         <div className="relative" style={{ width: 1600, height: 1200 }}>
-          {posicionadas.map((m) => (
+          {posicionadas.map((m) => {
+            const w = FORMA_W[m.forma] ?? 88;
+            const h = FORMA_H[m.forma] ?? 88;
+            return (
             <div
               key={m.id}
               style={{
                 position: 'absolute',
                 left: m.pos_x ?? 0,
                 top: m.pos_y ?? 0,
-                width: 96,
-                height: 80,
+                width: w,
+                height: h,
               }}
             >
               <MesaTile mesa={m} onClick={() => onClick(m)} />
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
       {sinPosicion.length > 0 && (
