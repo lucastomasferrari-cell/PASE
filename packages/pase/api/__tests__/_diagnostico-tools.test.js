@@ -137,14 +137,22 @@ describe('desglose_categoria', () => {
 });
 
 describe('estado_empleado', () => {
-  it('devuelve empleados con sus adelantos y pagos especiales', async () => {
+  it('devuelve sueldos mensuales, adelantos y pagos especiales', async () => {
     const admin = makeAdmin({
       rrhh_empleados: [{ id: 7, nombre: 'Mauricio', apellido: 'Balcazar', local_id: 5 }],
       rrhh_adelantos: [{ id: 'a1', monto: 5000 }],
       rrhh_pagos_especiales: [{ id: 'p1', tipo: 'aguinaldo', monto: 90000 }],
+      rrhh_novedades: [{
+        mes: 6, anio: 2026, estado: 'confirmado', cuota_num: 1, cuotas_total: 1,
+        rrhh_liquidaciones: [{ total_a_pagar: 500000, estado: 'pendiente', subtotal2: 600000 }],
+      }],
     });
     const out = await executeTool(admin, scope, 'estado_empleado', { local_id: 5, nombre: 'Balcazar' });
     expect(out.empleados).toHaveLength(1);
+    expect(out.empleados[0].sueldos).toHaveLength(1);
+    expect(out.empleados[0].sueldos[0].total_a_pagar).toBe(500000);
+    expect(out.empleados[0].sueldos[0].estado).toBe('pendiente');
+    expect(out.empleados[0].sueldos[0].bruto).toBe(600000);
     expect(out.empleados[0].pagos_especiales[0].tipo).toBe('aguinaldo');
     expect(out.empleados[0].adelantos).toHaveLength(1);
   });

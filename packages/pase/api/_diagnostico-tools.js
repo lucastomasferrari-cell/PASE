@@ -125,10 +125,11 @@ export const TOOLS = [
   {
     name: 'estado_empleado',
     description:
-      'Estado de un empleado: legajo (sueldo declarado, antigüedad), adelantos recientes y ' +
-      'pagos especiales (aguinaldo, vacaciones, liquidación final). Usala para "no le figura ' +
-      'el aguinaldo/adelanto a tal empleado". Pedí nombre del empleado + local. (Las ' +
-      'liquidaciones de sueldo mensual todavía no están acá — para eso guiá a Equipo.)',
+      'Estado COMPLETO de un empleado: legajo (sueldo declarado, antigüedad), sueldos ' +
+      'mensuales liquidados (últimos 12 meses: monto, cuotas y si están pagados o ' +
+      'pendientes), adelantos, y pagos especiales (aguinaldo, vacaciones, liquidación ' +
+      'final). Usala para "no le figura el sueldo/aguinaldo/adelanto a X" o "cuánto cobró X". ' +
+      'Pedí nombre del empleado + local.',
     input_schema: {
       type: 'object',
       properties: {
@@ -349,11 +350,30 @@ export async function executeTool(admin, scope, name, input) {
     if (!emps || !emps.length) return { empleados: [], nota: 'No encontré un empleado con ese nombre en tus locales.' };
     const out = [];
     for (const emp of emps) {
-      const [adel, esp] = await Promise.all([
+      const [adel, esp, novs] = await Promise.all([
         admin.from('rrhh_adelantos').select('*').eq('empleado_id', emp.id).order('fecha', { ascending: false }).limit(10),
         admin.from('rrhh_pagos_especiales').select('*').eq('empleado_id', emp.id).order('pagado_at', { ascending: false }).limit(10),
+        // Sueldos mensuales: la liquidación cuelga de la novedad (mes/año/cuota).
+        // total_a_pagar = monto canónico; estado = pagada/pendiente; subtotal2 = bruto.
+        admin.from('rrhh_novedades')
+          .select('mes, anio, estado, cuota_num, cuotas_total, rrhh_liquidaciones(total_a_pagar, estado, subtotal2)')
+          .eq('empleado_id', emp.id)
+          .order('anio', { ascending: false }).order('mes', { ascending: false }).limit(12),
       ]);
-      out.push({ ...emp, adelantos: adel.data || [], pagos_especiales: esp.data || [] });
+      const sueldos = (novs.data || []).map((n) => {
+        const liqs = Array.isArray(n.rrhh_liquidaciones)
+          ? n.rrhh_liquidaciones
+          : (n.rrhh_liquidaciones ? [n.rrhh_liquidaciones] : []);
+        return {
+          mes: n.mes,
+          anio: n.anio,
+          cuota: n.cuotas_total > 1 ? `${n.cuota_num}/${n.cuotas_total}` : null,
+          total_a_pagar: liqs.reduce((s, l) => s + Number(l.total_a_pagar || 0), 0),
+          bruto: liqs.reduce((s, l) => s + Number(l.subtotal2 || 0), 0),
+          estado: liqs.map((l) => l.estado).filter(Boolean).join('/') || n.estado || null,
+        };
+      });
+      out.push({ ...emp, sueldos, adelantos: adel.data || [], pagos_especiales: esp.data || [] });
     }
     return { empleados: out };
   }
