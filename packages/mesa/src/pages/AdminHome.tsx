@@ -199,7 +199,7 @@ export function AdminHome() {
             ) : seccion === 'espera' ? (
               <AdminEspera localId={localSel.local_id} tenantId={localSel.tenant_id} localNombre={localSel.nombre} />
             ) : seccion === 'comensales' ? (
-              <AdminComensales />
+              <AdminComensales tenantId={localSel.tenant_id} />
             ) : seccion === 'resenas' ? (
               <AdminResenas localSlug={localSel.slug} />
             ) : seccion === 'stats' ? (
