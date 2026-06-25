@@ -16,9 +16,13 @@ export interface Cliente {
   primer_pedido_at: string | null;
   total_pedidos: number | null;
   total_gastado: number | null;
+  // tags: columna nueva (migración 202606250300_mesa_tags). Con select('*') no
+  // rompe si todavía no está aplicada — llega undefined.
+  tags?: string[] | null;
 }
 
-const COLS = 'id, nombre, apellido, telefono, email, vip, notas, acepta_marketing, ultimo_pedido_at, primer_pedido_at, total_pedidos, total_gastado';
+// select('*') a propósito: trae tags si la columna existe, sin romper si no.
+const COLS = '*';
 
 export interface ListClientesOpts {
   search?: string;
@@ -69,4 +73,17 @@ export async function updateCliente(id: number, patch: Partial<ClienteInput>): P
 export async function eliminarCliente(id: number): Promise<{ error: string | null }> {
   const { error } = await db().from('clientes').update({ deleted_at: new Date().toISOString() }).eq('id', id);
   return { error: error?.message ?? null };
+}
+
+// Setea las tags del cliente. Requiere la columna clientes.tags (migración
+// 202606250300). Si no está aplicada, devuelve un error claro.
+export async function setTagsCliente(id: number, tags: string[]): Promise<{ error: string | null }> {
+  const { error } = await db().from('clientes').update({ tags }).eq('id', id);
+  if (error) {
+    if (/column .*tags.* does not exist/i.test(error.message)) {
+      return { error: 'Las tags necesitan una actualización de la base (migración pendiente).' };
+    }
+    return { error: error.message };
+  }
+  return { error: null };
 }

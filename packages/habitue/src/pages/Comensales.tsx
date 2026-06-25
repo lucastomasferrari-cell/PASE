@@ -4,8 +4,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Search, Star, Phone, Mail, ChevronDown, ChevronUp, Plus, Download, X, Trash2, Megaphone } from 'lucide-react';
-import { listClientes, createCliente, updateCliente, eliminarCliente, type Cliente } from '@/lib/clientesService';
+import { Search, Star, Phone, Mail, ChevronDown, ChevronUp, Plus, Download, X, Trash2, Megaphone, Tag } from 'lucide-react';
+import { listClientes, createCliente, updateCliente, eliminarCliente, setTagsCliente, type Cliente } from '@/lib/clientesService';
 import { listReservasByCliente, type Reserva } from '@/lib/reservasService';
 import { getConsumoCliente, type ConsumoCliente } from '@/lib/consumoService';
 
@@ -201,6 +201,8 @@ function ClienteCard({ cliente, abierto, onToggle, onToggleVip, onBorrar }: {
           </div>
           {cliente.notas && <p className="text-xs text-ink-soft italic mb-2">{cliente.notas}</p>}
 
+          <TagsEditor cliente={cliente} />
+
           {consumo && consumo.topItems.length > 0 && (
             <div className="mb-3">
               <p className="text-xs font-medium text-ink-muted mb-1.5">Qué pide ({consumo.pedidos} pedidos)</p>
@@ -234,6 +236,49 @@ function ClienteCard({ cliente, abierto, onToggle, onToggleVip, onBorrar }: {
               <Trash2 className="h-3.5 w-3.5" /> Borrar comensal
             </button>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TagsEditor({ cliente }: { cliente: Cliente }) {
+  const [tags, setTags] = useState<string[]>(cliente.tags ?? []);
+  const [input, setInput] = useState('');
+  const SUGERIDAS = ['cumpleañero', 'celíaco', 'vegano', 'fan del sushi', 'delivery', 'habitué'];
+
+  async function persistir(next: string[]) {
+    const prev = tags;
+    setTags(next);
+    const { error } = await setTagsCliente(cliente.id, next);
+    if (error) { toast.error(error); setTags(prev); }
+  }
+  function agregar(t: string) {
+    const tag = t.trim().toLowerCase();
+    if (!tag || tags.includes(tag)) { setInput(''); return; }
+    void persistir([...tags, tag]); setInput('');
+  }
+  function quitar(t: string) { void persistir(tags.filter((x) => x !== t)); }
+
+  return (
+    <div className="mb-3">
+      <p className="text-xs font-medium text-ink-muted mb-1.5 inline-flex items-center gap-1"><Tag className="h-3 w-3" /> Tags</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {tags.map((t) => (
+          <span key={t} className="text-xs bg-brand-100 text-brand-800 rounded-full pl-2.5 pr-1 py-0.5 inline-flex items-center gap-1">
+            {t}
+            <button onClick={() => quitar(t)} className="hover:bg-brand-200 rounded-full p-0.5"><X className="h-3 w-3" /></button>
+          </span>
+        ))}
+        <input value={input} onChange={(e) => setInput(e.target.value)}
+               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); agregar(input); } }}
+               placeholder="+ tag" className="text-xs rounded-full border border-ink/15 px-2.5 py-1 w-24 focus:w-32 transition-all" />
+      </div>
+      {tags.length === 0 && (
+        <div className="flex flex-wrap gap-1 mt-1.5">
+          {SUGERIDAS.map((s) => (
+            <button key={s} onClick={() => agregar(s)} className="text-[11px] text-ink-muted hover:text-brand-600 border border-dashed border-ink/15 rounded-full px-2 py-0.5">+ {s}</button>
+          ))}
         </div>
       )}
     </div>
