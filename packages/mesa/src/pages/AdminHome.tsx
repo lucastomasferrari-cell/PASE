@@ -10,16 +10,19 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { LogOut, CalendarDays, Store, Map, Hourglass, Users, BarChart3, ChevronDown, Check, MapPin } from 'lucide-react';
+import { LogOut, CalendarDays, Store, Map, Hourglass, Users, BarChart3, ChevronDown, Check, MapPin, LayoutDashboard, GanttChartSquare, Star } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
+import { AdminTablero } from './AdminTablero';
+import { AdminDiario } from './AdminDiario';
 import { AdminReservas } from './AdminReservas';
 import { AdminMapa } from './AdminMapa';
 import { AdminEspera } from './AdminEspera';
 import { AdminComensales } from './AdminComensales';
+import { AdminResenas } from './AdminResenas';
 import { AdminStats } from './AdminStats';
 import { AdminPerfil, type LocalPerfil } from './AdminPerfil';
 
-type Seccion = 'reservas' | 'mapa' | 'espera' | 'comensales' | 'stats' | 'perfil';
+type Seccion = 'tablero' | 'diario' | 'reservas' | 'mapa' | 'espera' | 'comensales' | 'resenas' | 'stats' | 'perfil';
 
 export function AdminHome() {
   const [sesion, setSesion] = useState<{ email: string } | null>(null);
@@ -30,7 +33,7 @@ export function AdminHome() {
 
   const [locales, setLocales] = useState<LocalPerfil[]>([]);
   const [sel, setSel] = useState<number | null>(null);  // settings_id
-  const [seccion, setSeccion] = useState<Seccion>('reservas');
+  const [seccion, setSeccion] = useState<Seccion>('tablero');
 
   useEffect(() => {
     if (!supabaseConfigurado) return;
@@ -126,11 +129,14 @@ export function AdminHome() {
   const localSel = locales.find((l) => l.settings_id === sel) ?? null;
 
   const NAV: { key: Seccion; label: string; icon: React.ReactNode }[] = [
+    { key: 'tablero',    label: 'Tablero',          icon: <LayoutDashboard className="h-[18px] w-[18px]" /> },
+    { key: 'diario',     label: 'Diario',           icon: <GanttChartSquare className="h-[18px] w-[18px]" /> },
     { key: 'reservas',   label: 'Reservas',         icon: <CalendarDays className="h-[18px] w-[18px]" /> },
     { key: 'mapa',       label: 'Mapa de mesas',    icon: <Map className="h-[18px] w-[18px]" /> },
     { key: 'espera',     label: 'Lista de espera',  icon: <Hourglass className="h-[18px] w-[18px]" /> },
     { key: 'comensales', label: 'Comensales',       icon: <Users className="h-[18px] w-[18px]" /> },
-    { key: 'stats',      label: 'Estadísticas',     icon: <BarChart3 className="h-[18px] w-[18px]" /> },
+    { key: 'resenas',    label: 'Reseñas',          icon: <Star className="h-[18px] w-[18px]" /> },
+    { key: 'stats',      label: 'Informes',         icon: <BarChart3 className="h-[18px] w-[18px]" /> },
     { key: 'perfil',     label: 'Perfil del local', icon: <Store className="h-[18px] w-[18px]" /> },
   ];
 
@@ -182,7 +188,11 @@ export function AdminHome() {
         {/* Contenido de la sección */}
         <main className="flex-1 px-4 sm:px-6 pb-16">
           {localSel ? (
-            seccion === 'reservas' ? (
+            seccion === 'tablero' ? (
+              <AdminTablero localId={localSel.local_id} localSlug={localSel.slug} />
+            ) : seccion === 'diario' ? (
+              <AdminDiario localId={localSel.local_id} localNombre={localSel.nombre} />
+            ) : seccion === 'reservas' ? (
               <AdminReservas localId={localSel.local_id} localNombre={localSel.nombre} />
             ) : seccion === 'mapa' ? (
               <AdminMapa localId={localSel.local_id} />
@@ -190,6 +200,8 @@ export function AdminHome() {
               <AdminEspera localId={localSel.local_id} tenantId={localSel.tenant_id} localNombre={localSel.nombre} />
             ) : seccion === 'comensales' ? (
               <AdminComensales />
+            ) : seccion === 'resenas' ? (
+              <AdminResenas localSlug={localSel.slug} />
             ) : seccion === 'stats' ? (
               <AdminStats localId={localSel.local_id} />
             ) : (
