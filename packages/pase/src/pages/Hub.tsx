@@ -11,13 +11,17 @@ function IconExternal() {
 }
 
 const COMANDA_URL = "https://pase-comanda.vercel.app";
+const MESA_URL    = "https://mesa-orpin.vercel.app";
+const PASE_URL    = "https://pase-yndx.vercel.app";
+const ADMIN_URL   = "https://pase-admin-console.vercel.app";
+const BOT_IG_URL  = "https://pase-instagram-bot.vercel.app";
 
 interface SistemaCard {
   nombre: string;
   descripcion: string;
   url: string;
   externa: boolean;
-  icono: string;          // emoji — sin dependencia extra
+  icono: string;
   accentBg: string;
   accentText: string;
   badge?: string;
@@ -39,13 +43,13 @@ const SISTEMAS: { seccion: string; items: SistemaCard[] }[] = [
       },
       {
         nombre: "MESA",
-        descripcion: "Plano del salón, estado de mesas en tiempo real y gestión de reservas.",
-        url: `${COMANDA_URL}/salon`,
+        descripcion: "Gestión de reservas, plano del salón y disponibilidad en tiempo real.",
+        url: MESA_URL,
         externa: true,
         icono: "🗺️",
         accentBg: "#E6F4EE",
         accentText: "#14532D",
-        badge: "Salón",
+        badge: "Reservas",
       },
       {
         nombre: "Pantalla de Cocina",
@@ -65,8 +69,8 @@ const SISTEMAS: { seccion: string; items: SistemaCard[] }[] = [
       {
         nombre: "PASE — Back-Office",
         descripcion: "EERR, RRHH, Caja, Conciliaciones, Facturas y todo el historial financiero.",
-        url: "/inicio",
-        externa: false,
+        url: PASE_URL,
+        externa: true,
         icono: "📊",
         accentBg: "#EAF3FB",
         accentText: "#1A3A5E",
@@ -75,12 +79,22 @@ const SISTEMAS: { seccion: string; items: SistemaCard[] }[] = [
       {
         nombre: "Bot IA Diagnóstico",
         descripcion: "Asistente inteligente que lee la base de datos y resuelve dudas al instante.",
-        url: "/inicio",
-        externa: false,
+        url: PASE_URL,
+        externa: true,
         icono: "🧠",
         accentBg: "#F3E8FF",
         accentText: "#581C87",
         badge: "IA",
+      },
+      {
+        nombre: "Admin Console",
+        descripcion: "Superadmin — gestión de tenants, backups, configuración global del sistema.",
+        url: ADMIN_URL,
+        externa: true,
+        icono: "🛡️",
+        accentBg: "#FEF3C7",
+        accentText: "#92400E",
+        badge: "Admin",
       },
     ],
   },
@@ -100,12 +114,22 @@ const SISTEMAS: { seccion: string; items: SistemaCard[] }[] = [
       {
         nombre: "Reservas Online",
         descripcion: "Página pública para que tus clientes hagan reservas sin llamarte.",
-        url: `${COMANDA_URL}/settings/reservas`,
+        url: MESA_URL,
         externa: true,
         icono: "📅",
         accentBg: "#EEF2FF",
         accentText: "#3730A3",
         badge: "Público",
+      },
+      {
+        nombre: "Bot Instagram",
+        descripcion: "Responde mensajes de clientes en Instagram con IA — consultas, reservas y más.",
+        url: BOT_IG_URL,
+        externa: true,
+        icono: "📸",
+        accentBg: "#FCE7F3",
+        accentText: "#9D174D",
+        badge: "IG",
       },
     ],
   },
