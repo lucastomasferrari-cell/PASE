@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  Plus, Users, Clock, Pencil, X, Search,
+  Plus, Users, Clock, Pencil, X, Search, Printer,
   Check, Armchair, CalendarX, Ban, RotateCcw, MessageCircle,
 } from 'lucide-react';
 import {
@@ -121,6 +121,23 @@ export function AdminReservas({ localId, localNombre }: Props) {
     return m ? `Mesa ${m.numero}` : `Mesa #${mesaId}`;
   }
 
+  function imprimir() {
+    const w = window.open('', '_blank', 'width=800,height=900');
+    if (!w) { toast.error('Permití las ventanas emergentes para imprimir'); return; }
+    const filas = porDia.map(([dia, rs]) => `
+      <h3>${labelFecha(new Date(dia))}</h3>
+      <table><thead><tr><th>Hora</th><th>Cliente</th><th>Pers.</th><th>Tel.</th><th>Mesa</th><th>Estado</th></tr></thead><tbody>
+      ${rs.map((r) => `<tr><td>${hora(r.fecha_hora)}</td><td>${r.cliente_nombre}</td><td>${r.personas}</td><td>${r.cliente_telefono ?? ''}</td><td>${nombreMesa(r.mesa_id) ?? ''}</td><td>${ESTADO_CFG[r.estado].label}</td></tr>`).join('')}
+      </tbody></table>`).join('');
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Reservas — ${localNombre}</title>
+      <style>body{font-family:Arial,sans-serif;color:#1A3A5E;padding:24px}h1{font-size:20px}h3{margin:18px 0 6px;font-size:14px}
+      table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ccc;padding:5px 8px;text-align:left}
+      th{background:#f0f4f8}</style></head><body>
+      <h1>Reservas — ${localNombre}</h1><p>${filtradas.length} reservas · ${totalPersonas} comensales</p>${filas}
+      <script>window.onload=function(){window.print()}<\/script></body></html>`);
+    w.document.close();
+  }
+
   return (
     <div className="mt-6">
       {/* Filtros + acción */}
@@ -138,6 +155,10 @@ export function AdminReservas({ localId, localNombre }: Props) {
                 className="rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm">
           {ESTADO_FILTROS.map((e) => <option key={e.key} value={e.key}>{e.label}</option>)}
         </select>
+        <button onClick={imprimir} disabled={filtradas.length === 0} title="Imprimir lista"
+                className="rounded-lg border border-ink/15 bg-white hover:bg-ink/5 px-3 py-2 text-sm font-medium inline-flex items-center gap-1.5 disabled:opacity-50">
+          <Printer className="h-4 w-4" />
+        </button>
         <button onClick={() => setEditando('nueva')}
                 className="rounded-lg bg-brand-500 hover:bg-brand-600 text-white px-3.5 py-2 text-sm font-medium inline-flex items-center gap-1.5">
           <Plus className="h-4 w-4" /> Nueva

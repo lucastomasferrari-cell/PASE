@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { CalendarCheck, ExternalLink, Save } from 'lucide-react';
+import { CalendarCheck, ExternalLink, Save, Link2 } from 'lucide-react';
 import { db } from '@/lib/supabase';
 
 export interface LocalPerfil {
@@ -52,13 +52,26 @@ export function AdminPerfil({ local, onSaved }: { local: LocalPerfil; onSaved: (
   return (
     <div className="mt-6 grid lg:grid-cols-2 gap-6 max-w-5xl">
       <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <p className="font-medium">{form.nombre}</p>
           {form.slug && (
-            <a href={`/${form.slug}`} target="_blank" rel="noopener"
-               className="text-xs text-brand-600 hover:underline inline-flex items-center gap-1">
-              Ver página pública <ExternalLink className="h-3 w-3" />
-            </a>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  const link = `${window.location.origin}/${form.slug}`;
+                  void navigator.clipboard.writeText(link).then(
+                    () => toast.success('Link de reservas copiado'),
+                    () => toast.error('No se pudo copiar'),
+                  );
+                }}
+                className="text-xs text-brand-600 hover:underline inline-flex items-center gap-1">
+                <Link2 className="h-3 w-3" /> Copiar link de reservas
+              </button>
+              <a href={`/${form.slug}`} target="_blank" rel="noopener"
+                 className="text-xs text-brand-600 hover:underline inline-flex items-center gap-1">
+                Ver página <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
           )}
         </div>
         <Campo label="Descripción (la historia del local, 'sobre nosotros')">
