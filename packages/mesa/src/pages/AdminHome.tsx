@@ -10,7 +10,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { LogOut, CalendarDays, Store, Map, Hourglass, Users, BarChart3 } from 'lucide-react';
+import { LogOut, CalendarDays, Store, Map, Hourglass, Users, BarChart3, ChevronDown, Check, MapPin } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
 import { AdminReservas } from './AdminReservas';
 import { AdminMapa } from './AdminMapa';
@@ -125,75 +125,134 @@ export function AdminHome() {
 
   const localSel = locales.find((l) => l.settings_id === sel) ?? null;
 
+  const NAV: { key: Seccion; label: string; icon: React.ReactNode }[] = [
+    { key: 'reservas',   label: 'Reservas',         icon: <CalendarDays className="h-[18px] w-[18px]" /> },
+    { key: 'mapa',       label: 'Mapa de mesas',    icon: <Map className="h-[18px] w-[18px]" /> },
+    { key: 'espera',     label: 'Lista de espera',  icon: <Hourglass className="h-[18px] w-[18px]" /> },
+    { key: 'comensales', label: 'Comensales',       icon: <Users className="h-[18px] w-[18px]" /> },
+    { key: 'stats',      label: 'Estadísticas',     icon: <BarChart3 className="h-[18px] w-[18px]" /> },
+    { key: 'perfil',     label: 'Perfil del local', icon: <Store className="h-[18px] w-[18px]" /> },
+  ];
+
   return (
-    <div className="min-h-screen pb-16 bg-crema">
-      <header className="container py-5 flex items-center justify-between">
-        <span className="font-display text-xl font-semibold text-brand-600">mesa.</span>
-        <div className="flex items-center gap-4 text-sm">
-          <span className="text-ink-muted hidden sm:inline">{sesion.email}</span>
-          <button onClick={() => void salir()} className="text-ink-soft hover:text-ink flex items-center gap-1.5">
+    <div className="min-h-screen bg-crema md:flex">
+      {/* Sidebar de navegación (desktop) — estilo OpenTable */}
+      <aside className="hidden md:flex md:flex-col md:w-60 md:fixed md:inset-y-0 bg-white border-r border-ink/10 z-30">
+        <div className="px-5 h-16 flex items-center">
+          <span className="font-display text-2xl font-semibold text-brand-600">mesa.</span>
+        </div>
+        <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
+          {NAV.map((it) => (
+            <NavItem key={it.key} activo={seccion === it.key} icon={it.icon} label={it.label}
+                     onClick={() => setSeccion(it.key)} />
+          ))}
+        </nav>
+        <div className="border-t border-ink/10 p-3">
+          <div className="px-2 pb-2 text-xs text-ink-muted truncate" title={sesion.email}>{sesion.email}</div>
+          <button onClick={() => void salir()}
+                  className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm text-ink-soft hover:bg-ink/5">
             <LogOut className="h-4 w-4" /> Salir
           </button>
         </div>
-      </header>
+      </aside>
 
-      <main className="container">
-        {/* Tabs de sección */}
-        <div className="flex items-center gap-1 border-b border-ink/10 overflow-x-auto">
-          <TabBtn activo={seccion === 'reservas'} onClick={() => setSeccion('reservas')} icon={<CalendarDays className="h-4 w-4" />} label="Reservas" />
-          <TabBtn activo={seccion === 'mapa'} onClick={() => setSeccion('mapa')} icon={<Map className="h-4 w-4" />} label="Mapa" />
-          <TabBtn activo={seccion === 'espera'} onClick={() => setSeccion('espera')} icon={<Hourglass className="h-4 w-4" />} label="Espera" />
-          <TabBtn activo={seccion === 'comensales'} onClick={() => setSeccion('comensales')} icon={<Users className="h-4 w-4" />} label="Comensales" />
-          <TabBtn activo={seccion === 'stats'} onClick={() => setSeccion('stats')} icon={<BarChart3 className="h-4 w-4" />} label="Stats" />
-          <TabBtn activo={seccion === 'perfil'} onClick={() => setSeccion('perfil')} icon={<Store className="h-4 w-4" />} label="Perfil" />
-        </div>
+      {/* Columna principal */}
+      <div className="flex-1 min-w-0 md:pl-60 flex flex-col min-h-screen">
+        {/* Topbar con selector de local (dropdown) */}
+        <header className="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-ink/10 h-16 flex items-center gap-3 px-4 sm:px-6">
+          <span className="md:hidden font-display text-xl font-semibold text-brand-600">mesa.</span>
+          <LocationSwitcher locales={locales} sel={sel} onSelect={setSel} />
+          <button onClick={() => void salir()} className="md:hidden ml-auto text-ink-soft hover:text-ink p-2" title="Salir">
+            <LogOut className="h-5 w-5" />
+          </button>
+        </header>
 
-        {/* Selector de local */}
-        {locales.length > 1 && (
-          <div className="mt-5 flex gap-2 flex-wrap">
-            {locales.map((l) => (
-              <button key={l.settings_id} onClick={() => setSel(l.settings_id)}
-                      className={`rounded-full px-4 py-1.5 text-sm font-medium border transition-colors ${
-                        sel === l.settings_id ? 'bg-brand-500 text-white border-brand-500' : 'border-ink/15 bg-white hover:border-brand-300'
-                      }`}>
-                {l.nombre}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Nav mobile (horizontal) */}
+        <nav className="md:hidden flex gap-1 overflow-x-auto px-3 py-2 border-b border-ink/10 bg-white">
+          {NAV.map((it) => (
+            <button key={it.key} onClick={() => setSeccion(it.key)}
+                    className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${
+                      seccion === it.key ? 'bg-brand-500 text-white' : 'text-ink-muted hover:bg-ink/5'
+                    }`}>
+              {it.icon}{it.label}
+            </button>
+          ))}
+        </nav>
 
-        {localSel ? (
-          seccion === 'reservas' ? (
-            <AdminReservas localId={localSel.local_id} localNombre={localSel.nombre} />
-          ) : seccion === 'mapa' ? (
-            <AdminMapa localId={localSel.local_id} />
-          ) : seccion === 'espera' ? (
-            <AdminEspera localId={localSel.local_id} tenantId={localSel.tenant_id} localNombre={localSel.nombre} />
-          ) : seccion === 'comensales' ? (
-            <AdminComensales />
-          ) : seccion === 'stats' ? (
-            <AdminStats localId={localSel.local_id} />
+        {/* Contenido de la sección */}
+        <main className="flex-1 px-4 sm:px-6 pb-16">
+          {localSel ? (
+            seccion === 'reservas' ? (
+              <AdminReservas localId={localSel.local_id} localNombre={localSel.nombre} />
+            ) : seccion === 'mapa' ? (
+              <AdminMapa localId={localSel.local_id} />
+            ) : seccion === 'espera' ? (
+              <AdminEspera localId={localSel.local_id} tenantId={localSel.tenant_id} localNombre={localSel.nombre} />
+            ) : seccion === 'comensales' ? (
+              <AdminComensales />
+            ) : seccion === 'stats' ? (
+              <AdminStats localId={localSel.local_id} />
+            ) : (
+              <AdminPerfil
+                local={localSel}
+                onSaved={(updated) => setLocales((prev) => prev.map((l) => l.settings_id === updated.settings_id ? updated : l))}
+              />
+            )
           ) : (
-            <AdminPerfil
-              local={localSel}
-              onSaved={(updated) => setLocales((prev) => prev.map((l) => l.settings_id === updated.settings_id ? updated : l))}
-            />
-          )
-        ) : (
-          <div className="mt-10 text-center text-ink-muted">Cargando locales…</div>
-        )}
-      </main>
+            <div className="mt-10 text-center text-ink-muted">Cargando locales…</div>
+          )}
+        </main>
+      </div>
     </div>
   );
 }
 
-function TabBtn({ activo, onClick, icon, label }: { activo: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+function NavItem({ activo, onClick, icon, label }: { activo: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
   return (
     <button onClick={onClick}
-            className={`px-4 py-2.5 text-sm font-medium inline-flex items-center gap-1.5 border-b-2 -mb-px transition-colors ${
-              activo ? 'border-brand-500 text-brand-700' : 'border-transparent text-ink-muted hover:text-ink'
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              activo ? 'bg-brand-50 text-brand-700' : 'text-ink-soft hover:bg-ink/5'
             }`}>
       {icon}{label}
     </button>
+  );
+}
+
+// Selector de local estilo OpenTable: un dropdown con el local actual + lista
+// para cambiar. Reemplaza la fila de pills (no escala con varios locales).
+function LocationSwitcher({ locales, sel, onSelect }: {
+  locales: LocalPerfil[];
+  sel: number | null;
+  onSelect: (settingsId: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const actual = locales.find((l) => l.settings_id === sel);
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((o) => !o)}
+              className="flex items-center gap-2 rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm font-medium hover:border-brand-300 max-w-[260px]">
+        <MapPin className="h-4 w-4 text-brand-500 shrink-0" />
+        <span className="truncate">{actual?.nombre ?? 'Elegí un local'}</span>
+        <ChevronDown className={`h-4 w-4 text-ink-muted shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full mt-1.5 z-40 w-64 max-h-80 overflow-y-auto rounded-xl border border-ink/10 bg-white shadow-card py-1.5">
+            <p className="px-3 py-1 text-[11px] uppercase tracking-wide text-ink-muted">Tus locales</p>
+            {locales.map((l) => (
+              <button key={l.settings_id}
+                      onClick={() => { onSelect(l.settings_id); setOpen(false); }}
+                      className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left hover:bg-brand-50/60 ${
+                        l.settings_id === sel ? 'text-brand-700 font-medium' : 'text-ink'
+                      }`}>
+                <span className="truncate">{l.nombre}</span>
+                {l.settings_id === sel && <Check className="h-4 w-4 text-brand-500 shrink-0" />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
