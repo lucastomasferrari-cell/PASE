@@ -1,7 +1,7 @@
 {
   "outputDirectory": "dist",
   "crons": [
-    { "path": "/api/automations-tick", "schedule": "0 * * * *" }
+    { "path": "/api/automations-tick", "schedule": "0 9 * * *" }
   ],
   "rewrites": [
     {
