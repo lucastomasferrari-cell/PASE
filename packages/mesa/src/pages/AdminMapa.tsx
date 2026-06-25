@@ -10,6 +10,8 @@ import {
   listMesas, estadoMesasLive,
   type Mesa, type MesaEstadoLive, type EstadoMesaLive,
 } from '@/lib/mesasService';
+import { sentarDePaso } from '@/lib/reservasService';
+import { WalkInDialog } from '@/components/WalkInDialog';
 
 interface Props { localId: number; }
 
@@ -48,6 +50,7 @@ export function AdminMapa({ localId }: Props) {
   const [mesas, setMesas] = useState<Mesa[]>([]);
   const [estados, setEstados] = useState<Map<number, MesaEstadoLive>>(new Map());
   const [cargando, setCargando] = useState(true);
+  const [walkInMesa, setWalkInMesa] = useState<number | null>(null);
 
   const reload = useCallback(async () => {
     const [m, e] = await Promise.all([listMesas(localId), estadoMesasLive(localId)]);
@@ -108,7 +111,7 @@ export function AdminMapa({ localId }: Props) {
         >
           {ubicadas.map((m) => (
             <div key={m.id} className="absolute" style={{ left: m.pos_x ?? 0, top: m.pos_y ?? 0 }}>
-              <MesaToken mesa={m} estado={estados.get(m.id) ?? null} />
+              <MesaToken mesa={m} estado={estados.get(m.id) ?? null} onSeat={() => setWalkInMesa(m.id)} />
             </div>
           ))}
         </div>
@@ -119,26 +122,43 @@ export function AdminMapa({ localId }: Props) {
         <div className="rounded-lg border border-dashed border-ink/15 p-3">
           <p className="text-xs font-medium text-ink-muted mb-2">Sin ubicar en el plano (ubicalas desde COMANDA)</p>
           <div className="flex flex-wrap gap-2">
-            {sinUbicar.map((m) => <MesaToken key={m.id} mesa={m} estado={estados.get(m.id) ?? null} />)}
+            {sinUbicar.map((m) => <MesaToken key={m.id} mesa={m} estado={estados.get(m.id) ?? null} onSeat={() => setWalkInMesa(m.id)} />)}
           </div>
         </div>
+      )}
+
+      {walkInMesa != null && (
+        <WalkInDialog
+          mesas={mesas}
+          mesaIdInicial={walkInMesa}
+          onClose={() => setWalkInMesa(null)}
+          onSave={async (input) => {
+            const { error } = await sentarDePaso({ localId, ...input });
+            if (error) { toast.error(error); return; }
+            toast.success('Walk-in sentado');
+            setWalkInMesa(null);
+            void reload();
+          }}
+        />
       )}
     </div>
   );
 }
 
-function MesaToken({ mesa, estado }: { mesa: Mesa; estado: MesaEstadoLive | null }) {
+function MesaToken({ mesa, estado, onSeat }: { mesa: Mesa; estado: MesaEstadoLive | null; onSeat?: () => void }) {
   const { w, h } = mesaSize(mesa);
   const esLive = estado?.estado_live ?? 'libre';
   const s = ESTADO_STYLE[esLive];
+  const libre = esLive === 'libre';
 
   return (
     <div
+      onClick={libre ? onSeat : undefined}
       className={`flex flex-col items-center justify-center border-2 select-none ${s.border} ${s.bg} ${s.text} ${
         mesa.forma === 'redondo' ? 'rounded-full' : 'rounded-lg'
-      }`}
+      } ${libre ? 'cursor-pointer hover:ring-2 hover:ring-emerald-300' : ''}`}
       style={{ width: w, height: h }}
-      title={estado?.reserva_nombre ? `Reserva: ${estado.reserva_nombre}` : ESTADO_LABEL[esLive]}
+      title={estado?.reserva_nombre ? `Reserva: ${estado.reserva_nombre}` : libre ? 'Libre — tocá para sentar de paso' : ESTADO_LABEL[esLive]}
     >
       <span className="text-xs font-bold leading-tight">{mesa.numero}</span>
       {mesa.capacidad != null && (
