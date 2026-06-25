@@ -184,6 +184,37 @@ const ERRORES: Record<string, string> = {
   NOMBRE_REQUERIDO: 'Tu nombre es obligatorio',
 };
 
+// Layout común de la página (cabecera + container). A nivel de módulo (no
+// dentro del render) para no recrear el componente en cada render — recibe
+// `info` por prop ya que es lo único del scope que necesita.
+function Shell({ info, children }: { info: ReservasInfoPublico; children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-background flex flex-col items-center py-8 px-4">
+      <div className="w-full max-w-sm space-y-5">
+        {/* Cabecera */}
+        <div className="text-center space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight">{info.local_nombre}</h1>
+          <p className="text-sm text-muted-foreground flex items-center justify-center gap-1.5">
+            <CalendarCheck className="h-4 w-4" /> Reservas online
+          </p>
+        </div>
+
+        {info.notas_publicas && (
+          <div className="text-xs text-foreground/70 bg-amber-50 border border-amber-200 rounded-lg p-3">
+            {info.notas_publicas}
+          </div>
+        )}
+
+        {children}
+
+        <p className="text-center text-xs text-muted-foreground/50 pt-2">
+          Powered by COMANDA
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function ReservaPublicaPage() {
   const { slug } = useParams<{ slug: string }>();
   const [info, setInfo] = useState<ReservasInfoPublico | null>(null);
@@ -323,36 +354,10 @@ export function ReservaPublicaPage() {
     );
   }
 
-  const Shell = ({ children }: { children: React.ReactNode }) => (
-    <div className="min-h-screen bg-background flex flex-col items-center py-8 px-4">
-      <div className="w-full max-w-sm space-y-5">
-        {/* Cabecera */}
-        <div className="text-center space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">{info.local_nombre}</h1>
-          <p className="text-sm text-muted-foreground flex items-center justify-center gap-1.5">
-            <CalendarCheck className="h-4 w-4" /> Reservas online
-          </p>
-        </div>
-
-        {info.notas_publicas && (
-          <div className="text-xs text-foreground/70 bg-amber-50 border border-amber-200 rounded-lg p-3">
-            {info.notas_publicas}
-          </div>
-        )}
-
-        {children}
-
-        <p className="text-center text-xs text-muted-foreground/50 pt-2">
-          Powered by COMANDA
-        </p>
-      </div>
-    </div>
-  );
-
   // ── PASO OK ─────────────────────────────────────────────────────────────────
   if (paso === 'ok' && reservaOk) {
     return (
-      <Shell>
+      <Shell info={info}>
         <div className="text-center space-y-4">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 mx-auto">
             <Check className="h-8 w-8" strokeWidth={2.5} />
@@ -398,7 +403,7 @@ export function ReservaPublicaPage() {
   if (paso === 'cancelar') {
     if (cancelOk) {
       return (
-        <Shell>
+        <Shell info={info}>
           <div className="text-center space-y-4">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 text-red-700 mx-auto">
               <X className="h-8 w-8" strokeWidth={2.5} />
@@ -413,7 +418,7 @@ export function ReservaPublicaPage() {
       );
     }
     return (
-      <Shell>
+      <Shell info={info}>
         <div className="space-y-4">
           <button type="button" onClick={() => setPaso('fecha')}
                   className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
@@ -452,7 +457,7 @@ export function ReservaPublicaPage() {
   // ── PASO FECHA ───────────────────────────────────────────────────────────────
   if (paso === 'fecha') {
     return (
-      <Shell>
+      <Shell info={info}>
         <div className="space-y-5">
           {/* Personas */}
           <div className="flex items-center justify-between bg-muted rounded-xl px-4 py-3">
@@ -559,7 +564,7 @@ export function ReservaPublicaPage() {
 
   // ── PASO DATOS ───────────────────────────────────────────────────────────────
   return (
-    <Shell>
+    <Shell info={info}>
       <div className="space-y-4">
         {/* Resumen */}
         <button type="button"
