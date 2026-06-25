@@ -1,13 +1,10 @@
 // integraciones — capa "integration-ready" de Habitué.
 //
-// Idea: cada capacidad externa (WhatsApp Business API, email, Meta/Google Ads,
-// Search Console) está DISEÑADA como si ya se usara. Hay (a) un REGISTRY que
-// describe cada integración para el hub, (b) interfaces tipadas que la
-// implementación real va a cumplir, y (c) adapters STUB con un único punto
-// `// TODO: integración` donde va la llamada a la API. Conectar = reemplazar el
-// stub por la impl real + cargar credenciales. Nada más cambia en la app.
-
-import { db } from './supabase';
+// Cada capacidad externa (WhatsApp Cloud API, email, Meta/Google Ads, Google
+// Maps, Search Console, IG) tiene su adapter front que pega al endpoint
+// serverless en `api/*` ya escrito a spec del proveedor. "Solo credenciales":
+// setear las env vars del proyecto Vercel → empieza a funcionar sin tocar código.
+// El hub Integraciones consulta /api/integraciones-health para mostrar estado.
 
 export type ProviderId =
   | 'whatsapp_api' | 'email' | 'meta_ads' | 'google_ads' | 'search_console' | 'instagram' | 'google_maps';
@@ -68,20 +65,19 @@ export const INTEGRACIONES: IntegracionDef[] = [
   },
 ];
 
-// ─── Estado persistido (tabla integraciones; graceful si no migrada) ──────────
-function faltaTabla(msg: string) {
-  return /relation .*integraciones.* does not exist/i.test(msg) || /could not find the table/i.test(msg);
-}
-
+// ─── Estado de cada provider — pregunta al endpoint /api/integraciones-health,
+// que mira las env vars del proyecto Vercel. "Conectado" = credenciales presentes.
 export async function listEstados(): Promise<{ estados: Record<string, EstadoIntegracion>; sinTabla: boolean; error: string | null }> {
-  const { data, error } = await db().from('integraciones').select('provider, estado');
-  if (error) {
-    if (faltaTabla(error.message)) return { estados: {}, sinTabla: true, error: null };
-    return { estados: {}, sinTabla: false, error: error.message };
+  try {
+    const r = await fetch('/api/integraciones-health');
+    const data = (await r.json()) as { ok: boolean; providers?: Record<string, boolean> };
+    if (!data.ok || !data.providers) return { estados: {}, sinTabla: false, error: null };
+    const estados: Record<string, EstadoIntegracion> = {};
+    for (const [k, v] of Object.entries(data.providers)) estados[k] = v ? 'conectado' : 'desconectado';
+    return { estados, sinTabla: false, error: null };
+  } catch (e) {
+    return { estados: {}, sinTabla: false, error: e instanceof Error ? e.message : String(e) };
   }
-  const estados: Record<string, EstadoIntegracion> = {};
-  for (const r of (data ?? []) as { provider: string; estado: EstadoIntegracion }[]) estados[r.provider] = r.estado;
-  return { estados, sinTabla: false, error: null };
 }
 
 // ─── Interfaces que la integración REAL va a implementar ──────────────────────
@@ -96,25 +92,50 @@ export interface AdsProvider {
   getInsights(desde: string, hasta: string): Promise<AdInsights | null>;
 }
 
-// ─── Adapters STUB (hoy). Único lugar a reemplazar al integrar. ───────────────
+// ─── Adapters: hablan con los endpoints serverless (/api/*) que ya están a spec.
+// "Solo credenciales": cuando se setean las env vars en Vercel, esto empieza a
+// funcionar sin cambiar una línea de código. Sin credenciales, devuelve un
+// error claro y la app cae elegante al modo manual (wa.me / mailto).
+
 export const whatsappProvider: MessagingProvider = {
-  async enviar(/* to, mensaje */) {
-    // TODO: integración — POST a WhatsApp Business API (Meta/BSP) con plantilla.
-    // Por ahora el envío es manual vía links wa.me en el composer.
-    return { ok: false, error: 'WhatsApp API no conectada — usá los links wa.me del composer.' };
+  async enviar(to: string, mensaje: string) {
+    try {
+      const r = await fetch('/api/whatsapp-send', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, texto: mensaje }),
+      });
+      const data = (await r.json()) as { ok: boolean; configured?: boolean; error?: string };
+      if (!data.ok) return { ok: false, error: data.error ?? 'No se pudo enviar' };
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
   },
 };
 
 export const emailProvider: EmailProvider = {
-  async enviar(/* to, asunto, cuerpo */) {
-    // TODO: integración — POST a Resend/SendGrid. Por ahora se usa mailto BCC.
-    return { ok: false, error: 'Email no conectado — usá el mailto BCC del composer.' };
+  async enviar(to: string[], asunto: string, cuerpo: string) {
+    try {
+      const r = await fetch('/api/email-send', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, asunto, texto: cuerpo }),
+      });
+      const data = (await r.json()) as { ok: boolean; configured?: boolean; error?: string };
+      if (!data.ok) return { ok: false, error: data.error ?? 'No se pudo enviar' };
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
   },
 };
 
 export const metaAdsProvider: AdsProvider = {
-  async getInsights(/* desde, hasta */) {
-    // TODO: integración — Meta Marketing API /insights. Por ahora la pauta es manual.
-    return null;
+  async getInsights(desde: string, hasta: string) {
+    try {
+      const r = await fetch(`/api/meta-ads-insights?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
+      const data = (await r.json()) as { ok: boolean; insights?: AdInsights };
+      if (!data.ok || !data.insights) return null;
+      return data.insights;
+    } catch { return null; }
   },
 };

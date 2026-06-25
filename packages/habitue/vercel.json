@@ -1,5 +1,8 @@
 {
   "outputDirectory": "dist",
+  "crons": [
+    { "path": "/api/automations-tick", "schedule": "0 * * * *" }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",
