@@ -155,6 +155,21 @@ export const TOOLS = [
       required: ['local_id', 'mes'],
     },
   },
+  {
+    name: 'resumen_ventas',
+    description:
+      'Ventas (ingresos) de un local en un mes: total, desglose por medio de cobro y por día. ' +
+      'Para "cuánto vendí en tal mes", "qué día falta cargar la venta" o "las ventas no cuadran". ' +
+      'Es el lado de ingresos del EERR (base devengada, por fecha de la venta).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        local_id: { type: 'integer', description: 'ID del local (obligatorio).' },
+        mes: { type: 'string', description: 'Mes en formato YYYY-MM (obligatorio).' },
+      },
+      required: ['local_id', 'mes'],
+    },
+  },
 ];
 
 // Sanea texto libre antes de meterlo en un filtro PostgREST (.or/.ilike):
@@ -403,6 +418,37 @@ export async function executeTool(admin, scope, name, input) {
     const por_tipo = [...porTipo.values()].map((e) => ({ ...e, monto: round2(e.monto) }))
       .sort((a, c) => Math.abs(c.monto) - Math.abs(a.monto));
     return { mes: input.mes, movimientos: vivos.length, ingresos, egresos, neto: round2(ingresos + egresos), por_tipo };
+  }
+
+  if (name === 'resumen_ventas') {
+    if (!enScope(input.local_id)) return FUERA;
+    const b = mesBounds(input.mes);
+    if (!b) return { error: 'MES_INVALIDO', detalle: 'mes debe tener formato "YYYY-MM".' };
+    // ventas.fecha es date (no timestamp) → comparación por fecha directa.
+    const { data, error } = await admin.from('ventas')
+      .select('fecha, monto, medio')
+      .eq('local_id', input.local_id).gte('fecha', b.desde).lt('fecha', b.hastaExcl)
+      .limit(2000);
+    if (error) return { error: 'QUERY_FALLO', detalle: error.message };
+    const round2 = (n) => Math.round(n * 100) / 100;
+    const ventas = data || [];
+    const medios = new Map();
+    const dias = new Map();
+    for (const v of ventas) {
+      const m = v.medio || 'sin medio';
+      medios.set(m, (medios.get(m) || 0) + Number(v.monto || 0));
+      const d = String(v.fecha || '').slice(0, 10);
+      dias.set(d, (dias.get(d) || 0) + Number(v.monto || 0));
+    }
+    const por_medio = [...medios.entries()].map(([medio, monto]) => ({ medio, monto: round2(monto) })).sort((a, c) => c.monto - a.monto);
+    const por_dia = [...dias.entries()].map(([dia, monto]) => ({ dia, monto: round2(monto) })).sort((a, c) => a.dia.localeCompare(c.dia));
+    return {
+      mes: input.mes,
+      total: round2(ventas.reduce((s, v) => s + Number(v.monto || 0), 0)),
+      dias_con_ventas: por_dia.length,
+      por_medio,
+      por_dia,
+    };
   }
 
   return { error: 'TOOL_DESCONOCIDA', detalle: `No existe la herramienta '${name}'.` };

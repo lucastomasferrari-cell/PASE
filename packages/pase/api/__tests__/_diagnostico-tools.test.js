@@ -58,6 +58,10 @@ describe('executeTool — control de acceso (aislamiento)', () => {
     const out = await executeTool(makeAdmin({}), scope, 'resumen_mp', { local_id: 99, mes: '2026-06' });
     expect(out.error).toBe('LOCAL_FUERA_DE_ALCANCE');
   });
+  it('resumen_ventas: rechaza local fuera del alcance', async () => {
+    const out = await executeTool(makeAdmin({}), scope, 'resumen_ventas', { local_id: 99, mes: '2026-06' });
+    expect(out.error).toBe('LOCAL_FUERA_DE_ALCANCE');
+  });
   it('sin especificar local → rechaza', async () => {
     const out = await executeTool(makeAdmin({}), scope, 'buscar_gasto', {});
     expect(out.error).toBe('LOCAL_FUERA_DE_ALCANCE');
@@ -175,15 +179,29 @@ describe('resumen_mp', () => {
   });
 });
 
+describe('resumen_ventas', () => {
+  it('suma total y agrupa por medio y por día', async () => {
+    const admin = makeAdmin({ ventas: [
+      { fecha: '2026-06-01', monto: 1000, medio: 'Efectivo' },
+      { fecha: '2026-06-01', monto: 500, medio: 'MercadoPago' },
+      { fecha: '2026-06-02', monto: 2000, medio: 'Efectivo' },
+    ] });
+    const out = await executeTool(admin, scope, 'resumen_ventas', { local_id: 5, mes: '2026-06' });
+    expect(out.total).toBe(3500);
+    expect(out.dias_con_ventas).toBe(2);
+    expect(out.por_medio.find((m) => m.medio === 'Efectivo').monto).toBe(3000);
+  });
+});
+
 describe('TOOLS (schema)', () => {
-  it('tiene las 8 herramientas', () => {
+  it('tiene las 9 herramientas', () => {
     expect(TOOLS.map((t) => t.name).sort()).toEqual([
       'buscar_factura', 'buscar_gasto', 'buscar_movimiento', 'desglose_categoria',
-      'detalle_registro', 'estado_empleado', 'resumen_mp', 'saldo_cuentas',
+      'detalle_registro', 'estado_empleado', 'resumen_mp', 'resumen_ventas', 'saldo_cuentas',
     ]);
   });
   it('las de búsqueda exigen local_id', () => {
-    for (const n of ['buscar_gasto', 'buscar_movimiento', 'saldo_cuentas', 'buscar_factura', 'desglose_categoria', 'estado_empleado', 'resumen_mp']) {
+    for (const n of ['buscar_gasto', 'buscar_movimiento', 'saldo_cuentas', 'buscar_factura', 'desglose_categoria', 'estado_empleado', 'resumen_mp', 'resumen_ventas']) {
       expect(TOOLS.find((t) => t.name === n).input_schema.required).toContain('local_id');
     }
   });
