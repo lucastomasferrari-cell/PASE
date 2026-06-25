@@ -4,20 +4,24 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { LogOut, Users, Send, Award, Ticket } from 'lucide-react';
+import { LogOut, Users, Send, Award, Ticket, LayoutDashboard, Megaphone } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
+import { Tablero } from './Tablero';
 import { Comensales } from './Comensales';
 import { Segmentos } from './Segmentos';
 import { Cupones } from './Cupones';
 import { Fidelidad } from './Fidelidad';
+import { Pauta } from './Pauta';
 
-type Seccion = 'comensales' | 'segmentos' | 'cupones' | 'fidelidad';
+type Seccion = 'tablero' | 'comensales' | 'segmentos' | 'cupones' | 'fidelidad' | 'pauta';
 
 const NAV: { key: Seccion; label: string; icon: React.ReactNode }[] = [
+  { key: 'tablero', label: 'Tablero', icon: <LayoutDashboard className="h-[18px] w-[18px]" /> },
   { key: 'comensales', label: 'Comensales', icon: <Users className="h-[18px] w-[18px]" /> },
   { key: 'segmentos', label: 'Segmentos y campañas', icon: <Send className="h-[18px] w-[18px]" /> },
   { key: 'cupones', label: 'Cupones', icon: <Ticket className="h-[18px] w-[18px]" /> },
   { key: 'fidelidad', label: 'Fidelidad', icon: <Award className="h-[18px] w-[18px]" /> },
+  { key: 'pauta', label: 'Pauta', icon: <Megaphone className="h-[18px] w-[18px]" /> },
 ];
 
 export function AdminHome() {
@@ -27,7 +31,7 @@ export function AdminHome() {
   const [password, setPassword] = useState('');
   const [entrando, setEntrando] = useState(false);
   const [tenantId, setTenantId] = useState<string | null>(null);
-  const [seccion, setSeccion] = useState<Seccion>('comensales');
+  const [seccion, setSeccion] = useState<Seccion>('tablero');
 
   useEffect(() => {
     if (!supabaseConfigurado) return;
@@ -137,12 +141,16 @@ export function AdminHome() {
         </nav>
 
         <main className="flex-1 px-4 sm:px-6 py-6">
-          {seccion === 'comensales' ? (
+          {seccion === 'tablero' ? (
+            <Tablero />
+          ) : seccion === 'comensales' ? (
             <Comensales tenantId={tenantId ?? ''} />
           ) : seccion === 'segmentos' ? (
             <Segmentos />
           ) : seccion === 'cupones' ? (
             <Cupones tenantId={tenantId ?? ''} />
+          ) : seccion === 'pauta' ? (
+            <Pauta tenantId={tenantId ?? ''} />
           ) : (
             <Fidelidad />
           )}
