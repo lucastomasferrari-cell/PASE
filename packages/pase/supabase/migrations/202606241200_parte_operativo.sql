@@ -14,13 +14,13 @@ CREATE TABLE IF NOT EXISTS partes_operativos (
   id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   tenant_id    TEXT        NOT NULL,
   local_id     INTEGER     NOT NULL,
-  turno_id     INTEGER     REFERENCES turnos_caja(id) ON DELETE SET NULL,
+  turno_id     INTEGER,
   -- Ids de empleados (TEXT = UUID de rrhh_empleados)
   empleados_falta  TEXT[]  NOT NULL DEFAULT '{}',
   empleados_tarde  TEXT[]  NOT NULL DEFAULT '{}',
   reclamos         TEXT,
   comentario       TEXT,
-  cerrado_por      TEXT    REFERENCES rrhh_empleados(id) ON DELETE SET NULL,
+  cerrado_por      TEXT,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
