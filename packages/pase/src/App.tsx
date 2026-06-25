@@ -59,6 +59,7 @@ const Cashflow = lazy(() => import("./pages/Cashflow"));
 const Utilidades = lazy(() => import("./pages/Utilidades"));
 const Objetivos = lazy(() => import("./pages/Objetivos"));
 const Ayuda = lazy(() => import("./pages/Ayuda"));
+const Hub = lazy(() => import("./pages/Hub"));
 const Ajustes = lazy(() => import("./pages/Ajustes"));
 const Importar = lazy(() => import("./pages/Importar"));
 const LectorExtractoMP = lazy(() => import("./pages/LectorExtractoMP"));
@@ -987,6 +988,7 @@ function AppMain() {
               <Route path="/cashflow" element={<Cashflow {...props}/>} />
               <Route path="/utilidades" element={<Utilidades {...props}/>} />
               <Route path="/ayuda" element={<Ayuda/>} />
+              <Route path="/hub" element={<Hub/>} />
 
               {/* Herramientas */}
               <Route path="/equipo" element={<RRHHPage {...props}/>} />
