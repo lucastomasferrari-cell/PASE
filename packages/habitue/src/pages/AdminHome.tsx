@@ -4,25 +4,23 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { LogOut, Users, Filter, Megaphone, Award, Ticket } from 'lucide-react';
+import { LogOut, Users, Send, Award, Ticket } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
 import { Comensales } from './Comensales';
+import { Segmentos } from './Segmentos';
+import { Cupones } from './Cupones';
 
-type Seccion = 'comensales' | 'segmentos' | 'campanas' | 'fidelidad' | 'cupones';
+type Seccion = 'comensales' | 'segmentos' | 'cupones' | 'fidelidad';
 
 const NAV: { key: Seccion; label: string; icon: React.ReactNode; pronto?: boolean }[] = [
   { key: 'comensales', label: 'Comensales', icon: <Users className="h-[18px] w-[18px]" /> },
-  { key: 'segmentos', label: 'Segmentos', icon: <Filter className="h-[18px] w-[18px]" />, pronto: true },
-  { key: 'campanas', label: 'Campañas', icon: <Megaphone className="h-[18px] w-[18px]" />, pronto: true },
+  { key: 'segmentos', label: 'Segmentos y campañas', icon: <Send className="h-[18px] w-[18px]" /> },
+  { key: 'cupones', label: 'Cupones', icon: <Ticket className="h-[18px] w-[18px]" /> },
   { key: 'fidelidad', label: 'Fidelidad', icon: <Award className="h-[18px] w-[18px]" />, pronto: true },
-  { key: 'cupones', label: 'Cupones', icon: <Ticket className="h-[18px] w-[18px]" />, pronto: true },
 ];
 
 const PRONTO: Record<string, { titulo: string; desc: string }> = {
-  segmentos: { titulo: 'Segmentos inteligentes', desc: 'Agrupá comensales por comportamiento (los que no vienen hace 30 días, VIP, los que más gastan) para accionar sobre cada grupo.' },
-  campanas: { titulo: 'Campañas', desc: 'Mandá WhatsApp o email a un segmento — promos, "te extrañamos", cumpleaños — y medí quién volvió.' },
-  fidelidad: { titulo: 'Fidelidad', desc: 'Puntos por visita/consumo, niveles y premios para convertir comensales en habitués.' },
-  cupones: { titulo: 'Cupones y promos', desc: 'Creá códigos de descuento, seguilos y canjealos en COMANDA.' },
+  fidelidad: { titulo: 'Fidelidad', desc: 'Puntos por visita/consumo, niveles y premios para convertir comensales en habitués. Próximo sprint (necesita schema de loyalty).' },
 };
 
 export function AdminHome() {
@@ -145,6 +143,10 @@ export function AdminHome() {
         <main className="flex-1 px-4 sm:px-6 py-6">
           {seccion === 'comensales' ? (
             <Comensales tenantId={tenantId ?? ''} />
+          ) : seccion === 'segmentos' ? (
+            <Segmentos />
+          ) : seccion === 'cupones' ? (
+            <Cupones tenantId={tenantId ?? ''} />
           ) : (
             <div className="max-w-md mx-auto mt-10 rounded-2xl bg-white border border-ink/5 shadow-card p-8 text-center">
               <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-50 text-brand-500 mb-3">
