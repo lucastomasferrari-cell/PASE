@@ -5,7 +5,7 @@
 
 import { db } from './supabase';
 
-export type TriggerTipo = 'sin_pedir_dias' | 'cumpleanos' | 'primera_compra' | 'recurrente';
+export type TriggerTipo = 'sin_pedir_dias' | 'cumpleanos' | 'primera_compra' | 'recurrente' | 'post_visita';
 export type AccionTipo = 'enviar_campana' | 'dar_cupon';
 
 export interface Automatizacion {
@@ -89,5 +89,9 @@ export const PLANTILLAS_FLOW: { nombre: string; emoji: string; desc: string; inp
   {
     nombre: 'Premio a recurrentes', emoji: '💚', desc: 'A los que ya son habitués, un mimo para fidelizar.',
     input: { nombre: 'Premio a recurrentes', trigger_tipo: 'recurrente', trigger_params: { min_pedidos: 5 }, accion_tipo: 'dar_cupon', accion_params: { mensaje: 'Gracias por elegirnos siempre 💛' } },
+  },
+  {
+    nombre: 'Pedí reseñas', emoji: '⭐', desc: 'Después de una visita/pedido, pedile una reseña en Google.',
+    input: { nombre: 'Pedí reseñas', trigger_tipo: 'post_visita', trigger_params: { horas: 3 }, accion_tipo: 'enviar_campana', accion_params: { canal: 'whatsapp', mensaje: 'Hola {nombre}! Gracias por tu visita 🙌 ¿Nos dejás una reseña? Nos ayuda muchísimo.' } },
   },
 ];

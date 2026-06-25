@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Check, Plug, ChevronRight } from 'lucide-react';
 import { INTEGRACIONES, listEstados, type EstadoIntegracion, type IntegracionDef } from '@/lib/integraciones';
 
-const CATS: IntegracionDef['categoria'][] = ['Mensajería', 'Publicidad', 'SEO'];
+const CATS: IntegracionDef['categoria'][] = ['Mensajería', 'Reputación', 'Publicidad', 'SEO'];
 
 export function Integraciones() {
   const [estados, setEstados] = useState<Record<string, EstadoIntegracion>>({});

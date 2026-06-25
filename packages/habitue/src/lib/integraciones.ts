@@ -10,13 +10,13 @@
 import { db } from './supabase';
 
 export type ProviderId =
-  | 'whatsapp_api' | 'email' | 'meta_ads' | 'google_ads' | 'search_console' | 'instagram';
+  | 'whatsapp_api' | 'email' | 'meta_ads' | 'google_ads' | 'search_console' | 'instagram' | 'google_maps';
 export type EstadoIntegracion = 'desconectado' | 'conectado' | 'error';
 
 export interface IntegracionDef {
   id: ProviderId;
   nombre: string;
-  categoria: 'Mensajería' | 'Publicidad' | 'SEO';
+  categoria: 'Mensajería' | 'Publicidad' | 'SEO' | 'Reputación';
   emoji: string;
   descripcion: string;
   desbloquea: string;     // qué habilita conectarla
@@ -59,6 +59,12 @@ export const INTEGRACIONES: IntegracionDef[] = [
     descripcion: 'Conecta el bot de Instagram para campañas y respuestas por DM.',
     desbloquea: 'Campañas y automatizaciones por DM de IG, unificadas con el CRM.',
     comoConectar: 'Instagram Graph API (ya hay app IG en el ecosistema) + permisos de mensajería.',
+  },
+  {
+    id: 'google_maps', nombre: 'Google Maps (reseñas)', categoria: 'Reputación', emoji: '🗺️',
+    descripcion: 'Trae tus reseñas de Google Maps al control de calidad (hoy se piden a mano).',
+    desbloquea: 'Reseñas de Google centralizadas, alertas de baja calificación y pedido automático de reseña tras la visita.',
+    comoConectar: 'Google Business Profile API (Places) + OAuth + place_id del local.',
   },
 ];
 

@@ -17,6 +17,7 @@ const TRIGGER_LABEL: Record<string, string> = {
   cumpleanos: 'Es su cumpleaños',
   primera_compra: 'Hizo su primera compra',
   recurrente: 'Es recurrente',
+  post_visita: 'Después de una visita',
 };
 const ACCION_LABEL: Record<string, string> = {
   enviar_campana: 'Enviar mensaje',
