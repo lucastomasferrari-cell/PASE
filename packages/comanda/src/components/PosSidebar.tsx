@@ -1,8 +1,10 @@
 import { UtensilsCrossed, Coffee, Package, Wallet, ArrowLeft, LifeBuoy } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useFeaturesPosModos } from '@/lib/useFeaturesPosModos';
 import { usePermiso } from '@/lib/usePermiso';
+import { getConsoleErrors } from '@/lib/consoleCapture';
 import type { PosModo } from '@/types/database';
 
 interface ModoConfig {
@@ -21,6 +23,17 @@ export function PosSidebar() {
   const { pathname } = useLocation();
   const enabledModos = useFeaturesPosModos();
   const puedeAdmin = usePermiso('comanda.config.editar');
+  const [tieneErrores, setTieneErrores] = useState(false);
+
+  useEffect(() => {
+    function check() { setTieneErrores(getConsoleErrors().length > 0); }
+    check();
+    const id = setInterval(check, 5000);
+    // Cuando el widget se abre y limpia errores, actualizar inmediatamente
+    function onClear() { setTieneErrores(false); }
+    window.addEventListener('comanda:soporte-errores-vistos', onClear);
+    return () => { clearInterval(id); window.removeEventListener('comanda:soporte-errores-vistos', onClear); };
+  }, []);
 
   const linkCls = (active: boolean) => cn(
     'w-[60px] flex flex-col items-center gap-1 py-3 rounded-lg transition-colors touch-target-lg',
@@ -74,9 +87,14 @@ export function PosSidebar() {
         <button
           type="button"
           onClick={() => window.dispatchEvent(new CustomEvent('comanda:toggle-soporte'))}
-          className="w-[60px] flex flex-col items-center gap-1 py-3 rounded-lg transition-colors touch-target-lg text-muted-foreground hover:bg-accent hover:text-foreground"
+          className="w-[60px] flex flex-col items-center gap-1 py-3 rounded-lg transition-colors touch-target-lg text-muted-foreground hover:bg-accent hover:text-foreground relative"
         >
-          <LifeBuoy className="h-5 w-5" />
+          <span className="relative">
+            <LifeBuoy className="h-5 w-5" />
+            {tieneErrores && (
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 ring-2 ring-card animate-pulse" />
+            )}
+          </span>
           <span className="text-[10px] font-medium">Ayuda</span>
         </button>
       </div>

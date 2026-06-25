@@ -8,7 +8,7 @@ import { useState, useRef, useEffect } from 'react';
 import { X, Send, Bug, RotateCcw } from 'lucide-react';
 import { db } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import { getConsoleErrors } from '@/lib/consoleCapture';
+import { getConsoleErrors, clearConsoleErrors } from '@/lib/consoleCapture';
 import { cn } from '@/lib/utils';
 
 interface ChatMsg {
@@ -141,6 +141,15 @@ export function SoporteWidget() {
     window.addEventListener('comanda:toggle-soporte', onToggle);
     return () => window.removeEventListener('comanda:toggle-soporte', onToggle);
   }, []);
+
+  // Cuando se abre el widget: limpiar errores capturados y avisar al sidebar
+  // para que apague el badge naranja.
+  useEffect(() => {
+    if (open) {
+      clearConsoleErrors();
+      window.dispatchEvent(new CustomEvent('comanda:soporte-errores-vistos'));
+    }
+  }, [open]);
 
   // Guard antes de los handlers para que TS sepa que user no es null adentro.
   // (Early return en componente no propaga la narrowing a funciones inner.)
