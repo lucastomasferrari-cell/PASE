@@ -1,12 +1,12 @@
-// Agenda de reservas del día — panel admin de MESA.
-// Vista de día con navegación de fecha, lista de reservas agrupadas por estado,
-// alta/edición manual y cambios de estado (confirmar, sentar, finalizar,
-// no-show, cancelar) + asignación de mesa. Etapa 1 de la mudanza COMANDA→MESA.
+// Reservas — lista filtrable (búsqueda + estado + rango de fechas), agrupada
+// por día, con alta/edición y cambios de estado (confirmar, sentar, finalizar,
+// no-show, cancelar) + asignación de mesa. La vista timeline de un día está en
+// "Diario"; acá es la lista cross-fecha tipo "Reservas" de OpenTable/Tableo.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  ChevronLeft, ChevronRight, Plus, Users, Clock, Pencil, X,
+  Plus, Users, Clock, Pencil, X, Search,
   Check, Armchair, CalendarX, Ban, RotateCcw, MessageCircle,
 } from 'lucide-react';
 import {
@@ -27,9 +27,6 @@ const ESTADO_CFG: Record<EstadoReserva, { label: string; badge: string }> = {
   cancelada:  { label: 'Cancelada',  badge: 'bg-slate-100 text-slate-500 border-slate-200 line-through' },
 };
 
-function inicioDelDia(f: Date) { return new Date(f.getFullYear(), f.getMonth(), f.getDate(), 0, 0, 0, 0).toISOString(); }
-function finDelDia(f: Date)    { return new Date(f.getFullYear(), f.getMonth(), f.getDate(), 23, 59, 59, 999).toISOString(); }
-function mismoDia(a: Date, b: Date) { return a.toDateString() === b.toDateString(); }
 function hora(iso: string) { return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }); }
 function labelFecha(f: Date) {
   const s = f.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -39,35 +36,77 @@ function labelFecha(f: Date) {
 function aISO(fecha: string, hora: string) { return new Date(`${fecha}T${hora}`).toISOString(); }
 function inputDate(f: Date) { return `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`; }
 
+type Rango = 'hoy' | 'semana' | 'proximas' | 'pasadas';
+const RANGOS: { key: Rango; label: string }[] = [
+  { key: 'hoy', label: 'Hoy' },
+  { key: 'semana', label: 'Próx. 7 días' },
+  { key: 'proximas', label: 'Próx. 30 días' },
+  { key: 'pasadas', label: 'Pasadas' },
+];
+const ESTADO_FILTROS: { key: EstadoReserva | 'todas'; label: string }[] = [
+  { key: 'todas', label: 'Todos los estados' },
+  { key: 'pendiente', label: 'Pendientes' },
+  { key: 'confirmada', label: 'Confirmadas' },
+  { key: 'sentada', label: 'En mesa' },
+  { key: 'finalizada', label: 'Finalizadas' },
+  { key: 'no_show', label: 'No vino' },
+  { key: 'cancelada', label: 'Canceladas' },
+];
+
+function rangoFechas(r: Rango): { desde: string; hasta: string } {
+  const inicioHoy = new Date(); inicioHoy.setHours(0, 0, 0, 0);
+  const finHoy = new Date(); finHoy.setHours(23, 59, 59, 999);
+  const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  if (r === 'hoy') return { desde: inicioHoy.toISOString(), hasta: finHoy.toISOString() };
+  if (r === 'semana') return { desde: inicioHoy.toISOString(), hasta: addDays(finHoy, 7).toISOString() };
+  if (r === 'proximas') return { desde: inicioHoy.toISOString(), hasta: addDays(finHoy, 30).toISOString() };
+  return { desde: addDays(inicioHoy, -60).toISOString(), hasta: finHoy.toISOString() };
+}
+
 export function AdminReservas({ localId, localNombre }: Props) {
-  const [fecha, setFecha] = useState(() => new Date());
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [mesas, setMesas] = useState<MesaSimple[]>([]);
   const [cargando, setCargando] = useState(true);
   const [editando, setEditando] = useState<Reserva | 'nueva' | null>(null);
+  const [rango, setRango] = useState<Rango>('semana');
+  const [estadoFiltro, setEstadoFiltro] = useState<EstadoReserva | 'todas'>('todas');
+  const [search, setSearch] = useState('');
 
   const reload = useCallback(async () => {
     setCargando(true);
+    const { desde, hasta } = rangoFechas(rango);
     const [r, m] = await Promise.all([
-      listReservas({ localId, desde: inicioDelDia(fecha), hasta: finDelDia(fecha) }),
+      listReservas({ localId, desde, hasta, estado: estadoFiltro, limit: 500 }),
       listMesasDelLocal(localId),
     ]);
     if (r.error) toast.error('No se pudieron cargar las reservas: ' + r.error);
     setReservas(r.data);
     setMesas(m.data);
     setCargando(false);
-  }, [localId, fecha]);
+  }, [localId, rango, estadoFiltro]);
 
   useEffect(() => { void reload(); }, [reload]);
 
-  const hoy = useMemo(() => new Date(), []);
-  const grupos = useMemo(() => {
-    const activas = reservas.filter((r) => ['pendiente', 'confirmada', 'sentada'].includes(r.estado));
-    const cerradas = reservas.filter((r) => ['finalizada', 'no_show', 'cancelada'].includes(r.estado));
-    return { activas, cerradas };
-  }, [reservas]);
+  const filtradas = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    let rs = reservas;
+    if (q) rs = rs.filter((r) => r.cliente_nombre.toLowerCase().includes(q) || (r.cliente_telefono ?? '').includes(q));
+    if (rango === 'pasadas') rs = [...rs].sort((a, b) => b.fecha_hora.localeCompare(a.fecha_hora));
+    return rs;
+  }, [reservas, search, rango]);
 
-  const totalPersonas = grupos.activas.reduce((s, r) => s + r.personas, 0);
+  // Agrupar por día.
+  const porDia = useMemo(() => {
+    const map = new Map<string, Reserva[]>();
+    for (const r of filtradas) {
+      const key = new Date(r.fecha_hora).toDateString();
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(r);
+    }
+    return Array.from(map.entries());
+  }, [filtradas]);
+
+  const totalPersonas = filtradas.reduce((s, r) => s + r.personas, 0);
 
   async function accion(p: Promise<{ error: string | null }>, okMsg: string) {
     const { error } = await p;
@@ -83,70 +122,59 @@ export function AdminReservas({ localId, localNombre }: Props) {
   }
 
   return (
-    <div>
-      {/* Barra de fecha + acción */}
-      <div className="mt-6 flex items-center gap-3 flex-wrap">
-        <div className="flex items-center rounded-xl border border-ink/15 bg-white overflow-hidden">
-          <button onClick={() => setFecha((f) => { const n = new Date(f); n.setDate(n.getDate() - 1); return n; })}
-                  className="px-2.5 py-2 hover:bg-brand-50 text-ink-soft" aria-label="Día anterior">
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <div className="px-4 py-2 text-sm font-medium min-w-[190px] text-center">{labelFecha(fecha)}</div>
-          <button onClick={() => setFecha((f) => { const n = new Date(f); n.setDate(n.getDate() + 1); return n; })}
-                  className="px-2.5 py-2 hover:bg-brand-50 text-ink-soft" aria-label="Día siguiente">
-            <ChevronRight className="h-4 w-4" />
-          </button>
+    <div className="mt-6">
+      {/* Filtros + acción */}
+      <div className="flex items-center gap-2 flex-wrap mb-3">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-muted" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre o teléfono…"
+                 className="w-full rounded-lg border border-ink/15 bg-white pl-9 pr-3 py-2 text-sm" />
         </div>
-        {!mismoDia(fecha, hoy) && (
-          <button onClick={() => setFecha(new Date())}
-                  className="text-sm text-brand-600 hover:underline">Hoy</button>
-        )}
-        <div className="ml-auto flex items-center gap-3">
-          {grupos.activas.length > 0 && (
-            <span className="text-sm text-ink-muted">
-              {grupos.activas.length} reserva{grupos.activas.length !== 1 ? 's' : ''} · {totalPersonas} personas
-            </span>
-          )}
-          <button onClick={() => setEditando('nueva')}
-                  className="rounded-lg bg-brand-500 hover:bg-brand-600 text-white px-3.5 py-2 text-sm font-medium inline-flex items-center gap-1.5">
-            <Plus className="h-4 w-4" /> Nueva reserva
-          </button>
-        </div>
+        <select value={rango} onChange={(e) => setRango(e.target.value as Rango)}
+                className="rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm">
+          {RANGOS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+        </select>
+        <select value={estadoFiltro} onChange={(e) => setEstadoFiltro(e.target.value as EstadoReserva | 'todas')}
+                className="rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm">
+          {ESTADO_FILTROS.map((e) => <option key={e.key} value={e.key}>{e.label}</option>)}
+        </select>
+        <button onClick={() => setEditando('nueva')}
+                className="rounded-lg bg-brand-500 hover:bg-brand-600 text-white px-3.5 py-2 text-sm font-medium inline-flex items-center gap-1.5">
+          <Plus className="h-4 w-4" /> Nueva
+        </button>
       </div>
 
-      {/* Lista */}
-      <div className="mt-5 space-y-2">
-        {cargando ? (
-          <div className="py-16 text-center text-ink-muted">Cargando…</div>
-        ) : reservas.length === 0 ? (
-          <div className="rounded-2xl bg-white border border-ink/5 shadow-card py-16 text-center">
-            <p className="font-medium">Sin reservas este día</p>
-            <p className="text-sm text-ink-muted mt-1">Tocá "Nueva reserva" para cargar una a mano.</p>
-          </div>
-        ) : (
-          <>
-            {grupos.activas.map((r) => (
-              <FilaReserva key={r.id} r={r} mesas={mesas} nombreMesa={nombreMesa} localNombre={localNombre}
-                           onEditar={() => setEditando(r)} onAccion={accion} />
-            ))}
-            {grupos.cerradas.length > 0 && (
-              <div className="pt-3">
-                <p className="text-xs uppercase tracking-wide text-ink-muted mb-2">Cerradas</p>
-                {grupos.cerradas.map((r) => (
+      <div className="text-sm text-ink-muted mb-3">
+        {cargando ? 'Cargando…' : `${filtradas.length} reserva${filtradas.length !== 1 ? 's' : ''} · ${totalPersonas} comensales`}
+      </div>
+
+      {/* Lista agrupada por día */}
+      {!cargando && filtradas.length === 0 ? (
+        <div className="rounded-2xl bg-white border border-ink/5 shadow-card py-16 text-center">
+          <p className="font-medium">Sin reservas</p>
+          <p className="text-sm text-ink-muted mt-1">Probá otro rango o estado, o cargá una con "Nueva".</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {porDia.map(([dia, rs]) => (
+            <div key={dia}>
+              <p className="text-xs uppercase tracking-wide text-ink-muted mb-2">{labelFecha(new Date(dia))}</p>
+              <div className="space-y-2">
+                {rs.map((r) => (
                   <FilaReserva key={r.id} r={r} mesas={mesas} nombreMesa={nombreMesa} localNombre={localNombre}
                                onEditar={() => setEditando(r)} onAccion={accion} />
                 ))}
               </div>
-            )}
-          </>
-        )}
-      </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {editando && (
         <FormReserva
           localId={localId}
           localNombre={localNombre}
-          fechaDefault={fecha}
+          fechaDefault={new Date()}
           reserva={editando === 'nueva' ? null : editando}
           onClose={() => setEditando(null)}
           onSaved={() => { setEditando(null); void reload(); }}
