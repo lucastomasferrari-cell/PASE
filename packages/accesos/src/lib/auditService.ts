@@ -1,5 +1,5 @@
 // auditService — registra cambios sensibles (alta/baja/cambio de permisos/
-// reset PIN/etc) y los muestra en la sección Auditoría. Tabla `equipo_audit`
+// reset PIN/etc) y los muestra en la sección Auditoría. Tabla `accesos_audit`
 // (migración 202606250700). Graceful si no está aplicada.
 
 import { db } from './supabase';
@@ -19,7 +19,7 @@ export interface AuditEntry {
 }
 
 function faltaTabla(msg: string) {
-  return /relation .*equipo_audit.* does not exist/i.test(msg) || /could not find the table/i.test(msg);
+  return /relation .*accesos_audit.* does not exist/i.test(msg) || /could not find the table/i.test(msg);
 }
 
 export async function logAudit(args: {
@@ -28,7 +28,7 @@ export async function logAudit(args: {
   accion: AuditAccion;
   detalle?: Record<string, unknown>;
 }): Promise<{ error: string | null }> {
-  const { error } = await db().from('equipo_audit').insert({
+  const { error } = await db().from('accesos_audit').insert({
     actor_id: args.actorId,
     usuario_id: args.usuarioId,
     accion: args.accion,
@@ -40,7 +40,7 @@ export async function logAudit(args: {
 
 export async function listAudit(limit = 100): Promise<{ data: AuditEntry[]; sinTabla: boolean; error: string | null }> {
   const { data, error } = await db()
-    .from('equipo_audit')
+    .from('accesos_audit')
     .select('id, actor_id, usuario_id, accion, detalle, created_at')
     .order('created_at', { ascending: false })
     .limit(limit);

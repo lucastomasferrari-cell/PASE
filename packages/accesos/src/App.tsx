@@ -1,4 +1,5 @@
-// Equipo — admin del dueño del local. Standalone, login propio, mismo Supabase.
+// Accesos — admin del dueño del local (personas + permisos del ecosistema).
+// Standalone, login propio, mismo Supabase.
 
 import { Routes, Route } from 'react-router-dom';
 import { AdminHome } from './pages/AdminHome';

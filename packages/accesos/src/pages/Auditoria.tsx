@@ -1,5 +1,5 @@
 // Auditoría — últimos cambios sensibles (alta, baja, cambio de permisos,
-// reset PIN, etc.). Tabla equipo_audit (migración 202606250700). Graceful.
+// reset PIN, etc.). Tabla accesos_audit (migración 202606250700). Graceful.
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -63,7 +63,7 @@ export function Auditoria() {
 
       {sinTabla && (
         <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm p-3">
-          La auditoría necesita aplicar la migración <span className="font-mono text-xs">202606250700_equipo_app_access.sql</span> (en tus pendientes).
+          La auditoría necesita aplicar la migración <span className="font-mono text-xs">202606250700_accesos_app_access.sql</span> (en tus pendientes).
         </div>
       )}
 

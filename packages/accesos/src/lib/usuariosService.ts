@@ -15,7 +15,7 @@ export interface Usuario {
   cuentas_visibles: string[] | null;
   cuentas_operables?: string[] | null;
   rol_id?: number | null;       // FK a tabla roles (RBAC)
-  apps_permitidas?: string[];   // 'pase' | 'comanda' | 'mesa' | 'habitue' | 'equipo'
+  apps_permitidas?: string[];   // 'pase' | 'comanda' | 'mesa' | 'habitue' | 'accesos'
   permisos?: string[];          // resuelto vía LEFT JOIN
   locales?: number[];           // ids de locales asignados
   created_at?: string;

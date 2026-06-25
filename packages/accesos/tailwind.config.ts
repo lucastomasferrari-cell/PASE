@@ -1,7 +1,7 @@
 import type { Config } from 'tailwindcss';
 
-// Equipo — admin del dueño. Paleta MORADA (admin/control), para diferenciarla
-// del azul de MESA y el dorado de Habitué. Ink navy + crema fría compartidos.
+// Accesos — admin del dueño (personas y permisos). Paleta MORADA (admin/control),
+// para diferenciarla del azul de MESA y el dorado de Habitué.
 const config: Config = {
   darkMode: ['class'],
   content: ['./index.html', './src/**/*.{ts,tsx}'],

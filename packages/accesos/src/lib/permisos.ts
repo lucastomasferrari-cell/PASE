@@ -1,4 +1,4 @@
-// Catálogo de permisos del ecosistema. Lo usa Equipo para mostrar la matriz
+// Catálogo de permisos del ecosistema. Lo usa Accesos para mostrar la matriz
 // de Roles y permisos. Los slugs son los mismos que usa PASE en la columna
 // `usuarios.permisos` y en la RPC `auth_tiene_permiso()` — porteado de
 // packages/pase/src/lib/auth.ts.PERMISOS_EXTRAS.

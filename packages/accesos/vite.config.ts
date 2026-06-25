@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Equipo — admin del dueño (gestiona usuarios + accesos al ecosistema).
+// Accesos — admin del dueño (gestiona usuarios + permisos del ecosistema).
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
