@@ -9,19 +9,16 @@ import { db, supabaseConfigurado } from '@/lib/supabase';
 import { Comensales } from './Comensales';
 import { Segmentos } from './Segmentos';
 import { Cupones } from './Cupones';
+import { Fidelidad } from './Fidelidad';
 
 type Seccion = 'comensales' | 'segmentos' | 'cupones' | 'fidelidad';
 
-const NAV: { key: Seccion; label: string; icon: React.ReactNode; pronto?: boolean }[] = [
+const NAV: { key: Seccion; label: string; icon: React.ReactNode }[] = [
   { key: 'comensales', label: 'Comensales', icon: <Users className="h-[18px] w-[18px]" /> },
   { key: 'segmentos', label: 'Segmentos y campañas', icon: <Send className="h-[18px] w-[18px]" /> },
   { key: 'cupones', label: 'Cupones', icon: <Ticket className="h-[18px] w-[18px]" /> },
-  { key: 'fidelidad', label: 'Fidelidad', icon: <Award className="h-[18px] w-[18px]" />, pronto: true },
+  { key: 'fidelidad', label: 'Fidelidad', icon: <Award className="h-[18px] w-[18px]" /> },
 ];
-
-const PRONTO: Record<string, { titulo: string; desc: string }> = {
-  fidelidad: { titulo: 'Fidelidad', desc: 'Puntos por visita/consumo, niveles y premios para convertir comensales en habitués. Próximo sprint (necesita schema de loyalty).' },
-};
 
 export function AdminHome() {
   const [sesion, setSesion] = useState<{ email: string } | null>(null);
@@ -110,7 +107,6 @@ export function AdminHome() {
                       seccion === it.key ? 'bg-brand-50 text-brand-700' : 'text-ink-soft hover:bg-ink/5'
                     }`}>
               {it.icon}<span className="flex-1 text-left">{it.label}</span>
-              {it.pronto && <span className="text-[10px] text-ink-muted">pronto</span>}
             </button>
           ))}
         </nav>
@@ -148,14 +144,7 @@ export function AdminHome() {
           ) : seccion === 'cupones' ? (
             <Cupones tenantId={tenantId ?? ''} />
           ) : (
-            <div className="max-w-md mx-auto mt-10 rounded-2xl bg-white border border-ink/5 shadow-card p-8 text-center">
-              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-50 text-brand-500 mb-3">
-                {NAV.find((n) => n.key === seccion)?.icon}
-              </div>
-              <h2 className="font-display text-xl font-semibold">{PRONTO[seccion]?.titulo}</h2>
-              <p className="text-sm text-ink-muted mt-2">{PRONTO[seccion]?.desc}</p>
-              <p className="text-xs text-brand-600 mt-4 font-medium">Próximo sprint</p>
-            </div>
+            <Fidelidad />
           )}
         </main>
       </div>
