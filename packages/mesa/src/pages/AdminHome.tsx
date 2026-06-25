@@ -10,19 +10,20 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { LogOut, CalendarDays, Store, Map, Hourglass, Users, BarChart3, ChevronDown, Check, MapPin, LayoutDashboard, GanttChartSquare, Star } from 'lucide-react';
+import { LogOut, CalendarDays, Store, Map, Hourglass, Users, BarChart3, ChevronDown, Check, MapPin, LayoutDashboard, GanttChartSquare, Star, BellRing } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
 import { AdminTablero } from './AdminTablero';
 import { AdminDiario } from './AdminDiario';
 import { AdminReservas } from './AdminReservas';
 import { AdminMapa } from './AdminMapa';
 import { AdminEspera } from './AdminEspera';
+import { AdminRecordatorios } from './AdminRecordatorios';
 import { AdminComensales } from './AdminComensales';
 import { AdminResenas } from './AdminResenas';
 import { AdminStats } from './AdminStats';
 import { AdminPerfil, type LocalPerfil } from './AdminPerfil';
 
-type Seccion = 'tablero' | 'diario' | 'reservas' | 'mapa' | 'espera' | 'comensales' | 'resenas' | 'stats' | 'perfil';
+type Seccion = 'tablero' | 'diario' | 'reservas' | 'mapa' | 'espera' | 'recordatorios' | 'comensales' | 'resenas' | 'stats' | 'perfil';
 
 export function AdminHome() {
   const [sesion, setSesion] = useState<{ email: string } | null>(null);
@@ -134,6 +135,7 @@ export function AdminHome() {
     { key: 'reservas',   label: 'Reservas',         icon: <CalendarDays className="h-[18px] w-[18px]" /> },
     { key: 'mapa',       label: 'Mapa de mesas',    icon: <Map className="h-[18px] w-[18px]" /> },
     { key: 'espera',     label: 'Lista de espera',  icon: <Hourglass className="h-[18px] w-[18px]" /> },
+    { key: 'recordatorios', label: 'Recordatorios', icon: <BellRing className="h-[18px] w-[18px]" /> },
     { key: 'comensales', label: 'Comensales',       icon: <Users className="h-[18px] w-[18px]" /> },
     { key: 'resenas',    label: 'Reseñas',          icon: <Star className="h-[18px] w-[18px]" /> },
     { key: 'stats',      label: 'Informes',         icon: <BarChart3 className="h-[18px] w-[18px]" /> },
@@ -198,6 +200,8 @@ export function AdminHome() {
               <AdminMapa localId={localSel.local_id} />
             ) : seccion === 'espera' ? (
               <AdminEspera localId={localSel.local_id} tenantId={localSel.tenant_id} localNombre={localSel.nombre} />
+            ) : seccion === 'recordatorios' ? (
+              <AdminRecordatorios localId={localSel.local_id} localNombre={localSel.nombre} />
             ) : seccion === 'comensales' ? (
               <AdminComensales tenantId={localSel.tenant_id} />
             ) : seccion === 'resenas' ? (

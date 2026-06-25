@@ -172,6 +172,35 @@ export async function sentarDePaso(args: {
   return { error: e2 };
 }
 
+// Reservas confirmadas de hoy todavía sin recordatorio enviado (para la
+// sección Recordatorios). Trae las de las próximas `horas` horas.
+export async function listReservasParaRecordatorio(
+  localId: number,
+  horas = 4,
+): Promise<{ data: Reserva[]; error: string | null }> {
+  const ahora = new Date().toISOString();
+  const limite = new Date(Date.now() + horas * 60 * 60 * 1000).toISOString();
+  const { data, error } = await db()
+    .from('reservas')
+    .select('*')
+    .eq('local_id', localId)
+    .eq('estado', 'confirmada')
+    .is('deleted_at', null)
+    .gte('fecha_hora', ahora)
+    .lte('fecha_hora', limite)
+    .order('fecha_hora', { ascending: true });
+  if (error) return { data: [], error: error.message };
+  return { data: (data ?? []) as Reserva[], error: null };
+}
+
+export async function marcarRecordatorioEnviado(reservaId: number): Promise<{ error: string | null }> {
+  const { error } = await db()
+    .from('reservas')
+    .update({ recordatorio_enviado_at: new Date().toISOString() })
+    .eq('id', reservaId);
+  return { error: error?.message ?? null };
+}
+
 // Historial de reservas de un cliente (todas sus visitas, cross-local del tenant).
 export async function listReservasByCliente(clienteId: number): Promise<{ data: Reserva[]; error: string | null }> {
   const { data, error } = await db()
