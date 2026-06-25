@@ -10,7 +10,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { LogOut, CalendarDays, Store, Map, Hourglass, Users, BarChart3, ChevronDown, Check, MapPin, LayoutDashboard, GanttChartSquare, Star, BellRing } from 'lucide-react';
+import { LogOut, CalendarDays, Store, Map, Hourglass, Users, BarChart3, ChevronDown, Check, MapPin, LayoutDashboard, GanttChartSquare, Star, BellRing, Link2, Copy, ExternalLink, X } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
 import { AdminTablero } from './AdminTablero';
 import { AdminDiario } from './AdminDiario';
@@ -170,9 +170,12 @@ export function AdminHome() {
         <header className="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-ink/10 h-16 flex items-center gap-3 px-4 sm:px-6">
           <span className="md:hidden font-display text-xl font-semibold text-brand-600">mesa.</span>
           <LocationSwitcher locales={locales} sel={sel} onSelect={setSel} />
-          <button onClick={() => void salir()} className="md:hidden ml-auto text-ink-soft hover:text-ink p-2" title="Salir">
-            <LogOut className="h-5 w-5" />
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <LinkReservasButton slug={localSel?.slug ?? null} />
+            <button onClick={() => void salir()} className="md:hidden text-ink-soft hover:text-ink p-2" title="Salir">
+              <LogOut className="h-5 w-5" />
+            </button>
+          </div>
         </header>
 
         {/* Nav mobile (horizontal) */}
@@ -219,6 +222,64 @@ export function AdminHome() {
           )}
         </main>
       </div>
+    </div>
+  );
+}
+
+// Botón "Link de reservas" siempre visible en el topbar: muestra el link
+// público del local (mesa-orpin.vercel.app/:slug), con copiar, abrir y un QR
+// para que el cliente escanee desde la mesa.
+function LinkReservasButton({ slug }: { slug: string | null }) {
+  const [open, setOpen] = useState(false);
+  const link = slug ? `${window.location.origin}/${slug}` : null;
+
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((o) => !o)}
+              className="flex items-center gap-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white px-3 py-2 text-sm font-medium">
+        <Link2 className="h-4 w-4" /> <span className="hidden sm:inline">Link de reservas</span>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1.5 z-40 w-72 rounded-xl border border-ink/10 bg-white shadow-card p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-medium">Link de reservas</p>
+              <button onClick={() => setOpen(false)} className="p-1 rounded hover:bg-ink/5 text-ink-soft"><X className="h-4 w-4" /></button>
+            </div>
+            {!link ? (
+              <p className="text-sm text-ink-muted">Este local todavía no tiene su página configurada. Cargá la descripción/datos en <span className="font-medium">Perfil del local</span> para activar el link.</p>
+            ) : (
+              <>
+                <p className="text-xs text-ink-muted mb-2">Compartilo con tus clientes para que reserven solos.</p>
+                <div className="flex items-center gap-1 rounded-lg border border-ink/15 bg-brand-50/40 px-2 py-1.5 mb-3">
+                  <span className="text-xs text-ink-soft truncate flex-1">{link.replace(/^https?:\/\//, '')}</span>
+                </div>
+                <div className="flex gap-2 mb-3">
+                  <button
+                    onClick={() => void navigator.clipboard.writeText(link).then(
+                      () => toast.success('Link copiado'), () => toast.error('No se pudo copiar'))}
+                    className="flex-1 rounded-lg bg-brand-500 hover:bg-brand-600 text-white py-2 text-sm font-medium inline-flex items-center justify-center gap-1.5">
+                    <Copy className="h-4 w-4" /> Copiar
+                  </button>
+                  <a href={link} target="_blank" rel="noopener noreferrer"
+                     className="flex-1 rounded-lg border border-ink/15 hover:bg-ink/5 py-2 text-sm font-medium inline-flex items-center justify-center gap-1.5">
+                    <ExternalLink className="h-4 w-4" /> Abrir
+                  </a>
+                </div>
+                <div className="flex flex-col items-center gap-1.5 pt-1 border-t border-ink/5">
+                  <p className="text-[11px] text-ink-muted pt-2">QR para imprimir y poner en la mesa</p>
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=8&data=${encodeURIComponent(link)}`}
+                    alt="QR del link de reservas" width={140} height={140}
+                    className="rounded-lg border border-ink/10"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
