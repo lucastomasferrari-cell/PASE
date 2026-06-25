@@ -4,24 +4,28 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { LogOut, Users, Send, Award, Ticket, LayoutDashboard, Megaphone } from 'lucide-react';
+import { LogOut, Users, Send, Award, Ticket, LayoutDashboard, Megaphone, Zap, Plug } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
 import { Tablero } from './Tablero';
 import { Comensales } from './Comensales';
 import { Segmentos } from './Segmentos';
+import { Automatizaciones } from './Automatizaciones';
 import { Cupones } from './Cupones';
 import { Fidelidad } from './Fidelidad';
 import { Pauta } from './Pauta';
+import { Integraciones } from './Integraciones';
 
-type Seccion = 'tablero' | 'comensales' | 'segmentos' | 'cupones' | 'fidelidad' | 'pauta';
+type Seccion = 'tablero' | 'comensales' | 'segmentos' | 'automatizaciones' | 'cupones' | 'fidelidad' | 'pauta' | 'integraciones';
 
 const NAV: { key: Seccion; label: string; icon: React.ReactNode }[] = [
   { key: 'tablero', label: 'Tablero', icon: <LayoutDashboard className="h-[18px] w-[18px]" /> },
   { key: 'comensales', label: 'Comensales', icon: <Users className="h-[18px] w-[18px]" /> },
   { key: 'segmentos', label: 'Segmentos y campañas', icon: <Send className="h-[18px] w-[18px]" /> },
+  { key: 'automatizaciones', label: 'Automatizaciones', icon: <Zap className="h-[18px] w-[18px]" /> },
   { key: 'cupones', label: 'Cupones', icon: <Ticket className="h-[18px] w-[18px]" /> },
   { key: 'fidelidad', label: 'Fidelidad', icon: <Award className="h-[18px] w-[18px]" /> },
   { key: 'pauta', label: 'Pauta', icon: <Megaphone className="h-[18px] w-[18px]" /> },
+  { key: 'integraciones', label: 'Integraciones', icon: <Plug className="h-[18px] w-[18px]" /> },
 ];
 
 export function AdminHome() {
@@ -147,10 +151,14 @@ export function AdminHome() {
             <Comensales tenantId={tenantId ?? ''} />
           ) : seccion === 'segmentos' ? (
             <Segmentos />
+          ) : seccion === 'automatizaciones' ? (
+            <Automatizaciones tenantId={tenantId ?? ''} />
           ) : seccion === 'cupones' ? (
             <Cupones tenantId={tenantId ?? ''} />
           ) : seccion === 'pauta' ? (
             <Pauta tenantId={tenantId ?? ''} />
+          ) : seccion === 'integraciones' ? (
+            <Integraciones />
           ) : (
             <Fidelidad />
           )}
