@@ -10,12 +10,16 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { LogOut, CalendarDays, Store } from 'lucide-react';
+import { LogOut, CalendarDays, Store, Map, Hourglass, Users, BarChart3 } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
 import { AdminReservas } from './AdminReservas';
+import { AdminMapa } from './AdminMapa';
+import { AdminEspera } from './AdminEspera';
+import { AdminComensales } from './AdminComensales';
+import { AdminStats } from './AdminStats';
 import { AdminPerfil, type LocalPerfil } from './AdminPerfil';
 
-type Seccion = 'reservas' | 'perfil';
+type Seccion = 'reservas' | 'mapa' | 'espera' | 'comensales' | 'stats' | 'perfil';
 
 export function AdminHome() {
   const [sesion, setSesion] = useState<{ email: string } | null>(null);
@@ -42,19 +46,19 @@ export function AdminHome() {
     void (async () => {
       const { data, error } = await db()
         .from('comanda_local_settings')
-        .select('id, local_id, slug, direccion, telefono, instagram, web, mesa_descripcion, mesa_fotos, locales(nombre)')
+        .select('id, local_id, tenant_id, slug, direccion, telefono, instagram, web, mesa_descripcion, mesa_fotos, locales(nombre)')
         .is('deleted_at', null)
         .order('local_id');
       if (error) { toast.error('No se pudieron cargar los locales: ' + error.message); return; }
       const rows = (data ?? []).map((r) => {
         const row = r as unknown as {
-          id: number; local_id: number; slug: string | null; direccion: string | null;
+          id: number; local_id: number; tenant_id: string; slug: string | null; direccion: string | null;
           telefono: string | null; instagram: string | null; web: string | null;
           mesa_descripcion: string | null; mesa_fotos: string[] | null;
           locales: { nombre: string } | null;
         };
         return {
-          settings_id: row.id, local_id: row.local_id,
+          settings_id: row.id, local_id: row.local_id, tenant_id: row.tenant_id,
           nombre: row.locales?.nombre ?? `Local ${row.local_id}`,
           slug: row.slug, direccion: row.direccion, telefono: row.telefono,
           instagram: row.instagram, web: row.web,
@@ -135,9 +139,13 @@ export function AdminHome() {
 
       <main className="container">
         {/* Tabs de sección */}
-        <div className="flex items-center gap-1 border-b border-ink/10">
+        <div className="flex items-center gap-1 border-b border-ink/10 overflow-x-auto">
           <TabBtn activo={seccion === 'reservas'} onClick={() => setSeccion('reservas')} icon={<CalendarDays className="h-4 w-4" />} label="Reservas" />
-          <TabBtn activo={seccion === 'perfil'} onClick={() => setSeccion('perfil')} icon={<Store className="h-4 w-4" />} label="Perfil público" />
+          <TabBtn activo={seccion === 'mapa'} onClick={() => setSeccion('mapa')} icon={<Map className="h-4 w-4" />} label="Mapa" />
+          <TabBtn activo={seccion === 'espera'} onClick={() => setSeccion('espera')} icon={<Hourglass className="h-4 w-4" />} label="Espera" />
+          <TabBtn activo={seccion === 'comensales'} onClick={() => setSeccion('comensales')} icon={<Users className="h-4 w-4" />} label="Comensales" />
+          <TabBtn activo={seccion === 'stats'} onClick={() => setSeccion('stats')} icon={<BarChart3 className="h-4 w-4" />} label="Stats" />
+          <TabBtn activo={seccion === 'perfil'} onClick={() => setSeccion('perfil')} icon={<Store className="h-4 w-4" />} label="Perfil" />
         </div>
 
         {/* Selector de local */}
@@ -157,6 +165,14 @@ export function AdminHome() {
         {localSel ? (
           seccion === 'reservas' ? (
             <AdminReservas localId={localSel.local_id} localNombre={localSel.nombre} />
+          ) : seccion === 'mapa' ? (
+            <AdminMapa localId={localSel.local_id} />
+          ) : seccion === 'espera' ? (
+            <AdminEspera localId={localSel.local_id} tenantId={localSel.tenant_id} />
+          ) : seccion === 'comensales' ? (
+            <AdminComensales />
+          ) : seccion === 'stats' ? (
+            <AdminStats localId={localSel.local_id} />
           ) : (
             <AdminPerfil
               local={localSel}

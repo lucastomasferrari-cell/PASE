@@ -10,6 +10,7 @@ import { db } from '@/lib/supabase';
 export interface LocalPerfil {
   settings_id: number;
   local_id: number;
+  tenant_id: string;
   nombre: string;
   slug: string | null;
   direccion: string | null;

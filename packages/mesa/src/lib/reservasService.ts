@@ -149,3 +149,16 @@ export async function asignarMesaReserva(args: {
   if (error) return { error: error.message };
   return { error: null };
 }
+
+// Historial de reservas de un cliente (todas sus visitas, cross-local del tenant).
+export async function listReservasByCliente(clienteId: number): Promise<{ data: Reserva[]; error: string | null }> {
+  const { data, error } = await db()
+    .from('reservas')
+    .select('*')
+    .eq('cliente_id', clienteId)
+    .is('deleted_at', null)
+    .order('fecha_hora', { ascending: false })
+    .limit(30);
+  if (error) return { data: [], error: error.message };
+  return { data: (data ?? []) as Reserva[], error: null };
+}
