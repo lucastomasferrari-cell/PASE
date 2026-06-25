@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Calculator, Hash, Info } from 'lucide-react';
+import { Lock, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Calculator, Hash, Info, ClipboardList } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
 import { useLocalActivo } from '../../lib/localActivo';
@@ -8,7 +8,9 @@ import { usePermiso } from '../../lib/usePermiso';
 import {
   getTurnoAbierto, totalesPorMetodo, cerrarTurno, type TotalesPorMetodo,
 } from '../../services/turnosCajaService';
-import type { TurnoCaja } from '../../types/database';
+import { listEmpleadosLocal } from '../../services/empleadosService';
+import { crearParteOperativo } from '../../services/parteOperativoService';
+import type { TurnoCaja, EmpleadoPos } from '../../types/database';
 import { formatARS, formatHoraAR } from '../../lib/format';
 import { MoneyInput } from '../../components/MoneyInput';
 import { DenominacionesInput, emptyBreakdown, type EfectivoBreakdown } from '../../components/DenominacionesInput';
@@ -37,23 +39,29 @@ export function CajaCerrar() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   // Cash Management: modo rápido (input único) vs modo denominaciones.
-  // Default rápido. Si el dueño quiere forzar denominaciones, hacerlo
-  // setting de comanda_local_settings (deuda).
   const [modo, setModo] = useState<'rapido' | 'denominaciones'>('rapido');
   const [breakdown, setBreakdown] = useState<EfectivoBreakdown>(() => emptyBreakdown());
+
+  // Parte operativo del turno
+  const [empleadosLocal, setEmpleadosLocal] = useState<EmpleadoPos[]>([]);
+  const [empleadosFalta, setEmpleadosFalta] = useState<string[]>([]);
+  const [empleadosTarde, setEmpleadosTarde] = useState<string[]>([]);
+  const [reclamos, setReclamos] = useState('');
+  const [comentarioTurno, setComentarioTurno] = useState('');
 
   useEffect(() => {
     if (localId === null) return;
     let cancelled = false;
     (async () => {
-      const { data: t } = await getTurnoAbierto(localId);
+      const [turnoR, empleadosR] = await Promise.all([
+        getTurnoAbierto(localId),
+        listEmpleadosLocal(localId),
+      ]);
       if (cancelled) return;
-      setTurno(t);
-      // Solo pedir los totales si el empleado puede VER el esperado — sin
-      // permiso no se consulta (no regalar el dato en la response de red).
-      // NUNCA autocompletar el declarado: declarar es contar (cierre ciego).
-      if (t && puedeVerEsperado) {
-        const tot = await totalesPorMetodo(t.id);
+      setTurno(turnoR.data);
+      setEmpleadosLocal(empleadosR.data);
+      if (turnoR.data && puedeVerEsperado) {
+        const tot = await totalesPorMetodo(turnoR.data.id);
         if (cancelled) return;
         setTotales(tot.data);
       } else {
@@ -84,14 +92,29 @@ export function CajaCerrar() {
     if (!empleado || !turno) return;
     setSaving(true);
     setError(null);
+
+    // Parte operativo: guardar si tiene algún contenido.
+    const tieneParteDatos = empleadosFalta.length > 0 || empleadosTarde.length > 0
+      || reclamos.trim() || comentarioTurno.trim();
+    if (tieneParteDatos) {
+      await crearParteOperativo({
+        localId: turno.local_id,
+        turnoId: turno.id,
+        empleadosFalta,
+        empleadosTarde,
+        reclamos: reclamos.trim() || null,
+        comentario: comentarioTurno.trim() || null,
+        cerradoPor: empleado.id,
+      });
+      // Error no bloqueante: el cierre continúa aunque el parte falle.
+    }
+
     const breakdownArg = modo === 'denominaciones' ? breakdown : null;
     const { error: err } = await cerrarTurno(
       turno.id, empleado.id, declarado, notas.trim() || null, breakdownArg,
     );
     setSaving(false);
     if (err) { setError(err); return; }
-    // Notificar a PosLayout para que refetchee el turno y el header
-    // pase a rojo sin requerir F5 (bug A4 sprint 5).
     window.dispatchEvent(new Event('comanda:turno-changed'));
     navigate('/caja/abrir', { replace: true });
   }
@@ -211,6 +234,62 @@ export function CajaCerrar() {
           />
         </div>
 
+        {/* ── Parte operativo del turno ─────────────────────────────── */}
+        <div className="border-t border-border pt-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <ClipboardList className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Parte del turno</span>
+            <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground uppercase tracking-wide">
+              Opcional
+            </span>
+          </div>
+
+          {empleadosLocal.length > 0 && (
+            <>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Empleados con falta</Label>
+                <EmpleadosPicker
+                  empleados={empleadosLocal}
+                  seleccionados={empleadosFalta}
+                  onChange={setEmpleadosFalta}
+                  color="red"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Llegadas tarde</Label>
+                <EmpleadosPicker
+                  empleados={empleadosLocal}
+                  seleccionados={empleadosTarde}
+                  onChange={setEmpleadosTarde}
+                  color="amber"
+                />
+              </div>
+            </>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="reclamos" className="text-xs text-muted-foreground">Reclamos o quejas de clientes</Label>
+            <Textarea
+              id="reclamos"
+              value={reclamos}
+              onChange={(e) => setReclamos(e.target.value)}
+              rows={2}
+              placeholder="Ej: mesa 5 esperó mucho, pedido mal cobrado…"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="comentario-turno" className="text-xs text-muted-foreground">Comentario general del turno</Label>
+            <Textarea
+              id="comentario-turno"
+              value={comentarioTurno}
+              onChange={(e) => setComentarioTurno(e.target.value)}
+              rows={2}
+              placeholder="Ej: turno tranquilo, cocina rápida, faltó mozarrella…"
+            />
+          </div>
+        </div>
+
         {error && (
           <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
         )}
@@ -279,6 +358,52 @@ function Centered({ children }: { children: React.ReactNode }) {
           <p className="text-muted-foreground">{children}</p>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// Selector de empleados por pills — tap para seleccionar/deseleccionar
+function EmpleadosPicker({
+  empleados,
+  seleccionados,
+  onChange,
+  color,
+}: {
+  empleados: EmpleadoPos[];
+  seleccionados: string[];
+  onChange: (ids: string[]) => void;
+  color: 'red' | 'amber';
+}) {
+  function toggle(id: string) {
+    onChange(
+      seleccionados.includes(id)
+        ? seleccionados.filter((s) => s !== id)
+        : [...seleccionados, id],
+    );
+  }
+  const selSet = new Set(seleccionados);
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {empleados.map((e) => {
+        const sel = selSet.has(e.id);
+        return (
+          <button
+            key={e.id}
+            type="button"
+            onClick={() => toggle(e.id)}
+            className={cn(
+              'px-2.5 py-1 text-xs rounded-full border transition-colors',
+              sel && color === 'red'
+                ? 'bg-red-100 border-red-300 text-red-700 font-medium'
+                : sel && color === 'amber'
+                ? 'bg-amber-100 border-amber-300 text-amber-700 font-medium'
+                : 'bg-background border-border text-muted-foreground hover:border-foreground/30',
+            )}
+          >
+            {e.apellido} {e.nombre}
+          </button>
+        );
+      })}
     </div>
   );
 }
