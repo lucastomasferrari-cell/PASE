@@ -170,6 +170,23 @@ export const TOOLS = [
       required: ['local_id', 'mes'],
     },
   },
+  {
+    name: 'conciliacion_mp',
+    description:
+      'Qué egresos de MercadoPago FALTAN justificar/conciliar en un local en un mes: los ' +
+      'pagos manuales (excluye comisiones e impuestos automáticos) que todavía NO están ' +
+      'vinculados a un comprobante (gasto/factura/remito). Es exactamente lo que muestra el ' +
+      'tab "Egresos sin justificar". Para "qué me falta conciliar en MP" o "por qué no cierra MP". ' +
+      '(Las ventas/ingresos NO se justifican acá.)',
+    input_schema: {
+      type: 'object',
+      properties: {
+        local_id: { type: 'integer', description: 'ID del local (obligatorio).' },
+        mes: { type: 'string', description: 'Mes en formato YYYY-MM (obligatorio).' },
+      },
+      required: ['local_id', 'mes'],
+    },
+  },
 ];
 
 // Sanea texto libre antes de meterlo en un filtro PostgREST (.or/.ilike):
@@ -189,6 +206,35 @@ function mesBounds(mes) {
   const ny = month === 12 ? year + 1 : year;
   const nm = month === 12 ? 1 : month + 1;
   return { desde: `${m[1]}-${m[2]}-01`, hastaExcl: `${ny}-${String(nm).padStart(2, '0')}-01` };
+}
+
+// Comisiones/impuestos = egresos automáticos de MP (no se concilian a mano).
+const ES_MP_AUTOMATICO = (t) => t === 'fee' || t === 'tax';
+
+// Dedup multi-fuente de mp_movimientos: una fila por core_id (id sin prefijo),
+// prefiriendo pay- > rr- > set- > legacy. Réplica EXACTA de ConciliacionMP.tsx
+// (mp puede traer hasta 3 filas del mismo movimiento: pay-/set-/rr-).
+function dedupMpMovs(movs) {
+  const groups = new Map();
+  const sinId = [];
+  for (const m of movs) {
+    const id = String(m.id || '');
+    if (!id) { sinId.push(m); continue; }
+    const core = id.startsWith('pay-') ? id.slice(4)
+      : id.startsWith('set-') ? id.slice(4)
+      : id.startsWith('rr-') ? id.slice(3)
+      : id;
+    const arr = groups.get(core) || [];
+    arr.push(m);
+    groups.set(core, arr);
+  }
+  const prio = (id) => (id.startsWith('pay-') ? 1 : id.startsWith('rr-') ? 2 : id.startsWith('set-') ? 3 : 4);
+  const winners = [];
+  for (const arr of groups.values()) {
+    arr.sort((a, b) => prio(String(a.id)) - prio(String(b.id)));
+    winners.push(arr[0]);
+  }
+  return [...winners, ...sinId];
 }
 
 // Resuelve prov_id → nombre para un set de facturas (segunda query, evita
@@ -448,6 +494,39 @@ export async function executeTool(admin, scope, name, input) {
       dias_con_ventas: por_dia.length,
       por_medio,
       por_dia,
+    };
+  }
+
+  if (name === 'conciliacion_mp') {
+    if (!enScope(input.local_id)) return FUERA;
+    const b = mesBounds(input.mes);
+    if (!b) return { error: 'MES_INVALIDO', detalle: 'mes debe tener formato "YYYY-MM".' };
+    const desdeTs = `${b.desde}T00:00:00-03:00`;
+    const hastaTs = `${b.hastaExcl}T00:00:00-03:00`;
+    const { data, error } = await admin.from('mp_movimientos')
+      .select('id, fecha, monto, tipo, descripcion, medio_pago, justificativo_tipo, ignorado, anulado')
+      .eq('local_id', input.local_id).gte('fecha', desdeTs).lt('fecha', hastaTs)
+      .order('fecha', { ascending: false }).limit(3000);
+    if (error) return { error: 'QUERY_FALLO', detalle: error.message };
+    const round2 = (n) => Math.round(n * 100) / 100;
+    // Egresos manuales = deduped, monto<0, no fee/tax, no anulado (igual que la pantalla).
+    const manuales = dedupMpMovs(data || []).filter((m) =>
+      Number(m.monto) < 0 && !ES_MP_AUTOMATICO(m.tipo) && m.anulado !== true);
+    const justificados = manuales.filter((m) => m.justificativo_tipo);
+    const ignorados = manuales.filter((m) => !m.justificativo_tipo && m.ignorado);
+    const sinJustificar = manuales.filter((m) => !m.justificativo_tipo && !m.ignorado);
+    return {
+      mes: input.mes,
+      egresos_manuales: manuales.length,
+      justificados: justificados.length,
+      ignorados: ignorados.length,
+      sin_justificar: sinJustificar.length,
+      monto_sin_justificar: round2(sinJustificar.reduce((s, m) => s + Number(m.monto || 0), 0)),
+      detalle_sin_justificar: sinJustificar.slice(0, 25).map((m) => ({
+        id: m.id, fecha: m.fecha, monto: m.monto, descripcion: m.descripcion, medio_pago: m.medio_pago,
+      })),
+      truncado: sinJustificar.length > 25,
+      nota: 'Solo egresos manuales (excluye comisiones/impuestos automáticos); las ventas/ingresos no se justifican acá.',
     };
   }
 

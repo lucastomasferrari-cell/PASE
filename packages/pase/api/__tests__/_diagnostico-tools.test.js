@@ -62,6 +62,10 @@ describe('executeTool — control de acceso (aislamiento)', () => {
     const out = await executeTool(makeAdmin({}), scope, 'resumen_ventas', { local_id: 99, mes: '2026-06' });
     expect(out.error).toBe('LOCAL_FUERA_DE_ALCANCE');
   });
+  it('conciliacion_mp: rechaza local fuera del alcance', async () => {
+    const out = await executeTool(makeAdmin({}), scope, 'conciliacion_mp', { local_id: 99, mes: '2026-06' });
+    expect(out.error).toBe('LOCAL_FUERA_DE_ALCANCE');
+  });
   it('sin especificar local → rechaza', async () => {
     const out = await executeTool(makeAdmin({}), scope, 'buscar_gasto', {});
     expect(out.error).toBe('LOCAL_FUERA_DE_ALCANCE');
@@ -193,15 +197,35 @@ describe('resumen_ventas', () => {
   });
 });
 
+describe('conciliacion_mp', () => {
+  it('dedup + excluye fee/tax/anulados/ingresos; separa justificados/ignorados/sin justificar', async () => {
+    const admin = makeAdmin({ mp_movimientos: [
+      { id: 'pay-1', monto: -5000, tipo: 'payment' },                              // sin justificar
+      { id: 'rr-1', monto: -5000, tipo: 'payment' },                               // mismo core → dedup
+      { id: 'pay-2', monto: -3000, tipo: 'payment', justificativo_tipo: 'gasto' }, // justificado
+      { id: 'pay-3', monto: -100, tipo: 'fee' },                                   // automático → excluido
+      { id: 'pay-4', monto: 9000, tipo: 'liquidacion' },                           // ingreso → excluido
+      { id: 'pay-5', monto: -200, tipo: 'payment', anulado: true },                // anulado → excluido
+      { id: 'pay-6', monto: -700, tipo: 'payment', ignorado: true },               // ignorado
+    ] });
+    const out = await executeTool(admin, scope, 'conciliacion_mp', { local_id: 5, mes: '2026-06' });
+    expect(out.egresos_manuales).toBe(3); // core-1 (deduped), pay-2, pay-6
+    expect(out.justificados).toBe(1);
+    expect(out.ignorados).toBe(1);
+    expect(out.sin_justificar).toBe(1);
+    expect(out.monto_sin_justificar).toBe(-5000);
+  });
+});
+
 describe('TOOLS (schema)', () => {
-  it('tiene las 9 herramientas', () => {
+  it('tiene las 10 herramientas', () => {
     expect(TOOLS.map((t) => t.name).sort()).toEqual([
-      'buscar_factura', 'buscar_gasto', 'buscar_movimiento', 'desglose_categoria',
+      'buscar_factura', 'buscar_gasto', 'buscar_movimiento', 'conciliacion_mp', 'desglose_categoria',
       'detalle_registro', 'estado_empleado', 'resumen_mp', 'resumen_ventas', 'saldo_cuentas',
     ]);
   });
   it('las de búsqueda exigen local_id', () => {
-    for (const n of ['buscar_gasto', 'buscar_movimiento', 'saldo_cuentas', 'buscar_factura', 'desglose_categoria', 'estado_empleado', 'resumen_mp', 'resumen_ventas']) {
+    for (const n of ['buscar_gasto', 'buscar_movimiento', 'saldo_cuentas', 'buscar_factura', 'desglose_categoria', 'estado_empleado', 'resumen_mp', 'resumen_ventas', 'conciliacion_mp']) {
       expect(TOOLS.find((t) => t.name === n).input_schema.required).toContain('local_id');
     }
   });
