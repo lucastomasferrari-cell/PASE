@@ -5,7 +5,7 @@
 
 CREATE TABLE IF NOT EXISTS waitlist (
   id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  tenant_id  TEXT    NOT NULL REFERENCES tenants(id),
+  tenant_id  TEXT    NOT NULL,
   local_id   INTEGER NOT NULL,
   cliente_nombre    TEXT    NOT NULL,
   cliente_telefono  TEXT,

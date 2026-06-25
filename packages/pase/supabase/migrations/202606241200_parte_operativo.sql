@@ -12,7 +12,7 @@
 
 CREATE TABLE IF NOT EXISTS partes_operativos (
   id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  tenant_id    TEXT        NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  tenant_id    TEXT        NOT NULL,
   local_id     INTEGER     NOT NULL,
   turno_id     INTEGER     REFERENCES turnos_caja(id) ON DELETE SET NULL,
   -- Ids de empleados (TEXT = UUID de rrhh_empleados)
