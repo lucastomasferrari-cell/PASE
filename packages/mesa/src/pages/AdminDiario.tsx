@@ -5,9 +5,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ChevronLeft, ChevronRight, Users, X, Check, Armchair, Ban, MessageCircle, CalendarX } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Users, X, Check, Armchair, Ban, MessageCircle, CalendarX, UserPlus } from 'lucide-react';
 import {
-  listReservas, listMesasDelLocal, cambiarEstadoReserva,
+  listReservas, listMesasDelLocal, cambiarEstadoReserva, sentarDePaso,
   type Reserva, type EstadoReserva, type MesaSimple,
 } from '@/lib/reservasService';
 import { whatsAppUrl, mensajeConfirmacionReserva } from '@/lib/whatsapp';
@@ -47,6 +47,7 @@ export function AdminDiario({ localId, localNombre }: Props) {
   const [mesas, setMesas] = useState<MesaSimple[]>([]);
   const [cargando, setCargando] = useState(true);
   const [sel, setSel] = useState<Reserva | null>(null);
+  const [dePaso, setDePaso] = useState(false);
 
   const reload = useCallback(async () => {
     setCargando(true);
@@ -130,7 +131,13 @@ export function AdminDiario({ localId, localNombre }: Props) {
         {!mismoDia(fecha, hoy) && (
           <button onClick={() => setFecha(new Date())} className="text-sm text-brand-600 hover:underline">Hoy</button>
         )}
-        <span className="ml-auto text-sm text-ink-muted">{reservas.length} reservas · {totalCovers} comensales</span>
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-sm text-ink-muted">{reservas.length} reservas · {totalCovers} comensales</span>
+          <button onClick={() => setDePaso(true)}
+                  className="rounded-lg border border-brand-300 bg-white hover:bg-brand-50 text-brand-700 px-3.5 py-2 text-sm font-medium inline-flex items-center gap-1.5">
+            <UserPlus className="h-4 w-4" /> De paso
+          </button>
+        </div>
       </div>
 
       {cargando ? (
@@ -189,6 +196,78 @@ export function AdminDiario({ localId, localNombre }: Props) {
       {sel && (
         <DetalleReserva r={sel} localNombre={localNombre} onClose={() => setSel(null)} onAccion={accionRapida} />
       )}
+
+      {/* De paso (walk-in) */}
+      {dePaso && (
+        <WalkInDialog
+          mesas={mesas}
+          onClose={() => setDePaso(false)}
+          onSave={async (input) => {
+            const { error } = await sentarDePaso({ localId, ...input });
+            if (error) { toast.error(error); return; }
+            toast.success('Walk-in sentado');
+            setDePaso(false);
+            void reload();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function WalkInDialog({ mesas, onClose, onSave }: {
+  mesas: MesaSimple[];
+  onClose: () => void;
+  onSave: (input: { clienteNombre: string; personas: number; mesaId?: number }) => void;
+}) {
+  const [nombre, setNombre] = useState('Walk-in');
+  const [personas, setPersonas] = useState(2);
+  const [mesaId, setMesaId] = useState<number | ''>('');
+  const [guardando, setGuardando] = useState(false);
+
+  async function submit() {
+    if (!nombre.trim()) { toast.error('Poné un nombre o "Walk-in"'); return; }
+    setGuardando(true);
+    await onSave({ clienteNombre: nombre.trim(), personas, mesaId: mesaId === '' ? undefined : Number(mesaId) });
+    setGuardando(false);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-ink/40 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="w-full sm:max-w-sm bg-white rounded-t-2xl sm:rounded-2xl shadow-card p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="font-display text-xl font-semibold">Sentar de paso</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-ink/5 text-ink-soft"><X className="h-5 w-5" /></button>
+        </div>
+        <p className="text-xs text-ink-muted -mt-2">Cliente que llegó sin reserva. Se crea ya sentado, con hora de ahora.</p>
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-ink-soft">Nombre</label>
+          <input value={nombre} onChange={(e) => setNombre(e.target.value)}
+                 className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-ink-soft inline-flex items-center gap-1"><Users className="h-3 w-3" />Personas</label>
+            <input type="number" min={1} value={personas} onChange={(e) => setPersonas(Math.max(1, Number(e.target.value)))}
+                   className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm" />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-ink-soft">Mesa</label>
+            <select value={mesaId} onChange={(e) => setMesaId(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full rounded-lg border border-ink/15 px-3 py-2 text-sm bg-white">
+              <option value="">Sin mesa</option>
+              {mesas.map((m) => <option key={m.id} value={m.id}>Mesa {m.numero}{m.zona ? ` · ${m.zona}` : ''}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button onClick={onClose} className="flex-1 rounded-lg border border-ink/15 py-2.5 text-sm font-medium hover:bg-ink/5">Cancelar</button>
+          <button onClick={() => void submit()} disabled={guardando}
+                  className="flex-1 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 text-sm font-medium disabled:opacity-60">
+            {guardando ? 'Sentando…' : 'Sentar'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

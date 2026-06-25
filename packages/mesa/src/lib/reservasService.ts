@@ -150,6 +150,28 @@ export async function asignarMesaReserva(args: {
   return { error: null };
 }
 
+// "De paso" / walk-in: cliente que llega sin reserva y se sienta al instante.
+// Crea la reserva con hora = ahora y la marca sentada (opcionalmente con mesa).
+export async function sentarDePaso(args: {
+  localId: number;
+  clienteNombre: string;
+  personas: number;
+  mesaId?: number;
+  notas?: string;
+}): Promise<{ error: string | null }> {
+  const { id, error } = await crearReserva({
+    localId: args.localId,
+    clienteNombre: args.clienteNombre,
+    fechaHora: new Date().toISOString(),
+    personas: args.personas,
+    notas: args.notas,
+    idempotencyKey: `depaso-${args.localId}-${args.clienteNombre}-${Date.now()}`,
+  });
+  if (error || !id) return { error: error ?? 'No se pudo crear el walk-in' };
+  const { error: e2 } = await cambiarEstadoReserva({ reservaId: id, nuevoEstado: 'sentada', mesaId: args.mesaId });
+  return { error: e2 };
+}
+
 // Historial de reservas de un cliente (todas sus visitas, cross-local del tenant).
 export async function listReservasByCliente(clienteId: number): Promise<{ data: Reserva[]; error: string | null }> {
   const { data, error } = await db()
