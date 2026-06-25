@@ -52,6 +52,7 @@ const CajaAbrir = lazy(() => import('./pages/Caja/CajaAbrir').then(m => ({ defau
 const CajaEstado = lazy(() => import('./pages/Caja/CajaEstado').then(m => ({ default: m.CajaEstado })));
 const CajaCerrar = lazy(() => import('./pages/Caja/CajaCerrar').then(m => ({ default: m.CajaCerrar })));
 const CajaHistorico = lazy(() => import('./pages/Caja/CajaHistorico').then(m => ({ default: m.CajaHistorico })));
+const PartesOperativos = lazy(() => import('./pages/Caja/PartesOperativos').then(m => ({ default: m.PartesOperativos })));
 const Logbook = lazy(() => import('./pages/Caja/Logbook').then(m => ({ default: m.Logbook })));
 
 // POS
@@ -398,6 +399,7 @@ export default function App() {
                       <Route path="/caja/abrir" element={<CajaAbrir />} />
                       <Route path="/caja/cerrar" element={<CajaCerrar />} />
                       <Route path="/caja/historico" element={<CajaHistorico />} />
+                      <Route path="/caja/partes" element={<PartesOperativos />} />
                       <Route path="/caja/logbook" element={<Logbook />} />
                     </Route>
                     {/* Handheld mozo: layout propio full-screen mobile-first, NO usa PosLayout */}

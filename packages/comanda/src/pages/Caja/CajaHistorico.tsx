@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, History } from 'lucide-react';
+import { ArrowLeft, History, ClipboardList } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useLocalActivo } from '@/lib/localActivo';
 import { listHistoricoTurnos, type TurnoConCajero } from '@/services/turnosCajaService';
@@ -43,6 +43,12 @@ export function CajaHistorico() {
         </Button>
         <h1 className="text-2xl font-bold tracking-tight">Histórico de turnos</h1>
         <span className="text-sm text-muted-foreground">{turnos.length} turnos cerrados</span>
+        <div className="ml-auto">
+          <Button variant="outline" size="sm" onClick={() => navigate('/caja/partes')}>
+            <ClipboardList className="h-4 w-4 mr-1" />
+            Partes
+          </Button>
+        </div>
       </header>
 
       {error && (
