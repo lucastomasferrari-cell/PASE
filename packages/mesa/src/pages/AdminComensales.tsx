@@ -4,9 +4,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Search, Star, Phone, Mail, ChevronDown, ChevronUp, Plus, Download, X } from 'lucide-react';
+import { Search, Star, Phone, Mail, ChevronDown, ChevronUp, Plus, Download, X, Trash2 } from 'lucide-react';
 import {
-  listClientes, createCliente, updateCliente, type Cliente,
+  listClientes, createCliente, updateCliente, eliminarCliente, type Cliente,
 } from '@/lib/clientesService';
 import { listReservasByCliente, type Reserva } from '@/lib/reservasService';
 
@@ -45,6 +45,14 @@ export function AdminComensales({ tenantId }: Props) {
     setClientes((prev) => prev.map((x) => x.id === c.id ? { ...x, vip: nuevo } : x));
     const { error } = await updateCliente(c.id, { vip: nuevo });
     if (error) { toast.error(error); void reload(search); }
+  }
+
+  async function borrar(c: Cliente) {
+    if (!window.confirm(`¿Borrar a ${nombreCliente(c)} de comensales?`)) return;
+    setClientes((prev) => prev.filter((x) => x.id !== c.id));
+    const { error } = await eliminarCliente(c.id);
+    if (error) { toast.error(error); void reload(search); }
+    else toast.success('Comensal borrado');
   }
 
   function exportarCSV() {
@@ -93,7 +101,8 @@ export function AdminComensales({ tenantId }: Props) {
           {clientes.map((c) => (
             <ClienteCard key={c.id} cliente={c} abierto={abierto === c.id}
                          onToggle={() => setAbierto((x) => x === c.id ? null : c.id)}
-                         onToggleVip={() => void toggleVip(c)} />
+                         onToggleVip={() => void toggleVip(c)}
+                         onBorrar={() => void borrar(c)} />
           ))}
         </div>
       )}
@@ -114,8 +123,8 @@ export function AdminComensales({ tenantId }: Props) {
   );
 }
 
-function ClienteCard({ cliente, abierto, onToggle, onToggleVip }: {
-  cliente: Cliente; abierto: boolean; onToggle: () => void; onToggleVip: () => void;
+function ClienteCard({ cliente, abierto, onToggle, onToggleVip, onBorrar }: {
+  cliente: Cliente; abierto: boolean; onToggle: () => void; onToggleVip: () => void; onBorrar: () => void;
 }) {
   const [reservas, setReservas] = useState<Reserva[] | null>(null);
 
@@ -181,6 +190,12 @@ function ClienteCard({ cliente, abierto, onToggle, onToggleVip }: {
               ))}
             </ul>
           )}
+          <div className="pt-3 mt-1 border-t border-ink/5">
+            <button onClick={onBorrar}
+                    className="text-xs text-red-600 hover:text-red-700 inline-flex items-center gap-1.5">
+              <Trash2 className="h-3.5 w-3.5" /> Borrar comensal
+            </button>
+          </div>
         </div>
       )}
     </div>

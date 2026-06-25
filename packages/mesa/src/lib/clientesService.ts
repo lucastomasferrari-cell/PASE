@@ -40,6 +40,12 @@ export async function updateCliente(id: number, patch: Partial<ClienteInput>): P
   return { error: error?.message ?? null };
 }
 
+// Soft-delete: lo saca de la lista sin romper FKs de reservas viejas.
+export async function eliminarCliente(id: number): Promise<{ error: string | null }> {
+  const { error } = await db().from('clientes').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+  return { error: error?.message ?? null };
+}
+
 export async function listClientes(
   opts: { search?: string; limit?: number } = {},
 ): Promise<{ data: Cliente[]; error: string | null }> {
