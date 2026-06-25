@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { LogOut, Users, Send, Award, Ticket, LayoutDashboard, Megaphone, Zap, Plug, Star } from 'lucide-react';
+import { LogOut, Users, Send, Award, Ticket, LayoutDashboard, Megaphone, Zap, Plug, Star, MessageCircle } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
 import { Tablero } from './Tablero';
 import { Comensales } from './Comensales';
@@ -15,14 +15,16 @@ import { Cupones } from './Cupones';
 import { Fidelidad } from './Fidelidad';
 import { Pauta } from './Pauta';
 import { Integraciones } from './Integraciones';
+import { Mensajeria } from './Mensajeria';
 
-type Seccion = 'tablero' | 'comensales' | 'segmentos' | 'automatizaciones' | 'calidad' | 'cupones' | 'fidelidad' | 'pauta' | 'integraciones';
+type Seccion = 'tablero' | 'comensales' | 'segmentos' | 'automatizaciones' | 'mensajeria' | 'calidad' | 'cupones' | 'fidelidad' | 'pauta' | 'integraciones';
 
 const NAV: { key: Seccion; label: string; icon: React.ReactNode }[] = [
   { key: 'tablero', label: 'Tablero', icon: <LayoutDashboard className="h-[18px] w-[18px]" /> },
   { key: 'comensales', label: 'Comensales', icon: <Users className="h-[18px] w-[18px]" /> },
   { key: 'segmentos', label: 'Segmentos y campañas', icon: <Send className="h-[18px] w-[18px]" /> },
   { key: 'automatizaciones', label: 'Automatizaciones', icon: <Zap className="h-[18px] w-[18px]" /> },
+  { key: 'mensajeria', label: 'Mensajería IG', icon: <MessageCircle className="h-[18px] w-[18px]" /> },
   { key: 'calidad', label: 'Calidad y reseñas', icon: <Star className="h-[18px] w-[18px]" /> },
   { key: 'cupones', label: 'Cupones', icon: <Ticket className="h-[18px] w-[18px]" /> },
   { key: 'fidelidad', label: 'Fidelidad', icon: <Award className="h-[18px] w-[18px]" /> },
@@ -37,6 +39,7 @@ export function AdminHome() {
   const [password, setPassword] = useState('');
   const [entrando, setEntrando] = useState(false);
   const [tenantId, setTenantId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<number | null>(null);
   const [seccion, setSeccion] = useState<Seccion>('tablero');
 
   useEffect(() => {
@@ -51,8 +54,12 @@ export function AdminHome() {
   useEffect(() => {
     if (!sesion) return;
     void (async () => {
-      const { data } = await db().from('comanda_local_settings').select('tenant_id').is('deleted_at', null).limit(1).maybeSingle();
-      if (data?.tenant_id) setTenantId(data.tenant_id as string);
+      const [s, u] = await Promise.all([
+        db().from('comanda_local_settings').select('tenant_id').is('deleted_at', null).limit(1).maybeSingle(),
+        db().from('usuarios').select('id').eq('email', sesion.email).maybeSingle(),
+      ]);
+      if (s.data?.tenant_id) setTenantId(s.data.tenant_id as string);
+      if (u.data?.id) setUserId(u.data.id as number);
     })();
   }, [sesion]);
 
@@ -71,7 +78,7 @@ export function AdminHome() {
 
   async function salir() {
     await db().auth.signOut();
-    setSesion(null); setTenantId(null);
+    setSesion(null); setTenantId(null); setUserId(null);
   }
 
   if (!supabaseConfigurado) {
@@ -155,6 +162,8 @@ export function AdminHome() {
             <Segmentos />
           ) : seccion === 'automatizaciones' ? (
             <Automatizaciones tenantId={tenantId ?? ''} />
+          ) : seccion === 'mensajeria' ? (
+            <Mensajeria userId={userId ?? 0} />
           ) : seccion === 'calidad' ? (
             <Calidad />
           ) : seccion === 'cupones' ? (
