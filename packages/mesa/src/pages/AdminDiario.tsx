@@ -11,6 +11,7 @@ import {
   type Reserva, type EstadoReserva, type MesaSimple,
 } from '@/lib/reservasService';
 import { whatsAppUrl, mensajeConfirmacionReserva } from '@/lib/whatsapp';
+import { calcularRango, bloqueTimeline } from '@/lib/reservasUtils';
 
 interface Props { localId: number; localNombre: string; }
 
@@ -66,19 +67,10 @@ export function AdminDiario({ localId, localNombre }: Props) {
 
   // Rango horario: arranca a las 12 (o antes si hay reservas temprano) hasta
   // las 24 (o más si alguna termina más tarde).
-  const { rangoIni, rangoFin, horas } = useMemo(() => {
-    let ini = 12 * 60, fin = 24 * 60;
-    for (const r of reservas) {
-      const s = minutosDelDia(r.fecha_hora);
-      const e = s + (r.duracion_min ?? DUR_DEFAULT);
-      ini = Math.min(ini, Math.floor(s / 60) * 60);
-      fin = Math.max(fin, Math.ceil(e / 60) * 60);
-    }
-    ini = Math.max(0, ini); fin = Math.min(30 * 60, fin);
-    const hs: number[] = [];
-    for (let h = ini; h <= fin; h += 60) hs.push(h);
-    return { rangoIni: ini, rangoFin: fin, horas: hs };
-  }, [reservas]);
+  const { rangoIni, rangoFin, horas } = useMemo(
+    () => calcularRango(reservas.map((r) => ({ startMin: minutosDelDia(r.fecha_hora), durMin: r.duracion_min ?? DUR_DEFAULT }))),
+    [reservas],
+  );
 
   const anchoGrid = (rangoFin - rangoIni) * PX_PER_MIN;
 
@@ -298,8 +290,7 @@ function FilaTimeline({
         {reservas.map((r) => {
           const s = minutosDelDia(r.fecha_hora);
           const dur = r.duracion_min ?? DUR_DEFAULT;
-          const left = (s - rangoIni) * PX_PER_MIN;
-          const width = Math.max(38, dur * PX_PER_MIN - 2);
+          const { left, width } = bloqueTimeline(s, dur, rangoIni, PX_PER_MIN);
           const c = ESTADO_COLOR[r.estado];
           return (
             <button key={r.id} onClick={() => onSel(r)} title={`${r.cliente_nombre} · ${hhmm(r.fecha_hora)} · ${r.personas}p`}
