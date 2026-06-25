@@ -4,19 +4,20 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Users, Clock, BellRing, Armchair, X } from 'lucide-react';
+import { Plus, Users, Clock, BellRing, Armchair, X, MessageCircle } from 'lucide-react';
 import {
   listWaitlistActiva, agregarWaitlist, llamarWaitlist, sentarWaitlist, cancelarWaitlist,
   type WaitlistEntry,
 } from '@/lib/waitlistService';
+import { whatsAppUrl, mensajeHayMesaWaitlist } from '@/lib/whatsapp';
 
-interface Props { localId: number; tenantId: string; }
+interface Props { localId: number; tenantId: string; localNombre: string; }
 
 function esperaMin(iso: string) {
   return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
 }
 
-export function AdminEspera({ localId, tenantId }: Props) {
+export function AdminEspera({ localId, tenantId, localNombre }: Props) {
   const [lista, setLista] = useState<WaitlistEntry[]>([]);
   const [cargando, setCargando] = useState(true);
   const [agregando, setAgregando] = useState(false);
@@ -80,6 +81,17 @@ export function AdminEspera({ localId, tenantId }: Props) {
                 {w.notas && <div className="text-xs text-ink-soft italic mt-0.5">{w.notas}</div>}
               </div>
               <div className="flex items-center gap-1.5">
+                {w.cliente_telefono && (() => {
+                  const url = whatsAppUrl(w.cliente_telefono, mensajeHayMesaWaitlist({
+                    clienteNombre: w.cliente_nombre, localNombre, personas: w.personas,
+                  }));
+                  return url ? (
+                    <a href={url} target="_blank" rel="noopener noreferrer" title="Avisar por WhatsApp que hay mesa"
+                       className="text-xs px-2.5 py-1.5 rounded-lg border border-emerald-200 bg-white hover:bg-emerald-50 text-emerald-700 font-medium inline-flex items-center gap-1">
+                      <MessageCircle className="h-3.5 w-3.5" /> WA
+                    </a>
+                  ) : null;
+                })()}
                 {w.estado === 'esperando' && (
                   <button onClick={() => void accion(llamarWaitlist(w.id), 'Cliente llamado')}
                           className="text-xs px-2.5 py-1.5 rounded-lg border border-amber-200 bg-white hover:bg-amber-50 text-amber-700 font-medium inline-flex items-center gap-1">

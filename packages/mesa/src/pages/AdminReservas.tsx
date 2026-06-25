@@ -7,13 +7,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
   ChevronLeft, ChevronRight, Plus, Users, Clock, Pencil, X,
-  Check, Armchair, CalendarX, Ban, RotateCcw,
+  Check, Armchair, CalendarX, Ban, RotateCcw, MessageCircle,
 } from 'lucide-react';
 import {
   listReservas, listMesasDelLocal, crearReserva, editarReserva,
   cambiarEstadoReserva, asignarMesaReserva,
   type Reserva, type EstadoReserva, type MesaSimple,
 } from '@/lib/reservasService';
+import { whatsAppUrl, mensajeConfirmacionReserva } from '@/lib/whatsapp';
 
 interface Props { localId: number; localNombre: string; }
 
@@ -125,14 +126,14 @@ export function AdminReservas({ localId, localNombre }: Props) {
         ) : (
           <>
             {grupos.activas.map((r) => (
-              <FilaReserva key={r.id} r={r} mesas={mesas} nombreMesa={nombreMesa}
+              <FilaReserva key={r.id} r={r} mesas={mesas} nombreMesa={nombreMesa} localNombre={localNombre}
                            onEditar={() => setEditando(r)} onAccion={accion} />
             ))}
             {grupos.cerradas.length > 0 && (
               <div className="pt-3">
                 <p className="text-xs uppercase tracking-wide text-ink-muted mb-2">Cerradas</p>
                 {grupos.cerradas.map((r) => (
-                  <FilaReserva key={r.id} r={r} mesas={mesas} nombreMesa={nombreMesa}
+                  <FilaReserva key={r.id} r={r} mesas={mesas} nombreMesa={nombreMesa} localNombre={localNombre}
                                onEditar={() => setEditando(r)} onAccion={accion} />
                 ))}
               </div>
@@ -156,17 +157,23 @@ export function AdminReservas({ localId, localNombre }: Props) {
 }
 
 function FilaReserva({
-  r, mesas, nombreMesa, onEditar, onAccion,
+  r, mesas, nombreMesa, localNombre, onEditar, onAccion,
 }: {
   r: Reserva;
   mesas: MesaSimple[];
   nombreMesa: (id: number | null) => string | null;
+  localNombre: string;
   onEditar: () => void;
   onAccion: (p: Promise<{ error: string | null }>, okMsg: string) => void;
 }) {
   const cfg = ESTADO_CFG[r.estado];
   const editable = r.estado === 'pendiente' || r.estado === 'confirmada';
   const mesaTxt = nombreMesa(r.mesa_id);
+  const waUrl = r.cliente_telefono
+    ? whatsAppUrl(r.cliente_telefono, mensajeConfirmacionReserva({
+        clienteNombre: r.cliente_nombre, localNombre, fechaHora: r.fecha_hora, personas: r.personas,
+      }))
+    : null;
 
   return (
     <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-4 flex items-start gap-4 flex-wrap">
@@ -211,6 +218,12 @@ function FilaReserva({
           </select>
         )}
 
+        {waUrl && r.estado !== 'cancelada' && r.estado !== 'no_show' && r.estado !== 'finalizada' && (
+          <a href={waUrl} target="_blank" rel="noopener noreferrer" title="Escribir por WhatsApp"
+             className="text-xs px-2.5 py-1.5 rounded-lg border border-emerald-200 bg-white hover:bg-emerald-50 text-emerald-700 font-medium inline-flex items-center gap-1">
+            <MessageCircle className="h-3.5 w-3.5" /> WA
+          </a>
+        )}
         {r.estado === 'pendiente' && (
           <BtnAccion icon={<Check className="h-3.5 w-3.5" />} label="Confirmar" tono="brand"
                      onClick={() => onAccion(cambiarEstadoReserva({ reservaId: r.id, nuevoEstado: 'confirmada' }), 'Reserva confirmada')} />

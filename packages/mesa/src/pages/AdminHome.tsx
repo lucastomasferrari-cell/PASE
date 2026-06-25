@@ -168,7 +168,7 @@ export function AdminHome() {
           ) : seccion === 'mapa' ? (
             <AdminMapa localId={localSel.local_id} />
           ) : seccion === 'espera' ? (
-            <AdminEspera localId={localSel.local_id} tenantId={localSel.tenant_id} />
+            <AdminEspera localId={localSel.local_id} tenantId={localSel.tenant_id} localNombre={localSel.nombre} />
           ) : seccion === 'comensales' ? (
             <AdminComensales />
           ) : seccion === 'stats' ? (
