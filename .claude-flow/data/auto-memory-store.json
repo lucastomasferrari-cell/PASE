@@ -1,0 +1,38 @@
+[
+  {
+    "id": "task-ventascreen-phase2-hooks",
+    "key": "ventascreen-phase2-hooks",
+    "content": "Task completed: ventascreen-phase2-hooks",
+    "namespace": "tasks",
+    "type": "task-outcome",
+    "metadata": {
+      "success": true,
+      "quality": 0.85
+    },
+    "createdAt": 1779942259505
+  },
+  {
+    "id": "task-ventascreen-phase3-split",
+    "key": "ventascreen-phase3-split",
+    "content": "Task completed: ventascreen-phase3-split",
+    "namespace": "tasks",
+    "type": "task-outcome",
+    "metadata": {
+      "success": true,
+      "quality": 0.85
+    },
+    "createdAt": 1779942924453
+  },
+  {
+    "id": "task-e2e-shared-seed-delta-refactor",
+    "key": "e2e-shared-seed-delta-refactor",
+    "content": "Task completed: e2e-shared-seed-delta-refactor",
+    "namespace": "tasks",
+    "type": "task-outcome",
+    "metadata": {
+      "success": true,
+      "quality": 0.85
+    },
+    "createdAt": 1780079427970
+  }
+]

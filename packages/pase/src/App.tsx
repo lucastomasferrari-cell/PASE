@@ -59,7 +59,6 @@ const Cashflow = lazy(() => import("./pages/Cashflow"));
 const Utilidades = lazy(() => import("./pages/Utilidades"));
 const Objetivos = lazy(() => import("./pages/Objetivos"));
 const Ayuda = lazy(() => import("./pages/Ayuda"));
-const Hub = lazy(() => import("./pages/Hub"));
 const Ajustes = lazy(() => import("./pages/Ajustes"));
 const Importar = lazy(() => import("./pages/Importar"));
 const LectorExtractoMP = lazy(() => import("./pages/LectorExtractoMP"));
@@ -796,25 +795,6 @@ function AppMain() {
 
   if (authLoading) return <><style>{css}</style><FullPageLoader/></>;
 
-  // /hub es la landing pública del ecosistema: solo botones que llevan al
-  // login de cada sistema (COMANDA, MESA, Admin, etc). No expone datos, así
-  // que es accesible sin sesión de PASE — funciona como punto de entrada
-  // único antes de elegir a qué sistema ingresar.
-  if (!user && typeof window !== "undefined" && window.location.pathname === "/hub") {
-    return (
-      <>
-        <style>{css}</style>
-        <div style={{ minHeight: "100vh", background: "var(--pase-bg-page)" }}>
-          <Suspense fallback={<FullPageLoader/>}>
-            <div style={{ maxWidth: 920, margin: "0 auto" }}>
-              <Hub/>
-            </div>
-          </Suspense>
-        </div>
-      </>
-    );
-  }
-
   if(!user) return <><style>{css}</style><Login onLogin={login}/></>;
 
   if (user.password_temporal) return <><style>{css}</style><Suspense fallback={<FullPageLoader/>}><ForcePasswordChange user={user} onDone={() => {
@@ -1007,7 +987,6 @@ function AppMain() {
               <Route path="/cashflow" element={<Cashflow {...props}/>} />
               <Route path="/utilidades" element={<Utilidades {...props}/>} />
               <Route path="/ayuda" element={<Ayuda/>} />
-              <Route path="/hub" element={<Hub/>} />
 
               {/* Herramientas */}
               <Route path="/equipo" element={<RRHHPage {...props}/>} />

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cocina — el sistema de tu local</title>
+  <meta name="description" content="Cocina: el lanzador de tu ecosistema gastronómico. Entrá a COMANDA, MESA, PASE y todos tus sistemas desde un solo lugar." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍳</text></svg>" />
+  <style>
+    :root {
+      --celeste: #75AADB;
+      --gold: #F5C518;
+      --bg-page: #EFF3F8;
+      --bg-card: #FFFFFF;
+      --text: #1A3A5E;
+      --text-muted: #6E8CAB;
+      --border: #E0EAF4;
+      --shadow-sm: 0 1px 2px rgba(26,58,94,0.04), 0 2px 4px rgba(26,58,94,0.04);
+      --shadow-md: 0 2px 4px rgba(26,58,94,0.03), 0 8px 24px rgba(26,58,94,0.08);
+      --radius-card: 16px;
+      --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-page: #0C1220;
+        --bg-card: #1A2540;
+        --text: #F0F4F8;
+        --text-muted: #93A8C2;
+        --border: #2A3550;
+        --shadow-sm: 0 1px 2px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.10);
+        --shadow-md: 0 2px 4px rgba(0,0,0,0.10), 0 8px 24px rgba(0,0,0,0.20);
+      }
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: var(--font);
+      background: var(--bg-page);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 20px 32px;
+      min-height: 100%;
+    }
+    .wrap { width: 100%; max-width: 880px; }
+
+    header { margin-bottom: 36px; }
+    .overline {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px; font-weight: 500; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;
+    }
+    .overline .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gold); }
+    .brand { font-size: 40px; font-weight: 600; letter-spacing: -0.03em; line-height: 1; }
+    .brand .accent { color: var(--gold); }
+    .tagline { font-size: 15px; color: var(--text-muted); margin-top: 8px; }
+
+    section { margin-bottom: 32px; }
+    .sec-title {
+      font-size: 11px; font-weight: 500; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text-muted);
+      padding-bottom: 8px; margin-bottom: 14px;
+      border-bottom: 0.5px solid var(--border);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 14px;
+    }
+    .card {
+      display: flex; flex-direction: column; gap: 12px;
+      padding: 18px;
+      background: var(--bg-card);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-sm);
+      text-decoration: none; color: inherit;
+      transition: transform 0.14s cubic-bezier(0.22,0.61,0.36,1),
+                  box-shadow 0.14s ease, border-color 0.14s ease;
+    }
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-md);
+      border-color: var(--celeste);
+    }
+    .card-top { display: flex; align-items: flex-start; justify-content: space-between; }
+    .icon {
+      width: 48px; height: 48px; border-radius: 13px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; flex-shrink: 0;
+    }
+    .badge {
+      font-size: 10px; font-weight: 500; letter-spacing: 0.04em;
+      padding: 3px 9px; border-radius: 999px;
+    }
+    .card-name { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; display: flex; align-items: center; gap: 6px; }
+    .card-desc { font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-top: 4px; }
+    .card-cta { font-size: 12px; font-weight: 500; color: var(--celeste); letter-spacing: 0.02em; margin-top: 2px; }
+    .ext { opacity: 0.55; }
+
+    footer {
+      margin-top: 24px; padding-top: 18px;
+      border-top: 0.5px solid var(--border);
+      width: 100%; max-width: 880px;
+      display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+      font-size: 11px; color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="overline"><span class="dot"></span>Ecosistema gastronómico</div>
+      <div class="brand">cocina<span class="accent">.</span></div>
+      <div class="tagline">El sistema de tu local. Elegí a dónde entrar.</div>
+    </header>
+
+    <section>
+      <div class="sec-title">Operación diaria</div>
+      <div class="grid" id="grid-operacion"></div>
+    </section>
+
+    <section>
+      <div class="sec-title">Gestión &amp; administración</div>
+      <div class="grid" id="grid-gestion"></div>
+    </section>
+  </div>
+
+  <footer>
+    <span>Todos los sistemas comparten la misma base en tiempo real.</span>
+    <span>cocina<span style="color:var(--gold)">.</span></span>
+  </footer>
+
+  <script>
+    const SISTEMAS = {
+      operacion: [
+        { nombre: "COMANDA", desc: "Punto de venta — tomá pedidos en salón y mostrador, cobrá y gestioná mesas.", url: "https://pase-comanda.vercel.app", icono: "📱", badge: "POS", bg: "#EAF3FB", fg: "#1A3A5E" },
+        { nombre: "MESA", desc: "Reservas, plano del salón y disponibilidad en tiempo real.", url: "https://mesa-orpin.vercel.app", icono: "🗺️", badge: "Reservas", bg: "#E6F4EE", fg: "#14532D" },
+        { nombre: "Pantalla de Cocina", desc: "KDS — vista de órdenes por estado para el equipo de cocina.", url: "https://pase-comanda.vercel.app/kds", icono: "👨‍🍳", badge: "KDS", bg: "#FFF8E6", fg: "#92400E" },
+      ],
+      gestion: [
+        { nombre: "PASE", desc: "Back-office — EERR, RRHH, Caja, conciliaciones y facturas.", url: "https://pase-yndx.vercel.app", icono: "📊", badge: "Gestión", bg: "#EAF3FB", fg: "#1A3A5E" },
+        { nombre: "Admin Console", desc: "Superadmin — tenants, backups y configuración global del sistema.", url: "https://pase-admin-console.vercel.app", icono: "🛡️", badge: "Admin", bg: "#FEF3C7", fg: "#92400E" },
+        { nombre: "Bot Instagram", desc: "Responde a tus clientes en Instagram con IA — consultas y reservas.", url: "https://pase-instagram-bot.vercel.app", icono: "📸", badge: "IG", bg: "#FCE7F3", fg: "#9D174D" },
+      ],
+    };
+
+    function card(s) {
+      const a = document.createElement("a");
+      a.className = "card";
+      a.href = s.url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.innerHTML = `
+        <div class="card-top">
+          <div class="icon" style="background:${s.bg}">${s.icono}</div>
+          <span class="badge" style="background:${s.bg};color:${s.fg}">${s.badge}</span>
+        </div>
+        <div>
+          <div class="card-name">${s.nombre}<svg class="ext" width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2H2.5A.5.5 0 0 0 2 2.5v7a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5V7"/><path d="M7 2h3v3"/><path d="M10 2L5.5 6.5"/></svg></div>
+          <div class="card-desc">${s.desc}</div>
+        </div>
+        <div class="card-cta">Abrir →</div>`;
+      return a;
+    }
+
+    const gop = document.getElementById("grid-operacion");
+    const gge = document.getElementById("grid-gestion");
+    SISTEMAS.operacion.forEach((s) => gop.appendChild(card(s)));
+    SISTEMAS.gestion.forEach((s) => gge.appendChild(card(s)));
+  </script>
+</body>
+</html>
