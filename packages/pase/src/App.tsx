@@ -796,6 +796,25 @@ function AppMain() {
 
   if (authLoading) return <><style>{css}</style><FullPageLoader/></>;
 
+  // /hub es la landing pública del ecosistema: solo botones que llevan al
+  // login de cada sistema (COMANDA, MESA, Admin, etc). No expone datos, así
+  // que es accesible sin sesión de PASE — funciona como punto de entrada
+  // único antes de elegir a qué sistema ingresar.
+  if (!user && typeof window !== "undefined" && window.location.pathname === "/hub") {
+    return (
+      <>
+        <style>{css}</style>
+        <div style={{ minHeight: "100vh", background: "var(--pase-bg-page)" }}>
+          <Suspense fallback={<FullPageLoader/>}>
+            <div style={{ maxWidth: 920, margin: "0 auto" }}>
+              <Hub/>
+            </div>
+          </Suspense>
+        </div>
+      </>
+    );
+  }
+
   if(!user) return <><style>{css}</style><Login onLogin={login}/></>;
 
   if (user.password_temporal) return <><style>{css}</style><Suspense fallback={<FullPageLoader/>}><ForcePasswordChange user={user} onDone={() => {
