@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Search, Star, Phone, Mail, ChevronDown, ChevronUp, Plus, Download, X, Trash2, Megaphone } from 'lucide-react';
 import { listClientes, createCliente, updateCliente, eliminarCliente, type Cliente } from '@/lib/clientesService';
 import { listReservasByCliente, type Reserva } from '@/lib/reservasService';
+import { getConsumoCliente, type ConsumoCliente } from '@/lib/consumoService';
 
 interface Props { tenantId: string; }
 type Filtro = 'todos' | 'vip' | 'marketing';
@@ -150,9 +151,11 @@ function ClienteCard({ cliente, abierto, onToggle, onToggleVip, onBorrar }: {
   cliente: Cliente; abierto: boolean; onToggle: () => void; onToggleVip: () => void; onBorrar: () => void;
 }) {
   const [reservas, setReservas] = useState<Reserva[] | null>(null);
+  const [consumo, setConsumo] = useState<ConsumoCliente | null>(null);
   useEffect(() => {
     if (abierto && reservas === null) void listReservasByCliente(cliente.id).then((r) => setReservas(r.data));
-  }, [abierto, reservas, cliente.id]);
+    if (abierto && consumo === null) void getConsumoCliente(cliente.telefono).then((r) => setConsumo(r.data));
+  }, [abierto, reservas, consumo, cliente.id, cliente.telefono]);
 
   const stats = reservas ? {
     visitas: reservas.filter((r) => r.estado === 'finalizada' || r.estado === 'sentada').length,
@@ -197,6 +200,20 @@ function ClienteCard({ cliente, abierto, onToggle, onToggleVip, onBorrar }: {
             <Mini label="Visitas" valor={stats ? String(stats.visitas) : '…'} />
           </div>
           {cliente.notas && <p className="text-xs text-ink-soft italic mb-2">{cliente.notas}</p>}
+
+          {consumo && consumo.topItems.length > 0 && (
+            <div className="mb-3">
+              <p className="text-xs font-medium text-ink-muted mb-1.5">Qué pide ({consumo.pedidos} pedidos)</p>
+              <div className="flex flex-wrap gap-1.5">
+                {consumo.topItems.map((it) => (
+                  <span key={it.nombre} className="text-xs bg-brand-50 border border-brand-200 text-brand-800 rounded-full px-2.5 py-0.5">
+                    {it.nombre} <span className="text-brand-500">×{it.cantidad}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           <p className="text-xs font-medium text-ink-muted mb-1.5">Historial de reservas</p>
           {reservas === null ? (
             <p className="text-xs text-ink-muted">Cargando…</p>
