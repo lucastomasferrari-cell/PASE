@@ -2,8 +2,19 @@
 // Tabla `usuarios` (perfil) + `usuario_permisos` (permisos por slug) +
 // `usuario_locales` (locales asignados). La columna `apps_permitidas`
 // (migración 202606250700) controla a qué apps del ecosistema entra.
+//
+// Alta y reset de password van por /api/auth-admin (endpoint en PASE,
+// reescrito por vercel.json a pase-yndx). Requiere JWT del caller con
+// rol dueno/admin/superadmin.
 
 import { db } from './supabase';
+
+async function authHeaders(): Promise<Record<string, string> | null> {
+  const { data } = await db().auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return null;
+  return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+}
 
 export interface Usuario {
   id: number;
@@ -64,27 +75,31 @@ export interface UsuarioInput {
   rol_id?: number | null;
 }
 
-// Crea usuario en Auth + perfil en `usuarios`. Usa la RPC oficial si está
-// disponible; cae a llamada al endpoint admin de PASE como fallback.
+// Crea usuario en Auth + perfil en `usuarios`. Va por /api/auth-admin que
+// usa service_role para crear el user en Supabase Auth y linkear el perfil.
 export async function crearUsuario(input: UsuarioInput): Promise<{ id: number | null; error: string | null }> {
-  // Path A: RPC `fn_crear_usuario` (si existe en la base) — way faster.
-  const { data, error } = await db().rpc('fn_crear_usuario', {
-    p_email: input.email.trim(),
-    p_nombre: input.nombre.trim(),
-    p_rol: input.rol,
-    p_password: input.password,
-    p_apps_permitidas: input.apps_permitidas ?? ['pase'],
-    p_cuentas_visibles: input.cuentas_visibles ?? null,
-    p_rol_id: input.rol_id ?? null,
-  });
-  if (error) {
-    // Mensaje claro si la RPC no existe todavía.
-    if (/function .* does not exist/i.test(error.message)) {
-      return { id: null, error: 'El alta de usuario necesita la RPC fn_crear_usuario en la base. Pasalo a Lucas para que la cree.' };
-    }
-    return { id: null, error: error.message };
+  const headers = await authHeaders();
+  if (!headers) return { id: null, error: 'Tu sesión venció. Recargá y volvé a intentar.' };
+  try {
+    const r = await fetch('/api/auth-admin', {
+      method: 'POST', headers,
+      body: JSON.stringify({
+        action: 'create',
+        nombre: input.nombre.trim(),
+        usuario: input.email.trim(),
+        password: input.password,
+        rol: input.rol,
+        apps_permitidas: input.apps_permitidas ?? ['pase'],
+        cuentas_visibles: input.cuentas_visibles ?? null,
+        rol_id: input.rol_id ?? null,
+      }),
+    });
+    const d = await r.json();
+    if (!d.ok) return { id: null, error: d.error || 'Error creando usuario' };
+    return { id: d.id != null ? Number(d.id) : null, error: null };
+  } catch (e) {
+    return { id: null, error: 'Error de red: ' + (e instanceof Error ? e.message : String(e)) };
   }
-  return { id: Number(data), error: null };
 }
 
 export async function actualizarUsuario(id: number, patch: Partial<Usuario>): Promise<{ error: string | null }> {
@@ -123,16 +138,21 @@ export async function setLocales(usuarioId: number, localIds: number[]): Promise
 }
 
 export async function resetPassword(usuarioId: number): Promise<{ error: string | null; tempPassword?: string }> {
-  // RPC `fn_reset_password_usuario` (genera password temporal y marca
-  // password_temporal=true). Si no existe, devuelve error claro.
-  const { data, error } = await db().rpc('fn_reset_password_usuario', { p_usuario_id: usuarioId });
-  if (error) {
-    if (/function .* does not exist/i.test(error.message)) {
-      return { error: 'El reset de password necesita la RPC fn_reset_password_usuario. Pasalo a Lucas.' };
-    }
-    return { error: error.message };
+  // Genera password temporal en Supabase Auth y marca password_temporal=true.
+  // Va por /api/auth-admin?action=reset_password (PASE).
+  const headers = await authHeaders();
+  if (!headers) return { error: 'Tu sesión venció. Recargá y volvé a intentar.' };
+  try {
+    const r = await fetch('/api/auth-admin', {
+      method: 'POST', headers,
+      body: JSON.stringify({ action: 'reset_password', usuario_id: usuarioId }),
+    });
+    const d = await r.json();
+    if (!d.ok) return { error: d.error || 'Error reseteando contraseña' };
+    return { error: null, tempPassword: d.temp_password as string };
+  } catch (e) {
+    return { error: 'Error de red: ' + (e instanceof Error ? e.message : String(e)) };
   }
-  return { error: null, tempPassword: data as string };
 }
 
 export async function listLocales(): Promise<{ data: { id: number; nombre: string }[]; error: string | null }> {

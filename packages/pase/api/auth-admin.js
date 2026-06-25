@@ -58,7 +58,8 @@ export default async function handler(req, res) {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { action, nombre, usuario, password, rol, locales: userLocales, authId, tenant_id: payloadTenantId } = req.body || {};
+    const { action, nombre, usuario, password, rol, locales: userLocales, authId, tenant_id: payloadTenantId,
+      apps_permitidas: appsPermitidas, cuentas_visibles: cuentasVisibles, rol_id: rolId, usuario_id: targetUsuarioId } = req.body || {};
 
     if (action === 'create') {
       if (!nombre || !usuario || !password) {
@@ -121,13 +122,18 @@ export default async function handler(req, res) {
       if (requestedRol !== 'superadmin') {
         userRow.tenant_id = tenantId;
       }
-      const { error: insertErr } = await db.from('usuarios').insert([userRow]);
+      // Campos opcionales (Accesos los manda; PASE Usuarios.tsx legacy no).
+      if (Array.isArray(appsPermitidas)) userRow.apps_permitidas = appsPermitidas;
+      if (Array.isArray(cuentasVisibles) || cuentasVisibles === null) userRow.cuentas_visibles = cuentasVisibles;
+      if (rolId !== undefined) userRow.rol_id = rolId;
+
+      const { data: inserted, error: insertErr } = await db.from('usuarios').insert([userRow]).select('id').single();
 
       if (insertErr) {
         return res.status(500).json({ ok: false, error: insertErr.message });
       }
 
-      return res.status(200).json({ ok: true, auth_id: newAuthId });
+      return res.status(200).json({ ok: true, auth_id: newAuthId, id: inserted?.id ?? null });
 
     } else if (action === 'change_password') {
       // Cambiar contraseña en Supabase Auth
@@ -267,8 +273,53 @@ export default async function handler(req, res) {
 
       return res.status(200).json({ ok: true, id: cuRow.id, auth_id: authIdToUse });
 
+    } else if (action === 'reset_password') {
+      // Reset por id numérico de `usuarios` (no auth_id) — flow usado por
+      // Accesos: el dueño tilda un empleado y pide reset. Genera password
+      // temporal de 8 chars, lo aplica en Supabase Auth y marca
+      // `password_temporal=true` para forzar cambio en próximo login.
+      if (!targetUsuarioId) {
+        return res.status(400).json({ ok: false, error: 'Falta usuario_id' });
+      }
+      const { data: target, error: targetErr } = await db.from('usuarios')
+        .select('id, rol, tenant_id, auth_id')
+        .eq('id', targetUsuarioId)
+        .maybeSingle();
+      if (targetErr || !target) {
+        return res.status(404).json({ ok: false, error: 'target_user_not_found' });
+      }
+      // Mismo tenant (excepto superadmin) y no podés resetear a alguien con rol >= al tuyo.
+      if (auth.row.rol !== 'superadmin') {
+        if (target.tenant_id !== auth.row.tenant_id) {
+          return res.status(403).json({ ok: false, error: 'cross_tenant_reset_denied' });
+        }
+        const targetRank = ROLE_RANK[target.rol] || 0;
+        if (targetRank >= callerRank) {
+          return res.status(403).json({ ok: false, error: 'cannot_reset_password_of_higher_role' });
+        }
+      }
+      if (!target.auth_id) {
+        return res.status(400).json({ ok: false, error: 'user_sin_supabase_auth' });
+      }
+
+      // Password temporal: 8 chars [a-z0-9] generados con crypto.
+      const { randomBytes } = await import('crypto');
+      const tempPassword = randomBytes(6).toString('base64')
+        .replace(/[+/=]/g, '').slice(0, 8).toLowerCase() || 'temp1234';
+
+      const { error: updErr } = await db.auth.admin.updateUserById(target.auth_id, { password: tempPassword });
+      if (updErr) {
+        return res.status(500).json({ ok: false, error: 'auth_update_failed: ' + updErr.message });
+      }
+
+      // Marcar password_temporal=true para forzar cambio. NO tocamos la columna
+      // legacy `usuarios.password` (placeholder __supabase_auth_only__ post-F2D).
+      await db.from('usuarios').update({ password_temporal: true }).eq('id', target.id);
+
+      return res.status(200).json({ ok: true, temp_password: tempPassword });
+
     } else {
-      return res.status(400).json({ ok: false, error: 'action requerida: create | change_password | create_comanda' });
+      return res.status(400).json({ ok: false, error: 'action requerida: create | change_password | reset_password | create_comanda' });
     }
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });

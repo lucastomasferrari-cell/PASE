@@ -20,5 +20,14 @@ export default defineConfig([
       ecmaVersion: 2022,
       globals: globals.browser,
     },
+    rules: {
+      // react-hooks v7 trae 2 reglas del RFC "Components/Hooks must be pure":
+      //   - `react-hooks/purity`         — flagea `Date.now()` y similares en render
+      //   - `react-hooks/set-state-in-effect` — flagea el patrón clásico de fetch+setState
+      // Son sugerencias del RFC, no requirements de React 19. Refactorizar
+      // a SWR/useSyncExternalStore es un proyecto aparte; por ahora warn.
+      'react-hooks/purity': 'warn',
+      'react-hooks/set-state-in-effect': 'warn',
+    },
   },
 ]);
