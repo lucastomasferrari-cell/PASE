@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ChevronLeft, ChevronRight, Users, X, Check, Armchair, Ban, MessageCircle, CalendarX, UserPlus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Users, X, Check, Armchair, Ban, MessageCircle, CalendarX, UserPlus, Pencil } from 'lucide-react';
 import {
   listReservas, listMesasDelLocal, cambiarEstadoReserva, sentarDePaso,
   type Reserva, type EstadoReserva, type MesaSimple,
@@ -13,6 +13,7 @@ import {
 import { whatsAppUrl, mensajeConfirmacionReserva } from '@/lib/whatsapp';
 import { calcularRango, bloqueTimeline } from '@/lib/reservasUtils';
 import { WalkInDialog } from '@/components/WalkInDialog';
+import { ReservaForm } from '@/components/ReservaForm';
 
 interface Props { localId: number; localNombre: string; }
 
@@ -50,6 +51,7 @@ export function AdminDiario({ localId, localNombre }: Props) {
   const [cargando, setCargando] = useState(true);
   const [sel, setSel] = useState<Reserva | null>(null);
   const [dePaso, setDePaso] = useState(false);
+  const [editando, setEditando] = useState<Reserva | null>(null);
 
   const reload = useCallback(async () => {
     setCargando(true);
@@ -187,7 +189,17 @@ export function AdminDiario({ localId, localNombre }: Props) {
 
       {/* Popover de detalle / acciones */}
       {sel && (
-        <DetalleReserva r={sel} localNombre={localNombre} onClose={() => setSel(null)} onAccion={accionRapida} />
+        <DetalleReserva r={sel} localNombre={localNombre} onClose={() => setSel(null)} onAccion={accionRapida}
+                        onEditar={() => { setEditando(sel); setSel(null); }} />
+      )}
+
+      {/* Editar reserva */}
+      {editando && (
+        <ReservaForm
+          localId={localId} localNombre={localNombre} fechaDefault={fecha} reserva={editando}
+          onClose={() => setEditando(null)}
+          onSaved={() => { setEditando(null); void reload(); }}
+        />
       )}
 
       {/* De paso (walk-in) */}
@@ -254,10 +266,11 @@ function FilaTimeline({
 }
 
 function DetalleReserva({
-  r, localNombre, onClose, onAccion,
+  r, localNombre, onClose, onAccion, onEditar,
 }: {
   r: Reserva; localNombre: string; onClose: () => void;
   onAccion: (r: Reserva, e: 'confirmada' | 'sentada' | 'finalizada' | 'no_show' | 'cancelada') => void;
+  onEditar: () => void;
 }) {
   const waUrl = r.cliente_telefono
     ? whatsAppUrl(r.cliente_telefono, mensajeConfirmacionReserva({ clienteNombre: r.cliente_nombre, localNombre, fechaHora: r.fecha_hora, personas: r.personas }))
@@ -286,6 +299,9 @@ function DetalleReserva({
           )}
           {r.estado === 'confirmada' && (
             <BtnQ tono="ghost" icon={<CalendarX className="h-4 w-4" />} label="No vino" onClick={() => onAccion(r, 'no_show')} />
+          )}
+          {(r.estado === 'pendiente' || r.estado === 'confirmada') && (
+            <BtnQ tono="ghost" icon={<Pencil className="h-4 w-4" />} label="Editar" onClick={onEditar} />
           )}
           {(r.estado === 'pendiente' || r.estado === 'confirmada') && (
             <BtnQ tono="ghost" icon={<Ban className="h-4 w-4" />} label="Cancelar" onClick={() => onAccion(r, 'cancelada')} />
