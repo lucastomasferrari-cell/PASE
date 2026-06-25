@@ -53,3 +53,24 @@ agent.log
 
 .env*
 .superpowers/
+
+# Vector DB de tooling local (ruvector) — binarios, no compartir
+**/ruvector.db
+
+# claude-flow tooling local
+.claude-flow/
+
+# Outputs de tests COMANDA
+packages/comanda/playwright-report/
+packages/comanda/screenshots/
+
+# Scripts de debug / scratch one-off (personales, no compartidos)
+/_*.mjs
+packages/pase/_*.cjs
+packages/pase/_*.mjs
+packages/pase/_*.sql
+packages/pase/_*.txt
+packages/pase/.dbg_*.cjs
+packages/pase/check_*.cjs
+packages/pase/apply_*.cjs
+packages/pase/mint-superadmin-session.mjs
