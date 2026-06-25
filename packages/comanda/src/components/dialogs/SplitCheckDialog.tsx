@@ -18,12 +18,13 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   ventaId: number;
   tenantId: string;
+  localId?: number;
   onPartida: (nuevaVentaId: number) => void;
 }
 
 // Versión simple: checkboxes para mover items a una nueva venta hermana.
 // Drag & drop / múltiples cuentas (3+) postergado a otro sprint.
-export function SplitCheckDialog({ open, onOpenChange, ventaId, tenantId, onPartida }: Props) {
+export function SplitCheckDialog({ open, onOpenChange, ventaId, tenantId, localId, onPartida }: Props) {
   const [items, setItems] = useState<VentaPosItem[]>([]);
   const [catalogo, setCatalogo] = useState<ItemConGrupo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,7 +72,7 @@ export function SplitCheckDialog({ open, onOpenChange, ventaId, tenantId, onPart
 
   async function ejecutar({ managerId, motivo }: { managerId: string; motivo: string }) {
     const { ventaNuevaId, error } = await partirCuentaService(
-      ventaId, Array.from(seleccion), managerId, motivo,
+      ventaId, Array.from(seleccion), managerId, motivo, tenantId, localId,
     );
     if (error || !ventaNuevaId) throw new Error(error ?? 'Error');
     toast.success('Cuenta partida');

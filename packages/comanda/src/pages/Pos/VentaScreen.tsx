@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { ModifiersDialog } from '@/components/dialogs/ModifiersDialog';
 import { PaymentDialog } from '@/components/dialogs/PaymentDialog';
 import { EmitirFacturaDialog } from '@/components/dialogs/EmitirFacturaDialog';
+import { getCredencialesAFIP } from '@/lib/afip/service';
 import { DiscountDialog } from '@/components/dialogs/DiscountDialog';
 import { TransferMesaDialog } from '@/components/dialogs/TransferMesaDialog';
 import { MergeMesasDialog } from '@/components/dialogs/MergeMesasDialog';
@@ -524,7 +525,10 @@ export function VentaScreen() {
           empleadoId={empleado.id}
           onCobrado={() => {
             reload();
-            setShowEmitirFactura(true);
+            void getCredencialesAFIP().then((r) => {
+              if (r.data?.activa) setShowEmitirFactura(true);
+              else navigate(venta.modo === 'salon' ? '/pos/salon' : '/pos/mostrador');
+            });
           }}
         />
       )}
@@ -578,6 +582,7 @@ export function VentaScreen() {
           onOpenChange={setShowSplit}
           ventaId={ventaId}
           tenantId={user?.tenant_id ?? ''}
+          localId={venta?.local_id}
           onPartida={(nueva) => {
             toast.success(`Cuenta partida — venta nueva #${nueva}`);
             reload();
@@ -593,7 +598,10 @@ export function VentaScreen() {
           empleadoId={empleado.id}
           onCobrado={() => {
             reload();
-            setShowEmitirFactura(true);
+            void getCredencialesAFIP().then((r) => {
+              if (r.data?.activa) setShowEmitirFactura(true);
+              else navigate(venta.modo === 'salon' ? '/pos/salon' : '/pos/mostrador');
+            });
           }}
         />
       )}
