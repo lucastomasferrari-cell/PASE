@@ -10,7 +10,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { LogOut, CalendarDays, Store, Map, Hourglass, Users, BarChart3, ChevronDown, Check, MapPin, LayoutDashboard, GanttChartSquare, Star, BellRing, Link2, Copy, ExternalLink, X } from 'lucide-react';
+import { LogOut, CalendarDays, Store, Map, Hourglass, Users, BarChart3, ChevronDown, Check, MapPin, LayoutDashboard, GanttChartSquare, Star, BellRing, Link2, Copy, ExternalLink, X, MessageCircle } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
 import { AdminTablero } from './AdminTablero';
 import { AdminDiario } from './AdminDiario';
@@ -171,7 +171,7 @@ export function AdminHome() {
           <span className="md:hidden font-display text-xl font-semibold text-brand-600">mesa.</span>
           <LocationSwitcher locales={locales} sel={sel} onSelect={setSel} />
           <div className="ml-auto flex items-center gap-2">
-            <LinkReservasButton slug={localSel?.slug ?? null} />
+            <LinkReservasButton slug={localSel?.slug ?? null} nombre={localSel?.nombre ?? ''} />
             <button onClick={() => void salir()} className="md:hidden text-ink-soft hover:text-ink p-2" title="Salir">
               <LogOut className="h-5 w-5" />
             </button>
@@ -229,9 +229,12 @@ export function AdminHome() {
 // Botón "Link de reservas" siempre visible en el topbar: muestra el link
 // público del local (mesa-orpin.vercel.app/:slug), con copiar, abrir y un QR
 // para que el cliente escanee desde la mesa.
-function LinkReservasButton({ slug }: { slug: string | null }) {
+function LinkReservasButton({ slug, nombre }: { slug: string | null; nombre: string }) {
   const [open, setOpen] = useState(false);
   const link = slug ? `${window.location.origin}/${slug}` : null;
+  const waShare = link
+    ? `https://wa.me/?text=${encodeURIComponent(`¡Reservá tu mesa en ${nombre || 'nuestro local'}! 🍽️\n${link}`)}`
+    : null;
 
   return (
     <div className="relative">
@@ -267,6 +270,12 @@ function LinkReservasButton({ slug }: { slug: string | null }) {
                     <ExternalLink className="h-4 w-4" /> Abrir
                   </a>
                 </div>
+                {waShare && (
+                  <a href={waShare} target="_blank" rel="noopener noreferrer"
+                     className="w-full rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white py-2 text-sm font-medium inline-flex items-center justify-center gap-1.5 mb-3">
+                    <MessageCircle className="h-4 w-4" /> Compartir por WhatsApp
+                  </a>
+                )}
                 <div className="flex flex-col items-center gap-1.5 pt-1 border-t border-ink/5">
                   <p className="text-[11px] text-ink-muted pt-2">QR para imprimir y poner en la mesa</p>
                   <img
