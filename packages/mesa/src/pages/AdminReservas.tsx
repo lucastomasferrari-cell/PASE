@@ -14,7 +14,7 @@ import {
   cambiarEstadoReserva, asignarMesaReserva,
   type Reserva, type EstadoReserva, type MesaSimple,
 } from '@/lib/reservasService';
-import { whatsAppUrl, mensajeConfirmacionReserva } from '@/lib/whatsapp';
+import { whatsAppUrl, mensajeConfirmacionReserva, enviarOFallback } from '@/lib/whatsapp';
 import { ReservaForm } from '@/components/ReservaForm';
 
 interface Props { localId: number; localNombre: string; }
@@ -274,17 +274,24 @@ function FilaReserva({
         {r.estado === 'pendiente' && (
           <BtnAccion icon={<Check className="h-3.5 w-3.5" />} label="Confirmar" tono="brand"
                      onClick={() => {
-                       // Confirmar + abrir WhatsApp pre-cargado para avisar al cliente.
-                       // El popup necesita ser disparado por el click (no por la promesa)
-                       // para que el browser no lo bloquee — abrimos primero la tab vacía
-                       // y la llenamos cuando termina la RPC.
-                       const popup = waUrl ? window.open('about:blank', '_blank') : null;
+                       // Confirmar + intentar mandar WhatsApp. Si el tenant tiene WA Business
+                       // configurada, va automático (silent). Si no, abrimos wa.me para que
+                       // el staff toque "Enviar". El popup hay que abrirlo en el click directo
+                       // o el browser lo bloquea — preventivo, lo cerramos si no hace falta.
+                       const popup = r.cliente_telefono ? window.open('about:blank', '_blank') : null;
+                       const mensaje = mensajeConfirmacionReserva({
+                         clienteNombre: r.cliente_nombre, localNombre, fechaHora: r.fecha_hora, personas: r.personas,
+                       });
                        const p = cambiarEstadoReserva({ reservaId: r.id, nuevoEstado: 'confirmada' });
-                       void p.then((res) => {
-                         if (!res.error && popup && waUrl) { popup.location.href = waUrl; }
+                       void p.then(async (res) => {
+                         if (res.error) { if (popup) popup.close(); return; }
+                         if (!r.cliente_telefono) { if (popup) popup.close(); return; }
+                         const wa = await enviarOFallback(r.cliente_telefono, mensaje);
+                         if (wa.sent) { if (popup) popup.close(); }
+                         else if (wa.fallbackUrl && popup) { popup.location.href = wa.fallbackUrl; }
                          else if (popup) popup.close();
                        });
-                       onAccion(p, 'Reserva confirmada — avisale por WA');
+                       onAccion(p, 'Reserva confirmada');
                      }} />
         )}
         {r.estado === 'confirmada' && (

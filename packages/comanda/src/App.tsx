@@ -118,6 +118,7 @@ const DisponibilidadLista = lazy(() => import('./pages/Catalogo/DisponibilidadLi
 // Admin — Settings
 const SettingsLocal = lazy(() => import('./pages/Settings/SettingsLocal').then(m => ({ default: m.SettingsLocal })));
 const SettingsAfip = lazy(() => import('./pages/Settings/SettingsAfip').then(m => ({ default: m.SettingsAfip })));
+const SettingsIntegraciones = lazy(() => import('./pages/Settings/SettingsIntegraciones').then(m => ({ default: m.SettingsIntegraciones })));
 const IntegracionPartnerScreen = lazy(() => import('./pages/Integraciones/IntegracionPartnerScreen').then(m => ({ default: m.IntegracionPartnerScreen })));
 const HardwareImpresoras = lazy(() => import('./pages/Hardware/HardwareImpresoras').then(m => ({ default: m.HardwareImpresoras })));
 const HardwareAgentes = lazy(() => import('./pages/Hardware/HardwareAgentes').then(m => ({ default: m.HardwareAgentes })));
@@ -365,6 +366,7 @@ export default function App() {
                   <Route path="/configuracion" element={<Navigate to="/configuracion/local" replace />} />
                   <Route path="/configuracion/local" element={<SettingsLocal />} />
                   <Route path="/configuracion/afip" element={<SettingsAfip />} />
+                  <Route path="/configuracion/integraciones" element={<SettingsIntegraciones />} />
                   <Route path="/configuracion/branding" element={<SettingsBranding />} />
                   <Route path="/configuracion/notificaciones" element={<SettingsRecibos />} />
                   <Route path="/configuracion/recibos" element={<SettingsRecibos />} />

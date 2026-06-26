@@ -183,7 +183,43 @@ BEGIN
   END IF;
 END $$;
 
--- ─── 6) Vista costo IG diario por tenant (admin-console) ────────────────
+-- ─── 6) Realtime mesas: publication para que el POS sincronice mesas ────
+-- Migración 202605101100. Habilita Supabase Realtime en tablas críticas
+-- (incluye `mesas`) para sincronizar updates entre dispositivos sin polling.
+-- Idempotente: si ya está, skip.
+DO $$
+DECLARE
+  tables TEXT[] := ARRAY['mesas','ventas_pos','ventas_pos_items','ventas_pos_pagos','turnos_caja','movimientos_caja','metodos_cobro','comanda_local_settings'];
+  t TEXT;
+BEGIN
+  FOREACH t IN ARRAY tables LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_publication_tables
+      WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = t
+    ) AND EXISTS (
+      SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = t
+    ) THEN
+      EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', t);
+    END IF;
+  END LOOP;
+END $$;
+
+-- ─── 7) Hub credenciales: extender tabla integraciones ──────────────────
+-- Permite cargar tokens de WhatsApp/Email/Stripe/etc por tenant desde la UI.
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'integraciones') THEN
+    EXECUTE 'ALTER TABLE integraciones ADD COLUMN IF NOT EXISTS ultima_verificacion_at TIMESTAMPTZ';
+    EXECUTE 'ALTER TABLE integraciones ADD COLUMN IF NOT EXISTS ultimo_error TEXT';
+    EXECUTE 'ALTER TABLE integraciones ADD COLUMN IF NOT EXISTS notas TEXT';
+    EXECUTE 'ALTER TABLE integraciones ADD COLUMN IF NOT EXISTS updated_by INTEGER';
+    EXECUTE 'ALTER TABLE integraciones DROP CONSTRAINT IF EXISTS integraciones_provider_check';
+    EXECUTE $C$ALTER TABLE integraciones ADD CONSTRAINT integraciones_provider_check CHECK (provider IN ('whatsapp_api','email','meta_ads','google_ads','search_console','instagram','google_maps','stripe','mp_point'))$C$;
+    EXECUTE 'ALTER TABLE integraciones DROP CONSTRAINT IF EXISTS integraciones_estado_check';
+    EXECUTE $C$ALTER TABLE integraciones ADD CONSTRAINT integraciones_estado_check CHECK (estado IN ('desconectado','conectado','error','probando'))$C$;
+  END IF;
+END $$;
+
+-- ─── 8) Vista costo IG diario por tenant (admin-console) ────────────────
 -- Mostrar gasto del bot IG por tenant en Tenants.tsx + alerta si se acerca al cap.
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'ig_config')

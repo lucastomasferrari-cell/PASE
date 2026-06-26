@@ -318,8 +318,164 @@ export default async function handler(req, res) {
 
       return res.status(200).json({ ok: true, temp_password: tempPassword });
 
+    } else if (action === 'credencial-list') {
+      // Lista las integraciones del tenant del caller. NUNCA devuelve secretos
+      // en plaintext — solo nombres de campos y si están seteados.
+      const { data: rows } = await db.from('integraciones')
+        .select('id, provider, estado, conectado_at, ultima_verificacion_at, ultimo_error, notas, updated_at, config')
+        .eq('tenant_id', auth.row.tenant_id);
+      const out = (rows ?? []).map((r) => ({
+        ...r,
+        // Redactar secretos: dejar solo las KEYS y un preview (..últimos 4)
+        config_keys: r.config ? Object.keys(r.config) : [],
+        config: undefined,
+        config_preview: r.config ? Object.fromEntries(
+          Object.entries(r.config).map(([k, v]) => [k,
+            typeof v === 'string' && v.length > 8 ? '...' + v.slice(-4) : v
+          ])
+        ) : null,
+      }));
+      return res.status(200).json({ ok: true, integraciones: out });
+
+    } else if (action === 'credencial-set') {
+      // Upsert una integración. config = objeto con credenciales en plain
+      // (RLS protege la tabla — solo service_role lee). Marca estado=desconectado
+      // al setear; la verificación efectiva la hace credencial-test.
+      const { provider, config, notas } = req.body || {};
+      const VALID_PROVIDERS = new Set([
+        'whatsapp_api','email','meta_ads','google_ads','search_console',
+        'instagram','google_maps','stripe','mp_point',
+      ]);
+      if (!provider || !VALID_PROVIDERS.has(provider)) {
+        return res.status(400).json({ ok: false, error: 'provider_invalido' });
+      }
+      if (!config || typeof config !== 'object') {
+        return res.status(400).json({ ok: false, error: 'config_invalido' });
+      }
+      const { data: existing } = await db.from('integraciones')
+        .select('id').eq('tenant_id', auth.row.tenant_id).eq('provider', provider).maybeSingle();
+      if (existing) {
+        const { error } = await db.from('integraciones').update({
+          config, notas: notas ?? null, estado: 'desconectado',
+          ultimo_error: null, updated_at: new Date().toISOString(),
+          updated_by: auth.row.id,
+        }).eq('id', existing.id);
+        if (error) return res.status(500).json({ ok: false, error: error.message });
+      } else {
+        const { error } = await db.from('integraciones').insert({
+          tenant_id: auth.row.tenant_id, provider, config,
+          estado: 'desconectado', notas: notas ?? null, updated_by: auth.row.id,
+        });
+        if (error) return res.status(500).json({ ok: false, error: error.message });
+      }
+      return res.status(200).json({ ok: true });
+
+    } else if (action === 'credencial-delete') {
+      // Desconectar una integración (borra la fila).
+      const { provider } = req.body || {};
+      if (!provider) return res.status(400).json({ ok: false, error: 'falta_provider' });
+      const { error } = await db.from('integraciones')
+        .delete()
+        .eq('tenant_id', auth.row.tenant_id)
+        .eq('provider', provider);
+      if (error) return res.status(500).json({ ok: false, error: error.message });
+      return res.status(200).json({ ok: true });
+
+    } else if (action === 'wa-send') {
+      // Mandar un mensaje de WhatsApp desde la app (Habitué/MESA/COMANDA).
+      // Usa la credencial del tenant del caller (no env vars).
+      const { to, texto, template } = req.body || {};
+      if (!to) return res.status(400).json({ ok: false, error: 'falta_to' });
+      const { getCredencial, sendWhatsApp } = await import('./_integraciones.js');
+      const wa = await getCredencial(db, auth.row.tenant_id, 'whatsapp_api');
+      const result = await sendWhatsApp({ wa, to, texto, template });
+      return res.status(200).json(result);
+
+    } else if (action === 'email-send') {
+      // Mandar un email transaccional desde la app.
+      const { to, subject, html, text } = req.body || {};
+      if (!to || !subject) return res.status(400).json({ ok: false, error: 'falta_to_o_subject' });
+      const { getCredencial, sendEmailTransactional } = await import('./_integraciones.js');
+      const email = await getCredencial(db, auth.row.tenant_id, 'email');
+      const result = await sendEmailTransactional({ email, to, subject, html, text });
+      return res.status(200).json(result);
+
+    } else if (action === 'credencial-test') {
+      // Verifica que la credencial funciona. Implementa pings específicos
+      // por provider (HEAD/GET a sus APIs). Si funciona, marca conectado;
+      // si no, error.
+      const { provider } = req.body || {};
+      if (!provider) return res.status(400).json({ ok: false, error: 'falta_provider' });
+      const { data: integ } = await db.from('integraciones')
+        .select('id, config')
+        .eq('tenant_id', auth.row.tenant_id)
+        .eq('provider', provider)
+        .maybeSingle();
+      if (!integ) return res.status(404).json({ ok: false, error: 'no_configurada' });
+      const config = integ.config || {};
+      let testOk = false;
+      let testError = null;
+      try {
+        if (provider === 'whatsapp_api') {
+          const phoneId = config.phone_number_id;
+          const token = config.access_token;
+          if (!phoneId || !token) throw new Error('Falta phone_number_id o access_token');
+          const r = await fetch(`https://graph.facebook.com/v21.0/${phoneId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!r.ok) throw new Error(`Meta API ${r.status}`);
+          testOk = true;
+        } else if (provider === 'email') {
+          const apiKey = config.api_key;
+          if (!apiKey) throw new Error('Falta api_key');
+          const r = await fetch('https://api.resend.com/domains', {
+            headers: { Authorization: `Bearer ${apiKey}` },
+          });
+          if (!r.ok) throw new Error(`Resend ${r.status}`);
+          testOk = true;
+        } else if (provider === 'meta_ads') {
+          const token = config.access_token;
+          const adId = config.ad_account_id;
+          if (!token || !adId) throw new Error('Falta access_token o ad_account_id');
+          const r = await fetch(`https://graph.facebook.com/v21.0/${adId}?fields=id,name`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!r.ok) throw new Error(`Meta Ads ${r.status}`);
+          testOk = true;
+        } else if (provider === 'google_maps') {
+          const apiKey = config.api_key;
+          const placeId = config.place_id;
+          if (!apiKey || !placeId) throw new Error('Falta api_key o place_id');
+          const r = await fetch(`https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name&key=${apiKey}`);
+          const data = await r.json();
+          if (data.status !== 'OK') throw new Error(`Places ${data.status}: ${data.error_message ?? ''}`);
+          testOk = true;
+        } else if (provider === 'stripe') {
+          const sk = config.secret_key;
+          if (!sk) throw new Error('Falta secret_key');
+          const r = await fetch('https://api.stripe.com/v1/account', {
+            headers: { Authorization: `Bearer ${sk}` },
+          });
+          if (!r.ok) throw new Error(`Stripe ${r.status}`);
+          testOk = true;
+        } else {
+          testError = 'test_no_implementado_para_este_provider';
+        }
+      } catch (e) {
+        testError = e.message;
+      }
+
+      await db.from('integraciones').update({
+        estado: testOk ? 'conectado' : 'error',
+        ultima_verificacion_at: new Date().toISOString(),
+        ultimo_error: testError,
+        conectado_at: testOk ? new Date().toISOString() : null,
+      }).eq('id', integ.id);
+
+      return res.status(200).json({ ok: testOk, error: testError });
+
     } else {
-      return res.status(400).json({ ok: false, error: 'action requerida: create | change_password | reset_password | create_comanda' });
+      return res.status(400).json({ ok: false, error: 'action requerida: create | change_password | reset_password | create_comanda | credencial-list | credencial-set | credencial-delete | credencial-test | wa-send | email-send' });
     }
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });

@@ -954,6 +954,29 @@ async function handleNotifyPedido(req, res) {
     return;
   }
 
+  // ── WhatsApp paralelo (best-effort): si el tenant tiene WA Business API
+  // configurada y la venta tiene cliente_telefono, mandar confirmación
+  // también por WA. Es lo que los clientes argentinos esperan.
+  let waResult = null;
+  try {
+    const { data: ventaTel } = await supabase
+      .from('ventas_pos')
+      .select('cliente_telefono, tenant_id')
+      .eq('id', venta_id)
+      .single();
+    if (ventaTel?.cliente_telefono && ventaTel.tenant_id) {
+      const { getCredencial, sendWhatsApp } = await import('./_integraciones.js');
+      const wa = await getCredencial(supabase, ventaTel.tenant_id, 'whatsapp_api');
+      if (wa) {
+        const tel = ventaTel.cliente_telefono.replace(/\D/g, '');
+        const texto = `Hola ${venta.cliente_nombre ?? ''}! ✅\nRecibimos tu pedido #${venta.numero_local ?? venta.id} en ${local.nombre}.\nTotal: $${venta.total}\n${tiempo ? `Tiempo estimado: ${tiempo} min\n` : ''}Seguilo acá: ${seguimientoUrl}`;
+        waResult = await sendWhatsApp({ wa, to: tel, texto });
+      }
+    }
+  } catch (e) {
+    console.warn('[notify-pedido] WA paralelo falló:', e?.message);
+  }
+
   // Marcar como enviado (también si skipped, así no reintenta cada navegación).
   // eslint-disable-next-line pase-local/no-direct-financiera-write -- campo no-financiero (timestamp notif), endpoint server-side con service_role
   await supabase
@@ -961,7 +984,7 @@ async function handleNotifyPedido(req, res) {
     .update({ notif_email_recibido_at: new Date().toISOString() })
     .eq('id', venta_id);
 
-  res.status(200).json({ ok: true, sent: !sent.skipped, email_id: sent.id });
+  res.status(200).json({ ok: true, sent: !sent.skipped, email_id: sent.id, wa: waResult });
 }
 
 // ─── NOTIFY: Tu pedido está listo ───────────────────────────────────────────
@@ -1027,13 +1050,35 @@ async function handleNotifyListo(req, res) {
     return;
   }
 
+  // ── WhatsApp paralelo (best-effort) — mismo patrón que notify-pedido
+  let waResult = null;
+  try {
+    const { data: ventaTel } = await supabase
+      .from('ventas_pos')
+      .select('cliente_telefono, tenant_id')
+      .eq('id', venta_id)
+      .single();
+    if (ventaTel?.cliente_telefono && ventaTel.tenant_id) {
+      const { getCredencial, sendWhatsApp } = await import('./_integraciones.js');
+      const wa = await getCredencial(supabase, ventaTel.tenant_id, 'whatsapp_api');
+      if (wa) {
+        const tel = ventaTel.cliente_telefono.replace(/\D/g, '');
+        const accion = venta.tipo_entrega === 'delivery' ? 'sale en camino' : 'está listo para retirar';
+        const texto = `${venta.cliente_nombre ?? ''}! 🎉\nTu pedido #${venta.numero_local ?? venta.id} en ${local?.nombre ?? ''} ${accion}.${cls?.direccion ? `\n📍 ${cls.direccion}` : ''}${cls?.telefono ? `\n📞 ${cls.telefono}` : ''}`;
+        waResult = await sendWhatsApp({ wa, to: tel, texto });
+      }
+    }
+  } catch (e) {
+    console.warn('[notify-listo] WA paralelo falló:', e?.message);
+  }
+
   // eslint-disable-next-line pase-local/no-direct-financiera-write -- campo no-financiero
   await supabase
     .from('ventas_pos')
     .update({ notif_email_listo_at: new Date().toISOString() })
     .eq('id', venta_id);
 
-  res.status(200).json({ ok: true, sent: !sent.skipped });
+  res.status(200).json({ ok: true, sent: !sent.skipped, wa: waResult });
 }
 
 // ─── NOTIFY: Pedido rechazado / cancelado ───────────────────────────────────

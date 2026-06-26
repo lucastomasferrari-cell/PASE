@@ -212,6 +212,7 @@ const ADMIN_NAVIGATION_FULL: NavCategory[] = [
     requiredPermission: 'comanda.configuracion.editar',
     subItems: [
       { slug: 'local',          label: 'Local',                 href: '/configuracion/local' },
+      { slug: 'integraciones',  label: 'Integraciones (WhatsApp, Email, Stripe…)', href: '/configuracion/integraciones' },
       { slug: 'afip',           label: 'Factura electrónica AFIP', href: '/configuracion/afip' },
       { slug: 'branding',       label: 'Branding y logos',      href: '/configuracion/branding',       badge: 'soon' },
       { slug: 'notificaciones', label: 'Notificaciones',        href: '/configuracion/notificaciones', badge: 'soon' },

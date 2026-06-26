@@ -1,6 +1,11 @@
-// WhatsApp click-to-chat (wa.me) — gratis, sin Twilio/BSP. Genera un link que
-// abre WhatsApp con el mensaje pre-armado; el staff toca "Enviar". Port de
-// COMANDA (packages/comanda/src/lib/whatsapp.ts).
+// WhatsApp helper: si el tenant tiene WA Business API configurada (hub de
+// credenciales en COMANDA Settings → Integraciones), manda el mensaje
+// automáticamente sin abrir nada. Si NO, cae a wa.me (click-to-chat) — gratis.
+// Port + extensión de COMANDA (packages/comanda/src/lib/whatsapp.ts).
+
+import { db } from './supabase';
+
+const PASE_API_BASE = (import.meta.env.VITE_PASE_API_BASE as string | undefined) || 'https://pase-yndx.vercel.app';
 
 export function normalizarTelefonoAR(telefono: string | null | undefined): string | null {
   if (!telefono) return null;
@@ -57,4 +62,42 @@ export function mensajeRecordatorioReserva(args: {
   const hora = fmtHoraES(args.fechaHora);
   const p = `${args.personas} persona${args.personas === 1 ? '' : 's'}`;
   return `Hola ${args.clienteNombre}! 👋\nTe recordamos que *hoy a las ${hora}* tenés reserva en *${args.localNombre}* para ${p}.\n\n¿Venís? ¡Te esperamos!`;
+}
+
+/**
+ * Manda un mensaje de WhatsApp. Si el tenant tiene WA Business API configurada,
+ * lo envía automáticamente (silent). Si no, devuelve la URL wa.me para que el
+ * llamador la abra (fallback manual).
+ *
+ * @returns { sent: true } si se envió automático
+ *          { sent: false, fallbackUrl } si hay que abrir wa.me a mano
+ */
+export async function enviarOFallback(telefono: string | null | undefined, mensaje: string): Promise<{
+  sent: boolean;
+  fallbackUrl?: string;
+  error?: string;
+}> {
+  const tel = normalizarTelefonoAR(telefono);
+  if (!tel) return { sent: false, error: 'sin_telefono' };
+
+  // 1. Intentar via WA Business API (endpoint /api/auth-admin?action=wa-send)
+  try {
+    const { data: sess } = await db().auth.getSession();
+    const token = sess.session?.access_token;
+    if (token) {
+      const r = await fetch(`${PASE_API_BASE}/api/auth-admin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'wa-send', to: tel, texto: mensaje }),
+      });
+      const d = await r.json();
+      if (d.ok) return { sent: true };
+      // Si la credencial no está configurada, caemos al fallback wa.me
+    }
+  } catch {
+    // network error → fallback
+  }
+
+  // 2. Fallback: link wa.me que el staff toca para enviar manual.
+  return { sent: false, fallbackUrl: `https://wa.me/${tel}?text=${encodeURIComponent(mensaje)}` };
 }
