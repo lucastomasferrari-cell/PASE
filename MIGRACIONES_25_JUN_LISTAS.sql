@@ -183,6 +183,34 @@ BEGIN
   END IF;
 END $$;
 
+-- ─── 6) Vista costo IG diario por tenant (admin-console) ────────────────
+-- Mostrar gasto del bot IG por tenant en Tenants.tsx + alerta si se acerca al cap.
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'ig_config')
+     AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'ig_mensajes') THEN
+    EXECUTE $V$
+      CREATE OR REPLACE VIEW v_ig_costo_diario_tenant AS
+      SELECT
+        c.tenant_id,
+        COALESCE(MAX(c.cap_diario_usd), 5.00) AS cap_diario_usd,
+        COALESCE(SUM(
+          CASE WHEN m.created_at >= CURRENT_DATE THEN m.llm_cost_usd ELSE 0 END
+        ), 0)::NUMERIC(10,4) AS gasto_hoy_usd,
+        COALESCE(SUM(
+          CASE WHEN m.created_at >= CURRENT_DATE - INTERVAL '7 days' THEN m.llm_cost_usd ELSE 0 END
+        ), 0)::NUMERIC(10,4) AS gasto_7d_usd,
+        COUNT(*) FILTER (
+          WHERE m.created_at >= CURRENT_DATE AND m.direccion = 'out' AND m.origen = 'bot'
+        ) AS mensajes_hoy
+      FROM ig_config c
+      LEFT JOIN ig_mensajes m ON m.tenant_id = c.tenant_id
+      GROUP BY c.tenant_id
+    $V$;
+    EXECUTE 'REVOKE ALL ON v_ig_costo_diario_tenant FROM PUBLIC';
+    EXECUTE 'GRANT SELECT ON v_ig_costo_diario_tenant TO authenticated';
+  END IF;
+END $$;
+
 -- ─── Verificación final ──────────────────────────────────────────────────
 DO $$
 DECLARE

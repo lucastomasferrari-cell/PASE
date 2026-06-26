@@ -22,6 +22,9 @@ interface TenantRow {
   sub_estado?: string | null;
   num_locales: number;
   num_usuarios: number;
+  // Bot IG cost watch (migración 202606260100)
+  ig_gasto_hoy?: number | null;
+  ig_cap_diario?: number | null;
 }
 
 // Mapeo estado de subscription → color del badge.
@@ -64,6 +67,16 @@ export function Tenants() {
 
     const list = (ts || []) as Omit<TenantRow, 'num_locales' | 'num_usuarios' | 'sub_estado'>[];
 
+    // Vista v_ig_costo_diario_tenant (migración 202606260100): un SELECT global
+    // y mapeamos por tenant_id en JS. Si la vista no existe (tenants sin bot),
+    // gasto_hoy_usd queda en 0.
+    const { data: igCostos } = await db.from('v_ig_costo_diario_tenant')
+      .select('tenant_id, gasto_hoy_usd, cap_diario_usd');
+    const igMap = new Map<string, { gasto: number; cap: number }>();
+    for (const r of (igCostos ?? []) as { tenant_id: string; gasto_hoy_usd: number; cap_diario_usd: number }[]) {
+      igMap.set(r.tenant_id, { gasto: Number(r.gasto_hoy_usd), cap: Number(r.cap_diario_usd) });
+    }
+
     // 2. Para cada tenant, contar locales + usuarios + buscar estado de sub.
     // Estos counts no escalan a miles, pero hoy hay <20 tenants, sirve.
     const enriched: TenantRow[] = await Promise.all(list.map(async (t) => {
@@ -72,11 +85,14 @@ export function Tenants() {
         db.from('usuarios').select('*', { count: 'exact', head: true }).eq('tenant_id', t.id),
         db.from('tenant_subscriptions').select('estado').eq('tenant_id', t.id).maybeSingle(),
       ]);
+      const ig = igMap.get(t.id);
       return {
         ...t,
         num_locales: locCount || 0,
         num_usuarios: usrCount || 0,
         sub_estado: subRow?.estado ?? null,
+        ig_gasto_hoy: ig?.gasto ?? null,
+        ig_cap_diario: ig?.cap ?? null,
       };
     }));
     setTenants(enriched);
@@ -212,6 +228,7 @@ export function Tenants() {
                 <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider">Plan / Estado</th>
                 <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider text-right">Locales</th>
                 <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider text-right">Usuarios</th>
+                <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider text-right" title="Costo del bot IG hoy / cap diario">IG hoy</th>
                 <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider">Creado</th>
                 <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider"></th>
               </tr>
@@ -236,6 +253,20 @@ export function Tenants() {
                   </td>
                   <td className="px-3 py-2.5 text-right text-admin-text font-mono">{t.num_locales}</td>
                   <td className="px-3 py-2.5 text-right text-admin-text font-mono">{t.num_usuarios}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-xs">
+                    {t.ig_cap_diario != null ? (() => {
+                      const gasto = t.ig_gasto_hoy ?? 0;
+                      const cap = t.ig_cap_diario ?? 5;
+                      const pct = cap > 0 ? gasto / cap : 0;
+                      const cls = pct >= 1 ? 'text-admin-danger font-semibold'
+                        : pct >= 0.8 ? 'text-admin-warn font-semibold'
+                        : gasto > 0 ? 'text-admin-text'
+                        : 'text-admin-muted';
+                      return <span className={cls} title={`${(pct * 100).toFixed(0)}% del cap`}>
+                        ${gasto.toFixed(2)} / ${cap.toFixed(0)}
+                      </span>;
+                    })() : <span className="text-admin-muted">—</span>}
+                  </td>
                   <td className="px-3 py-2.5 text-admin-muted text-xs font-mono">
                     {t.created_at ? t.created_at.slice(0, 10) : '—'}
                   </td>
