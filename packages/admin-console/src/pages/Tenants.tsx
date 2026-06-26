@@ -85,14 +85,13 @@ export function Tenants() {
 
   useEffect(() => { void load(); }, [load]);
 
-  // AUDIT F6B#1: verComo está deshabilitado hasta implementar el lado PASE.
-  // Antes: el botón abría URL `?as=<uuid>` que PASE NUNCA leía → Lucas
-  // clickeaba "Ver" y veía su propio tenant (Neko), silently broken.
-  // Para implementar realmente: handler en PASE App.tsx que lea ?as, valide
-  // que el caller es superadmin, escriba pase_tenant_override en sessionStorage
-  // y recargue. Por ahora el botón está oculto para no engañar.
+  // F6B#1 (26-jun-2026): habilitado. PASE App.tsx ahora lee `?override_tenant=<uuid>`
+  // al cargar, lo guarda en sessionStorage (key TENANT_OVERRIDE_KEY), limpia
+  // la URL y aplica el override solo si el user logueado es superadmin.
+  // Si no es superadmin, applyLogin lo borra solo (defense-in-depth).
   const verComo = (t: TenantRow) => {
-    alert(`Función "Ver como" deshabilitada — el handler ?as=<uuid> en PASE no está implementado todavía. Pendiente sprint dedicado. Tenant: ${t.nombre}`);
+    const url = `https://pase-yndx.vercel.app/?override_tenant=${encodeURIComponent(t.id)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
   // Mantener referencia explícita para que TS/ESLint no se queje del unused var.
   // PASE_API_BASE se mantiene en uso por otros features (si los hay).

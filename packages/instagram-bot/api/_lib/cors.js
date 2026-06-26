@@ -7,10 +7,16 @@ const ALLOWED_ORIGINS = new Set([
   'https://pase-admin-console.vercel.app',
   'https://comanda-yndx.vercel.app',
   'https://pase-comanda.vercel.app',
+  // Apps nuevas del ecosistema Cocina (25-jun-2026)
+  'https://habitue.vercel.app',
+  'https://mesa-orpin.vercel.app',
+  'https://accesos-eight.vercel.app',
   // Localhost para dev
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:5175',
+  'http://localhost:5176',
+  'http://localhost:5177',
 ]);
 
 // Para previews de Vercel del propio team.

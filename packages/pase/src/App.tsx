@@ -499,6 +499,24 @@ function AppMain() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refetchLocales se redefine cada render pero solo queremos correr al cambiar user.
   },[user]);
 
+  // Handler "Ver como tenant" desde admin-console (26-jun-2026).
+  // Admin-console abre PASE con `?override_tenant=<uuid>` después de validar
+  // que el caller es superadmin. Acá leemos el param, lo guardamos en
+  // sessionStorage (que applyLogin lee si rol===superadmin) y limpiamos
+  // la URL. Si el user logueado NO es superadmin, applyLogin lo borra solo.
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const overrideTenant = params.get('override_tenant');
+      if (overrideTenant && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(overrideTenant)) {
+        sessionStorage.setItem(TENANT_OVERRIDE_KEY, overrideTenant);
+        params.delete('override_tenant');
+        const newUrl = window.location.pathname + (params.toString() ? '?' + params : '') + window.location.hash;
+        window.history.replaceState({}, '', newUrl);
+      }
+    } catch { /* fail silently */ }
+  }, []);
+
   // Restaurar sesión al cargar.
   useEffect(()=>{
     const restore = async () => {
