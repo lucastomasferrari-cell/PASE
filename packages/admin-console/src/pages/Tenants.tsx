@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '@/lib/supabase';
 import { cn } from '@/lib/cn';
-import { Building2, Plus, Loader2, Search, ExternalLink, ToggleLeft } from 'lucide-react';
+import { Building2, Plus, Loader2, Search, ExternalLink, ToggleLeft, CreditCard } from 'lucide-react';
 import { TenantWizard } from '@/components/TenantWizard';
 
 // URL del backend de PASE — el endpoint /api/crear-tenant vive ahí porque ya
@@ -287,6 +287,13 @@ export function Tenants() {
                         title="Activar/desactivar funciones del tenant"
                       >
                         <ToggleLeft className="w-3 h-3" /> Funciones
+                      </button>
+                      <button
+                        onClick={() => navigate(`/tenants/${t.id}/billing`)}
+                        className="px-2 py-1 rounded text-xs text-admin-muted hover:text-admin-text hover:bg-admin-border/40 flex items-center gap-1"
+                        title="Suscripción y facturación"
+                      >
+                        <CreditCard className="w-3 h-3" /> Billing
                       </button>
                       <button
                         onClick={() => toggleActivo(t)}

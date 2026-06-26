@@ -219,7 +219,61 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- ─── 8) Vista costo IG diario por tenant (admin-console) ────────────────
+-- ─── 8) Conciliación caja con diferencias + RPC + vista ────────────────
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'partes_operativos') THEN
+    EXECUTE 'ALTER TABLE partes_operativos ADD COLUMN IF NOT EXISTS declarado_efectivo NUMERIC(14,2)';
+    EXECUTE 'ALTER TABLE partes_operativos ADD COLUMN IF NOT EXISTS sistema_efectivo NUMERIC(14,2)';
+    EXECUTE 'ALTER TABLE partes_operativos ADD COLUMN IF NOT EXISTS diferencia NUMERIC(14,2)';
+    EXECUTE 'ALTER TABLE partes_operativos ADD COLUMN IF NOT EXISTS diferencia_justificacion TEXT';
+    EXECUTE 'ALTER TABLE partes_operativos ADD COLUMN IF NOT EXISTS diferencia_aceptada_por TEXT';
+  END IF;
+END $$;
+
+CREATE OR REPLACE FUNCTION fn_cuadre_caja(
+  p_turno_id INTEGER, p_declarado_efectivo NUMERIC,
+  p_justificacion TEXT DEFAULT NULL, p_aceptado_por TEXT DEFAULT NULL
+) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $F$
+DECLARE v_local_id INTEGER; v_tenant_id TEXT; v_sistema NUMERIC := 0; v_diferencia NUMERIC; v_parte_id BIGINT;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'NOT_AUTHENTICATED'; END IF;
+  SELECT t.local_id, l.tenant_id::TEXT INTO v_local_id, v_tenant_id
+    FROM turnos_caja t JOIN locales l ON l.id = t.local_id WHERE t.id = p_turno_id;
+  IF v_local_id IS NULL THEN RAISE EXCEPTION 'TURNO_NO_ENCONTRADO'; END IF;
+  IF NOT (auth_es_dueno_o_admin() OR v_local_id = ANY(auth_locales_visibles())) THEN
+    RAISE EXCEPTION 'NO_ACCESO_AL_LOCAL';
+  END IF;
+  SELECT COALESCE(SUM(monto), 0) INTO v_sistema FROM movimientos_caja
+    WHERE turno_id = p_turno_id AND metodo_cobro = 'efectivo';
+  v_diferencia := p_declarado_efectivo - v_sistema;
+  SELECT id INTO v_parte_id FROM partes_operativos WHERE turno_id = p_turno_id;
+  IF v_parte_id IS NOT NULL THEN
+    UPDATE partes_operativos SET declarado_efectivo = p_declarado_efectivo, sistema_efectivo = v_sistema,
+      diferencia = v_diferencia, diferencia_justificacion = p_justificacion,
+      diferencia_aceptada_por = p_aceptado_por WHERE id = v_parte_id;
+  ELSE
+    INSERT INTO partes_operativos (tenant_id, local_id, turno_id, declarado_efectivo, sistema_efectivo,
+      diferencia, diferencia_justificacion, diferencia_aceptada_por)
+    VALUES (v_tenant_id, v_local_id, p_turno_id, p_declarado_efectivo, v_sistema, v_diferencia,
+      p_justificacion, p_aceptado_por) RETURNING id INTO v_parte_id;
+  END IF;
+  RETURN jsonb_build_object('ok', true, 'parte_id', v_parte_id, 'sistema', v_sistema,
+    'declarado', p_declarado_efectivo, 'diferencia', v_diferencia,
+    'estado', CASE WHEN ABS(v_diferencia) < 1 THEN 'cuadra' WHEN v_diferencia > 0 THEN 'sobra' ELSE 'falta' END);
+END $F$;
+GRANT EXECUTE ON FUNCTION fn_cuadre_caja(INTEGER, NUMERIC, TEXT, TEXT) TO authenticated;
+
+-- ─── 9) tenant_subscriptions: campos Stripe ─────────────────────────────
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'tenant_subscriptions') THEN
+    EXECUTE 'ALTER TABLE tenant_subscriptions ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT';
+    EXECUTE 'ALTER TABLE tenant_subscriptions ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT';
+    EXECUTE 'ALTER TABLE tenant_subscriptions ADD COLUMN IF NOT EXISTS stripe_price_id TEXT';
+    EXECUTE 'ALTER TABLE tenant_subscriptions ADD COLUMN IF NOT EXISTS stripe_checkout_session_id TEXT';
+  END IF;
+END $$;
+
+-- ─── 10) Vista costo IG diario por tenant (admin-console) ────────────────
 -- Mostrar gasto del bot IG por tenant en Tenants.tsx + alerta si se acerca al cap.
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'ig_config')

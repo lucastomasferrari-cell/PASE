@@ -5,6 +5,7 @@ import { Login } from './pages/Login';
 import { Soporte } from './pages/Soporte';
 import { Tenants } from './pages/Tenants';
 import { TenantFeaturesDetalle } from './pages/TenantFeaturesDetalle';
+import { TenantBilling } from './pages/TenantBilling';
 import { TenantsFeaturesMatriz } from './pages/TenantsFeaturesMatriz';
 import { Pagos } from './pages/Pagos';
 import { Metricas } from './pages/Metricas';
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="/tenants" element={<Tenants />} />
           <Route path="/tenants/features" element={<TenantsFeaturesMatriz />} />
           <Route path="/tenants/:tenantId/features" element={<TenantFeaturesDetalle />} />
+          <Route path="/tenants/:id/billing" element={<TenantBilling />} />
           <Route path="/pagos" element={<Pagos />} />
           <Route path="/metricas" element={<Metricas />} />
           <Route path="*" element={<Navigate to="/soporte" replace />} />

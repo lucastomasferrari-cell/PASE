@@ -381,6 +381,111 @@ export default async function handler(req, res) {
       if (error) return res.status(500).json({ ok: false, error: error.message });
       return res.status(200).json({ ok: true });
 
+    } else if (action === 'stripe-checkout') {
+      // Inicia un checkout de Stripe para que el tenant pague la suscripción.
+      // Requiere credencial stripe configurada en hub. Crea checkout session
+      // y devuelve URL para redirect. Webhook actualiza tenant_subscriptions.
+      const { plan_id, success_url, cancel_url } = req.body || {};
+      if (!plan_id) return res.status(400).json({ ok: false, error: 'falta_plan_id' });
+      const { getCredencial } = await import('./_integraciones.js');
+      const stripeCred = await getCredencial(db, auth.row.tenant_id, 'stripe');
+      if (!stripeCred?.config?.secret_key) {
+        return res.status(400).json({ ok: false, error: 'stripe_no_configurado' });
+      }
+      // Levantar plan + precio (billing_plans tiene precio_mensual_ars)
+      const { data: plan } = await db.from('billing_plans').select('*').eq('id', plan_id).single();
+      if (!plan) return res.status(404).json({ ok: false, error: 'plan_no_encontrado' });
+
+      // Levantar/crear customer en Stripe. Si el tenant ya tiene
+      // stripe_customer_id usamos ese; si no, creamos uno nuevo.
+      const { data: sub } = await db.from('tenant_subscriptions')
+        .select('id, stripe_customer_id')
+        .eq('tenant_id', auth.row.tenant_id).maybeSingle();
+      let customerId = sub?.stripe_customer_id ?? null;
+
+      const stripeAuth = { Authorization: `Bearer ${stripeCred.config.secret_key}` };
+      if (!customerId) {
+        const cr = await fetch('https://api.stripe.com/v1/customers', {
+          method: 'POST', headers: { ...stripeAuth, 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ email: auth.row.email || '', name: auth.row.nombre || '' }),
+        });
+        const cd = await cr.json();
+        if (!cr.ok) return res.status(502).json({ ok: false, error: cd?.error?.message || `stripe ${cr.status}` });
+        customerId = cd.id;
+        if (sub) {
+          await db.from('tenant_subscriptions').update({ stripe_customer_id: customerId }).eq('id', sub.id);
+        }
+      }
+
+      // Crear checkout session en modo subscription. price_data inline para
+      // no requerir setup previo de prices en Stripe Dashboard.
+      const monto = Number(plan.precio_mensual_ars);
+      const form = new URLSearchParams();
+      form.append('mode', 'subscription');
+      form.append('customer', customerId);
+      form.append('success_url', success_url || 'https://pase-admin-console.vercel.app/billing/success');
+      form.append('cancel_url', cancel_url || 'https://pase-admin-console.vercel.app/tenants');
+      form.append('line_items[0][quantity]', '1');
+      form.append('line_items[0][price_data][currency]', 'ars');
+      form.append('line_items[0][price_data][product_data][name]', plan.nombre);
+      form.append('line_items[0][price_data][unit_amount]', String(Math.round(monto * 100)));
+      form.append('line_items[0][price_data][recurring][interval]', 'month');
+      form.append('metadata[tenant_id]', auth.row.tenant_id || '');
+      form.append('metadata[plan_id]', plan_id);
+      const sr = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+        method: 'POST', headers: { ...stripeAuth, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: form,
+      });
+      const sd = await sr.json();
+      if (!sr.ok) return res.status(502).json({ ok: false, error: sd?.error?.message || `stripe ${sr.status}` });
+
+      // Guardar session id para reconciliación posterior
+      await db.from('tenant_subscriptions').update({
+        stripe_checkout_session_id: sd.id,
+        gateway_provider: 'stripe',
+      }).eq('tenant_id', auth.row.tenant_id);
+
+      return res.status(200).json({ ok: true, url: sd.url, session_id: sd.id });
+
+    } else if (action === 'stripe-webhook') {
+      // NOTA: este action está aquí solo para multiplexar. En prod conviene
+      // tener un endpoint dedicado /api/stripe-webhook con verificación de
+      // firma (Stripe-Signature header). Para webhooks reales setear en
+      // Stripe Dashboard → Webhooks → Endpoint URL = /api/stripe-webhook.
+      // Eventos a manejar: checkout.session.completed, invoice.paid,
+      // customer.subscription.updated, customer.subscription.deleted.
+      const event = req.body || {};
+      try {
+        if (event.type === 'checkout.session.completed') {
+          const session = event.data?.object;
+          const tenantId = session?.metadata?.tenant_id;
+          const planId = session?.metadata?.plan_id;
+          if (tenantId) {
+            await db.from('tenant_subscriptions').update({
+              estado: 'active',
+              stripe_subscription_id: session.subscription,
+              gateway_provider: 'stripe',
+              plan_id: planId || undefined,
+              current_period_start: new Date().toISOString(),
+            }).eq('tenant_id', tenantId);
+          }
+        } else if (event.type === 'customer.subscription.deleted') {
+          const sub = event.data?.object;
+          await db.from('tenant_subscriptions').update({
+            estado: 'cancelled',
+            cancelled_at: new Date().toISOString(),
+          }).eq('stripe_subscription_id', sub.id);
+        } else if (event.type === 'invoice.payment_failed') {
+          const inv = event.data?.object;
+          await db.from('tenant_subscriptions').update({
+            estado: 'past_due',
+          }).eq('stripe_subscription_id', inv.subscription);
+        }
+      } catch (e) {
+        console.error('[stripe-webhook]', e?.message);
+      }
+      return res.status(200).json({ ok: true, received: true });
+
     } else if (action === 'wa-send') {
       // Mandar un mensaje de WhatsApp desde la app (Habitué/MESA/COMANDA).
       // Usa la credencial del tenant del caller (no env vars).
@@ -475,7 +580,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: testOk, error: testError });
 
     } else {
-      return res.status(400).json({ ok: false, error: 'action requerida: create | change_password | reset_password | create_comanda | credencial-list | credencial-set | credencial-delete | credencial-test | wa-send | email-send' });
+      return res.status(400).json({ ok: false, error: 'action requerida: create | change_password | reset_password | create_comanda | credencial-list | credencial-set | credencial-delete | credencial-test | wa-send | email-send | stripe-checkout | stripe-webhook' });
     }
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
