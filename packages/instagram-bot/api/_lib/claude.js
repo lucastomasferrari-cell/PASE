@@ -56,6 +56,14 @@ const MODELOS_VALIDOS = new Set([
 ]);
 const MODELO_FALLBACK = 'claude-sonnet-4-6';
 
+// AUDIT F6A CRIT-4 (2026-05-27): clamps defensivos server-side. Si un dueño
+// hostil o un JWT robado hace `UPDATE ig_config SET max_tokens=200000`, sin
+// estos topes 1 mensaje cuesta ~$1 USD en Sonnet. Defensa en profundidad:
+// además del CHECK constraint en DB (migration 202606250800), clamp acá
+// también — un atacante con service_role bypassa RLS pero NO el código.
+const MAX_TOKENS_HARD_CAP = 4096;
+const SYSTEM_PROMPT_HARD_CAP = 50_000;  // chars (≈ 12.500 tokens)
+
 export async function llamarClaude({
   systemPrompt,
   messages,
@@ -66,6 +74,19 @@ export async function llamarClaude({
   if (!MODELOS_VALIDOS.has(modelo)) {
     console.warn(`[claude] modelo '${modelo}' no es válido, usando ${MODELO_FALLBACK}`);
     modelo = MODELO_FALLBACK;
+  }
+
+  // Clamp defensivo: max_tokens y system_prompt no pueden exceder topes
+  // razonables aunque ig_config tenga valores corruptos.
+  const maxTokensClamp = Math.min(Math.max(128, Number(maxTokens) || 1024), MAX_TOKENS_HARD_CAP);
+  if (maxTokensClamp !== maxTokens) {
+    console.warn(`[claude] maxTokens=${maxTokens} clampeado a ${maxTokensClamp}`);
+  }
+  maxTokens = maxTokensClamp;
+
+  if (typeof systemPrompt === 'string' && systemPrompt.length > SYSTEM_PROMPT_HARD_CAP) {
+    console.warn(`[claude] systemPrompt length=${systemPrompt.length} excede ${SYSTEM_PROMPT_HARD_CAP}, truncado`);
+    systemPrompt = systemPrompt.slice(0, SYSTEM_PROMPT_HARD_CAP);
   }
   // AUDIT F6A#5: el system prompt va como array con cache_control para
   // que Anthropic lo cachee 5 min. Solo cachea si pesa ≥ 1024 tokens

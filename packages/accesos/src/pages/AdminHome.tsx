@@ -65,6 +65,26 @@ export function AdminHome() {
       const mail = email.includes('@') ? email : `${email}@pase.local`;
       const { data, error } = await db().auth.signInWithPassword({ email: mail, password });
       if (error || !data.session) { toast.error('Usuario o contraseña incorrectos'); return; }
+
+      // Gating apps_permitidas. Accesos es de uso casi exclusivo del dueño;
+      // por eso, además de chequear apps_permitidas, exigimos rol dueno/admin/superadmin.
+      const { data: perfil } = await db().from('usuarios')
+        .select('apps_permitidas, rol')
+        .eq('auth_id', data.session.user.id)
+        .maybeSingle();
+      const apps = (perfil?.apps_permitidas as string[] | null) ?? ['pase'];
+      const rol = perfil?.rol as string | undefined;
+      if (!apps.includes('accesos')) {
+        toast.error('Tu cuenta no tiene acceso a Accesos. Pedile al dueño que te habilite.');
+        await db().auth.signOut();
+        return;
+      }
+      if (!rol || !['dueno', 'admin', 'superadmin'].includes(rol)) {
+        toast.error('Accesos es solo para el dueño / admin del local.');
+        await db().auth.signOut();
+        return;
+      }
+
       setSesion({ email: data.session.user.email ?? mail });
     } finally { setEntrando(false); }
   }

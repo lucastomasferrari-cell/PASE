@@ -289,7 +289,11 @@ function DetalleReserva({
         {r.notas && <p className="text-sm bg-muted/50 rounded p-2 text-ink-soft italic">{r.notas}</p>}
         <div className="flex flex-wrap gap-2 pt-1">
           {r.estado === 'pendiente' && (
-            <BtnQ tono="brand" icon={<Check className="h-4 w-4" />} label="Confirmar" onClick={() => onAccion(r, 'confirmada')} />
+            <BtnQ tono="brand" icon={<Check className="h-4 w-4" />} label="Confirmar" onClick={() => {
+              // Abrimos WhatsApp en el mismo click (después no se puede sin trigger directo)
+              if (waUrl) { window.open(waUrl, '_blank', 'noopener,noreferrer'); }
+              onAccion(r, 'confirmada');
+            }} />
           )}
           {(r.estado === 'pendiente' || r.estado === 'confirmada') && (
             <BtnQ tono="emerald" icon={<Armchair className="h-4 w-4" />} label="Sentar" onClick={() => onAccion(r, 'sentada')} />

@@ -478,12 +478,41 @@ async function handleWebhook(req, res) {
     return;
   }
 
-  // Cobrar la venta via RPC (idempotente)
+  // Anti-fraud: validar que MP cobró exactamente lo que decía la venta. Si
+  // un cliente manipuló items[] en el body de preference y MP terminó cobrando
+  // de menos, NO cobramos la venta en COMANDA — queda pendiente para revisar.
+  // Tolerancia $0.50 por redondeos float.
+  const { data: ventaDb } = await supabase
+    .from('ventas_pos')
+    .select('total')
+    .eq('id', ventaId)
+    .single();
+  if (!ventaDb) {
+    res.status(404).json({ error: 'Venta no encontrada para validar monto' });
+    return;
+  }
+  const montoCobrado = Number(payment.transaction_amount);
+  const montoEsperado = Number(ventaDb.total);
+  if (Math.abs(montoCobrado - montoEsperado) > 0.5) {
+    console.error(`[tienda-mp webhook] MISMATCH monto venta=${ventaId} esperado=${montoEsperado} cobrado=${montoCobrado}`);
+    // Log para auditoría — quedará pendiente de revisión manual del dueño
+    await supabase.from('pedidos_externos_log').insert({
+      provider: 'mercadopago-fraud-check',
+      external_id: paymentId,
+      payload: { venta_id: ventaId, esperado: montoEsperado, cobrado: montoCobrado, payment },
+      headers: { tipo: 'monto_mismatch' },
+    }).catch(() => {});
+    res.status(200).json({ ok: false, error: 'monto_mismatch', esperado: montoEsperado, cobrado: montoCobrado });
+    return;
+  }
+
+  // Cobrar la venta via RPC (idempotente). Usamos el monto DE LA DB,
+  // no el del payment de MP (defense-in-depth — aunque ya validamos arriba).
   const { error: errCobro } = await supabase.rpc('fn_cobrar_venta_comanda', {
     p_venta_id: ventaId,
     p_pagos: [{
       metodo: 'mercadopago',
-      monto: Number(payment.transaction_amount),
+      monto: montoEsperado,
       idempotency_key: `mp-payment-${paymentId}`,
     }],
     p_propina: 0,
@@ -498,7 +527,147 @@ async function handleWebhook(req, res) {
     return;
   }
 
-  res.status(200).json({ ok: true, venta_id: ventaId, status });
+  // ── AFIP CAE post-cobro (best-effort) ────────────────────────────────────
+  // Si el tenant tiene AFIP activa, emitimos factura electrónica automática
+  // para la venta. Default: Consumidor Final (doc_tipo=99). Si falla AFIP no
+  // bloqueamos la respuesta al webhook MP — queda registrada como rechazada
+  // y se puede reintentar manual desde el POS.
+  let afip_factura = null;
+  try {
+    afip_factura = await emitirFacturaPostCobroOnline(supabase, ventaId, paymentId);
+  } catch (e) {
+    console.error('[tienda-mp webhook] emitir AFIP falló (no bloquea cobro)', ventaId, e?.message);
+  }
+
+  res.status(200).json({ ok: true, venta_id: ventaId, status, afip: afip_factura });
+}
+
+// ─── AFIP CAE para cobros online de tienda ─────────────────────────────────
+// Server-to-server: no usa JWT (el cliente final del marketplace no tiene
+// sesión). El tenant_id sale de la venta_pos. tipo_comprobante se elige
+// según afip_credenciales.tipo_contribuyente. Si AFIP no está activa para
+// el tenant, sale sin hacer nada (no es error — los locales que aún no se
+// dieron de alta en AFIP siguen pudiendo vender online sin factura).
+async function emitirFacturaPostCobroOnline(supabase, ventaId, paymentId) {
+  // 1. Levantar venta + tenant_id
+  const { data: venta } = await supabase
+    .from('ventas_pos')
+    .select('id, tenant_id, total, subtotal, cliente_nombre, cliente_email')
+    .eq('id', ventaId)
+    .single();
+  if (!venta) return { ok: false, error: 'venta_no_encontrada' };
+
+  // 2. Credenciales AFIP del tenant
+  const { data: cred } = await supabase
+    .from('afip_credenciales')
+    .select('cuit, ambiente, cert_pem, key_pem, punto_venta, activa, tipo_contribuyente')
+    .eq('tenant_id', venta.tenant_id)
+    .maybeSingle();
+  if (!cred || !cred.activa || !cred.cert_pem || !cred.key_pem) {
+    return { ok: false, skipped: 'afip_no_configurada' };
+  }
+
+  // 3. Idempotency por venta+payment (anti doble-emisión si MP reenvía webhook)
+  const requestUuid = `mp-${paymentId}-venta-${ventaId}`;
+  const { data: prev } = await supabase
+    .from('afip_facturas')
+    .select('id, cae, numero, qr_fiscal_url, estado')
+    .eq('request_uuid', requestUuid)
+    .eq('tenant_id', venta.tenant_id)
+    .maybeSingle();
+  if (prev?.cae) {
+    return { ok: true, cached: true, factura_id: prev.id, cae: prev.cae, numero: prev.numero };
+  }
+
+  // 4. tipo_comprobante + cálculo neto/iva según tipo_contribuyente
+  //    monotributo  → Factura C (11), IVA 0
+  //    exento       → Factura C (11), IVA 0
+  //    resp_inscr.  → Factura B (6), IVA 21% (consumidor final default)
+  let cbteTipo, importeNeto, importeIva, importeTotal;
+  importeTotal = Number(venta.total);
+  if (cred.tipo_contribuyente === 'responsable_inscripto') {
+    cbteTipo = 6;
+    importeNeto = +(importeTotal / 1.21).toFixed(2);
+    importeIva = +(importeTotal - importeNeto).toFixed(2);
+  } else {
+    cbteTipo = 11;
+    importeNeto = importeTotal;
+    importeIva = 0;
+  }
+
+  // 5. SDK AFIP
+  let afipSdk;
+  try {
+    afipSdk = new Afip({
+      CUIT: cred.cuit, cert: cred.cert_pem, key: cred.key_pem,
+      production: cred.ambiente === 'produccion',
+    });
+  } catch (e) {
+    return { ok: false, error: 'afip_sdk_init_failed: ' + e.message };
+  }
+
+  const ptoVta = cred.punto_venta;
+  let numero;
+  try {
+    const ultimo = await afipSdk.ElectronicBilling.getLastVoucher(ptoVta, cbteTipo);
+    numero = (ultimo || 0) + 1;
+  } catch (e) {
+    return { ok: false, error: 'afip_get_last_voucher_failed: ' + e.message };
+  }
+
+  const today = new Date();
+  const yyyymmdd = parseInt(today.toISOString().slice(0, 10).replaceAll('-', ''));
+
+  let caeResult;
+  try {
+    caeResult = await afipSdk.ElectronicBilling.createVoucher({
+      CantReg: 1, PtoVta: ptoVta, CbteTipo: cbteTipo, Concepto: 1,
+      DocTipo: 99, DocNro: 0,
+      CbteDesde: numero, CbteHasta: numero, CbteFch: yyyymmdd,
+      ImpTotal: importeTotal, ImpTotConc: 0,
+      ImpNeto: importeNeto, ImpOpEx: 0, ImpIVA: importeIva, ImpTrib: 0,
+      MonId: 'PES', MonCotiz: 1,
+      ...(importeIva > 0 ? { Iva: [{ Id: 5, BaseImp: importeNeto, Importe: importeIva }] } : {}),
+    });
+  } catch (e) {
+    // Registrar rechazo para auditoría y reintento manual desde POS
+    await supabase.from('afip_facturas').insert({
+      tenant_id: venta.tenant_id, venta_pos_id: ventaId,
+      tipo_comprobante: cbteTipo, punto_venta: ptoVta, numero,
+      importe_neto: importeNeto, importe_iva: importeIva, importe_total: importeTotal,
+      concepto: 1, doc_tipo: 99, doc_nro: null,
+      cliente_razon_social: venta.cliente_nombre || null,
+      estado: 'rechazada', rechazo_motivo: e.message,
+      request_uuid: requestUuid, emitida_por: null,
+    });
+    return { ok: false, error: 'afip_rejected: ' + e.message };
+  }
+
+  // QR fiscal AR (Res. Gral. 4892/2020)
+  const qrPayload = Buffer.from(JSON.stringify({
+    ver: 1, fecha: today.toISOString().slice(0, 10),
+    cuit: parseInt(cred.cuit), ptoVta, tipoCmp: cbteTipo, nroCmp: numero,
+    importe: importeTotal, moneda: 'PES', ctz: 1,
+    tipoDocRec: 99, nroDocRec: 0, tipoCodAut: 'E', codAut: parseInt(caeResult.CAE),
+  })).toString('base64');
+  const qrFiscalUrl = `https://www.afip.gob.ar/fe/qr/?p=${qrPayload}`;
+
+  const { data: factura } = await supabase
+    .from('afip_facturas')
+    .insert({
+      tenant_id: venta.tenant_id, venta_pos_id: ventaId,
+      tipo_comprobante: cbteTipo, punto_venta: ptoVta, numero,
+      importe_neto: importeNeto, importe_iva: importeIva, importe_total: importeTotal,
+      concepto: 1, doc_tipo: 99, doc_nro: null,
+      cliente_razon_social: venta.cliente_nombre || null,
+      cae: caeResult.CAE, cae_vence_at: caeResult.CAEFchVto, qr_fiscal_url: qrFiscalUrl,
+      estado: 'aprobada', request_uuid: requestUuid,
+      emitida_at: new Date().toISOString(), emitida_por: null,
+    })
+    .select('id, cae, numero, qr_fiscal_url')
+    .single();
+
+  return { ok: true, factura_id: factura?.id, cae: caeResult.CAE, numero, qr_fiscal_url: qrFiscalUrl };
 }
 
 // ─── PARTNER WEBHOOKS (Rappi / PedidosYa) ───────────────────────────────

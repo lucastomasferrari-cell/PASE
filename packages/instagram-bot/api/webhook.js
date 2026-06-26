@@ -379,6 +379,35 @@ async function procesarMensajeEntrante({ cfg, event, sender_igsid }) {
     return;
   }
 
+  // AUDIT F6A CRIT-4 (26-jun): cap USD diario por tenant. Defense-in-depth
+  // contra cost-runaway si el rate-limit per-msg no alcanza (ej. mensajes
+  // muy largos con system_prompt grande). Si SUM(llm_cost_usd) de HOY ya
+  // excede cfg.cap_diario_usd (default $5), pausamos el bot hasta mañana.
+  const capDiarioUsd = Number(cfg.cap_diario_usd ?? 5);
+  if (capDiarioUsd > 0) {
+    const hoy = new Date().toISOString().slice(0, 10);
+    const { data: gastoHoyRows } = await db
+      .from('ig_mensajes')
+      .select('llm_cost_usd')
+      .eq('tenant_id', cfg.tenant_id)
+      .eq('direccion', 'out')
+      .eq('origen', 'bot')
+      .gte('created_at', `${hoy}T00:00:00Z`);
+    const gastoHoy = (gastoHoyRows ?? []).reduce((s, r) => s + Number(r.llm_cost_usd || 0), 0);
+    if (gastoHoy >= capDiarioUsd) {
+      console.warn(`[webhook] cap diario tenant=${cfg.tenant_id} alcanzado ($${gastoHoy.toFixed(2)}/$${capDiarioUsd}). Skip.`);
+      try {
+        await db.from('ig_eventos').insert({
+          tenant_id: cfg.tenant_id, conversacion_id: conv.id,
+          tipo: 'cap_diario_hit',
+          error_message: `Bot pausado: $${gastoHoy.toFixed(2)} gastado hoy (cap $${capDiarioUsd})`,
+          payload: { igsid: sender_igsid, gasto_hoy: gastoHoy, cap: capDiarioUsd },
+        });
+      } catch { /* no crítico */ }
+      return;
+    }
+  }
+
   // AUDIT F6A#2: rate limit per-tenant. Las columnas existían pero NUNCA
   // se leían. Sin esto, 5000 DMs de un mismo cliente en 30s ≈ $150 USD de
   // Claude sin tope. Defaults: 30 msgs en 5min si la config no define.

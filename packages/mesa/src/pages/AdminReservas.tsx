@@ -273,7 +273,19 @@ function FilaReserva({
         )}
         {r.estado === 'pendiente' && (
           <BtnAccion icon={<Check className="h-3.5 w-3.5" />} label="Confirmar" tono="brand"
-                     onClick={() => onAccion(cambiarEstadoReserva({ reservaId: r.id, nuevoEstado: 'confirmada' }), 'Reserva confirmada')} />
+                     onClick={() => {
+                       // Confirmar + abrir WhatsApp pre-cargado para avisar al cliente.
+                       // El popup necesita ser disparado por el click (no por la promesa)
+                       // para que el browser no lo bloquee — abrimos primero la tab vacía
+                       // y la llenamos cuando termina la RPC.
+                       const popup = waUrl ? window.open('about:blank', '_blank') : null;
+                       const p = cambiarEstadoReserva({ reservaId: r.id, nuevoEstado: 'confirmada' });
+                       void p.then((res) => {
+                         if (!res.error && popup && waUrl) { popup.location.href = waUrl; }
+                         else if (popup) popup.close();
+                       });
+                       onAccion(p, 'Reserva confirmada — avisale por WA');
+                     }} />
         )}
         {r.estado === 'confirmada' && (
           <BtnAccion icon={<Armchair className="h-3.5 w-3.5" />} label="Sentar" tono="emerald"

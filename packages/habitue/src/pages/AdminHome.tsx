@@ -70,6 +70,19 @@ export function AdminHome() {
       const mail = email.includes('@') ? email : `${email}@pase.local`;
       const { data, error } = await db().auth.signInWithPassword({ email: mail, password });
       if (error || !data.session) { toast.error('Usuario o contraseña incorrectos'); return; }
+
+      // Gating apps_permitidas (migración 202606250700)
+      const { data: perfil } = await db().from('usuarios')
+        .select('apps_permitidas')
+        .eq('auth_id', data.session.user.id)
+        .maybeSingle();
+      const apps = (perfil?.apps_permitidas as string[] | null) ?? ['pase'];
+      if (!apps.includes('habitue')) {
+        toast.error('Tu cuenta no tiene acceso a Habitué. Pedile al dueño que te habilite en Accesos.');
+        await db().auth.signOut();
+        return;
+      }
+
       setSesion({ email: data.session.user.email ?? mail });
     } finally {
       setEntrando(false);
