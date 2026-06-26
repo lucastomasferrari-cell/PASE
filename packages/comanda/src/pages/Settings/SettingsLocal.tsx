@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Upload, Trash2, ImageIcon, Store, ExternalLink, X, Plus } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { WarningIntegracionFalta } from '@/components/WarningIntegracionFalta';
 import { useLocalActivo } from '@/lib/localActivo';
 import {
   getLocalSettings, updateLocalSettings, validarSlugUnico, subirMpQr, eliminarMpQr,
@@ -328,6 +329,14 @@ export function SettingsLocal() {
               checked={merged.acepta_delivery ?? true}
               onChange={(v) => setField('acepta_delivery', v)}
             />
+            {(merged.tienda_activa ?? true) && (
+              <>
+                <WarningIntegracionFalta provider="email"
+                  mensaje="Sin email conectado, los clientes no van a recibir confirmación cuando hagan un pedido." />
+                <WarningIntegracionFalta provider="whatsapp_api" tono="info"
+                  mensaje="Opcional pero recomendado: WhatsApp Business para confirmar pedidos por WA además del email." />
+              </>
+            )}
           </div>
 
           {/* Radio de delivery — vive en tabla `locales`, va al patch mp */}

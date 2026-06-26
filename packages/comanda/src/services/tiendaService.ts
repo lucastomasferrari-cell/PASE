@@ -314,16 +314,26 @@ export async function getPopulares(
  * (sprint dedicado). Por ahora devuelve [] siempre. El frontend oculta
  * la sección "Discounts" de la Tienda online si data.length === 0.
  *
- * Cuando se implemente:
- *   1. Crear tabla `descuentos_tienda` con start_at, end_at, tipo
- *      (porcentaje/monto), valor, items_aplicables.
- *   2. Agregar parámetro `slug: string` y consultar la tabla.
- *   3. Eliminar este JSDoc.
- *
- * Anotado en DEUDA_TECNICA.md (Sprint 5).
+ * Implementado 26-jun-2026 via fn_descuentos_publicos_tienda (RPC pública).
  */
 export async function getDescuentos(): Promise<{ data: PopularItem[]; error: string | null }> {
   return { data: [], error: null };
+}
+
+export interface DescuentoTienda {
+  code: string;
+  descripcion: string | null;
+  tipo: 'porcentaje' | 'monto_fijo';
+  valor: number;
+  monto_min_compra: number | null;
+  fecha_hasta: string | null;
+}
+
+/** Cupones activos visibles en la home pública del marketplace. */
+export async function listDescuentosPublicos(slug: string): Promise<{ data: DescuentoTienda[]; error: string | null }> {
+  const { data, error } = await db.rpc('fn_descuentos_publicos_tienda', { p_local_slug: slug });
+  if (error) return { data: [], error: translateError(error) };
+  return { data: (data ?? []) as DescuentoTienda[], error: null };
 }
 
 export async function listPedidosPorAprobar(localId: number): Promise<{ data: VentaPos[]; error: string | null }> {

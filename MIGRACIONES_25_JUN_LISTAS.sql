@@ -273,7 +273,36 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- ─── 10) Vista costo IG diario por tenant (admin-console) ────────────────
+-- ─── 10) Descuentos públicos para marketplace (RPC) ────────────────────
+CREATE OR REPLACE FUNCTION fn_descuentos_publicos_tienda(p_local_slug TEXT)
+RETURNS TABLE (
+  code TEXT, descripcion TEXT, tipo TEXT, valor NUMERIC,
+  monto_min_compra NUMERIC, fecha_hasta TIMESTAMPTZ
+)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $D$
+DECLARE v_local_id INTEGER;
+BEGIN
+  SELECT cls.local_id INTO v_local_id FROM comanda_local_settings cls
+    WHERE cls.slug = p_local_slug AND cls.tienda_activa = TRUE AND cls.deleted_at IS NULL;
+  IF v_local_id IS NULL THEN RETURN; END IF;
+  RETURN QUERY
+    SELECT c.code, c.descripcion, c.tipo, c.valor, c.monto_min_compra, c.fecha_hasta
+    FROM cupones c
+    WHERE c.activo = TRUE AND c.deleted_at IS NULL
+      AND (c.local_id = v_local_id OR c.local_id IS NULL)
+      AND (c.fecha_desde IS NULL OR c.fecha_desde <= NOW())
+      AND (c.fecha_hasta IS NULL OR c.fecha_hasta >= NOW())
+      AND (c.max_usos IS NULL OR c.usos_actuales < c.max_usos)
+      AND (c.canales_aplicables IS NULL OR 'tienda_online' = ANY(c.canales_aplicables))
+      AND COALESCE(c.solo_primera_compra, FALSE) = FALSE
+    ORDER BY CASE WHEN c.tipo = 'porcentaje' THEN c.valor ELSE 0 END DESC,
+             CASE WHEN c.tipo = 'monto_fijo' THEN c.valor ELSE 0 END DESC
+    LIMIT 10;
+END $D$;
+REVOKE ALL ON FUNCTION fn_descuentos_publicos_tienda(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION fn_descuentos_publicos_tienda(TEXT) TO anon, authenticated;
+
+-- ─── 11) Vista costo IG diario por tenant (admin-console) ────────────────
 -- Mostrar gasto del bot IG por tenant en Tenants.tsx + alerta si se acerca al cap.
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'ig_config')

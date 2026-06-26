@@ -149,6 +149,21 @@ export async function borrarCredencial(provider: ProviderId): Promise<{ error: s
   }
 }
 
+/**
+ * Helper para mostrar avisos en otras pantallas: ¿el tenant tiene esta
+ * integración conectada? Más liviano que listIntegraciones cuando solo
+ * querés saber el estado de UNA.
+ */
+export async function estadoIntegracion(provider: ProviderId): Promise<EstadoIntegracion> {
+  const { data, error } = await db
+    .from('integraciones')
+    .select('estado')
+    .eq('provider', provider)
+    .maybeSingle();
+  if (error || !data) return 'desconectado';
+  return (data.estado as EstadoIntegracion) ?? 'desconectado';
+}
+
 export async function probarCredencial(provider: ProviderId): Promise<{ ok: boolean; error?: string }> {
   const headers = await authHeaders();
   if (!headers) return { ok: false, error: 'sesión_expirada' };
