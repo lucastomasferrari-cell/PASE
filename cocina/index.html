@@ -4,39 +4,56 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Cocina — el sistema de tu local</title>
-  <meta name="description" content="Cocina: el lanzador de tu ecosistema gastronómico. Entrá a COMANDA, MESA, PASE y todos tus sistemas desde un solo lugar." />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍳</text></svg>" />
+  <meta name="description" content="Cocina: el lanzador de tu ecosistema gastronómico. Entrá a Comanda, Mesa, Pase y todos tus sistemas desde un solo lugar." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text x='8' y='78' font-family='Inter,system-ui,sans-serif' font-size='86' font-weight='500' fill='%231A3A5E' letter-spacing='-4'>c</text><circle cx='80' cy='74' r='9' fill='%23F5C518'/></svg>" />
   <style>
     :root {
-      --celeste: #75AADB;
-      --gold: #F5C518;
-      --bg-page: #EFF3F8;
-      --bg-card: #FFFFFF;
-      --text: #1A3A5E;
-      --text-muted: #6E8CAB;
-      --border: #E0EAF4;
-      --shadow-sm: 0 1px 2px rgba(26,58,94,0.04), 0 2px 4px rgba(26,58,94,0.04);
-      --shadow-md: 0 2px 4px rgba(26,58,94,0.03), 0 8px 24px rgba(26,58,94,0.08);
-      --radius-card: 16px;
-      --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+      /* Paleta canónica de PASE — IRAM 7677-2002 + dorado moneda */
+      --pase-celeste: #75AADB;
+      --pase-celeste-100: #EAF3FB;
+      --pase-celeste-200: #D7E8F5;
+      --pase-celeste-300: #9DC3E2;
+      --pase-gold: #F5C518;
+      --pase-text: #1A3A5E;
+      --pase-text-muted: #6E8CAB;
+      --pase-border: #E0EAF4;
+      --pase-border-strong: #D0DCEA;
+      --pase-bg: #FFFFFF;
+      --pase-bg-page: #EFF3F8;
+      --pase-bg-soft: #EBF0F6;
+
+      --pase-radius-card: 14px;
+      --pase-radius-md: 8px;
+      --pase-shadow-sm: 0 1px 2px rgba(26,58,94,0.04), 0 2px 4px rgba(26,58,94,0.04);
+      --pase-shadow-md: 0 2px 4px rgba(26,58,94,0.03), 0 4px 12px rgba(26,58,94,0.06);
+      --pase-ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+      --pase-font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg-page: #0C1220;
-        --bg-card: #1A2540;
-        --text: #F0F4F8;
-        --text-muted: #93A8C2;
-        --border: #2A3550;
-        --shadow-sm: 0 1px 2px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.10);
-        --shadow-md: 0 2px 4px rgba(0,0,0,0.10), 0 8px 24px rgba(0,0,0,0.20);
+        /* Dark mode "Argentina 2006" idéntico a PASE — celeste y dorado intactos */
+        --pase-bg: #1A2540;
+        --pase-bg-page: #0C1220;
+        --pase-bg-soft: #1A2540;
+        --pase-text: #F0F4F8;
+        --pase-text-muted: #93A8C2;
+        --pase-border: #2A3550;
+        --pase-border-strong: #3F4D6E;
+        --pase-celeste-100: #1E3155;
+        --pase-celeste-200: #2E4878;
+        --pase-celeste-300: #4A6FA8;
+        --pase-shadow-sm: 0 1px 2px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.10);
+        --pase-shadow-md: 0 2px 4px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.15);
       }
     }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; }
     body {
-      font-family: var(--font);
-      background: var(--bg-page);
-      color: var(--text);
+      font-family: var(--pase-font);
+      background: var(--pase-bg-page);
+      color: var(--pase-text);
       -webkit-font-smoothing: antialiased;
       display: flex;
       flex-direction: column;
@@ -46,74 +63,148 @@
     }
     .wrap { width: 100%; max-width: 880px; }
 
-    header { margin-bottom: 36px; }
-    .overline {
-      display: flex; align-items: center; gap: 8px;
-      font-size: 11px; font-weight: 500; letter-spacing: 0.08em;
-      text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;
+    /* Header */
+    header { margin-bottom: 40px; }
+    .brand-row {
+      display: flex; align-items: baseline; gap: 12px;
+      margin-bottom: 10px;
     }
-    .overline .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gold); }
-    .brand { font-size: 40px; font-weight: 600; letter-spacing: -0.03em; line-height: 1; }
-    .brand .accent { color: var(--gold); }
-    .tagline { font-size: 15px; color: var(--text-muted); margin-top: 8px; }
+    .brand {
+      font-size: 38px; font-weight: 500;
+      letter-spacing: -0.035em; line-height: 1;
+      color: var(--pase-text);
+    }
+    .brand .accent { color: var(--pase-gold); }
+    .live-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--pase-gold);
+      box-shadow: 0 0 0 4px rgba(245,197,24,0.28);
+      align-self: center;
+    }
+    .tagline {
+      font-size: 14px;
+      color: var(--pase-text-muted);
+      max-width: 540px;
+      line-height: 1.55;
+    }
 
-    section { margin-bottom: 32px; }
+    /* Sections */
+    section { margin-bottom: 28px; }
     .sec-title {
-      font-size: 11px; font-weight: 500; text-transform: uppercase;
-      letter-spacing: 0.08em; color: var(--text-muted);
-      padding-bottom: 8px; margin-bottom: 14px;
-      border-bottom: 0.5px solid var(--border);
+      font-size: 12px; font-weight: 500;
+      color: var(--pase-text-muted);
+      padding-bottom: 10px; margin-bottom: 14px;
+      border-bottom: 0.5px solid var(--pase-border);
+      letter-spacing: -0.005em;
     }
+
+    /* Grid */
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-      gap: 14px;
+      gap: 10px;
     }
+
+    /* Card */
     .card {
-      display: flex; flex-direction: column; gap: 12px;
-      padding: 18px;
-      background: var(--bg-card);
-      border: 0.5px solid var(--border);
-      border-radius: var(--radius-card);
-      box-shadow: var(--shadow-sm);
+      display: flex; flex-direction: column;
+      padding: 16px 18px;
+      background: var(--pase-bg);
+      border: 0.5px solid var(--pase-border);
+      border-radius: var(--pase-radius-card);
+      box-shadow: var(--pase-shadow-sm);
       text-decoration: none; color: inherit;
-      transition: transform 0.14s cubic-bezier(0.22,0.61,0.36,1),
-                  box-shadow 0.14s ease, border-color 0.14s ease;
+      transition:
+        transform 0.2s var(--pase-ease-out),
+        box-shadow 0.2s var(--pase-ease-out),
+        border-color 0.12s var(--pase-ease-out);
+      cursor: pointer;
     }
     .card:hover {
-      transform: translateY(-3px);
-      box-shadow: var(--shadow-md);
-      border-color: var(--celeste);
+      transform: translateY(-2px);
+      box-shadow: var(--pase-shadow-md);
+      border-color: var(--pase-border-strong);
     }
-    .card-top { display: flex; align-items: flex-start; justify-content: space-between; }
-    .icon {
-      width: 48px; height: 48px; border-radius: 13px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 24px; flex-shrink: 0;
+    .card:focus-visible {
+      outline: none;
+      border-color: var(--pase-celeste);
+      box-shadow: 0 0 0 3px var(--pase-celeste-100), var(--pase-shadow-sm);
     }
-    .badge {
-      font-size: 10px; font-weight: 500; letter-spacing: 0.04em;
-      padding: 3px 9px; border-radius: 999px;
-    }
-    .card-name { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; display: flex; align-items: center; gap: 6px; }
-    .card-desc { font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-top: 4px; }
-    .card-cta { font-size: 12px; font-weight: 500; color: var(--celeste); letter-spacing: 0.02em; margin-top: 2px; }
-    .ext { opacity: 0.55; }
 
+    .card-top {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .icon {
+      width: 36px; height: 36px;
+      border-radius: var(--pase-radius-md);
+      background: var(--pase-celeste-100);
+      color: var(--pase-text);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .icon svg { width: 18px; height: 18px; stroke-width: 1.5; }
+
+    .badge {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--pase-text-muted);
+      letter-spacing: 0.02em;
+      align-self: flex-start;
+      padding-top: 9px;
+    }
+
+    .card-name {
+      font-size: 15px; font-weight: 500;
+      color: var(--pase-text);
+      letter-spacing: -0.01em;
+      display: flex; align-items: center; gap: 5px;
+      margin-bottom: 4px;
+    }
+    .card-name .ext {
+      width: 10px; height: 10px;
+      opacity: 0.4;
+      flex-shrink: 0;
+    }
+    .card-desc {
+      font-size: 12.5px;
+      color: var(--pase-text-muted);
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+    .card-cta {
+      font-size: 11.5px; font-weight: 500;
+      color: var(--pase-celeste);
+      margin-top: auto;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .card:hover .card-cta { color: var(--pase-text); }
+
+    /* Footer */
     footer {
-      margin-top: 24px; padding-top: 18px;
-      border-top: 0.5px solid var(--border);
+      margin-top: 32px; padding-top: 18px;
+      border-top: 0.5px solid var(--pase-border);
       width: 100%; max-width: 880px;
       display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
-      font-size: 11px; color: var(--text-muted);
+      font-size: 11px; color: var(--pase-text-muted);
+    }
+    .footer-brand { font-weight: 500; color: var(--pase-text); }
+    .footer-brand .accent { color: var(--pase-gold); }
+
+    @media (max-width: 520px) {
+      body { padding: 32px 16px 24px; }
+      .brand { font-size: 32px; }
+      header { margin-bottom: 32px; }
     }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <div class="overline"><span class="dot"></span>Ecosistema gastronómico</div>
-      <div class="brand">cocina<span class="accent">.</span></div>
+      <div class="brand-row">
+        <div class="brand">cocina<span class="accent">.</span></div>
+        <div class="live-dot" aria-hidden="true"></div>
+      </div>
       <div class="tagline">El sistema de tu local. Elegí a dónde entrar.</div>
     </header>
 
@@ -123,29 +214,44 @@
     </section>
 
     <section>
-      <div class="sec-title">Gestión &amp; administración</div>
+      <div class="sec-title">Gestión y administración</div>
       <div class="grid" id="grid-gestion"></div>
     </section>
   </div>
 
   <footer>
     <span>Todos los sistemas comparten la misma base en tiempo real.</span>
-    <span>cocina<span style="color:var(--gold)">.</span></span>
+    <span class="footer-brand">cocina<span class="accent">.</span></span>
   </footer>
 
   <script>
+    // Íconos line-art outline — stroke 1.5px, fill="none", inherit color.
+    // Estilo Tabler/Lucide, mismo lenguaje que Icons.tsx en PASE.
+    const ICONS = {
+      pos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-2.5-1.5L14 21l-2-1.5L10 21l-2.5-1.5L5 21z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
+      reservas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="18" height="7" rx="1"/><path d="M6 5v4M18 5v4M6 16v4M18 16v4"/></svg>',
+      kds: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="1"/><path d="M8 21h8M12 17v4"/><path d="M7 9h2M11 9h6M7 12h4"/></svg>',
+      gestion: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V12M9 20V8M15 20v-6M21 20v-12"/></svg>',
+      crm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="6" r="2.5"/><path d="M21 17c0-2.2-1.8-4-4-4"/></svg>',
+      accesos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>',
+      sistema: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>',
+      bot: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 14a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/><circle cx="9.5" cy="11" r="0.8" fill="currentColor"/><circle cx="13" cy="11" r="0.8" fill="currentColor"/><circle cx="16.5" cy="11" r="0.8" fill="currentColor"/></svg>',
+    };
+
+    const EXT_ARROW = '<svg class="ext" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 2H2.5A.5.5 0 0 0 2 2.5v7a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5V7"/><path d="M7 2h3v3"/><path d="M10 2 5.5 6.5"/></svg>';
+
     const SISTEMAS = {
       operacion: [
-        { nombre: "COMANDA", desc: "Punto de venta — tomá pedidos en salón y mostrador, cobrá y gestioná mesas.", url: "https://pase-comanda.vercel.app", icono: "📱", badge: "POS", bg: "#EAF3FB", fg: "#1A3A5E" },
-        { nombre: "MESA", desc: "Reservas, plano del salón, lista de espera y comensales.", url: "https://mesa-orpin.vercel.app/admin", icono: "🗺️", badge: "Reservas", bg: "#E6F4EE", fg: "#14532D" },
-        { nombre: "Pantalla de Cocina", desc: "KDS — vista de órdenes por estado para el equipo de cocina.", url: "https://pase-comanda.vercel.app/kds", icono: "👨‍🍳", badge: "KDS", bg: "#FFF8E6", fg: "#92400E" },
+        { nombre: "Comanda",            badge: "Punto de venta", icon: "pos",      desc: "Tomá pedidos en salón y mostrador, cobrá y gestioná mesas.",   url: "https://pase-comanda.vercel.app" },
+        { nombre: "Mesa",               badge: "Reservas",       icon: "reservas", desc: "Reservas, plano del salón, lista de espera y comensales.",     url: "https://mesa-orpin.vercel.app/admin" },
+        { nombre: "Pantalla de cocina", badge: "KDS",            icon: "kds",      desc: "Vista de órdenes por estado para el equipo de cocina.",        url: "https://pase-comanda.vercel.app/kds" },
       ],
       gestion: [
-        { nombre: "PASE", desc: "Back-office — EERR, RRHH, Caja, conciliaciones y facturas.", url: "https://pase-yndx.vercel.app", icono: "📊", badge: "Gestión", bg: "#EAF3FB", fg: "#1A3A5E" },
-        { nombre: "Habitué", desc: "CRM y marketing — comensales, segmentos, campañas y fidelidad.", url: "https://habitue.vercel.app/admin", icono: "💛", badge: "CRM", bg: "#FBF6EC", fg: "#7C5217" },
-        { nombre: "Accesos", desc: "Personas, roles, accesos a apps, PIN del POS y auditoría.", url: "https://accesos-eight.vercel.app", icono: "🛡️", badge: "Accesos", bg: "#F5F3FF", fg: "#5B21B6" },
-        { nombre: "Admin Console", desc: "Superadmin — tenants, backups y configuración global del sistema.", url: "https://pase-admin-console.vercel.app", icono: "🔑", badge: "Sistema", bg: "#FEF3C7", fg: "#92400E" },
-        { nombre: "Bot Instagram", desc: "Responde a tus clientes en Instagram con IA — consultas y reservas.", url: "https://pase-instagram-bot.vercel.app", icono: "📸", badge: "IG", bg: "#FCE7F3", fg: "#9D174D" },
+        { nombre: "Pase",          badge: "Back-office", icon: "gestion", desc: "EERR, RRHH, caja, conciliaciones y facturas.",                         url: "https://pase-yndx.vercel.app" },
+        { nombre: "Habitué",       badge: "CRM",         icon: "crm",     desc: "Comensales, segmentos, campañas y fidelidad.",                          url: "https://habitue.vercel.app/admin" },
+        { nombre: "Accesos",       badge: "Permisos",    icon: "accesos", desc: "Personas, roles, accesos a apps, PIN del POS y auditoría.",            url: "https://accesos-eight.vercel.app" },
+        { nombre: "Admin console", badge: "Sistema",     icon: "sistema", desc: "Superadmin: tenants, backups y configuración global del sistema.",     url: "https://pase-admin-console.vercel.app" },
+        { nombre: "Bot Instagram", badge: "Mensajería",  icon: "bot",     desc: "Responde a tus clientes en Instagram con IA: consultas y reservas.",   url: "https://pase-instagram-bot.vercel.app" },
       ],
     };
 
@@ -157,13 +263,11 @@
       a.rel = "noopener noreferrer";
       a.innerHTML = `
         <div class="card-top">
-          <div class="icon" style="background:${s.bg}">${s.icono}</div>
-          <span class="badge" style="background:${s.bg};color:${s.fg}">${s.badge}</span>
+          <div class="icon">${ICONS[s.icon]}</div>
+          <span class="badge">${s.badge}</span>
         </div>
-        <div>
-          <div class="card-name">${s.nombre}<svg class="ext" width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2H2.5A.5.5 0 0 0 2 2.5v7a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5V7"/><path d="M7 2h3v3"/><path d="M10 2L5.5 6.5"/></svg></div>
-          <div class="card-desc">${s.desc}</div>
-        </div>
+        <div class="card-name">${s.nombre}${EXT_ARROW}</div>
+        <div class="card-desc">${s.desc}</div>
         <div class="card-cta">Abrir →</div>`;
       return a;
     }
