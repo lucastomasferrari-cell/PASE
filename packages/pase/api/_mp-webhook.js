@@ -118,7 +118,7 @@ export async function findMatchingMpSecret(supabase, headers, dataId) {
     const { data: creds } = await supabase
       .from('mp_credenciales')
       .select('id, tenant_id, webhook_secret')
-      .eq('activa', true)
+      .eq('activo', true)
       .not('webhook_secret', 'is', null);
     for (const c of creds ?? []) {
       const r = verifyMpSignature(headers, dataId, c.webhook_secret);

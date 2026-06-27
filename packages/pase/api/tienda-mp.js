@@ -155,12 +155,14 @@ async function handlePreference(req, res) {
     return;
   }
 
-  // Obtener credencial MP del local (la primera activa)
+  // Obtener credencial MP del local (la primera activa).
+  // NOTA: la columna real es `activo` (sin 'a') — afip_credenciales sí usa
+  // `activa`, mp_credenciales no. Fix 26-jun.
   const { data: cred, error: errCred } = await supabase
     .from('mp_credenciales')
-    .select('id, activa')
+    .select('id, activo')
     .eq('local_id', venta.local_id)
-    .eq('activa', true)
+    .eq('activo', true)
     .limit(1)
     .single();
   if (errCred || !cred) {
@@ -272,11 +274,12 @@ async function handlePagoPublicoPreference(req, res, tipo) {
   }
 
   // Credencial MP del local (misma que usa la tienda — cero setup extra).
+  // NOTA: columna real es `activo` (no `activa`). Fix 26-jun.
   const { data: cred, error: errCred } = await supabase
     .from('mp_credenciales')
-    .select('id, activa')
+    .select('id, activo')
     .eq('local_id', row.local_id)
-    .eq('activa', true)
+    .eq('activo', true)
     .limit(1)
     .single();
   if (errCred || !cred) {
@@ -441,7 +444,7 @@ async function handleWebhook(req, res) {
   // Pero ahora MP devuelve metadata en el payment → podemos cortar al primer
   // hit para no consumir N calls por webhook.
   if (!payment) {
-    const { data: creds } = await supabase.from('mp_credenciales').select('id').eq('activa', true);
+    const { data: creds } = await supabase.from('mp_credenciales').select('id').eq('activo', true);
     if (!creds || creds.length === 0) {
       res.status(200).json({ ok: true, no_creds: true });
       return;
