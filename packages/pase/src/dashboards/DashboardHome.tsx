@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { PageHeader } from "../components/ui";
 import { getDashboardConfig } from "./service";
 import { findWidget, widgetsParaPermisos } from "./widgets/registry";
 import { DEFAULT_WIDGETS_POR_ROL, type RolPase, type WidgetContext } from "./types";
@@ -134,24 +133,21 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
   if (loading) {
     return (
       <div style={{ padding: "0 20px" }}>
-        <PageHeader title={`Hola, ${usuario.nombre}`} />
+        <BoldHeader usuario={usuario} localActual={null} info={null} />
         <div className="loading">Cargando dashboard…</div>
       </div>
     );
   }
 
   const availableCount = widgetsParaPermisos(permisos).length;
+  const localActual = locales.find(l => l.id === localActivo) ?? null;
+  const headerInfo = puedeConfigurar
+    ? <>Si querés cambiar qué widgets ve cada usuario, andá a <strong>Herramientas → Configurar dashboards</strong>.</>
+    : null;
 
   return (
     <div style={{ padding: "0 20px" }}>
-      <PageHeader
-        title={`Hola, ${usuario.nombre}`}
-        subtitle={greetingByHour()}
-        info={puedeConfigurar
-          ? <>Si querés cambiar qué widgets ve cada usuario, andá a <strong>Herramientas → Configurar dashboards</strong>.</>
-          : undefined
-        }
-      />
+      <BoldHeader usuario={usuario} localActual={localActual} info={headerInfo} />
 
       {widgets.length === 0 ? (
         <div className="panel" style={{ padding: 32, textAlign: "center" }}>
@@ -173,7 +169,7 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
           )}
         </div>
       ) : (
-        <div className="dashboard-grid">
+        <div className="dashboard-grid dashboard-grid--bold">
           {widgets.map((w) => {
             const span = SIZE_TO_SPAN[w.size] ?? 6;
             return (
@@ -181,18 +177,12 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
                 key={w.id}
                 style={{
                   gridColumn: `span ${span}`,
-                  background: "var(--pase-bg)",
-                  border: "0.5px solid var(--pase-border)",
-                  borderRadius: "var(--pase-radius-card)",
-                  padding: 20,
                   minWidth: 0,
-                  boxShadow: "var(--pase-shadow-sm)",
-                  transition: "border-color 0.12s, box-shadow 0.2s",
                 }}
                 aria-label={w.title}
-                className="dashboard-widget"
+                className="dashboard-widget dashboard-widget--bold"
               >
-                <header style={{ marginBottom: 14 }}>
+                <header style={{ marginBottom: 12 }}>
                   <h3 style={{
                     margin: 0,
                     fontSize: "var(--pase-fs-xs)",
@@ -212,18 +202,77 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
       )}
 
       <style>{`
+        /* Bolder dashboard — sweep visual 27-jun.
+         * Header editorial (Fraunces italic en el nombre) + widgets sin card
+         * que flotan en la grilla. Paleta intocada. Si no convence en prod,
+         * \`git revert\` del commit que introduce estos cambios.
+         */
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,400;1,500&display=swap');
+
+        .bold-header {
+          display: grid;
+          grid-template-columns: 2px 1fr;
+          gap: 18px;
+          margin: 16px 0 28px;
+        }
+        .bold-header-anchor {
+          width: 2px;
+          background: linear-gradient(
+            to bottom,
+            transparent,
+            var(--pase-gold) 25%,
+            var(--pase-gold) 75%,
+            transparent
+          );
+          min-height: 64px;
+        }
+        .bold-header-overline {
+          font-size: 10px;
+          color: var(--pase-text-muted);
+          letter-spacing: 0.04em;
+          margin-bottom: 6px;
+        }
+        .bold-header-title {
+          margin: 0;
+          font-size: clamp(28px, 4vw, 40px);
+          font-weight: 500;
+          color: var(--pase-text);
+          letter-spacing: -0.025em;
+          line-height: 1;
+        }
+        .bold-header-italic {
+          font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
+          font-style: italic;
+          font-weight: 400;
+        }
+        .bold-header-info {
+          margin: 12px 0 0;
+          font-size: var(--pase-fs-sm);
+          color: var(--pase-text-muted);
+        }
+
         .dashboard-grid {
           display: grid;
           grid-template-columns: repeat(12, 1fr);
           gap: 16px;
         }
-        .dashboard-widget:hover {
-          border-color: var(--pase-border-strong) !important;
-          box-shadow: var(--pase-shadow-md) !important;
+        /* Bolder: widgets sin card flotando con más aire entre sí */
+        .dashboard-grid--bold {
+          gap: 28px 24px;
         }
-        [data-theme="dark"] .dashboard-widget {
-          background: var(--pase-bg-soft) !important;
+        .dashboard-widget--bold {
+          background: transparent !important;
+          border: none !important;
+          border-radius: 0 !important;
+          box-shadow: none !important;
+          padding: 0 !important;
+          border-top: 0.5px solid var(--pase-border);
+          padding-top: 14px !important;
         }
+        .dashboard-widget--bold:hover {
+          border-top-color: var(--pase-border-strong) !important;
+        }
+
         @media (max-width: 900px) {
           .dashboard-widget {
             grid-column: span 12 !important;
@@ -234,9 +283,46 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
   );
 }
 
+interface BoldHeaderProps {
+  usuario: { nombre: string };
+  localActual: { nombre: string } | null;
+  info: ReactNode;
+}
+
+function BoldHeader({ usuario, localActual, info }: BoldHeaderProps) {
+  return (
+    <header className="bold-header">
+      <div className="bold-header-anchor" aria-hidden="true" />
+      <div>
+        <div className="bold-header-overline">
+          {fechaCortaArg()}{localActual ? ` · ${localActual.nombre}` : ""}
+        </div>
+        <h1 className="bold-header-title">
+          {greetingByHour()},{" "}
+          <span className="bold-header-italic">{primerNombre(usuario.nombre)}</span>
+        </h1>
+        {info && <p className="bold-header-info">{info}</p>}
+      </div>
+    </header>
+  );
+}
+
 function greetingByHour(): string {
   const h = new Date().getHours();
-  if (h < 12) return "buenos días";
-  if (h < 19) return "buenas tardes";
-  return "buenas noches";
+  if (h < 12) return "Buenos días";
+  if (h < 19) return "Buenas tardes";
+  return "Buenas noches";
+}
+
+function primerNombre(full: string): string {
+  return full.split(/\s+/)[0] ?? full;
+}
+
+function fechaCortaArg(): string {
+  const f = new Intl.DateTimeFormat("es-AR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(new Date());
+  return f.charAt(0).toUpperCase() + f.slice(1);
 }
