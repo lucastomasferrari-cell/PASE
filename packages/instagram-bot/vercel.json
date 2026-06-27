@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
-  "buildCommand": "echo 'no build step — solo serverless functions en api/'",
-  "outputDirectory": "public",
+  "buildCommand": "vite build",
+  "outputDirectory": "dist",
   "ignoreCommand": "npx -y turbo-ignore @pase/instagram-bot",
   "functions": {
     "api/webhook.js": {
@@ -23,5 +23,8 @@
     "api/auth-bridge.js": {
       "maxDuration": 10
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
 }

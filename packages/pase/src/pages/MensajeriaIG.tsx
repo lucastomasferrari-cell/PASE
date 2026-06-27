@@ -1,9 +1,8 @@
-// MensajeriaIG — se MUDÓ a Habitué (25-jun-2026).
+// MensajeriaIG — el bot de Instagram tiene su PROPIA web (27-jun-2026).
 //
-// La UI del bot de Instagram vive ahora en Habitué (sección "Mensajería IG").
-// El backend del bot sigue en pase-instagram-bot.vercel.app (Meta apunta su
-// webhook ahí — no se movió). Esta pantalla queda como redirect para no
-// romper links históricos del sidebar.
+// La UI de mensajería vive ahora en el mismo proyecto del bot
+// (pase-instagram-bot.vercel.app), junto al backend/webhook. Esta pantalla de
+// PASE queda como acceso directo para no romper el link del sidebar.
 //
 // La versión completa de esta pantalla (1868 líneas con IGConfigModal,
 // IGClienteModal, IGConexionPanel, NotificacionesPushToggle) está en el
@@ -11,8 +10,8 @@
 
 import type { Usuario } from "../types";
 
-const HABITUE_URL =
-  (import.meta.env.VITE_HABITUE_URL as string | undefined) || "https://habitue.vercel.app";
+const BOT_URL =
+  (import.meta.env.VITE_IG_BOT_URL as string | undefined) || "https://pase-instagram-bot.vercel.app";
 
 function MessageCircleIcon({ size = 28 }: { size?: number }) {
   return (
@@ -48,21 +47,18 @@ export default function MensajeriaIG(_props: Props) {
         }}>
           <MessageCircleIcon size={28} />
         </div>
-        <h2 style={{ fontSize: 20, margin: "0 0 8px" }}>La mensajería se mudó a Habitué</h2>
+        <h2 style={{ fontSize: 20, margin: "0 0 8px" }}>El bot de Instagram tiene su propia web</h2>
         <p style={{ color: "var(--muted2)", fontSize: 14, margin: "0 0 20px", lineHeight: 1.5 }}>
-          Junto con marketing/CRM. El bot sigue funcionando igual; lo operás desde Habitué.
+          Ahí ves y respondés los DMs y configurás el bot. Entrás con la misma cuenta de PASE.
         </p>
-        <a href={`${HABITUE_URL}/?seccion=mensajeria`} target="_blank" rel="noopener noreferrer"
+        <a href={BOT_URL} target="_blank" rel="noopener noreferrer"
            style={{
              display: "inline-flex", alignItems: "center", gap: 8,
              background: "var(--acc)", color: "white", padding: "10px 18px",
              borderRadius: 10, textDecoration: "none", fontSize: 14, fontWeight: 500,
            }}>
-          Abrir Habitué <ExternalLinkIcon size={14} />
+          Abrir mensajería <ExternalLinkIcon size={14} />
         </a>
-        <p style={{ color: "var(--muted2)", fontSize: 11, marginTop: 16 }}>
-          ¿No tenés acceso a Habitué? Pedile a quien gestione el equipo que te lo dé.
-        </p>
       </div>
     </div>
   );
