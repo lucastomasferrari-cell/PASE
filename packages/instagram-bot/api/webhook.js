@@ -291,7 +291,15 @@ async function procesarMensajeEntrante({ cfg, event, sender_igsid }) {
     texto = msg.text;
   } else if (msg?.attachments?.[0]) {
     const att = msg.attachments[0];
-    tipo = att.type || 'unsupported';  // image | video | audio | file | sticker
+    // Meta manda el type en INGLÉS (image | video | audio | file | share |
+    // story_mention | ig_reel | …). Hay que mapearlo al enum que permite el
+    // constraint ig_mensajes_tipo_check (texto|imagen|audio|video|sticker|
+    // reaccion|reply|unsupported); cualquier tipo que no manejamos cae en
+    // 'unsupported'. Bug 27-jun: antes se insertaba el type crudo → las
+    // menciones en historias ('story_mention') y hasta las imágenes ('image'
+    // ≠ 'imagen') rompían el INSERT y el DM no se guardaba ni se contestaba.
+    const MAP_TIPO_ATTACH = { image: 'imagen', video: 'video', audio: 'audio', sticker: 'sticker' };
+    tipo = MAP_TIPO_ATTACH[att.type] || 'unsupported';
     media_url = att.payload?.url || null;
   }
 
