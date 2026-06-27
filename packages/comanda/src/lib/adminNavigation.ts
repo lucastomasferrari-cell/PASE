@@ -214,6 +214,7 @@ const ADMIN_NAVIGATION_FULL: NavCategory[] = [
       { slug: 'local',          label: 'Local',                 href: '/configuracion/local' },
       { slug: 'integraciones',  label: 'Integraciones (WhatsApp, Email, Stripe…)', href: '/configuracion/integraciones' },
       { slug: 'afip',           label: 'Factura electrónica AFIP', href: '/configuracion/afip' },
+      { slug: 'afip-pendientes', label: 'AFIP pendientes (reintentar)', href: '/configuracion/afip-pendientes' },
       { slug: 'branding',       label: 'Branding y logos',      href: '/configuracion/branding',       badge: 'soon' },
       { slug: 'notificaciones', label: 'Notificaciones',        href: '/configuracion/notificaciones', badge: 'soon' },
       { slug: 'recibos',        label: 'Recibos e impresión',   href: '/configuracion/recibos',        badge: 'soon' },
