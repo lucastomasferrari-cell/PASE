@@ -429,10 +429,13 @@ async function procesarMensajeEntrante({ cfg, event, sender_igsid }) {
       p_estimate_usd: COSTO_ESTIMADO_USD,
     });
     if (errReserva) {
-      console.error('[webhook] fn_reservar_cap_diario_ig error:', errReserva.message);
-      return;
-    }
-    if (!reserva?.ok) {
+      // Defensa (27-jun): si el cap diario no está disponible (RPC con bug o
+      // migración faltante) NO cortamos la respuesta — mejor contestar sin cap
+      // que dejar al cliente sin respuesta. El rate-limit de abajo sigue
+      // protegiendo. (fn_reservar_cap_diario_ig fallaba por uuid=text y por
+      // multi-cuenta-por-tenant, y tumbaba TODAS las respuestas del bot.)
+      console.error('[webhook] cap diario no disponible, respondo sin cap:', errReserva.message);
+    } else if (!reserva?.ok) {
       const gastado = Number(reserva?.gastado ?? 0);
       console.warn(`[webhook] cap diario tenant=${cfg.tenant_id} alcanzado ($${gastado.toFixed(2)}/$${capDiarioUsd}). Skip.`);
       try {
@@ -444,8 +447,9 @@ async function procesarMensajeEntrante({ cfg, event, sender_igsid }) {
         });
       } catch { /* no crítico */ }
       return;
+    } else {
+      reservaPasada = true;
     }
-    reservaPasada = true;
   }
 
   // AUDIT F6A#2: rate limit per-tenant. Las columnas existían pero NUNCA
