@@ -53,7 +53,7 @@ export function AgentPanel({ ticket, onChange }: Props) {
       {/* Header con estado */}
       <div className="px-4 py-3 bg-admin-accent/10 flex items-center gap-2">
         <Bot className="w-4 h-4 text-admin-accent shrink-0" />
-        <div className="text-xs uppercase tracking-wider text-admin-accent font-medium">
+        <div className="text-xs normal-case tracking-wider text-admin-accent font-medium">
           Auto-fix Agent
         </div>
         <div className="ml-auto flex items-center gap-1.5">
@@ -104,7 +104,7 @@ export function AgentPanel({ ticket, onChange }: Props) {
         {/* Diff summary */}
         {ticket.agent_diff_summary && (
           <div className="rounded bg-admin-bg border border-admin-border px-3 py-2 text-xs text-admin-muted">
-            <div className="text-[10px] uppercase tracking-wider mb-1">Resumen del cambio</div>
+            <div className="text-[10px] normal-case tracking-wider mb-1">Resumen del cambio</div>
             <div className="text-admin-text">{ticket.agent_diff_summary}</div>
           </div>
         )}

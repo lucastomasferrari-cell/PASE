@@ -132,11 +132,11 @@ export function Tenants() {
   // un soft-delete (set activo=false + delete diferido N días) en vez del hard.
   const eliminarTenant = async (t: TenantRow) => {
     const confirmText = prompt(
-      `⚠ ELIMINAR PERMANENTEMENTE el tenant "${t.nombre}".\n\n` +
+      `Eliminar permanentemente el tenant "${t.nombre}".\n\n` +
       `Esto borra: ventas, facturas, gastos, empleados, movimientos, ` +
-      `mesas, items, recetas, configuración, usuarios — TODA la data del tenant.\n\n` +
+      `mesas, items, recetas, configuración, usuarios — toda la data del tenant.\n\n` +
       `Hay una RPC restore_tenant para deshacer pero requiere backup previo.\n\n` +
-      `Para CONFIRMAR escribí exactamente: ${t.slug}`
+      `Para confirmar escribí exactamente: ${t.slug}`
     );
     if (confirmText !== t.slug) {
       if (confirmText !== null) alert('Slug no coincide. Cancelado.');
@@ -176,7 +176,7 @@ export function Tenants() {
     <div className="space-y-4">
       <header className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-semibold text-admin-text flex items-center gap-2">
+          <h1 className="text-xl font-medium text-admin-text flex items-center gap-2">
             <Building2 className="w-5 h-5 text-admin-accent" />
             Tenants
           </h1>
@@ -224,13 +224,13 @@ export function Tenants() {
           <table className="w-full text-sm">
             <thead className="bg-admin-bg border-b border-admin-border">
               <tr className="text-left">
-                <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider">Nombre</th>
-                <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider">Plan / Estado</th>
-                <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider text-right">Locales</th>
-                <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider text-right">Usuarios</th>
-                <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider text-right" title="Costo del bot IG hoy / cap diario">IG hoy</th>
-                <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider">Creado</th>
-                <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider"></th>
+                <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Nombre</th>
+                <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Plan / Estado</th>
+                <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider text-right">Locales</th>
+                <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider text-right">Usuarios</th>
+                <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider text-right" title="Costo del bot IG hoy / cap diario">IG hoy</th>
+                <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Creado</th>
+                <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider"></th>
               </tr>
             </thead>
             <tbody>
@@ -244,7 +244,7 @@ export function Tenants() {
                     <div className="text-admin-text text-xs">{t.plan || '—'}</div>
                     {t.sub_estado && (
                       <span className={cn(
-                        'inline-block mt-0.5 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border',
+                        'inline-block mt-0.5 text-[10px] normal-case tracking-wider px-1.5 py-0.5 rounded border',
                         ESTADO_COLORS[t.sub_estado] || ESTADO_COLORS['cancelled'],
                       )}>
                         {ESTADO_LABELS[t.sub_estado] || t.sub_estado}
@@ -258,8 +258,8 @@ export function Tenants() {
                       const gasto = t.ig_gasto_hoy ?? 0;
                       const cap = t.ig_cap_diario ?? 5;
                       const pct = cap > 0 ? gasto / cap : 0;
-                      const cls = pct >= 1 ? 'text-admin-danger font-semibold'
-                        : pct >= 0.8 ? 'text-admin-warn font-semibold'
+                      const cls = pct >= 1 ? 'text-admin-danger font-medium'
+                        : pct >= 0.8 ? 'text-admin-warn font-medium'
                         : gasto > 0 ? 'text-admin-text'
                         : 'text-admin-muted';
                       return <span className={cls} title={`${(pct * 100).toFixed(0)}% del cap`}>

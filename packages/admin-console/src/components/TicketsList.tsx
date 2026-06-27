@@ -122,7 +122,7 @@ export function TicketsList({ tickets, selectedId, onSelect, loading, filters, s
                   )}
                 >
                   <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                    <span className="text-[10px] uppercase tracking-wider text-admin-muted">{t.sistema}</span>
+                    <span className="text-[10px] normal-case tracking-wider text-admin-muted">{t.sistema}</span>
                     {t.prioridad && (
                       <span className={cn('text-[10px] px-1.5 py-0.5 rounded border', PRIORIDAD_COLORS[t.prioridad])}>
                         {t.prioridad}
@@ -179,7 +179,7 @@ function TabBtn({ active, onClick, icon: Icon, label, count, highlight }: TabBtn
       {count > 0 && (
         <span className={cn(
           'text-[10px] px-1.5 py-0.5 rounded',
-          highlight && !active ? 'bg-admin-warn text-admin-bg font-semibold' : 'bg-admin-border text-admin-muted',
+          highlight && !active ? 'bg-admin-warn text-admin-bg font-medium' : 'bg-admin-border text-admin-muted',
         )}>
           {count}
         </span>

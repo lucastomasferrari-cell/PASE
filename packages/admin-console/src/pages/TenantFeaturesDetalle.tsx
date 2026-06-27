@@ -153,7 +153,7 @@ export function TenantFeaturesDetalle() {
           >
             <ArrowLeft className="w-3 h-3" /> Tenants
           </button>
-          <h1 className="text-xl font-semibold text-admin-text">
+          <h1 className="text-xl font-medium text-admin-text">
             Funciones: {tenant?.nombre}
           </h1>
           <p className="text-xs text-admin-muted mt-1 font-mono">{tenant?.slug}</p>
@@ -192,7 +192,7 @@ export function TenantFeaturesDetalle() {
         if (!feats || feats.length === 0) return null;
         return (
           <section key={cat}>
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-admin-muted mb-2">{cat}</h3>
+            <h3 className="text-[11px] font-medium normal-case tracking-wider text-admin-muted mb-2">{cat}</h3>
             <div className="rounded border border-admin-border bg-admin-surface overflow-hidden">
               {feats.map((f, idx) => {
                 const habilitado = tenantTieneFeature(f.slug, overrides);
@@ -211,7 +211,7 @@ export function TenantFeaturesDetalle() {
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-admin-text">{f.label}</span>
                         {f.beta && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-admin-accent/15 text-admin-accent font-semibold tracking-wider">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-admin-accent/15 text-admin-accent font-medium tracking-wider">
                             BETA
                           </span>
                         )}

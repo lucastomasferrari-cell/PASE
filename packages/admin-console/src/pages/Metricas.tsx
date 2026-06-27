@@ -147,7 +147,7 @@ export function Metricas() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-xl font-semibold text-admin-text flex items-center gap-2">
+        <h1 className="text-xl font-medium text-admin-text flex items-center gap-2">
           <BarChart3 className="w-5 h-5 text-admin-accent" />
           Métricas
         </h1>
@@ -181,7 +181,7 @@ export function Metricas() {
 
           {/* ─── KPIs principales del SaaS ─── */}
           <section>
-            <h2 className="text-xs uppercase tracking-wider text-admin-muted mb-2 flex items-center gap-1.5">
+            <h2 className="text-xs normal-case tracking-wider text-admin-muted mb-2 flex items-center gap-1.5">
               <DollarSign className="w-3.5 h-3.5" /> Ingresos del SaaS
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -216,7 +216,7 @@ export function Metricas() {
 
           {/* ─── Métricas de la plataforma (GMV) ─── */}
           <section>
-            <h2 className="text-xs uppercase tracking-wider text-admin-muted mb-2 flex items-center gap-1.5">
+            <h2 className="text-xs normal-case tracking-wider text-admin-muted mb-2 flex items-center gap-1.5">
               <Activity className="w-3.5 h-3.5" /> Uso de la plataforma
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -308,7 +308,7 @@ export function Metricas() {
           <div className="grid md:grid-cols-2 gap-4">
             <Card title={`Clientes en riesgo de churn — ${enRiesgo.length}`}>
               {enRiesgo.length === 0 ? (
-                <Empty>Ningún cliente en riesgo. 🎉</Empty>
+                <Empty>Ningún cliente en riesgo.</Empty>
               ) : (
                 <ul className="divide-y divide-admin-border/50">
                   {enRiesgo.map(d => (
@@ -318,7 +318,7 @@ export function Metricas() {
                         <div className="text-[10px] text-admin-muted">{d.plan_nombre} · {d.locales_count}L · {d.usuarios_count}U</div>
                       </div>
                       <span className={cn(
-                        'text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded',
+                        'text-[10px] normal-case tracking-wider px-1.5 py-0.5 rounded',
                         d.sub_estado === 'suspended' ? 'bg-admin-danger/15 text-admin-danger' :
                         d.sub_estado === 'trial_expired' ? 'bg-admin-danger/15 text-admin-danger' :
                         'bg-admin-warn/15 text-admin-warn',
@@ -333,7 +333,7 @@ export function Metricas() {
 
             <Card title="Soporte abierto por cliente">
               {tickets.length === 0 ? (
-                <Empty>No hay tickets abiertos. 🎉</Empty>
+                <Empty>No hay tickets abiertos.</Empty>
               ) : (
                 <ul className="divide-y divide-admin-border/50">
                   {tickets
@@ -361,13 +361,13 @@ export function Metricas() {
               <table className="w-full text-sm">
                 <thead className="bg-admin-bg border-b border-admin-border">
                   <tr className="text-left">
-                    <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider">Cliente</th>
-                    <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider">Estado</th>
-                    <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider text-right">Locales</th>
-                    <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider text-right">Usuarios</th>
-                    <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider text-right">Mes actual</th>
-                    <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider text-right">vs prev</th>
-                    <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider text-right">Tickets</th>
+                    <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Cliente</th>
+                    <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Estado</th>
+                    <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider text-right">Locales</th>
+                    <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider text-right">Usuarios</th>
+                    <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider text-right">Mes actual</th>
+                    <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider text-right">vs prev</th>
+                    <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider text-right">Tickets</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -382,7 +382,7 @@ export function Metricas() {
                             <div className="text-[10px] text-admin-muted">{d.plan_nombre}</div>
                           </td>
                           <td className="px-3 py-2">
-                            <span className="text-[10px] uppercase tracking-wider text-admin-muted">
+                            <span className="text-[10px] normal-case tracking-wider text-admin-muted">
                               {d.sub_estado?.replace('_', ' ') || '—'}
                             </span>
                           </td>
@@ -434,10 +434,10 @@ function KpiBig({ label, value, exact, hint, tone, icon }: {
   return (
     <div className="rounded border border-admin-border bg-admin-surface px-4 py-3">
       <div className="flex items-center justify-between">
-        <div className="text-[10px] uppercase tracking-wider text-admin-muted">{label}</div>
+        <div className="text-[10px] normal-case tracking-wider text-admin-muted">{label}</div>
         {icon}
       </div>
-      <div className={cn('text-2xl font-semibold mt-1', toneCls)} title={exact}>{value}</div>
+      <div className={cn('text-2xl font-medium mt-1', toneCls)} title={exact}>{value}</div>
       {hint && <div className="text-[10px] text-admin-muted mt-1">{hint}</div>}
     </div>
   );
@@ -446,7 +446,7 @@ function KpiBig({ label, value, exact, hint, tone, icon }: {
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded border border-admin-border bg-admin-surface p-3">
-      <div className="text-xs uppercase tracking-wider text-admin-muted mb-2 px-1">{title}</div>
+      <div className="text-xs normal-case tracking-wider text-admin-muted mb-2 px-1">{title}</div>
       <div>{children}</div>
     </div>
   );

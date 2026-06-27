@@ -28,8 +28,8 @@ export function Login({ reason }: Props) {
     <div className="min-h-screen flex items-center justify-center bg-admin-bg px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="text-xs uppercase tracking-wider text-admin-muted">PASE</div>
-          <div className="text-2xl font-semibold text-admin-text mt-1">Admin Console</div>
+          <div className="text-xs normal-case tracking-wider text-admin-muted">PASE</div>
+          <div className="text-2xl font-medium text-admin-text mt-1">Admin Console</div>
           <div className="text-xs text-admin-muted mt-2">Acceso restringido a superadmins.</div>
         </div>
 

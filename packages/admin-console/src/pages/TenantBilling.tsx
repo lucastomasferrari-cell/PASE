@@ -103,7 +103,7 @@ export function TenantBilling() {
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-admin-text">Facturación — {tenant.nombre}</h1>
+          <h1 className="text-2xl font-medium text-admin-text">Facturación — {tenant.nombre}</h1>
           <p className="text-sm text-admin-muted">{tenant.slug}</p>
         </div>
         <button onClick={() => void load()} className="px-3 py-1.5 rounded border border-admin-border text-sm hover:bg-admin-border/40 inline-flex items-center gap-1.5">
@@ -153,9 +153,9 @@ export function TenantBilling() {
             )}>
               <div className="flex items-baseline justify-between">
                 <span className="font-medium text-admin-text">{p.nombre}</span>
-                {sub?.plan_id === p.id && <span className="text-[10px] uppercase text-admin-accent">Actual</span>}
+                {sub?.plan_id === p.id && <span className="text-[10px] normal-case text-admin-accent">Actual</span>}
               </div>
-              <div className="text-2xl font-semibold tabular-nums">${p.precio_mensual_ars.toLocaleString('es-AR')}<span className="text-xs text-admin-muted font-normal">/mes</span></div>
+              <div className="text-2xl font-medium tabular-nums">${p.precio_mensual_ars.toLocaleString('es-AR')}<span className="text-xs text-admin-muted font-normal">/mes</span></div>
               <div className="text-xs text-admin-muted">
                 {p.max_locales ? `Hasta ${p.max_locales} locales` : 'Locales ilimitados'} ·{' '}
                 {p.max_usuarios ? `${p.max_usuarios} usuarios` : 'Usuarios ilimitados'}

@@ -120,7 +120,7 @@ export function TenantWizard({ apiBase, onClose, onCreated }: Props) {
         {/* Header */}
         <div className="flex items-start justify-between px-5 py-4 border-b border-admin-border">
           <div>
-            <h2 className="text-base font-semibold text-admin-text">Crear nuevo tenant</h2>
+            <h2 className="text-base font-medium text-admin-text">Crear nuevo tenant</h2>
             <p className="text-xs text-admin-muted mt-0.5">Paso {paso} de 4</p>
           </div>
           <button onClick={onClose} className="text-admin-muted hover:text-admin-text">
@@ -312,7 +312,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 function SummaryCard({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="rounded border border-admin-border bg-admin-bg p-3">
-      <div className="text-[10px] uppercase tracking-wider text-admin-muted mb-1">{label}</div>
+      <div className="text-[10px] normal-case tracking-wider text-admin-muted mb-1">{label}</div>
       {children}
     </div>
   );

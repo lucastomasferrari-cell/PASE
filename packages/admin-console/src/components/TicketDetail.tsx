@@ -106,7 +106,7 @@ export function TicketDetail({ ticket, onChange, onBack }: Props) {
             <div className="text-xs text-admin-muted">
               {ticket.autor_email || `User ${ticket.autor_user_id}`}
               {' · '}
-              <span className="uppercase tracking-wider">{ticket.sistema}</span>
+              <span className="normal-case tracking-wider">{ticket.sistema}</span>
               {ticket.pantalla_origen && (
                 <>{' · '}<code className="text-admin-accent">{ticket.pantalla_origen}</code></>
               )}
@@ -115,12 +115,12 @@ export function TicketDetail({ ticket, onChange, onBack }: Props) {
             </div>
             <div className="flex items-center gap-1.5 mt-2">
               {ticket.categoria && (
-                <span className="text-[10px] uppercase px-1.5 py-0.5 rounded bg-admin-border text-admin-muted">
+                <span className="text-[10px] normal-case px-1.5 py-0.5 rounded bg-admin-border text-admin-muted">
                   {ticket.categoria}
                 </span>
               )}
               <PrioridadPicker prioridad={ticket.prioridad} onChange={onSetPrioridad} />
-              <span className="text-[10px] uppercase px-1.5 py-0.5 rounded bg-admin-border text-admin-muted ml-auto">
+              <span className="text-[10px] normal-case px-1.5 py-0.5 rounded bg-admin-border text-admin-muted ml-auto">
                 {ticket.estado}
               </span>
             </div>
@@ -135,14 +135,14 @@ export function TicketDetail({ ticket, onChange, onBack }: Props) {
 
         {/* Mensaje original */}
         <div className="rounded border border-admin-border bg-admin-surface p-4">
-          <div className="text-[10px] uppercase tracking-wider text-admin-muted mb-2">Mensaje original</div>
+          <div className="text-[10px] normal-case tracking-wider text-admin-muted mb-2">Mensaje original</div>
           <p className="text-sm whitespace-pre-wrap text-admin-text">{ticket.mensaje}</p>
         </div>
 
         {/* Screenshot si hay */}
         {ticket.screenshot_url && (
           <div className="rounded border border-admin-border bg-admin-surface p-4">
-            <div className="text-[10px] uppercase tracking-wider text-admin-muted mb-2 flex items-center gap-1">
+            <div className="text-[10px] normal-case tracking-wider text-admin-muted mb-2 flex items-center gap-1">
               <ImageIcon className="w-3 h-3" /> Captura adjunta
             </div>
             {screenshotSignedUrl ? (
@@ -158,7 +158,7 @@ export function TicketDetail({ ticket, onChange, onBack }: Props) {
         {/* Contexto JSONB si tiene contenido */}
         {Object.keys(ticket.contexto_jsonb || {}).length > 0 && (
           <details className="rounded border border-admin-border bg-admin-surface p-4">
-            <summary className="text-[10px] uppercase tracking-wider text-admin-muted cursor-pointer">
+            <summary className="text-[10px] normal-case tracking-wider text-admin-muted cursor-pointer">
               Contexto técnico
             </summary>
             <pre className="text-[11px] text-admin-text mt-2 overflow-auto">
@@ -170,7 +170,7 @@ export function TicketDetail({ ticket, onChange, onBack }: Props) {
         {/* Respuesta automática del LLM */}
         {ticket.respuesta_llm && (
           <div className="rounded border border-admin-accent/30 bg-admin-accent/5 p-4">
-            <div className="text-[10px] uppercase tracking-wider text-admin-accent mb-2">
+            <div className="text-[10px] normal-case tracking-wider text-admin-accent mb-2">
               Auto-respuesta del asistente
             </div>
             <p className="text-sm whitespace-pre-wrap text-admin-text">{ticket.respuesta_llm}</p>
@@ -190,7 +190,7 @@ export function TicketDetail({ ticket, onChange, onBack }: Props) {
                   : 'border-admin-border bg-admin-surface mr-8',
               )}
             >
-              <div className="text-[10px] uppercase tracking-wider text-admin-muted mb-2 flex items-center gap-1">
+              <div className="text-[10px] normal-case tracking-wider text-admin-muted mb-2 flex items-center gap-1">
                 <MessageSquare className="w-3 h-3" />
                 {esSuperadmin ? 'Superadmin' : (c.autor_rol || 'Autor')}
                 <span className="ml-auto normal-case">{new Date(c.created_at).toLocaleString('es-AR')}</span>
@@ -248,7 +248,7 @@ function PrioridadPicker({ prioridad, onChange }: { prioridad: PrioridadTicket |
     <select
       value={prioridad ?? 'media'}
       onChange={(e) => onChange(e.target.value as PrioridadTicket)}
-      className="text-[10px] uppercase tracking-wider bg-admin-border border-0 rounded px-1.5 py-0.5 text-admin-text focus:outline-none"
+      className="text-[10px] normal-case tracking-wider bg-admin-border border-0 rounded px-1.5 py-0.5 text-admin-text focus:outline-none"
     >
       <option value="critica">Crítica</option>
       <option value="alta">Alta</option>

@@ -21,8 +21,8 @@ export function Sidebar({ user }: Props) {
   return (
     <aside className="hidden md:flex w-56 shrink-0 bg-admin-surface border-r border-admin-border flex-col">
       <div className="px-4 py-5 border-b border-admin-border">
-        <div className="text-xs uppercase tracking-wider text-admin-muted">PASE</div>
-        <div className="text-base font-semibold text-admin-text mt-0.5">Admin Console</div>
+        <div className="text-xs normal-case tracking-wider text-admin-muted">PASE</div>
+        <div className="text-base font-medium text-admin-text mt-0.5">Admin Console</div>
       </div>
       <nav className="flex-1 py-3 px-2 space-y-0.5">
         {NAV.map(({ to, label, icon: Icon, badge }) => (
@@ -41,7 +41,7 @@ export function Sidebar({ user }: Props) {
             <Icon className="w-4 h-4 shrink-0" />
             <span className="flex-1">{label}</span>
             {badge === 'soon' && (
-              <span className="text-[9px] uppercase tracking-wider text-admin-muted bg-admin-border px-1.5 py-0.5 rounded">
+              <span className="text-[9px] normal-case tracking-wider text-admin-muted bg-admin-border px-1.5 py-0.5 rounded">
                 soon
               </span>
             )}

@@ -93,7 +93,7 @@ export function TenantsFeaturesMatriz() {
   return (
     <div className="space-y-4">
       <header>
-        <h1 className="text-xl font-semibold text-admin-text flex items-center gap-2">
+        <h1 className="text-xl font-medium text-admin-text flex items-center gap-2">
           <Grid3x3 className="w-5 h-5 text-admin-accent" />
           Funciones (matriz)
         </h1>
@@ -146,7 +146,7 @@ export function TenantsFeaturesMatriz() {
           <table className="w-full text-sm">
             <thead className="bg-admin-bg">
               <tr>
-                <th className="text-left px-3 py-2 sticky left-0 bg-admin-bg border-r border-admin-border min-w-[220px] font-medium text-admin-muted text-xs uppercase tracking-wider">
+                <th className="text-left px-3 py-2 sticky left-0 bg-admin-bg border-r border-admin-border min-w-[220px] font-medium text-admin-muted text-xs normal-case tracking-wider">
                   Función
                 </th>
                 {tenants.map((t) => (
@@ -170,7 +170,7 @@ export function TenantsFeaturesMatriz() {
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm font-medium text-admin-text">{f.label}</span>
                       {f.beta && (
-                        <span className="text-[9px] px-1 py-0.5 rounded bg-admin-accent/15 text-admin-accent font-semibold">
+                        <span className="text-[9px] px-1 py-0.5 rounded bg-admin-accent/15 text-admin-accent font-medium">
                           BETA
                         </span>
                       )}

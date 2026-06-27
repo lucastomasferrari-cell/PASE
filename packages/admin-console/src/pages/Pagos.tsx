@@ -180,7 +180,7 @@ export function Pagos() {
   return (
     <div className="space-y-4">
       <header>
-        <h1 className="text-xl font-semibold text-admin-text flex items-center gap-2">
+        <h1 className="text-xl font-medium text-admin-text flex items-center gap-2">
           <Wallet className="w-5 h-5 text-admin-accent" />
           Pagos
         </h1>
@@ -238,8 +238,8 @@ function Kpi({ label, value, tone }: { label: string; value: number; tone: 'defa
   }[tone];
   return (
     <div className="rounded border border-admin-border bg-admin-surface px-4 py-3">
-      <div className="text-[10px] uppercase tracking-wider text-admin-muted">{label}</div>
-      <div className={cn('text-2xl font-semibold mt-1', toneCls)}>{value}</div>
+      <div className="text-[10px] normal-case tracking-wider text-admin-muted">{label}</div>
+      <div className={cn('text-2xl font-medium mt-1', toneCls)}>{value}</div>
     </div>
   );
 }
@@ -267,13 +267,13 @@ function SubsTable({ subs, actionLoading, onGenerarInvoice }: { subs: SubRow[]; 
       <table className="w-full text-sm">
         <thead className="bg-admin-bg border-b border-admin-border">
           <tr className="text-left">
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider">Tenant</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider">Plan</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider">Estado</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider text-right">Precio/mes</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider">Próximo cobro</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider">Gateway</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider"></th>
+            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Tenant</th>
+            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Plan</th>
+            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Estado</th>
+            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider text-right">Precio/mes</th>
+            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Próximo cobro</th>
+            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Gateway</th>
+            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider"></th>
           </tr>
         </thead>
         <tbody>
@@ -285,7 +285,7 @@ function SubsTable({ subs, actionLoading, onGenerarInvoice }: { subs: SubRow[]; 
               <td className="px-3 py-2.5 text-admin-text font-medium">{s.tenant_nombre}</td>
               <td className="px-3 py-2.5 text-admin-text">{s.plan_nombre}</td>
               <td className="px-3 py-2.5">
-                <span className={cn('text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded', SUB_ESTADO_COLORS[s.estado] || SUB_ESTADO_COLORS.cancelled)}>
+                <span className={cn('text-[10px] normal-case tracking-wider px-1.5 py-0.5 rounded', SUB_ESTADO_COLORS[s.estado] || SUB_ESTADO_COLORS.cancelled)}>
                   {s.estado.replace('_', ' ')}
                 </span>
               </td>
@@ -326,13 +326,13 @@ function InvoicesTable({ invoices, actionLoading, onMarcarPagada }: { invoices: 
       <table className="w-full text-sm">
         <thead className="bg-admin-bg border-b border-admin-border">
           <tr className="text-left">
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider">Tenant</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider">Período</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider text-right">Total</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider">Estado</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider">Vence</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider">Cobrada</th>
-            <th className="px-3 py-2 font-medium text-admin-muted text-xs uppercase tracking-wider"></th>
+            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Tenant</th>
+            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Período</th>
+            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider text-right">Total</th>
+            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Estado</th>
+            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Vence</th>
+            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider">Cobrada</th>
+            <th className="px-3 py-2 font-medium text-admin-muted text-xs normal-case tracking-wider"></th>
           </tr>
         </thead>
         <tbody>
@@ -349,7 +349,7 @@ function InvoicesTable({ invoices, actionLoading, onMarcarPagada }: { invoices: 
               </td>
               <td className="px-3 py-2.5 text-right text-admin-text font-mono">{fmtMoney(i.total_ars)}</td>
               <td className="px-3 py-2.5">
-                <span className={cn('text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded', INV_ESTADO_COLORS[i.estado] || INV_ESTADO_COLORS.anulada)}>
+                <span className={cn('text-[10px] normal-case tracking-wider px-1.5 py-0.5 rounded', INV_ESTADO_COLORS[i.estado] || INV_ESTADO_COLORS.anulada)}>
                   {i.estado}
                 </span>
               </td>
@@ -504,7 +504,7 @@ function GatewayCard({ name, badge, badgeTone, description, steps, url, status }
           <CreditCard className="w-4 h-4" />
           {name}
         </div>
-        <span className={cn('text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border', badgeCls)}>
+        <span className={cn('text-[10px] normal-case tracking-wider px-1.5 py-0.5 rounded border', badgeCls)}>
           {badge}
         </span>
       </div>
