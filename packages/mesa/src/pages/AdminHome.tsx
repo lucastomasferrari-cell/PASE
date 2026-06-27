@@ -40,7 +40,25 @@ export function AdminHome() {
     if (!supabaseConfigurado) return;
     void (async () => {
       const { data } = await db().auth.getSession();
-      if (data.session?.user?.email) setSesion({ email: data.session.user.email });
+      if (data.session?.user?.email) {
+        // Fix audit 26-jun ALTO-1: re-chequear apps_permitidas también en
+        // restore de sesión existente. Antes solo se chequeaba en entrar(),
+        // así que si el dueño quitaba el permiso 'mesa' a un user logueado,
+        // el user seguía adentro hasta cerrar manualmente.
+        const { data: perfil } = await db().from('usuarios')
+          .select('apps_permitidas')
+          .eq('auth_id', data.session.user.id)
+          .maybeSingle();
+        const apps = Array.isArray(perfil?.apps_permitidas)
+          ? (perfil.apps_permitidas as string[])
+          : ['pase'];
+        if (!apps.includes('mesa')) {
+          await db().auth.signOut();
+          setCargando(false);
+          return;
+        }
+        setSesion({ email: data.session.user.email });
+      }
       setCargando(false);
     })();
   }, []);

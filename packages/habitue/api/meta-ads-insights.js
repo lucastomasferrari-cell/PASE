@@ -9,6 +9,10 @@
 // Query: ?desde=YYYY-MM-DD&hasta=YYYY-MM-DD (default = últimos 30 días)
 // Respuesta: { ok, configured, insights: { gasto, alcance, clicks, conversiones } }
 
+// SEGURIDAD (fix audit 26-jun CRIT-3): requiere JWT del caller. Antes era
+// abierto y leakeaba gasto/conversiones de Meta Ads del tenant.
+import { checkUserAuth } from './_auth.js';
+
 const GRAPH = 'https://graph.facebook.com';
 
 function rangoDefault() {
@@ -18,6 +22,9 @@ function rangoDefault() {
 }
 
 export default async function handler(req, res) {
+  const auth = await checkUserAuth(req, res);
+  if (!auth) return;
+
   const token = process.env.META_ADS_TOKEN;
   const accountId = process.env.META_ADS_ACCOUNT_ID;
   const version = process.env.META_API_VERSION || 'v21.0';

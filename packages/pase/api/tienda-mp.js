@@ -21,6 +21,7 @@ import { createMpTokenGetter } from './_mp-token.js';
 import { sendEmail, htmlPedidoConfirmado, htmlPedidoListo, htmlPedidoRechazado, htmlPedidoEntregado } from './_email.js';
 import { createRappiClient, getRappiCredentials, verifyRappiWebhookSignature } from './_rappi.js';
 import { createPedidosYaClient, getPedidosYaCredentials, verifyPedidosYaWebhookSignature } from './_pedidosya.js';
+import { verifyMpSignature, getMpWebhookSecret } from './_mp-webhook.js';
 import { checkUserAuth } from './_user-auth.js';
 import { Afip } from '@afipsdk/afip.js';
 
@@ -378,10 +379,29 @@ async function handleWebhook(req, res) {
   const type = req.query.type || req.body?.type;
   const paymentId = req.query['data.id'] || req.body?.data?.id;
 
-  // Validar firma x-signature (formato MP webhook signing)
-  // TODO completo: implementar verificación HMAC. Por ahora confiamos en
-  // que el endpoint es público + validamos contra MP API antes de marcar.
-  // Ver https://www.mercadopago.com.ar/developers/es/docs/your-integrations/notifications/webhooks#editor_8
+  // ── Validar firma x-signature (fix audit 26-jun CRIT-2) ───────────────
+  // MP firma id+request-id+ts con HMAC SHA-256 del webhook secret configurado
+  // en MP Dashboard → Notificaciones → Webhooks. Sin esto, atacante puede
+  // mandar webhooks falsos (cualquier paymentId aleatorio iteraba todas las
+  // credenciales activas → rate-limit MP, posible registro de venta).
+  // Política: si MP_WEBHOOK_SECRET no está configurado, fallar 503 — no
+  // dejamos pasar webhooks sin firma "porque sí".
+  const mpSecret = getMpWebhookSecret();
+  if (!mpSecret) {
+    console.error('[tienda-mp webhook] MP_WEBHOOK_SECRET no configurado');
+    res.status(503).json({ error: 'WEBHOOK_SECRET_NOT_CONFIGURED' });
+    return;
+  }
+  // Para payments el data.id viene del query (formato estándar MP).
+  // Si llega vacío rechazamos arriba con ignored=true.
+  if (paymentId) {
+    const verify = verifyMpSignature(req.headers, paymentId, mpSecret);
+    if (!verify.ok) {
+      console.warn('[tienda-mp webhook] firma MP inválida:', verify.error);
+      res.status(401).json({ error: 'INVALID_SIGNATURE', detail: verify.error });
+      return;
+    }
+  }
 
   if (type !== 'payment' || !paymentId) {
     // No es un payment notification — ack 200 igual para que MP no reintente
@@ -528,15 +548,45 @@ async function handleWebhook(req, res) {
   }
 
   // ── AFIP CAE post-cobro (best-effort) ────────────────────────────────────
-  // Si el tenant tiene AFIP activa, emitimos factura electrónica automática
-  // para la venta. Default: Consumidor Final (doc_tipo=99). Si falla AFIP no
-  // bloqueamos la respuesta al webhook MP — queda registrada como rechazada
-  // y se puede reintentar manual desde el POS.
+  // Si el tenant tiene AFIP activa, emitimos factura electrónica automática.
+  // Default: Consumidor Final (doc_tipo=99). Si falla AFIP NO bloqueamos la
+  // respuesta al webhook MP, pero marcamos `ventas_pos.afip_pendiente=true`
+  // para que el POS muestre la venta como "necesita reintento" (fix audit
+  // 26-jun CRIT-4: antes el rechazo quedaba enterrado en logs sin alertar).
   let afip_factura = null;
+  let afip_error = null;
   try {
     afip_factura = await emitirFacturaPostCobroOnline(supabase, ventaId, paymentId);
+    if (afip_factura && afip_factura.ok === false && !afip_factura.skipped) {
+      afip_error = afip_factura.error || 'afip_failed';
+    }
   } catch (e) {
     console.error('[tienda-mp webhook] emitir AFIP falló (no bloquea cobro)', ventaId, e?.message);
+    afip_error = e?.message || String(e);
+  }
+
+  // Si AFIP falló (no skipped por afip_no_configurada), marcar venta como
+  // pendiente para que el operador la reintente desde el POS.
+  if (afip_error) {
+    try {
+      await supabase.from('ventas_pos')
+        .update({
+          afip_pendiente: true,
+          afip_ultimo_intento_at: new Date().toISOString(),
+          afip_ultimo_error: afip_error,
+        })
+        .eq('id', ventaId);
+    } catch (e) {
+      console.error('[tienda-mp webhook] no se pudo marcar afip_pendiente', ventaId, e?.message);
+    }
+  } else if (afip_factura && (afip_factura.cae || afip_factura.cached)) {
+    // Éxito (nuevo CAE o ya estaba emitido): asegurar que el flag esté en false.
+    try {
+      await supabase.from('ventas_pos')
+        .update({ afip_pendiente: false, afip_ultimo_error: null })
+        .eq('id', ventaId)
+        .eq('afip_pendiente', true);
+    } catch { /* no crítico */ }
   }
 
   res.status(200).json({ ok: true, venta_id: ventaId, status, afip: afip_factura });

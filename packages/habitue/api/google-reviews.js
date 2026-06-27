@@ -7,9 +7,16 @@
 // Query: ?place_id=ChIJ... (el place_id de tu Perfil de Empresa de Google)
 // Respuesta: { ok, configured, rating, total, reviews: [...] }
 
+// SEGURIDAD (fix audit 26-jun CRIT-3): requiere JWT del caller. Antes era
+// abierto y permitía agotar la cuota Places API del tenant (cobrada).
+import { checkUserAuth } from './_auth.js';
+
 const PLACES_NEW = 'https://places.googleapis.com/v1/places';
 
 export default async function handler(req, res) {
+  const auth = await checkUserAuth(req, res);
+  if (!auth) return;
+
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
   if (!apiKey) {
     return res.status(200).json({ ok: false, configured: false, error: 'Google Places sin credenciales (GOOGLE_PLACES_API_KEY).' });

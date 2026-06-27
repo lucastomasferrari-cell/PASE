@@ -8,8 +8,12 @@
 // 202606250600 aplicada (tabla automatizaciones).
 //
 // Seguridad: solo Vercel Cron lo invoca. CRON_SECRET en env + header.
+// Fix audit 26-jun ALTO-7: el check de CRON_SECRET era condicional
+// (`if (secret && auth !== ...)`) — si Lucas olvidaba setear la env var, el
+// endpoint quedaba abierto. Ahora si la env var no está, falla 500.
 
 import { createClient } from '@supabase/supabase-js';
+import { checkCronAuth } from './_auth.js';
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY;
@@ -17,9 +21,7 @@ const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY;
 function diasAtras(n) { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString(); }
 
 export default async function handler(req, res) {
-  const secret = process.env.CRON_SECRET;
-  const auth = req.headers.authorization || '';
-  if (secret && auth !== `Bearer ${secret}`) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  if (!checkCronAuth(req, res)) return;
 
   if (!SUPABASE_URL || !SERVICE_KEY) {
     return res.status(200).json({ ok: false, configured: false, error: 'Faltan SUPABASE_URL / SUPABASE_SERVICE_KEY.' });

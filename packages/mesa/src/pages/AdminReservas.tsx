@@ -275,21 +275,33 @@ function FilaReserva({
           <BtnAccion icon={<Check className="h-3.5 w-3.5" />} label="Confirmar" tono="brand"
                      onClick={() => {
                        // Confirmar + intentar mandar WhatsApp. Si el tenant tiene WA Business
-                       // configurada, va automático (silent). Si no, abrimos wa.me para que
-                       // el staff toque "Enviar". El popup hay que abrirlo en el click directo
-                       // o el browser lo bloquea — preventivo, lo cerramos si no hace falta.
-                       const popup = r.cliente_telefono ? window.open('about:blank', '_blank') : null;
+                       // configurada, va automático (silent) y cerramos el popup. Si no,
+                       // el popup ya está abierto en wa.me con el mensaje pre-armado, listo
+                       // para que el staff toque "Enviar".
+                       //
+                       // Fix audit 26-jun ALTO-6: antes el popup abría en about:blank y
+                       // quedaba en blanco varios segundos esperando al fetch. Si tardaba
+                       // mucho (o fallaba) el staff veía una pestaña vacía sin saber qué
+                       // hacer. Ahora abre directo en wa.me — useful desde el primer ms.
                        const mensaje = mensajeConfirmacionReserva({
                          clienteNombre: r.cliente_nombre, localNombre, fechaHora: r.fecha_hora, personas: r.personas,
                        });
+                       const waUrlPreliminar = r.cliente_telefono
+                         ? whatsAppUrl(r.cliente_telefono, mensaje) : null;
+                       // El popup hay que abrirlo en el click directo o el browser lo
+                       // bloquea por popup-blocker. Lo abrimos con el wa.me directo
+                       // como contenido útil de entrada.
+                       const popup = waUrlPreliminar ? window.open(waUrlPreliminar, '_blank') : null;
                        const p = cambiarEstadoReserva({ reservaId: r.id, nuevoEstado: 'confirmada' });
                        void p.then(async (res) => {
-                         if (res.error) { if (popup) popup.close(); return; }
-                         if (!r.cliente_telefono) { if (popup) popup.close(); return; }
+                         if (res.error) { try { popup?.close(); } catch { /* ignore */ } return; }
+                         if (!r.cliente_telefono) { try { popup?.close(); } catch { /* ignore */ } return; }
                          const wa = await enviarOFallback(r.cliente_telefono, mensaje);
-                         if (wa.sent) { if (popup) popup.close(); }
-                         else if (wa.fallbackUrl && popup) { popup.location.href = wa.fallbackUrl; }
-                         else if (popup) popup.close();
+                         if (wa.sent) {
+                           // WA Business mandó OK — cerrar el popup wa.me (ya no hace falta).
+                           try { popup?.close(); } catch { /* popup ya cerrado por el user */ }
+                         }
+                         // Si !wa.sent, el popup ya tiene wa.me y el staff continúa ahí.
                        });
                        onAccion(p, 'Reserva confirmada');
                      }} />

@@ -14,10 +14,18 @@
 // Body JSON:
 //   { to: "<telefono>", texto?: "...", template?: { nombre, idioma?, variables?: string[] } }
 
+// SEGURIDAD (fix audit 26-jun CRIT-3): requiere JWT del caller. Antes era
+// abierto y permitía mandar WhatsApps arbitrarios usando los créditos Meta
+// del tenant.
+import { checkUserAuth } from './_auth.js';
+
 const GRAPH = 'https://graph.facebook.com';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+
+  const auth = await checkUserAuth(req, res);
+  if (!auth) return;
 
   const token = process.env.WHATSAPP_TOKEN;
   const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;

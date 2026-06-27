@@ -42,12 +42,27 @@ export default async function handler(req, res) {
       return res.status(500).json({ ok: false, error: 'Missing env vars' });
     }
 
+    // Leer action ANTES de checkUserAuth — algunas actions tienen reglas de
+    // auth distintas (ej. change_password_self acepta users con
+    // password_temporal=true, que es justamente el caso que usa el flujo).
+    const { action, nombre, usuario, password, rol, locales: userLocales, authId, tenant_id: payloadTenantId,
+      apps_permitidas: appsPermitidas, cuentas_visibles: cuentasVisibles, rol_id: rolId, usuario_id: targetUsuarioId,
+      newPassword } = req.body || {};
+
+    // Actions abiertas a cualquier user autenticado (target = caller).
+    const SELF_SERVICE_ACTIONS = new Set(['change_password_self']);
+
     // ─── AUTH del caller (CRIT-1 fix) ────────────────────────────────────
-    const auth = await checkUserAuth(req, res);
+    const auth = await checkUserAuth(req, res, {
+      // change_password_self es el flujo que usa el user con password_temporal
+      // para destrabarse — bloquearlo por password_temporal sería lockear al
+      // user para siempre.
+      allowPasswordTemporal: SELF_SERVICE_ACTIONS.has(action),
+    });
     if (!auth) return; // checkUserAuth ya respondió 401/403/500
 
-    // Solo roles administrativos pueden invocar este endpoint.
-    if (!['superadmin', 'dueno', 'admin'].includes(auth.row.rol)) {
+    // Solo roles administrativos pueden invocar el resto del endpoint.
+    if (!SELF_SERVICE_ACTIONS.has(action) && !['superadmin', 'dueno', 'admin'].includes(auth.row.rol)) {
       return res.status(403).json({ ok: false, error: 'forbidden_role' });
     }
     const callerRank = ROLE_RANK[auth.row.rol] || 0;
@@ -57,9 +72,6 @@ export default async function handler(req, res) {
     const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-
-    const { action, nombre, usuario, password, rol, locales: userLocales, authId, tenant_id: payloadTenantId,
-      apps_permitidas: appsPermitidas, cuentas_visibles: cuentasVisibles, rol_id: rolId, usuario_id: targetUsuarioId } = req.body || {};
 
     if (action === 'create') {
       if (!nombre || !usuario || !password) {
@@ -448,43 +460,74 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, url: sd.url, session_id: sd.id });
 
     } else if (action === 'stripe-webhook') {
-      // NOTA: este action está aquí solo para multiplexar. En prod conviene
-      // tener un endpoint dedicado /api/stripe-webhook con verificación de
-      // firma (Stripe-Signature header). Para webhooks reales setear en
-      // Stripe Dashboard → Webhooks → Endpoint URL = /api/stripe-webhook.
-      // Eventos a manejar: checkout.session.completed, invoice.paid,
-      // customer.subscription.updated, customer.subscription.deleted.
-      const event = req.body || {};
-      try {
-        if (event.type === 'checkout.session.completed') {
-          const session = event.data?.object;
-          const tenantId = session?.metadata?.tenant_id;
-          const planId = session?.metadata?.plan_id;
-          if (tenantId) {
-            await db.from('tenant_subscriptions').update({
-              estado: 'active',
-              stripe_subscription_id: session.subscription,
-              gateway_provider: 'stripe',
-              plan_id: planId || undefined,
-              current_period_start: new Date().toISOString(),
-            }).eq('tenant_id', tenantId);
-          }
-        } else if (event.type === 'customer.subscription.deleted') {
-          const sub = event.data?.object;
-          await db.from('tenant_subscriptions').update({
-            estado: 'cancelled',
-            cancelled_at: new Date().toISOString(),
-          }).eq('stripe_subscription_id', sub.id);
-        } else if (event.type === 'invoice.payment_failed') {
-          const inv = event.data?.object;
-          await db.from('tenant_subscriptions').update({
-            estado: 'past_due',
-          }).eq('stripe_subscription_id', inv.subscription);
-        }
-      } catch (e) {
-        console.error('[stripe-webhook]', e?.message);
+      // MOVIDO a /api/stripe-webhook.js (fix audit 26-jun CRIT-1).
+      // El handler anterior aceptaba el evento sin verificar firma Y permitía
+      // a cualquier dueño/admin autenticado modificar tenant_subscriptions
+      // ajeno pasando metadata.tenant_id arbitrario. Hardcore cross-tenant.
+      // Ahora el endpoint dedicado valida HMAC SHA-256 del header Stripe-Signature.
+      // Reconfigurar en Stripe Dashboard:
+      //   URL antigua (rota): /api/auth-admin?action=stripe-webhook
+      //   URL nueva (con firma): /api/stripe-webhook
+      return res.status(410).json({
+        ok: false,
+        error: 'gone',
+        detail: 'Esta acción se movió a /api/stripe-webhook con validación de firma. Actualizar la URL en Stripe Dashboard.',
+      });
+
+    } else if (action === 'change_password_self') {
+      // Cambiar la PROPIA contraseña (no la de otro user). Diferente a
+      // 'change_password' que es para admins reseteando a otros.
+      //
+      // Movido desde /api/auth-change-password (fix audit 26-jun: hacer
+      // espacio para /api/stripe-webhook respetando límite de 12 functions).
+      //
+      // El JWT del caller ya fue validado por checkUserAuth. Usamos
+      // auth.row.auth_id como target (NO authId del body — defense contra
+      // que un user pase otro authId arbitrario).
+      const np = typeof newPassword === 'string' ? newPassword
+        : (typeof password === 'string' ? password : null);
+      if (!np) {
+        return res.status(400).json({ error: 'BAD_REQUEST' });
       }
-      return res.status(200).json({ ok: true, received: true });
+      if (np.length < 8) {
+        return res.status(400).json({ error: 'PASSWORD_TOO_SHORT' });
+      }
+      // checkUserAuth devuelve auth.user (Supabase Auth) y auth.row (tabla
+      // usuarios). El auth_id del target = caller es auth.user.id.
+      const targetAuthId = auth.user?.id;
+      if (!targetAuthId) {
+        return res.status(400).json({ error: 'NO_AUTH_ID' });
+      }
+
+      const { error: updErr } = await db.auth.admin.updateUserById(targetAuthId, {
+        password: np,
+      });
+      if (updErr) {
+        const msg = (updErr.message || '').toLowerCase();
+        if (updErr.code === 'same_password' || msg.includes('different from the old')) {
+          return res.status(422).json({ error: 'SAME_PASSWORD' });
+        }
+        if (updErr.code === 'weak_password' || msg.includes('weak password')) {
+          return res.status(422).json({ error: 'WEAK_PASSWORD', detail: updErr.message });
+        }
+        console.error('[auth-admin] change_password_self updateUserById error:', updErr);
+        return res.status(500).json({ error: 'UPDATE_FAILED', detail: updErr.message });
+      }
+
+      const { error: dbErr } = await db.from('usuarios')
+        .update({ password_temporal: false })
+        .eq('auth_id', targetAuthId);
+      if (dbErr) {
+        // El password YA cambió en auth.users. Sin rollback limpio.
+        console.error('[auth-admin] change_password_self usuarios UPDATE error:', dbErr);
+        return res.status(500).json({
+          error: 'FLAG_UPDATE_FAILED',
+          detail: dbErr.message,
+          passwordChanged: true,
+        });
+      }
+
+      return res.status(200).json({ ok: true });
 
     } else if (action === 'wa-send') {
       // Mandar un mensaje de WhatsApp desde la app (Habitué/MESA/COMANDA).
@@ -580,7 +623,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: testOk, error: testError });
 
     } else {
-      return res.status(400).json({ ok: false, error: 'action requerida: create | change_password | reset_password | create_comanda | credencial-list | credencial-set | credencial-delete | credencial-test | wa-send | email-send | stripe-checkout | stripe-webhook' });
+      return res.status(400).json({ ok: false, error: 'action requerida: create | change_password | change_password_self | reset_password | create_comanda | credencial-list | credencial-set | credencial-delete | credencial-test | wa-send | email-send | stripe-checkout' });
     }
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });

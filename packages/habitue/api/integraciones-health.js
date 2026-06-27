@@ -3,8 +3,17 @@
 // "Conectado" sin tener que tocar la tabla `integraciones`.
 //
 // No expone los valores, solo si están presentes.
+//
+// SEGURIDAD (fix audit 26-jun CRIT-3): requiere JWT del caller. Aunque solo
+// devuelve booleans, leakea qué integraciones tiene cada tenant — info útil
+// para reconnaissance.
 
-export default function handler(req, res) {
+import { checkUserAuth } from './_auth.js';
+
+export default async function handler(req, res) {
+  const auth = await checkUserAuth(req, res);
+  if (!auth) return;
+
   const presentes = (...keys) => keys.every((k) => !!process.env[k]);
 
   res.status(200).json({

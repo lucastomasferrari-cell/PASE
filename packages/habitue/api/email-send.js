@@ -7,9 +7,19 @@
 //
 // Body JSON: { to: ["a@x.com", ...], asunto: "...", html?: "...", texto?: "..." }
 // (to acepta hasta 50 destinatarios por request según Resend; para más, batch.)
+//
+// SEGURIDAD (fix audit 26-jun CRIT-3): requiere JWT del caller. Antes era
+// abierto y permitía spam masivo con los créditos de Resend del tenant.
+
+import { checkUserAuth } from './_auth.js';
+
+const MAX_DESTINATARIOS_POR_REQUEST = 50;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+
+  const auth = await checkUserAuth(req, res);
+  if (!auth) return; // ya respondió 401/403
 
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM;
@@ -19,6 +29,9 @@ export default async function handler(req, res) {
 
   const { to, asunto, html, texto } = req.body || {};
   if (!Array.isArray(to) || to.length === 0) return res.status(400).json({ ok: false, error: 'Falta "to" (array)' });
+  if (to.length > MAX_DESTINATARIOS_POR_REQUEST) {
+    return res.status(400).json({ ok: false, error: `Máximo ${MAX_DESTINATARIOS_POR_REQUEST} destinatarios por request` });
+  }
   if (!asunto) return res.status(400).json({ ok: false, error: 'Falta "asunto"' });
 
   try {

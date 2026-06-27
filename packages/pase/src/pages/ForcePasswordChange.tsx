@@ -12,7 +12,9 @@ interface ForcePasswordChangeProps {
 
 // Refactor 27-may iteración 3: después de 3 intentos fallidos de fixear
 // el bug client-side ("se queda Guardando..."), pasamos TODA la lógica
-// al endpoint serverless /api/auth-change-password.
+// al endpoint serverless. Originalmente /api/auth-change-password, movido
+// a /api/auth-admin?action=change_password_self el 26-jun para liberar
+// cupo Vercel Hobby (fix audit CRIT-1 Stripe webhook).
 //
 // Por qué es definitivo:
 // - Server-side hace ambos pasos (cambio pass + UPDATE flag) atómicamente
@@ -72,13 +74,13 @@ export default function ForcePasswordChange(_props: ForcePasswordChangeProps) {
         return;
       }
 
-      const resp = await fetch("/api/auth-change-password", {
+      const resp = await fetch("/api/auth-admin", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ newPassword: newPass }),
+        body: JSON.stringify({ action: "change_password_self", newPassword: newPass }),
       });
 
       let data: { error?: string; detail?: string; ok?: boolean; passwordChanged?: boolean } = {};

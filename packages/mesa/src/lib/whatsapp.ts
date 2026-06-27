@@ -72,7 +72,13 @@ export function mensajeRecordatorioReserva(args: {
  * @returns { sent: true } si se envió automático
  *          { sent: false, fallbackUrl } si hay que abrir wa.me a mano
  */
-export async function enviarOFallback(telefono: string | null | undefined, mensaje: string): Promise<{
+const WA_SEND_TIMEOUT_MS = 5000; // fix audit 26-jun ALTO-8
+
+export async function enviarOFallback(
+  telefono: string | null | undefined,
+  mensaje: string,
+  opts: { timeoutMs?: number } = {},
+): Promise<{
   sent: boolean;
   fallbackUrl?: string;
   error?: string;
@@ -80,22 +86,34 @@ export async function enviarOFallback(telefono: string | null | undefined, mensa
   const tel = normalizarTelefonoAR(telefono);
   if (!tel) return { sent: false, error: 'sin_telefono' };
 
-  // 1. Intentar via WA Business API (endpoint /api/auth-admin?action=wa-send)
+  const timeoutMs = opts.timeoutMs ?? WA_SEND_TIMEOUT_MS;
+
+  // 1. Intentar via WA Business API (endpoint /api/auth-admin?action=wa-send).
+  //    Fix audit ALTO-8: timeout con AbortController. Sin esto, si el endpoint
+  //    colgaba, el llamador (handler de Confirmar reserva) esperaba el default
+  //    del browser (~30s) con la UI bloqueada y popup en blanco.
   try {
     const { data: sess } = await db().auth.getSession();
     const token = sess.session?.access_token;
     if (token) {
-      const r = await fetch(`${PASE_API_BASE}/api/auth-admin`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ action: 'wa-send', to: tel, texto: mensaje }),
-      });
-      const d = await r.json();
-      if (d.ok) return { sent: true };
-      // Si la credencial no está configurada, caemos al fallback wa.me
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+      try {
+        const r = await fetch(`${PASE_API_BASE}/api/auth-admin`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ action: 'wa-send', to: tel, texto: mensaje }),
+          signal: ctrl.signal,
+        });
+        const d = await r.json();
+        if (d.ok) return { sent: true };
+        // Si la credencial no está configurada, caemos al fallback wa.me
+      } finally {
+        clearTimeout(timer);
+      }
     }
   } catch {
-    // network error → fallback
+    // network error / abort → fallback
   }
 
   // 2. Fallback: link wa.me que el staff toca para enviar manual.

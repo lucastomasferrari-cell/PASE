@@ -178,7 +178,7 @@ export function TenantBilling() {
         <div>
           <span className="font-medium">Setup Stripe necesario:</span> el tenant tiene que cargar su Secret Key y Webhook Secret en
           COMANDA → Configuración → Integraciones → Stripe antes de poder activar suscripciones.
-          El webhook tiene que apuntar a <code className="font-mono">pase-yndx.vercel.app/api/auth-admin?action=stripe-webhook</code>.
+          El webhook tiene que apuntar a <code className="font-mono">pase-yndx.vercel.app/api/stripe-webhook</code> (con verificación de firma HMAC).
         </div>
       </div>
     </div>

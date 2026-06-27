@@ -381,31 +381,40 @@ async function procesarMensajeEntrante({ cfg, event, sender_igsid }) {
 
   // AUDIT F6A CRIT-4 (26-jun): cap USD diario por tenant. Defense-in-depth
   // contra cost-runaway si el rate-limit per-msg no alcanza (ej. mensajes
-  // muy largos con system_prompt grande). Si SUM(llm_cost_usd) de HOY ya
-  // excede cfg.cap_diario_usd (default $5), pausamos el bot hasta mañana.
+  // muy largos con system_prompt grande).
+  //
+  // AUDIT 26-jun ALTO-2: ANTES esto era SELECT SUM + check en JS, vulnerable
+  // a race condition (dos webhooks al mismo tiempo leían el mismo SUM viejo,
+  // ambos pasaban el check, ambos llamaban Claude → cap excedido).
+  // AHORA: RPC atómica fn_reservar_cap_diario_ig que hace UPDATE con CASE
+  // dentro del WHERE — solo pasa si acumulado + estimate <= cap. Después de
+  // Claude ajustamos con cost real.
   const capDiarioUsd = Number(cfg.cap_diario_usd ?? 5);
+  const COSTO_ESTIMADO_USD = 0.10; // conservador; ajustamos con real después
+  let reservaPasada = false;
   if (capDiarioUsd > 0) {
-    const hoy = new Date().toISOString().slice(0, 10);
-    const { data: gastoHoyRows } = await db
-      .from('ig_mensajes')
-      .select('llm_cost_usd')
-      .eq('tenant_id', cfg.tenant_id)
-      .eq('direccion', 'out')
-      .eq('origen', 'bot')
-      .gte('created_at', `${hoy}T00:00:00Z`);
-    const gastoHoy = (gastoHoyRows ?? []).reduce((s, r) => s + Number(r.llm_cost_usd || 0), 0);
-    if (gastoHoy >= capDiarioUsd) {
-      console.warn(`[webhook] cap diario tenant=${cfg.tenant_id} alcanzado ($${gastoHoy.toFixed(2)}/$${capDiarioUsd}). Skip.`);
+    const { data: reserva, error: errReserva } = await db.rpc('fn_reservar_cap_diario_ig', {
+      p_tenant_id: cfg.tenant_id,
+      p_estimate_usd: COSTO_ESTIMADO_USD,
+    });
+    if (errReserva) {
+      console.error('[webhook] fn_reservar_cap_diario_ig error:', errReserva.message);
+      return;
+    }
+    if (!reserva?.ok) {
+      const gastado = Number(reserva?.gastado ?? 0);
+      console.warn(`[webhook] cap diario tenant=${cfg.tenant_id} alcanzado ($${gastado.toFixed(2)}/$${capDiarioUsd}). Skip.`);
       try {
         await db.from('ig_eventos').insert({
           tenant_id: cfg.tenant_id, conversacion_id: conv.id,
           tipo: 'cap_diario_hit',
-          error_message: `Bot pausado: $${gastoHoy.toFixed(2)} gastado hoy (cap $${capDiarioUsd})`,
-          payload: { igsid: sender_igsid, gasto_hoy: gastoHoy, cap: capDiarioUsd },
+          error_message: `Bot pausado: $${gastado.toFixed(2)} gastado hoy (cap $${capDiarioUsd})`,
+          payload: { igsid: sender_igsid, gasto_hoy: gastado, cap: capDiarioUsd },
         });
       } catch { /* no crítico */ }
       return;
     }
+    reservaPasada = true;
   }
 
   // AUDIT F6A#2: rate limit per-tenant. Las columnas existían pero NUNCA
@@ -498,7 +507,30 @@ async function procesarMensajeEntrante({ cfg, event, sender_igsid }) {
       tipo: 'error',
       error_message: `Claude API: ${String(e?.message || e)}`,
     });
+    // Si reservamos cap pero Claude falló, liberar la reserva (real=0).
+    if (reservaPasada) {
+      try {
+        await db.rpc('fn_ajustar_cap_diario_ig', {
+          p_tenant_id: cfg.tenant_id,
+          p_costo_real_usd: 0,
+          p_estimate_reservado_usd: COSTO_ESTIMADO_USD,
+        });
+      } catch { /* no crítico */ }
+    }
     return;
+  }
+
+  // Ajustar el cap con el cost real (puede ser mayor o menor al estimate).
+  if (reservaPasada) {
+    try {
+      await db.rpc('fn_ajustar_cap_diario_ig', {
+        p_tenant_id: cfg.tenant_id,
+        p_costo_real_usd: Number(respuesta.costo_usd ?? 0),
+        p_estimate_reservado_usd: COSTO_ESTIMADO_USD,
+      });
+    } catch (e) {
+      console.warn('[webhook] fn_ajustar_cap_diario_ig falló (no crítico):', e?.message);
+    }
   }
 
   if (!respuesta.texto || respuesta.texto.trim().length === 0) {

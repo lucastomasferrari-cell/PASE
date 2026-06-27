@@ -42,7 +42,27 @@ export function AdminHome() {
     if (!supabaseConfigurado) return;
     void (async () => {
       const { data } = await db().auth.getSession();
-      if (data.session?.user?.email) setSesion({ email: data.session.user.email });
+      if (data.session?.user?.email) {
+        // Fix audit 26-jun ALTO-1: re-chequear apps_permitidas + rol también en
+        // restore de sesión existente, no solo en entrar(). Defensive: el dueño
+        // pudo haber quitado el acceso/cambiado rol mientras el user estaba
+        // logueado.
+        const { data: perfil } = await db().from('usuarios')
+          .select('apps_permitidas, rol')
+          .eq('auth_id', data.session.user.id)
+          .maybeSingle();
+        const apps = Array.isArray(perfil?.apps_permitidas)
+          ? (perfil.apps_permitidas as string[])
+          : ['pase'];
+        const rol = perfil?.rol as string | undefined;
+        const rolOk = rol && ['dueno', 'admin', 'superadmin'].includes(rol);
+        if (!apps.includes('accesos') || !rolOk) {
+          await db().auth.signOut();
+          setCargando(false);
+          return;
+        }
+        setSesion({ email: data.session.user.email });
+      }
       setCargando(false);
     })();
   }, []);
