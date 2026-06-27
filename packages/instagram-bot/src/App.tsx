@@ -32,7 +32,15 @@ export function App() {
   useEffect(() => {
     if (!sesion) return;
     void (async () => {
-      const { data } = await db().from('usuarios').select('id').eq('email', sesion.email).maybeSingle();
+      // El usuario interno se resuelve por auth_id, NO por email: la convención
+      // del ecosistema guarda usuarios.email SIN @ (ej "dueno"), mientras el
+      // email de Supabase Auth es "dueno@pase.local". Buscar por email no
+      // matchea → userId quedaba en 0 → FK violation (tomada_por → usuarios.id)
+      // al "Tomar como humano".
+      const { data: sess } = await db().auth.getSession();
+      const authId = sess.session?.user?.id;
+      if (!authId) return;
+      const { data } = await db().from('usuarios').select('id').eq('auth_id', authId).maybeSingle();
       if (data?.id) setUserId(data.id as number);
     })();
   }, [sesion]);
