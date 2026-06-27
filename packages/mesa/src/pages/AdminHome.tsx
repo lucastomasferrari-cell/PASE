@@ -138,7 +138,7 @@ export function AdminHome() {
       <div className="min-h-screen grid place-items-center px-6">
         <form onSubmit={entrar} className="w-full max-w-sm rounded-2xl bg-white border border-ink/5 shadow-card p-6 space-y-4">
           <div>
-            <span className="font-display text-2xl font-semibold text-brand-600">mesa.</span>
+            <span className="text-2xl font-medium text-brand-600">mesa<span className="text-gold">.</span></span>
             <p className="text-sm text-ink-muted mt-1">Panel del restaurante — misma cuenta que PASE/COMANDA.</p>
           </div>
           <div className="space-y-1.5">
@@ -180,7 +180,7 @@ export function AdminHome() {
       {/* Sidebar de navegación (desktop) — estilo OpenTable */}
       <aside className="hidden md:flex md:flex-col md:w-60 md:fixed md:inset-y-0 bg-white border-r border-ink/10 z-30">
         <div className="px-5 h-16 flex items-center">
-          <span className="font-display text-2xl font-semibold text-brand-600">mesa.</span>
+          <span className="text-2xl font-medium text-brand-600">mesa<span className="text-gold">.</span></span>
         </div>
         <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
           {NAV.map((it) => (
@@ -201,7 +201,7 @@ export function AdminHome() {
       <div className="flex-1 min-w-0 md:pl-60 flex flex-col min-h-screen">
         {/* Topbar con selector de local (dropdown) */}
         <header className="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-ink/10 h-16 flex items-center gap-3 px-4 sm:px-6">
-          <span className="md:hidden font-display text-xl font-semibold text-brand-600">mesa.</span>
+          <span className="md:hidden text-xl font-medium text-brand-600">mesa<span className="text-gold">.</span></span>
           <LocationSwitcher locales={locales} sel={sel} onSelect={setSel} />
           <div className="ml-auto flex items-center gap-2">
             <LinkReservasButton slug={localSel?.slug ?? null} nombre={localSel?.nombre ?? ''} />
@@ -358,7 +358,7 @@ function LocationSwitcher({ locales, sel, onSelect }: {
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div className="absolute left-0 top-full mt-1.5 z-40 w-64 max-h-80 overflow-y-auto rounded-xl border border-ink/10 bg-white shadow-card py-1.5">
-            <p className="px-3 py-1 text-[11px] uppercase tracking-wide text-ink-muted">Tus locales</p>
+            <p className="px-3 py-1 text-[11px] normal-case tracking-wide text-ink-muted">Tus locales</p>
             {locales.map((l) => (
               <button key={l.settings_id}
                       onClick={() => { onSelect(l.settings_id); setOpen(false); }}

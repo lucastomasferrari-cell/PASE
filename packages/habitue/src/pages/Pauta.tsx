@@ -91,7 +91,7 @@ export function Pauta({ tenantId }: Props) {
                   {x.clicks ? ` · ${x.clicks} clicks${x.clicks > 0 ? ` · ${money(Number(x.monto) / x.clicks)}/click` : ''}` : ''}
                 </div>
               </div>
-              <div className="text-sm font-semibold text-ink">{money(Number(x.monto))}</div>
+              <div className="text-sm font-medium text-ink">{money(Number(x.monto))}</div>
               <button onClick={() => void borrar(x.id)} className="p-1.5 rounded-lg hover:bg-ink/5 text-ink-soft" title="Borrar"><Trash2 className="h-4 w-4" /></button>
             </div>
           ))}
@@ -122,7 +122,7 @@ function Card({ icon, label, valor, tono = 'normal' }: { icon: React.ReactNode; 
   return (
     <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-4">
       <div className={`inline-flex items-center justify-center w-9 h-9 rounded-xl bg-brand-50 text-brand-600 mb-2 [&_svg]:h-5 [&_svg]:w-5`}>{icon}</div>
-      <div className={`text-xl font-semibold ${tono === 'brand' ? 'text-brand-700' : 'text-ink'}`}>{valor}</div>
+      <div className={`text-xl font-medium ${tono === 'brand' ? 'text-brand-700' : 'text-ink'}`}>{valor}</div>
       <div className="text-xs text-ink-muted">{label}</div>
     </div>
   );
@@ -155,7 +155,7 @@ function FormInversion({ onClose, onSave }: {
     <div className="fixed inset-0 z-50 bg-ink/40 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
       <div className="w-full sm:max-w-md max-h-[90vh] overflow-y-auto bg-white rounded-t-2xl sm:rounded-2xl shadow-card p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h3 className="font-display text-xl font-semibold">Registrar gasto de pauta</h3>
+          <h3 className="text-xl font-medium">Registrar gasto de pauta</h3>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-ink/5 text-ink-soft"><X className="h-5 w-5" /></button>
         </div>
         <div className="grid grid-cols-2 gap-3">

@@ -36,7 +36,7 @@ export function IGConfigDrawer({ cuentaId, onClose }: { cuentaId: number; onClos
     <div className="fixed inset-0 z-50 bg-ink/40 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
       <div className="w-full sm:max-w-lg max-h-[92vh] overflow-y-auto bg-white rounded-t-2xl sm:rounded-2xl shadow-card p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h3 className="font-display text-xl font-semibold inline-flex items-center gap-2">
+          <h3 className="text-xl font-medium inline-flex items-center gap-2">
             <Bot className="h-5 w-5 text-brand-500" /> Configuración del bot
           </h3>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-ink/5 text-ink-soft"><X className="h-5 w-5" /></button>

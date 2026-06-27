@@ -106,7 +106,7 @@ function KPI({ label, valor, sub, tono = 'normal' }: { label: string; valor: str
   return (
     <div className="rounded-xl bg-white border border-ink/5 shadow-card p-4">
       <div className="text-xs text-ink-muted">{label}</div>
-      <div className={`text-2xl font-semibold mt-0.5 ${tono === 'red' ? 'text-red-600' : 'text-ink'}`}>{valor}</div>
+      <div className={`text-2xl font-medium mt-0.5 ${tono === 'red' ? 'text-red-600' : 'text-ink'}`}>{valor}</div>
       {sub && <div className="text-[11px] text-ink-muted mt-0.5">{sub}</div>}
     </div>
   );

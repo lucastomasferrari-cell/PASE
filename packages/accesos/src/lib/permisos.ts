@@ -18,7 +18,7 @@ export interface CategoriaPermisos {
 
 export const CATEGORIAS: CategoriaPermisos[] = [
   {
-    titulo: 'Operación diaria (PASE)', emoji: '💸',
+    titulo: 'Operación diaria (PASE)', emoji: '',
     permisos: [
       { slug: 'caja', label: 'Caja y movimientos', descripcion: 'Ver y operar la caja.', app: 'pase' },
       { slug: 'ventas', label: 'Ventas', descripcion: 'Cargar y ver ventas.', app: 'pase' },
@@ -29,7 +29,7 @@ export const CATEGORIAS: CategoriaPermisos[] = [
     ],
   },
   {
-    titulo: 'Gestión y reportes (PASE)', emoji: '📊',
+    titulo: 'Gestión y reportes (PASE)', emoji: '',
     permisos: [
       { slug: 'negocio', label: 'Panel del negocio', app: 'pase' },
       { slug: 'finanzas', label: 'Finanzas', app: 'pase' },
@@ -41,7 +41,7 @@ export const CATEGORIAS: CategoriaPermisos[] = [
     ],
   },
   {
-    titulo: 'Acciones destructivas (sin permiso pide código del dueño)', emoji: '🛡️',
+    titulo: 'Acciones destructivas (sin permiso pide código del dueño)', emoji: '',
     permisos: [
       { slug: 'caja_anular', label: 'Anular movimientos de caja', app: 'pase' },
       { slug: 'compras_anular', label: 'Anular facturas/remitos', app: 'pase' },
@@ -50,14 +50,14 @@ export const CATEGORIAS: CategoriaPermisos[] = [
     ],
   },
   {
-    titulo: 'Configuración (PASE)', emoji: '⚙️',
+    titulo: 'Configuración (PASE)', emoji: '',
     permisos: [
       { slug: 'ajustes', label: 'Ajustes generales', app: 'pase' },
       { slug: 'blindaje', label: 'Blindaje (cierres y bloqueos)', app: 'pase' },
     ],
   },
   {
-    titulo: 'COMANDA — POS y catálogo', emoji: '📱',
+    titulo: 'COMANDA — POS y catálogo', emoji: '',
     permisos: [
       { slug: 'comanda.salon.editar', label: 'Editar salón/mesas', app: 'comanda' },
       { slug: 'comanda.config.editar', label: 'Configuración de COMANDA', app: 'comanda' },
@@ -65,14 +65,14 @@ export const CATEGORIAS: CategoriaPermisos[] = [
     ],
   },
   {
-    titulo: 'MESA — reservas', emoji: '🗺️',
+    titulo: 'MESA — reservas', emoji: '',
     permisos: [
       { slug: 'mesa.reservas.editar', label: 'Crear/editar reservas', app: 'mesa' },
       { slug: 'mesa.config.editar', label: 'Configurar horarios y mesas', app: 'mesa' },
     ],
   },
   {
-    titulo: 'Habitué — CRM y marketing', emoji: '💛',
+    titulo: 'Habitué — CRM y marketing', emoji: '',
     permisos: [
       { slug: 'habitue.campanas.enviar', label: 'Enviar campañas', app: 'habitue' },
       { slug: 'habitue.cupones.editar', label: 'Crear cupones y vouchers', app: 'habitue' },

@@ -65,7 +65,7 @@ export function AdminEspera({ localId, tenantId, localNombre }: Props) {
         <div className="space-y-2">
           {lista.map((w, i) => (
             <div key={w.id} className="rounded-2xl bg-white border border-ink/5 shadow-card p-4 flex items-center gap-3 flex-wrap">
-              <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-700 grid place-items-center font-semibold text-sm shrink-0">{i + 1}</div>
+              <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-700 grid place-items-center font-medium text-sm shrink-0">{i + 1}</div>
               <div className="flex-1 min-w-[140px]">
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{w.cliente_nombre}</span>
@@ -147,7 +147,7 @@ function FormEspera({ onClose, onSave }: {
     <div className="fixed inset-0 z-50 bg-ink/40 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
       <div className="w-full sm:max-w-sm bg-white rounded-t-2xl sm:rounded-2xl shadow-card p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h3 className="font-display text-xl font-semibold">Anotar en espera</h3>
+          <h3 className="text-xl font-medium">Anotar en espera</h3>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-ink/5 text-ink-soft"><X className="h-5 w-5" /></button>
         </div>
         <div className="space-y-1.5">

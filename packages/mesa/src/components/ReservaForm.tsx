@@ -66,7 +66,7 @@ export function ReservaForm({
       <div className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-card p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-display text-xl font-semibold">{esEdicion ? 'Editar reserva' : 'Nueva reserva'}</h3>
+            <h3 className="text-xl font-medium">{esEdicion ? 'Editar reserva' : 'Nueva reserva'}</h3>
             <p className="text-xs text-ink-muted">{localNombre}</p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-ink/5 text-ink-soft"><X className="h-5 w-5" /></button>

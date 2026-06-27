@@ -18,14 +18,14 @@ export interface SegmentoDef {
 }
 
 export const SEGMENTOS: SegmentoDef[] = [
-  { key: 'perdidos', label: 'Clientes perdidos', emoji: '🚪', descripcion: 'No piden hace más de 60 días (y antes pedían).', sugerencia: 'reactivar' },
-  { key: 'riesgo', label: 'En riesgo', emoji: '⚠️', descripcion: 'Sin pedir hace 30 a 60 días — antes de perderlos.', sugerencia: 'reactivar' },
-  { key: 'una_compra', label: 'Una sola compra', emoji: '🔂', descripcion: 'Compraron una vez y no volvieron. "Comprá de nuevo".', sugerencia: 'segunda_compra' },
-  { key: 'recurrentes', label: 'Recurrentes', emoji: '💚', descripcion: '5 pedidos o más. Tus habitués — cuidalos.', sugerencia: 'fidelizar' },
-  { key: 'top_gasto', label: 'Top gasto', emoji: '💎', descripcion: 'Los que más gastaron en total.', sugerencia: 'fidelizar' },
-  { key: 'nuevos', label: 'Nuevos', emoji: '✨', descripcion: 'Primer pedido en los últimos 30 días. Dales la bienvenida.', sugerencia: 'bienvenida' },
-  { key: 'vip', label: 'VIP', emoji: '⭐', descripcion: 'Marcados como VIP a mano.', sugerencia: 'fidelizar' },
-  { key: 'marketing', label: 'Aceptan promos', emoji: '📣', descripcion: 'Dieron OK para recibir marketing.', sugerencia: 'promo' },
+  { key: 'perdidos', label: 'Clientes perdidos', emoji: '', descripcion: 'No piden hace más de 60 días (y antes pedían).', sugerencia: 'reactivar' },
+  { key: 'riesgo', label: 'En riesgo', emoji: '', descripcion: 'Sin pedir hace 30 a 60 días — antes de perderlos.', sugerencia: 'reactivar' },
+  { key: 'una_compra', label: 'Una sola compra', emoji: '', descripcion: 'Compraron una vez y no volvieron. "Comprá de nuevo".', sugerencia: 'segunda_compra' },
+  { key: 'recurrentes', label: 'Recurrentes', emoji: '', descripcion: '5 pedidos o más. Tus habitués — cuidalos.', sugerencia: 'fidelizar' },
+  { key: 'top_gasto', label: 'Top gasto', emoji: '', descripcion: 'Los que más gastaron en total.', sugerencia: 'fidelizar' },
+  { key: 'nuevos', label: 'Nuevos', emoji: '', descripcion: 'Primer pedido en los últimos 30 días. Dales la bienvenida.', sugerencia: 'bienvenida' },
+  { key: 'vip', label: 'VIP', emoji: '', descripcion: 'Marcados como VIP a mano.', sugerencia: 'fidelizar' },
+  { key: 'marketing', label: 'Aceptan promos', emoji: '', descripcion: 'Dieron OK para recibir marketing.', sugerencia: 'promo' },
 ];
 
 function diasAtras(n: number): string {

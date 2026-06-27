@@ -78,7 +78,7 @@ export function Automatizaciones({ tenantId }: Props) {
 
       {/* Plantillas */}
       <div>
-        <p className="text-xs uppercase tracking-wide text-ink-muted mb-2">Plantillas listas</p>
+        <p className="text-xs normal-case tracking-wide text-ink-muted mb-2">Plantillas listas</p>
         <div className="grid sm:grid-cols-2 gap-3">
           {PLANTILLAS_FLOW.map((p) => (
             <div key={p.nombre} className="rounded-2xl bg-white border border-ink/5 shadow-card p-4">
@@ -98,7 +98,7 @@ export function Automatizaciones({ tenantId }: Props) {
 
       {/* Activas */}
       <div>
-        <p className="text-xs uppercase tracking-wide text-ink-muted mb-2 inline-flex items-center gap-1"><Zap className="h-3.5 w-3.5" /> Tus automatizaciones</p>
+        <p className="text-xs normal-case tracking-wide text-ink-muted mb-2 inline-flex items-center gap-1"><Zap className="h-3.5 w-3.5" /> Tus automatizaciones</p>
         {cargando ? (
           <div className="py-10 text-center text-ink-muted">Cargando…</div>
         ) : flows.length === 0 ? (

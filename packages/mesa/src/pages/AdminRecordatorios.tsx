@@ -64,7 +64,7 @@ export function AdminRecordatorios({ localId, localNombre }: Props) {
             return (
               <div key={r.id} className="rounded-2xl bg-white border border-ink/5 shadow-card p-4 flex items-center gap-3 flex-wrap">
                 <div className="text-center min-w-[54px]">
-                  <div className="text-lg font-semibold tabular-nums">{hhmm(r.fecha_hora)}</div>
+                  <div className="text-lg font-medium tabular-nums">{hhmm(r.fecha_hora)}</div>
                   <div className="text-[11px] text-brand-600 inline-flex items-center gap-0.5"><Clock className="h-3 w-3" />{enCuanto(r.fecha_hora)}</div>
                 </div>
                 <div className="flex-1 min-w-[140px]">

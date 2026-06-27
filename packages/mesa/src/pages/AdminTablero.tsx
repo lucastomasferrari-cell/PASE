@@ -115,7 +115,7 @@ export function AdminTablero({ localId, localSlug }: Props) {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-lg font-semibold text-brand-700 inline-flex items-center gap-1"><Users className="h-4 w-4" />{t.pax}</div>
+                    <div className="text-lg font-medium text-brand-700 inline-flex items-center gap-1"><Users className="h-4 w-4" />{t.pax}</div>
                     <div className="text-xs text-ink-muted">{t.count} reserva{t.count !== 1 ? 's' : ''}</div>
                   </div>
                 </div>
@@ -168,7 +168,7 @@ function KPI({ icon, label, valor, tono = 'normal' }: { icon: React.ReactNode; l
   return (
     <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-4">
       <div className={`inline-flex items-center justify-center w-9 h-9 rounded-xl bg-brand-50 ${color} mb-2`}>{icon}</div>
-      <div className="text-2xl font-semibold text-ink">{valor}</div>
+      <div className="text-2xl font-medium text-ink">{valor}</div>
       <div className="text-xs text-ink-muted">{label}</div>
     </div>
   );

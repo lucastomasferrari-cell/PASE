@@ -53,7 +53,7 @@ export function PerfilLocal() {
   if (!slug || estado === 'no-existe' || !perfil) {
     return (
       <Centro>
-        <p className="font-display text-3xl">Ese local no existe</p>
+        <p className="text-3xl">Ese local no existe</p>
         <p className="mt-2 text-ink-muted">Revisá el link o consultale al restaurante.</p>
       </Centro>
     );
@@ -66,7 +66,7 @@ export function PerfilLocal() {
     <div className="min-h-screen pb-20">
       {/* nav */}
       <header className="container py-4 flex items-center justify-between">
-        <Link to="/" className="font-display text-xl font-semibold text-brand-600">mesa.</Link>
+        <Link to="/" className="text-xl font-medium text-brand-600">mesa.</Link>
         {perfil.hay_mesa_ahora === true && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 text-green-800 text-xs font-medium px-3 py-1">
             <span className="h-1.5 w-1.5 rounded-full bg-green-600 animate-pulse" /> Hay mesa ahora
@@ -94,7 +94,7 @@ export function PerfilLocal() {
         {/* ── Columna principal ─────────────────────────────────────────── */}
         <div className="space-y-12 min-w-0">
           <section>
-            <h1 className="font-display text-4xl md:text-5xl font-semibold">{local.nombre}</h1>
+            <h1 className="text-4xl md:text-5xl font-medium">{local.nombre}</h1>
             <div className="mt-3 flex items-center gap-4 flex-wrap text-sm text-ink-soft">
               {reviews.resumen?.total ? (
                 <span className="inline-flex items-center gap-1 font-medium text-ink">
@@ -228,7 +228,7 @@ export function PerfilLocal() {
       </main>
 
       <footer className="container mt-16 pt-6 border-t border-ink/10 text-xs text-ink-muted flex items-center justify-between">
-        <span>Reservas por <span className="font-display font-semibold text-brand-600">mesa.</span></span>
+        <span>Reservas por <span className="font-medium text-brand-600">mesa.</span></span>
         <span>Sin comisión por cubierto.</span>
       </footer>
     </div>
@@ -298,7 +298,7 @@ function ReservaWidget({ slug, perfil }: { slug: string; perfil: PerfilLocalData
     return (
       <div className="rounded-2xl bg-white border border-green-200 shadow-card p-6 text-center">
         <CalendarCheck className="h-10 w-10 text-green-600 mx-auto" />
-        <p className="mt-3 font-display text-2xl">¡Listo, {nombre.split(' ')[0]}!</p>
+        <p className="mt-3 text-2xl">¡Listo, {nombre.split(' ')[0]}!</p>
         <p className="mt-2 text-sm text-ink-soft">
           {personas} personas · {new Date(`${fecha}T${hora}:00`).toLocaleString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
         </p>
@@ -412,8 +412,8 @@ function EventoCard({ evento: e, slug }: { evento: PerfilLocalData['eventos'][nu
       <div className="flex">
         {e.foto_url && <img src={e.foto_url} alt={e.titulo} className="w-32 object-cover hidden sm:block" />}
         <div className="p-4 flex-1 min-w-0">
-          <p className="text-[11px] uppercase tracking-wide text-brand-600 font-medium">Evento</p>
-          <p className="font-display text-lg font-semibold leading-snug">{e.titulo}</p>
+          <p className="text-[11px] normal-case tracking-wide text-brand-600 font-medium">Evento</p>
+          <p className="text-lg font-medium leading-snug">{e.titulo}</p>
           {e.descripcion && <p className="mt-1 text-sm text-ink-soft line-clamp-2">{e.descripcion}</p>}
           <div className="mt-2 flex items-center gap-3 text-xs text-ink-muted flex-wrap">
             <span>{new Date(e.fecha_inicio).toLocaleString('es-AR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
@@ -478,7 +478,7 @@ function GiftcardCard({ gift: g, slug }: { gift: PerfilLocalData['giftcards'][nu
       <div className="flex">
         {g.foto_url && <img src={g.foto_url} alt={g.nombre} className="w-32 object-cover hidden sm:block" />}
         <div className="p-4 flex-1 min-w-0">
-          <p className="font-display text-lg font-semibold leading-snug">{g.nombre}</p>
+          <p className="text-lg font-medium leading-snug">{g.nombre}</p>
           {g.descripcion && <p className="mt-1 text-sm text-ink-soft">{g.descripcion}</p>}
           <p className="mt-2 text-sm font-medium">{fmtARS(Number(g.precio))}</p>
           {!abierto ? (
@@ -514,7 +514,7 @@ function Centro({ children }: { children: React.ReactNode }) {
   return <div className="min-h-screen grid place-items-center text-ink-muted text-center px-6"><div>{children}</div></div>;
 }
 function Titulo({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
-  return <h2 className="font-display text-2xl font-semibold mb-4 flex items-center gap-2">{icon}{children}</h2>;
+  return <h2 className="text-2xl font-medium mb-4 flex items-center gap-2">{icon}{children}</h2>;
 }
 function InfoRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return <p className="flex items-center gap-2 text-ink-soft">{icon}{children}</p>;

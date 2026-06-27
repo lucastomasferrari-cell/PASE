@@ -67,7 +67,7 @@ export function Segmentos() {
         </button>
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <h2 className="font-display text-2xl font-semibold">{sel.emoji} {sel.label}</h2>
+            <h2 className="text-2xl font-medium">{sel.emoji} {sel.label}</h2>
             <p className="text-sm text-ink-muted">{sel.descripcion}</p>
             <p className="text-sm text-ink-soft mt-1">{lista.length} comensales</p>
           </div>
@@ -130,7 +130,7 @@ export function Segmentos() {
                   className="text-left rounded-2xl bg-white border border-ink/5 shadow-card p-4 hover:border-brand-300 hover:-translate-y-0.5 transition-all">
             <div className="flex items-start justify-between">
               <span className="text-2xl">{s.emoji}</span>
-              <span className="text-2xl font-semibold text-ink tabular-nums">
+              <span className="text-2xl font-medium text-ink tabular-nums">
                 {counts[s.key] == null ? '…' : counts[s.key]}
               </span>
             </div>

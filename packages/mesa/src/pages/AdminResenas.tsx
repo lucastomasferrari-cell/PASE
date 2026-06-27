@@ -53,7 +53,7 @@ export function AdminResenas({ localSlug }: Props) {
       <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5">
         <div className="flex items-center gap-4 flex-wrap">
           <div>
-            <div className="text-4xl font-semibold text-ink">{ratingProm != null ? ratingProm.toFixed(1) : '—'}</div>
+            <div className="text-4xl font-medium text-ink">{ratingProm != null ? ratingProm.toFixed(1) : '—'}</div>
             <Estrellas n={Math.round(ratingProm ?? 0)} />
             <div className="text-xs text-ink-muted mt-1">{total} reseña{total !== 1 ? 's' : ''}</div>
           </div>
@@ -63,7 +63,7 @@ export function AdminResenas({ localSlug }: Props) {
                 <div key={a.label}>
                   <div className="text-xs text-ink-muted">{a.label}</div>
                   <div className="flex items-center gap-1">
-                    <span className="text-sm font-semibold text-ink">{a.val!.toFixed(1)}</span>
+                    <span className="text-sm font-medium text-ink">{a.val!.toFixed(1)}</span>
                     <Star className="h-3.5 w-3.5 text-amber-400 fill-amber-400" />
                   </div>
                 </div>

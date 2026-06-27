@@ -8,14 +8,14 @@ export function LandingMesa() {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="container flex items-center justify-between py-6">
-        <span className="font-display text-2xl font-semibold text-brand-600">mesa.</span>
+        <span className="text-2xl font-medium text-brand-600">mesa<span className="text-gold">.</span></span>
         <Link to="/admin" className="text-sm text-ink-soft hover:text-ink underline-offset-4 hover:underline">
           Acceso restaurantes
         </Link>
       </header>
 
       <main className="container flex-1 flex flex-col justify-center py-16">
-        <h1 className="font-display text-4xl sm:text-6xl font-semibold leading-tight max-w-2xl">
+        <h1 className="text-4xl sm:text-6xl font-medium leading-tight max-w-2xl">
           Reservas que hablan con tu salón.
         </h1>
         <p className="mt-5 text-lg text-ink-soft max-w-xl">

@@ -288,7 +288,7 @@ function TagsEditor({ cliente }: { cliente: Cliente }) {
 function Mini({ label, valor }: { label: string; valor: string }) {
   return (
     <div className="rounded-lg bg-brand-50/60 p-2 text-center">
-      <div className="text-base font-semibold text-ink truncate">{valor}</div>
+      <div className="text-base font-medium text-ink truncate">{valor}</div>
       <div className="text-[11px] text-ink-muted">{label}</div>
     </div>
   );
@@ -321,7 +321,7 @@ function FormCliente({ onClose, onSave }: {
     <div className="fixed inset-0 z-50 bg-ink/40 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
       <div className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-card p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h3 className="font-display text-xl font-semibold">Nuevo comensal</h3>
+          <h3 className="text-xl font-medium">Nuevo comensal</h3>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-ink/5 text-ink-soft"><X className="h-5 w-5" /></button>
         </div>
         <div className="grid grid-cols-2 gap-3">

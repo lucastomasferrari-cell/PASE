@@ -58,9 +58,9 @@ export function Fidelidad() {
           <div className="rounded-2xl bg-white border border-ink/5 shadow-card divide-y divide-ink/5">
             {top.map((c, i) => (
               <div key={c.id} className="flex items-center gap-3 px-4 py-2.5">
-                <span className="w-6 text-center text-sm font-semibold text-ink-muted">{i + 1}</span>
+                <span className="w-6 text-center text-sm font-medium text-ink-muted">{i + 1}</span>
                 <span className="flex-1 text-sm font-medium truncate">{nombre(c)}</span>
-                <span className="text-sm font-semibold text-brand-700 inline-flex items-center gap-1">
+                <span className="text-sm font-medium text-brand-700 inline-flex items-center gap-1">
                   <Award className="h-4 w-4" />{Math.round(c.puntos_disponibles)} pts
                 </span>
               </div>

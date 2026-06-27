@@ -43,13 +43,13 @@ export function Confirmacion() {
   }, [tipo, idNum]);
 
   if (!tipoOk || !idNum) {
-    return <Centro><p className="font-display text-2xl">Link inválido</p></Centro>;
+    return <Centro><p className="text-2xl">Link inválido</p></Centro>;
   }
   if (!pago) {
     return (
       <Centro>
         <Clock3 className="h-10 w-10 text-brand-400 mx-auto animate-pulse" />
-        <p className="mt-3 font-display text-2xl">Confirmando tu pago…</p>
+        <p className="mt-3 text-2xl">Confirmando tu pago…</p>
         <p className="mt-1 text-sm text-ink-muted">Unos segundos, no cierres esta página.</p>
       </Centro>
     );
@@ -65,7 +65,7 @@ export function Confirmacion() {
         ) : (
           <Clock3 className="h-12 w-12 text-amber-500 mx-auto" />
         )}
-        <p className="mt-4 font-display text-2xl font-semibold">
+        <p className="mt-4 text-2xl font-medium">
           {pagado ? '¡Pago confirmado!' : agotado ? 'Estamos confirmando tu pago' : 'Confirmando…'}
         </p>
 
@@ -84,7 +84,7 @@ export function Confirmacion() {
         {tipo === 'gift' && pagado && pago.codigo && (
           <div className="mt-4 rounded-xl border-2 border-dashed border-brand-300 bg-brand-50 p-4">
             <p className="text-xs text-ink-muted">Código de la giftcard — guardalo, se presenta en el local:</p>
-            <p className="mt-1 font-mono text-2xl font-semibold tracking-wider text-brand-700">{pago.codigo}</p>
+            <p className="mt-1 font-mono text-2xl font-medium tracking-wider text-brand-700">{pago.codigo}</p>
           </div>
         )}
 

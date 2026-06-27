@@ -177,7 +177,7 @@ export function AdminReservas({ localId, localNombre }: Props) {
         <div className="space-y-4">
           {porDia.map(([dia, rs]) => (
             <div key={dia}>
-              <p className="text-xs uppercase tracking-wide text-ink-muted mb-2">{labelFecha(new Date(dia))}</p>
+              <p className="text-xs normal-case tracking-wide text-ink-muted mb-2">{labelFecha(new Date(dia))}</p>
               <div className="space-y-2">
                 {rs.map((r) => (
                   <FilaReserva key={r.id} r={r} mesas={mesas} nombreMesa={nombreMesa} localNombre={localNombre}
@@ -226,7 +226,7 @@ function FilaReserva({
     <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-4 flex items-start gap-4 flex-wrap">
       {/* Hora */}
       <div className="text-center min-w-[54px]">
-        <div className="text-lg font-semibold tabular-nums text-ink">{hora(r.fecha_hora)}</div>
+        <div className="text-lg font-medium tabular-nums text-ink">{hora(r.fecha_hora)}</div>
         <div className="text-[11px] text-ink-muted inline-flex items-center gap-0.5"><Users className="h-3 w-3" />{r.personas}</div>
       </div>
 

@@ -22,43 +22,43 @@ export interface IntegracionDef {
 
 export const INTEGRACIONES: IntegracionDef[] = [
   {
-    id: 'whatsapp_api', nombre: 'WhatsApp Business API', categoria: 'Mensajería', emoji: '🟢',
+    id: 'whatsapp_api', nombre: 'WhatsApp Business API', categoria: 'Mensajería', emoji: '',
     descripcion: 'Envío masivo y automático de campañas por WhatsApp (hoy es link por link).',
     desbloquea: 'Campañas masivas automáticas, plantillas aprobadas, respuestas 2 vías y el bot de WhatsApp.',
     comoConectar: 'Cuenta de WhatsApp Business API (Meta) o un BSP (Twilio/360dialog) + número verificado + plantillas aprobadas.',
   },
   {
-    id: 'email', nombre: 'Email (Resend/SendGrid)', categoria: 'Mensajería', emoji: '✉️',
+    id: 'email', nombre: 'Email (Resend/SendGrid)', categoria: 'Mensajería', emoji: '',
     descripcion: 'Envío de campañas por email con tracking de aperturas (hoy es mailto BCC).',
     desbloquea: 'Emails masivos con plantilla, tasa de apertura/clicks, dominio verificado.',
     comoConectar: 'API key de Resend o SendGrid + verificación de dominio (SPF/DKIM).',
   },
   {
-    id: 'meta_ads', nombre: 'Meta Ads', categoria: 'Publicidad', emoji: '📘',
+    id: 'meta_ads', nombre: 'Meta Ads', categoria: 'Publicidad', emoji: '',
     descripcion: 'Trae el gasto y las métricas de tus campañas de Facebook/Instagram (hoy es carga manual).',
     desbloquea: 'Pauta automática: gasto, alcance, clicks, conversiones y CAC/ROAS reales.',
     comoConectar: 'OAuth con Meta Marketing API + ad account id.',
   },
   {
-    id: 'google_ads', nombre: 'Google Ads', categoria: 'Publicidad', emoji: '🔍',
+    id: 'google_ads', nombre: 'Google Ads', categoria: 'Publicidad', emoji: '',
     descripcion: 'Trae el gasto y métricas de tus campañas de Google (hoy es carga manual).',
     desbloquea: 'Pauta automática de Google + CAC/ROAS reales.',
     comoConectar: 'OAuth con Google Ads API + customer id + developer token.',
   },
   {
-    id: 'search_console', nombre: 'Google Search Console', categoria: 'SEO', emoji: '📈',
+    id: 'search_console', nombre: 'Google Search Console', categoria: 'SEO', emoji: '',
     descripcion: 'Posicionamiento orgánico: qué búsquedas te traen, clicks e impresiones.',
     desbloquea: 'SEO: keywords, posición promedio, CTR, páginas que rankean.',
     comoConectar: 'OAuth con Search Console API + propiedad verificada del sitio.',
   },
   {
-    id: 'instagram', nombre: 'Instagram (bot/DM)', categoria: 'Mensajería', emoji: '📸',
+    id: 'instagram', nombre: 'Instagram (bot/DM)', categoria: 'Mensajería', emoji: '',
     descripcion: 'Conecta el bot de Instagram para campañas y respuestas por DM.',
     desbloquea: 'Campañas y automatizaciones por DM de IG, unificadas con el CRM.',
     comoConectar: 'Instagram Graph API (ya hay app IG en el ecosistema) + permisos de mensajería.',
   },
   {
-    id: 'google_maps', nombre: 'Google Maps (reseñas)', categoria: 'Reputación', emoji: '🗺️',
+    id: 'google_maps', nombre: 'Google Maps (reseñas)', categoria: 'Reputación', emoji: '',
     descripcion: 'Trae tus reseñas de Google Maps al control de calidad (hoy se piden a mano).',
     desbloquea: 'Reseñas de Google centralizadas, alertas de baja calificación y pedido automático de reseña tras la visita.',
     comoConectar: 'Google Business Profile API (Places) + OAuth + place_id del local.',

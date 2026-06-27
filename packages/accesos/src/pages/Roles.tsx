@@ -83,7 +83,7 @@ export function Roles() {
             <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-5 space-y-4">
               <div className="flex items-start justify-between gap-2 flex-wrap">
                 <div>
-                  <div className="font-display text-xl font-semibold inline-flex items-center gap-2">
+                  <div className="text-xl font-medium inline-flex items-center gap-2">
                     <ShieldCheck className="h-5 w-5 text-brand-500" />{sel.nombre}
                   </div>
                   {sel.descripcion && <p className="text-sm text-ink-muted mt-0.5">{sel.descripcion}</p>}
@@ -97,7 +97,7 @@ export function Roles() {
 
               {CATEGORIAS.map((cat) => (
                 <div key={cat.titulo} className="space-y-2">
-                  <p className="text-xs uppercase tracking-wide text-ink-muted">{cat.emoji} {cat.titulo}</p>
+                  <p className="text-xs normal-case tracking-wide text-ink-muted">{cat.emoji} {cat.titulo}</p>
                   <div className="flex flex-wrap gap-1.5">
                     {cat.permisos.map((p) => (
                       <button key={p.slug} onClick={() => void toggle(p.slug)} title={p.descripcion}
@@ -143,7 +143,7 @@ function FormRol({ onClose, onSaved }: { onClose: () => void; onSaved: () => voi
     <div className="fixed inset-0 z-50 bg-ink/40 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
       <div className="w-full sm:max-w-sm bg-white rounded-t-2xl sm:rounded-2xl shadow-card p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h3 className="font-display text-xl font-semibold">Nuevo rol</h3>
+          <h3 className="text-xl font-medium">Nuevo rol</h3>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-ink/5 text-ink-soft"><X className="h-5 w-5" /></button>
         </div>
         <div className="space-y-1.5">

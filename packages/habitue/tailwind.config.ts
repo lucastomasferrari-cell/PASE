@@ -1,8 +1,11 @@
 import type { Config } from 'tailwindcss';
 
-// Habitué — CRM/Marketing del ecosistema Cocina. Base ink/crema compartida con
-// MESA, pero primario DORADO/ámbar (fidelidad, calidez, "habitué premium") para
-// diferenciar el producto. Playfair en títulos (toque hospitality).
+/**
+ * Habitué — CRM/Marketing del ecosistema Cocina.
+ * Paleta alineada con PASE: celeste IRAM 7677-2002 + dorado restringido + navy.
+ * (Originalmente dorado/ámbar — migrado para que todo el ecosistema Cocina
+ * comparta la misma identidad visual.)
+ */
 const config: Config = {
   darkMode: ['class'],
   content: ['./index.html', './src/**/*.{ts,tsx}'],
@@ -15,27 +18,27 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
-        display: ['"Playfair Display"', 'Georgia', 'serif'],
       },
       colors: {
         brand: {
-          50: '#FBF6EC',
-          100: '#F6E8C9',
-          200: '#EFD79B',
-          300: '#E5BE63',
-          400: '#D9A23A',  // primario (dorado)
-          500: '#C2862A',  // hover
-          600: '#9E6A1E',
-          700: '#7C5217',
-          800: '#5E3E12',
-          900: '#3D280B',
+          50:  '#F4F9FD',  // pase-bg-soft light
+          100: '#EAF3FB',  // pase-celeste-100
+          200: '#D7E8F5',  // pase-celeste-200
+          300: '#9DC3E2',  // pase-celeste-300
+          400: '#75AADB',  // pase-celeste — primario (IRAM 7677-2002)
+          500: '#5A8FC2',  // hover
+          600: '#4A78A6',
+          700: '#3A608A',
+          800: '#2A4870',
+          900: '#1A3A5E',  // pase-text
         },
         ink: {
-          DEFAULT: '#1A3A5E',  // navy ancla del ecosistema
-          soft: '#4A6584',
-          muted: '#7D93AB',
+          DEFAULT: '#1A3A5E',
+          soft:    '#4A6584',
+          muted:   '#7D93AB',
         },
-        crema: '#FAF7F1',      // crema cálida
+        gold:  '#F5C518',  // pase-gold — uso restringido (logo dot + indicador "en vivo")
+        crema: '#FAF6EC',  // pase-crema cálido opcional
       },
       boxShadow: {
         card: '0 1px 3px rgba(26,58,94,0.06), 0 8px 24px rgba(26,58,94,0.06)',

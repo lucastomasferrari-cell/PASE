@@ -172,7 +172,7 @@ export function AdminDiario({ localId, localNombre }: Props) {
               {zonas.map(([zona, ms]) => (
                 <div key={zona}>
                   <div className="flex bg-brand-50/50 border-y border-ink/5">
-                    <div className="w-[150px] shrink-0 px-3 py-1.5 text-[11px] uppercase tracking-wide font-medium text-ink-soft">{zona}</div>
+                    <div className="w-[150px] shrink-0 px-3 py-1.5 text-[11px] normal-case tracking-wide font-medium text-ink-soft">{zona}</div>
                     <div style={{ width: anchoGrid }} />
                   </div>
                   {ms.map((m) => (
@@ -253,7 +253,7 @@ function FilaTimeline({
             <button key={r.id} onClick={() => onSel(r)} title={`${r.cliente_nombre} · ${hhmm(r.fecha_hora)} · ${r.personas}p`}
                     className={`absolute top-1 bottom-1 rounded-md border-l-4 ${c.bg} ${c.text} ${c.bar} px-2 text-left overflow-hidden hover:ring-2 hover:ring-brand-300 transition-shadow`}
                     style={{ left, width }}>
-              <div className="text-[11px] font-semibold leading-tight truncate">{r.cliente_nombre}</div>
+              <div className="text-[11px] font-medium leading-tight truncate">{r.cliente_nombre}</div>
               <div className="text-[10px] leading-tight opacity-80 flex items-center gap-1">
                 <Users className="h-2.5 w-2.5" />{r.personas} · {hhmm(r.fecha_hora)}
               </div>
@@ -280,7 +280,7 @@ function DetalleReserva({
       <div className="w-full sm:max-w-sm bg-white rounded-t-2xl sm:rounded-2xl shadow-card p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between">
           <div>
-            <h3 className="font-display text-xl font-semibold">{r.cliente_nombre}</h3>
+            <h3 className="text-xl font-medium">{r.cliente_nombre}</h3>
             <p className="text-sm text-ink-muted">{hhmm(r.fecha_hora)} · {r.personas} personas · {ESTADO_LABEL[r.estado]}</p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-ink/5 text-ink-soft"><X className="h-5 w-5" /></button>

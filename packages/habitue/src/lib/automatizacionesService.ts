@@ -75,23 +75,23 @@ export async function eliminarAutomatizacion(id: number): Promise<{ error: strin
 // Plantillas pre-armadas (las que usan los grandes).
 export const PLANTILLAS_FLOW: { nombre: string; emoji: string; desc: string; input: AutomatizacionInput }[] = [
   {
-    nombre: 'Recuperá perdidos', emoji: '🚪', desc: 'Cuando un cliente no pide hace 60 días, mandale un WhatsApp con descuento.',
+    nombre: 'Recuperá perdidos', emoji: '', desc: 'Cuando un cliente no pide hace 60 días, mandale un WhatsApp con descuento.',
     input: { nombre: 'Recuperá perdidos', trigger_tipo: 'sin_pedir_dias', trigger_params: { dias: 60 }, accion_tipo: 'enviar_campana', accion_params: { canal: 'whatsapp', mensaje: 'Hola {nombre}! Hace rato no te vemos. Te dejamos un beneficio para que vuelvas 🍽️' } },
   },
   {
-    nombre: 'Saludo de cumpleaños', emoji: '🎂', desc: 'El día del cumple, saludá y regalá un beneficio.',
+    nombre: 'Saludo de cumpleaños', emoji: '', desc: 'El día del cumple, saludá y regalá un beneficio.',
     input: { nombre: 'Saludo de cumpleaños', trigger_tipo: 'cumpleanos', trigger_params: {}, accion_tipo: 'enviar_campana', accion_params: { canal: 'whatsapp', mensaje: '¡Feliz cumple {nombre}! 🎉 Te esperamos con un regalo para festejar.' } },
   },
   {
-    nombre: 'Bienvenida', emoji: '✨', desc: 'Tras la primera compra, agradecé e invitá a volver.',
+    nombre: 'Bienvenida', emoji: '', desc: 'Tras la primera compra, agradecé e invitá a volver.',
     input: { nombre: 'Bienvenida', trigger_tipo: 'primera_compra', trigger_params: {}, accion_tipo: 'enviar_campana', accion_params: { canal: 'whatsapp', mensaje: 'Gracias por tu primera visita, {nombre}! 🙌 Para la próxima, un beneficio para vos.' } },
   },
   {
-    nombre: 'Premio a recurrentes', emoji: '💚', desc: 'A los que ya son habitués, un mimo para fidelizar.',
+    nombre: 'Premio a recurrentes', emoji: '', desc: 'A los que ya son habitués, un mimo para fidelizar.',
     input: { nombre: 'Premio a recurrentes', trigger_tipo: 'recurrente', trigger_params: { min_pedidos: 5 }, accion_tipo: 'dar_cupon', accion_params: { mensaje: 'Gracias por elegirnos siempre 💛' } },
   },
   {
-    nombre: 'Pedí reseñas', emoji: '⭐', desc: 'Después de una visita/pedido, pedile una reseña en Google.',
+    nombre: 'Pedí reseñas', emoji: '', desc: 'Después de una visita/pedido, pedile una reseña en Google.',
     input: { nombre: 'Pedí reseñas', trigger_tipo: 'post_visita', trigger_params: { horas: 3 }, accion_tipo: 'enviar_campana', accion_params: { canal: 'whatsapp', mensaje: 'Hola {nombre}! Gracias por tu visita 🙌 ¿Nos dejás una reseña? Nos ayuda muchísimo.' } },
   },
 ];

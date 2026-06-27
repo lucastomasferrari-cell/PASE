@@ -111,7 +111,7 @@ function UsuarioCard({ u, locales, onEditar, onToggleActivo, onReset }: {
         <div className="flex-1 min-w-[160px]">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium">{nombre(u)}</span>
-            <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-200">{u.rol}</span>
+            <span className="text-[10px] normal-case tracking-wide px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-200">{u.rol}</span>
             {u.password_temporal && <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">Password temporal</span>}
             {!u.activo && <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">Inactivo</span>}
           </div>
@@ -199,12 +199,12 @@ function FormUsuario({ usuario, locales, onClose, onSaved }: {
     <div className="fixed inset-0 z-50 bg-ink/40 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
       <div className="w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto bg-white rounded-t-2xl sm:rounded-2xl shadow-card p-5 space-y-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h3 className="font-display text-xl font-semibold">{esEdicion ? `Editar a ${usuario?.nombre || usuario?.email}` : 'Nueva persona'}</h3>
+          <h3 className="text-xl font-medium">{esEdicion ? `Editar a ${usuario?.nombre || usuario?.email}` : 'Nueva persona'}</h3>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-ink/5 text-ink-soft"><X className="h-5 w-5" /></button>
         </div>
 
         <section className="space-y-3">
-          <p className="text-xs uppercase tracking-wide text-ink-muted">Datos básicos</p>
+          <p className="text-xs normal-case tracking-wide text-ink-muted">Datos básicos</p>
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-ink-soft">Nombre *</label>
@@ -231,7 +231,7 @@ function FormUsuario({ usuario, locales, onClose, onSaved }: {
         </section>
 
         <section className="space-y-2">
-          <p className="text-xs uppercase tracking-wide text-ink-muted">Apps a las que puede entrar</p>
+          <p className="text-xs normal-case tracking-wide text-ink-muted">Apps a las que puede entrar</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {APPS.map((a) => {
               const sel = apps.includes(a.key);
@@ -252,7 +252,7 @@ function FormUsuario({ usuario, locales, onClose, onSaved }: {
 
         {locales.length > 0 && (
           <section className="space-y-2">
-            <p className="text-xs uppercase tracking-wide text-ink-muted">Locales asignados (vacío = todos)</p>
+            <p className="text-xs normal-case tracking-wide text-ink-muted">Locales asignados (vacío = todos)</p>
             <div className="flex flex-wrap gap-1.5">
               {locales.map((l) => (
                 <button key={l.id} onClick={() => toggleLocal(l.id)} type="button"
@@ -265,7 +265,7 @@ function FormUsuario({ usuario, locales, onClose, onSaved }: {
         )}
 
         <section className="space-y-3">
-          <p className="text-xs uppercase tracking-wide text-ink-muted">Permisos detallados</p>
+          <p className="text-xs normal-case tracking-wide text-ink-muted">Permisos detallados</p>
           {CATEGORIAS.map((cat) => (
             <div key={cat.titulo} className="rounded-xl border border-ink/10 p-3">
               <p className="text-sm font-medium mb-2">{cat.emoji} {cat.titulo}</p>

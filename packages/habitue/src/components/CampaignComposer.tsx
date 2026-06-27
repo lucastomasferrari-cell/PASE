@@ -45,7 +45,7 @@ export function CampaignComposer({ clientes, segmentoLabel, sugerencia, onClose 
       <div className="w-full sm:max-w-lg max-h-[90vh] bg-white rounded-t-2xl sm:rounded-2xl shadow-card flex flex-col" onClick={(e) => e.stopPropagation()}>
         <header className="px-5 pt-5 pb-3 flex items-center justify-between shrink-0">
           <div>
-            <h3 className="font-display text-xl font-semibold">Campaña</h3>
+            <h3 className="text-xl font-medium">Campaña</h3>
             <p className="text-xs text-ink-muted">{segmentoLabel} · {clientes.length} comensales</p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-ink/5 text-ink-soft"><X className="h-5 w-5" /></button>

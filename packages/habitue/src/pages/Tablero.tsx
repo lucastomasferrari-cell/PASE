@@ -69,7 +69,7 @@ export function Tablero() {
 function Seccion({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="text-xs uppercase tracking-wide text-ink-muted mb-2">{titulo}</p>
+      <p className="text-xs normal-case tracking-wide text-ink-muted mb-2">{titulo}</p>
       {children}
     </div>
   );
@@ -80,7 +80,7 @@ function Card({ icon, label, valor, sub, tono = 'normal' }: { icon: React.ReactN
   return (
     <div className="rounded-2xl bg-white border border-ink/5 shadow-card p-4">
       <div className={`inline-flex items-center justify-center w-9 h-9 rounded-xl bg-brand-50 ${c} mb-2 [&_svg]:h-5 [&_svg]:w-5`}>{icon}</div>
-      <div className={`text-2xl font-semibold ${tono === 'normal' ? 'text-ink' : c}`}>{valor}</div>
+      <div className={`text-2xl font-medium ${tono === 'normal' ? 'text-ink' : c}`}>{valor}</div>
       <div className="text-xs text-ink-muted">{label}</div>
       {sub && <div className="text-[11px] text-ink-muted mt-0.5">{sub}</div>}
     </div>

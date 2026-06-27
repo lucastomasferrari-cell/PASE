@@ -63,10 +63,10 @@ export function Cupones({ tenantId }: Props) {
         <div className="space-y-2">
           {cupones.map((c) => (
             <div key={c.id} className={`rounded-2xl bg-white border shadow-card p-4 flex items-center gap-3 flex-wrap ${c.activo ? 'border-ink/5' : 'border-ink/5 opacity-60'}`}>
-              <div className="w-12 h-12 rounded-xl bg-brand-50 text-brand-700 grid place-items-center font-semibold shrink-0">{valorTxt(c)}</div>
+              <div className="w-12 h-12 rounded-xl bg-brand-50 text-brand-700 grid place-items-center font-medium shrink-0">{valorTxt(c)}</div>
               <div className="flex-1 min-w-[160px]">
                 <div className="flex items-center gap-2">
-                  <span className="font-mono font-semibold">{c.code}</span>
+                  <span className="font-mono font-medium">{c.code}</span>
                   <button onClick={() => void navigator.clipboard.writeText(c.code).then(() => toast.success('Código copiado'))}
                           className="text-ink-muted hover:text-ink" title="Copiar código"><Copy className="h-3.5 w-3.5" /></button>
                   {!c.activo && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">Pausado</span>}
@@ -142,7 +142,7 @@ function FormCupon({ onClose, onSave }: {
     <div className="fixed inset-0 z-50 bg-ink/40 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
       <div className="w-full sm:max-w-md max-h-[90vh] overflow-y-auto bg-white rounded-t-2xl sm:rounded-2xl shadow-card p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h3 className="font-display text-xl font-semibold">Nuevo cupón</h3>
+          <h3 className="text-xl font-medium">Nuevo cupón</h3>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-ink/5 text-ink-soft"><X className="h-5 w-5" /></button>
         </div>
         <div className="space-y-1.5">

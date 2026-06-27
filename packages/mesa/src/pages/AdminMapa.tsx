@@ -160,7 +160,7 @@ function MesaToken({ mesa, estado, onSeat }: { mesa: Mesa; estado: MesaEstadoLiv
       style={{ width: w, height: h }}
       title={estado?.reserva_nombre ? `Reserva: ${estado.reserva_nombre}` : libre ? 'Libre — tocá para sentar de paso' : ESTADO_LABEL[esLive]}
     >
-      <span className="text-xs font-bold leading-tight">{mesa.numero}</span>
+      <span className="text-xs font-medium leading-tight">{mesa.numero}</span>
       {mesa.capacidad != null && (
         <span className="flex items-center gap-0.5 text-[10px] opacity-70 mt-0.5">
           <Users className="h-2.5 w-2.5" />{mesa.capacidad}

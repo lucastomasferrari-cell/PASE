@@ -18,10 +18,10 @@ import { IGConfigDrawer } from '@/components/IGConfigDrawer';
 
 const ESTADOS: { key: EstadoConversacion | 'todas'; label: string; emoji?: string }[] = [
   { key: 'todas', label: 'Todas' },
-  { key: 'bot', label: 'Bot', emoji: '🤖' },
-  { key: 'humano', label: 'Humano', emoji: '🙋' },
-  { key: 'escalada', label: 'Escalada', emoji: '⚠️' },
-  { key: 'cerrada', label: 'Cerradas', emoji: '✅' },
+  { key: 'bot', label: 'Bot', emoji: '' },
+  { key: 'humano', label: 'Humano', emoji: '' },
+  { key: 'escalada', label: 'Escalada', emoji: '' },
+  { key: 'cerrada', label: 'Cerradas', emoji: '' },
 ];
 
 const ESTADO_CFG: Record<EstadoConversacion, { label: string; tono: string; icon: React.ReactNode }> = {
@@ -132,7 +132,7 @@ export function Mensajeria({ userId }: { userId: number }) {
         {cuentas.map((c) => (
           <button key={c.id} onClick={() => setCuentaSel(c.id)}
                   className={`rounded-full px-3.5 py-1.5 text-sm font-medium border ${cuentaSel === c.id ? 'bg-brand-500 text-white border-brand-500' : 'border-ink/15 bg-white hover:border-brand-300'}`}>
-            📸 @{c.ig_username ?? `cuenta ${c.id}`}
+            @{c.ig_username ?? `cuenta ${c.id}`}
           </button>
         ))}
         {cuentas.length === 0 && (
@@ -199,7 +199,7 @@ export function Mensajeria({ userId }: { userId: number }) {
                         <p className="text-xs text-ink-muted mt-1 line-clamp-2">{c.ultimo_mensaje_preview ?? '(sin preview)'}</p>
                       </div>
                       {c.no_leidos_admin > 0 && (
-                        <span className="shrink-0 bg-brand-500 text-white text-[10px] font-semibold rounded-full px-1.5 py-0.5 min-w-[20px] text-center">{c.no_leidos_admin}</span>
+                        <span className="shrink-0 bg-brand-500 text-white text-[10px] font-medium rounded-full px-1.5 py-0.5 min-w-[20px] text-center">{c.no_leidos_admin}</span>
                       )}
                     </button>
                   );

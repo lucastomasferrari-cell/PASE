@@ -33,7 +33,7 @@ export function Integraciones() {
 
       {CATS.map((cat) => (
         <div key={cat}>
-          <p className="text-xs uppercase tracking-wide text-ink-muted mb-2">{cat}</p>
+          <p className="text-xs normal-case tracking-wide text-ink-muted mb-2">{cat}</p>
           <div className="space-y-2">
             {INTEGRACIONES.filter((i) => i.categoria === cat).map((def) => {
               const estado = estados[def.id] ?? 'desconectado';
@@ -52,7 +52,7 @@ export function Integraciones() {
                         )}
                       </div>
                       <p className="text-xs text-ink-soft mt-1">{def.descripcion}</p>
-                      <p className="text-xs text-brand-700 mt-1.5">🔓 {def.desbloquea}</p>
+                      <p className="text-xs text-brand-700 mt-1.5">{def.desbloquea}</p>
                     </div>
                     {!conectado && (
                       <button onClick={() => conectar(def)}
