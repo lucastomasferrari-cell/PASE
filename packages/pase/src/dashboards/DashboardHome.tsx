@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { PageHeader } from "../components/ui";
 import { getDashboardConfig } from "./service";
 import { findWidget, widgetsParaPermisos } from "./widgets/registry";
 import { DEFAULT_WIDGETS_POR_ROL, type RolPase, type WidgetContext } from "./types";
@@ -130,24 +131,29 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
 
   const puedeConfigurar = usuario.rol === "dueno" || usuario.rol === "admin" || usuario.rol === "superadmin";
 
+  const localActual = locales.find(l => l.id === localActivo) ?? null;
+  const overline = `${fechaCortaArg()}${localActual ? ` · ${localActual.nombre}` : ""}`;
+  const headerTitle = (
+    <>{greetingByHour()}, <span className="ph-italic">{primerNombre(usuario.nombre)}</span></>
+  );
+
   if (loading) {
     return (
       <div style={{ padding: "0 20px" }}>
-        <BoldHeader usuario={usuario} localActual={null} info={null} />
+        <PageHeader title={headerTitle} overline={overline} />
         <div className="loading">Cargando dashboard…</div>
       </div>
     );
   }
 
   const availableCount = widgetsParaPermisos(permisos).length;
-  const localActual = locales.find(l => l.id === localActivo) ?? null;
   const headerInfo = puedeConfigurar
     ? <>Si querés cambiar qué widgets ve cada usuario, andá a <strong>Herramientas → Configurar dashboards</strong>.</>
-    : null;
+    : undefined;
 
   return (
     <div style={{ padding: "0 20px" }}>
-      <BoldHeader usuario={usuario} localActual={localActual} info={headerInfo} />
+      <PageHeader title={headerTitle} overline={overline} info={headerInfo} />
 
       {widgets.length === 0 ? (
         <div className="panel" style={{ padding: 32, textAlign: "center" }}>
@@ -208,55 +214,6 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
       )}
 
       <style>{`
-        /* Bolder dashboard — sweep visual 27-jun.
-         * Header editorial (Fraunces italic en el nombre) + widgets sin card
-         * que flotan en la grilla. Paleta intocada. Si no convence en prod,
-         * \`git revert\` del commit que introduce estos cambios.
-         */
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,400;1,500&display=swap');
-
-        .bold-header {
-          display: grid;
-          grid-template-columns: 2px 1fr;
-          gap: 18px;
-          margin: 16px 0 28px;
-        }
-        .bold-header-anchor {
-          width: 2px;
-          background: linear-gradient(
-            to bottom,
-            transparent,
-            var(--pase-gold) 25%,
-            var(--pase-gold) 75%,
-            transparent
-          );
-          min-height: 64px;
-        }
-        .bold-header-overline {
-          font-size: 10px;
-          color: var(--pase-text-muted);
-          letter-spacing: 0.04em;
-          margin-bottom: 6px;
-        }
-        .bold-header-title {
-          margin: 0;
-          font-size: clamp(28px, 4vw, 40px);
-          font-weight: 500;
-          color: var(--pase-text);
-          letter-spacing: -0.025em;
-          line-height: 1;
-        }
-        .bold-header-italic {
-          font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
-          font-style: italic;
-          font-weight: 400;
-        }
-        .bold-header-info {
-          margin: 12px 0 0;
-          font-size: var(--pase-fs-sm);
-          color: var(--pase-text-muted);
-        }
-
         .dashboard-grid {
           display: grid;
           grid-template-columns: repeat(12, 1fr);
@@ -277,30 +234,6 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
         }
       `}</style>
     </div>
-  );
-}
-
-interface BoldHeaderProps {
-  usuario: { nombre: string };
-  localActual: { nombre: string } | null;
-  info: ReactNode;
-}
-
-function BoldHeader({ usuario, localActual, info }: BoldHeaderProps) {
-  return (
-    <header className="bold-header">
-      <div className="bold-header-anchor" aria-hidden="true" />
-      <div>
-        <div className="bold-header-overline">
-          {fechaCortaArg()}{localActual ? ` · ${localActual.nombre}` : ""}
-        </div>
-        <h1 className="bold-header-title">
-          {greetingByHour()},{" "}
-          <span className="bold-header-italic">{primerNombre(usuario.nombre)}</span>
-        </h1>
-        {info && <p className="bold-header-info">{info}</p>}
-      </div>
-    </header>
   );
 }
 
