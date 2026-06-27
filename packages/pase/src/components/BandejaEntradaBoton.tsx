@@ -132,7 +132,7 @@ export function BandejaEntradaBoton({ user }: Props) {
             color: "#1A3A5E",
             borderRadius: 999,
             fontSize: 10,
-            fontWeight: 600,
+            fontWeight: 500,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -263,7 +263,7 @@ export function BandejaEntradaBoton({ user }: Props) {
                     <span style={{
                       fontSize: "var(--pase-fs-xs)",
                       color: "var(--pase-text-muted)",
-                      textTransform: "uppercase",
+                      textTransform: "none",
                       letterSpacing: "var(--pase-ls-overline)",
                       fontWeight: 500,
                     }}>

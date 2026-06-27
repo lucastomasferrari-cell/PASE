@@ -21,7 +21,7 @@ export function EvolucionChart({ data }: { data: EvolucionRow[] }) {
           return String(n);
         }}/>
         <Tooltip
-          contentStyle={{background:"var(--s1)",border:"1px solid var(--bd2)",borderRadius:6,fontSize:11}}
+          contentStyle={{background:"var(--s1)",border: "0.5px solid var(--bd2)",borderRadius:6,fontSize:11}}
           formatter={(v)=>[`$${Number(v).toLocaleString("es-AR")}`] as [string]}
         />
         <Legend wrapperStyle={{fontSize:11}}/>
@@ -43,7 +43,7 @@ export function CategoriaCMVChart({ data }: { data: CategoriaRow[] }) {
         <XAxis dataKey="cat" tick={{fontSize:9,fill:"var(--muted)"}} axisLine={false} tickLine={false}/>
         <YAxis hide/>
         <Tooltip
-          contentStyle={{background:"var(--s1)",border:"1px solid var(--bd2)",borderRadius:6,fontSize:11}}
+          contentStyle={{background:"var(--s1)",border: "0.5px solid var(--bd2)",borderRadius:6,fontSize:11}}
           formatter={(v)=>[`$${Number(v).toLocaleString("es-AR")}`, "CMV"] as [string, string]}
         />
         <Bar dataKey="monto" radius={[4,4,0,0]} fill="var(--pase-celeste)"/>

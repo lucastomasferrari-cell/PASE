@@ -170,7 +170,7 @@ export const PRESENTISMO_OPTS = [
 ];
 export const CUENTAS_PAGO = ["Caja Efectivo","Caja Chica","Caja Mayor","MercadoPago","Banco"];
 
-export const inp: CSSProperties = { padding:"3px 5px", background:"var(--bg)", border:"1px solid var(--bd)", color:"var(--txt)", fontFamily:"'DM Mono',monospace", fontSize:10, borderRadius:"var(--r)", textAlign:"center" };
+export const inp: CSSProperties = { padding:"3px 5px", background:"var(--bg)", border: "0.5px solid var(--bd)", color:"var(--txt)", fontFamily:"'DM Mono',monospace", fontSize:10, borderRadius:"var(--r)", textAlign:"center" };
 
 /**
  * Calcula el último día (ISO yyyy-mm-dd) del período que cubre una liquidación.

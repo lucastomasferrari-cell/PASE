@@ -364,7 +364,7 @@ export function ModalCargarFactura({
               las facturas solo usan los campos comunes de arriba. Si la
               factura tiene IIBB, IVA 27%, no gravado, perc. ganancias, etc.,
               el usuario abre y completa lo que corresponde. */}
-          <details style={{ marginTop: 10, padding: "8px 10px", border: "1px solid var(--bd)", borderRadius: "var(--r)", background: "var(--s2)" }}>
+          <details style={{ marginTop: 10, padding: "8px 10px", border: "0.5px solid var(--bd)", borderRadius: "var(--r)", background: "var(--s2)" }}>
             <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--muted2)", fontWeight: 500 }}>
               Discriminación fiscal (IVA 27% · No grav. · Exento · IIBB por jurisdicción · Perc. Gan. · SUSS)
             </summary>
@@ -408,9 +408,9 @@ export function ModalCargarFactura({
           <div className="field"><label>Descripción</label><input value={form.detalle} onChange={e => setForm({ ...form, detalle: e.target.value })} placeholder="Detalle general..." /></div>
 
           {/* DETALLE DE INSUMOS */}
-          <div style={{ marginTop: 16, borderTop: "1px solid var(--bd)", paddingTop: 16 }}>
+          <div style={{ marginTop: 16, borderTop: "0.5px solid var(--bd)", paddingTop: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <span style={{ fontSize: 10, letterSpacing: .8, textTransform: "uppercase", color: "var(--muted2)" }}>Detalle de Insumos (opcional)</span>
+              <span style={{ fontSize: 10, letterSpacing: .8, textTransform: "none", color: "var(--muted2)" }}>Detalle de Insumos (opcional)</span>
               <button className="btn btn-ghost btn-sm" onClick={addItem}>+ Agregar ítem</button>
             </div>
             {items.length > 0 && (
@@ -421,10 +421,10 @@ export function ModalCargarFactura({
                   const necesitaVincular = esCMVCategoria && it.producto.trim().length > 0 && !it.materia_prima_id;
                   return (
                   <tr key={i} style={necesitaVincular ? { background: 'rgba(255, 200, 0, 0.08)' } : undefined}>
-                    <td><input style={{ width: "100%", background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.producto} onChange={e => updateItemConAutoLink(i, "producto", e.target.value)} placeholder="Ej: Salmón" /></td>
-                    <td><input type="number" step="0.01" style={{ width: 70, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.cantidad} onChange={e => updateItem(i, "cantidad", e.target.value)} /></td>
-                    <td><select style={{ background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.unidad} onChange={e => updateItem(i, "unidad", e.target.value)}>{UNIDADES.map(u => <option key={u}>{u}</option>)}</select></td>
-                    <td><input type="number" step="0.01" style={{ width: 90, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.precio_unitario} onChange={e => updateItem(i, "precio_unitario", e.target.value)} /></td>
+                    <td><input style={{ width: "100%", background: "var(--bg)", border: "0.5px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.producto} onChange={e => updateItemConAutoLink(i, "producto", e.target.value)} placeholder="Ej: Salmón" /></td>
+                    <td><input type="number" step="0.01" style={{ width: 70, background: "var(--bg)", border: "0.5px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.cantidad} onChange={e => updateItem(i, "cantidad", e.target.value)} /></td>
+                    <td><select style={{ background: "var(--bg)", border: "0.5px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.unidad} onChange={e => updateItem(i, "unidad", e.target.value)}>{UNIDADES.map(u => <option key={u}>{u}</option>)}</select></td>
+                    <td><input type="number" step="0.01" style={{ width: 90, background: "var(--bg)", border: "0.5px solid var(--bd)", color: "var(--txt)", padding: "4px 6px", fontFamily: "'Inter',sans-serif", fontSize: 11, borderRadius: "var(--r)" }} value={it.precio_unitario} onChange={e => updateItem(i, "precio_unitario", e.target.value)} /></td>
                     <td style={{ color: "var(--acc)", fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 500 }}>{fmt_$(it.subtotal)}</td>
                     <td>
                       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -467,7 +467,7 @@ export function ModalCargarFactura({
               </table>
             )}
             {tieneItems && esCMVCategoria && itemsSinMP > 0 && (
-              <div style={{ fontSize: 11, color: '#92400e', marginTop: 6, padding: "8px 10px", background: 'rgba(255, 200, 0, 0.12)', border: '1px solid rgba(217, 119, 6, 0.4)', borderRadius: 4 }}>
+              <div style={{ fontSize: 11, color: '#92400e', marginTop: 6, padding: "8px 10px", background: 'rgba(255, 200, 0, 0.12)', border: '0.5px solid rgba(217, 119, 6, 0.4)', borderRadius: 4 }}>
                 <strong>⚠ Atención:</strong> {itemsSinMP} {itemsSinMP === 1 ? 'ítem' : 'ítems'} sin vincular a materia prima.
                 Sin vincular, el stock del insumo NO se va a sumar y NO va a aparecer en el reporte CMV.
                 Vinculalos arriba con el dropdown, o creá las materias primas faltantes en Recetario → Materias primas.

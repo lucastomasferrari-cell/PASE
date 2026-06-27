@@ -213,7 +213,7 @@ export default function Onboarding({ user }: Props) {
           <span
             style={{
               fontSize: 18,
-              fontWeight: 600,
+              fontWeight: 500,
               color: pct === 100 ? "var(--pase-success, #2BB673)" : "var(--pase-celeste)",
               fontVariantNumeric: "tabular-nums",
             }}
@@ -292,7 +292,7 @@ export default function Onboarding({ user }: Props) {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontWeight: 600,
+                    fontWeight: 500,
                     fontSize: 14,
                   }}
                 >
@@ -303,7 +303,7 @@ export default function Onboarding({ user }: Props) {
                     style={{
                       margin: 0,
                       fontSize: 16,
-                      fontWeight: 600,
+                      fontWeight: 500,
                       color: "var(--pase-text)",
                       textDecoration: hecho ? "line-through" : "none",
                     }}

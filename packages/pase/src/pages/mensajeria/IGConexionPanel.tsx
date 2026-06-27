@@ -68,11 +68,11 @@ function ModalElegirLocal({ locales, onConfirm, onCancel }: ModalLocalProps) {
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>
       <div style={{
-        background: "var(--bg)", border: "1px solid var(--bd)",
+        background: "var(--bg)", border: "0.5px solid var(--bd)",
         borderRadius: 12, padding: "24px 28px", width: 340, maxWidth: "90vw",
         boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
       }}>
-        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>
+        <div style={{ fontWeight: 500, fontSize: 15, marginBottom: 8 }}>
           Conectar cuenta IG
         </div>
         <div style={{ fontSize: 13, color: "var(--muted2)", marginBottom: 16, lineHeight: 1.5 }}>
@@ -83,7 +83,7 @@ function ModalElegirLocal({ locales, onConfirm, onCancel }: ModalLocalProps) {
           onChange={e => setSel(e.target.value)}
           style={{
             width: "100%", padding: "8px 10px", borderRadius: 6,
-            border: "1px solid var(--bd)", background: "var(--s2)",
+            border: "0.5px solid var(--bd)", background: "var(--s2)",
             fontSize: 13, marginBottom: 20, fontFamily: "inherit",
           }}
         >
@@ -318,13 +318,13 @@ export function IGConexionPanel() {
         <div style={{
           padding: "20px 24px",
           background: "linear-gradient(135deg, rgba(225,48,108,0.06), rgba(193,53,132,0.04))",
-          border: "1px solid rgba(225,48,108,0.2)",
+          border: "0.5px solid rgba(225,48,108,0.2)",
           borderRadius: 12, marginBottom: 16,
           display: "flex", alignItems: "center", justifyContent: "space-between",
           gap: 16, flexWrap: "wrap",
         }}>
           <div style={{ flex: 1, minWidth: 240 }}>
-            <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 4 }}>
+            <div style={{ fontWeight: 500, fontSize: 16, marginBottom: 4 }}>
               Conecta tu Instagram
             </div>
             <div style={{ fontSize: 13, color: "var(--muted2)", lineHeight: 1.5 }}>
@@ -373,12 +373,12 @@ export function IGConexionPanel() {
       <ToastComponent toast={toast} />
       {flashBanner}
       <div style={{
-        border: "1px solid var(--bd)", borderRadius: 10,
+        border: "0.5px solid var(--bd)", borderRadius: 10,
         marginBottom: 16, overflow: "hidden",
       }}>
         {/* Header con botón Conectar */}
         <div style={{
-          padding: "10px 14px", borderBottom: "1px solid var(--bd)",
+          padding: "10px 14px", borderBottom: "0.5px solid var(--bd)",
           display: "flex", alignItems: "center", justifyContent: "space-between",
           background: "var(--s2)",
         }}>
@@ -510,17 +510,17 @@ function LogsModal({ logs, onClose }: { logs: LogEntry[]; onClose: () => void })
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
       <div style={{
-        background: 'var(--bg)', border: '1px solid var(--bd)',
+        background: 'var(--bg)', border: '0.5px solid var(--bd)',
         borderRadius: 12, width: 720, maxWidth: '95vw', maxHeight: '85vh',
         display: 'flex', flexDirection: 'column',
         boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
       }}>
         <div style={{
-          padding: '14px 18px', borderBottom: '1px solid var(--bd)',
+          padding: '14px 18px', borderBottom: '0.5px solid var(--bd)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <div>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>Últimos eventos del bot IG</div>
+            <div style={{ fontWeight: 500, fontSize: 14 }}>Últimos eventos del bot IG</div>
             <div style={{ fontSize: 11, color: 'var(--muted2)', marginTop: 2 }}>
               {logs.length} eventos · solo los últimos 20 (debug, errores, conexiones)
             </div>
@@ -539,7 +539,7 @@ function LogsModal({ logs, onClose }: { logs: LogEntry[]; onClose: () => void })
               fontSize: 12,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span style={{ color: colorPorTipo(log.tipo), fontWeight: 600 }}>
+                <span style={{ color: colorPorTipo(log.tipo), fontWeight: 500 }}>
                   {log.tipo}
                 </span>
                 <span style={{ color: 'var(--muted2)', fontSize: 11 }}>

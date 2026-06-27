@@ -128,7 +128,7 @@ export default function Negocio({ user, locales = [], localActivo = null }: Prop
           font-weight: 500;
           color: var(--pase-text-muted);
           letter-spacing: 0.04em;
-          text-transform: uppercase;
+          text-transform: none;
         }
         @media (max-width: 900px) {
           .neg-grid > .neg-card { grid-column: span 12 !important; }

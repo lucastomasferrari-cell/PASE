@@ -201,7 +201,7 @@ export function TabSimulador({ user, locales, localActivo }: Props) {
                 style={{
                   textAlign: "left",
                   padding: 14,
-                  border: "1px solid var(--bd)",
+                  border: "0.5px solid var(--bd)",
                   background: "var(--s2)",
                   borderRadius: 8,
                   cursor: "pointer",
@@ -385,7 +385,7 @@ export function TabSimulador({ user, locales, localActivo }: Props) {
           <>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
                 <div style={{ padding: 12, background: "var(--s2)", borderRadius: 8 }}>
-                  <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 1 }}>Real</div>
+                  <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "none", letterSpacing: 1 }}>Real</div>
                   <div style={{ marginTop: 6, fontSize: 12 }}>Facturación: <strong>{fmt_$(verResultado.resultado.real.facturacion)}</strong></div>
                   <div style={{ fontSize: 12 }}>Costo: <strong>{fmt_$(verResultado.resultado.real.costo)}</strong></div>
                   <div style={{ fontSize: 12 }}>Margen: <strong>{fmt_$(verResultado.resultado.real.margen)} ({verResultado.resultado.real.margen_pct}%)</strong></div>
@@ -393,8 +393,8 @@ export function TabSimulador({ user, locales, localActivo }: Props) {
                     {Math.round(verResultado.resultado.real.items_vendidos)} items vendidos
                   </div>
                 </div>
-                <div style={{ padding: 12, background: "rgba(34,197,94,0.06)", borderRadius: 8, border: "1px solid rgba(34,197,94,0.25)" }}>
-                  <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 1 }}>Hipotético</div>
+                <div style={{ padding: 12, background: "rgba(34,197,94,0.06)", borderRadius: 8, border: "0.5px solid rgba(34,197,94,0.25)" }}>
+                  <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "none", letterSpacing: 1 }}>Hipotético</div>
                   <div style={{ marginTop: 6, fontSize: 12 }}>Facturación: <strong>{fmt_$(verResultado.resultado.hipotetico.facturacion)}</strong></div>
                   <div style={{ fontSize: 12 }}>Costo: <strong>{fmt_$(verResultado.resultado.hipotetico.costo)}</strong></div>
                   <div style={{ fontSize: 12 }}>Margen: <strong>{fmt_$(verResultado.resultado.hipotetico.margen)} ({verResultado.resultado.hipotetico.margen_pct}%)</strong></div>

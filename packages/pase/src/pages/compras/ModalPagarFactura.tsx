@@ -89,8 +89,8 @@ export function ModalPagarFactura({
       </div>
 
       {ncsDisponibles.length > 0 && (
-        <div style={{ marginBottom: 12, padding: 12, background: "var(--s2)", border: "1px solid var(--bd2)", borderRadius: "var(--r)" }}>
-          <div style={{ fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "var(--info)", marginBottom: 8, fontWeight:500 }}>
+        <div style={{ marginBottom: 12, padding: 12, background: "var(--s2)", border: "0.5px solid var(--bd2)", borderRadius: "var(--r)" }}>
+          <div style={{ fontSize: 10, letterSpacing: 1, textTransform: "none", color: "var(--info)", marginBottom: 8, fontWeight:500 }}>
             Notas de crédito disponibles ({ncsDisponibles.length})
           </div>
           {ncsDisponibles.map(({ nc, saldoNc }) => {
@@ -142,10 +142,10 @@ export function ModalPagarFactura({
         <div style={{
           marginBottom: 12, padding: 12,
           background: "rgba(34,197,94,0.08)",
-          border: "1px solid rgba(34,197,94,0.30)",
+          border: "0.5px solid rgba(34,197,94,0.30)",
           borderRadius: "var(--r)",
         }}>
-          <div style={{ fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "var(--success)", marginBottom: 6, fontWeight: 500 }}>
+          <div style={{ fontSize: 10, letterSpacing: 1, textTransform: "none", color: "var(--success)", marginBottom: 6, fontWeight: 500 }}>
             💰 Saldo a favor disponible
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -205,7 +205,7 @@ export function ModalPagarFactura({
                 borderRadius: "var(--r)",
                 fontSize: 11,
               }}>
-                <div style={{ fontWeight: 600, color: colorText, marginBottom: 6 }}>
+                <div style={{ fontWeight: 500, color: colorText, marginBottom: 6 }}>
                   {esMas
                     ? <>⚠ Pago de MÁS por {fmt_$(Math.abs(dif))}</>
                     : <>⚠ Pago de MENOS por {fmt_$(Math.abs(dif))}</>}
@@ -241,7 +241,7 @@ export function ModalPagarFactura({
           })()}
         </>
       ) : (totalNcAplicado > 0 || saldoFavorEfectivo > 0) ? (
-        <div className="alert" style={{ background: "rgba(34,197,94,0.1)", border: "1px solid var(--success)", color: "var(--success)", fontSize: 11, padding: "10px 12px", marginBottom: 12 }}>
+        <div className="alert" style={{ background: "rgba(34,197,94,0.1)", border: "0.5px solid var(--success)", color: "var(--success)", fontSize: 11, padding: "10px 12px", marginBottom: 12 }}>
           {totalNcAplicado > 0 && saldoFavorEfectivo > 0
             ? "Las NCs + saldo a favor cubren el total de la factura. No hace falta pago en plata."
             : totalNcAplicado > 0

@@ -124,7 +124,7 @@ export default function Utilidades({ locales, localActivo }: Props) {
               </div>
             ))}
             {sociosActivos.length > 0 && (
-              <div style={{ ...rowBetween, borderBottom: "none", fontWeight: 600, marginTop: 4 }}>
+              <div style={{ ...rowBetween, borderBottom: "none", fontWeight: 500, marginTop: 4 }}>
                 <span>Total</span>
                 <span style={{ color: Math.abs(sumaPct - 100) < 0.01 ? "var(--pase-celeste)" : "#B45309", fontVariantNumeric: "tabular-nums" }}>
                   {sumaPct.toLocaleString("es-AR")}%{Math.abs(sumaPct - 100) < 0.01 ? "" : " ⚠️ no suma 100%"}
@@ -217,7 +217,7 @@ function SeguroRepartirCard({ calc, mesesColchon, onMesesColchon }: {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
           <div>
             <div style={cardTitle}>Seguro repartir</div>
-            <div style={{ fontSize: "2rem", fontWeight: 600, fontVariantNumeric: "tabular-nums", color: positivo ? "var(--pase-celeste)" : "#B91C1C" }}>
+            <div style={{ fontSize: "2rem", fontWeight: 500, fontVariantNumeric: "tabular-nums", color: positivo ? "var(--pase-celeste)" : "#B91C1C" }}>
               {fmtM(seguro)}
             </div>
             <div style={subMuted}>
@@ -242,7 +242,7 @@ function SeguroRepartirCard({ calc, mesesColchon, onMesesColchon }: {
           <Row label="Plata total (operativo + reservado)" value={fmt_$(calc.plata_total)} />
           <Row label="− Obligaciones pendientes del mes" value={`− ${fmt_$(calc.obligaciones_pendientes)}`} />
           <Row label={`− Colchón (${calc.meses_colchon} ${calc.meses_colchon === 1 ? "mes" : "meses"})`} value={`− ${fmt_$(calc.colchon)}`} />
-          <div style={{ ...rowBetween, borderBottom: "none", fontWeight: 600, borderTop: "1px solid var(--pase-border)", marginTop: 4, paddingTop: 8 }}>
+          <div style={{ ...rowBetween, borderBottom: "none", fontWeight: 500, borderTop: "0.5px solid var(--pase-border)", marginTop: 4, paddingTop: 8 }}>
             <span>= Seguro repartir</span>
             <span style={{ fontVariantNumeric: "tabular-nums", color: positivo ? "var(--pase-celeste)" : "#B91C1C" }}>{fmt_$(seguro)}</span>
           </div>
@@ -441,7 +441,7 @@ function RepartoModal({ lid, periodoMes, socios, onClose, onDone }: {
                   style={{ ...selStyle, width: 130, textAlign: "right" }} />
               </div>
             ))}
-            <div style={{ ...rowBetween, borderBottom: "none", fontWeight: 600, marginTop: 4 }}>
+            <div style={{ ...rowBetween, borderBottom: "none", fontWeight: 500, marginTop: 4 }}>
               <span>Suma</span>
               <span style={{ color: cuadra ? "var(--pase-celeste)" : "#B45309", fontVariantNumeric: "tabular-nums" }}>
                 {fmt_$(sumaMontos)}{cuadra ? "" : ` (≠ ${fmt_$(totalNum)})`}

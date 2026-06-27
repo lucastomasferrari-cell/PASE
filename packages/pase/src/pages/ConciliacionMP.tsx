@@ -893,7 +893,7 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
       )}
 
       {sincronizando&&(
-        <div className="alert" style={{background:"var(--bg2)",border:"1px solid var(--acc3)",color:"var(--acc3)",textAlign:"center",padding:"14px 20px",marginBottom:12,borderRadius:8,fontSize:14}}>
+        <div className="alert" style={{background:"var(--bg2)",border: "0.5px solid var(--acc3)",color:"var(--acc3)",textAlign:"center",padding:"14px 20px",marginBottom:12,borderRadius:8,fontSize:14}}>
           {syncCountdown>0
             ? `Esperando reporte de MercadoPago... ${Math.floor(syncCountdown/60)}:${String(syncCountdown%60).padStart(2,"0")}`
             : syncCountdown===-1
@@ -1280,7 +1280,7 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
               <span style={{whiteSpace:"nowrap"}}>¿No querés conciliar?</span>
               <input value={motivoIgnorar} onChange={e=>setMotivoIgnorar(e.target.value)}
                 placeholder="Motivo (opcional, ej: duplicado, reverso)..."
-                style={{flex:1,minWidth:180,padding:"5px 8px",background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--txt)",fontSize:11,borderRadius:"var(--r)"}}
+                style={{flex:1,minWidth:180,padding:"5px 8px",background:"var(--bg)",border: "0.5px solid var(--bd)",color:"var(--txt)",fontSize:11,borderRadius:"var(--r)"}}
                 disabled={conciliando}/>
               <button className="btn btn-ghost btn-sm" onClick={ignorarMP} disabled={conciliando}>Ignorar egreso</button>
             </div>
@@ -1325,8 +1325,8 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
             </div>
           </div>
         )}
-          <div style={{padding:12,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)",marginBottom:12}}>
-            <div style={{fontSize:10,color:"var(--muted2)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Movimiento a justificar</div>
+          <div style={{padding:12,background:"var(--s2)",borderRadius:"var(--r)",border: "0.5px solid var(--bd2)",marginBottom:12}}>
+            <div style={{fontSize:10,color:"var(--muted2)",textTransform: "none",letterSpacing:1,marginBottom:4}}>Movimiento a justificar</div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
                 <div style={{fontWeight:500,fontSize:13}}>{TIPO_LABELS[conciliarModal.tipo]||conciliarModal.tipo}</div>
@@ -1425,7 +1425,7 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
                   </select>
                 </div>
                 {vinculoSel==="__NUEVO__"&&(
-                  <div style={{marginTop:12,padding:14,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)"}}>
+                  <div style={{marginTop:12,padding:14,background:"var(--s2)",borderRadius:"var(--r)",border: "0.5px solid var(--bd2)"}}>
                     <div style={{fontSize:11,fontWeight:500,marginBottom:10,color:"var(--muted2)",letterSpacing:1}}>NUEVO GASTO · {fmt_$(mpMonto)}</div>
                     <div className="field"><label>Categoría *</label>
                       <Combobox
@@ -1514,7 +1514,7 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
                   const diferencia=montoMp-totalAplicado;
                   const facsElegibles=lista; // ya filtra por proveedor + no conciliadas
                   return (
-                    <div style={{marginTop:12,padding:14,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)"}}>
+                    <div style={{marginTop:12,padding:14,background:"var(--s2)",borderRadius:"var(--r)",border: "0.5px solid var(--bd2)"}}>
                       <div style={{fontSize:11,fontWeight:500,marginBottom:10,color:"var(--muted2)",letterSpacing:1}}>VARIAS FACTURAS · MP {fmt_$(montoMp)}</div>
                       {lineasMulti.map((linea,i)=>{
                         const facIds=lineasMulti.filter((_,j)=>j!==i).map(l=>l.factura_id);
@@ -1538,7 +1538,7 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
                       <button type="button" className="btn btn-sec btn-sm" style={{marginTop:4}}
                         onClick={()=>setLineasMulti(prev=>[...prev,{factura_id:"",monto:""}])}
                         disabled={lineasMulti.length>=facsElegibles.length}>+ Agregar otra factura</button>
-                      <div style={{marginTop:14,padding:"10px 12px",background:"var(--bg)",borderRadius:"var(--r)",border:"1px solid var(--bd)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                      <div style={{marginTop:14,padding:"10px 12px",background:"var(--bg)",borderRadius:"var(--r)",border: "0.5px solid var(--bd)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
                         <div style={{fontSize:11,color:"var(--muted2)"}}>
                           Aplicado: <span className="num" style={{color:"var(--txt)"}}>{fmt_$(totalAplicado)}</span> · MP: <span className="num" style={{color:"var(--txt)"}}>{fmt_$(montoMp)}</span>
                         </div>
@@ -1559,7 +1559,7 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
                   );
                 })()}
                 {vinculoSel==="__NUEVO__"&&(
-                  <div style={{marginTop:12,padding:14,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)"}}>
+                  <div style={{marginTop:12,padding:14,background:"var(--s2)",borderRadius:"var(--r)",border: "0.5px solid var(--bd2)"}}>
                     <div style={{fontSize:11,fontWeight:500,marginBottom:10,color:"var(--muted2)",letterSpacing:1}}>NUEVA FACTURA · total {fmt_$(Math.abs(conciliarModal.monto||0))}</div>
                     <div className="field"><label>Proveedor *</label>
                       <Combobox
@@ -1626,7 +1626,7 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
                   </div>
                 )}
                 {vinculoSel==="__NUEVO__"&&(
-                  <div style={{marginTop:12,padding:14,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)"}}>
+                  <div style={{marginTop:12,padding:14,background:"var(--s2)",borderRadius:"var(--r)",border: "0.5px solid var(--bd2)"}}>
                     <div style={{fontSize:11,fontWeight:500,marginBottom:10,color:"var(--muted2)",letterSpacing:1}}>NUEVO REMITO · monto {fmt_$(Math.abs(conciliarModal.monto||0))}</div>
                     <div className="field"><label>Proveedor *</label>
                       <Combobox
@@ -1677,7 +1677,7 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
       >
         {credenciales.length>0&&(
           <div style={{marginBottom:16}}>
-            <div style={{fontSize:10,letterSpacing:2,textTransform:"uppercase",color:"var(--muted2)",marginBottom:8}}>Cuentas configuradas</div>
+            <div style={{fontSize:10,letterSpacing:2,textTransform: "none",color:"var(--muted2)",marginBottom:8}}>Cuentas configuradas</div>
             {credenciales.map(c=>(
               <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:"var(--s2)",borderRadius:"var(--r)",marginBottom:6}}>
                 <div>
@@ -1693,7 +1693,7 @@ function ConciliacionMP({ user, locales, localActivo, embedded = false }: Concil
             ))}
           </div>
         )}
-        <div style={{padding:16,background:"var(--s2)",borderRadius:"var(--r)",border:"1px solid var(--bd2)"}}>
+        <div style={{padding:16,background:"var(--s2)",borderRadius:"var(--r)",border: "0.5px solid var(--bd2)"}}>
           <div style={{fontSize:11,fontWeight:500,marginBottom:12}}>Agregar / actualizar cuenta</div>
           <div className="field"><label>Local</label>
             <select value={configForm.local_id} onChange={e=>setConfigForm({...configForm,local_id:e.target.value})}>

@@ -199,7 +199,7 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
                     fontWeight: 500,
                     color: "var(--pase-text-muted)",
                     letterSpacing: "0.04em",
-                    textTransform: "uppercase" as const,
+                    textTransform: "none" as const,
                   }}>
                     {w.title}
                   </h3>

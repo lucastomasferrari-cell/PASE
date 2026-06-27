@@ -446,7 +446,7 @@ export default function RRHHLegajo({ empleadoId, user, locales, onGoToPago, init
           />
         </div>
         <div style={{textAlign:"right"}}>
-          <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"var(--muted)"}}>Sueldo mensual</div>
+          <div style={{fontSize:9,letterSpacing:2,textTransform: "none",color:"var(--muted)"}}>Sueldo mensual</div>
           <div style={{fontFamily:"'Inter',sans-serif",fontSize:17,fontWeight:500,color:"var(--acc)"}}>{fmt_$(emp.sueldo_mensual)}</div>
           <div style={{fontSize:10,color:"var(--muted2)"}}>Día: {fmt_$(valorDia)}</div>
         </div>
@@ -848,20 +848,20 @@ function TabDatos({
               </div>
             )}
             <div style={{background:"var(--s2)",borderRadius:"var(--r)",padding:16}}>
-              <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>
+              <div style={{fontSize:10,color:"var(--muted)",textTransform: "none",letterSpacing:1,marginBottom:12}}>
                 Conceptos <span style={{color:"var(--warn)",marginLeft:8,textTransform:"none",letterSpacing:0}}>(todos editables — el cálculo es el punto de partida)</span>
               </div>
               {conceptos.map(([key, label]) => {
                 const calc = liqFinalData?.[key] || 0;
                 const editado = liqFinalOverrides[key] !== undefined && liqFinalOverrides[key] !== "";
                 return (
-                  <div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid var(--bd)",fontSize:12}}>
+                  <div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom: "0.5px solid var(--bd)",fontSize:12}}>
                     <span>{label}{editado && <span style={{color:"var(--warn)",marginLeft:6,fontSize:10}}>✎</span>}</span>
                     <input
                       type="number"
                       value={liqFinalOverrides[key] ?? String(Math.round(calc))}
                       onChange={e => setLiqFinalOverrides((prev) => ({...prev, [key]: e.target.value}))}
-                      style={{width:130,background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--acc)",padding:"3px 6px",fontFamily:"'DM Mono',monospace",fontSize:11,textAlign:"right",borderRadius:"var(--r)"}}
+                      style={{width:130,background:"var(--bg)",border: "0.5px solid var(--bd)",color:"var(--acc)",padding:"3px 6px",fontFamily:"'DM Mono',monospace",fontSize:11,textAlign:"right",borderRadius:"var(--r)"}}
                     />
                   </div>
                 );
@@ -871,7 +871,7 @@ function TabDatos({
               </div>
             </div>
             <div style={{marginTop:12}}>
-              <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Formas de pago *</div>
+              <div style={{fontSize:10,color:"var(--muted)",textTransform: "none",letterSpacing:1,marginBottom:8}}>Formas de pago *</div>
               {liqFinalLineas.map((l, i) => (
                 <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
                   <select className="search" style={{width:130}} title="Local del que sale la plata"
@@ -893,7 +893,7 @@ function TabDatos({
                 onClick={() => setLiqFinalLineas((prev) => [...prev, { cuenta: "", monto: liqFinalRestante > 0 ? String(Math.round(liqFinalRestante)) : "" }])}>
                 + Agregar forma de pago
               </button>
-              <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop: "0.5px solid var(--bd)"}}>
                 <span style={{fontSize:12,color: Math.abs(liqFinalRestante) < 0.5 ? "var(--muted2)" : "var(--warn)"}}>
                   {Math.abs(liqFinalRestante) < 0.5 ? "Asignado completo" : liqFinalRestante > 0 ? "Falta asignar" : "Te pasaste por"}
                 </span>
@@ -1280,11 +1280,11 @@ function TabVacAgu({
             <div className="field"><label>Días a pagar</label>
               <input type="number" value={vacDias} onChange={e => setVacDias(e.target.value)} placeholder={vacAcumuladas.toFixed(1)} />
             </div>
-            <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginBottom:12,borderBottom:"1px solid var(--bd)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginBottom:12,borderBottom: "0.5px solid var(--bd)"}}>
               <span style={{fontSize:12,color:"var(--muted2)"}}>Plus vacacional recomendado</span>
               <span style={{fontSize:14,fontWeight:500,color:"var(--acc)"}}>{fmt_$(plusVacacional)}</span>
             </div>
-            <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Formas de pago</div>
+            <div style={{fontSize:10,color:"var(--muted)",textTransform: "none",letterSpacing:1,marginBottom:8}}>Formas de pago</div>
             {/* Bug Caja-1 fix: cada línea tiene placeholder y la validación
                 de "puedeConfirmar" exige cuenta != "". */}
             {vacLineas.map((l, i) => (
@@ -1303,7 +1303,7 @@ function TabVacAgu({
               onClick={() => setVacLineas((prev) => [...prev, { cuenta: "", monto: restante > 0 ? String(Math.round(restante)) : "" }])}>
               + Agregar forma de pago
             </button>
-            <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop: "0.5px solid var(--bd)"}}>
               <span style={{fontSize:12,color: esParcial ? "var(--warn)" : "var(--muted2)"}}>
                 {esParcial ? "Pago parcial — Restante" : "Restante"}
               </span>
@@ -1336,12 +1336,12 @@ function TabVacAgu({
               </>
             }
           >
-            <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginBottom:8,borderBottom:"1px solid var(--bd)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginBottom:8,borderBottom: "0.5px solid var(--bd)"}}>
               <span style={{fontSize:12,color:"var(--muted2)"}}>Acumulado proporcional</span>
               <span style={{fontSize:14,fontWeight:500,color:"var(--acc)"}}>{fmt_$(sacAcumulado)}</span>
             </div>
             <div style={{fontSize:10,color:"var(--muted2)",marginBottom:12}}>Teórico semestre completo: {fmt_$(sacTeorico)}</div>
-            <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Formas de pago</div>
+            <div style={{fontSize:10,color:"var(--muted)",textTransform: "none",letterSpacing:1,marginBottom:8}}>Formas de pago</div>
             {aguLineas.map((l, i) => (
               <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
                 <select className="search" style={{width:120}} title="Local del que sale la plata"
@@ -1363,7 +1363,7 @@ function TabVacAgu({
               onClick={() => setAguLineas((prev) => [...prev, { cuenta: "", monto: restante > 0 ? String(Math.round(restante)) : "" }])}>
               + Agregar forma de pago
             </button>
-            <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop: "0.5px solid var(--bd)"}}>
               <span style={{fontSize:12,color: esParcial ? "var(--warn)" : "var(--muted2)"}}>
                 {esParcial ? "Pago parcial — Restante" : "Restante"}
               </span>
@@ -1444,7 +1444,7 @@ function TabDocumentos({
         <div className="field"><label>Archivo</label>
           <input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
             onChange={e => e.target.files?.[0] && subirDoc(e.target.files[0])}
-            style={{background:"var(--bg)",border:"1px solid var(--bd)",padding:8,borderRadius:"var(--r)",width:"100%",color:"var(--txt)",fontFamily:"'DM Mono',monospace",fontSize:12}} />
+            style={{background:"var(--bg)",border: "0.5px solid var(--bd)",padding:8,borderRadius:"var(--r)",width:"100%",color:"var(--txt)",fontFamily:"'DM Mono',monospace",fontSize:12}} />
         </div>
         {uploading && <div className="loading">Subiendo...</div>}
       </Modal>

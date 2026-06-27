@@ -216,8 +216,8 @@ export function AguinaldoModal({ localId, cuentasUsables, localNombre, showToast
     setTimeout(() => { win.print(); }, 250);
   }
 
-  const th: React.CSSProperties = { fontSize: 11, color: "var(--muted2)", textAlign: "left", padding: "6px 8px", fontWeight: 600 };
-  const td: React.CSSProperties = { fontSize: 13, padding: "6px 8px", borderTop: "1px solid var(--pase-border)" };
+  const th: React.CSSProperties = { fontSize: 11, color: "var(--muted2)", textAlign: "left", padding: "6px 8px", fontWeight: 500 };
+  const td: React.CSSProperties = { fontSize: 13, padding: "6px 8px", borderTop: "0.5px solid var(--pase-border)" };
 
   return (
     <Modal isOpen onClose={onClose} title={`Pagar aguinaldos · ${localNombre}`} maxWidth={740}>
@@ -241,7 +241,7 @@ export function AguinaldoModal({ localId, cuentasUsables, localNombre, showToast
         {preview === null ? (
           <div style={{ padding: 24, textAlign: "center", color: "var(--muted2)", fontSize: 13 }}>Cargando empleados y sueldos…</div>
         ) : (
-          <div style={{ maxHeight: 380, overflowY: "auto", border: "1px solid var(--pase-border)", borderRadius: 8 }}>
+          <div style={{ maxHeight: 380, overflowY: "auto", border: "0.5px solid var(--pase-border)", borderRadius: 8 }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
@@ -271,7 +271,7 @@ export function AguinaldoModal({ localId, cuentasUsables, localNombre, showToast
                             onChange={ev => setIncluir(prev => ({ ...prev, [r.empleado_id]: ev.target.checked }))} />}
                         </td>
                         <td style={td}>
-                          <div style={{ fontWeight: 600 }}>{r.apellido}, {r.nombre}</div>
+                          <div style={{ fontWeight: 500 }}>{r.apellido}, {r.nombre}</div>
                           <div style={{ fontSize: 11, color: "var(--muted2)" }}>
                             {r.puesto}
                             {multi
@@ -318,7 +318,7 @@ export function AguinaldoModal({ localId, cuentasUsables, localNombre, showToast
                                     <span style={{ color: l.neg ? "var(--danger)" : undefined }}>{l.neg ? "−" : ""}{fmt$(Math.abs(l.monto))}</span>
                                   </div>
                                 ))}
-                                <div style={{ display: "flex", justifyContent: "space-between", maxWidth: 320, borderTop: "1px solid var(--pase-border)", marginTop: 2, paddingTop: 2, fontWeight: 600 }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", maxWidth: 320, borderTop: "0.5px solid var(--pase-border)", marginTop: 2, paddingTop: 2, fontWeight: 500 }}>
                                   <span>Bruto del mes</span><span>{fmt$(r.bruto)}</span>
                                 </div>
                                 <div style={{ marginTop: 2 }}>

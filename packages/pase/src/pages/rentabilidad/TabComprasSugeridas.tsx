@@ -352,7 +352,7 @@ export function TabComprasSugeridas({ user, locales, localActivo }: Props) {
                         <td className="num-right mono" style={{ fontSize: 11, color: cfg.color }}>
                           {r.dias_aguanta != null ? `${r.dias_aguanta}d` : "—"}
                         </td>
-                        <td className="num-right mono" style={{ fontWeight: 600, color: sugerido > 0 ? "var(--acc)" : "var(--muted2)" }}>
+                        <td className="num-right mono" style={{ fontWeight: 500, color: sugerido > 0 ? "var(--acc)" : "var(--muted2)" }}>
                           {sugerido > 0 ? `${sugerido.toFixed(1)} ${r.unidad}` : "—"}
                         </td>
                         <td className="num-right mono" style={{ fontWeight: 500 }}>

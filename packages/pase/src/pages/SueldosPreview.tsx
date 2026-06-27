@@ -417,7 +417,7 @@ export default function SueldosPreview() {
       {/* Banner sandbox */}
       <div style={{
         background: "linear-gradient(135deg, rgba(245,158,11,0.15), rgba(245,158,11,0.05))",
-        border: "1px solid rgba(245,158,11,0.35)",
+        border: "0.5px solid rgba(245,158,11,0.35)",
         borderRadius: 8, padding: "10px 14px", marginBottom: 16,
         display: "flex", alignItems: "center", gap: 10, fontSize: 12,
       }}>
@@ -487,7 +487,7 @@ export default function SueldosPreview() {
           <span style={{
             padding: "3px 10px", borderRadius: 6,
             background: "rgba(34,197,94,0.10)",
-            border: "1px solid rgba(34,197,94,0.25)",
+            border: "0.5px solid rgba(34,197,94,0.25)",
             color: "var(--success)", fontWeight: 500,
           }}>
             A separar: {fmt_$(totalASeparar)}
@@ -600,7 +600,7 @@ export default function SueldosPreview() {
                       gridTemplateColumns: "60px 1fr 130px 110px 110px",
                       gap: 12, padding: "10px 16px 10px 38px",
                       alignItems: "center",
-                      borderTop: "1px solid var(--bd)",
+                      borderTop: "0.5px solid var(--bd)",
                       background: c.estado === "pagado" ? "rgba(34,197,94,0.04)" : "transparent",
                     }}>
                       <span style={{ fontSize: 11, fontWeight: 500, color: "var(--acc)" }}>
@@ -643,7 +643,7 @@ export default function SueldosPreview() {
                   const sumaAdel = cuotaActiva.sumaAdel;
                   const total = cuotaActiva.total;
                   return (
-                    <div style={{ borderTop: "1px solid var(--bd)", padding: "16px 20px" }}>
+                    <div style={{ borderTop: "0.5px solid var(--bd)", padding: "16px 20px" }}>
                       {/* Tabs Q1/Q2 si tiene 2 cuotas */}
                       {cuotasTotal > 1 && (
                         <div style={{ display: "flex", gap: 4, marginBottom: 14 }}>
@@ -663,7 +663,7 @@ export default function SueldosPreview() {
                       <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 28 }}>
                         {/* Col izq: novedades + adelantos */}
                         <div>
-                          <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+                          <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "none", letterSpacing: 0.5, marginBottom: 8 }}>
                             Novedades de {labelSlot(s.cuota, s.cuotasTotal)}
                           </div>
                           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
@@ -683,7 +683,7 @@ export default function SueldosPreview() {
                           </div>
 
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                            <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                            <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "none", letterSpacing: 0.5 }}>
                               Adelantos
                             </div>
                             <button
@@ -744,7 +744,7 @@ export default function SueldosPreview() {
 
                         {/* Col der: desglose en vivo */}
                         <div>
-                          <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+                          <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "none", letterSpacing: 0.5, marginBottom: 8 }}>
                             Cálculo en vivo
                           </div>
                           <div style={{ background: "var(--s2)", borderRadius: 8, padding: 14, fontSize: 12 }}>
@@ -757,7 +757,7 @@ export default function SueldosPreview() {
                             {nov.otros_desc > 0 && <DesgloseRow label="− Otros desc." value={`−${fmt_$(nov.otros_desc)}`} tone="danger" />}
                             {sumaAdel > 0 && <DesgloseRow label={`− Adelantos (${tildSet.size})`} value={`−${fmt_$(sumaAdel)}`} tone="danger" />}
                             <div style={{
-                              marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--bd)",
+                              marginTop: 10, paddingTop: 10, borderTop: "0.5px solid var(--bd)",
                               display: "flex", justifyContent: "space-between", alignItems: "baseline",
                             }}>
                               <span style={{ fontWeight: 500 }}>Total</span>
@@ -883,7 +883,7 @@ export default function SueldosPreview() {
               {/* Adelantos en el modal (mismo widget que la card expandida) */}
               {adels.length > 0 && (
                 <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", marginBottom: 6 }}>
+                  <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "none", marginBottom: 6 }}>
                     Adelantos a descontar
                   </div>
                   <div style={{ background: "var(--s2)", borderRadius: 8, padding: 10 }}>
@@ -915,7 +915,7 @@ export default function SueldosPreview() {
               )}
 
               {/* Líneas de pago */}
-              <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", marginBottom: 6 }}>
+              <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "none", marginBottom: 6 }}>
                 Formas de pago
               </div>
               {pagoLineas.map((l, i) => (
@@ -954,7 +954,7 @@ export default function SueldosPreview() {
               </button>
               <div style={{
                 display: "flex", justifyContent: "space-between",
-                fontSize: 12, paddingTop: 10, borderTop: "1px solid var(--bd)",
+                fontSize: 12, paddingTop: 10, borderTop: "0.5px solid var(--bd)",
               }}>
                 <span style={{ color: "var(--muted2)" }}>Asignado en formas de pago</span>
                 <span style={{ color: sumaLineasPago === total ? "var(--success)" : "var(--warn)", fontWeight: 500 }}>

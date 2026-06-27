@@ -84,10 +84,10 @@ export function EfectivoConsolidadoWidget({ ctx }: { ctx: WidgetContext }) {
 
   return (
     <div>
-      <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 4 }}>
+      <div style={{ fontSize: "var(--pase-fs-xs)", color: "var(--pase-text-muted)", letterSpacing: "0.04em", textTransform: "none", marginBottom: 4 }}>
         Efectivo total · todos los locales
       </div>
-      <div style={{ fontSize: "26px", fontWeight: 600, fontVariantNumeric: "tabular-nums", color: total < 0 ? "var(--pase-danger, #DC2626)" : "var(--pase-text)", marginBottom: 12 }}>
+      <div style={{ fontSize: "26px", fontWeight: 500, fontVariantNumeric: "tabular-nums", color: total < 0 ? "var(--pase-danger, #DC2626)" : "var(--pase-text)", marginBottom: 12 }}>
         {formatCurrency(total)}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

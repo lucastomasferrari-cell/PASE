@@ -244,7 +244,7 @@ export function SolicitudesContent({ user, withHeader = true }: ContentProps) {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
-                    <span style={{ fontWeight: 600, fontSize: 14, color: "var(--pase-text)" }}>
+                    <span style={{ fontWeight: 500, fontSize: 14, color: "var(--pase-text)" }}>
                       {r.creador_nombre ?? "?"}
                     </span>
                     <span style={{ fontSize: 13, color: "var(--pase-text-muted)" }}>
@@ -275,7 +275,7 @@ export function SolicitudesContent({ user, withHeader = true }: ContentProps) {
                 <span style={{
                   fontSize: 11, padding: "3px 8px", borderRadius: 999,
                   background: badge.bg, color: badge.color,
-                  fontWeight: 600, whiteSpace: "nowrap",
+                  fontWeight: 500, whiteSpace: "nowrap",
                 }}>
                   {badge.label}
                 </span>

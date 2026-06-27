@@ -113,7 +113,7 @@
   font-weight: 500;
   color: var(--pase-text-muted);
   letter-spacing: 0.06em;
-  text-transform: uppercase;
+  text-transform: none;
   margin-bottom: 8px;
 }
 

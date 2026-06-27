@@ -174,7 +174,7 @@ export function IGClienteModal({ clienteId, onClose, onSaved }: Props) {
 
           {cliente.bloqueado && (
             <div style={{
-              padding: 10, background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.25)",
+              padding: 10, background: "rgba(220,38,38,0.08)", border: "0.5px solid rgba(220,38,38,0.25)",
               borderRadius: 6, fontSize: 12,
             }}>
               🚫 <strong>Cliente bloqueado.</strong> {cliente.bloqueado_motivo && `Motivo: ${cliente.bloqueado_motivo}.`}

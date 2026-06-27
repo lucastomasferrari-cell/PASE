@@ -766,7 +766,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
           <div style={{
             padding: "10px 14px",
             background: "rgba(245, 158, 11, 0.1)",
-            border: "1px solid rgba(245, 158, 11, 0.3)",
+            border: "0.5px solid rgba(245, 158, 11, 0.3)",
             borderRadius: 6,
             margin: "0 14px 12px",
             fontSize: 12,
@@ -939,7 +939,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
             del último query (proxy con movimientos.length + hasMore=true ⇒
             "X+"). Si hasMore, botón "Cargar más" trae otro bloque. */}
         {!loading && movimientos.length > 0 && (
-          <div style={{padding:"8px 12px",borderTop:"1px solid var(--bd)",display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:11,color:"var(--muted2)"}}>
+          <div style={{padding:"8px 12px",borderTop: "0.5px solid var(--bd)",display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:11,color:"var(--muted2)"}}>
             <span>Mostrando {mFilt.length} de {movimientos.length}{hasMore ? "+" : ""} movimientos en el rango</span>
             {hasMore && (
               <button className="btn btn-ghost btn-sm" onClick={loadMore} disabled={loadingMore}>
@@ -1048,7 +1048,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
             <div>
-              <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1,color:"var(--muted)",marginBottom:8}}>Antes</div>
+              <div style={{fontSize:9,textTransform: "none",letterSpacing:1,color:"var(--muted)",marginBottom:8}}>Antes</div>
               {auditLog.antes && Object.entries(auditLog.antes).map(([k, v]) => (
                 <div key={k} style={{fontSize:11,marginBottom:4}}>
                   <span style={{color:"var(--muted2)"}}>{k}:</span> <span style={{color:"var(--danger)"}}>{String(v??'—')}</span>
@@ -1056,7 +1056,7 @@ export default function Caja({ user, locales = [], localActivo }: CajaProps) {
               ))}
             </div>
             <div>
-              <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1,color:"var(--muted)",marginBottom:8}}>Después</div>
+              <div style={{fontSize:9,textTransform: "none",letterSpacing:1,color:"var(--muted)",marginBottom:8}}>Después</div>
               {auditLog.despues && Object.entries(auditLog.despues).map(([k, v]) => (
                 <div key={k} style={{fontSize:11,marginBottom:4}}>
                   <span style={{color:"var(--muted2)"}}>{k}:</span> <span style={{color:"var(--success)"}}>{String(v??'—')}</span>

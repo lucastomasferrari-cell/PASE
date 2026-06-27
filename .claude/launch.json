@@ -2,16 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "comanda",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "comanda", "dev"],
-      "port": 5174
-    },
-    {
       "name": "pase",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "pase", "dev"],
       "port": 5173
+    },
+    {
+      "name": "comanda",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "comanda", "dev"],
+      "port": 5174
     }
   ]
 }

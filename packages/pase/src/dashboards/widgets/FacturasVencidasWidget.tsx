@@ -106,7 +106,7 @@ export function FacturasVencidasWidget({ ctx }: { ctx: WidgetContext }) {
             <div style={{
               fontSize: "var(--pase-fs-xs)",
               color: "var(--pase-text-muted)",
-              textTransform: "uppercase",
+              textTransform: "none",
               letterSpacing: "var(--pase-ls-overline)",
               marginBottom: 6,
             }}>

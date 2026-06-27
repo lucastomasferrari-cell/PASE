@@ -704,7 +704,7 @@ function SectionTitle({ children, locked }: { children: React.ReactNode; locked?
       display: "flex", alignItems: "baseline", justifyContent: "space-between",
       fontSize: "var(--pase-fs-xs)", fontWeight: 500,
       color: "var(--pase-text-muted)",
-      textTransform: "uppercase", letterSpacing: "var(--pase-ls-overline)",
+      textTransform: "none", letterSpacing: "var(--pase-ls-overline)",
       marginBottom: 10, marginTop: 18,
       paddingBottom: 6, borderBottom: "0.5px solid var(--pase-border)",
     }}>

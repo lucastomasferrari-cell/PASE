@@ -42,13 +42,13 @@ export function ModalVerFactura({ factura, onClose, proveedores, locales }: Moda
       title={`Factura ${factura.nro}`}
     >
       <div className="form2">
-        <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase" }}>Proveedor</span><div style={{ marginTop: 4 }}>{proveedores.find(p => String(p.id) === String(factura.prov_id))?.nombre}</div></div>
-        <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase" }}>Local</span><div style={{ marginTop: 4 }}>{locales.find(l => String(l.id) === String(factura.local_id))?.nombre}</div></div>
+        <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "none" }}>Proveedor</span><div style={{ marginTop: 4 }}>{proveedores.find(p => String(p.id) === String(factura.prov_id))?.nombre}</div></div>
+        <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "none" }}>Local</span><div style={{ marginTop: 4 }}>{locales.find(l => String(l.id) === String(factura.local_id))?.nombre}</div></div>
       </div>
       <div className="form3" style={{ marginTop: 12 }}>
-        <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase" }}>Fecha</span><div style={{ marginTop: 4 }}>{fmt_d(factura.fecha)}</div></div>
-        <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase" }}>Vencimiento</span><div style={{ marginTop: 4 }}>{fmt_d(factura.venc)}</div></div>
-        <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase" }}>Categoría</span><div style={{ marginTop: 4 }}>{factura.cat}</div></div>
+        <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "none" }}>Fecha</span><div style={{ marginTop: 4 }}>{fmt_d(factura.fecha)}</div></div>
+        <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "none" }}>Vencimiento</span><div style={{ marginTop: 4 }}>{fmt_d(factura.venc)}</div></div>
+        <div><span style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "none" }}>Categoría</span><div style={{ marginTop: 4 }}>{factura.cat}</div></div>
       </div>
       <div style={{ marginTop: 16, background: "var(--s2)", padding: 12, borderRadius: "var(--r)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12 }}><span>Neto Gravado</span><span>{fmt_$(factura.neto)}</span></div>
@@ -58,13 +58,13 @@ export function ModalVerFactura({ factura, onClose, proveedores, locales }: Moda
         {Number(factura.perc_iva) > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12 }}><span>Perc. IVA</span><span>{fmt_$(factura.perc_iva)}</span></div>}
         {Number(factura.otros_cargos) > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12 }}><span>Otros Cargos</span><span>{fmt_$(factura.otros_cargos)}</span></div>}
         {Number(factura.descuentos) > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12, color: "var(--danger)" }}><span>Descuentos</span><span>− {fmt_$(factura.descuentos)}</span></div>}
-        <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid var(--bd)", paddingTop: 8, fontFamily: "'Inter',sans-serif", fontSize: 16, fontWeight: 500 }}><span>TOTAL</span><span style={{ color: "var(--acc)" }}>{fmt_$(factura.total)}</span></div>
+        <div style={{ display: "flex", justifyContent: "space-between", borderTop: "0.5px solid var(--bd)", paddingTop: 8, fontFamily: "'Inter',sans-serif", fontSize: 16, fontWeight: 500 }}><span>TOTAL</span><span style={{ color: "var(--acc)" }}>{fmt_$(factura.total)}</span></div>
       </div>
       {(factura.pagos || []).length > 0 && (
         <div style={{ marginTop: 12 }}>
-          <div style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase", marginBottom: 8 }}>Pagos registrados</div>
+          <div style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "none", marginBottom: 8 }}>Pagos registrados</div>
           {factura.pagos.map((p: PagoFactura, i: number) => (
-            <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--bd)", fontSize: 12 }}>
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "0.5px solid var(--bd)", fontSize: 12 }}>
               <span>{fmt_d(p.fecha)} · {p.cuenta}</span><span style={{ color: "var(--muted2)" }}>{fmt_$(p.monto)}</span>
             </div>
           ))}
@@ -80,7 +80,7 @@ export function ModalVerFactura({ factura, onClose, proveedores, locales }: Moda
       )}
       {factura.imagen_url && (
         <div style={{ marginTop: 16 }}>
-          <div style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "uppercase", marginBottom: 8 }}>Comprobante</div>
+          <div style={{ fontSize: 9, color: "var(--muted)", letterSpacing: .8, textTransform: "none", marginBottom: 8 }}>Comprobante</div>
           {imgLoading && <div className="loading">Cargando comprobante...</div>}
           {!imgLoading && imgUrl && (() => {
             const isPdf = /\.pdf$/i.test(factura.imagen_url!);

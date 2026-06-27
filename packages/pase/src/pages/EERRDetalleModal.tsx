@@ -12,7 +12,7 @@
  */
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Modal } from "../components/ui";
+import { Modal, TipoPill } from "../components/ui";
 import { db } from "../lib/supabase";
 import { applyLocalScope } from "../lib/auth";
 import { fmt_$ } from "@pase/shared/utils";
@@ -144,23 +144,23 @@ export default function EERRDetalleModal({ state, mes, localActivo, user, onClos
   if (state.tipo === "sueldo") {
     return (
       <Modal isOpen onClose={onClose} title={state.titulo} subtitle={state.subtitulo} maxWidth={460}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <div style={{ display: "flex", flexDirection: "column" }}>
           {state.breakdown.map((r, i) => (
             <div
               key={i}
               style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
-                padding: "7px 2px",
-                borderTop: r.big ? "1px solid var(--pase-border)" : undefined,
-                marginTop: r.big ? 2 : undefined,
+                padding: r.big ? "12px 4px 4px" : "8px 4px",
+                borderTop: r.big ? "0.5px solid var(--pase-border-strong)" : undefined,
+                marginTop: r.big ? 4 : undefined,
               }}
             >
-              <span style={{ fontSize: 12, fontWeight: r.big ? 600 : 400, color: r.neg ? "var(--muted2)" : "var(--pase-text)" }}>
+              <span style={{ fontSize: 12, fontWeight: r.big ? 500 : 400, color: "var(--pase-text)" }}>
                 {r.label}
               </span>
               <span
                 className="num"
-                style={{ fontSize: 13, fontWeight: r.big ? 600 : 500, color: r.neg ? "var(--danger)" : "var(--pase-text)" }}
+                style={{ fontSize: 13, fontWeight: 500, color: "var(--pase-text)" }}
               >
                 {r.neg ? "− " : ""}{fmt_$(Math.abs(r.monto))}
               </span>
@@ -193,7 +193,7 @@ export default function EERRDetalleModal({ state, mes, localActivo, user, onClos
               title={`Abrir en ${r.origen === "Compra" ? "Compras" : "Gastos"}`}
               style={{
                 display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10,
-                padding: "8px 2px",
+                padding: "8px 4px",
                 cursor: "pointer",
                 borderBottom: i < rows.length - 1 ? "0.5px solid var(--pase-border)" : undefined,
               }}
@@ -205,23 +205,19 @@ export default function EERRDetalleModal({ state, mes, localActivo, user, onClos
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 12, color: "var(--pase-text)", display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.label}</span>
-                    <span style={{
-                      fontSize: 9, color: "var(--muted)", border: "0.5px solid var(--pase-border)",
-                      borderRadius: 4, padding: "1px 4px", flexShrink: 0,
-                    }}>{r.origen}</span>
+                    <TipoPill tipo={r.origen} size="sm" />
                   </div>
-                  {r.sublabel && <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 1 }}>{r.sublabel}</div>}
+                  {r.sublabel && <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 2 }}>{r.sublabel}</div>}
                 </div>
               </div>
-              <span className="num" style={{ fontSize: 13, fontWeight: 500, color: "var(--pase-text)", flexShrink: 0, display: "flex", alignItems: "center", gap: 5 }}>
+              <span className="num" style={{ fontSize: 13, fontWeight: 500, color: "var(--pase-text)", flexShrink: 0 }}>
                 {fmt_$(r.monto)}
-                <span style={{ fontSize: 11, color: "var(--muted)" }}>›</span>
               </span>
             </div>
           ))}
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 2px 2px", borderTop: "1.5px solid var(--pase-border)", marginTop: 4 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--pase-text)" }}>Total</span>
-            <span className="num" style={{ fontSize: 13, fontWeight: 600, color: "var(--pase-text)" }}>{fmt_$(total)}</span>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 4px 4px", borderTop: "0.5px solid var(--pase-border-strong)", marginTop: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 500, color: "var(--pase-text)" }}>Total</span>
+            <span className="num" style={{ fontSize: 13, fontWeight: 500, color: "var(--pase-text)" }}>{fmt_$(total)}</span>
           </div>
         </div>
       )}

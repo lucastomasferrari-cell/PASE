@@ -330,7 +330,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
       <div className="panel">
         <div className="panel-hd" style={{flexWrap:"wrap",gap:8,justifyContent:"flex-end"}}>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-            <span style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:0.5,marginRight:2}}>Período</span>
+            <span style={{fontSize:10,color:"var(--muted)",textTransform: "none",letterSpacing:0.5,marginRight:2}}>Período</span>
             <label style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"var(--muted2)"}}>
               Desde
               <input type="date" className="search" style={{width:140}} value={filtDesde}
@@ -464,7 +464,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
               </div>
               <div className="field"><label>Turno</label><select value={form.turno} onChange={e=>setForm({...form,turno:e.target.value})}><option>Mediodía</option><option>Noche</option></select></div>
 
-              <div style={{fontSize:10,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginTop:16,marginBottom:8}}>Formas de cobro</div>
+              <div style={{fontSize:10,color:"var(--muted)",textTransform: "none",letterSpacing:1,marginTop:16,marginBottom:8}}>Formas de cobro</div>
               {lineas.map((l,i)=>(
                 <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
                   <select className="search" style={{flex:1}} value={l.medio} onChange={e=>updateLinea(i,"medio",e.target.value)}>
@@ -477,7 +477,7 @@ export default function Ventas({ user, locales, localActivo }: VentasProps) {
               ))}
               <button className="btn btn-ghost btn-sm" style={{marginBottom:12}} onClick={()=>setLineas(prev=>[...prev,{medio:medioDefault,monto:""}])}>+ Agregar forma de cobro</button>
 
-              <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid var(--bd)",fontSize:12}}>
+              <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop: "0.5px solid var(--bd)",fontSize:12}}>
                 <span style={{color:"var(--muted2)"}}>Total</span>
                 <span style={{fontWeight:500,color:"var(--success)"}}>{fmt_$(lineas.reduce((s,l)=>s+(parseFloat(l.monto)||0),0))}</span>
               </div>

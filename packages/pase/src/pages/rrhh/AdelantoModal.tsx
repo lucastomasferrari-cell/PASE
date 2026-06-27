@@ -86,7 +86,7 @@ export function AdelantoModal({
           <div style={{
             display: "flex", alignItems: "center", gap: 8,
             padding: "8px 10px", background: "var(--s2)",
-            border: "1px solid var(--bd)", borderRadius: "var(--r)",
+            border: "0.5px solid var(--bd)", borderRadius: "var(--r)",
             fontSize: 13,
           }}>
             <span style={{ fontWeight: 500 }}>
@@ -97,7 +97,7 @@ export function AdelantoModal({
               onClick={() => setAdelForm({ ...adelForm, empleado_id: "" })}
               style={{
                 marginLeft: "auto", padding: "2px 8px", fontSize: 10,
-                background: "transparent", border: "1px solid var(--bd)",
+                background: "transparent", border: "0.5px solid var(--bd)",
                 borderRadius: "var(--r)", color: "var(--muted2)", cursor: "pointer",
               }}
               title="Elegir otro empleado"

@@ -207,7 +207,7 @@ export function Combobox({
                     padding: "6px 10px 4px",
                     fontSize: 9,
                     letterSpacing: 1,
-                    textTransform: "uppercase",
+                    textTransform: "none",
                     color: "var(--muted)",
                     background: "var(--s2)",
                     fontWeight:500,

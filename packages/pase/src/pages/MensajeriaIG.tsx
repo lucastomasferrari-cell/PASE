@@ -38,7 +38,7 @@ export default function MensajeriaIG(_props: Props) {
   return (
     <div style={{ display: "grid", placeItems: "center", minHeight: "60vh", padding: 24 }}>
       <div style={{
-        maxWidth: 460, background: "var(--s1)", border: "1px solid var(--bd)",
+        maxWidth: 460, background: "var(--s1)", border: "0.5px solid var(--bd)",
         borderRadius: 16, padding: 32, textAlign: "center",
       }}>
         <div style={{

@@ -58,7 +58,7 @@ export default function EERRSimulador({ base, mes, onClose }: Props) {
   return (
     <div style={card}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <div style={{ fontWeight: 600 }}>Simulador de escenario · {mes}</div>
+        <div style={{ fontWeight: 500 }}>Simulador de escenario · {mes}</div>
         <div style={{ display: "flex", gap: 8 }}>
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setInputs({})}>Reset</button>
           <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Salir del simulador</button>
@@ -133,7 +133,7 @@ function SubtotalRow({ label, real, sim, ventasReal, ventasSim, big }: {
   label: string; real: number; sim: number; ventasReal: number; ventasSim: number; big?: boolean;
 }) {
   return (
-    <tr style={{ borderTop: big ? "1.5px solid var(--pase-border)" : "1px solid var(--pase-border)", fontWeight: 600 }}>
+    <tr style={{ borderTop: big ? "1.5px solid var(--pase-border)" : "1px solid var(--pase-border)", fontWeight: 500 }}>
       <td style={td}>{label}</td>
       <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt_$(real)} <span style={muted}>{pctTxt(real, ventasReal)}</span></td>
       <td style={td}></td>
@@ -146,7 +146,7 @@ function Kpi({ label, value, sub, color }: { label: string; value: string; sub?:
   return (
     <div style={{ minWidth: 160 }}>
       <div style={{ fontSize: 11, color: "var(--pase-text-muted)" }}>{label}</div>
-      <div style={{ fontSize: 20, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: color ?? "var(--pase-text)" }}>{value}</div>
+      <div style={{ fontSize: 20, fontWeight: 500, fontVariantNumeric: "tabular-nums", color: color ?? "var(--pase-text)" }}>{value}</div>
       {sub && <div style={muted}>{sub}</div>}
     </div>
   );

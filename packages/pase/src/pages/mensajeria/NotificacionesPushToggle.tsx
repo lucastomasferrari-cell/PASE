@@ -23,7 +23,7 @@ export function NotificacionesPushToggle() {
     return (
       <div style={{
         fontSize: 11, color: "var(--muted2)", padding: "8px 12px",
-        background: "var(--s2)", border: "1px solid var(--bd)", borderRadius: 6,
+        background: "var(--s2)", border: "0.5px solid var(--bd)", borderRadius: 6,
       }}>
         ℹ️ Tu navegador no soporta notificaciones push. Probá Chrome/Firefox/Edge.
       </div>
@@ -59,7 +59,7 @@ export function NotificacionesPushToggle() {
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
-      padding: "10px 14px", background: "var(--s2)", border: "1px solid var(--bd)",
+      padding: "10px 14px", background: "var(--s2)", border: "0.5px solid var(--bd)",
       borderRadius: 8, marginBottom: 12, fontSize: 12,
     }}>
       <span style={{ fontWeight: 500 }}>

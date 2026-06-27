@@ -568,9 +568,9 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
             {plantillasFiltradas.map(p => {
               const estado = getEstadoPlantilla(p);
               return (
-                <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 14px", borderBottom: "1px solid var(--bd)" }}>
+                <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 14px", borderBottom: "0.5px solid var(--bd)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 15, height: 15, borderRadius: 4, border: "1px solid var(--bd2)", background: estado.pagado ? "var(--s3)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <div style={{ width: 15, height: 15, borderRadius: 4, border: "0.5px solid var(--bd2)", background: estado.pagado ? "var(--s3)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       {estado.pagado && <div style={{ width: 7, height: 7, borderRadius: 2, background: "var(--acc)" }} />}
                     </div>
                     <div>
@@ -586,7 +586,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                 </div>
               );
             })}
-            <div data-tour="gastos-plantillas" style={{ padding: "9px 14px", fontSize: 11, color: "var(--muted2)", cursor: "pointer", borderTop: "1px solid var(--bd)" }} onClick={() => setGestionarModal(true)}>
+            <div data-tour="gastos-plantillas" style={{ padding: "9px 14px", fontSize: 11, color: "var(--muted2)", cursor: "pointer", borderTop: "0.5px solid var(--bd)" }} onClick={() => setGestionarModal(true)}>
               + Gestionar recurrentes
             </div>
           </div>
@@ -679,7 +679,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                           background: "transparent",
                           fontWeight: 500,
                           whiteSpace: "nowrap",
-                          textTransform: "uppercase",
+                          textTransform: "none",
                           letterSpacing: 0.3,
                         }}
                       >{empPorGasto[g.id]}</span>
@@ -944,7 +944,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
                   margin: "0 14px 8px",
                   padding: "8px 12px",
                   background: "rgba(210,150,30,0.1)",
-                  border: "1px solid rgba(210,150,30,0.3)",
+                  border: "0.5px solid rgba(210,150,30,0.3)",
                   borderRadius: 6,
                   fontSize: 12,
                   color: "var(--warn, #d29922)",
@@ -1015,7 +1015,7 @@ export default function Gastos({ user, locales, localActivo }: GastosProps) {
             ))}</tbody>
           </table>
         )}
-        <div style={{ borderTop: "1px solid var(--bd)", paddingTop: 14 }}>
+        <div style={{ borderTop: "0.5px solid var(--bd)", paddingTop: 14 }}>
           <div className="section-title" style={{ marginBottom: 10 }}>Nueva plantilla</div>
           <div className="form2">
             <div className="field"><label>Nombre *</label><input value={plantForm.nombre} onChange={e => setPlantForm({ ...plantForm, nombre: e.target.value })} placeholder="Ej: Alquiler local" /></div>

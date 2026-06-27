@@ -420,7 +420,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
   const porCatOtros=Object.entries(otrosGastosArr.reduce<Record<string,number>>((acc,g)=>{const k=g.categoria||g.tipo;acc[k]=(acc[k]||0)+(g.monto||0);return acc},{})).map(([c,t])=>({c,t})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
 
   const ERow=({label,valor,color,big}: {label: string, valor: number, color: string, big?: boolean})=>(
-    <div className="eerr-row-summary" style={big?{borderTop:"1.5px solid var(--pase-border)",marginTop:2}:{}}>
+    <div className="eerr-row-summary" style={big?{borderTop: "0.5px solid var(--pase-border)",marginTop:2}:{}}>
       <span style={{fontSize:12,fontWeight:big?600:400,color:"var(--pase-text)"}}>{label}</span>
       <div style={{textAlign:"right"}}>
         <span style={{fontFamily:"'Inter',sans-serif",fontSize:13,fontWeight:500,color,fontVariantNumeric:"tabular-nums"}}>{fmt_$(valor)}</span>
@@ -648,7 +648,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           <input type="month" className="search" style={{width:160}} value={mes} onChange={e=>setMes(e.target.value)}/>
           {mesesComp.map((m, idx) => (
-            <div key={m} style={{display:"flex",alignItems:"center",gap:4,background:"var(--s2)",border:"1px solid var(--bd2)",borderRadius:"var(--r)",padding:"2px 4px"}}>
+            <div key={m} style={{display:"flex",alignItems:"center",gap:4,background:"var(--s2)",border: "0.5px solid var(--bd2)",borderRadius:"var(--r)",padding:"2px 4px"}}>
               <span style={{fontSize:10,color:"var(--muted2)",marginLeft:4}}>vs</span>
               <input type="month" className="search" style={{width:130,border:"none",background:"transparent"}} value={m} onChange={e=>cambiarMesComp(idx, e.target.value)}/>
               <button type="button" onClick={()=>quitarMesComp(m)} style={{background:"transparent",border:"none",color:"var(--muted2)",cursor:"pointer",fontSize:14,padding:"0 4px"}} aria-label="Quitar mes">✕</button>
@@ -771,7 +771,7 @@ export default function EERR({ user, localActivo }: EERRProps) {
               {porMedio.length===0?<div className="empty">Sin ventas este mes</div>:(
                 <div>
                   {porMedio.map(x=><div key={x.m} className="eerr-row-summary"><span style={{fontSize:12,color:"var(--pase-text)"}}>{x.m}</span><div style={{textAlign:"right"}}><span style={{fontFamily:"'Inter',sans-serif",fontSize:13,fontWeight:500,color:"var(--pase-text)",fontVariantNumeric:"tabular-nums"}}>{fmt_$(x.t)}</span><span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>{pct(x.t)}</span></div></div>)}
-                  <div className="eerr-row-summary" style={{borderTop:"1.5px solid var(--pase-border)",marginTop:2}}><span style={{fontSize:12,fontWeight:600,color:"var(--pase-text)"}}>TOTAL VENTAS</span><div style={{textAlign:"right"}}><span style={{fontFamily:"'Inter',sans-serif",fontSize:13,fontWeight:500,color:"var(--success)",fontVariantNumeric:"tabular-nums"}}>{fmt_$(totalVentas)}</span><span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>100.0%</span></div></div>
+                  <div className="eerr-row-summary" style={{borderTop: "0.5px solid var(--pase-border)",marginTop:2}}><span style={{fontSize:12,fontWeight: 500,color:"var(--pase-text)"}}>TOTAL VENTAS</span><div style={{textAlign:"right"}}><span style={{fontFamily:"'Inter',sans-serif",fontSize:13,fontWeight:500,color:"var(--success)",fontVariantNumeric:"tabular-nums"}}>{fmt_$(totalVentas)}</span><span style={{fontSize:10,color:"var(--muted)",marginLeft:6}}>100.0%</span></div></div>
                 </div>
               )}
             </div>

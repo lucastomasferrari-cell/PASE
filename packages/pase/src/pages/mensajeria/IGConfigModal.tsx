@@ -182,7 +182,7 @@ export function IGConfigModal({ isOpen, onClose }: Props) {
                     onChange={e => setSeleccionada(e.target.value)}
                     style={{
                       marginTop: 4, padding: "6px 10px", background: "var(--bg)",
-                      border: "1px solid var(--bd)", borderRadius: 6, fontSize: 14,
+                      border: "0.5px solid var(--bd)", borderRadius: 6, fontSize: 14,
                       fontWeight: 500, color: "var(--text)", cursor: "pointer",
                     }}
                   >
@@ -213,7 +213,7 @@ export function IGConfigModal({ isOpen, onClose }: Props) {
           {cuentas.length > 1 && (
             <div style={{
               padding: "8px 12px", marginBottom: 12, fontSize: 11, color: "var(--muted2)",
-              background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.15)",
+              background: "rgba(59,130,246,0.06)", border: "0.5px solid rgba(59,130,246,0.15)",
               borderRadius: 6, lineHeight: 1.5,
             }}>
               💡 Cada cuenta tiene su propio prompt, modelo y ajustes. Cambiando la cuenta arriba
@@ -250,7 +250,7 @@ export function IGConfigModal({ isOpen, onClose }: Props) {
                   fontSize: 13,
                   fontFamily: "ui-monospace, 'Courier New', monospace",
                   background: "var(--s2)",
-                  border: "1px solid var(--bd)",
+                  border: "0.5px solid var(--bd)",
                   borderRadius: 6,
                   resize: "vertical",
                   color: "var(--text)",
@@ -277,7 +277,7 @@ export function IGConfigModal({ isOpen, onClose }: Props) {
                 <select
                   value={config.modelo}
                   onChange={e => setConfig({ ...config, modelo: e.target.value })}
-                  style={{ width: "100%", padding: 10, background: "var(--s2)", border: "1px solid var(--bd)", borderRadius: 6, fontSize: 13, color: "var(--text)" }}
+                  style={{ width: "100%", padding: 10, background: "var(--s2)", border: "0.5px solid var(--bd)", borderRadius: 6, fontSize: 13, color: "var(--text)" }}
                 >
                   {MODELOS_DISPONIBLES.map(m => (
                     <option key={m.id} value={m.id}>
@@ -328,7 +328,7 @@ export function IGConfigModal({ isOpen, onClose }: Props) {
               </div>
 
               <div style={{
-                padding: 10, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)",
+                padding: 10, background: "rgba(245,158,11,0.08)", border: "0.5px solid rgba(245,158,11,0.25)",
                 borderRadius: 6, fontSize: 11, color: "var(--text)",
               }}>
                 ℹ️ Estos cambios se aplican <strong>al próximo mensaje</strong> que reciba el bot.

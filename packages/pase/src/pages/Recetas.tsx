@@ -483,7 +483,7 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
           marginBottom: 12,
           padding: "10px 14px",
           background: "rgba(212,175,55,0.08)",
-          border: "1px solid rgba(212,175,55,0.3)",
+          border: "0.5px solid rgba(212,175,55,0.3)",
           borderRadius: 6,
           fontSize: 12,
           color: "var(--muted2)",
@@ -776,7 +776,7 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
           {/* Crear item / sub-receta nuevo desde PASE (todo el catálogo en PASE) */}
           {puedeEditar && (
             <div style={{ padding: 10, background: "var(--s2)", borderRadius: 6, display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ fontSize: 11, fontWeight: 600 }}>Crear nuevo en PASE</div>
+              <div style={{ fontSize: 11, fontWeight: 500 }}>Crear nuevo en PASE</div>
               <div style={{ display: "flex", gap: 6 }}>
                 <input
                   type="text"
@@ -806,7 +806,7 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
               Todos los items ya tienen receta cargada.
             </div>
           ) : (
-            <div style={{ maxHeight: 400, overflowY: "auto", border: "1px solid var(--bd)", borderRadius: 6 }}>
+            <div style={{ maxHeight: 400, overflowY: "auto", border: "0.5px solid var(--bd)", borderRadius: 6 }}>
               {itemsSinReceta.map(it => (
                 <button
                   key={it.id}
@@ -823,7 +823,7 @@ export default function Recetas({ user, embedded = false }: RecetasProps) {
                     padding: "10px 12px",
                     background: "transparent",
                     border: "none",
-                    borderBottom: "1px solid var(--bd)",
+                    borderBottom: "0.5px solid var(--bd)",
                     cursor: "pointer",
                     textAlign: "left",
                     color: "var(--text)",
@@ -855,8 +855,8 @@ function KpiBlock({ label, value, highlight, tone }: { label: string; value: str
               : "var(--text)";
   return (
     <div>
-      <div style={{ fontSize: 10, textTransform: "uppercase", color: "var(--muted2)", letterSpacing: 0.5 }}>{label}</div>
-      <div className="mono" style={{ fontSize: 16, fontWeight: 600, color, marginTop: 2 }}>{value}</div>
+      <div style={{ fontSize: 10, textTransform: "none", color: "var(--muted2)", letterSpacing: 0.5 }}>{label}</div>
+      <div className="mono" style={{ fontSize: 16, fontWeight: 500, color, marginTop: 2 }}>{value}</div>
     </div>
   );
 }

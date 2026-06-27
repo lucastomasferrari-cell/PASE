@@ -25,12 +25,12 @@ export default function Ayuda() {
         {PREGUNTAS_CLAVE.map((p, i) => {
           const open = abierta === i;
           return (
-            <div key={i} style={{ border: "1px solid var(--bd)", borderRadius: 8, background: "var(--s2)", overflow: "hidden" }}>
+            <div key={i} style={{ border: "0.5px solid var(--bd)", borderRadius: 8, background: "var(--s2)", overflow: "hidden" }}>
               <button
                 onClick={() => setAbierta(open ? null : i)}
                 style={{
                   width: "100%", textAlign: "left", padding: "12px 14px", background: "transparent",
-                  border: "none", color: "var(--text)", fontSize: 13.5, fontWeight: 600, cursor: "pointer",
+                  border: "none", color: "var(--text)", fontSize: 13.5, fontWeight: 500, cursor: "pointer",
                   display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10,
                 }}
               >
@@ -42,7 +42,7 @@ export default function Ayuda() {
                   <p style={{ margin: "0 0 10px" }}>{p.a}</p>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{
-                      fontSize: 11, fontWeight: 600, color: "var(--acc)", background: "rgba(96,165,250,0.12)",
+                      fontSize: 11, fontWeight: 500, color: "var(--acc)", background: "rgba(96,165,250,0.12)",
                       borderRadius: 6, padding: "2px 8px",
                     }}>{p.modulo}</span>
                     {p.ruta && (
@@ -65,12 +65,12 @@ export default function Ayuda() {
       }}>
         {MODULOS_AYUDA.map((m) => (
           <div key={m.titulo} style={{
-            border: "1px solid var(--bd)", borderRadius: 8, background: "var(--s2)", padding: "12px 14px",
+            border: "0.5px solid var(--bd)", borderRadius: 8, background: "var(--s2)", padding: "12px 14px",
             display: "flex", flexDirection: "column", gap: 6,
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {m.icon && <span style={{ fontSize: 16 }}>{m.icon}</span>}
-              <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>{m.titulo}</span>
+              <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text)" }}>{m.titulo}</span>
             </div>
             <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: "var(--muted2)" }}>{m.paraQue}</p>
             {m.ruta && (

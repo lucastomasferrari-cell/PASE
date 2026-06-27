@@ -587,7 +587,7 @@ function GroupTitle({ children, style, info }: { children: React.ReactNode; styl
         fontSize: "var(--pase-fs-xs)",
         fontWeight: 500,
         color: "var(--pase-text-muted)",
-        textTransform: "uppercase",
+        textTransform: "none",
         letterSpacing: "var(--pase-ls-overline)",
       }}>
         {children}

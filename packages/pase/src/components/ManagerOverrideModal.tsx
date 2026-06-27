@@ -197,7 +197,7 @@ export function ManagerOverrideModal({
 
           {/* Tabs solo cuando estamos en form */}
           {estado.tipo === "form" && (
-            <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: "1px solid var(--pase-border)" }}>
+            <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: "0.5px solid var(--pase-border)" }}>
               <TabBtn active={tab === "solicitar"} onClick={() => setTab("solicitar")}>
                 📲 Pedirle al dueño
               </TabBtn>

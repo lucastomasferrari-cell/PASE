@@ -338,7 +338,7 @@ export function SoporteWidget({ user }: Props) {
             height: 560,
             maxHeight: "calc(100vh - 110px)",
             background: "var(--bg)",
-            border: "1px solid var(--bd)",
+            border: "0.5px solid var(--bd)",
             borderRadius: "var(--r)",
             boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
             display: "flex",
@@ -351,7 +351,7 @@ export function SoporteWidget({ user }: Props) {
           <div
             style={{
               padding: "12px 14px",
-              borderBottom: "1px solid var(--bd)",
+              borderBottom: "0.5px solid var(--bd)",
               display: "flex",
               alignItems: "center",
               gap: 8,
@@ -368,7 +368,7 @@ export function SoporteWidget({ user }: Props) {
                 onClick={reset}
                 style={{
                   background: "transparent",
-                  border: "1px solid var(--bd)",
+                  border: "0.5px solid var(--bd)",
                   borderRadius: "var(--r)",
                   padding: "2px 8px",
                   fontSize: 10,
@@ -406,7 +406,7 @@ export function SoporteWidget({ user }: Props) {
             {msgs.length === 0 && (
               <div style={{ color: "var(--muted2)", fontSize: 11 }}>
                 {tienePermiso(user, "diagnostico_ia") && (
-                  <div style={{ marginBottom: 8, padding: "6px 8px", borderRadius: 6, border: "1px solid rgba(59,130,246,0.3)", background: "rgba(59,130,246,0.08)" }}>
+                  <div style={{ marginBottom: 8, padding: "6px 8px", borderRadius: 6, border: "0.5px solid rgba(59,130,246,0.3)", background: "rgba(59,130,246,0.08)" }}>
                     🔍 <strong>Modo diagnóstico activo</strong> — además de responder dudas, puedo mirar tus datos (solo lectura) para encontrar gastos, movimientos, saldos o facturas. Ej: <em>"cargué un gasto de ~$50.000 en tal local y no lo encuentro"</em>.
                   </div>
                 )}
@@ -424,7 +424,7 @@ export function SoporteWidget({ user }: Props) {
                   padding: "8px 10px",
                   borderRadius: "var(--r)",
                   background: m.role === "user" ? "var(--acc-soft, rgba(90, 143, 168, 0.15))" : "var(--s2)",
-                  border: "1px solid var(--bd)",
+                  border: "0.5px solid var(--bd)",
                   whiteSpace: "pre-wrap",
                   lineHeight: 1.4,
                 }}
@@ -449,7 +449,7 @@ export function SoporteWidget({ user }: Props) {
                 style={{
                   padding: 8,
                   background: "rgba(248,81,73,0.1)",
-                  border: "1px solid rgba(248,81,73,0.3)",
+                  border: "0.5px solid rgba(248,81,73,0.3)",
                   borderRadius: "var(--r)",
                   fontSize: 11,
                   color: "var(--danger)",
@@ -463,7 +463,7 @@ export function SoporteWidget({ user }: Props) {
           {/* Footer — input + acciones + adjunto */}
           <div
             style={{
-              borderTop: "1px solid var(--bd)",
+              borderTop: "0.5px solid var(--bd)",
               padding: 10,
               background: dragOver ? "rgba(90,143,168,0.1)" : undefined,
               transition: "background 120ms",
@@ -477,7 +477,7 @@ export function SoporteWidget({ user }: Props) {
               <div style={{
                 display: "flex", alignItems: "center", gap: 8,
                 padding: 6, marginBottom: 6,
-                background: "var(--s2)", border: "1px solid var(--bd)",
+                background: "var(--s2)", border: "0.5px solid var(--bd)",
                 borderRadius: "var(--r)",
               }}>
                 <img
@@ -485,7 +485,7 @@ export function SoporteWidget({ user }: Props) {
                   alt="Screenshot adjunto"
                   style={{
                     width: 48, height: 48, objectFit: "cover",
-                    borderRadius: 4, border: "1px solid var(--bd)",
+                    borderRadius: 4, border: "0.5px solid var(--bd)",
                   }}
                 />
                 <div style={{ flex: 1, fontSize: 11, color: "var(--muted2)" }}>
@@ -525,7 +525,7 @@ export function SoporteWidget({ user }: Props) {
                 resize: "none",
                 padding: "6px 8px",
                 background: "var(--s2)",
-                border: "1px solid var(--bd)",
+                border: "0.5px solid var(--bd)",
                 borderRadius: "var(--r)",
                 fontSize: 12,
                 color: "var(--txt)",
@@ -551,7 +551,7 @@ export function SoporteWidget({ user }: Props) {
                 title="Adjuntar imagen (también podés pegar con Ctrl+V o arrastrar)"
                 style={{
                   background: "var(--s2)",
-                  border: "1px solid var(--bd)",
+                  border: "0.5px solid var(--bd)",
                   borderRadius: "var(--r)",
                   padding: "4px 8px",
                   fontSize: 14,

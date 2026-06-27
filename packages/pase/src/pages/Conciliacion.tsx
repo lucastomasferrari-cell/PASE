@@ -259,7 +259,7 @@ export default function Conciliacion({ user, embedded = false }: ConciliacionPro
 
       {/* Banner explicativo */}
       {rows.length === 0 && !loading && (
-        <div style={{ marginBottom: 12, padding: "12px 14px", background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 6, fontSize: 12, color: "var(--muted2)" }}>
+        <div style={{ marginBottom: 12, padding: "12px 14px", background: "rgba(34,197,94,0.08)", border: "0.5px solid rgba(34,197,94,0.3)", borderRadius: 6, fontSize: 12, color: "var(--muted2)" }}>
           <strong style={{ color: "var(--success)" }}>✓ Bandeja vacía.</strong> No hay productos de mercadería pendientes de vincular. Cuando cargues facturas (a mano o por el Lector IA), los productos nuevos van a aparecer acá para que los mapees una vez.
         </div>
       )}
@@ -323,9 +323,9 @@ export default function Conciliacion({ user, embedded = false }: ConciliacionPro
         ) : (
           <div style={{ display: "flex", flexDirection: "column" }}>
             {porFactura.map(f => (
-              <div key={f.factura_id} style={{ borderBottom: "1px solid var(--bd)", padding: "10px 14px" }}>
+              <div key={f.factura_id} style={{ borderBottom: "0.5px solid var(--bd)", padding: "10px 14px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600 }}>
+                  <div style={{ fontSize: 12, fontWeight: 500 }}>
                     📄 {f.proveedor || "Sin proveedor"} · {fmtFecha(f.fecha)}
                     <span style={{ color: "var(--warn)", fontWeight: 400, marginLeft: 8 }}>{f.items.length} sin vincular</span>
                   </div>

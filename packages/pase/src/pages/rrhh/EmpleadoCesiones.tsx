@@ -90,13 +90,13 @@ export function EmpleadoCesiones({ empleadoId, localPrincipalId: _localPrincipal
 
   return (
     <div style={{
-      border: "1px solid var(--bd)",
+      border: "0.5px solid var(--bd)",
       borderRadius: "var(--r)",
       padding: 12,
       marginTop: 12,
       background: "var(--s2)",
     }}>
-      <div style={{ fontSize: 10, letterSpacing: 2, textTransform: "uppercase", color: "var(--muted)", marginBottom: 8 }}>
+      <div style={{ fontSize: 10, letterSpacing: 2, textTransform: "none", color: "var(--muted)", marginBottom: 8 }}>
         Locales asignados
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>

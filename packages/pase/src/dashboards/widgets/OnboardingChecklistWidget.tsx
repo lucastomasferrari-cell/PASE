@@ -218,7 +218,7 @@ export function OnboardingChecklistWidget({ ctx }: { ctx: WidgetContext }) {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontWeight: 600,
+                  fontWeight: 500,
                   fontSize: "var(--pase-fs-xs)",
                   marginTop: 1,
                 }}

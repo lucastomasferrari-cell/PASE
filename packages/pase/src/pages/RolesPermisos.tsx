@@ -192,7 +192,7 @@ export default function RolesPermisos({ user }: Props) {
 
         {loading ? <div className="loading">Cargando…</div> : (
           <>
-            <h2 style={{fontSize:13,fontWeight:500,marginTop:0,marginBottom:12,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>
+            <h2 style={{fontSize:13,fontWeight:500,marginTop:0,marginBottom:12,color:"var(--muted)",textTransform: "none",letterSpacing:1}}>
               Roles del sistema ({rolesSistema.length})
             </h2>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(280px, 1fr))",gap:12,marginBottom:32}}>
@@ -201,7 +201,7 @@ export default function RolesPermisos({ user }: Props) {
               ))}
             </div>
 
-            <h2 style={{fontSize:13,fontWeight:500,marginBottom:12,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1}}>
+            <h2 style={{fontSize:13,fontWeight:500,marginBottom:12,color:"var(--muted)",textTransform: "none",letterSpacing:1}}>
               Roles custom de tu cuenta ({rolesCustom.length})
             </h2>
             {rolesCustom.length === 0 ? (
@@ -385,7 +385,7 @@ function ModalEditarRol({ rol, onClose, onSaved, onDeleted, showError }: { rol: 
           placeholder="Para qué sirve este rol" />
       </div>
 
-      <div style={{fontSize:11,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>
+      <div style={{fontSize:11,color:"var(--muted)",textTransform: "none",letterSpacing:1,marginBottom:8}}>
         Permisos ({permisos.size} marcados)
       </div>
 

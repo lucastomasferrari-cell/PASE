@@ -135,7 +135,7 @@ export default function SettingsDashboards({ tenantId }: { tenantId: string }) {
         {/* Lista de usuarios */}
         <aside style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <div style={{
-            textTransform: "uppercase",
+            textTransform: "none",
             fontWeight: 500,
             color: "var(--pase-text-muted)",
             marginBottom: 8,
@@ -269,7 +269,7 @@ export default function SettingsDashboards({ tenantId }: { tenantId: string }) {
                         </div>
                         <span style={{
                           color: "var(--pase-text-muted)",
-                          textTransform: "uppercase",
+                          textTransform: "none",
                           fontWeight: 500,
                           flexShrink: 0,
                           fontSize: "var(--pase-fs-xs)",

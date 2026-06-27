@@ -161,7 +161,7 @@ export default function CodigosManager({ user }: Props) {
       {/* Tabs */}
       <div style={{
         display: "flex", gap: 4, marginBottom: 18,
-        borderBottom: "1px solid var(--pase-border)",
+        borderBottom: "0.5px solid var(--pase-border)",
       }}>
         <TabBtn active={tab === "solicitudes"} onClick={() => setTab("solicitudes")}>
           📲 Solicitudes
@@ -243,7 +243,7 @@ function CodigoTab({ actual, usos, usuarios, err, regenerating, showConfirmRegen
           <div style={{
             fontSize: "var(--pase-fs-xs)",
             color: "var(--pase-text-muted)",
-            textTransform: "uppercase",
+            textTransform: "none",
             letterSpacing: "var(--pase-ls-overline)",
             marginBottom: 12,
           }}>
@@ -251,7 +251,7 @@ function CodigoTab({ actual, usos, usuarios, err, regenerating, showConfirmRegen
           </div>
           <div style={{
             fontSize: 56,
-            fontWeight: 600,
+            fontWeight: 500,
             letterSpacing: "0.15em",
             fontVariantNumeric: "tabular-nums",
             fontFamily: "var(--pase-font-mono, monospace)",
@@ -338,7 +338,7 @@ function CodigoTab({ actual, usos, usuarios, err, regenerating, showConfirmRegen
           gap: 6,
           fontSize: "var(--pase-fs-xs)",
           color: "var(--pase-text-muted)",
-          textTransform: "uppercase",
+          textTransform: "none",
           letterSpacing: "var(--pase-ls-overline)",
           marginBottom: 12,
         }}>

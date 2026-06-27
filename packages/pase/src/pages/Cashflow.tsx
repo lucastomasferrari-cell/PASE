@@ -432,7 +432,7 @@ function PuenteView({ lid, periodoMes, refreshKey }: { lid: number; periodoMes: 
         ] as const).map(([k, v]) => (
           <div key={k} style={rowBetween}><span>{k}</span><span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(v)}</span></div>
         ))}
-        <div style={{ ...rowBetween, fontWeight: 600, borderTop: "1px solid var(--pase-border)", marginTop: 4, paddingTop: 8 }}>
+        <div style={{ ...rowBetween, fontWeight: 500, borderTop: "0.5px solid var(--pase-border)", marginTop: 4, paddingTop: 8 }}>
           <span>Utilidad neta devengada</span><span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(d.utilidad_neta)}</span>
         </div>
       </Card>
@@ -445,7 +445,7 @@ function PuenteView({ lid, periodoMes, refreshKey }: { lid: number; periodoMes: 
             <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(l.monto)}</span>
           </div>
         ))}
-        <div style={{ ...rowBetween, fontWeight: 600, borderTop: "1px solid var(--pase-border)", marginTop: 4, paddingTop: 8 }}>
+        <div style={{ ...rowBetween, fontWeight: 500, borderTop: "0.5px solid var(--pase-border)", marginTop: 4, paddingTop: 8 }}>
           <span>= Cash real generado</span>
           <span style={{ fontVariantNumeric: "tabular-nums", color: puente.cash_generado >= 0 ? "var(--pase-celeste)" : "#B91C1C" }}>{fmt_$(puente.cash_generado)}</span>
         </div>
@@ -509,7 +509,7 @@ function FlujoMes({ saldoIni, saldoFin, ingresos, egresos }: {
           </span>
         </div>
       ))}
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, paddingTop: 8, borderTop: "1px solid var(--pase-border)", fontWeight: 600 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, paddingTop: 8, borderTop: "0.5px solid var(--pase-border)", fontWeight: 500 }}>
         <span>Saldo final (líquido)</span>
         <b style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(saldoFin)}</b>
       </div>

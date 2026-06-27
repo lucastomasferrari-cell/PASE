@@ -336,7 +336,7 @@ export default function MateriasPrimas({ user, embedded = false }: MateriasPrima
           marginBottom: 12,
           padding: "10px 14px",
           background: "rgba(110, 181, 255, 0.08)",
-          border: "1px solid rgba(110, 181, 255, 0.3)",
+          border: "0.5px solid rgba(110, 181, 255, 0.3)",
           borderRadius: 6,
           fontSize: 12,
           color: "var(--muted2)",

@@ -359,7 +359,7 @@ export default function Blindaje({ user, locales, localActivo }: BlindajeProps) 
             <div className="field"><label>Archivo (opcional si ya tenés uno cargado)</label>
               <input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                 onChange={e => setArchivo(e.target.files?.[0] || null)}
-                style={{ background: "var(--bg)", border: "1px solid var(--bd)", padding: 8, borderRadius: "var(--r)", width: "100%", color: "var(--txt)", fontFamily: "'DM Mono',monospace", fontSize: 12 }} />
+                style={{ background: "var(--bg)", border: "0.5px solid var(--bd)", padding: 8, borderRadius: "var(--r)", width: "100%", color: "var(--txt)", fontFamily: "'DM Mono',monospace", fontSize: 12 }} />
               {docModal.doc?.archivo_url && !archivo && (
                 <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 4 }}>Ya hay un archivo cargado. Subí uno nuevo para reemplazarlo.</div>
               )}

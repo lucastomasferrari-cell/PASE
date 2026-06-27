@@ -179,8 +179,8 @@ export function TabSueldosBase({ user: _user, esEnc, locsDisp, localActivo }: Pr
           {/* Header */}
           <div style={{
             display: "grid", gridTemplateColumns: "34px 1fr 130px 150px 150px",
-            gap: 10, padding: "8px 14px", borderBottom: "1px solid var(--bd)",
-            fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600,
+            gap: 10, padding: "8px 14px", borderBottom: "0.5px solid var(--bd)",
+            fontSize: 10, color: "var(--muted)", textTransform: "none", letterSpacing: 0.5, fontWeight: 500,
             alignItems: "center",
           }}>
             <input type="checkbox" checked={allSelected} onChange={toggleAll} title="Seleccionar todos" />
@@ -197,7 +197,7 @@ export function TabSueldosBase({ user: _user, esEnc, locsDisp, localActivo }: Pr
             return (
               <div key={e.id} style={{
                 display: "grid", gridTemplateColumns: "34px 1fr 130px 150px 150px",
-                gap: 10, padding: "8px 14px", borderTop: "1px solid var(--bd)", alignItems: "center",
+                gap: 10, padding: "8px 14px", borderTop: "0.5px solid var(--bd)", alignItems: "center",
                 background: selected.has(e.id) ? "rgba(34,127,255,0.05)" : "transparent",
               }}>
                 <input type="checkbox" checked={selected.has(e.id)} onChange={() => toggleSel(e.id)} />
@@ -237,7 +237,7 @@ export function TabSueldosBase({ user: _user, esEnc, locsDisp, localActivo }: Pr
               {" → "}
               <strong style={{ color: difMasa !== 0 ? "var(--acc)" : "var(--text)" }}>{fmt_$(masaNueva)}</strong>
               {difMasa !== 0 && (
-                <span style={{ marginLeft: 8, color: difMasa > 0 ? "var(--success)" : "var(--danger)", fontWeight: 600 }}>
+                <span style={{ marginLeft: 8, color: difMasa > 0 ? "var(--success)" : "var(--danger)", fontWeight: 500 }}>
                   ({difMasa > 0 ? "+" : "−"}{fmt_$(Math.abs(difMasa))})
                 </span>
               )}
@@ -277,17 +277,17 @@ export function TabSueldosBase({ user: _user, esEnc, locsDisp, localActivo }: Pr
           <span style={{ color: "var(--muted2)" }}>Masa salarial</span>
           <span>
             {fmt_$(masaActual)} → <strong style={{ color: "var(--acc)" }}>{fmt_$(masaNueva)}</strong>
-            <span style={{ marginLeft: 6, color: difMasa > 0 ? "var(--success)" : "var(--danger)", fontWeight: 600 }}>
+            <span style={{ marginLeft: 6, color: difMasa > 0 ? "var(--success)" : "var(--danger)", fontWeight: 500 }}>
               ({difMasa > 0 ? "+" : "−"}{fmt_$(Math.abs(difMasa))})
             </span>
           </span>
         </div>
 
-        <div style={{ maxHeight: 280, overflowY: "auto", border: "1px solid var(--bd)", borderRadius: 8, marginBottom: 12 }}>
+        <div style={{ maxHeight: 280, overflowY: "auto", border: "0.5px solid var(--bd)", borderRadius: 8, marginBottom: 12 }}>
           {cambios.map(c => (
             <div key={c.emp.id} style={{
               display: "flex", justifyContent: "space-between", alignItems: "center",
-              padding: "6px 10px", borderBottom: "1px solid var(--bd)", fontSize: 12,
+              padding: "6px 10px", borderBottom: "0.5px solid var(--bd)", fontSize: 12,
             }}>
               <span>{c.emp.apellido}, {c.emp.nombre}</span>
               <span style={{ fontVariantNumeric: "tabular-nums" }}>

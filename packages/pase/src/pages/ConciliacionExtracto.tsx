@@ -1391,7 +1391,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
             <div>
               <div style={{ fontSize: 13, color: "var(--muted2)" }}>📄 {archivoNombre}</div>
-              <div style={{ fontSize: 22, fontWeight: 600, marginTop: 4 }}>
+              <div style={{ fontSize: 22, fontWeight: 500, marginTop: 4 }}>
                 {egresosExtracto.length} egresos a conciliar
               </div>
               <div style={{ fontSize: 12, color: "var(--muted2)", marginTop: 2 }}>
@@ -1495,7 +1495,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                         {bloque.proveedor}
                       </strong>
                       <span style={{
-                        fontSize: 13, fontWeight: 600, fontVariantNumeric: "tabular-nums",
+                        fontSize: 13, fontWeight: 500, fontVariantNumeric: "tabular-nums",
                         color: Number(bloque.dif) < 0 ? "var(--danger)" : "var(--warn)",
                       }}>
                         {Number(bloque.dif) < 0
@@ -1560,7 +1560,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                               const transf = movAtransferencia.get(m.id);
                               const difMonto = transf ? Math.abs(transf.monto) - Math.abs(m.importe) : 0;
                               return (
-                                <div key={`ctx-pase-${m.id}`} style={{ padding: "4px 0 4px 4px", opacity: 0.7, fontSize: 11, borderBottom: "1px solid var(--bd)" }}>
+                                <div key={`ctx-pase-${m.id}`} style={{ padding: "4px 0 4px 4px", opacity: 0.7, fontSize: 11, borderBottom: "0.5px solid var(--bd)" }}>
                                   <div style={{ display: "flex", gap: 6 }}>
                                     <span style={{ color: "var(--success)", flexShrink: 0 }}>✓</span>
                                     <span style={{ flex: 1 }}><b>PASE</b> · {fmt_d(m.fecha)} · {(m.detalle ?? "").slice(0, 48)}</span>
@@ -1591,7 +1591,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                             <span>Total completo extracto: <b>{fmt_$(bloque.total_completo_ext)}</b></span>
                             <span>Total completo PASE: <b>{fmt_$(bloque.total_completo_pase)}</b></span>
                             <span style={{
-                              fontWeight: 600,
+                              fontWeight: 500,
                               color: Math.abs(Number(bloque.total_completo_dif)) <= 2 ? "var(--success)" : "var(--danger)",
                             }}>
                               Dif total: {fmt_$(bloque.total_completo_dif)}
@@ -1601,7 +1601,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                         {/* Facturas pendientes del proveedor */}
                         {(bloque.facturas_pendientes ?? []).length > 0 && (
                           <>
-                            <div style={{ color: "#3b82f6", margin: "8px 0 2px", fontWeight: 600 }}>
+                            <div style={{ color: "#3b82f6", margin: "8px 0 2px", fontWeight: 500 }}>
                               💡 Facturas de este proveedor SIN marcar como pagadas:
                             </div>
                             {(bloque.facturas_pendientes ?? []).map(p => (
@@ -1952,7 +1952,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                   {cruce.extracto.filter(f => f.estado === "ya_conciliada").map(f => (
                     <div key={f.idx} style={{
                       display: "flex", justifyContent: "space-between",
-                      padding: "5px 0", borderBottom: "1px solid var(--bd)", opacity: 0.7,
+                      padding: "5px 0", borderBottom: "0.5px solid var(--bd)", opacity: 0.7,
                     }}>
                       <span>{fmt_d(f.fecha)} · {f.descripcion.slice(0, 55)}</span>
                       <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(f.monto)}</span>
@@ -2031,7 +2031,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                 <div style={{ maxHeight: 300, overflowY: "auto", fontSize: 12, marginTop: 6 }}>
                   {cruce.alertas!.map((a, i) => (
                     <div key={i} style={{
-                      padding: "8px 0", borderBottom: "1px solid var(--bd)",
+                      padding: "8px 0", borderBottom: "0.5px solid var(--bd)",
                       display: "flex", flexDirection: "column", gap: 4,
                     }}>
                       <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
@@ -2083,7 +2083,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                   {cruce.sobrantes.filter(s => s.bloque_prov && !resueltos[`sob:${s.id}`]).map(s => (
                     <div key={s.id} style={{
                       display: "flex", justifyContent: "space-between",
-                      padding: "5px 0", borderBottom: "1px solid var(--bd)",
+                      padding: "5px 0", borderBottom: "0.5px solid var(--bd)",
                     }}>
                       <span>{fmt_d(s.fecha)} · {(s.detalle ?? "").slice(0, 55)} <em style={{ color: "var(--muted2)" }}>[{s.bloque_prov}]</em></span>
                       <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(s.importe)}</span>
@@ -2140,10 +2140,10 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                     const pago = fila.candidatos[0]; // verde individual = 1 pago matcheado
                     const difMonto = pago ? Math.abs(fila.monto) - Math.abs(pago.importe) : 0;
                     return (
-                      <div key={fila.idx} style={{ padding: "8px 0", borderBottom: "1px solid var(--bd)", fontSize: 12 }}>
+                      <div key={fila.idx} style={{ padding: "8px 0", borderBottom: "0.5px solid var(--bd)", fontSize: 12 }}>
                         <div style={{ display: "flex", justifyContent: "space-between" }}>
                           <span><strong>Banco</strong> · {fmt_d(fila.fecha)} · {fila.descripcion}</span>
-                          <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{fmt_$(fila.monto)}</span>
+                          <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmt_$(fila.monto)}</span>
                         </div>
                         {pago ? (
                           <div style={{ marginTop: 3, paddingLeft: 12, color: "var(--muted2)", display: "flex", justifyContent: "space-between" }}>
@@ -2179,11 +2179,11 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                     const combo = fila.combinaciones[0]!;
                     return (
                       <div key={fila.idx} style={{
-                        padding: "8px 0", borderBottom: "1px solid var(--bd)", fontSize: 12,
+                        padding: "8px 0", borderBottom: "0.5px solid var(--bd)", fontSize: 12,
                       }}>
                         <div style={{ display: "flex", justifyContent: "space-between" }}>
                           <span><strong>{fmt_d(fila.fecha)}</strong> · {fila.descripcion}</span>
-                          <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{fmt_$(fila.monto)}</span>
+                          <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmt_$(fila.monto)}</span>
                         </div>
                         <div style={{ marginTop: 4, paddingLeft: 12, color: "var(--muted2)" }}>
                           ↳ {combo.proveedor ?? "—"} · {combo.num_movs} facturas:
@@ -2299,11 +2299,11 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
             onChange={e => setBusquedaProv(e.target.value)}
             style={{
               width: "100%", padding: "8px 10px", fontSize: 13,
-              background: "var(--bg)", border: "1px solid var(--bd)",
+              background: "var(--bg)", border: "0.5px solid var(--bd)",
               color: "var(--text)", borderRadius: 6, marginBottom: 10,
             }}
           />
-          <div style={{ maxHeight: 340, overflowY: "auto", border: "1px solid var(--bd)", borderRadius: 6 }}>
+          <div style={{ maxHeight: 340, overflowY: "auto", border: "0.5px solid var(--bd)", borderRadius: 6 }}>
             {(() => {
               const q = busquedaProv.trim().toLowerCase();
               const filtrados = q.length === 0
@@ -2332,7 +2332,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                     setAsignarProvFila(null);
                     setBusquedaProv("");
                   }}
-                  style={{ width: "100%", textAlign: "left", padding: "8px 12px", borderRadius: 0, borderBottom: "1px solid var(--bd)" }}
+                  style={{ width: "100%", textAlign: "left", padding: "8px 12px", borderRadius: 0, borderBottom: "0.5px solid var(--bd)" }}
                 >
                   {p.nombre}
                 </button>
@@ -2368,7 +2368,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
               <select
                 value={loteTipo}
                 onChange={e => { setLoteTipo(e.target.value); setLoteCat(""); }}
-                style={{ width: "100%", padding: "8px 10px", fontSize: 13, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--text)", borderRadius: 6 }}
+                style={{ width: "100%", padding: "8px 10px", fontSize: 13, background: "var(--bg)", border: "0.5px solid var(--bd)", color: "var(--text)", borderRadius: 6 }}
               >
                 <option value="">Seleccioná…</option>
                 {tiposGasto.map(t => <option key={t} value={t}>{t}</option>)}
@@ -2380,7 +2380,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                 value={loteCat}
                 onChange={e => setLoteCat(e.target.value)}
                 disabled={!loteTipo}
-                style={{ width: "100%", padding: "8px 10px", fontSize: 13, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--text)", borderRadius: 6 }}
+                style={{ width: "100%", padding: "8px 10px", fontSize: 13, background: "var(--bg)", border: "0.5px solid var(--bd)", color: "var(--text)", borderRadius: 6 }}
               >
                 <option value="">{loteTipo ? "Seleccioná…" : "(elegí tipo primero)"}</option>
                 {catsDisponibles.map(c => <option key={c} value={c}>{c}</option>)}
@@ -2390,7 +2390,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
 
           <div style={{ marginTop: 12, maxHeight: 220, overflowY: "auto", fontSize: 11 }}>
             {filas.map(f => (
-              <div key={f.idx} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid var(--bd)" }}>
+              <div key={f.idx} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "0.5px solid var(--bd)" }}>
                 <span>{fmt_d(f.fecha)} · {f.descripcion.slice(0, 45)}</span>
                 <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt_$(f.monto)}</span>
               </div>
@@ -2451,7 +2451,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
               <select
                 value={crearTipo}
                 onChange={e => { setCrearTipo(e.target.value); setCrearCat(""); }}
-                style={{ width: "100%", padding: "8px 10px", fontSize: 13, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--text)", borderRadius: 6 }}
+                style={{ width: "100%", padding: "8px 10px", fontSize: 13, background: "var(--bg)", border: "0.5px solid var(--bd)", color: "var(--text)", borderRadius: 6 }}
               >
                 <option value="">Seleccioná…</option>
                 {tipos.map(t => <option key={t} value={t}>{t}</option>)}
@@ -2465,7 +2465,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                 value={crearCat}
                 onChange={e => setCrearCat(e.target.value)}
                 disabled={!crearTipo}
-                style={{ width: "100%", padding: "8px 10px", fontSize: 13, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--text)", borderRadius: 6 }}
+                style={{ width: "100%", padding: "8px 10px", fontSize: 13, background: "var(--bg)", border: "0.5px solid var(--bd)", color: "var(--text)", borderRadius: 6 }}
               >
                 <option value="">{crearTipo ? "Seleccioná…" : "(elegí tipo primero)"}</option>
                 {catsDisponibles.map(c => <option key={c} value={c}>{c}</option>)}
@@ -2508,7 +2508,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
               <select
                 value={crearTipo}
                 onChange={e => { setCrearTipo(e.target.value); setCrearCat(""); }}
-                style={{ width: "100%", padding: "8px 10px", fontSize: 13, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--text)", borderRadius: 6 }}
+                style={{ width: "100%", padding: "8px 10px", fontSize: 13, background: "var(--bg)", border: "0.5px solid var(--bd)", color: "var(--text)", borderRadius: 6 }}
               >
                 <option value="">Seleccioná…</option>
                 {tiposGasto.map(t => <option key={t} value={t}>{t}</option>)}
@@ -2520,7 +2520,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
                 value={crearCat}
                 onChange={e => setCrearCat(e.target.value)}
                 disabled={!crearTipo}
-                style={{ width: "100%", padding: "8px 10px", fontSize: 13, background: "var(--bg)", border: "1px solid var(--bd)", color: "var(--text)", borderRadius: 6 }}
+                style={{ width: "100%", padding: "8px 10px", fontSize: 13, background: "var(--bg)", border: "0.5px solid var(--bd)", color: "var(--text)", borderRadius: 6 }}
               >
                 <option value="">{crearTipo ? "Seleccioná…" : "(elegí tipo primero)"}</option>
                 {catsDisponibles.map(c => <option key={c} value={c}>{c}</option>)}
@@ -2560,7 +2560,7 @@ export default function ConciliacionExtracto({ user, locales, localActivo }: Con
             placeholder="ej: cargado por error, en realidad fue caja chica"
             style={{
               width: "100%", padding: "8px 10px", fontSize: 13,
-              background: "var(--bg)", border: "1px solid var(--bd)",
+              background: "var(--bg)", border: "0.5px solid var(--bd)",
               color: "var(--text)", borderRadius: 6, marginTop: 4,
             }}
             autoFocus
@@ -2595,8 +2595,8 @@ function Card({ children }: { children: React.ReactNode }) {
 function Kpi({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div style={{ textAlign: "center" }}>
-      <div style={{ fontSize: 11, color: "var(--muted2)", textTransform: "uppercase", letterSpacing: 0.4 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 600, color, marginTop: 4 }}>{value}</div>
+      <div style={{ fontSize: 11, color: "var(--muted2)", textTransform: "none", letterSpacing: 0.4 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 500, color, marginTop: 4 }}>{value}</div>
     </div>
   );
 }
@@ -2689,7 +2689,7 @@ function Historial({
               border: `1px solid ${m.cerrada ? "rgba(34,197,94,0.4)" : "rgba(239,68,68,0.3)"}`,
               textAlign: "center", fontSize: 10,
               color: m.cerrada ? "var(--success)" : "var(--danger)",
-              textTransform: "uppercase", letterSpacing: 0.3, fontWeight: 600,
+              textTransform: "none", letterSpacing: 0.3, fontWeight: 500,
             }}
           >
             {m.cerrada ? "✓" : "—"} {m.label}
@@ -2706,7 +2706,7 @@ function Historial({
           <div style={{ marginTop: 8, maxHeight: 280, overflowY: "auto", fontSize: 11 }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
-                <tr style={{ borderBottom: "1px solid var(--bd)", color: "var(--muted2)" }}>
+                <tr style={{ borderBottom: "0.5px solid var(--bd)", color: "var(--muted2)" }}>
                   <th style={{ textAlign: "left", padding: "5px 4px" }}>Período</th>
                   <th style={{ textAlign: "right", padding: "5px 4px" }}>Total</th>
                   <th style={{ textAlign: "right", padding: "5px 4px" }}>🟢</th>
@@ -2719,7 +2719,7 @@ function Historial({
               </thead>
               <tbody>
                 {corridas.map(c => (
-                  <tr key={c.id} style={{ borderBottom: "1px solid var(--bd)" }}>
+                  <tr key={c.id} style={{ borderBottom: "0.5px solid var(--bd)" }}>
                     <td style={{ padding: "5px 4px" }}>
                       {fmt_d(c.periodo_desde)} → {fmt_d(c.periodo_hasta)}
                     </td>
@@ -2786,7 +2786,7 @@ function FilaCard({
           <span style={{ color: "var(--muted2)" }}>{fmt_d(fecha)}</span>
           <span style={{ marginLeft: 10 }}>{descripcion}</span>
         </div>
-        <div style={{ fontSize: 15, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+        <div style={{ fontSize: 15, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
           {fmt_$(monto)}
         </div>
       </div>

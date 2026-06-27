@@ -106,7 +106,7 @@ export default function Tenants({ user }: TenantsProps) {
         )}
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, borderBottom: "1px solid var(--bd)" }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, borderBottom: "0.5px solid var(--bd)" }}>
         <button
           className={"btn " + (tab === "tenants" ? "btn-acc" : "btn-ghost")}
           onClick={() => setTab("tenants")}

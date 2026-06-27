@@ -243,7 +243,7 @@ export function EstadoCuentaDrawer({
                 gap: 12,
               }}>
                 <div>
-                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "var(--muted2)", fontWeight: 500, marginBottom: 2 }}>
+                  <div style={{ fontSize: 10, textTransform: "none", letterSpacing: 0.5, color: "var(--muted2)", fontWeight: 500, marginBottom: 2 }}>
                     {tieneSaldoFavor ? "💰 Saldo a favor (nos debe)" : "⚠ Saldo en contra (le debemos)"}
                   </div>
                   <div style={{ fontSize: 11, color: "var(--muted2)" }}>
@@ -252,7 +252,7 @@ export function EstadoCuentaDrawer({
                 </div>
                 <div style={{
                   fontSize: 18,
-                  fontWeight: 600,
+                  fontWeight: 500,
                   color: tieneSaldoFavor ? "var(--success)" : "var(--warn)",
                   fontVariantNumeric: "tabular-nums",
                 }}>

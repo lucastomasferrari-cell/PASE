@@ -637,7 +637,7 @@ Si la factura es simple (solo IVA 21%) y NO ves ninguna percepción/retención/e
                       Number(form.iibb_caba) > 0 || Number(form.iibb_ba) > 0 || Number(form.iibb_otros) > 0 ||
                       Number(form.perc_ganancias) > 0 || Number(form.retencion_suss) > 0;
                     return (
-                      <details open={tieneExtras} style={{ margin: "8px 0", padding: "6px 8px", border: "1px solid var(--bd)", borderRadius: "var(--r)" }}>
+                      <details open={tieneExtras} style={{ margin: "8px 0", padding: "6px 8px", border: "0.5px solid var(--bd)", borderRadius: "var(--r)" }}>
                         <summary style={{ cursor: "pointer", fontSize: 11, color: "var(--muted2)", fontWeight: 500 }}>
                           Discriminación fiscal {tieneExtras ? "✓ IA detectó" : "(opcional)"}
                         </summary>
@@ -655,7 +655,7 @@ Si la factura es simple (solo IVA 21%) y NO ves ninguna percepción/retención/e
                             <div key={k as string} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                               <span style={{fontSize:11,color:"var(--muted2)"}}>{l}</span>
                               <input type="number" step="0.01" value={form[k as keyof typeof form] as string | number} onChange={e=>setForm({...form,[k as string]:e.target.value})}
-                                style={{width:120,background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--txt)",padding:"3px 6px",fontFamily:"'DM Mono',monospace",fontSize:11,borderRadius:"var(--r)",textAlign:"right"}}/>
+                                style={{width:120,background:"var(--bg)",border: "0.5px solid var(--bd)",color:"var(--txt)",padding:"3px 6px",fontFamily:"'DM Mono',monospace",fontSize:11,borderRadius:"var(--r)",textAlign:"right"}}/>
                             </div>
                           ))}
                           {Number(form.iibb_otros) > 0 && (
@@ -663,7 +663,7 @@ Si la factura es simple (solo IVA 21%) y NO ves ninguna percepción/retención/e
                               <input type="text" placeholder="Jurisdicción del IIBB otra (Córdoba, Mendoza…)"
                                 value={form.iibb_otros_jurisdiccion}
                                 onChange={e=>setForm({...form,iibb_otros_jurisdiccion: e.target.value})}
-                                style={{width:"100%",background:"var(--bg)",border:"1px solid var(--bd)",color:"var(--txt)",padding:"3px 6px",fontSize:11,borderRadius:"var(--r)"}}/>
+                                style={{width:"100%",background:"var(--bg)",border: "0.5px solid var(--bd)",color:"var(--txt)",padding:"3px 6px",fontSize:11,borderRadius:"var(--r)"}}/>
                             </div>
                           )}
                         </div>
@@ -671,7 +671,7 @@ Si la factura es simple (solo IVA 21%) y NO ves ninguna percepción/retención/e
                     );
                   })()}
 
-                  <div style={{display:"flex",justifyContent:"space-between",borderTop:"1px solid var(--bd)",paddingTop:8}}>
+                  <div style={{display:"flex",justifyContent:"space-between",borderTop: "0.5px solid var(--bd)",paddingTop:8}}>
                     <span style={{fontWeight:500}}>TOTAL</span>
                     <input type="number" step="0.01" value={form.total} onChange={e=>setForm({...form,total:e.target.value})}
                       style={{width:120,background:"var(--bg)",border:conf.total!==undefined&&conf.total<80?campoBorder("total"):"1px solid var(--acc)",color:"var(--acc)",padding:"4px 8px",fontFamily:"'Inter',sans-serif",fontWeight:500,fontSize:14,borderRadius:"var(--r)",textAlign:"right"}}/>
@@ -691,14 +691,14 @@ Si la factura es simple (solo IVA 21%) y NO ves ninguna percepción/retención/e
                   const incoherente=netoDet>0&&sumaItems>0&&diff>0.05;
                   return (
                     <div style={{marginBottom:12}}>
-                      <div style={{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:"var(--muted)",marginBottom:8}}>Ítems detectados ({items.length})</div>
+                      <div style={{fontSize:9,letterSpacing:2,textTransform: "none",color:"var(--muted)",marginBottom:8}}>Ítems detectados ({items.length})</div>
                       {incoherente&&(
                         <div className="alert alert-danger" style={{marginBottom:8,fontSize:11}}>
                           ⚠ Los items no suman al neto detectado — revisá manualmente. Suma items: <strong>{fmt_$(sumaItems)}</strong> vs neto: <strong>{fmt_$(netoDet)}</strong>.
                         </div>
                       )}
                       {items.map((it, i) => (
-                        <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid var(--bd)",fontSize:11}}>
+                        <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom: "0.5px solid var(--bd)",fontSize:11}}>
                           <span>{it.descripcion}</span>
                           <span style={{color:"var(--muted2)"}}>{it.cantidad} {it.unidad} · {fmt_$(it.subtotal)}</span>
                         </div>

@@ -1187,7 +1187,7 @@ export function TabSueldos({
           <span style={{
             padding: "3px 10px", borderRadius: 6,
             background: "rgba(34,197,94,0.10)",
-            border: "1px solid rgba(34,197,94,0.25)",
+            border: "0.5px solid rgba(34,197,94,0.25)",
             color: "var(--success)", fontWeight: 500,
           }}>
             A separar: {fmt_$(totalASeparar)}
@@ -1205,7 +1205,7 @@ export function TabSueldos({
                 style={{
                   padding: "3px 10px", borderRadius: 6,
                   background: "rgba(245,158,11,0.10)",
-                  border: "1px solid rgba(245,158,11,0.30)",
+                  border: "0.5px solid rgba(245,158,11,0.30)",
                   color: "#d97706", fontWeight: 500,
                 }}
               >
@@ -1218,7 +1218,7 @@ export function TabSueldos({
                 style={{
                   padding: "3px 10px", borderRadius: 6,
                   background: "rgba(59,130,246,0.10)",
-                  border: "1px solid rgba(59,130,246,0.30)",
+                  border: "0.5px solid rgba(59,130,246,0.30)",
                   color: "#2563eb", fontWeight: 500,
                 }}
               >
@@ -1290,7 +1290,7 @@ export function TabSueldos({
                     <div style={{ fontSize: 10, color: "var(--muted2)", marginTop: 2 }}>{emp.puesto}</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--acc)" }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: "var(--acc)" }}>
                       {fmt_$(cuotasInfo.reduce((s, c) => s + c.total, 0))}
                     </div>
                     <div style={{ fontSize: 10, marginTop: 2 }}>
@@ -1321,7 +1321,7 @@ export function TabSueldos({
                         style={{
                           display: "grid", gridTemplateColumns: "60px 1fr 130px 110px 110px",
                           gap: 12, padding: "10px 16px 10px 38px", alignItems: "center",
-                          borderTop: "1px solid var(--bd)",
+                          borderTop: "0.5px solid var(--bd)",
                           borderLeft: esActivaEnExpand ? "3px solid var(--acc)" : "3px solid transparent",
                           background: esActivaEnExpand
                             ? "rgba(34,127,255,0.06)"
@@ -1377,17 +1377,17 @@ export function TabSueldos({
                   // junto con autosave entero. Ahora la novedad se persiste
                   // solo al tocar Confirmar/Pagar — sin estado intermedio.
                   return (
-                    <div style={{ borderTop: "1px solid var(--bd)", padding: "10px 16px 14px" }}>
+                    <div style={{ borderTop: "0.5px solid var(--bd)", padding: "10px 16px 14px" }}>
 
                       {/* Banner pagado: una línea compacta con todo */}
                       {isPagado && liqInfo && (
                         <div style={{
-                          background: "rgba(34,197,94,0.07)", border: "1px solid rgba(34,197,94,0.25)",
+                          background: "rgba(34,197,94,0.07)", border: "0.5px solid rgba(34,197,94,0.25)",
                           borderRadius: 6, padding: "6px 10px", marginBottom: 10,
                           display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap",
                         }}>
                           <div style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                            <span style={{ fontSize: 9, fontWeight: 600, padding: "1px 6px", borderRadius: 3, background: "var(--success)", color: "white", letterSpacing: 0.3 }}>PAGADO</span>
+                            <span style={{ fontSize: 9, fontWeight: 500, padding: "1px 6px", borderRadius: 3, background: "var(--success)", color: "white", letterSpacing: 0.3 }}>PAGADO</span>
                             <span style={{ color: "var(--muted2)" }}>
                               <strong style={{ color: "var(--text)" }}>{fmt_$(liqInfo.pagos_realizados)}</strong>
                               {movsLiq.length > 0 && <> · {fmt_d(movsLiq[0]!.fecha)}</>}
@@ -1459,7 +1459,7 @@ export function TabSueldos({
                             </div>
                           ) : (
                             <div>
-                              <div style={SECT_HD}>Novedades {isConfirmado(s.key) && <span style={{ marginLeft: 6, fontSize: 9, padding: "1px 6px", background: "rgba(34,197,94,0.15)", color: "var(--success)", borderRadius: 3, fontWeight: 600, letterSpacing: 0.3 }}>CONFIRMADAS</span>}</div>
+                              <div style={SECT_HD}>Novedades {isConfirmado(s.key) && <span style={{ marginLeft: 6, fontSize: 9, padding: "1px 6px", background: "rgba(34,197,94,0.15)", color: "var(--success)", borderRadius: 3, fontWeight: 500, letterSpacing: 0.3 }}>CONFIRMADAS</span>}</div>
                               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, opacity: isConfirmado(s.key) ? 0.65 : 1 }}>
                                 <NovInput label="Faltas" value={nov.inasistencias} onChange={v => updateNov(s.key, "inasistencias", v)} disabled={isConfirmado(s.key)} />
                                 <NovInput label="Hs extras" value={nov.horas_extras} onChange={v => updateNov(s.key, "horas_extras", v)} disabled={isConfirmado(s.key)} allowNegative />
@@ -1553,11 +1553,11 @@ export function TabSueldos({
                             {nov.otros_desc > 0 && <DesgloseRow label="− Otros desc." value={`−${fmt_$(d.otrosDesc)}`} tone="danger" />}
                             {sumaAdel > 0 && <DesgloseRow label={`− Ya pagado (${tildSet.size})`} value={`−${fmt_$(d.totalAdelantos)}`} tone="danger" />}
                             <div style={{
-                              marginTop: 6, paddingTop: 6, borderTop: "1px solid var(--bd)",
+                              marginTop: 6, paddingTop: 6, borderTop: "0.5px solid var(--bd)",
                               display: "flex", justifyContent: "space-between", alignItems: "baseline",
                             }}>
                               <span style={{ fontWeight: 500 }}>Total</span>
-                              <span style={{ fontSize: 15, fontWeight: 600, color: "var(--acc)" }}>{fmt_$(d.total)}</span>
+                              <span style={{ fontSize: 15, fontWeight: 500, color: "var(--acc)" }}>{fmt_$(d.total)}</span>
                             </div>
                           </div>
                           {/* Aviso si pagado: cálculo vs pagado real puede diferir */}
@@ -1601,7 +1601,7 @@ export function TabSueldos({
                           width: 140, padding: "7px 10px", fontSize: 13,
                           background: confirmado ? "var(--s2)" : "var(--bg, #0e1a2a)",
                           color: "var(--text, #e6ecf3)",
-                          border: "1px solid var(--bd, #1e2d3f)",
+                          border: "0.5px solid var(--bd, #1e2d3f)",
                           borderRadius: 6,
                           textAlign: "right",
                           fontVariantNumeric: "tabular-nums",
@@ -1611,12 +1611,12 @@ export function TabSueldos({
                         };
                         return (
                           <div style={{
-                            marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--bd)",
+                            marginTop: 12, paddingTop: 12, borderTop: "0.5px solid var(--bd)",
                           }}>
                             {yaPagadoSlot > 0 && total > 0 && (
                               <div style={{
                                 marginBottom: 10, padding: "7px 12px", borderRadius: 6,
-                                background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)",
+                                background: "rgba(245,158,11,0.12)", border: "0.5px solid rgba(245,158,11,0.3)",
                                 fontSize: 11.5, color: "var(--warn)", textAlign: "center",
                               }}>
                                 ⚠ Pago parcial: ya se pagó <strong>{fmt_$(yaPagadoSlot)}</strong> de {fmt_$(totalSueldo)} ·
@@ -1667,10 +1667,10 @@ export function TabSueldos({
 
                               {/* Status compacto */}
                               <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-start", minWidth: 130 }}>
-                                <span style={{ fontSize: 10, color: "var(--muted2)", textTransform: "uppercase", letterSpacing: 0.4 }}>
+                                <span style={{ fontSize: 10, color: "var(--muted2)", textTransform: "none", letterSpacing: 0.4 }}>
                                   Cargado / Total
                                 </span>
-                                <span style={{ fontSize: 13, fontWeight: 600, color: exacto ? "var(--success)" : "var(--warn)", fontVariantNumeric: "tabular-nums" }}>
+                                <span style={{ fontSize: 13, fontWeight: 500, color: exacto ? "var(--success)" : "var(--warn)", fontVariantNumeric: "tabular-nums" }}>
                                   {exacto
                                     ? <>✓ {fmt_$(cargado)}</>
                                     : <>{fmt_$(cargado)} <span style={{ opacity: 0.6, fontWeight: 400 }}>/ {fmt_$(total)}</span></>}
@@ -1818,7 +1818,7 @@ export function TabSueldos({
               if (adels.length === 0) return null;
               return (
                 <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", marginBottom: 6 }}>
+                  <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "none", marginBottom: 6 }}>
                     Ya pagado — tildá para descontar
                   </div>
                   <div style={{ background: "var(--s2)", borderRadius: 8, padding: 10 }}>
@@ -1850,7 +1850,7 @@ export function TabSueldos({
               );
             })()}
 
-            <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", marginBottom: 6 }}>
+            <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "none", marginBottom: 6 }}>
               Fecha del movimiento
             </div>
             <input
@@ -1861,7 +1861,7 @@ export function TabSueldos({
               onChange={e => setFechaPago(e.target.value)}
             />
 
-            <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", marginBottom: 6 }}>
+            <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "none", marginBottom: 6 }}>
               Formas de pago
             </div>
             {locsDisp.length > 1 && (
@@ -1918,7 +1918,7 @@ export function TabSueldos({
             </button>
             <div style={{
               display: "flex", justifyContent: "space-between",
-              fontSize: 12, paddingTop: 10, borderTop: "1px solid var(--bd)",
+              fontSize: 12, paddingTop: 10, borderTop: "0.5px solid var(--bd)",
             }}>
               <span style={{ color: "var(--muted2)" }}>Asignado en formas de pago</span>
               <span style={{ color: sumaLineasPago === totalPago ? "var(--success)" : "var(--warn)", fontWeight: 500 }}>
@@ -1964,7 +1964,7 @@ export function TabSueldos({
         {anulModal && (
           <>
             <div style={{
-              padding: "12px 14px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)",
+              padding: "12px 14px", background: "rgba(239,68,68,0.08)", border: "0.5px solid rgba(239,68,68,0.25)",
               borderRadius: 8, marginBottom: 14, fontSize: 12, lineHeight: 1.5, color: "var(--text)",
             }}>
               {anulModal.modoEdit ? (
@@ -1973,7 +1973,7 @@ export function TabSueldos({
                 <>⚠ <strong>Esto va a devolver {fmt_$(anulModal.total)} a caja</strong> y dejar el sueldo en estado pendiente. Vas a tener que pagarlo de nuevo cuando quieras.</>
               )}
             </div>
-            <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", marginBottom: 6 }}>
+            <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "none", marginBottom: 6 }}>
               Movimientos que se van a anular ({anulModal.movs.length})
             </div>
             <div style={{ background: "var(--s2)", borderRadius: 8, padding: 10 }}>
@@ -2022,8 +2022,8 @@ export function TabSueldos({
 
 // ── Helpers de estilo (compactar — Lucas 31-may) ────────────────────────────
 const SECT_HD: import("react").CSSProperties = {
-  fontSize: 9, color: "var(--muted)", textTransform: "uppercase",
-  letterSpacing: 0.6, marginBottom: 5, fontWeight: 600,
+  fontSize: 9, color: "var(--muted)", textTransform: "none",
+  letterSpacing: 0.6, marginBottom: 5, fontWeight: 500,
 };
 
 // ── Sub-componentes ─────────────────────────────────────────────────────────
@@ -2047,7 +2047,7 @@ function NovInput({ label, value, onChange, disabled, allowNegative }: { label: 
   // tecleo parsea como número válido y se muestra correctamente.
   const styleInput: import("react").CSSProperties = {
     fontSize: 12, padding: "4px 6px", textAlign: "right",
-    background: "var(--bg)", border: "1px solid var(--bd)",
+    background: "var(--bg)", border: "0.5px solid var(--bd)",
     color: "var(--text)", borderRadius: 4, width: "100%", boxSizing: "border-box",
   };
 

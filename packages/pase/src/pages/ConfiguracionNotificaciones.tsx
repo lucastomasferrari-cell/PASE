@@ -145,7 +145,7 @@ export default function ConfiguracionNotificaciones({ user }: Props) {
   return (
     <div style={{ padding: "24px 32px", maxWidth: 880, margin: "0 auto", fontFamily: "var(--pase-font)" }}>
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 600, color: "var(--text)", margin: 0, letterSpacing: "-0.02em" }}>
+        <h1 style={{ fontSize: 22, fontWeight: 500, color: "var(--text)", margin: 0, letterSpacing: "-0.02em" }}>
           Notificaciones
         </h1>
         <p style={{ fontSize: 13, color: "var(--muted2)", marginTop: 6, lineHeight: 1.5 }}>
@@ -157,10 +157,10 @@ export default function ConfiguracionNotificaciones({ user }: Props) {
 
       {/* ─── Bloque 1: Activar push en ESTE dispositivo ───────────────── */}
       <div style={{
-        background: "var(--s2)", border: "1px solid var(--bd)", borderRadius: 10,
+        background: "var(--s2)", border: "0.5px solid var(--bd)", borderRadius: 10,
         padding: 16, marginBottom: 20,
       }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 4 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text)", marginBottom: 4 }}>
           Push en este dispositivo
         </div>
         <p style={{ fontSize: 12, color: "var(--muted2)", margin: "0 0 12px", lineHeight: 1.5 }}>
@@ -214,12 +214,12 @@ export default function ConfiguracionNotificaciones({ user }: Props) {
           if (tipos.length === 0) return null;
           return (
             <div key={grupo.id} style={{
-              background: "var(--s2)", border: "1px solid var(--bd)", borderRadius: 10,
+              background: "var(--s2)", border: "0.5px solid var(--bd)", borderRadius: 10,
               overflow: "hidden",
             }}>
               <div style={{
-                padding: "12px 16px", borderBottom: "1px solid var(--bd)",
-                fontSize: 12, fontWeight: 600, color: "var(--text)",
+                padding: "12px 16px", borderBottom: "0.5px solid var(--bd)",
+                fontSize: 12, fontWeight: 500, color: "var(--text)",
                 display: "flex", alignItems: "center", gap: 8,
                 background: "var(--s3)",
               }}>
@@ -248,8 +248,8 @@ export default function ConfiguracionNotificaciones({ user }: Props) {
                               fontSize: 9, padding: "2px 6px", borderRadius: 4,
                               background: "rgba(168,137,58,0.15)",
                               color: "var(--pase-gold)",
-                              fontWeight: 600, letterSpacing: "0.04em",
-                              textTransform: "uppercase",
+                              fontWeight: 500, letterSpacing: "0.04em",
+                              textTransform: "none",
                             }}>
                               Próximamente
                             </span>

@@ -169,12 +169,12 @@ export default function AprobarSolicitud({ user }: Props) {
         <div style={{
           padding: 20,
           background: "var(--pase-bg-elev)",
-          border: "1px solid var(--pase-border)",
+          border: "0.5px solid var(--pase-border)",
           borderRadius: 12,
           textAlign: "center",
         }}>
           <div style={{ fontSize: 36, marginBottom: 8 }}>⏱</div>
-          <p style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 600 }}>
+          <p style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 500 }}>
             Esta solicitud ya no está disponible
           </p>
           <p style={{ margin: 0, fontSize: 13, color: "var(--pase-text-muted)" }}>
@@ -218,10 +218,10 @@ export default function AprobarSolicitud({ user }: Props) {
   return (
     <Container>
       <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 12, color: "var(--pase-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
+        <div style={{ fontSize: 12, color: "var(--pase-text-muted)", textTransform: "none", letterSpacing: "0.05em", marginBottom: 4 }}>
           Solicitud de autorización
         </div>
-        <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0, color: "var(--pase-text)" }}>
+        <h1 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: "var(--pase-text)" }}>
           {solicitud.creador_nombre} pide tu OK
         </h1>
         <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--pase-text-muted)" }}>
@@ -231,13 +231,13 @@ export default function AprobarSolicitud({ user }: Props) {
 
       <div style={{
         background: "var(--pase-bg-elev)",
-        border: "1px solid var(--pase-border)",
+        border: "0.5px solid var(--pase-border)",
         borderRadius: 12,
         padding: 18,
         marginBottom: 16,
       }}>
         <div style={{ fontSize: 13, color: "var(--pase-text-muted)", marginBottom: 4 }}>Acción</div>
-        <div style={{ fontSize: 18, fontWeight: 600, color: "var(--pase-text)", marginBottom: 14 }}>
+        <div style={{ fontSize: 18, fontWeight: 500, color: "var(--pase-text)", marginBottom: 14 }}>
           {fmtAccion(solicitud.accion)}
         </div>
 
@@ -286,7 +286,7 @@ export default function AprobarSolicitud({ user }: Props) {
                 flex: 1, padding: 14, fontSize: 15,
                 background: "transparent",
                 color: "var(--pase-text-muted)",
-                border: "1px solid var(--pase-border)",
+                border: "0.5px solid var(--pase-border)",
                 borderRadius: 10, cursor: "pointer",
               }}
             >
@@ -296,7 +296,7 @@ export default function AprobarSolicitud({ user }: Props) {
               onClick={() => void rechazar()}
               disabled={!!actuando}
               style={{
-                flex: 1, padding: 14, fontSize: 15, fontWeight: 600,
+                flex: 1, padding: 14, fontSize: 15, fontWeight: 500,
                 background: "#EF4444",
                 color: "white", border: "none",
                 borderRadius: 10, cursor: actuando ? "wait" : "pointer",
@@ -312,7 +312,7 @@ export default function AprobarSolicitud({ user }: Props) {
             onClick={() => void aprobar()}
             disabled={!!actuando}
             style={{
-              padding: 18, fontSize: 17, fontWeight: 600,
+              padding: 18, fontSize: 17, fontWeight: 500,
               background: "#2BB673",
               color: "white", border: "none",
               borderRadius: 12, cursor: actuando ? "wait" : "pointer",
@@ -324,10 +324,10 @@ export default function AprobarSolicitud({ user }: Props) {
             onClick={() => setMostrarRechazo(true)}
             disabled={!!actuando}
             style={{
-              padding: 18, fontSize: 17, fontWeight: 600,
+              padding: 18, fontSize: 17, fontWeight: 500,
               background: "transparent",
               color: "#EF4444",
-              border: "1px solid #EF4444",
+              border: "0.5px solid #EF4444",
               borderRadius: 12, cursor: "pointer",
             }}
           >

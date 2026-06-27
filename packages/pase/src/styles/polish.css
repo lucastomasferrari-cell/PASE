@@ -270,7 +270,7 @@ tbody tr.clickable:hover {
  * SECTION TITLES — consistent
  * ═══════════════════════════════════════════════════════════════════ */
 .section-title {
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: 0.04em;
   font-size: var(--pase-fs-xs);
 }
@@ -290,19 +290,19 @@ tbody tr.clickable:hover {
   justify-content: space-between;
   align-items: center;
   padding: 10px 18px;
-  border-bottom: 1px solid var(--pase-border);
+  border-bottom: 0.5px solid var(--pase-border);
 }
 .eerr-row-summary:last-child {
   border-bottom: none;
 }
 .eerr-section-title {
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: 0.06em;
   font-size: var(--pase-fs-xs);
-  font-weight: 600;
+  font-weight: 500;
   padding: 12px 18px 6px;
   margin-top: 8px;
-  border-top: 1px solid var(--pase-border);
+  border-top: 0.5px solid var(--pase-border);
   color: var(--pase-text);
 }
 .eerr-section-title:first-child {
@@ -399,7 +399,7 @@ tbody tr.clickable:hover {
 }
 .brand-sub {
   letter-spacing: 0.06em;
-  text-transform: uppercase;
+  text-transform: none;
   font-size: 8.5px;
 }
 

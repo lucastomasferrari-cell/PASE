@@ -224,7 +224,7 @@ export default function Contador({ user, locales, localActivo }: ContadorProps) 
                     </tr>
                   ))}
                 </tbody>
-                <tfoot style={{ background: "var(--s2)", borderTop: "1px solid var(--bd)", fontWeight: 600 }}>
+                <tfoot style={{ background: "var(--s2)", borderTop: "0.5px solid var(--bd)", fontWeight: 500 }}>
                   <tr>
                     <td colSpan={2} style={{ textAlign: "right", padding: "8px 6px" }}>TOTAL</td>
                     {columnasVisibles.map(c => (
