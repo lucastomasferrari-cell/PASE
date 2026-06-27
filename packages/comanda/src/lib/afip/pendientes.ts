@@ -67,10 +67,12 @@ export async function reintentarAfipVenta(ventaId: number): Promise<{
   result?: AfipFacturaResult;
   error?: string;
 }> {
-  // 1. Levantar venta
+  // 1. Levantar venta (incluyendo el afip_request_uuid original — fix
+  //    code-review 27-jun: reusarlo para que AFIP devuelva el CAE cacheado
+  //    si ya emitió, en lugar de emitir un comprobante con número nuevo).
   const { data: venta, error: errVenta } = await db
     .from('ventas_pos')
-    .select('id, total, cliente_email, cliente_nombre')
+    .select('id, total, cliente_email, cliente_nombre, afip_request_uuid')
     .eq('id', ventaId)
     .maybeSingle();
   if (errVenta || !venta) return { ok: false, error: 'Venta no encontrada' };
@@ -96,8 +98,23 @@ export async function reintentarAfipVenta(ventaId: number): Promise<{
     importeIva = 0;
   }
 
-  // 4. Llamar al endpoint con request_uuid único de retry
-  const requestUuid = `retry-${ventaId}-${Date.now()}`;
+  // 4. Llamar al endpoint con request_uuid persistido (fix code-review 27-jun).
+  //    Si la venta nunca pasó por el flow online (no tiene afip_request_uuid),
+  //    generamos uno nuevo Y lo persistimos para que futuros retries lo reusen.
+  let requestUuid = (venta as { afip_request_uuid?: string | null }).afip_request_uuid ?? null;
+  if (!requestUuid) {
+    requestUuid = `retry-${ventaId}-${Date.now()}`;
+    try {
+      // eslint-disable-next-line pase-local/no-direct-financiera-write -- afip_request_uuid es metadata de idempotency fiscal no-monetaria.
+      await db
+        .from('ventas_pos')
+        .update({ afip_request_uuid: requestUuid })
+        .eq('id', ventaId)
+        .is('afip_request_uuid', null);
+    } catch {
+      /* no crítico: si falla guardar, igual usamos el uuid generado ahora */
+    }
+  }
   try {
     const result = await emitirFactura({
       tenant_id: cred.tenant_id ?? '', // server lo resuelve del JWT

@@ -567,16 +567,45 @@ async function handleWebhook(req, res) {
   // Si AFIP falló (no skipped por afip_no_configurada), marcar venta como
   // pendiente para que el operador la reintente desde el POS.
   if (afip_error) {
+    let marcaPendienteOk = false;
+    let marcaError = null;
     try {
-      await supabase.from('ventas_pos')
+      // eslint-disable-next-line pase-local/no-direct-financiera-write -- afip_pendiente/afip_ultimo_error son flags fiscales no-monetarios.
+      const { error: errUpdate } = await supabase.from('ventas_pos')
         .update({
           afip_pendiente: true,
           afip_ultimo_intento_at: new Date().toISOString(),
           afip_ultimo_error: afip_error,
         })
         .eq('id', ventaId);
+      if (errUpdate) {
+        marcaError = errUpdate.message;
+      } else {
+        marcaPendienteOk = true;
+      }
     } catch (e) {
-      console.error('[tienda-mp webhook] no se pudo marcar afip_pendiente', ventaId, e?.message);
+      marcaError = e?.message || String(e);
+    }
+    // Fix code-review 27-jun: si NO se pudo marcar el flag, dejar una alerta
+    // visible en pedidos_externos_log porque sino la venta queda cobrada,
+    // sin factura, sin pendiente — peor caso silencioso. El operador puede
+    // ver estas alertas en logs.
+    if (!marcaPendienteOk) {
+      console.error('[tienda-mp webhook] CRÍTICO: no se pudo marcar afip_pendiente', ventaId, marcaError);
+      try {
+        await supabase.from('pedidos_externos_log').insert({
+          provider: 'afip-flag-write-failed',
+          external_id: String(paymentId),
+          payload: {
+            venta_id: ventaId,
+            afip_error,
+            marca_pendiente_error: marcaError,
+            severity: 'critical',
+            instruccion: 'Venta cobrada, AFIP rechazó, flag afip_pendiente NO se pudo setear. Revisar venta a mano y reintentar AFIP desde COMANDA o /api/afip-cae.',
+          },
+          headers: { tipo: 'afip_flag_write_failed' },
+        });
+      } catch { /* peor caso: ni siquiera el log funciona */ }
     }
   } else if (afip_factura && (afip_factura.cae || afip_factura.cached)) {
     // Éxito (nuevo CAE o ya estaba emitido): asegurar que el flag esté en false.
@@ -616,8 +645,20 @@ async function emitirFacturaPostCobroOnline(supabase, ventaId, paymentId) {
     return { ok: false, skipped: 'afip_no_configurada' };
   }
 
-  // 3. Idempotency por venta+payment (anti doble-emisión si MP reenvía webhook)
+  // 3. Idempotency por venta+payment (anti doble-emisión si MP reenvía webhook).
+  // Fix code-review 27-jun: persistir el uuid en ventas_pos para que el
+  // reintento manual desde COMANDA → AFIP pendientes reuse el mismo y AFIP
+  // devuelva el CAE cacheado en lugar de emitir un nuevo número.
   const requestUuid = `mp-${paymentId}-venta-${ventaId}`;
+  try {
+    // eslint-disable-next-line pase-local/no-direct-financiera-write -- afip_request_uuid es metadata de idempotency fiscal no-monetaria.
+    await supabase.from('ventas_pos')
+      .update({ afip_request_uuid: requestUuid })
+      .eq('id', ventaId)
+      .is('afip_request_uuid', null); // solo setear si está vacío (no pisar)
+  } catch (e) {
+    console.warn('[tienda-mp afip] no se pudo persistir afip_request_uuid', e?.message);
+  }
   const { data: prev } = await supabase
     .from('afip_facturas')
     .select('id, cae, numero, qr_fiscal_url, estado')
