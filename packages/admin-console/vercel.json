@@ -2,6 +2,7 @@
   "outputDirectory": "dist",
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
   "buildCommand": "cd ../.. && pnpm --filter admin-console build",
+  "ignoreCommand": "npx -y turbo-ignore admin-console",
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],

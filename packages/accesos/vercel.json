@@ -1,5 +1,6 @@
 {
   "outputDirectory": "dist",
+  "ignoreCommand": "npx -y turbo-ignore accesos",
   "rewrites": [
     { "source": "/api/:path*", "destination": "https://pase-yndx.vercel.app/api/:path*" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }

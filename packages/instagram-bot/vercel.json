@@ -3,6 +3,7 @@
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
   "buildCommand": "echo 'no build step — solo serverless functions en api/'",
   "outputDirectory": "public",
+  "ignoreCommand": "npx -y turbo-ignore @pase/instagram-bot",
   "functions": {
     "api/webhook.js": {
       "maxDuration": 30
