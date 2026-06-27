@@ -21,7 +21,7 @@ import { createMpTokenGetter } from './_mp-token.js';
 import { sendEmail, htmlPedidoConfirmado, htmlPedidoListo, htmlPedidoRechazado, htmlPedidoEntregado } from './_email.js';
 import { createRappiClient, getRappiCredentials, verifyRappiWebhookSignature } from './_rappi.js';
 import { createPedidosYaClient, getPedidosYaCredentials, verifyPedidosYaWebhookSignature } from './_pedidosya.js';
-import { verifyMpSignature, getMpWebhookSecret } from './_mp-webhook.js';
+import { findMatchingMpSecret } from './_mp-webhook.js';
 import { checkUserAuth } from './_user-auth.js';
 import { Afip } from '@afipsdk/afip.js';
 
@@ -380,27 +380,23 @@ async function handleWebhook(req, res) {
   const paymentId = req.query['data.id'] || req.body?.data?.id;
 
   // ── Validar firma x-signature (fix audit 26-jun CRIT-2) ───────────────
-  // MP firma id+request-id+ts con HMAC SHA-256 del webhook secret configurado
-  // en MP Dashboard → Notificaciones → Webhooks. Sin esto, atacante puede
-  // mandar webhooks falsos (cualquier paymentId aleatorio iteraba todas las
-  // credenciales activas → rate-limit MP, posible registro de venta).
-  // Política: si MP_WEBHOOK_SECRET no está configurado, fallar 503 — no
-  // dejamos pasar webhooks sin firma "porque sí".
-  const mpSecret = getMpWebhookSecret();
-  if (!mpSecret) {
-    console.error('[tienda-mp webhook] MP_WEBHOOK_SECRET no configurado');
-    res.status(503).json({ error: 'WEBHOOK_SECRET_NOT_CONFIGURED' });
-    return;
-  }
-  // Para payments el data.id viene del query (formato estándar MP).
-  // Si llega vacío rechazamos arriba con ignored=true.
+  // MP firma id+request-id+ts con HMAC SHA-256 del webhook secret. Buscamos
+  // contra TODOS los webhook_secret disponibles: primero los de
+  // mp_credenciales (per-tenant, escala a N clientes sin tocar Vercel),
+  // después env vars MP_WEBHOOK_SECRET* (fallback legacy).
+  // Si NINGUNA matchea, rechazamos 401. Sin firma válida no procesamos nada.
   if (paymentId) {
-    const verify = verifyMpSignature(req.headers, paymentId, mpSecret);
+    const supabaseEarly = db();
+    const verify = await findMatchingMpSecret(supabaseEarly, req.headers, paymentId);
     if (!verify.ok) {
-      console.warn('[tienda-mp webhook] firma MP inválida:', verify.error);
+      console.warn('[tienda-mp webhook] firma MP inválida (ninguna credencial activa matchea)');
       res.status(401).json({ error: 'INVALID_SIGNATURE', detail: verify.error });
       return;
     }
+    // Si quisiéramos limitar el procesamiento a la credencial que firmó,
+    // podríamos pasar verify.credId como hint hacia el resolver de payment.
+    // Por ahora dejamos que el flow existente (con credIdHint del body /
+    // metadata.mp_credencial_id) maneje eso.
   }
 
   if (type !== 'payment' || !paymentId) {
