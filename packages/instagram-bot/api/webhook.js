@@ -18,7 +18,7 @@
 //   4. Devolver 200 OK siempre (Meta reintenta si dice <>200).
 
 import { db } from './_lib/db.js';
-import { validarFirmaWebhook, enviarMensaje, marcarLeido, escribiendo } from './_lib/meta.js';
+import { validarFirmaWebhook, enviarMensaje, marcarLeido, escribiendo, obtenerPerfil } from './_lib/meta.js';
 import { llamarClaude } from './_lib/claude.js';
 import { getSystemPrompt } from './_lib/prompt.js';
 import { notificarDMNuevo } from './_lib/push.js';
@@ -237,6 +237,29 @@ async function procesarMensajeEntrante({ cfg, event, sender_igsid }) {
   if (cliente?.bloqueado) {
     console.log(`[webhook] cliente ${sender_igsid} bloqueado — ignoramos`);
     return;
+  }
+
+  // Traer nombre + @usuario del perfil de Instagram si todavía no los tenemos
+  // (clientes nuevos). Sin esto el inbox muestra el IGSID numérico en vez de
+  // quién es. No es crítico: si falla, seguimos sin nombre.
+  if (cliente && (!cliente.nombre || !cliente.ig_username)) {
+    try {
+      const { data: tokenPerfil } = await db.rpc('get_ig_token', {
+        p_tenant_id: cfg.tenant_id,
+        p_ig_account_id: cfg.ig_account_id,
+      });
+      if (tokenPerfil) {
+        const perfil = await obtenerPerfil({ pageAccessToken: tokenPerfil, igsid: sender_igsid });
+        if (perfil.ok && (perfil.name || perfil.username)) {
+          await db.from('ig_clientes').update({
+            nombre: perfil.name ?? cliente.nombre,
+            ig_username: perfil.username ?? cliente.ig_username,
+          }).eq('id', cliente.id);
+          cliente.nombre = perfil.name ?? cliente.nombre;
+          cliente.ig_username = perfil.username ?? cliente.ig_username;
+        }
+      }
+    } catch { /* no crítico */ }
   }
 
   // AUDIT F6A#1: NO sobreescribir el `estado` de una conversación existente.

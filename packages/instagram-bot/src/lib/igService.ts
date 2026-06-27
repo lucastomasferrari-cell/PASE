@@ -33,6 +33,7 @@ export interface Conversacion {
   created_at: string;
   cliente_id: number;
   igsid: string;
+  ig_username: string | null;
   cliente_nombre: string | null;
   cliente_telefono: string | null;
   mensajes_count: number;
@@ -85,7 +86,7 @@ export async function listConversaciones(opts: {
       id, ig_config_id, estado, tomada_por, tomada_at,
       ultimo_mensaje_at, ultimo_mensaje_preview, no_leidos_admin,
       created_at, cliente_id,
-      ig_clientes!inner(igsid, nombre, telefono, bloqueado, mensajes_count)
+      ig_clientes!inner(igsid, nombre, telefono, bloqueado, mensajes_count, ig_username)
     `)
     .order('ultimo_mensaje_at', { ascending: false })
     .limit(opts.limit ?? 200);
@@ -99,7 +100,7 @@ export async function listConversaciones(opts: {
       tomada_por: number | null; tomada_at: string | null;
       ultimo_mensaje_at: string; ultimo_mensaje_preview: string | null;
       no_leidos_admin: number; created_at: string; cliente_id: number;
-      ig_clientes: { igsid: string; nombre: string | null; telefono: string | null; bloqueado: boolean; mensajes_count: number };
+      ig_clientes: { igsid: string; nombre: string | null; telefono: string | null; bloqueado: boolean; mensajes_count: number; ig_username: string | null };
     };
     return {
       id: row.id, ig_config_id: row.ig_config_id, estado: row.estado,
@@ -110,6 +111,7 @@ export async function listConversaciones(opts: {
       created_at: row.created_at, cliente_id: row.cliente_id,
       mensajes_count: row.ig_clientes.mensajes_count,
       igsid: row.ig_clientes.igsid,
+      ig_username: row.ig_clientes.ig_username,
       cliente_nombre: row.ig_clientes.nombre,
       cliente_telefono: row.ig_clientes.telefono,
       bloqueado: row.ig_clientes.bloqueado,

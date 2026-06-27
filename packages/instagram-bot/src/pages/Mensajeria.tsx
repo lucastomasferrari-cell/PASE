@@ -41,7 +41,9 @@ function tiempoRelativo(iso: string) {
 function horaCorta(iso: string) {
   return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
 }
-function nombre(c: Conversacion) { return c.cliente_nombre || `@${c.igsid.slice(0, 8)}`; }
+function nombre(c: Conversacion) {
+  return c.cliente_nombre || (c.ig_username ? `@${c.ig_username}` : `@${c.igsid.slice(0, 8)}`);
+}
 
 export function Mensajeria({ userId }: { userId: number }) {
   const [cuentas, setCuentas] = useState<CuentaIG[]>([]);
@@ -223,7 +225,7 @@ export function Mensajeria({ userId }: { userId: number }) {
                   <div className="w-9 h-9 rounded-full bg-brand-100 text-brand-700 grid place-items-center font-medium text-sm shrink-0">{(nombre(sel)[0] ?? '?').toUpperCase()}</div>
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm">{nombre(sel)}</div>
-                    <div className="text-[11px] text-ink-muted">@{sel.igsid.slice(0, 16)} · {sel.mensajes_count} mensajes</div>
+                    <div className="text-[11px] text-ink-muted">{sel.ig_username ? `@${sel.ig_username}` : `@${sel.igsid.slice(0, 16)}`} · {sel.mensajes_count} mensajes</div>
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {sel.estado === 'bot' && (

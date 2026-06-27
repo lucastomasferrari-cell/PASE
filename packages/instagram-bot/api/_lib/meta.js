@@ -86,6 +86,34 @@ export async function enviarMensaje({ pageAccessToken, igsid, texto }) {
 }
 
 /**
+ * Trae el perfil público del usuario de Instagram (nombre, @username, foto).
+ * Funciona para usuarios con una conversación activa con el negocio.
+ *
+ * @param {object} opts
+ * @param {string} opts.pageAccessToken
+ * @param {string} opts.igsid - Instagram-Scoped User ID del cliente
+ * @returns {Promise<{ok: boolean, name?: string|null, username?: string|null, profile_pic?: string|null, error?: string}>}
+ */
+export async function obtenerPerfil({ pageAccessToken, igsid }) {
+  const url = `https://graph.instagram.com/${GRAPH_API_VERSION}/${encodeURIComponent(igsid)}?fields=name,username,profile_pic&access_token=${encodeURIComponent(pageAccessToken)}`;
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (!resp.ok) {
+      return { ok: false, error: data?.error?.message || `HTTP ${resp.status}` };
+    }
+    return {
+      ok: true,
+      name: data.name ?? null,
+      username: data.username ?? null,
+      profile_pic: data.profile_pic ?? null,
+    };
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+}
+
+/**
  * Marca el chat como "leído" (cliente ve los ✓✓ azules). Buena práctica
  * después de procesar un mensaje para que el usuario sepa que llegó.
  */
