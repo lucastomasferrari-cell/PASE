@@ -169,7 +169,7 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
           )}
         </div>
       ) : (
-        <div className="dashboard-grid dashboard-grid--bold">
+        <div className="dashboard-grid">
           {widgets.map((w) => {
             const span = SIZE_TO_SPAN[w.size] ?? 6;
             return (
@@ -177,12 +177,18 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
                 key={w.id}
                 style={{
                   gridColumn: `span ${span}`,
+                  background: "var(--pase-bg)",
+                  border: "0.5px solid var(--pase-border)",
+                  borderRadius: "var(--pase-radius-card)",
+                  padding: 20,
                   minWidth: 0,
+                  boxShadow: "var(--pase-shadow-sm)",
+                  transition: "border-color 0.12s, box-shadow 0.2s",
                 }}
                 aria-label={w.title}
-                className="dashboard-widget dashboard-widget--bold"
+                className="dashboard-widget"
               >
-                <header style={{ marginBottom: 12 }}>
+                <header style={{ marginBottom: 14 }}>
                   <h3 style={{
                     margin: 0,
                     fontSize: "var(--pase-fs-xs)",
@@ -256,21 +262,12 @@ export function DashboardHome({ usuario, permisos, locales, localActivo }: Props
           grid-template-columns: repeat(12, 1fr);
           gap: 16px;
         }
-        /* Bolder: widgets sin card flotando con más aire entre sí */
-        .dashboard-grid--bold {
-          gap: 28px 24px;
+        .dashboard-widget:hover {
+          border-color: var(--pase-border-strong) !important;
+          box-shadow: var(--pase-shadow-md) !important;
         }
-        .dashboard-widget--bold {
-          background: transparent !important;
-          border: none !important;
-          border-radius: 0 !important;
-          box-shadow: none !important;
-          padding: 0 !important;
-          border-top: 0.5px solid var(--pase-border);
-          padding-top: 14px !important;
-        }
-        .dashboard-widget--bold:hover {
-          border-top-color: var(--pase-border-strong) !important;
+        [data-theme="dark"] .dashboard-widget {
+          background: var(--pase-bg-soft) !important;
         }
 
         @media (max-width: 900px) {
