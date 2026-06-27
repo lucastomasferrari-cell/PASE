@@ -58,8 +58,7 @@ export function App() {
   if (!supabaseConfigurado) {
     return (
       <div className="min-h-screen grid place-items-center text-ink-muted px-6 text-center">
-        Falta configurar el bot: agregá <code className="mx-1">VITE_SUPABASE_URL</code> y{' '}
-        <code className="mx-1">VITE_SUPABASE_ANON_KEY</code> en Vercel.
+        Falta configurar el bot: agregá <code className="mx-1">VITE_SUPABASE_ANON_KEY</code> en Vercel.
       </div>
     );
   }

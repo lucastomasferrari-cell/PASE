@@ -1,23 +1,24 @@
 // Cliente Supabase de la web del bot de Instagram. MISMA base que
 // PASE/COMANDA/MESA/Habitué — lee/escribe las tablas ig_* del ecosistema.
 //
-// Env vars (Vercel del proyecto pase-instagram-bot + .env.local para dev):
-//   VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+// Convención del repo (igual que packages/pase/src/lib/supabase.ts): la URL va
+// hardcodeada; la anon key va por env (VITE_SUPABASE_ANON_KEY) para poder
+// rotarla sin tocar código — ver ROTATE_ANON_KEY.md.
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const SUPABASE_URL = 'https://pduxydviqiaxfqnshhdc.supabase.co';
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
-export const supabaseConfigurado = Boolean(url && anonKey);
+export const supabaseConfigurado = Boolean(anonKey);
 
 let _client: SupabaseClient | null = null;
 export function db(): SupabaseClient {
   if (!_client) {
-    if (!url || !anonKey) {
-      throw new Error('Bot sin configurar: faltan VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY');
+    if (!anonKey) {
+      throw new Error('Bot sin configurar: falta VITE_SUPABASE_ANON_KEY');
     }
-    _client = createClient(url, anonKey);
+    _client = createClient(SUPABASE_URL, anonKey);
   }
   return _client;
 }
