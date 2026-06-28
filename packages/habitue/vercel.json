@@ -1,6 +1,6 @@
 {
   "outputDirectory": "dist",
-  "ignoreCommand": "npx -y turbo-ignore habitue",
+  "ignoreCommand": "exit 1",
   "crons": [
     { "path": "/api/automations-tick", "schedule": "0 9 * * *" }
   ],

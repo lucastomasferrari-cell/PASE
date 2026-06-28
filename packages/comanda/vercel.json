@@ -1,6 +1,6 @@
 {
   "outputDirectory": "dist",
-  "ignoreCommand": "npx -y turbo-ignore comanda",
+  "ignoreCommand": "exit 1",
   "rewrites": [
     {
       "source": "/api/:path*",
