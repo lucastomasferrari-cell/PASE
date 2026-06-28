@@ -58,12 +58,12 @@ export function LoginPage() {
 
       <Card className="w-full max-w-md shadow-lg">
         <CardContent className="p-8">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4">
-              <Lock className="h-8 w-8 text-primary" />
+          <div className="text-center mb-7">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-primary/10 mb-3">
+              <Lock className="h-6 w-6 text-primary" />
             </div>
-            <h1 className="text-3xl font-bold tracking-tight">COMANDA</h1>
-            <p className="text-sm text-muted-foreground mt-2">
+            <h1 className="text-2xl font-medium tracking-tight">COMANDA</h1>
+            <p className="text-xs text-muted-foreground mt-1.5">
               Iniciá sesión con tu usuario y contraseña
             </p>
           </div>

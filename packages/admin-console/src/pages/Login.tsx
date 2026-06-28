@@ -26,11 +26,11 @@ export function Login({ reason }: Props) {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-admin-bg px-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 text-center">
+      <div className="w-full max-w-md rounded-2xl border border-admin-border bg-admin-surface p-8 shadow-lg">
+        <div className="mb-6 text-center">
           <div className="text-xs normal-case tracking-wider text-admin-muted">PASE</div>
           <div className="text-2xl font-medium text-admin-text mt-1">Admin Console</div>
-          <div className="text-xs text-admin-muted mt-2">Acceso restringido a superadmins.</div>
+          <div className="text-xs text-admin-muted mt-1.5">Acceso restringido a superadmins.</div>
         </div>
 
         {reason && (

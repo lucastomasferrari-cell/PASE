@@ -120,10 +120,10 @@ export function AdminHome() {
   if (!sesion) {
     return (
       <div className="min-h-screen grid place-items-center px-6">
-        <form onSubmit={entrar} className="w-full max-w-sm rounded-2xl bg-white border border-ink/5 shadow-card p-6 space-y-4">
-          <div>
+        <form onSubmit={entrar} className="w-full max-w-md rounded-2xl bg-white border border-ink/5 shadow-card p-8 space-y-4">
+          <div className="mb-2">
             <span className="text-2xl font-medium text-brand-600">habitué<span className="text-gold">.</span></span>
-            <p className="text-sm text-ink-muted mt-1">CRM y marketing — misma cuenta que PASE/COMANDA/MESA.</p>
+            <p className="text-xs text-ink-muted mt-1">CRM y marketing — misma cuenta que PASE/COMANDA/MESA.</p>
           </div>
           <div className="space-y-1.5">
             <label htmlFor="h-email" className="text-sm font-medium">Usuario o email</label>

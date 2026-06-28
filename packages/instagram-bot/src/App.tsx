@@ -75,8 +75,8 @@ export function App() {
   if (!sesion) {
     return (
       <div className="min-h-screen grid place-items-center px-6">
-        <form onSubmit={entrar} className="w-full max-w-sm rounded-2xl bg-white border border-ink/5 shadow-card p-6 space-y-4">
-          <div className="flex items-center gap-2.5">
+        <form onSubmit={entrar} className="w-full max-w-md rounded-2xl bg-white border border-ink/5 shadow-card p-8 space-y-4">
+          <div className="flex items-center gap-2.5 mb-2">
             <span className="inline-grid place-items-center w-10 h-10 rounded-xl bg-brand-500 text-white"><MessageCircle className="h-5 w-5" /></span>
             <div className="leading-tight">
               <span className="text-lg font-medium text-brand-700 block">Bot de Instagram</span>
