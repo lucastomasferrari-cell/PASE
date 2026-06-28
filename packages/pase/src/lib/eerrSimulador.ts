@@ -17,8 +17,9 @@ export interface LineasEERR {
 }
 
 export type AjusteLinea =
-  | { tipo: "abs"; valor: number }   // nuevo monto absoluto en $
-  | { tipo: "pct"; valor: number };  // ajuste relativo en % (ej. -10 = bajar 10%)
+  | { tipo: "abs"; valor: number }     // nuevo monto absoluto en $
+  | { tipo: "pct"; valor: number }     // ajuste relativo en % (ej. -10 = bajar 10%)
+  | { tipo: "delta"; valor: number };  // suma/resta al valor base (ej. +50000 = base + 50.000)
 
 export interface ResultadoEERR {
   lineas: LineasEERR;   // los montos resultantes tras aplicar los ajustes
@@ -36,6 +37,7 @@ const KEYS_GASTO: (keyof LineasEERR)[] = [
 export function aplicarAjuste(base: number, ajuste: AjusteLinea | undefined): number {
   if (!ajuste) return base;
   if (ajuste.tipo === "abs") return ajuste.valor;
+  if (ajuste.tipo === "delta") return base + ajuste.valor;
   return base * (1 + ajuste.valor / 100);
 }
 

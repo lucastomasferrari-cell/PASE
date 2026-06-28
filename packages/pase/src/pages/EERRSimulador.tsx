@@ -12,7 +12,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Unidad = "abs" | "pct";
+type Unidad = "abs" | "pct" | "delta";
 interface InputLinea { unidad: Unidad; texto: string }
 
 const LINEAS: { key: keyof LineasEERR; label: string }[] = [
@@ -99,9 +99,15 @@ export default function EERRSimulador({ base, mes, onClose }: Props) {
                       <select value={inp?.unidad ?? "pct"} onChange={(e) => setLinea(key, { unidad: e.target.value as Unidad })} style={sel}>
                         <option value="pct">%</option>
                         <option value="abs">$</option>
+                        <option value="delta">±</option>
                       </select>
                       <input value={inp?.texto ?? ""} onChange={(e) => setLinea(key, { texto: e.target.value })}
-                        inputMode="decimal" placeholder={(inp?.unidad ?? "pct") === "abs" ? "$ nuevo" : "% ej. -10"}
+                        inputMode="decimal"
+                        placeholder={
+                          (inp?.unidad ?? "pct") === "abs" ? "$ nuevo"
+                          : (inp?.unidad ?? "pct") === "delta" ? "± ej. +50000 ó -20000"
+                          : "% ej. -10"
+                        }
                         style={inputStyle} />
                     </td>
                     <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: simV !== realV ? 600 : 400 }}>
@@ -122,8 +128,10 @@ export default function EERRSimulador({ base, mes, onClose }: Props) {
       </div>
 
       <div style={{ ...muted, marginTop: 10 }}>
-        Simulación en vivo — no modifica ningún dato real ni se guarda. El ajuste en % es relativo al valor real
-        (ej. −10 baja un 10%); en $ reemplaza el monto. Las líneas son independientes.
+        Simulación en vivo — no modifica ningún dato real ni se guarda. <strong>%</strong> es relativo al valor real
+        (ej. −10 baja un 10%); <strong>$</strong> reemplaza el monto;
+        <strong> ±</strong> suma o resta al valor real (ej. <code>+50000</code> agrega $50.000 al real,
+        <code>-20000</code> lo baja). Las líneas son independientes.
       </div>
     </div>
   );
