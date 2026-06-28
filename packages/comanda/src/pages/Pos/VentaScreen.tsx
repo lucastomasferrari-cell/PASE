@@ -61,7 +61,7 @@ export function VentaScreen() {
   const navigate = useNavigate();
 
   // Hook #1: carga + reload de los 4 datasets primarios + realtime + reconcile
-  const { venta, items, setItems, catalogo, grupos, loading, reloadVenta, reloadFull, addOptimistic, reconcileAdd } = useVentaData(ventaId);
+  const { venta, setVenta, items, setItems, catalogo, grupos, loading, reloadVenta, reloadFull, addOptimistic, reconcileAdd } = useVentaData(ventaId);
 
   // 'favoritos' = filtra solo los Quick Items del empleado; null = todos; N = grupo_id
   const [grupoSel, setGrupoSel] = useState<number | 'favoritos' | null>(null);
@@ -86,6 +86,11 @@ export function VentaScreen() {
   const [lastAddedItemId, setLastAddedItemId] = useState<number | null>(null);
   const [lastAddedRowId, setLastAddedRowId] = useState<number | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  // Sequence guard para changeQty: cuando el user pica +/- rápido sobre el
+  // mismo item, queremos que solo el ÚLTIMO request haga reload. Sin esto, el
+  // reload del primero traía cantidad vieja del server y pisaba el optimistic
+  // del segundo → flicker visible "5 baja a 4" (bug reportado 28-jun).
+  const changeQtySeqRef = useRef<Map<number, number>>(new Map());
   // Anti-double-tap: evita agregar el mismo producto 2 veces en < 350ms
   const clickCooldownRef = useRef<Map<number, number>>(new Map());
 
@@ -340,15 +345,34 @@ export function VentaScreen() {
 
   async function changeQty(itemRow: VentaPosItem, qty: number) {
     if (qty <= 0) return;
-    // Optimista: refleja el cambio antes de esperar la red
-    setItems((prev) => prev.map((i) =>
-      i.id === itemRow.id
-        ? { ...i, cantidad: qty, subtotal: qty * Number(i.precio_unitario) }
-        : i,
-    ));
+    // Optimista: refleja el cambio en items + recalcula el total de la venta
+    // ANTES de esperar la red. Sin esto, el "Total" de abajo se quedaba
+    // congelado hasta que el reload del server lo refrescaba.
+    setItems((prev) => {
+      const nuevos = prev.map((i) =>
+        i.id === itemRow.id
+          ? { ...i, cantidad: qty, subtotal: qty * Number(i.precio_unitario) }
+          : i,
+      );
+      const total = nuevos.reduce((acc, i) => acc + Number(i.subtotal ?? 0), 0);
+      setVenta((v) => v ? { ...v, total, subtotal: total } : v);
+      return nuevos;
+    });
+
+    // Sequence guard: bumpear seq de ESTE item. Solo el último request hace
+    // reload — los anteriores se descartan silenciosos para no pisar el
+    // optimistic con data vieja del server.
+    const seq = (changeQtySeqRef.current.get(itemRow.id) ?? 0) + 1;
+    changeQtySeqRef.current.set(itemRow.id, seq);
+
     const { error } = await modificarItem(itemRow.id, { cantidad: qty });
     if (error) { toast.error(error); reload(); return; }
-    reload(); // actualiza total de la venta
+
+    // Si entre que mandamos esta request y ahora llegó otro click +/-, el
+    // seq ya no matchea → el otro request va a hacer su propio reload con
+    // la cantidad final. Acá no hacemos nada.
+    if (changeQtySeqRef.current.get(itemRow.id) !== seq) return;
+    reload();
   }
 
   async function guardarEdicionItem() {

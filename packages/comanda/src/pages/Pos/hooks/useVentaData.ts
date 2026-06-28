@@ -11,6 +11,7 @@ import { listenReconcile } from '../../../lib/sync/idReconciliation';
 
 export interface UseVentaDataResult {
   venta: VentaPos | null;
+  setVenta: React.Dispatch<React.SetStateAction<VentaPos | null>>;
   items: VentaPosItem[];
   setItems: React.Dispatch<React.SetStateAction<VentaPosItem[]>>;
   catalogo: ItemConGrupo[];
@@ -166,5 +167,5 @@ export function useVentaData(ventaId: number): UseVentaDataResult {
     enabled: Number.isFinite(ventaId) && ventaId > 0,
   });
 
-  return { venta, items, setItems, catalogo, grupos, loading, reloadFull, reloadVenta, addOptimistic, reconcileAdd };
+  return { venta, setVenta, items, setItems, catalogo, grupos, loading, reloadFull, reloadVenta, addOptimistic, reconcileAdd };
 }
