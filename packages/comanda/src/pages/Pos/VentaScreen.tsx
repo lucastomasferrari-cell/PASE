@@ -67,6 +67,20 @@ export function VentaScreen() {
   const [grupoSel, setGrupoSel] = useState<number | 'favoritos' | null>(null);
   const [search, setSearch] = useState('');
   const [cursoActivo, setCursoActivo] = useState<number>(1);
+  // Si el local tiene `usar_cursos=false`, ocultamos toda la UI de cursos
+  // (tabs, pills "Stay"/"Enviar solo", header "Curso N · X sin enviar")
+  // y todo va en una sola tanda al cobrar. Default = true para back-compat.
+  const [usarCursos, setUsarCursos] = useState<boolean>(true);
+  useEffect(() => {
+    if (!venta?.local_id) return;
+    let cancelled = false;
+    void import('../../services/localSettingsService').then(({ getLocalSettings }) =>
+      getLocalSettings(venta.local_id),
+    ).then(({ data }) => {
+      if (!cancelled && data) setUsarCursos(data.usar_cursos ?? true);
+    });
+    return () => { cancelled = true; };
+  }, [venta?.local_id]);
 
   // Dialogs
   const [showCobro, setShowCobro] = useState(false);
@@ -469,6 +483,7 @@ export function VentaScreen() {
         editable={editable}
         cursoActivo={cursoActivo}
         maxCurso={maxCurso}
+        usarCursos={usarCursos}
         lastAddedItemId={lastAddedItemId}
         searchRef={searchRef}
         setGrupoSel={setGrupoSel}
@@ -508,6 +523,7 @@ export function VentaScreen() {
           itemsPorCurso={itemsPorCurso}
           catalogo={catalogo}
           editable={editable}
+          usarCursos={usarCursos}
           lastAddedRowId={lastAddedRowId}
           holdCount={holdCount}
           stayCount={stayCount}

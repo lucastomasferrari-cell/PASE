@@ -329,6 +329,14 @@ export function SettingsLocal() {
               checked={merged.acepta_delivery ?? true}
               onChange={(v) => setField('acepta_delivery', v)}
             />
+            <ToggleField
+              label="Usar cursos en el POS"
+              checked={merged.usar_cursos ?? true}
+              onChange={(v) => setField('usar_cursos', v)}
+            />
+            <p className="text-[10px] text-muted-foreground -mt-1 ml-1">
+              Restaurantes de mantel (entrada → principal → postre) lo usan para mandar cada round a la cocina cuando los comensales terminan el anterior. Si tu negocio manda todo junto (sushi, fast casual, cafetería), apagalo y la UI queda más simple.
+            </p>
             {(merged.tienda_activa ?? true) && (
               <>
                 <WarningIntegracionFalta provider="email"

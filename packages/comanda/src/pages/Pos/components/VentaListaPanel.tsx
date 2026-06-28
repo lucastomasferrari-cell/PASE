@@ -28,12 +28,15 @@ interface CheckRowProps {
   onToggleStay: () => void;
   onEditar: () => void;
   editable: boolean;
+  /** Si false, oculta las acciones "Enviar solo" y "Stay" (no aplican
+   * sin sistema de cursos). Default true. */
+  usarCursos?: boolean;
   flashed?: boolean;
 }
 
 function CheckRow({
   item, catalogo, onQty, onRemove, onRepetir, onAnular,
-  onCambiarPrecio, onCortesia, onMandarSolo, onToggleStay, onEditar, editable, flashed,
+  onCambiarPrecio, onCortesia, onMandarSolo, onToggleStay, onEditar, editable, usarCursos = true, flashed,
 }: CheckRowProps) {
   const it = catalogo.find((c) => c.id === item.item_id);
   const anulado = item.estado === 'anulado';
@@ -64,7 +67,7 @@ function CheckRow({
           {item.precio_unitario_original != null && Number(item.precio_unitario_original) !== Number(item.precio_unitario) && !item.es_cortesia && (
             <span className="text-[9px] px-1 py-0.5 rounded bg-warning/15 text-warning font-bold uppercase">Precio mod.</span>
           )}
-          {item.stay_until_release && item.estado === 'hold' && (
+          {item.stay_until_release && item.estado === 'hold' && usarCursos && (
             <span className="text-[9px] px-1 py-0.5 rounded bg-purple-200 text-purple-900 dark:bg-purple-900/40 dark:text-purple-100 font-bold uppercase inline-flex items-center gap-0.5">
               <PauseCircle className="h-2.5 w-2.5" /> Stay
             </span>
@@ -118,7 +121,7 @@ function CheckRow({
       {editable && !anulado && (
         <div className="flex items-center gap-2">
           <button type="button" onClick={onRepetir} className="text-[10px] text-primary hover:underline">+ Repetir</button>
-          {item.estado === 'hold' && (
+          {item.estado === 'hold' && usarCursos && (
             <>
               <button
                 type="button"
@@ -162,6 +165,9 @@ export interface VentaListaPanelProps {
   itemsPorCurso: Map<number, VentaPosItem[]>;
   catalogo: ItemConGrupo[];
   editable: boolean;
+  /** Si false (local sin cursos), el header del bloque dice "Sin enviar"
+   * en lugar de "Curso N" y oculta el pill "stay". Default true. */
+  usarCursos?: boolean;
   lastAddedRowId: number | null;
   holdCount: (curso: number) => number;
   stayCount: (curso: number) => number;
@@ -181,6 +187,7 @@ export const VentaListaPanel = React.memo(function VentaListaPanel({
   itemsPorCurso,
   catalogo,
   editable,
+  usarCursos = true,
   lastAddedRowId,
   holdCount,
   stayCount,
@@ -220,8 +227,8 @@ export const VentaListaPanel = React.memo(function VentaListaPanel({
                 )}
               >
                 <div className="flex items-center gap-1.5">
-                  <span>Curso {curso}</span>
-                  {stay > 0 && (
+                  <span>{usarCursos ? `Curso ${curso}` : 'Pedido'}</span>
+                  {usarCursos && stay > 0 && (
                     <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-purple-200 text-purple-900 dark:bg-purple-900/40 dark:text-purple-100 font-bold uppercase text-[9px]">
                       <PauseCircle className="h-2 w-2" /> {stay} stay
                     </span>
@@ -254,6 +261,7 @@ export const VentaListaPanel = React.memo(function VentaListaPanel({
                     onToggleStay={() => onToggleStay(it)}
                     onEditar={() => onEditarItem(it)}
                     editable={editable}
+                    usarCursos={usarCursos}
                     flashed={lastAddedRowId === it.id}
                   />
                 ))}

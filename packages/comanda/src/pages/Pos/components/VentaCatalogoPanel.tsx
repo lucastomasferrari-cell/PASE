@@ -195,6 +195,9 @@ export interface VentaCatalogoPanelProps {
   editable: boolean;
   cursoActivo: number;
   maxCurso: number;
+  /** Si false, oculta la fila de tabs "Curso 1/2/3 + Curso N+" del header.
+   * Configurado por local en SettingsLocal (comanda_local_settings.usar_cursos). */
+  usarCursos?: boolean;
   lastAddedItemId: number | null;
   searchRef: React.RefObject<HTMLInputElement | null>;
   setGrupoSel: (v: number | 'favoritos' | null) => void;
@@ -215,6 +218,7 @@ export const VentaCatalogoPanel = React.memo(function VentaCatalogoPanel({
   editable,
   cursoActivo,
   maxCurso,
+  usarCursos = true,
   lastAddedItemId,
   searchRef,
   setGrupoSel,
@@ -229,8 +233,9 @@ export const VentaCatalogoPanel = React.memo(function VentaCatalogoPanel({
   const densityCfg = CATALOGO_DENSITY_CONFIG[density];
   return (
     <div className="p-4 overflow-y-auto border-r border-border bg-card min-h-0">
-      {/* Selector de curso */}
-      {editable && (
+      {/* Selector de curso — solo si el local usa cursos. Si no, ocultamos
+          toda la franja y los items van todos al curso 1 implícito. */}
+      {editable && usarCursos && (
         <div className="mb-3 flex items-center gap-2 flex-wrap">
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Cargando en:</span>
           {Array.from({ length: maxCurso }, (_, i) => i + 1).map((c) => (

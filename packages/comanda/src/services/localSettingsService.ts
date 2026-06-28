@@ -33,6 +33,7 @@ export interface LocalSettingsPatch {
   acepta_delivery?: boolean;
   autolock_minutos?: number;
   features_pos_modos?: PosModo[];
+  usar_cursos?: boolean;
   horario_lun?: string | null;
   horario_mar?: string | null;
   horario_mie?: string | null;

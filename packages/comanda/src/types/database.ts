@@ -453,6 +453,9 @@ export interface ComandaLocalSettings extends HorariosLocal {
   acepta_delivery: boolean;
   autolock_minutos: number;
   features_pos_modos: PosModo[];
+  /** Si true, el POS muestra cursos (Curso 1/2/3 + Stay + Enviar solo). Si
+   * false (sushi/fast casual), oculta toda esa UI y manda todo en una tanda. */
+  usar_cursos: boolean;
   timezone: string;
   // MESA módulo #3 — configuración de reservas online
   reservas_activas: boolean;
