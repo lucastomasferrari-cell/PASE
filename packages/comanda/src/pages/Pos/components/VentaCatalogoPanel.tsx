@@ -90,8 +90,8 @@ function ProductTile({ item, disabled, flashed, favorito, onToggleFavorito, onCl
         }}
         disabled={disabled || (agotado && !onLongPress)}
         className={cn(
-          'w-full flex items-baseline justify-between gap-3 pl-1 pr-7 py-3 text-left rounded-md',
-          'transition-colors hover:bg-accent active:bg-accent touch-target-lg',
+          'w-full flex items-baseline justify-between gap-3 pl-1 pr-7 py-1.5 text-left rounded-md',
+          'transition-colors hover:bg-accent active:bg-accent',
           'disabled:opacity-50 disabled:cursor-not-allowed',
           flashed && 'bg-success/15',
           agotado && 'opacity-50',
@@ -215,7 +215,7 @@ export const VentaCatalogoPanel = React.memo(function VentaCatalogoPanel({
         ))}
       </div>
 
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-x-6">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4">
         {catalogoFiltrado.map((it) => (
           <ProductTile
             key={it.id}
