@@ -368,6 +368,22 @@ export async function anularItem(
   return { error: error?.message ?? null };
 }
 
+/**
+ * Quita un item EN HOLD (todavía no enviado a cocina). Soft-delete sin
+ * requerir manager. Para items ya enviados usar anularItem (que pide
+ * manager override + motivo).
+ *
+ * Fix bug 28-jun: antes el "tacho" llamaba modificarItem con cantidad=0,
+ * lo que dejaba la fila visible en la lista con cantidad 0. Ahora la
+ * RPC fn_quitar_item_hold_comanda hace soft-delete real.
+ */
+export async function quitarItemHold(itemId: number): Promise<{ error: string | null }> {
+  const { error } = await db.rpc('fn_quitar_item_hold_comanda', {
+    p_item_id: itemId,
+  });
+  return { error: error?.message ?? null };
+}
+
 export async function mandarCurso(ventaId: number, curso: number): Promise<{ count: number; error: string | null }> {
   const { featureFlags } = await import('../lib/featureFlags');
   if (featureFlags.offlineFirstVentas) {

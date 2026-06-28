@@ -5,7 +5,7 @@ import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
 import { type ItemConGrupo } from '../../services/itemsService';
 import {
-  agregarItem, modificarItem, mandarCurso, mandarItemIndividual, toggleItemStay, updateVentaMeta,
+  agregarItem, modificarItem, mandarCurso, mandarItemIndividual, toggleItemStay, updateVentaMeta, quitarItemHold,
 } from '../../services/ventasService';
 import type { VentaPosItem } from '../../types/database';
 import { formatARS } from '../../lib/format';
@@ -290,8 +290,18 @@ export function VentaScreen() {
     }
     const nombre = catalogo.find((c) => c.id === itemRow.item_id)?.nombre ?? `Item #${itemRow.item_id}`;
     if (!confirm(`¿Quitar "${nombre}" × ${itemRow.cantidad} de la venta?`)) return;
-    const { error } = await modificarItem(itemRow.id, { cantidad: 0 });
-    if (error) { toast.error(error); return; }
+    // Fix 28-jun: usar fn_quitar_item_hold_comanda (soft-delete real) en
+    // lugar de modificarItem con cantidad=0, que dejaba la fila visible
+    // en la lista con cantidad 0 (bug reportado por Lucas).
+    // Optimista: sacar de la lista inmediatamente.
+    setItems((prev) => {
+      const sin = prev.filter((i) => i.id !== itemRow.id);
+      const total = sin.reduce((acc, i) => acc + Number(i.subtotal ?? 0), 0);
+      setVenta((v) => v ? { ...v, total, subtotal: total } : v);
+      return sin;
+    });
+    const { error } = await quitarItemHold(itemRow.id);
+    if (error) { toast.error(error); reload(); return; }
     toast.success('Item quitado');
     reload();
   }
