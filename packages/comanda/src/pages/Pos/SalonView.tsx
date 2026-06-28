@@ -1,6 +1,72 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from 'lucide-react';
+
+// ── Density del plano de mesas (Compacto/Normal/Grande) ──────────────────
+// Se guarda en localStorage por dispositivo (no por user — útil cuando el
+// mismo equipo lo usan varios cajeros). Default: 'normal'.
+type MesaDensity = 'compact' | 'normal' | 'large';
+const DENSITY_STORAGE_KEY = 'comanda_mesa_density';
+
+interface DensityConfig {
+  padding: string;
+  minHeight: string;
+  numero: string;
+  zona: string;
+  meta: string;
+  planoBox: { w: number; h: number; rectW: number; rectH: number };
+  gridGap: string;
+  gridCols: string;
+}
+
+const DENSITY_CONFIG: Record<MesaDensity, DensityConfig> = {
+  compact: {
+    padding: 'p-2',
+    minHeight: 'min-h-[72px]',
+    numero: 'text-base',
+    zona: 'text-[10px]',
+    meta: 'text-[11px]',
+    planoBox: { w: 64, h: 64, rectW: 108, rectH: 58 },
+    gridGap: 'gap-2',
+    gridCols: 'grid-cols-3 sm:grid-cols-5 md:grid-cols-7 xl:grid-cols-9',
+  },
+  normal: {
+    padding: 'p-3',
+    minHeight: 'min-h-[120px]',
+    numero: 'text-lg',
+    zona: 'text-xs',
+    meta: 'text-xs',
+    planoBox: { w: 88, h: 88, rectW: 140, rectH: 80 },
+    gridGap: 'gap-3',
+    gridCols: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5',
+  },
+  large: {
+    padding: 'p-4',
+    minHeight: 'min-h-[150px]',
+    numero: 'text-xl',
+    zona: 'text-sm',
+    meta: 'text-sm',
+    planoBox: { w: 112, h: 112, rectW: 172, rectH: 100 },
+    gridGap: 'gap-4',
+    gridCols: 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4',
+  },
+};
+
+function useDensityMesas(): readonly [MesaDensity, (d: MesaDensity) => void] {
+  const [density, setDensityState] = useState<MesaDensity>(() => {
+    if (typeof window === 'undefined') return 'normal';
+    const saved = window.localStorage.getItem(DENSITY_STORAGE_KEY);
+    if (saved === 'compact' || saved === 'normal' || saved === 'large') return saved;
+    return 'normal';
+  });
+  const setDensity = useCallback((d: MesaDensity) => {
+    setDensityState(d);
+    if (typeof window !== 'undefined') {
+      try { window.localStorage.setItem(DENSITY_STORAGE_KEY, d); } catch { /* localStorage lleno o private mode */ }
+    }
+  }, []);
+  return [density, setDensity] as const;
+}
 import { useAuth } from '../../lib/auth';
 import { useAuthPos } from '../../lib/authPos';
 import { useLocalActivo } from '../../lib/localActivo';
@@ -33,6 +99,8 @@ export function SalonView() {
   const [abrirDialog, setAbrirDialog] = useState<MesaConVenta | null>(null);
   const [editandoLayout, setEditandoLayout] = useState(false);
   const puedeEditarLayout = usePermiso('comanda.config.editar');
+  const [density, setDensity] = useDensityMesas();
+  const densityCfg = DENSITY_CONFIG[density];
 
   // Tick cada 30s para refrescar relativoCorto + alertas de tiempo sin reconsultar
   // DB. El hook realtime cubre cambios de estado; este solo re-renderiza.
@@ -125,17 +193,44 @@ export function SalonView() {
                 </ZoneButton>
               ))}
             </nav>
-            {puedeEditarLayout && mesas.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setEditandoLayout(true)}
-                className="ml-auto gap-1.5"
-              >
-                <Layout className="h-3.5 w-3.5" />
-                Editar layout
-              </Button>
-            )}
+            <div className="ml-auto flex items-center gap-2">
+              {/* Toggle density: Compacto / Normal / Grande */}
+              <div className="inline-flex rounded-md border border-border bg-background p-0.5" role="group" aria-label="Tamaño de mesas">
+                {(['compact', 'normal', 'large'] as const).map((d) => {
+                  const label = d === 'compact' ? 'Compacto' : d === 'normal' ? 'Normal' : 'Grande';
+                  const letra = d === 'compact' ? 'S' : d === 'normal' ? 'M' : 'L';
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setDensity(d)}
+                      aria-pressed={density === d}
+                      aria-label={`Mesas ${label.toLowerCase()}`}
+                      title={`Mesas ${label.toLowerCase()}`}
+                      className={cn(
+                        'px-2.5 py-1 text-xs font-medium rounded transition-colors min-w-[28px]',
+                        density === d
+                          ? 'bg-accent text-foreground'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
+                      )}
+                    >
+                      {letra}
+                    </button>
+                  );
+                })}
+              </div>
+              {puedeEditarLayout && mesas.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditandoLayout(true)}
+                  className="gap-1.5"
+                >
+                  <Layout className="h-3.5 w-3.5" />
+                  Editar layout
+                </Button>
+              )}
+            </div>
           </header>
 
           {/* Barra de resumen + leyenda — una sola línea discreta */}
@@ -170,16 +265,17 @@ export function SalonView() {
           ) : mesasFiltradas.some((m) => m.pos_x !== null && m.pos_y !== null) ? (
             // Render absoluto: las mesas que tienen pos_x/pos_y van con
             // coordenadas, las que no tienen quedan abajo en grid auto.
-            <PlanoCustom mesas={mesasFiltradas} onClick={(m) => {
+            <PlanoCustom mesas={mesasFiltradas} density={density} onClick={(m) => {
               if (m.estado === 'libre') setAbrirDialog(m);
               else if (m.venta_abierta_id) navigate(`/pos/venta/${m.venta_abierta_id}`);
             }} />
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
+            <div className={cn('grid', densityCfg.gridCols, densityCfg.gridGap)}>
               {mesasFiltradas.map((m) => (
                 <MesaTile
                   key={m.id}
                   mesa={m}
+                  density={density}
                   onClick={() => {
                     if (m.estado === 'libre') setAbrirDialog(m);
                     else if (m.venta_abierta_id) navigate(`/pos/venta/${m.venta_abierta_id}`);
@@ -219,20 +315,18 @@ export function SalonView() {
 // Plano custom: mesas posicionadas con pos_x/pos_y absolute. Las que NO
 // tienen posición se renderizan en grid auto debajo. El user puede mezclar:
 // algunas mesas en el plano, otras todavía sin posicionar.
-const FORMA_W: Record<string, number> = { cuadrado: 88, redondo: 88, rectangular: 140 };
-const FORMA_H: Record<string, number> = { cuadrado: 88, redondo: 88, rectangular: 80 };
-
-function PlanoCustom({ mesas, onClick }: { mesas: MesaConVenta[]; onClick: (m: MesaConVenta) => void }) {
+function PlanoCustom({ mesas, onClick, density }: { mesas: MesaConVenta[]; onClick: (m: MesaConVenta) => void; density: MesaDensity }) {
   const posicionadas = mesas.filter((m) => m.pos_x !== null && m.pos_y !== null);
   const sinPosicion = mesas.filter((m) => m.pos_x === null || m.pos_y === null);
+  const cfg = DENSITY_CONFIG[density];
   return (
     <div>
       <div className="relative bg-muted/20 border border-dashed border-border rounded-lg overflow-auto"
         style={{ minHeight: 400 }}>
         <div className="relative" style={{ width: 1600, height: 1200 }}>
           {posicionadas.map((m) => {
-            const w = FORMA_W[m.forma] ?? 88;
-            const h = FORMA_H[m.forma] ?? 88;
+            const w = m.forma === 'rectangular' ? cfg.planoBox.rectW : cfg.planoBox.w;
+            const h = m.forma === 'rectangular' ? cfg.planoBox.rectH : cfg.planoBox.h;
             return (
             <div
               key={m.id}
@@ -244,7 +338,7 @@ function PlanoCustom({ mesas, onClick }: { mesas: MesaConVenta[]; onClick: (m: M
                 height: h,
               }}
             >
-              <MesaTile mesa={m} onClick={() => onClick(m)} />
+              <MesaTile mesa={m} density={density} onClick={() => onClick(m)} />
             </div>
             );
           })}
@@ -255,9 +349,9 @@ function PlanoCustom({ mesas, onClick }: { mesas: MesaConVenta[]; onClick: (m: M
           <div className="text-xs text-muted-foreground mb-2">
             Sin posición ({sinPosicion.length}) — entrá a "Editar layout" para acomodar:
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
+          <div className={cn('grid', cfg.gridCols, cfg.gridGap)}>
             {sinPosicion.map((m) => (
-              <MesaTile key={m.id} mesa={m} onClick={() => onClick(m)} />
+              <MesaTile key={m.id} mesa={m} density={density} onClick={() => onClick(m)} />
             ))}
           </div>
         </div>
@@ -342,9 +436,10 @@ function clasificarMesa(mesa: MesaConVenta): MesaBucket {
 }
 
 
-function MesaTile({ mesa, onClick }: { mesa: MesaConVenta; onClick: () => void }) {
+function MesaTile({ mesa, onClick, density = 'normal' }: { mesa: MesaConVenta; onClick: () => void; density?: MesaDensity }) {
   const bucket = clasificarMesa(mesa);
   const styles = MESA_BUCKET_STYLES[bucket];
+  const cfg = DENSITY_CONFIG[density];
   const radius = mesa.forma === 'redondo' ? 'rounded-full' : mesa.forma === 'rectangular' ? 'rounded-lg' : 'rounded-2xl';
   return (
     <button
@@ -352,7 +447,9 @@ function MesaTile({ mesa, onClick }: { mesa: MesaConVenta; onClick: () => void }
       onClick={onClick}
       title={styles.label}
       className={cn(
-        'p-3 border-2 min-h-[120px] flex flex-col justify-center items-center text-center relative',
+        'border-2 flex flex-col justify-center items-center text-center relative',
+        cfg.padding,
+        cfg.minHeight,
         'transition-all hover:scale-105 hover:shadow-sm',
         radius,
         styles.bg,
@@ -360,16 +457,17 @@ function MesaTile({ mesa, onClick }: { mesa: MesaConVenta; onClick: () => void }
         styles.border,
       )}
     >
-      <div className="text-lg font-semibold">{mesa.numero}</div>
-      {mesa.zona && <div className="text-xs opacity-70">{mesa.zona}</div>}
+      <div className={cn('font-semibold', cfg.numero)}>{mesa.numero}</div>
+      {mesa.zona && <div className={cn('opacity-70', cfg.zona)}>{mesa.zona}</div>}
       {mesa.venta_abierta_id !== null && (
         <>
-          <div className="text-xs font-medium mt-1 tabular-nums">
+          <div className={cn('font-medium mt-1 tabular-nums', cfg.meta)}>
             {formatARS(mesa.venta_total)}
           </div>
           {mesa.venta_abierta_at && (
             <div className={cn(
-              'text-xs tabular-nums',
+              'tabular-nums',
+              cfg.meta,
               bucket === 'urgente' && 'font-bold',
               bucket === 'atencion' && 'font-semibold',
             )}>
