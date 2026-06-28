@@ -86,6 +86,27 @@ export function AuthPosProvider({ children, autolockMin }: Props) {
     };
   }, [empleado, armTimer]);
 
+  // Fix 28-jun: cuando el dueño/admin cambia de local desde el sidebar
+  // (writeLocalActivo dispara 'comanda:local-activo-changed'), si el
+  // empleado POS activo pertenece a otro local, lo deslogueamos. Sin esto,
+  // al abrir caja o cobrar tira "EMPLEADO_NO_EN_LOCAL" porque el RPC
+  // valida que el cajero pertenezca al local. Forzar nuevo PIN para el
+  // local nuevo es el comportamiento correcto (el cajero del local A no
+  // debería poder operar en el local B sin re-identificarse).
+  useEffect(() => {
+    if (!empleado) return;
+    const handler = (e: Event) => {
+      const newLocalId = (e as CustomEvent<number | null>).detail;
+      if (typeof newLocalId === 'number' && newLocalId !== empleado.local_id) {
+        console.info('[authPos] local cambió, deslogueando POS', { from: empleado.local_id, to: newLocalId });
+        writeEmpleadoToStorage(null);
+        setEmpleado(null);
+      }
+    };
+    window.addEventListener('comanda:local-activo-changed', handler);
+    return () => window.removeEventListener('comanda:local-activo-changed', handler);
+  }, [empleado]);
+
   const loginPin = useCallback(async (localId: number, pin: string) => {
     const { empleadoId, error } = await verificarPin(localId, pin);
     if (error) return { ok: false, error };

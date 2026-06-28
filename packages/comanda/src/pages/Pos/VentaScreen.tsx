@@ -61,7 +61,7 @@ export function VentaScreen() {
   const navigate = useNavigate();
 
   // Hook #1: carga + reload de los 4 datasets primarios + realtime + reconcile
-  const { venta, items, setItems, catalogo, grupos, loading, reloadVenta, addOptimistic, reconcileAdd } = useVentaData(ventaId);
+  const { venta, items, setItems, catalogo, grupos, loading, reloadVenta, reloadFull, addOptimistic, reconcileAdd } = useVentaData(ventaId);
 
   // 'favoritos' = filtra solo los Quick Items del empleado; null = todos; N = grupo_id
   const [grupoSel, setGrupoSel] = useState<number | 'favoritos' | null>(null);
@@ -610,7 +610,14 @@ export function VentaScreen() {
         <AgotarDialog
           item={agotarItem}
           onClose={() => setAgotarItem(null)}
-          onDone={() => { setAgotarItem(null); reload(); toast.success(`${agotarItem.nombre} marcado agotado`); }}
+          onDone={() => {
+            setAgotarItem(null);
+            // Fix 28-jun: usar reloadFull (no reload/reloadVenta) para que
+            // el catálogo se refresque con el nuevo estado='agotado' del
+            // item. Sin esto el ProductTile seguía mostrándolo disponible.
+            void reloadFull();
+            toast.success(`${agotarItem.nombre} marcado agotado`);
+          }}
         />
       )}
 
