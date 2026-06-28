@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '../../../components/SearchInput';
@@ -6,6 +6,60 @@ import { formatARS } from '../../../lib/format';
 import { cn } from '@/lib/utils';
 import type { ItemConGrupo } from '../../../services/itemsService';
 import type { ItemGrupo } from '../../../types/database';
+
+// ── Density del catálogo del POS (Compacto/Normal/Grande) ─────────────────
+// Mismo patrón que SalonView. Independiente del salón (otra key) para que
+// el cajero pueda preferir items chiquitos pero mesas grandes (o viceversa).
+type CatalogoDensity = 'compact' | 'normal' | 'large';
+const CATALOGO_DENSITY_KEY = 'comanda_pos_catalogo_density';
+
+interface CatalogoDensityConfig {
+  itemPaddingY: string;
+  itemText: string;
+  priceText: string;
+  agotadoText: string;
+  gridCols: string;
+}
+
+const CATALOGO_DENSITY_CONFIG: Record<CatalogoDensity, CatalogoDensityConfig> = {
+  compact: {
+    itemPaddingY: 'py-1',
+    itemText: 'text-xs',
+    priceText: 'text-xs',
+    agotadoText: 'text-[9px]',
+    gridCols: 'grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-x-3',
+  },
+  normal: {
+    itemPaddingY: 'py-1.5',
+    itemText: 'text-sm',
+    priceText: 'text-sm',
+    agotadoText: 'text-[10px]',
+    gridCols: 'grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4',
+  },
+  large: {
+    itemPaddingY: 'py-2.5',
+    itemText: 'text-base',
+    priceText: 'text-base',
+    agotadoText: 'text-xs',
+    gridCols: 'grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-x-5',
+  },
+};
+
+function useCatalogoDensity(): readonly [CatalogoDensity, (d: CatalogoDensity) => void] {
+  const [density, setDensityState] = useState<CatalogoDensity>(() => {
+    if (typeof window === 'undefined') return 'normal';
+    const saved = window.localStorage.getItem(CATALOGO_DENSITY_KEY);
+    if (saved === 'compact' || saved === 'normal' || saved === 'large') return saved;
+    return 'normal';
+  });
+  const setDensity = useCallback((d: CatalogoDensity) => {
+    setDensityState(d);
+    if (typeof window !== 'undefined') {
+      try { window.localStorage.setItem(CATALOGO_DENSITY_KEY, d); } catch { /* private mode */ }
+    }
+  }, []);
+  return [density, setDensity] as const;
+}
 
 interface GrupoTabProps {
   active: boolean;
@@ -33,14 +87,16 @@ interface ProductTileProps {
   disabled: boolean;
   flashed?: boolean;
   favorito?: boolean;
+  density?: CatalogoDensity;
   onToggleFavorito?: () => void;
   onClick: () => void;
   onLongPress?: () => void;
 }
 
 // Fila plana tipo menú: nombre … precio. Sin caja, sin monograma, sin emoji.
-function ProductTile({ item, disabled, flashed, favorito, onToggleFavorito, onClick, onLongPress }: ProductTileProps) {
+function ProductTile({ item, disabled, flashed, favorito, density = 'normal', onToggleFavorito, onClick, onLongPress }: ProductTileProps) {
   const agotado = item.estado === 'agotado';
+  const densityCfg = CATALOGO_DENSITY_CONFIG[density];
   const longPressRef = useRef<{ timer: number | null; fired: boolean }>({ timer: null, fired: false });
 
   function handlePointerDown() {
@@ -90,7 +146,8 @@ function ProductTile({ item, disabled, flashed, favorito, onToggleFavorito, onCl
         }}
         disabled={disabled || (agotado && !onLongPress)}
         className={cn(
-          'w-full flex items-baseline justify-between gap-3 pl-1 pr-7 py-1.5 text-left rounded-md',
+          'w-full flex items-baseline justify-between gap-3 pl-1 pr-7 text-left rounded-md',
+          densityCfg.itemPaddingY,
           'transition-colors hover:bg-accent active:bg-accent',
           'disabled:opacity-50 disabled:cursor-not-allowed',
           flashed && 'bg-success/15',
@@ -98,13 +155,13 @@ function ProductTile({ item, disabled, flashed, favorito, onToggleFavorito, onCl
         )}
         title={agotado ? 'AGOTADO — mantené presionado para reponer' : 'Tocá para agregar · mantené presionado para marcar agotado'}
       >
-        <span className="min-w-0 flex-1 truncate text-sm">
+        <span className={cn('min-w-0 flex-1 truncate', densityCfg.itemText)}>
           {item.nombre}
           {agotadoLabel && (
-            <span className="ml-2 text-[10px] uppercase tracking-wide text-destructive font-medium">{agotadoLabel}</span>
+            <span className={cn('ml-2 uppercase tracking-wide text-destructive font-medium', densityCfg.agotadoText)}>{agotadoLabel}</span>
           )}
         </span>
-        <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
+        <span className={cn('shrink-0 tabular-nums text-muted-foreground', densityCfg.priceText)}>
           {formatARS(item.precio_madre)}
         </span>
       </button>
@@ -168,6 +225,8 @@ export const VentaCatalogoPanel = React.memo(function VentaCatalogoPanel({
   onLongPress,
   onToggleFav,
 }: VentaCatalogoPanelProps) {
+  const [density, setDensity] = useCatalogoDensity();
+  const densityCfg = CATALOGO_DENSITY_CONFIG[density];
   return (
     <div className="p-4 overflow-y-auto border-r border-border bg-card min-h-0">
       {/* Selector de curso */}
@@ -191,15 +250,42 @@ export const VentaCatalogoPanel = React.memo(function VentaCatalogoPanel({
         </div>
       )}
 
-      <div className="mb-3">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Buscar producto… (Enter agrega el primero)"
-          autoFocus
-          inputRef={searchRef}
-          onKeyDown={onSearchKeyDown}
-        />
+      <div className="mb-3 flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Buscar producto… (Enter agrega el primero)"
+            autoFocus
+            inputRef={searchRef}
+            onKeyDown={onSearchKeyDown}
+          />
+        </div>
+        {/* Toggle density del catálogo (S/M/L) — persiste en localStorage */}
+        <div className="inline-flex rounded-md border border-border bg-background p-0.5 shrink-0" role="group" aria-label="Tamaño de items">
+          {(['compact', 'normal', 'large'] as const).map((d) => {
+            const label = d === 'compact' ? 'Compacto' : d === 'normal' ? 'Normal' : 'Grande';
+            const letra = d === 'compact' ? 'S' : d === 'normal' ? 'M' : 'L';
+            return (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setDensity(d)}
+                aria-pressed={density === d}
+                aria-label={`Items ${label.toLowerCase()}`}
+                title={`Items ${label.toLowerCase()}`}
+                className={cn(
+                  'px-2.5 h-9 text-xs font-medium rounded transition-colors min-w-[28px]',
+                  density === d
+                    ? 'bg-accent text-foreground'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
+                )}
+              >
+                {letra}
+              </button>
+            );
+          })}
+        </div>
       </div>
       <div className="flex gap-1 mb-3 flex-wrap">
         {favoritosSet.size > 0 && (
@@ -215,7 +301,7 @@ export const VentaCatalogoPanel = React.memo(function VentaCatalogoPanel({
         ))}
       </div>
 
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4">
+      <div className={cn('grid', densityCfg.gridCols)}>
         {catalogoFiltrado.map((it) => (
           <ProductTile
             key={it.id}
@@ -223,6 +309,7 @@ export const VentaCatalogoPanel = React.memo(function VentaCatalogoPanel({
             disabled={!editable}
             flashed={lastAddedItemId === it.id}
             favorito={favoritosSet.has(it.id)}
+            density={density}
             onToggleFavorito={() => onToggleFav(it)}
             onClick={() => onAddItem(it)}
             onLongPress={() => onLongPress(it)}
