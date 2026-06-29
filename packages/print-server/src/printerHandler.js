@@ -12,12 +12,12 @@ import os from 'node:os';
 import path from 'node:path';
 const execAsync = promisify(exec);
 
-// Retorna el PortName de la primera impresora Windows en puerto USB (ej: "USB001").
-async function findWindowsUsbPortName() {
+// Retorna el Name de la primera impresora Windows en puerto USB (ej: "Impresora Comanda").
+async function findWindowsUsbPrinterName() {
   if (process.platform !== 'win32') return null;
   try {
     const { stdout } = await execAsync(
-      `powershell.exe -NoProfile -Command "Get-Printer | Where-Object { $_.PortName -match '^USB' } | Select-Object -First 1 -ExpandProperty PortName"`,
+      `powershell.exe -NoProfile -Command "Get-Printer | Where-Object { $_.PortName -match '^USB' } | Select-Object -First 1 -ExpandProperty Name"`,
       { timeout: 5000 }
     );
     return stdout.trim() || null;
@@ -27,30 +27,96 @@ async function findWindowsUsbPortName() {
 }
 
 // Interface custom para USB en Windows.
-// node-thermal-printer acepta un objeto en lugar de string para interface.
-// fs.writeFile('\\.\USB001', ...) no funciona directamente en Node.js/Windows —
-// el acceso al puerto de impresora USB pasa por el print spooler. La solución:
-// escribir el buffer ESC/POS a un archivo temp y mandarlos al puerto con
-// `cmd /c copy /b`, que sí puede escribir a puertos USB del spooler.
+// Usa la Windows Print API (winspool.drv) con tipo de datos RAW para enviar
+// los bytes ESC/POS directamente al hardware sin que el driver "Generic/Text Only"
+// los procese como texto y los corrompa.
+// El flujo: escribir buffer a bin temp → generar ps1 temp con P/Invoke →
+// ejecutar ps1 → limpiar ambos archivos.
 function makeWindowsUsbInterface() {
   return {
     async isPrinterConnected() {
-      const portName = await findWindowsUsbPortName().catch(() => null);
-      return !!portName;
+      const name = await findWindowsUsbPrinterName().catch(() => null);
+      return !!name;
     },
     async execute(buffer) {
-      const portName = await findWindowsUsbPortName();
-      if (!portName) throw new Error('No se encontró impresora USB. Instalá el driver desde el Print Agent.');
+      const printerName = await findWindowsUsbPrinterName();
+      if (!printerName) throw new Error('No se encontró impresora USB. Instalá el driver desde el Print Agent.');
 
-      const tmpFile = path.join(os.tmpdir(), `comanda_print_${Date.now()}.bin`);
-      await fs.promises.writeFile(tmpFile, buffer);
+      const ts = Date.now();
+      const binFile = path.join(os.tmpdir(), `comanda_${ts}.bin`);
+      const psFile  = path.join(os.tmpdir(), `comanda_${ts}.ps1`);
+
+      await fs.promises.writeFile(binFile, buffer);
+
+      // pDataType="RAW" → los bytes van directo al hardware sin que el driver
+      // los toque. copy /b pasaba por "Generic/Text Only" y corrompía ESC/POS.
+      const safeBin     = binFile.replace(/\\/g, '\\\\');
+      const safePrinter = printerName.replace(/'/g, "''");
+      const psScript = `
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+public class EscPos {
+  [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Ansi)]
+  public class DOC {
+    public string pDocName;
+    public string pOutputFile;
+    public string pDataType;
+  }
+  [DllImport("winspool.drv",CharSet=CharSet.Ansi,SetLastError=true)]
+  public static extern bool OpenPrinter(string n,out IntPtr h,IntPtr d);
+  [DllImport("winspool.drv",SetLastError=true)]
+  public static extern bool ClosePrinter(IntPtr h);
+  [DllImport("winspool.drv",CharSet=CharSet.Ansi,SetLastError=true)]
+  public static extern int StartDocPrinter(IntPtr h,int l,[In,MarshalAs(UnmanagedType.LPStruct)] DOC di);
+  [DllImport("winspool.drv",SetLastError=true)]
+  public static extern bool EndDocPrinter(IntPtr h);
+  [DllImport("winspool.drv",SetLastError=true)]
+  public static extern bool StartPagePrinter(IntPtr h);
+  [DllImport("winspool.drv",SetLastError=true)]
+  public static extern bool EndPagePrinter(IntPtr h);
+  [DllImport("winspool.drv",SetLastError=true)]
+  public static extern bool WritePrinter(IntPtr h,IntPtr p,int c,out int w);
+}
+'@
+$bytes = [IO.File]::ReadAllBytes('${safeBin}')
+$h = [IntPtr]::Zero
+if (-not [EscPos]::OpenPrinter('${safePrinter}', [ref]$h, [IntPtr]::Zero)) {
+  throw "OpenPrinter fallo: " + [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+}
+$d = New-Object EscPos+DOC
+$d.pDocName  = 'COMANDA'
+$d.pDataType = 'RAW'
+$jobId = [EscPos]::StartDocPrinter($h, 1, $d)
+if ($jobId -le 0) {
+  [EscPos]::ClosePrinter($h)
+  throw "StartDocPrinter fallo: " + [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+}
+[EscPos]::StartPagePrinter($h) | Out-Null
+$p = [Runtime.InteropServices.Marshal]::AllocCoTaskMem($bytes.Length)
+[Runtime.InteropServices.Marshal]::Copy($bytes, 0, $p, $bytes.Length)
+$w = 0
+[EscPos]::WritePrinter($h, $p, $bytes.Length, [ref]$w) | Out-Null
+[Runtime.InteropServices.Marshal]::FreeCoTaskMem($p)
+[EscPos]::EndPagePrinter($h) | Out-Null
+[EscPos]::EndDocPrinter($h) | Out-Null
+[EscPos]::ClosePrinter($h) | Out-Null
+Write-Output "OK:$w"
+`;
+
+      await fs.promises.writeFile(psFile, psScript, 'utf8');
       try {
-        // copy /b envía bytes crudos al puerto — único método que funciona para
-        // ESC/POS en Windows sin node-printer ni driver adicional.
-        await execAsync(`cmd /c copy /b "${tmpFile}" ${portName}`, { timeout: 10000 });
+        const { stdout } = await execAsync(
+          `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${psFile}"`,
+          { timeout: 15000 }
+        );
+        const out = stdout.trim();
+        if (!out.startsWith('OK:')) throw new Error(`Print error: ${out}`);
         return 'Print done';
       } finally {
-        fs.unlink(tmpFile, () => {});
+        fs.unlink(binFile, () => {});
+        fs.unlink(psFile, () => {});
       }
     },
   };
