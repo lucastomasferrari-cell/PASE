@@ -86,6 +86,8 @@ export function VentaScreen() {
   const [showCobro, setShowCobro] = useState(false);
   const [showEmitirFactura, setShowEmitirFactura] = useState(false);
   const [showDescuento, setShowDescuento] = useState(false);
+  // Dialog de selección de curso cuando hay múltiples con items pendientes
+  const [showMarcharPicker, setShowMarcharPicker] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
   const [showSplit, setShowSplit] = useState(false);
@@ -429,10 +431,38 @@ export function VentaScreen() {
     const itemsEnHold = (itemsPorCurso.get(curso) ?? []).filter((i) => i.estado === 'hold');
     const enStay = itemsEnHold.filter((i) => i.stay_until_release).length;
     if (count === 0 && enStay > 0) {
-      toast.warning(`Curso ${curso}: ${enStay} item(s) en stay no se enviaron. Liberalos individualmente.`);
+      toast.warning(`Curso ${curso}: ${enStay} item(s) en hold no se enviaron. Liberalos para marcharlos.`);
     } else {
-      toast.success(`Curso ${curso} enviado a cocina${enStay > 0 ? ` (${enStay} en stay quedaron)` : ''}`);
+      toast.success(`Curso ${curso} enviado a cocina${enStay > 0 ? ` (${enStay} en hold quedaron)` : ''}`);
     }
+    reload();
+  }
+
+  // Handler del botón "Marchar" en el footer:
+  // - Si hay 1 solo curso con items en hold → lo manda directo
+  // - Si hay múltiples → abre el picker de selección
+  function handleMarchar() {
+    const cursosConHold = Array.from(itemsPorCurso.entries())
+      .filter(([, its]) => its.some((i) => i.estado === 'hold' && !i.stay_until_release))
+      .map(([c]) => c);
+    if (cursosConHold.length === 0) return;
+    if (cursosConHold.length === 1 && cursosConHold[0] !== undefined) {
+      void mandarCursoHandler(cursosConHold[0]);
+    } else {
+      setShowMarcharPicker(true);
+    }
+  }
+
+  // Handler del botón "Hold": alterna stay en TODOS los items en hold.
+  // Si todos ya están en stay → los libera. Si no → los pone todos en stay.
+  async function handleHoldTodos() {
+    const holdItems = items.filter((i) => i.estado === 'hold');
+    if (holdItems.length === 0) return;
+    const todosEnStay = holdItems.every((i) => i.stay_until_release);
+    const nuevoStay = !todosEnStay;
+    const aTogglerar = holdItems.filter((i) => i.stay_until_release !== nuevoStay);
+    await Promise.all(aTogglerar.map((i) => toggleItemStay(i.id)));
+    toast.success(nuevoStay ? `⏸ ${holdItems.length} item(s) en hold` : `▶ Hold liberado`);
     reload();
   }
 
@@ -550,6 +580,11 @@ export function VentaScreen() {
         <VentaFooter
           venta={venta}
           editable={editable}
+          totalHold={items.filter((i) => i.estado === 'hold').length}
+          todosEnStay={items.filter((i) => i.estado === 'hold').every((i) => i.stay_until_release)}
+          onMarchar={handleMarchar}
+          onHold={() => void handleHoldTodos()}
+          onMesa={() => navigate(venta.modo === 'salon' ? '/pos/salon' : '/pos/mostrador')}
           onCobrar={() => setShowCobro(true)}
         />
       </aside>
@@ -572,6 +607,8 @@ export function VentaScreen() {
           open={showCobro}
           onOpenChange={setShowCobro}
           venta={venta}
+          items={items}
+          catalogo={catalogo}
           empleadoId={empleado.id}
           onCobrado={() => {
             reload();
@@ -582,6 +619,55 @@ export function VentaScreen() {
           }}
         />
       )}
+
+      {/* Dialog: seleccionar qué curso marchar (aparece cuando hay múltiples con pendientes) */}
+      <Dialog open={showMarcharPicker} onOpenChange={setShowMarcharPicker}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>¿Qué marchás?</DialogTitle>
+            <DialogDescription>Seleccioná el curso que querés enviar a cocina.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-1">
+            {Array.from(itemsPorCurso.entries())
+              .filter(([, its]) => its.some((i) => i.estado === 'hold' && !i.stay_until_release))
+              .map(([curso, its]) => {
+                const pendientes = its.filter((i) => i.estado === 'hold' && !i.stay_until_release);
+                return (
+                  <button
+                    key={curso}
+                    type="button"
+                    onClick={async () => {
+                      setShowMarcharPicker(false);
+                      await mandarCursoHandler(curso);
+                    }}
+                    className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-border hover:bg-accent text-left transition-colors"
+                  >
+                    <span className="font-medium">Curso {curso}</span>
+                    <span className="text-sm text-muted-foreground">{pendientes.length} item(s)</span>
+                  </button>
+                );
+              })
+            }
+            <button
+              type="button"
+              onClick={async () => {
+                setShowMarcharPicker(false);
+                const cursos = Array.from(itemsPorCurso.entries())
+                  .filter(([, its]) => its.some((i) => i.estado === 'hold' && !i.stay_until_release))
+                  .map(([c]) => c);
+                for (const c of cursos) await mandarCursoHandler(c);
+              }}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-lg bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:border-emerald-800 text-left transition-colors"
+            >
+              <span className="font-medium text-emerald-800 dark:text-emerald-300">Marchar todo</span>
+              <span className="text-sm text-emerald-700 dark:text-emerald-400">Todos los cursos</span>
+            </button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMarcharPicker(false)}>Cancelar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {showEmitirFactura && (
         <EmitirFacturaDialog

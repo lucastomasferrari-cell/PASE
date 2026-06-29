@@ -1,5 +1,5 @@
 import React from 'react';
-import { Send, Trash2, PauseCircle, Play, CloudUpload } from 'lucide-react';
+import { Send, Trash2, PauseCircle, Play, CloudUpload, MoreHorizontal } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -28,8 +28,6 @@ interface CheckRowProps {
   onToggleStay: () => void;
   onEditar: () => void;
   editable: boolean;
-  /** Si false, oculta las acciones "Enviar solo" y "Stay" (no aplican
-   * sin sistema de cursos). Default true. */
   usarCursos?: boolean;
   flashed?: boolean;
 }
@@ -40,122 +38,163 @@ function CheckRow({
 }: CheckRowProps) {
   const it = catalogo.find((c) => c.id === item.item_id);
   const anulado = item.estado === 'anulado';
+  const enHold = item.estado === 'hold';
+  const enStay = item.stay_until_release;
+
   return (
     <div
       className={cn(
-        'py-1 px-2 border-b border-border transition-colors duration-700',
+        'py-2 px-2 border-b border-border transition-colors duration-700',
         anulado && 'opacity-40',
         flashed && 'bg-amber-100/70 dark:bg-amber-900/30 ring-1 ring-amber-400',
       )}
     >
-      {/* Línea 1: nombre · controles de qty · precio total */}
-      <div className="flex items-center gap-1.5">
-        <div className="flex-1 min-w-0 flex items-center gap-1 flex-wrap">
+      {/* Línea 1: nombre + precio */}
+      <div className="flex items-start gap-1.5">
+        <div className="flex-1 min-w-0">
           <span
             className={cn(
-              'text-sm font-medium truncate',
-              editable && item.estado === 'hold' && 'cursor-pointer hover:text-primary',
+              'text-sm font-medium',
+              editable && enHold && 'cursor-pointer hover:text-primary',
             )}
-            onDoubleClick={editable && item.estado === 'hold' ? onEditar : undefined}
-            title={editable && item.estado === 'hold' ? 'Doble click para editar nombre o precio' : undefined}
+            onDoubleClick={editable && enHold ? onEditar : undefined}
+            title={editable && enHold ? 'Doble click para editar nombre o precio' : undefined}
           >
             {item.nombre_display ?? it?.nombre ?? `Item #${item.item_id}`}
           </span>
-          {item.es_cortesia && (
-            <span className="text-[9px] px-1 py-0.5 rounded bg-success/15 text-success font-bold uppercase">Cortesía</span>
-          )}
-          {item.precio_unitario_original != null && Number(item.precio_unitario_original) !== Number(item.precio_unitario) && !item.es_cortesia && (
-            <span className="text-[9px] px-1 py-0.5 rounded bg-warning/15 text-warning font-bold uppercase">Precio mod.</span>
-          )}
-          {item.stay_until_release && item.estado === 'hold' && usarCursos && (
-            <span className="text-[9px] px-1 py-0.5 rounded bg-purple-200 text-purple-900 dark:bg-purple-900/40 dark:text-purple-100 font-bold uppercase inline-flex items-center gap-0.5">
-              <PauseCircle className="h-2.5 w-2.5" /> Stay
-            </span>
-          )}
-          {(item as unknown as { _local_dirty?: boolean })._local_dirty && (
-            <span className="text-[9px] px-1 py-0.5 rounded bg-amber-200 text-amber-900 font-bold uppercase inline-flex items-center gap-0.5 animate-pulse">
-              <CloudUpload className="h-2.5 w-2.5" /> Queued
-            </span>
-          )}
+          {/* Badges inline */}
+          <span className="inline-flex gap-1 ml-1.5 align-middle">
+            {item.es_cortesia && (
+              <span className="text-[9px] px-1 py-0.5 rounded bg-success/15 text-success font-bold uppercase">Cortesía</span>
+            )}
+            {item.precio_unitario_original != null && Number(item.precio_unitario_original) !== Number(item.precio_unitario) && !item.es_cortesia && (
+              <span className="text-[9px] px-1 py-0.5 rounded bg-warning/15 text-warning font-bold uppercase">Precio mod.</span>
+            )}
+            {(item as unknown as { _local_dirty?: boolean })._local_dirty && (
+              <span className="text-[9px] px-1 py-0.5 rounded bg-amber-200 text-amber-900 font-bold uppercase inline-flex items-center gap-0.5 animate-pulse">
+                <CloudUpload className="h-2.5 w-2.5" /> Queued
+              </span>
+            )}
+          </span>
         </div>
-        {editable && item.estado === 'hold' ? (
-          <div className="flex items-center gap-0.5 shrink-0">
-            <div className="flex items-center rounded border border-border divide-x divide-border overflow-hidden">
-              <button
-                type="button"
-                className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:bg-accent text-base leading-none"
-                onClick={() => onQty(Math.max(1, Number(item.cantidad) - 1))}
-              >−</button>
-              <span className="w-6 text-center text-xs tabular-nums select-none">{item.cantidad}</span>
-              <button
-                type="button"
-                className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:bg-accent text-base leading-none"
-                onClick={() => onQty(Math.min(99, Number(item.cantidad) + 1))}
-              >+</button>
-            </div>
-            <button
-              type="button"
-              onClick={onRemove}
-              title="Quitar"
-              className="h-6 w-6 flex items-center justify-center rounded text-destructive hover:bg-destructive/10"
-            >
-              <Trash2 className="h-3 w-3" />
-            </button>
-          </div>
-        ) : (
-          <span className="text-xs text-muted-foreground shrink-0">×{item.cantidad}</span>
-        )}
         <strong className="text-sm tabular-nums shrink-0">{formatARS(item.subtotal)}</strong>
       </div>
 
-      {/* Línea 2: modificadores / notas / precio u. (solo si hay info extra) */}
+      {/* Modificadores / notas */}
       {(item.modificadores && item.modificadores.length > 0 || item.notas) && (
-        <div className="text-[11px] text-muted-foreground truncate">
+        <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
           {item.modificadores?.map((m) => m.nombre).join(' · ')}
           {item.modificadores?.length && item.notas ? ' · ' : ''}
           {item.notas && <span className="text-warning italic">{item.notas}</span>}
         </div>
       )}
 
-      {/* Acciones rápidas */}
+      {/* Fila de controles */}
       {editable && !anulado && (
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={onRepetir} className="text-[10px] text-primary hover:underline">+ Repetir</button>
-          {item.estado === 'hold' && usarCursos && (
+        <div className="flex items-center gap-1.5 mt-1.5">
+
+          {enHold ? (
             <>
+              {/* Cantidad */}
+              <div className="flex items-center rounded border border-border divide-x divide-border overflow-hidden">
+                <button
+                  type="button"
+                  className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:bg-accent text-base leading-none"
+                  onClick={() => onQty(Math.max(1, Number(item.cantidad) - 1))}
+                >−</button>
+                <span className="w-6 text-center text-xs tabular-nums select-none">{item.cantidad}</span>
+                <button
+                  type="button"
+                  className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:bg-accent text-base leading-none"
+                  onClick={() => onQty(Math.min(99, Number(item.cantidad) + 1))}
+                >+</button>
+              </div>
+
+              {/* Quitar */}
               <button
                 type="button"
-                onClick={onMandarSolo}
-                className="text-[10px] inline-flex items-center gap-0.5 text-success hover:underline"
+                onClick={onRemove}
+                title="Quitar item"
+                className="h-6 w-6 flex items-center justify-center rounded text-destructive hover:bg-destructive/10"
               >
-                <Send className="h-2.5 w-2.5" /> Enviar solo
+                <Trash2 className="h-3 w-3" />
               </button>
+
+              <div className="flex-1" />
+
+              {/* Enviar solo — solo con cursos */}
+              {usarCursos && (
+                <button
+                  type="button"
+                  onClick={onMandarSolo}
+                  title="Enviar solo este item a cocina"
+                  className="h-6 px-2 rounded text-[11px] font-medium inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800"
+                >
+                  <Send className="h-2.5 w-2.5" />
+                  Enviar solo
+                </button>
+              )}
+
+              {/* Stay toggle — solo con cursos */}
+              {usarCursos && (
+                <button
+                  type="button"
+                  onClick={onToggleStay}
+                  title={enStay ? 'Liberar (sale cuando marchás el curso)' : 'Hold: retener aunque marches el curso'}
+                  className={cn(
+                    'h-6 px-2 rounded text-[11px] font-medium inline-flex items-center gap-1 border transition-colors',
+                    enStay
+                      ? 'bg-purple-100 text-purple-800 border-purple-300 hover:bg-purple-200 dark:bg-purple-950/50 dark:text-purple-200 dark:border-purple-700'
+                      : 'bg-muted text-muted-foreground border-border hover:text-foreground hover:bg-accent',
+                  )}
+                >
+                  {enStay ? <Play className="h-2.5 w-2.5" /> : <PauseCircle className="h-2.5 w-2.5" />}
+                  {enStay ? 'Liberar' : 'Hold'}
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              {/* Item ya enviado: solo repetir + menú override */}
+              <span className="text-xs text-muted-foreground">×{item.cantidad}</span>
               <button
                 type="button"
-                onClick={onToggleStay}
-                className={cn(
-                  'text-[10px] inline-flex items-center gap-0.5 hover:underline',
-                  item.stay_until_release ? 'text-purple-600 dark:text-purple-300 font-medium' : 'text-muted-foreground',
-                )}
+                onClick={onRepetir}
+                className="text-[10px] text-primary hover:underline"
               >
-                {item.stay_until_release ? <Play className="h-2.5 w-2.5" /> : <PauseCircle className="h-2.5 w-2.5" />}
-                {item.stay_until_release ? 'Liberar' : 'Stay'}
+                + Repetir
               </button>
+              {!item.es_cortesia && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-accent ml-auto"
+                    >
+                      <MoreHorizontal className="h-3 w-3" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuItem onClick={onCambiarPrecio}>Cambiar precio…</DropdownMenuItem>
+                    <DropdownMenuItem onClick={onCortesia}>Cortesía (gratis)</DropdownMenuItem>
+                    <DropdownMenuItem onClick={onAnular} className="text-destructive">Anular item</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </>
           )}
-          {item.estado !== 'hold' && !item.es_cortesia && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button type="button" className="text-[10px] text-muted-foreground hover:text-foreground px-1 rounded hover:bg-accent">⋯</button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuItem onClick={onCambiarPrecio}>Cambiar precio…</DropdownMenuItem>
-                <DropdownMenuItem onClick={onCortesia}>🎁 Cortesía (gratis)</DropdownMenuItem>
-                <DropdownMenuItem onClick={onAnular} className="text-destructive">Anular item</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
         </div>
+      )}
+
+      {/* Repetir también disponible en hold (abajo de los controles) */}
+      {editable && !anulado && enHold && (
+        <button
+          type="button"
+          onClick={onRepetir}
+          className="text-[10px] text-primary hover:underline mt-0.5"
+        >
+          + Repetir
+        </button>
       )}
     </div>
   );
@@ -165,8 +204,6 @@ export interface VentaListaPanelProps {
   itemsPorCurso: Map<number, VentaPosItem[]>;
   catalogo: ItemConGrupo[];
   editable: boolean;
-  /** Si false (local sin cursos), el header del bloque dice "Sin enviar"
-   * en lugar de "Curso N" y oculta el pill "stay". Default true. */
   usarCursos?: boolean;
   lastAddedRowId: number | null;
   holdCount: (curso: number) => number;
@@ -215,7 +252,7 @@ export const VentaListaPanel = React.memo(function VentaListaPanel({
           const stay = stayCount(curso);
           return (
             <div key={curso}>
-              {/* Un solo bloque: muestra estado del curso y actúa como botón de envío */}
+              {/* Header del curso — clickeable para marchar */}
               <button
                 type="button"
                 onClick={() => { if (hold > 0 && editable) onMandarCurso(curso); }}
@@ -230,7 +267,7 @@ export const VentaListaPanel = React.memo(function VentaListaPanel({
                   <span>{usarCursos ? `Curso ${curso}` : 'Pedido'}</span>
                   {usarCursos && stay > 0 && (
                     <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-purple-200 text-purple-900 dark:bg-purple-900/40 dark:text-purple-100 font-bold uppercase text-[9px]">
-                      <PauseCircle className="h-2 w-2" /> {stay} stay
+                      <PauseCircle className="h-2 w-2" /> {stay} hold
                     </span>
                   )}
                 </div>
@@ -245,6 +282,7 @@ export const VentaListaPanel = React.memo(function VentaListaPanel({
                   ) : null}
                 </div>
               </button>
+
               <div className="mt-1">
                 {itemsCurso.map((it) => (
                   <CheckRow

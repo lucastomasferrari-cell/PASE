@@ -640,6 +640,8 @@ function PantallaVenta({ ventaId, mesa, empleadoId, tenantId, onVolver }: {
           open={showCobro}
           onOpenChange={setShowCobro}
           venta={venta}
+          items={items}
+          catalogo={catalogo}
           empleadoId={empleadoId}
           onCobrado={() => {
             setShowCobro(false);

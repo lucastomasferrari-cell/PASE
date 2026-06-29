@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { toast } from 'sonner';
-import { Trash2, Plus, CheckCircle2 } from 'lucide-react';
+import { Trash2, Plus, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { MoneyInput } from '@/components/MoneyInput';
 import { listMetodosCobroActivos } from '@/services/configService';
-import type { MetodoCobro, VentaPos } from '@/types/database';
+import type { MetodoCobro, VentaPos, VentaPosItem } from '@/types/database';
+import type { ItemConGrupo } from '@/services/itemsService';
 import { formatARS } from '@/lib/format';
 import { newIdempotencyKey, agregarPago } from '@/services/pagosService';
 import { cn } from '@/lib/utils';
@@ -36,6 +37,8 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   venta: VentaPos;
+  items: VentaPosItem[];
+  catalogo: ItemConGrupo[];
   empleadoId: string;
   onCobrado: () => void;
 }
@@ -52,7 +55,8 @@ const BILLETES_AR = [1000, 2000, 5000, 10000, 20000];
 
 // Multi-pago + propina + vuelto. Suma parcial vs total con indicador visual.
 // Cada pago tiene idempotencyKey estable; si la red falla, retry no duplica.
-export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado }: Props) {
+export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empleadoId, onCobrado }: Props) {
+  const [ticketExpandido, setTicketExpandido] = useState(true);
   const [metodos, setMetodos] = useState<MetodoCobro[]>([]);
   // Propina oculta por ahora — mantenemos la variable para no romper la
   // lógica de cobro pero siempre vale 0.
@@ -209,15 +213,94 @@ export function PaymentDialog({ open, onOpenChange, venta, empleadoId, onCobrado
     }
   }
 
+  // Agrupar items por curso (excluir anulados)
+  const itemsActivos = items.filter((i) => i.estado !== 'anulado');
+  const cursos = Array.from(new Set(itemsActivos.map((i) => i.curso ?? 1))).sort((a, b) => a - b);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-5 pt-5 pb-3 shrink-0 text-left space-y-0">
-          <DialogTitle className="text-sm font-medium text-muted-foreground">
+          <DialogTitle className="text-base font-semibold">
             Cobrar venta #{venta.numero_local}
           </DialogTitle>
           <DialogDescription className="sr-only">Registrar el cobro de la venta</DialogDescription>
         </DialogHeader>
+
+        {/* Detalle del ticket — expandible */}
+        <div className="shrink-0 border-b border-border">
+          <button
+            type="button"
+            onClick={() => setTicketExpandido((v) => !v)}
+            className="w-full flex items-center justify-between px-5 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
+          >
+            <span>Detalle de la cuenta</span>
+            {ticketExpandido ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </button>
+          {ticketExpandido && (
+            <div className="px-5 pb-3 space-y-3 max-h-52 overflow-y-auto">
+              {cursos.map((curso) => {
+                const its = itemsActivos.filter((i) => i.curso === curso);
+                return (
+                  <div key={curso}>
+                    {cursos.length > 1 && (
+                      <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                        Curso {curso}
+                      </div>
+                    )}
+                    {its.map((it) => {
+                      const cat = catalogo.find((c) => c.id === it.item_id);
+                      const nombre = it.nombre_display ?? cat?.nombre ?? `Item #${it.item_id}`;
+                      return (
+                        <div key={it.id} className="flex items-start justify-between gap-2 py-0.5">
+                          <div className="min-w-0 flex-1">
+                            <span className="text-sm">
+                              <span className="text-muted-foreground mr-1">{it.cantidad}×</span>
+                              {nombre}
+                            </span>
+                            {it.es_cortesia && (
+                              <span className="ml-1 text-[9px] px-1 py-0.5 rounded bg-success/15 text-success font-bold uppercase">Cortesía</span>
+                            )}
+                            {it.modificadores && it.modificadores.length > 0 && (
+                              <div className="text-[10px] text-muted-foreground truncate">
+                                {it.modificadores.map((m) => m.nombre).join(' · ')}
+                              </div>
+                            )}
+                            {it.notas && (
+                              <div className="text-[10px] text-warning italic truncate">{it.notas}</div>
+                            )}
+                          </div>
+                          <span className="text-sm tabular-nums shrink-0">
+                            {it.es_cortesia ? <span className="text-success">$0</span> : formatARS(it.subtotal)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+              {/* Subtotales */}
+              <div className="border-t border-border pt-2 space-y-0.5">
+                {Number(venta.descuento_total) > 0 && (
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Subtotal</span>
+                    <span className="tabular-nums">{formatARS(venta.subtotal)}</span>
+                  </div>
+                )}
+                {Number(venta.descuento_total) > 0 && (
+                  <div className="flex justify-between text-sm text-success">
+                    <span>Descuento</span>
+                    <span className="tabular-nums">−{formatARS(venta.descuento_total)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-semibold">
+                  <span>Total</span>
+                  <span className="tabular-nums">{formatARS(totalConPropina)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Total — el foco de la pantalla */}
         <div className="px-5 shrink-0">
