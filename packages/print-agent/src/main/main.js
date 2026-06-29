@@ -200,6 +200,38 @@ ipcMain.handle('set-login-startup', (_evt, enable) => {
   return app.getLoginItemSettings().openAtLogin;
 });
 
+// Instala el driver "Generic / Text Only" + crea impresora Windows en USB001.
+// Requiere admin; se ejecuta elevado via Start-Process -Verb RunAs.
+ipcMain.handle('install-usb-driver', () => {
+  const { execFile } = require('node:child_process');
+  const script = [
+    'Add-PrinterDriver -Name "Generic / Text Only" -ErrorAction SilentlyContinue;',
+    '$port = (Get-PrinterPort | Where-Object { $_.Name -match "^USB" } | Select-Object -First 1).Name;',
+    'if ($port) {',
+    '  if (!(Get-Printer -Name "Impresora Comanda" -ErrorAction SilentlyContinue)) {',
+    '    Add-Printer -Name "Impresora Comanda" -DriverName "Generic / Text Only" -PortName $port',
+    '  }',
+    '  "OK"',
+    '} else {',
+    '  throw "No se encontro puerto USB de impresora. Conecta la impresora y volvé a intentar."',
+    '}',
+  ].join(' ');
+
+  return new Promise((resolve) => {
+    // Elevar con Start-Process -Verb RunAs para que tenga permisos de admin
+    const elevatedCmd = `Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile -Command "${script.replace(/"/g, '\\"')}"'`;
+    execFile('powershell.exe', ['-NoProfile', '-Command', elevatedCmd], { timeout: 30000 }, (err, stdout, stderr) => {
+      if (err) {
+        log.error('[install-usb-driver] error:', err.message, stderr);
+        resolve({ ok: false, error: stderr || err.message });
+      } else {
+        log.info('[install-usb-driver] ok');
+        resolve({ ok: true });
+      }
+    });
+  });
+});
+
 // ─── Auto-update ──────────────────────────────────────────────────────
 if (!isDev) {
   autoUpdater.logger = log;

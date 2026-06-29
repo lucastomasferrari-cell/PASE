@@ -131,6 +131,33 @@ document.getElementById('open-logs-btn').addEventListener('click', () => {
   window.agentAPI.openLogs();
 });
 
+document.getElementById('install-driver-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('install-driver-btn');
+  const okEl = document.getElementById('install-driver-ok');
+  const errEl = document.getElementById('install-driver-error');
+  btn.disabled = true;
+  btn.textContent = 'Instalando…';
+  okEl.hidden = true;
+  errEl.hidden = true;
+  try {
+    const result = await window.agentAPI.installUsbDriver();
+    if (result.ok) {
+      okEl.hidden = false;
+      btn.textContent = 'Reinstalar driver USB';
+    } else {
+      errEl.textContent = result.error || 'Error desconocido';
+      errEl.hidden = false;
+      btn.textContent = 'Instalar driver USB';
+    }
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.hidden = false;
+    btn.textContent = 'Instalar driver USB';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 elLoginCheckbox.addEventListener('change', async (e) => {
   await window.agentAPI.setLoginStartup(e.target.checked);
 });

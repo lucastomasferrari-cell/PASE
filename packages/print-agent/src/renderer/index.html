@@ -59,6 +59,21 @@
       </div>
     </section>
 
+    <!-- Configurar impresora USB -->
+    <section class="card" id="usb-driver-card">
+      <h2>Impresora USB térmica</h2>
+      <p class="hint" style="margin-top:0">
+        Si la impresora está conectada por USB y no funciona, instalá el driver
+        una sola vez. Solo se necesita hacer esto una vez por PC.
+      </p>
+      <button id="install-driver-btn" class="btn-primary">Instalar driver USB</button>
+      <div id="install-driver-ok" class="linked-status" hidden style="margin-top:8px">
+        <span class="dot dot-green"></span>
+        <span>Driver instalado — probá imprimir desde COMANDA</span>
+      </div>
+      <div id="install-driver-error" class="error-msg" hidden></div>
+    </section>
+
     <!-- Próximos pasos -->
     <section class="card">
       <h2>Cómo conectar impresoras</h2>

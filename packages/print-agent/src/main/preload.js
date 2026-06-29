@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('agentAPI', {
   openComanda: () => ipcRenderer.invoke('open-comanda'),
   openLogs: () => ipcRenderer.invoke('open-logs'),
   setLoginStartup: (enable) => ipcRenderer.invoke('set-login-startup', enable),
+  installUsbDriver: () => ipcRenderer.invoke('install-usb-driver'),
   onPrintServerStatus: (cb) => {
     ipcRenderer.on('print-server-status', (_e, payload) => cb(payload));
   },
