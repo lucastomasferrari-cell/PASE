@@ -8,6 +8,8 @@ import { ThermalPrinter, PrinterTypes, BreakLine, CharacterSet } from 'node-ther
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 const execAsync = promisify(exec);
 
 // Retorna el PortName de la primera impresora Windows en puerto USB (ej: "USB001").
@@ -26,32 +28,30 @@ async function findWindowsUsbPortName() {
 
 // Interface custom para USB en Windows.
 // node-thermal-printer acepta un objeto en lugar de string para interface.
-// Escribimos el buffer ESC/POS directo al device path \\.\USBxxx (puerto
-// de impresora expuesto por usbprint.sys), sin necesitar node-printer.
+// fs.writeFile('\\.\USB001', ...) no funciona directamente en Node.js/Windows —
+// el acceso al puerto de impresora USB pasa por el print spooler. La solución:
+// escribir el buffer ESC/POS a un archivo temp y mandarlos al puerto con
+// `cmd /c copy /b`, que sí puede escribir a puertos USB del spooler.
 function makeWindowsUsbInterface() {
-  let cachedDevicePath = null;
-
-  async function getDevicePath() {
-    if (cachedDevicePath) return cachedDevicePath;
-    const portName = await findWindowsUsbPortName();
-    if (!portName) throw new Error('No se encontró impresora USB. Instalá el driver desde el Print Agent.');
-    cachedDevicePath = `\\\\.\\${portName}`; // ej: \\.\USB001
-    return cachedDevicePath;
-  }
-
   return {
     async isPrinterConnected() {
       const portName = await findWindowsUsbPortName().catch(() => null);
       return !!portName;
     },
     async execute(buffer) {
-      const devicePath = await getDevicePath();
-      return new Promise((resolve, reject) => {
-        fs.writeFile(devicePath, buffer, (err) => {
-          if (err) reject(new Error(`Error escribiendo a ${devicePath}: ${err.message}`));
-          else resolve('Print done');
-        });
-      });
+      const portName = await findWindowsUsbPortName();
+      if (!portName) throw new Error('No se encontró impresora USB. Instalá el driver desde el Print Agent.');
+
+      const tmpFile = path.join(os.tmpdir(), `comanda_print_${Date.now()}.bin`);
+      await fs.promises.writeFile(tmpFile, buffer);
+      try {
+        // copy /b envía bytes crudos al puerto — único método que funciona para
+        // ESC/POS en Windows sin node-printer ni driver adicional.
+        await execAsync(`cmd /c copy /b "${tmpFile}" ${portName}`, { timeout: 10000 });
+        return 'Print done';
+      } finally {
+        fs.unlink(tmpFile, () => {});
+      }
     },
   };
 }
