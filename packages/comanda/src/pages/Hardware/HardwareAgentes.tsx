@@ -18,8 +18,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Monitor, Plus, RefreshCw, Copy, Trash2, CheckCircle2,
-  AlertCircle, Clock, Printer as PrinterIcon, ListChecks,
+  AlertCircle, Clock, Printer as PrinterIcon, ListChecks, Download,
 } from 'lucide-react';
+
+const PRINT_AGENT_DOWNLOAD_URL = 'https://github.com/lucastomasferrari-cell/PASE/releases/download/print-agent-v1.0.0/COMANDA.Print.Agent.Setup.1.0.0.exe';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -143,6 +145,12 @@ export function HardwareAgentes() {
           <Button variant="outline" size="sm" onClick={() => reload()} disabled={refreshing}>
             <RefreshCw className={`h-4 w-4 mr-1.5 ${refreshing ? 'animate-spin' : ''}`} />
             Refrescar
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <a href={PRINT_AGENT_DOWNLOAD_URL} download>
+              <Download className="h-4 w-4 mr-1.5" />
+              Descargar Print Agent
+            </a>
           </Button>
           <Button size="sm" onClick={() => { setNuevoNombre('PC Cocina'); setTokenGenerado(null); setNuevoOpen(true); }}>
             <Plus className="h-4 w-4 mr-1.5" />
@@ -312,9 +320,9 @@ export function HardwareAgentes() {
               <div className="text-xs text-foreground/70 space-y-2 p-3 bg-gray-50 rounded-md">
                 <p className="font-medium text-foreground">Próximos pasos:</p>
                 <ol className="list-decimal ml-4 space-y-1">
-                  <li>Descargá el COMANDA Print Agent (link en Hardware → Impresoras).</li>
-                  <li>Instalalo en la PC que va a conectar las impresoras.</li>
+                  <li><a href={PRINT_AGENT_DOWNLOAD_URL} download className="text-brand-600 underline">Descargá el COMANDA Print Agent</a> e instalalo en la PC del local.</li>
                   <li>Al primer arranque te va a pedir este token — pegalo.</li>
+                  <li>Si la impresora es USB térmica: click en "Instalar driver USB" en el agent.</li>
                   <li>Después de unos segundos esta PC aparece acá como "En línea".</li>
                 </ol>
               </div>
