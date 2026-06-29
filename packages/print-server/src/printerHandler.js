@@ -5,43 +5,87 @@
 // QR, code128, imágenes, alineación, etc).
 
 import { ThermalPrinter, PrinterTypes, BreakLine, CharacterSet } from 'node-thermal-printer';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
+import fs from 'node:fs';
+const execAsync = promisify(exec);
+
+// Retorna el PortName de la primera impresora Windows en puerto USB (ej: "USB001").
+async function findWindowsUsbPortName() {
+  if (process.platform !== 'win32') return null;
+  try {
+    const { stdout } = await execAsync(
+      `powershell.exe -NoProfile -Command "Get-Printer | Where-Object { $_.PortName -match '^USB' } | Select-Object -First 1 -ExpandProperty PortName"`,
+      { timeout: 5000 }
+    );
+    return stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+// Interface custom para USB en Windows.
+// node-thermal-printer acepta un objeto en lugar de string para interface.
+// Escribimos el buffer ESC/POS directo al device path \\.\USBxxx (puerto
+// de impresora expuesto por usbprint.sys), sin necesitar node-printer.
+function makeWindowsUsbInterface() {
+  let cachedDevicePath = null;
+
+  async function getDevicePath() {
+    if (cachedDevicePath) return cachedDevicePath;
+    const portName = await findWindowsUsbPortName();
+    if (!portName) throw new Error('No se encontró impresora USB. Instalá el driver desde el Print Agent.');
+    cachedDevicePath = `\\\\.\\${portName}`; // ej: \\.\USB001
+    return cachedDevicePath;
+  }
+
+  return {
+    async isPrinterConnected() {
+      const portName = await findWindowsUsbPortName().catch(() => null);
+      return !!portName;
+    },
+    async execute(buffer) {
+      const devicePath = await getDevicePath();
+      return new Promise((resolve, reject) => {
+        fs.writeFile(devicePath, buffer, (err) => {
+          if (err) reject(new Error(`Error escribiendo a ${devicePath}: ${err.message}`));
+          else resolve('Print done');
+        });
+      });
+    },
+  };
+}
 
 // ─── Crear instancia ThermalPrinter según transporte ───────────────────────
 
-function buildPrinter(printerCfg) {
+async function buildPrinter(printerCfg) {
   const t = printerCfg.transporte;
   const c = printerCfg.config || {};
 
-  // Tipo de printer: por default Epson (más compatible).
-  // Si la impresora es Star, mejor especificarlo en config porque comandos
-  // de corte y dirección de papel difieren.
   const type = c.tipo === 'star' ? PrinterTypes.STAR : PrinterTypes.EPSON;
 
-  let interfaceStr;
+  // En Windows USB: interface custom que escribe raw ESC/POS al device path.
+  // node-thermal-printer acepta { isPrinterConnected, execute } como interface.
+  // Esto evita depender de node-printer (que no está incluido) y la restricción
+  // de que printer:auto agarra Microsoft PDF en vez de la térmica.
+  let iface;
   if (t === 'usb') {
-    // Formato: usb (autodetect) o usb://<vendor>:<product> para específica.
-    if (c.vendor_id && c.product_id) {
-      interfaceStr = `printer:USB${c.vendor_id}/${c.product_id}`;
-    } else {
-      // Auto-detect: usa la primera USB que encuentre.
-      interfaceStr = 'printer:auto';
-    }
+    iface = process.platform === 'win32'
+      ? makeWindowsUsbInterface()
+      : 'printer:auto'; // Linux/Mac: printer:auto funciona nativamente
   } else if (t === 'network') {
-    // Formato: tcp://192.168.1.100:9100
     if (!c.host) throw new Error('Network requiere config.host');
-    const port = c.port || 9100;
-    interfaceStr = `tcp://${c.host}:${port}`;
+    iface = `tcp://${c.host}:${c.port || 9100}`;
   } else if (t === 'serial') {
-    // Formato: COM3 o /dev/ttyUSB0
     if (!c.path) throw new Error('Serial requiere config.path (ej "COM3" o "/dev/ttyUSB0")');
-    interfaceStr = `printer:${c.path}`;
+    iface = c.path; // File interface (\\.\COM3 en Windows, /dev/ttyUSB0 en Linux)
   } else {
     throw new Error(`Transporte desconocido: ${t}`);
   }
 
   return new ThermalPrinter({
     type,
-    interface: interfaceStr,
+    interface: iface,
     characterSet: CharacterSet.PC850_MULTILINGUAL, // soporta acentos AR
     removeSpecialCharacters: false,
     lineCharacter: '-',
@@ -55,7 +99,7 @@ function buildPrinter(printerCfg) {
 
 async function ping(printerCfg) {
   try {
-    const printer = buildPrinter(printerCfg);
+    const printer = await buildPrinter(printerCfg);
     const isConnected = await printer.isPrinterConnected();
     return { ok: !!isConnected };
   } catch (err) {
@@ -66,7 +110,7 @@ async function ping(printerCfg) {
 // ─── Print: arma el ticket y lo manda ──────────────────────────────────────
 
 async function print(printerCfg, ticket) {
-  const printer = buildPrinter(printerCfg);
+  const printer = await buildPrinter(printerCfg);
 
   // Verificar conexión antes de gastar bytes
   const connected = await printer.isPrinterConnected().catch(() => false);
