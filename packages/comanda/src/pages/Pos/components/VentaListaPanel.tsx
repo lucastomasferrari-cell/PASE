@@ -1,8 +1,5 @@
-import React from 'react';
-import { Send, Trash2, PauseCircle, Play, CloudUpload, MoreHorizontal } from 'lucide-react';
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import React, { useState } from 'react';
+import { Send, Trash2, PauseCircle, Play, CloudUpload } from 'lucide-react';
 import { Badge } from '../../../components/Badge';
 import { formatARS } from '../../../lib/format';
 import { cn } from '@/lib/utils';
@@ -30,45 +27,54 @@ interface CheckRowProps {
   editable: boolean;
   usarCursos?: boolean;
   flashed?: boolean;
+  selected: boolean;
+  onSelect: () => void;
 }
 
+// Patrón Toast: cada item es UNA línea compacta (cantidad · nombre · porciones
+// · precio). Al tocarla se selecciona y recién ahí aparecen sus acciones
+// (cantidad, quitar, enviar solo, hold…). Maximiza cuántos items entran sin
+// scroll; el envío global vive en el footer (Marchar / Hold / Cobrar).
 function CheckRow({
   item, catalogo, onQty, onRemove, onRepetir, onAnular,
-  onCambiarPrecio, onCortesia, onMandarSolo, onToggleStay, onEditar, editable, usarCursos = true, flashed,
+  onCambiarPrecio, onCortesia, onMandarSolo, onToggleStay, onEditar,
+  editable, usarCursos = true, flashed, selected, onSelect,
 }: CheckRowProps) {
   const it = catalogo.find((c) => c.id === item.item_id);
   const anulado = item.estado === 'anulado';
   const enHold = item.estado === 'hold';
   const enStay = item.stay_until_release;
+  const qty = Number(item.cantidad);
+  const btnCls = 'h-7 px-2.5 rounded text-[11px] font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors';
 
   return (
     <div
       className={cn(
-        'py-1.5 px-2 border-b border-border/40 transition-colors duration-700',
+        'border-b border-border/40 transition-colors',
         anulado && 'opacity-40',
         flashed && 'bg-amber-100/70 dark:bg-amber-900/30 ring-1 ring-amber-400',
+        selected && 'bg-accent/50',
       )}
     >
-      {/* Línea 1: nombre + (porciones inline) + precio */}
-      <div className="flex items-baseline gap-1.5">
-        <div className="flex-1 min-w-0 truncate">
-          <span
-            className={cn(
-              'text-sm font-medium',
-              editable && enHold && 'cursor-pointer hover:text-primary',
-            )}
-            onDoubleClick={editable && enHold ? onEditar : undefined}
-            title={editable && enHold ? 'Doble click para editar nombre o precio' : undefined}
-          >
+      {/* Línea compacta — tap para seleccionar / desplegar acciones */}
+      <button
+        type="button"
+        onClick={() => { if (editable && !anulado) onSelect(); }}
+        onDoubleClick={editable && enHold ? onEditar : undefined}
+        className="w-full flex items-baseline gap-1.5 px-2 py-1.5 text-left"
+      >
+        {qty > 1 && (
+          <span className="text-xs font-semibold tabular-nums text-muted-foreground shrink-0">{qty}×</span>
+        )}
+        <span className="flex-1 min-w-0 truncate">
+          <span className="text-sm font-medium">
             {item.nombre_display ?? it?.nombre ?? `Item #${item.item_id}`}
           </span>
-          {/* Modificadores (porciones) inline, al lado del nombre */}
           {item.modificadores && item.modificadores.length > 0 && (
             <span className="text-[11px] text-muted-foreground ml-1.5">
               {item.modificadores.map((m) => m.nombre).join(' · ')}
             </span>
           )}
-          {/* Badges inline */}
           {item.es_cortesia && (
             <span className="text-[9px] px-1 py-0.5 rounded bg-success/15 text-success font-bold uppercase ml-1.5">Cortesía</span>
           )}
@@ -80,99 +86,58 @@ function CheckRow({
               <CloudUpload className="h-2.5 w-2.5" /> Queued
             </span>
           )}
-        </div>
+        </span>
         <strong className="text-sm tabular-nums shrink-0">{formatARS(item.subtotal)}</strong>
-      </div>
+      </button>
 
       {/* Nota / aclaración (solo si existe) */}
       {item.notas && (
-        <div className="text-[11px] text-warning italic mt-0.5 truncate">{item.notas}</div>
+        <div className="px-2 pb-1 -mt-0.5 text-[11px] text-warning italic truncate">{item.notas}</div>
       )}
 
-      {/* Fila de controles */}
-      {editable && !anulado && (
-        <div className="flex items-center gap-1.5 mt-1">
-
+      {/* Acciones — solo cuando el item está seleccionado */}
+      {selected && editable && !anulado && (
+        <div className="flex items-center gap-1.5 px-2 pb-2">
           {enHold ? (
             <>
-              {/* Cantidad */}
               <div className="flex items-center rounded border border-border divide-x divide-border overflow-hidden">
-                <button
-                  type="button"
-                  className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:bg-accent text-base leading-none"
-                  onClick={() => onQty(Math.max(1, Number(item.cantidad) - 1))}
-                >−</button>
-                <span className="w-6 text-center text-xs tabular-nums select-none">{item.cantidad}</span>
-                <button
-                  type="button"
-                  className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:bg-accent text-base leading-none"
-                  onClick={() => onQty(Math.min(99, Number(item.cantidad) + 1))}
-                >+</button>
+                <button type="button" className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:bg-accent text-base leading-none"
+                  onClick={() => onQty(Math.max(1, qty - 1))}>−</button>
+                <span className="w-7 text-center text-xs tabular-nums select-none">{qty}</span>
+                <button type="button" className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:bg-accent text-base leading-none"
+                  onClick={() => onQty(Math.min(99, qty + 1))}>+</button>
               </div>
-
-              {/* Quitar */}
-              <button
-                type="button"
-                onClick={onRemove}
-                title="Quitar item"
-                className="h-6 w-6 flex items-center justify-center rounded text-destructive hover:bg-destructive/10"
-              >
-                <Trash2 className="h-3 w-3" />
+              <button type="button" onClick={onRemove} title="Quitar item"
+                className="h-7 w-7 flex items-center justify-center rounded text-destructive hover:bg-destructive/10">
+                <Trash2 className="h-3.5 w-3.5" />
               </button>
-
               <div className="flex-1" />
-
-              {/* Enviar solo — solo con cursos */}
               {usarCursos && (
-                <button
-                  type="button"
-                  onClick={onMandarSolo}
-                  title="Enviar solo este item a cocina"
-                  className="h-6 px-2 rounded text-[11px] font-medium inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800"
-                >
-                  <Send className="h-2.5 w-2.5" />
-                  Enviar solo
+                <button type="button" onClick={onMandarSolo} title="Enviar solo este item a cocina"
+                  className="h-7 px-2.5 rounded text-[11px] font-medium inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800">
+                  <Send className="h-3 w-3" /> Enviar solo
                 </button>
               )}
-
-              {/* Stay toggle — solo con cursos */}
               {usarCursos && (
-                <button
-                  type="button"
-                  onClick={onToggleStay}
-                  title={enStay ? 'Liberar (sale cuando marchás el curso)' : 'Hold: retener aunque marches el curso'}
-                  className={cn(
-                    'h-6 px-2 rounded text-[11px] font-medium inline-flex items-center gap-1 border transition-colors',
+                <button type="button" onClick={onToggleStay} title={enStay ? 'Liberar' : 'Hold'}
+                  className={cn('h-7 px-2.5 rounded text-[11px] font-medium inline-flex items-center gap-1 border transition-colors',
                     enStay
                       ? 'bg-purple-100 text-purple-800 border-purple-300 hover:bg-purple-200 dark:bg-purple-950/50 dark:text-purple-200 dark:border-purple-700'
-                      : 'bg-muted text-muted-foreground border-border hover:text-foreground hover:bg-accent',
-                  )}
-                >
-                  {enStay ? <Play className="h-2.5 w-2.5" /> : <PauseCircle className="h-2.5 w-2.5" />}
-                  {enStay ? 'Liberar' : 'Hold'}
+                      : 'bg-muted text-muted-foreground border-border hover:text-foreground hover:bg-accent')}>
+                  {enStay ? <Play className="h-3 w-3" /> : <PauseCircle className="h-3 w-3" />}{enStay ? 'Liberar' : 'Hold'}
                 </button>
               )}
             </>
           ) : (
             <>
-              {/* Item ya enviado: cantidad + menú override (incluye Repetir) */}
-              <span className="text-xs text-muted-foreground">×{item.cantidad}</span>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-accent ml-auto"
-                  >
-                    <MoreHorizontal className="h-3 w-3" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-44">
-                  <DropdownMenuItem onClick={onRepetir}>Repetir item</DropdownMenuItem>
-                  {!item.es_cortesia && <DropdownMenuItem onClick={onCambiarPrecio}>Cambiar precio…</DropdownMenuItem>}
-                  {!item.es_cortesia && <DropdownMenuItem onClick={onCortesia}>Cortesía (gratis)</DropdownMenuItem>}
-                  <DropdownMenuItem onClick={onAnular} className="text-destructive">Anular item</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <button type="button" onClick={onRepetir} className={btnCls}>Repetir</button>
+              {!item.es_cortesia && <button type="button" onClick={onCambiarPrecio} className={btnCls}>Precio</button>}
+              {!item.es_cortesia && <button type="button" onClick={onCortesia} className={btnCls}>Cortesía</button>}
+              <div className="flex-1" />
+              <button type="button" onClick={onAnular}
+                className="h-7 px-2.5 rounded text-[11px] font-medium border border-destructive/30 text-destructive hover:bg-destructive/10">
+                Anular
+              </button>
             </>
           )}
         </div>
@@ -221,6 +186,8 @@ export const VentaListaPanel = React.memo(function VentaListaPanel({
   onEditarItem,
 }: VentaListaPanelProps) {
   const totalItems = Array.from(itemsPorCurso.values()).reduce((s, a) => s + a.length, 0);
+  // Item seleccionado (patrón Toast): solo el seleccionado muestra sus acciones.
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   return (
     <div className="flex-1 overflow-y-auto p-2 space-y-2">
       {totalItems === 0 ? (
@@ -282,6 +249,8 @@ export const VentaListaPanel = React.memo(function VentaListaPanel({
                     editable={editable}
                     usarCursos={usarCursos}
                     flashed={lastAddedRowId === it.id}
+                    selected={selectedId === it.id}
+                    onSelect={() => setSelectedId((cur) => (cur === it.id ? null : it.id))}
                   />
                 ))}
               </div>
