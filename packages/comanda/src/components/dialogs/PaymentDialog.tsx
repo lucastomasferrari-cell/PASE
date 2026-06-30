@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { toast } from 'sonner';
-import { Trash2, Plus, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trash2, Plus, CheckCircle2 } from 'lucide-react';
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -15,17 +15,15 @@ import { newIdempotencyKey, agregarPago } from '@/services/pagosService';
 import { cn } from '@/lib/utils';
 
 interface PagoEnCurso {
-  id: string;             // local (UUID) — se asocia con idempotencyKey
-  idempotencyKey: string; // estable, se reusa si retry
+  id: string;
+  idempotencyKey: string;
   metodo: string;
   monto: number;
   vuelto?: number | null;
-  cuotas?: number | null; // 3/6/12 típico AR — solo aplica a crédito
-  confirmado: boolean;    // true cuando ya se mandó al backend OK
+  cuotas?: number | null;
+  confirmado: boolean;
 }
 
-// Helper: detectar si el método de cobro es de crédito (acepta cuotas).
-// Reconoce por slug (configurable en medios_cobro, catálogo único).
 function metodoAceptaCuotas(slug: string): boolean {
   const s = slug.toLowerCase();
   return s.includes('credit') || s === 'tc' || s.includes('tarjeta_credito');
@@ -43,23 +41,11 @@ interface Props {
   onCobrado: () => void;
 }
 
-// Propina deshabilitada por pedido de Lucas (2026-05-15). El handling
-// interno queda en 0 para no romper el resto de la lógica. Cuando se
-// vuelva a activar, restaurar la sección UI + el array de porcentajes.
 const PROPINA_FIJA = 0;
-
-// Billetes típicos AR 2026. "Exacto" siempre primero; el resto solo aparecen
-// si son > que el monto a cobrar (no tiene sentido mostrar $1000 si vas a
-// cobrar $4500).
 const BILLETES_AR = [1000, 2000, 5000, 10000, 20000];
 
-// Multi-pago + propina + vuelto. Suma parcial vs total con indicador visual.
-// Cada pago tiene idempotencyKey estable; si la red falla, retry no duplica.
 export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empleadoId, onCobrado }: Props) {
-  const [ticketExpandido, setTicketExpandido] = useState(true);
   const [metodos, setMetodos] = useState<MetodoCobro[]>([]);
-  // Propina oculta por ahora — mantenemos la variable para no romper la
-  // lógica de cobro pero siempre vale 0.
   const propina = PROPINA_FIJA;
   const [pagos, setPagos] = useState<PagoEnCurso[]>([]);
   const [montoNuevo, setMontoNuevo] = useState<number>(0);
@@ -67,10 +53,6 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
   const [cuotasNuevo, setCuotasNuevo] = useState<number>(1);
   const [montoEntregado, setMontoEntregado] = useState<number>(0);
   const [confirmando, setConfirmando] = useState(false);
-  // Ref-based guard contra doble-click (fix sistémico 2026-05-18). En cobro
-  // es crítico: si el cajero toca "Cobrar" dos veces, se generan 2 pagos
-  // contra el mismo idempotencyKey — el segundo lo rechaza el backend pero
-  // ensucia logs. Ref sincrónico ataja antes del re-render.
   const confirmandoRef = useRef(false);
 
   useEffect(() => {
@@ -88,7 +70,6 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
   const restante = Math.max(0, totalConPropina - sumaPagos);
   const cubrió = sumaPagos >= totalConPropina - 0.01;
 
-  // Si el monto del nuevo pago es 0, autocompletar con el restante
   useEffect(() => {
     if (montoNuevo === 0 && restante > 0) setMontoNuevo(restante);
   }, [restante, montoNuevo]);
@@ -97,10 +78,6 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
   const pideVuelto = metodoActual?.pide_vuelto ?? false;
   const vueltoCalc = pideVuelto && montoEntregado >= montoNuevo ? montoEntregado - montoNuevo : 0;
 
-  // Cuando el cajero cambia a un método que pide vuelto y aún no tocó "Cliente
-  // entrega", asumimos "Exacto" (caso 80%) y dejamos que toque billete si
-  // quiere cambiar. Evita un input vacío que confunde + deja "Exacto"
-  // highlighteado por default.
   useEffect(() => {
     if (pideVuelto && montoEntregado === 0 && montoNuevo > 0) {
       setMontoEntregado(montoNuevo);
@@ -109,10 +86,7 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
 
   function agregarPagoLocal() {
     if (montoNuevo <= 0) { toast.error('Monto inválido'); return; }
-    if (montoNuevo > restante + 0.01) {
-      toast.error('Monto supera lo que falta cobrar');
-      return;
-    }
+    if (montoNuevo > restante + 0.01) { toast.error('Monto supera lo que falta cobrar'); return; }
     const aceptaCuotas = metodoAceptaCuotas(metodoNuevo);
     setPagos((p) => [...p, {
       id: crypto.randomUUID?.() ?? `local-${Date.now()}-${Math.random()}`,
@@ -168,17 +142,10 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
           propinaIncluida: propinaIncl,
           cuotas: p.cuotas ?? null,
         });
-        if (error) {
-          toast.error(`Error procesando pago: ${error}`);
-          return;
-        }
+        if (error) { toast.error(`Error procesando pago: ${error}`); return; }
         p.confirmado = true;
       }
       toast.success('Venta cobrada');
-      // Fire-and-forget impresión del ticket de cliente. Si falla (sin
-      // impresora, server caído, etc) NO bloqueamos el flow del POS — la
-      // venta ya está cobrada. El operador puede reimprimir desde el
-      // detalle del pedido.
       void (async () => {
         try {
           const { imprimirTicket } = await import('@/services/printerService');
@@ -213,302 +180,307 @@ export function PaymentDialog({ open, onOpenChange, venta, items, catalogo, empl
     }
   }
 
-  // Agrupar items por curso (excluir anulados)
   const itemsActivos = items.filter((i) => i.estado !== 'anulado');
   const cursos = Array.from(new Set(itemsActivos.map((i) => i.curso ?? 1))).sort((a, b) => a - b);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
-        <DialogHeader className="px-4 pt-4 pb-2 shrink-0 text-left space-y-0">
-          <DialogTitle className="text-base font-semibold">
-            Cobrar venta #{venta.numero_local}
-          </DialogTitle>
-          <DialogDescription className="sr-only">Registrar el cobro de la venta</DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <DialogTitle className="sr-only">Cobrar venta #{venta.numero_local}</DialogTitle>
+        <DialogDescription className="sr-only">Registrar el cobro de la venta</DialogDescription>
 
-        {/* Detalle del ticket — expandible */}
-        <div className="shrink-0 border-b border-border">
-          <button
-            type="button"
-            onClick={() => setTicketExpandido((v) => !v)}
-            className="w-full flex items-center justify-between px-4 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
-          >
-            <span>Detalle de la cuenta</span>
-            {ticketExpandido ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-          </button>
-          {ticketExpandido && (
-            <div className="px-4 pb-2 space-y-1 max-h-36 overflow-y-auto">
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+
+          {/* ── IZQUIERDA: comanda ─────────────────────────────────── */}
+          <div className="w-[44%] shrink-0 flex flex-col border-r border-border/40 bg-card/60">
+            {/* Header comanda */}
+            <div className="px-4 pt-4 pb-3 border-b border-border/40">
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Comanda</span>
+                <span className="text-xs text-muted-foreground">#{venta.numero_local}</span>
+              </div>
+              {/* Meta: mesa / cliente / covers */}
+              <div className="mt-1.5 space-y-0.5">
+                {venta.mesa_id && (
+                  <div className="text-xs text-foreground/70">
+                    <span className="font-medium">Mesa</span>
+                  </div>
+                )}
+                {venta.cliente_nombre && (
+                  <div className="text-xs text-foreground/70">
+                    <span className="font-medium">Cliente</span> · {venta.cliente_nombre}
+                  </div>
+                )}
+                {(venta as unknown as { covers?: number }).covers && (
+                  <div className="text-xs text-foreground/70">
+                    <span className="font-medium">Comensales</span> · {(venta as unknown as { covers?: number }).covers}
+                  </div>
+                )}
+                {venta.tab_nombre && (
+                  <div className="text-xs text-foreground/70">
+                    <span className="font-medium">Tab</span> · {venta.tab_nombre}
+                  </div>
+                )}
+                {venta.notas && (
+                  <div className="text-xs italic text-warning/80 mt-1">{venta.notas}</div>
+                )}
+              </div>
+            </div>
+
+            {/* Items */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
               {cursos.map((curso) => {
-                const its = itemsActivos.filter((i) => i.curso === curso);
+                const its = itemsActivos.filter((i) => (i.curso ?? 1) === curso);
                 return (
                   <div key={curso}>
                     {cursos.length > 1 && (
-                      <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                      <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 pb-0.5 border-b border-border/30">
                         Curso {curso}
                       </div>
                     )}
-                    {its.map((it) => {
-                      const cat = catalogo.find((c) => c.id === it.item_id);
-                      const nombre = it.nombre_display ?? cat?.nombre ?? `Item #${it.item_id}`;
-                      return (
-                        <div key={it.id} className="flex items-start justify-between gap-2 py-0.5">
-                          <div className="min-w-0 flex-1">
-                            <span className="text-sm">
-                              <span className="text-muted-foreground mr-1">{it.cantidad}×</span>
-                              {nombre}
+                    <div className="space-y-1">
+                      {its.map((it) => {
+                        const cat = catalogo.find((c) => c.id === it.item_id);
+                        const nombre = it.nombre_display ?? cat?.nombre ?? `Item #${it.item_id}`;
+                        return (
+                          <div key={it.id} className="flex items-baseline justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <span className="text-xs text-muted-foreground tabular-nums mr-1">{it.cantidad}×</span>
+                              <span className="text-xs text-foreground leading-snug">{nombre}</span>
+                              {it.es_cortesia && (
+                                <span className="ml-1 text-[9px] px-1 py-0.5 rounded bg-success/15 text-success font-bold uppercase">Cortesía</span>
+                              )}
+                              {it.modificadores && it.modificadores.length > 0 && (
+                                <div className="text-[10px] text-muted-foreground/70 truncate pl-3">
+                                  {it.modificadores.map((m) => m.nombre).join(' · ')}
+                                </div>
+                              )}
+                            </div>
+                            <span className="text-xs tabular-nums shrink-0 text-foreground/80">
+                              {it.es_cortesia ? <span className="text-success">$0</span> : formatARS(it.subtotal)}
                             </span>
-                            {it.es_cortesia && (
-                              <span className="ml-1 text-[9px] px-1 py-0.5 rounded bg-success/15 text-success font-bold uppercase">Cortesía</span>
-                            )}
-                            {it.modificadores && it.modificadores.length > 0 && (
-                              <div className="text-[10px] text-muted-foreground truncate">
-                                {it.modificadores.map((m) => m.nombre).join(' · ')}
-                              </div>
-                            )}
-                            {it.notas && (
-                              <div className="text-[10px] text-warning italic truncate">{it.notas}</div>
-                            )}
                           </div>
-                          <span className="text-sm tabular-nums shrink-0">
-                            {it.es_cortesia ? <span className="text-success">$0</span> : formatARS(it.subtotal)}
-                          </span>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })}
-              {/* Subtotales */}
-              <div className="border-t border-border pt-2 space-y-0.5">
-                {Number(venta.descuento_total) > 0 && (
-                  <div className="flex justify-between text-sm text-muted-foreground">
+            </div>
+
+            {/* Totales — pie de la comanda */}
+            <div className="px-4 py-3 border-t border-border/40 space-y-1">
+              {Number(venta.descuento_total) > 0 && (
+                <>
+                  <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Subtotal</span>
                     <span className="tabular-nums">{formatARS(venta.subtotal)}</span>
                   </div>
-                )}
-                {Number(venta.descuento_total) > 0 && (
-                  <div className="flex justify-between text-sm text-success">
+                  <div className="flex justify-between text-xs text-success">
                     <span>Descuento</span>
                     <span className="tabular-nums">−{formatARS(venta.descuento_total)}</span>
                   </div>
-                )}
-                <div className="flex justify-between font-semibold">
-                  <span>Total</span>
-                  <span className="tabular-nums">{formatARS(totalConPropina)}</span>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Total — el foco de la pantalla */}
-        <div className="px-4 py-2 shrink-0">
-          <div className={cn(
-            'rounded-xl px-4 py-2.5 transition-colors duration-200',
-            cubrió ? 'bg-success/15' : 'bg-muted/50',
-          )}>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-medium text-muted-foreground">
-                {cubrió ? 'Total cobrado' : sumaPagos > 0 ? 'Falta cobrar' : 'Total a cobrar'}
-              </span>
-              {sumaPagos > 0 && !cubrió && (
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  Pagado {formatARS(sumaPagos)} de {formatARS(totalConPropina)}
-                </span>
+                </>
               )}
-            </div>
-            <div className={cn(
-              'mt-0.5 text-2xl leading-tight font-semibold tabular-nums tracking-tight',
-              cubrió ? 'text-success' : 'text-foreground',
-            )}>
-              {formatARS(cubrió ? totalConPropina : restante)}
+              <div className="flex justify-between text-sm font-semibold pt-0.5">
+                <span>Total</span>
+                <span className="tabular-nums">{formatARS(totalConPropina)}</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
+          {/* ── DERECHA: cobro ─────────────────────────────────────── */}
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
-          {/* Pagos ya registrados (split) */}
-          {pagos.length > 0 && (
-            <div className="space-y-2">
-              <div className="text-xs font-medium text-muted-foreground">Pagos registrados</div>
-              <div className="space-y-1.5">
-                {pagos.map((p) => {
-                  const m = metodos.find((x) => x.slug === p.metodo);
-                  return (
-                    <div key={p.id} className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2 text-sm">
-                      <div className="min-w-0">
-                        <span className="font-medium">{m?.emoji} {m?.nombre ?? p.metodo}</span>
-                        <span className="ml-2 tabular-nums text-muted-foreground">{formatARS(p.monto)}</span>
-                        {p.cuotas && p.cuotas > 1 && (
-                          <span className="ml-2 text-xs text-muted-foreground">· {p.cuotas} cuotas de {formatARS(p.monto / p.cuotas)}</span>
-                        )}
-                        {p.vuelto && p.vuelto > 0 && (
-                          <span className="ml-2 text-xs text-warning">· vuelto {formatARS(p.vuelto)}</span>
-                        )}
-                      </div>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                        onClick={() => eliminarPago(p.id)} disabled={confirmando}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  );
-                })}
+            {/* Monto restante */}
+            <div className="px-4 pt-4 pb-3 border-b border-border/40 shrink-0">
+              <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">
+                {cubrió ? 'Total cobrado' : sumaPagos > 0 ? 'Falta cobrar' : 'Total a cobrar'}
               </div>
+              <div className={cn(
+                'text-3xl font-bold tabular-nums tracking-tight leading-none',
+                cubrió ? 'text-success' : 'text-primary',
+              )}>
+                {formatARS(cubrió ? totalConPropina : restante)}
+              </div>
+              {sumaPagos > 0 && !cubrió && (
+                <div className="text-[10px] text-muted-foreground mt-0.5">
+                  Pagado {formatARS(sumaPagos)} de {formatARS(totalConPropina)}
+                </div>
+              )}
             </div>
-          )}
 
-          {!cubrió && (
-            <>
-              {/* Medios de pago — grilla de tiles */}
-              <div className="space-y-2">
-                <div className="text-xs font-medium text-muted-foreground">¿Cómo paga?</div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {metodos.map((m) => {
-                    const sel = metodoNuevo === m.slug;
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 min-h-0">
+
+              {/* Pagos ya registrados (split) */}
+              {pagos.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Pagos registrados</div>
+                  {pagos.map((p) => {
+                    const m = metodos.find((x) => x.slug === p.metodo);
                     return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        aria-pressed={sel}
-                        onClick={() => setMetodoNuevo(m.slug)}
-                        className={cn(
-                          'flex items-center justify-center gap-2 rounded-lg px-2 py-2 min-h-[40px] text-center transition-colors duration-150',
-                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                          sel
-                            ? 'bg-primary/15 ring-1 ring-primary text-foreground'
-                            : 'bg-muted/40 hover:bg-muted text-foreground/90',
-                        )}
-                      >
-                        <span className="text-base leading-none">{m.emoji}</span>
-                        <span className="text-xs font-medium leading-tight line-clamp-1">{m.nombre}</span>
-                      </button>
+                      <div key={p.id} className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-1.5 text-xs">
+                        <div className="min-w-0">
+                          <span className="font-medium">{m?.emoji} {m?.nombre ?? p.metodo}</span>
+                          <span className="ml-2 tabular-nums text-muted-foreground">{formatARS(p.monto)}</span>
+                          {p.cuotas && p.cuotas > 1 && (
+                            <span className="ml-1 text-muted-foreground">· {p.cuotas}c</span>
+                          )}
+                          {p.vuelto && p.vuelto > 0 && (
+                            <span className="ml-1 text-warning">· vuelto {formatARS(p.vuelto)}</span>
+                          )}
+                        </div>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => eliminarPago(p.id)} disabled={confirmando}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
                     );
                   })}
                 </div>
-              </div>
+              )}
 
-              {/* Monto + (cliente entrega) */}
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Monto</Label>
-                    <MoneyInput value={montoNuevo} onChange={setMontoNuevo} />
+              {!cubrió && (
+                <>
+                  {/* Medios de pago */}
+                  <div className="space-y-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">¿Cómo paga?</div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {metodos.map((m) => {
+                        const sel = metodoNuevo === m.slug;
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            aria-pressed={sel}
+                            onClick={() => setMetodoNuevo(m.slug)}
+                            className={cn(
+                              'flex items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors duration-150',
+                              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                              sel
+                                ? 'bg-primary/15 ring-1 ring-primary text-foreground'
+                                : 'bg-muted/40 hover:bg-muted text-foreground/80',
+                            )}
+                          >
+                            <span className="text-base leading-none shrink-0">{m.emoji}</span>
+                            <span className="text-xs font-medium leading-tight line-clamp-1">{m.nombre}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                  {pideVuelto && (
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Cliente entrega</Label>
-                      <MoneyInput value={montoEntregado} onChange={setMontoEntregado} />
-                    </div>
-                  )}
-                </div>
 
-                {/* Cuotas: solo si el método es de crédito (típico AR) */}
-                {metodoAceptaCuotas(metodoNuevo) && (
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Cuotas</Label>
-                    <div className="grid grid-cols-6 gap-1.5">
-                      {OPCIONES_CUOTAS.map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() => setCuotasNuevo(n)}
-                          className={cn(
-                            'h-10 rounded-lg text-xs font-medium transition-colors duration-150',
-                            cuotasNuevo === n
-                              ? 'bg-primary/15 ring-2 ring-primary'
-                              : 'bg-muted/40 hover:bg-muted',
-                          )}
-                        >
-                          {n === 1 ? '1 pago' : `${n}c`}
-                        </button>
-                      ))}
+                  {/* Monto + cliente entrega */}
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Monto</Label>
+                        <MoneyInput value={montoNuevo} onChange={setMontoNuevo} />
+                      </div>
+                      {pideVuelto && (
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Cliente entrega</Label>
+                          <MoneyInput value={montoEntregado} onChange={setMontoEntregado} />
+                        </div>
+                      )}
                     </div>
-                    {cuotasNuevo > 1 && montoNuevo > 0 && (
-                      <p className="text-[11px] text-muted-foreground">
-                        {cuotasNuevo} cuotas de {formatARS(montoNuevo / cuotasNuevo)}
-                      </p>
+
+                    {/* Cuotas */}
+                    {metodoAceptaCuotas(metodoNuevo) && (
+                      <div className="space-y-1">
+                        <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Cuotas</Label>
+                        <div className="grid grid-cols-6 gap-1">
+                          {OPCIONES_CUOTAS.map((n) => (
+                            <button
+                              key={n}
+                              type="button"
+                              onClick={() => setCuotasNuevo(n)}
+                              className={cn(
+                                'h-8 rounded-md text-xs font-medium transition-colors duration-150',
+                                cuotasNuevo === n ? 'bg-primary/15 ring-1 ring-primary' : 'bg-muted/40 hover:bg-muted',
+                              )}
+                            >
+                              {n === 1 ? '1' : `${n}c`}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     )}
-                  </div>
-                )}
 
-                {/* Atajos billete para efectivo — gran win velocidad cajero */}
-                {pideVuelto && montoNuevo > 0 && (
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Cliente paga con</Label>
-                    <div className="flex flex-wrap gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setMontoEntregado(montoNuevo)}
-                        className={cn(
-                          'h-10 px-4 rounded-full text-sm font-medium transition-colors duration-150',
-                          montoEntregado === montoNuevo ? 'bg-primary text-primary-foreground' : 'bg-muted/40 hover:bg-muted',
-                        )}
-                      >
-                        Exacto
-                      </button>
-                      {BILLETES_AR.filter((b) => b > montoNuevo).slice(0, 4).map((b) => (
-                        <button
-                          key={b}
-                          type="button"
-                          onClick={() => setMontoEntregado(b)}
-                          className={cn(
-                            'h-10 px-4 rounded-full text-sm font-medium tabular-nums transition-colors duration-150',
-                            montoEntregado === b ? 'bg-primary text-primary-foreground' : 'bg-muted/40 hover:bg-muted',
-                          )}
-                        >
-                          {formatARS(b)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                    {/* Atajos billete efectivo */}
+                    {pideVuelto && montoNuevo > 0 && (
+                      <div className="space-y-1">
+                        <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Paga con</Label>
+                        <div className="flex flex-wrap gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setMontoEntregado(montoNuevo)}
+                            className={cn(
+                              'h-8 px-3 rounded-full text-xs font-medium transition-colors duration-150',
+                              montoEntregado === montoNuevo ? 'bg-primary text-primary-foreground' : 'bg-muted/40 hover:bg-muted',
+                            )}
+                          >
+                            Exacto
+                          </button>
+                          {BILLETES_AR.filter((b) => b > montoNuevo).slice(0, 3).map((b) => (
+                            <button
+                              key={b}
+                              type="button"
+                              onClick={() => setMontoEntregado(b)}
+                              className={cn(
+                                'h-8 px-3 rounded-full text-xs font-medium tabular-nums transition-colors duration-150',
+                                montoEntregado === b ? 'bg-primary text-primary-foreground' : 'bg-muted/40 hover:bg-muted',
+                              )}
+                            >
+                              {formatARS(b)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
-                {pideVuelto && vueltoCalc > 0 && (
-                  <div className="flex items-center justify-between rounded-lg bg-warning/15 px-3 py-2.5 text-warning-foreground">
-                    <span className="text-sm">Vuelto</span>
-                    <strong className="tabular-nums text-lg">{formatARS(vueltoCalc)}</strong>
-                  </div>
-                )}
-                {pideVuelto && montoEntregado > 0 && montoEntregado < montoNuevo && (
-                  <div className="rounded-lg bg-destructive/15 px-3 py-2 text-xs text-destructive">
-                    Falta {formatARS(montoNuevo - montoEntregado)} para cubrir el monto
-                  </div>
-                )}
+                    {pideVuelto && vueltoCalc > 0 && (
+                      <div className="flex items-center justify-between rounded-lg bg-warning/10 px-3 py-2">
+                        <span className="text-xs text-warning-foreground">Vuelto</span>
+                        <strong className="text-sm tabular-nums text-warning">{formatARS(vueltoCalc)}</strong>
+                      </div>
+                    )}
 
-                {/* Dividir el pago (split) */}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={agregarPagoLocal}
-                  disabled={montoNuevo <= 0 || montoNuevo >= restante - 0.01 || confirmando}
-                  className="w-full border border-dashed border-border text-muted-foreground hover:text-foreground"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Dividir en otro pago
-                </Button>
-              </div>
-            </>
-          )}
+                    {/* Split */}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={agregarPagoLocal}
+                      disabled={montoNuevo <= 0 || montoNuevo >= restante - 0.01 || confirmando}
+                      className="w-full border border-dashed border-border/40 text-muted-foreground hover:text-foreground text-xs"
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-1.5" />
+                      Dividir en otro pago
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
 
+            {/* Footer */}
+            <div className="px-4 py-3 border-t border-border/40 shrink-0 flex gap-2">
+              <Button variant="outline" size="sm" className="shrink-0" onClick={() => onOpenChange(false)} disabled={confirmando}>
+                Cancelar
+              </Button>
+              <Button
+                variant="default"
+                size="default"
+                className="flex-1"
+                onClick={confirmar}
+                disabled={confirmando || (pagos.length === 0 && (montoNuevo <= 0 || Math.abs(montoNuevo - totalConPropina) > 0.01)) || (pagos.length > 0 && !cubrió)}
+              >
+                <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                {confirmando ? 'Procesando…' : `Cobrar ${formatARS(totalConPropina)}`}
+              </Button>
+            </div>
+          </div>
         </div>
-
-        <DialogFooter className="px-4 py-3 border-t border-border/40 shrink-0 flex-row gap-2">
-          <Button variant="outline" size="sm" className="shrink-0" onClick={() => onOpenChange(false)} disabled={confirmando}>
-            Cancelar
-          </Button>
-          <Button
-            variant="default"
-            size="default"
-            className="flex-1"
-            onClick={confirmar}
-            disabled={confirmando || (pagos.length === 0 && (montoNuevo <= 0 || Math.abs(montoNuevo - totalConPropina) > 0.01)) || (pagos.length > 0 && !cubrió)}
-          >
-            <CheckCircle2 className="h-4 w-4 mr-1.5" />
-            {confirmando ? 'Procesando…' : `Cobrar ${formatARS(totalConPropina)}`}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
