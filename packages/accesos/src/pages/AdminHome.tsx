@@ -4,20 +4,22 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  LogOut, ShieldCheck, Users, Grid3x3, KeyRound, ScrollText, User, MapPin, ChevronDown, Check,
+  LogOut, ShieldCheck, Users, Grid3x3, KeyRound, ScrollText, User, MapPin, ChevronDown, Check, Tags,
 } from 'lucide-react';
 import { db, supabaseConfigurado } from '@/lib/supabase';
 import { Personas } from './Personas';
+import { Marcas } from './Marcas';
 import { Roles } from './Roles';
 import { Accesos } from './Accesos';
 import { PinPos } from './PinPos';
 import { Auditoria } from './Auditoria';
 import { MiCuenta } from './MiCuenta';
 
-type Seccion = 'personas' | 'roles' | 'accesos' | 'pin' | 'audit' | 'mi_cuenta';
+type Seccion = 'personas' | 'marcas' | 'roles' | 'accesos' | 'pin' | 'audit' | 'mi_cuenta';
 
 const NAV: { key: Seccion; label: string; icon: React.ReactNode }[] = [
   { key: 'personas', label: 'Personas', icon: <Users className="h-[18px] w-[18px]" /> },
+  { key: 'marcas', label: 'Marcas', icon: <Tags className="h-[18px] w-[18px]" /> },
   { key: 'roles', label: 'Roles y permisos', icon: <ShieldCheck className="h-[18px] w-[18px]" /> },
   { key: 'accesos', label: 'Accesos por app', icon: <Grid3x3 className="h-[18px] w-[18px]" /> },
   { key: 'pin', label: 'PIN del POS', icon: <KeyRound className="h-[18px] w-[18px]" /> },
@@ -191,6 +193,7 @@ export function AdminHome() {
 
         <main className="flex-1 px-4 sm:px-6 py-6">
           {seccion === 'personas' ? <Personas />
+            : seccion === 'marcas' ? <Marcas />
             : seccion === 'roles' ? <Roles />
             : seccion === 'accesos' ? <Accesos />
             : seccion === 'pin' ? <PinPos localId={localSel} locales={locales} />
