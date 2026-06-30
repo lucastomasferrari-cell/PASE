@@ -67,38 +67,58 @@ export function ModifiersDialog({ open, onOpenChange, item, onConfirm }: Props) 
         opciones: opcionesByGroup.get((g as ModifierGroup).id) ?? [],
       }));
       setGroups(enriched);
-      // Pre-selección por defecto: en grupos obligatorios de UNA opción (ej.
-      // Porciones x10/x5) dejamos elegida la primera (la base, precio_madre).
-      // Así el grupo ya queda completo al abrir → sin error rojo ni paso
-      // extra; el cajero solo toca si quiere cambiar. Multi-select queda vacío.
-      const initSel: Record<number, Set<number>> = {};
-      for (const g of enriched) {
-        if (g.requerido && g.tipo === 'opcion' && g.opciones.length > 0) {
-          const first = [...g.opciones].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))[0];
-          if (first) initSel[g.id] = new Set([first.id]);
-        }
-      }
-      setSeleccion(initSel);
       setLoading(false);
     })();
   }, [open, item.id]);
 
-  function toggle(groupId: number, modifierId: number, group: GroupConOpciones) {
-    setSeleccion((prev) => {
-      const cur = new Set(prev[groupId] ?? []);
-      if (cur.has(modifierId)) {
-        cur.delete(modifierId);
-      } else {
-        if (group.tipo === 'opcion') {
-          cur.clear();
-        } else if (group.max_seleccion !== null && cur.size >= group.max_seleccion) {
-          toast.warning(`${group.nombre}: máximo ${group.max_seleccion} opciones`);
-          return prev;
+  // Chequea si una selección dada cumple TODOS los requisitos (obligatorios + min/max).
+  function requisitosOk(sel: Record<number, Set<number>>): boolean {
+    for (const g of groups) {
+      const count = sel[g.id]?.size ?? 0;
+      if (g.requerido && count === 0) return false;
+      if (g.min_seleccion > 0 && count < g.min_seleccion) return false;
+      if (g.max_seleccion !== null && count > g.max_seleccion) return false;
+    }
+    return true;
+  }
+
+  function construirMods(sel: Record<number, Set<number>>): VentaPosItemModificador[] {
+    const result: VentaPosItemModificador[] = [];
+    for (const g of groups) {
+      const s = sel[g.id];
+      if (!s) continue;
+      for (const op of g.opciones) {
+        if (s.has(op.id)) {
+          result.push({ nombre: op.nombre, precio_extra: Number(op.precio_extra), modifier_id: op.id });
         }
-        cur.add(modifierId);
       }
-      return { ...prev, [groupId]: cur };
-    });
+    }
+    return result;
+  }
+
+  function toggle(groupId: number, modifierId: number, group: GroupConOpciones) {
+    const cur = new Set(seleccion[groupId] ?? []);
+    let added = false;
+    if (cur.has(modifierId)) {
+      cur.delete(modifierId);
+    } else {
+      if (group.tipo === 'opcion') {
+        cur.clear();
+      } else if (group.max_seleccion !== null && cur.size >= group.max_seleccion) {
+        toast.warning(`${group.nombre}: máximo ${group.max_seleccion} opciones`);
+        return;
+      }
+      cur.add(modifierId);
+      added = true;
+    }
+    const newSel = { ...seleccion, [groupId]: cur };
+    setSeleccion(newSel);
+    // Auto-agregar: si al tocar una opción de elección única se completan TODOS
+    // los obligatorios, agregamos el producto directo (sin tocar "Agregar").
+    // El cajero igual puede ajustar cantidad antes (footer) o dejar nota.
+    if (added && group.tipo === 'opcion' && requisitosOk(newSel)) {
+      void confirmarCon(newSel);
+    }
   }
 
   function validar(): { ok: boolean; error?: string } {
@@ -138,32 +158,23 @@ export function ModifiersDialog({ open, onOpenChange, item, onConfirm }: Props) 
     }).length;
   }, [groups, seleccion]);
 
-  async function confirmar() {
-    const v = validar();
-    if (!v.ok) { toast.error(v.error ?? 'Validación falló'); return; }
-    const result: VentaPosItemModificador[] = [];
-    for (const g of groups) {
-      const sel = seleccion[g.id];
-      if (!sel) continue;
-      for (const op of g.opciones) {
-        if (sel.has(op.id)) {
-          result.push({
-            nombre: op.nombre,
-            precio_extra: Number(op.precio_extra),
-            modifier_id: op.id,
-          });
-        }
-      }
-    }
+  async function confirmarCon(sel: Record<number, Set<number>>) {
+    if (saving) return;
     setSaving(true);
     try {
-      await onConfirm(result, notas.trim() || null, cantidad);
+      await onConfirm(construirMods(sel), notas.trim() || null, cantidad);
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error agregando item');
     } finally {
       setSaving(false);
     }
+  }
+
+  async function confirmar() {
+    const v = validar();
+    if (!v.ok) { toast.error(v.error ?? 'Validación falló'); return; }
+    await confirmarCon(seleccion);
   }
 
   useEffect(() => {
