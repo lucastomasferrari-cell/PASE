@@ -53,7 +53,12 @@ export function PWAUpdatePrompt() {
         <Button
           size="sm"
           onClick={async () => {
-            await updateServiceWorker(true);  // skipWaiting + reload
+            // updateServiceWorker(true) DEBERÍA recargar solo (skipWaiting +
+            // controllerchange), pero con la config skipWaiting del workbox el
+            // SW nuevo ya activó y no dispara el evento → el toast se quedaba.
+            // Forzamos la recarga sí o sí como fallback.
+            try { await updateServiceWorker(true); } catch { /* ignore */ }
+            window.location.reload();
           }}
         >
           <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
