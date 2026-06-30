@@ -21,7 +21,7 @@ import {
   AlertCircle, Clock, Printer as PrinterIcon, ListChecks, Download,
 } from 'lucide-react';
 
-const PRINT_AGENT_DOWNLOAD_URL = 'https://github.com/lucastomasferrari-cell/PASE/releases/download/print-agent-v1.0.1/COMANDA.Print.Agent.Setup.1.0.1.exe';
+const PRINT_AGENT_DOWNLOAD_URL = 'https://github.com/lucastomasferrari-cell/PASE/releases/download/print-agent-v1.0.2/COMANDA.Print.Agent.Setup.1.0.2.exe';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
