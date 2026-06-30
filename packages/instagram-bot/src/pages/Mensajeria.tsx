@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Bot, User as UserIcon, Send, Lock, CheckCircle2, AlertTriangle, Hand,
-  MessageSquare, ChevronRight, Search, Settings,
+  MessageSquare, ChevronRight, Search, Settings, ArrowLeft,
 } from 'lucide-react';
 import {
   listCuentas, listConversaciones, listMensajes, marcarLeida,
@@ -155,8 +155,8 @@ export function Mensajeria({ userId }: { userId: number }) {
         </div>
       ) : (
         <div className="grid lg:grid-cols-[340px_1fr] gap-3 min-h-[60vh]">
-          {/* Lista de conversaciones */}
-          <aside className="rounded-2xl bg-white border border-ink/5 shadow-card flex flex-col overflow-hidden">
+          {/* Lista de conversaciones — en mobile se oculta cuando hay un chat abierto */}
+          <aside className={`rounded-2xl bg-white border border-ink/5 shadow-card flex-col overflow-hidden ${sel ? 'hidden lg:flex' : 'flex'}`}>
             <div className="p-3 border-b border-ink/5 space-y-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-muted" />
@@ -210,7 +210,7 @@ export function Mensajeria({ userId }: { userId: number }) {
           </aside>
 
           {/* Thread */}
-          <section className="rounded-2xl bg-white border border-ink/5 shadow-card flex flex-col overflow-hidden">
+          <section className={`rounded-2xl bg-white border border-ink/5 shadow-card flex-col overflow-hidden ${!sel ? 'hidden lg:flex' : 'flex'}`}>
             {!sel ? (
               <div className="flex-1 grid place-items-center text-ink-muted">
                 <div className="text-center">
@@ -222,6 +222,10 @@ export function Mensajeria({ userId }: { userId: number }) {
               <>
                 {/* Header del thread */}
                 <div className="p-3 border-b border-ink/5 flex items-center gap-2 flex-wrap">
+                  <button onClick={() => setSel(null)} aria-label="Volver a la lista"
+                    className="lg:hidden -ml-1 mr-0.5 p-1.5 rounded-lg text-ink-soft hover:bg-ink/5 shrink-0">
+                    <ArrowLeft className="h-5 w-5" />
+                  </button>
                   <div className="w-9 h-9 rounded-full bg-brand-100 text-brand-700 grid place-items-center font-medium text-sm shrink-0">{(nombre(sel)[0] ?? '?').toUpperCase()}</div>
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm">{nombre(sel)}</div>
