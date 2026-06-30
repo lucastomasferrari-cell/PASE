@@ -93,6 +93,7 @@ export function VentaScreen() {
   const [showSplit, setShowSplit] = useState(false);
   const [showComensalSplit, setShowComensalSplit] = useState(false);
   const [showAnular, setShowAnular] = useState(false);
+  const [showMesaControl, setShowMesaControl] = useState(false);
   const [pendingModifiers, setPendingModifiers] = useState<ItemConGrupo | null>(null);
 
   // Cache de qué items tienen modifier_groups asignados (para decidir si abre dialog)
@@ -584,7 +585,7 @@ export function VentaScreen() {
           todosEnStay={items.filter((i) => i.estado === 'hold').every((i) => i.stay_until_release)}
           onMarchar={handleMarchar}
           onHold={() => void handleHoldTodos()}
-          onMesa={() => navigate(venta.modo === 'salon' ? '/pos/salon' : '/pos/mostrador')}
+          onMesa={() => setShowMesaControl(true)}
           onCobrar={() => setShowCobro(true)}
         />
       </aside>
@@ -903,6 +904,104 @@ export function VentaScreen() {
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Control de mesa — acciones rápidas sobre la mesa sin salir de la venta */}
+      <Dialog open={showMesaControl} onOpenChange={setShowMesaControl}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Control de mesa</DialogTitle>
+            <DialogDescription>
+              Venta #{venta.numero_local} · {venta.modo === 'salon' ? 'Salón' : 'Mostrador'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-1">
+            {editable && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => { setShowMesaControl(false); setShowDescuento(true); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-border hover:bg-accent text-left transition-colors"
+                >
+                  <span className="text-lg">💰</span>
+                  <div>
+                    <div className="font-medium text-sm">Aplicar descuento</div>
+                    <div className="text-xs text-muted-foreground">Porcentaje o monto fijo</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowMesaControl(false); setShowTransfer(true); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-border hover:bg-accent text-left transition-colors"
+                >
+                  <span className="text-lg">🔀</span>
+                  <div>
+                    <div className="font-medium text-sm">Transferir mesa</div>
+                    <div className="text-xs text-muted-foreground">Mover la cuenta a otra mesa</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowMesaControl(false); setShowMerge(true); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-border hover:bg-accent text-left transition-colors"
+                >
+                  <span className="text-lg">🔗</span>
+                  <div>
+                    <div className="font-medium text-sm">Unir mesas</div>
+                    <div className="text-xs text-muted-foreground">Fusionar otra mesa a esta</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowMesaControl(false); setShowSplit(true); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-border hover:bg-accent text-left transition-colors"
+                >
+                  <span className="text-lg">✂️</span>
+                  <div>
+                    <div className="font-medium text-sm">Partir cuenta</div>
+                    <div className="text-xs text-muted-foreground">Dividir en cuentas separadas</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowMesaControl(false); setShowComensalSplit(true); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-border hover:bg-accent text-left transition-colors"
+                >
+                  <span className="text-lg">👥</span>
+                  <div>
+                    <div className="font-medium text-sm">Dividir por comensal</div>
+                    <div className="text-xs text-muted-foreground">Cobrar a cada uno por separado</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowMesaControl(false); setShowAnular(true); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-destructive/30 hover:bg-destructive/5 text-left transition-colors"
+                >
+                  <span className="text-lg">❌</span>
+                  <div>
+                    <div className="font-medium text-sm text-destructive">Anular venta</div>
+                    <div className="text-xs text-muted-foreground">Requiere autorización</div>
+                  </div>
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={() => { setShowMesaControl(false); navigate(venta.modo === 'salon' ? '/pos/salon' : '/pos/mostrador'); }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-border hover:bg-accent text-left transition-colors"
+            >
+              <span className="text-lg">🗺️</span>
+              <div>
+                <div className="font-medium text-sm">Ver plano del salón</div>
+                <div className="text-xs text-muted-foreground">Mapa de todas las mesas</div>
+              </div>
+            </button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMesaControl(false)}>Cerrar</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
